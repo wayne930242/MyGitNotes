@@ -85,7 +85,7 @@ export const ThemePicker: React.FC<ThemePickerProps> = ({
                     </div>
                   </div>
 
-                  {/* Palette Swatch Preview (色票展示) */}
+                  {/* Palette Swatch Preview */}
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
                       {theme.swatches.map((swatch, idx) => (

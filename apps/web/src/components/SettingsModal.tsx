@@ -67,15 +67,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleUpdateCoreClick = async () => {
     if (!local) {
-      setCoreUpdateMsg('Core 更新僅可在本地工作區環境中執行（目前為遠端 GitHub 模式）。');
+      setCoreUpdateMsg('Core updates can only be executed in a local workspace environment (currently in remote GitHub mode).');
       return;
     }
     if (branch === 'core') {
-      setCoreUpdateMsg('當前處於 core 核心開發分支。Core 更新專用於將最新 Core 更新同步至使用者的 main 工作區分支。若要建立工作區，請在終端機執行：pnpm bootstrap-workspace');
+      setCoreUpdateMsg('Currently on the core product branch. Core updates are used to sync updates into a user main workspace branch. To create a workspace, run: pnpm bootstrap-workspace');
       return;
     }
     if (branch !== 'main') {
-      setCoreUpdateMsg(`Core 更新僅支援合併至使用者工作區分支 'main'（當前分支：${branch}）。`);
+      setCoreUpdateMsg(`Core updates can only be merged into the user workspace branch 'main' (current branch: ${branch}).`);
       return;
     }
     setIsUpdatingCore(true);
@@ -113,7 +113,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
       </div>
 
-      {/* Theme Palettes (色票主題設定) */}
+      {/* Theme Palettes */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div>
@@ -168,7 +168,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {theme.description}
                 </p>
 
-                {/* Swatches Visual representation (色票組) */}
+                {/* Swatches Visual representation */}
                 <div className="flex items-center gap-1.5 mt-auto pt-2 border-t border-slate-100 dark:border-slate-800/60">
                   {theme.swatches.map((color, idx) => (
                     <div
@@ -198,12 +198,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </h3>
               {branch === 'core' && (
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-medium">
-                  Core 分支
+                  Core Branch
                 </span>
               )}
               {branch === 'main' && (
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-medium">
-                  工作區分支
+                  Workspace Branch
                 </span>
               )}
             </div>
@@ -224,8 +224,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
             title={
               branch === 'core'
-                ? '點擊查看 Core 分支更新與工作區說明'
-                : '執行 Core 安全合併更新'
+                ? 'View Core branch status and workspace instructions'
+                : 'Run Core update merge'
             }
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isUpdatingCore ? 'animate-spin' : ''}`} />
@@ -244,12 +244,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="text-xs bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 rounded-lg p-3 flex items-start gap-2.5">
             <Info className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
             <div className="space-y-1">
-              <p className="font-semibold">目前位於核心開發分支 (`core`)：</p>
+              <p className="font-semibold">Currently on the core development branch (`core`):</p>
               <p className="text-amber-700 dark:text-amber-400 leading-relaxed text-[11px]">
-                Core Update 功能是用於將上游 Core 的最新程式碼安全合併至使用者筆記工作區分支（<code>main</code>）。在 <code>core</code> 開發分支中，無需也不可合併更新自身。
+                Core Update safely merges upstream Core code into your personal workspace branch (<code>main</code>). In the <code>core</code> development branch itself, updates cannot be merged into itself.
               </p>
               <p className="text-[11px] text-amber-800 dark:text-amber-200">
-                💡 若要建立個人筆記工作區分支，請在終端機執行：<code className="font-mono bg-amber-100/70 dark:bg-amber-900/50 px-1 py-0.5 rounded text-amber-900 dark:text-amber-100 font-semibold">pnpm bootstrap-workspace</code>
+                💡 To create your personal workspace branch, run in your terminal: <code className="font-mono bg-amber-100/70 dark:bg-amber-900/50 px-1 py-0.5 rounded text-amber-900 dark:text-amber-100 font-semibold">pnpm bootstrap-workspace</code>
               </p>
             </div>
           </div>
@@ -258,7 +258,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {!local && (
           <div className="text-xs bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded-lg p-2.5 flex items-center gap-2">
             <Info className="w-4 h-4 shrink-0 text-slate-500" />
-            <span>目前為遠端 GitHub 檢視模式。Core 更新與工作區配置修改僅可在本地工作區環境執行。</span>
+            <span>Currently in remote GitHub view mode. Core updates and workspace config changes are only supported in a local workspace.</span>
           </div>
         )}
 
@@ -285,7 +285,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </label>
             {branch === 'core' && (
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono">
-                core 分支唯讀
+                core branch read-only
               </span>
             )}
           </div>
@@ -293,7 +293,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={handleSaveConfig}
             disabled={!local || isSaving || branch === 'core'}
             className="flex items-center gap-1.5 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-indigo-600 text-white rounded-md text-xs font-medium transition cursor-pointer"
-            title={branch === 'core' ? '工作區配置僅在 main 分支中可編輯' : '儲存並提交配置變更'}
+            title={branch === 'core' ? 'Workspace config can only be edited on the main branch' : 'Save & Commit changes'}
           >
             <Save className="w-3.5 h-3.5" />
             <span>{isSaving ? 'Saving...' : 'Save & Commit'}</span>
@@ -306,7 +306,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           the initial status of new notes. Statuses found in notes also appear as options.
           {branch === 'core' && (
             <span className="block mt-1 text-amber-600 dark:text-amber-400 text-[11px]">
-              註：此儲存庫目前處於 <code>core</code> 開發分支。<code>.github-notes.yaml</code> 屬於使用者筆記工作區分支（<code>main</code>），因此在 <code>core</code> 分支下為唯讀。
+              Note: This repository is currently on the <code>core</code> product branch. <code>.github-notes.yaml</code> belongs to user workspace branches (<code>main</code>), and is read-only on <code>core</code>.
             </span>
           )}
         </p>

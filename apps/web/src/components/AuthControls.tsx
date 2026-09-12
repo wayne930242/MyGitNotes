@@ -1,7 +1,8 @@
 import { Select } from './Select.js';
 import { useEffect, useState } from 'react';
-import { KeyRound, Copy, Plus, Trash2, HelpCircle } from 'lucide-react';
+import { KeyRound, Copy, Check, Plus, Trash2, HelpCircle } from 'lucide-react';
 import { McpTutorialModal } from './McpTutorialModal.js';
+import { copyToClipboard } from '../lib/clipboard.js';
 
 type Session = { authenticated?: boolean; login?: string; configured?: boolean };
 type Grant = { id: string; name: string; write: boolean; source: string; createdAt: number; expiresAt: null };
@@ -31,6 +32,7 @@ export function AgentAccessSettings({ local = false }: { local?: boolean }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const refresh = async () => {
@@ -40,9 +42,21 @@ export function AgentAccessSettings({ local = false }: { local?: boolean }) {
     setGrants(data.grants);
   };
   useEffect(() => { if (canManage) void refresh().catch(error => setError(error.message)); }, [canManage]);
+  const handleCopyToken = async () => {
+    setCopyError(null);
+    const input = document.getElementById('agent-token') as HTMLInputElement | null;
+    const ok = await copyToClipboard(token, input);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      input?.select();
+      setCopyError('Could not copy automatically. The URL has been selected, press Ctrl+C / ⌘+C to copy.');
+    }
+  };
   const create = async () => {
     if (!canManage) return;
-    setBusy(true); setError(''); setCopied(false); setToken('');
+    setBusy(true); setError(''); setCopied(false); setCopyError(null); setToken('');
     try {
       const response = await fetch('/api/auth/agent-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, write }) });
       const data = await response.json();
@@ -70,14 +84,14 @@ export function AgentAccessSettings({ local = false }: { local?: boolean }) {
         type="button"
         onClick={() => setIsTutorialOpen(true)}
         className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 transition active:scale-95 shadow-xs shrink-0 cursor-pointer"
-        title="開啟 ChatGPT / Claude / Cursor 連接器教學"
+        title="Open ChatGPT / Claude / Cursor connector guide"
       >
         <HelpCircle className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-        <span>連接器教學指南</span>
+        <span>Connector Guide</span>
       </button>
     </div>
     <p className="text-xs text-slate-500 dark:text-slate-400">Grants stay active until you revoke them here. Signing out keeps them active. Paste the connection URL into your MCP client; creating or revoking a grant takes effect immediately.</p>
-    <p className="text-xs text-slate-500 dark:text-slate-400">For a ChatGPT connector, paste the full URL as the MCP server URL and select No authentication. The URL itself grants access.（若需詳細圖文步驟，請點擊上方「連接器教學指南」）</p>
+    <p className="text-xs text-slate-500 dark:text-slate-400">For a ChatGPT connector, paste the full URL as the MCP server URL and select No authentication. The URL itself grants access. (Click &quot;Connector Guide&quot; above for step-by-step instructions)</p>
     {local ? <p role="status" className="text-sm text-slate-600 dark:text-slate-300">Local workspace access follows your operating-system permissions. Persistent MCP connection URLs are available for a GitHub workspace.</p> : !session.authenticated && <p className="text-sm"><a className="underline" href="/api/auth/github">Sign in with GitHub</a> to manage agent access.</p>}
     <>
       <div className="flex flex-wrap gap-3 items-end">
@@ -89,10 +103,11 @@ export function AgentAccessSettings({ local = false }: { local?: boolean }) {
         <label className="text-xs font-semibold" htmlFor="agent-token">Copy this MCP connection URL now; it is shown once.</label>
         <div className="flex gap-2 items-center flex-wrap sm:flex-nowrap">
           <input id="agent-token" aria-label="MCP connection URL" readOnly value={token} onFocus={e => e.target.select()} className="flex-1 min-w-0 p-2 rounded border border-slate-300 dark:border-slate-700 bg-transparent font-mono text-xs" />
-          <button className="text-xs flex items-center gap-1 hover:text-slate-900 dark:hover:text-slate-100 transition" onClick={async () => { try { await navigator.clipboard.writeText(token); setCopied(true); } catch { setError('Select the connection URL and copy it manually.'); } }}><Copy className="w-3.5 h-3.5" />{copied ? 'Copied' : 'Copy'}</button>
-          <button className="text-xs flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:underline transition" onClick={() => setIsTutorialOpen(true)}><HelpCircle className="w-3.5 h-3.5" />教學</button>
-          <button className="text-xs underline hover:opacity-80 transition" onClick={() => setToken('')}>Dismiss</button>
+          <button type="button" className={`text-xs flex items-center gap-1 transition ${copied ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'hover:text-slate-900 dark:hover:text-slate-100'}`} onClick={handleCopyToken}>{copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}{copied ? 'Copied' : 'Copy'}</button>
+          <button type="button" className="text-xs flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:underline transition" onClick={() => setIsTutorialOpen(true)}><HelpCircle className="w-3.5 h-3.5" />Guide</button>
+          <button type="button" className="text-xs underline hover:opacity-80 transition" onClick={() => { setToken(''); setCopyError(null); setCopied(false); }}>Dismiss</button>
         </div>
+        {copyError && <p role="alert" className="text-xs text-amber-600 dark:text-amber-400">{copyError}</p>}
       </div>}
       {canManage && <div className="divide-y divide-slate-200 dark:divide-slate-800">{grants.map(grant => <div key={grant.id} className="py-3 flex items-center justify-between gap-3">
         <div className="min-w-0"><p className="text-sm font-medium truncate">{grant.name}</p><p className="text-xs text-slate-500 dark:text-slate-400">{grant.write ? 'Read and write' : 'Read-only'} · Until revoked · {new Date(grant.createdAt).toLocaleDateString()}</p><p className="text-xs font-mono text-slate-400 truncate">{grant.source.replace(/^github:/, '')}</p></div>

@@ -733,7 +733,7 @@ export const App: React.FC = () => {
               onClick={() => handleRestoreNote(undoToast.note)}
               className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-semibold rounded-md transition"
             >
-              Undo (復原)
+              Undo
             </button>
             <button
               onClick={() => setUndoToast(null)}

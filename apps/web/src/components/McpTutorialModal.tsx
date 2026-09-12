@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Copy, Check, ExternalLink, Bot, Terminal, Code2, Sparkles, AlertCircle, HelpCircle } from 'lucide-react';
+import { copyToClipboard as copyText } from '../lib/clipboard.js';
 
 interface McpTutorialModalProps {
   isOpen: boolean;
@@ -22,12 +23,10 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
   const displayUrl = activeUrl || (typeof window !== 'undefined' ? `${window.location.origin}/mcp/<TOKEN>` : 'https://<YOUR_HOST>/mcp/<TOKEN>');
 
   const copyToClipboard = async (text: string, key: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
+    const ok = await copyText(text);
+    if (ok) {
       setCopiedKey(key);
       setTimeout(() => setCopiedKey(null), 2000);
-    } catch {
-      // Fallback if clipboard API is restricted
     }
   };
 
@@ -79,10 +78,10 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                MCP 連接器設定教學指南
+                MCP Connector Guide
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                將 GitHub Notes 筆記庫連接至 ChatGPT、Claude 或各類 AI 編輯器
+                Connect your GitHub Notes workspace to ChatGPT, Claude, or any AI editor
               </p>
             </div>
           </div>
@@ -102,19 +101,19 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
             onClick={() => setActiveTab('chatgpt')}
             className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition -mb-px whitespace-nowrap ${
               activeTab === 'chatgpt'
-                ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300 font-semibold'
+                ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 font-semibold'
                 : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <Bot className="w-4 h-4" />
-            <span>ChatGPT 連接器</span>
+            <span>ChatGPT Connector</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('claude')}
             className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition -mb-px whitespace-nowrap ${
               activeTab === 'claude'
-                ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300 font-semibold'
+                ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 font-semibold'
                 : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
@@ -126,12 +125,12 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
             onClick={() => setActiveTab('general')}
             className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition -mb-px whitespace-nowrap ${
               activeTab === 'general'
-                ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300 font-semibold'
+                ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 font-semibold'
                 : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <Code2 className="w-4 h-4" />
-            <span>通用 MCP (Cursor / Windsurf)</span>
+            <span>Generic MCP (Cursor / Windsurf)</span>
           </button>
         </div>
 
@@ -139,22 +138,22 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Active URL notice if available */}
           {activeUrl && (
-            <div className="p-3.5 bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 rounded-xl text-xs flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                  已為您帶入當前產生的 MCP 連線網址
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs flex flex-col gap-2 shadow-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  Active MCP connection URL included
                 </span>
                 <button
                   type="button"
                   onClick={() => copyToClipboard(activeUrl, 'active-url')}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 rounded-md border border-indigo-200 dark:border-indigo-700 hover:bg-indigo-50 dark:hover:bg-slate-700 transition font-medium"
+                  className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition font-medium shrink-0"
                 >
                   {copiedKey === 'active-url' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedKey === 'active-url' ? '已複製' : '複製連線網址'}</span>
+                  <span>{copiedKey === 'active-url' ? 'Copied' : 'Copy URL'}</span>
                 </button>
               </div>
-              <code className="text-[11px] font-mono bg-white dark:bg-slate-900 p-2 rounded border border-indigo-100 dark:border-indigo-900 break-all select-all text-slate-700 dark:text-slate-300">
+              <code className="text-[11px] font-mono bg-white dark:bg-slate-950 p-2 rounded border border-slate-200 dark:border-slate-800 break-all select-all text-slate-800 dark:text-slate-200">
                 {activeUrl}
               </code>
             </div>
@@ -166,14 +165,14 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
               <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-semibold">使用需求：</span>
-                  ChatGPT 新增自訂連接器功能需要 Plus、Pro、Team、Business 或 Edu 帳號，並在設定中開啟開發者模式。
+                  <span className="font-semibold">Prerequisites: </span>
+                  Custom connectors in ChatGPT require a Plus, Pro, Team, Business, or Edu plan with Developer Mode enabled in Settings.
                 </div>
               </div>
 
               <div className="space-y-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  設定步驟
+                  Setup Steps
                 </h3>
 
                 {/* Step 1 */}
@@ -183,10 +182,10 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
                   </span>
                   <div className="flex-1 text-xs">
                     <p className="font-semibold text-slate-800 dark:text-slate-200">
-                      開啟 ChatGPT 連接器設定並啟用開發者模式
+                      Open ChatGPT Connectors settings and enable Developer Mode
                     </p>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">
-                      前往 ChatGPT 的「設定 (Settings)」→「連接器 (Connectors)」分頁，開啟「開發者模式 (Developer Mode)」開關，然後按下「建立應用程式 (Create Application)」按鈕。
+                      Go to ChatGPT Settings → Connectors, turn on the Developer Mode toggle, then click Create Application.
                     </p>
                     <a
                       href="https://chatgpt.com/#settings/Connectors"
@@ -194,7 +193,7 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 mt-2 text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
                     >
-                      開啟 ChatGPT 連接器設定頁面 <ExternalLink className="w-3 h-3" />
+                      Open ChatGPT Connectors settings <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
                 </div>
@@ -206,10 +205,10 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
                   </span>
                   <div className="flex-1 text-xs">
                     <p className="font-semibold text-slate-800 dark:text-slate-200">
-                      填寫應用程式名稱與 MCP 伺服器網址
+                      Configure name and MCP Server URL
                     </p>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">
-                      名稱填寫：<code className="font-mono bg-black/5 dark:bg-white/10 px-1 py-0.5 rounded">GitHub Notes</code>。在伺服器網址 (Server URL) 欄位中，貼上下方的 MCP 連線網址：
+                      Set Name to <code className="font-mono bg-black/5 dark:bg-white/10 px-1 py-0.5 rounded">GitHub Notes</code>. In the Server URL field, paste the MCP connection URL below:
                     </p>
                     <div className="relative mt-2 flex items-center gap-2 bg-slate-900 text-slate-100 p-2.5 rounded-lg font-mono text-[11px]">
                       <code className="flex-1 break-all select-all">{displayUrl}</code>
@@ -219,7 +218,7 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
                         className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-xs transition shrink-0 flex items-center gap-1"
                       >
                         {copiedKey === 'chatgpt-url' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                        <span>{copiedKey === 'chatgpt-url' ? '已複製' : '複製'}</span>
+                        <span>{copiedKey === 'chatgpt-url' ? 'Copied' : 'Copy'}</span>
                       </button>
                     </div>
                   </div>
@@ -232,13 +231,13 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
                   </span>
                   <div className="flex-1 text-xs">
                     <p className="font-semibold text-slate-800 dark:text-slate-200">
-                      身份驗證選擇「無身份驗證 (No authentication)」
+                      Set Authentication to &quot;No authentication&quot;
                     </p>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">
-                      重要：在「身份驗證 (Authentication)」下拉選單中選擇<strong>「無 (No authentication)」</strong>。因為 GitHub Notes 連線 URL 中已包含專屬授權憑證，網址本身即可提供安全的存取控制。
+                      Important: In the Authentication dropdown, select <strong>No authentication</strong>. The GitHub Notes connection URL contains a dedicated token that provides access directly.
                     </p>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">
-                      勾選使用者條款同意核取方塊後，按下<strong>「建立 (Create)」</strong>完成註冊。
+                      Check the terms agreement checkbox and click <strong>Create</strong> to complete registration.
                     </p>
                   </div>
                 </div>
@@ -250,10 +249,10 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
                   </span>
                   <div className="flex-1 text-xs">
                     <p className="font-semibold text-slate-800 dark:text-slate-200">
-                      在對話中啟用應用程式並開始互動
+                      Start chatting with your notes
                     </p>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">
-                      在 ChatGPT 對話輸入框點擊「+」號（或應用程式清單），選擇「GitHub Notes」，即可讓 ChatGPT 讀取、搜尋或更新你的筆記！
+                      In the ChatGPT chat input, click the &quot;+&quot; button (or explore apps), select &quot;GitHub Notes&quot;, and ask ChatGPT to read, search, or update your notes!
                     </p>
                   </div>
                 </div>
@@ -262,19 +261,19 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
               {/* Sample Prompts */}
               <div className="space-y-2">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  試試這些範例提示詞 (點擊直接複製)
+                  Try these example prompts (click to copy)
                 </h4>
                 <div className="grid grid-cols-1 gap-2">
                   {[
-                    '列出我在 GitHub Notes 中的所有筆記與標籤結構',
-                    '搜尋筆記庫中有關「架構設計」或「API」的內容並彙總給我',
-                    '在 ideas 筆記本中建立一篇標題為「2026 產品規劃」的新筆記',
+                    'List all my notes and tag hierarchy in GitHub Notes',
+                    'Search my notes for architecture decisions and summarize them',
+                    'Create a new note titled "2026 Product Roadmap" in the ideas notebook',
                   ].map((prompt, idx) => (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => copyToClipboard(prompt, `prompt-${idx}`)}
-                      className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 bg-white dark:bg-slate-900/80 text-left text-xs text-slate-700 dark:text-slate-300 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition group"
+                      className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 bg-white dark:bg-slate-900/80 text-left text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition group"
                     >
                       <span className="flex items-center gap-2">
                         <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
@@ -282,7 +281,7 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
                       </span>
                       <span className="text-[11px] text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 flex items-center gap-1 shrink-0">
                         {copiedKey === `prompt-${idx}` ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedKey === `prompt-${idx}` ? '已複製' : '複製'}</span>
+                        <span>{copiedKey === `prompt-${idx}` ? 'Copied' : 'Copy'}</span>
                       </span>
                     </button>
                   ))}
@@ -296,11 +295,11 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
             <div className="space-y-6">
               <div className="space-y-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  選項 A：Claude Desktop 桌面端設定
+                  Option A: Claude Desktop Configuration
                 </h3>
                 <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-xs space-y-3">
                   <p className="text-slate-600 dark:text-slate-400">
-                    開啟 Claude Desktop 設定檔 <code className="font-mono bg-black/5 dark:bg-white/10 px-1 py-0.5 rounded">claude_desktop_config.json</code>：
+                    Open your Claude Desktop configuration file <code className="font-mono bg-black/5 dark:bg-white/10 px-1 py-0.5 rounded">claude_desktop_config.json</code>:
                   </p>
                   <ul className="list-disc pl-5 space-y-1 text-slate-500 dark:text-slate-400 text-[11px]">
                     <li><strong>macOS:</strong> <code className="font-mono">~/Library/Application Support/Claude/claude_desktop_config.json</code></li>
@@ -311,15 +310,15 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
                   <div className="pt-2">
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        將設定加入 mcpServers（遠端 / HTTP SSE 模式）：
+                        Add to mcpServers (Remote / HTTP SSE mode):
                       </span>
                       <button
                         type="button"
                         onClick={() => copyToClipboard(claudeDesktopConfig, 'claude-desktop-cfg')}
-                        className="flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline"
+                        className="flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
                       >
                         {copiedKey === 'claude-desktop-cfg' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                        <span>{copiedKey === 'claude-desktop-cfg' ? '已複製' : '複製 JSON'}</span>
+                        <span>{copiedKey === 'claude-desktop-cfg' ? 'Copied' : 'Copy JSON'}</span>
                       </button>
                     </div>
                     <pre className="p-3 rounded-lg bg-slate-900 text-slate-100 font-mono text-[11px] overflow-x-auto">
@@ -330,15 +329,15 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
                   <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        或使用本機 Stdio 模式（直接執行本機 CLI）：
+                        Or use local Stdio mode (runs local CLI directly):
                       </span>
                       <button
                         type="button"
                         onClick={() => copyToClipboard(claudeLocalStdioConfig, 'claude-stdio-cfg')}
-                        className="flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline"
+                        className="flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
                       >
                         {copiedKey === 'claude-stdio-cfg' ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                        <span>{copiedKey === 'claude-stdio-cfg' ? '已複製' : '複製 JSON'}</span>
+                        <span>{copiedKey === 'claude-stdio-cfg' ? 'Copied' : 'Copy JSON'}</span>
                       </button>
                     </div>
                     <pre className="p-3 rounded-lg bg-slate-900 text-slate-100 font-mono text-[11px] overflow-x-auto">
@@ -350,11 +349,11 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
 
               <div className="space-y-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  選項 B：Claude Code (CLI 命令列)
+                  Option B: Claude Code (CLI)
                 </h3>
                 <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-xs space-y-2">
                   <p className="text-slate-600 dark:text-slate-400">
-                    在終端機中執行以下指令，直接將 GitHub Notes 註冊至 Claude Code：
+                    Run the following command in your terminal to register GitHub Notes with Claude Code:
                   </p>
                   <div className="relative flex items-center gap-2 bg-slate-900 text-slate-100 p-2.5 rounded-lg font-mono text-[11px]">
                     <code className="flex-1 break-all select-all">
@@ -366,7 +365,7 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
                       className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-xs transition shrink-0 flex items-center gap-1"
                     >
                       {copiedKey === 'claude-cli' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedKey === 'claude-cli' ? '已複製' : '複製'}</span>
+                      <span>{copiedKey === 'claude-cli' ? 'Copied' : 'Copy'}</span>
                     </button>
                   </div>
                 </div>
@@ -379,18 +378,18 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
             <div className="space-y-6">
               <div className="space-y-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Cursor IDE 設定
+                  Cursor IDE Setup
                 </h3>
                 <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-xs space-y-3">
                   <ol className="list-decimal pl-5 space-y-1.5 text-slate-600 dark:text-slate-400">
-                    <li>開啟 Cursor，前往 <strong>Settings → Features → MCP</strong>。</li>
-                    <li>點擊 <strong>「+ Add New MCP Server」</strong>。</li>
+                    <li>Open Cursor and navigate to <strong>Settings → Features → MCP</strong>.</li>
+                    <li>Click <strong>&quot;+ Add New MCP Server&quot;</strong>.</li>
                     <li>
-                      填寫設定值：
+                      Configure the server:
                       <ul className="list-disc pl-5 mt-1 space-y-1 text-slate-500 dark:text-slate-400">
                         <li><strong>Name:</strong> <code className="font-mono">github-notes</code></li>
-                        <li><strong>Type:</strong> 選擇 <code className="font-mono">sse</code></li>
-                        <li><strong>Server URL:</strong> 貼上連線網址（見下方）</li>
+                        <li><strong>Type:</strong> select <code className="font-mono">sse</code></li>
+                        <li><strong>Server URL:</strong> paste the connection URL below</li>
                       </ul>
                     </li>
                   </ol>
@@ -402,7 +401,7 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
                       className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-xs transition shrink-0 flex items-center gap-1"
                     >
                       {copiedKey === 'cursor-url' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedKey === 'cursor-url' ? '已複製' : '複製'}</span>
+                      <span>{copiedKey === 'cursor-url' ? 'Copied' : 'Copy'}</span>
                     </button>
                   </div>
                 </div>
@@ -410,11 +409,11 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
 
               <div className="space-y-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Windsurf 或其他 MCP 客戶端
+                  Windsurf or Other MCP Clients
                 </h3>
                 <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-xs space-y-2">
                   <p className="text-slate-600 dark:text-slate-400">
-                    在 Windsurf 的配置檔 <code className="font-mono bg-black/5 dark:bg-white/10 px-1 py-0.5 rounded">~/.codeium/windsurf/mcp_config.json</code> 中貼入相同 JSON 設定即可。
+                    In Windsurf configuration file <code className="font-mono bg-black/5 dark:bg-white/10 px-1 py-0.5 rounded">~/.codeium/windsurf/mcp_config.json</code>, paste the same JSON configuration.
                   </p>
                 </div>
               </div>
@@ -423,12 +422,12 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
               <div className="p-3.5 bg-slate-100 dark:bg-slate-800/70 rounded-xl text-xs space-y-2 border border-slate-200 dark:border-slate-700">
                 <h4 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                   <HelpCircle className="w-3.5 h-3.5 text-indigo-500" />
-                  權限與安全性說明
+                  Permissions & Security Information
                 </h4>
                 <ul className="list-disc pl-5 space-y-1 text-slate-600 dark:text-slate-400 text-[11px]">
-                  <li><strong>唯讀 (Read-only)：</strong> AI 客戶端僅能列出與閱讀筆記、目錄結構及搜尋，無法修改或刪除任何檔案。</li>
-                  <li><strong>讀寫 (Read and write)：</strong> AI 客戶端可由對話中自動建立、編輯或刪除筆記。每次變更皆為標準且原子性的 Git Commit，保證隨時可版本回溯。</li>
-                  <li><strong>授權吊銷 (Revoke)：</strong> 隨時可在 MCP Access Control 清單中點選「Revoke」，連線將立即失效。</li>
+                  <li><strong>Read-only:</strong> The AI client can only list, read, and search notes and notebooks. It cannot modify or delete any files.</li>
+                  <li><strong>Read and write:</strong> The AI client can create, update, or remove notes during conversations. Every mutation is an atomic Git commit with full revision history.</li>
+                  <li><strong>Revocation:</strong> You can revoke grants anytime in MCP Access Control settings. The URL will stop working immediately.</li>
                 </ul>
               </div>
             </div>
@@ -438,14 +437,14 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
         {/* Footer */}
         <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-900/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
           <span className="text-xs text-slate-400">
-            遵循標準 Model Context Protocol (Streamable HTTP / SSE) 規範
+            Standard Model Context Protocol (Streamable HTTP / SSE)
           </span>
           <button
             type="button"
             onClick={onClose}
             className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 rounded-lg text-xs font-medium transition active:scale-95 shadow-sm"
           >
-            完成並關閉
+            Done
           </button>
         </div>
       </div>

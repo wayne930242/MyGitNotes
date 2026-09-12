@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useState } from 'react';
 import { Check, File, Folder, Image as ImageIcon, Upload, X } from 'lucide-react';
 import type { AssetItem } from '../lib/types.js';
+import { copyToClipboard } from '../lib/clipboard.js';
 
 export interface AssetLibraryProps {
   assets: AssetItem[];
@@ -18,6 +19,7 @@ export function AssetLibrary({ assets, onUploadAsset, onDeleteAsset, onMoveAsset
   const [destination, setDestination] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [copiedRef, setCopiedRef] = useState(false);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<AssetItem | null>(null);
   const folderList = useId();
@@ -73,7 +75,13 @@ export function AssetLibrary({ assets, onUploadAsset, onDeleteAsset, onMoveAsset
     <div className="border-t pt-3 flex flex-wrap items-center gap-2 dark:border-slate-700">
       <span className="text-xs mr-auto truncate max-w-48">{selected?.name || 'Select an asset'}</span>
       <button className={button} disabled={!selected || busy} onClick={() => selected && setPreview(selected)}>View</button>
-      <button className={button} disabled={!selected || busy} onClick={() => selected && void run(() => navigator.clipboard.writeText(selected.markdownRef))}>Copy reference</button>
+      <button className={button} disabled={!selected || busy} onClick={() => selected && void run(async () => {
+        const ok = await copyToClipboard(selected.markdownRef);
+        if (ok) {
+          setCopiedRef(true);
+          setTimeout(() => setCopiedRef(false), 2000);
+        }
+      })}>{copiedRef ? 'Copied' : 'Copy reference'}</button>
       <button className={`${button} text-rose-600`} disabled={!selected || !onDeleteAsset || busy} onClick={() => {
         if (!selected || !onDeleteAsset) return;
         if (!confirmDelete) { setConfirmDelete(true); return; }
