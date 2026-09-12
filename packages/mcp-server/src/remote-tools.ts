@@ -1,4 +1,11 @@
-import { GitHubSource, callNoteShell, noteShellWrites } from '@github-notes/core';
+import path from 'node:path';
+import {
+  GitHubSource,
+  callNoteShell,
+  noteShellWrites,
+  withNoteStatus,
+  serializeNoteContent,
+} from '@github-notes/core';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 type Schema = Record<string, any>;
@@ -15,66 +22,300 @@ const metadata: Schema = { type: 'object', additionalProperties: true };
 const noteSchema = object({ id: str('Note identifier'), path: pathField, notebookId: str('Notebook ID'), title: str('Title'), content: str('Markdown body'), metadata, tags: array(str('Tag')), revision: str('Read commit SHA') }, ['path','title','content','metadata','revision'], true);
 const nullableInteger: Schema = { type: ['integer','null'] };
 const receiptSchema = object({ success: { const: true }, committed: { const: true }, pushed: { const: true }, repository: str('GitHub owner/repo'), branch: str('Updated branch'), revision: str('Resulting commit SHA'), changedPaths: array(pathField), commit: object({ commitHash: str('Resulting commit SHA'), message: str('Program-generated commit message') }) }, undefined, true);
-export function isMutationTool(name: string) { return name === 'save_note' || noteShellWrites.has(name); }
+
+const mutatingTools = new Set([
+  'save_note',
+  'delete_note',
+  'add_asset',
+  'delete_asset',
+  'replace_notes',
+  'update_note_metadata',
+]);
+
+export function isMutationTool(name: string) {
+  return mutatingTools.has(name) || noteShellWrites.has(name);
+}
+
 function tool(name: string, description: string, properties: Schema, required: string[], output: Schema): Tool {
   const mutation = isMutationTool(name);
-  return { name, description, inputSchema: object(properties,required) as Tool['inputSchema'], outputSchema: output as Tool['outputSchema'],
-    annotations: { title: name, readOnlyHint: !mutation, destructiveHint: ['write','edit','mv','rm','cp','save_note'].includes(name), idempotentHint: !mutation, openWorldHint: true } };
+  return {
+    name,
+    description,
+    inputSchema: object(properties, required) as Tool['inputSchema'],
+    outputSchema: output as Tool['outputSchema'],
+    annotations: {
+      title: name,
+      readOnlyHint: !mutation,
+      destructiveHint: ['write', 'edit', 'mv', 'rm', 'cp', 'save_note', 'delete_note', 'delete_asset', 'replace_notes', 'add_asset', 'update_note_metadata'].includes(name),
+      idempotentHint: !mutation,
+      openWorldHint: true,
+    },
+  };
 }
-const page = { offset: int('Zero-based result offset.',0,100000), limit: int('Maximum returned entries; default 100.',1,500) };
+
+const page = { offset: int('Zero-based result offset.', 0, 100000), limit: int('Maximum returned entries; default 100.', 1, 500) };
 const transfer = { source: pathField, destination: str('Destination path; an existing directory receives the source basename.'), revision: revisionField, recursive: bool('Required for copying or moving a directory.'), overwrite: bool('Explicitly allow replacement of destination files; default false.') };
+
 export const remoteTools: Tool[] = [
-  tool('ls','List a notebook directory like ls. Start with path "." to list notebooks. Returns the revision for a subsequent write.',{path:str('Directory path; default "." lists notebook roots.'),...page},[],object({revision:revisionField,path:str('Listed directory'),entries:array(object({path:pathField,type:{type:'string',enum:['file','directory']},size:int('Bytes',0,Number.MAX_SAFE_INTEGER)},['path','type'])),total:int('Total entries',0,100000),nextOffset:nullableInteger})),
-  tool('glob','Find note paths using a Bash glob without reading each file. Use before read, find, cp, mv or rm.',{pattern:patternField,...page},[],object({revision:revisionField,paths:array(pathField),total:int('Total matches',0,100000),nextOffset:nullableInteger})),
-  tool('read','Read a file like sed -n, using one-based lines including YAML frontmatter. Defaults to 200 lines. Returns the revision and next line.',{path:pathField,startLine:int('First line, inclusive; default 1.',1,1000000),maxLines:int('Maximum lines; default 200.',1,500)},['path'],object({path:pathField,revision:revisionField,startLine:int('First returned line',1,1000000),endLine:int('Last returned line',0,1000000),totalLines:int('Total file lines',0,1000000),content:str('Exact text of returned lines'),truncated:bool('More lines remain'),nextLine:nullableInteger})),
-  tool('find','Search literal text like grep -n across note files matched by a glob. Returns paths, one-based line numbers and bounded excerpts. Refine the pattern when truncated.',{query:str('Literal text to find.',{minLength:1,maxLength:1000}),pattern:patternField,caseSensitive:bool('Default false.'),maxResults:int('Maximum matches; default 100.',1,500),fileOffset:int('File offset from the previous page.',0,100000),maxFiles:int('Files to scan per call; default 25.',1,100)},['query'],object({revision:revisionField,matches:array(object({path:pathField,line:int('One-based line',1,1000000),text:str('Matching line, at most 2000 characters')})),scannedFiles:int('Files searched',0,100),truncated:bool('The search was bounded; refine query or continue with nextFileOffset'),nextFileOffset:nullableInteger})),
-  tool('write','Create or replace a complete UTF-8 note file. One successful call creates one program-named Git commit and updates the remote branch. Overwrites file content.',{path:pathField,content:contentField,revision:revisionField,createOnly:bool('Reject an existing target instead of replacing it.')},['path','content','revision'],receiptSchema),
-  tool('append','Append text to a note, creating it if absent. One successful call creates one commit and updates the remote branch.',{path:pathField,content:contentField,revision:revisionField},['path','content','revision'],receiptSchema),
-  tool('edit','Replace an inclusive line range in a previously read file. Use endLine = startLine - 1 for insertion, or empty content for deletion. Preserves surrounding text and commits once remotely.',{path:pathField,startLine:int('First replaced line, inclusive.',1,1000000),endLine:int('Last replaced line, inclusive; startLine - 1 inserts.',0,1000000),content:contentField,revision:revisionField},['path','startLine','endLine','content','revision'],receiptSchema),
-  tool('mkdir','Create a notebook folder using a _dir.yml metadata file. Parent directories are created as needed. Creates one remote commit.',{path:pathField,title:str('Folder display title; defaults to the basename.'),revision:revisionField},['path','revision'],receiptSchema),
-  tool('cp','Copy a note or, with recursive true, a note directory. Keeps the source. One atomic remote commit covers all destination files. overwrite true can replace existing notes.',transfer,['source','destination','revision'],receiptSchema),
-  tool('mv','Move or rename a note or note directory. Removes old paths and adds new paths in one atomic remote commit. Relative links keep their original file text.',transfer,['source','destination','revision'],receiptSchema),
-  tool('rm','Remove explicitly listed notes, or directories with recursive true. One atomic remote commit covers all removals. Use glob first to review the exact targets.',{paths:{...array(pathField),minItems:1,maxItems:200},recursive:bool('Required to delete a directory and its note files.'),revision:revisionField},['paths','revision'],receiptSchema),
-  tool('get_workspace_config','Read the configured workspace manifest.',{},[],object({config:metadata})),
-  tool('list_notebooks','List configured notebooks.',{},[],object({notebooks:array(metadata)})),
-  tool('list_folders','List notebook folder display metadata.',{},[],object({folders:array(metadata)})),
-  tool('list_notes','Read parsed notes and their Markdown bodies. Prefer glob then read for bounded file inspection.',{notebookId:str('Optional notebook ID.')},[],object({notes:array(noteSchema),count:int('Number of notes',0,100000)})),
-  tool('read_note','Read a parsed note, including metadata and the body without frontmatter. Use read for line-based edits of the complete file.',{path:pathField},['path'],object({note:noteSchema})),
-  tool('list_assets','List notebook assets and their URLs.',{notebookId:str('Optional notebook ID.')},[],object({assets:array(metadata)})),
-  tool('save_note','Create or replace a parsed note body and optional frontmatter. Commits once and updates the remote branch with a program-generated message.',{path:pathField,content:str('Markdown body without frontmatter.'),revision:revisionField,metadata,createOnly:bool('Reject existing paths.')},['path','content','revision'],{...receiptSchema,properties:{...receiptSchema.properties,note:noteSchema},required:[...receiptSchema.required,'note']}),
+  tool('ls', 'List a notebook directory like ls. Start with path "." to list notebooks. Returns the revision for a subsequent write.', { path: str('Directory path; default "." lists notebook roots.'), ...page }, [], object({ revision: revisionField, path: str('Listed directory'), entries: array(object({ path: pathField, type: { type: 'string', enum: ['file', 'directory'] }, size: int('Bytes', 0, Number.MAX_SAFE_INTEGER) }, ['path', 'type'])), total: int('Total entries', 0, 100000), nextOffset: nullableInteger })),
+  tool('glob', 'Find note paths using a Bash glob without reading each file. Use before read, find, cp, mv or rm.', { pattern: patternField, ...page }, [], object({ revision: revisionField, paths: array(pathField), total: int('Total matches', 0, 100000), nextOffset: nullableInteger })),
+  tool('read', 'Read a file like sed -n, using one-based lines including YAML frontmatter. Defaults to 200 lines. Returns the revision and next line.', { path: pathField, startLine: int('First line, inclusive; default 1.', 1, 1000000), maxLines: int('Maximum lines; default 200.', 1, 500) }, ['path'], object({ path: pathField, revision: revisionField, startLine: int('First returned line', 1, 1000000), endLine: int('Last returned line', 0, 1000000), totalLines: int('Total file lines', 0, 1000000), content: str('Exact text of returned lines'), truncated: bool('More lines remain'), nextLine: nullableInteger })),
+  tool('find', 'Search literal text like grep -n across note files matched by a glob. Returns paths, one-based line numbers and bounded excerpts. Refine the pattern when truncated.', { query: str('Literal text to find.', { minLength: 1, maxLength: 1000 }), pattern: patternField, caseSensitive: bool('Default false.'), maxResults: int('Maximum matches; default 100.', 1, 500), fileOffset: int('File offset from the previous page.', 0, 100000), maxFiles: int('Files to scan per call; default 25.', 1, 100) }, ['query'], object({ revision: revisionField, matches: array(object({ path: pathField, line: int('One-based line', 1, 1000000), text: str('Matching line, at most 2000 characters') })), scannedFiles: int('Files searched', 0, 100), truncated: bool('The search was bounded; refine query or continue with nextFileOffset'), nextFileOffset: nullableInteger })),
+  tool('write', 'Create or replace a complete UTF-8 note file. One successful call creates one program-named Git commit and updates the remote branch. Overwrites file content.', { path: pathField, content: contentField, revision: revisionField, createOnly: bool('Reject an existing target instead of replacing it.') }, ['path', 'content', 'revision'], receiptSchema),
+  tool('append', 'Append text to a note, creating it if absent. One successful call creates one commit and updates the remote branch.', { path: pathField, content: contentField, revision: revisionField }, ['path', 'content', 'revision'], receiptSchema),
+  tool('edit', 'Replace an inclusive line range in a previously read file. Use endLine = startLine - 1 for insertion, or empty content for deletion. Preserves surrounding text and commits once remotely.', { path: pathField, startLine: int('First replaced line, inclusive.', 1, 1000000), endLine: int('Last replaced line, inclusive; startLine - 1 inserts.', 0, 1000000), content: contentField, revision: revisionField }, ['path', 'startLine', 'endLine', 'content', 'revision'], receiptSchema),
+  tool('mkdir', 'Create a notebook folder using a _dir.yml metadata file. Parent directories are created as needed. Creates one remote commit.', { path: pathField, title: str('Folder display title; defaults to the basename.'), revision: revisionField }, ['path', 'revision'], receiptSchema),
+  tool('cp', 'Copy a note or, with recursive true, a note directory. Keeps the source. One atomic remote commit covers all destination files. overwrite true can replace existing notes.', transfer, ['source', 'destination', 'revision'], receiptSchema),
+  tool('mv', 'Move or rename a note or note directory. Removes old paths and adds new paths in one atomic remote commit. Relative links keep their original file text.', transfer, ['source', 'destination', 'revision'], receiptSchema),
+  tool('rm', 'Remove explicitly listed notes, or directories with recursive true. One atomic remote commit covers all removals. Use glob first to review the exact targets.', { paths: { ...array(pathField), minItems: 1, maxItems: 200 }, recursive: bool('Required to delete a directory and its note files.'), revision: revisionField }, ['paths', 'revision'], receiptSchema),
+  tool('get_workspace_config', 'Read the configured workspace manifest.', {}, [], object({ config: metadata })),
+  tool('list_notebooks', 'List configured notebooks.', {}, [], object({ notebooks: array(metadata) })),
+  tool('list_folders', 'List notebook folder display metadata.', {}, [], object({ folders: array(metadata) })),
+  tool('list_notes', 'Read parsed notes and their Markdown bodies. Prefer glob then read for bounded file inspection.', { notebookId: str('Optional notebook ID.') }, [], object({ notes: array(noteSchema), count: int('Number of notes', 0, 100000) })),
+  tool('read_note', 'Read a parsed note, including metadata and the body without frontmatter. Use read for line-based edits of the complete file.', { path: pathField }, ['path'], object({ note: noteSchema })),
+  tool('save_note', 'Create or replace a parsed note body and optional frontmatter. Commits once and updates the remote branch with a program-generated message.', { path: pathField, content: str('Markdown body without frontmatter.'), revision: revisionField, metadata, createOnly: bool('Reject existing paths.') }, ['path', 'content', 'revision'], { ...receiptSchema, properties: { ...receiptSchema.properties, note: noteSchema }, required: [...receiptSchema.required, 'note'] }),
+  tool('delete_note', 'Delete a note file by path, creating an atomic commit.', { path: pathField, revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['path'], object({ success: { const: true }, path: pathField, commit: object({ commitHash: str('Commit SHA'), message: str('Commit message') }, undefined, true) })),
+  tool('list_assets', 'List notebook assets and their URLs.', { notebookId: str('Optional notebook ID.') }, [], object({ assets: array(metadata) })),
+  tool('add_asset', 'Upload an asset file (base64 encoded) to a notebook assets directory, with optional subfolder path.', { notebookId: str('Notebook identifier, e.g. default'), filename: str('Asset filename, e.g. screenshot.png'), base64Content: str('Base64-encoded binary content of the asset file'), directory: str('Optional subdirectory path within assets/ folder'), revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['notebookId', 'filename', 'base64Content'], object({ success: { const: true }, filename: str('Asset filename'), path: pathField, markdownRef: str('Markdown reference for embedding the asset'), commit: object({ commitHash: str('Commit SHA'), message: str('Commit message') }, undefined, true) })),
+  tool('delete_asset', 'Delete an asset file from a notebook assets directory, creating an atomic commit.', { path: pathField, revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['path'], object({ success: { const: true }, path: pathField, commit: object({ commitHash: str('Commit SHA'), message: str('Commit message') }, undefined, true) })),
+  tool('get_statuses', 'Get all valid note statuses including default, configured, and observed statuses across notes.', { notebookId: str('Optional notebook identifier') }, [], object({ notebookId: str('Notebook identifier'), defaultStatuses: array(str('Status name')), configuredStatuses: array(str('Status name')), observedStatuses: array(str('Status name')), allStatuses: array(str('Status name')) })),
+  tool('get_note_metadata', 'Fast read for note frontmatter metadata and available statuses without loading the markdown body.', { path: pathField }, ['path'], object({ path: pathField, notebookId: str('Notebook identifier'), title: str('Note title'), status: { type: ['string', 'null'], description: 'Note status' }, tags: array(str('Tag name')), metadata, revision: str('Read commit SHA'), availableStatuses: array(str('Status name')) })),
+  tool('update_note_metadata', 'Fast update for note frontmatter metadata without re-sending markdown body.', { path: pathField, status: str('Optional status to update to'), tags: array(str('Tag name')), title: str('Optional title to update'), hidden: bool('Optional hidden boolean flag'), metadata: object({}, [], true), revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['path'], { ...receiptSchema, properties: { ...receiptSchema.properties, note: noteSchema }, required: [...receiptSchema.required, 'note'] }),
+  tool('search_notes', 'Search note files using plain text or regular expressions.', { query: str('Search query or regular expression pattern'), notebookId: str('Optional notebook identifier to search within'), isRegex: bool('Whether query is a regular expression; default false'), caseSensitive: bool('Whether search is case-sensitive; default false') }, ['query'], object({ query: str('Search query'), isRegex: bool('Whether query was treated as regex'), matches: array(object({ path: pathField, title: str('Note title'), notebookId: str('Notebook identifier'), matchCount: int('Number of matches', 0, 1000000) })), totalMatches: int('Total match count', 0, 1000000) })),
+  tool('replace_notes', 'Search and replace text or regular expressions across note files with atomic commit support.', { search: str('Search text or regular expression to match'), replace: str('Replacement text (supports $1, $2 capture groups for regex)'), notebookId: str('Optional notebook identifier to limit replacement scope'), isRegex: bool('Whether search is a regular expression; default false'), caseSensitive: bool('Whether search is case-sensitive; default false'), dryRun: bool('If true, previews matches without saving or committing; default false'), revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['search', 'replace'], object({ success: bool('Success status'), dryRun: bool('Dry run flag'), search: str('Search pattern'), replace: str('Replacement text'), matchedFiles: array(pathField), totalFiles: int('Count of matched files', 0, 100000), commit: object({ commitHash: str('Commit SHA'), message: str('Commit message') }, undefined, true) }, ['success', 'dryRun', 'search', 'replace', 'matchedFiles', 'totalFiles'])),
 ];
 
 function validate(value: unknown, schema: Schema, label: string) {
-  if(schema.type==='object') {
-    if(!value||typeof value!=='object'||Array.isArray(value))throw new Error(`${label} must be an object.`);
-    const object=value as Record<string,unknown>;
-    for(const key of schema.required||[])if(!Object.hasOwn(object,key))throw new Error(`${label}.${key} is required.`);
-    for(const [key,item] of Object.entries(object)) {
-      const child=schema.properties?.[key];
-      if(child)validate(item,child,`${label}.${key}`);
-      else if(schema.additionalProperties===false)throw new Error(`Unknown argument ${key}.`);
+  if (schema.type === 'object') {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} must be an object.`);
+    const object = value as Record<string, unknown>;
+    for (const key of schema.required || []) if (!Object.hasOwn(object, key)) throw new Error(`${label}.${key} is required.`);
+    for (const [key, item] of Object.entries(object)) {
+      const child = schema.properties?.[key];
+      if (child) validate(item, child, `${label}.${key}`);
+      else if (schema.additionalProperties === false) throw new Error(`Unknown argument ${key}.`);
     }
-  } else if(schema.type==='array') {
-    if(!Array.isArray(value)||(schema.minItems!==undefined&&value.length<schema.minItems)||(schema.maxItems!==undefined&&value.length>schema.maxItems))throw new Error(`${label} has an invalid array length.`);
-    value.forEach((item,index)=>validate(item,schema.items,`${label}[${index}]`));
-  } else if(schema.type==='string') {
-    if(typeof value!=='string'||(schema.minLength!==undefined&&value.length<schema.minLength)||(schema.maxLength!==undefined&&value.length>schema.maxLength))throw new Error(`${label} has an invalid string value.`);
-  } else if(schema.type==='boolean') {if(typeof value!=='boolean')throw new Error(`${label} must be boolean.`);}
-  else if(schema.type==='integer') {if(!Number.isInteger(value)||Number(value)<schema.minimum||Number(value)>schema.maximum)throw new Error(`${label} is outside its integer range.`);}
+  } else if (schema.type === 'array') {
+    if (!Array.isArray(value) || (schema.minItems !== undefined && value.length < schema.minItems) || (schema.maxItems !== undefined && value.length > schema.maxItems)) throw new Error(`${label} has an invalid array length.`);
+    value.forEach((item, index) => validate(item, schema.items, `${label}[${index}]`));
+  } else if (schema.type === 'string') {
+    if (typeof value !== 'string' || (schema.minLength !== undefined && value.length < schema.minLength) || (schema.maxLength !== undefined && value.length > schema.maxLength)) throw new Error(`${label} has an invalid string value.`);
+  } else if (schema.type === 'boolean') {
+    if (typeof value !== 'boolean') throw new Error(`${label} must be boolean.`);
+  } else if (schema.type === 'integer') {
+    if (!Number.isInteger(value) || Number(value) < schema.minimum || Number(value) > schema.maximum) throw new Error(`${label} is outside its integer range.`);
+  }
 }
-export async function callRemoteTool(reader: GitHubSource, name: string, args: Record<string, unknown>, write: boolean): Promise<Record<string,unknown>> {
-  const definition=remoteTools.find(t=>t.name===name);
-  if(!definition)throw new Error('This operation is unavailable for a remote source.');
-  validate(args,definition.inputSchema,'arguments');
-  if(isMutationTool(name)&&!write)throw new Error('This agent grant is read-only.');
+
+export async function callRemoteTool(
+  reader: GitHubSource,
+  name: string,
+  args: Record<string, unknown>,
+  write: boolean
+): Promise<Record<string, unknown>> {
+  const definition = remoteTools.find((t) => t.name === name);
+  if (!definition) throw new Error('This operation is unavailable for a remote source.');
+  validate(args, definition.inputSchema, 'arguments');
+  if (isMutationTool(name) && !write) throw new Error('This agent grant is read-only.');
+
   switch (name) {
-    case 'get_workspace_config': return { config: await reader.config() };
-    case 'list_notebooks': return { notebooks: (await reader.config()).notebooks };
-    case 'list_folders': return { folders: await reader.folders() };
-    case 'list_notes': { const notes = await reader.notes(args.notebookId as string | undefined); return { notes, count: notes.length }; }
-    case 'read_note': return { note: await reader.note(String(args.path)) };
-    case 'list_assets': return { assets: await reader.assets(args.notebookId as string | undefined) };
-    case 'save_note': return reader.save(String(args.path),String(args.content),args.metadata as Record<string,unknown>|undefined,String(args.revision),args.createOnly===true);
-    default: return callNoteShell(reader,name,args,write);
+    case 'get_workspace_config':
+      return { config: await reader.config() };
+    case 'list_notebooks':
+      return { notebooks: (await reader.config()).notebooks };
+    case 'list_folders':
+      return { folders: await reader.folders() };
+    case 'list_notes': {
+      const notes = await reader.notes(args.notebookId as string | undefined);
+      return { notes, count: notes.length };
+    }
+    case 'read_note':
+      return { note: await reader.note(String(args.path)) };
+    case 'save_note':
+      return reader.save(
+        String(args.path),
+        String(args.content),
+        args.metadata as Record<string, unknown> | undefined,
+        String(args.revision),
+        args.createOnly === true
+      );
+    case 'delete_note': {
+      const snapshot = await reader.getSnapshot();
+      const rev = String(args.revision || snapshot.sha);
+      const receipt = await reader.commitChanges([{ path: String(args.path), sha: null }], rev, 'delete', 'notes');
+      return { success: true, path: String(args.path), commit: receipt.commit };
+    }
+    case 'list_assets':
+      return { assets: await reader.assets(args.notebookId as string | undefined) };
+    case 'add_asset': {
+      const snapshot = await reader.getSnapshot();
+      const rev = String(args.revision || snapshot.sha);
+      const res = await reader.mutateAsset('upload', { ...args, revision: rev });
+      const config = await reader.config();
+      const nb = config.notebooks.find((n) => n.id === args.notebookId) || config.notebooks[0];
+      const dest = String(res.path);
+      const markdownRel = dest.slice(nb.root.length + 1);
+      return {
+        ...res,
+        filename: path.posix.basename(dest),
+        path: dest,
+        markdownRef: `![${path.posix.basename(dest)}](${markdownRel})`,
+      };
+    }
+    case 'delete_asset': {
+      const snapshot = await reader.getSnapshot();
+      const rev = String(args.revision || snapshot.sha);
+      const res = await reader.mutateAsset('delete', { ...args, revision: rev });
+      return { success: true, path: String(args.path), commit: res.commit };
+    }
+    case 'get_statuses': {
+      const config = await reader.config();
+      const defaultStatuses = ['inbox', 'working', 'done', 'archived'];
+      const nb = args.notebookId ? config.notebooks.find((n) => n.id === args.notebookId) : config.notebooks[0];
+      const configuredStatuses = nb?.statuses && nb.statuses.length > 0 ? nb.statuses : defaultStatuses;
+      const notes = await reader.notes(args.notebookId as string | undefined);
+      const observedStatuses = Array.from(new Set(notes.map((n) => n.status).filter(Boolean))) as string[];
+      const allStatuses = Array.from(new Set([...configuredStatuses, ...observedStatuses]));
+      return {
+        notebookId: nb?.id || 'default',
+        defaultStatuses,
+        configuredStatuses,
+        observedStatuses,
+        allStatuses,
+      };
+    }
+    case 'get_note_metadata': {
+      const note = await reader.note(String(args.path));
+      const config = await reader.config();
+      const nb = config.notebooks.find((n) => n.id === note.notebookId);
+      const availableStatuses = nb?.statuses && nb.statuses.length > 0 ? nb.statuses : ['inbox', 'working', 'done', 'archived'];
+      return {
+        path: note.path,
+        notebookId: note.notebookId,
+        title: note.title,
+        status: note.status || null,
+        tags: note.tags,
+        metadata: note.metadata,
+        revision: note.revision,
+        availableStatuses,
+      };
+    }
+    case 'update_note_metadata': {
+      const note = await reader.note(String(args.path));
+      const config = await reader.config();
+      const nb = config.notebooks.find((n) => n.id === note.notebookId);
+      const availableStatuses = nb?.statuses && nb.statuses.length > 0 ? nb.statuses : ['inbox', 'working', 'done', 'archived'];
+      if (args.status !== undefined && args.status !== '' && !availableStatuses.includes(String(args.status))) {
+        throw new Error(`Invalid status '${args.status}'. Available statuses: ${availableStatuses.join(', ')}`);
+      }
+      let newMetadata: Record<string, unknown> = { ...note.metadata, ...(args.metadata as Record<string, unknown> || {}) };
+      if (args.status !== undefined) newMetadata = withNoteStatus(newMetadata, String(args.status));
+      if (args.tags !== undefined) newMetadata.tags = args.tags;
+      if (args.title !== undefined) newMetadata.title = args.title;
+      if (args.hidden !== undefined) newMetadata.hiden = Boolean(args.hidden);
+      const snapshot = await reader.getSnapshot();
+      const rev = String(args.revision || snapshot.sha);
+      return reader.save(note.path, note.content, newMetadata, rev, false);
+    }
+    case 'search_notes': {
+      const notes = await reader.notes(args.notebookId as string | undefined);
+      const query = String(args.query);
+      const isRegex = Boolean(args.isRegex);
+      const caseSensitive = Boolean(args.caseSensitive);
+      let regex: RegExp;
+      if (isRegex) {
+        regex = new RegExp(query, caseSensitive ? 'g' : 'gi');
+      } else {
+        const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        regex = new RegExp(escaped, caseSensitive ? 'g' : 'gi');
+      }
+      const matches = [];
+      for (const note of notes) {
+        const contentMatches = note.content.match(regex);
+        const titleMatches = note.title.match(regex);
+        const count = (contentMatches?.length || 0) + (titleMatches?.length || 0);
+        if (count > 0) {
+          matches.push({
+            path: note.path,
+            title: note.title,
+            notebookId: note.notebookId,
+            matchCount: count,
+          });
+        }
+      }
+      return {
+        query,
+        isRegex,
+        matches,
+        totalMatches: matches.reduce((acc, m) => acc + m.matchCount, 0),
+      };
+    }
+    case 'replace_notes': {
+      const notes = await reader.notes(args.notebookId as string | undefined);
+      const search = String(args.search);
+      const replace = String(args.replace);
+      const isRegex = Boolean(args.isRegex);
+      const caseSensitive = Boolean(args.caseSensitive);
+      const dryRun = Boolean(args.dryRun);
+      let regex: RegExp;
+      if (isRegex) {
+        regex = new RegExp(search, caseSensitive ? 'g' : 'gi');
+      } else {
+        const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        regex = new RegExp(escaped, caseSensitive ? 'g' : 'gi');
+      }
+      const modified: { path: string; metadata: any; content: string }[] = [];
+      for (const note of notes) {
+        if (regex.test(note.content)) {
+          regex.lastIndex = 0;
+          const newContent = note.content.replace(regex, replace);
+          modified.push({ path: note.path, metadata: note.metadata, content: newContent });
+        }
+      }
+      if (dryRun) {
+        return {
+          success: true,
+          dryRun: true,
+          search,
+          replace,
+          matchedFiles: modified.map((n) => n.path),
+          totalFiles: modified.length,
+        };
+      }
+      if (modified.length === 0) {
+        return {
+          success: true,
+          dryRun: false,
+          search,
+          replace,
+          matchedFiles: [],
+          totalFiles: 0,
+        };
+      }
+      const snapshot = await reader.getSnapshot();
+      const rev = String(args.revision || snapshot.sha);
+      const changes = modified.map((n) => ({
+        path: n.path,
+        content: serializeNoteContent(n.metadata, n.content),
+      }));
+      const receipt = await reader.commitChanges(
+        changes,
+        rev,
+        'replace',
+        'notes',
+        `docs(notes): replace "${search}" across ${modified.length} notes`
+      );
+      return {
+        success: true,
+        dryRun: false,
+        search,
+        replace,
+        matchedFiles: modified.map((n) => n.path),
+        totalFiles: modified.length,
+        commit: receipt.commit,
+      };
+    }
+    default:
+      return callNoteShell(reader, name, args, write);
   }
 }
