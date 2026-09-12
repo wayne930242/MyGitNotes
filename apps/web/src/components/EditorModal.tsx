@@ -525,30 +525,30 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
         {showFrontmatter && (
           <fieldset disabled={locked} className="note-metadata shrink-0 min-w-0 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 p-4 grid grid-cols-1 md:grid-cols-4 gap-4 text-xs animate-fadeIn">
             <div>
-              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">Title</label>
+              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">{t('editor.title')}</label>
               <input
                 type="text"
                 value={String(metadata.title || '')}
                 onChange={(e) => setMetadata({ ...metadata, title: e.target.value })}
-                placeholder="Note Title"
+                placeholder={t('editor.titlePlaceholder')}
                 className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100 focus:outline-none"
               />
             </div>
             <div>
-              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">Status</label>
-              <Select aria-label="Note status" disabled={locked} value={String(metadata.status || '')} onValueChange={value => setMetadata(withNoteStatus(metadata, value))} options={Array.from(new Set(['', ...statuses, String(metadata.status || '')])).map(value => ({value,label:value || '(No status)'}))} className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100 focus:outline-none" />
+              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">{t('editor.status')}</label>
+              <Select aria-label={t('editor.status')} disabled={locked} value={String(metadata.status || '')} onValueChange={value => setMetadata(withNoteStatus(metadata, value))} options={Array.from(new Set(['', ...statuses, String(metadata.status || '')])).map(value => ({value,label:value || t('editor.noStatus')}))} className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100 focus:outline-none" />
               <label className="flex items-center gap-2 min-h-11 cursor-pointer">
-                <input type="checkbox" aria-label="Hide note" checked={isNoteHidden(metadata)}
+                <input type="checkbox" aria-label={t('editor.hideNote')} checked={isNoteHidden(metadata)}
                   onChange={event => setMetadata({ ...metadata, hiden: event.target.checked })}
                   className="w-4 h-4 accent-indigo-600" />
-                Hide note
+                {t('editor.hideNote')}
               </label>
             </div>
 
             {/* Tags with Autocomplete (Requirement 4) */}
             <div className="md:col-span-2 relative">
               <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">
-                Tags (Type to Autocomplete)
+                {t('editor.tags')}
               </label>
               <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md min-h-[35px] relative">
                 {currentTags.map((tag) => (
@@ -584,7 +584,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
                         handleRemoveTag(currentTags[currentTags.length - 1]);
                       }
                     }}
-                    placeholder={currentTags.length === 0 ? "Add tag (e.g. project)..." : "Add..."}
+                    placeholder={currentTags.length === 0 ? t('editor.addTagPlaceholder') : t('editor.addPlaceholder')}
                     className="w-full text-xs bg-transparent focus:outline-none text-slate-900 dark:text-slate-100"
                   />
 
@@ -602,7 +602,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
                           className="w-full text-left px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between text-slate-800 dark:text-slate-200"
                         >
                           <span className="font-semibold">{st}</span>
-                          <span className="text-[10px] text-slate-400">add</span>
+                          <span className="text-[10px] text-slate-400">{t('editor.add')}</span>
                         </button>
                       ))}
                     </div>
@@ -613,7 +613,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
               {/* Quick suggestion suggestions below */}
               {suggestedTags.length > 0 && !tagInput && (
                 <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-400 flex-wrap">
-                  <span>Suggestions:</span>
+                  <span>{t('editor.suggestions')}</span>
                   {suggestedTags.slice(0, 5).map((st) => (
                     <button
                       key={st}
@@ -636,9 +636,9 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
         {/* Modal Bottom Bar: Auto-save status & Note Stats */}
         <div className="note-footer shrink-0 px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 flex items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">
           <div className="flex items-center gap-3">
-            <span>{content.trim().split(/\s+/).filter(Boolean).length} words</span>
+            <span>{t('editor.words', { count: content.trim().split(/\s+/).filter(Boolean).length })}</span>
             <span className="text-slate-300 dark:text-slate-700">·</span>
-            <span>{content.length} characters</span>
+            <span>{t('editor.characters', { count: content.length })}</span>
             <span className="text-slate-300 dark:text-slate-700">·</span>
             <span className="font-mono text-slate-400 dark:text-slate-500">{note.path}</span>
           </div>
@@ -647,28 +647,28 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
             {isSaving ? (
               <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
                 <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                {draftMode ? 'Saving locally...' : autoSave ? 'Auto-saving to disk...' : 'Saving to GitHub...'}
+                {draftMode ? t('editor.savingLocally') : autoSave ? t('editor.autoSavingToDisk') : t('editor.savingToGitHub')}
               </span>
             ) : isDirty ? (
               <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
                 <span className="w-2 h-2 rounded-full bg-amber-500" />
-                {draftMode ? (hasUnsavedChanges ? 'Unsaved local changes' : 'Saved locally · Pending commit') : autoSave ? 'Uncommitted Changes' : 'Unsaved Changes'}
+                {draftMode ? (hasUnsavedChanges ? t('editor.unsavedLocalChanges') : t('editor.savedLocallyPendingCommit')) : autoSave ? t('editor.uncommittedChanges') : t('editor.unsavedChanges')}
               </span>
             ) : (
               <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
                 <Check className="w-3.5 h-3.5" />
-                {readOnly ? 'Read-only' : draftMode ? 'No pending changes' : autoSave ? 'Clean (Saved to disk)' : 'Saved to GitHub'}
+                {readOnly ? t('editor.readOnly') : draftMode ? t('editor.noPendingChanges') : autoSave ? t('editor.cleanSavedToDisk') : t('editor.savedToGitHub')}
               </span>
             )}
             <span className="text-slate-300 dark:text-slate-700">|</span>
-            <span className="font-mono text-slate-400 dark:text-slate-500">Branch: {branch}</span>
+            <span className="font-mono text-slate-400 dark:text-slate-500">{t('editor.branch', { branch })}</span>
           </div>
         </div>
       </div>
 
-      {isAssetPickerOpen && <div role="dialog" aria-label="Note assets" aria-modal="true" className="viewport-overlay fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+      {isAssetPickerOpen && <div role="dialog" aria-label={t('editor.notebookAssets')} aria-modal="true" className="viewport-overlay fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="rounded-2xl border shadow-2xl w-full max-w-3xl max-h-[85dvh] flex flex-col overflow-hidden" style={{ backgroundColor:'var(--color-surface)',borderColor:'var(--color-border)' }}>
-          <div className="p-4 border-b shrink-0 flex items-center justify-between" style={{ borderColor:'var(--color-border)' }}><span className="font-semibold text-sm text-slate-900 dark:text-slate-100">Notebook Assets</span><button aria-label="Close note assets" onClick={() => setIsAssetPickerOpen(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 p-1 rounded-lg transition"><X className="w-5 h-5" /></button></div>
+          <div className="p-4 border-b shrink-0 flex items-center justify-between" style={{ borderColor:'var(--color-border)' }}><span className="font-semibold text-sm text-slate-900 dark:text-slate-100">{t('editor.notebookAssets')}</span><button aria-label={t('editor.closeNotebookAssets')} onClick={() => setIsAssetPickerOpen(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 p-1 rounded-lg transition"><X className="w-5 h-5" /></button></div>
           <div className="p-4 overflow-y-auto"><AssetLibrary assets={assets} onUploadAsset={locked ? undefined : onUploadAsset} onDeleteAsset={locked ? undefined : onDeleteAsset} onMoveAsset={locked ? undefined : onMoveAsset} onInsert={locked ? undefined : asset => handleInsertAssetRef(asset.markdownRef)} /></div>
         </div>
       </div>}
