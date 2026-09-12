@@ -105,6 +105,7 @@ export async function callNoteShell(reader: GitHubSource, operation: string, arg
     const matcher=matchNoteGlob(string(args,'pattern','**/*'));const files=blobs.filter(e=>matcher(e.path));
     const fileOffset=integer(args,'fileOffset',0,0,100000);const maxFiles=integer(args,'maxFiles',25,1,100);const maxResults=integer(args,'maxResults',100,1,500);
     const sensitive=args.caseSensitive===true;const needle=sensitive?query:query.toLowerCase();
+    await reader.prefetchFiles(files.slice(fileOffset,fileOffset+maxFiles).map(file=>file.path));
     const matches:{path:string;line:number;text:string}[]=[];let scannedFiles=0;let truncated=false;
     for(const file of files.slice(fileOffset,fileOffset+maxFiles)) {
       const lines=textLines(await read(file.path));scannedFiles++;

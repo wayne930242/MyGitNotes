@@ -93,6 +93,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   const [remoteNotice, setRemoteNotice] = useState('');
   const [conflictDraft, setConflictDraft] = useState<NoteDraft | null>(() => getLocalDraft(`${draftScope || branch}:conflict`, note.path));
   const operation = useRef(false);
+  const nextRemoteCheck = useRef(0);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const current = useRef({ content, metadata, baseNote, blocked });
@@ -125,6 +126,9 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   };
   const handleRemoteFailure = (error: unknown) => {
     if (!mounted.current) return;
+    if (error instanceof ApiError && (error.retryAfter || error.status === 429)) {
+      nextRemoteCheck.current = Date.now() + (error.retryAfter || 60) * 1000;
+    }
     if (error instanceof ApiError && error.status === 404) {
       preserveConflict(); current.current.blocked = true; setBlocked(true);
       const reason = 'This note was moved or deleted remotely. Your draft is preserved. Refresh after the note is restored, or open its new location.';
@@ -133,7 +137,8 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     } else setSaveError((error as Error).message);
   };
   const checkRemote = async () => {
-    if (!onReadRemote || operation.current || current.current.blocked) return;
+    if (!onReadRemote || operation.current || current.current.blocked || Date.now() < nextRemoteCheck.current) return;
+    nextRemoteCheck.current = Date.now() + (readOnly ? 300000 : 60000);
     operation.current = true;
     try { const latest = await onReadRemote(note.path); if (mounted.current) applyRemote(latest); }
     catch (error) { handleRemoteFailure(error); }
@@ -144,10 +149,10 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     if (!onReadRemote) return;
     void checkRemoteRef.current();
     const check = () => { if (document.visibilityState === 'visible') void checkRemoteRef.current(); };
-    const timer = window.setInterval(check, 30000);
+    const timer = window.setInterval(check, readOnly ? 300000 : 60000);
     window.addEventListener('focus', check); document.addEventListener('visibilitychange', check);
     return () => { clearInterval(timer); window.removeEventListener('focus', check); document.removeEventListener('visibilitychange', check); };
-  }, [onReadRemote, note.path]);
+  }, [onReadRemote, note.path, readOnly]);
   const refreshRemote = async () => {
     if (!onReadRemote || operation.current) return;
     operation.current = true; setIsSaving(true);

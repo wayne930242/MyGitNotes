@@ -51,7 +51,8 @@ export function createApp(base: string): express.Express {
     app.get('/api/workspace', async (req, res) => {
       try {
         const reader: GitHubSource = res.locals.reader;
-        const [config, snapshot] = await Promise.all([reader.config(), reader.getSnapshot()]);
+        const snapshot = await reader.getSnapshot(req.query.fresh === '1');
+        const config = await reader.config();
         res.json({ repoRoot: '', branch: reader.branch, config, gitStatus: { branch: reader.branch, isClean: true, staged: [], modified: [], untracked: [] },
           isCoreBranch: reader.branch === 'core', source: { type: 'github', identity: sourceIdentity(source!), repository: reader.repository },
           revision: snapshot.sha, capabilities: { write: Boolean(res.locals.authenticated && snapshot.info.permissions?.push && reader.branch === 'main'), local: false } });
@@ -60,6 +61,10 @@ export function createApp(base: string): express.Express {
     app.get('/api/notes', async (req, res) => { try { res.json({ notes: await (res.locals.reader as GitHubSource).notes(req.query.notebookId as string) }); } catch (error) { fail(res, error); } });
     app.get('/api/folders', async (req, res) => { try { res.json({ folders: await (res.locals.reader as GitHubSource).folders() }); } catch (error) { fail(res, error); } });
     app.get('/api/notes/read', async (req, res) => { try { res.json({ note: await (res.locals.reader as GitHubSource).note(String(req.query.path || '')) }); } catch (error) { fail(res, error); } });
+    app.post('/api/notes/read-batch', async (req, res) => {
+      try { res.json({ notes: await (res.locals.reader as GitHubSource).readNotes(req.body.paths, req.body.revision) }); }
+      catch (error) { fail(res, error); }
+    });
     app.get('/api/assets', async (req, res) => { try { res.json({ assets: await (res.locals.reader as GitHubSource).assets(req.query.notebookId as string) }); } catch (error) { fail(res, error); } });
     for (const [method, operation] of [['post', 'upload'], ['patch', 'move'], ['delete', 'delete']] as const) {
       app[method]('/api/assets', async (req, res) => {
@@ -151,5 +156,7 @@ export function createApp(base: string): express.Express {
 }
 
 function fail(res: express.Response, error: unknown) {
-  res.status(error instanceof SourceError ? error.status : 500).json({ error: error instanceof Error ? error.message : 'Request failed.' });
+  const retryAfter = error instanceof SourceError ? error.retryAfter : undefined;
+  if (retryAfter) res.setHeader('Retry-After', String(retryAfter));
+  res.status(error instanceof SourceError ? error.status : 500).json({ error: error instanceof Error ? error.message : 'Request failed.', ...(retryAfter ? { retryAfter } : {}) });
 }

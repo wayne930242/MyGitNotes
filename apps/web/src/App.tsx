@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { notebookRoute, noteRoute, parseWorkspaceRoute, WorkspaceTab } from './lib/routes.js';
 import { readWorkingNotes, updateWorkingNote, clearCommittedNotes, overlayWorkingNotes, workingDiff, WorkingNotes } from './lib/working-notes.js';
 import { mergeNote, sameValue } from './lib/merge-note.js';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   fetchWorkspace,
   commitRemoteNotes,
@@ -12,6 +12,7 @@ import {
   fetchFolders,
   fetchNotes,
   readNote,
+  readNotes,
   saveNote,
   deleteNote,
   restoreNote,
@@ -93,6 +94,7 @@ const AppContent: React.FC = () => {
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [sourceId, setSourceId] = useState('');
   const [remote, setRemote] = useState(false);
+  const loadedRemote = useRef(false);
   const [canWrite, setCanWrite] = useState(false);
   const [revision, setRevision] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -233,6 +235,7 @@ const AppContent: React.FC = () => {
   const refreshWorkspace = async () => {
     try {
       const ws = await fetchWorkspace();
+      loadedRemote.current = !ws.capabilities.local;
       setSourceId(ws.source.identity);
       setRemote(!ws.capabilities.local);
       setCanWrite(ws.capabilities.write);
@@ -248,10 +251,6 @@ const AppContent: React.FC = () => {
       const noteList = await fetchNotes();
       setNotes(noteList);
 
-      if (selectedNotebookId) {
-        const assetList = await fetchAssets(selectedNotebookId);
-        setAssets(assetList);
-      }
     } catch (err) {
       setNotes([]); setFolders([]); setAssets([]); setConfig(null);
       setLoadError(err instanceof Error ? err.message : 'Failed to load workspace');
@@ -259,8 +258,15 @@ const AppContent: React.FC = () => {
   };
 
   useEffect(() => {
-    refreshWorkspace();
+    if (!loadedRemote.current) refreshWorkspace();
   }, [selectedNotebookId]);
+
+  useEffect(() => {
+    if (!sourceId || !config) return;
+    let active = true;
+    fetchAssets(selectedNotebookId).then(items => { if (active) setAssets(items); }).catch(console.error);
+    return () => { active = false; };
+  }, [sourceId, selectedNotebookId, config]);
 
   useEffect(() => {
     if (loading || !config) return;
@@ -518,17 +524,23 @@ const AppContent: React.FC = () => {
     const pending = readWorkingNotes(workingScope);
     const selected = files.map(file => pending[file]).filter(Boolean);
     if (selected.length !== files.length) throw new Error('Pending files changed. Review the selection again.');
-    const workspace = await fetchWorkspace();
+    const workspace = await fetchWorkspace(true);
     if (!workspace.capabilities.write || workspace.source.identity !== sourceId) throw new Error('Sign in with write access to this workspace before committing.');
     const expected = workspace.revision!;
     const sent: WorkingNotes = {};
     let reviewRequired = false;
+    const existingPaths = selected.filter(entry => entry.base).map(entry => entry.note.path);
+    const latestNotes = existingPaths.length ? await readNotes(existingPaths, expected) : [];
+    const latestByPath = new Map(latestNotes.map(note => [note.path, note]));
     for (const entry of selected) {
       if (entry.blocked) throw new Error(`${entry.note.path}: ${entry.blocked}`);
       let prepared = entry;
       if (entry.base) {
         let latest: NoteItem;
-        try { latest = await readNote(entry.note.path); }
+        try {
+          latest = latestByPath.get(entry.note.path)!;
+          if (!latest) throw new ApiError('Note moved or deleted remotely.', 404);
+        }
         catch (error) {
           if (error instanceof ApiError && error.status === 404) {
             const blocked = 'Moved or deleted remotely. Open the note and refresh after it is restored.';
