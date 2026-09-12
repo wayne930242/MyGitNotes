@@ -41,6 +41,8 @@ pnpm dev
 在瀏覽器中開啟 [http://localhost:5173](http://localhost:5173)。本地 API 執行於 `http://127.0.0.1:4321`。
 亦可執行 `pnpm dev:server` 直接在 `http://127.0.0.1:4321` 預覽建置後的前端。
 
+開發指令會直接讀取本地儲存庫，不需要 GitHub 登入，即使 `.env` 中保留了部署設定也一樣。可用 `REPO_ROOT=/path/to/workspace pnpm dev` 開啟另一個本地工作區。若要依設定使用 GitHub 等資料來源，請執行 `pnpm --filter @github-notes/local-server start`，並搭配 `pnpm dev:web` 啟動前端。
+
 ## 主要特色（Key Features）
 
 - **本地優先與 Git 原生（Local-First & Git-Native）**：完整的本地檔案系統控制權。編輯內容會立即儲存於本地；點擊頁尾的 Commit 即可將選取的筆記變更打包為單一 Git commit 發布。

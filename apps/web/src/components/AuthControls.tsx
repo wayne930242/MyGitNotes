@@ -36,7 +36,9 @@ function useSession() {
   useEffect(() => { fetch('/api/auth/session').then(r => r.json()).then(setSession).catch(() => {}); }, []);
   return session;
 }
-export function AuthControls({ local = false }: { local?: boolean }) {
+const connectionActionClass = 'inline-flex min-h-11 items-center justify-center px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0';
+
+export function AuthControls({ local = false, connection = false }: { local?: boolean; connection?: boolean }) {
   const { t } = useTranslation();
   const session = useSession();
   if (local) return null;
@@ -46,7 +48,7 @@ export function AuthControls({ local = false }: { local?: boolean }) {
       const response = await fetch('/api/auth/logout', { method: 'POST' });
       if (response.ok) window.location.reload();
     }}>{t('auth.signOut')}</button>
-  </div> : <a href="/api/auth/github" className="px-3 py-1.5 rounded-lg text-white text-xs shrink-0 hover:opacity-90 active:scale-95 transition" style={{ backgroundColor: 'var(--color-primary)' }}>{t('auth.signInWithGithub')}</a>;
+  </div> : <a href="/api/auth/github" className={`${connection ? connectionActionClass : 'px-3 py-1.5 rounded-lg text-xs shrink-0'} text-white hover:opacity-90 active:scale-95 transition`} style={{ backgroundColor: 'var(--color-primary)' }}>{t('auth.signInWithGithub')}</a>;
 }
 export function AgentAccessSettings({ local = false }: { local?: boolean }) {
   const { t, language } = useTranslation();
@@ -179,5 +181,5 @@ export function AgentAccessSettings({ local = false }: { local?: boolean }) {
 }
 export function ConnectionState({ loading, error, onRetry }: { loading: boolean; error: string; onRetry: () => void }) {
   const { t } = useTranslation();
-  return <main className="min-h-screen p-8 flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}><div className="max-w-xl w-full p-8 rounded-2xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}><h1 className="text-2xl font-semibold mb-4">GitHub Notes</h1><p role="status" className="mb-6">{loading ? t('auth.openingWorkspace') : error}</p>{!loading && <div className="flex items-center gap-4"><button onClick={onRetry} className="px-4 py-2 border rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition active:scale-95">{t('auth.retry')}</button><AuthControls /></div>}</div></main>;
+  return <main className="min-h-screen p-8 flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}><div className="max-w-xl w-full p-8 rounded-2xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}><h1 className="text-2xl font-semibold mb-4">GitHub Notes</h1><p role="status" className="mb-6">{loading ? t('auth.openingWorkspace') : error}</p>{!loading && <div className="flex flex-wrap items-center gap-3"><button onClick={onRetry} className={`${connectionActionClass} border hover:bg-black/5 dark:hover:bg-white/10 transition active:scale-95`}>{t('auth.retry')}</button><AuthControls connection /></div>}</div></main>;
 }

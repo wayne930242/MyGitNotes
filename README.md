@@ -41,6 +41,8 @@ pnpm dev
 Open [http://localhost:5173](http://localhost:5173) in your browser. The local API runs on `http://127.0.0.1:4321`.
 Alternatively, run `pnpm dev:server` to preview the built frontend directly on `http://127.0.0.1:4321`.
 
+Development commands read the local repository without GitHub sign-in, even if `.env` contains deployment settings. Set `REPO_ROOT=/path/to/workspace pnpm dev` to open another local checkout. To run with the configured source (including GitHub), use `pnpm --filter @github-notes/local-server start`; `pnpm dev:web` can run the frontend alongside it.
+
 ## Key Features
 
 - **Local-First & Git-Native**: Full local filesystem control. Editing saves locally; the Commit footer publishes selected note changes as one Git commit.
