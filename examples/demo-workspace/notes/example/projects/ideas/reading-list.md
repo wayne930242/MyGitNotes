@@ -1,25 +1,25 @@
 ---
-title: 閱讀清單
-tags: [靈感]
+title: Reading List
+tags: [inspiration]
 status: inbox
 ---
-# 閱讀清單
+# Reading List
 
-先收集，再整理。這篇筆記放在兩層資料夾 `projects/ideas/`，狀態為 inbox。
+Capture first, organize later. This note lives inside nested directories under `projects/ideas/` with status `inbox`.
 
-- [ ] 記下想閱讀的文章名稱與連結
-- [ ] 寫下一個想釐清的問題
-- [ ] 閱讀後留下三行摘要
-- [ ] 將下一步移到 [每週回顧](../weekly-review.md)
+- [ ] Note down article titles and URLs to read
+- [ ] Formulate a core question to explore
+- [ ] Write a three-line summary after reading
+- [ ] Move actionable next steps to [Weekly Review](../weekly-review.md)
 
-## 摘要模板
+## Summary Template
 
-### 主題
+### Topic
 
-來源：
+Source:
 
-我的理解：
+Takeaways:
 
-下一步：
+Next Steps:
 
-資料夾中的 `_dir.yml` 可設定側欄名稱與排序；筆記路徑保持原樣。用標籤串起跨資料夾的相關主題。
+A `_dir.yml` file in each folder configures sidebar titles and ordering without altering physical disk paths. Use tags to connect related topics across directories.
