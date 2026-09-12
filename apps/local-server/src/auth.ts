@@ -63,9 +63,16 @@ export class SessionStore {
       catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
     }
     if (!raw) return null;
-    const record = unseal(raw);
-    if (record.expires !== null && record.expires <= Date.now()) { await this.deleteByDigest(hash); return null; }
-    return record.value;
+    let record: any;
+    try {
+      record = unseal(raw);
+    } catch {
+      // Key rotated or record corrupted; self-heal by pruning stale record
+      await this.deleteByDigest(hash);
+      return null;
+    }
+    if (record?.expires !== null && record?.expires <= Date.now()) { await this.deleteByDigest(hash); return null; }
+    return record?.value;
   }
   async delete(id: string) {
     if (/^[A-Za-z0-9_-]{43}$/.test(id)) await this.deleteByDigest(digest(id));

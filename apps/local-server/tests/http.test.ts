@@ -189,4 +189,27 @@ describe('durable Redis grant records',()=>{
     expect(await store.get(token)).toBeNull();expect(members.size).toBe(0);
     await store.set(token,{kind:'oauth'},600);expect(commands.filter(c=>c[0]==='SET').at(-1)?.slice(-2)).toEqual(['EX','600']);
   });
+  it('self-heals and prunes undecryptable records when session secret is rotated', async () => {
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://redis.test');
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'redis-token');
+    const records = new Map<string, string>();
+    const members = new Set<string>();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+      const c = JSON.parse(String(init?.body));
+      let result: unknown = null;
+      if (c[0] === 'GET') result = records.get(c[1]) || null;
+      if (c[0] === 'DEL') { records.delete(c[1]); result = 1; }
+      if (c[0] === 'SREM') { members.delete(c[2]); result = 1; }
+      if (c[0] === 'SMEMBERS') result = [...members];
+      return new Response(JSON.stringify({ result }));
+    });
+    const hash = 'a'.repeat(64);
+    records.set(`gh-notes:${hash}`, 'invalid-ciphertext-or-old-key-data');
+    members.add(hash);
+    const store = new SessionStore(root);
+    const grants = await store.listGrants(1);
+    expect(grants).toEqual([]);
+    expect(records.has(`gh-notes:${hash}`)).toBe(false);
+    expect(members.has(hash)).toBe(false);
+  });
 });
