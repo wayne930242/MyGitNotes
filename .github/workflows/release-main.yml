@@ -27,8 +27,8 @@ jobs:
           pnpm install --frozen-lockfile
       - name: Verify Core
         run: |
-          pnpm test
           pnpm build
+          pnpm test
       - name: Rebase main and synchronize examples
         id: sync
         env:

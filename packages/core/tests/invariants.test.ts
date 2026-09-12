@@ -12,21 +12,13 @@ describe('Core Repository & Invariant Guardrails', () => {
     expect(userNoteClassification.type).not.toBe('product_source');
   });
 
-  it('ensures notes/ directory has .github-notes.yaml and example notebook at root', () => {
+  it('keeps starter examples in Core and classifies copied files as workspace content', () => {
     const projectRoot = path.resolve(__dirname, '../../../');
-    const notesConfig = path.join(projectRoot, 'notes', WORKSPACE_CONFIG_FILENAME);
-    const welcomeNote = path.join(projectRoot, 'notes/example/welcome.md');
-    const notesAgents = path.join(projectRoot, 'notes/AGENTS.md');
-    const notebookAgents = path.join(projectRoot, 'notes/example/AGENTS.md');
-
-    expect(fs.existsSync(notesConfig)).toBe(true);
-    expect(fs.existsSync(welcomeNote)).toBe(true);
-    expect(fs.existsSync(notesAgents)).toBe(true);
-    expect(fs.existsSync(notebookAgents)).toBe(true);
-
-    const welcomeContent = fs.readFileSync(welcomeNote, 'utf-8');
-    expect(welcomeContent).toMatch(/^---\r?\nid: welcome/);
-
+    const template = path.join(projectRoot, 'examples/demo-workspace');
+    expect(fs.existsSync(path.join(template, WORKSPACE_CONFIG_FILENAME))).toBe(true);
+    expect(fs.existsSync(path.join(template, 'notes/example/welcome.md'))).toBe(true);
+    expect(classifyResource('examples/demo-workspace/notes/example/welcome.md').type).toBe('product_source');
+    expect(classifyResource('.github-notes.yaml').type).toBe('workspace_config');
     expect(classifyResource('notes/.github-notes.yaml').type).toBe('workspace_config');
     expect(classifyResource('notes/AGENTS.md').type).toBe('agent_instruction');
     expect(classifyResource('notes/example/welcome.md').type).toBe('note');
