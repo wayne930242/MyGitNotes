@@ -17,6 +17,40 @@ describe('copyToClipboard', () => {
     expect(writeText).toHaveBeenCalledWith('mcp-token-xyz');
   });
 
+  it('copies the displayed URL synchronously before a pending clipboard permission request', async () => {
+    const writeText = vi.fn(() => new Promise<void>(() => {}));
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    vi.stubGlobal('window', {});
+    const target = {
+      value: 'https://example.com/mcp/test-token',
+      readOnly: true,
+      focus: vi.fn(),
+      select: vi.fn(),
+      setSelectionRange: vi.fn(),
+    } as unknown as HTMLInputElement;
+    const execCommand = vi.fn(() => {
+      expect(target.readOnly).toBe(false);
+      return true;
+    });
+    vi.stubGlobal('document', { execCommand });
+
+    const result = copyToClipboard(target.value, target);
+    expect(execCommand).toHaveBeenCalledWith('copy');
+    expect(writeText).not.toHaveBeenCalled();
+    expect(await result).toBe(true);
+    expect(target.readOnly).toBe(true);
+  });
+
+  it('uses the requested text when the displayed value differs', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    vi.stubGlobal('window', {});
+    const target = { value: 'old-url', select: vi.fn() } as unknown as HTMLInputElement;
+    expect(await copyToClipboard('new-url', target)).toBe(true);
+    expect(writeText).toHaveBeenCalledWith('new-url');
+    expect(target.select).not.toHaveBeenCalled();
+  });
+
   it('falls back to execCommand when navigator.clipboard throws', async () => {
     const writeText = vi.fn().mockRejectedValue(new Error('Permission denied'));
     vi.stubGlobal('navigator', { clipboard: { writeText } });

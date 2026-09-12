@@ -8,21 +8,9 @@ export async function copyToClipboard(
 ): Promise<boolean> {
   if (typeof window === 'undefined') return false;
 
-  // 1. Try Modern Clipboard API first if available
-  if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      // Modern Clipboard API failed (e.g. document not focused, non-secure context, permission denied, or Safari restriction)
-      // Fall through to execCommand
-    }
-  }
-
-  // 2. If targetElement is provided and attached, try selecting it directly.
-  // In WebKit/Safari, document.execCommand('copy') fails if the input has readOnly=true.
-  // We temporarily toggle readOnly if present.
-  if (targetElement && typeof targetElement.select === 'function') {
+  // Copy the displayed value while the click's user activation is still active.
+  // This also completes when the asynchronous Clipboard API would await permission.
+  if (targetElement && targetElement.value === text && typeof targetElement.select === 'function') {
     const wasReadOnly = targetElement.readOnly;
     try {
       if (wasReadOnly) {
@@ -44,7 +32,16 @@ export async function copyToClipboard(
       if (wasReadOnly) {
         targetElement.readOnly = true;
       }
-      // Fall through to temporary textarea
+      // Continue with the Clipboard API.
+    }
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Continue with a temporary textarea.
     }
   }
 
