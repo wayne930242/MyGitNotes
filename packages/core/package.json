@@ -1,0 +1,27 @@
+{
+  "name": "@github-notes/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./note-status": { "types": "./dist/note-status.d.ts", "import": "./dist/note-status.js" }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "picomatch": "^4.0.3",
+    "yaml": "^2.5.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "@types/picomatch": "^4.0.2",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.1"
+  }
+}

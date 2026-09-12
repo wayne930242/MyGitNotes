@@ -1,0 +1,197 @@
+import YAML from 'yaml';
+import path from 'node:path';
+import fs from 'node:fs';
+import { WorkspaceConfig, NotebookConfig } from './types.js';
+
+export const WORKSPACE_CONFIG_FILENAME = '.github-notes.yaml';
+
+export class ConfigValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConfigValidationError';
+  }
+}
+
+/**
+ * Validates a parsed WorkspaceConfig object according to project invariants.
+ */
+export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
+  if (!config || typeof config !== 'object') {
+    throw new ConfigValidationError('Configuration must be an object');
+  }
+
+  const raw = config as Record<string, unknown>;
+
+  if (typeof raw.schema_version !== 'number' || raw.schema_version < 1) {
+    throw new ConfigValidationError('schema_version must be a positive integer');
+  }
+
+  if (!raw.workspace || typeof raw.workspace !== 'object') {
+    throw new ConfigValidationError('Missing or invalid workspace block');
+  }
+
+  const ws = raw.workspace as Record<string, unknown>;
+  if (typeof ws.title !== 'string' || !ws.title.trim()) {
+    throw new ConfigValidationError('workspace.title is required');
+  }
+  if (typeof ws.default_notebook !== 'string' || !ws.default_notebook.trim()) {
+    throw new ConfigValidationError('workspace.default_notebook is required');
+  }
+
+  if (!Array.isArray(raw.notebooks) || raw.notebooks.length === 0) {
+    throw new ConfigValidationError('notebooks must be a non-empty array');
+  }
+
+  const notebookIds = new Set<string>();
+  const notebookRoots: string[] = [];
+
+  const validatedNotebooks: NotebookConfig[] = [];
+
+  for (const nb of raw.notebooks) {
+    if (!nb || typeof nb !== 'object') {
+      throw new ConfigValidationError('Each notebook entry must be an object');
+    }
+    const item = nb as Record<string, unknown>;
+
+    // Validate notebook id: slug format
+    if (typeof item.id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(item.id)) {
+      throw new ConfigValidationError(
+        `Notebook ID '${item.id}' must be an alphanumeric/slug string without special characters`
+      );
+    }
+    if (notebookIds.has(item.id)) {
+      throw new ConfigValidationError(`Duplicate notebook ID detected: '${item.id}'`);
+    }
+    notebookIds.add(item.id);
+
+    // Validate title: allow Unicode
+    if (typeof item.title !== 'string' || !item.title.trim()) {
+      throw new ConfigValidationError(`Notebook '${item.id}' must have a title`);
+    }
+
+    // Validate root: must be relative, inside repo, non-overlapping
+    if (typeof item.root !== 'string' || !item.root.trim()) {
+      throw new ConfigValidationError(`Notebook '${item.id}' must have a root directory`);
+    }
+    const normalizedRoot = path.posix.normalize(item.root.replace(/\\/g, '/'));
+    if (path.isAbsolute(normalizedRoot) || normalizedRoot.startsWith('..') || normalizedRoot === '.') {
+      throw new ConfigValidationError(
+        `Notebook '${item.id}' root must be a relative subdirectory inside the repository: '${item.root}'`
+      );
+    }
+
+    // Check non-overlapping roots
+    for (const existingRoot of notebookRoots) {
+      const relA = path.posix.relative(existingRoot, normalizedRoot);
+      const relB = path.posix.relative(normalizedRoot, existingRoot);
+      if (!relA.startsWith('..') || !relB.startsWith('..')) {
+        throw new ConfigValidationError(
+          `Notebook roots overlap: '${existingRoot}' and '${normalizedRoot}'`
+        );
+      }
+    }
+    notebookRoots.push(normalizedRoot);
+
+    const assetPath = typeof item.assets === 'string' ? item.assets.replace(/\\/g, '/') : 'assets';
+    if (!assetPath || assetPath.startsWith('/') || assetPath.split('/').some(p => p === '..' || p === '.' || !p) || /^[A-Za-z]:/.test(assetPath)) {
+      throw new ConfigValidationError(`Notebook '${item.id}' assets must be a relative directory within its notebook`);
+    }
+
+    if (item.statuses !== undefined) {
+      if (!Array.isArray(item.statuses) || item.statuses.some(status =>
+        typeof status !== 'string' || !status.trim() || status !== status.trim()
+      ) || new Set(item.statuses).size !== item.statuses.length) {
+        throw new ConfigValidationError(`Notebook '${item.id}' statuses must be an array of distinct nonblank strings without surrounding whitespace`);
+      }
+    }
+
+    validatedNotebooks.push({
+      id: item.id,
+      title: item.title,
+      root: normalizedRoot,
+      assets: assetPath,
+      default_view: (item.default_view as 'list' | 'card' | 'kanban') || 'list',
+      ...(item.statuses !== undefined ? { statuses: [...item.statuses as string[]] } : {}),
+    });
+  }
+
+  // Ensure default_notebook exists
+  if (!notebookIds.has(ws.default_notebook as string)) {
+    throw new ConfigValidationError(
+      `default_notebook '${ws.default_notebook}' does not match any configured notebook ID`
+    );
+  }
+
+  return {
+    schema_version: raw.schema_version as number,
+    workspace: {
+      title: ws.title as string,
+      default_notebook: ws.default_notebook as string,
+    },
+    notebooks: validatedNotebooks,
+    files: {
+      hide_dotfiles: raw.files && typeof raw.files === 'object' && 'hide_dotfiles' in (raw.files as Record<string, unknown>)
+        ? Boolean((raw.files as Record<string, unknown>).hide_dotfiles)
+        : true,
+    },
+  };
+}
+
+/**
+ * Parses a YAML string into a validated WorkspaceConfig.
+ */
+export function parseWorkspaceConfig(yamlContent: string): WorkspaceConfig {
+  const parsed = YAML.parse(yamlContent);
+  return validateWorkspaceConfig(parsed);
+}
+
+/**
+ * Serializes a WorkspaceConfig to YAML string.
+ */
+export function serializeWorkspaceConfig(config: WorkspaceConfig): string {
+  return YAML.stringify(config);
+}
+
+/**
+ * Loads and validates .github-notes.yaml from a repository notes root or root directory.
+ */
+export function loadWorkspaceConfig(repoRoot: string): WorkspaceConfig | null {
+  // 1. Primary: Look in notes/ root directly (e.g. notes/.github-notes.yaml)
+  const notesConfigPath = path.join(repoRoot, 'notes', WORKSPACE_CONFIG_FILENAME);
+  if (fs.existsSync(notesConfigPath)) {
+    const content = fs.readFileSync(notesConfigPath, 'utf-8');
+    const parsed = parseWorkspaceConfig(content);
+    // Normalize notebook roots to repository-relative paths
+    parsed.notebooks = parsed.notebooks.map((nb) => {
+      let root = nb.root.replace(/\\/g, '/');
+      if (!root.startsWith('notes/') && root !== 'notes') {
+        if (fs.existsSync(path.join(repoRoot, 'notes', root))) {
+          root = path.posix.join('notes', root);
+        }
+      }
+      return { ...nb, root };
+    });
+    return parsed;
+  }
+
+  // 2. Secondary: Look in repository root (.github-notes.yaml)
+  const rootConfigPath = path.join(repoRoot, WORKSPACE_CONFIG_FILENAME);
+  if (fs.existsSync(rootConfigPath)) {
+    const content = fs.readFileSync(rootConfigPath, 'utf-8');
+    return parseWorkspaceConfig(content);
+  }
+
+  // 3. Fallback: Legacy example path if present
+  const exampleConfig = path.join(repoRoot, 'examples/workspace', WORKSPACE_CONFIG_FILENAME);
+  if (fs.existsSync(exampleConfig)) {
+    const content = fs.readFileSync(exampleConfig, 'utf-8');
+    const parsed = parseWorkspaceConfig(content);
+    parsed.notebooks = parsed.notebooks.map((nb) => ({
+      ...nb,
+      root: path.posix.join('examples/workspace', nb.root),
+    }));
+    return parsed;
+  }
+
+  return null;
+}
