@@ -213,3 +213,36 @@ describe('durable Redis grant records',()=>{
     expect(members.has(hash)).toBe(false);
   });
 });
+
+describe('agent resources discovery and security boundaries', () => {
+  it('discovers system and workspace guidelines, allows reading root AGENTS.md, and rejects modifying non-notes resources', async () => {
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Product System Guidelines\n');
+    fs.writeFileSync(path.join(root, 'notes/AGENTS.md'), '# Workspace Guidelines\n');
+
+    const res = await fetch(`${base}/api/agent-resources`).then((r) => r.json());
+    expect(res.instructions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'AGENTS.md', scope: 'product', editable: false }),
+        expect.objectContaining({ path: 'notes/AGENTS.md', scope: 'notes', editable: true }),
+      ])
+    );
+
+    const rootDoc = await fetch(`${base}/api/agent-resources/read?path=AGENTS.md`).then((r) => r.json());
+    expect(rootDoc.content).toBe('# Product System Guidelines\n');
+
+    const saveRoot = await fetch(`${base}/api/agent-resources/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: 'AGENTS.md', content: 'attempted overwrite' }),
+    });
+    expect(saveRoot.status).toBe(403);
+
+    const saveWorkspace = await fetch(`${base}/api/agent-resources/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: 'notes/AGENTS.md', content: '# Updated Workspace Guidelines\n' }),
+    });
+    expect(saveWorkspace.status).toBe(200);
+    expect(fs.readFileSync(path.join(root, 'notes/AGENTS.md'), 'utf8')).toBe('# Updated Workspace Guidelines\n');
+  });
+});

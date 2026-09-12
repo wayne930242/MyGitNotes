@@ -108,7 +108,37 @@ export function createApp(base: string): express.Express {
       } catch (error) { fail(res, error); }
     });
     app.get('/api/git/status', (req, res) => res.json({ status: { branch: source?.type === 'github' ? source.branch : '', isClean: true, staged: [], modified: [], untracked: [] }, commits: [] }));
-    app.get('/api/agent-resources', (req, res) => res.json({ instructions: [], skills: [], docs: [] }));
+    app.get('/api/agent-resources', async (req, res) => {
+      try {
+        const reader: GitHubSource = res.locals.reader;
+        const snapshot = await reader.getSnapshot();
+        const entries = snapshot.entries;
+        const instructions: { path: string; name: string; editable?: boolean; scope?: 'notes' | 'product' }[] = [];
+        if (entries.some(e => e.path === 'AGENTS.md' && e.type === 'blob')) {
+          instructions.push({ path: 'AGENTS.md', name: 'System Guidelines', editable: false, scope: 'product' });
+        }
+        if (entries.some(e => e.path === 'notes/AGENTS.md' && e.type === 'blob')) {
+          instructions.push({ path: 'notes/AGENTS.md', name: 'Notes Workspace Guidelines', editable: false, scope: 'notes' });
+        }
+        for (const entry of entries) {
+          const match = entry.path.match(/^notes\/([^/]+)\/AGENTS\.md$/);
+          if (match && entry.type === 'blob') {
+            instructions.push({ path: entry.path, name: `Notebook: ${match[1].charAt(0).toUpperCase() + match[1].slice(1)} Guidelines`, editable: false, scope: 'notes' });
+          }
+        }
+        res.json({ instructions, skills: [], docs: [] });
+      } catch (error) { fail(res, error); }
+    });
+    app.get('/api/agent-resources/read', async (req, res) => {
+      try {
+        const targetPath = req.query.path as string;
+        if (!targetPath) throw new SourceError('path query required', 400);
+        if (targetPath !== 'AGENTS.md' && !targetPath.startsWith('notes/')) throw new SourceError('Access to core product internal docs is restricted', 403);
+        const reader: GitHubSource = res.locals.reader;
+        const buf = await reader.readFile(targetPath);
+        res.json({ path: targetPath, content: buf.toString('utf8') });
+      } catch (error) { fail(res, error); }
+    });
     app.use('/api', (req, res) => res.status(403).json({ error: 'This operation is available only in a local workspace.' }));
   }
   const web = path.join(base, 'apps/web/dist');

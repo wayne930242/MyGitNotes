@@ -218,6 +218,12 @@ export const zhTW: Record<TranslationKey, string> = {
   // Agent System
   'agent.title': '筆記 Agent 系統',
   'agent.guidelines': '工作區指引',
+  'agent.systemGuidelines': '系統指引',
+  'agent.workspaceGuidelines': '工作區指引',
+  'agent.createWorkspaceGuidelines': '建立工作區指引',
+  'agent.coreBranchReadOnly': '核心分支唯讀',
+  'agent.coreBranchNotice': '目前處於 core 分支，為保護產品原始碼設為唯讀。切換至 main 分支即可編輯工作區指引。',
+  'agent.systemNotice': '此為產品全域系統指引（AGENTS.md），屬於唯讀參考規範。',
   'agent.editable': '可編輯',
   'agent.readOnly': '唯讀',
   'agent.editableSystem': '可編輯系統指引',
