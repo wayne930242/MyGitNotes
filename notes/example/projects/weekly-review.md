@@ -1,7 +1,7 @@
 ---
 title: 每週回顧
 tags: [規劃]
-status: in-progress
+status: doing
 ---
 # 每週回顧
 
