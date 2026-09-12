@@ -1,0 +1,91 @@
+import React from 'react';
+import { Folder, ChevronRight, ArrowLeft } from 'lucide-react';
+import { BreadcrumbSegment } from '../lib/folder-tree.js';
+
+interface BreadcrumbsProps {
+  segments: BreadcrumbSegment[];
+  currentFolder: string | null;
+  onSelectFolder: (folder: string | null) => void;
+  subfolderCount?: number;
+  noteCount?: number;
+}
+
+export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
+  segments,
+  currentFolder,
+  onSelectFolder,
+  subfolderCount = 0,
+  noteCount = 0,
+}) => {
+  // Parent folder for the "Back / Up" button
+  const parentFolder = currentFolder
+    ? currentFolder.includes('/')
+      ? currentFolder.slice(0, currentFolder.lastIndexOf('/'))
+      : null
+    : null;
+
+  return (
+    <nav
+      aria-label="Breadcrumbs"
+      className="flex items-center justify-between gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl border bg-black/[0.02] dark:bg-white/[0.02] mb-4 text-xs select-none transition-colors"
+      style={{ borderColor: 'var(--color-border)' }}
+    >
+      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+        {currentFolder !== null && (
+          <button
+            type="button"
+            onClick={() => onSelectFolder(parentFolder)}
+            title="Go up one folder"
+            aria-label="Go up one folder"
+            className="inline-flex items-center gap-1 px-2 py-1 -ml-1 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-black/5 dark:hover:bg-white/10 transition active:scale-95 shrink-0"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span className="font-medium hidden sm:inline">Up</span>
+          </button>
+        )}
+
+        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+          {segments.map((seg, idx) => {
+            const isLast = idx === segments.length - 1;
+
+            return (
+              <React.Fragment key={seg.path ?? 'root'}>
+                {idx > 0 && (
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0 mx-0.5" />
+                )}
+
+                {isLast ? (
+                  <span className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-100 truncate px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10">
+                    <Folder className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--color-primary)' }} />
+                    <span className="truncate max-w-[160px] md:max-w-xs">{seg.name}</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onSelectFolder(seg.path)}
+                    className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition px-1.5 py-0.5 rounded hover:bg-black/5 dark:hover:bg-white/5 truncate"
+                  >
+                    {idx === 0 && <Folder className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+                    <span className="truncate max-w-[120px] md:max-w-[200px]">{seg.name}</span>
+                  </button>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Summary indicator */}
+      <div className="flex items-center gap-2 shrink-0 text-slate-400 text-[11px] font-mono">
+        {subfolderCount > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400">
+            {subfolderCount} {subfolderCount === 1 ? 'folder' : 'folders'}
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400">
+          {noteCount} {noteCount === 1 ? 'note' : 'notes'}
+        </span>
+      </div>
+    </nav>
+  );
+};

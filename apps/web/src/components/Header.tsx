@@ -13,6 +13,8 @@ import {
   PanelLeft,
 } from 'lucide-react';
 import { ViewMode } from '../lib/types.js';
+import { SortField, SortOrder } from '../lib/note-sort.js';
+import { useTranslation } from '../lib/i18n/index.js';
 
 interface HeaderProps {
   workspaceTitle: string;
@@ -28,6 +30,9 @@ interface HeaderProps {
   onOpenNewNoteModal: () => void;
   filtersOpen: boolean;
   onToggleFilters: () => void;
+  sortField?: SortField;
+  sortOrder?: SortOrder;
+  onSortChange?: (field: SortField, order?: SortOrder) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -44,7 +49,27 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNewNoteModal,
   filtersOpen,
   onToggleFilters,
+  sortField = 'updated',
+  sortOrder = 'desc',
+  onSortChange,
 }) => {
+  const { t } = useTranslation();
+
+  const sortOptions = [
+    { value: 'updated:desc', label: t('sort.updatedDesc') },
+    { value: 'updated:asc', label: t('sort.updatedAsc') },
+    { value: 'created:desc', label: t('sort.createdDesc') },
+    { value: 'created:asc', label: t('sort.createdAsc') },
+    { value: 'title:asc', label: t('sort.titleAsc') },
+    { value: 'title:desc', label: t('sort.titleDesc') },
+    { value: 'status:asc', label: t('sort.status') },
+  ];
+
+  const handleSortSelect = (val: string) => {
+    const [field, order] = val.split(':') as [SortField, SortOrder];
+    onSortChange?.(field, order);
+  };
+
   return (
     <header
       className="border-b sticky top-0 z-20 transition-colors shrink-0 flex-none"
@@ -55,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="header-left flex items-center gap-6 min-w-0">
           <div className="header-brand flex items-center gap-2.5 min-w-0">
             <div
-              className="w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-md shadow-black/10"
+              className="w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-md shadow-black/10 shrink-0"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >
               <BookOpen className="w-5 h-5" />
@@ -66,7 +91,7 @@ export const Header: React.FC<HeaderProps> = ({
               </h1>
               <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                <span className="truncate">{sourceLabel || 'Git-Native Workspace'}</span>
+                <span className="truncate">{sourceLabel || t('header.gitWorkspace')}</span>
               </div>
             </div>
           </div>
@@ -74,6 +99,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Navigation Tabs */}
           <nav aria-label="Main navigation" className="header-nav flex shrink-0 items-center bg-black/5 dark:bg-white/5 p-1 rounded-xl gap-1">
             <button
+              type="button"
               onClick={() => setActiveTab('notes')}
               aria-current={activeTab === 'notes' ? 'page' : undefined}
               style={
@@ -91,9 +117,10 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <BookOpen className="w-4 h-4" />
-              <span>Notes</span>
+              <span>{t('nav.notes')}</span>
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('agent')}
               aria-current={activeTab === 'agent' ? 'page' : undefined}
               style={
@@ -111,9 +138,10 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <Bot className="w-4 h-4" />
-              <span>Agent System</span>
+              <span>{t('nav.agent')}</span>
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('assets')}
               aria-current={activeTab === 'assets' ? 'page' : undefined}
               style={
@@ -131,14 +159,15 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <ImageIcon className="w-4 h-4" />
-              <span>Assets</span>
+              <span>{t('nav.assets')}</span>
             </button>
-            {/* Settings Tab: Icon Only (Requirement 4) */}
+            {/* Settings Tab */}
             <button
+              type="button"
               onClick={() => setActiveTab('settings')}
               aria-current={activeTab === 'settings' ? 'page' : undefined}
-              title="Settings"
-              aria-label="Settings"
+              title={t('nav.settings')}
+              aria-label={t('nav.settings')}
               data-header-settings
               style={
                 activeTab === 'settings'
@@ -155,24 +184,35 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <Settings className="w-4 h-4" />
-              <span className="mobile-nav-label">Settings</span>
+              <span className="mobile-nav-label">{t('nav.settings')}</span>
             </button>
           </nav>
         </div>
 
         {/* Center / Right: Search & Actions */}
-        <div className="header-actions flex items-center gap-3 flex-1 min-w-0 max-w-2xl justify-end">
+        <div className="header-actions flex items-center gap-3 flex-1 min-w-0 max-w-3xl justify-end">
           <div className="header-account">{accountControls}</div>
           {activeTab === 'notes' && (
-            <div className="header-note-actions flex items-center gap-3 flex-1 min-w-0 justify-end">
-              <button aria-label="Notebooks and filters" aria-expanded={filtersOpen} aria-controls="notebook-panel" onClick={onToggleFilters} className="mobile-only items-center justify-center rounded-lg border hover:bg-black/5 dark:hover:bg-white/10 transition" style={{ borderColor: 'var(--color-border)' }}><PanelLeft className="w-5 h-5" /></button>
+            <div className="header-note-actions flex items-center gap-2.5 flex-1 min-w-0 justify-end">
+              <button
+                type="button"
+                aria-label="Notebooks and filters"
+                aria-expanded={filtersOpen}
+                aria-controls="notebook-panel"
+                onClick={onToggleFilters}
+                className="mobile-only items-center justify-center rounded-lg border hover:bg-black/5 dark:hover:bg-white/10 transition"
+                style={{ borderColor: 'var(--color-border)' }}
+              >
+                <PanelLeft className="w-5 h-5" />
+              </button>
+
               {/* Search Bar */}
               <div className="header-search relative w-full min-w-0 max-w-xs">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  aria-label="Search notes"
-                  placeholder="Search notes, tags, content..."
+                  aria-label={t('header.searchPlaceholder')}
+                  placeholder={t('header.searchPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-9 pr-4 py-1.5 bg-black/5 dark:bg-white/5 border border-slate-200/80 dark:border-slate-700/80 rounded-lg text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
@@ -180,12 +220,38 @@ export const Header: React.FC<HeaderProps> = ({
                 />
               </div>
 
-              {/* View Switcher */}
-              <Select aria-label="Note view" value={viewMode} onValueChange={value => setViewMode(value as ViewMode)} options={['list','card','kanban'].map(value => ({value,label:value[0].toUpperCase()+value.slice(1)}))} className="mobile-only note-view-select min-w-0 rounded-lg border bg-transparent px-1" />
+              {/* Sort Selector */}
+              {onSortChange && (
+                <div className="header-sort-container flex items-center shrink-0">
+                  <Select
+                    aria-label={t('header.sort')}
+                    value={`${sortField}:${sortOrder}`}
+                    onValueChange={handleSortSelect}
+                    options={sortOptions}
+                    className="note-sort-select min-w-0 rounded-lg border bg-transparent px-2 text-xs h-8 sm:h-9"
+                  />
+                </div>
+              )}
+
+              {/* View Switcher Mobile */}
+              <Select
+                aria-label="Note view"
+                value={viewMode}
+                onValueChange={(value) => setViewMode(value as ViewMode)}
+                options={[
+                  { value: 'list', label: t('view.list') },
+                  { value: 'card', label: t('view.card') },
+                  { value: 'kanban', label: t('view.kanban') },
+                ]}
+                className="mobile-only note-view-select min-w-0 rounded-lg border bg-transparent px-1"
+              />
+
+              {/* View Switcher Desktop */}
               <div className="desktop-views flex items-center bg-black/5 dark:bg-white/5 p-1 rounded-lg gap-1 shrink-0">
                 <button
+                  type="button"
                   onClick={() => setViewMode('list')}
-                  title="List View"
+                  title={t('view.list')}
                   style={
                     viewMode === 'list'
                       ? {
@@ -203,8 +269,9 @@ export const Header: React.FC<HeaderProps> = ({
                   <LayoutList className="w-4 h-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setViewMode('card')}
-                  title="Card View"
+                  title={t('view.card')}
                   style={
                     viewMode === 'card'
                       ? {
@@ -222,8 +289,9 @@ export const Header: React.FC<HeaderProps> = ({
                   <LayoutGrid className="w-4 h-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setViewMode('kanban')}
-                  title="Kanban View"
+                  title={t('view.kanban')}
                   style={
                     viewMode === 'kanban'
                       ? {
@@ -243,15 +311,18 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
 
               {/* New Note Button */}
-              {!readOnly && (<button
-                aria-label="New Note"
-                onClick={onOpenNewNoteModal}
-                style={{ backgroundColor: 'var(--color-primary)' }}
-                className="header-new-note flex items-center gap-1.5 px-3.5 py-1.5 text-white rounded-lg text-sm font-medium shadow-sm transition hover:opacity-90 active:scale-95 shrink-0"
-              >
-                <Plus className="w-4 h-4" />
-                <span>New Note</span>
-              </button>)}
+              {!readOnly && (
+                <button
+                  type="button"
+                  aria-label={t('header.newNote')}
+                  onClick={onOpenNewNoteModal}
+                  style={{ backgroundColor: 'var(--color-primary)' }}
+                  className="header-new-note flex items-center gap-1.5 px-3.5 py-1.5 text-white rounded-lg text-sm font-medium shadow-sm transition hover:opacity-90 active:scale-95 shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{t('header.newNote')}</span>
+                </button>
+              )}
             </div>
           )}
         </div>

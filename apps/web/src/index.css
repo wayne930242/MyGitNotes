@@ -315,6 +315,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 .mobile-only { display: none; }
 .mobile-nav-label { display: none; }
 .editor-mode-select, .editor-mobile-icon, .agent-status-compact { display: none; }
+.note-sort-select { width: auto; max-width: 170px; }
 .notebook-panel { flex-shrink: 0; height: 100%; }
 .agent-main { display: flex; flex-direction: column; }
 .agent-layout { flex: 1; }
@@ -346,6 +347,8 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   }
   .header-note-actions > button { flex-shrink: 0; min-width: 44px; height: 44px; }
   .header-note-actions > .note-view-select { width: 80px; flex-shrink: 0; }
+  .header-note-actions > .header-sort-container { flex-shrink: 0; display: flex; align-items: center; }
+  .header-note-actions .note-sort-select { width: 88px; height: 44px; flex-shrink: 0; }
   .header-search { max-width: none; flex: 1; }
   .header-search input { height: 44px; padding-right: 8px; }
   .desktop-views { display: none; }

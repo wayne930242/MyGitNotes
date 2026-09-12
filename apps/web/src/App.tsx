@@ -45,10 +45,42 @@ import { AgentSystemView } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { CommitModal } from './components/CommitModal.js';
 import { FloatingCommitFooter } from './components/FloatingCommitFooter.js';
+import { Breadcrumbs } from './components/Breadcrumbs.js';
+import {
+  getImmediateSubfolders,
+  getImmediateNotes,
+  getBreadcrumbs,
+} from './lib/folder-tree.js';
+import {
+  sortNotes,
+  getSavedSort,
+  saveSort,
+  SortField,
+  SortOrder,
+} from './lib/note-sort.js';
+import { I18nProvider, useTranslation } from './lib/i18n/index.js';
 import { AlertTriangle, FileText, X } from 'lucide-react';
 
-export const App: React.FC = () => {
+const AppContent: React.FC = () => {
   useVisualViewport();
+  const { t } = useTranslation();
+  const [sortField, setSortField] = useState<SortField>(() => getSavedSort().field);
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => getSavedSort().order);
+
+  const handleSortChange = (field: SortField, order?: SortOrder) => {
+    let newOrder: SortOrder;
+    if (order) {
+      newOrder = order;
+    } else if (field === sortField) {
+      newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+      newOrder = field === 'title' || field === 'status' ? 'asc' : 'desc';
+    }
+    setSortField(field);
+    setSortOrder(newOrder);
+    saveSort(field, newOrder);
+  };
+
   const [filtersOpen, setFiltersOpen] = useState(false);
   const location = useLocation();
   useEffect(() => { setFiltersOpen(false); }, [location.pathname, location.search]);
@@ -268,6 +300,27 @@ export const App: React.FC = () => {
       return true;
     });
   }, [visibleNotes, config, selectedFolder, selectedNotebookId, selectedStatus, selectedTag, searchQuery]);
+
+  // Hierarchical Subfolder Discovery for current folder
+  const immediateSubfolders = useMemo(() => {
+    if (searchQuery.trim() || selectedStatus || selectedTag) return [];
+    const root = config?.notebooks.find((nb) => nb.id === selectedNotebookId)?.root || '';
+    return getImmediateSubfolders(visibleNotes, folders, selectedNotebookId, root, selectedFolder);
+  }, [visibleNotes, folders, selectedNotebookId, config, selectedFolder, searchQuery, selectedStatus, selectedTag]);
+
+  // Direct notes in current folder (or flat list during search/filter), sorted
+  const displayedNotes = useMemo(() => {
+    const root = config?.notebooks.find((nb) => nb.id === selectedNotebookId)?.root || '';
+    const base = searchQuery.trim() || selectedStatus || selectedTag
+      ? filteredNotes
+      : getImmediateNotes(filteredNotes, root, selectedFolder);
+    return sortNotes(base, sortField, sortOrder, notebookStatuses);
+  }, [filteredNotes, config, selectedNotebookId, selectedFolder, searchQuery, selectedStatus, selectedTag, sortField, sortOrder, notebookStatuses]);
+
+  // Breadcrumb Trail from Root to current folder
+  const breadcrumbs = useMemo(() => {
+    return getBreadcrumbs(selectedFolder, folders, selectedNotebookId, t('folder.allFolders'));
+  }, [selectedFolder, folders, selectedNotebookId, t]);
 
   // Note Handlers
   const handleOpenNote = (note: NoteItem) => {
@@ -603,6 +656,9 @@ export const App: React.FC = () => {
         onOpenNewNoteModal={() => openNewNote()}
         filtersOpen={filtersOpen}
         onToggleFilters={() => setFiltersOpen(open => !open)}
+        sortField={sortField}
+        sortOrder={sortOrder}
+        onSortChange={handleSortChange}
       />
 
       {routeError && <div role="alert" className="px-6 py-3 text-sm text-rose-600">{routeError} <button className="underline" onClick={() => navigate('/notes')}>Go to notes</button></div>}
@@ -636,16 +692,28 @@ export const App: React.FC = () => {
             {/* Main Content Area */}
             <main className="workspace-main flex-1 min-w-0 p-3 md:p-6 overflow-y-auto">
               {actionError && <p role="alert" className="mb-3 text-sm text-rose-600">{actionError}</p>}
+              <Breadcrumbs
+                segments={breadcrumbs}
+                currentFolder={selectedFolder}
+                onSelectFolder={setSelectedFolder}
+                subfolderCount={immediateSubfolders.length}
+                noteCount={displayedNotes.length}
+              />
               {viewMode === 'list' && (
                 <ListView
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
                   canDelete={!remote && canWrite}
-                  notes={filteredNotes}
+                  notes={displayedNotes}
+                  subfolders={immediateSubfolders}
                   onOpenNote={handleOpenNote}
                   onDeleteNote={handleDeleteNote}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
                   onNewNote={() => openNewNote()}
+                  onSelectFolder={setSelectedFolder}
+                  sortField={sortField}
+                  sortOrder={sortOrder}
+                  onSortChange={handleSortChange}
                 />
               )}
               {viewMode === 'card' && (
@@ -653,11 +721,13 @@ export const App: React.FC = () => {
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
                   canDelete={!remote && canWrite}
-                  notes={filteredNotes}
+                  notes={displayedNotes}
+                  subfolders={immediateSubfolders}
                   onOpenNote={handleOpenNote}
                   onDeleteNote={handleDeleteNote}
                   onNewNote={() => openNewNote()}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
+                  onSelectFolder={setSelectedFolder}
                 />
               )}
               {viewMode === 'kanban' && (
@@ -665,7 +735,7 @@ export const App: React.FC = () => {
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
                   canDelete={!remote && canWrite}
-                  notes={filteredNotes}
+                  notes={sortNotes(filteredNotes, sortField, sortOrder, notebookStatuses)}
                   onOpenNote={handleOpenNote}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
                   onDeleteNote={handleDeleteNote}
@@ -851,5 +921,13 @@ export const App: React.FC = () => {
         </div>
       )}
     </div>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <I18nProvider>
+      <AppContent />
+    </I18nProvider>
   );
 };
