@@ -17,7 +17,7 @@ interface Props {
 export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEditorMode; onChange: (mode: MarkdownEditorMode) => void }) {
   return <div className="editor-mode-switch flex items-center bg-slate-200/70 dark:bg-slate-800 p-0.5 rounded-lg text-xs font-medium" role="group" aria-label="Editor mode">
     <Select className="editor-mode-select" aria-label="Editor mode" value={mode} onValueChange={value => onChange(value as MarkdownEditorMode)} options={[{value:'live',label:'Live'},{value:'raw',label:'Source'}]} />
-    {([['live', 'Live Preview', Eye], ['raw', 'Source', Code2]] as const).map(([value, label, Icon]) => <button className={`editor-mode-button flex items-center gap-1 px-3 py-1.5 rounded-md ${mode === value ? 'bg-white dark:bg-slate-900 shadow-sm' : 'text-slate-500'}`} key={value} aria-pressed={mode === value} onClick={() => onChange(value)} style={mode === value ? { color: 'var(--color-primary)' } : undefined}><Icon className="w-3.5 h-3.5" />{label}</button>)}
+    {([['live', 'Live Preview', Eye], ['raw', 'Source', Code2]] as const).map(([value, label, Icon]) => <button className={`editor-mode-button flex items-center gap-1 px-3 py-1.5 rounded-md transition ${mode === value ? 'bg-white dark:bg-slate-900 shadow-sm hover:opacity-90' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5'}`} key={value} aria-pressed={mode === value} onClick={() => onChange(value)} style={mode === value ? { color: 'var(--color-primary)' } : undefined}><Icon className="w-3.5 h-3.5" />{label}</button>)}
   </div>;
 }
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, mode, readOnly, onChange, ariaLabel = 'Document content' }, ref) => {

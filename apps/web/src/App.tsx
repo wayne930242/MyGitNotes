@@ -125,7 +125,7 @@ export const App: React.FC = () => {
   const route = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
   const activeTab = route.tab;
   const sidebarGestureRef = useSidebarSwipe(activeTab === 'notes' && !loading && !loadError, filtersOpen, setFiltersOpen);
-  const selectedNotebookId = route.notebook || config?.workspace.default_notebook || 'example';
+  const selectedNotebookId = route.notebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
   const notebookStatuses = useMemo(() => resolveNoteStatuses(
     config?.notebooks.find(nb => nb.id === selectedNotebookId),
     notes.filter(note => note.notebookId === selectedNotebookId).map(note => note.status),
@@ -233,7 +233,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (loading || !config) return;
     if (!route.valid) { setRouteError('Page not found.');  return; }
-    const notebook = config.notebooks.find(nb => nb.id === selectedNotebookId);
+    const notebook = config.notebooks.find(nb => nb.id === selectedNotebookId) || (!route.notebook ? config.notebooks[0] : null);
     if (!notebook) { setRouteError('Notebook not found.');  return; }
     if (route.folder && !folders.some(f => f.notebookId === notebook.id && f.path === route.folder)) { setRouteError('Folder not found.'); return; }
     if (!route.note) { setRouteError(''); setEditingNote(null);  return; }
@@ -731,13 +731,13 @@ export const App: React.FC = () => {
             </span>
             <button
               onClick={() => handleRestoreNote(undoToast.note)}
-              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold rounded-md transition"
+              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-semibold rounded-md transition"
             >
               Undo (復原)
             </button>
             <button
               onClick={() => setUndoToast(null)}
-              className="text-slate-400 hover:text-white transition ml-1"
+              className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/10 transition ml-1"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -834,7 +834,7 @@ export const App: React.FC = () => {
             <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
               <button
                 onClick={() => setIsNewNoteOpen(false)}
-                className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition"
+                className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition active:scale-95"
               >
                 Cancel
               </button>
@@ -842,7 +842,7 @@ export const App: React.FC = () => {
                 onClick={() => handleCreateNewNote()}
                 disabled={!newNoteTitle.trim()}
                 style={{ backgroundColor: 'var(--color-primary)' }}
-                className="px-4 py-2 text-xs font-medium text-white rounded-lg shadow-sm transition hover:opacity-90 disabled:opacity-50"
+                className="px-4 py-2 text-xs font-medium text-white rounded-lg shadow-sm transition hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Create Note
               </button>

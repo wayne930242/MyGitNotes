@@ -86,8 +86,8 @@ export const Header: React.FC<HeaderProps> = ({
               }
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
                 activeTab === 'notes'
-                  ? 'shadow-xs font-semibold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  ? 'shadow-xs font-semibold hover:opacity-90'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5'
               }`}
             >
               <BookOpen className="w-4 h-4" />
@@ -106,8 +106,8 @@ export const Header: React.FC<HeaderProps> = ({
               }
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
                 activeTab === 'agent'
-                  ? 'shadow-xs font-semibold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  ? 'shadow-xs font-semibold hover:opacity-90'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5'
               }`}
             >
               <Bot className="w-4 h-4" />
@@ -126,8 +126,8 @@ export const Header: React.FC<HeaderProps> = ({
               }
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
                 activeTab === 'assets'
-                  ? 'shadow-xs font-semibold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  ? 'shadow-xs font-semibold hover:opacity-90'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5'
               }`}
             >
               <ImageIcon className="w-4 h-4" />
@@ -150,8 +150,8 @@ export const Header: React.FC<HeaderProps> = ({
               }
               className={`flex items-center justify-center p-2 rounded-lg text-sm font-medium transition ${
                 activeTab === 'settings'
-                  ? 'shadow-xs font-semibold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  ? 'shadow-xs font-semibold hover:opacity-90'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5'
               }`}
             >
               <Settings className="w-4 h-4" />
@@ -165,7 +165,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="header-account">{accountControls}</div>
           {activeTab === 'notes' && (
             <div className="header-note-actions flex items-center gap-3 flex-1 min-w-0 justify-end">
-              <button aria-label="Notebooks and filters" aria-expanded={filtersOpen} aria-controls="notebook-panel" onClick={onToggleFilters} className="mobile-only items-center justify-center rounded-lg border" style={{ borderColor: 'var(--color-border)' }}><PanelLeft className="w-5 h-5" /></button>
+              <button aria-label="Notebooks and filters" aria-expanded={filtersOpen} aria-controls="notebook-panel" onClick={onToggleFilters} className="mobile-only items-center justify-center rounded-lg border hover:bg-black/5 dark:hover:bg-white/10 transition" style={{ borderColor: 'var(--color-border)' }}><PanelLeft className="w-5 h-5" /></button>
               {/* Search Bar */}
               <div className="header-search relative w-full min-w-0 max-w-xs">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -196,8 +196,8 @@ export const Header: React.FC<HeaderProps> = ({
                   }
                   className={`p-1.5 rounded-md transition ${
                     viewMode === 'list'
-                      ? 'shadow-xs'
-                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                      ? 'shadow-xs hover:opacity-90'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10'
                   }`}
                 >
                   <LayoutList className="w-4 h-4" />
@@ -215,8 +215,8 @@ export const Header: React.FC<HeaderProps> = ({
                   }
                   className={`p-1.5 rounded-md transition ${
                     viewMode === 'card'
-                      ? 'shadow-xs'
-                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                      ? 'shadow-xs hover:opacity-90'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10'
                   }`}
                 >
                   <LayoutGrid className="w-4 h-4" />
@@ -234,8 +234,8 @@ export const Header: React.FC<HeaderProps> = ({
                   }
                   className={`p-1.5 rounded-md transition ${
                     viewMode === 'kanban'
-                      ? 'shadow-xs'
-                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                      ? 'shadow-xs hover:opacity-90'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10'
                   }`}
                 >
                   <Kanban className="w-4 h-4" />

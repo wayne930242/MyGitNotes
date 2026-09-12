@@ -5,6 +5,7 @@ export interface ThemeDefinition {
   mode: 'light' | 'dark';
   colors: {
     primary: string;
+    primaryHover?: string;
     background: string;
     surface: string;
     sidebar: string;
@@ -23,6 +24,7 @@ export const THEMES: ThemeDefinition[] = [
     mode: 'light',
     colors: {
       primary: '#4f46e5',
+      primaryHover: '#4338ca',
       background: '#f8fafc',
       surface: '#ffffff',
       sidebar: '#f1f5f9',
@@ -39,6 +41,7 @@ export const THEMES: ThemeDefinition[] = [
     mode: 'light',
     colors: {
       primary: '#d97706',
+      primaryHover: '#b45309',
       background: '#faf5eb',
       surface: '#fffdfa',
       sidebar: '#f4ebd8',
@@ -55,6 +58,7 @@ export const THEMES: ThemeDefinition[] = [
     mode: 'light',
     colors: {
       primary: '#059669',
+      primaryHover: '#047857',
       background: '#f0fdf4',
       surface: '#ffffff',
       sidebar: '#e1f7e8',
@@ -71,6 +75,7 @@ export const THEMES: ThemeDefinition[] = [
     mode: 'dark',
     colors: {
       primary: '#58a6ff',
+      primaryHover: '#79c0ff',
       background: '#0d1117',
       surface: '#161b22',
       sidebar: '#010409',
@@ -87,6 +92,7 @@ export const THEMES: ThemeDefinition[] = [
     mode: 'dark',
     colors: {
       primary: '#88c0d0',
+      primaryHover: '#9fcbd8',
       background: '#242933',
       surface: '#2e3440',
       sidebar: '#1e222a',
@@ -103,6 +109,7 @@ export const THEMES: ThemeDefinition[] = [
     mode: 'dark',
     colors: {
       primary: '#a855f7',
+      primaryHover: '#c084fc',
       background: '#09090b',
       surface: '#121216',
       sidebar: '#050507',
@@ -138,7 +145,7 @@ export function applyTheme(theme: ThemeDefinition): void {
   }
 
   root.style.setProperty('--color-primary', theme.colors.primary);
-  root.style.setProperty('--color-primary-hover', theme.colors.primary);
+  root.style.setProperty('--color-primary-hover', theme.colors.primaryHover || theme.colors.primary);
   root.style.setProperty('--color-primary-light', `${theme.colors.primary}22`);
   root.style.setProperty('--color-bg', theme.colors.background);
   root.style.setProperty('--color-surface', theme.colors.surface);

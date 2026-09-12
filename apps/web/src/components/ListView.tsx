@@ -36,7 +36,8 @@ export const ListView: React.FC<ListViewProps> = ({
         </p>
         {!readOnly && (<button
           onClick={onNewNote}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm transition"
+          style={{ backgroundColor: 'var(--color-primary)' }}
+          className="inline-flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg shadow-sm transition hover:opacity-90 active:scale-95"
         >
           <Plus className="w-4 h-4" />
           Create Note

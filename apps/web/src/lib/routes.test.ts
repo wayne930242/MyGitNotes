@@ -8,8 +8,13 @@ describe('workspace URLs', () => {
     expect(parseWorkspaceRoute(notebookRoute('example','projects/week'),'?view=kanban&status=inbox')).toMatchObject({ valid:true,folder:'projects/week',view:'kanban',status:'inbox' });
   });
   it('restores pages, notebook and filters from URLs', () => {
+    expect(parseWorkspaceRoute('/', '')).toMatchObject({ valid: true, tab: 'notes' });
+    expect(parseWorkspaceRoute('/index.html', '')).toMatchObject({ valid: true, tab: 'notes' });
+    expect(parseWorkspaceRoute('/notebooks', '')).toMatchObject({ valid: true, tab: 'notes' });
+    expect(parseWorkspaceRoute('/notebooks/', '')).toMatchObject({ valid: true, tab: 'notes' });
     expect(parseWorkspaceRoute('/notes', '?showHidden=true').showHidden).toBe(true);
     expect(parseWorkspaceRoute('/notes', '').showHidden).toBe(false);
+    expect(parseWorkspaceRoute('/notes', '?folder=').valid).toBe(true);
     for (const tab of ['settings','assets','agent']) for (const suffix of ['', '/']) expect(parseWorkspaceRoute('/'+tab+suffix,'?notebook=work').tab).toBe(tab);
     expect(parseWorkspaceRoute(noteRoute('work','note.md'),'?folder=projects&q=hello&tag=demo')).toMatchObject({ notebook:'work',folder:'projects',q:'hello',tag:'demo' });
   });

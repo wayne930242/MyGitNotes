@@ -10,6 +10,7 @@ import {
   Palette,
   Sun,
   Moon,
+  Info,
 } from 'lucide-react';
 import { WorkspaceConfig } from '../lib/types.js';
 import { updateWorkspaceConfig, runCoreUpdate } from '../lib/api.js';
@@ -65,6 +66,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleUpdateCoreClick = async () => {
+    if (!local) {
+      setCoreUpdateMsg('Core 更新僅可在本地工作區環境中執行（目前為遠端 GitHub 模式）。');
+      return;
+    }
+    if (branch === 'core') {
+      setCoreUpdateMsg('當前處於 core 核心開發分支。Core 更新專用於將最新 Core 更新同步至使用者的 main 工作區分支。若要建立工作區，請在終端機執行：pnpm bootstrap-workspace');
+      return;
+    }
+    if (branch !== 'main') {
+      setCoreUpdateMsg(`Core 更新僅支援合併至使用者工作區分支 'main'（當前分支：${branch}）。`);
+      return;
+    }
     setIsUpdatingCore(true);
     setCoreUpdateMsg(null);
     try {
@@ -123,8 +136,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={() => onSelectTheme(theme)}
                 className={`flex flex-col p-4 rounded-xl border text-left transition-all ${
                   isSelected
-                    ? 'border-indigo-600 dark:border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-xs'
-                    : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900/60'
+                    ? 'border-indigo-600 dark:border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-xs hover:opacity-95'
+                    : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/40 bg-white dark:bg-slate-900/60'
                 }`}
               >
                 <div className="flex items-center justify-between w-full mb-2">
@@ -151,23 +164,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
                   {theme.description}
                 </p>
 
-                {/* Color Swatches (色票展示) */}
-                <div className="mt-auto pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-slate-400">Palette Swatches</span>
-                  <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
-                    {theme.swatches.map((color, idx) => (
-                      <div
-                        key={idx}
-                        className="w-4 h-4 rounded-full border border-black/10 dark:border-white/10 shadow-xs"
-                        style={{ backgroundColor: color }}
-                        title={color}
-                      />
-                    ))}
-                  </div>
+                {/* Swatches Visual representation (色票組) */}
+                <div className="flex items-center gap-1.5 mt-auto pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                  {theme.swatches.map((color, idx) => (
+                    <div
+                      key={idx}
+                      className="flex-1 h-5 rounded-md border border-black/10 dark:border-white/10 relative group"
+                      style={{ backgroundColor: color }}
+                      title={color}
+                    />
+                  ))}
                 </div>
               </button>
             );
@@ -177,36 +187,91 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
       {accountSettings}
 
-      {/* Core Update Banner */}
-      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="font-semibold text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1.5 mb-0.5">
-            <Shield className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            Core Product Updates
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Fetch and non-destructively merge canonical Core changes into your workspace branch.
-          </p>
-          {coreUpdateMsg && (
-            <p className="text-xs font-mono mt-2 text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded">
-              {coreUpdateMsg}
+      {/* Upstream & Core Updates Section */}
+      <div className="flex flex-col gap-3 p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
+        <div className="flex items-start sm:items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Shield className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                Core Product Updates
+              </h3>
+              {branch === 'core' && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-medium">
+                  Core 分支
+                </span>
+              )}
+              {branch === 'main' && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-medium">
+                  工作區分支
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Safely fetch and merge changes from the Core product branch into your workspace.
             </p>
-          )}
+          </div>
+
+          <button
+            onClick={handleUpdateCoreClick}
+            disabled={isUpdatingCore}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium text-white transition shrink-0 ${
+              isUpdatingCore
+                ? 'bg-slate-400 dark:bg-slate-600 cursor-not-allowed opacity-50'
+                : branch === 'core'
+                ? 'bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500 shadow-sm active:scale-95 cursor-pointer'
+                : 'bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 shadow-sm shadow-indigo-100 dark:shadow-none active:scale-95 cursor-pointer'
+            }`}
+            title={
+              branch === 'core'
+                ? '點擊查看 Core 分支更新與工作區說明'
+                : '執行 Core 安全合併更新'
+            }
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isUpdatingCore ? 'animate-spin' : ''}`} />
+            <span>
+              {isUpdatingCore
+                ? 'Updating...'
+                : branch === 'core'
+                ? 'Check Core Status'
+                : 'Check & Update Core'}
+            </span>
+          </button>
         </div>
 
-        <button
-          onClick={handleUpdateCoreClick}
-          disabled={!local || isUpdatingCore || branch === 'core'}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium text-white transition shrink-0 ${
-            branch === 'core'
-              ? 'bg-slate-400 dark:bg-slate-600 cursor-not-allowed'
-              : 'bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 shadow-sm shadow-indigo-100 dark:shadow-none'
-          }`}
-          title={branch === 'core' ? 'You are already on core branch' : 'Run safe Core update'}
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isUpdatingCore ? 'animate-spin' : ''}`} />
-          <span>{isUpdatingCore ? 'Updating...' : 'Check & Update Core'}</span>
-        </button>
+        {/* Branch Context Guidance */}
+        {branch === 'core' && (
+          <div className="text-xs bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 rounded-lg p-3 flex items-start gap-2.5">
+            <Info className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+            <div className="space-y-1">
+              <p className="font-semibold">目前位於核心開發分支 (`core`)：</p>
+              <p className="text-amber-700 dark:text-amber-400 leading-relaxed text-[11px]">
+                Core Update 功能是用於將上游 Core 的最新程式碼安全合併至使用者筆記工作區分支（<code>main</code>）。在 <code>core</code> 開發分支中，無需也不可合併更新自身。
+              </p>
+              <p className="text-[11px] text-amber-800 dark:text-amber-200">
+                💡 若要建立個人筆記工作區分支，請在終端機執行：<code className="font-mono bg-amber-100/70 dark:bg-amber-900/50 px-1 py-0.5 rounded text-amber-900 dark:text-amber-100 font-semibold">pnpm bootstrap-workspace</code>
+              </p>
+            </div>
+          </div>
+        )}
+
+        {!local && (
+          <div className="text-xs bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded-lg p-2.5 flex items-center gap-2">
+            <Info className="w-4 h-4 shrink-0 text-slate-500" />
+            <span>目前為遠端 GitHub 檢視模式。Core 更新與工作區配置修改僅可在本地工作區環境執行。</span>
+          </div>
+        )}
+
+        {coreUpdateMsg && (
+          <div className={`p-3 rounded-lg text-xs flex items-start gap-2 ${
+            coreUpdateMsg.startsWith('Error:')
+              ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+              : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+          }`}>
+            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <span className="leading-relaxed">{coreUpdateMsg}</span>
+          </div>
+        )}
       </div>
 
       {!local && <p className="text-xs text-slate-500 dark:text-slate-400">This manifest comes from the selected GitHub repository. Edit workspace configuration in that repository or a local workspace. Core updates run in the local workspace.</p>}
@@ -214,13 +279,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       {/* Manifest YAML Editor */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-            Workspace Manifest (.github-notes.yaml)
-          </label>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              Workspace Manifest (.github-notes.yaml)
+            </label>
+            {branch === 'core' && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono">
+                core 分支唯讀
+              </span>
+            )}
+          </div>
           <button
             onClick={handleSaveConfig}
             disabled={!local || isSaving || branch === 'core'}
-            className="flex items-center gap-1.5 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-md text-xs font-medium transition"
+            className="flex items-center gap-1.5 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-indigo-600 text-white rounded-md text-xs font-medium transition cursor-pointer"
+            title={branch === 'core' ? '工作區配置僅在 main 分支中可編輯' : '儲存並提交配置變更'}
           >
             <Save className="w-3.5 h-3.5" />
             <span>{isSaving ? 'Saving...' : 'Save & Commit'}</span>
@@ -231,6 +304,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           Each notebook can define <code>statuses: [inbox, working, done, archived]</code>.
           Omit it or use an empty list for these defaults. Order sets Kanban columns and
           the initial status of new notes. Statuses found in notes also appear as options.
+          {branch === 'core' && (
+            <span className="block mt-1 text-amber-600 dark:text-amber-400 text-[11px]">
+              註：此儲存庫目前處於 <code>core</code> 開發分支。<code>.github-notes.yaml</code> 屬於使用者筆記工作區分支（<code>main</code>），因此在 <code>core</code> 分支下為唯讀。
+            </span>
+          )}
         </p>
         <textarea
           readOnly={!local || branch === 'core'}

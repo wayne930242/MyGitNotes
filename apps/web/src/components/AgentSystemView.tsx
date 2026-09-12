@@ -163,9 +163,9 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean }> = ({ readOnly = f
                 key={res.path}
                 disabled={switching || restoring}
                 onClick={() => void selectDocument(res.path)}
-                className={`w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium transition ${
+                className={`w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed ${
                   selectedPath === res.path
-                    ? 'font-semibold shadow-xs'
+                    ? 'font-semibold shadow-xs hover:opacity-90'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-100'
                 }`}
                 style={
@@ -254,9 +254,9 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean }> = ({ readOnly = f
               disabled={locked}
               aria-label={confirmRestore ? 'Confirm restore agent document' : 'Restore agent document'}
               onClick={handleRestoreClick}
-              className={`editor-action ${confirmRestore ? 'editor-confirming' : ''} flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition ${
+              className={`editor-action ${confirmRestore ? 'editor-confirming' : ''} flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed ${
                 confirmRestore
-                  ? 'bg-rose-500 text-white shadow-md animate-pulse'
+                  ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-md animate-pulse'
                   : 'bg-black/5 dark:bg-white/5 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-black/10 dark:hover:bg-white/10'
               }`}
               title={confirmRestore ? 'Click again to confirm revert from Git HEAD' : 'Revert edits to Git HEAD'}

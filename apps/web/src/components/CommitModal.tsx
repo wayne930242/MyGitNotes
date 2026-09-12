@@ -111,7 +111,7 @@ const CommitModalContent: React.FC<CommitModalProps> = ({
           </div>
           <button
             aria-label="Close commit" disabled={isCommitting} onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"
+            className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <X className="w-5 h-5" />
           </button>
@@ -162,7 +162,7 @@ const CommitModalContent: React.FC<CommitModalProps> = ({
                   <button
                     onClick={handleGenerateAiMessage}
                     disabled={isGenerating || changedFiles.length === 0}
-                    className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                    className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 hover:underline font-medium disabled:opacity-40 disabled:cursor-not-allowed transition"
                   >
                     <Sparkles className="w-3 h-3 text-amber-500" />
                     <span>{isGenerating ? 'Generating...' : commitFiles ? 'Generate message' : 'Semantic Message (Gemini)'}</span>
@@ -206,7 +206,7 @@ const CommitModalContent: React.FC<CommitModalProps> = ({
         <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/50 flex items-center justify-end gap-2">
           <button
             disabled={isCommitting} onClick={onClose}
-            className="px-4 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition"
+            className="px-4 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
@@ -214,7 +214,7 @@ const CommitModalContent: React.FC<CommitModalProps> = ({
             <button
               onClick={handleCommit}
               disabled={isCommitting}
-              className="px-4 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition disabled:opacity-50"
+              className="px-4 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg shadow-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isCommitting ? 'Committing...' : commitFiles ? 'Commit to GitHub' : 'Commit & Save'}
             </button>

@@ -413,8 +413,8 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
         {saveError && <EditorNotice tone="error">{saveError}</EditorNotice>}
 
         {(blocked || remoteNotice || conflictDraft) && <EditorNotice actions={<>
-          {blocked && <button disabled={isSaving} onClick={refreshRemote} className="font-semibold underline disabled:opacity-50">Refresh remote version</button>}
-          {conflictDraft && <button onClick={downloadConflictDraft} className="underline">Download preserved draft</button>}
+          {blocked && <button disabled={isSaving} onClick={refreshRemote} className="font-semibold underline hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed transition">Refresh remote version</button>}
+          {conflictDraft && <button onClick={downloadConflictDraft} className="underline hover:opacity-80 transition">Download preserved draft</button>}
         </>}>{remoteNotice || 'Your local changes are preserved.'}</EditorNotice>}
         </div>
 
@@ -441,7 +441,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
           </div>
 
           <div className="note-controls flex items-center gap-2">
-            {!autoSave && !readOnly && <button aria-label="Save to GitHub" title="Save to GitHub" disabled={locked || !hasUnsavedChanges} onClick={handleExplicitSave} className="note-save editor-action px-3 py-1.5 rounded-lg text-xs text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}><Save className="editor-mobile-icon w-5 h-5" /><span>{isSaving ? 'Saving…' : 'Save to GitHub'}</span></button>}
+            {!autoSave && !readOnly && <button aria-label="Save to GitHub" title="Save to GitHub" disabled={locked || !hasUnsavedChanges} onClick={handleExplicitSave} className="note-save editor-action px-3 py-1.5 rounded-lg text-xs text-white transition hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: 'var(--color-primary)' }}><Save className="editor-mobile-icon w-5 h-5" /><span>{isSaving ? 'Saving…' : 'Save to GitHub'}</span></button>}
             {isMarkdown && <MarkdownEditorModeSwitch mode={editorMode} onChange={setEditorMode} />}
 
             {/* Frontmatter Toggle */}
@@ -450,8 +450,8 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
               onClick={() => setShowFrontmatter(!showFrontmatter)}
               className={`editor-action flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
                 showFrontmatter
-                  ? 'border-slate-300 dark:border-slate-600 font-semibold'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                  ? 'border-slate-300 dark:border-slate-600 font-semibold hover:opacity-90'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
               style={
                 showFrontmatter
@@ -471,7 +471,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
             <button
               aria-label="Insert asset"
               onClick={() => setIsAssetPickerOpen(true)}
-              className="editor-action flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              className="editor-action flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 transition"
               title="Insert image from notebook assets"
             >
               <ImageIcon className="w-3.5 h-3.5" style={{ color: 'var(--color-primary)' }} />
@@ -486,7 +486,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
                 className={`editor-action ${confirmRestore ? 'editor-confirming' : ''} flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium transition active:scale-95 shadow-xs ${
                   confirmRestore
                     ? 'bg-rose-600 hover:bg-rose-700 text-white font-bold animate-pulse'
-                    : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-amber-600'
+                    : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-amber-600'
                 }`}
                 title={
                   confirmRestore
@@ -666,7 +666,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
       {isAssetPickerOpen && <div role="dialog" aria-label="Note assets" aria-modal="true" className="viewport-overlay fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="rounded-2xl border shadow-2xl w-full max-w-3xl max-h-[85dvh] flex flex-col overflow-hidden" style={{ backgroundColor:'var(--color-surface)',borderColor:'var(--color-border)' }}>
-          <div className="p-4 border-b shrink-0 flex items-center justify-between" style={{ borderColor:'var(--color-border)' }}><span className="font-semibold text-sm text-slate-900 dark:text-slate-100">Notebook Assets</span><button aria-label="Close note assets" onClick={() => setIsAssetPickerOpen(false)} className="text-slate-400"><X className="w-5 h-5" /></button></div>
+          <div className="p-4 border-b shrink-0 flex items-center justify-between" style={{ borderColor:'var(--color-border)' }}><span className="font-semibold text-sm text-slate-900 dark:text-slate-100">Notebook Assets</span><button aria-label="Close note assets" onClick={() => setIsAssetPickerOpen(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 p-1 rounded-lg transition"><X className="w-5 h-5" /></button></div>
           <div className="p-4 overflow-y-auto"><AssetLibrary assets={assets} onUploadAsset={locked ? undefined : onUploadAsset} onDeleteAsset={locked ? undefined : onDeleteAsset} onMoveAsset={locked ? undefined : onMoveAsset} onInsert={locked ? undefined : asset => handleInsertAssetRef(asset.markdownRef)} /></div>
         </div>
       </div>}

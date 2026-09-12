@@ -1,5 +1,5 @@
 import React from 'react';
-import { Folder, Tag, Filter, GitBranch, CheckCircle2, Heart } from 'lucide-react';
+import { Folder, Tag, Filter, GitBranch, CheckCircle2, Heart, Eye, EyeOff } from 'lucide-react';
 import { NotebookConfig, NoteItem, GitStatus, FolderItem } from '../lib/types.js';
 
 interface SidebarProps {
@@ -98,7 +98,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }
                   className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-sm font-medium transition ${
                     isSelected
-                      ? 'font-semibold'
+                      ? 'font-semibold hover:opacity-90'
                       : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
@@ -134,23 +134,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {onSelectFolder && <div>
           <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-2">Folders</div>
-          <button className="w-full text-left px-2.5 py-2 text-sm rounded-lg" aria-pressed={selectedFolder === null} onClick={() => onSelectFolder(null)}
+          <button className={`w-full text-left px-2.5 py-2 text-sm rounded-lg transition ${selectedFolder === null ? 'font-medium hover:opacity-90' : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200'}`} aria-pressed={selectedFolder === null} onClick={() => onSelectFolder(null)}
             style={selectedFolder === null ? { backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)' } : undefined}>All folders</button>
           {folders.filter(f => f.notebookId === selectedNotebookId).map(folder => <button key={folder.path} title={folder.description || folder.path}
             aria-pressed={selectedFolder === folder.path} onClick={() => onSelectFolder(folder.path)}
-            className="w-full flex items-center gap-2 py-2 pr-2 text-sm rounded-lg text-left"
+            className={`w-full flex items-center gap-2 py-2 pr-2 text-sm rounded-lg text-left transition ${selectedFolder === folder.path ? 'font-medium hover:opacity-90' : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200'}`}
             style={{ paddingLeft: 10 + (folder.path.split('/').length - 1) * 14,
               ...(selectedFolder === folder.path ? { backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)' } : {}) }}>
             <Folder className="w-4 h-4 shrink-0"/><span className="truncate">{folder.title}</span>
           </button>)}
         </div>}
-
-        <label className="flex items-center gap-2 px-2 min-h-11 text-sm cursor-pointer">
-          <input type="checkbox" checked={showHidden} onChange={event => onShowHiddenChange(event.target.checked)}
-            aria-label="Show hidden notes" className="w-4 h-4 shrink-0 accent-indigo-600" />
-          <span className="min-w-0">Show hidden notes</span>
-          <span className="text-xs text-slate-400 ml-auto">{hiddenNoteCount}</span>
-        </label>
 
         {/* Status Filters */}
         <div>
@@ -179,8 +172,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }
               className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition ${
                 selectedStatus === null
-                  ? 'font-medium'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5'
+                  ? 'font-medium hover:opacity-90'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               <div className="flex items-center gap-2">
@@ -209,8 +202,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }
                   className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition ${
                     isSelected
-                      ? 'font-medium'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5'
+                      ? 'font-medium hover:opacity-90'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   <div className="flex items-center gap-2">
@@ -231,6 +224,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </button>
               );
             })}
+          </div>
+
+          {/* Show Hidden Notes Toggle Switch */}
+          <div className="mt-2.5 pt-2 border-t border-slate-200/70 dark:border-slate-800/70 px-1">
+            <label className="flex items-center justify-between cursor-pointer group py-1.5 px-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition select-none">
+              <div className="flex items-center gap-2 min-w-0">
+                {showHidden ? (
+                  <Eye className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0 transition" />
+                ) : (
+                  <EyeOff className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-500 dark:group-hover:text-slate-300 shrink-0 transition" />
+                )}
+                <span className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 transition font-medium">
+                  Show hidden notes
+                </span>
+                <span className="text-[11px] px-1.5 py-0.2 rounded-full bg-black/5 dark:bg-white/10 text-slate-500 dark:text-slate-400 font-mono">
+                  {hiddenNoteCount}
+                </span>
+              </div>
+              <div className="relative inline-flex items-center">
+                <input
+                  type="checkbox"
+                  checked={showHidden}
+                  onChange={(event) => onShowHiddenChange(event.target.checked)}
+                  aria-label="Show hidden notes"
+                  className="sr-only peer"
+                />
+                <div
+                  className={`w-8 h-4.5 rounded-full transition-colors relative flex items-center p-0.5 ${
+                    showHidden ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                  style={showHidden ? { backgroundColor: 'var(--color-primary)' } : undefined}
+                >
+                  <div
+                    className={`w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform duration-150 ${
+                      showHidden ? 'translate-x-3.5' : 'translate-x-0'
+                    }`}
+                  />
+                </div>
+              </div>
+            </label>
           </div>
         </div>
 
@@ -262,15 +295,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             backgroundColor: 'var(--color-primary)',
                             color: '#ffffff',
                           }
-                        : {
-                            backgroundColor: 'var(--color-surface)',
-                            borderColor: 'var(--color-border)',
-                          }
+                        : undefined
                     }
                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition border ${
                       isSelected
-                        ? 'font-medium shadow-xs border-transparent'
-                        : 'text-slate-600 dark:text-slate-400 hover:border-slate-400'
+                        ? 'font-medium shadow-xs border-transparent hover:opacity-90'
+                        : 'text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                   >
                     <Tag className="w-3 h-3" />

@@ -9,7 +9,7 @@ export interface AssetLibraryProps {
   onMoveAsset?: (asset: AssetItem, directory: string) => Promise<AssetItem>;
   onInsert?: (asset: AssetItem) => void;
 }
-const button = 'px-3 py-1.5 rounded-lg border text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-black/5 dark:hover:bg-white/10';
+const button = 'px-3 py-1.5 rounded-lg border text-xs font-medium transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-black/5 dark:hover:bg-white/10';
 const imageFile = (name: string) => /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(name);
 
 export function AssetLibrary({ assets, onUploadAsset, onDeleteAsset, onMoveAsset, onInsert }: AssetLibraryProps) {
@@ -62,7 +62,7 @@ export function AssetLibrary({ assets, onUploadAsset, onDeleteAsset, onMoveAsset
       </label>
     </div>
     {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
-    <div className="flex flex-wrap gap-2">{folders.filter(f => f && f !== directory).map(folder => <button key={folder} className="text-xs underline text-slate-500" disabled={busy} onClick={() => { setDirectory(folder); setSelectedPath(''); }}>{folder}</button>)}</div>
+    <div className="flex flex-wrap gap-2">{folders.filter(f => f && f !== directory).map(folder => <button key={folder} className="text-xs underline text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition disabled:opacity-40 disabled:cursor-not-allowed" disabled={busy} onClick={() => { setDirectory(folder); setSelectedPath(''); }}>{folder}</button>)}</div>
     {visible.length === 0 ? <p className="text-sm text-slate-400 py-10 text-center">No assets in this folder.</p> : <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 overflow-y-auto">
       {visible.map(asset => <button key={asset.path} aria-label={`Select ${asset.name}`} aria-pressed={selectedPath === asset.path} disabled={busy} onClick={() => { setSelectedPath(asset.path); setConfirmDelete(false); }} className="relative border rounded-xl overflow-hidden text-left transition hover:shadow-md" style={{ backgroundColor:'var(--color-sidebar)',borderColor:selectedPath === asset.path ? 'var(--color-primary)' : 'var(--color-border)',boxShadow:selectedPath === asset.path ? '0 0 0 1px var(--color-primary)' : undefined }}>
         <div className="h-28 bg-black/5 dark:bg-white/5 flex items-center justify-center">{imageFile(asset.name) ? <img src={asset.rawUrl} alt={asset.name} className="w-full h-full object-cover" /> : <File className="w-9 h-9 text-slate-400" />}</div>
@@ -79,7 +79,7 @@ export function AssetLibrary({ assets, onUploadAsset, onDeleteAsset, onMoveAsset
         if (!confirmDelete) { setConfirmDelete(true); return; }
         void run(async () => { await onDeleteAsset(selected); setSelectedPath(''); setConfirmDelete(false); });
       }}>{confirmDelete ? 'Confirm delete' : 'Delete'}</button>
-      {onInsert && <button className={`${button} text-white`} style={{ backgroundColor:'var(--color-primary)' }} disabled={!selected || busy} onClick={() => selected && onInsert(selected)}>Insert</button>}
+      {onInsert && <button className={`${button} text-white hover:opacity-90`} style={{ backgroundColor:'var(--color-primary)' }} disabled={!selected || busy} onClick={() => selected && onInsert(selected)}>Insert</button>}
     </div>
     {onMoveAsset && <div className="flex gap-2 items-center">
       <input aria-label="Move asset to folder" list={folderList} placeholder="Destination folder (empty = root)" value={destination} disabled={!selected || busy} onChange={e => setDestination(e.target.value)} className="min-w-0 flex-1 px-3 py-2 rounded-lg border text-xs bg-transparent dark:border-slate-700" />
@@ -87,7 +87,7 @@ export function AssetLibrary({ assets, onUploadAsset, onDeleteAsset, onMoveAsset
     </div>}
     {preview && <div role="dialog" aria-label="Asset preview" aria-modal="true" className="viewport-overlay fixed inset-0 z-[70] bg-slate-950/80 flex items-center justify-center p-6" onClick={() => setPreview(null)}>
       <div className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden min-w-0 max-w-4xl max-h-[85dvh] shadow-xl" onClick={e => e.stopPropagation()}>
-        <div className="p-3 flex items-center gap-4 border-b dark:border-slate-700"><ImageIcon className="w-4 h-4" /><span className="text-sm mr-auto min-w-0 truncate">{preview.name}</span><a href={preview.rawUrl} target="_blank" rel="noopener noreferrer" className="text-xs underline shrink-0">Open original</a><button aria-label="Close asset preview" onClick={() => setPreview(null)}><X className="w-5 h-5" /></button></div>
+        <div className="p-3 flex items-center gap-4 border-b dark:border-slate-700"><ImageIcon className="w-4 h-4" /><span className="text-sm mr-auto min-w-0 truncate">{preview.name}</span><a href={preview.rawUrl} target="_blank" rel="noopener noreferrer" className="text-xs underline shrink-0">Open original</a><button aria-label="Close asset preview" onClick={() => setPreview(null)} className="p-1 rounded hover:bg-black/5 dark:hover:bg-white/10 transition"><X className="w-5 h-5" /></button></div>
         {imageFile(preview.name) ? <img src={preview.rawUrl} alt={preview.name} className="max-h-[70vh] max-w-full object-contain" /> : <p className="p-10 text-sm">Open the original file to view this format.</p>}
       </div>
     </div>}

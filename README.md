@@ -59,6 +59,84 @@ pnpm update-core
 
 This merges the latest changes from `upstream/core` into your current branch without modifying your notes.
 
+## Deploying to Vercel
+
+GitHub Notes can be deployed to Vercel as a cloud-hosted, Git-backed workspace frontend. In production, notes are loaded directly from your GitHub repository branch, and user sessions are stored securely in Upstash Redis.
+
+### 1. Register a GitHub OAuth App
+
+To allow users to sign in with GitHub and commit notes:
+
+1. Go to GitHub -> **Settings** -> **Developer Settings** -> **OAuth Apps** -> **New OAuth App** (or your organization's Developer Settings).
+2. Configure the OAuth application:
+   - **Application name**: e.g., `GitHub Notes`
+   - **Homepage URL**: `https://<your-project>.vercel.app` (or your custom domain)
+   - **Authorization callback URL**: `https://<your-project>.vercel.app/api/auth/github/callback`
+3. Click **Register application**.
+4. Copy the **Client ID**.
+5. Click **Generate a new client secret** and copy the **Client Secret**.
+
+> [!NOTE]
+> Standard OAuth Apps request the `repo` scope to read and write notes on behalf of authenticated users.
+
+### 2. Set Up Upstash Redis (Session Storage)
+
+Vercel Serverless Functions require an external Redis instance to store encrypted user sessions and agent grants:
+
+1. Create a free database at [Upstash Redis](https://upstash.com), or add the **Upstash Redis** integration directly from the Vercel Marketplace on your project dashboard.
+2. Retrieve the REST connection credentials:
+   - `UPSTASH_REDIS_REST_URL`
+   - `UPSTASH_REDIS_REST_TOKEN`
+
+### 3. Configure Environment Variables
+
+Create or update `.env` with the following variables:
+
+```bash
+# Data source: connect to a GitHub repository
+GITHUB_NOTES_SOURCE=github
+GITHUB_NOTES_REPOSITORY=your-username/github-notes
+GITHUB_NOTES_BRANCH=main
+
+# Public URL and GitHub OAuth credentials
+APP_URL=https://<your-project>.vercel.app
+GITHUB_CLIENT_ID=your_oauth_client_id
+GITHUB_CLIENT_SECRET=your_oauth_client_secret
+GITHUB_APP_TYPE=oauth-app
+
+# 32+ character random secret (generate with: openssl rand -hex 32)
+SESSION_SECRET=your_32_character_session_secret
+
+# Upstash Redis REST API credentials
+UPSTASH_REDIS_REST_URL=https://...upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_token
+
+# Optional: Gemini API key for AI-assisted semantic commit messages
+GEMINI_API_KEY=your_gemini_api_key
+```
+
+### 4. Deploy with Vercel CLI or Dashboard
+
+#### Option A: Using Vercel CLI
+
+```bash
+# Link the repository to your Vercel project
+vercel link
+
+# Import configured variables from .env to Vercel production
+pnpm env:vercel production
+
+# Deploy to production
+vercel --prod
+```
+
+#### Option B: Using Vercel Dashboard
+
+1. Import your Git repository into Vercel.
+2. The included [`vercel.json`](vercel.json) automatically configures the build settings (`pnpm build`), output directory (`apps/web/dist`), and API rewrites (`/api/*`, `/mcp/*`).
+3. Add the environment variables listed above under **Project Settings** -> **Environment Variables**.
+4. Deploy the project.
+
 ## Documentation
 
 - [Agent & Developer Documentation](docs/agent/index.md): Architecture, branch lifecycle, security boundaries, and MCP specifications.

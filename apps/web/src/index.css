@@ -37,6 +37,62 @@
   code, pre {
     font-family: 'JetBrains Mono', monospace;
   }
+
+  button {
+    cursor: pointer;
+    touch-action: manipulation;
+    transition-property: color, background-color, border-color, opacity, box-shadow, transform, filter;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+
+  /* Universal disabled state for buttons and button-like inputs */
+  button:disabled,
+  button[disabled],
+  button[aria-disabled="true"],
+  input[type="button"]:disabled,
+  input[type="submit"]:disabled,
+  input[type="reset"]:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.45 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    pointer-events: auto !important;
+  }
+
+  /* Prevent hover/active transform, shadow, or brightness shifts on disabled buttons */
+  button:disabled:hover,
+  button[disabled]:hover,
+  button[aria-disabled="true"]:hover,
+  button:disabled:active,
+  button[disabled]:active,
+  button[aria-disabled="true"]:active {
+    opacity: 0.45 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    filter: none !important;
+  }
+
+  /* Tactile active feedback for interactive buttons */
+  button:not(:disabled):not([aria-disabled="true"]):active {
+    transform: scale(0.98);
+  }
+
+  /* Hover & active feedback for buttons using primary background custom properties */
+  button:not(:disabled):not([aria-disabled="true"])[style*="--color-primary"]:hover {
+    filter: brightness(0.93);
+  }
+  .dark button:not(:disabled):not([aria-disabled="true"])[style*="--color-primary"]:hover {
+    filter: brightness(1.12);
+  }
+  button:not(:disabled):not([aria-disabled="true"])[style*="--color-primary"]:active {
+    filter: brightness(0.86);
+    transform: scale(0.97);
+  }
+  .dark button:not(:disabled):not([aria-disabled="true"])[style*="--color-primary"]:active {
+    filter: brightness(1.22);
+    transform: scale(0.97);
+  }
 }
 
 .dark {
@@ -355,6 +411,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
     border-radius: 8px;
   }
   .header-nav button svg { width: 20px; height: 20px; }
+  .header-nav button:hover:not(:disabled) { background: var(--color-primary-light); }
   .header-nav button[aria-current="page"] { background: var(--color-primary-light) !important; box-shadow: none; }
   .mobile-nav-label { display: block; }
   .viewport-overlay {
