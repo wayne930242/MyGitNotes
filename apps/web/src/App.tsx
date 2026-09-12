@@ -264,15 +264,15 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     if (loading || !config) return;
-    if (!route.valid) { setRouteError('Page not found.');  return; }
+    if (!route.valid) { setRouteError('route.pageNotFound');  return; }
     const notebook = config.notebooks.find(nb => nb.id === selectedNotebookId) || (!route.notebook ? config.notebooks[0] : null);
-    if (!notebook) { setRouteError('Notebook not found.');  return; }
-    if (route.folder && !folders.some(f => f.notebookId === notebook.id && f.path === route.folder)) { setRouteError('Folder not found.'); return; }
+    if (!notebook) { setRouteError('route.notebookNotFound');  return; }
+    if (route.folder && !folders.some(f => f.notebookId === notebook.id && f.path === route.folder)) { setRouteError('route.folderNotFound'); return; }
     if (!route.note) { setRouteError(''); setEditingNote(null);  return; }
     const file = `${notebook.root}/${route.note}`;
     const note = notes.find(n => n.path === file);
     if (note) { setRouteError(''); setEditingNote(previous => previous?.path === file ? previous : note);  }
-    else if (editingNote?.path !== file) { setRouteError('Note not found. It may have been moved or deleted.');  }
+    else if (editingNote?.path !== file) { setRouteError('route.noteNotFound');  }
   }, [route, config, notes, folders, loading, selectedNotebookId, sourceId]);
 
   // Filter notes by active notebook, search query, status, and tags
@@ -632,10 +632,10 @@ const AppContent: React.FC = () => {
               className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-white shrink-0 shadow-xs"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >
-              Core Baseline
+              {t('nav.coreBaseline')}
             </span>
             <span className="text-slate-600 dark:text-slate-300">
-              You are currently on the canonical <code className="font-mono font-semibold px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10">core</code> branch. To create your personal workspace and notes, run <code className="font-mono font-semibold px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10">pnpm bootstrap-workspace</code>.
+              {t('nav.coreBanner')}
             </span>
           </div>
         </div>
@@ -661,7 +661,14 @@ const AppContent: React.FC = () => {
         onSortChange={handleSortChange}
       />
 
-      {routeError && <div role="alert" className="px-6 py-3 text-sm text-rose-600">{routeError} <button className="underline" onClick={() => navigate('/notes')}>Go to notes</button></div>}
+      {routeError && (
+        <div role="alert" className="px-6 py-3 text-sm text-rose-600">
+          {routeError.startsWith('route.') ? t(routeError as any) : routeError}{' '}
+          <button className="underline" onClick={() => navigate('/notes')}>
+            {t('route.goToNotes')}
+          </button>
+        </div>
+      )}
       {/* Main Workspace Layout */}
       <div ref={sidebarGestureRef} className="workspace-body relative flex-1 min-h-0 min-w-0 flex overflow-hidden">
         {activeTab === 'notes' && (
@@ -735,13 +742,16 @@ const AppContent: React.FC = () => {
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
                   canDelete={!remote && canWrite}
-                  notes={sortNotes(filteredNotes, sortField, sortOrder, notebookStatuses)}
+                  notes={filteredNotes}
                   onOpenNote={handleOpenNote}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
                   onDeleteNote={handleDeleteNote}
                   onNewNoteWithStatus={(status) => {
                     openNewNote(status);
                   }}
+                  sortField={sortField}
+                  sortOrder={sortOrder}
+                  onSortChange={handleSortChange}
                 />
               )}
             </main>
@@ -797,13 +807,13 @@ const AppContent: React.FC = () => {
         <div className="fixed top-20 right-6 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
           <div className="bg-slate-900/95 dark:bg-slate-800/95 text-white backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-slate-700/80 flex items-center gap-3 text-xs">
             <span>
-              Note <strong>"{undoToast.note.title}"</strong> moved to trash.
+              {t('toast.noteMovedToTrash', { title: undoToast.note.title })}
             </span>
             <button
               onClick={() => handleRestoreNote(undoToast.note)}
               className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-semibold rounded-md transition"
             >
-              Undo
+              {t('common.undo')}
             </button>
             <button
               onClick={() => setUndoToast(null)}
@@ -871,18 +881,18 @@ const AppContent: React.FC = () => {
           >
             <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
-              Create New Note
+              {t('createNote.title')}
             </h3>
 
             {createError && <p id="create-note-error" role="alert" className="mb-3 text-sm text-red-600">{createError}</p>}
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-                  Note Title
+                  {t('createNote.noteTitle')}
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Sprint Planning, Project Ideas..."
+                  placeholder={t('createNote.placeholder')}
                   aria-describedby="create-note-error" value={newNoteTitle}
                   onChange={(e) => setNewNoteTitle(e.target.value)}
                   className="w-full px-3 py-2 bg-black/5 dark:bg-white/5 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:outline-none"
@@ -895,9 +905,9 @@ const AppContent: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-                  Initial Status
+                  {t('createNote.initialStatus')}
                 </label>
-                <Select aria-label="Initial status" value={newNoteStatus} onValueChange={setNewNoteStatus} options={notebookStatuses.map(value => ({value,label:value}))} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:outline-none bg-black/5 dark:bg-white/5" />
+                <Select aria-label={t('createNote.initialStatus')} value={newNoteStatus} onValueChange={setNewNoteStatus} options={notebookStatuses.map(value => ({value,label:value}))} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:outline-none bg-black/5 dark:bg-white/5" />
               </div>
             </div>
 
@@ -906,7 +916,7 @@ const AppContent: React.FC = () => {
                 onClick={() => setIsNewNoteOpen(false)}
                 className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition active:scale-95"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={() => handleCreateNewNote()}
@@ -914,7 +924,7 @@ const AppContent: React.FC = () => {
                 style={{ backgroundColor: 'var(--color-primary)' }}
                 className="px-4 py-2 text-xs font-medium text-white rounded-lg shadow-sm transition hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Create Note
+                {t('createNote.submit')}
               </button>
             </div>
           </div>

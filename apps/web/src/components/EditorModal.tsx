@@ -19,6 +19,7 @@ import { AssetLibrary } from './AssetLibrary.js';
 import { NoteItem, AssetItem } from '../lib/types.js';
 import { saveLocalDraft, getLocalDraft, clearLocalDraft } from '../lib/storage.js';
 import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
+import { useTranslation } from '../lib/i18n/index.js';
 
 interface EditorModalProps {
   note: NoteItem | null;
@@ -77,6 +78,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 }) => {
 
   const isMarkdown = note.path.endsWith('.md') || note.path.endsWith('.markdown');
+  const { t } = useTranslation();
 
   // Editor states
   const [content, setContent] = useState(note.content);
@@ -413,9 +415,9 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
         {saveError && <EditorNotice tone="error">{saveError}</EditorNotice>}
 
         {(blocked || remoteNotice || conflictDraft) && <EditorNotice actions={<>
-          {blocked && <button disabled={isSaving} onClick={refreshRemote} className="font-semibold underline hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed transition">Refresh remote version</button>}
-          {conflictDraft && <button onClick={downloadConflictDraft} className="underline hover:opacity-80 transition">Download preserved draft</button>}
-        </>}>{remoteNotice || 'Your local changes are preserved.'}</EditorNotice>}
+          {blocked && <button disabled={isSaving} onClick={refreshRemote} className="font-semibold underline hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed transition">{t('editor.refreshRemote')}</button>}
+          {conflictDraft && <button onClick={downloadConflictDraft} className="underline hover:opacity-80 transition">{t('editor.downloadPreservedDraft')}</button>}
+        </>}>{remoteNotice || t('editor.localChangesPreserved')}</EditorNotice>}
         </div>
 
         {/* Modal Top Bar */}
@@ -432,7 +434,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
             </div>
             <div className="truncate">
               <div className="font-semibold text-slate-900 dark:text-slate-100 text-sm truncate">
-                {String(metadata.title || note.title || 'Untitled')}
+                {String(metadata.title || note.title || t('editor.untitled'))}
               </div>
               <div className="text-xs text-slate-400 dark:text-slate-500 font-mono truncate">
                 {note.path}
@@ -441,12 +443,12 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
           </div>
 
           <div className="note-controls flex items-center gap-2">
-            {!autoSave && !readOnly && <button aria-label="Save to GitHub" title="Save to GitHub" disabled={locked || !hasUnsavedChanges} onClick={handleExplicitSave} className="note-save editor-action px-3 py-1.5 rounded-lg text-xs text-white transition hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: 'var(--color-primary)' }}><Save className="editor-mobile-icon w-5 h-5" /><span>{isSaving ? 'Saving…' : 'Save to GitHub'}</span></button>}
+            {!autoSave && !readOnly && <button aria-label={t('editor.saveToGitHub')} title={t('editor.saveToGitHub')} disabled={locked || !hasUnsavedChanges} onClick={handleExplicitSave} className="note-save editor-action px-3 py-1.5 rounded-lg text-xs text-white transition hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: 'var(--color-primary)' }}><Save className="editor-mobile-icon w-5 h-5" /><span>{isSaving ? t('editor.saving') : t('editor.saveToGitHub')}</span></button>}
             {isMarkdown && <MarkdownEditorModeSwitch mode={editorMode} onChange={setEditorMode} />}
 
             {/* Frontmatter Toggle */}
             <button
-              aria-label="Frontmatter" aria-pressed={showFrontmatter}
+              aria-label={t('editor.frontmatter')} aria-pressed={showFrontmatter}
               onClick={() => setShowFrontmatter(!showFrontmatter)}
               className={`editor-action flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
                 showFrontmatter
@@ -464,24 +466,24 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
               }
             >
               <Settings2 className="w-3.5 h-3.5" />
-              <span>Frontmatter</span>
+              <span>{t('editor.frontmatter')}</span>
             </button>
 
             {/* Insert Asset Helper (Requirement 2: Directly opens inline Asset Picker) */}
             <button
-              aria-label="Insert asset"
+              aria-label={t('editor.asset')}
               onClick={() => setIsAssetPickerOpen(true)}
               className="editor-action flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 transition"
-              title="Insert image from notebook assets"
+              title={t('editor.insertAssetTooltip')}
             >
               <ImageIcon className="w-3.5 h-3.5" style={{ color: 'var(--color-primary)' }} />
-              <span>Asset</span>
+              <span>{t('editor.asset')}</span>
             </button>
 
             {/* Single-File Restore Button with Two-Click Confirmation (Requirement 3: Only shown when note is dirty!) */}
             {autoSave && !readOnly && isDirty && (
               <button
-                aria-label={confirmRestore ? 'Confirm restore note' : 'Restore note'}
+                aria-label={confirmRestore ? t('editor.confirmRestoreNote') : t('editor.restoreNote')}
                 onClick={handleRestoreClick}
                 className={`editor-action ${confirmRestore ? 'editor-confirming' : ''} flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium transition active:scale-95 shadow-xs ${
                   confirmRestore
@@ -490,19 +492,19 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
                 }`}
                 title={
                   confirmRestore
-                    ? 'Click again to confirm reverting changes from Git HEAD'
-                    : 'Discard uncommitted changes and restore from Git HEAD (Click twice to confirm)'
+                    ? t('editor.confirmRestoreTooltip')
+                    : t('editor.restoreTooltip')
                 }
               >
                 {confirmRestore ? (
                   <>
                     <AlertTriangle className="w-3.5 h-3.5 text-white" />
-                    <span>Confirm Restore?</span>
+                    <span>{t('editor.confirmRestore')}</span>
                   </>
                 ) : (
                   <>
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Restore</span>
+                    <span>{t('editor.restore')}</span>
                   </>
                 )}
               </button>
@@ -510,7 +512,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
             {/* Close Button */}
             <button
-              aria-label="Close note"
+              aria-label={t('editor.closeNote')}
               onClick={close}
               className="note-close p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition ml-1"
             >
