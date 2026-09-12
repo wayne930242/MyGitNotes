@@ -51,7 +51,8 @@ export function createApp(base: string): express.Express {
     app.get('/api/workspace', async (req, res) => {
       try {
         const reader: GitHubSource = res.locals.reader;
-        const [config, snapshot] = await Promise.all([reader.config(), reader.getSnapshot()]);
+        const snapshot = await reader.getSnapshot(req.query.fresh === '1');
+        const config = await reader.config();
         res.json({ repoRoot: '', branch: reader.branch, config, gitStatus: { branch: reader.branch, isClean: true, staged: [], modified: [], untracked: [] },
           isCoreBranch: reader.branch === 'core', source: { type: 'github', identity: sourceIdentity(source!), repository: reader.repository },
           revision: snapshot.sha, capabilities: { write: Boolean(res.locals.authenticated && snapshot.info.permissions?.push && reader.branch === 'main'), local: false } });
@@ -60,6 +61,10 @@ export function createApp(base: string): express.Express {
     app.get('/api/notes', async (req, res) => { try { res.json({ notes: await (res.locals.reader as GitHubSource).notes(req.query.notebookId as string) }); } catch (error) { fail(res, error); } });
     app.get('/api/folders', async (req, res) => { try { res.json({ folders: await (res.locals.reader as GitHubSource).folders() }); } catch (error) { fail(res, error); } });
     app.get('/api/notes/read', async (req, res) => { try { res.json({ note: await (res.locals.reader as GitHubSource).note(String(req.query.path || '')) }); } catch (error) { fail(res, error); } });
+    app.post('/api/notes/read-batch', async (req, res) => {
+      try { res.json({ notes: await (res.locals.reader as GitHubSource).readNotes(req.body.paths, req.body.revision) }); }
+      catch (error) { fail(res, error); }
+    });
     app.get('/api/assets', async (req, res) => { try { res.json({ assets: await (res.locals.reader as GitHubSource).assets(req.query.notebookId as string) }); } catch (error) { fail(res, error); } });
     for (const [method, operation] of [['post', 'upload'], ['patch', 'move'], ['delete', 'delete']] as const) {
       app[method]('/api/assets', async (req, res) => {
@@ -108,7 +113,37 @@ export function createApp(base: string): express.Express {
       } catch (error) { fail(res, error); }
     });
     app.get('/api/git/status', (req, res) => res.json({ status: { branch: source?.type === 'github' ? source.branch : '', isClean: true, staged: [], modified: [], untracked: [] }, commits: [] }));
-    app.get('/api/agent-resources', (req, res) => res.json({ instructions: [], skills: [], docs: [] }));
+    app.get('/api/agent-resources', async (req, res) => {
+      try {
+        const reader: GitHubSource = res.locals.reader;
+        const snapshot = await reader.getSnapshot();
+        const entries = snapshot.entries;
+        const instructions: { path: string; name: string; editable?: boolean; scope?: 'notes' | 'product' }[] = [];
+        if (entries.some(e => e.path === 'AGENTS.md' && e.type === 'blob')) {
+          instructions.push({ path: 'AGENTS.md', name: 'System Guidelines', editable: false, scope: 'product' });
+        }
+        if (entries.some(e => e.path === 'notes/AGENTS.md' && e.type === 'blob')) {
+          instructions.push({ path: 'notes/AGENTS.md', name: 'Notes Workspace Guidelines', editable: false, scope: 'notes' });
+        }
+        for (const entry of entries) {
+          const match = entry.path.match(/^notes\/([^/]+)\/AGENTS\.md$/);
+          if (match && entry.type === 'blob') {
+            instructions.push({ path: entry.path, name: `Notebook: ${match[1].charAt(0).toUpperCase() + match[1].slice(1)} Guidelines`, editable: false, scope: 'notes' });
+          }
+        }
+        res.json({ instructions, skills: [], docs: [] });
+      } catch (error) { fail(res, error); }
+    });
+    app.get('/api/agent-resources/read', async (req, res) => {
+      try {
+        const targetPath = req.query.path as string;
+        if (!targetPath) throw new SourceError('path query required', 400);
+        if (targetPath !== 'AGENTS.md' && !targetPath.startsWith('notes/')) throw new SourceError('Access to core product internal docs is restricted', 403);
+        const reader: GitHubSource = res.locals.reader;
+        const buf = await reader.readFile(targetPath);
+        res.json({ path: targetPath, content: buf.toString('utf8') });
+      } catch (error) { fail(res, error); }
+    });
     app.use('/api', (req, res) => res.status(403).json({ error: 'This operation is available only in a local workspace.' }));
   }
   const web = path.join(base, 'apps/web/dist');
@@ -121,5 +156,7 @@ export function createApp(base: string): express.Express {
 }
 
 function fail(res: express.Response, error: unknown) {
-  res.status(error instanceof SourceError ? error.status : 500).json({ error: error instanceof Error ? error.message : 'Request failed.' });
+  const retryAfter = error instanceof SourceError ? error.retryAfter : undefined;
+  if (retryAfter) res.setHeader('Retry-After', String(retryAfter));
+  res.status(error instanceof SourceError ? error.status : 500).json({ error: error instanceof Error ? error.message : 'Request failed.', ...(retryAfter ? { retryAfter } : {}) });
 }

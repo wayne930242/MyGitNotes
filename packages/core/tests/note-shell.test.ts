@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { GitHubSource } from '../src/github-source.js';
 import { callNoteShell, replaceNoteLines, matchNoteGlob } from '../src/note-shell.js';
+
+vi.setConfig({ testTimeout: 30000 }); // Real GitHub write pacing applies to multi-commit scenarios too.
 
 function fixture() {
   const raw:Record<string,string>={
@@ -21,7 +23,7 @@ function fixture() {
       const id=endpoint.slice('/git/trees/'.length).split('?')[0];const entries=[];const dirs=new Set<string>();for(const [file,sha] of trees.get(id)!){const parts=file.split('/');for(let i=1;i<parts.length;i++)dirs.add(parts.slice(0,i).join('/'));entries.push({path:file,sha,type:'blob',mode:'100644',size:objects.get(sha)!.length});}result={truncated:false,tree:[...entries,...[...dirs].map(path=>({path,sha:path,type:'tree',mode:'040000'}))]};
     }else if(endpoint.startsWith('/git/blobs/')&&!init?.method)result={encoding:'base64',content:Buffer.from(objects.get(endpoint.slice('/git/blobs/'.length))!).toString('base64')};
     else if(endpoint==='/git/blobs'){const sha='blob'+counter++;objects.set(sha,body.encoding === 'base64' ? Buffer.from(body.content, 'base64').toString('utf8') : body.content);result={sha};}
-    else if(endpoint==='/git/trees'){const next=new Map(trees.get(body.base_tree));for(const change of body.tree)if(change.sha===null)next.delete(change.path);else next.set(change.path,change.sha);const sha='tree'+counter++;trees.set(sha,next);result={sha};}
+    else if(endpoint==='/git/trees'){const next=new Map(trees.get(body.base_tree));for(const change of body.tree)if(change.sha===null)next.delete(change.path);else {let blob=change.sha;if(change.content!==undefined){blob='blob'+counter++;objects.set(blob,change.content);}next.set(change.path,blob);}const sha='tree'+counter++;trees.set(sha,next);result={sha};}
     else if(endpoint==='/git/commits'){const sha='head'+counter++;commits.set(sha,body.tree);result={sha};}
     else if(endpoint.startsWith('/git/refs/heads/')){expect(body.force).toBe(false);head=body.sha;treeId=commits.get(head)!;files=new Map(trees.get(treeId));result={object:{sha:head}};}
     else return new Response('{}',{status:404});
@@ -89,8 +91,15 @@ describe('shell-shaped note operations',()=>{
     await callNoteShell(f.reader(),'mv',{source:'notes/ex/copied',destination:'notes/ex/moved',recursive:true,revision:f.head()},true);
     expect(f.files()).not.toContain('notes/ex/copied/b.md');expect(f.files()).toContain('notes/ex/moved/_dir.yml');
     await callNoteShell(f.reader(),'rm',{paths:['notes/ex/moved'],recursive:true,revision:f.head()},true);expect(f.files().some(p=>p.startsWith('notes/ex/moved/'))).toBe(false);
-    await callNoteShell(f.reader(),'mkdir',{path:'notes/ex/new/deep',title:'Deep',revision:f.head()},true);expect(f.text('notes/ex/new/deep/_dir.yml')).toBe('title: "Deep"\n');
-    expect(f.calls.filter(c=>c.endpoint==='/git/commits')).toHaveLength(4);expect(f.calls.filter(c=>c.method==='PATCH')).toHaveLength(4);
+    await callNoteShell(f.reader(),'mkdir',{path:'notes/ex/new/deep',title:'Deep',order:3,description:'Deep notes',revision:f.head()},true);
+    expect(f.text('notes/ex/new/deep/_dir.yml')).toContain('title: Deep');
+    expect(f.text('notes/ex/new/deep/_dir.yml')).toContain('order: 3');
+    expect(f.text('notes/ex/new/deep/_dir.yml')).toContain('description: Deep notes');
+    await callNoteShell(f.reader(),'update_folder_metadata',{path:'notes/ex/new/deep',order:5,description:'Updated deep notes',revision:f.head()},true);
+    expect(f.text('notes/ex/new/deep/_dir.yml')).toContain('title: Deep');
+    expect(f.text('notes/ex/new/deep/_dir.yml')).toContain('order: 5');
+    expect(f.text('notes/ex/new/deep/_dir.yml')).toContain('description: Updated deep notes');
+    expect(f.calls.filter(c=>c.endpoint==='/git/commits')).toHaveLength(5);expect(f.calls.filter(c=>c.method==='PATCH')).toHaveLength(5);
     const move=f.calls.filter(c=>c.endpoint==='/git/trees'&&c.method)[1];expect(move.body.tree).toHaveLength(4);expect(move.body.tree.filter((c:any)=>c.sha===null)).toHaveLength(2);
   });
   it('appends and creates notes with one commit each',async()=>{

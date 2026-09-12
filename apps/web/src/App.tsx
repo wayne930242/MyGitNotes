@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { notebookRoute, noteRoute, parseWorkspaceRoute, WorkspaceTab } from './lib/routes.js';
 import { readWorkingNotes, updateWorkingNote, clearCommittedNotes, overlayWorkingNotes, workingDiff, WorkingNotes } from './lib/working-notes.js';
 import { mergeNote, sameValue } from './lib/merge-note.js';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   fetchWorkspace,
   commitRemoteNotes,
@@ -12,6 +12,7 @@ import {
   fetchFolders,
   fetchNotes,
   readNote,
+  readNotes,
   saveNote,
   deleteNote,
   restoreNote,
@@ -45,10 +46,42 @@ import { AgentSystemView } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { CommitModal } from './components/CommitModal.js';
 import { FloatingCommitFooter } from './components/FloatingCommitFooter.js';
+import { Breadcrumbs } from './components/Breadcrumbs.js';
+import {
+  getImmediateSubfolders,
+  getImmediateNotes,
+  getBreadcrumbs,
+} from './lib/folder-tree.js';
+import {
+  sortNotes,
+  getSavedSort,
+  saveSort,
+  SortField,
+  SortOrder,
+} from './lib/note-sort.js';
+import { I18nProvider, useTranslation } from './lib/i18n/index.js';
 import { AlertTriangle, FileText, X } from 'lucide-react';
 
-export const App: React.FC = () => {
+const AppContent: React.FC = () => {
   useVisualViewport();
+  const { t } = useTranslation();
+  const [sortField, setSortField] = useState<SortField>(() => getSavedSort().field);
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => getSavedSort().order);
+
+  const handleSortChange = (field: SortField, order?: SortOrder) => {
+    let newOrder: SortOrder;
+    if (order) {
+      newOrder = order;
+    } else if (field === sortField) {
+      newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+      newOrder = field === 'title' || field === 'status' ? 'asc' : 'desc';
+    }
+    setSortField(field);
+    setSortOrder(newOrder);
+    saveSort(field, newOrder);
+  };
+
   const [filtersOpen, setFiltersOpen] = useState(false);
   const location = useLocation();
   useEffect(() => { setFiltersOpen(false); }, [location.pathname, location.search]);
@@ -61,6 +94,7 @@ export const App: React.FC = () => {
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [sourceId, setSourceId] = useState('');
   const [remote, setRemote] = useState(false);
+  const loadedRemote = useRef(false);
   const [canWrite, setCanWrite] = useState(false);
   const [revision, setRevision] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -125,7 +159,7 @@ export const App: React.FC = () => {
   const route = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
   const activeTab = route.tab;
   const sidebarGestureRef = useSidebarSwipe(activeTab === 'notes' && !loading && !loadError, filtersOpen, setFiltersOpen);
-  const selectedNotebookId = route.notebook || config?.workspace.default_notebook || 'example';
+  const selectedNotebookId = route.notebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
   const notebookStatuses = useMemo(() => resolveNoteStatuses(
     config?.notebooks.find(nb => nb.id === selectedNotebookId),
     notes.filter(note => note.notebookId === selectedNotebookId).map(note => note.status),
@@ -201,6 +235,7 @@ export const App: React.FC = () => {
   const refreshWorkspace = async () => {
     try {
       const ws = await fetchWorkspace();
+      loadedRemote.current = !ws.capabilities.local;
       setSourceId(ws.source.identity);
       setRemote(!ws.capabilities.local);
       setCanWrite(ws.capabilities.write);
@@ -216,10 +251,6 @@ export const App: React.FC = () => {
       const noteList = await fetchNotes();
       setNotes(noteList);
 
-      if (selectedNotebookId) {
-        const assetList = await fetchAssets(selectedNotebookId);
-        setAssets(assetList);
-      }
     } catch (err) {
       setNotes([]); setFolders([]); setAssets([]); setConfig(null);
       setLoadError(err instanceof Error ? err.message : 'Failed to load workspace');
@@ -227,20 +258,27 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
-    refreshWorkspace();
+    if (!loadedRemote.current) refreshWorkspace();
   }, [selectedNotebookId]);
 
   useEffect(() => {
+    if (!sourceId || !config) return;
+    let active = true;
+    fetchAssets(selectedNotebookId).then(items => { if (active) setAssets(items); }).catch(console.error);
+    return () => { active = false; };
+  }, [sourceId, selectedNotebookId, config]);
+
+  useEffect(() => {
     if (loading || !config) return;
-    if (!route.valid) { setRouteError('Page not found.');  return; }
-    const notebook = config.notebooks.find(nb => nb.id === selectedNotebookId);
-    if (!notebook) { setRouteError('Notebook not found.');  return; }
-    if (route.folder && !folders.some(f => f.notebookId === notebook.id && f.path === route.folder)) { setRouteError('Folder not found.'); return; }
+    if (!route.valid) { setRouteError('route.pageNotFound');  return; }
+    const notebook = config.notebooks.find(nb => nb.id === selectedNotebookId) || (!route.notebook ? config.notebooks[0] : null);
+    if (!notebook) { setRouteError('route.notebookNotFound');  return; }
+    if (route.folder && !folders.some(f => f.notebookId === notebook.id && f.path === route.folder)) { setRouteError('route.folderNotFound'); return; }
     if (!route.note) { setRouteError(''); setEditingNote(null);  return; }
     const file = `${notebook.root}/${route.note}`;
     const note = notes.find(n => n.path === file);
     if (note) { setRouteError(''); setEditingNote(previous => previous?.path === file ? previous : note);  }
-    else if (editingNote?.path !== file) { setRouteError('Note not found. It may have been moved or deleted.');  }
+    else if (editingNote?.path !== file) { setRouteError('route.noteNotFound');  }
   }, [route, config, notes, folders, loading, selectedNotebookId, sourceId]);
 
   // Filter notes by active notebook, search query, status, and tags
@@ -268,6 +306,27 @@ export const App: React.FC = () => {
       return true;
     });
   }, [visibleNotes, config, selectedFolder, selectedNotebookId, selectedStatus, selectedTag, searchQuery]);
+
+  // Hierarchical Subfolder Discovery for current folder
+  const immediateSubfolders = useMemo(() => {
+    if (searchQuery.trim() || selectedStatus || selectedTag) return [];
+    const root = config?.notebooks.find((nb) => nb.id === selectedNotebookId)?.root || '';
+    return getImmediateSubfolders(visibleNotes, folders, selectedNotebookId, root, selectedFolder);
+  }, [visibleNotes, folders, selectedNotebookId, config, selectedFolder, searchQuery, selectedStatus, selectedTag]);
+
+  // Direct notes in current folder (or flat list during search/filter), sorted
+  const displayedNotes = useMemo(() => {
+    const root = config?.notebooks.find((nb) => nb.id === selectedNotebookId)?.root || '';
+    const base = searchQuery.trim() || selectedStatus || selectedTag
+      ? filteredNotes
+      : getImmediateNotes(filteredNotes, root, selectedFolder);
+    return sortNotes(base, sortField, sortOrder, notebookStatuses);
+  }, [filteredNotes, config, selectedNotebookId, selectedFolder, searchQuery, selectedStatus, selectedTag, sortField, sortOrder, notebookStatuses]);
+
+  // Breadcrumb Trail from Root to current folder
+  const breadcrumbs = useMemo(() => {
+    return getBreadcrumbs(selectedFolder, folders, selectedNotebookId, t('folder.allFolders'));
+  }, [selectedFolder, folders, selectedNotebookId, t]);
 
   // Note Handlers
   const handleOpenNote = (note: NoteItem) => {
@@ -465,17 +524,23 @@ export const App: React.FC = () => {
     const pending = readWorkingNotes(workingScope);
     const selected = files.map(file => pending[file]).filter(Boolean);
     if (selected.length !== files.length) throw new Error('Pending files changed. Review the selection again.');
-    const workspace = await fetchWorkspace();
+    const workspace = await fetchWorkspace(true);
     if (!workspace.capabilities.write || workspace.source.identity !== sourceId) throw new Error('Sign in with write access to this workspace before committing.');
     const expected = workspace.revision!;
     const sent: WorkingNotes = {};
     let reviewRequired = false;
+    const existingPaths = selected.filter(entry => entry.base).map(entry => entry.note.path);
+    const latestNotes = existingPaths.length ? await readNotes(existingPaths, expected) : [];
+    const latestByPath = new Map(latestNotes.map(note => [note.path, note]));
     for (const entry of selected) {
       if (entry.blocked) throw new Error(`${entry.note.path}: ${entry.blocked}`);
       let prepared = entry;
       if (entry.base) {
         let latest: NoteItem;
-        try { latest = await readNote(entry.note.path); }
+        try {
+          latest = latestByPath.get(entry.note.path)!;
+          if (!latest) throw new ApiError('Note moved or deleted remotely.', 404);
+        }
         catch (error) {
           if (error instanceof ApiError && error.status === 404) {
             const blocked = 'Moved or deleted remotely. Open the note and refresh after it is restored.';
@@ -579,10 +644,10 @@ export const App: React.FC = () => {
               className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-white shrink-0 shadow-xs"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >
-              Core Baseline
+              {t('nav.coreBaseline')}
             </span>
             <span className="text-slate-600 dark:text-slate-300">
-              You are currently on the canonical <code className="font-mono font-semibold px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10">core</code> branch. To create your personal workspace and notes, run <code className="font-mono font-semibold px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10">pnpm bootstrap-workspace</code>.
+              {t('nav.coreBanner')}
             </span>
           </div>
         </div>
@@ -605,13 +670,20 @@ export const App: React.FC = () => {
         onToggleFilters={() => setFiltersOpen(open => !open)}
       />
 
-      {routeError && <div role="alert" className="px-6 py-3 text-sm text-rose-600">{routeError} <button className="underline" onClick={() => navigate('/notes')}>Go to notes</button></div>}
+      {routeError && (
+        <div role="alert" className="px-6 py-3 text-sm text-rose-600">
+          {routeError.startsWith('route.') ? t(routeError as any) : routeError}{' '}
+          <button className="underline" onClick={() => navigate('/notes')}>
+            {t('route.goToNotes')}
+          </button>
+        </div>
+      )}
       {/* Main Workspace Layout */}
       <div ref={sidebarGestureRef} className="workspace-body relative flex-1 min-h-0 min-w-0 flex overflow-hidden">
         {activeTab === 'notes' && (
           <>
             {/* Sidebar for Notebooks, Filters & Branch Info at bottom */}
-            {filtersOpen && <button className="notebook-backdrop mobile-only absolute inset-0 z-20 bg-slate-950/40" aria-label="Close notebooks and filters" onClick={() => setFiltersOpen(false)} />}
+            {filtersOpen && <button className="notebook-backdrop mobile-only absolute inset-0 z-20 bg-slate-950/40" aria-label={t('sidebar.closeFilters')} onClick={() => setFiltersOpen(false)} />}
             <div id="notebook-panel" className={`notebook-panel ${filtersOpen ? 'is-open' : ''}`}>
             <Sidebar
               statuses={notebookStatuses}
@@ -636,16 +708,31 @@ export const App: React.FC = () => {
             {/* Main Content Area */}
             <main className="workspace-main flex-1 min-w-0 p-3 md:p-6 overflow-y-auto">
               {actionError && <p role="alert" className="mb-3 text-sm text-rose-600">{actionError}</p>}
+              <Breadcrumbs
+                segments={breadcrumbs}
+                currentFolder={selectedFolder}
+                onSelectFolder={setSelectedFolder}
+                subfolderCount={immediateSubfolders.length}
+                noteCount={displayedNotes.length}
+                sortField={sortField}
+                sortOrder={sortOrder}
+                onSortChange={viewMode !== 'kanban' ? handleSortChange : undefined}
+              />
               {viewMode === 'list' && (
                 <ListView
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
                   canDelete={!remote && canWrite}
-                  notes={filteredNotes}
+                  notes={displayedNotes}
+                  subfolders={immediateSubfolders}
                   onOpenNote={handleOpenNote}
                   onDeleteNote={handleDeleteNote}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
                   onNewNote={() => openNewNote()}
+                  onSelectFolder={setSelectedFolder}
+                  sortField={sortField}
+                  sortOrder={sortOrder}
+                  onSortChange={handleSortChange}
                 />
               )}
               {viewMode === 'card' && (
@@ -653,11 +740,13 @@ export const App: React.FC = () => {
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
                   canDelete={!remote && canWrite}
-                  notes={filteredNotes}
+                  notes={displayedNotes}
+                  subfolders={immediateSubfolders}
                   onOpenNote={handleOpenNote}
                   onDeleteNote={handleDeleteNote}
                   onNewNote={() => openNewNote()}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
+                  onSelectFolder={setSelectedFolder}
                 />
               )}
               {viewMode === 'kanban' && (
@@ -672,6 +761,9 @@ export const App: React.FC = () => {
                   onNewNoteWithStatus={(status) => {
                     openNewNote(status);
                   }}
+                  sortField={sortField}
+                  sortOrder={sortOrder}
+                  onSortChange={handleSortChange}
                 />
               )}
             </main>
@@ -680,7 +772,10 @@ export const App: React.FC = () => {
 
         {activeTab === 'agent' && (
           <main className="workspace-main agent-main flex-1 min-w-0 p-3 md:p-6 overflow-y-auto">
-            <AgentSystemView readOnly={remote || !canWrite} />
+            <AgentSystemView
+              readOnly={remote || !canWrite}
+              readOnlyNotice={t(remote ? 'agent.remoteReadOnlyNotice' : branch === 'core' ? 'agent.coreBranchNotice' : 'agent.workspaceReadOnlyNotice')}
+            />
           </main>
         )}
 
@@ -727,17 +822,17 @@ export const App: React.FC = () => {
         <div className="fixed top-20 right-6 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
           <div className="bg-slate-900/95 dark:bg-slate-800/95 text-white backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-slate-700/80 flex items-center gap-3 text-xs">
             <span>
-              Note <strong>"{undoToast.note.title}"</strong> moved to trash.
+              {t('toast.noteMovedToTrash', { title: undoToast.note.title })}
             </span>
             <button
               onClick={() => handleRestoreNote(undoToast.note)}
-              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold rounded-md transition"
+              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-semibold rounded-md transition"
             >
-              Undo (復原)
+              {t('common.undo')}
             </button>
             <button
               onClick={() => setUndoToast(null)}
-              className="text-slate-400 hover:text-white transition ml-1"
+              className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/10 transition ml-1"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -801,18 +896,18 @@ export const App: React.FC = () => {
           >
             <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
-              Create New Note
+              {t('createNote.title')}
             </h3>
 
             {createError && <p id="create-note-error" role="alert" className="mb-3 text-sm text-red-600">{createError}</p>}
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-                  Note Title
+                  {t('createNote.noteTitle')}
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Sprint Planning, Project Ideas..."
+                  placeholder={t('createNote.placeholder')}
                   aria-describedby="create-note-error" value={newNoteTitle}
                   onChange={(e) => setNewNoteTitle(e.target.value)}
                   className="w-full px-3 py-2 bg-black/5 dark:bg-white/5 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:outline-none"
@@ -825,31 +920,39 @@ export const App: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-                  Initial Status
+                  {t('createNote.initialStatus')}
                 </label>
-                <Select aria-label="Initial status" value={newNoteStatus} onValueChange={setNewNoteStatus} options={notebookStatuses.map(value => ({value,label:value}))} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:outline-none bg-black/5 dark:bg-white/5" />
+                <Select aria-label={t('createNote.initialStatus')} value={newNoteStatus} onValueChange={setNewNoteStatus} options={notebookStatuses.map(value => ({value,label:value}))} className="w-full" />
               </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
               <button
                 onClick={() => setIsNewNoteOpen(false)}
-                className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition"
+                className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition active:scale-95"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={() => handleCreateNewNote()}
                 disabled={!newNoteTitle.trim()}
                 style={{ backgroundColor: 'var(--color-primary)' }}
-                className="px-4 py-2 text-xs font-medium text-white rounded-lg shadow-sm transition hover:opacity-90 disabled:opacity-50"
+                className="px-4 py-2 text-xs font-medium text-white rounded-lg shadow-sm transition hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Create Note
+                {t('createNote.submit')}
               </button>
             </div>
           </div>
         </div>
       )}
     </div>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <I18nProvider>
+      <AppContent />
+    </I18nProvider>
   );
 };

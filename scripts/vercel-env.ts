@@ -11,7 +11,7 @@ const names = ['GITHUB_NOTES_SOURCE', 'GITHUB_NOTES_REPOSITORY', 'GITHUB_NOTES_B
   'UPSTASH_REDIS_REST_TOKEN', 'GEMINI_API_KEY'];
 if (process.env.GITHUB_NOTES_SOURCE !== 'github') throw new Error('Set GITHUB_NOTES_SOURCE=github in .env before importing a Vercel deployment.');
 if (!process.env.GITHUB_NOTES_REPOSITORY || !process.env.GITHUB_NOTES_BRANCH) throw new Error('Set the target repository and branch.');
-if (environment === 'production' && process.env.APP_URL !== 'https://my-gh-core.vercel.app') throw new Error('Set APP_URL=https://my-gh-core.vercel.app for this deployment.');
+if (environment === 'production' && (!process.env.APP_URL || !process.env.APP_URL.startsWith('https://'))) throw new Error('Set APP_URL (e.g. https://your-project.vercel.app) before importing production environment.');
 for (const name of names) {
   const value = process.env[name];
   if (!value) continue;

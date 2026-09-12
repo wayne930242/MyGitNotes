@@ -16,10 +16,16 @@ export async function commitRemoteNotes(notes: { path: string; content: string; 
   return data;
 }
 export class ApiError extends Error {
-  constructor(message: string, public status: number) { super(message); }
+  constructor(message: string, public status: number, public retryAfter?: number) { super(message); }
 }
 
-export async function fetchWorkspace(): Promise<{
+async function responseError(res: Response, fallback: string): Promise<ApiError> {
+  const data = await res.json().catch(() => ({}));
+  const seconds = Number(res.headers.get('Retry-After') || data.retryAfter);
+  return new ApiError(data.error || fallback, res.status, Number.isFinite(seconds) && seconds > 0 ? seconds : undefined);
+}
+
+export async function fetchWorkspace(fresh = false): Promise<{
   repoRoot: string;
   branch: string;
   config: WorkspaceConfig | null;
@@ -29,8 +35,8 @@ export async function fetchWorkspace(): Promise<{
   capabilities: { write: boolean; local: boolean };
   revision?: string;
 }> {
-  const res = await fetch(`${API_BASE}/workspace`);
-  if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch workspace');
+  const res = await fetch(`${API_BASE}/workspace${fresh ? '?fresh=1' : ''}`);
+  if (!res.ok) throw await responseError(res, 'Failed to fetch workspace');
   return res.json();
 }
 
@@ -52,7 +58,7 @@ export async function fetchNotes(notebookId?: string): Promise<NoteItem[]> {
     ? `${API_BASE}/notes?notebookId=${encodeURIComponent(notebookId)}`
     : `${API_BASE}/notes`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error('Failed to fetch notes');
+  if (!res.ok) throw await responseError(res, 'Failed to fetch notes');
   const data = await res.json();
   return data.notes || [];
 }
@@ -62,9 +68,15 @@ export async function readNote(path: string, notebookId?: string): Promise<NoteI
     notebookId ? `&notebookId=${encodeURIComponent(notebookId)}` : ''
   }`;
   const res = await fetch(url);
-  if (!res.ok) throw new ApiError((await res.json()).error || 'Failed to read note', res.status);
+  if (!res.ok) throw await responseError(res, 'Failed to read note');
   const data = await res.json();
   return data.note;
+}
+
+export async function readNotes(paths: string[], revision: string): Promise<NoteItem[]> {
+  const res = await fetch(`${API_BASE}/notes/read-batch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paths, revision }) });
+  if (!res.ok) throw await responseError(res, 'Failed to review notes');
+  return (await res.json()).notes;
 }
 
 export async function saveNote(params: {

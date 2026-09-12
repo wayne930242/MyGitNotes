@@ -9,7 +9,7 @@ GitHub Notes is a Git-native, local-first notes application and agent-operable w
 ## 2. Branch & Ownership Contract
 
 - **`core`**: Canonical product branch and default branch of the public repository. Contains application source code, packages, scripts, tests, skills, and documentation. Never contains real user data.
-- **`main`**: User workspace branch created after cloning via `pnpm bootstrap-workspace`. Contains user workspace config (`/.github-notes.yaml`) and user notes (`notes/**`).
+- **`main`**: User workspace branch created after cloning via `pnpm bootstrap-workspace`. Contains user workspace config (`/.github-notes.yaml`) and user notes (`notes/**`). In the public repository, `main` also serves as the demo workspace branch and is **automatically rebased onto `core` via GitHub Actions (`.github/workflows/release-main.yml`)** whenever `core` is pushed.
 
 ### Path Ownership Invariants
 - **Core-owned paths**: `apps/**`, `packages/**`, `scripts/**`, `docs/**`, `.agents/**`, `examples/**`, `AGENTS.md`, `README.md`, `package.json`, `pnpm-workspace.yaml`.

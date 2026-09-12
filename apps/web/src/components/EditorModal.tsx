@@ -19,6 +19,7 @@ import { AssetLibrary } from './AssetLibrary.js';
 import { NoteItem, AssetItem } from '../lib/types.js';
 import { saveLocalDraft, getLocalDraft, clearLocalDraft } from '../lib/storage.js';
 import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
+import { useTranslation } from '../lib/i18n/index.js';
 
 interface EditorModalProps {
   note: NoteItem | null;
@@ -77,6 +78,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 }) => {
 
   const isMarkdown = note.path.endsWith('.md') || note.path.endsWith('.markdown');
+  const { t } = useTranslation();
 
   // Editor states
   const [content, setContent] = useState(note.content);
@@ -91,6 +93,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   const [remoteNotice, setRemoteNotice] = useState('');
   const [conflictDraft, setConflictDraft] = useState<NoteDraft | null>(() => getLocalDraft(`${draftScope || branch}:conflict`, note.path));
   const operation = useRef(false);
+  const nextRemoteCheck = useRef(0);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const current = useRef({ content, metadata, baseNote, blocked });
@@ -123,6 +126,9 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   };
   const handleRemoteFailure = (error: unknown) => {
     if (!mounted.current) return;
+    if (error instanceof ApiError && (error.retryAfter || error.status === 429)) {
+      nextRemoteCheck.current = Date.now() + (error.retryAfter || 60) * 1000;
+    }
     if (error instanceof ApiError && error.status === 404) {
       preserveConflict(); current.current.blocked = true; setBlocked(true);
       const reason = 'This note was moved or deleted remotely. Your draft is preserved. Refresh after the note is restored, or open its new location.';
@@ -131,7 +137,8 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     } else setSaveError((error as Error).message);
   };
   const checkRemote = async () => {
-    if (!onReadRemote || operation.current || current.current.blocked) return;
+    if (!onReadRemote || operation.current || current.current.blocked || Date.now() < nextRemoteCheck.current) return;
+    nextRemoteCheck.current = Date.now() + (readOnly ? 300000 : 60000);
     operation.current = true;
     try { const latest = await onReadRemote(note.path); if (mounted.current) applyRemote(latest); }
     catch (error) { handleRemoteFailure(error); }
@@ -142,10 +149,10 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     if (!onReadRemote) return;
     void checkRemoteRef.current();
     const check = () => { if (document.visibilityState === 'visible') void checkRemoteRef.current(); };
-    const timer = window.setInterval(check, 30000);
+    const timer = window.setInterval(check, readOnly ? 300000 : 60000);
     window.addEventListener('focus', check); document.addEventListener('visibilitychange', check);
     return () => { clearInterval(timer); window.removeEventListener('focus', check); document.removeEventListener('visibilitychange', check); };
-  }, [onReadRemote, note.path]);
+  }, [onReadRemote, note.path, readOnly]);
   const refreshRemote = async () => {
     if (!onReadRemote || operation.current) return;
     operation.current = true; setIsSaving(true);
@@ -394,7 +401,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
   return (
     <div className="note-overlay viewport-overlay fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 md:p-6 animate-fadeIn">
-      <div role="dialog" aria-modal="true" aria-label="Note editor" className="note-dialog bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-6xl h-[90dvh] flex flex-col overflow-hidden transition-colors">
+      <div role="dialog" aria-modal="true" aria-label="Note editor" className="note-dialog ui-dialog shadow-2xl w-full max-w-6xl h-[90dvh] flex flex-col overflow-hidden transition-colors">
         <div className="editor-notices">
         {/* Crash recovery banner if draft differs from disk */}
         {recoveredDraft && !blocked && (
@@ -413,9 +420,9 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
         {saveError && <EditorNotice tone="error">{saveError}</EditorNotice>}
 
         {(blocked || remoteNotice || conflictDraft) && <EditorNotice actions={<>
-          {blocked && <button disabled={isSaving} onClick={refreshRemote} className="font-semibold underline disabled:opacity-50">Refresh remote version</button>}
-          {conflictDraft && <button onClick={downloadConflictDraft} className="underline">Download preserved draft</button>}
-        </>}>{remoteNotice || 'Your local changes are preserved.'}</EditorNotice>}
+          {blocked && <button disabled={isSaving} onClick={refreshRemote} className="font-semibold underline hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed transition">{t('editor.refreshRemote')}</button>}
+          {conflictDraft && <button onClick={downloadConflictDraft} className="underline hover:opacity-80 transition">{t('editor.downloadPreservedDraft')}</button>}
+        </>}>{remoteNotice || t('editor.localChangesPreserved')}</EditorNotice>}
         </div>
 
         {/* Modal Top Bar */}
@@ -431,8 +438,8 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
               <FileText className="w-4 h-4" />
             </div>
             <div className="truncate">
-              <div className="font-semibold text-slate-900 dark:text-slate-100 text-sm truncate">
-                {String(metadata.title || note.title || 'Untitled')}
+              <div className="font-serif font-semibold text-slate-900 dark:text-slate-100 text-sm truncate">
+                {String(metadata.title || note.title || t('editor.untitled'))}
               </div>
               <div className="text-xs text-slate-400 dark:text-slate-500 font-mono truncate">
                 {note.path}
@@ -441,17 +448,17 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
           </div>
 
           <div className="note-controls flex items-center gap-2">
-            {!autoSave && !readOnly && <button aria-label="Save to GitHub" title="Save to GitHub" disabled={locked || !hasUnsavedChanges} onClick={handleExplicitSave} className="note-save editor-action px-3 py-1.5 rounded-lg text-xs text-white disabled:opacity-50" style={{ backgroundColor: 'var(--color-primary)' }}><Save className="editor-mobile-icon w-5 h-5" /><span>{isSaving ? 'Saving…' : 'Save to GitHub'}</span></button>}
+            {!autoSave && !readOnly && <button aria-label={t('editor.saveToGitHub')} title={t('editor.saveToGitHub')} disabled={locked || !hasUnsavedChanges} onClick={handleExplicitSave} className="note-save editor-action px-3 py-1.5 rounded-lg text-xs text-white transition hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: 'var(--color-primary)' }}><Save className="editor-mobile-icon w-5 h-5" /><span>{isSaving ? t('editor.saving') : t('editor.saveToGitHub')}</span></button>}
             {isMarkdown && <MarkdownEditorModeSwitch mode={editorMode} onChange={setEditorMode} />}
 
             {/* Frontmatter Toggle */}
             <button
-              aria-label="Frontmatter" aria-pressed={showFrontmatter}
+              aria-label={t('editor.frontmatter')} aria-pressed={showFrontmatter}
               onClick={() => setShowFrontmatter(!showFrontmatter)}
               className={`editor-action flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
                 showFrontmatter
-                  ? 'border-slate-300 dark:border-slate-600 font-semibold'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                  ? 'border-slate-300 dark:border-slate-600 font-semibold hover:opacity-90'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
               style={
                 showFrontmatter
@@ -464,45 +471,45 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
               }
             >
               <Settings2 className="w-3.5 h-3.5" />
-              <span>Frontmatter</span>
+              <span>{t('editor.frontmatter')}</span>
             </button>
 
             {/* Insert Asset Helper (Requirement 2: Directly opens inline Asset Picker) */}
             <button
-              aria-label="Insert asset"
+              aria-label={t('editor.asset')}
               onClick={() => setIsAssetPickerOpen(true)}
-              className="editor-action flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
-              title="Insert image from notebook assets"
+              className="editor-action flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 transition"
+              title={t('editor.insertAssetTooltip')}
             >
               <ImageIcon className="w-3.5 h-3.5" style={{ color: 'var(--color-primary)' }} />
-              <span>Asset</span>
+              <span>{t('editor.asset')}</span>
             </button>
 
             {/* Single-File Restore Button with Two-Click Confirmation (Requirement 3: Only shown when note is dirty!) */}
             {autoSave && !readOnly && isDirty && (
               <button
-                aria-label={confirmRestore ? 'Confirm restore note' : 'Restore note'}
+                aria-label={confirmRestore ? t('editor.confirmRestoreNote') : t('editor.restoreNote')}
                 onClick={handleRestoreClick}
                 className={`editor-action ${confirmRestore ? 'editor-confirming' : ''} flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium transition active:scale-95 shadow-xs ${
                   confirmRestore
                     ? 'bg-rose-600 hover:bg-rose-700 text-white font-bold animate-pulse'
-                    : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-amber-600'
+                    : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-amber-600'
                 }`}
                 title={
                   confirmRestore
-                    ? 'Click again to confirm reverting changes from Git HEAD'
-                    : 'Discard uncommitted changes and restore from Git HEAD (Click twice to confirm)'
+                    ? t('editor.confirmRestoreTooltip')
+                    : t('editor.restoreTooltip')
                 }
               >
                 {confirmRestore ? (
                   <>
                     <AlertTriangle className="w-3.5 h-3.5 text-white" />
-                    <span>Confirm Restore?</span>
+                    <span>{t('editor.confirmRestore')}</span>
                   </>
                 ) : (
                   <>
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Restore</span>
+                    <span>{t('editor.restore')}</span>
                   </>
                 )}
               </button>
@@ -510,7 +517,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
             {/* Close Button */}
             <button
-              aria-label="Close note"
+              aria-label={t('editor.closeNote')}
               onClick={close}
               className="note-close p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition ml-1"
             >
@@ -523,30 +530,30 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
         {showFrontmatter && (
           <fieldset disabled={locked} className="note-metadata shrink-0 min-w-0 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 p-4 grid grid-cols-1 md:grid-cols-4 gap-4 text-xs animate-fadeIn">
             <div>
-              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">Title</label>
+              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">{t('editor.title')}</label>
               <input
                 type="text"
                 value={String(metadata.title || '')}
                 onChange={(e) => setMetadata({ ...metadata, title: e.target.value })}
-                placeholder="Note Title"
-                className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100 focus:outline-none"
+                placeholder={t('editor.titlePlaceholder')}
+                className="ui-control w-full"
               />
             </div>
             <div>
-              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">Status</label>
-              <Select aria-label="Note status" disabled={locked} value={String(metadata.status || '')} onValueChange={value => setMetadata(withNoteStatus(metadata, value))} options={Array.from(new Set(['', ...statuses, String(metadata.status || '')])).map(value => ({value,label:value || '(No status)'}))} className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100 focus:outline-none" />
+              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">{t('editor.status')}</label>
+              <Select aria-label={t('editor.status')} disabled={locked} value={String(metadata.status || '')} onValueChange={value => setMetadata(withNoteStatus(metadata, value))} options={Array.from(new Set(['', ...statuses, String(metadata.status || '')])).map(value => ({value,label:value || t('editor.noStatus')}))} className="w-full" />
               <label className="flex items-center gap-2 min-h-11 cursor-pointer">
-                <input type="checkbox" aria-label="Hide note" checked={isNoteHidden(metadata)}
+                <input type="checkbox" aria-label={t('editor.hideNote')} checked={isNoteHidden(metadata)}
                   onChange={event => setMetadata({ ...metadata, hiden: event.target.checked })}
                   className="w-4 h-4 accent-indigo-600" />
-                Hide note
+                {t('editor.hideNote')}
               </label>
             </div>
 
             {/* Tags with Autocomplete (Requirement 4) */}
             <div className="md:col-span-2 relative">
               <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">
-                Tags (Type to Autocomplete)
+                {t('editor.tags')}
               </label>
               <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md min-h-[35px] relative">
                 {currentTags.map((tag) => (
@@ -582,7 +589,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
                         handleRemoveTag(currentTags[currentTags.length - 1]);
                       }
                     }}
-                    placeholder={currentTags.length === 0 ? "Add tag (e.g. project)..." : "Add..."}
+                    placeholder={currentTags.length === 0 ? t('editor.addTagPlaceholder') : t('editor.addPlaceholder')}
                     className="w-full text-xs bg-transparent focus:outline-none text-slate-900 dark:text-slate-100"
                   />
 
@@ -600,7 +607,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
                           className="w-full text-left px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between text-slate-800 dark:text-slate-200"
                         >
                           <span className="font-semibold">{st}</span>
-                          <span className="text-[10px] text-slate-400">add</span>
+                          <span className="text-[10px] text-slate-400">{t('editor.add')}</span>
                         </button>
                       ))}
                     </div>
@@ -611,7 +618,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
               {/* Quick suggestion suggestions below */}
               {suggestedTags.length > 0 && !tagInput && (
                 <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-400 flex-wrap">
-                  <span>Suggestions:</span>
+                  <span>{t('editor.suggestions')}</span>
                   {suggestedTags.slice(0, 5).map((st) => (
                     <button
                       key={st}
@@ -634,9 +641,9 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
         {/* Modal Bottom Bar: Auto-save status & Note Stats */}
         <div className="note-footer shrink-0 px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 flex items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">
           <div className="flex items-center gap-3">
-            <span>{content.trim().split(/\s+/).filter(Boolean).length} words</span>
+            <span>{t('editor.words', { count: content.trim().split(/\s+/).filter(Boolean).length })}</span>
             <span className="text-slate-300 dark:text-slate-700">·</span>
-            <span>{content.length} characters</span>
+            <span>{t('editor.characters', { count: content.length })}</span>
             <span className="text-slate-300 dark:text-slate-700">·</span>
             <span className="font-mono text-slate-400 dark:text-slate-500">{note.path}</span>
           </div>
@@ -645,28 +652,28 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
             {isSaving ? (
               <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
                 <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                {draftMode ? 'Saving locally...' : autoSave ? 'Auto-saving to disk...' : 'Saving to GitHub...'}
+                {draftMode ? t('editor.savingLocally') : autoSave ? t('editor.autoSavingToDisk') : t('editor.savingToGitHub')}
               </span>
             ) : isDirty ? (
               <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
                 <span className="w-2 h-2 rounded-full bg-amber-500" />
-                {draftMode ? (hasUnsavedChanges ? 'Unsaved local changes' : 'Saved locally · Pending commit') : autoSave ? 'Uncommitted Changes' : 'Unsaved Changes'}
+                {draftMode ? (hasUnsavedChanges ? t('editor.unsavedLocalChanges') : t('editor.savedLocallyPendingCommit')) : autoSave ? t('editor.uncommittedChanges') : t('editor.unsavedChanges')}
               </span>
             ) : (
               <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
                 <Check className="w-3.5 h-3.5" />
-                {readOnly ? 'Read-only' : draftMode ? 'No pending changes' : autoSave ? 'Clean (Saved to disk)' : 'Saved to GitHub'}
+                {readOnly ? t('editor.readOnly') : draftMode ? t('editor.noPendingChanges') : autoSave ? t('editor.cleanSavedToDisk') : t('editor.savedToGitHub')}
               </span>
             )}
             <span className="text-slate-300 dark:text-slate-700">|</span>
-            <span className="font-mono text-slate-400 dark:text-slate-500">Branch: {branch}</span>
+            <span className="font-mono text-slate-400 dark:text-slate-500">{t('editor.branch', { branch })}</span>
           </div>
         </div>
       </div>
 
-      {isAssetPickerOpen && <div role="dialog" aria-label="Note assets" aria-modal="true" className="viewport-overlay fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="rounded-2xl border shadow-2xl w-full max-w-3xl max-h-[85dvh] flex flex-col overflow-hidden" style={{ backgroundColor:'var(--color-surface)',borderColor:'var(--color-border)' }}>
-          <div className="p-4 border-b shrink-0 flex items-center justify-between" style={{ borderColor:'var(--color-border)' }}><span className="font-semibold text-sm text-slate-900 dark:text-slate-100">Notebook Assets</span><button aria-label="Close note assets" onClick={() => setIsAssetPickerOpen(false)} className="text-slate-400"><X className="w-5 h-5" /></button></div>
+      {isAssetPickerOpen && <div role="dialog" aria-label={t('editor.notebookAssets')} aria-modal="true" className="viewport-overlay fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="ui-dialog shadow-2xl w-full max-w-3xl max-h-[85dvh] flex flex-col overflow-hidden">
+          <div className="p-4 border-b shrink-0 flex items-center justify-between" style={{ borderColor:'var(--color-border)' }}><span className="font-semibold text-sm theme-text">{t('editor.notebookAssets')}</span><button aria-label={t('editor.closeNotebookAssets')} onClick={() => setIsAssetPickerOpen(false)} className="ui-icon-button"><X className="w-5 h-5" /></button></div>
           <div className="p-4 overflow-y-auto"><AssetLibrary assets={assets} onUploadAsset={locked ? undefined : onUploadAsset} onDeleteAsset={locked ? undefined : onDeleteAsset} onMoveAsset={locked ? undefined : onMoveAsset} onInsert={locked ? undefined : asset => handleInsertAssetRef(asset.markdownRef)} /></div>
         </div>
       </div>}

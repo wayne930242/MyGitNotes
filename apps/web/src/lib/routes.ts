@@ -3,6 +3,7 @@ import type { ViewMode } from './types.js';
 export type WorkspaceTab = 'notes' | 'assets' | 'agent' | 'settings';
 export function parseWorkspaceRoute(pathname: string, search: string) {
   pathname = pathname.replace(/\/+$/, '') || '/';
+  if (pathname === '/index.html' || pathname === '/index' || pathname === '/notebooks') pathname = '/notes';
   const query = new URLSearchParams(search);
   let tab: WorkspaceTab = 'notes'; let notebook: string | null = null; let folder: string | null = null; let note: string | null = null; let valid = true;
   try {
@@ -13,11 +14,17 @@ export function parseWorkspaceRoute(pathname: string, search: string) {
       const root=matchPath('/notebooks/:notebook',pathname);
       const match=entry||directory||root;
       if(!match)valid=false;
-      else {notebook=decodeURIComponent(match.params.notebook!);if(entry)note=decodeURIComponent(entry.params['*']!);if(directory)folder=decodeURIComponent(directory.params['*']!);}
+      else {
+        notebook=decodeURIComponent(match.params.notebook!);
+        if(entry)note=decodeURIComponent(entry.params['*']!).replace(/^\/+|\/+$/g, '') || null;
+        if(directory)folder=decodeURIComponent(directory.params['*']!).replace(/^\/+|\/+$/g, '') || null;
+      }
     }
   }catch {valid=false;}
-  notebook ||= query.get('notebook');
-  if(note)folder=query.get('folder');
+  const queryNotebook = query.get('notebook');
+  if (queryNotebook) notebook = queryNotebook;
+  const queryFolder = query.get('folder');
+  if (queryFolder) folder = queryFolder;
   if((note!==null&&!safeRelative(note))||(folder!==null&&!safeRelative(folder)))valid=false;
   return {valid,tab,notebook,folder,note,showHidden:query.get('showHidden') === 'true',view:(['list','card','kanban'].includes(query.get('view')||'')?query.get('view'):'list') as ViewMode,status:query.get('status'),tag:query.get('tag'),q:query.get('q')||''};
 }

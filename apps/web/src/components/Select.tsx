@@ -10,7 +10,7 @@ type Props = Omit<ComponentPropsWithoutRef<typeof RadixSelect.Trigger>, 'value' 
 
 export function Select({ value, onValueChange, options, disabled, className = '', ...props }: Props) {
   return <RadixSelect.Root value={`option:${value}`} onValueChange={next => onValueChange(next.slice(7))} disabled={disabled}>
-    <RadixSelect.Trigger {...props} value={value} className={`select-trigger ${className}`}>
+    <RadixSelect.Trigger {...props} value={value} className={`ui-control select-trigger ${className}`}>
       <span className="select-value"><RadixSelect.Value placeholder="Select…" /></span>
       <RadixSelect.Icon asChild><ChevronDown className="select-chevron w-3.5 h-3.5 shrink-0" /></RadixSelect.Icon>
     </RadixSelect.Trigger>

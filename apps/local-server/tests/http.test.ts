@@ -122,11 +122,11 @@ describe('GitHub login and shared agent authorization',()=>{
       await client.connect(new StreamableHTTPClientTransport(new URL(grant.url)));
       try {
         const { tools } = await client.listTools();
-        expect(tools.map(t => t.name)).toEqual(expect.arrayContaining(['ls','glob','read','find']));
+        expect(tools.map(t => t.name)).toEqual(expect.arrayContaining(['ls','glob','read','find','get_statuses','read_note','search_notes']));
         expect(tools.every(t => t.annotations?.readOnlyHint === true && t.inputSchema && t.outputSchema)).toBe(true);
-        for (const name of ['write','append','edit','mkdir','cp','mv','rm','save_note']) expect(tools.some(t => t.name === name)).toBe(false);
+        for (const name of ['write','append','edit','mkdir','cp','mv','rm','save_note','delete_note','add_asset','delete_asset','replace_notes','update_note_metadata']) expect(tools.some(t => t.name === name)).toBe(false);
         // The SDK validates structuredContent against each advertised output schema.
-        for (const [name, args] of [['read', {path:'notes/ex/private.md'}], ['glob',{}], ['find',{query:'Private'}], ['read_note',{path:'notes/ex/private.md'}]] as const) {
+        for (const [name, args] of [['read', {path:'notes/ex/private.md'}], ['glob',{}], ['find',{query:'Private'}], ['read_note',{path:'notes/ex/private.md'}], ['get_statuses',{}], ['get_note_metadata',{path:'notes/ex/private.md'}], ['search_notes',{query:'Private'}]] as const) {
           const result = await client.callTool({name,arguments:args});
           expect(result.isError).not.toBe(true); expect(result.structuredContent).toBeDefined();
         }
@@ -188,5 +188,61 @@ describe('durable Redis grant records',()=>{
     expect(await store.revokeGrant(grants[0].id,1)).toBe(true);
     expect(await store.get(token)).toBeNull();expect(members.size).toBe(0);
     await store.set(token,{kind:'oauth'},600);expect(commands.filter(c=>c[0]==='SET').at(-1)?.slice(-2)).toEqual(['EX','600']);
+  });
+  it('self-heals and prunes undecryptable records when session secret is rotated', async () => {
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://redis.test');
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'redis-token');
+    const records = new Map<string, string>();
+    const members = new Set<string>();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+      const c = JSON.parse(String(init?.body));
+      let result: unknown = null;
+      if (c[0] === 'GET') result = records.get(c[1]) || null;
+      if (c[0] === 'DEL') { records.delete(c[1]); result = 1; }
+      if (c[0] === 'SREM') { members.delete(c[2]); result = 1; }
+      if (c[0] === 'SMEMBERS') result = [...members];
+      return new Response(JSON.stringify({ result }));
+    });
+    const hash = 'a'.repeat(64);
+    records.set(`gh-notes:${hash}`, 'invalid-ciphertext-or-old-key-data');
+    members.add(hash);
+    const store = new SessionStore(root);
+    const grants = await store.listGrants(1);
+    expect(grants).toEqual([]);
+    expect(records.has(`gh-notes:${hash}`)).toBe(false);
+    expect(members.has(hash)).toBe(false);
+  });
+});
+
+describe('agent resources discovery and security boundaries', () => {
+  it('discovers system and workspace guidelines, allows reading root AGENTS.md, and rejects modifying non-notes resources', async () => {
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Product System Guidelines\n');
+    fs.writeFileSync(path.join(root, 'notes/AGENTS.md'), '# Workspace Guidelines\n');
+
+    const res = await fetch(`${base}/api/agent-resources`).then((r) => r.json());
+    expect(res.instructions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'AGENTS.md', scope: 'product', editable: false }),
+        expect.objectContaining({ path: 'notes/AGENTS.md', scope: 'notes', editable: true }),
+      ])
+    );
+
+    const rootDoc = await fetch(`${base}/api/agent-resources/read?path=AGENTS.md`).then((r) => r.json());
+    expect(rootDoc.content).toBe('# Product System Guidelines\n');
+
+    const saveRoot = await fetch(`${base}/api/agent-resources/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: 'AGENTS.md', content: 'attempted overwrite' }),
+    });
+    expect(saveRoot.status).toBe(403);
+
+    const saveWorkspace = await fetch(`${base}/api/agent-resources/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: 'notes/AGENTS.md', content: '# Updated Workspace Guidelines\n' }),
+    });
+    expect(saveWorkspace.status).toBe(200);
+    expect(fs.readFileSync(path.join(root, 'notes/AGENTS.md'), 'utf8')).toBe('# Updated Workspace Guidelines\n');
   });
 });

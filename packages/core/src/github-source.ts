@@ -4,10 +4,10 @@ import { parseWorkspaceConfig } from './config.js';
 import { parseNoteContent, serializeNoteContent } from './frontmatter.js';
 import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js';
 import { WorkspaceConfig, NotebookConfig, NoteItem, FolderItem, NoteMetadata } from './types.js';
+import { GitHubApi, SourceError } from './github-api.js';
+import { readGitHubArchive } from './github-archive.js';
 
-export class SourceError extends Error {
-  constructor(message: string, public status = 400) { super(message); }
-}
+export { SourceError } from './github-api.js';
 export interface GitHubEntry { path: string; type: string; mode: string; sha: string; size?: number }
 export interface RepositoryInfo { private: boolean; permissions?: { push?: boolean }; default_branch: string }
 
@@ -15,25 +15,18 @@ export interface RepositoryInfo { private: boolean; permissions?: { push?: boole
 export class GitHubSource {
   private snapshot?: Promise<{ sha: string; treeSha: string; entries: GitHubEntry[]; info: RepositoryInfo }>;
   private manifest?: Promise<WorkspaceConfig>;
-  constructor(public repository: string, public branch: string, private token?: string, private request: typeof fetch = fetch) {}
-
-  async api(endpoint: string, init: RequestInit = {}): Promise<any> {
-    const response = await this.request(`https://api.github.com/repos/${this.repository}${endpoint}`, {
-      ...init, redirect: 'error', signal: AbortSignal.timeout(20000),
-      headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'GitHub-Notes', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
-        ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...init.headers },
-    });
-    if (!response.ok) {
-      const status = response.status;
-      throw new SourceError(status === 404 ? 'Repository, branch or file unavailable. Private repositories require GitHub sign-in.' :
-        status === 403 || status === 429 ? 'GitHub denied access or its API rate limit was reached. Check permissions and retry later.' :
-        status === 409 || status === 422 ? 'The repository changed. Reload the note before saving again.' : `GitHub request failed (${status}).`, status === 422 ? 409 : status);
-    }
-    return response.status === 204 ? null : response.json();
+  private client: GitHubApi;
+  private fresh = false;
+  constructor(public repository: string, public branch: string, private token?: string, private request: typeof fetch = fetch) {
+    this.client = new GitHubApi(repository, token, request);
   }
 
-  async getSnapshot() {
+  async api(endpoint: string, init: RequestInit = {}): Promise<any> {
+    return this.client.json(endpoint, init, this.fresh && (endpoint === '' || endpoint.startsWith('/commits/')));
+  }
+
+  async getSnapshot(fresh = false) {
+    if (fresh && !this.fresh) { this.snapshot = undefined; this.manifest = undefined; this.fresh = true; }
     this.snapshot ??= (async () => {
       const info: RepositoryInfo = await this.api('');
       if (info.private && !this.token) throw new SourceError('Sign in to read this private repository.', 401);
@@ -59,6 +52,26 @@ export class GitHubSource {
       return { sha: commit.sha as string, treeSha, entries, info };
     })();
     return this.snapshot;
+  }
+
+  async prefetchFiles(files: string[]) {
+    const snapshot = await this.getSnapshot();
+    const wanted = new Set(files);
+    const missing = snapshot.entries.filter(entry => wanted.has(entry.path) && entry.type === 'blob' && entry.mode !== '120000' &&
+      (entry.size || 0) <= 5 * 1024 * 1024 && !this.client.hasBlob(entry.sha));
+    if (missing.length <= 6) return;
+    await this.client.once(`archive:${snapshot.sha}`, async () => {
+      if (missing.every(entry => this.client.hasBlob(entry.sha))) return;
+      try {
+        const archive = await this.client.archive(snapshot.sha);
+        const contents = await readGitHubArchive(archive, snapshot.entries.filter(entry => entry.type === 'blob' && entry.mode !== '120000' &&
+          /\.(md|markdown|txt|ya?ml)$/i.test(entry.path)));
+        for (const [sha, bytes] of contents) this.client.putBlob(sha, bytes);
+      } catch (error) {
+        // A missing archive may still have individually readable blobs. Never fall back through a cooldown.
+        if (!(error instanceof SourceError) || ![404, 413].includes(error.status)) throw error;
+      }
+    });
   }
 
   async readFile(file: string): Promise<Buffer> {
@@ -105,15 +118,35 @@ export class GitHubSource {
     for (const nb of config.notebooks.filter(n => !notebookId || n.id === notebookId)) {
       const files = entries.filter(e => e.type === 'blob' && e.mode !== '120000' && e.path.startsWith(`${nb.root}/`) &&
         isNotebookContent(e.path.slice(nb.root.length + 1), nb) && /\.(md|markdown|txt)$/i.test(e.path));
-      // Bounded batches respect upstream rate limits while avoiding a serial request per note.
+      await this.prefetchFiles(files.map(file => file.path));
+      // The shared transport coalesces cache misses and serializes upstream requests.
       for (let i = 0; i < files.length; i += 6) output.push(...await Promise.all(files.slice(i, i + 6).map(f => this.note(f.path))));
     }
     return output;
   }
 
+  async readNotes(files: string[], expected: string): Promise<NoteItem[]> {
+    if (!Array.isArray(files) || !files.length || files.length > 200 || files.some(file => typeof file !== 'string' || file.length > 2048)) {
+      throw new SourceError('Select between 1 and 200 note paths.');
+    }
+    const snapshot = await this.getSnapshot(true);
+    if (!expected || snapshot.sha !== expected) throw new SourceError('The repository changed. Review the latest version before committing.', 409);
+    await this.prefetchFiles(files);
+    const notes: NoteItem[] = [];
+    for (const file of files) {
+      try { notes.push(await this.note(file)); }
+      catch (error) {
+        // A deleted selected note is absent from the result so the browser can preserve and mark its draft.
+        if (!(error instanceof SourceError) || error.status !== 404 || snapshot.entries.some(entry => entry.path === file)) throw error;
+      }
+    }
+    return notes;
+  }
+
   async folders(): Promise<FolderItem[]> {
     const config = await this.config();
     const { entries } = await this.getSnapshot();
+    await this.prefetchFiles(entries.filter(entry => entry.path.endsWith('/_dir.yml') && config.notebooks.some(nb => entry.path.startsWith(nb.root + '/'))).map(entry => entry.path));
     const folders: FolderItem[] = [];
     for (const nb of config.notebooks) {
       const list: FolderItem[] = [];
@@ -155,7 +188,7 @@ export class GitHubSource {
   }
 
   async save(file: string, content: string, metadata: NoteMetadata | undefined, expected: string, createOnly = false) {
-    const snapshot = await this.getSnapshot();
+    const snapshot = await this.getSnapshot(true);
     if (!this.token || !snapshot.info.permissions?.push || this.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
     if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
     const config = await this.config();
@@ -175,7 +208,7 @@ export class GitHubSource {
   async commitNotes(notes: { path: string; content: string; metadata: NoteMetadata; createOnly?: boolean }[], expected: string, message: string) {
     if (!Array.isArray(notes) || !notes.length || notes.length > 200) throw new SourceError('Select between 1 and 200 notes.');
     if (typeof message !== 'string' || !message.trim() || message.length > 4000) throw new SourceError('A commit message of at most 4000 characters is required.');
-    const snapshot = await this.getSnapshot();
+    const snapshot = await this.getSnapshot(true);
     const changes = notes.map(note => {
       if (!note || typeof note.path !== 'string' || !/\.(md|markdown|txt)$/i.test(note.path) || typeof note.content !== 'string' || !note.metadata || typeof note.metadata !== 'object' || Array.isArray(note.metadata)) throw new SourceError('Invalid note change.');
       if (note.createOnly && snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`A note already exists at ${note.path}.`, 409);
@@ -187,7 +220,7 @@ export class GitHubSource {
 
   /** One Git tree, commit and non-force ref update for the entire mutation. */
   async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null }[], expected: string, operation: string, scope: 'notes' | 'assets' = 'notes', requestedMessage?: string) {
-    const snapshot = await this.getSnapshot();
+    const snapshot = await this.getSnapshot(true);
     if (!this.token || !snapshot.info.permissions?.push || this.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
     if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
     if (!changes.length || changes.length > 200) throw new SourceError('A mutation requires between 1 and 200 changed files.');
@@ -218,16 +251,19 @@ export class GitHubSource {
     if (bytes > 5 * 1024 * 1024) throw new SourceError('Mutation exceeds the 5 MiB limit.', 413);
     const entries = [];
     for (const change of changes) {
-      const sha = change.base64 !== undefined ? (await this.api('/git/blobs', { method: 'POST', body: JSON.stringify({ content: change.base64, encoding: 'base64' }) })).sha : change.content !== undefined ? (await this.api('/git/blobs', { method: 'POST', body: JSON.stringify({ content: change.content, encoding: 'utf-8' }) })).sha : change.sha;
-      entries.push({ path: change.path, mode: '100644', type: 'blob', sha });
+      const value = change.content !== undefined ? { content: change.content } : {
+        sha: change.base64 !== undefined ? (await this.api('/git/blobs', { method: 'POST', body: JSON.stringify({ content: change.base64, encoding: 'base64' }) })).sha : change.sha,
+      };
+      entries.push({ path: change.path, mode: '100644', type: 'blob', ...value });
     }
     const tree = await this.api('/git/trees', { method: 'POST', body: JSON.stringify({ base_tree: snapshot.treeSha, tree: entries }) });
     const changedPaths = changes.map(c => c.path).sort();
     const summary = changedPaths.length === 1 ? path.posix.basename(changedPaths[0]) : `${changedPaths.length} files`;
     const message = requestedMessage || `docs(${scope}): ${operation.replace(/[^a-z-]/g, '')} ${summary.replace(/[\r\n]/g, ' ')}`;
     const commit = await this.api('/git/commits', { method: 'POST', body: JSON.stringify({ message, tree: tree.sha, parents: [snapshot.sha] }) });
-    await this.api(`/git/refs/heads/${encodeURIComponent(this.branch)}`, { method: 'PATCH', body: JSON.stringify({ sha: commit.sha, force: false }) });
-    this.snapshot = undefined; this.manifest = undefined;
+    try {
+      await this.api(`/git/refs/heads/${encodeURIComponent(this.branch)}`, { method: 'PATCH', body: JSON.stringify({ sha: commit.sha, force: false }) });
+    } finally { this.client.invalidate(); this.snapshot = undefined; this.manifest = undefined; this.fresh = false; }
     return { success: true, committed: true, pushed: true, repository: this.repository, branch: this.branch, revision: commit.sha as string, changedPaths, commit: { commitHash: commit.sha as string, message } };
   }
 }

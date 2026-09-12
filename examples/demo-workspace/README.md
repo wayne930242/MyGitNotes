@@ -1,7 +1,9 @@
-# GitHub Notes 範例工作區
+# Demo and starter workspace
 
-開啟 [GitHub Notes 示範網站](https://my-gh-core.vercel.app) 瀏覽這個儲存庫的 `main` 分支。
+This directory is the canonical source for the public main workspace and newly bootstrapped workspaces. Maintain examples and tutorials here on Core, then synchronize the public demo from this directory.
 
-筆記位於 `notes/example/`，工作區設定為根目錄的 `.github-notes.yaml`。資料夾中的 `_dir.yml` 決定側欄名稱與排序。
+Copy `.github-notes.yaml` to the workspace root and `notes/` to its notes directory. Ordinary `pnpm bootstrap-workspace` copies missing files and preserves existing notes and configuration. Public-demo synchronization is a separate explicit maintenance operation.
 
-公開筆記可直接閱讀。登入 GitHub 後，具有此儲存庫寫入權限的使用者可儲存筆記；每次儲存會建立一個 Git commit。
+The notebook uses the default inbox, working, done and archived statuses. No notebook override is configured. The archived example is hidden until Show hidden notes is enabled.
+
+Browser editing saves locally; the Commit footer publishes selected changes. MCP mutations and hosted asset operations create their own commits.

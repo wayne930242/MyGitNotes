@@ -1,14 +1,19 @@
 ---
-title: 歡迎使用 GitHub Notes
-tags: [入門]
+title: Welcome to GitHub Notes
+tags: [getting-started]
 status: done
 ---
-# 歡迎使用 GitHub Notes
+# Welcome to GitHub Notes
 
-這是公開的範例筆記工作區。你的筆記以 Markdown 儲存在 GitHub，版本紀錄由 Git 保存。
+This example workspace serves as both a starter template and an interactive tutorial. Content is maintained in `examples/demo-workspace` on the product `core` branch, and the public demo workspace on `main` uses the exact same notes.
 
-- 使用左側資料夾瀏覽筆記。
-- 切換清單、卡片與看板檢視。
-- 以搜尋列尋找標題或內文。
+## Getting Started
 
-登入 GitHub 後，具有此儲存庫寫入權限的使用者可編輯並儲存筆記。
+1. Read [Edit and Commit](getting-started/edit-and-commit.md) to try local auto-saving and commits.
+2. Use [Weekly Review](projects/weekly-review.md) to track active tasks.
+3. Capture unorganized ideas in [Reading List](projects/ideas/reading-list.md).
+4. Read [Status and Visibility](getting-started/status-and-visibility.md) to understand default statuses.
+
+List view is ideal for quickly opening notes; Card view displays content summaries; Kanban groups notes into columns by status. Note statuses can be changed directly from the status menu, and changes are staged for review and committed together via the bottom Commit bar.
+
+The public website is readable by anyone; log in with GitHub and grant repository write access to edit and save notes.

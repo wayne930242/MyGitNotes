@@ -159,7 +159,7 @@ describe('successful remote save',()=>{
     const base=githubMock(false,true);let written=false;let content='';
     const request=vi.fn(async(input:string,init?:RequestInit)=>{
       if(init?.method==='POST'&&input.endsWith('/git/blobs')) {content=JSON.parse(String(init.body)).content;return new Response(JSON.stringify({sha:'blob2'}));}
-      if(init?.method==='POST'&&input.endsWith('/git/trees'))return new Response(JSON.stringify({sha:'tree2'}));
+      if(init?.method==='POST'&&input.endsWith('/git/trees')) {content=JSON.parse(String(init.body)).tree[0].content;return new Response(JSON.stringify({sha:'tree2'}));}
       if(init?.method==='POST'&&input.endsWith('/git/commits')) {expect(JSON.parse(String(init.body)).parents).toEqual(['commit1']);return new Response(JSON.stringify({sha:'commit2'}));}
       if(init?.method==='PATCH') {written=true;return new Response(JSON.stringify({object:{sha:'commit2'}}));}
       if(input.endsWith('/commits/commit2'))return new Response(JSON.stringify({sha:'commit2',commit:{tree:{sha:'tree1'}}}));

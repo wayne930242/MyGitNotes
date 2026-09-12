@@ -11,19 +11,24 @@ Default transport is **stdio** for local agent integration (e.g. Claude Desktop,
 1. `get_workspace_config`: Returns parsed `.github-notes.yaml` workspace manifest.
 2. `list_notebooks`: Lists all configured notebooks and their root directories.
 3. `list_notes`: Lists all notes within a notebook, returning metadata and file paths.
-4. `read_note`: Reads a note file and parses its frontmatter and raw Markdown body.
-5. `save_note`: Atomically creates or updates a note file, with path traversal and branch checks, and commits the change to Git.
+4. `read_note`: Reads a note file and parses its frontmatter and raw Markdown body (supports `metadataOnly: true` to return metadata without the markdown body).
+5. `save_note`: Atomically creates or updates a note file with path traversal and branch checks, and commits to Git. If `content` is omitted, updates frontmatter metadata only.
 6. `delete_note`: Removes a note file and creates a corresponding deletion commit.
-7. `list_agent_resources`: Discovers Agent Instructions (`AGENTS.md`) and Agent Docs (`docs/agent/**`).
-8. `read_agent_resource`: Reads an agent instruction or doc file safely.
-9. `list_assets`: Lists assets within a notebook's asset directory.
-10. `add_asset`: Safely writes an asset file and returns the relative Markdown reference link.
+7. `read_agent_resource`: Reads an agent instruction or doc file safely; lists available agent resources (`AGENTS.md`, `docs/agent/**`) if `path` is omitted.
+8. `list_assets`: Lists assets within a notebook's asset directory.
+9. `add_asset`: Safely writes an asset file (with optional subfolder directory) and returns the relative Markdown reference link.
+10. `delete_asset`: Safely removes an asset file from a notebook asset directory and creates a Git commit.
 11. `get_git_status`: Returns branch name, clean/dirty state, and recent commit history.
 12. `git_commit`: Creates an atomic commit across staged/modified files.
-13. `check_core_update`: Inspects available remote Core updates.
-14. `update_core`: Performs the guarded Core update workflow.
+13. `update_core`: Performs the guarded Core update workflow, or inspects available updates if `checkOnly: true`.
+14. `list_folders`: Returns notebook-relative folder paths and `_dir.yml` display metadata, or inspects a specific folder if `path` is provided.
+15. `mkdir`: Creates a notebook folder or updates display metadata (`title`, `order`, `description`, and custom fields) in `_dir.yml` (supports `overwrite: true`), creating an atomic Git commit.
+16. `search_notes`: Searches note files using plain text or regular expressions (regex).
+17. `replace_notes`: Searches and replaces plain text or regular expressions across note files and creates an atomic Git commit.
+18. `get_statuses`: Returns configured, observed, and available valid note statuses for a notebook or workspace to ensure accurate status tagging.
 
-15. `list_folders`: Returns notebook-relative folder paths and `_dir.yml` display metadata.
+> [!NOTE]
+> Backward Compatibility: Redundant endpoints (`get_note_metadata`, `update_note_metadata`, `get_folder_metadata`, `update_folder_metadata`, `list_agent_resources`, `check_core_update`) remain supported via tool dispatch aliases for backward compatibility with existing callers.
 
 ## Source selection and hosted access
 
@@ -41,7 +46,7 @@ Upstream GitHub expiration or revocation can require another GitHub login.
 Legacy session-bound grants retain their original expiry.
 
 Hosted tools include `ls`, `glob`, `read`, `find`, `write`, `append`, `edit`,
-`mkdir`, `cp`, `mv`, and `rm`, plus the existing remote note tools. Shell reads
+`mkdir`, `cp`, `mv`, and `rm`, plus the existing remote note and folder tools. Shell reads
 and line edits include frontmatter; lines are one-based. `find` performs literal
 text search over glob-selected notes. Listing and reading return a revision.
 All writes require that revision, push permission and the `main` branch. Each

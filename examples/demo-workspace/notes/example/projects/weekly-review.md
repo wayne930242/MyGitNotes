@@ -1,15 +1,24 @@
 ---
-title: 每週回顧
-tags: [規劃]
-status: doing
+title: Weekly Review
+tags: [planning]
+status: working
 ---
-# 每週回顧
+# Weekly Review
 
-## 本週完成
+## Completed This Week
 
-- 建立筆記工作區
-- 試用巢狀資料夾
+- [x] Set up notes workspace
+- [x] Test nested directories and view modes
+- [ ] Organize captured thoughts into actionable next steps
 
-## 下週安排
+## In Progress
 
-整理標籤，挑選下一個要完成的小任務。
+Read [Reading List](ideas/reading-list.md), select one topic worth deeper research, and document findings and questions.
+
+## Next Week
+
+- One primary objective:
+- Reference materials to gather:
+- Key questions to follow up:
+
+Switch status to `done` once reviewed; change to `archived` when you no longer need it in default views while retaining its history.

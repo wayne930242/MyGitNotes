@@ -1,4 +1,5 @@
 import { Select } from './Select.js';
+import { useTranslation } from '../lib/i18n/index.js';
 
 function statusColor(status: string) {
   switch (status.toLowerCase()) {
@@ -9,8 +10,21 @@ function statusColor(status: string) {
     default: return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700';
   }
 }
+
 export function NoteStatusSelect({ status = '', statuses, readOnly, onChange, label }: { status?: string; statuses: string[]; readOnly: boolean; onChange: (status: string) => void; label: string }) {
-  return <div className="relative inline-flex items-center shrink-0 min-w-0 max-w-48" onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
-    <Select aria-label={label} disabled={readOnly} value={status} onValueChange={onChange} options={['', ...statuses, ...(status && !statuses.includes(status) ? [status] : [])].map(value => ({value,label:value || '(No status)'}))} className={`cursor-pointer disabled:cursor-default px-2.5 py-0.5 text-xs rounded-full border font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 ${statusColor(status)}`} title="Select status" />
-  </div>;
+  const { t } = useTranslation();
+
+  return (
+    <div className="relative inline-flex items-center shrink-0 min-w-0 max-w-48" onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
+      <Select
+        aria-label={label}
+        disabled={readOnly}
+        value={status}
+        onValueChange={onChange}
+        options={['', ...statuses, ...(status && !statuses.includes(status) ? [status] : [])].map(value => ({ value, label: value || t('notes.noStatus') }))}
+        className={`cursor-pointer disabled:cursor-default min-h-6 px-2.5 py-0.5 text-xs rounded-md border font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 ${statusColor(status)}`}
+        title={label}
+      />
+    </div>
+  );
 }
