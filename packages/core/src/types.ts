@@ -66,3 +66,11 @@ export interface FolderItem {
   order: number;
   description?: string;
 }
+
+export interface FolderMetadata {
+  title?: string;
+  order?: number;
+  description?: string;
+  [key: string]: unknown;
+}
+

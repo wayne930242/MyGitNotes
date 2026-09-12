@@ -33,8 +33,11 @@ export async function handleListAgentResources(ctx: ToolContext) {
 
 export async function handleReadAgentResource(
   ctx: ToolContext,
-  args: { path: string }
+  args?: { path?: string }
 ) {
+  if (!args?.path) {
+    return handleListAgentResources(ctx);
+  }
   const safe = assertSafeRepoPath(ctx.repoRoot, args.path);
   if (!fs.existsSync(safe)) {
     return { error: `Resource not found: ${args.path}` };

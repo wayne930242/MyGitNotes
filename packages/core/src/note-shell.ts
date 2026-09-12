@@ -1,11 +1,12 @@
 import path from 'node:path';
 import picomatch from 'picomatch';
 import { GitHubSource, GitHubEntry, SourceError } from './github-source.js';
-import { isNotebookContent } from './folders.js';
+import { isNotebookContent, serializeFolderConfig } from './folders.js';
 import { NotebookConfig } from './types.js';
+import YAML from 'yaml';
 
 type Args = Record<string, unknown>;
-const mutating = new Set(['write', 'append', 'edit', 'mkdir', 'cp', 'mv', 'rm']);
+const mutating = new Set(['write', 'append', 'edit', 'mkdir', 'cp', 'mv', 'rm', 'update_folder_metadata']);
 export const noteShellWrites = mutating;
 function string(args: Args, key: string, fallback?: string) {
   const value = args[key] ?? fallback;
@@ -130,9 +131,49 @@ export async function callNoteShell(reader: GitHubSource, operation: string, arg
     return receipt([{path:file,content}]);
   }
   if (operation === 'mkdir') {
-    const dir=relative(string(args,'path'));if(!inNotebook(dir,notebooks))throw new SourceError('Create a folder inside a notebook.',403);
-    if(snapshot.entries.some(e=>e.path===dir||e.path.startsWith(dir+'/')))throw new SourceError('Target already exists.',409);
-    return receipt([{path:dir+'/_dir.yml',content:'title: '+JSON.stringify(string(args,'title',path.posix.basename(dir)))+'\n'}]);
+    const dir = relative(string(args, 'path')).replace(/\/(_dir\.yml)?$/, '');
+    if (!inNotebook(dir, notebooks)) throw new SourceError('Create a folder inside a notebook.', 403);
+    const exists = snapshot.entries.some((e) => e.path === dir || e.path.startsWith(dir + '/'));
+    if (exists && args.overwrite !== true) throw new SourceError('Target already exists.', 409);
+    const title = args.title !== undefined ? string(args, 'title') : path.posix.basename(dir);
+    const meta: Record<string, unknown> = {
+      ...(args.metadata && typeof args.metadata === 'object' && !Array.isArray(args.metadata) ? (args.metadata as Record<string, unknown>) : {}),
+      title,
+    };
+    if (args.order !== undefined) meta.order = integer(args, 'order', 0, -1000000, 1000000);
+    if (args.description !== undefined) meta.description = string(args, 'description');
+    const content = serializeFolderConfig(meta);
+    return receipt([{ path: dir + '/_dir.yml', content }]);
+  }
+  if (operation === 'update_folder_metadata') {
+    const dir = relative(string(args, 'path')).replace(/\/(_dir\.yml)?$/, '');
+    if (!inNotebook(dir, notebooks)) throw new SourceError('Target must be inside a configured notebook.', 403);
+    const exists = snapshot.entries.some((e) => e.path === dir || e.path.startsWith(dir + '/'));
+    if (!exists) throw new SourceError('Folder does not exist.', 404);
+    const dirFile = dir + '/_dir.yml';
+    let currentRaw = '';
+    const fileEntry = blobs.find((e) => e.path === dirFile);
+    if (fileEntry) {
+      currentRaw = await read(dirFile);
+    }
+    let currentData: Record<string, unknown> = {};
+    if (currentRaw) {
+      try {
+        currentData = (YAML.parse(currentRaw) as Record<string, unknown>) || {};
+      } catch {
+        // fallback
+      }
+    }
+    const meta: Record<string, unknown> = {
+      ...currentData,
+      ...(args.metadata && typeof args.metadata === 'object' && !Array.isArray(args.metadata) ? (args.metadata as Record<string, unknown>) : {}),
+    };
+    if (args.title !== undefined) meta.title = string(args, 'title');
+    else if (!meta.title) meta.title = path.posix.basename(dir);
+    if (args.order !== undefined) meta.order = integer(args, 'order', 0, -1000000, 1000000);
+    if (args.description !== undefined) meta.description = string(args, 'description');
+    const content = serializeFolderConfig(meta);
+    return receipt([{ path: dirFile, content }]);
   }
   if (operation === 'rm') {
     if(!Array.isArray(args.paths)||!args.paths.length||args.paths.length>200||args.paths.some(p=>typeof p!=='string'))throw new SourceError('paths must be an explicit list of 1 to 200 paths.');

@@ -28,6 +28,9 @@ import {
   handleGetStatuses,
   handleGetNoteMetadata,
   handleUpdateNoteMetadata,
+  handleMkdir,
+  handleGetFolderMetadata,
+  handleUpdateFolderMetadata,
   ToolContext,
 } from './tools/index.js';
 
@@ -104,7 +107,7 @@ async function dispatchLocalTool(
 ): Promise<unknown> {
   switch (name) {
     case 'list_folders':
-      return handleListFolders(ctx);
+      return handleListFolders(ctx, args as { path?: string; notebookId?: string });
     case 'get_workspace_config':
       return handleGetWorkspaceConfig(ctx);
     case 'list_notebooks':
@@ -112,7 +115,7 @@ async function dispatchLocalTool(
     case 'list_notes':
       return handleListNotes(ctx, args);
     case 'read_note':
-      return handleReadNote(ctx, args as { path: string; notebookId?: string });
+      return handleReadNote(ctx, args as { path: string; notebookId?: string; metadataOnly?: boolean });
     case 'save_note':
       return handleSaveNote(ctx, args as any);
     case 'delete_note':
@@ -120,7 +123,7 @@ async function dispatchLocalTool(
     case 'list_agent_resources':
       return handleListAgentResources(ctx);
     case 'read_agent_resource':
-      return handleReadAgentResource(ctx, args as { path: string });
+      return handleReadAgentResource(ctx, args as { path?: string });
     case 'list_assets':
       return handleListAssets(ctx, args as { notebookId: string });
     case 'add_asset':
@@ -134,7 +137,7 @@ async function dispatchLocalTool(
     case 'check_core_update':
       return handleCheckCoreUpdate(ctx);
     case 'update_core':
-      return handleUpdateCore(ctx, args);
+      return handleUpdateCore(ctx, args as { autoPush?: boolean; checkOnly?: boolean });
     case 'search_notes':
       return handleSearchNotes(ctx, args as any);
     case 'replace_notes':
@@ -145,6 +148,12 @@ async function dispatchLocalTool(
       return handleGetNoteMetadata(ctx, args as { path: string });
     case 'update_note_metadata':
       return handleUpdateNoteMetadata(ctx, args as any);
+    case 'mkdir':
+      return handleMkdir(ctx, args as any);
+    case 'get_folder_metadata':
+      return handleGetFolderMetadata(ctx, args as { path: string });
+    case 'update_folder_metadata':
+      return handleUpdateFolderMetadata(ctx, args as any);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

@@ -46,7 +46,7 @@ function tool(name: string, description: string, properties: Schema, required: s
     annotations: {
       title: name,
       readOnlyHint: !mutation,
-      destructiveHint: ['write', 'edit', 'mv', 'rm', 'cp', 'save_note', 'delete_note', 'delete_asset', 'replace_notes', 'add_asset', 'update_note_metadata'].includes(name),
+      destructiveHint: ['write', 'edit', 'mv', 'rm', 'cp', 'save_note', 'delete_note', 'delete_asset', 'replace_notes', 'add_asset', 'update_note_metadata', 'update_folder_metadata', 'mkdir'].includes(name),
       idempotentHint: !mutation,
       openWorldHint: true,
     },
@@ -56,6 +56,13 @@ function tool(name: string, description: string, properties: Schema, required: s
 const page = { offset: int('Zero-based result offset.', 0, 100000), limit: int('Maximum returned entries; default 100.', 1, 500) };
 const transfer = { source: pathField, destination: str('Destination path; an existing directory receives the source basename.'), revision: revisionField, recursive: bool('Required for copying or moving a directory.'), overwrite: bool('Explicitly allow replacement of destination files; default false.') };
 
+export const legacyRemoteTools: Tool[] = [
+  tool('get_folder_metadata', 'Read display metadata for a notebook folder (_dir.yml).', { path: pathField }, ['path'], object({ path: pathField, notebookId: str('Notebook identifier'), title: str('Folder title'), order: int('Order', -1000000, 1000000), description: str('Folder description') })),
+  tool('update_folder_metadata', 'Update display metadata for a notebook folder (_dir.yml) and create one remote commit.', { path: pathField, title: str('Optional display title for the folder.'), order: int('Optional sort order number.', -1000000, 1000000), description: str('Optional folder description.'), metadata, revision: revisionField }, ['path', 'revision'], receiptSchema),
+  tool('get_note_metadata', 'Fast read for note frontmatter metadata and available statuses without loading the markdown body.', { path: pathField }, ['path'], object({ path: pathField, notebookId: str('Notebook identifier'), title: str('Note title'), status: { type: ['string', 'null'], description: 'Note status' }, tags: array(str('Tag name')), metadata, revision: str('Read commit SHA'), availableStatuses: array(str('Status name')) })),
+  tool('update_note_metadata', 'Fast update for note frontmatter metadata without re-sending markdown body.', { path: pathField, status: str('Optional status to update to'), tags: array(str('Tag name')), title: str('Optional title to update'), hidden: bool('Optional hidden boolean flag'), metadata: object({}, [], true), revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['path'], { ...receiptSchema, properties: { ...receiptSchema.properties, note: noteSchema }, required: [...receiptSchema.required, 'note'] }),
+];
+
 export const remoteTools: Tool[] = [
   tool('ls', 'List a notebook directory like ls. Start with path "." to list notebooks. Returns the revision for a subsequent write.', { path: str('Directory path; default "." lists notebook roots.'), ...page }, [], object({ revision: revisionField, path: str('Listed directory'), entries: array(object({ path: pathField, type: { type: 'string', enum: ['file', 'directory'] }, size: int('Bytes', 0, Number.MAX_SAFE_INTEGER) }, ['path', 'type'])), total: int('Total entries', 0, 100000), nextOffset: nullableInteger })),
   tool('glob', 'Find note paths using a Bash glob without reading each file. Use before read, find, cp, mv or rm.', { pattern: patternField, ...page }, [], object({ revision: revisionField, paths: array(pathField), total: int('Total matches', 0, 100000), nextOffset: nullableInteger })),
@@ -64,23 +71,21 @@ export const remoteTools: Tool[] = [
   tool('write', 'Create or replace a complete UTF-8 note file. One successful call creates one program-named Git commit and updates the remote branch. Overwrites file content.', { path: pathField, content: contentField, revision: revisionField, createOnly: bool('Reject an existing target instead of replacing it.') }, ['path', 'content', 'revision'], receiptSchema),
   tool('append', 'Append text to a note, creating it if absent. One successful call creates one commit and updates the remote branch.', { path: pathField, content: contentField, revision: revisionField }, ['path', 'content', 'revision'], receiptSchema),
   tool('edit', 'Replace an inclusive line range in a previously read file. Use endLine = startLine - 1 for insertion, or empty content for deletion. Preserves surrounding text and commits once remotely.', { path: pathField, startLine: int('First replaced line, inclusive.', 1, 1000000), endLine: int('Last replaced line, inclusive; startLine - 1 inserts.', 0, 1000000), content: contentField, revision: revisionField }, ['path', 'startLine', 'endLine', 'content', 'revision'], receiptSchema),
-  tool('mkdir', 'Create a notebook folder using a _dir.yml metadata file. Parent directories are created as needed. Creates one remote commit.', { path: pathField, title: str('Folder display title; defaults to the basename.'), revision: revisionField }, ['path', 'revision'], receiptSchema),
+  tool('mkdir', 'Create a notebook folder using a _dir.yml metadata file or update existing folder metadata. Parent directories are created as needed. Creates one remote commit.', { path: pathField, title: str('Folder display title; defaults to the basename.'), order: int('Sort order number; defaults to 0.', -1000000, 1000000), description: str('Optional folder description.'), metadata, overwrite: bool('Allow updating folder metadata if folder already exists; default false.'), revision: revisionField }, ['path', 'revision'], receiptSchema),
   tool('cp', 'Copy a note or, with recursive true, a note directory. Keeps the source. One atomic remote commit covers all destination files. overwrite true can replace existing notes.', transfer, ['source', 'destination', 'revision'], receiptSchema),
   tool('mv', 'Move or rename a note or note directory. Removes old paths and adds new paths in one atomic remote commit. Relative links keep their original file text.', transfer, ['source', 'destination', 'revision'], receiptSchema),
   tool('rm', 'Remove explicitly listed notes, or directories with recursive true. One atomic remote commit covers all removals. Use glob first to review the exact targets.', { paths: { ...array(pathField), minItems: 1, maxItems: 200 }, recursive: bool('Required to delete a directory and its note files.'), revision: revisionField }, ['paths', 'revision'], receiptSchema),
   tool('get_workspace_config', 'Read the configured workspace manifest.', {}, [], object({ config: metadata })),
   tool('list_notebooks', 'List configured notebooks.', {}, [], object({ notebooks: array(metadata) })),
-  tool('list_folders', 'List notebook folder display metadata.', {}, [], object({ folders: array(metadata) })),
+  tool('list_folders', 'List notebook folder display metadata, or inspect display metadata for a specific folder if path is provided.', { path: str('Optional relative path of a specific notebook folder to inspect.') }, [], object({ folders: array(metadata) })),
   tool('list_notes', 'Read parsed notes and their Markdown bodies. Prefer glob then read for bounded file inspection.', { notebookId: str('Optional notebook ID.') }, [], object({ notes: array(noteSchema), count: int('Number of notes', 0, 100000) })),
-  tool('read_note', 'Read a parsed note, including metadata and the body without frontmatter. Use read for line-based edits of the complete file.', { path: pathField }, ['path'], object({ note: noteSchema })),
-  tool('save_note', 'Create or replace a parsed note body and optional frontmatter. Commits once and updates the remote branch with a program-generated message.', { path: pathField, content: str('Markdown body without frontmatter.'), revision: revisionField, metadata, createOnly: bool('Reject existing paths.') }, ['path', 'content', 'revision'], { ...receiptSchema, properties: { ...receiptSchema.properties, note: noteSchema }, required: [...receiptSchema.required, 'note'] }),
+  tool('read_note', 'Read a parsed note, including metadata and the body without frontmatter (or metadata only if metadataOnly is true). Use read for line-based edits of the complete file.', { path: pathField, metadataOnly: bool('If true, returns note metadata and valid statuses without markdown body.') }, ['path'], object({ note: noteSchema })),
+  tool('save_note', 'Create or replace a parsed note body and optional frontmatter, or update metadata only if content is omitted. Commits once and updates the remote branch with a program-generated message.', { path: pathField, content: str('Markdown body without frontmatter; if omitted, preserves existing content and updates metadata only.'), status: str('Optional status shortcut'), tags: array(str('Tag name')), title: str('Optional note title'), revision: revisionField, metadata, createOnly: bool('Reject existing paths.') }, ['path', 'revision'], { ...receiptSchema, properties: { ...receiptSchema.properties, note: noteSchema }, required: [...receiptSchema.required, 'note'] }),
   tool('delete_note', 'Delete a note file by path, creating an atomic commit.', { path: pathField, revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['path'], object({ success: { const: true }, path: pathField, commit: object({ commitHash: str('Commit SHA'), message: str('Commit message') }, undefined, true) })),
   tool('list_assets', 'List notebook assets and their URLs.', { notebookId: str('Optional notebook ID.') }, [], object({ assets: array(metadata) })),
   tool('add_asset', 'Upload an asset file (base64 encoded) to a notebook assets directory, with optional subfolder path.', { notebookId: str('Notebook identifier, e.g. default'), filename: str('Asset filename, e.g. screenshot.png'), base64Content: str('Base64-encoded binary content of the asset file'), directory: str('Optional subdirectory path within assets/ folder'), revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['notebookId', 'filename', 'base64Content'], object({ success: { const: true }, filename: str('Asset filename'), path: pathField, markdownRef: str('Markdown reference for embedding the asset'), commit: object({ commitHash: str('Commit SHA'), message: str('Commit message') }, undefined, true) })),
   tool('delete_asset', 'Delete an asset file from a notebook assets directory, creating an atomic commit.', { path: pathField, revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['path'], object({ success: { const: true }, path: pathField, commit: object({ commitHash: str('Commit SHA'), message: str('Commit message') }, undefined, true) })),
   tool('get_statuses', 'Get all valid note statuses including default, configured, and observed statuses across notes.', { notebookId: str('Optional notebook identifier') }, [], object({ notebookId: str('Notebook identifier'), defaultStatuses: array(str('Status name')), configuredStatuses: array(str('Status name')), observedStatuses: array(str('Status name')), allStatuses: array(str('Status name')) })),
-  tool('get_note_metadata', 'Fast read for note frontmatter metadata and available statuses without loading the markdown body.', { path: pathField }, ['path'], object({ path: pathField, notebookId: str('Notebook identifier'), title: str('Note title'), status: { type: ['string', 'null'], description: 'Note status' }, tags: array(str('Tag name')), metadata, revision: str('Read commit SHA'), availableStatuses: array(str('Status name')) })),
-  tool('update_note_metadata', 'Fast update for note frontmatter metadata without re-sending markdown body.', { path: pathField, status: str('Optional status to update to'), tags: array(str('Tag name')), title: str('Optional title to update'), hidden: bool('Optional hidden boolean flag'), metadata: object({}, [], true), revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['path'], { ...receiptSchema, properties: { ...receiptSchema.properties, note: noteSchema }, required: [...receiptSchema.required, 'note'] }),
   tool('search_notes', 'Search note files using plain text or regular expressions.', { query: str('Search query or regular expression pattern'), notebookId: str('Optional notebook identifier to search within'), isRegex: bool('Whether query is a regular expression; default false'), caseSensitive: bool('Whether search is case-sensitive; default false') }, ['query'], object({ query: str('Search query'), isRegex: bool('Whether query was treated as regex'), matches: array(object({ path: pathField, title: str('Note title'), notebookId: str('Notebook identifier'), matchCount: int('Number of matches', 0, 1000000) })), totalMatches: int('Total match count', 0, 1000000) })),
   tool('replace_notes', 'Search and replace text or regular expressions across note files with atomic commit support.', { search: str('Search text or regular expression to match'), replace: str('Replacement text (supports $1, $2 capture groups for regex)'), notebookId: str('Optional notebook identifier to limit replacement scope'), isRegex: bool('Whether search is a regular expression; default false'), caseSensitive: bool('Whether search is case-sensitive; default false'), dryRun: bool('If true, previews matches without saving or committing; default false'), revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['search', 'replace'], object({ success: bool('Success status'), dryRun: bool('Dry run flag'), search: str('Search pattern'), replace: str('Replacement text'), matchedFiles: array(pathField), totalFiles: int('Count of matched files', 0, 100000), commit: object({ commitHash: str('Commit SHA'), message: str('Commit message') }, undefined, true) }, ['success', 'dryRun', 'search', 'replace', 'matchedFiles', 'totalFiles'])),
 ];
@@ -113,7 +118,7 @@ export async function callRemoteTool(
   args: Record<string, unknown>,
   write: boolean
 ): Promise<Record<string, unknown>> {
-  const definition = remoteTools.find((t) => t.name === name);
+  const definition = remoteTools.find((t) => t.name === name) || legacyRemoteTools.find((t) => t.name === name);
   if (!definition) throw new Error('This operation is unavailable for a remote source.');
   validate(args, definition.inputSchema, 'arguments');
   if (isMutationTool(name) && !write) throw new Error('This agent grant is read-only.');
@@ -123,22 +128,78 @@ export async function callRemoteTool(
       return { config: await reader.config() };
     case 'list_notebooks':
       return { notebooks: (await reader.config()).notebooks };
-    case 'list_folders':
+    case 'list_folders': {
+      if (args.path) {
+        const folders = await reader.folders();
+        const norm = String(args.path).replace(/\/(_dir\.yml)?$/, '');
+        const folder = folders.find((f) => f.path === norm || `${f.notebookId}/${f.path}` === norm || norm.endsWith(`/${f.path}`));
+        if (!folder) throw new Error(`Folder not found: ${args.path}`);
+        return { ...folder, path: norm };
+      }
       return { folders: await reader.folders() };
+    }
+    case 'get_folder_metadata': {
+      const folders = await reader.folders();
+      const norm = String(args.path).replace(/\/(_dir\.yml)?$/, '');
+      const folder = folders.find((f) => f.path === norm || `${f.notebookId}/${f.path}` === norm || norm.endsWith(`/${f.path}`));
+      if (!folder) throw new Error(`Folder not found: ${args.path}`);
+      return { ...folder, path: norm };
+    }
     case 'list_notes': {
       const notes = await reader.notes(args.notebookId as string | undefined);
       return { notes, count: notes.length };
     }
-    case 'read_note':
+    case 'read_note': {
+      if (args.metadataOnly) {
+        const note = await reader.note(String(args.path));
+        const config = await reader.config();
+        const nb = config.notebooks.find((n) => n.id === note.notebookId);
+        const availableStatuses = nb?.statuses && nb.statuses.length > 0 ? nb.statuses : ['inbox', 'working', 'done', 'archived'];
+        return {
+          path: note.path,
+          notebookId: note.notebookId,
+          title: note.title,
+          status: note.status || null,
+          tags: note.tags,
+          metadata: note.metadata,
+          revision: note.revision,
+          availableStatuses,
+        };
+      }
       return { note: await reader.note(String(args.path)) };
-    case 'save_note':
+    }
+    case 'save_note': {
+      if (args.content === undefined) {
+        const note = await reader.note(String(args.path));
+        const config = await reader.config();
+        const nb = config.notebooks.find((n) => n.id === note.notebookId);
+        const availableStatuses = nb?.statuses && nb.statuses.length > 0 ? nb.statuses : ['inbox', 'working', 'done', 'archived'];
+        if (args.status !== undefined && args.status !== '' && !availableStatuses.includes(String(args.status))) {
+          throw new Error(`Invalid status '${args.status}'. Available statuses: ${availableStatuses.join(', ')}`);
+        }
+        let newMetadata: Record<string, unknown> = { ...note.metadata, ...(args.metadata as Record<string, unknown> || {}) };
+        if (args.status !== undefined) newMetadata = withNoteStatus(newMetadata, String(args.status));
+        if (args.tags !== undefined) newMetadata.tags = args.tags;
+        if (args.title !== undefined) newMetadata.title = args.title;
+        const snapshot = await reader.getSnapshot();
+        const rev = String(args.revision || snapshot.sha);
+        return reader.save(note.path, note.content, newMetadata, rev, false);
+      }
+      let finalMetadata = args.metadata as Record<string, unknown> | undefined;
+      if (args.status !== undefined || args.tags !== undefined || args.title !== undefined) {
+        finalMetadata = { ...(finalMetadata || {}) };
+        if (args.status !== undefined) finalMetadata = withNoteStatus(finalMetadata, String(args.status));
+        if (args.tags !== undefined) finalMetadata.tags = args.tags;
+        if (args.title !== undefined) finalMetadata.title = args.title;
+      }
       return reader.save(
         String(args.path),
         String(args.content),
-        args.metadata as Record<string, unknown> | undefined,
+        finalMetadata,
         String(args.revision),
         args.createOnly === true
       );
+    }
     case 'delete_note': {
       const snapshot = await reader.getSnapshot();
       const rev = String(args.revision || snapshot.sha);

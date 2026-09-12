@@ -89,8 +89,15 @@ describe('shell-shaped note operations',()=>{
     await callNoteShell(f.reader(),'mv',{source:'notes/ex/copied',destination:'notes/ex/moved',recursive:true,revision:f.head()},true);
     expect(f.files()).not.toContain('notes/ex/copied/b.md');expect(f.files()).toContain('notes/ex/moved/_dir.yml');
     await callNoteShell(f.reader(),'rm',{paths:['notes/ex/moved'],recursive:true,revision:f.head()},true);expect(f.files().some(p=>p.startsWith('notes/ex/moved/'))).toBe(false);
-    await callNoteShell(f.reader(),'mkdir',{path:'notes/ex/new/deep',title:'Deep',revision:f.head()},true);expect(f.text('notes/ex/new/deep/_dir.yml')).toBe('title: "Deep"\n');
-    expect(f.calls.filter(c=>c.endpoint==='/git/commits')).toHaveLength(4);expect(f.calls.filter(c=>c.method==='PATCH')).toHaveLength(4);
+    await callNoteShell(f.reader(),'mkdir',{path:'notes/ex/new/deep',title:'Deep',order:3,description:'Deep notes',revision:f.head()},true);
+    expect(f.text('notes/ex/new/deep/_dir.yml')).toContain('title: Deep');
+    expect(f.text('notes/ex/new/deep/_dir.yml')).toContain('order: 3');
+    expect(f.text('notes/ex/new/deep/_dir.yml')).toContain('description: Deep notes');
+    await callNoteShell(f.reader(),'update_folder_metadata',{path:'notes/ex/new/deep',order:5,description:'Updated deep notes',revision:f.head()},true);
+    expect(f.text('notes/ex/new/deep/_dir.yml')).toContain('title: Deep');
+    expect(f.text('notes/ex/new/deep/_dir.yml')).toContain('order: 5');
+    expect(f.text('notes/ex/new/deep/_dir.yml')).toContain('description: Updated deep notes');
+    expect(f.calls.filter(c=>c.endpoint==='/git/commits')).toHaveLength(5);expect(f.calls.filter(c=>c.method==='PATCH')).toHaveLength(5);
     const move=f.calls.filter(c=>c.endpoint==='/git/trees'&&c.method)[1];expect(move.body.tree).toHaveLength(4);expect(move.body.tree.filter((c:any)=>c.sha===null)).toHaveLength(2);
   });
   it('appends and creates notes with one commit each',async()=>{

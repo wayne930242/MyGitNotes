@@ -53,8 +53,11 @@ export async function handleCheckCoreUpdate(ctx: ToolContext) {
 
 export async function handleUpdateCore(
   ctx: ToolContext,
-  args: { autoPush?: boolean }
+  args: { autoPush?: boolean; checkOnly?: boolean } = {}
 ) {
+  if (args.checkOnly) {
+    return handleCheckCoreUpdate(ctx);
+  }
   const result = await updateCore({
     repoRoot: ctx.repoRoot,
     autoPush: args.autoPush,

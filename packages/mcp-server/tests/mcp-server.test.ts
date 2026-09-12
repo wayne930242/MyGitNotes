@@ -17,7 +17,15 @@ import {
   handleGetStatuses,
   handleGetNoteMetadata,
   handleUpdateNoteMetadata,
+  handleMkdir,
+  handleGetFolderMetadata,
+  handleUpdateFolderMetadata,
+  handleListFolders,
+  handleReadAgentResource,
+  handleUpdateCore,
 } from '../src/tools.js';
+import { localTools } from '../src/local-tools.js';
+import { createMCPServer } from '../src/server.js';
 import { assertUserWorkspaceBranch } from '../src/guards.js';
 
 describe('MCP Server Safe Tools & Boundaries', () => {
@@ -366,4 +374,272 @@ notebooks:
     const { stdout: log } = await runGit(['log', '-1', '--oneline'], testRepo);
     expect(log).toMatch(/chore\(metadata\): set status to done for feature\.md/);
   });
+
+  it('supports mkdir with metadata, get_folder_metadata, and update_folder_metadata with atomic commits', async () => {
+    // Current branch is 'core'
+    await expect(
+      handleMkdir(
+        { repoRoot: testRepo },
+        {
+          path: 'notes/example/projects',
+          title: 'Projects',
+          order: 1,
+        }
+      )
+    ).rejects.toThrow(/User content modifications are restricted to workspace branch/);
+
+    // Switch to main
+    await runGit(['checkout', '-b', 'main'], testRepo);
+    const configContent = `schema_version: 1
+workspace:
+  title: "Test Workspace"
+  default_notebook: example
+notebooks:
+  - id: example
+    title: "Example Notebook"
+    root: notes/example
+`;
+    fs.writeFileSync(path.join(testRepo, WORKSPACE_CONFIG_FILENAME), configContent);
+    await stageAndCommit(testRepo, [WORKSPACE_CONFIG_FILENAME], 'add workspace config');
+
+    // 1. mkdir with metadata
+    const mkdirRes = await handleMkdir(
+      { repoRoot: testRepo },
+      {
+        path: 'notes/example/projects/backend',
+        title: 'Backend Services',
+        order: 2,
+        description: 'Microservices and backend APIs',
+      }
+    );
+    expect(mkdirRes.success).toBe(true);
+    expect(mkdirRes.folder.title).toBe('Backend Services');
+    expect(mkdirRes.folder.order).toBe(2);
+    expect(mkdirRes.folder.description).toBe('Microservices and backend APIs');
+    expect(mkdirRes.commit.commitHash).toBeDefined();
+
+    // Verify _dir.yml on disk
+    const dirYmlPath = path.join(testRepo, 'notes/example/projects/backend/_dir.yml');
+    expect(fs.existsSync(dirYmlPath)).toBe(true);
+    const rawYaml = fs.readFileSync(dirYmlPath, 'utf8');
+    expect(rawYaml).toContain('title: Backend Services');
+    expect(rawYaml).toContain('order: 2');
+    expect(rawYaml).toContain('description: Microservices and backend APIs');
+
+    // Reject duplicate mkdir without overwrite
+    const dupRes = await handleMkdir(
+      { repoRoot: testRepo },
+      {
+        path: 'notes/example/projects/backend',
+        title: 'Backend Services',
+      }
+    );
+    expect(dupRes.error).toMatch(/already exists/);
+
+    // 2. get_folder_metadata
+    const getRes = await handleGetFolderMetadata(
+      { repoRoot: testRepo },
+      { path: 'notes/example/projects/backend' }
+    );
+    expect(getRes.folder.title).toBe('Backend Services');
+    expect(getRes.folder.order).toBe(2);
+    expect(getRes.folder.description).toBe('Microservices and backend APIs');
+
+    // 3. update_folder_metadata
+    const updateRes = await handleUpdateFolderMetadata(
+      { repoRoot: testRepo },
+      {
+        path: 'notes/example/projects/backend',
+        order: 10,
+        description: 'Updated backend description',
+      }
+    );
+    expect(updateRes.success).toBe(true);
+    expect(updateRes.folder.title).toBe('Backend Services');
+    expect(updateRes.folder.order).toBe(10);
+    expect(updateRes.folder.description).toBe('Updated backend description');
+    expect(updateRes.commit.commitHash).toBeDefined();
+
+    // Verify git log
+    const { stdout: log } = await runGit(['log', '-1', '--oneline'], testRepo);
+    expect(log).toMatch(/chore\(metadata\): update folder metadata for backend/);
+
+    // 4. list_folders
+    const listRes = await handleListFolders({ repoRoot: testRepo });
+    expect(listRes.folders.some((f) => f.path === 'projects/backend' && f.order === 10)).toBe(true);
+  });
+
+  it('exposes exactly 18 consolidated tools and absorbs redundant endpoints', async () => {
+    expect(localTools.length).toBe(18);
+
+    const toolNames = localTools.map((t) => t.name);
+    // 18 primary tools
+    const expected = [
+      'list_folders',
+      'get_workspace_config',
+      'list_notebooks',
+      'list_notes',
+      'read_note',
+      'save_note',
+      'delete_note',
+      'read_agent_resource',
+      'list_assets',
+      'add_asset',
+      'delete_asset',
+      'get_git_status',
+      'git_commit',
+      'update_core',
+      'search_notes',
+      'replace_notes',
+      'get_statuses',
+      'mkdir',
+    ];
+    expect(toolNames.sort()).toEqual(expected.sort());
+
+    // Redundant absorbed endpoints are not in the exposed list
+    const absorbed = [
+      'get_note_metadata',
+      'update_note_metadata',
+      'get_folder_metadata',
+      'update_folder_metadata',
+      'list_agent_resources',
+      'check_core_update',
+    ];
+    for (const name of absorbed) {
+      expect(toolNames).not.toContain(name);
+    }
+  });
+
+  it('supports consolidated operations: metadataOnly in read_note, omitted content in save_note, path in list_folders, checkOnly in update_core', async () => {
+    await runGit(['checkout', '-b', 'main'], testRepo);
+    const configContent = `schema_version: 1
+workspace:
+  title: "Test Workspace"
+  default_notebook: example
+notebooks:
+  - id: example
+    title: "Example Notebook"
+    root: notes/example
+`;
+    fs.writeFileSync(path.join(testRepo, WORKSPACE_CONFIG_FILENAME), configContent);
+    await stageAndCommit(testRepo, [WORKSPACE_CONFIG_FILENAME], 'add workspace config');
+
+    // 1. save_note initial content
+    await handleSaveNote(
+      { repoRoot: testRepo },
+      {
+        path: 'notes/example/sample.md',
+        content: '# Sample Note Body\nSome text.',
+        metadata: { title: 'Sample Note', status: 'inbox', tags: ['alpha'] },
+      }
+    );
+
+    // 2. read_note with metadataOnly: true
+    const metaOnly = (await handleReadNote(
+      { repoRoot: testRepo },
+      { path: 'notes/example/sample.md', metadataOnly: true }
+    )) as any;
+    expect(metaOnly.title).toBe('Sample Note');
+    expect(metaOnly.status).toBe('inbox');
+    expect(metaOnly.tags).toEqual(['alpha']);
+    expect(metaOnly.availableStatuses).toBeDefined();
+    expect(metaOnly.content).toBeUndefined();
+
+    // 3. save_note with omitted content (updates frontmatter only)
+    const updateRes = (await handleSaveNote(
+      { repoRoot: testRepo },
+      {
+        path: 'notes/example/sample.md',
+        status: 'working',
+        tags: ['alpha', 'beta'],
+        title: 'Updated Sample Title',
+      }
+    )) as any;
+    expect(updateRes.success).toBe(true);
+    expect(updateRes.note.title).toBe('Updated Sample Title');
+    expect(updateRes.note.status).toBe('working');
+    expect(updateRes.note.tags).toEqual(['alpha', 'beta']);
+
+    // Verify content remained intact
+    const fullNote = (await handleReadNote(
+      { repoRoot: testRepo },
+      { path: 'notes/example/sample.md' }
+    )) as any;
+    expect(fullNote.note.content.trim()).toBe('# Sample Note Body\nSome text.');
+
+    // 4. list_folders with path
+    await handleMkdir(
+      { repoRoot: testRepo },
+      { path: 'notes/example/docs', title: 'Documentation', order: 1 }
+    );
+    const singleFolder = (await handleListFolders(
+      { repoRoot: testRepo },
+      { path: 'notes/example/docs' }
+    )) as any;
+    expect(singleFolder.folder.title).toBe('Documentation');
+    expect(singleFolder.folder.order).toBe(1);
+
+    // 5. read_agent_resource without path -> lists resources
+    const resources = (await handleReadAgentResource({ repoRoot: testRepo })) as any;
+    expect(resources.instructions).toContain('AGENTS.md');
+
+    // 6. update_core with checkOnly: true
+    const checkRes = (await handleUpdateCore({ repoRoot: testRepo }, { checkOnly: true })) as any;
+    expect(checkRes.error || checkRes.currentHash).toBeDefined();
+  });
+
+  it('supports legacy tool calls through MCPServer dispatch for backward compatibility', async () => {
+    await runGit(['checkout', '-b', 'main'], testRepo);
+    const configContent = `schema_version: 1
+workspace:
+  title: "Test Workspace"
+  default_notebook: example
+notebooks:
+  - id: example
+    title: "Example Notebook"
+    root: notes/example
+`;
+    fs.writeFileSync(path.join(testRepo, WORKSPACE_CONFIG_FILENAME), configContent);
+    await stageAndCommit(testRepo, [WORKSPACE_CONFIG_FILENAME], 'add workspace config');
+
+    // Save a note
+    await handleSaveNote(
+      { repoRoot: testRepo },
+      {
+        path: 'notes/example/test.md',
+        content: '# Legacy Test',
+        metadata: { title: 'Legacy Note', status: 'inbox' },
+      }
+    );
+
+    const server = createMCPServer(testRepo);
+    // Legacy call: get_note_metadata
+    const getMetaReq = {
+      method: 'tools/call',
+      params: {
+        name: 'get_note_metadata',
+        arguments: { path: 'notes/example/test.md' },
+      },
+    };
+    const handler = (server as any)._requestHandlers.get('tools/call');
+    expect(handler).toBeDefined();
+
+    const metaResult = await handler(getMetaReq);
+    expect(metaResult.isError).toBeFalsy();
+    expect(metaResult.structuredContent.title).toBe('Legacy Note');
+    expect(metaResult.structuredContent.status).toBe('inbox');
+
+    // Legacy call: list_agent_resources
+    const listResReq = {
+      method: 'tools/call',
+      params: {
+        name: 'list_agent_resources',
+        arguments: {},
+      },
+    };
+    const listResResult = await handler(listResReq);
+    expect(listResResult.isError).toBeFalsy();
+    expect(listResResult.structuredContent.instructions).toContain('AGENTS.md');
+  });
 });
+

@@ -122,7 +122,7 @@ describe('GitHub login and shared agent authorization',()=>{
       await client.connect(new StreamableHTTPClientTransport(new URL(grant.url)));
       try {
         const { tools } = await client.listTools();
-        expect(tools.map(t => t.name)).toEqual(expect.arrayContaining(['ls','glob','read','find','get_statuses','get_note_metadata','search_notes']));
+        expect(tools.map(t => t.name)).toEqual(expect.arrayContaining(['ls','glob','read','find','get_statuses','read_note','search_notes']));
         expect(tools.every(t => t.annotations?.readOnlyHint === true && t.inputSchema && t.outputSchema)).toBe(true);
         for (const name of ['write','append','edit','mkdir','cp','mv','rm','save_note','delete_note','add_asset','delete_asset','replace_notes','update_note_metadata']) expect(tools.some(t => t.name === name)).toBe(false);
         // The SDK validates structuredContent against each advertised output schema.

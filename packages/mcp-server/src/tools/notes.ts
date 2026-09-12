@@ -6,7 +6,6 @@ import {
   writeNoteFile,
   deleteNoteFile,
   scanNotebookNotes,
-  scanNotebookFolders,
   resolveSafePath,
   NoteItem,
   NoteMetadata,
@@ -36,13 +35,6 @@ export async function handleListNotebooks(ctx: ToolContext) {
   return { notebooks: config.notebooks };
 }
 
-export async function handleListFolders(ctx: ToolContext) {
-  const config = loadWorkspaceConfig(ctx.repoRoot);
-  if (!config) return { folders: [] };
-  const folders = config.notebooks.flatMap((nb) => scanNotebookFolders(ctx.repoRoot, nb));
-  return { folders };
-}
-
 export async function handleListNotes(
   ctx: ToolContext,
   args: { notebookId?: string }
@@ -66,9 +58,12 @@ export async function handleListNotes(
 
 export async function handleReadNote(
   ctx: ToolContext,
-  args: { path: string; notebookId?: string }
+  args: { path: string; notebookId?: string; metadataOnly?: boolean }
 ) {
   assertSafeRepoPath(ctx.repoRoot, args.path);
+  if (args.metadataOnly) {
+    return handleGetNoteMetadata(ctx, { path: args.path });
+  }
   const notebookId = args.notebookId || 'default';
   const note = readNoteFile(ctx.repoRoot, args.path, notebookId);
   return { note };
@@ -78,15 +73,30 @@ export async function handleSaveNote(
   ctx: ToolContext,
   args: {
     path: string;
-    content: string;
+    content?: string;
     metadata?: Record<string, unknown>;
+    status?: string;
+    tags?: string[];
+    title?: string;
     commitMessage?: string;
   }
 ) {
   await assertUserWorkspaceBranch(ctx.repoRoot);
   assertSafeRepoPath(ctx.repoRoot, args.path);
 
-  const saved = writeNoteFile(ctx.repoRoot, args.path, args.content, args.metadata);
+  if (args.content === undefined) {
+    return handleUpdateNoteMetadata(ctx, args);
+  }
+
+  let finalMetadata = args.metadata;
+  if (args.status !== undefined || args.tags !== undefined || args.title !== undefined) {
+    finalMetadata = { ...(finalMetadata || {}) };
+    if (args.status !== undefined) finalMetadata = withNoteStatus(finalMetadata, args.status);
+    if (args.tags !== undefined) finalMetadata.tags = args.tags;
+    if (args.title !== undefined) finalMetadata.title = args.title;
+  }
+
+  const saved = writeNoteFile(ctx.repoRoot, args.path, args.content, finalMetadata);
 
   let message = args.commitMessage;
   if (!message) {

@@ -3,8 +3,16 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 export const localTools: Tool[] = [
   {
     name: 'list_folders',
-    description: 'List notebook folders and their display metadata.',
-    inputSchema: { type: 'object', properties: {} },
+    description: 'List notebook folders and their display metadata, or inspect display metadata for a specific folder if path is provided.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Optional relative path of a specific notebook folder to inspect.',
+        },
+      },
+    },
   },
   {
     name: 'get_workspace_config',
@@ -31,7 +39,7 @@ export const localTools: Tool[] = [
   },
   {
     name: 'read_note',
-    description: 'Reads a note file, returning parsed metadata and raw markdown body.',
+    description: 'Reads a note file, returning parsed metadata and raw markdown body (or metadata and valid statuses only if metadataOnly is true).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -43,6 +51,10 @@ export const localTools: Tool[] = [
           type: 'string',
           description: 'Optional notebook identifier.',
         },
+        metadataOnly: {
+          type: 'boolean',
+          description: 'If true, returns note metadata and valid statuses without loading full markdown body.',
+        },
       },
       required: ['path'],
     },
@@ -50,7 +62,7 @@ export const localTools: Tool[] = [
   {
     name: 'save_note',
     description:
-      'Safely creates or updates a note with path guards and creates an atomic Git commit. Operates only on workspace branch (main).',
+      'Safely creates or updates a note with path guards and creates an atomic Git commit. If content is omitted, updates note frontmatter metadata only. Operates only on workspace branch (main).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -60,18 +72,31 @@ export const localTools: Tool[] = [
         },
         content: {
           type: 'string',
-          description: 'Markdown body content.',
+          description: 'Markdown body content. If omitted, existing body is preserved and only metadata is updated.',
         },
         metadata: {
           type: 'object',
           description: 'Optional YAML frontmatter metadata (id, title, status, tags, and arbitrary fields).',
+        },
+        status: {
+          type: 'string',
+          description: 'Optional status shortcut (e.g. "inbox", "working", "done", "archived").',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional list of tags.',
+        },
+        title: {
+          type: 'string',
+          description: 'Optional note title.',
         },
         commitMessage: {
           type: 'string',
           description: 'Optional commit message. If omitted, uses semantic commit generation or fallback.',
         },
       },
-      required: ['path', 'content'],
+      required: ['path'],
     },
   },
   {
@@ -93,22 +118,16 @@ export const localTools: Tool[] = [
     },
   },
   {
-    name: 'list_agent_resources',
-    description: 'Discovers Agent Instructions (AGENTS.md) and Agent Docs (docs/agent/**).',
-    inputSchema: { type: 'object', properties: {} },
-  },
-  {
     name: 'read_agent_resource',
-    description: 'Safely reads an agent instruction or doc file.',
+    description: 'Safely reads an agent instruction or doc file, or lists available agent resources if path is omitted.',
     inputSchema: {
       type: 'object',
       properties: {
         path: {
           type: 'string',
-          description: 'Relative path to the agent resource.',
+          description: 'Optional relative path to the agent resource. If omitted, returns list of available resources.',
         },
       },
-      required: ['path'],
     },
   },
   {
@@ -194,16 +213,15 @@ export const localTools: Tool[] = [
     },
   },
   {
-    name: 'check_core_update',
-    description: 'Inspects available remote Core updates without modifying workspace.',
-    inputSchema: { type: 'object', properties: {} },
-  },
-  {
     name: 'update_core',
-    description: 'Performs the safe Core fetch/merge workflow into user workspace branch (main).',
+    description: 'Performs the safe Core fetch/merge workflow into user workspace branch (main), or inspects available updates if checkOnly is true.',
     inputSchema: {
       type: 'object',
       properties: {
+        checkOnly: {
+          type: 'boolean',
+          description: 'If true, inspects available remote Core updates without modifying workspace.',
+        },
         autoPush: {
           type: 'boolean',
           description: 'Whether to push to origin/main after successful merge. Defaults to false.',
@@ -301,45 +319,34 @@ export const localTools: Tool[] = [
     },
   },
   {
-    name: 'get_note_metadata',
-    description: 'Fast read for note frontmatter metadata (title, status, tags, custom fields) and available valid statuses without transferring the full markdown body.',
+    name: 'mkdir',
+    description: 'Creates a notebook folder or updates display metadata (_dir.yml) for an existing folder, creating an atomic Git commit.',
     inputSchema: {
       type: 'object',
       properties: {
         path: {
           type: 'string',
-          description: 'Relative path of the note file inside the repository.',
-        },
-      },
-      required: ['path'],
-    },
-  },
-  {
-    name: 'update_note_metadata',
-    description: 'Fast write/update for note frontmatter metadata (status, tags, title, custom fields) without re-sending the note body, and creates an atomic Git commit. Returns available statuses.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        path: {
-          type: 'string',
-          description: 'Relative path of the note file inside the repository.',
-        },
-        metadata: {
-          type: 'object',
-          description: 'Optional frontmatter fields to merge/update.',
-        },
-        status: {
-          type: 'string',
-          description: 'Optional status shortcut (e.g. "inbox", "working", "done", "archived"). Automatically manages hidden status.',
-        },
-        tags: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Optional list of tags.',
+          description: 'Relative path of the folder to create or update inside the repository (e.g. notes/example/my-folder).',
         },
         title: {
           type: 'string',
-          description: 'Optional note title.',
+          description: 'Optional display title for the folder. Defaults to folder basename.',
+        },
+        order: {
+          type: 'integer',
+          description: 'Optional sort order number.',
+        },
+        description: {
+          type: 'string',
+          description: 'Optional folder description.',
+        },
+        metadata: {
+          type: 'object',
+          description: 'Optional additional folder metadata fields.',
+        },
+        overwrite: {
+          type: 'boolean',
+          description: 'Allow updating folder metadata if folder already exists. Defaults to false.',
         },
         commitMessage: {
           type: 'string',
@@ -350,3 +357,4 @@ export const localTools: Tool[] = [
     },
   },
 ];
+
