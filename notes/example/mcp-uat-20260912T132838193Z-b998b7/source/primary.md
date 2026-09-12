@@ -6,6 +6,6 @@ custom: preserved
 ---
 # MCP acceptance
 alpha
-beta
+BETA edited
 omega
 tail
