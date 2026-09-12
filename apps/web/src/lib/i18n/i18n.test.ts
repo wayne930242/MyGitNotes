@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { en } from './en.js';
 import { zhTW } from './zh-TW.js';
+import { THEMES, getThemeName, getThemeDescription } from '../themes.js';
 
 describe('i18n', () => {
   it('has identical keys between English and Traditional Chinese dictionaries', () => {
@@ -24,5 +25,30 @@ describe('i18n', () => {
         expect(val.includes(char), `Found simplified character '${char}' in key '${key}': "${val}"`).toBe(false);
       }
     }
+  });
+
+  it('provides localized names and descriptions for every theme preset', () => {
+    const zhT = (key: string) => zhTW[key as keyof typeof zhTW] || key;
+    const enT = (key: string) => en[key as keyof typeof en] || key;
+
+    for (const theme of THEMES) {
+      const zhName = getThemeName(theme, zhT as any);
+      const enName = getThemeName(theme, enT as any);
+      const zhDesc = getThemeDescription(theme, zhT as any);
+      const enDesc = getThemeDescription(theme, enT as any);
+
+      expect(zhName).not.toEqual(enName);
+      expect(zhDesc).not.toEqual(enDesc);
+      expect(zhName.length).toBeGreaterThan(0);
+      expect(zhDesc.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('includes required MCP access control notices in both languages', () => {
+    expect(en['auth.grantsActiveNotice']).toContain('Grants stay active until you revoke them here');
+    expect(zhTW['auth.grantsActiveNotice']).toContain('授權將持續有效');
+
+    expect(en['auth.chatgptConnectorNotice']).toContain('For a ChatGPT connector');
+    expect(zhTW['auth.chatgptConnectorNotice']).toContain('使用 ChatGPT 連接器時');
   });
 });

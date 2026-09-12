@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { WorkspaceConfig } from '../lib/types.js';
 import { updateWorkspaceConfig, runCoreUpdate } from '../lib/api.js';
-import { ThemeDefinition, THEMES } from '../lib/themes.js';
+import { ThemeDefinition, THEMES, getThemeName, getThemeDescription } from '../lib/themes.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import YAML from 'yaml';
 
@@ -139,12 +139,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
           >
             <div className="flex items-center gap-3">
-              <span className="text-2xl" role="img" aria-label="English">🇺🇸</span>
+              <span className="text-2xl" role="img" aria-label={t('settings.english')}>🇺🇸</span>
               <div>
                 <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">
                   English
                 </div>
-                <div className="text-xs text-slate-400">Default</div>
+                <div className="text-xs text-slate-400">{t('settings.defaultLanguage')}</div>
               </div>
             </div>
             {language === 'en' && (
@@ -164,12 +164,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
           >
             <div className="flex items-center gap-3">
-              <span className="text-2xl" role="img" aria-label="Traditional Chinese">🇹🇼</span>
+              <span className="text-2xl" role="img" aria-label={t('settings.traditionalChinese')}>🇹🇼</span>
               <div>
                 <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">
                   繁體中文
                 </div>
-                <div className="text-xs text-slate-400">Traditional Chinese</div>
+                <div className="text-xs text-slate-400">{t('settings.traditionalChinese')}</div>
               </div>
             </div>
             {language === 'zh-TW' && (
@@ -217,13 +217,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <Sun className="w-4 h-4 text-amber-500" />
                     )}
                     <span className="font-semibold text-sm text-slate-900 dark:text-slate-100">
-                      {theme.name}
+                      {getThemeName(theme, t)}
                     </span>
                   </div>
 
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                      {theme.mode}
+                      {theme.mode === 'dark' ? t('theme.dark') : t('theme.light')}
                     </span>
                     {isSelected && (
                       <span className="w-5 h-5 rounded-full bg-indigo-600 dark:bg-indigo-500 text-white flex items-center justify-center">
@@ -234,7 +234,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
-                  {theme.description}
+                  {getThemeDescription(theme, t)}
                 </p>
 
                 {/* Swatches Visual representation */}
@@ -390,7 +390,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </p>
         <textarea
           readOnly={!local || branch === 'core'}
-          aria-label="Workspace manifest"
+          aria-label={t('settings.manifest')}
           value={yamlContent}
           onChange={(e) => setYamlContent(e.target.value)}
           rows={12}

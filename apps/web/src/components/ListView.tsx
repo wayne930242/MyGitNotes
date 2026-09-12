@@ -146,7 +146,7 @@ export const ListView: React.FC<ListViewProps> = ({
                       <Folder className="w-4 h-4" />
                     </div>
                     <div>
-                      <div className="font-semibold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition flex items-center gap-2">
+                      <div className="font-semibold text-slate-900 dark:text-slate-100 transition flex items-center gap-2">
                         <span>{folder.title}</span>
                         <span className="text-[10px] uppercase font-mono px-1.5 py-0.2 rounded bg-black/5 dark:bg-white/10 text-slate-500 dark:text-slate-400">
                           {t('folder.folders')}
@@ -165,7 +165,7 @@ export const ListView: React.FC<ListViewProps> = ({
 
                 <td className="py-3 px-4">
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400 text-xs font-mono">
-                    {folder.noteCount} {folder.noteCount === 1 ? t('folder.noteCount', { count: 1 }) : t('folder.notesCount', { count: folder.noteCount })}
+                    {folder.noteCount === 1 ? t('folder.noteCount', { count: 1 }) : t('folder.notesCount', { count: folder.noteCount })}
                   </span>
                 </td>
 
@@ -202,7 +202,7 @@ export const ListView: React.FC<ListViewProps> = ({
                     <div className="flex items-center gap-2.5">
                       <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
                       <div>
-                        <div className="font-medium text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
+                        <div className="font-medium text-slate-900 dark:text-slate-100 transition">
                           {note.title}
                         </div>
                         <div className="text-xs text-slate-400 dark:text-slate-500 font-mono">

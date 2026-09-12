@@ -95,11 +95,11 @@ export const CardView: React.FC<CardViewProps> = ({
                 <Folder className="w-5 h-5" />
               </div>
               <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400">
-                {folder.noteCount} {folder.noteCount === 1 ? t('folder.noteCount', { count: 1 }) : t('folder.notesCount', { count: folder.noteCount })}
+                {folder.noteCount === 1 ? t('folder.noteCount', { count: 1 }) : t('folder.notesCount', { count: folder.noteCount })}
               </span>
             </div>
 
-            <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
+            <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base line-clamp-1 transition">
               {folder.title}
             </h3>
 
@@ -115,9 +115,9 @@ export const CardView: React.FC<CardViewProps> = ({
             <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               {t('folder.folders')}
             </span>
-            <div className="flex items-center gap-1 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
+            <div className="flex items-center gap-1 text-slate-400 transition">
               <span className="text-[11px] font-medium">{t('folder.open')}</span>
-              <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition" />
+              <ChevronRight className="w-4 h-4 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:translate-x-0.5 transition" />
             </div>
           </div>
         </div>
@@ -144,7 +144,7 @@ export const CardView: React.FC<CardViewProps> = ({
           >
             <div>
               <div className="flex items-start justify-between gap-2 mb-2">
-                <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
+                <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base line-clamp-1 transition">
                   {note.title}
                 </h3>
                 <NoteStatusSelect

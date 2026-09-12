@@ -21,7 +21,7 @@ import {
 } from '../lib/api.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
-export const AgentSystemView: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) => {
+export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: string }> = ({ readOnly = false, readOnlyNotice }) => {
   const { t } = useTranslation();
   const [instructions, setInstructions] = useState<AgentResource[]>([]);
   const [selectedPath, setSelectedPath] = useState<string>('');
@@ -319,7 +319,7 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean }> = ({ readOnly = f
           <strong className="block mb-1 font-semibold" style={{ color: 'var(--color-primary)' }}>
             {t('agent.guidelinesTitle')}
           </strong>
-          {t('agent.guidelinesDescription')}
+          {t(readOnly ? 'agent.guidelinesReadOnlyDescription' : 'agent.guidelinesDescription')}
         </div>
       </div>
 
@@ -357,7 +357,7 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean }> = ({ readOnly = f
                 backgroundColor: editable ? 'var(--color-primary)' : 'var(--color-text-muted, #64748b)',
               }}
             >
-              {editable ? t('agent.editableSystem') : t('agent.readOnlySystem')}
+              {editable ? t('agent.editable') : t('agent.readOnly')}
             </span>
           </div>
 
@@ -379,8 +379,8 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean }> = ({ readOnly = f
               ) : (
                 <span className="text-emerald-500 dark:text-emerald-400 flex items-center gap-1">
                   <Check className="w-3.5 h-3.5" />
-                  <span className="agent-status-detail">{t('agent.savedToDisk')}</span>
-                  <span className="agent-status-compact">{t('agent.saved')}</span>
+                  <span className="agent-status-detail">{t(editable ? 'agent.savedToDisk' : 'agent.loaded')}</span>
+                  <span className="agent-status-compact">{t(editable ? 'agent.saved' : 'agent.loaded')}</span>
                 </span>
               )}
             </div>
@@ -425,9 +425,9 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean }> = ({ readOnly = f
             {t('agent.systemNotice')}
           </div>
         )}
-        {readOnly && !isProductResource && selectedPath.startsWith('notes/') && (
+        {!editable && !isProductResource && selectedPath.startsWith('notes/') && (
           <div className="px-6 py-2 border-b text-[11px] leading-relaxed text-amber-700 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-950/20">
-            {t('agent.coreBranchNotice')}
+            {readOnlyNotice || t('agent.workspaceReadOnlyNotice')}
           </div>
         )}
 

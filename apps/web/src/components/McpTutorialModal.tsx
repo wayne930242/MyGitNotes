@@ -389,7 +389,7 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
                     <li>
                       {t('mcpGuide.cursorStep3')}
                       <ul className="list-disc pl-5 mt-1 space-y-1 text-slate-500 dark:text-slate-400">
-                        <li><strong>Name:</strong> <code className="font-mono">github-notes</code></li>
+                        <li><strong>{t('mcpGuide.cursorFieldName')}</strong> <code className="font-mono">github-notes</code></li>
                         <li>{t('mcpGuide.cursorFieldType')}</li>
                         <li>{t('mcpGuide.cursorFieldUrl')}</li>
                       </ul>

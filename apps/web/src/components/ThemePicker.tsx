@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Palette, Check, Sun, Moon } from 'lucide-react';
-import { ThemeDefinition, THEMES } from '../lib/themes.js';
+import { ThemeDefinition, THEMES, getThemeName } from '../lib/themes.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
 interface ThemePickerProps {
@@ -33,7 +33,7 @@ export const ThemePicker: React.FC<ThemePickerProps> = ({
       <button
         onClick={() => setIsOpen(!isOpen)}
         title={t('theme.current', {
-          name: currentTheme.name,
+          name: getThemeName(currentTheme, t),
           mode: currentTheme.mode === 'dark' ? t('theme.dark') : t('theme.light'),
         })}
         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 transition"
@@ -85,7 +85,7 @@ export const ThemePicker: React.FC<ThemePickerProps> = ({
                       <Sun className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                     )}
                     <div>
-                      <div className="text-xs font-semibold leading-tight">{theme.name}</div>
+                      <div className="text-xs font-semibold leading-tight">{getThemeName(theme, t)}</div>
                       <div className="text-[10px] text-slate-400 capitalize">
                         {theme.mode === 'dark' ? t('theme.dark') : t('theme.light')}
                       </div>

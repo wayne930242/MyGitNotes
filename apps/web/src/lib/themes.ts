@@ -1,3 +1,5 @@
+import type { TranslationKey } from './i18n/en.js';
+
 export interface ThemeDefinition {
   id: string;
   name: string;
@@ -153,4 +155,18 @@ export function applyTheme(theme: ThemeDefinition): void {
   root.style.setProperty('--color-border', theme.colors.border);
   root.style.setProperty('--color-text', theme.colors.text);
   root.style.setProperty('--color-muted', theme.colors.muted);
+}
+
+export function getThemeName(theme: ThemeDefinition, t?: (key: TranslationKey) => string): string {
+  if (!t) return theme.name;
+  const key = `theme.${theme.id}.name` as TranslationKey;
+  const translated = t(key);
+  return translated && translated !== key ? translated : theme.name;
+}
+
+export function getThemeDescription(theme: ThemeDefinition, t?: (key: TranslationKey) => string): string {
+  if (!t) return theme.description;
+  const key = `theme.${theme.id}.description` as TranslationKey;
+  const translated = t(key);
+  return translated && translated !== key ? translated : theme.description;
 }

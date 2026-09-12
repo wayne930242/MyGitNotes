@@ -290,7 +290,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                         }}
                       >
                         <div className="flex items-start justify-between gap-1 mb-1.5">
-                          <div className="font-medium text-slate-900 dark:text-slate-100 text-sm line-clamp-2 transition group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                          <div className="font-medium text-slate-900 dark:text-slate-100 text-sm line-clamp-2 transition">
                             {note.title}
                           </div>
                           <GripVertical className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 shrink-0 opacity-0 group-hover:opacity-100 transition" />
