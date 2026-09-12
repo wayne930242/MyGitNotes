@@ -704,7 +704,7 @@ const AppContent: React.FC = () => {
                 noteCount={displayedNotes.length}
                 sortField={sortField}
                 sortOrder={sortOrder}
-                onSortChange={handleSortChange}
+                onSortChange={viewMode !== 'kanban' ? handleSortChange : undefined}
               />
               {viewMode === 'list' && (
                 <ListView

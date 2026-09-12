@@ -18,6 +18,7 @@ export const en = {
   'header.readOnly': 'Read-only',
 
   // Sorting
+  'sort.select': 'Sort',
   'sort.updatedDesc': 'Updated (Newest)',
   'sort.updatedAsc': 'Updated (Oldest)',
   'sort.createdDesc': 'Created (Newest)',

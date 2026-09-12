@@ -107,7 +107,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
           <div className="flex items-center gap-1.5">
             <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <Select
-              aria-label={t('header.sort')}
+              aria-label={t('sort.select')}
               value={`${sortField}:${sortOrder}`}
               onValueChange={handleSortSelect}
               options={sortOptions}

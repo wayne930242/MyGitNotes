@@ -20,6 +20,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'header.readOnly': '唯讀',
 
   // Sorting
+  'sort.select': '排序',
   'sort.updatedDesc': '更新時間 (由新到舊)',
   'sort.updatedAsc': '更新時間 (由舊到新)',
   'sort.createdDesc': '建立時間 (由新到舊)',
