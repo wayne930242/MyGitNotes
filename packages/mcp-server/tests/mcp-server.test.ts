@@ -9,6 +9,9 @@ import {
   handleListNotes,
   handleSaveNote,
   handleReadNote,
+  handleAddAsset,
+  handleDeleteAsset,
+  handleListAssets,
 } from '../src/tools.js';
 import { assertUserWorkspaceBranch } from '../src/guards.js';
 
@@ -117,5 +120,81 @@ notebooks:
     );
     const res = await handleGetWorkspaceConfig({ repoRoot: testRepo });
     expect(res.config?.workspace.title).toBe('MCP Notes');
+  });
+
+  it('rejects asset mutation on the core branch', async () => {
+    // Current branch is 'core'
+    await expect(
+      handleAddAsset(
+        { repoRoot: testRepo },
+        {
+          notebookId: 'example',
+          filename: 'test.png',
+          base64Content: Buffer.from('dummy').toString('base64'),
+        }
+      )
+    ).rejects.toThrow(/User content modifications are restricted to workspace branch/);
+
+    await expect(
+      handleDeleteAsset(
+        { repoRoot: testRepo },
+        { path: 'notes/example/assets/test.png' }
+      )
+    ).rejects.toThrow(/User content modifications are restricted to workspace branch/);
+  });
+
+  it('adds an asset to a specific subfolder and deletes it with atomic commits', async () => {
+    await runGit(['checkout', '-b', 'main'], testRepo);
+    const configContent = `schema_version: 1
+workspace:
+  title: "Test Workspace"
+  default_notebook: example
+notebooks:
+  - id: example
+    title: "Example Notebook"
+    root: notes/example
+    assets: assets
+`;
+    fs.writeFileSync(path.join(testRepo, WORKSPACE_CONFIG_FILENAME), configContent);
+    await stageAndCommit(testRepo, [WORKSPACE_CONFIG_FILENAME], 'add workspace config');
+
+    // 1. Add asset with subfolder directory: 'images/sub'
+    const dummyData = Buffer.from('sample png image data').toString('base64');
+    const addResult = await handleAddAsset(
+      { repoRoot: testRepo },
+      {
+        notebookId: 'example',
+        filename: 'photo.png',
+        directory: 'images/sub',
+        base64Content: dummyData,
+      }
+    );
+
+    expect(addResult.success).toBe(true);
+    expect(addResult.path).toBe('notes/example/assets/images/sub/photo.png');
+    expect(addResult.markdownRef).toBe('![photo.png](assets/images/sub/photo.png)');
+    expect(fs.existsSync(path.join(testRepo, 'notes/example/assets/images/sub/photo.png'))).toBe(true);
+
+    // 2. Reject deletion of non-asset path
+    const nonAssetDelete = await handleDeleteAsset(
+      { repoRoot: testRepo },
+      { path: 'notes/example/note.md' }
+    );
+    expect(nonAssetDelete.error).toMatch(/not a workspace asset/);
+
+    // 3. Delete the asset
+    const deleteResult = await handleDeleteAsset(
+      { repoRoot: testRepo },
+      { path: 'notes/example/assets/images/sub/photo.png' }
+    );
+
+    expect(deleteResult.success).toBe(true);
+    expect(deleteResult.path).toBe('notes/example/assets/images/sub/photo.png');
+    expect(fs.existsSync(path.join(testRepo, 'notes/example/assets/images/sub/photo.png'))).toBe(false);
+
+    // Verify git log contains both commits
+    const { stdout: log } = await runGit(['log', '-2', '--oneline'], testRepo);
+    expect(log).toMatch(/chore\(assets\): delete photo\.png/);
+    expect(log).toMatch(/chore\(assets\): add asset photo\.png/);
   });
 });

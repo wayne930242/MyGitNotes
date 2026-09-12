@@ -16,6 +16,7 @@ import {
   handleReadAgentResource,
   handleListAssets,
   handleAddAsset,
+  handleDeleteAsset,
   handleGetGitStatus,
   handleGitCommit,
   handleCheckCoreUpdate,
@@ -174,7 +175,7 @@ export function createMCPServer(repoRoot: string): Server {
         },
         {
           name: 'add_asset',
-          description: 'Adds an asset file to a notebook asset directory and creates a Git commit.',
+          description: 'Adds an asset file to a notebook asset directory (or optional subfolder) and creates a Git commit.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -190,8 +191,30 @@ export function createMCPServer(repoRoot: string): Server {
                 type: 'string',
                 description: 'Base64 encoded file payload.',
               },
+              directory: {
+                type: 'string',
+                description: 'Optional subfolder path relative to notebook assets directory (e.g. "images" or "covers").',
+              },
             },
             required: ['notebookId', 'filename', 'base64Content'],
+          },
+        },
+        {
+          name: 'delete_asset',
+          description: 'Deletes an asset file from a notebook asset directory and creates a Git commit.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              path: {
+                type: 'string',
+                description: 'Relative path to the asset file within repository (e.g. notes/example/assets/image.png).',
+              },
+              commitMessage: {
+                type: 'string',
+                description: 'Optional commit message. Defaults to "chore(assets): delete <filename>".',
+              },
+            },
+            required: ['path'],
           },
         },
         {
@@ -300,7 +323,18 @@ export function createMCPServer(repoRoot: string): Server {
         case 'add_asset':
           result = await handleAddAsset(
             ctx,
-            args as { notebookId: string; filename: string; base64Content: string }
+            args as {
+              notebookId: string;
+              filename: string;
+              base64Content: string;
+              directory?: string;
+            }
+          );
+          break;
+        case 'delete_asset':
+          result = await handleDeleteAsset(
+            ctx,
+            args as { path: string; commitMessage?: string }
           );
           break;
         case 'get_git_status':

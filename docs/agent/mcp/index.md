@@ -17,13 +17,13 @@ Default transport is **stdio** for local agent integration (e.g. Claude Desktop,
 7. `list_agent_resources`: Discovers Agent Instructions (`AGENTS.md`) and Agent Docs (`docs/agent/**`).
 8. `read_agent_resource`: Reads an agent instruction or doc file safely.
 9. `list_assets`: Lists assets within a notebook's asset directory.
-10. `add_asset`: Safely writes an asset file and returns the relative Markdown reference link.
-11. `get_git_status`: Returns branch name, clean/dirty state, and recent commit history.
-12. `git_commit`: Creates an atomic commit across staged/modified files.
-13. `check_core_update`: Inspects available remote Core updates.
-14. `update_core`: Performs the guarded Core update workflow.
-
-15. `list_folders`: Returns notebook-relative folder paths and `_dir.yml` display metadata.
+10. `add_asset`: Safely writes an asset file (with optional subfolder directory) and returns the relative Markdown reference link.
+11. `delete_asset`: Safely removes an asset file from a notebook asset directory and creates a Git commit.
+12. `get_git_status`: Returns branch name, clean/dirty state, and recent commit history.
+13. `git_commit`: Creates an atomic commit across staged/modified files.
+14. `check_core_update`: Inspects available remote Core updates.
+15. `update_core`: Performs the guarded Core update workflow.
+16. `list_folders`: Returns notebook-relative folder paths and `_dir.yml` display metadata.
 
 ## Source selection and hosted access
 
