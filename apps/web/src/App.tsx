@@ -656,9 +656,6 @@ const AppContent: React.FC = () => {
         onOpenNewNoteModal={() => openNewNote()}
         filtersOpen={filtersOpen}
         onToggleFilters={() => setFiltersOpen(open => !open)}
-        sortField={sortField}
-        sortOrder={sortOrder}
-        onSortChange={handleSortChange}
       />
 
       {routeError && (
@@ -705,6 +702,9 @@ const AppContent: React.FC = () => {
                 onSelectFolder={setSelectedFolder}
                 subfolderCount={immediateSubfolders.length}
                 noteCount={displayedNotes.length}
+                sortField={sortField}
+                sortOrder={sortOrder}
+                onSortChange={handleSortChange}
               />
               {viewMode === 'list' && (
                 <ListView

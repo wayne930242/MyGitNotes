@@ -13,7 +13,6 @@ import {
   PanelLeft,
 } from 'lucide-react';
 import { ViewMode } from '../lib/types.js';
-import { SortField, SortOrder } from '../lib/note-sort.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
 interface HeaderProps {
@@ -30,9 +29,6 @@ interface HeaderProps {
   onOpenNewNoteModal: () => void;
   filtersOpen: boolean;
   onToggleFilters: () => void;
-  sortField?: SortField;
-  sortOrder?: SortOrder;
-  onSortChange?: (field: SortField, order?: SortOrder) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -49,26 +45,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNewNoteModal,
   filtersOpen,
   onToggleFilters,
-  sortField = 'updated',
-  sortOrder = 'desc',
-  onSortChange,
 }) => {
   const { t } = useTranslation();
-
-  const sortOptions = [
-    { value: 'updated:desc', label: t('sort.updatedDesc') },
-    { value: 'updated:asc', label: t('sort.updatedAsc') },
-    { value: 'created:desc', label: t('sort.createdDesc') },
-    { value: 'created:asc', label: t('sort.createdAsc') },
-    { value: 'title:asc', label: t('sort.titleAsc') },
-    { value: 'title:desc', label: t('sort.titleDesc') },
-    { value: 'status:asc', label: t('sort.status') },
-  ];
-
-  const handleSortSelect = (val: string) => {
-    const [field, order] = val.split(':') as [SortField, SortOrder];
-    onSortChange?.(field, order);
-  };
 
   return (
     <header
@@ -219,19 +197,6 @@ export const Header: React.FC<HeaderProps> = ({
                   style={{ backgroundColor: 'var(--color-bg)' }}
                 />
               </div>
-
-              {/* Sort Selector */}
-              {onSortChange && (
-                <div className="header-sort-container flex items-center shrink-0">
-                  <Select
-                    aria-label={t('header.sort')}
-                    value={`${sortField}:${sortOrder}`}
-                    onValueChange={handleSortSelect}
-                    options={sortOptions}
-                    className="note-sort-select min-w-0 rounded-lg border bg-transparent px-2 text-xs h-8 sm:h-9"
-                  />
-                </div>
-              )}
 
               {/* View Switcher Mobile */}
               <Select
