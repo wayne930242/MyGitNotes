@@ -1,20 +1,20 @@
 ---
-title: 素材與圖片
-tags: [入門, 素材]
+title: Assets and Images
+tags: [getting-started, assets]
 status: done
 ---
-# 素材與圖片
+# Assets and Images
 
-在筆記工具列開啟 Assets，或從主導覽進入 Assets 頁面。兩者使用相同的素材操作。
+Open Assets from the note editor toolbar or navigate to the Assets page from the main menu. Both provide identical asset management capabilities.
 
-1. 選擇資料夾，直接在視窗內上傳檔案。
-2. 點一下素材以選取，再用 View 檢視。
-3. 在筆記視窗按 Insert，才會插入素材參照。
-4. 用 Move 將素材整理到其他資料夾。
-5. Delete 需要再點一次確認。
+1. Select a directory and upload files directly within the modal.
+2. Click an asset to select it, then click View to preview it.
+3. Click Insert within the note editor modal to insert the asset reference into your note.
+4. Use Move to organize assets into other directories.
+5. Delete requires a second click to confirm.
 
-新插入的網址依檔案內容的 Git blob hash 定位；在 notebook 的素材目錄中搬動檔案，既有參照仍有效。刪除該素材後，參照將無法載入。
+Newly inserted asset URLs are addressed by their Git blob content hash. Moving files within the notebook's asset directory will not break existing hash references. If an asset is deleted, references will fail to load.
 
-舊的相對路徑連結仍能使用；搬動檔案前，可重新插入 hash 參照。單檔上傳上限為 3 MiB。
+Legacy relative-path links remain supported; reinsert hash references before moving legacy files. The maximum single-file upload size is 3 MiB.
 
-GitHub 來源的素材上傳、搬移與刪除會各自建立遠端提交；筆記文字則先保存於瀏覽器，再從 Commit 列提交。
+For GitHub-backed workspaces, asset uploads, moves, and deletions each create an immediate remote Git commit, whereas note text is saved to browser drafts first and published via the Commit bar.

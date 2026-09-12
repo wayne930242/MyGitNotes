@@ -1,24 +1,24 @@
 ---
-title: 編輯、本機保存與 Commit
-tags: [入門, 編輯]
+title: Editing, Local Saving, and Commits
+tags: [getting-started, editing]
 status: done
 ---
-# 編輯、本機保存與 Commit
+# Editing, Local Saving, and Commits
 
-## 先保存，再提交
+## Save Locally, Commit Explicitly
 
-開啟筆記即可使用 Live Preview：游標所在位置顯示 Markdown 語法，其他內容直接呈現格式。需要完整原始文字時，切換 Source。筆記和 Agent System 共用編輯器。
+Opening a note launches Live Preview: markdown syntax is visible where your cursor is placed, while the rest of the document renders formatted output. Switch to Source view whenever you need raw text editing. Notes and the Agent System share the exact same editor.
 
-- 本機 repo：編輯自動保存到磁碟的工作目錄。
-- GitHub 來源：編輯先保存到目前瀏覽器的本機草稿，重新整理仍可接續。
-- 底部 Commit 列：選取要提交的筆記、查看差異與訊息，再按 Commit。
+- Local repositories: Edits automatically save to the on-disk working directory.
+- GitHub sources: Edits save automatically to local browser drafts and persist across refreshes.
+- Bottom Commit bar: Select notes to stage, inspect diffs and generated commit messages, then click Commit.
 
-一次選取多篇筆記會產生一筆提交。尚未選取的變更繼續保留。瀏覽器草稿在提交前只存在該瀏覽器；換裝置前先 Commit，才能從遠端接續。
+Selecting multiple notes creates a single atomic Git commit. Unselected changes remain intact in draft. Browser drafts exist only in that browser until committed; commit before switching devices to continue from remote.
 
-## 遠端也有人編輯時
+## Handling Concurrent Remote Edits
 
-系統會檢查遠端版本並嘗試合併獨立變更。Commit 前合併的新內容需要再檢視一次；同一位置衝突時，會停止編輯與提交。
+The application checks remote revisions and attempts to merge non-conflicting changes automatically. Merged remote changes should be reviewed before committing. When conflicting changes occur on the same line, editing and committing are paused.
 
-使用 **Refresh remote version** 載入遠端版本後再繼續。衝突草稿會保留備份，可下載取回文字。
+Click **Refresh remote version** to load the latest remote changes and proceed. Conflicted drafts are backed up locally and can be downloaded to recover text.
 
-按 Esc 可以關閉筆記；開著素材視窗或選單時，Esc 先關閉最上層。
+Press Esc to close the active note; when modals or menus are open, Esc closes the topmost overlay first.
