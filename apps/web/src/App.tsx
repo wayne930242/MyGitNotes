@@ -674,7 +674,7 @@ const AppContent: React.FC = () => {
         {activeTab === 'notes' && (
           <>
             {/* Sidebar for Notebooks, Filters & Branch Info at bottom */}
-            {filtersOpen && <button className="notebook-backdrop mobile-only absolute inset-0 z-20 bg-slate-950/40" aria-label="Close notebooks and filters" onClick={() => setFiltersOpen(false)} />}
+            {filtersOpen && <button className="notebook-backdrop mobile-only absolute inset-0 z-20 bg-slate-950/40" aria-label={t('sidebar.closeFilters')} onClick={() => setFiltersOpen(false)} />}
             <div id="notebook-panel" className={`notebook-panel ${filtersOpen ? 'is-open' : ''}`}>
             <Sidebar
               statuses={notebookStatuses}

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Palette, Check, Sun, Moon } from 'lucide-react';
 import { ThemeDefinition, THEMES } from '../lib/themes.js';
+import { useTranslation } from '../lib/i18n/index.js';
 
 interface ThemePickerProps {
   currentTheme: ThemeDefinition;
@@ -11,6 +12,7 @@ export const ThemePicker: React.FC<ThemePickerProps> = ({
   currentTheme,
   onSelectTheme,
 }) => {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -30,7 +32,10 @@ export const ThemePicker: React.FC<ThemePickerProps> = ({
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        title={`Current Theme: ${currentTheme.name} (${currentTheme.mode})`}
+        title={t('theme.current', {
+          name: currentTheme.name,
+          mode: currentTheme.mode === 'dark' ? t('theme.dark') : t('theme.light'),
+        })}
         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 transition"
       >
         <Palette className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
@@ -50,10 +55,10 @@ export const ThemePicker: React.FC<ThemePickerProps> = ({
         <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 p-2 text-xs animate-in fade-in zoom-in-95 duration-150">
           <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <span className="font-semibold text-slate-800 dark:text-slate-200">
-              Color Palettes (Theme Swatches)
+              {t('theme.palettes')}
             </span>
             <span className="text-[10px] text-slate-400 font-mono">
-              {THEMES.length} Presets
+              {t('theme.presets', { count: THEMES.length })}
             </span>
           </div>
 
@@ -81,7 +86,9 @@ export const ThemePicker: React.FC<ThemePickerProps> = ({
                     )}
                     <div>
                       <div className="text-xs font-semibold leading-tight">{theme.name}</div>
-                      <div className="text-[10px] text-slate-400 capitalize">{theme.mode}</div>
+                      <div className="text-[10px] text-slate-400 capitalize">
+                        {theme.mode === 'dark' ? t('theme.dark') : t('theme.light')}
+                      </div>
                     </div>
                   </div>
 

@@ -218,7 +218,7 @@ export const ListView: React.FC<ListViewProps> = ({
                       statuses={statuses}
                       status={note.status}
                       readOnly={readOnly}
-                      label={`Status for ${note.title}`}
+                      label={t('notes.statusFor', { title: note.title })}
                       onChange={(status) => onUpdateNoteStatus(note, status)}
                     />
                   </td>

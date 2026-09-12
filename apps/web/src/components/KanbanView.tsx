@@ -231,7 +231,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                       type="button"
                       onClick={() => onNewNoteWithStatus(col.id)}
                       className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition"
-                      title={`Add note to ${col.title}`}
+                      title={t('kanban.addNoteTo', { title: col.title })}
                     >
                       <Plus className="w-4 h-4" />
                     </button>
@@ -251,13 +251,13 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                       backgroundColor: 'var(--color-primary-light)',
                     }}
                   >
-                    Drop note into {col.title}
+                    {t('kanban.dropNoteInto', { title: col.title })}
                   </div>
                 )}
 
                 {colNotes.length === 0 && !isColumnDragOver ? (
                   <div className="py-8 text-center text-xs text-slate-400 dark:text-slate-500 border border-dashed border-slate-200 dark:border-slate-800 rounded-lg">
-                    {readOnly ? 'No notes' : 'Drag notes here or click +'}
+                    {readOnly ? t('kanban.noNotes') : t('kanban.dragNotesHere')}
                   </div>
                 ) : (
                   colNotes.map((note) => {
@@ -330,7 +330,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                                 onClick={() =>
                                   onUpdateNoteStatus(note, columns[index - 1].id)
                                 }
-                                title={`Move to ${columns[index - 1].title}`}
+                                title={t('kanban.moveTo', { title: columns[index - 1].title })}
                                 className="p-1 hover:text-indigo-600 dark:hover:text-indigo-400 rounded hover:bg-black/5 dark:hover:bg-white/10 transition"
                               >
                                 <ArrowLeft className="w-3.5 h-3.5" />
@@ -342,7 +342,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                                 onClick={() =>
                                   onUpdateNoteStatus(note, columns[index + 1].id)
                                 }
-                                title={`Move to ${columns[index + 1].title}`}
+                                title={t('kanban.moveTo', { title: columns[index + 1].title })}
                                 className="p-1 hover:text-indigo-600 dark:hover:text-indigo-400 rounded hover:bg-black/5 dark:hover:bg-white/10 transition"
                               >
                                 <ArrowRight className="w-3.5 h-3.5" />
@@ -352,7 +352,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                               <button
                                 type="button"
                                 onClick={() => onDeleteNote(note)}
-                                title="Delete note"
+                                title={t('notes.delete')}
                                 className="p-1 hover:text-rose-600 dark:hover:text-rose-400 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 transition opacity-40 hover:opacity-100"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />

@@ -116,7 +116,7 @@ export const CardView: React.FC<CardViewProps> = ({
               {t('folder.folders')}
             </span>
             <div className="flex items-center gap-1 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
-              <span className="text-[11px] font-medium">Open</span>
+              <span className="text-[11px] font-medium">{t('folder.open')}</span>
               <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition" />
             </div>
           </div>
@@ -151,7 +151,7 @@ export const CardView: React.FC<CardViewProps> = ({
                   statuses={statuses}
                   status={note.status}
                   readOnly={readOnly}
-                  label={`Status for ${note.title}`}
+                  label={t('notes.statusFor', { title: note.title })}
                   onChange={(status) => onUpdateNoteStatus(note, status)}
                 />
               </div>

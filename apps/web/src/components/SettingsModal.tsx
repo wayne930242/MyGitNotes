@@ -70,15 +70,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleUpdateCoreClick = async () => {
     if (!local) {
-      setCoreUpdateMsg('Core updates can only be executed in a local workspace environment (currently in remote GitHub mode).');
+      setCoreUpdateMsg(t('settings.coreUpdateLocalOnly'));
       return;
     }
     if (branch === 'core') {
-      setCoreUpdateMsg('Currently on the core product branch. Core updates are used to sync updates into a user main workspace branch. To create a workspace, run: pnpm bootstrap-workspace');
+      setCoreUpdateMsg(t('settings.coreUpdateCoreBranch'));
       return;
     }
     if (branch !== 'main') {
-      setCoreUpdateMsg(`Core updates can only be merged into the user workspace branch 'main' (current branch: ${branch}).`);
+      setCoreUpdateMsg(t('settings.coreUpdateMainOnly', { branch }));
       return;
     }
     setIsUpdatingCore(true);
@@ -267,12 +267,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </h3>
               {branch === 'core' && (
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-medium">
-                  Core Branch
+                  {t('settings.coreBranch')}
                 </span>
               )}
               {branch === 'main' && (
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-medium">
-                  Workspace Branch
+                  {t('settings.workspaceBranch')}
                 </span>
               )}
             </div>
@@ -294,8 +294,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
             title={
               branch === 'core'
-                ? 'View Core branch status and workspace instructions'
-                : 'Run Core update merge'
+                ? t('settings.viewCoreStatusTitle')
+                : t('settings.runCoreUpdateTitle')
             }
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isUpdatingCore ? 'animate-spin' : ''}`} />
@@ -314,12 +314,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="text-xs bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 rounded-lg p-3 flex items-start gap-2.5">
             <Info className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
             <div className="space-y-1">
-              <p className="font-semibold">Currently on the core development branch (`core`):</p>
+              <p className="font-semibold">{t('settings.coreBranchNotice')}</p>
               <p className="text-amber-700 dark:text-amber-400 leading-relaxed text-[11px]">
-                Core Update safely merges upstream Core code into your personal workspace branch (<code>main</code>). In the <code>core</code> development branch itself, updates cannot be merged into itself.
+                {t('settings.coreBranchNoticeDesc')}
               </p>
               <p className="text-[11px] text-amber-800 dark:text-amber-200">
-                💡 To create your personal workspace branch, run in your terminal: <code className="font-mono bg-amber-100/70 dark:bg-amber-900/50 px-1 py-0.5 rounded text-amber-900 dark:text-amber-100 font-semibold">pnpm bootstrap-workspace</code>
+                💡 {t('settings.coreBranchNoticeCmd')}{' '}
+                <code className="font-mono bg-amber-100/70 dark:bg-amber-900/50 px-1 py-0.5 rounded text-amber-900 dark:text-amber-100 font-semibold">
+                  pnpm bootstrap-workspace
+                </code>
               </p>
             </div>
           </div>
@@ -328,7 +331,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {!local && (
           <div className="text-xs bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded-lg p-2.5 flex items-center gap-2">
             <Info className="w-4 h-4 shrink-0 text-slate-500" />
-            <span>Currently in remote GitHub view mode. Core updates and workspace config changes are only supported in a local workspace.</span>
+            <span>{t('settings.remoteGitHubMode')}</span>
           </div>
         )}
 
@@ -348,7 +351,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
       {!local && (
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          This manifest comes from the selected GitHub repository. Edit workspace configuration in that repository or a local workspace. Core updates run in the local workspace.
+          {t('settings.remoteManifestHint')}
         </p>
       )}
 
@@ -361,7 +364,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </label>
             {branch === 'core' && (
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono">
-                core branch read-only
+                {t('settings.coreBranchReadOnly')}
               </span>
             )}
           </div>
@@ -370,7 +373,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={handleSaveConfig}
             disabled={!local || isSaving || branch === 'core'}
             className="flex items-center gap-1.5 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-indigo-600 text-white rounded-md text-xs font-medium transition cursor-pointer"
-            title={branch === 'core' ? 'Workspace config can only be edited on the main branch' : t('settings.saveCommit')}
+            title={branch === 'core' ? t('settings.coreBranchConfigReadOnlyTitle') : t('settings.saveCommit')}
           >
             <Save className="w-3.5 h-3.5" />
             <span>{isSaving ? t('settings.saving') : t('settings.saveCommit')}</span>
@@ -378,12 +381,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Each notebook can define <code>statuses: [inbox, working, done, archived]</code>.
-          Omit it or use an empty list for these defaults. Order sets Kanban columns and
-          the initial status of new notes. Statuses found in notes also appear as options.
+          {t('settings.manifestHint')}
           {branch === 'core' && (
             <span className="block mt-1 text-amber-600 dark:text-amber-400 text-[11px]">
-              Note: This repository is currently on the <code>core</code> product branch. <code>.github-notes.yaml</code> belongs to user workspace branches (<code>main</code>), and is read-only on <code>core</code>.
+              {t('settings.coreBranchManifestWarning')}
             </span>
           )}
         </p>
