@@ -1,6 +1,7 @@
 import React from 'react';
 import { Folder, ChevronRight, ArrowLeft } from 'lucide-react';
 import { BreadcrumbSegment } from '../lib/folder-tree.js';
+import { useTranslation } from '../lib/i18n/index.js';
 
 interface BreadcrumbsProps {
   segments: BreadcrumbSegment[];
@@ -17,6 +18,8 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
   subfolderCount = 0,
   noteCount = 0,
 }) => {
+  const { t } = useTranslation();
+
   // Parent folder for the "Back / Up" button
   const parentFolder = currentFolder
     ? currentFolder.includes('/')
@@ -35,12 +38,12 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
           <button
             type="button"
             onClick={() => onSelectFolder(parentFolder)}
-            title="Go up one folder"
-            aria-label="Go up one folder"
+            title={t('folder.goUpTooltip')}
+            aria-label={t('folder.goUpTooltip')}
             className="inline-flex items-center gap-1 px-2 py-1 -ml-1 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-black/5 dark:hover:bg-white/10 transition active:scale-95 shrink-0"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="font-medium hidden sm:inline">Up</span>
+            <span className="font-medium hidden sm:inline">{t('folder.up')}</span>
           </button>
         )}
 
@@ -79,11 +82,11 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
       <div className="flex items-center gap-2 shrink-0 text-slate-400 text-[11px] font-mono">
         {subfolderCount > 0 && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400">
-            {subfolderCount} {subfolderCount === 1 ? 'folder' : 'folders'}
+            {subfolderCount === 1 ? t('folder.subfolderCount', { count: 1 }) : t('folder.subfoldersCount', { count: subfolderCount })}
           </span>
         )}
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400">
-          {noteCount} {noteCount === 1 ? 'note' : 'notes'}
+          {noteCount === 1 ? t('folder.noteCount', { count: 1 }) : t('folder.notesCount', { count: noteCount })}
         </span>
       </div>
     </nav>

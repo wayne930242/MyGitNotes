@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GitCommit, AlertCircle, Trash2, RotateCcw, X } from 'lucide-react';
 import { GitStatus, NoteItem } from '../lib/types.js';
+import { useTranslation } from '../lib/i18n/index.js';
 
 interface FloatingCommitFooterProps {
   gitStatus: GitStatus | null;
@@ -15,6 +16,7 @@ export const FloatingCommitFooter: React.FC<FloatingCommitFooterProps> = ({
   deletedNotes = [],
   onRestoreNote,
 }) => {
+  const { t } = useTranslation();
   const [showTrashPopover, setShowTrashPopover] = useState(false);
 
   const modifiedCount = gitStatus?.modified.length || 0;
@@ -38,7 +40,7 @@ export const FloatingCommitFooter: React.FC<FloatingCommitFooterProps> = ({
 
           <span className="font-semibold text-amber-300 text-xs flex items-center gap-1">
             <AlertCircle className="w-3.5 h-3.5" />
-            <span>{dirtyCount} pending</span>
+            <span>{t('footer.dirtyCount', { count: dirtyCount })}</span>
           </span>
         </div>
 
@@ -52,7 +54,7 @@ export const FloatingCommitFooter: React.FC<FloatingCommitFooterProps> = ({
               title="View deleted notes in trash and restore before commit"
             >
               <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-              <span>Trash ({deletedNotes.length})</span>
+              <span>{t('footer.trash', { count: deletedNotes.length })}</span>
             </button>
 
             {/* Trash Popover */}
@@ -61,7 +63,7 @@ export const FloatingCommitFooter: React.FC<FloatingCommitFooterProps> = ({
                 <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-300">
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Uncommitted Trash ({deletedNotes.length})</span>
+                    <span>{t('footer.uncommittedTrash', { count: deletedNotes.length })}</span>
                   </div>
                   <button
                     onClick={() => setShowTrashPopover(false)}
@@ -90,7 +92,7 @@ export const FloatingCommitFooter: React.FC<FloatingCommitFooterProps> = ({
                         title={`Restore "${dn.title}"`}
                       >
                         <RotateCcw className="w-3 h-3" />
-                        <span>Restore</span>
+                        <span>{t('footer.restore')}</span>
                       </button>
                     </div>
                   ))}
@@ -110,7 +112,7 @@ export const FloatingCommitFooter: React.FC<FloatingCommitFooterProps> = ({
           title="Review diff and commit working tree changes"
         >
           <GitCommit className="w-3.5 h-3.5" />
-          <span>Commit</span>
+          <span>{t('footer.commit')}</span>
         </button>
       </div>
     </div>
