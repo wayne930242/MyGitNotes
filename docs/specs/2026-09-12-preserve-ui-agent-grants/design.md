@@ -179,3 +179,11 @@ Create the initial public `core` from the verified current product tree, excludi
 Configure Vercel Git integration and production branch tracking, then verify the production deployment's commit identity and a real full-path note read. This supersedes the earlier CLI-only release checkpoint.
 
 Publication friction: GitHub CLI login had not configured Git's HTTPS credential helper; `gh auth setup-git` resolved the push. Vercel required the remote Core branch to exist before accepting production branch tracking. Publication now has explicit branch/tree and deployment identity checkpoints. A concurrent local README rewrite was observed after snapshot publication and remains a separate uncommitted user change.
+
+### Starter template seam
+
+Replace inline bootstrap note/config strings with the existing `examples/demo-workspace` directory. Keep bootstrap's CLI and Git lifecycle; copy missing template files exclusively, using the shared path guard and existing config parser. The public demo synchronization is an explicit release operation in a disposable checkout, while ordinary bootstrap preserves user edits. Validate the CLI on disposable Git repositories, including root-config precedence, custom notebooks, reruns and symlink escapes.
+
+### Release automation seam
+
+A standalone Node script owns the Git synchronization transaction so temporary repository tests exercise the same logic as Actions. Preserve existing merges via `git rebase --rebase-merges`; copy the Core template into the demo workspace; use the fetched main SHA as the force-with-lease condition. GitHub Actions runs the existing pnpm checks and invokes this script with the tested Core SHA. A second small script polls GitHub commit statuses for Vercel success/failure. Vercel integration remains the deployment executor, avoiding duplicated application credentials or short-lived CLI OAuth tokens in CI.

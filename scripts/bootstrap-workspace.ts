@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { runGit, getCurrentBranch, stageAndCommit } from '../packages/git/src/index.js';
-import { WORKSPACE_CONFIG_FILENAME } from '../packages/core/src/index.js';
+import { WORKSPACE_CONFIG_FILENAME, loadWorkspaceConfig, resolveSafePath } from '../packages/core/src/index.js';
 
 async function bootstrapWorkspace() {
   const repoRoot = process.cwd();
@@ -31,50 +31,41 @@ async function bootstrapWorkspace() {
     }
   }
 
-  // 4. Check notes/.github-notes.yaml
-  const notesConfigPath = path.join(repoRoot, 'notes', WORKSPACE_CONFIG_FILENAME);
-  let needsCommit = false;
+  // Core owns the template; initialization copies only missing workspace files.
+  const template = path.join(repoRoot, 'examples/demo-workspace');
   const filesToStage: string[] = [];
-
-  if (fs.existsSync(notesConfigPath)) {
-    console.log(`[bootstrap] notes/${WORKSPACE_CONFIG_FILENAME} already exists. Preserving configuration.`);
-  } else {
-    console.log(`[bootstrap] Creating notes/${WORKSPACE_CONFIG_FILENAME} from baseline template...`);
-    const notesDir = path.join(repoRoot, 'notes');
-    if (!fs.existsSync(notesDir)) {
-      fs.mkdirSync(notesDir, { recursive: true });
+  let needsCommit = false;
+  const copyMissing = (source: string, relative: string) => {
+    const target = resolveSafePath(repoRoot, relative);
+    if (fs.existsSync(target)) return;
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL);
+    filesToStage.push(relative);
+    needsCommit = true;
+  };
+  const notesConfig = resolveSafePath(repoRoot, `notes/${WORKSPACE_CONFIG_FILENAME}`);
+  const rootConfig = resolveSafePath(repoRoot, WORKSPACE_CONFIG_FILENAME);
+  if (!fs.existsSync(notesConfig) && !fs.existsSync(rootConfig)) {
+    copyMissing(path.join(template, WORKSPACE_CONFIG_FILENAME), WORKSPACE_CONFIG_FILENAME);
+  }
+  const config = loadWorkspaceConfig(repoRoot);
+  if (!config) throw new Error('Workspace configuration could not be loaded.');
+  const copyDirectory = (directory: string, relative: string) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const source = path.join(directory, entry.name);
+      const target = path.posix.join(relative, entry.name);
+      if (entry.isDirectory()) copyDirectory(source, target);
+      else if (entry.isFile()) copyMissing(source, target);
     }
-    fs.writeFileSync(
-      notesConfigPath,
-      `schema_version: 1\nworkspace:\n  title: "My GitHub Notes"\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: "Example"\n    root: notes/example\n    assets: assets\n    default_view: list\nfiles:\n  hide_dotfiles: true\n`
-    );
-    filesToStage.push(path.posix.join('notes', WORKSPACE_CONFIG_FILENAME));
-    needsCommit = true;
+  };
+  if (config.notebooks.some(notebook => notebook.id === 'example' && notebook.root === 'notes/example')) {
+    copyDirectory(path.join(template, 'notes/example'), 'notes/example');
+    fs.mkdirSync(resolveSafePath(repoRoot, 'notes/example/assets'), { recursive: true });
   }
 
-  // 5. Create default notebook folder, note fixture, and agent guidelines
-  const targetNotebookDir = path.join(repoRoot, 'notes/example');
-  const targetAssetsDir = path.join(targetNotebookDir, 'assets');
-  if (!fs.existsSync(targetNotebookDir)) {
-    fs.mkdirSync(targetNotebookDir, { recursive: true });
-  }
-  if (!fs.existsSync(targetAssetsDir)) {
-    fs.mkdirSync(targetAssetsDir, { recursive: true });
-  }
-
-  const targetNotePath = path.join(targetNotebookDir, 'welcome.md');
-  if (!fs.existsSync(targetNotePath)) {
-    console.log(`[bootstrap] Creating initial welcome note fixture...`);
-    fs.writeFileSync(
-      targetNotePath,
-      `---\nid: welcome\ntitle: Welcome to GitHub Notes\nstatus: inbox\ntags:\n  - example\n---\n\n# Welcome to GitHub Notes\n\nYour notes workspace is ready.\n`
-    );
-    filesToStage.push('notes/example/welcome.md');
-    needsCommit = true;
-  }
-
-  const notesAgentsPath = path.join(repoRoot, 'notes/AGENTS.md');
+  const notesAgentsPath = resolveSafePath(repoRoot, 'notes/AGENTS.md');
   if (!fs.existsSync(notesAgentsPath)) {
+    fs.mkdirSync(path.dirname(notesAgentsPath), { recursive: true });
     fs.writeFileSync(
       notesAgentsPath,
       `# GitHub Notes Workspace Agent System\n\nOperational guidelines for AI agents working within this note repository.\n`
@@ -99,7 +90,7 @@ async function bootstrapWorkspace() {
   console.log(`\n======================================================`);
   console.log(`✅ GitHub Notes workspace ready on branch 'main'!`);
   console.log(`   - Config: ${WORKSPACE_CONFIG_FILENAME}`);
-  console.log(`   - Default Notebook: notes/example/`);
+  console.log(`   - Default Notebook: ${config.workspace.default_notebook}`);
   console.log(`   - Next steps: Run 'pnpm dev' to launch the application.`);
   console.log(`======================================================\n`);
 }

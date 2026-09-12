@@ -29,7 +29,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "main": false
+      "core": false,
+      "main": true
     }
   }
 }

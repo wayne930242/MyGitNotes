@@ -41,7 +41,7 @@ Alternatively, run `pnpm dev:server` to preview the built frontend directly on `
 
 ## Key Features
 
-- **Local-First & Git-Native**: Full local filesystem control. Every explicit note save creates an atomic Git commit.
+- **Local-First & Git-Native**: Full local filesystem control. Editing saves locally; the Commit footer publishes selected note changes as one Git commit.
 - **Flexible Note Views**: Switch instantly between List, Card, and Kanban views.
 - **Hierarchical Folders**: Organize notes in nested directories. Use optional `_dir.yml` files for custom titles and ordering.
 - **Configurable Note Sources**: Work against your local filesystem or connect to remote GitHub repositories.

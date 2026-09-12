@@ -91,3 +91,11 @@ named rewrite parameters passing through in query strings.
 ### Publish the product and workspace branches
 
 The user identified that the public repository contained only the example workspace, while Vercel deployments uploaded local source directly. Publish a clean product snapshot on `core`, merge it into the existing remote `main`, and connect Vercel to the repository with `core` as its production branch. Preserve the remote workspace manifest and every existing note blob. Retain the old local histories privately because they contain local notes. The local data worktree remains separate from the public example workspace.
+
+### Canonical demo and starter content
+
+Confirmed by the user's latest instruction: maintain all demo and tutorial notes under Core's `examples/demo-workspace`; populate remote main from that template and use only the default statuses. A new user's bootstrap consumes the same examples. Existing user notes and manifests are preserved by bootstrap. This replaces the earlier requirement to retain the old demo bytes when synchronizing the explicitly authorized public demo.
+
+### Automated main release — supersedes Core deployment
+
+The user explicitly requested CI/CD to rebase main onto Core and deploy main automatically. Use GitHub Actions for test/build, rebase with merge topology preserved, canonical example synchronization and a force-with-lease update. Vercel's Git integration deploys main; Actions observes the resulting commit status. A repository-scoped deploy key authenticates automation pushes so subsequent Git provider events are delivered without relying on the workflow token's recursion restrictions.

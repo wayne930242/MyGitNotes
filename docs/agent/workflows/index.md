@@ -10,9 +10,9 @@ When a user clones the repository:
 3. The script:
    - Verifies the repository root.
    - Checks out or creates branch `main`.
-   - Creates `notes/.github-notes.yaml` (if absent).
+   - Copies the canonical `examples/demo-workspace/.github-notes.yaml` to the workspace root when neither root nor notes-level configuration exists.
    - Initializes the default notebook directory (e.g. `notes/example`).
-   - Creates the initial welcome note and notes workspace agent instructions when absent.
+   - Copies missing canonical example notes/tutorials when the example notebook is configured, preserving existing files. Creates missing workspace agent instructions.
    - Commits the user initialization to `main`.
 
 ## 2. Core Update Flow
@@ -32,9 +32,15 @@ When an update is released to the canonical product branch `core`:
 ## 3. Git Save and Semantic Commits
 
 Local UI edits auto-save to the working tree; the Commit action stages selected changes and creates a commit.
-Local MCP saves create a Git commit. Remote UI and MCP note saves create an explicit GitHub commit with a revision check.
+Local MCP saves create a Git commit. Remote UI edits persist as browser working drafts; the Commit footer publishes selected notes together with a revision check. MCP mutations create a commit immediately.
 - A remote save advances the branch without force; concurrent changes return a conflict.
 - Semantic commit messages are generated:
   - If `GEMINI_API_KEY` is provided, requests a concise conventional commit message from Gemini Flash-Lite.
   - If no API key is available or the request fails, falls back gracefully to deterministic messages (e.g. `minor-mod` or `docs(notes): update <title>`).
   - Editing and Save always succeed even without network or API keys.
+
+## 4. Public Demo CI/CD
+
+`.github/workflows/release-main.yml` runs on Core pushes and manual dispatch. It installs dependencies, tests and builds the product, then rebases main onto the tested Core revision while preserving merge topology. The release script synchronizes the public demo from `examples/demo-workspace` and pushes with an explicit old-main lease. Conflicts or concurrent remote note saves stop publication. Ordinary workspace bootstrap continues to preserve existing user content.
+
+Vercel production tracks `main`; Core auto-deployment is disabled in `vercel.json`. The workflow waits for Vercel's commit status on the exact main SHA. The `CORE_SYNC_SSH_KEY` Actions secret contains a dedicated repository write deploy key. Application and OAuth secrets stay in Vercel environment variables.

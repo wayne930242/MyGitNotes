@@ -235,3 +235,23 @@ and note creation before explicit Commit. Exercise local and mobile regressions.
 - Existing remote history is preserved through a non-force merge and push.
 - The local development checkout tracks public Core; its old history and local data worktree remain available privately.
 - Production deployments identify a public Core commit. Verify Git integration separately from deployment success.
+
+### Canonical example acceptance — approved 2026-09-12
+
+Approval: the user requested Core examples as the source for main's demo/tutorial notes and the default status set.
+
+- Examples explain everyday capture, editing/local save/explicit Commit, sources, folders, assets, status/visibility and MCP access.
+- Actual example status values use only inbox, working, done and archived. The template omits notebook status overrides.
+- Fresh bootstrap copies the canonical template onto main in one initialization commit; repeated runs preserve existing notes/config and create no redundant commit.
+- Existing root or notes-level workspace configuration remains authoritative; custom workspaces are not populated with an unconfigured example notebook.
+- Synchronize the public demo main from Core examples, then verify exact file correspondence and default status choices on the hosted UI.
+
+### CI/CD acceptance — approved 2026-09-12
+
+Approval: "Use CI/CD: automatically rebase main onto core; automatically deploy main to Vercel."
+
+- Core pushes run tests and build, rebase main onto the tested Core revision, synchronize canonical examples, and update main with an explicit old-head lease.
+- Rebase conflicts and concurrent remote edits fail before overwriting the remote branch. Superseded Core runs skip publication.
+- Vercel production tracks main and automatically deploys its pushes. Core's intermediate pushes do not deploy production.
+- CI observes Vercel's status for the exact published main SHA. Verify one real workflow execution and the matching production deployment.
+- Workflow secrets contain only a dedicated repository write deploy key; application secrets remain in Vercel.

@@ -17,7 +17,9 @@ try{
  await page.waitForSelector('[aria-label="Show hidden notes"]',{timeout:30000});
  assert(workspace?.config);assert.equal(workspace.branch,'main');
  console.log(JSON.stringify({workspace:workspace.source.type,branch:workspace.branch,noteCount,endpoints:statuses}));
- const list=await page.evaluate(async()=>fetch('/api/notes').then(r=>r.json()));
+ const listResult=await page.evaluate(async()=>{const r=await fetch('/api/notes');return {status:r.status,body:await r.json()};});
+ assert.equal(listResult.status,200,JSON.stringify(listResult.body));
+ const list=listResult.body;
  for(const note of list.notes){
   const result=await page.evaluate(async file=>{const response=await fetch('/api/notes/read?path='+encodeURIComponent(file));return {status:response.status,data:await response.json()};},note.path);
   assert.equal(result.status,200,`Configured note read failed: ${note.path}`);assert.equal(result.data.note.path,note.path);
@@ -50,4 +52,4 @@ try{
   console.log('PASS production OAuth redirect and credential-bearing MCP route rejects invalid grants (401)');
  }
  assert.deepEqual(errors,[]);console.log('PASS no browser runtime errors');
-}finally{await browser.close();}
+}catch(error){console.log(await page.evaluate(()=>({url:location.href,text:document.body.innerText.slice(0,1500)})));throw error;}finally{await browser.close();}

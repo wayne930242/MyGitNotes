@@ -216,3 +216,11 @@ Earlier production smoke covered note listing but omitted actual note reads. The
 Authenticated production Commit and actual ChatGPT connector UAT remain a user acceptance checkpoint; local browser fixtures and stateful GitHub tests provide separate evidence, not a claim of live account UAT.
 
 Reflexive: Deployment-source evidence and a real configured note read were missing from the earlier release checkpoint. The release script now exercises those paths; credential-helper and branch-creation ordering were transient setup issues, so the skill review made no agent-instruction changes.
+
+## Canonical examples and CI/CD checkpoint
+
+- Nine canonical demo/tutorial notes cover editing/Commit, sources, assets, access, status/visibility and everyday planning. Actual statuses are exactly inbox, working, done and archived; the manifest has no override. All relative tutorial links resolve.
+- Bootstrap CLI tests exercised fresh main creation, exact template copying, repeated initialization preserving edited content, existing root config/custom notebook preservation, and symlink escape rejection.
+- Release transaction tests exercised main rebase/template synchronization, retention of independent notes, skipping superseded Core revisions, conflict rejection and a concurrent remote commit during push. The old-head lease retained that concurrent commit.
+- Local suite: 102 tests / 19 files passed. Build passed after the bootstrap changes. Public browser smoke observed correct note reads but repeated anonymous page loads reached GitHub API limits; authenticated production UAT remains distinct.
+- The latest CI/CD instruction supersedes the previous Core deployment configuration: production now tracks main. A dedicated repository write deploy key is installed in GitHub Actions; app secrets remain in Vercel.
