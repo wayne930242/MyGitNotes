@@ -1,0 +1,13 @@
+.git
+.env*
+!.env.example
+notes
+.github-notes.yaml
+github-notes.server.yaml
+.github-notes-sessions
+node_modules
+**/node_modules
+**/dist
+.vercel
+scratch
+artifacts

@@ -1,0 +1,22 @@
+{
+  "name": "github-notes-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bootstrap-workspace": "tsx scripts/bootstrap-workspace.ts",
+    "update-core": "tsx scripts/update-core.ts",
+    "build": "pnpm --filter \"@github-notes/*\" run build",
+    "test": "vitest run",
+    "dev": "pnpm --parallel --filter \"@github-notes/local-server\" --filter \"@github-notes/web\" dev",
+    "dev:server": "pnpm --filter \"@github-notes/local-server\" dev",
+    "dev:web": "pnpm --filter \"@github-notes/web\" dev",
+    "env:vercel": "tsx scripts/vercel-env.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "tsx": "^4.19.1",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.1"
+  }
+}

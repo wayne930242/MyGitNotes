@@ -1,0 +1,12 @@
+schema_version: 1
+workspace:
+  title: GitHub Notes 範例工作區
+  default_notebook: example
+notebooks:
+  - id: example
+    title: 使用範例
+    root: notes/example
+    assets: assets
+    default_view: list
+files:
+  hide_dotfiles: true

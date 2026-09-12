@@ -1,0 +1,74 @@
+import { useEffect, useRef } from 'react';
+
+export function useSidebarSwipe(enabled: boolean, open: boolean, onChange: (open: boolean) => void) {
+  const ref = useRef<HTMLDivElement>(null);
+  const suppressClickUntil = useRef(0);
+  useEffect(() => {
+    const root = ref.current;
+    if (!enabled || !root) return;
+    const panel = root.querySelector<HTMLElement>('#notebook-panel');
+    if (!panel) return;
+    let gesture: { x: number; y: number; dx: number; dragging: boolean } | null = null;
+    const reset = () => {
+      gesture = null;
+      panel.classList.remove('is-dragging');
+      panel.style.removeProperty('--sidebar-drag');
+    };
+    const start = (event: TouchEvent) => {
+      // A fresh touch is an intentional interaction, not the drag's compatibility click.
+      suppressClickUntil.current = 0;
+      if (!window.matchMedia('(max-width: 1100px)').matches || event.touches.length !== 1) return;
+      if ((event.target as Element).closest('input, textarea, select, [role="combobox"], [contenteditable="true"]')) return;
+      const touch = event.touches[0];
+      if (!open && touch.clientX - root.getBoundingClientRect().left > 24) return;
+      gesture = { x: touch.clientX, y: touch.clientY, dx: 0, dragging: false };
+    };
+    const move = (event: TouchEvent) => {
+      if (!gesture) return;
+      if (event.touches.length !== 1) { reset(); return; }
+      const touch = event.touches[0];
+      const dx = touch.clientX - gesture.x;
+      const dy = touch.clientY - gesture.y;
+      if (!gesture.dragging) {
+        if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { reset(); return; }
+        if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+        if ((open && dx > 0) || (!open && dx < 0)) { reset(); return; }
+        gesture.dragging = true;
+        panel.classList.add('is-dragging');
+      }
+      event.preventDefault();
+      gesture.dx = dx;
+      const width = panel.getBoundingClientRect().width;
+      const offset = Math.max(-width, Math.min(0, (open ? 0 : -width) + dx));
+      panel.style.setProperty('--sidebar-drag', `${offset}px`);
+    };
+    const end = () => {
+      if (gesture?.dragging) {
+        suppressClickUntil.current = performance.now() + 400;
+        if (Math.abs(gesture.dx) >= 64) onChange(!open);
+      }
+      reset();
+    };
+    const cancel = () => {
+      if (gesture?.dragging) suppressClickUntil.current = performance.now() + 400;
+      reset();
+    };
+    const click = (event: MouseEvent) => {
+      if (performance.now() < suppressClickUntil.current) { event.preventDefault(); event.stopPropagation(); }
+    };
+    root.addEventListener('touchstart', start, { passive: true });
+    root.addEventListener('touchmove', move, { passive: false });
+    root.addEventListener('touchend', end);
+    root.addEventListener('touchcancel', cancel);
+    root.addEventListener('click', click, true);
+    return () => {
+      reset();
+      root.removeEventListener('touchstart', start);
+      root.removeEventListener('touchmove', move);
+      root.removeEventListener('touchend', end);
+      root.removeEventListener('touchcancel', cancel);
+      root.removeEventListener('click', click, true);
+    };
+  }, [enabled, open, onChange]);
+  return ref;
+}
