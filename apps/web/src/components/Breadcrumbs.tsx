@@ -1,6 +1,8 @@
 import React from 'react';
-import { Folder, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Folder, ChevronRight, ArrowLeft, ArrowUpDown } from 'lucide-react';
 import { BreadcrumbSegment } from '../lib/folder-tree.js';
+import { SortField, SortOrder } from '../lib/note-sort.js';
+import { Select } from './Select.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
 interface BreadcrumbsProps {
@@ -9,6 +11,9 @@ interface BreadcrumbsProps {
   onSelectFolder: (folder: string | null) => void;
   subfolderCount?: number;
   noteCount?: number;
+  sortField?: SortField;
+  sortOrder?: SortOrder;
+  onSortChange?: (field: SortField, order: SortOrder) => void;
 }
 
 export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
@@ -17,8 +22,26 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
   onSelectFolder,
   subfolderCount = 0,
   noteCount = 0,
+  sortField = 'updated',
+  sortOrder = 'desc',
+  onSortChange,
 }) => {
   const { t } = useTranslation();
+
+  const sortOptions = [
+    { value: 'updated:desc', label: t('sort.updatedDesc') },
+    { value: 'updated:asc', label: t('sort.updatedAsc') },
+    { value: 'created:desc', label: t('sort.createdDesc') },
+    { value: 'created:asc', label: t('sort.createdAsc') },
+    { value: 'title:asc', label: t('sort.titleAsc') },
+    { value: 'title:desc', label: t('sort.titleDesc') },
+    { value: 'status:asc', label: t('sort.status') },
+  ];
+
+  const handleSortSelect = (val: string) => {
+    const [field, order] = val.split(':') as [SortField, SortOrder];
+    onSortChange?.(field, order);
+  };
 
   // Parent folder for the "Back / Up" button
   const parentFolder = currentFolder
@@ -30,7 +53,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
   return (
     <nav
       aria-label="Breadcrumbs"
-      className="flex items-center justify-between gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl border bg-black/[0.02] dark:bg-white/[0.02] mb-4 text-xs select-none transition-colors"
+      className="flex items-center justify-between gap-3 px-3 py-2 md:px-4 md:py-2.5 rounded-xl border bg-black/[0.02] dark:bg-white/[0.02] mb-4 text-xs select-none transition-colors flex-wrap sm:flex-nowrap"
       style={{ borderColor: 'var(--color-border)' }}
     >
       <div className="flex items-center gap-1.5 flex-wrap min-w-0">
@@ -78,16 +101,31 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
         </div>
       </div>
 
-      {/* Summary indicator */}
-      <div className="flex items-center gap-2 shrink-0 text-slate-400 text-[11px] font-mono">
-        {subfolderCount > 0 && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400">
-            {subfolderCount === 1 ? t('folder.subfolderCount', { count: 1 }) : t('folder.subfoldersCount', { count: subfolderCount })}
-          </span>
+      {/* Right: Sort controls & Summary indicator */}
+      <div className="flex items-center gap-3 shrink-0 justify-between sm:justify-end w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-black/5 dark:border-white/5">
+        {onSortChange && (
+          <div className="flex items-center gap-1.5">
+            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <Select
+              aria-label={t('header.sort')}
+              value={`${sortField}:${sortOrder}`}
+              onValueChange={handleSortSelect}
+              options={sortOptions}
+              className="breadcrumb-sort-select min-w-0 rounded-lg border bg-white/70 dark:bg-slate-900/70 hover:bg-white dark:hover:bg-slate-900 px-2 text-xs h-7 sm:h-8 shadow-xs"
+            />
+          </div>
         )}
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400">
-          {noteCount === 1 ? t('folder.noteCount', { count: 1 }) : t('folder.notesCount', { count: noteCount })}
-        </span>
+
+        <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-mono">
+          {subfolderCount > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400">
+              {subfolderCount === 1 ? t('folder.subfolderCount', { count: 1 }) : t('folder.subfoldersCount', { count: subfolderCount })}
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400">
+            {noteCount === 1 ? t('folder.noteCount', { count: 1 }) : t('folder.notesCount', { count: noteCount })}
+          </span>
+        </div>
       </div>
     </nav>
   );
