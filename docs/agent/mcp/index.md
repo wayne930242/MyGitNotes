@@ -24,6 +24,11 @@ Default transport is **stdio** for local agent integration (e.g. Claude Desktop,
 14. `check_core_update`: Inspects available remote Core updates.
 15. `update_core`: Performs the guarded Core update workflow.
 16. `list_folders`: Returns notebook-relative folder paths and `_dir.yml` display metadata.
+17. `search_notes`: Searches note files using plain text or regular expressions (regex).
+18. `replace_notes`: Searches and replaces plain text or regular expressions across note files and creates an atomic Git commit.
+19. `get_statuses`: Returns configured, observed, and available valid note statuses for a notebook or workspace to ensure accurate status tagging.
+20. `get_note_metadata`: Fast read for frontmatter metadata, title, status, tags, and valid statuses without loading the markdown body.
+21. `update_note_metadata`: Fast write/update for frontmatter metadata without re-sending the markdown body, automatically managing status transitions and creating an atomic Git commit.
 
 ## Source selection and hosted access
 

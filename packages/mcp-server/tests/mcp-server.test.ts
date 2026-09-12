@@ -12,6 +12,11 @@ import {
   handleAddAsset,
   handleDeleteAsset,
   handleListAssets,
+  handleSearchNotes,
+  handleReplaceNotes,
+  handleGetStatuses,
+  handleGetNoteMetadata,
+  handleUpdateNoteMetadata,
 } from '../src/tools.js';
 import { assertUserWorkspaceBranch } from '../src/guards.js';
 
@@ -196,5 +201,169 @@ notebooks:
     const { stdout: log } = await runGit(['log', '-2', '--oneline'], testRepo);
     expect(log).toMatch(/chore\(assets\): delete photo\.png/);
     expect(log).toMatch(/chore\(assets\): add asset photo\.png/);
+  });
+
+  it('supports search_notes with plain text and regular expressions', async () => {
+    await runGit(['checkout', '-b', 'main'], testRepo);
+    const configContent = `schema_version: 1
+workspace:
+  title: "Test Workspace"
+  default_notebook: example
+notebooks:
+  - id: example
+    title: "Example Notebook"
+    root: notes/example
+`;
+    fs.writeFileSync(path.join(testRepo, WORKSPACE_CONFIG_FILENAME), configContent);
+    await stageAndCommit(testRepo, [WORKSPACE_CONFIG_FILENAME], 'add workspace config');
+
+    // Create test notes
+    await handleSaveNote(
+      { repoRoot: testRepo },
+      {
+        path: 'notes/example/user-guide.md',
+        content: '# Guide\nContact: support@example.com for help.\nRef: TICKET-1234 on 2026-09-12.',
+        metadata: { title: 'User Guide', status: 'inbox' },
+      }
+    );
+
+    // 1. Literal search
+    const litSearch = await handleSearchNotes(
+      { repoRoot: testRepo },
+      { query: 'support@example.com' }
+    );
+    expect(litSearch.totalMatches).toBe(1);
+    expect(litSearch.matches[0].path).toBe('notes/example/user-guide.md');
+    expect(litSearch.matches[0].line).toBe(7);
+
+    // 2. Regex search
+    const regexSearch = await handleSearchNotes(
+      { repoRoot: testRepo },
+      { query: 'TICKET-\\d+', isRegex: true }
+    );
+    expect(regexSearch.totalMatches).toBe(1);
+    expect(regexSearch.matches[0].matches).toContain('TICKET-1234');
+    expect(regexSearch.matches[0].line).toBe(8);
+  });
+
+  it('supports replace_notes with dryRun and regex replacement with commit', async () => {
+    await runGit(['checkout', '-b', 'main'], testRepo);
+    const configContent = `schema_version: 1
+workspace:
+  title: "Test Workspace"
+  default_notebook: example
+notebooks:
+  - id: example
+    title: "Example Notebook"
+    root: notes/example
+`;
+    fs.writeFileSync(path.join(testRepo, WORKSPACE_CONFIG_FILENAME), configContent);
+    await stageAndCommit(testRepo, [WORKSPACE_CONFIG_FILENAME], 'add workspace config');
+
+    await handleSaveNote(
+      { repoRoot: testRepo },
+      {
+        path: 'notes/example/todo.md',
+        content: '# Tasks\nFix ISSUE-101 and ISSUE-102.',
+        metadata: { title: 'Todo', status: 'working' },
+      }
+    );
+
+    // 1. Dry run
+    const dryRunRes = await handleReplaceNotes(
+      { repoRoot: testRepo },
+      {
+        find: 'ISSUE-(\\d+)',
+        replace: 'BUG-$1',
+        isRegex: true,
+        dryRun: true,
+      }
+    );
+    expect(dryRunRes.dryRun).toBe(true);
+    expect(dryRunRes.totalReplacements).toBe(2);
+    expect(dryRunRes.changedFiles).toContain('notes/example/todo.md');
+    expect(dryRunRes.commit).toBeUndefined();
+
+    // Verify file unchanged
+    const unmod = await handleReadNote({ repoRoot: testRepo }, { path: 'notes/example/todo.md' });
+    expect(unmod.note.content).toContain('ISSUE-101');
+
+    // 2. Real replacement
+    const liveRes = await handleReplaceNotes(
+      { repoRoot: testRepo },
+      {
+        find: 'ISSUE-(\\d+)',
+        replace: 'BUG-$1',
+        isRegex: true,
+      }
+    );
+    expect(liveRes.success).toBe(true);
+    expect(liveRes.totalReplacements).toBe(2);
+    expect(liveRes.commit?.commitHash).toBeDefined();
+
+    // Verify file updated
+    const mod = await handleReadNote({ repoRoot: testRepo }, { path: 'notes/example/todo.md' });
+    expect(mod.note.content).toContain('Fix BUG-101 and BUG-102.');
+  });
+
+  it('supports get_statuses, get_note_metadata, and update_note_metadata with validation', async () => {
+    await runGit(['checkout', '-b', 'main'], testRepo);
+    const configContent = `schema_version: 1
+workspace:
+  title: "Test Workspace"
+  default_notebook: example
+notebooks:
+  - id: example
+    title: "Example Notebook"
+    root: notes/example
+    statuses:
+      - inbox
+      - working
+      - review
+      - done
+      - archived
+`;
+    fs.writeFileSync(path.join(testRepo, WORKSPACE_CONFIG_FILENAME), configContent);
+    await stageAndCommit(testRepo, [WORKSPACE_CONFIG_FILENAME], 'add workspace config');
+
+    await handleSaveNote(
+      { repoRoot: testRepo },
+      {
+        path: 'notes/example/feature.md',
+        content: '# Feature Planning\nDetailed specification...',
+        metadata: { title: 'Feature Planning', status: 'inbox', tags: ['v1'] },
+      }
+    );
+
+    // 1. Get statuses
+    const statusesRes = await handleGetStatuses({ repoRoot: testRepo }, { notebookId: 'example' });
+    expect(statusesRes.notebooks[0].configuredStatuses).toEqual(['inbox', 'working', 'review', 'done', 'archived']);
+    expect(statusesRes.notebooks[0].allStatuses).toContain('review');
+
+    // 2. Fast get metadata
+    const metaRes = await handleGetNoteMetadata({ repoRoot: testRepo }, { path: 'notes/example/feature.md' });
+    expect(metaRes.status).toBe('inbox');
+    expect(metaRes.tags).toEqual(['v1']);
+    expect(metaRes.availableStatuses).toContain('review');
+
+    // 3. Fast update metadata
+    const updateRes = await handleUpdateNoteMetadata(
+      { repoRoot: testRepo },
+      {
+        path: 'notes/example/feature.md',
+        status: 'done',
+        tags: ['v1', 'shipped'],
+      }
+    );
+    expect(updateRes.success).toBe(true);
+    expect(updateRes.note.status).toBe('done');
+    expect(updateRes.note.tags).toEqual(['v1', 'shipped']);
+    expect(updateRes.note.content).toContain('Detailed specification...');
+    expect(updateRes.availableStatuses).toContain('done');
+    expect(updateRes.commit.commitHash).toBeDefined();
+
+    // Verify git log
+    const { stdout: log } = await runGit(['log', '-1', '--oneline'], testRepo);
+    expect(log).toMatch(/chore\(metadata\): set status to done for feature\.md/);
   });
 });
