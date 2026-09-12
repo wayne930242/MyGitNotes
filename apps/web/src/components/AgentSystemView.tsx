@@ -336,7 +336,7 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
               value: resource.path,
               label: `${resource.scope === 'product' ? `[${t('agent.systemGuidelines')}] ` : ''}${resource.name}`,
             }))}
-            className="w-full min-w-0 rounded-lg border bg-transparent px-2"
+            className="w-full"
           />
         </label>
         {/* Top Bar */}

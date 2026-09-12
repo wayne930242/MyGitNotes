@@ -396,7 +396,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
   return (
     <div className="note-overlay viewport-overlay fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 md:p-6 animate-fadeIn">
-      <div role="dialog" aria-modal="true" aria-label="Note editor" className="note-dialog bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-6xl h-[90dvh] flex flex-col overflow-hidden transition-colors">
+      <div role="dialog" aria-modal="true" aria-label="Note editor" className="note-dialog ui-dialog shadow-2xl w-full max-w-6xl h-[90dvh] flex flex-col overflow-hidden transition-colors">
         <div className="editor-notices">
         {/* Crash recovery banner if draft differs from disk */}
         {recoveredDraft && !blocked && (
@@ -531,12 +531,12 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
                 value={String(metadata.title || '')}
                 onChange={(e) => setMetadata({ ...metadata, title: e.target.value })}
                 placeholder={t('editor.titlePlaceholder')}
-                className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100 focus:outline-none"
+                className="ui-control w-full"
               />
             </div>
             <div>
               <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">{t('editor.status')}</label>
-              <Select aria-label={t('editor.status')} disabled={locked} value={String(metadata.status || '')} onValueChange={value => setMetadata(withNoteStatus(metadata, value))} options={Array.from(new Set(['', ...statuses, String(metadata.status || '')])).map(value => ({value,label:value || t('editor.noStatus')}))} className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md text-slate-900 dark:text-slate-100 focus:outline-none" />
+              <Select aria-label={t('editor.status')} disabled={locked} value={String(metadata.status || '')} onValueChange={value => setMetadata(withNoteStatus(metadata, value))} options={Array.from(new Set(['', ...statuses, String(metadata.status || '')])).map(value => ({value,label:value || t('editor.noStatus')}))} className="w-full" />
               <label className="flex items-center gap-2 min-h-11 cursor-pointer">
                 <input type="checkbox" aria-label={t('editor.hideNote')} checked={isNoteHidden(metadata)}
                   onChange={event => setMetadata({ ...metadata, hiden: event.target.checked })}
@@ -667,8 +667,8 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
       </div>
 
       {isAssetPickerOpen && <div role="dialog" aria-label={t('editor.notebookAssets')} aria-modal="true" className="viewport-overlay fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="rounded-2xl border shadow-2xl w-full max-w-3xl max-h-[85dvh] flex flex-col overflow-hidden" style={{ backgroundColor:'var(--color-surface)',borderColor:'var(--color-border)' }}>
-          <div className="p-4 border-b shrink-0 flex items-center justify-between" style={{ borderColor:'var(--color-border)' }}><span className="font-semibold text-sm text-slate-900 dark:text-slate-100">{t('editor.notebookAssets')}</span><button aria-label={t('editor.closeNotebookAssets')} onClick={() => setIsAssetPickerOpen(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 p-1 rounded-lg transition"><X className="w-5 h-5" /></button></div>
+        <div className="ui-dialog shadow-2xl w-full max-w-3xl max-h-[85dvh] flex flex-col overflow-hidden">
+          <div className="p-4 border-b shrink-0 flex items-center justify-between" style={{ borderColor:'var(--color-border)' }}><span className="font-semibold text-sm theme-text">{t('editor.notebookAssets')}</span><button aria-label={t('editor.closeNotebookAssets')} onClick={() => setIsAssetPickerOpen(false)} className="ui-icon-button"><X className="w-5 h-5" /></button></div>
           <div className="p-4 overflow-y-auto"><AssetLibrary assets={assets} onUploadAsset={locked ? undefined : onUploadAsset} onDeleteAsset={locked ? undefined : onDeleteAsset} onMoveAsset={locked ? undefined : onMoveAsset} onInsert={locked ? undefined : asset => handleInsertAssetRef(asset.markdownRef)} /></div>
         </div>
       </div>}

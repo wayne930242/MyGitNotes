@@ -15,13 +15,13 @@ export const AssetBrowser: React.FC<AssetBrowserProps> = ({ notebooks, selectedN
   const { t } = useTranslation();
 
   return (
-    <div className="rounded-xl border shadow-sm p-3 md:p-6 flex flex-col gap-6" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+    <div className="ui-panel shadow-sm p-3 md:p-6 flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 flex gap-2 items-center">
+        <h2 className="text-sm font-semibold flex gap-2 items-center">
           <ImageIcon className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
           {t('assets.title')}
         </h2>
-        <Select aria-label={t('assets.title')} value={selectedNotebookId} onValueChange={onSelectNotebook} options={notebooks.map(nb => ({ value: nb.id, label: nb.title }))} className="bg-transparent text-sm dark:text-slate-200 max-w-full" />
+        <Select aria-label={t('assets.title')} value={selectedNotebookId} onValueChange={onSelectNotebook} options={notebooks.map(nb => ({ value: nb.id, label: nb.title }))} className="w-full sm:w-auto sm:max-w-xs" />
       </div>
       <AssetLibrary key={selectedNotebookId} {...library} />
     </div>

@@ -22,7 +22,7 @@ export function NoteStatusSelect({ status = '', statuses, readOnly, onChange, la
         value={status}
         onValueChange={onChange}
         options={['', ...statuses, ...(status && !statuses.includes(status) ? [status] : [])].map(value => ({ value, label: value || t('notes.noStatus') }))}
-        className={`cursor-pointer disabled:cursor-default px-2.5 py-0.5 text-xs rounded-full border font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 ${statusColor(status)}`}
+        className={`cursor-pointer disabled:cursor-default min-h-6 px-2.5 py-0.5 text-xs rounded-md border font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 ${statusColor(status)}`}
         title={label}
       />
     </div>

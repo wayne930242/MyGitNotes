@@ -208,7 +208,7 @@ export const Header: React.FC<HeaderProps> = ({
                   { value: 'card', label: t('view.card') },
                   { value: 'kanban', label: t('view.kanban') },
                 ]}
-                className="mobile-only note-view-select min-w-0 rounded-lg border bg-transparent px-1"
+                className="mobile-only note-view-select px-1"
               />
 
               {/* View Switcher Desktop */}

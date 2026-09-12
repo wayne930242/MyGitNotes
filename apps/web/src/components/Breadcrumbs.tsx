@@ -111,7 +111,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
               value={`${sortField}:${sortOrder}`}
               onValueChange={handleSortSelect}
               options={sortOptions}
-              className="breadcrumb-sort-select min-w-0 rounded-lg border bg-white/70 dark:bg-slate-900/70 hover:bg-white dark:hover:bg-slate-900 px-2 text-xs h-7 sm:h-8 shadow-xs"
+              className="breadcrumb-sort-select"
             />
           </div>
         )}

@@ -334,7 +334,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   { value: 'count-desc', label: t('sidebar.tagCountDesc') },
                   { value: 'count-asc', label: t('sidebar.tagCountAsc') },
                 ]}
-                className="w-full h-8 px-2.5 rounded-lg border bg-transparent text-xs"
+                className="w-full"
                 style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}
               />
               <p role="status" className="text-[11px] text-slate-400">

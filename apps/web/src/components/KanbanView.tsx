@@ -150,7 +150,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                 onSortChange(f, o);
               }}
               options={boardSortOptions}
-              className="text-xs h-8 px-2.5 py-0.5 rounded-lg border bg-transparent font-medium"
+              className="font-medium"
             />
           </div>
         )}
@@ -223,7 +223,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                       }));
                     }}
                     options={columnSortOptions}
-                    className="text-[11px] h-7 px-1.5 py-0 rounded-md border bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400 font-medium"
+                    className="min-h-7 px-1.5 py-1 text-[11px] font-medium"
                   />
 
                   {!readOnly && (

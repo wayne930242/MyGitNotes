@@ -11,6 +11,15 @@ export default {
         sans: ['var(--font-body)'],
         serif: ['var(--font-heading)'],
       },
+      borderRadius: {
+        sm: 'var(--radius-xs)',
+        DEFAULT: 'var(--radius-sm)',
+        md: 'var(--radius-control)',
+        lg: 'var(--radius-control)',
+        xl: 'var(--radius-panel)',
+        '2xl': 'var(--radius-dialog)',
+        '3xl': 'var(--radius-dialog)',
+      },
       colors: {
         primary: {
           50: 'var(--color-primary-light)',
