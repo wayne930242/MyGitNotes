@@ -201,3 +201,18 @@ connector warning behavior remain unverified until that client is connected.
 | Publication and deployed full-path note read | Pending the GitHub publication and production checkpoint below | unknown |
 
 Earlier production smoke covered note listing but omitted actual note reads. The release checkpoint now includes the full configured note path through the deployed rewrite and editor route.
+
+### Public repository checkpoint
+
+- Published clean Core snapshot `03e61b21e80f34edd44b48c1d137c2b56a3bcde9` (143 product files). Root notes/config and credentials are absent. Pattern scanning and comparison against actual local credential values found no matches in product files.
+- Merged Core into remote `main` as `513f35e43425e59bc05434b31696ae5adab196e8`. Compared Git tree entries for every existing `notes/**` file and root manifest against `59a6fbede9fb1980b7b7f23eddd250b0680ad9e3`: identical. The old remote main is an ancestor; push was non-force.
+- GitHub default branch is `core`. Vercel Git integration links `wayne930242/github-notes` and tracks `core` for production. The initial push created a GitHub-triggered preview successfully.
+- Production deployment `dpl_7ZAvcsZTzc13TVuATANRuHKxrXTY` was built directly from GitHub Core SHA `03e61b2`, reached READY, and owns `my-gh-core.vercel.app`. Actual `GET /api/notes/read?path=notes%2Fexample%2Fwelcome.md` returned 200 with the full path and remote main revision.
+- Local development Core tracks `origin/core`. The old history remains on local-only `local-history/core-before-publication-20260912`; seven existing root note files were byte-hash compared and remain untouched (now untracked on Core). The separate local data worktree still has its original `main` history. Default origin push publishes Core only.
+- Full suite: 94 tests / 17 files passed. Full build passed. General browser, notebook statuses, working-note flows, and mobile QA passed. Working-note QA also verified storage quota failure retains the editor and retry saves the content, and conflict refresh keeps a downloadable backup.
+- `scripts/qa-release.mjs` now checks every configured note's read API and an actual dynamic editor route plus reload before the existing production UI/auth smoke checks.
+- Configure `git.deploymentEnabled.main = false` so note commits on the workspace branch do not create preview builds. Production remains linked to Core pushes.
+
+Authenticated production Commit and actual ChatGPT connector UAT remain a user acceptance checkpoint; local browser fixtures and stateful GitHub tests provide separate evidence, not a claim of live account UAT.
+
+Reflexive: Deployment-source evidence and a real configured note read were missing from the earlier release checkpoint. The release script now exercises those paths; credential-helper and branch-creation ordering were transient setup issues, so the skill review made no agent-instruction changes.
