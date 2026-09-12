@@ -2,6 +2,8 @@
 
 A Git-native, local-first notes application and agent-operable workspace frontend. Notes are stored as pure Markdown files with optional YAML frontmatter, organized into notebooks, and tracked via Git commits.
 
+[English](README.md) · [繁體中文](README.zh-TW.md)
+
 [Live Demo](https://my-gh-core.vercel.app) · [Example Repository](https://github.com/wayne930242/github-notes/tree/main)
 
 ## Branch Architecture
