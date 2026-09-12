@@ -7,6 +7,10 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-body)'],
+        serif: ['var(--font-heading)'],
+      },
       colors: {
         primary: {
           50: 'var(--color-primary-light)',

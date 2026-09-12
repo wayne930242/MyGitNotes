@@ -3,6 +3,8 @@
 @tailwind utilities;
 
 :root {
+  --font-body: 'Noto Sans TC', 'Source Han Sans TW', sans-serif;
+  --font-heading: 'Noto Serif TC', 'Source Han Serif TW', serif;
   --color-primary: #4f46e5;
   --color-primary-hover: #4338ca;
   --color-link: var(--color-primary);
@@ -26,13 +28,17 @@
 
 @layer base {
   body {
-    font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-body);
     background-color: var(--color-bg);
     color: var(--color-text);
     margin: 0;
     padding: 0;
     height: 100%;
     overflow: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6, .live-md-heading {
+    font-family: var(--font-heading);
   }
 
   code, pre {

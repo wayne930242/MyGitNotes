@@ -433,7 +433,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
               <FileText className="w-4 h-4" />
             </div>
             <div className="truncate">
-              <div className="font-semibold text-slate-900 dark:text-slate-100 text-sm truncate">
+              <div className="font-serif font-semibold text-slate-900 dark:text-slate-100 text-sm truncate">
                 {String(metadata.title || note.title || t('editor.untitled'))}
               </div>
               <div className="text-xs text-slate-400 dark:text-slate-500 font-mono truncate">
