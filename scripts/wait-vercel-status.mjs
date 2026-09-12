@@ -8,7 +8,7 @@ for (let attempt = 0; attempt < 90; attempt++) {
   });
   if (!response.ok) throw Error(`GitHub status request failed: ${response.status}`);
   const { statuses } = await response.json();
-  const status = statuses.find(status => status.context === 'Vercel');
+  const status = statuses.find(status => status.context === 'Vercel' || status.context.startsWith('Vercel'));
   if (status?.state === 'success') { console.log(`Vercel deployed main ${sha}: ${status.target_url}`); process.exit(0); }
   if (status && ['failure', 'error'].includes(status.state)) throw Error(`Vercel deployment failed: ${status.target_url}`);
   await new Promise(resolve => setTimeout(resolve, 10000));
