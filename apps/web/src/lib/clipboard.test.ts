@@ -74,6 +74,69 @@ describe('copyToClipboard', () => {
     expect(execCommand).toHaveBeenCalledWith('copy');
   });
 
+  it('temporarily unsets readOnly on targetElement and restores it when copying', async () => {
+    vi.stubGlobal('navigator', {});
+    vi.stubGlobal('window', {});
+
+    const execCommand = vi.fn().mockReturnValue(true);
+    vi.stubGlobal('document', {
+      execCommand,
+    });
+
+    const targetInput = {
+      value: 'token-url-to-copy',
+      readOnly: true,
+      focus: vi.fn(),
+      select: vi.fn(),
+      setSelectionRange: vi.fn(),
+    } as unknown as HTMLInputElement;
+
+    const result = await copyToClipboard('token-url-to-copy', targetInput);
+    expect(result).toBe(true);
+    expect(targetInput.readOnly).toBe(true);
+    expect(targetInput.select).toHaveBeenCalled();
+    expect(execCommand).toHaveBeenCalledWith('copy');
+  });
+
+  it('configures fallback textarea correctly without readonly and inside viewport', async () => {
+    vi.stubGlobal('navigator', {});
+    vi.stubGlobal('window', {});
+
+    const execCommand = vi.fn().mockReturnValue(true);
+    let createdEl: any = null;
+    vi.stubGlobal('document', {
+      createElement: () => {
+        createdEl = {
+          value: '',
+          style: {},
+          setAttribute: vi.fn(),
+          focus: vi.fn(),
+          select: vi.fn(),
+          setSelectionRange: vi.fn(),
+        };
+        return createdEl;
+      },
+      body: {
+        appendChild: vi.fn(),
+        removeChild: vi.fn(),
+      },
+      execCommand,
+    });
+
+    const result = await copyToClipboard('https://example.com/mcp/123');
+    expect(result).toBe(true);
+    expect(createdEl).not.toBeNull();
+    expect(createdEl.style.position).toBe('fixed');
+    expect(createdEl.style.top).toBe('0');
+    expect(createdEl.style.left).toBe('0');
+    expect(createdEl.style.opacity).toBe('0.01');
+    expect(createdEl.style.fontSize).toBe('16px');
+    // Ensure 'readonly' was NOT set
+    expect(createdEl.setAttribute).not.toHaveBeenCalledWith('readonly', expect.anything());
+    expect(createdEl.setAttribute).toHaveBeenCalledWith('aria-hidden', 'true');
+    expect(createdEl.setAttribute).toHaveBeenCalledWith('tabindex', '-1');
+  });
+
   it('selects targetElement when all copy methods fail', async () => {
     vi.stubGlobal('navigator', {});
     vi.stubGlobal('window', {});

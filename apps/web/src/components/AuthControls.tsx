@@ -105,10 +105,43 @@ export function AgentAccessSettings({ local = false }: { local?: boolean }) {
       {canManage && token && <div className="p-3 rounded-lg bg-black/5 dark:bg-white/5 flex flex-col gap-2">
         <label className="text-xs font-semibold" htmlFor="agent-token">{t('auth.copyUrlPrompt')}</label>
         <div className="flex gap-2 items-center flex-wrap sm:flex-nowrap">
-          <input id="agent-token" aria-label="MCP connection URL" readOnly value={token} onFocus={e => e.target.select()} className="flex-1 min-w-0 p-2 rounded border border-slate-300 dark:border-slate-700 bg-transparent font-mono text-xs" />
-          <button type="button" className={`text-xs flex items-center gap-1 transition ${copied ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'hover:text-slate-900 dark:hover:text-slate-100'}`} onClick={handleCopyToken}>{copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}{copied ? t('common.copied') : t('common.copy')}</button>
-          <button type="button" className="text-xs flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:underline transition" onClick={() => setIsTutorialOpen(true)}><HelpCircle className="w-3.5 h-3.5" />{t('auth.connectorGuide')}</button>
-          <button type="button" className="text-xs underline hover:opacity-80 transition" onClick={() => { setToken(''); setCopyError(null); setCopied(false); }}>{t('auth.dismiss')}</button>
+          <input
+            id="agent-token"
+            aria-label="MCP connection URL"
+            readOnly
+            value={token}
+            onClick={e => (e.target as HTMLInputElement).select()}
+            onFocus={e => e.target.select()}
+            className="flex-1 min-w-0 p-2 rounded border border-slate-300 dark:border-slate-700 bg-transparent font-mono text-xs cursor-pointer select-all focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+          <button
+            type="button"
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition active:scale-95 shadow-xs shrink-0 cursor-pointer ${
+              copied
+                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                : 'bg-indigo-600 dark:bg-indigo-500 text-white hover:bg-indigo-700 dark:hover:bg-indigo-600'
+            }`}
+            onClick={handleCopyToken}
+            title={copied ? t('common.copied') : t('common.copy')}
+          >
+            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            <span>{copied ? t('common.copied') : t('common.copy')}</span>
+          </button>
+          <button
+            type="button"
+            className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition active:scale-95 shadow-xs shrink-0 cursor-pointer"
+            onClick={() => setIsTutorialOpen(true)}
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>{t('auth.connectorGuide')}</span>
+          </button>
+          <button
+            type="button"
+            className="px-2.5 py-1.5 text-xs rounded-lg border border-transparent hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition shrink-0 cursor-pointer"
+            onClick={() => { setToken(''); setCopyError(null); setCopied(false); }}
+          >
+            {t('auth.dismiss')}
+          </button>
         </div>
         {copyError && <p role="alert" className="text-xs text-amber-600 dark:text-amber-400">{copyError}</p>}
       </div>}
