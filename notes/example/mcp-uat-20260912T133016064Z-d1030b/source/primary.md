@@ -1,7 +1,7 @@
 ---
 title: MCP UAT 20260912T133016064Z-d1030b
 status: archived
-hiden: true
+hiden: false
 custom: preserved
 ---
 # MCP acceptance
