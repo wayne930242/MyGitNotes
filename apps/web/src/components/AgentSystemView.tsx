@@ -17,8 +17,10 @@ import {
   saveAgentResource,
   restoreAgentResource,
 } from '../lib/api.js';
+import { useTranslation } from '../lib/i18n/index.js';
 
 export const AgentSystemView: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) => {
+  const { t } = useTranslation();
   const [instructions, setInstructions] = useState<AgentResource[]>([]);
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [content, setContent] = useState<string>('');
@@ -141,20 +143,20 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean }> = ({ readOnly = f
           style={{ borderColor: 'var(--color-border)' }}
         >
           <Bot className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
-          <span className="text-slate-900 dark:text-slate-100">Notes Agent System</span>
+          <span className="text-slate-900 dark:text-slate-100">{t('agent.title')}</span>
         </div>
 
         {/* Notes Agent Instructions List */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-[11px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
-              Workspace Guidelines
+              {t('agent.guidelines')}
             </h4>
             <span
               className="text-[10px] px-1.5 py-0.5 rounded font-semibold text-white uppercase tracking-wider"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >
-              {readOnly ? 'Read-only' : 'Editable'}
+              {readOnly ? t('agent.readOnly') : t('agent.editable')}
             </span>
           </div>
           <div className="space-y-1">
@@ -197,16 +199,16 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean }> = ({ readOnly = f
           }}
         >
           <strong className="block mb-1 font-semibold" style={{ color: 'var(--color-primary)' }}>
-            Notes Agent Guidelines:
+            {t('agent.guidelinesTitle')}
           </strong>
-          These instructions govern how AI agents understand your note taxonomy, frontmatter schema, and workflow rules. Edits auto-save to disk and are tracked in Git.
+          {t('agent.guidelinesDescription')}
         </div>
       </div>
 
       {/* Right Content Viewer / Editor */}
       <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-        <label className="agent-document-picker mobile-only flex-col gap-1 p-3 border-b text-xs" style={{ borderColor: 'var(--color-border)' }}>Agent document
-          <Select aria-label="Agent document" value={selectedPath} disabled={switching || restoring || !instructions.length} onValueChange={value => void selectDocument(value)} options={instructions.map(resource => ({value:resource.path,label:resource.name}))} className="w-full min-w-0 rounded-lg border bg-transparent px-2" />
+        <label className="agent-document-picker mobile-only flex-col gap-1 p-3 border-b text-xs" style={{ borderColor: 'var(--color-border)' }}>{t('agent.document')}
+          <Select aria-label={t('agent.document')} value={selectedPath} disabled={switching || restoring || !instructions.length} onValueChange={value => void selectDocument(value)} options={instructions.map(resource => ({value:resource.path,label:resource.name}))} className="w-full min-w-0 rounded-lg border bg-transparent px-2" />
         </label>
         {/* Top Bar */}
         <div
@@ -224,27 +226,27 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean }> = ({ readOnly = f
               className="text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider text-white"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >
-              {editable ? 'Editable System' : 'Read-only System'}
+              {editable ? t('agent.editableSystem') : t('agent.readOnlySystem')}
             </span>
           </div>
 
           <div className="agent-controls flex items-center gap-3">
             {/* Auto-save & Status indicator */}
             <div className="agent-save-status flex items-center gap-2 text-xs">
-              {loading ? <span className="text-slate-400">Loading…</span> : isSaving ? (
+              {loading ? <span className="text-slate-400">{t('agent.loading')}</span> : isSaving ? (
                 <span className="text-amber-500 flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                  Saving...
+                  {t('agent.saving')}
                 </span>
               ) : hasUnsavedChanges ? (
                 <span className="text-amber-500 flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  Editing
+                  {t('agent.editing')}
                 </span>
               ) : (
                 <span className="text-emerald-500 dark:text-emerald-400 flex items-center gap-1">
                   <Check className="w-3.5 h-3.5" />
-                  <span className="agent-status-detail">Saved to disk</span><span className="agent-status-compact">Saved</span>
+                  <span className="agent-status-detail">{t('agent.savedToDisk')}</span><span className="agent-status-compact">{t('agent.saved')}</span>
                 </span>
               )}
             </div>
@@ -252,24 +254,24 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean }> = ({ readOnly = f
             {/* Single-file restore button with two-click confirmation */}
             <button
               disabled={locked}
-              aria-label={confirmRestore ? 'Confirm restore agent document' : 'Restore agent document'}
+              aria-label={confirmRestore ? t('agent.confirmRestore') : t('agent.restore')}
               onClick={handleRestoreClick}
               className={`editor-action ${confirmRestore ? 'editor-confirming' : ''} flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed ${
                 confirmRestore
                   ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-md animate-pulse'
                   : 'bg-black/5 dark:bg-white/5 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-black/10 dark:hover:bg-white/10'
               }`}
-              title={confirmRestore ? 'Click again to confirm revert from Git HEAD' : 'Revert edits to Git HEAD'}
+              title={confirmRestore ? t('editor.confirmRestoreTooltip') : t('editor.restoreTooltip')}
             >
               {confirmRestore ? (
                 <>
                   <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>Confirm Restore?</span>
+                  <span>{t('agent.confirmRestore')}</span>
                 </>
               ) : (
                 <>
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Restore</span>
+                  <span>{t('agent.restore')}</span>
                 </>
               )}
             </button>
@@ -279,7 +281,7 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean }> = ({ readOnly = f
         </div>
 
         {error && <div className="editor-notices"><EditorNotice tone="error">{error}</EditorNotice></div>}
-        {loading ? <p className="p-6 text-sm text-slate-400">{selectedPath ? 'Loading document…' : 'No agent documents in this workspace.'}</p> : <MarkdownEditor content={content} path={selectedPath} mode={viewMode} readOnly={locked} onChange={setContent} ariaLabel="Agent document content" />}
+        {loading ? <p className="p-6 text-sm text-slate-400">{selectedPath ? t('agent.loadingDocument') : t('agent.noDocuments')}</p> : <MarkdownEditor content={content} path={selectedPath} mode={viewMode} readOnly={locked} onChange={setContent} ariaLabel="Agent document content" />}
       </div>
     </div>
   );
