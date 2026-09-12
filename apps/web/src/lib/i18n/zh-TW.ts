@@ -175,6 +175,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'editor.rawSource': 'Markdown 原始文字',
   'editor.plainTextSource': '純文字 / 原始碼編輯器',
   'editor.loadingEditor': '編輯器載入中…',
+  'editor.openLinkInNewTab': '在新分頁開啟連結',
 
   // Commit Modal
   'commit.title': '提交變更',

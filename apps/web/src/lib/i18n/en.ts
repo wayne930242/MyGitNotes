@@ -173,6 +173,7 @@ export const en = {
   'editor.rawSource': 'Markdown Raw Source',
   'editor.plainTextSource': 'Plain-Text / Source Editor',
   'editor.loadingEditor': 'Loading editor…',
+  'editor.openLinkInNewTab': 'Open link in new tab',
 
   // Commit Modal
   'commit.title': 'Commit Changes',

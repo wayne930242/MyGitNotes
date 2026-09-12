@@ -5,6 +5,7 @@
 :root {
   --color-primary: #4f46e5;
   --color-primary-hover: #4338ca;
+  --color-link: var(--color-primary);
   --color-primary-light: rgba(79, 70, 229, 0.1);
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
@@ -97,6 +98,7 @@
 
 .dark {
   color-scheme: dark;
+  --color-link: var(--color-primary-hover);
 }
 
 input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
@@ -235,10 +237,28 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 }
 
 .prose-custom a {
-  color: var(--color-primary);
+  color: var(--color-link);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+.cm-content a.live-md-external-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 4px;
+  vertical-align: middle;
+  border-radius: 4px;
+  color: var(--color-link);
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.cm-content a.live-md-external-link:hover { background: var(--color-primary-light); }
+.cm-content a.live-md-external-link:focus-visible { outline: 2px solid var(--color-link); outline-offset: 2px; }
 
 .prose-custom hr {
   border: 0;
