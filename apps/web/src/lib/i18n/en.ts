@@ -199,6 +199,9 @@ export const en = {
   'footer.uncommittedTrash': 'Uncommitted Trash ({count})',
   'footer.restore': 'Restore',
   'footer.commit': 'Commit',
+  'footer.viewTrashTooltip': 'View deleted notes in trash and restore before commit',
+  'footer.restoreNoteTooltip': 'Restore "{title}"',
+  'footer.reviewDiffTooltip': 'Review diff and commit working tree changes',
 
   // Crash Recovery Banner
   'recovery.unsavedDraftAvailable': 'Unsaved draft available',

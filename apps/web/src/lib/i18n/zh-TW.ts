@@ -201,6 +201,9 @@ export const zhTW: Record<TranslationKey, string> = {
   'footer.uncommittedTrash': '未提交垃圾桶 ({count})',
   'footer.restore': '還原',
   'footer.commit': '提交',
+  'footer.viewTrashTooltip': '在垃圾桶中檢視已刪除的筆記，並在提交前還原',
+  'footer.restoreNoteTooltip': '還原「{title}」',
+  'footer.reviewDiffTooltip': '檢視差異並提交工作目錄的變更',
 
   // Crash Recovery Banner
   'recovery.unsavedDraftAvailable': '發現未儲存的本機草稿',
