@@ -16,7 +16,8 @@ const resources: AgentResource[] = paths.map(path => ({ path, name: path,
 describe('Agent document navigation', () => {
   it('keeps shared and product documents while filtering exact notebook boundaries', () => {
     const groups = groupAgentResources(resources, notebooks, 'a');
-    expect(groups.shared.map(r => r.path)).toEqual(paths.slice(0, 4));
+    expect(groups.shared.map(r => r.path)).toEqual(paths.slice(0, 2));
+    expect(groups.skills.map(r => r.path)).toEqual(paths.slice(2, 4));
     expect(groups.notebook.map(r => r.path)).toEqual(['notes/a/AGENTS.md']);
     expect(groups.product.map(r => r.path)).toEqual(['docs/agent/product/index.md']);
     expect(groupAgentResources(resources, notebooks, 'ab').notebook.map(r => r.path))
@@ -26,7 +27,8 @@ describe('Agent document navigation', () => {
   });
 
   it('keeps unassigned documents discoverable and does not mutate API resources', () => {
-    expect(groupAgentResources(resources, [], '').shared).toHaveLength(7);
+    expect(groupAgentResources(resources, [], '').shared).toHaveLength(5);
+    expect(groupAgentResources(resources, [], '').skills).toHaveLength(2);
     expect(groupAgentResources(resources, notebooks, 'missing').notebook).toEqual([]);
     expect(resources.map(r => r.path)).toEqual(paths);
   });
@@ -40,5 +42,20 @@ describe('Agent document navigation', () => {
     expect(skill.children?.[1].resource).toBe(resources[2]);
     expect(skill.children?.[0].children?.[0].resource).toBe(resources[3]);
     expect(buildAgentTree([])).toEqual([]);
+  });
+
+  it('keeps root skills available across notebooks with native settings before docs', () => {
+    const files: AgentResource[] = [
+      { path: '.codex/skills/legacy/SKILL.md', name: 'Legacy', scope: 'workspace' },
+      { path: '.agents/skills/review/agents/openai.yaml', name: 'Interface', scope: 'workspace' },
+      { path: '.agents/docs/setup.md', name: 'Setup', scope: 'workspace' },
+      { path: 'docs/agent/product/skills/dev/SKILL.md', name: 'Product', scope: 'product' },
+    ];
+    for (const notebook of ['a', 'ab', 'missing']) {
+      const groups = groupAgentResources(files, notebooks, notebook);
+      expect(groups.skills.map(r => r.path)).toEqual(files.slice(0, 2).map(r => r.path));
+      expect(groups.shared).toEqual([files[2]]);
+      expect(groups.product).toEqual([files[3]]);
+    }
   });
 });

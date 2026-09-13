@@ -26,8 +26,10 @@ pnpm update-core --workspace /absolute/path/to/workspace
 
 ## 介面支援
 
+Agents 頁面優先顯示「工作區技能」，再呈現共用規則、筆記本文件與產品參考。技能維持在 repository 根目錄的原生路徑，切換筆記本仍可存取。
+
 - 根目錄及 notes 內的 `AGENTS.md`。
-- `.agents/skills/`、`.codex/skills/` 內的 Markdown／文字文件。
+- `.agents/skills/`、`.codex/skills/` 內的 Markdown／文字文件，以及各技能的 `agents/openai.yaml` 原生介面設定。
 - `.agents/agents/`、`.codex/agents/` 內的 Markdown、文字、TOML 或 YAML 角色設定。
 - 上述設定根目錄的 `rules/` 內 Markdown／`.rules`，以及 `docs/` 內 Markdown／文字文件。
 - notes 內既有 `docs/agent/` 文件。
