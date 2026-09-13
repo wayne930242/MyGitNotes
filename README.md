@@ -42,6 +42,17 @@ The boundaries are intentional:
 - **You own the system boundary.** You choose the repository, branch, deployment, credentials, Core updates, and every agent grant.
 - **The UI and agents share the same rules.** Path guards, branch guards, revision checks, and repository permissions apply to both.
 
+## Why combine both sides
+
+The market usually treats these as separate product models:
+
+- **Local-first, like [Obsidian](https://obsidian.md/blog/free-your-notes/):** ordinary files on your device, offline access, and direct editing from an IDE, CLI, or local agent.
+- **Cloud-document, like [Craft](https://support.craft.do/en/account-and-subscription/data-and-security/data-storage) or [Notion](https://www.notion.com/help/notion-for-web):** a polished browser and multi-device experience with automatic sync, sharing, and remote collaboration.
+
+Even products that support both models often present them as alternatives. Craft, for example, supports local [External Locations](https://support.craft.do/en/account-and-subscription/storage-and-recovery/external-locations), but sharing and collaboration are unavailable there.
+
+GitHub Notes connects both interfaces to the same Markdown and Git workspace. The local UI and local agents edit the files directly; Git syncs them to GitHub; Vercel exposes the same repository through a high-density remote note UI and serverless MCP. There is no second cloud copy to export, import, or reconcile.
+
 ## Repository model
 
 - **`core`** — product source, packages, tests, scripts, and documentation. It contains no personal notes.
