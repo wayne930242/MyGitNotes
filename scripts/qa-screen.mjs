@@ -1,0 +1,95 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { createServer } from 'node:http';
+
+const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(`${product}/apps/web/package.json`);
+const puppeteer = require('puppeteer-core');
+const root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-screen-qa-'));
+const write = (file, content) => { fs.mkdirSync(path.dirname(path.join(root, file)), {recursive:true}); fs.writeFileSync(path.join(root, file), content); };
+const git = (...args) => execFileSync('git', args, {cwd:root,stdio:'pipe'});
+write('.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Screen QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
+for (let i=0; i<6; i++) write(`notes/example/note-${i}.md`, `# Note ${i}\n\n${'A long paragraph for native vertical scrolling.\n\n'.repeat(40)}`);
+write('.github-notes-screen.yaml', JSON.stringify({version:1,rows:[
+  {id:'reading',name:'Reading',kind:'dynamic',view:'medium',source:{kind:'folder',notebookId:'example',path:'notes/example',recursive:true}},
+  {id:'pins',name:'Pins',kind:'custom',view:'small',items:[]},
+]}));
+git('init','-b','main'); git('config','user.name','QA'); git('config','user.email','qa@example.com'); git('add','.'); git('commit','-m','fixture');
+process.env.GITHUB_NOTES_SOURCE='local'; process.env.GITHUB_NOTES_LOCAL_PATH=root; delete process.env.VERCEL; delete process.env.APP_URL;
+const {createApp} = await import(`${product}/apps/local-server/dist/app.js`);
+const server = createServer(createApp(product)); await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+const browser = await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH || path.join(os.homedir(),'.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+const assert = (value,message) => { if(!value) throw Error(message); };
+let page;
+try {
+  page = await browser.newPage(); await page.setViewport({width:1440,height:1000});
+  const errors=[]; page.on('pageerror',error=>errors.push(error.message));
+  let failAssets=true;
+  await page.setRequestInterception(true);
+  page.on('request',request=>{
+    if(new URL(request.url()).pathname==='/api/assets' && failAssets) void request.respond({status:503,contentType:'application/json',body:JSON.stringify({error:'Temporary asset outage'})});
+    else void request.continue();
+  });
+  await page.goto(`http://127.0.0.1:${server.address().port}/screen`,{waitUntil:'networkidle0'});
+  await page.waitForSelector('.screen-error');
+  const lane='#screen-lane-reading', body=`${lane} .screen-card-content`, strip=`${lane} .screen-lane-strip`;
+  const first=await page.$(body); const rect=await first.boundingBox();
+  await page.mouse.move(rect.x+100,rect.y+100); await page.mouse.wheel({deltaY:180});
+  await page.waitForFunction(selector=>document.querySelector(selector).scrollTop>0,{},body);
+  assert(await page.$eval(strip,e=>e.scrollLeft===0),'Native wheel unexpectedly moved lane');
+  const vertical=await page.$eval(body,e=>e.scrollTop);
+  await page.keyboard.down('Alt'); await page.mouse.wheel({deltaY:180}); await page.keyboard.up('Alt');
+  await page.waitForFunction(selector=>document.querySelector(selector).scrollLeft>0,{},strip);
+  assert(await page.$eval(body,(e,before)=>e.scrollTop===before,vertical),'Alt wheel was intercepted by note scrolling');
+  await page.$eval(strip,e=>{e.scrollLeft=e.scrollWidth;});
+  const edge=await page.$eval(strip,e=>e.scrollLeft);
+  const edgeResult=await page.$eval(body,e=>{const event=new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaY:120,altKey:true});e.dispatchEvent(event);return event.defaultPrevented;});
+  assert(edgeResult && await page.$eval(strip,(e,x)=>e.scrollLeft===x,edge),'Alt wheel escaped at lane boundary');
+  console.log('PASS native note scrolling, Alt horizontal scrolling and boundary containment');
+
+  for(const [label,value] of [['Thumbnail','thumbnail'],['Small','small'],['Medium','medium']]) {
+    await page.click(`${lane} button[aria-label="${label}"]`);
+    await page.waitForSelector(`${lane}.screen-view-${value} button[aria-label="${label}"][aria-pressed="true"]`);
+  }
+  const inset=await page.$eval(lane,e=>{const a=e.getBoundingClientRect(),b=e.querySelector('h3').getBoundingClientRect();return {x:b.x-a.x,y:b.y-a.y};});
+  assert(inset.x>=12 && inset.y>=12,'Lane heading lacks top/left padding');
+  assert(!await page.$('.screen-sidebar button[aria-label="Edit swimlanes"]'),'Old lane editor remains');
+  await page.click('[aria-label="Rename swimlane: Reading"]');
+  await page.waitForSelector('input[aria-label="Swimlane name"]');
+  await page.focus('input[aria-label="Swimlane name"]'); await page.keyboard.down('Control'); await page.keyboard.press('KeyA'); await page.keyboard.up('Control'); await page.keyboard.type('Renamed'); await page.keyboard.press('Enter');
+  await page.waitForFunction(()=>document.querySelector('#screen-lane-reading h3')?.textContent==='Renamed');
+  await page.focus('[aria-label="Move swimlane: Renamed"]'); await page.keyboard.press('Space');
+  await page.waitForFunction(()=>document.querySelector('[aria-label="Move swimlane: Renamed"]')?.getAttribute('aria-pressed')==='true');
+  await page.waitForFunction(()=>[...document.querySelectorAll('[role="status"]')].some(e=>e.textContent.includes('over droppable area reading')));
+  await page.keyboard.press('ArrowDown');
+  await page.waitForFunction(()=>[...document.querySelectorAll('[role="status"]')].some(e=>e.textContent.includes('over droppable area pins')));
+  await page.keyboard.press('Space');
+  await page.waitForFunction(()=>document.querySelector('.screen-lane')?.id==='screen-lane-pins');
+  const handle=await page.$('[aria-label="Move swimlane: Renamed"]'), target=await page.$('[aria-label="Move swimlane: Pins"]');
+  const a=await handle.boundingBox(),b=await target.boundingBox();
+  await page.mouse.move(a.x+a.width/2,a.y+a.height/2); await page.mouse.down(); await page.mouse.move(b.x+b.width/2,b.y+b.height/2,{steps:12}); await page.mouse.up();
+  await page.waitForFunction(()=>document.querySelector('.screen-lane')?.id==='screen-lane-reading');
+  await page.waitForNetworkIdle({idleTime:200,timeout:10000});
+  failAssets=false;
+  await page.click('button[aria-label="Retry assets"]');
+  await page.waitForFunction(()=>!document.querySelector('.screen-error'));
+  assert(await page.$eval('#screen-lane-reading h3',e=>e.textContent==='Renamed'),'Resource retry discarded lane edits');
+  await page.waitForFunction(()=>!Object.keys(localStorage).some(key=>key.startsWith('github-notes:screen-draft:')));
+  await page.reload({waitUntil:'networkidle0'});
+  assert(await page.$eval('.screen-lane',e=>e.id==='screen-lane-reading' && e.querySelector('h3').textContent==='Renamed'),'Lane changes did not persist');
+  for(const width of [320,390,1440]) {
+    await page.setViewport({width,height:1000});
+    const fit=await page.$eval('.screen-lane-actions',e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;});
+    assert(fit,`Lane controls overflow at ${width}`);
+  }
+  fs.mkdirSync(path.join(product,'artifacts/qa'),{recursive:true}); await page.screenshot({path:path.join(product,'artifacts/qa/screen-lanes.png')});
+  assert(!errors.length,errors.join('; '));
+  console.log('PASS size tabs, heading inset, sidebar pointer/keyboard reorder, rename persistence and non-destructive asset retry');
+} catch(error) {
+  console.log(await page.evaluate(()=>({focus:document.activeElement?.outerHTML,nav:document.querySelector('.screen-sidebar-lanes')?.innerText,status:[...document.querySelectorAll('[role="status"]')].map(e=>e.textContent),alerts:[...document.querySelectorAll('[role="alert"]')].map(e=>e.textContent)})));
+  throw error;
+} finally {await browser.close();await new Promise(resolve=>server.close(resolve));fs.rmSync(root,{recursive:true,force:true});}
