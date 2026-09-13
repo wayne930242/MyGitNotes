@@ -23,6 +23,7 @@ export function workspaceAgentKind(file: string): WorkspaceAgentKind | undefined
   }
   if (!['.agents', '.codex'].includes(parts[0]) || parts.slice(1).some(p => p.startsWith('.'))) return;
   if (parts.length === 2 && parts[1] === 'AGENTS.md') return 'instructions';
+  if (parts[1] === 'skills' && parts.length === 5 && parts[3] === 'agents' && parts[4] === 'openai.yaml') return 'skills';
   if (parts[1] === 'skills' && parts.length >= 4 && /\.(md|markdown|txt)$/i.test(file)) return 'skills';
   if (parts[1] === 'agents' && parts.length >= 3 && /\.(md|markdown|txt|toml|ya?ml)$/i.test(file)) return 'docs';
   if (parts[1] === 'rules' && parts.length >= 3 && /\.(md|rules)$/i.test(file)) return 'docs';

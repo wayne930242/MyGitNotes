@@ -16,6 +16,9 @@ write('.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Agent works
 write('notes/example/intro.md', '# Example\n');
 write('AGENTS.md', '# Workspace Rules\n\nKeep our custom instructions.\n');
 write('.agents/skills/custom/SKILL.md', '---\nname: Custom skill\n---\n# Custom skill\n');
+write('.agents/skills/custom/agents/openai.yaml', 'interface:\n  display_name: Custom\ncustom_field: keep\n');
+write('.agents/skills/custom/references/check.md', '# Reference\n');
+write('.agents/docs/setup.md', '# Setup\n');
 write('.codex/agents/reviewer.toml', 'description = "Reviewer"\n');
 write('.codex/auth.json', '{"token":"fixture-only"}');
 git('init','-b','main'); git('config','user.name','QA'); git('config','user.email','qa@example.com'); git('add','.'); git('commit','-m','fixture');
@@ -32,19 +35,38 @@ try {
     await page.evaluate(label=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===label&&!button.disabled).click(),label);
   };
   const editor = 'textarea[aria-label="Agent document content"]';
+  const selectFile = async file => {
+    // Expand only the ancestors needed to reach the actual file button.
+    for (const ancestor of file.split('/').slice(0, -1).map((_, i, parts) => parts.slice(0, i + 1).join('/'))) {
+      await page.evaluate(ancestor => {
+        const folder = [...document.querySelectorAll('button.agent-folder')].find(button => button.title === ancestor);
+        if (folder?.getAttribute('aria-expanded') === 'false') folder.click();
+      }, ancestor);
+    }
+    await page.waitForFunction(file => [...document.querySelectorAll('button.agent-file')].some(button => button.title.split('\n')[0] === file && !button.disabled), {}, file);
+    await page.evaluate(file => [...document.querySelectorAll('button.agent-file')].find(button => button.title.split('\n')[0] === file).click(), file);
+  };
   const append = async text => { await page.focus(editor); await page.keyboard.down('Control'); await page.keyboard.press('End'); await page.keyboard.up('Control'); await page.keyboard.type(text); };
   await page.goto(base+'/agent',{waitUntil:'networkidle0'});
   await click('Source'); await page.waitForSelector(editor);
+  const sections = await page.$$eval('.agent-sidebar section', nodes => nodes.map(node => node.getAttribute('aria-label')));
+  if (sections[0] !== 'Workspace skills' || sections.indexOf('Shared workspace') < 1) throw Error('Skills were not presented before shared documents');
   if (await page.$eval(editor,e=>e.readOnly)) throw Error('Root Agent instructions remained read-only');
   if (await page.evaluate(()=>document.body.innerText.includes('auth.json'))) throw Error('Secret appeared in resource list');
   await append('\nRoot edited in browser');
-  await click('Custom skill');
+  await selectFile('.agents/skills/custom/SKILL.md');
   await page.waitForFunction(()=>document.querySelector('textarea[aria-label="Agent document content"]')?.value.includes('# Custom skill'));
   if (!fs.readFileSync(path.join(root,'AGENTS.md'),'utf8').includes('Root edited in browser')) throw Error('Root edit was lost on switch');
   await append('\nSkill edited in browser');
-  await click('Workspace Rules');
+  await selectFile('.agents/skills/custom/agents/openai.yaml');
+  await page.waitForFunction(() => document.querySelector('textarea[aria-label="Agent document content"]')?.value.includes('custom_field: keep'));
+  if (await page.$eval(editor, e => e.readOnly)) throw Error('Skill interface settings remained read-only');
+  await append('\n# Interface edited in browser');
+  await selectFile('AGENTS.md');
   await page.waitForFunction(()=>document.querySelector('textarea[aria-label="Agent document content"]')?.value.includes('Root edited in browser'));
   if (!fs.readFileSync(path.join(root,'.agents/skills/custom/SKILL.md'),'utf8').includes('Skill edited in browser')) throw Error('Skill edit was lost');
+  const interfaceContent = fs.readFileSync(path.join(root,'.agents/skills/custom/agents/openai.yaml'),'utf8');
+  if (!interfaceContent.includes('custom_field: keep') || !interfaceContent.includes('Interface edited in browser')) throw Error('Skill interface edit or custom field was lost');
   await click('Restore'); await click('Confirm Restore?');
   await page.waitForFunction(()=>!document.querySelector('textarea[aria-label="Agent document content"]')?.value.includes('Root edited in browser'));
   if (fs.readFileSync(path.join(root,'AGENTS.md'),'utf8')!=='# Workspace Rules\n\nKeep our custom instructions.\n') throw Error('Restore did not preserve original root rules');
@@ -52,9 +74,18 @@ try {
   if (!receipt.ok || !git('show','HEAD:.agents/skills/custom/SKILL.md').includes('Skill edited in browser')) throw Error('Agent settings could not be committed');
   fs.mkdirSync(path.join(product,'artifacts/qa'),{recursive:true});
   await page.screenshot({path:path.join(product,'artifacts/qa/workspace-agent-system.png'),fullPage:true});
+  await page.setViewport({width:390,height:844});
+  await page.click('.agent-document-picker [role="combobox"]');
+  await page.waitForSelector('[role="option"]');
+  const options = await page.$$eval('[role="option"]', nodes => nodes.map(node => node.textContent));
+  if (!options[0]?.includes('.agents/skills/') || !options.some(text => text.includes('agents/openai.yaml'))) throw Error('Mobile picker did not prioritize complete workspace skills');
+  await page.click('[data-option-value=".agents/skills/custom/agents/openai.yaml"]');
+  await page.waitForFunction(() => document.querySelector('textarea[aria-label="Agent document content"]')?.value.includes('Interface edited in browser'));
+  await page.screenshot({path:path.join(product,'artifacts/qa/workspace-agent-skills-mobile.png'),fullPage:true});
+  await page.setViewport({width:1440,height:1000});
   git('checkout','-b','core');
   await page.reload({waitUntil:'networkidle0'}); await click('Source'); await page.waitForSelector(editor);
   if (!await page.$eval(editor,e=>e.readOnly)) throw Error('Core branch offered Agent editing');
   if (errors.length) throw Error(errors.join('; '));
-  console.log('PASS root and skill edits, switch flushing, Git restore, tracked skill commit, secret exclusion and Core read-only UI');
+  console.log('PASS prioritized skills, desktop/mobile navigation, Markdown and interface YAML edits, switch flushing, Git restore, tracked skill commit, secret exclusion and Core read-only UI');
 } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); fs.rmSync(root,{recursive:true,force:true}); }

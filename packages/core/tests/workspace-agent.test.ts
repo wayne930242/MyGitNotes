@@ -28,6 +28,14 @@ function remote(token: string | undefined = 'fixture', push = true, branch = 'ma
 }
 
 describe('workspace Agent documents', () => {
+  it('includes native skill interface YAML without opening arbitrary skill files', () => {
+    for (const root of ['.agents', '.codex']) {
+      expect(workspaceAgentKind(`${root}/skills/review/agents/openai.yaml`)).toBe('skills');
+      for (const file of ['secrets.yaml', 'scripts/run.sh', 'agents/.secret.yaml', 'agents/../openai.yaml']) {
+        expect(workspaceAgentKind(`${root}/skills/review/${file}`)).toBeUndefined();
+      }
+    }
+  });
   it('allows document paths without exposing credentials, runtime files or scripts', () => {
     for (const file of ['AGENTS.md', '.agents/skills/custom/SKILL.md', '.codex/agents/reviewer.toml', '.codex/rules/local.rules', 'notes/ex/docs/agent/guide.md']) expect(workspaceAgentKind(file)).toBeTruthy();
     for (const file of ['.codex/auth.json', '.codex/config.toml', '.codex/sessions/log.md', '.agents/skills/custom/run.sh', '.agents/skills/custom/.env', 'apps/web/AGENTS.md', 'docs/agent/index.md', '../AGENTS.md', 'notes/../AGENTS.md', '.agents//skills/a.md']) expect(workspaceAgentKind(file)).toBeUndefined();

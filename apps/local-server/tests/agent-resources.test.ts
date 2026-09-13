@@ -11,6 +11,7 @@ let writes: {endpoint:string;body:any}[];
 const files: Record<string,string> = {
   '.github-notes.yaml': 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n',
   'AGENTS.md': '# Workspace\n', '.agents/skills/custom/SKILL.md': '# Skill\n',
+  '.agents/skills/custom/agents/openai.yaml': 'interface:\n  display_name: Custom\ncustom_field: keep\n',
   '.codex/agents/reviewer.toml': 'description = "Reviewer"\n', '.codex/auth.json': '{"token":"fixture"}',
 };
 const session = 'a'.repeat(43);
@@ -43,6 +44,7 @@ it('serves workspace Agent settings with revision and enforces login for remote 
   expect(listing.revision).toBe('before');
   expect(listing.instructions).toContainEqual(expect.objectContaining({path:'AGENTS.md',scope:'workspace',editable:true}));
   expect(listing.skills).toContainEqual(expect.objectContaining({path:'.agents/skills/custom/SKILL.md',editable:true}));
+  expect(listing.skills).toContainEqual(expect.objectContaining({path:'.agents/skills/custom/agents/openai.yaml',editable:true}));
   expect(listing.docs.map((r:any)=>r.path)).toEqual(['.codex/agents/reviewer.toml']);
   expect(await fetch(`${base}/api/agent-resources/read?path=AGENTS.md`,{headers}).then(r=>r.json())).toMatchObject({content:'# Workspace\n',revision:'before'});
   expect((await fetch(`${base}/api/agent-resources/read?path=.codex/auth.json`,{headers})).status).toBe(403);
@@ -53,6 +55,24 @@ it('serves workspace Agent settings with revision and enforces login for remote 
   const saved=await fetch(`${base}/api/agent-resources/save`,{method:'POST',headers,body}).then(r=>r.json());
   expect(saved).toMatchObject({success:true,path:'AGENTS.md',revision:'after',committed:true});
   expect(writes.find(w=>w.endpoint==='/git/trees')?.body.tree).toEqual([{path:'AGENTS.md',mode:'100644',type:'blob',content:'# Updated\n'}]);
+});
+
+it('reads and saves native skill interface settings at their original Git path', async () => {
+  const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
+  const path = '.agents/skills/custom/agents/openai.yaml';
+  const original = files[path];
+  const read = await fetch(`${base}/api/agent-resources/read?path=${encodeURIComponent(path)}`, { headers });
+  expect(read.status).toBe(200);
+  expect(await read.json()).toMatchObject({ content: original, revision: 'before' });
+  const content = original.replace('Custom', 'Updated');
+  const saved = await fetch(`${base}/api/agent-resources/save`, {
+    method: 'POST', headers, body: JSON.stringify({ path, content, revision: 'before' }),
+  });
+  expect(saved.status).toBe(200);
+  expect(await saved.json()).toMatchObject({ success: true, path, revision: 'after' });
+  expect(writes.find(w => w.endpoint === '/git/trees')?.body.tree).toEqual([
+    { path, mode: '100644', type: 'blob', content },
+  ]);
 });
 
 it('saves Screen YAML as one remote file with authentication and revision protection', async () => {

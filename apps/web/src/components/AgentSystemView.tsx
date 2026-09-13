@@ -203,14 +203,14 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
   useEffect(() => registerBeforeNavigate(prepareLeave), [registerBeforeNavigate, switching, restoring, loading, hasUnsavedChanges, editable, selectedPath, content]);
 
   const groups = groupAgentResources(instructions, notebooks, selectedNotebookId);
-  const visibleResources = [...groups.shared, ...groups.notebook, ...groups.product];
+  const visibleResources = [...groups.skills, ...groups.shared, ...groups.notebook, ...groups.product];
   const treeNavigation = { selectedPath, disabled: switching || restoring, onSelect: (path: string) => void selectDocument(path) };
   const prepareNotebookChange = async (id: string) => {
     if (loading || switching || restoring || isCreating) return false;
     const next = groupAgentResources(instructions, notebooks, id);
-    const visible = [...next.shared, ...next.notebook, ...next.product];
+    const visible = [...next.skills, ...next.shared, ...next.notebook, ...next.product];
     const path = visible.some(resource => resource.path === selectedPath)
-      ? selectedPath : (next.notebook[0] || next.shared[0] || next.product[0])?.path || '';
+      ? selectedPath : (next.notebook[0] || next.skills[0] || next.shared[0] || next.product[0])?.path || '';
     return selectDocument(path);
   };
 
@@ -224,7 +224,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
   // Browser history can also change the notebook without remounting the editor.
   useEffect(() => {
     if (!instructions.length || visibleResources.some(resource => resource.path === selectedPath)) return;
-    const fallback = groups.notebook[0] || groups.shared[0] || groups.product[0];
+    const fallback = groups.notebook[0] || groups.skills[0] || groups.shared[0] || groups.product[0];
     void selectDocument(fallback?.path || '');
   }, [selectedNotebookId, instructions]);
 
@@ -238,6 +238,11 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
     >
       {/* Left Navigation: Notes & System Agent Files */}
       <WorkspaceSidebar label={t('agent.title')} className="agent-sidebar">
+        <section aria-label={t('agent.workspaceSkills')}>
+          <div className="sidebar-section-label">{t('agent.workspaceSkills')}</div>
+          <AgentFileTree resources={groups.skills} {...treeNavigation} />
+          {!groups.skills.length && <p className="agent-empty-scope">{t('agent.noWorkspaceSkills')}</p>}
+        </section>
         <section aria-label={t('agent.sharedDocuments')}>
           <div className="sidebar-section-label">{t('agent.sharedDocuments')}</div>
           <AgentFileTree resources={groups.shared} {...treeNavigation} />
