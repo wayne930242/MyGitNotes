@@ -180,7 +180,7 @@
 .workspace-page-actions .desktop-views { background: transparent; gap: 0; padding: 0; }
 .workspace-page-actions .desktop-views button { padding: 8px; box-shadow: none; }
 .workspace-page-actions .header-new-note { box-shadow: none; font-size: 12px; padding: 8px 12px; border-radius: 6px; }
-.workspace-scroll { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 24px var(--workspace-padding) 40px; }
+.workspace-scroll { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 16px 24px 24px; }
 .app-shell .commit-footer.workspace-commit-footer { position: relative; flex: none; align-self: stretch; z-index: 23; left: auto; bottom: auto; transform: none; width: 100%; max-width: none; margin: 0; padding: 8px var(--workspace-padding); background: var(--color-surface); border-top: 1px solid var(--workspace-divider); }
 .workspace-commit-bar { justify-content: flex-end; min-height: 32px; }
 .workspace-commit-bar > .w-px { background: var(--workspace-divider); }
@@ -192,7 +192,7 @@
 .note-list { border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
 .note-list thead { background: transparent !important; color: var(--color-muted); }
 .note-list th { font-weight: 400; font-size: 11px; }
-.note-list th:first-child, .note-list td:first-child { padding-left: 0; }
+.note-list th:first-child, .note-list td:first-child { padding-left: 12px; }
 .note-list th:last-child, .note-list td:last-child { padding-right: 0; }
 .note-list td { border-color: var(--workspace-divider); }
 .note-list tbody tr { border-color: var(--workspace-divider) !important; }
@@ -275,7 +275,7 @@
   .workspace-header .header-nav { padding: 4px env(safe-area-inset-right) calc(4px + env(safe-area-inset-bottom)) env(safe-area-inset-left); display: grid; background: var(--color-surface); }
   .workspace-header .header-nav button { height: 56px; gap: 4px; padding: 4px 0; font-size: 11px; }
   .workspace-header .header-nav button svg { width: 20px; height: 20px; }
-  .workspace-scroll { padding-top: 16px; }
+  .workspace-scroll { padding: 12px var(--workspace-padding) 20px; }
   .workspace-page-actions .header-note-actions { gap: 6px; }
   .workspace-page-actions .header-search input { font-size: 16px; padding-left: 30px; }
   .workspace-page-actions .header-search svg { left: 9px; }
