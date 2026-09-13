@@ -26,7 +26,7 @@ export function parseWorkspaceRoute(pathname: string, search: string) {
   const queryFolder = query.get('folder');
   if (queryFolder) folder = queryFolder;
   if((note!==null&&!safeRelative(note))||(folder!==null&&!safeRelative(folder)))valid=false;
-  return {valid,tab,notebook,folder,note,showHidden:query.get('showHidden') === 'true',view:(['list','card','kanban','flat'].includes(query.get('view')||'')?query.get('view'):'list') as ViewMode,status:query.get('status'),tag:query.get('tag'),q:query.get('q')||''};
+  return {valid,tab,notebook,folder,note,showHidden:query.get('showHidden') === 'true',view:(['flat','list','card','kanban'].includes(query.get('view')||'')?query.get('view'):'flat') as ViewMode,status:query.get('status'),tag:query.get('tag'),q:query.get('q')||''};
 }
 export function safeRelative(value: string) { return Boolean(value)&&!value.includes('\\')&&!value.includes('\0')&&value.split('/').every(part=>Boolean(part)&&part!=='.'&&part!=='..'); }
 const encodePath = (value: string) => value.split('/').map(encodeURIComponent).join('/');

@@ -140,7 +140,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
 
         {onSortChange && (
           <div className="flex items-center gap-2">
-            <span className="text-slate-400 font-medium">{t('kanban.sortBy')}:</span>
+            <span className="text-slate-400 font-medium whitespace-nowrap">{t('kanban.sortBy')}</span>
             <Select
               aria-label={t('kanban.sortBy')}
               value={boardSortKey}

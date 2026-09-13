@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { noteRoute, notebookRoute, parseWorkspaceRoute } from './routes.js';
 describe('workspace URLs', () => {
+  it('defaults to flat while preserving explicit view links', () => {
+    for (const pathname of ['/', '/notes', '/notebooks/example', '/notebooks/example/folders/projects']) {
+      expect(parseWorkspaceRoute(pathname, '').view).toBe('flat');
+      expect(parseWorkspaceRoute(pathname, '?view=unknown').view).toBe('flat');
+      for (const view of ['flat', 'list', 'card', 'kanban']) {
+        expect(parseWorkspaceRoute(pathname, `?view=${view}`).view).toBe(view);
+      }
+    }
+  });
   it('roundtrips nested notes and reserved filename characters', () => {
     for (const path of ['projects/week/note.md', '研究/百分比 100% #?+.md', 'literal%2F.md']) {
       expect(parseWorkspaceRoute(noteRoute('example',path),'').note).toBe(path);

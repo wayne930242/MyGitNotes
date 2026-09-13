@@ -48,14 +48,55 @@ const openIndex = async (relativePath = 'index.md') => {
 const closeIndex = () => page.click('[aria-label="Close note"]');
 try {
   await page.setViewport({ width: 1440, height: 1000 });
-  for (const view of ['list', 'card', 'kanban']) {
+  await visit('/notebooks/example');
+  assert(await page.$('.desktop-views > button:first-child[aria-label="Expand"][aria-pressed="true"]'), 'Expand must be the default and first view');
+  const indexSelector = view => ['flat', 'kanban'].includes(view)
+    ? '.workspace-page-actions > button[data-folder-index]'
+    : '.folder-links > button[data-folder-index]:first-child';
+  fs.mkdirSync(`${product}/artifacts/qa`, { recursive: true });
+  await page.evaluate(() => localStorage.setItem('github-notes:language', 'zh-TW'));
+  for (const width of [1440, 768, 390, 320]) {
+    await page.setViewport({ width, height: 900 });
+    for (const view of ['flat', 'kanban']) {
+      await visit(`/notebooks/example?view=${view}`);
+      assert(!await page.$('.workspace-breadcrumbs, .folder-links'), `Folder selectors remain in ${view}`);
+      assert(await page.$(indexSelector(view)), `Toolbar index missing in ${view}`);
+      assert(await page.evaluate(() => document.querySelector('.workspace-scroll').textContent.includes('No Index')), 'Descendant notes must remain visible');
+      assert(!await page.$('[data-notepath="notes/example/index.md"], [aria-label="Status for Notebook introduction"]'), 'Toolbar index must not duplicate the current index in results');
+      const layout = await page.evaluate(() => {
+        const box = selector => {
+          const { x, y, width, height } = document.querySelector(selector).getBoundingClientRect();
+          return { x, y, width, height };
+        };
+        return { index: box('[data-folder-index]'), actions: box('.header-note-actions'), newNote: box('.header-new-note'), search: box('.header-search'), overflow: document.documentElement.scrollWidth > innerWidth };
+      });
+      assert.equal(layout.index.y + layout.index.height / 2, layout.newNote.y + layout.newNote.height / 2, 'Index and New note must share a toolbar row');
+      assert(layout.index.x + layout.index.width <= layout.actions.x, 'Toolbar index overlaps other controls');
+      assert(layout.search.width >= 40, `Search field collapsed at ${width}px in ${view}: ${JSON.stringify(layout)}`);
+      assert(!layout.overflow, `Horizontal overflow at ${width}px in ${view}`);
+      if (view === 'kanban') {
+        assert(await page.$('[aria-label="排序"]'), 'Kanban sort label must be concise');
+        assert(!await page.evaluate(() => document.body.textContent.includes('卡片排序方式')));
+      }
+      if (width === 390 && view === 'flat') {
+        await page.click('[aria-label="Note view"]');
+        await page.waitForSelector('[role="option"]');
+        assert.equal(await page.$eval('[role="option"]', element => element.getAttribute('data-option-value')), 'flat', 'Expand must be the first mobile option');
+        await page.keyboard.press('Escape');
+      }
+      if ([1440, 390].includes(width)) await page.screenshot({ path: `${product}/artifacts/qa/toolbar-${view}-${width}.png`, fullPage: true });
+    }
+  }
+  await page.evaluate(() => localStorage.setItem('github-notes:language', 'en'));
+  await page.setViewport({ width: 1440, height: 1000 });
+  for (const view of ['list', 'card', 'kanban', 'flat']) {
     await visit(`/notebooks/example/folders/readme/deep?view=${view}`);
-    assert(await page.$('.folder-links > button[data-folder-index]:first-child'), 'README.md must provide the index card when index.md is absent');
+    assert(await page.$(indexSelector(view)), 'README.md must provide the index card when index.md is absent');
     assert(!await page.$('[aria-label="Status for README guide"], [data-notepath$="/README.md"]'), 'Selected README must not be duplicated below');
     await openIndex('readme/deep/README.md');
     await closeIndex();
   }
-  await visit('/notebooks/example');
+  await visit('/notebooks/example?view=list');
   assert(await page.$('.folder-links > button[data-folder-index]:first-child'), 'Index must be the first folder card');
   assert.equal(await page.$eval('[data-folder-index]', element => element.textContent.trim()), 'Index');
   assert.equal(await page.$eval('[data-folder-index]', element => getComputedStyle(element).backgroundColor), 'rgb(255, 255, 255)');
@@ -73,9 +114,12 @@ try {
   await openIndex();
   await page.waitForFunction(() => document.body.innerText.includes('根目錄介紹') || document.querySelector('textarea[aria-label="Note content"]')?.value.includes('根目錄介紹'));
   await closeIndex();
-  for (const view of ['list', 'card', 'kanban']) {
+  for (const view of ['list', 'card', 'kanban', 'flat']) {
     await visit(`/notebooks/example/folders/projects/deep?view=${view}`);
-    assert(await page.$('.folder-links > button[data-folder-index]:first-child'), `Nested index missing in ${view}`);
+    assert(await page.$(indexSelector(view)), `Nested index missing in ${view}`);
+    if (['flat', 'kanban'].includes(view)) {
+      assert(!await page.$('.workspace-breadcrumbs, .folder-links'), `Folder selectors remain in ${view}`);
+    }
     assert(!await page.$('[data-notepath$="/index.md"], [aria-label="Status for 深層介紹"]'), `Index duplicated in ${view}`);
     assert(!await page.evaluate(() => document.body.innerText.includes('No notes yet')), 'An index-only folder must not appear empty');
     await page.click('button[data-folder-index]');
@@ -83,9 +127,9 @@ try {
     assert(new URL(page.url()).pathname.endsWith('/notes/projects/deep/index.md'));
     await closeIndex();
   }
-  for (const query of ['view=flat', 'q=Regular', 'status=inbox', 'tag=missing']) {
+  for (const query of ['q=Regular', 'status=inbox', 'tag=missing']) {
     await visit(`/notebooks/example?${query}`);
-    assert(!await page.$('[data-folder-index]'), `Index should not displace filtered or flat results: ${query}`);
+    assert(!await page.$('[data-folder-index]'), `Index should not displace filtered results: ${query}`);
   }
   await visit('/notebooks/example/folders/empty');
   assert(!await page.$('[data-folder-index]'), 'Parent index must not leak into a folder with no index');
@@ -108,7 +152,7 @@ try {
   await page.screenshot({ path: `${product}/artifacts/qa/folder-index-desktop.png`, fullPage: true });
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
   await visit('/notebooks/example');
-  assert(await page.$('.folder-links > button[data-folder-index]:first-child'));
+  assert(await page.$(indexSelector('flat')));
   assert(await page.$eval('.workspace-page-header', element => element.getBoundingClientRect().height <= 64), 'Mobile toolbar is too tall');
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile horizontal overflow');
   await page.screenshot({ path: `${product}/artifacts/qa/folder-index-mobile.png`, fullPage: true });

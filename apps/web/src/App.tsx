@@ -187,6 +187,7 @@ const AppContent: React.FC = () => {
   const selectedTag = route.tag;
   const searchQuery = route.q;
   const viewMode = route.view;
+  const indexInToolbar = viewMode === 'flat' || viewMode === 'kanban';
   const [routeError, setRouteError] = useState('');
   const updateQuery = (key: string, value: string | null, replace = false) => {
     const query = new URLSearchParams(location.search);
@@ -354,14 +355,14 @@ const AppContent: React.FC = () => {
 
   // Hierarchical Subfolder Discovery for current folder
   const immediateSubfolders = useMemo(() => {
-    if (viewMode === 'flat' || searchQuery.trim() || selectedStatus || selectedTag) return [];
+    if (indexInToolbar || searchQuery.trim() || selectedStatus || selectedTag) return [];
     const root = config?.notebooks.find((nb) => nb.id === selectedNotebookId)?.root || '';
     return getImmediateSubfolders(visibleNotes, folders, selectedNotebookId, root, selectedFolder);
-  }, [visibleNotes, folders, selectedNotebookId, config, selectedFolder, searchQuery, selectedStatus, selectedTag, viewMode]);
+  }, [visibleNotes, folders, selectedNotebookId, config, selectedFolder, searchQuery, selectedStatus, selectedTag, indexInToolbar]);
 
   // Choose by filename before applying visibility so a hidden index keeps priority.
   const folderIndex = useMemo(() => {
-    if (viewMode === 'flat' || searchQuery.trim() || selectedStatus || selectedTag) return undefined;
+    if (searchQuery.trim() || selectedStatus || selectedTag) return undefined;
     const notebook = config?.notebooks.find(nb => nb.id === selectedNotebookId);
     if (!notebook) return undefined;
     const directory = [notebook.root.replace(/\/$/, ''), selectedFolder].filter(Boolean).join('/');
@@ -369,7 +370,7 @@ const AppContent: React.FC = () => {
     const selected = candidates.find(note => note.path === `${directory}/index.md`)
       ?? candidates.find(note => note.path === `${directory}/README.md`);
     return selected && visibleNotes.find(note => note.path === selected.path);
-  }, [notes, visibleNotes, config, selectedNotebookId, selectedFolder, viewMode, searchQuery, selectedStatus, selectedTag]);
+  }, [notes, visibleNotes, config, selectedNotebookId, selectedFolder, searchQuery, selectedStatus, selectedTag]);
 
   const notesBelowFolders = useMemo(() => filteredNotes.filter(note => note.path !== folderIndex?.path), [filteredNotes, folderIndex]);
 
@@ -798,6 +799,7 @@ const AppContent: React.FC = () => {
             {/* Main Content Area */}
             <main className="workspace-main notes-main">
               <PageToolbar>
+                {indexInToolbar && folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
                 <NoteToolbar readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode}
                   searchQuery={searchQuery} setSearchQuery={setSearchQuery}
                   onOpenNewNoteModal={() => openNewNote()} filtersOpen={filtersOpen}
@@ -805,19 +807,21 @@ const AppContent: React.FC = () => {
               </PageToolbar>
               <div className="workspace-scroll">
               {actionError && <p role="alert" className="mb-3 text-sm text-rose-600">{actionError}</p>}
-              <Breadcrumbs
-                segments={breadcrumbs}
-                currentFolder={selectedFolder}
-                onSelectFolder={setSelectedFolder}
-                subfolderCount={immediateSubfolders.length}
-                noteCount={displayedNotes.length}
-                sortField={sortField}
-                sortOrder={sortOrder}
-                onSortChange={viewMode !== 'kanban' ? handleSortChange : undefined}
-              />
-              <FolderLinks folders={immediateSubfolders} onSelect={setSelectedFolder}>
-                {folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
-              </FolderLinks>
+              {!indexInToolbar && <>
+                <Breadcrumbs
+                  segments={breadcrumbs}
+                  currentFolder={selectedFolder}
+                  onSelectFolder={setSelectedFolder}
+                  subfolderCount={immediateSubfolders.length}
+                  noteCount={displayedNotes.length}
+                  sortField={sortField}
+                  sortOrder={sortOrder}
+                  onSortChange={handleSortChange}
+                />
+                <FolderLinks folders={immediateSubfolders} onSelect={setSelectedFolder}>
+                  {folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
+                </FolderLinks>
+              </>}
               {(viewMode === 'list' || viewMode === 'flat') && (
                 <ListView
                   statuses={notebookStatuses}
