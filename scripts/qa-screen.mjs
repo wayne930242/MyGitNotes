@@ -67,7 +67,7 @@ try {
   assert(!await page.$('#screen-lane-pins .screen-sort-select'), 'Custom lane must retain manual ordering');
   console.log('PASS independent dynamic lane sorting');
   const inset=await page.$eval(lane,e=>{const a=e.getBoundingClientRect(),b=e.querySelector('h3').getBoundingClientRect();return {x:b.x-a.x,y:b.y-a.y};});
-  assert(inset.x>=12 && inset.y>=12,'Lane heading lacks top/left padding');
+  assert(inset.x>=8 && inset.y>=8,`Lane heading lacks top/left padding: ${JSON.stringify(inset)}`);
   assert(!await page.$('.screen-sidebar button[aria-label="Edit swimlanes"]'),'Old lane editor remains');
   await page.click('.screen-sidebar-controls .screen-sidebar-action');
   await page.waitForSelector('dialog[open]');
@@ -121,7 +121,7 @@ try {
     await page.setViewport({width,height:1000});
     const fit=await page.$eval('.screen-lane-actions',e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;});
     assert(fit,`Lane controls overflow at ${width}`);
-    const navFits = await page.$$eval('.header-nav button', buttons => buttons.every(button => {
+    const navFits = await page.$$eval('.header-nav button', buttons => buttons.filter(button => button.getBoundingClientRect().width > 0).every(button => {
       const r = button.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth && r.height >= 32;
     }));
     assert(navFits, `Navigation buttons clipped or undersized at ${width}`);

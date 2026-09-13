@@ -1,4 +1,4 @@
-import { WorkspaceSidebar } from './WorkspaceChrome.js';
+import { WorkspaceSidebar, WorkspaceSidebarDrawer, WorkspaceSidebarToggle, useWorkspaceSidebarDrawer } from './WorkspaceChrome.js';
 import React, { useState, useEffect } from 'react';
 import {
   Save,
@@ -40,6 +40,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSelectTheme,
 }) => {
   const { t, language, setLanguage } = useTranslation();
+  const sidebar = useWorkspaceSidebarDrawer();
   const [yamlContent, setYamlContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -96,7 +97,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <>
-      <WorkspaceSidebar label={t('settings.title')} className="settings-sidebar">
+      <WorkspaceSidebarDrawer open={sidebar.open} onClose={() => sidebar.setOpen(false)} closeLabel={t('common.close')}><WorkspaceSidebar label={t('settings.title')} className="settings-sidebar">
         <div className="sidebar-section-label">{t('nav.settings')}</div>
         {([
           ['language', t('settings.language'), Globe],
@@ -105,10 +106,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           ['updates', t('settings.coreUpdates'), RefreshCw],
           ['manifest', t('layout.manifest'), Save],
         ] as const).map(([id, label, Icon]) => <a key={String(id)} href={`#settings-${id}`} className="sidebar-link"
-          onClick={event => { event.preventDefault(); document.getElementById(`settings-${id}`)?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); }}>
+          onClick={event => { event.preventDefault(); sidebar.setOpen(false); document.getElementById(`settings-${id}`)?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); }}>
           <Icon aria-hidden="true" className="w-4 h-4" /><span>{String(label)}</span>
         </a>)}
-      </WorkspaceSidebar>
+      </WorkspaceSidebar></WorkspaceSidebarDrawer>
+      <WorkspaceSidebarToggle label={t('settings.title')} open={sidebar.open} onClick={() => sidebar.setOpen(open => !open)} />
       <div className="workspace-content">
         <div className="workspace-scroll">
           <div className="settings-panel">

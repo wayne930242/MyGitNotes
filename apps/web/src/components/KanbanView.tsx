@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Plus,
   Tag,
@@ -13,6 +13,7 @@ import { NoteItem } from '../lib/types.js';
 import { SortField, SortOrder, sortNotes } from '../lib/note-sort.js';
 import { Select } from './Select.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
 
 interface KanbanViewProps {
   notes: NoteItem[];
@@ -44,6 +45,8 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
   const { t } = useTranslation();
   const [draggedNotePath, setDraggedNotePath] = useState<string | null>(null);
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
+  const columnsRef = useRef<HTMLDivElement>(null);
+  useAltWheelHorizontalScroll(columnsRef, columnsRef);
 
   // Per-column sort override state
   const [columnSorts, setColumnSorts] = useState<
@@ -157,7 +160,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
       </div>
 
       {/* Kanban Columns List */}
-      <div className="flex gap-5 overflow-x-auto pt-1 px-1 pb-6 flex-1 items-start">
+      <div ref={columnsRef} data-kanban-columns="" className="flex gap-5 overflow-x-auto pt-1 px-1 pb-6 flex-1 items-start">
         {columns.map((col, index) => {
           const rawColNotes = notes.filter((n) => n.status === col.id);
           const colSort = columnSorts[col.id] || {

@@ -20,7 +20,8 @@ export function useSidebarSwipe(enabled: boolean, open: boolean, onChange: (open
       if (!window.matchMedia('(max-width: 1100px)').matches || event.touches.length !== 1) return;
       if ((event.target as Element).closest('input, textarea, select, [role="combobox"], [contenteditable="true"]')) return;
       const touch = event.touches[0];
-      if (!open && touch.clientX - root.getBoundingClientRect().left > 24) return;
+      const bounds = root.getBoundingClientRect();
+      if (!open && touch.clientX - bounds.left > bounds.width / 2) return;
       gesture = { x: touch.clientX, y: touch.clientY, dx: 0, dragging: false };
     };
     const move = (event: TouchEvent) => {

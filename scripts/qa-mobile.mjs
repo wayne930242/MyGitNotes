@@ -38,8 +38,8 @@ const fits = async (selector, minWidth=0) => {
  assert(r.x>=-1&&r.right<=viewport.width+1&&r.y>=-1&&r.bottom<=viewport.height+1&&r.width>=minWidth, `${selector} outside viewport: ${JSON.stringify(r)}`);
 };
 const tap = async selector => {
- const element=await page.waitForSelector(selector,{visible:true});await element.scrollIntoView();
- const r=await element.boundingBox();await page.touchscreen.tap(r.x+r.width/2,r.y+r.height/2);
+ await page.waitForSelector(selector,{visible:true});await page.$eval(selector,e=>e.scrollIntoView());
+ const r=await bounds(selector);await page.touchscreen.tap(r.x+r.width/2,r.y+r.height/2);
 };
 const click = async text => {
  if(['Source','Live Preview'].includes(text)) {
@@ -77,8 +77,10 @@ try {
    await fits('button[aria-label="Notebooks and filters"]');
    if(width<768) {
     const nav=await bounds('nav');assert(nav.bottom===844&&nav.height>=64,'Mobile navigation is not at the bottom');
-    const items=await page.$$eval('nav[aria-label="Main navigation"] button',buttons=>buttons.map(e=>({icon:e.querySelector('svg').getBoundingClientRect().width,label:e.querySelector('span').getBoundingClientRect().height,height:e.getBoundingClientRect().height})));
-    assert(items.length===4&&items.every(item=>item.icon>=20&&item.label<=16&&item.height>=44),'Bottom navigation compresses icons or wraps labels');
+    const items=await page.$$eval('nav[aria-label="Main navigation"] button',buttons=>buttons.map(e=>({aria:e.getAttribute('aria-label'),icon:e.querySelector('svg').getBoundingClientRect().width,label:e.querySelector('span')?.getBoundingClientRect().height||0,height:e.getBoundingClientRect().height,width:e.getBoundingClientRect().width,radius:getComputedStyle(e).borderRadius})));
+    assert(items.length===5&&items.every(item=>item.icon>=20&&item.height>=44),'Bottom navigation compresses icons or omits the center action');
+    assert(items[2].aria==='New Note'&&items[2].width===items[2].height&&parseFloat(items[2].radius)>=items[2].width/2-1,'New Note is not a circular center navigation action');
+    assert(await page.$$eval('[aria-label="New Note"]',buttons=>buttons.filter(e=>e.getBoundingClientRect().width>0).length)===1,'Mobile renders duplicate New Note actions');
    }
    if(width<768) {
     const row=await bounds('.note-list tbody tr');assert(row.height<=72,'Mobile List is not compact');
@@ -117,19 +119,28 @@ try {
  await page.waitForFunction(()=>!document.querySelector('.editor-notice-actions'));
  await tap('button[aria-label="Restore note"]');await fits('button[aria-label="Confirm restore note"]');assert((await bounds('.note-controls')).height<=48,'Note restore confirmation wraps toolbar');
  await tap('button[aria-label="Confirm restore note"]');await page.waitForFunction(()=>!document.querySelector('.cm-content')?.innerText.includes('Recovered mobile draft'));
- await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});await tap('[aria-label="Close note"]');
+ await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});await tap('[aria-label="Close note"]');await page.waitForFunction(()=>!document.querySelector('[aria-label="Note editor"]'));
  console.log('PASS bounded recovery, draft restore, note restore confirmation and select-only Escape');
  await swipe([12,250],[190,252]);await page.waitForSelector('#notebook-panel.is-open');
  assert(Math.abs((await bounds('#notebook-panel')).width-390*.75)<2,'Sidebar is not 75% wide');
  await page.waitForFunction(()=>document.querySelector('#notebook-panel').getBoundingClientRect().left>=0);
  await swipe([200,250],[30,251]);await page.waitForFunction(()=>!document.querySelector('#notebook-panel.is-open'));
  await page.waitForFunction(()=>document.querySelector('#notebook-panel').getBoundingClientRect().right<=1);
- await swipe([120,250],[280,250]);assert(!await page.$('#notebook-panel.is-open'),'Non-edge swipe opened sidebar');
+ await swipe([120,250],[280,250]);await page.waitForSelector('#notebook-panel.is-open');
+ await swipe([200,250],[30,251]);await page.waitForFunction(()=>!document.querySelector('#notebook-panel.is-open'));
+ await swipe([240,250],[380,250]);assert(!await page.$('#notebook-panel.is-open'),'Swipe starting in the right half opened sidebar');
  await swipe([12,250],[14,350]);assert(!await page.$('#notebook-panel.is-open'),'Vertical swipe opened sidebar');
  await swipe([12,250],[42,250]);assert(!await page.$('#notebook-panel.is-open'),'Short swipe opened sidebar');
  await swipe([12,250],[190,250],true);assert(!await page.$('#notebook-panel.is-open'),'Cancelled swipe opened sidebar');
  assert(!await page.$('[aria-label="Note editor"]'),'Swipe opened a note');
- console.log('PASS edge swipe open/close, vertical/non-edge/short/cancelled gestures and no accidental note');
+ console.log('PASS left-half swipe open, right-half/vertical/short/cancelled gestures and no accidental note');
+ for(const route of ['/agent?notebook=example','/assets?notebook=example','/settings','/screen?notebook=example']) {
+  await page.goto(base+route,{waitUntil:'networkidle0'});
+  await tap('[data-sidebar-toggle]');await page.waitForSelector('[data-responsive-sidebar].is-open');
+  await tap('[data-sidebar-backdrop]');await page.waitForFunction(()=>!document.querySelector('[data-responsive-sidebar].is-open'));
+ }
+ console.log('PASS mobile sidebar drawers on Agent, Assets, Settings and Screen');
+ await page.goto(base+'/notes',{waitUntil:'networkidle0'});
  await tap('button[aria-label="Notebooks and filters"]');await page.waitForSelector('#notebook-panel.is-open');
  await page.touchscreen.tap(370,250);await page.waitForFunction(()=>!document.querySelector('#notebook-panel.is-open'));
  await tap('button[aria-label="Notebooks and filters"]');await page.waitForFunction(()=>document.querySelector('#notebook-panel').getBoundingClientRect().left>=0);await tap('#notebook-panel .folder-tree-select[title="projects"]');
@@ -164,6 +175,9 @@ try {
  assert(await page.evaluate(()=>document.body.innerText.includes('MCP Access Control')),'Settings access section missing');
  console.log('PASS touch navigation, notebook filters, Card status and Settings access');
  await click('Notes');await tap('button[aria-label="New Note"]');
+ assert(await page.$eval('input[aria-label="Folder path"]',input=>input.value)==='','New note folder does not default to notebook root');
+ assert(await page.$$eval('#create-note-folders option',options=>options.map(option=>option.value).join(',')==='projects,projects/deep'),'Folder path autocomplete does not list notebook folders');
+ await page.type('input[aria-label="Folder path"]','projects/deep');
  await page.type('input[placeholder="e.g. Sprint Planning, Project Ideas..."]','Mobile draft');
  await click('Create Note');await page.waitForSelector('.cm-content');
  await tap('.cm-content');await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');
@@ -175,6 +189,7 @@ try {
  assert(await page.$eval('textarea[aria-label="Note content"]',e=>e.value.includes('Mobile live edit')),'Mode switch lost mobile edit');
  assert(await page.$eval('textarea[aria-label="Note content"]',e=>getComputedStyle(e).caretColor===getComputedStyle(document.querySelector('.header-search input')).caretColor),'Dark source caret differs from input foreground');
  const noteFile=await page.$eval('.note-heading',e=>e.querySelector('.font-mono').textContent);
+ assert(noteFile.startsWith('notes/example/projects/deep/'),'Selected folder path was not used for the new note');
  await waitDisk(noteFile,'Mobile live edit');
  await click('Frontmatter');await page.waitForSelector('.note-metadata');
  await page.$eval('.note-metadata input',e=>e.scrollIntoView());
@@ -198,18 +213,18 @@ try {
  await tap('[aria-label="Close note"]');
  await click('Agent System');await page.waitForSelector('.cm-content[aria-label="Agent document content"]');
  await page.setViewport({width:320,height:420,isMobile:true,hasTouch:true});
- await tap('button[role="combobox"][aria-label="Agent document"]');await page.waitForSelector('[role="listbox"]');await fits('[role="listbox"]');await page.keyboard.press('Escape');
- await fits('[data-markdown-editor]',250);assert((await bounds('[data-markdown-editor]')).height>=100,'Agent toolbar consumes reduced viewport');
+ await tap('[data-sidebar-toggle]');await page.waitForSelector('[data-responsive-sidebar].is-open');await page.waitForFunction(()=>document.querySelector('[data-responsive-sidebar]').getBoundingClientRect().left>=0);await fits('[data-responsive-sidebar]',200);await page.keyboard.press('Escape');await page.waitForFunction(()=>!document.querySelector('[data-responsive-sidebar].is-open'));
+ await fits('[data-markdown-editor]',250);const reducedAgentEditor=await bounds('[data-markdown-editor]');assert(reducedAgentEditor.height>=100,`Agent toolbar consumes reduced viewport: ${JSON.stringify(reducedAgentEditor)}`);
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
- await chooseSelect(page, 'button[role="combobox"][aria-label="Agent document"]','notes/example/AGENTS.md');await page.waitForFunction(()=>document.querySelector('.cm-content')?.textContent.includes('Notebook Guidelines'));
+ await page.waitForFunction(()=>document.querySelector('.cm-content')?.textContent.includes('Workspace Guidelines'));
  await tap('.cm-content');await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.type('\nMobile agent edit');
- await waitDisk('notes/example/AGENTS.md','Mobile agent edit');
+ await waitDisk('notes/AGENTS.md','Mobile agent edit');
  await page.setViewport({width:320,height:844,isMobile:true,hasTouch:true});
  await tap('button[aria-label="Restore"]');
  await fits('button[aria-label="Confirm Restore?"]');
  assert((await bounds('.agent-toolbar')).height<=64,'Agent restore confirmation wraps toolbar');
  await tap('button[aria-label="Confirm Restore?"]');
- await page.waitForFunction(()=>document.querySelector('.cm-content')?.innerText.includes('Preserve frontmatter.')&&!document.querySelector('.cm-content')?.innerText.includes('Mobile agent edit'));
+ await page.waitForFunction(()=>document.querySelector('.cm-content')?.innerText.includes('Use Markdown notes.')&&!document.querySelector('.cm-content')?.innerText.includes('Mobile agent edit'));
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
  await page.screenshot({path:product+'/artifacts/qa/mobile-agent.png'});
  await click('Assets');await page.waitForSelector('input[aria-label="Asset folder"]');await fits('input[aria-label="Asset folder"]');

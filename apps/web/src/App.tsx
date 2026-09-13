@@ -39,6 +39,7 @@ import { ThemeDefinition, getSavedTheme, applyTheme } from './lib/themes.js';
 import { AuthControls, ConnectionState, AgentAccessSettings } from './components/AuthControls.js';
 import { inFolder } from './lib/note-paths.js';
 import { Header } from './components/Header.js';
+import { KeyboardShortcuts } from './components/KeyboardShortcuts.js';
 import { NoteToolbar } from './components/NoteToolbar.js';
 import { PageToolbar } from './components/WorkspaceChrome.js';
 import { useVisualViewport } from './lib/use-visual-viewport.js';
@@ -227,8 +228,11 @@ const AppContent: React.FC = () => {
   // New Note Form State
   const [newNoteTitle, setNewNoteTitle] = useState<string>('');
   const [newNoteStatus, setNewNoteStatus] = useState<string>('inbox');
+  const [newNoteFolder, setNewNoteFolder] = useState<string>('');
+  const newNoteFolders = useMemo(() => folders.filter(folder => folder.notebookId === selectedNotebookId).map(folder => folder.path).sort(), [folders, selectedNotebookId]);
   const openNewNote = (status = notebookStatuses[0]) => {
     setNewNoteStatus(status);
+    setNewNoteFolder('');
     setCreateError('');
     setIsNewNoteOpen(true);
   };
@@ -568,7 +572,9 @@ const AppContent: React.FC = () => {
 
       const currentNotebook = config?.notebooks.find((n) => n.id === selectedNotebookId) || config?.notebooks[0];
       const root = currentNotebook?.root || 'notes/example';
-      const notePath = [root, selectedFolder, `${slug}.md`].filter(Boolean).join('/');
+      const folder = newNoteFolder.trim().replace(/^\/+|\/+$/g, '');
+      if (folder && !newNoteFolders.includes(folder)) throw new Error(t('createNote.invalidFolder'));
+      const notePath = [root, folder, `${slug}.md`].filter(Boolean).join('/');
       if (notes.some(n => n.path === notePath)) throw new Error('A note with this filename already exists in this folder. Choose another title.');
 
       const status = statusOverride || newNoteStatus;
@@ -597,6 +603,7 @@ const AppContent: React.FC = () => {
       setNotes((prev) => [res.note, ...prev]);
       setIsNewNoteOpen(false);
       setNewNoteTitle('');
+      setNewNoteFolder('');
       setNewNoteStatus(notebookStatuses[0]);
       const statusRes = await fetchGitStatus();
       setGitStatus(statusRes.status);
@@ -751,7 +758,12 @@ const AppContent: React.FC = () => {
         notebookDisabled={loading || resourceNavigationBusy || notebookSwitchBusy}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        onCreateNote={() => openNewNote()}
+        createNoteDisabled={!canWrite}
       />
+      <KeyboardShortcuts activeTab={activeTab} canCreateNote={canWrite}
+        onNavigate={tab => void setActiveTab(tab)} onCreateNote={() => openNewNote()}
+        onFocusSearch={() => requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.header-search input')?.focus())} />
 
       {routeError && (
         <div role="alert" className="px-6 py-3 text-sm text-rose-600">
@@ -889,7 +901,7 @@ const AppContent: React.FC = () => {
         )}
 
         {activeTab === 'assets' && (
-          <main className="workspace-route assets-main">
+          <main className="workspace-route assets-main has-sidebar-drawer">
             <AssetBrowser
               assets={assets}
               selectedNotebookId={selectedNotebookId}
@@ -904,7 +916,7 @@ const AppContent: React.FC = () => {
         {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} notebooks={config?.notebooks || []} notes={notes} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} /></React.Suspense>}
 
         {activeTab === 'settings' && (
-          <main className="workspace-route settings-main">
+          <main className="workspace-route settings-main has-sidebar-drawer">
             <SettingsModal
               config={config}
               branch={branch}
@@ -1028,6 +1040,16 @@ const AppContent: React.FC = () => {
                     if (e.key === 'Enter') handleCreateNewNote();
                   }}
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5" htmlFor="create-note-folder">
+                  {t('createNote.folder')}
+                </label>
+                <input id="create-note-folder" type="text" list="create-note-folders" aria-label={t('createNote.folder')}
+                  placeholder={t('createNote.folderPlaceholder')} value={newNoteFolder} onChange={event => setNewNoteFolder(event.target.value)}
+                  className="ui-control" autoComplete="off" />
+                <datalist id="create-note-folders">{newNoteFolders.map(folder => <option key={folder} value={folder} />)}</datalist>
               </div>
 
               <div>
