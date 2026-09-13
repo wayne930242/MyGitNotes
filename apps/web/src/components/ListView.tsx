@@ -10,6 +10,7 @@ import {
   ArrowUpDown,
 } from 'lucide-react';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
+import { Select } from './Select.js';
 import { NoteItem } from '../lib/types.js';
 import { SortField, SortOrder } from '../lib/note-sort.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -26,7 +27,8 @@ interface ListViewProps {
   onNewNote: () => void;
   sortField?: SortField;
   sortOrder?: SortOrder;
-  onSortChange?: (field: SortField) => void;
+  onSortChange?: (field: SortField, order?: SortOrder) => void;
+  showMobileSort?: boolean;
 }
 
 interface NoteRowActions {
@@ -132,6 +134,7 @@ export const ListView: React.FC<ListViewProps> = ({
   sortField = 'updated',
   sortOrder = 'desc',
   onSortChange,
+  showMobileSort = false,
 }) => {
   const { t, language } = useTranslation();
   // Rows retain stable actions while invoking the latest committed callbacks.
@@ -206,6 +209,26 @@ export const ListView: React.FC<ListViewProps> = ({
 
   return (
     <>
+    {showMobileSort && notes.length > 0 && onSortChange && <div className="note-list-mobile-sort mobile-only items-center gap-2 mb-4">
+      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden="true" />
+      <Select
+        aria-label={t('sort.select')}
+        value={`${sortField}:${sortOrder}`}
+        onValueChange={value => {
+          const [field, order] = value.split(':') as [SortField, SortOrder];
+          onSortChange(field, order);
+        }}
+        options={[
+          { value: 'updated:desc', label: t('sort.updatedDesc') },
+          { value: 'updated:asc', label: t('sort.updatedAsc') },
+          { value: 'created:desc', label: t('sort.createdDesc') },
+          { value: 'created:asc', label: t('sort.createdAsc') },
+          { value: 'title:asc', label: t('sort.titleAsc') },
+          { value: 'title:desc', label: t('sort.titleDesc') },
+          { value: 'status:asc', label: t('sort.status') },
+        ]}
+      />
+    </div>}
     {notes.length > 0 && <div
       className="note-list rounded-xl border shadow-xs overflow-hidden transition-colors"
       style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}

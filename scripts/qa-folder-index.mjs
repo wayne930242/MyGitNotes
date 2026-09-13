@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
+import { chooseSelect } from './browser-select.mjs';
 
 const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(`${product}/apps/web/package.json`);
@@ -79,6 +80,12 @@ try {
         assert(!await page.evaluate(() => document.body.textContent.includes('卡片排序方式')));
       }
       if (width === 390 && view === 'flat') {
+        assert(await page.$('.note-list-mobile-sort [aria-label="排序"]'), 'Expanded notes must retain mobile sorting');
+        await chooseSelect(page, '.note-list-mobile-sort [aria-label="排序"]', 'title:asc');
+        const ascending = await page.$$eval('.note-list tbody tr', rows => rows.map(row => row.querySelector('td').textContent));
+        await chooseSelect(page, '.note-list-mobile-sort [aria-label="排序"]', 'title:desc');
+        const descending = await page.$$eval('.note-list tbody tr', rows => rows.map(row => row.querySelector('td').textContent));
+        assert.deepEqual(descending, [...ascending].reverse(), 'Mobile sorting must reorder the actual notes');
         await page.click('[aria-label="Note view"]');
         await page.waitForSelector('[role="option"]');
         assert.equal(await page.$eval('[role="option"]', element => element.getAttribute('data-option-value')), 'flat', 'Expand must be the first mobile option');
