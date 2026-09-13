@@ -1,5 +1,5 @@
 import { FolderLinks } from './FolderLinks.js';
-import React from 'react';
+import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import {
   FileText,
   Tag,
@@ -32,6 +32,96 @@ interface ListViewProps {
   onSortChange?: (field: SortField) => void;
 }
 
+interface NoteRowActions {
+  open: (note: NoteItem) => void;
+  remove: (note: NoteItem) => void;
+  status: (note: NoteItem, status: string) => void;
+}
+
+const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelete, actions, dates }: {
+  note: NoteItem; statuses: string[]; readOnly: boolean; canDelete: boolean;
+  actions: NoteRowActions; dates: { short: Intl.DateTimeFormat; full: Intl.DateTimeFormat };
+}) {
+  const { t } = useTranslation();
+  const formattedDate = note.mtime ? dates.short.format(note.mtime) : '—';
+  return (
+    <tr
+      onClick={() => actions.open(note)}
+      className="hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer group"
+    >
+      <td className="py-3 px-4">
+        <div className="flex items-center gap-2.5">
+          <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
+          <div>
+            <div className="font-medium text-slate-900 dark:text-slate-100 transition">
+              {note.title}
+            </div>
+            <div className="text-xs text-slate-400 dark:text-slate-500 font-mono">
+              {note.path}
+            </div>
+          </div>
+        </div>
+      </td>
+
+      {/* In-Table Selectable Status */}
+      <td className="py-3 px-4">
+        <NoteStatusSelect
+          statuses={statuses}
+          status={note.status}
+          readOnly={readOnly}
+          label={t('notes.statusFor', { title: note.title })}
+          onChange={(status) => actions.status(note, status)}
+        />
+      </td>
+
+      <td className="py-3 px-4">
+        <div className="flex flex-wrap gap-1">
+          {note.tags.length > 0 ? (
+            note.tags.map((tTag) => (
+              <span
+                key={tTag}
+                className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded text-xs"
+              >
+                <Tag className="w-2.5 h-2.5 text-slate-400" />
+                {tTag}
+              </span>
+            ))
+          ) : (
+            <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
+          )}
+        </div>
+      </td>
+
+      <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap tabular-nums">
+        <div className="flex items-center gap-1.5">
+          <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <time dateTime={note.mtime ? new Date(note.mtime).toISOString() : undefined}
+            title={note.mtime ? dates.full.format(note.mtime) : undefined}>{formattedDate}</time>
+        </div>
+      </td>
+
+      {/* Actions Column */}
+      <td className="py-3 px-4 text-right">
+        <div
+          className="flex items-center justify-end opacity-40 hover:opacity-100 group-hover:opacity-100 transition"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {!readOnly && canDelete && (
+            <button
+              type="button"
+              onClick={() => actions.remove(note)}
+              title={t('notes.delete')}
+              className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+});
+
 export const ListView: React.FC<ListViewProps> = ({
   notes,
   subfolders = [],
@@ -48,6 +138,18 @@ export const ListView: React.FC<ListViewProps> = ({
   onSortChange,
 }) => {
   const { t, language } = useTranslation();
+  // Rows retain stable actions while invoking the latest committed callbacks.
+  const handlers = useRef({ onOpenNote, onDeleteNote, onUpdateNoteStatus });
+  useLayoutEffect(() => { handlers.current = { onOpenNote, onDeleteNote, onUpdateNoteStatus }; });
+  const actions = useMemo<NoteRowActions>(() => ({
+    open: note => handlers.current.onOpenNote(note),
+    remove: note => handlers.current.onDeleteNote(note),
+    status: (note, status) => handlers.current.onUpdateNoteStatus(note, status),
+  }), []);
+  const dates = useMemo(() => ({
+    short: new Intl.DateTimeFormat(language, { month: '2-digit', day: '2-digit', hour12: false, hour: '2-digit', minute: '2-digit' }),
+    full: new Intl.DateTimeFormat(language, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }),
+  }), [language]);
 
   const isEmpty = notes.length === 0 && subfolders.length === 0;
 
@@ -129,95 +231,8 @@ export const ListView: React.FC<ListViewProps> = ({
           </thead>
           <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
             {/* Notes row rendering */}
-            {notes.map((note) => {
-              const formattedDate = note.mtime
-                ? new Date(note.mtime).toLocaleString(language, {
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour12: false,
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
-                : '—';
-
-              return (
-                <tr
-                  key={note.path}
-                  onClick={() => onOpenNote(note)}
-                  className="hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer group"
-                >
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-2.5">
-                      <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
-                      <div>
-                        <div className="font-medium text-slate-900 dark:text-slate-100 transition">
-                          {note.title}
-                        </div>
-                        <div className="text-xs text-slate-400 dark:text-slate-500 font-mono">
-                          {note.path}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* In-Table Selectable Status */}
-                  <td className="py-3 px-4">
-                    <NoteStatusSelect
-                      statuses={statuses}
-                      status={note.status}
-                      readOnly={readOnly}
-                      label={t('notes.statusFor', { title: note.title })}
-                      onChange={(status) => onUpdateNoteStatus(note, status)}
-                    />
-                  </td>
-
-                  <td className="py-3 px-4">
-                    <div className="flex flex-wrap gap-1">
-                      {note.tags.length > 0 ? (
-                        note.tags.map((tTag) => (
-                          <span
-                            key={tTag}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded text-xs"
-                          >
-                            <Tag className="w-2.5 h-2.5 text-slate-400" />
-                            {tTag}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
-                      )}
-                    </div>
-                  </td>
-
-                  <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap tabular-nums">
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <time dateTime={note.mtime ? new Date(note.mtime).toISOString() : undefined}
-                        title={note.mtime ? new Date(note.mtime).toLocaleString(language) : undefined}>{formattedDate}</time>
-                    </div>
-                  </td>
-
-                  {/* Actions Column */}
-                  <td className="py-3 px-4 text-right">
-                    <div
-                      className="flex items-center justify-end opacity-40 hover:opacity-100 group-hover:opacity-100 transition"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {!readOnly && canDelete && (
-                        <button
-                          type="button"
-                          onClick={() => onDeleteNote(note)}
-                          title={t('notes.delete')}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+            {notes.map(note => <NoteRow key={note.path} note={note} statuses={statuses}
+              readOnly={readOnly} canDelete={canDelete} actions={actions} dates={dates} />)}
           </tbody>
         </table>
       </div>

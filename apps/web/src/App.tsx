@@ -8,6 +8,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { notebookRoute, noteRoute, parseWorkspaceRoute, WorkspaceTab } from './lib/routes.js';
 import { readWorkingNotes, updateWorkingNote, clearCommittedNotes, overlayWorkingNotes, workingDiff, WorkingNotes } from './lib/working-notes.js';
 import { mergeNote, sameValue } from './lib/merge-note.js';
+import { mergeNoteSnapshot } from './lib/note-snapshot.js';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   fetchWorkspace,
@@ -104,6 +105,8 @@ const AppContent: React.FC = () => {
   const [sourceId, setSourceId] = useState('');
   const [remote, setRemote] = useState(false);
   const loadedRemote = useRef(false);
+  const loadedWorkspace = useRef('');
+  const refreshRequest = useRef(0);
   const [canWrite, setCanWrite] = useState(false);
   const [revision, setRevision] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -260,9 +263,18 @@ const AppContent: React.FC = () => {
     setEditingNote(null);  setDeletedNotes([]); setIsNewNoteOpen(false);
   }, [sourceId]);
 
-  const refreshWorkspace = async () => {
+  const refreshWorkspace = async (notebookId?: string) => {
+    const request = ++refreshRequest.current;
     try {
       const ws = await fetchWorkspace();
+      if (request !== refreshRequest.current) return;
+      // A different source, branch or notebook root needs a complete snapshot.
+      const workspace = JSON.stringify([ws.source.identity, ws.branch, ws.config?.notebooks.map(nb => [nb.id, nb.root])]);
+      const sameWorkspace = loadedWorkspace.current === workspace;
+      const scope = ws.capabilities.local && sameWorkspace && ws.config?.notebooks.some(nb => nb.id === notebookId) ? notebookId : undefined;
+      const [folderList, noteList] = await Promise.all([fetchFolders(), fetchNotes(scope)]);
+      if (request !== refreshRequest.current) return;
+      loadedWorkspace.current = workspace;
       loadedRemote.current = !ws.capabilities.local;
       setSourceId(ws.source.identity);
       setRemote(!ws.capabilities.local);
@@ -271,22 +283,26 @@ const AppContent: React.FC = () => {
       setLoadError('');
       setRepoRoot(ws.repoRoot);
       setBranch(ws.branch);
-      setConfig(ws.config);
+      setConfig(previous => sameValue(previous, ws.config) ? previous : ws.config);
       setWorkingNotes(ws.capabilities.local ? {} : readWorkingNotes(`${ws.source.identity}:${ws.branch}`));
       setGitStatus(ws.gitStatus);
 
-      setFolders(await fetchFolders());
-      const noteList = await fetchNotes();
-      setNotes(noteList);
+      setFolders(previous => sameValue(previous, folderList) ? previous : folderList);
+      setNotes(previous => mergeNoteSnapshot(sameWorkspace ? previous : [], noteList, scope));
 
     } catch (err) {
+      if (request !== refreshRequest.current) return;
+      loadedWorkspace.current = ''; loadedRemote.current = false;
       setNotes([]); setFolders([]); setAssets([]); setConfig(null);
       setLoadError(err instanceof Error ? err.message : 'Failed to load workspace');
-    } finally { setLoading(false); }
+    } finally { if (request === refreshRequest.current) setLoading(false); }
   };
 
   useEffect(() => {
-    if (!loadedRemote.current) refreshWorkspace();
+    if (!loadedRemote.current) {
+      void refreshWorkspace(loadedWorkspace.current ? selectedNotebookId : undefined);
+    }
+    return () => { refreshRequest.current++; };
   }, [selectedNotebookId]);
 
   useEffect(() => {
