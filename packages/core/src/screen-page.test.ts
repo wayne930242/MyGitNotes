@@ -8,6 +8,16 @@ const page = { version: 1, rows: [
   { id: 'live', name: '動態標籤', view: 'thumbnail', kind: 'dynamic', source: { kind: 'tag', tag: 'clue' } },
 ] };
 describe('Screen Page swimlanes', () => {
+  it('preserves optional dynamic sorting without rewriting legacy lanes', () => {
+    const legacy = ScreenPageSchema.parse(page);
+    expect(legacy.rows[2]).not.toHaveProperty('sort');
+    const sorted = { ...page, rows: [{ ...page.rows[2], sort: { field: 'updated', order: 'desc' } }] };
+    expect(ScreenPageSchema.parse(sorted).rows[0]).toMatchObject({ sort: { field: 'updated', order: 'desc' } });
+    for (const sort of [{ field: 'unknown', order: 'asc' }, { field: 'title', order: 'random' }]) {
+      expect(ScreenPageSchema.safeParse({ ...sorted, rows: [{ ...sorted.rows[0], sort }] }).success).toBe(false);
+    }
+    expect(ScreenPageSchema.safeParse({ ...page, rows: [{ ...page.rows[0], sort: { field: 'title', order: 'asc' } }] }).success).toBe(false);
+  });
   it('moves references across custom rows without changing notebook identity', () => {
     const config = ScreenPageSchema.parse(page);
     const moved = moveScreenItem(config, 'a', 'second', 1);
