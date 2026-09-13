@@ -1,7 +1,7 @@
 import { useWorkspaceLinks } from './WorkspaceLinks.js';
 import { AgentFileTree } from './AgentFileTree.js';
 import { groupAgentResources } from '../lib/agent-tree.js';
-import { WorkspaceSidebar } from './WorkspaceChrome.js';
+import { WorkspaceSidebar, WorkspaceSidebarDrawer, WorkspaceSidebarToggle, useWorkspaceSidebarDrawer } from './WorkspaceChrome.js';
 import { EditorNotice } from './EditorNotice.js';
 import { EditorFooter } from './EditorFooter.js';
 import { Select } from './Select.js';
@@ -29,6 +29,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
   notebooks: NotebookConfig[]; selectedNotebookId: string; onBusyChange: (busy: boolean) => void;
 }>(({ readOnly = false, readOnlyNotice, remote = false, notebooks, selectedNotebookId, onBusyChange }, ref) => {
   const { t } = useTranslation();
+  const sidebar = useWorkspaceSidebarDrawer();
   const [instructions, setInstructions] = useState<AgentResource[]>([]);
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [content, setContent] = useState<string>('');
@@ -205,6 +206,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
   const groups = groupAgentResources(instructions, notebooks, selectedNotebookId);
   const visibleResources = [...groups.skills, ...groups.shared, ...groups.notebook, ...groups.product];
   const treeNavigation = { selectedPath, disabled: switching || restoring, onSelect: (path: string) => void selectDocument(path) };
+  const drawerTreeNavigation = { ...treeNavigation, onSelect: (path: string) => { sidebar.setOpen(false); void selectDocument(path); } };
   const prepareNotebookChange = async (id: string) => {
     if (loading || switching || restoring || isCreating) return false;
     const next = groupAgentResources(instructions, notebooks, id);
@@ -230,22 +232,22 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
 
   return (
     <div
-      className="agent-layout workspace-route"
+      className="agent-layout workspace-route has-sidebar-drawer"
       style={{
         backgroundColor: 'var(--color-surface)',
         borderColor: 'var(--color-border)',
       }}
     >
       {/* Left Navigation: Notes & System Agent Files */}
-      <WorkspaceSidebar label={t('agent.title')} className="agent-sidebar">
+      <WorkspaceSidebarDrawer open={sidebar.open} onClose={() => sidebar.setOpen(false)} closeLabel={t('common.close')}><WorkspaceSidebar label={t('agent.title')} className="agent-sidebar">
         <section aria-label={t('agent.workspaceSkills')}>
           <div className="sidebar-section-label">{t('agent.workspaceSkills')}</div>
-          <AgentFileTree resources={groups.skills} {...treeNavigation} />
+          <AgentFileTree resources={groups.skills} {...drawerTreeNavigation} />
           {!groups.skills.length && <p className="agent-empty-scope">{t('agent.noWorkspaceSkills')}</p>}
         </section>
         <section aria-label={t('agent.sharedDocuments')}>
           <div className="sidebar-section-label">{t('agent.sharedDocuments')}</div>
-          <AgentFileTree resources={groups.shared} {...treeNavigation} />
+          <AgentFileTree resources={groups.shared} {...drawerTreeNavigation} />
           {!readOnly && !instructions.some(resource => resource.path === 'AGENTS.md') && (
             <button disabled={isCreating || switching || restoring} onClick={() => void handleCreateWorkspaceGuidelines()}
               className="sidebar-link"><Plus aria-hidden="true" /><span>{t('agent.createWorkspaceGuidelines')}</span></button>
@@ -253,12 +255,12 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
         </section>
         <section aria-label={t('agent.notebookDocuments')}>
           <div className="sidebar-section-label">{t('agent.notebookDocuments')}</div>
-          <AgentFileTree resources={groups.notebook} {...treeNavigation} />
+          <AgentFileTree resources={groups.notebook} {...drawerTreeNavigation} />
           {!groups.notebook.length && <p className="agent-empty-scope">{t('agent.noNotebookDocuments')}</p>}
         </section>
         {groups.product.length > 0 && <section aria-label={t('agent.systemGuidelines')}>
           <div className="sidebar-section-label">{t('agent.systemGuidelines')}<span>{t('agent.readOnly')}</span></div>
-          <AgentFileTree resources={groups.product} {...treeNavigation} />
+          <AgentFileTree resources={groups.product} {...drawerTreeNavigation} />
         </section>}
 
         {/* Informational Callout */}
@@ -276,7 +278,8 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
           <p className="mb-2">{t('agent.scopeDescription')}</p>
           {t(readOnly ? 'agent.guidelinesReadOnlyDescription' : remote ? 'agent.remoteGuidelinesDescription' : 'agent.guidelinesDescription')}
         </div>
-      </WorkspaceSidebar>
+      </WorkspaceSidebar></WorkspaceSidebarDrawer>
+      <WorkspaceSidebarToggle label={t('agent.title')} open={sidebar.open} onClick={() => sidebar.setOpen(open => !open)} />
 
       {/* Right Content Viewer / Editor */}
       <div className="workspace-content agent-content">

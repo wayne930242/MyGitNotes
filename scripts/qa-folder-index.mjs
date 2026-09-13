@@ -71,7 +71,8 @@ try {
         };
         return { index: box('[data-folder-index]'), actions: box('.header-note-actions'), newNote: box('.header-new-note'), search: box('.header-search'), overflow: document.documentElement.scrollWidth > innerWidth };
       });
-      assert.equal(layout.index.y + layout.index.height / 2, layout.newNote.y + layout.newNote.height / 2, 'Index and New note must share a toolbar row');
+      if (width >= 768) assert.equal(layout.index.y + layout.index.height / 2, layout.newNote.y + layout.newNote.height / 2, 'Index and New note must share a toolbar row');
+      else assert.equal(layout.newNote.width, 0, 'Mobile toolbar still shows the duplicate New note action');
       assert(layout.index.x + layout.index.width <= layout.actions.x, 'Toolbar index overlaps other controls');
       assert(layout.search.width >= 40, `Search field collapsed at ${width}px in ${view}: ${JSON.stringify(layout)}`);
       assert(!layout.overflow, `Horizontal overflow at ${width}px in ${view}`);
@@ -90,6 +91,27 @@ try {
       if (view === 'kanban') {
         assert(await page.$('[aria-label="排序"]'), 'Kanban sort label must be concise');
         assert(!await page.evaluate(() => document.body.textContent.includes('卡片排序方式')));
+        if (width === 1440) {
+          const wheel = await page.evaluate(() => {
+            const scroller = document.querySelector('[data-kanban-columns]');
+            if (!scroller) return { missing: true };
+            scroller.scrollLeft = 0;
+            const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120, altKey: true });
+            scroller.dispatchEvent(event);
+            return { missing: false, prevented: event.defaultPrevented, left: scroller.scrollLeft };
+          });
+          assert(!wheel.missing, 'Kanban horizontal scroller is not identifiable');
+          assert(wheel.prevented && wheel.left > 0, `Alt + vertical wheel did not scroll Kanban horizontally: ${JSON.stringify(wheel)}`);
+          const boundary = await page.evaluate(() => {
+            const scroller = document.querySelector('[data-kanban-columns]');
+            scroller.scrollLeft = scroller.scrollWidth;
+            const before = scroller.scrollLeft;
+            const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120, altKey: true });
+            scroller.dispatchEvent(event);
+            return { before, after: scroller.scrollLeft, prevented: event.defaultPrevented };
+          });
+          assert(boundary.prevented && boundary.after === boundary.before, 'Alt wheel escaped at the Kanban boundary');
+        }
       }
       if (width === 390 && view === 'flat') {
         assert(await page.$('.note-list-mobile-sort [aria-label="排序"]'), 'Expanded notes must retain mobile sorting');

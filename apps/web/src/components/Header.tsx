@@ -1,6 +1,6 @@
 import { ScreenIcon } from './ScreenIcon.js';
 import React, { useEffect } from 'react';
-import { BookOpen, Bot, Image as ImageIcon, Settings } from 'lucide-react';
+import { BookOpen, Bot, Image as ImageIcon, Plus, Settings } from 'lucide-react';
 import { useTranslation } from '../lib/i18n/index.js';
 import type { WorkspaceTab } from '../lib/routes.js';
 import type { NotebookConfig } from '../lib/types.js';
@@ -16,10 +16,12 @@ interface HeaderProps {
   selectedNotebookId: string;
   onSelectNotebook: (id: string) => void;
   notebookDisabled?: boolean;
+  onCreateNote: () => void;
+  createNoteDisabled?: boolean;
 }
 
 export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab, setActiveTab,
-  notebooks, selectedNotebookId, onSelectNotebook, notebookDisabled }: HeaderProps) {
+  notebooks, selectedNotebookId, onSelectNotebook, notebookDisabled, onCreateNote, createNoteDisabled }: HeaderProps) {
   const { t } = useTranslation();
   useEffect(() => {
     document.title = `${t(`nav.${activeTab}`)} · GitHub Notes`;
@@ -41,12 +43,16 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
         </div>
       </div>
       <nav aria-label="Main navigation" className="header-nav">
-        {items.map(({id, label, icon: Icon}) => <button key={id} type="button"
-          onClick={() => setActiveTab(id)} aria-label={label}
-          aria-current={activeTab === id ? 'page' : undefined}
->
-          <Icon aria-hidden="true" /><span>{label}</span>
-        </button>)}
+        {items.map(({id, label, icon: Icon}, index) => <React.Fragment key={id}>
+          {index === 2 && <button type="button" className="mobile-nav-create" aria-label={t('header.newNote')}
+            disabled={createNoteDisabled} onClick={onCreateNote}>
+            <Plus aria-hidden="true" /><span>{t('header.newNote')}</span>
+          </button>}
+          <button type="button" onClick={() => setActiveTab(id)} aria-label={label}
+            aria-current={activeTab === id ? 'page' : undefined}>
+            <Icon aria-hidden="true" /><span>{label}</span>
+          </button>
+        </React.Fragment>)}
       </nav>
       <div className="header-account">
         {notebooks.length > 0 && <div className="header-notebook">

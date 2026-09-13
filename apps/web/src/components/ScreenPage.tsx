@@ -4,7 +4,7 @@ import { stringify } from 'yaml';
 import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, GripVertical, X, Zap, ChevronLeft, ChevronRight, LayoutGrid, Columns3, Columns2, PanelLeft } from 'lucide-react';
+import { Plus, GripVertical, X, Zap, ChevronLeft, ChevronRight, LayoutGrid, Columns3, Columns2 } from 'lucide-react';
 import { moveScreenItem, type ScreenItem, type ScreenRow } from '@github-notes/core/screen-page';
 import type { NoteItem, NotebookConfig, FolderItem } from '../lib/types.js';
 import { fetchAssets } from '../lib/api.js';
@@ -17,10 +17,11 @@ import { useTranslation } from '../lib/i18n/index.js';
 import { ScreenCard, screenItemTitle, type ScreenContentProps, type ScreenAsset } from './ScreenCard.js';
 import { ScreenAddRow, ScreenAddItem } from './ScreenDialogs.js';
 import { ScreenLaneNavigation } from './ScreenLaneNavigation.js';
-import { WorkspaceSidebar } from './WorkspaceChrome.js';
+import { WorkspaceSidebar, WorkspaceSidebarDrawer, WorkspaceSidebarToggle, useWorkspaceSidebarDrawer } from './WorkspaceChrome.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { Select } from './Select.js';
 import type { SortConfig } from '../lib/note-sort.js';
+import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
 
 function MovableCard({ item, row, disabled, remove, ...content }: ScreenContentProps & {
   item: ScreenItem; row: ScreenRow; disabled: boolean; remove: () => void;
@@ -42,16 +43,7 @@ function Lane({ row, disabled, onView, onSort, onAdd, onRemove, ...content }: Sc
   const { t } = useTranslation(); const host = useRef<HTMLElement>(null), strip = useRef<HTMLDivElement>(null);
   const drop = useDroppable({ id: `lane:${row.id}`, disabled: disabled || row.kind !== 'custom', data: { rowId: row.id, empty: row.kind === 'custom' && !row.items.length } });
   const items = screenRowItems(row, content.notes, content.assets, content.notebooks);
-  useEffect(() => {
-    const element = host.current!, scroller = strip.current!;
-    const wheel = (event: WheelEvent) => {
-      if (!event.altKey || event.ctrlKey || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
-      const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? scroller.clientWidth : 1);
-      event.preventDefault(); scroller.scrollLeft += delta;
-    };
-    element.addEventListener('wheel', wheel, { passive: false });
-    return () => element.removeEventListener('wheel', wheel);
-  }, []);
+  useAltWheelHorizontalScroll(host, strip);
   const scroll = (direction: number) => strip.current?.scrollBy({ left: direction * strip.current.clientWidth * .8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   const source = row.kind === 'dynamic' ? row.source.kind === 'tag' ? `#${row.source.tag}` : row.source.path : '';
   return <section id={`screen-lane-${row.id}`} ref={host} className={`screen-lane screen-view-${row.view} ${row.kind === 'dynamic' ? 'screen-lane-dynamic' : ''}`} aria-label={row.name}>
@@ -91,12 +83,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
   onOpenNote: (note: NoteItem) => void;
 }) {
   const { t } = useTranslation(); const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  useEffect(() => {
-    if (!sidebarOpen) return;
-    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setSidebarOpen(false); };
-    document.addEventListener('keydown', close); return () => document.removeEventListener('keydown', close);
-  }, [sidebarOpen]);
+  const sidebar = useWorkspaceSidebarDrawer();
   const [assets, setAssets] = useState<ScreenAsset[]>([]), [assetError, setAssetError] = useState(false);
   const [assetAttempt, setAssetAttempt] = useState(0), [assetsLoading, setAssetsLoading] = useState(false);
   const [dialog, setDialog] = useState<'add' | 'reload' | null>(null), [addTo, setAddTo] = useState<string | null>(null);
@@ -128,18 +115,17 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
     else { const asset = assets.find(asset => asset.notebookId === item.notebookId && asset.path === item.path); if (asset) setPreview(asset); else screen.setError(t('screen.missing')); }
   } };
   const row = screen.page.rows.find(row => row.id === addTo);
-  return <div className="workspace-route screen-main">
-    {sidebarOpen && <button className="notebook-backdrop mobile-only absolute inset-0 z-20 bg-slate-950/40" aria-label={t('common.close')} onClick={() => setSidebarOpen(false)} />}
-    <div className={`notebook-panel screen-sidebar-panel ${sidebarOpen ? 'is-open' : ''}`}>
+  return <div className="workspace-route screen-main has-sidebar-drawer">
+    <WorkspaceSidebarDrawer open={sidebar.open} onClose={() => sidebar.setOpen(false)} closeLabel={t('common.close')}>
       <WorkspaceSidebar label={t('screen.controls')} className="screen-sidebar" footer={<p className="screen-wheel-help">{t('screen.wheelHint')}</p>}>
         <div className="screen-sidebar-controls">
-          <button className="screen-sidebar-action" disabled={disabled || screen.page.rows.length >= 40} onClick={() => { setSidebarOpen(false); setDialog('add'); }}><Plus size={16} />{t('screen.addRow')}</button>
+          <button className="screen-sidebar-action" disabled={disabled || screen.page.rows.length >= 40} onClick={() => { sidebar.setOpen(false); setDialog('add'); }}><Plus size={16} />{t('screen.addRow')}</button>
         </div>
-        {screen.page.rows.length > 0 && <ScreenLaneNavigation page={screen.page} disabled={disabled} notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onChange={screen.change} onSelect={id => { document.getElementById(`screen-lane-${id}`)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); setSidebarOpen(false); }} />}
+        {screen.page.rows.length > 0 && <ScreenLaneNavigation page={screen.page} disabled={disabled} notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onChange={screen.change} onSelect={id => { document.getElementById(`screen-lane-${id}`)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); sidebar.setOpen(false); }} />}
       </WorkspaceSidebar>
-    </div>
+    </WorkspaceSidebarDrawer>
+    <WorkspaceSidebarToggle label={t('screen.controls')} open={sidebar.open} onClick={() => sidebar.setOpen(open => !open)} />
     <main className="screen-content">
-      <button className="mobile-only screen-mobile-toggle ui-button" aria-label={t('screen.controls')} aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(open => !open)}><PanelLeft size={16} />{t('screen.lanes')}</button>
       <div className="screen-board-scroll">
       {assetError && <div role="alert" className="screen-error">{t('screen.assetsError')}
         <button type="button" className="ui-button" aria-label={t('screen.retryAssets')} disabled={assetsLoading} onClick={() => setAssetAttempt(value => value + 1)}>{t('screen.retryAssets')}</button>
