@@ -29,10 +29,13 @@
 .header-user-popover > span { display: block; padding: 8px; font-size: 11px; color: var(--color-muted); }
 .header-user-popover button { display: flex; align-items: center; gap: 8px; padding: 8px; width: 100%; border-radius: 6px; font-size: 12px; }
 .header-user-popover button:hover { background: var(--workspace-selection); }
-.screen-main { background: var(--color-bg); }
+.screen-main { --workspace-sidebar-width: 200px; background: var(--color-bg); }
+.screen-sidebar .workspace-sidebar-scroll { gap: 12px; padding: 12px 8px; }
+.screen-sidebar .workspace-sidebar-footer { padding: 0 12px 8px; }
+.screen-sidebar h4 { margin-bottom: 4px; }
 .screen-content { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: 1; }
-.screen-board-scroll { overflow-y: auto; overflow-x: hidden; min-height: 0; flex: 1; padding: 28px var(--workspace-padding) 84px; scrollbar-gutter: stable; }
-.screen-sidebar-action { display: flex; gap: 9px; align-items: center; width: 100%; min-height: 38px; padding: 8px 10px; border-radius: 7px; text-align: left; font-size: 13px; color: var(--color-text); }
+.screen-board-scroll { overflow-y: auto; overflow-x: hidden; min-height: 0; flex: 1; padding: 12px 16px 24px; scrollbar-gutter: stable; }
+.screen-sidebar-action { display: flex; gap: 9px; align-items: center; width: 100%; min-height: 32px; padding: 5px 8px; border-radius: 7px; text-align: left; font-size: 13px; color: var(--color-text); }
 .screen-sidebar-action:hover { background: var(--workspace-selection); }
 .screen-sidebar-action:disabled { opacity: .4; }
 .screen-sidebar-action svg { flex: none; color: var(--color-muted); }
@@ -40,7 +43,7 @@
 .screen-sidebar-lane { display: flex; align-items: center; min-width: 0; }
 .screen-sidebar-lane .screen-sidebar-action { flex: 1; min-width: 0; padding-left: 4px; }
 .screen-sidebar-lane > .ui-icon-button { width: 26px; }
-.screen-wheel-help { padding: 12px 4px; font-size: 10px; line-height: 1.8; color: var(--color-muted); }
+.screen-wheel-help { padding: 6px 0; font-size: 10px; line-height: 1.6; color: var(--color-muted); }
 .screen-mobile-toggle { display: none; align-self: flex-start; margin: 12px 16px 0; }
 @media (max-width: 900px) { .screen-mobile-toggle { display: inline-flex; } }
 .folder-tree-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
@@ -63,24 +66,25 @@
 .folder-dialog-actions .ui-button { justify-content: flex-start; }
 .folder-error { color: #b45309; font-size: 12px; overflow-wrap: anywhere; display: flex; flex-direction: column; gap: 8px; }
 .screen-board-meta { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 10px; color: var(--color-muted); padding: 8px 0 24px; }
-.screen-lane { --screen-card-width: 340px; --screen-content-height: 255px; margin-bottom: 28px; min-width: 0; border-radius: 12px; }
+.screen-lane { --screen-card-width: 340px; --screen-content-height: 255px; margin-bottom: 16px; min-width: 0; border-radius: 12px; }
 .screen-view-thumbnail { --screen-card-width: 240px; --screen-content-height: 125px; }
 .screen-view-medium { --screen-card-width: 480px; --screen-content-height: 405px; }
-.screen-lane-dynamic { background: color-mix(in srgb, var(--color-primary) 3%, transparent); outline: 1px dashed color-mix(in srgb, var(--color-primary) 23%, transparent); outline-offset: 8px; }
+.screen-lane-dynamic { background: color-mix(in srgb, var(--color-primary) 3%, transparent); outline: 1px dashed color-mix(in srgb, var(--color-primary) 23%, transparent); outline-offset: 4px; }
 .screen-lane-header, .screen-lane-heading, .screen-lane-actions { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.screen-lane-header { justify-content: space-between; padding: 14px 16px 4px; margin-bottom: 12px; flex-wrap: wrap; }
-.screen-lane-heading { flex-wrap: wrap; gap: 7px; }
-.screen-lane-heading h3 { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.screen-lane-header { justify-content: space-between; padding: 4px 8px; margin-bottom: 6px; gap: 6px 10px; flex-wrap: wrap; }
+.screen-lane-heading { flex: 1 1 180px; flex-wrap: wrap; gap: 6px; }
+.screen-lane-heading h3 { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .screen-count { font-size: 10px; color: var(--color-muted); }
-.screen-dynamic-label { display: inline-flex; align-items: center; gap: 5px; color: var(--color-primary); font-size: 10px; max-width: 360px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.screen-dynamic-label { display: inline-flex; align-items: center; gap: 5px; color: var(--color-primary); font-size: 10px; max-width: min(220px, 100%); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .screen-lane-actions { flex: none; gap: 3px; flex-wrap: wrap; max-width: 100%; }
-.screen-sort-select { width: 170px; max-width: 100%; margin-right: 6px; }
-.screen-view-tabs { display: flex; align-items: center; gap: 3px; padding: 3px; margin-right: 6px; border-radius: 8px; background: var(--workspace-selection); }
+.screen-lane-actions .ui-icon-button { width: 28px; height: 28px; }
+.screen-sort-select { width: 140px; max-width: 100%; min-height: 28px; padding: 4px 8px; font-size: 12px; line-height: 18px; margin-right: 4px; }
+.screen-view-tabs { display: flex; align-items: center; gap: 2px; padding: 2px; margin-right: 4px; border-radius: 8px; background: var(--workspace-selection); }
 .screen-view-tabs [aria-pressed="true"] { background: var(--color-surface); color: var(--color-primary); box-shadow: 0 1px 3px #0001; }
-.screen-lane-strip { display: flex; gap: 14px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 12px; min-height: 120px; scrollbar-width: thin; }
+.screen-lane-strip { display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 6px; min-height: 120px; scrollbar-width: thin; }
 .screen-card-slot { flex: 0 0 var(--screen-card-width); width: var(--screen-card-width); max-width: calc(100vw - 44px); min-width: 0; }
 .screen-card { position: relative; display: flex; flex-direction: column; border: 1px solid var(--workspace-divider); border-radius: 10px; background: var(--color-surface); overflow: hidden; box-shadow: 0 2px 4px #00000003; }
-.screen-card-header { display: flex; align-items: center; gap: 7px; padding: 10px 12px 8px; min-width: 0; }
+.screen-card-header { display: flex; align-items: center; gap: 7px; padding: 6px 10px; min-width: 0; }
 .screen-card-header > svg { width: 14px; height: 14px; color: var(--color-muted); flex: none; }
 .screen-card-title { min-width: 0; flex: 1; font-size: 13px; font-weight: 500; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .screen-card-header .ui-icon-button { width: 22px; height: 24px; }
@@ -89,7 +93,7 @@
 .screen-drag-handle:active { cursor: grabbing; }
 .screen-remove { position: absolute; right: 8px; bottom: 5px; }
 .screen-card-content { height: var(--screen-content-height); overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding: 8px 16px 16px; min-height: 0; font-size: 13px; }
-.screen-card-footer { font-size: 10px; color: var(--color-muted); padding: 7px 30px 9px 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-top: 1px solid var(--workspace-divider); }
+.screen-card-footer { font-size: 10px; color: var(--color-muted); padding: 5px 30px 5px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-top: 1px solid var(--workspace-divider); }
 .screen-summary { color: var(--color-muted); line-height: 1.9; font-size: 12px; margin: 0; }
 .screen-view-thumbnail .screen-summary { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .screen-markdown { font-size: 13px; line-height: 1.85; overflow-wrap: anywhere; }
@@ -296,6 +300,7 @@
   .screen-main .workspace-page-actions .ui-button { font-size: 11px; padding: 6px 9px; }
   .screen-board-meta { font-size: 9px; padding-bottom: 20px; }
   .screen-lane-header { gap: 8px; }
+  .screen-sort-select { min-height: 44px; }
   .screen-lane-heading { flex: 1 1 100%; }
   .screen-dynamic-label { max-width: 220px; }
   .workspace-dialog { padding: 18px; }
