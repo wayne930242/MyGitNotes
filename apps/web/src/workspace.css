@@ -37,6 +37,9 @@
 .screen-sidebar-action:disabled { opacity: .4; }
 .screen-sidebar-action svg { flex: none; color: var(--color-muted); }
 .screen-sidebar-action span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.screen-sidebar-lane { display: flex; align-items: center; min-width: 0; }
+.screen-sidebar-lane .screen-sidebar-action { flex: 1; min-width: 0; padding-left: 4px; }
+.screen-sidebar-lane > .ui-icon-button { width: 26px; }
 .screen-wheel-help { padding: 12px 4px; font-size: 10px; line-height: 1.8; color: var(--color-muted); }
 .screen-mobile-toggle { display: none; align-self: flex-start; margin: 12px 16px 0; }
 @media (max-width: 900px) { .screen-mobile-toggle { display: inline-flex; } }
@@ -65,13 +68,14 @@
 .screen-view-medium { --screen-card-width: 480px; --screen-content-height: 405px; }
 .screen-lane-dynamic { background: color-mix(in srgb, var(--color-primary) 3%, transparent); outline: 1px dashed color-mix(in srgb, var(--color-primary) 23%, transparent); outline-offset: 8px; }
 .screen-lane-header, .screen-lane-heading, .screen-lane-actions { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.screen-lane-header { justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; }
+.screen-lane-header { justify-content: space-between; padding: 14px 16px 4px; margin-bottom: 12px; flex-wrap: wrap; }
 .screen-lane-heading { flex-wrap: wrap; gap: 7px; }
 .screen-lane-heading h3 { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 .screen-count { font-size: 10px; color: var(--color-muted); }
 .screen-dynamic-label { display: inline-flex; align-items: center; gap: 5px; color: var(--color-primary); font-size: 10px; max-width: 360px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .screen-lane-actions { flex: none; gap: 3px; }
-.screen-lane-actions .select-trigger { min-height: 30px; font-size: 11px; width: 76px; padding: 4px 8px; background: transparent; border-color: transparent; }
+.screen-view-tabs { display: flex; align-items: center; gap: 3px; padding: 3px; margin-right: 6px; border-radius: 8px; background: var(--workspace-selection); }
+.screen-view-tabs [aria-pressed="true"] { background: var(--color-surface); color: var(--color-primary); box-shadow: 0 1px 3px #0001; }
 .screen-lane-strip { display: flex; gap: 14px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 12px; min-height: 120px; scrollbar-width: thin; }
 .screen-card-slot { flex: 0 0 var(--screen-card-width); width: var(--screen-card-width); max-width: calc(100vw - 44px); min-width: 0; }
 .screen-card { position: relative; display: flex; flex-direction: column; border: 1px solid var(--workspace-divider); border-radius: 10px; background: var(--color-surface); overflow: hidden; box-shadow: 0 2px 4px #00000003; }

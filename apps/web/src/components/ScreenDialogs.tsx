@@ -1,8 +1,4 @@
 import { useState } from 'react';
-import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy, sortableKeyboardCoordinates, arrayMove } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Trash2, Zap } from 'lucide-react';
 import { parseYouTubeUrl, type ScreenItem, type ScreenRow } from '@github-notes/core/screen-page';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { Select } from './Select.js';
@@ -38,32 +34,6 @@ export function ScreenAddRow({ notebooks, notes, assets, folders, selectedNotebo
         <label className="screen-checkbox"><input type="checkbox" checked={recursive} onChange={e => setRecursive(e.target.checked)} />{t('screen.recursive')}</label></>}
       <div className="workspace-dialog-actions"><button className="ui-button" type="button" onClick={onClose}>{t('common.cancel')}</button><button className="ui-button ui-button-primary" disabled={kind === 'folder' && !nb || kind === 'tag' && !tag.trim()}>{t('screen.addRow')}</button></div>
     </form>
-  </WorkspaceDialog>;
-}
-
-function RowEditor({ row, onChange, onRemove }: { row: ScreenRow; onChange: (value: string) => void; onRemove: () => void }) {
-  const { t } = useTranslation(); const sort = useSortable({ id: row.id });
-  return <div ref={sort.setNodeRef} style={{ transform: CSS.Transform.toString(sort.transform), transition: sort.transition }} className="screen-row-editor">
-    <button type="button" ref={sort.setActivatorNodeRef} {...sort.attributes} {...sort.listeners} className="screen-drag-handle ui-icon-button" aria-label={`${t('screen.moveRow')}: ${row.name}`}><GripVertical /></button>
-    {row.kind === 'dynamic' && <Zap size={14} />}
-    <input className="ui-control" aria-label={t('screen.rowName')} value={row.name} maxLength={100} onChange={e => onChange(e.target.value)} />
-    <button type="button" className="ui-icon-button" aria-label={`${t('screen.removeRow')}: ${row.name}`} onClick={onRemove}><Trash2 size={16} /></button>
-  </div>;
-}
-
-export function ScreenEditRows({ rows, onApply, onClose }: { rows: ScreenRow[]; onApply: (rows: ScreenRow[]) => void; onClose: () => void }) {
-  const { t } = useTranslation(); const [draft, setDraft] = useState(rows);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
-  return <WorkspaceDialog title={t('screen.editRows')} onClose={onClose}>
-    <p className="screen-dialog-hint">{t('screen.editRowsHint')}</p>
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={({ active, over }) => {
-      if (over && active.id !== over.id) setDraft(rows => arrayMove(rows, rows.findIndex(row => row.id === active.id), rows.findIndex(row => row.id === over.id)));
-    }}><SortableContext items={draft.map(row => row.id)} strategy={verticalListSortingStrategy}>
-      <div className="screen-row-editors">{draft.map(row => <RowEditor key={row.id} row={row}
-        onChange={name => setDraft(rows => rows.map(value => value.id === row.id ? { ...value, name } : value))}
-        onRemove={() => setDraft(rows => rows.filter(value => value.id !== row.id))} />)}</div>
-    </SortableContext></DndContext>
-    <div className="workspace-dialog-actions"><button className="ui-button" onClick={onClose}>{t('common.cancel')}</button><button className="ui-button ui-button-primary" disabled={draft.some(row => !row.name.trim())} onClick={() => { onApply(draft); onClose(); }}>{t('screen.apply')}</button></div>
   </WorkspaceDialog>;
 }
 
