@@ -359,14 +359,17 @@ const AppContent: React.FC = () => {
     return getImmediateSubfolders(visibleNotes, folders, selectedNotebookId, root, selectedFolder);
   }, [visibleNotes, folders, selectedNotebookId, config, selectedFolder, searchQuery, selectedStatus, selectedTag, viewMode]);
 
-  // Folder introductions use the same visibility and working-copy state as notes.
+  // Choose by filename before applying visibility so a hidden index keeps priority.
   const folderIndex = useMemo(() => {
     if (viewMode === 'flat' || searchQuery.trim() || selectedStatus || selectedTag) return undefined;
     const notebook = config?.notebooks.find(nb => nb.id === selectedNotebookId);
     if (!notebook) return undefined;
-    const indexPath = [notebook.root.replace(/\/$/, ''), selectedFolder, 'index.md'].filter(Boolean).join('/');
-    return visibleNotes.find(note => note.notebookId === notebook.id && note.path === indexPath);
-  }, [visibleNotes, config, selectedNotebookId, selectedFolder, viewMode, searchQuery, selectedStatus, selectedTag]);
+    const directory = [notebook.root.replace(/\/$/, ''), selectedFolder].filter(Boolean).join('/');
+    const candidates = notes.filter(note => note.notebookId === notebook.id);
+    const selected = candidates.find(note => note.path === `${directory}/index.md`)
+      ?? candidates.find(note => note.path === `${directory}/README.md`);
+    return selected && visibleNotes.find(note => note.path === selected.path);
+  }, [notes, visibleNotes, config, selectedNotebookId, selectedFolder, viewMode, searchQuery, selectedStatus, selectedTag]);
 
   const notesBelowFolders = useMemo(() => filteredNotes.filter(note => note.path !== folderIndex?.path), [filteredNotes, folderIndex]);
 
