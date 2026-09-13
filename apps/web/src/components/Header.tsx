@@ -1,6 +1,6 @@
 import { ScreenIcon } from './ScreenIcon.js';
 import React, { useEffect } from 'react';
-import { BookOpen, Bot, Image as ImageIcon, Plus, Settings } from 'lucide-react';
+import { BookOpen, Bot, Image as ImageIcon, Keyboard, Plus, Settings } from 'lucide-react';
 import { useTranslation } from '../lib/i18n/index.js';
 import type { WorkspaceTab } from '../lib/routes.js';
 import type { NotebookConfig } from '../lib/types.js';
@@ -18,10 +18,12 @@ interface HeaderProps {
   notebookDisabled?: boolean;
   onCreateNote: () => void;
   createNoteDisabled?: boolean;
+  onOpenCommands: () => void;
+  navigationDisabled?: boolean;
 }
 
 export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab, setActiveTab,
-  notebooks, selectedNotebookId, onSelectNotebook, notebookDisabled, onCreateNote, createNoteDisabled }: HeaderProps) {
+  notebooks, selectedNotebookId, onSelectNotebook, notebookDisabled, onCreateNote, createNoteDisabled, onOpenCommands, navigationDisabled = false }: HeaderProps) {
   const { t } = useTranslation();
   useEffect(() => {
     document.title = `${t(`nav.${activeTab}`)} · GitHub Notes`;
@@ -45,10 +47,10 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
       <nav aria-label="Main navigation" className="header-nav">
         {items.map(({id, label, icon: Icon}, index) => <React.Fragment key={id}>
           {index === 2 && <button type="button" className="mobile-nav-create" aria-label={t('header.newNote')}
-            disabled={createNoteDisabled} onClick={onCreateNote}>
+            disabled={createNoteDisabled || navigationDisabled} onClick={onCreateNote}>
             <Plus aria-hidden="true" /><span>{t('header.newNote')}</span>
           </button>}
-          <button type="button" onClick={() => setActiveTab(id)} aria-label={label}
+          <button type="button" disabled={navigationDisabled} onClick={() => setActiveTab(id)} aria-label={label}
             aria-current={activeTab === id ? 'page' : undefined}>
             <Icon aria-hidden="true" /><span>{label}</span>
           </button>
@@ -59,10 +61,14 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
           <BookOpen aria-hidden="true" />
           <Select aria-label={t('sidebar.notebooks')} value={selectedNotebookId}
             title={notebooks.find(nb => nb.id === selectedNotebookId)?.title}
-            disabled={notebookDisabled} onValueChange={onSelectNotebook}
+            disabled={notebookDisabled || navigationDisabled} onValueChange={onSelectNotebook}
             options={notebooks.map(nb => ({ value: nb.id, label: nb.title }))} />
         </div>}
-        <div className="header-utilities"><button type="button" className="ui-icon-button header-settings" data-header-settings="" aria-label={t('nav.settings')} title={t('nav.settings')} aria-current={activeTab === 'settings' ? 'page' : undefined} onClick={() => setActiveTab('settings')}><Settings size={17} /></button>{accountControls}</div>
+        <div className="header-utilities">
+          <button type="button" disabled={navigationDisabled} className="ui-icon-button header-command" data-header-command="" aria-label={t('shortcuts.open')} title={t('shortcuts.open')} onClick={onOpenCommands}><Keyboard size={17} /></button>
+          <button type="button" disabled={navigationDisabled} className="ui-icon-button header-settings" data-header-settings="" aria-label={t('nav.settings')} title={t('nav.settings')} aria-current={activeTab === 'settings' ? 'page' : undefined} onClick={() => setActiveTab('settings')}><Settings size={17} /></button>
+          {accountControls}
+        </div>
       </div>
     </div>
   </header>;

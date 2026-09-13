@@ -97,6 +97,14 @@ try {
    assert((await bounds('.note-controls')).height<=48,'Note toolbar wraps on mobile');
    const close=await bounds('button[aria-label="Close note"]');assert(close.width>=44&&close.height>=44,'Small Close target');
    await page.screenshot({path:product+'/artifacts/qa/mobile-note-'+width+'.png'});
+   if(width===320) {
+    await tap('button[aria-label="Find in note"]');await fits('.note-find-bar');
+    await tap('button[aria-label="Close search"]');
+    await tap('button[aria-label="Outline"]');await fits('.note-outline');
+    assert((await bounds('.note-outline')).width<=300,'Mobile outline is too wide');
+    await page.screenshot({path:product+'/artifacts/qa/mobile-note-outline.png'});
+    await page.keyboard.press('Escape');assert(await page.$('[aria-label="Note editor"]'),'Outline Escape closed the note');
+   }
   }
   await page.goto(base+'/agent',{waitUntil:'networkidle0'});await page.waitForSelector('.cm-content');
   await fits('[data-markdown-editor]',Math.min(width-40,500));

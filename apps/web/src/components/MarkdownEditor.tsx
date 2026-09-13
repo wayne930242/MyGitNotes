@@ -6,7 +6,11 @@ import { useTranslation } from '../lib/i18n/index.js';
 
 const LiveMarkdownEditor = React.lazy(() => import('./LiveMarkdownEditor.js').then(module => ({ default: module.LiveMarkdownEditor })));
 export type MarkdownEditorMode = 'live' | 'raw';
-export interface MarkdownEditorHandle { insert: (text: string) => void }
+export interface MarkdownEditorHandle {
+  insert: (text: string) => void;
+  revealRange: (from: number, to: number, focus?: boolean) => void;
+  goToLine: (line: number, options?: { focus?: boolean; smooth?: boolean }) => void;
+}
 interface Props {
   content: string;
   path: string;
@@ -66,6 +70,27 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
       const end = source.current?.selectionEnd ?? content.length;
       onChange(content.slice(0, start) + text + content.slice(end));
       requestAnimationFrame(() => { source.current?.focus(); source.current?.setSelectionRange(start + text.length, start + text.length); });
+    },
+    revealRange(from, to, focus = false) {
+      if (mode === 'live' && isMarkdown) { live.current?.revealRange(from, to, focus); return; }
+      const target = source.current; if (!target) return;
+      const start = Math.max(0, Math.min(from, target.value.length));
+      const end = Math.max(start, Math.min(to, target.value.length));
+      target.setSelectionRange(start, end);
+      const line = target.value.slice(0, start).split('\n').length;
+      setActiveSourceLine(line);
+      target.scrollTop = Math.max(0, (line - 1) * 22.75 - target.clientHeight / 2);
+      if (focus) target.focus();
+    },
+    goToLine(line, options = {}) {
+      if (mode === 'live' && isMarkdown) { live.current?.goToLine(line, options); return; }
+      const target = source.current; if (!target) return;
+      const targetLine = Math.max(1, Math.min(line, target.value.split('\n').length));
+      let from = 0;
+      for (let currentLine = 1; currentLine < targetLine; currentLine += 1) from = target.value.indexOf('\n', from) + 1;
+      target.setSelectionRange(from, from); setActiveSourceLine(targetLine);
+      target.scrollTo({ top: Math.max(0, (targetLine - 1) * 22.75 - 16), behavior: options.smooth ? 'smooth' : 'auto' });
+      if (options.focus !== false) target.focus();
     }
   }), [content, mode, readOnly, isMarkdown, onChange]);
 
