@@ -39,7 +39,7 @@ import { ThemeDefinition, getSavedTheme, applyTheme } from './lib/themes.js';
 import { AuthControls, ConnectionState, AgentAccessSettings } from './components/AuthControls.js';
 import { inFolder } from './lib/note-paths.js';
 import { Header } from './components/Header.js';
-import { KeyboardShortcuts } from './components/KeyboardShortcuts.js';
+import { KeyboardShortcuts, type ShortcutSurfaceMode } from './components/KeyboardShortcuts.js';
 import { NoteToolbar } from './components/NoteToolbar.js';
 import { PageToolbar } from './components/WorkspaceChrome.js';
 import { useVisualViewport } from './lib/use-visual-viewport.js';
@@ -229,6 +229,7 @@ const AppContent: React.FC = () => {
   const [newNoteTitle, setNewNoteTitle] = useState<string>('');
   const [newNoteStatus, setNewNoteStatus] = useState<string>('inbox');
   const [newNoteFolder, setNewNoteFolder] = useState<string>('');
+  const [shortcutMode, setShortcutMode] = useState<ShortcutSurfaceMode | null>(null);
   const newNoteFolders = useMemo(() => folders.filter(folder => folder.notebookId === selectedNotebookId).map(folder => folder.path).sort(), [folders, selectedNotebookId]);
   const openNewNote = (status = notebookStatuses[0]) => {
     setNewNoteStatus(status);
@@ -712,6 +713,7 @@ const AppContent: React.FC = () => {
 
   const routedPath = route.note ? `${config?.notebooks.find(nb => nb.id === selectedNotebookId)?.root}/${route.note}` : null;
   const routedNote = routedPath ? (editingNote?.path === routedPath ? editingNote : notes.find(note => note.path === routedPath) || null) : null;
+  const noteEditorOpen = Boolean(routedNote) && !routeError;
 
   if (loading || loadError) return <ConnectionState loading={loading} error={loadError} onRetry={refreshWorkspace} />;
 
@@ -760,8 +762,12 @@ const AppContent: React.FC = () => {
         setActiveTab={setActiveTab}
         onCreateNote={() => openNewNote()}
         createNoteDisabled={!canWrite}
+        onOpenCommands={() => setShortcutMode('palette')}
+        navigationDisabled={noteEditorOpen}
       />
-      <KeyboardShortcuts activeTab={activeTab} canCreateNote={canWrite}
+      <KeyboardShortcuts mode={shortcutMode} onModeChange={setShortcutMode}
+        suspended={noteEditorOpen}
+        activeTab={activeTab} canCreateNote={canWrite}
         onNavigate={tab => void setActiveTab(tab)} onCreateNote={() => openNewNote()}
         onFocusSearch={() => requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.header-search input')?.focus())} />
 

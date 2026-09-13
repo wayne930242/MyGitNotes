@@ -11,7 +11,11 @@ import { headingSlug, resolveWorkspaceHref } from '../lib/workspace-links.js';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from '../lib/i18n/index.js';
 
-export interface LiveMarkdownHandle { insert: (text: string) => void }
+export interface LiveMarkdownHandle {
+  insert: (text: string) => void;
+  revealRange: (from: number, to: number, focus?: boolean) => void;
+  goToLine: (line: number, options?: { focus?: boolean; smooth?: boolean }) => void;
+}
 interface Props { content: string; notePath: string; readOnly: boolean; ariaLabel?: string; onChange: (content: string) => void }
 const focusChanged = StateEffect.define<boolean>();
 function externalLinkIcon(href: string, label: string, sourcePath: string): HTMLAnchorElement {
@@ -142,7 +146,24 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
   const host = useRef<HTMLDivElement>(null); const editor = useRef<EditorView>();
   const callback = useRef(onChange); callback.current = onChange;
   const permission = useRef(new Compartment());
-  useImperativeHandle(ref, () => ({insert(text) {const view=editor.current;if(!view||view.state.readOnly)return;view.dispatch(view.state.replaceSelection(text),{scrollIntoView:true,userEvent:'input'});view.focus();}}),[]);
+  useImperativeHandle(ref, () => ({
+    insert(text) {const view=editor.current;if(!view||view.state.readOnly)return;view.dispatch(view.state.replaceSelection(text),{scrollIntoView:true,userEvent:'input'});view.focus();},
+    revealRange(from, to, focus = false) {
+      const view = editor.current; if (!view) return;
+      const start = Math.max(0, Math.min(from, view.state.doc.length));
+      const end = Math.max(start, Math.min(to, view.state.doc.length));
+      view.dispatch({ selection: { anchor: start, head: end }, effects: EditorView.scrollIntoView(start, { y: 'center' }) });
+      if (focus) view.focus();
+    },
+    goToLine(line, options = {}) {
+      const view = editor.current; if (!view) return;
+      const target = view.state.doc.line(Math.max(1, Math.min(line, view.state.doc.lines))).from;
+      view.dispatch({ selection: { anchor: target } });
+      if (options.smooth) requestAnimationFrame(() => view.scrollDOM.scrollTo({ top: Math.max(0, view.lineBlockAt(target).top - 20), behavior: 'smooth' }));
+      else view.dispatch({ effects: EditorView.scrollIntoView(target, { y: 'start', yMargin: 20 }) });
+      if (options.focus !== false) view.focus();
+    },
+  }),[]);
   useEffect(() => {
     const field = StateField.define<{decorations:DecorationSet;focused:boolean}>({
       create(state) {return {decorations:liveDecorations(state,false,notePath,linkLabel),focused:false};},

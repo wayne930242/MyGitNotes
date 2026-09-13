@@ -1,19 +1,25 @@
 /* Workspace geometry belongs here; documents retain their own typography. */
 .workspace-link-surface { display: contents; }
-.keyboard-shortcuts-panel { position: fixed; z-index: 80; top: 68px; left: 50%; width: min(420px, calc(100vw - 24px)); transform: translateX(-50%); padding: 14px; border: 1px solid var(--color-border); border-radius: 12px; background: color-mix(in srgb, var(--color-surface) 96%, transparent); color: var(--color-text); box-shadow: 0 18px 55px #0003; backdrop-filter: blur(12px); outline: none; }
+.keyboard-shortcuts-panel { position: fixed; z-index: 80; top: 68px; left: 50%; width: min(520px, calc(100vw - 24px)); transform: translateX(-50%); border: 1px solid var(--color-border); border-radius: 12px; background: color-mix(in srgb, var(--color-surface) 96%, transparent); color: var(--color-text); box-shadow: 0 18px 55px #0003; backdrop-filter: blur(12px); outline: none; overflow: hidden; }
 .keyboard-shortcuts-heading, .keyboard-shortcuts-heading > div { display: flex; align-items: center; gap: 10px; }
-.keyboard-shortcuts-heading { justify-content: space-between; margin-bottom: 10px; }
+.keyboard-shortcuts-heading { justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--workspace-divider); }
 .keyboard-shortcuts-heading > div > svg { width: 18px; height: 18px; color: var(--color-primary); }
 .keyboard-shortcuts-heading h2 { font-size: 14px; font-weight: 650; }
 .keyboard-shortcuts-heading p, .keyboard-shortcuts-footer { font-size: 10px; color: var(--color-muted); }
-.keyboard-shortcuts-list { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-.keyboard-shortcuts-list button { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 38px; padding: 5px 8px; border-radius: 7px; text-align: left; font-size: 12px; }
-.keyboard-shortcuts-list button:hover:not(:disabled) { background: var(--workspace-selection); }
+.keyboard-shortcuts-search { display: flex; align-items: center; gap: 8px; min-height: 38px; margin: 10px 12px 6px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); }
+.keyboard-shortcuts-search:focus-within { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.keyboard-shortcuts-search > svg { flex: none; width: 16px; height: 16px; color: var(--color-muted); pointer-events: none; }
+.keyboard-shortcuts-search input { flex: 1; min-width: 0; height: 36px; border: 0; outline: 0; padding: 0; background: transparent; color: var(--color-text); font-size: 13px; }
+.keyboard-shortcuts-list { display: flex; flex-direction: column; gap: 2px; max-height: min(420px, calc(100dvh - 220px)); padding: 6px; overflow-y: auto; }
+.keyboard-shortcuts-panel[data-mode="help"] .keyboard-shortcuts-list { display: grid; grid-template-columns: 1fr 1fr; padding: 10px; }
+.keyboard-shortcuts-list button { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 40px; padding: 5px 8px; border-radius: 7px; text-align: left; font-size: 12px; }
+.keyboard-shortcuts-list button:hover:not(:disabled), .keyboard-shortcuts-list button.is-active:not(:disabled) { background: var(--workspace-selection); }
 .keyboard-shortcuts-list button:disabled { opacity: .45; }
 .keyboard-shortcuts-list kbd { display: grid; place-items: center; min-width: 26px; height: 24px; padding: 0 5px; border: 1px solid var(--workspace-divider); border-bottom-width: 2px; border-radius: 5px; background: var(--color-bg); font-family: ui-monospace, monospace; font-size: 11px; }
 .keyboard-shortcuts-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.keyboard-shortcuts-list small { grid-column: 2; margin-top: -5px; color: var(--color-muted); font-size: 9px; }
-.keyboard-shortcuts-footer { margin-top: 10px; text-align: center; }
+.keyboard-shortcuts-list small { color: var(--color-muted); font-size: 9px; }
+.keyboard-shortcuts-empty { padding: 28px 14px; text-align: center; color: var(--color-muted); font-size: 12px; }
+.keyboard-shortcuts-footer { padding: 9px 14px; border-top: 1px solid var(--workspace-divider); text-align: center; }
 .ui-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--color-border); border-radius: 8px; padding: 8px 12px; font-size: 12px; line-height: 18px; background: var(--color-surface); color: var(--color-text); white-space: nowrap; }
 .ui-button:hover, .ui-icon-button:hover { background: color-mix(in srgb, var(--color-text) 6%, var(--color-surface)); }
 .ui-button-primary { background: var(--color-primary); color: white; border-color: transparent; }
@@ -297,7 +303,7 @@
 }
 @media (max-width: 767px) {
   .keyboard-shortcuts-panel { top: max(12px, env(safe-area-inset-top)); }
-  .keyboard-shortcuts-list { grid-template-columns: 1fr; }
+  .keyboard-shortcuts-panel[data-mode="help"] .keyboard-shortcuts-list { grid-template-columns: 1fr; }
   .app-shell { --workspace-padding: 16px; }
   .workspace-header .header-layout { padding: calc(8px + env(safe-area-inset-top)) 12px 8px; }
   .workspace-header .header-nav { padding: 4px env(safe-area-inset-right) calc(4px + env(safe-area-inset-bottom)) env(safe-area-inset-left); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--color-surface); }

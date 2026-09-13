@@ -12,6 +12,10 @@ import {
   FileText,
   RotateCcw,
   AlertTriangle,
+  Search,
+  ListTree,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { mergeNote, sameValue, NoteDraft } from '../lib/merge-note.js';
 import { ApiError } from '../lib/api.js';
@@ -21,6 +25,7 @@ import { NoteItem, AssetItem } from '../lib/types.js';
 import { saveLocalDraft, getLocalDraft, clearLocalDraft } from '../lib/storage.js';
 import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { findTextMatches, parseMarkdownOutline } from '../lib/note-navigation.js';
 
 interface EditorModalProps {
   note: NoteItem | null;
@@ -179,6 +184,13 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
   // Asset picker modal state (Requirement 2)
   const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false);
+  const [isFindOpen, setIsFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
+  const [findIndex, setFindIndex] = useState(0);
+  const [isOutlineOpen, setIsOutlineOpen] = useState(false);
+  const [outlineIndex, setOutlineIndex] = useState(0);
+  const [isEditorLeaderOpen, setIsEditorLeaderOpen] = useState(false);
+  const findInputRef = useRef<HTMLInputElement>(null);
 
   // Tag autocomplete states (Requirement 4)
   const [tagInput, setTagInput] = useState('');
@@ -188,6 +200,26 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   const [confirmRestore, setConfirmRestore] = useState(false);
   const restoreTimerRef = useRef<NodeJS.Timeout | null>(null);
   const editorRef = useRef<MarkdownEditorHandle>(null);
+  const matches = useMemo(() => findTextMatches(content, findQuery), [content, findQuery]);
+  const outline = useMemo(() => parseMarkdownOutline(content), [content]);
+
+  useEffect(() => setFindIndex(0), [findQuery]);
+  useEffect(() => {
+    if (!isFindOpen || matches.length === 0) return;
+    const index = Math.min(findIndex, matches.length - 1);
+    if (index !== findIndex) { setFindIndex(index); return; }
+    editorRef.current?.revealRange(matches[index].from, matches[index].to);
+  }, [editorMode, findIndex, isFindOpen, matches]);
+
+  const openFind = () => {
+    setIsEditorLeaderOpen(false); setIsOutlineOpen(false);
+    setIsFindOpen(true);
+    requestAnimationFrame(() => { findInputRef.current?.focus(); findInputRef.current?.select(); });
+  };
+  const stepFind = (delta: number) => {
+    if (matches.length === 0) return;
+    setFindIndex(index => (index + delta + matches.length) % matches.length);
+  };
 
   // Note is considered dirty if it has uncommitted edits on disk OR unsaved session edits
   const isDirty = Boolean(propIsDirty || hasUnsavedChanges);
@@ -209,6 +241,12 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     setTagInput('');
     setIsTagDropdownOpen(false);
     setIsAssetPickerOpen(false);
+    setIsFindOpen(false);
+    setFindQuery('');
+    setFindIndex(0);
+    setIsOutlineOpen(false);
+    setOutlineIndex(0);
+    setIsEditorLeaderOpen(false);
 
     const draft = readOnly ? null : getLocalDraft(draftScope || branch, note.path);
     if (draft && (draft.content !== note.content || !sameValue(draft.metadata, note.metadata))) {
@@ -322,16 +360,63 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     onClose();
   };
   const escapeAction = useRef(() => {});
-  escapeAction.current = () => isAssetPickerOpen ? setIsAssetPickerOpen(false) : close();
+  escapeAction.current = () => {
+    if (isAssetPickerOpen) setIsAssetPickerOpen(false);
+    else if (isEditorLeaderOpen) setIsEditorLeaderOpen(false);
+    else if (isFindOpen) setIsFindOpen(false);
+    else if (isOutlineOpen) setIsOutlineOpen(false);
+    else void close();
+  };
+  const openOutline = () => {
+    setIsEditorLeaderOpen(false); setIsFindOpen(false); setOutlineIndex(0); setIsOutlineOpen(true);
+  };
+  const chooseOutline = (index: number, closeAfter = true) => {
+    const heading = outline[index]; if (!heading) return;
+    editorRef.current?.goToLine(heading.line, { focus: closeAfter, smooth: true });
+    if (closeAfter) setIsOutlineOpen(false);
+  };
+  const shortcutAction = useRef<(event: KeyboardEvent) => boolean>(() => false);
+  shortcutAction.current = event => {
+    const slashKey = event.code === 'Slash' || event.key === '/';
+    if (slashKey && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      setIsEditorLeaderOpen(open => !open); return true;
+    }
+    if (isEditorLeaderOpen && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      if (event.key.toLowerCase() === 'f') { openFind(); return true; }
+      if (slashKey) { openOutline(); return true; }
+    }
+    if (isOutlineOpen && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      if (event.key.toLowerCase() === 'j' || event.key === 'ArrowDown') {
+        setOutlineIndex(index => outline.length ? (index + 1) % outline.length : 0); return true;
+      }
+      if (event.key.toLowerCase() === 'k' || event.key === 'ArrowUp') {
+        setOutlineIndex(index => outline.length ? (index - 1 + outline.length) % outline.length : 0); return true;
+      }
+      if (event.key === 'Enter') { chooseOutline(outlineIndex); return true; }
+    }
+    return false;
+  };
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (document.querySelector('[role="listbox"]')) return;
+      if (shortcutAction.current(event)) {
+        event.preventDefault(); event.stopPropagation(); return;
+      }
       if (event.key === 'Escape' && !document.querySelector('dialog[open]')) {
         event.preventDefault(); event.stopPropagation(); escapeAction.current();
       }
     };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
   }, []);
+
+  useEffect(() => {
+    if (!isOutlineOpen || outline.length === 0) return;
+    const index = Math.min(outlineIndex, outline.length - 1);
+    if (index !== outlineIndex) { setOutlineIndex(index); return; }
+    editorRef.current?.goToLine(outline[index].line, { focus: false, smooth: true });
+    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-outline-index="${index}"]`)?.focus());
+  }, [isOutlineOpen, outline, outlineIndex]);
 
   const handleRestoreDraft = () => {
     if (recoveredDraft && !locked) {
@@ -471,6 +556,14 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
           <div className="note-controls flex items-center gap-2">
             {!autoSave && !readOnly && <button aria-label={t('editor.saveToGitHub')} title={t('editor.saveToGitHub')} disabled={locked || !hasUnsavedChanges} onClick={handleExplicitSave} className="note-save editor-action px-3 py-1.5 rounded-lg text-xs text-white transition hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: 'var(--color-primary)' }}><Save className="editor-mobile-icon w-5 h-5" /><span>{isSaving ? t('editor.saving') : t('editor.saveToGitHub')}</span></button>}
             {isMarkdown && <MarkdownEditorModeSwitch mode={editorMode} onChange={setEditorMode} />}
+
+            <button type="button" aria-label={t('editor.findInNote')} title={`${t('editor.findInNote')} · ${t('editor.findShortcut')}`}
+              aria-pressed={isFindOpen} onClick={() => isFindOpen ? setIsFindOpen(false) : openFind()}
+              className="editor-action editor-secondary-action editor-find-action"><Search className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('editor.find')}</span></button>
+
+            {isMarkdown && <button type="button" aria-label={t('editor.outline')} title={t('editor.outline')}
+              aria-pressed={isOutlineOpen} onClick={() => isOutlineOpen ? setIsOutlineOpen(false) : openOutline()}
+              className="editor-action editor-secondary-action editor-outline-action"><ListTree className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('editor.outline')}</span></button>}
 
             {/* Frontmatter Toggle */}
             <button
@@ -657,7 +750,34 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
           </fieldset>
         )}
 
-        <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} ariaLabel="Note content" />
+        {isFindOpen && <form className="note-find-bar" role="search" aria-label={t('editor.findInNote')}
+          onSubmit={event => { event.preventDefault(); stepFind(1); }}>
+          <Search aria-hidden="true" />
+          <input ref={findInputRef} type="search" value={findQuery} onChange={event => setFindQuery(event.target.value)}
+            onKeyDown={event => { if (event.key === 'Enter' && event.shiftKey) { event.preventDefault(); stepFind(-1); } }}
+            aria-label={t('editor.findInNote')} placeholder={t('editor.findPlaceholder')} autoComplete="off" />
+          <span className="note-find-count" aria-live="polite">{findQuery
+            ? matches.length ? t('editor.matchCount', { current: Math.min(findIndex + 1, matches.length), total: matches.length }) : t('editor.noMatches')
+            : ''}</span>
+          <button type="button" className="ui-icon-button" aria-label={t('editor.previousMatch')} disabled={matches.length === 0} onClick={() => stepFind(-1)}><ChevronUp aria-hidden="true" /></button>
+          <button type="submit" className="ui-icon-button" aria-label={t('editor.nextMatch')} disabled={matches.length === 0}><ChevronDown aria-hidden="true" /></button>
+          <button type="button" className="ui-icon-button" aria-label={t('editor.closeSearch')} onClick={() => setIsFindOpen(false)}><X aria-hidden="true" /></button>
+        </form>}
+
+        <div className="note-editor-body">
+          <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} ariaLabel="Note content" />
+          {isOutlineOpen && <aside className="note-outline" aria-label={t('editor.outline')}>
+            <div className="note-outline-heading"><strong>{t('editor.outline')}</strong><button type="button" className="ui-icon-button" aria-label={t('editor.closeOutline')} onClick={() => setIsOutlineOpen(false)}><X aria-hidden="true" /></button></div>
+            {outline.length > 0 ? <nav aria-label={t('editor.outline')}>
+              {outline.map((heading, index) => <button type="button" key={`${heading.from}-${index}`} data-outline-index={index}
+                aria-current={index === outlineIndex ? 'true' : undefined}
+                style={{ paddingInlineStart: `${12 + (heading.depth - 1) * 14}px` }}
+                title={heading.label} onMouseEnter={() => setOutlineIndex(index)} onClick={() => chooseOutline(index)}>
+                <span>{heading.label}</span><small>{heading.line}</small>
+              </button>)}
+            </nav> : <p>{t('editor.outlineEmpty')}</p>}
+          </aside>}
+        </div>
 
         <EditorFooter
           content={content}
@@ -670,6 +790,11 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
               ? t(draftMode ? hasUnsavedChanges ? 'editor.unsavedLocalChanges' : 'editor.savedLocallyPendingCommit' : autoSave ? 'editor.uncommittedChanges' : 'editor.unsavedChanges')
               : t(readOnly ? 'editor.readOnly' : draftMode ? 'editor.noPendingChanges' : autoSave ? 'editor.cleanSavedToDisk' : 'editor.savedToGitHub')}
         />
+        {isEditorLeaderOpen && <div className="note-editor-leader" role="dialog" aria-modal="false" aria-label={t('editor.noteCommands')}>
+          <div><strong>{t('editor.noteCommands')}</strong><small>{t('editor.leaderHint')}</small></div>
+          <button type="button" onClick={openFind}><kbd>F</kbd><span>{t('editor.findInNote')}</span></button>
+          {isMarkdown && <button type="button" onClick={openOutline}><kbd>/</kbd><span>{t('editor.outline')}</span></button>}
+        </div>}
       </div>
 
       {isAssetPickerOpen && <div role="dialog" aria-label={t('editor.notebookAssets')} aria-modal="true" className="viewport-overlay fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">

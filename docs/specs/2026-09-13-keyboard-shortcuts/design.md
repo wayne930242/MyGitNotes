@@ -2,21 +2,25 @@
 
 ## Approach
 
-Add one `KeyboardShortcuts` component mounted by `AppContent`. It owns only leader-panel state and keyboard interpretation; application actions remain callbacks supplied by `AppContent`.
+Keep one `KeyboardShortcuts` component mounted by `AppContent`. `AppContent` owns only the surface mode so the Header button can open it; the component owns query, selection, focus restoration, outside dismissal, and keyboard interpretation. Application actions remain callbacks supplied by `AppContent`.
 
 ## Interfaces and data flow
 
-- Inputs: active tab, write capability, navigation callback, new-note callback, and note-search focus callback.
+- Inputs: active tab, write capability, controlled surface mode, mode-change callback, navigation callback, new-note callback, and note-search focus callback.
 - Output: calls existing actions rather than constructing routes or creating notes itself.
-- Editable-context detection is centralized and includes native form controls, ARIA comboboxes, CodeMirror, and contenteditable elements.
-- Command definitions are one ordered array used by both keyboard dispatch and rendered buttons so labels, disabled state, and behavior cannot drift.
+- Header receives one `onOpenCommands` callback; it does not know command definitions or keyboard rules.
+- Editable-context detection is centralized and applies to the help chord. The shell owns `Alt/Option+/` only while no note is open; the editor then owns the same leader locally so background navigation cannot interrupt editing.
+- Command definitions are one ordered array used by filtering, quick-key dispatch, arrow selection, and rendered buttons so labels, disabled state, and behavior cannot drift.
 
 ## Trade-offs and risks
 
-- A 2.5-second pending timeout is long enough to read a small list while short enough not to leave hidden keyboard state behind. The pinned `?` help mode removes the time limit when the user wants to read.
-- A non-modal panel avoids blocking the workspace, but focus restoration and Escape handling are required.
-- Platform detection affects only whether the opening chord is displayed as `Ctrl+Alt+K` or `Cmd+Option+K`; second keys remain layout-stable numbers and punctuation exposed by `KeyboardEvent.key`.
+- A searchable palette provides more depth than the former timed leader without distributing command knowledge into Header or route components.
+- A controlled mode is a small interface cost, but it avoids imperative refs and custom DOM events while allowing both keyboard and Header entry points.
+- A non-modal panel avoids blocking the workspace; outside-click dismissal, Escape focus restoration, and active-option semantics keep interaction predictable.
+- Quick keys only apply before query entry. Uppercase `N` avoids stealing a lowercase search beginning with “n”.
 
 ## Verification seam
 
-Use a browser QA script against the production build. It will prove that plain `Ctrl+K` does not open the application leader, dispatch the Alt/Option chord, inspect the visible panel and active focus, traverse all four routes, open the new-note dialog, focus search, verify Settings, preserve browser/editor `Ctrl+K`, and test Escape/timeout behavior. Confirm the opening chord once in live Chrome because a headless page cannot model every browser-owned shortcut.
+Use a browser QA script against the production build to exercise both entry points, search filtering, no results, arrows and Enter, empty-query quick keys, help, outside click, Escape and focus restoration, contextual disablement, and all existing actions. Confirm `Alt+/` once in live Chrome because a headless page cannot model every browser-owned shortcut.
+
+The human final check is whether the resulting one-chord, searchable interaction feels materially easier than the retired triple-modifier timed leader.
