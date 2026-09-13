@@ -824,6 +824,7 @@ const AppContent: React.FC = () => {
               </>}
               {(viewMode === 'list' || viewMode === 'flat') && (
                 <ListView
+                  showMobileSort={viewMode === 'flat'}
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
                   canDelete={!remote && canWrite}
