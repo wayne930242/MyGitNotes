@@ -178,3 +178,5 @@ The wheel scrolls a lane horizontally, while scrollable note bodies retain verti
 Create folders from the notes sidebar. Drag to an insertion line to reorder siblings, or onto a folder to change hierarchy. The folder menu also provides a move-and-order dialog. Deleting a folder moves its contents to its parent by default, or another folder you choose; notes and subfolders are preserved, and filename collisions are rejected. Recognized Markdown links and Screen references follow moved content. Folder order is stored in `_dir.yml`.
 
 The Expand note view lists notes in the current folder and all descendants without grouping them into folders.
+
+Place an optional `index.md` in any notebook root or nested folder to show its Markdown content above that folder's List, Card or Kanban view. Relative links and images work as in other notes, and Open index note opens the regular editor. The file remains a normal note in listings. Hidden-note visibility applies; search, status/tag filters and Expand show results without the introduction.

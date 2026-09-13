@@ -325,3 +325,11 @@
 @media (prefers-reduced-motion: reduce) {
   .workspace-sidebar, .workspace-header, .workspace-sidebar * { transition: none; }
 }
+.folder-index { min-width: 0; margin-bottom: 20px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.folder-index-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--color-border); }
+.folder-index-header > span { display: flex; align-items: center; gap: 8px; color: var(--color-muted); font-size: 13px; }
+.folder-index-header svg { width: 16px; height: 16px; }
+.folder-index-content { padding: 16px 20px; overflow-x: auto; overflow-wrap: anywhere; }
+.folder-index-content > :first-child { margin-top: 0; }
+.folder-index-content > :last-child { margin-bottom: 0; }
+.folder-index-empty { padding: 16px 20px; color: var(--color-muted); font-size: 13px; }

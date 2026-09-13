@@ -136,6 +136,8 @@ export const zhTW: Record<TranslationKey, string> = {
   // Folders & Breadcrumbs
   'folder.allFolders': '所有資料夾',
   'folder.folders': '資料夾',
+  'folder.index': '資料夾介紹',
+  'folder.openIndex': '開啟索引筆記',
   'folder.up': '上一層',
   'folder.goUpTooltip': '回到上一層資料夾',
   'folder.noteCount': '{count} 則筆記',

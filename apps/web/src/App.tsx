@@ -53,6 +53,7 @@ import { SettingsModal } from './components/SettingsModal.js';
 import { CommitModal } from './components/CommitModal.js';
 import { FloatingCommitFooter } from './components/FloatingCommitFooter.js';
 import { Breadcrumbs } from './components/Breadcrumbs.js';
+import { FolderIndex } from './components/FolderIndex.js';
 import {
   getImmediateSubfolders,
   getImmediateNotes,
@@ -340,6 +341,15 @@ const AppContent: React.FC = () => {
     const root = config?.notebooks.find((nb) => nb.id === selectedNotebookId)?.root || '';
     return getImmediateSubfolders(visibleNotes, folders, selectedNotebookId, root, selectedFolder);
   }, [visibleNotes, folders, selectedNotebookId, config, selectedFolder, searchQuery, selectedStatus, selectedTag, viewMode]);
+
+  // Folder introductions use the same visibility and working-copy state as notes.
+  const folderIndex = useMemo(() => {
+    if (viewMode === 'flat' || searchQuery.trim() || selectedStatus || selectedTag) return undefined;
+    const notebook = config?.notebooks.find(nb => nb.id === selectedNotebookId);
+    if (!notebook) return undefined;
+    const indexPath = [notebook.root.replace(/\/$/, ''), selectedFolder, 'index.md'].filter(Boolean).join('/');
+    return visibleNotes.find(note => note.notebookId === notebook.id && note.path === indexPath);
+  }, [visibleNotes, config, selectedNotebookId, selectedFolder, viewMode, searchQuery, selectedStatus, selectedTag]);
 
   // Direct notes in current folder (or flat list during search/filter), sorted
   const displayedNotes = useMemo(() => {
@@ -756,6 +766,7 @@ const AppContent: React.FC = () => {
                 sortOrder={sortOrder}
                 onSortChange={viewMode !== 'kanban' ? handleSortChange : undefined}
               />
+              {folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
               {(viewMode === 'list' || viewMode === 'flat') && (
                 <ListView
                   statuses={notebookStatuses}
