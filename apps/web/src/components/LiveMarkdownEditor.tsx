@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { Compartment, EditorState, StateEffect, StateField, Transaction, type Range } from '@codemirror/state';
-import { Decoration, EditorView, WidgetType, keymap, drawSelection, type DecorationSet } from '@codemirror/view';
+import { Decoration, EditorView, WidgetType, keymap, drawSelection, lineNumbers, type DecorationSet } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { defaultHighlightStyle, HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
@@ -119,6 +119,9 @@ const theme = EditorView.theme({
   '&.cm-focused':{outline:'none'}, '.cm-scroller':{overflow:'auto',fontFamily:'inherit',lineHeight:'1.8'},
   '.cm-content':{padding:'28px 36px',maxWidth:'900px',margin:'0 auto',minHeight:'100%',width:'100%',caretColor:'var(--color-primary)'},
   '.cm-line':{padding:'0 2px'}, '.cm-cursor':{borderLeftColor:'var(--color-primary)'},
+  '.cm-gutters':{backgroundColor:'transparent',borderRight:'1px solid var(--color-border)'},
+  '.cm-lineNumbers':{color:'var(--color-muted)',fontFamily:'monospace',fontSize:'11px',opacity:'0.55'},
+  '.cm-lineNumbers .cm-gutterElement':{paddingLeft:'8px',paddingRight:'10px'},
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground':{backgroundColor:'var(--color-primary-light)'},
   '.live-md-heading':{fontWeight:'700',lineHeight:'1.4',paddingTop:'12px',paddingBottom:'8px'},
   '.live-md-heading span':{textDecoration:'none'},
@@ -149,7 +152,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
       provide: field => EditorView.decorations.from(field,value=>value.decorations),
     });
     const view = new EditorView({parent:host.current!,state:EditorState.create({doc:content,extensions:[
-      markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),EditorView.lineWrapping,
+      markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),lineNumbers(),EditorView.lineWrapping,
       syntaxHighlighting(defaultHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'}])),theme,field,
       permission.current.of([EditorState.readOnly.of(readOnly),EditorView.editable.of(!readOnly)]),
       EditorView.contentAttributes.of({'aria-label':ariaLabel,'role':'textbox','aria-multiline':'true'}),

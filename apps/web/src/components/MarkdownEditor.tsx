@@ -48,7 +48,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   const { t } = useTranslation();
   const live = useRef<LiveMarkdownHandle>(null);
   const source = useRef<HTMLTextAreaElement>(null);
+  const sourceLineNumbers = useRef<HTMLDivElement>(null);
   const isMarkdown = /\.(md|markdown)$/i.test(path);
+  const sourceLineCount = content.split('\n').length;
 
   useImperativeHandle(ref, () => ({
     insert(text) {
@@ -73,16 +75,31 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
             <span>{isMarkdown ? t('editor.rawSource') : t('editor.plainTextSource')}</span>
             <span className="font-mono truncate">{path}</span>
           </div>
-          <textarea
-            key={path}
-            ref={source}
-            readOnly={readOnly}
-            aria-label={ariaLabel}
-            value={content}
-            onChange={event => onChange(event.target.value)}
-            className="flex-1 min-h-0 p-4 font-mono text-sm leading-relaxed text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 resize-none focus:outline-none"
-            spellCheck={false}
-          />
+          <div key={path} className="flex-1 flex min-h-0 overflow-hidden">
+            <div
+              data-source-line-numbers
+              aria-hidden="true"
+              className="w-12 shrink-0 overflow-hidden border-r border-slate-200/70 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900 text-slate-400/70 dark:text-slate-500/70"
+            >
+              <div ref={sourceLineNumbers} className="py-4 pr-3 text-right font-mono text-xs tabular-nums" style={{ lineHeight: '1.421875rem' }}>
+                {Array.from({ length: sourceLineCount }, (_, index) => <div key={index} data-line-number>{index + 1}</div>)}
+              </div>
+            </div>
+            <textarea
+              ref={source}
+              readOnly={readOnly}
+              aria-label={ariaLabel}
+              value={content}
+              onChange={event => onChange(event.target.value)}
+              onScroll={event => {
+                if (sourceLineNumbers.current) sourceLineNumbers.current.style.transform = `translateY(-${event.currentTarget.scrollTop}px)`;
+              }}
+              wrap="off"
+              className="flex-1 min-w-0 min-h-0 px-4 py-4 font-mono text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 resize-none focus:outline-none"
+              style={{ lineHeight: '1.421875rem' }}
+              spellCheck={false}
+            />
+          </div>
         </div>
       )}
     </div>
