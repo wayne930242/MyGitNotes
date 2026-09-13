@@ -32,13 +32,7 @@ The same workspace can therefore stay fully local, travel through Git, or be sec
 
 ## Design logic
 
-```text
-Local browser  ── local API ── local files + Git
-
-Remote browser ─┐
-MCP client     ──┴─ Vercel serverless API ── GitHub repository
-                                      └────── Redis sessions and grants
-```
+![GitHub Notes local and remote architecture](docs/assets/github-notes-architecture-en.png)
 
 The boundaries are intentional:
 

@@ -32,13 +32,7 @@ GitHub Notes 把一個 Git 儲存庫變成集中處理筆記、文件、素材�
 
 ## 設計邏輯
 
-```text
-本地瀏覽器 ── 本地 API ── 本機檔案 + Git
-
-遠端瀏覽器 ─┐
-MCP 用戶端 ──┴─ Vercel serverless API ── GitHub 儲存庫
-                                        └── Redis session 與授權
-```
+![GitHub Notes 本地與遠端架構](docs/assets/github-notes-architecture-zh-TW.png)
 
 各層的責任刻意分開：
 
