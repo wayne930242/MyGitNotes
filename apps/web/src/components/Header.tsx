@@ -1,5 +1,6 @@
+import { ScreenIcon } from './ScreenIcon.js';
 import React, { useEffect } from 'react';
-import { BookOpen, Bot, Image as ImageIcon, Settings, Rows3 } from 'lucide-react';
+import { BookOpen, Bot, Image as ImageIcon, Settings } from 'lucide-react';
 import { useTranslation } from '../lib/i18n/index.js';
 import type { WorkspaceTab } from '../lib/routes.js';
 import type { NotebookConfig } from '../lib/types.js';
@@ -27,7 +28,7 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
     { id: 'notes', label: t('nav.notes'), icon: BookOpen },
     { id: 'agent', label: t('nav.agent'), icon: Bot },
     { id: 'assets', label: t('nav.assets'), icon: ImageIcon },
-    { id: 'screen', label: t('nav.screen'), icon: Rows3 },
+    { id: 'screen', label: t('nav.screen'), icon: ScreenIcon },
   ] as const;
   return <header className="workspace-header">
     <div className="header-layout">

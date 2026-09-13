@@ -1,3 +1,6 @@
+import { listLocalDrafts } from './lib/storage.js';
+import { useScreenPage } from './lib/use-screen-page.js';
+import { SCREEN_PAGE_FILE } from '@github-notes/core/screen-page';
 import { WorkspaceLinks } from './components/WorkspaceLinks.js';
 import { resolveNoteStatuses, isNoteHidden, withNoteStatus } from '@github-notes/core/note-status';
 import { Select } from './components/Select.js';
@@ -127,13 +130,15 @@ const AppContent: React.FC = () => {
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [workingNotes, setWorkingNotes] = useState<WorkingNotes>({});
   const workingScope = `${sourceId}:${branch}`;
+  const screen = useScreenPage(remote ? sourceId : `local:${repoRoot}`, () => { void fetchGitStatus().then(result => setGitStatus(result.status)); }, remote, Boolean(config && sourceId));
+  const screenPending = remote && canWrite && screen.dirty;
   const activeWorkingNotes = remote && canWrite ? workingNotes : {};
   const notes = useMemo(() => remote && canWrite ? overlayWorkingNotes(sourceNotes, workingNotes) : sourceNotes, [remote, canWrite, sourceNotes, workingNotes]);
   const gitStatus = useMemo<GitStatus | null>(() => remote ? {
-    branch, isClean: Object.keys(activeWorkingNotes).length === 0, staged: [],
-    modified: Object.values(activeWorkingNotes).filter(entry => entry.base).map(entry => entry.note.path),
+    branch, isClean: !screenPending && Object.keys(activeWorkingNotes).length === 0, staged: [],
+    modified: [...Object.values(activeWorkingNotes).filter(entry => entry.base).map(entry => entry.note.path), ...(screenPending ? [SCREEN_PAGE_FILE] : [])],
     untracked: Object.values(activeWorkingNotes).filter(entry => !entry.base).map(entry => entry.note.path),
-  } : serverGitStatus, [remote, branch, workingNotes, canWrite, serverGitStatus]);
+  } : serverGitStatus, [remote, branch, workingNotes, canWrite, serverGitStatus, screenPending]);
   useEffect(() => {
     const refresh = (event: StorageEvent) => {
       if (event.key === `gh_notes_working:${workingScope}`) {
@@ -331,19 +336,19 @@ const AppContent: React.FC = () => {
 
   // Hierarchical Subfolder Discovery for current folder
   const immediateSubfolders = useMemo(() => {
-    if (searchQuery.trim() || selectedStatus || selectedTag) return [];
+    if (viewMode === 'flat' || searchQuery.trim() || selectedStatus || selectedTag) return [];
     const root = config?.notebooks.find((nb) => nb.id === selectedNotebookId)?.root || '';
     return getImmediateSubfolders(visibleNotes, folders, selectedNotebookId, root, selectedFolder);
-  }, [visibleNotes, folders, selectedNotebookId, config, selectedFolder, searchQuery, selectedStatus, selectedTag]);
+  }, [visibleNotes, folders, selectedNotebookId, config, selectedFolder, searchQuery, selectedStatus, selectedTag, viewMode]);
 
   // Direct notes in current folder (or flat list during search/filter), sorted
   const displayedNotes = useMemo(() => {
     const root = config?.notebooks.find((nb) => nb.id === selectedNotebookId)?.root || '';
-    const base = searchQuery.trim() || selectedStatus || selectedTag
+    const base = viewMode === 'flat' || searchQuery.trim() || selectedStatus || selectedTag
       ? filteredNotes
       : getImmediateNotes(filteredNotes, root, selectedFolder);
     return sortNotes(base, sortField, sortOrder, notebookStatuses);
-  }, [filteredNotes, config, selectedNotebookId, selectedFolder, searchQuery, selectedStatus, selectedTag, sortField, sortOrder, notebookStatuses]);
+  }, [filteredNotes, config, selectedNotebookId, selectedFolder, searchQuery, selectedStatus, selectedTag, sortField, sortOrder, notebookStatuses, viewMode]);
 
   // Breadcrumb Trail from Root to current folder
   const breadcrumbs = useMemo(() => {
@@ -546,8 +551,9 @@ const AppContent: React.FC = () => {
 
   const commitWorkingNotes = async (files: string[], message: string) => {
     const pending = readWorkingNotes(workingScope);
-    const selected = files.map(file => pending[file]).filter(Boolean);
-    if (selected.length !== files.length) throw new Error('Pending files changed. Review the selection again.');
+    const sentScreen = files.includes(SCREEN_PAGE_FILE) ? screen.commitDraft() : undefined;
+    const selected = files.filter(file => file !== SCREEN_PAGE_FILE).map(file => pending[file]).filter(Boolean);
+    if (selected.length + (sentScreen ? 1 : 0) !== files.length) throw new Error('Pending files changed. Review the selection again.');
     const workspace = await fetchWorkspace(true);
     if (!workspace.capabilities.write || workspace.source.identity !== sourceId) throw new Error('Sign in with write access to this workspace before committing.');
     const expected = workspace.revision!;
@@ -589,9 +595,10 @@ const AppContent: React.FC = () => {
       if (persisted) sent[entry.note.path] = persisted;
     }
     if (reviewRequired) throw new Error('Remote changes merged into local drafts. Review the updated diff, then Commit again.');
-    if (!Object.keys(sent).length) return;
+    if (!Object.keys(sent).length && !sentScreen) return;
     const result = await commitRemoteNotes(Object.values(sent).map(entry => ({ path: entry.note.path,
-      content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base })), expected, message);
+      content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base })), expected, message, sentScreen);
+    if (sentScreen) screen.committed(sentScreen, result.revision);
     setWorkingNotes(clearCommittedNotes(workingScope, sent));
     setRevision(result.revision);
     setNotes(previous => overlayWorkingNotes(previous, Object.fromEntries(Object.entries(sent).map(([path, entry]) => [path, { ...entry, note: { ...entry.note, revision: result.revision } }]))));
@@ -710,6 +717,11 @@ const AppContent: React.FC = () => {
               statuses={notebookStatuses}
               selectedNotebookId={selectedNotebookId}
               folders={folders}
+              foldersWritable={canWrite}
+              beforeFolderChange={() => {
+                if (Object.keys(activeWorkingNotes).length || listLocalDrafts(workingScope).length || screen.dirty) throw new Error(t('folder.draftsHint'));
+              }}
+              onFoldersChanged={async () => { await refreshWorkspace(); await screen.refresh(); }}
               selectedFolder={selectedFolder}
               onSelectFolder={setSelectedFolder}
               notes={visibleNotes}
@@ -744,7 +756,7 @@ const AppContent: React.FC = () => {
                 sortOrder={sortOrder}
                 onSortChange={viewMode !== 'kanban' ? handleSortChange : undefined}
               />
-              {viewMode === 'list' && (
+              {(viewMode === 'list' || viewMode === 'flat') && (
                 <ListView
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
@@ -825,7 +837,7 @@ const AppContent: React.FC = () => {
           </main>
         )}
 
-        {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} scope={remote ? sourceId : `local:${repoRoot}`} notebooks={config?.notebooks || []} notes={notes} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} onSaved={() => { void fetchGitStatus().then(result => setGitStatus(result.status)); }} /></React.Suspense>}
+        {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} notebooks={config?.notebooks || []} notes={notes} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} /></React.Suspense>}
 
         {activeTab === 'settings' && (
           <main className="workspace-route settings-main">
@@ -844,6 +856,7 @@ const AppContent: React.FC = () => {
       </div>
 
       {/* Floating Commit Footer: only shows when working tree is dirty, with restore button (Requirement 1 & 2) */}
+      {activeTab !== 'screen' && screen.dirty && screen.error && <div role="alert" className="workspace-link-error">{screen.error}<button className="ui-button" onClick={() => navigate('/screen')}>{t('nav.screen')}</button></div>}
       <FloatingCommitFooter
         gitStatus={gitStatus}
         onOpenCommitModal={() => setIsCommitOpen(true)}
@@ -910,7 +923,7 @@ const AppContent: React.FC = () => {
 
       {/* Commit Modal */}
       <CommitModal
-        previewDiff={remote ? workingDiff(activeWorkingNotes) : undefined}
+        previewDiff={remote ? [workingDiff(activeWorkingNotes), screenPending ? screen.diff : ''].filter(Boolean).join('\n\n') : undefined}
         commitFiles={remote ? commitWorkingNotes : undefined}
         isOpen={isCommitOpen}
         onClose={() => setIsCommitOpen(false)}

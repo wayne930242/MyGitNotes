@@ -4,18 +4,19 @@ import { stringify } from 'yaml';
 import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, GripVertical, X, Zap, ChevronLeft, ChevronRight, Rows3, Save } from 'lucide-react';
+import { Plus, GripVertical, X, Zap, ChevronLeft, ChevronRight, Rows3, PanelLeft } from 'lucide-react';
 import { moveScreenItem, type ScreenItem, type ScreenRow } from '@github-notes/core/screen-page';
 import type { NoteItem, NotebookConfig, FolderItem } from '../lib/types.js';
 import { fetchAssets } from '../lib/api.js';
 import { notebookRoute } from '../lib/routes.js';
 import { screenRowItems } from '../lib/screen-content.js';
-import { useScreenPage } from '../lib/use-screen-page.js';
+import type { ScreenController } from '../lib/use-screen-page.js';
+import { ScreenIcon } from './ScreenIcon.js';
 import { screenCollision, screenKeyboardCoordinates } from '../lib/screen-drag.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { ScreenCard, screenItemTitle, type ScreenContentProps, type ScreenAsset } from './ScreenCard.js';
 import { ScreenAddRow, ScreenAddItem, ScreenEditRows } from './ScreenDialogs.js';
-import { PageHeader } from './WorkspaceChrome.js';
+import { WorkspaceSidebar } from './WorkspaceChrome.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { Select } from './Select.js';
 
@@ -54,7 +55,7 @@ function Lane({ row, disabled, onView, onAdd, onRemove, ...content }: ScreenCont
   }, []);
   const scroll = (direction: number) => strip.current?.scrollBy({ left: direction * strip.current.clientWidth * .8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   const source = row.kind === 'dynamic' ? row.source.kind === 'tag' ? `#${row.source.tag}` : row.source.path : '';
-  return <section ref={host} className={`screen-lane screen-view-${row.view} ${row.kind === 'dynamic' ? 'screen-lane-dynamic' : ''}`} aria-label={row.name}>
+  return <section id={`screen-lane-${row.id}`} ref={host} className={`screen-lane screen-view-${row.view} ${row.kind === 'dynamic' ? 'screen-lane-dynamic' : ''}`} aria-label={row.name}>
     <header className="screen-lane-header"><div className="screen-lane-heading"><h3>{row.name}</h3><span className="screen-count">{items.length}</span>
       {row.kind === 'dynamic' && <span className="screen-dynamic-label" title={t('screen.dynamicHint')}><Zap size={12} />{t('screen.dynamic')} · {source}</span>}</div>
       <div className="screen-lane-actions"><Select aria-label={`${t('screen.view')}: ${row.name}`} disabled={disabled} value={row.view} onValueChange={value => onView(value as ScreenRow['view'])}
@@ -76,11 +77,17 @@ function Lane({ row, disabled, onView, onAdd, onRemove, ...content }: ScreenCont
   </section>;
 }
 
-export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scope, onOpenNote, onSaved }: {
-  notebooks: NotebookConfig[]; notes: NoteItem[]; folders: FolderItem[]; selectedNotebookId: string; scope: string;
-  onOpenNote: (note: NoteItem) => void; onSaved: () => void;
+export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, screen, onOpenNote }: {
+  notebooks: NotebookConfig[]; notes: NoteItem[]; folders: FolderItem[]; selectedNotebookId: string; screen: ScreenController;
+  onOpenNote: (note: NoteItem) => void;
 }) {
-  const { t } = useTranslation(); const navigate = useNavigate(); const screen = useScreenPage(scope, onSaved);
+  const { t } = useTranslation(); const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setSidebarOpen(false); };
+    document.addEventListener('keydown', close); return () => document.removeEventListener('keydown', close);
+  }, [sidebarOpen]);
   const [assets, setAssets] = useState<ScreenAsset[]>([]), [assetError, setAssetError] = useState(false);
   const [dialog, setDialog] = useState<'add' | 'edit' | 'reload' | null>(null), [addTo, setAddTo] = useState<string | null>(null);
   const [preview, setPreview] = useState<ScreenAsset>(), [dragging, setDragging] = useState<ScreenItem>();
@@ -90,7 +97,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scop
     void Promise.all(notebooks.map(async nb => (await fetchAssets(nb.id)).map(asset => ({ ...asset, notebookId: nb.id })))).then(items => { if (active) setAssets(items.flat()); }).catch(() => { if (active) setAssetError(true); });
     return () => { active = false; };
   }, [notebooks, notes]);
-  const disabled = !screen.writable || screen.saving || screen.loading;
+  const disabled = !screen.writable || screen.loading;
   const content: ScreenContentProps = { notebooks, notes, assets, onOpen: item => {
     if (item.kind === 'youtube') { window.open(`https://www.youtube.com/watch?v=${item.videoId}&t=${item.start}`, '_blank', 'noopener,noreferrer'); return; }
     const nb = notebooks.find(nb => nb.id === item.notebookId);
@@ -107,21 +114,32 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scop
     else { const asset = assets.find(asset => asset.notebookId === item.notebookId && asset.path === item.path); if (asset) setPreview(asset); else screen.setError(t('screen.missing')); }
   } };
   const row = screen.page.rows.find(row => row.id === addTo);
-  return <main className="workspace-route screen-main">
-    <PageHeader title="Screen Page" description={t('screen.description')}>
-      <button className="ui-button" disabled={disabled || screen.page.rows.length >= 40} onClick={() => setDialog('add')}><Plus size={15} />{t('screen.addRow')}</button>
-      <button className="ui-button" disabled={disabled || !screen.page.rows.length} onClick={() => setDialog('edit')}><Rows3 size={15} />{t('screen.editRows')}</button>
-      <button className="ui-button ui-button-primary" disabled={disabled || !screen.dirty} onClick={() => void screen.save()}><Save size={15} />{t(screen.saving ? 'screen.saving' : 'screen.save')}</button>
-    </PageHeader>
-    <div className="screen-board-scroll">
-      <div className="screen-board-meta"><span>{screen.dirty ? t('screen.unsaved') : t('screen.yamlHint')}</span><span>{t('screen.wheelHint')}</span></div>
+  return <div className="workspace-route screen-main">
+    {sidebarOpen && <button className="notebook-backdrop mobile-only absolute inset-0 z-20 bg-slate-950/40" aria-label={t('common.close')} onClick={() => setSidebarOpen(false)} />}
+    <div className={`notebook-panel screen-sidebar-panel ${sidebarOpen ? 'is-open' : ''}`}>
+      <WorkspaceSidebar label={t('screen.controls')} className="screen-sidebar" footer={<p className="screen-wheel-help">{t('screen.wheelHint')}</p>}>
+        <div className="screen-sidebar-controls">
+          <button className="screen-sidebar-action" disabled={disabled || screen.page.rows.length >= 40} onClick={() => { setSidebarOpen(false); setDialog('add'); }}><Plus size={16} />{t('screen.addRow')}</button>
+          <button className="screen-sidebar-action" disabled={disabled || !screen.page.rows.length} onClick={() => { setSidebarOpen(false); setDialog('edit'); }}><Rows3 size={16} />{t('screen.editRows')}</button>
+        </div>
+        {screen.page.rows.length > 0 && <nav aria-label={t('screen.lanes')} className="screen-sidebar-lanes">
+          <h4>{t('screen.lanes')}</h4>
+          {screen.page.rows.map(lane => <button key={lane.id} className="screen-sidebar-action" onClick={() => { document.getElementById(`screen-lane-${lane.id}`)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); setSidebarOpen(false); }}>
+            {lane.kind === 'dynamic' ? <Zap size={15} /> : <ScreenIcon size={15} />}<span>{lane.name}</span>
+          </button>)}
+        </nav>}
+      </WorkspaceSidebar>
+    </div>
+    <main className="screen-content">
+      <button className="mobile-only screen-mobile-toggle ui-button" aria-label={t('screen.controls')} aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(open => !open)}><PanelLeft size={16} />{t('screen.lanes')}</button>
+      <div className="screen-board-scroll">
       {(screen.error || assetError) && <div role="alert" className="screen-error">{screen.error || t('screen.assetsError')}
         <button className="ui-button" onClick={() => setDialog('reload')}>{t('screen.reload')}</button>
         <button className="ui-button" onClick={() => { const blob = new Blob([stringify(screen.page)], { type: 'application/yaml' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'screen-draft.yaml'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }}>{t('screen.exportDraft')}</button>
       </div>}
       {screen.loading ? <p role="status">{t('screen.loading')}</p> : <>
         {!screen.writable && <p className="screen-dialog-hint">{t('screen.readOnly')}</p>}
-        {!screen.page.rows.length && <div className="screen-board-empty"><Rows3 size={32} /><h3>{t('screen.startTitle')}</h3><p>{t('screen.startHint')}</p>
+        {!screen.page.rows.length && <div className="screen-board-empty"><ScreenIcon size={36} /><h3>{t('screen.startTitle')}</h3><p>{t('screen.startHint')}</p>
           <button className="ui-button ui-button-primary" disabled={disabled} onClick={() => setDialog('add')}><Plus size={16} />{t('screen.addRow')}</button></div>}
         <DndContext sensors={sensors} collisionDetection={screenCollision} onDragStart={({ active }) => setDragging(screen.page.rows.flatMap(row => row.kind === 'custom' ? row.items : []).find(item => item.id === active.id))}
           onDragCancel={() => setDragging(undefined)} onDragEnd={({ active, over }) => {
@@ -136,10 +154,11 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scop
         </DndContext>
       </>}
     </div>
+    </main>
     {dialog === 'add' && <ScreenAddRow notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onClose={() => setDialog(null)} onAdd={row => screen.change({ ...screen.page, rows: [...screen.page.rows, row] })} />}
     {dialog === 'edit' && <ScreenEditRows rows={screen.page.rows} onClose={() => setDialog(null)} onApply={rows => screen.change({ ...screen.page, rows })} />}
     {dialog === 'reload' && <WorkspaceDialog title={t('screen.reload')} onClose={() => setDialog(null)}><p>{t('screen.reloadHint')}</p><div className="workspace-dialog-actions"><button className="ui-button" onClick={() => setDialog(null)}>{t('common.cancel')}</button><button className="ui-button" onClick={() => { setDialog(null); void screen.reload(); }}>{t('screen.reload')}</button></div></WorkspaceDialog>}
     {row?.kind === 'custom' && <ScreenAddItem {...content} folders={folders} rowName={row.name} selectedNotebookId={selectedNotebookId} onClose={() => setAddTo(null)} onAdd={item => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id && value.kind === 'custom' ? { ...value, items: [...value.items, item] } : value) })} />}
     {preview && <WorkspaceDialog title={preview.name} onClose={() => setPreview(undefined)} className="asset-preview-dialog"><div className="workspace-asset-preview">{/\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(preview.name) ? <img src={preview.rawUrl} alt={preview.name} /> : <a href={preview.rawUrl} target="_blank" rel="noopener noreferrer">{preview.name}</a>}</div><div className="workspace-dialog-actions"><button className="ui-button" onClick={() => navigate(`/assets?notebook=${encodeURIComponent(preview.notebookId)}&asset=${encodeURIComponent(preview.path)}`)}>{t('links.locateAsset')}</button></div></WorkspaceDialog>}
-  </main>;
+  </div>;
 }

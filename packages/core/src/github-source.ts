@@ -8,7 +8,7 @@ import { GitHubApi, SourceError } from './github-api.js';
 import { readGitHubArchive } from './github-archive.js';
 import { workspaceAgentKind } from './workspace-agent.js';
 import { SCREEN_PAGE_FILE, ScreenPageSchema } from './screen-page.js';
-import { parse as parseYaml } from 'yaml';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 export { SourceError } from './github-api.js';
 export interface GitHubEntry { path: string; type: string; mode: string; sha: string; size?: number }
@@ -208,8 +208,8 @@ export class GitHubSource {
   }
 
   /** Publish selected browser working notes as one commit after validation. */
-  async commitNotes(notes: { path: string; content: string; metadata: NoteMetadata; createOnly?: boolean }[], expected: string, message: string) {
-    if (!Array.isArray(notes) || !notes.length || notes.length > 200) throw new SourceError('Select between 1 and 200 notes.');
+  async commitNotes(notes: { path: string; content: string; metadata: NoteMetadata; createOnly?: boolean }[], expected: string, message: string, screen?: { page: unknown; base: unknown }) {
+    if (!Array.isArray(notes) || !notes.length && !screen || notes.length + (screen ? 1 : 0) > 200) throw new SourceError('Select between 1 and 200 files.');
     if (typeof message !== 'string' || !message.trim() || message.length > 4000) throw new SourceError('A commit message of at most 4000 characters is required.');
     const snapshot = await this.getSnapshot(true);
     const changes = notes.map(note => {
@@ -218,7 +218,15 @@ export class GitHubSource {
       if (!note.createOnly && !snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`Note moved or deleted: ${note.path}.`, 409);
       return { path: note.path, content: serializeNoteContent(note.metadata, note.content) };
     });
-    return this.commitChanges(changes, expected, 'update', 'notes', message.trim());
+    if (screen) {
+      const page = ScreenPageSchema.safeParse(screen.page), base = ScreenPageSchema.safeParse(screen.base);
+      if (!page.success || !base.success) throw new SourceError('Invalid Screen configuration.');
+      const entry = snapshot.entries.find(entry => entry.path === SCREEN_PAGE_FILE);
+      const current = entry ? ScreenPageSchema.parse(parseYaml((await this.readFile(SCREEN_PAGE_FILE)).toString('utf8'), { maxAliasCount: 20 })) : { version: 1, rows: [] };
+      if (JSON.stringify(current) !== JSON.stringify(base.data)) throw new SourceError('Screen configuration changed. Reload and review your draft.', 409);
+      changes.push({ path: SCREEN_PAGE_FILE, content: stringifyYaml(page.data, { lineWidth: 0 }) });
+    }
+    return this.commitChanges(changes, expected, 'update', screen ? 'folders' : 'notes', message.trim());
   }
 
   /** One Git tree, commit and non-force ref update for the entire mutation. */
@@ -232,7 +240,7 @@ export class GitHubSource {
     return this.commitChanges([{ path: SCREEN_PAGE_FILE, content }], expected, 'save', 'screen');
   }
 
-  async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null }[], expected: string, operation: string, scope: 'notes' | 'assets' | 'agents' | 'screen' = 'notes', requestedMessage?: string) {
+  async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null }[], expected: string, operation: string, scope: 'notes' | 'assets' | 'agents' | 'screen' | 'folders' = 'notes', requestedMessage?: string) {
     const snapshot = await this.getSnapshot(true);
     if (!this.token || !snapshot.info.permissions?.push || this.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
     if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
@@ -243,10 +251,11 @@ export class GitHubSource {
     for (const change of changes) {
       const file = change.path;
       const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
-      const allowed = scope === 'screen' ? file === SCREEN_PAGE_FILE : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb &&
-        (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (/\.(md|markdown|txt)$/i.test(file) || path.posix.basename(file) === '_dir.yml'));
+      const screenFile = (scope === 'screen' || scope === 'folders') && file === SCREEN_PAGE_FILE;
+      const allowed = scope === 'screen' ? screenFile : screenFile || (scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb &&
+        (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (/\.(md|markdown|txt)$/i.test(file) || path.posix.basename(file) === '_dir.yml')));
       if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
-      if (scope === 'screen') {
+      if (screenFile) {
         if (typeof change.content !== 'string' || Buffer.byteLength(change.content) > 512 * 1024) throw new SourceError('Screen Page YAML is required.');
         try { ScreenPageSchema.parse(parseYaml(change.content, { maxAliasCount: 20 })); }
         catch { throw new SourceError('Invalid Screen Page YAML.'); }

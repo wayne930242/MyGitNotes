@@ -33,6 +33,20 @@ function fixture() {
 }
 
 describe('shell-shaped note operations',()=>{
+  it('commits Screen and selected notes together, while rejecting a stale Screen base', async () => {
+    const f = fixture();
+    const base = { version: 1, rows: [] };
+    const page = { version: 1, rows: [{ id: 'reading', kind: 'custom', name: 'Reading', view: 'small', items: [] }] };
+    await f.reader().commitNotes([{ path: 'notes/ex/a.md', content: '# Updated', metadata: {} }], f.head(), 'Update reading workspace', { page, base });
+    expect(f.text('.github-notes-screen.yaml')).toContain('name: Reading');
+    expect(f.text('notes/ex/a.md')).toContain('# Updated');
+    expect(f.calls.filter(call => call.endpoint === '/git/commits')).toHaveLength(1);
+    await expect(f.reader().commitNotes([], f.head(), 'Stale screen', { page: base, base })).rejects.toMatchObject({ status: 409 });
+    expect(f.calls.filter(call => call.endpoint === '/git/commits')).toHaveLength(1);
+    await f.reader().commitNotes([], f.head(), 'Clear screen', { page: base, base: page });
+    expect(f.text('.github-notes-screen.yaml')).toContain('rows: []');
+    expect(f.calls.filter(call => call.endpoint === '/git/commits')).toHaveLength(2);
+  });
   it('commits selected browser notes atomically and rejects invalid batches before writing', async () => {
     const f = fixture(); const baseline = f.head();
     const result = await f.reader().commitNotes([

@@ -7,6 +7,10 @@ import {
 import { NoteItem, FolderItem } from './types.js';
 
 describe('folder-tree', () => {
+  it('keeps folder cards in the persisted sidebar order', () => {
+    const ordered = [{ notebookId:'n', path:'a', title:'A', order:1 }, { notebookId:'n', path:'z', title:'Z', order:0 }];
+    expect(getImmediateSubfolders([], ordered, 'n', 'notes/n', null).map(folder => folder.path)).toEqual(['z','a']);
+  });
   const notes: NoteItem[] = [
     {
       id: '1',
@@ -63,7 +67,7 @@ describe('folder-tree', () => {
 
   it('lists immediate subfolders under All folders (null)', () => {
     const subfolders = getImmediateSubfolders(notes, folders, 'nb1', 'notes', null);
-    expect(subfolders.map((s) => s.path)).toEqual(['personal', 'projects']);
+    expect(subfolders.map((s) => s.path)).toEqual(['projects', 'personal']);
     expect(subfolders.find((s) => s.path === 'projects')?.noteCount).toBe(3); // proj-overview, web/app, backend/api
     expect(subfolders.find((s) => s.path === 'personal')?.noteCount).toBe(1); // diary
   });

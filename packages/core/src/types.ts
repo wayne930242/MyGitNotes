@@ -1,4 +1,4 @@
-export type ViewMode = 'list' | 'card' | 'kanban';
+export type ViewMode = 'list' | 'card' | 'kanban' | 'flat';
 
 export interface NotebookConfig {
   id: string;
@@ -73,4 +73,3 @@ export interface FolderMetadata {
   description?: string;
   [key: string]: unknown;
 }
-

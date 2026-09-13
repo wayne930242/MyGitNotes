@@ -489,7 +489,16 @@ app.get('/api/git/status', async (req: Request, res: Response) => {
 app.get('/api/git/diff', async (req: Request, res: Response) => {
   try {
     const filePath = req.query.path as string | undefined;
-    const diff = await getDiff(repoRoot, filePath);
+    let diff = await getDiff(repoRoot, filePath);
+    // The new Screen YAML has no Git diff until tracked; still make it reviewable.
+    if ((!filePath || filePath === SCREEN_PAGE_FILE) && (await getGitStatus(repoRoot)).untracked.includes(SCREEN_PAGE_FILE)) {
+      const file = resolveSafePath(repoRoot, SCREEN_PAGE_FILE);
+      const stat = fs.lstatSync(file);
+      if (stat.isFile() && !stat.isSymbolicLink() && stat.size <= 512 * 1024) {
+        const lines = fs.readFileSync(file, 'utf8').split('\n');
+        diff += `\n--- /dev/null\n+++ ${SCREEN_PAGE_FILE}\n@@ -0,0 +1,${lines.length} @@\n${lines.map(line => '+' + line).join('\n')}`;
+      }
+    }
     res.json({ diff });
   } catch (err: unknown) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });

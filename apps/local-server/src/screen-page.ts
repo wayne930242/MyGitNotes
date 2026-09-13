@@ -5,15 +5,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { parse, stringify } from 'yaml';
 import { emptyScreenPage, ScreenPageSchema, SCREEN_PAGE_FILE, GitHubSource, SourceError, type SourceConfig } from '@github-notes/core';
 import { getCurrentBranch } from '@github-notes/git';
+import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
 
 const revisionOf = (text: string | null) => text === null ? 'missing' : createHash('sha256').update(text).digest('hex');
-const queues = new Map<string, Promise<unknown>>();
-async function serialize<T>(root: string, action: () => Promise<T>): Promise<T> {
-  const pending = queues.get(root) || Promise.resolve();
-  const next = pending.catch(() => {}).then(action); queues.set(root, next);
-  try { return await next; } finally { if (queues.get(root) === next) queues.delete(root); }
-}
 async function readLocal(root: string) {
   const file = path.join(root, SCREEN_PAGE_FILE);
   try {
@@ -55,7 +50,7 @@ export function createScreenPageRouter(base: string, source: SourceConfig): Rout
       const yaml = stringify(value.data, { lineWidth: 0 });
       if (Buffer.byteLength(yaml) > 512 * 1024) throw new SourceError('Screen configuration is too large.', 413);
       if (source.type === 'local') {
-        return await serialize(source.path, async () => {
+        return await serializeWorkspaceMutation(source.path, async () => {
           if (await getCurrentBranch(source.path) !== 'main') throw new SourceError('Switch to main to save the Screen Page.', 403);
           const raw = await readLocal(source.path);
           if (revisionOf(raw) !== revision) throw new SourceError('The Screen Page changed. Reload it before saving your draft.', 409);
