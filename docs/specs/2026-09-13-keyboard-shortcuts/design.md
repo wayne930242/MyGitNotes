@@ -15,8 +15,8 @@ Add one `KeyboardShortcuts` component mounted by `AppContent`. It owns only lead
 
 - A 2.5-second pending timeout is long enough to read a small list while short enough not to leave hidden keyboard state behind. The pinned `?` help mode removes the time limit when the user wants to read.
 - A non-modal panel avoids blocking the workspace, but focus restoration and Escape handling are required.
-- Platform detection affects only displayed modifier labels and the opening chord; second keys remain layout-stable numbers and punctuation exposed by `KeyboardEvent.key`.
+- Platform detection affects only whether the opening chord is displayed as `Ctrl+Alt+K` or `Cmd+Option+K`; second keys remain layout-stable numbers and punctuation exposed by `KeyboardEvent.key`.
 
 ## Verification seam
 
-Use a browser QA script against the production build. It will dispatch real chords, inspect the visible panel and active focus, traverse all four routes, open the new-note dialog, focus search, verify Settings, preserve primary `Ctrl+K` in an input, exercise the alternate editable chord, and test Escape/timeout behavior.
+Use a browser QA script against the production build. It will prove that plain `Ctrl+K` does not open the application leader, dispatch the Alt/Option chord, inspect the visible panel and active focus, traverse all four routes, open the new-note dialog, focus search, verify Settings, preserve browser/editor `Ctrl+K`, and test Escape/timeout behavior. Confirm the opening chord once in live Chrome because a headless page cannot model every browser-owned shortcut.

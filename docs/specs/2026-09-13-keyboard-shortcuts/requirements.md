@@ -10,7 +10,7 @@ Provide fast, discoverable keyboard access to common GitHub Notes actions withou
 
 - WAI-ARIA recommends that shortcuts supplement normal keyboard navigation, avoid platform conflicts, and remain discoverable. `aria-keyshortcuts` exposes implemented shortcuts to assistive technology but does not implement them.
 - WCAG 2.1.4 makes unmodified character shortcuts risky because speech input can trigger them accidentally. A modifier or explicit leader state avoids that class of failure.
-- GitHub uses sequential navigation chords and a visible shortcut reference. Its command palette uses `Ctrl/Cmd+K` outside Markdown editing, but changes to `Ctrl+Alt+K` or `Cmd+Option+K` while editing because `Ctrl/Cmd+K` inserts a Markdown link.
+- GitHub uses sequential navigation chords and a visible shortcut reference. Its command palette documents `Ctrl/Cmd+K` with an Alt/Option variant for Markdown editing, but live Chrome use showed that this product cannot rely on `Ctrl+K` because the browser can reserve it for omnibox search.
 - VS Code's chord model is context-sensitive and shows pending chord state; contextual enablement is essential when editors, dialogs, or other controls own the keyboard.
 
 Primary sources:
@@ -25,7 +25,7 @@ Primary sources:
 ## Required behavior
 
 1. Shortcut navigation must call the application's existing `setActiveTab` path so Agent document save/leave checks remain authoritative.
-2. No application shortcut may intercept typing in `input`, `textarea`, `select`, CodeMirror, or `contenteditable`, except an explicitly confirmed editor-safe palette chord.
+2. No application shortcut may intercept typing in `input`, `textarea`, `select`, CodeMirror, or `contenteditable`, except the explicitly confirmed `Ctrl+Alt+K` / `Cmd+Option+K` palette chord.
 3. A pending leader must be visible, dismiss on `Escape`, and expire after a short timeout.
 4. Commands unavailable in the current context must be visibly disabled and must not execute.
 5. A keyboard help surface must list the current platform's `Ctrl` or `Cmd` notation and all active commands.
@@ -54,8 +54,8 @@ All second keys apply only while the leader/palette is visibly active; there are
 
 ## Confirmed decisions
 
-1. `Ctrl/Cmd+K` opens a compact visible leader panel; it is not searchable in the first iteration.
-2. Editing contexts retain their normal `Ctrl/Cmd+K` behavior and use `Ctrl+Alt+K` / `Cmd+Option+K` for the leader panel.
+1. `Ctrl+Alt+K` on Windows/Linux and `Cmd+Option+K` on macOS opens a compact visible leader panel; it is not searchable in the first iteration.
+2. `Ctrl/Cmd+K` remains untouched everywhere because Chrome may reserve it for browser search and Markdown editors may use it for links.
 3. The first release includes `1–4`, New note, search, Settings, and keyboard help.
 
 ## Open questions
