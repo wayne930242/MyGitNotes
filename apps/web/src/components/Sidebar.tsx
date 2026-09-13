@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Folder, Tag, Filter, GitBranch, CheckCircle2, Heart, Eye, EyeOff, Search, X } from 'lucide-react';
 import { NotebookConfig, NoteItem, GitStatus, FolderItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { WorkspaceSidebar } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
 import { filterAndSortTags, getSavedTagSort, saveTagSort, TagSort } from '../lib/tag-list.js';
 
@@ -84,12 +85,77 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const dirtyCount = modifiedCount + untrackedCount + stagedCount;
 
   return (
-    <aside
-      className="w-64 flex flex-col justify-between shrink-0 h-full p-4 select-none border-r transition-colors"
-      style={{ backgroundColor: 'var(--color-sidebar)', borderColor: 'var(--color-border)' }}
-    >
-      {/* Scrollable Navigation Sections */}
-      <div className="flex flex-col gap-6 overflow-y-auto pr-1 flex-1">
+    <WorkspaceSidebar label={t('sidebar.notebooks')} className="notes-sidebar" footer={
+      <div
+        className="pt-3 mt-3 border-t shrink-0 flex flex-col gap-2.5"
+        style={{ borderColor: 'var(--color-border)' }}
+      >
+        <div
+          className="flex items-center justify-between px-3 py-2 rounded-xl border shadow-xs transition-colors"
+          style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+        >
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-black/5 dark:bg-white/5"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              <GitBranch className="w-4 h-4" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200 leading-tight">
+                {gitStatus?.branch || 'main'}
+              </span>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
+                {gitStatus?.branch === 'core'
+                  ? t('sidebar.productCore')
+                  : t('sidebar.userWorkspace')}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            {dirtyCount > 0 ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                {t('sidebar.dirty', { count: dirtyCount })}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {t('sidebar.clean')}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Sidebar Footer */}
+        <div className="text-center text-[11px] text-slate-400 dark:text-slate-500 leading-tight flex flex-col items-center gap-0.5 pb-0.5">
+          <div className="flex items-center gap-1">
+            <span>powered by</span>
+            <a
+              href="https://github.com/wayne930242/github-notes"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium hover:underline transition hover:text-slate-600 dark:hover:text-slate-300"
+            >
+              github-notes
+            </a>
+          </div>
+          <div>
+            <a
+              href="https://github.com/wayne930242/github-notes"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 hover:underline transition hover:text-slate-600 dark:hover:text-slate-300"
+            >
+              <span>Made with</span>
+              <Heart className="w-3 h-3 fill-red-500 text-red-500" />
+              <span>by wayne930242</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    }>
         {/* Notebooks Section */}
         <div>
           <div className="flex items-center justify-between text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5 px-2">
@@ -354,7 +420,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
             </div>
             {visibleTags.length === 0 && <p className="px-2 py-3 text-xs text-slate-400">{t('sidebar.noMatchingTags')}</p>}
-            <div className="flex flex-wrap gap-1.5 px-1 max-h-64 overflow-y-auto">
+            <div className="sidebar-tags flex flex-wrap gap-1.5 px-1">
               {visibleTags.map((tag) => {
                 const isSelected = selectedTag === tag;
                 return (
@@ -385,78 +451,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </section>
         )}
-      </div>
-
-      {/* Sidebar Bottom: Git Branch & Workspace Status + Footer */}
-      <div
-        className="pt-3 mt-3 border-t shrink-0 flex flex-col gap-2.5"
-        style={{ borderColor: 'var(--color-border)' }}
-      >
-        <div
-          className="flex items-center justify-between px-3 py-2 rounded-xl border shadow-xs transition-colors"
-          style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-        >
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-black/5 dark:bg-white/5"
-              style={{ color: 'var(--color-muted)' }}
-            >
-              <GitBranch className="w-4 h-4" />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200 leading-tight">
-                {gitStatus?.branch || 'main'}
-              </span>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
-                {gitStatus?.branch === 'core'
-                  ? t('sidebar.productCore')
-                  : t('sidebar.userWorkspace')}
-              </span>
-            </div>
-          </div>
-
-          <div>
-            {dirtyCount > 0 ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                {t('sidebar.dirty', { count: dirtyCount })}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                {t('sidebar.clean')}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Sidebar Footer */}
-        <div className="text-center text-[11px] text-slate-400 dark:text-slate-500 leading-tight flex flex-col items-center gap-0.5 pb-0.5">
-          <div className="flex items-center gap-1">
-            <span>powered by</span>
-            <a
-              href="https://github.com/wayne930242/github-notes"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium hover:underline transition hover:text-slate-600 dark:hover:text-slate-300"
-            >
-              github-notes
-            </a>
-          </div>
-          <div>
-            <a
-              href="https://github.com/wayne930242/github-notes"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 hover:underline transition hover:text-slate-600 dark:hover:text-slate-300"
-            >
-              <span>Made with</span>
-              <Heart className="w-3 h-3 fill-red-500 text-red-500" />
-              <span>by wayne930242</span>
-            </a>
-          </div>
-        </div>
-      </div>
-    </aside>
+    </WorkspaceSidebar>
   );
 };

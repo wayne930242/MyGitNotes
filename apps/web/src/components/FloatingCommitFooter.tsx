@@ -29,16 +29,15 @@ export const FloatingCommitFooter: React.FC<FloatingCommitFooterProps> = ({
   }
 
   return (
-    <div className="commit-footer fixed bottom-6 left-1/2 -translate-x-1/2 z-40 animate-in fade-in slide-in-from-bottom-5 duration-200">
-      <div className="relative bg-slate-900/95 dark:bg-slate-900/95 text-white backdrop-blur-md px-4 py-2 rounded-2xl shadow-2xl shadow-slate-950/40 border border-slate-700/80 flex items-center gap-3">
+    <div className="commit-footer workspace-commit-footer">
+      <div className="workspace-commit-bar relative flex items-center gap-3">
         {/* Compact Dirty Status Indicator (Requirement 2) */}
         <div className="flex items-center gap-2">
           <span className="flex h-2 w-2 relative">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
           </span>
 
-          <span className="font-semibold text-amber-300 text-xs flex items-center gap-1">
+          <span className="theme-muted text-xs flex items-center gap-1">
             <AlertCircle className="w-3.5 h-3.5" />
             <span>{t('footer.dirtyCount', { count: dirtyCount })}</span>
           </span>
@@ -108,7 +107,7 @@ export const FloatingCommitFooter: React.FC<FloatingCommitFooterProps> = ({
         <button
           onClick={onOpenCommitModal}
           style={{ backgroundColor: 'var(--color-primary)' }}
-          className="flex items-center gap-1.5 px-3 py-1 hover:opacity-90 text-white rounded-xl text-xs font-semibold shadow-md transition active:scale-95 shrink-0"
+          className="ui-button ui-button-primary shrink-0"
           title={t('footer.reviewDiffTooltip')}
         >
           <GitCommit className="w-3.5 h-3.5" />

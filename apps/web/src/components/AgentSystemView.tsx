@@ -1,3 +1,4 @@
+import { PageHeader, WorkspaceSidebar } from './WorkspaceChrome.js';
 import { EditorNotice } from './EditorNotice.js';
 import { Select } from './Select.js';
 import React, { useState, useEffect, useRef } from 'react';
@@ -191,28 +192,14 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
 
   return (
     <div
-      className="agent-layout rounded-xl border shadow-sm flex h-full min-h-0 overflow-hidden transition-colors"
+      className="agent-layout workspace-route"
       style={{
         backgroundColor: 'var(--color-surface)',
         borderColor: 'var(--color-border)',
       }}
     >
       {/* Left Navigation: Notes & System Agent Files */}
-      <div
-        className="agent-sidebar w-80 border-r flex flex-col p-4 gap-5 shrink-0 overflow-y-auto"
-        style={{
-          backgroundColor: 'var(--color-sidebar)',
-          borderColor: 'var(--color-border)',
-        }}
-      >
-        <div
-          className="flex items-center gap-2 font-semibold text-sm pb-2 border-b"
-          style={{ borderColor: 'var(--color-border)' }}
-        >
-          <Bot className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
-          <span className="text-slate-900 dark:text-slate-100">{t('agent.title')}</span>
-        </div>
-
+      <WorkspaceSidebar label={t('agent.title')} className="agent-sidebar">
         {/* 1. Workspace Guidelines */}
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -314,7 +301,7 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
 
         {/* Informational Callout */}
         <div
-          className="mt-auto border rounded-xl p-3 text-[11px] leading-relaxed"
+          className="agent-sidebar-help text-xs leading-relaxed"
           style={{
             backgroundColor: 'var(--color-primary-light)',
             borderColor: 'var(--color-border)',
@@ -326,10 +313,11 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
           </strong>
           {t(readOnly ? 'agent.guidelinesReadOnlyDescription' : remote ? 'agent.remoteGuidelinesDescription' : 'agent.guidelinesDescription')}
         </div>
-      </div>
+      </WorkspaceSidebar>
 
       {/* Right Content Viewer / Editor */}
-      <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+      <div className="workspace-content agent-content">
+        <PageHeader title={t('nav.agent')} />
         <label className="agent-document-picker mobile-only flex-col gap-1 p-3 border-b text-xs" style={{ borderColor: 'var(--color-border)' }}>
           {t('agent.document')}
           <Select

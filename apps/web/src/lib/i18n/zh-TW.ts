@@ -1,6 +1,11 @@
 import { TranslationKey } from './en.js';
 
 export const zhTW: Record<TranslationKey, string> = {
+  'layout.access': '存取與連線',
+  'layout.manifest': '工作區清單',
+  'layout.list': '清單',
+  'layout.card': '卡片',
+  'layout.kanban': '看板',
   // Navigation & Shell
   'nav.notes': '筆記',
   'nav.agent': 'Agent 系統',
