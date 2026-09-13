@@ -60,6 +60,9 @@ try {
   await page.goto(base+'/agent',{waitUntil:'networkidle0'});
   await click('Source'); await page.waitForSelector(editor);
   if (!await page.$eval(editor, e => e.value.includes('# Workspace Rules'))) throw Error('Root workspace instructions were not the initial document');
+  if (!await page.$('.agent-content > .note-footer')) throw Error('Agent documents do not use the note footer');
+  if (await page.$('.agent-toolbar [role="status"], .agent-save-status')) throw Error('Agent toolbar still has a separate save indicator');
+  if (await page.$eval('.note-footer [role="status"]', e => e.textContent.trim()) !== 'Saved') throw Error('Agent saved status is not concise');
   const sections = await page.$$eval('.agent-sidebar section', nodes => nodes.map(node => node.getAttribute('aria-label')));
   if (sections[0] !== 'Workspace skills' || sections.indexOf('Shared workspace') < 1) throw Error('Skills were not presented before shared documents');
   if (await page.$eval(editor,e=>e.readOnly)) throw Error('Root Agent instructions remained read-only');
@@ -105,6 +108,8 @@ try {
   await page.click('[data-option-value=".agents/skills/custom/agents/openai.yaml"]');
   await page.waitForFunction(() => document.querySelector('textarea[aria-label="Agent document content"]')?.value.includes('Interface edited in browser'));
   await page.screenshot({path:path.join(product,'artifacts/qa/workspace-agent-skills-mobile.png'),fullPage:true});
+  const footerBounds = await page.$eval('.note-footer', e => ({ left: e.getBoundingClientRect().left, right: e.getBoundingClientRect().right, bottom: e.getBoundingClientRect().bottom }));
+  if (footerBounds.left < 0 || footerBounds.right > 390 || footerBounds.bottom > 844) throw Error('Mobile Agent footer is outside the viewport');
   await page.setViewport({width:1440,height:1000});
   git('checkout','-b','core');
   await page.reload({waitUntil:'networkidle0'}); await click('Source'); await page.waitForSelector(editor);

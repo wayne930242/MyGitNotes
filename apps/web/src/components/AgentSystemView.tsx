@@ -3,12 +3,12 @@ import { AgentFileTree } from './AgentFileTree.js';
 import { groupAgentResources } from '../lib/agent-tree.js';
 import { WorkspaceSidebar } from './WorkspaceChrome.js';
 import { EditorNotice } from './EditorNotice.js';
+import { EditorFooter } from './EditorFooter.js';
 import { Select } from './Select.js';
 import React, { useState, useEffect, useRef, useImperativeHandle } from 'react';
 import {
   Bot,
   RotateCcw,
-  Check,
   AlertTriangle,
   Plus,
 } from 'lucide-react';
@@ -317,29 +317,6 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
           </div>
 
           <div className="agent-controls flex items-center gap-3">
-            {/* Auto-save & Status indicator */}
-            <div className="agent-save-status flex items-center gap-2 text-xs">
-              {loading ? (
-                <span className="text-slate-400">{t('agent.loading')}</span>
-              ) : isSaving ? (
-                <span className="text-amber-500 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                  {t('agent.saving')}
-                </span>
-              ) : hasUnsavedChanges ? (
-                <span className="text-amber-500 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  {t('agent.editing')}
-                </span>
-              ) : (
-                <span className="text-emerald-500 dark:text-emerald-400 flex items-center gap-1">
-                  <Check className="w-3.5 h-3.5" />
-                  <span className="agent-status-detail">{t(editable ? remote ? 'agent.savedToRepository' : 'agent.savedToDisk' : 'agent.loaded')}</span>
-                  <span className="agent-status-compact">{t(editable ? 'agent.saved' : 'agent.loaded')}</span>
-                </span>
-              )}
-            </div>
-
             {/* Single-file restore applies to uncommitted local edits. */}
             {!remote && <button
               disabled={locked}
@@ -414,6 +391,12 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
             )}
           </div>
         )}
+        {selectedPath && <EditorFooter
+          content={loading ? '' : content}
+          path={selectedPath}
+          state={loading ? 'loading' : isSaving ? 'saving' : hasUnsavedChanges ? 'pending' : 'saved'}
+          status={t(loading ? 'agent.loading' : isSaving ? 'editor.saving' : hasUnsavedChanges ? 'editor.unsavedChanges' : editable ? 'agent.saved' : 'editor.readOnly')}
+        />}
       </div>
     </div>
   );

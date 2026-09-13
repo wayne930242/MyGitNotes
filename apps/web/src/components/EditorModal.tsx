@@ -1,6 +1,7 @@
 import { useWorkspaceLinks } from './WorkspaceLinks.js';
 import { isNoteHidden, withNoteStatus } from '@github-notes/core/note-status';
 import { EditorNotice } from './EditorNotice.js';
+import { EditorFooter } from './EditorFooter.js';
 import { Select } from './Select.js';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
@@ -8,7 +9,6 @@ import {
   Settings2,
   Save,
   Image as ImageIcon,
-  Check,
   FileText,
   RotateCcw,
   AlertTriangle,
@@ -659,37 +659,17 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
         <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} ariaLabel="Note content" />
 
-        {/* Modal Bottom Bar: Auto-save status & Note Stats */}
-        <div className="note-footer shrink-0 px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 flex items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">
-          <div className="flex items-center gap-3">
-            <span>{t('editor.words', { count: content.trim().split(/\s+/).filter(Boolean).length })}</span>
-            <span className="text-slate-300 dark:text-slate-700">·</span>
-            <span>{t('editor.characters', { count: content.length })}</span>
-            <span className="text-slate-300 dark:text-slate-700">·</span>
-            <span className="font-mono text-slate-400 dark:text-slate-500">{note.path}</span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {isSaving ? (
-              <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                {draftMode ? t('editor.savingLocally') : autoSave ? t('editor.autoSavingToDisk') : t('editor.savingToGitHub')}
-              </span>
-            ) : isDirty ? (
-              <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
-                <span className="w-2 h-2 rounded-full bg-amber-500" />
-                {draftMode ? (hasUnsavedChanges ? t('editor.unsavedLocalChanges') : t('editor.savedLocallyPendingCommit')) : autoSave ? t('editor.uncommittedChanges') : t('editor.unsavedChanges')}
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-                <Check className="w-3.5 h-3.5" />
-                {readOnly ? t('editor.readOnly') : draftMode ? t('editor.noPendingChanges') : autoSave ? t('editor.cleanSavedToDisk') : t('editor.savedToGitHub')}
-              </span>
-            )}
-            <span className="text-slate-300 dark:text-slate-700">|</span>
-            <span className="font-mono text-slate-400 dark:text-slate-500">{t('editor.branch', { branch })}</span>
-          </div>
-        </div>
+        <EditorFooter
+          content={content}
+          path={note.path}
+          branch={branch}
+          state={isSaving ? 'saving' : isDirty ? 'pending' : 'saved'}
+          status={isSaving
+            ? t(draftMode ? 'editor.savingLocally' : autoSave ? 'editor.autoSavingToDisk' : 'editor.savingToGitHub')
+            : isDirty
+              ? t(draftMode ? hasUnsavedChanges ? 'editor.unsavedLocalChanges' : 'editor.savedLocallyPendingCommit' : autoSave ? 'editor.uncommittedChanges' : 'editor.unsavedChanges')
+              : t(readOnly ? 'editor.readOnly' : draftMode ? 'editor.noPendingChanges' : autoSave ? 'editor.cleanSavedToDisk' : 'editor.savedToGitHub')}
+        />
       </div>
 
       {isAssetPickerOpen && <div role="dialog" aria-label={t('editor.notebookAssets')} aria-modal="true" className="viewport-overlay fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
