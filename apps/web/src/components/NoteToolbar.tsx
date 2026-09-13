@@ -50,17 +50,17 @@ export function NoteToolbar({ readOnly, viewMode, setViewMode, searchQuery, setS
                 value={viewMode}
                 onValueChange={(value) => setViewMode(value as ViewMode)}
                 options={[
+                  { value: 'flat', label: t('view.flat') },
                   { value: 'list', label: t('layout.list') },
                   { value: 'card', label: t('layout.card') },
                   { value: 'kanban', label: t('layout.kanban') },
-                  { value: 'flat', label: t('view.flat') },
                 ]}
                 className="mobile-only note-view-select px-1"
               />
 
               {/* View Switcher Desktop */}
               <div className="desktop-views flex items-center bg-black/5 dark:bg-white/5 p-1 rounded-lg gap-1 shrink-0">
-                {([{ mode: 'list', icon: LayoutList }, { mode: 'card', icon: LayoutGrid }, { mode: 'kanban', icon: Kanban }, { mode: 'flat', icon: ListTree }] as const).map(({ mode, icon: Icon }) =>
+                {([{ mode: 'flat', icon: ListTree }, { mode: 'list', icon: LayoutList }, { mode: 'card', icon: LayoutGrid }, { mode: 'kanban', icon: Kanban }] as const).map(({ mode, icon: Icon }) =>
                   <button key={mode} type="button" onClick={() => setViewMode(mode)} title={t(`view.${mode}`)} aria-label={t(`view.${mode}`)} aria-pressed={viewMode === mode}
                     style={viewMode === mode ? { backgroundColor: 'var(--color-surface)', color: 'var(--color-primary)' } : undefined}
                     className={`p-1.5 rounded-md transition ${viewMode === mode ? 'shadow-xs hover:opacity-90' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10'}`}>

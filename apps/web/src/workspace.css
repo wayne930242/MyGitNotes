@@ -316,3 +316,12 @@
 .folder-link.folder-index { background: #fff; color: #172033; box-shadow: inset 0 0 0 1px var(--workspace-divider); }
 .folder-link.folder-index > svg { color: #64748b; }
 .folder-link.folder-index:hover { background: #f8fafc; }
+.workspace-page-actions > .folder-index { flex: none; margin-right: auto; padding: 8px 10px; gap: 6px; min-height: 32px; }
+.workspace-page-actions > .folder-index > svg { width: 16px; height: 16px; }
+@media (max-width: 767px) {
+  .workspace-page-actions > .folder-index { min-height: 44px; padding: 8px; }
+}
+@media (max-width: 359px) {
+  .workspace-page-actions > .folder-index { min-width: 44px; }
+  .workspace-page-actions > .folder-index > svg { display: none; }
+}

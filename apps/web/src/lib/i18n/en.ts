@@ -122,7 +122,7 @@ export const en = {
   'sort.status': 'Status (Workflow)',
 
   // Kanban
-  'kanban.sortBy': 'Sort cards by',
+  'kanban.sortBy': 'Sort',
   'kanban.columnSort': 'Sort column',
   'kanban.newest': 'Newest',
   'kanban.oldest': 'Oldest',

@@ -123,7 +123,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'sort.status': '狀態 (工作流程順序)',
 
   // Kanban
-  'kanban.sortBy': '卡片排序方式',
+  'kanban.sortBy': '排序',
   'kanban.columnSort': '排序此欄位',
   'kanban.newest': '最新',
   'kanban.oldest': '最舊',
