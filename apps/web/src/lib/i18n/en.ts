@@ -1,4 +1,10 @@
 export const en = {
+  'layout.access': 'Access & connections',
+  'layout.manifest': 'Workspace manifest',
+  'layout.list': 'List',
+  'layout.card': 'Cards',
+  'layout.kanban': 'Board',
+
   // Navigation & Shell
   'nav.notes': 'Notes',
   'nav.agent': 'Agent System',

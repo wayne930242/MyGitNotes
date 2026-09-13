@@ -1,9 +1,8 @@
+import { PageHeader, WorkspaceSidebar } from './WorkspaceChrome.js';
 import React, { useState, useEffect } from 'react';
 import {
-  Settings,
   Save,
   RefreshCw,
-  GitBranch,
   Check,
   AlertCircle,
   Shield,
@@ -96,28 +95,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="settings-panel bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 md:p-6 max-w-4xl mx-auto flex flex-col gap-6">
-      <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <Settings className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-            {t('settings.title')}
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            {t('settings.description')}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-mono">
-            <GitBranch className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-            {branch}
-          </span>
-        </div>
-      </div>
-
+    <>
+      <WorkspaceSidebar label={t('settings.title')} className="settings-sidebar">
+        <div className="sidebar-section-label">{t('nav.settings')}</div>
+        {([
+          ['language', t('settings.language'), Globe],
+          ['theme', t('settings.theme'), Palette],
+          ['access', t('layout.access'), Shield],
+          ['updates', t('settings.coreUpdates'), RefreshCw],
+          ['manifest', t('layout.manifest'), Save],
+        ] as const).map(([id, label, Icon]) => <a key={String(id)} href={`#settings-${id}`} className="sidebar-link"
+          onClick={event => { event.preventDefault(); document.getElementById(`settings-${id}`)?.scrollIntoView({ block: 'start' }); }}>
+          <Icon aria-hidden="true" className="w-4 h-4" /><span>{String(label)}</span>
+        </a>)}
+      </WorkspaceSidebar>
+      <div className="workspace-content">
+        <PageHeader title={t('settings.title')} description={t('settings.description')} />
+        <div className="workspace-scroll">
+          <div className="settings-panel">
       {/* Language Selector */}
-      <div className="flex flex-col gap-3">
+      <div id="settings-language" className="flex flex-col gap-3">
         <div>
           <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
             <Globe className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
@@ -132,6 +129,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             onClick={() => setLanguage('en')}
+            aria-pressed={language === 'en'}
             className={`flex items-center justify-between p-4 rounded-xl border text-left transition-all ${
               language === 'en'
                 ? 'border-indigo-600 dark:border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-xs'
@@ -157,6 +155,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             onClick={() => setLanguage('zh-TW')}
+            aria-pressed={language === 'zh-TW'}
             className={`flex items-center justify-between p-4 rounded-xl border text-left transition-all ${
               language === 'zh-TW'
                 ? 'border-indigo-600 dark:border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-xs'
@@ -182,7 +181,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       </div>
 
       {/* Theme Palettes */}
-      <div className="flex flex-col gap-3">
+      <div id="settings-theme" className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
@@ -203,6 +202,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="button"
                 key={theme.id}
                 onClick={() => onSelectTheme(theme)}
+                aria-pressed={isSelected}
                 className={`flex flex-col p-4 rounded-xl border text-left transition-all ${
                   isSelected
                     ? 'border-indigo-600 dark:border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-xs hover:opacity-95'
@@ -254,10 +254,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
       </div>
 
-      {accountSettings}
+      <div id="settings-access">{accountSettings}</div>
 
       {/* Upstream & Core Updates Section */}
-      <div className="flex flex-col gap-3 p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
+      <div id="settings-updates" className="flex flex-col gap-3 p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
         <div className="flex items-start sm:items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
           <div>
             <div className="flex items-center gap-2">
@@ -356,7 +356,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       )}
 
       {/* Manifest YAML Editor */}
-      <div className="flex flex-col gap-2">
+      <div id="settings-manifest" className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
@@ -420,6 +420,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       <div className="break-words text-[11px] text-slate-400 dark:text-slate-500 border-t border-slate-100 dark:border-slate-800 pt-3">
         {local ? t('settings.repoRoot') : t('settings.githubSource')}: <code className="text-slate-600 dark:text-slate-400 font-mono">{repoRoot}</code>
       </div>
-    </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 };

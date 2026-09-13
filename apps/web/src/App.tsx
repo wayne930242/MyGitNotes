@@ -34,6 +34,8 @@ import { ThemeDefinition, getSavedTheme, applyTheme } from './lib/themes.js';
 import { AuthControls, ConnectionState, AgentAccessSettings } from './components/AuthControls.js';
 import { inFolder } from './lib/note-paths.js';
 import { Header } from './components/Header.js';
+import { NoteToolbar } from './components/NoteToolbar.js';
+import { PageHeader } from './components/WorkspaceChrome.js';
 import { useVisualViewport } from './lib/use-visual-viewport.js';
 import { useSidebarSwipe } from './lib/use-sidebar-swipe.js';
 import { Sidebar } from './components/Sidebar.js';
@@ -656,18 +658,10 @@ const AppContent: React.FC = () => {
       {/* Top Header */}
       <Header
         workspaceTitle={config?.workspace.title || 'GitHub Notes'}
-        readOnly={!canWrite}
         sourceLabel={remote ? `${sourceId.replace(/^github:/, '')}${canWrite ? '' : ' · Read-only'}` : undefined}
         accountControls={<AuthControls local={!remote} />}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        onOpenNewNoteModal={() => openNewNote()}
-        filtersOpen={filtersOpen}
-        onToggleFilters={() => setFiltersOpen(open => !open)}
       />
 
       {routeError && (
@@ -706,7 +700,14 @@ const AppContent: React.FC = () => {
             </div>
 
             {/* Main Content Area */}
-            <main className="workspace-main flex-1 min-w-0 p-3 md:p-6 overflow-y-auto">
+            <main className="workspace-main notes-main">
+              <PageHeader title={t('nav.notes')} description={config?.notebooks.find(nb => nb.id === selectedNotebookId)?.title}>
+                <NoteToolbar readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode}
+                  searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+                  onOpenNewNoteModal={() => openNewNote()} filtersOpen={filtersOpen}
+                  onToggleFilters={() => setFiltersOpen(open => !open)} />
+              </PageHeader>
+              <div className="workspace-scroll">
               {actionError && <p role="alert" className="mb-3 text-sm text-rose-600">{actionError}</p>}
               <Breadcrumbs
                 segments={breadcrumbs}
@@ -766,12 +767,13 @@ const AppContent: React.FC = () => {
                   onSortChange={handleSortChange}
                 />
               )}
+              </div>
             </main>
           </>
         )}
 
         {activeTab === 'agent' && (
-          <main className="workspace-main agent-main flex-1 min-w-0 p-3 md:p-6 overflow-y-auto">
+          <main className="workspace-route agent-main">
             <AgentSystemView
               readOnly={!canWrite}
               remote={remote}
@@ -781,7 +783,7 @@ const AppContent: React.FC = () => {
         )}
 
         {activeTab === 'assets' && (
-          <main className="workspace-main flex-1 min-w-0 p-3 md:p-6 overflow-y-auto">
+          <main className="workspace-route assets-main">
             <AssetBrowser
               assets={assets}
               notebooks={config?.notebooks || []}
@@ -795,7 +797,7 @@ const AppContent: React.FC = () => {
         )}
 
         {activeTab === 'settings' && (
-          <main className="workspace-main flex-1 min-w-0 p-3 md:p-6 overflow-y-auto">
+          <main className="workspace-route settings-main">
             <SettingsModal
               config={config}
               branch={branch}

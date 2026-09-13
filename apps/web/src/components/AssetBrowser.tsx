@@ -1,9 +1,9 @@
-import { Select } from './Select.js';
-import React from 'react';
-import { Image as ImageIcon } from 'lucide-react';
+import { Folder, BookOpen } from 'lucide-react';
 import type { NotebookConfig } from '../lib/types.js';
 import { AssetLibrary, AssetLibraryProps } from './AssetLibrary.js';
+import { PageHeader, WorkspaceSidebar } from './WorkspaceChrome.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { Select } from './Select.js';
 
 interface AssetBrowserProps extends AssetLibraryProps {
   notebooks: NotebookConfig[];
@@ -11,19 +11,27 @@ interface AssetBrowserProps extends AssetLibraryProps {
   onSelectNotebook: (id: string) => void;
 }
 
-export const AssetBrowser: React.FC<AssetBrowserProps> = ({ notebooks, selectedNotebookId, onSelectNotebook, ...library }) => {
+export function AssetBrowser({ notebooks, selectedNotebookId, onSelectNotebook, ...library }: AssetBrowserProps) {
   const { t } = useTranslation();
-
-  return (
-    <div className="ui-panel shadow-sm p-3 md:p-6 flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
-        <h2 className="text-sm font-semibold flex gap-2 items-center">
-          <ImageIcon className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
-          {t('assets.title')}
-        </h2>
-        <Select aria-label={t('assets.title')} value={selectedNotebookId} onValueChange={onSelectNotebook} options={notebooks.map(nb => ({ value: nb.id, label: nb.title }))} className="w-full sm:w-auto sm:max-w-xs" />
+  return <AssetLibrary key={selectedNotebookId} {...library}
+    renderHeader={busy => <PageHeader title={t('nav.assets')} description={notebooks.find(nb => nb.id === selectedNotebookId)?.title}>
+      <Select aria-label={t('assets.title')} value={selectedNotebookId} onValueChange={onSelectNotebook} disabled={busy}
+        options={notebooks.map(nb => ({ value: nb.id, label: nb.title }))} className="assets-notebook-picker" />
+    </PageHeader>}
+    renderSidebar={({ folders, directory, busy, onSelectDirectory }) => <WorkspaceSidebar label={t('nav.assets')} className="assets-sidebar">
+      <div>
+        <div className="sidebar-section-label">{t('sidebar.notebooks')}</div>
+        {notebooks.map(nb => <button type="button" key={nb.id} className="sidebar-link" disabled={busy}
+          aria-pressed={selectedNotebookId === nb.id} onClick={() => onSelectNotebook(nb.id)}>
+          <BookOpen aria-hidden="true" className="w-4 h-4" /><span>{nb.title}</span>
+        </button>)}
       </div>
-      <AssetLibrary key={selectedNotebookId} {...library} />
-    </div>
-  );
-};
+      <div>
+        <div className="sidebar-section-label">{t('folder.folders')}</div>
+        {['', ...folders.filter(Boolean)].map(folder => <button type="button" key={folder} className="sidebar-link"
+          disabled={busy} aria-pressed={directory === folder} onClick={() => onSelectDirectory(folder)}>
+          <Folder aria-hidden="true" className="w-4 h-4" /><span>{folder || t('assets.root')}</span>
+        </button>)}
+      </div>
+    </WorkspaceSidebar>} />;
+}

@@ -1,5 +1,6 @@
+import { FolderLinks } from './FolderLinks.js';
 import React from 'react';
-import { FileText, Tag, Clock, Trash2, Plus, Folder, ChevronRight } from 'lucide-react';
+import { FileText, Tag, Clock, Trash2, Plus } from 'lucide-react';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import { NoteItem } from '../lib/types.js';
 import { SubfolderInfo } from '../lib/folder-tree.js';
@@ -71,58 +72,9 @@ export const CardView: React.FC<CardViewProps> = ({
   };
 
   return (
+    <>
+    <FolderLinks folders={subfolders} onSelect={onSelectFolder} />
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      {/* Subfolder Cards */}
-      {subfolders.map((folder) => (
-        <div
-          key={`card-subfolder-${folder.path}`}
-          onClick={() => onSelectFolder?.(folder.path)}
-          style={{
-            backgroundColor: 'var(--color-surface)',
-            borderColor: 'var(--color-border)',
-          }}
-          className="rounded-xl border hover:border-indigo-400 dark:hover:border-indigo-500/80 p-5 flex flex-col justify-between shadow-xs hover:shadow-md hover:-translate-y-0.5 transition cursor-pointer group select-none relative overflow-hidden"
-        >
-          <div>
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center transition shadow-xs"
-                style={{
-                  backgroundColor: 'var(--color-primary-light)',
-                  color: 'var(--color-primary)',
-                }}
-              >
-                <Folder className="w-5 h-5" />
-              </div>
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400">
-                {folder.noteCount === 1 ? t('folder.noteCount', { count: 1 }) : t('folder.notesCount', { count: folder.noteCount })}
-              </span>
-            </div>
-
-            <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base line-clamp-1 transition">
-              {folder.title}
-            </h3>
-
-            <p className="text-xs text-slate-400 dark:text-slate-500 font-mono line-clamp-2 mt-1">
-              {folder.path}
-            </p>
-          </div>
-
-          <div
-            className="pt-3 border-t mt-4 flex items-center justify-between text-xs text-slate-400"
-            style={{ borderColor: 'var(--color-border)' }}
-          >
-            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              {t('folder.folders')}
-            </span>
-            <div className="flex items-center gap-1 text-slate-400 transition">
-              <span className="text-[11px] font-medium">{t('folder.open')}</span>
-              <ChevronRight className="w-4 h-4 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:translate-x-0.5 transition" />
-            </div>
-          </div>
-        </div>
-      ))}
-
       {/* Note Cards */}
       {notes.map((note) => {
         const formattedDate = note.mtime
@@ -212,5 +164,6 @@ export const CardView: React.FC<CardViewProps> = ({
         );
       })}
     </div>
+    </>
   );
 };

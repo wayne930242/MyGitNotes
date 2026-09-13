@@ -53,7 +53,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
   return (
     <nav
       aria-label="Breadcrumbs"
-      className="flex items-center justify-between gap-3 px-3 py-2 md:px-4 md:py-2.5 rounded-xl border bg-black/[0.02] dark:bg-white/[0.02] mb-4 text-xs select-none transition-colors flex-wrap sm:flex-nowrap"
+      className="workspace-breadcrumbs flex items-center justify-between gap-3 px-3 py-2 md:px-4 md:py-2.5 rounded-xl border bg-black/[0.02] dark:bg-white/[0.02] mb-4 text-xs select-none transition-colors flex-wrap sm:flex-nowrap"
       style={{ borderColor: 'var(--color-border)' }}
     >
       <div className="flex items-center gap-1.5 flex-wrap min-w-0">
