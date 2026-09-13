@@ -4,8 +4,8 @@ Confirmed by the user on 2026-09-13.
 
 ## Observable contract
 
-- Outside editable controls, `Ctrl+K` on Windows/Linux and `Cmd+K` on macOS opens a compact leader panel.
-- Inside inputs, textareas, selects, CodeMirror, and contenteditable regions, the primary chord is untouched. `Ctrl+Alt+K` on Windows/Linux and `Cmd+Option+K` on macOS opens the panel instead.
+- `Ctrl+Alt+K` on Windows/Linux and `Cmd+Option+K` on macOS opens a compact leader panel in both editable and non-editable contexts.
+- `Ctrl/Cmd+K` is untouched everywhere so Chrome can retain omnibox search and Markdown editors can retain link insertion.
 - The panel lists every command, its second key, and whether it is currently unavailable. It receives focus when opened and restores prior focus when dismissed.
 - The pending panel dismisses after 2.5 seconds or immediately with `Escape`. Pressing `?` pins the help view until explicitly dismissed.
 - While the panel is open: `1` Notes, `2` Agent System, `3` Assets, `4` Screen, `N` New note, `/` note search, `,` Settings, and `?` keyboard help.
@@ -24,13 +24,13 @@ Confirmed by the user on 2026-09-13.
 
 - WAI keyboard guidance and WCAG 2.1.4: avoid conflicting bare character shortcuts and preserve discoverability.
 - WAI-ARIA `aria-keyshortcuts`: do not mislabel a sequential chord as a single shortcut.
-- GitHub Command Palette: preserve Markdown `Ctrl/Cmd+K` and use the Alt/Option variant in editing contexts.
+- GitHub Command Palette: adopt its documented Alt/Option variant as the single application chord after live Chrome showed that plain `Ctrl+K` is browser-reserved here.
 - VS Code chords: display pending chord state and apply contextual enablement.
 
 See source URLs and synthesis in [requirements.md](requirements.md).
 
 ## Correctness strategy
 
-- Browser QA proves opening, dismissal, timeout, navigation, contextual actions, editor conflict handling, focus transfer, and disabled commands through real keyboard events.
+- Browser QA proves that plain `Ctrl+K` is untouched and that the Alt/Option chord opens the panel, then covers dismissal, timeout, navigation, contextual actions, editor conflict handling, focus transfer, and disabled commands through real keyboard events.
 - Existing application tests and full build verify route/save behavior and type compatibility.
 - Human appropriateness check: confirm that the compact panel's size, location, and command labels feel clear in the live preview.

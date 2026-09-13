@@ -13,10 +13,6 @@ interface KeyboardShortcutsProps {
   onFocusSearch: () => void;
 }
 
-function isEditableTarget(target: EventTarget | null) {
-  return target instanceof Element && Boolean(target.closest('input, textarea, select, [role="combobox"], [contenteditable="true"], .cm-content'));
-}
-
 export function KeyboardShortcuts({ activeTab, canCreateNote, onNavigate, onCreateNote, onFocusSearch }: KeyboardShortcutsProps) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<ShortcutMode | null>(null);
@@ -71,9 +67,7 @@ export function KeyboardShortcuts({ activeTab, canCreateNote, onNavigate, onCrea
     const keydown = (event: KeyboardEvent) => {
       const primary = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
       if (event.key.toLowerCase() === 'k' && primary) {
-        const editable = isEditableTarget(event.target);
-        const shouldOpen = editable ? event.altKey : !event.altKey;
-        if (!shouldOpen) return;
+        if (!event.altKey || event.shiftKey) return;
         event.preventDefault(); event.stopPropagation();
         if (mode) dismiss(); else setMode('leader');
         return;
@@ -97,7 +91,7 @@ export function KeyboardShortcuts({ activeTab, canCreateNote, onNavigate, onCrea
   return <div ref={panelRef} role="dialog" aria-modal="false" aria-label={t('shortcuts.title')} data-mode={mode}
     className="keyboard-shortcuts-panel" tabIndex={-1}>
     <div className="keyboard-shortcuts-heading">
-      <div><Keyboard aria-hidden="true" /><div><h2>{t(mode === 'help' ? 'shortcuts.title' : 'shortcuts.pending')}</h2><p>{t('shortcuts.chord', { modifier: isMac ? '⌘' : 'Ctrl' })}</p></div></div>
+      <div><Keyboard aria-hidden="true" /><div><h2>{t(mode === 'help' ? 'shortcuts.title' : 'shortcuts.pending')}</h2><p>{t('shortcuts.chord', { modifier: isMac ? '⌘+⌥' : 'Ctrl+Alt' })}</p></div></div>
       <button type="button" className="ui-icon-button" aria-label={t('common.close')} onClick={() => dismiss()}><X size={16} /></button>
     </div>
     <div className="keyboard-shortcuts-list">

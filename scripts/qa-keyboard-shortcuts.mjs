@@ -22,12 +22,14 @@ const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_E
 const page = await browser.newPage(); await page.setViewport({ width: 1440, height: 1000 });
 const base = `http://127.0.0.1:${server.address().port}`;
 const chord = async (...keys) => { for (const key of keys.slice(0, -1)) await page.keyboard.down(key); await page.keyboard.press(keys.at(-1)); for (const key of keys.slice(0, -1).reverse()) await page.keyboard.up(key); };
-const openLeader = async () => { await page.waitForFunction(() => !document.querySelector('[aria-label="Keyboard shortcuts"]')); await chord('Control', 'KeyK'); await page.waitForSelector('[aria-label="Keyboard shortcuts"]'); };
+const openLeader = async () => { await page.waitForFunction(() => !document.querySelector('[aria-label="Keyboard shortcuts"]')); await chord('Control', 'Alt', 'KeyK'); await page.waitForSelector('[aria-label="Keyboard shortcuts"]'); };
 const focusNav = async (label = 'Notes') => { await page.focus(`.header-nav button[aria-label="${label}"]`); };
 const assert = (value, message) => { if (!value) throw Error(message); };
 
 try {
   await page.goto(`${base}/notes`, { waitUntil: 'networkidle0' });
+  await focusNav(); await chord('Control', 'KeyK');
+  assert(!await page.$('[aria-label="Keyboard shortcuts"]'), 'Browser-reserved Ctrl+K still opens the application leader');
   await focusNav(); await openLeader();
   assert(await page.$eval('[aria-label="Keyboard shortcuts"]', panel => panel.getAttribute('data-mode')) === 'leader', 'Primary chord did not open pending leader mode');
   assert(await page.$$eval('[aria-label="Keyboard shortcuts"] [data-shortcut-key]', items => items.map(item => item.getAttribute('data-shortcut-key')).join(',')) === '1,2,3,4,N,/,comma,?', 'Leader command set is incomplete');
@@ -39,7 +41,7 @@ try {
   assert(!await page.$('[aria-label="Keyboard shortcuts"]'), 'Pending leader did not expire');
 
   await page.focus('.header-search input'); await chord('Control', 'KeyK');
-  assert(!await page.$('[aria-label="Keyboard shortcuts"]'), 'Primary chord intercepted an editable control');
+  assert(!await page.$('[aria-label="Keyboard shortcuts"]'), 'Browser-reserved Ctrl+K intercepted an editable control');
   await chord('Control', 'Alt', 'KeyK'); await page.waitForSelector('[aria-label="Keyboard shortcuts"]'); await page.keyboard.press('Escape');
 
   for (const [key, route] of [['2', '/agent'], ['3', '/assets'], ['4', '/screen'], ['1', '/notebooks/example']]) {
@@ -65,7 +67,7 @@ try {
   await page.keyboard.press('/');
   assert(await page.$('[aria-label="Keyboard shortcuts"]') && new URL(page.url()).pathname === '/settings', 'Disabled command executed or dismissed the panel');
   await page.keyboard.press('Escape');
-  console.log('PASS visible leader/help, timeout, focus restoration, editable alternate chord, navigation, New note, search, Settings and contextual disablement');
+  console.log('PASS reserved Ctrl+K, global Ctrl+Alt+K leader/help, timeout, focus restoration, navigation, New note, search, Settings and contextual disablement');
 } finally {
   await browser.close(); await new Promise(resolve => server.close(resolve)); fs.rmSync(root, { recursive: true, force: true });
 }

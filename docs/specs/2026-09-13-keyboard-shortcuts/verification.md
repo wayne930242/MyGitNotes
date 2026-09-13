@@ -4,9 +4,10 @@ Verified on 2026-09-13 against the Core workspace.
 
 ## Requirements evidence
 
-- The production-browser shortcut QA opens the visible leader with `Ctrl+K`, preserves primary `Ctrl+K` in editable controls, and opens it there with `Ctrl+Alt+K`.
+- The original production-browser shortcut QA opened the visible leader with `Ctrl+K`, but live Chrome subsequently exposed that the browser can consume that chord for omnibox search.
+- The corrected QA requires plain `Ctrl+K` to remain untouched and uses `Ctrl+Alt+K` as the single Windows/Linux application chord in editable and non-editable contexts.
 - The same QA exercises `1` through `4`, New note, Notes search, Settings, pinned help, Escape focus restoration, the 2.5-second timeout, and contextual command disablement.
-- Live visual inspection confirmed that the compact panel is readable above the Screen workspace and that disabled commands remain visibly distinct.
+- Live visual inspection confirmed that the compact panel is readable above the workspace and that disabled commands remain visibly distinct. After correction, live Chrome opened the panel with `Ctrl+Alt+K` while the note editor had focus and displayed the updated chord label.
 - Mobile browser QA covers the centered circular New note action, folder-path completion and creation, left-half swipe opening, and responsive sidebars on Agent, Assets, Settings, and Screen.
 - Screen and folder-index browser QA cover Alt-wheel horizontal scrolling in Screen lanes and Kanban while retaining normal vertical scrolling.
 
