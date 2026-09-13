@@ -179,4 +179,4 @@ Create folders from the notes sidebar. Drag to an insertion line to reorder sibl
 
 The Expand note view lists notes in the current folder and all descendants without grouping them into folders.
 
-Place an optional `index.md` in any notebook root or nested folder to show its Markdown content above that folder's List, Card or Kanban view. Relative links and images work as in other notes, and Open index note opens the regular editor. The file remains a normal note in listings. Hidden-note visibility applies; search, status/tag filters and Expand show results without the introduction.
+Place an optional `index.md` in any notebook root or nested folder to add a white Index card before that folder's other folder cards in List, Card or Kanban view. It uses a document icon and opens the regular note editor. The index is omitted from the notes below its card. Hidden-note visibility applies; search, status/tag filters and Expand show results without the index card.

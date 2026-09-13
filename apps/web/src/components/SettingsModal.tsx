@@ -1,4 +1,4 @@
-import { PageHeader, WorkspaceSidebar } from './WorkspaceChrome.js';
+import { WorkspaceSidebar } from './WorkspaceChrome.js';
 import React, { useState, useEffect } from 'react';
 import {
   Save,
@@ -110,7 +110,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </a>)}
       </WorkspaceSidebar>
       <div className="workspace-content">
-        <PageHeader title={t('settings.title')} description={t('settings.description')} />
         <div className="workspace-scroll">
           <div className="settings-panel">
       {/* Language Selector */}

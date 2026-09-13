@@ -1,14 +1,12 @@
-import { FolderLinks } from './FolderLinks.js';
 import React from 'react';
 import { FileText, Tag, Clock, Trash2, Plus } from 'lucide-react';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import { NoteItem } from '../lib/types.js';
-import { SubfolderInfo } from '../lib/folder-tree.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
 interface CardViewProps {
   notes: NoteItem[];
-  subfolders?: SubfolderInfo[];
+  hasFolderEntries?: boolean;
   statuses: string[];
   readOnly?: boolean;
   canDelete?: boolean;
@@ -16,12 +14,11 @@ interface CardViewProps {
   onDeleteNote: (note: NoteItem) => void;
   onNewNote: () => void;
   onUpdateNoteStatus: (note: NoteItem, status: string) => void;
-  onSelectFolder?: (folder: string | null) => void;
 }
 
 export const CardView: React.FC<CardViewProps> = ({
   notes,
-  subfolders = [],
+  hasFolderEntries = false,
   statuses,
   readOnly = false,
   canDelete = true,
@@ -29,11 +26,10 @@ export const CardView: React.FC<CardViewProps> = ({
   onDeleteNote,
   onNewNote,
   onUpdateNoteStatus,
-  onSelectFolder,
 }) => {
   const { t } = useTranslation();
 
-  const isEmpty = notes.length === 0 && subfolders.length === 0;
+  const isEmpty = notes.length === 0 && !hasFolderEntries;
 
   if (isEmpty) {
     return (
@@ -73,7 +69,6 @@ export const CardView: React.FC<CardViewProps> = ({
 
   return (
     <>
-    <FolderLinks folders={subfolders} onSelect={onSelectFolder} />
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {/* Note Cards */}
       {notes.map((note) => {

@@ -13,16 +13,10 @@ export function WorkspaceSidebar({ children, footer, label, className = '' }: {
   </aside>;
 }
 
-export function PageHeader({ title, description, children }: {
-  title: string;
-  description?: string;
-  children?: React.ReactNode;
+export function PageToolbar({ children }: {
+  children: React.ReactNode;
 }) {
   return <div className="workspace-page-header">
-    <div className="workspace-page-heading">
-      <h2>{title}</h2>
-      {description && <p>{description}</p>}
-    </div>
-    {children && <div className="workspace-page-actions">{children}</div>}
+    <div className="workspace-page-actions">{children}</div>
   </div>;
 }

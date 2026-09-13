@@ -13,6 +13,7 @@ This example workspace serves as both a starter template and an interactive tuto
 2. Use [Weekly Review](projects/weekly-review.md) to track active tasks.
 3. Capture unorganized ideas in [Reading List](projects/ideas/reading-list.md).
 4. Read [Status and Visibility](getting-started/status-and-visibility.md) to understand default statuses.
+5. Open [Folder Index](index.md) to learn how the white Index card provides a folder entry point.
 
 List view is ideal for quickly opening notes; Card view displays content summaries; Kanban groups notes into columns by status. Note statuses can be changed directly from the status menu, and changes are staged for review and committed together via the bottom Commit bar.
 

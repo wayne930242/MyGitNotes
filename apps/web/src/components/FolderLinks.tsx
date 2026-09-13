@@ -1,14 +1,17 @@
 import { Folder, ChevronRight } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { SubfolderInfo } from '../lib/folder-tree.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
-export function FolderLinks({ folders, onSelect }: {
+export function FolderLinks({ folders, onSelect, children }: {
   folders: SubfolderInfo[];
   onSelect?: (path: string) => void;
+  children?: ReactNode;
 }) {
   const { t } = useTranslation();
-  if (!folders.length) return null;
+  if (!folders.length && !children) return null;
   return <div className="folder-links" aria-label={t('folder.folders')}>
+    {children}
     {folders.map(folder => <button key={folder.path} type="button" title={folder.path}
       onClick={() => onSelect?.(folder.path)} className="folder-link">
       <Folder aria-hidden="true" />

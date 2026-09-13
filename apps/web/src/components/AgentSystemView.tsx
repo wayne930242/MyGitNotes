@@ -1,7 +1,7 @@
 import { useWorkspaceLinks } from './WorkspaceLinks.js';
 import { AgentFileTree } from './AgentFileTree.js';
 import { groupAgentResources } from '../lib/agent-tree.js';
-import { PageHeader, WorkspaceSidebar } from './WorkspaceChrome.js';
+import { WorkspaceSidebar } from './WorkspaceChrome.js';
 import { EditorNotice } from './EditorNotice.js';
 import { Select } from './Select.js';
 import React, { useState, useEffect, useRef, useImperativeHandle } from 'react';
@@ -204,7 +204,6 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
 
   const groups = groupAgentResources(instructions, notebooks, selectedNotebookId);
   const visibleResources = [...groups.shared, ...groups.notebook, ...groups.product];
-  const selectedNotebook = notebooks.find(nb => nb.id === selectedNotebookId);
   const treeNavigation = { selectedPath, disabled: switching || restoring, onSelect: (path: string) => void selectDocument(path) };
   const prepareNotebookChange = async (id: string) => {
     if (loading || switching || restoring || isCreating) return false;
@@ -276,7 +275,6 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
 
       {/* Right Content Viewer / Editor */}
       <div className="workspace-content agent-content">
-        <PageHeader title={t('nav.agent')} description={selectedNotebook?.title} />
         <label className="agent-document-picker mobile-only flex-col gap-1 p-3 border-b text-xs" style={{ borderColor: 'var(--color-border)' }}>
           {t('agent.document')}
           <Select
