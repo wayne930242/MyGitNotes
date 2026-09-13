@@ -105,7 +105,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           ['updates', t('settings.coreUpdates'), RefreshCw],
           ['manifest', t('layout.manifest'), Save],
         ] as const).map(([id, label, Icon]) => <a key={String(id)} href={`#settings-${id}`} className="sidebar-link"
-          onClick={event => { event.preventDefault(); document.getElementById(`settings-${id}`)?.scrollIntoView({ block: 'start' }); }}>
+          onClick={event => { event.preventDefault(); document.getElementById(`settings-${id}`)?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); }}>
           <Icon aria-hidden="true" className="w-4 h-4" /><span>{String(label)}</span>
         </a>)}
       </WorkspaceSidebar>

@@ -5,24 +5,27 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { defaultHighlightStyle, HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
+import { marked } from 'marked';
 import { renderNote } from '../lib/markdown.js';
+import { headingSlug, resolveWorkspaceHref } from '../lib/workspace-links.js';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from '../lib/i18n/index.js';
 
 export interface LiveMarkdownHandle { insert: (text: string) => void }
 interface Props { content: string; notePath: string; readOnly: boolean; ariaLabel?: string; onChange: (content: string) => void }
 const focusChanged = StateEffect.define<boolean>();
-const isExternalLink = (href: string) => /^(https?:\/\/|mailto:)/i.test(href);
-function externalLinkIcon(href: string, label: string): HTMLAnchorElement {
+function externalLinkIcon(href: string, label: string, sourcePath: string): HTMLAnchorElement {
   const anchor = document.createElement('a');
   anchor.className = 'live-md-external-link'; anchor.href = href; anchor.target = '_blank'; anchor.rel = 'noopener noreferrer';
   anchor.title = label; anchor.setAttribute('aria-label', `${label}: ${href}`);
+  anchor.dataset.workspaceLink = href; anchor.dataset.sourcePath = sourcePath;
   anchor.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M10 14 21 3M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg>';
   return anchor;
 }
 class ExternalLink extends WidgetType {
-  constructor(readonly href: string, readonly label: string) { super(); }
-  eq(other: ExternalLink) { return this.href === other.href && this.label === other.label; }
-  toDOM() { return externalLinkIcon(this.href, this.label); }
+  constructor(readonly href: string, readonly label: string, readonly path: string) { super(); }
+  eq(other: ExternalLink) { return this.href === other.href && this.label === other.label && this.path === other.path; }
+  toDOM() { return externalLinkIcon(this.href, this.label, this.path); }
 }
 class RenderedMarkdown extends WidgetType {
   constructor(readonly text: string, readonly path: string, readonly from: number, readonly block: boolean, readonly linkLabel: string) { super(); }
@@ -30,13 +33,9 @@ class RenderedMarkdown extends WidgetType {
   toDOM(view: EditorView) {
     const dom = document.createElement(this.block ? 'div' : 'span'); dom.className = 'live-md-rendered prose-custom';
     dom.innerHTML = renderNote(this.text, this.path);
-    for (const anchor of dom.querySelectorAll('a[href]')) {
-      const href = anchor.getAttribute('href')!;
-      if (isExternalLink(href)) anchor.after(externalLinkIcon(href, this.linkLabel));
-    }
     dom.setAttribute('aria-label', 'Rendered Markdown; click to edit');
     dom.addEventListener('mousedown', event => {
-      if ((event.target as HTMLElement).closest('a')) return;
+      if ((event.target as HTMLElement).closest('a, [data-workspace-link]')) return;
       event.preventDefault(); view.dispatch({selection:{anchor:this.from}}); view.focus();
     });
     for (const image of dom.querySelectorAll('img')) image.addEventListener('load', () => view.requestMeasure());
@@ -60,16 +59,17 @@ class BulletMarker extends WidgetType {
 }
 function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string): DecorationSet {
   const marks: Range<Decoration>[] = [];
+  const references = marked.lexer(state.doc.toString()).links;
   const active = (from: number, to: number) => focused && !state.readOnly && state.selection.ranges.some(range => state.doc.lineAt(range.from).from <= to && state.doc.lineAt(range.to).to >= from);
   const hide = (from: number, to: number) => { if (from < to) marks.push(Decoration.replace({}).range(from,to)); };
   const link = (from: number, to: number, href: string) => {
-    if (!isExternalLink(href)) return;
-    marks.push(Decoration.mark({attributes:{'data-live-link':href,title:'Ctrl/Cmd-click to open link'}}).range(from,to));
-    marks.push(Decoration.widget({widget:new ExternalLink(href,linkLabel),side:1}).range(to));
+    if (!resolveWorkspaceHref(href, notePath)) return;
+    marks.push(Decoration.mark({attributes:{'data-workspace-link':href,'data-source-path':notePath,role:'link',tabindex:'0',title:linkLabel}}).range(from,to));
+    marks.push(Decoration.widget({widget:new ExternalLink(href,linkLabel,notePath),side:1}).range(to));
   };
   syntaxTree(state).iterate({ enter(node) {
     const {from,to,name} = node; const editing = active(from,to);
-    if (/^(ATXHeading|SetextHeading)[1-6]$/.test(name)) marks.push(Decoration.line({class:`live-md-heading live-md-h${name.at(-1)}`}).range(state.doc.lineAt(from).from));
+    if (/^(ATXHeading|SetextHeading)[1-6]$/.test(name)) marks.push(Decoration.line({class:`live-md-heading live-md-h${name.at(-1)}`,attributes:{'data-heading-slug':headingSlug(state.sliceDoc(from,to).split('\n')[0])}}).range(state.doc.lineAt(from).from));
     if (name === 'Blockquote') for(let line = state.doc.lineAt(from); line.from < to; line = state.doc.line(line.number+1)) {
       marks.push(Decoration.line({class:'live-md-quote'}).range(line.from)); if(line.number === state.doc.lines)break;
     }
@@ -95,6 +95,14 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
         link(from,to,href);
         const source = state.sliceDoc(from,to); const start = source.indexOf('[')+1; const end = source.indexOf('](',start);
         if (!editing && end >= start) { hide(from,from+start); hide(from+end,to); return false; }
+      } else {
+        const source = state.sliceDoc(from, to);
+        const reference = source.match(/^\[([^\]]+)\](?:\[([^\]]*)\])?$/);
+        const target = reference && references[(reference[2] || reference[1]).replace(/\s+/g, ' ').toLowerCase()];
+        if (target) {
+          link(from, to, target.href);
+          if (!editing) { hide(from, from + 1); hide(from + 1 + reference![1].length, to); return false; }
+        }
       }
     }
     if (!editing && /^(HeaderMark|EmphasisMark|StrikethroughMark|CodeMark|QuoteMark)$/.test(name)) {
@@ -125,7 +133,8 @@ const theme = EditorView.theme({
   '.cm-content input[type=checkbox]':{accentColor:'var(--color-primary)',verticalAlign:'middle',marginRight:'4px'},
 });
 export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content,notePath,readOnly,onChange,ariaLabel = 'Note content'},ref) => {
-  const { t } = useTranslation(); const linkLabel = t('editor.openLinkInNewTab');
+  const { t } = useTranslation(); const linkLabel = t('links.open');
+  const location = useLocation();
   const host = useRef<HTMLDivElement>(null); const editor = useRef<EditorView>();
   const callback = useRef(onChange); callback.current = onChange;
   const permission = useRef(new Compartment());
@@ -144,20 +153,22 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
       syntaxHighlighting(defaultHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'}])),theme,field,
       permission.current.of([EditorState.readOnly.of(readOnly),EditorView.editable.of(!readOnly)]),
       EditorView.contentAttributes.of({'aria-label':ariaLabel,'role':'textbox','aria-multiline':'true'}),
-      EditorView.domEventHandlers({focus:(_event,view)=>{view.dispatch({effects:focusChanged.of(true)});},blur:(_event,view)=>{view.dispatch({effects:focusChanged.of(false)});},mousedown:(event)=>{
-        // Keep the clicked decoration in place until click opens the link.
-        if(event.button === 0 && (event.ctrlKey || event.metaKey) && (event.target as HTMLElement).closest('[data-live-link]')){event.preventDefault();return true;}
-        return false;
-      },click:(event,view)=>{
-        const link=(event.target as HTMLElement).closest('[data-live-link]')?.getAttribute('data-live-link');
-        if(link && (view.state.readOnly || event.ctrlKey || event.metaKey)){event.preventDefault();window.open(link,'_blank','noopener,noreferrer');return true;}
-        return false;
-      }}),
+      EditorView.domEventHandlers({focus:(_event,view)=>{view.dispatch({effects:focusChanged.of(true)});},blur:(_event,view)=>{view.dispatch({effects:focusChanged.of(false)});}}),
       EditorView.updateListener.of(update=>{if(update.docChanged)callback.current(update.state.doc.toString());}),
     ]})});
     editor.current=view;return()=>{view.destroy();editor.current=undefined;};
   },[notePath,ariaLabel,linkLabel]);
   useEffect(()=>{const view=editor.current;if(view && view.state.doc.toString()!==content)view.dispatch({changes:{from:0,to:view.state.doc.length,insert:content},annotations:Transaction.addToHistory.of(false)});},[content]);
   useEffect(()=>{editor.current?.dispatch({effects:permission.current.reconfigure([EditorState.readOnly.of(readOnly),EditorView.editable.of(!readOnly)])});},[readOnly]);
+  useEffect(() => {
+    if (!location.hash) return;
+    let anchor: string;
+    try { anchor = headingSlug(decodeURIComponent(location.hash.slice(1))); } catch { return; }
+    const frame = requestAnimationFrame(() => {
+      const heading = [...(host.current?.querySelectorAll<HTMLElement>('[data-heading-slug]') || [])].find(node => node.dataset.headingSlug === anchor);
+      heading?.scrollIntoView({ block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [location.hash, notePath, content]);
   return <div ref={host} className="flex-1 min-h-0 min-w-0 overflow-hidden" data-live-markdown />;
 });

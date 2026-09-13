@@ -1,3 +1,4 @@
+import { WorkspaceLinks } from './components/WorkspaceLinks.js';
 import { resolveNoteStatuses, isNoteHidden, withNoteStatus } from '@github-notes/core/note-status';
 import { Select } from './components/Select.js';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -44,7 +45,7 @@ import { CardView } from './components/CardView.js';
 import { KanbanView } from './components/KanbanView.js';
 import { EditorModal } from './components/EditorModal.js';
 import { AssetBrowser } from './components/AssetBrowser.js';
-import { AgentSystemView } from './components/AgentSystemView.js';
+import { AgentSystemView, type AgentSystemHandle } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { CommitModal } from './components/CommitModal.js';
 import { FloatingCommitFooter } from './components/FloatingCommitFooter.js';
@@ -63,6 +64,8 @@ import {
 } from './lib/note-sort.js';
 import { I18nProvider, useTranslation } from './lib/i18n/index.js';
 import { AlertTriangle, FileText, X } from 'lucide-react';
+
+const ScreenPage = React.lazy(() => import('./components/ScreenPage.js').then(module => ({ default: module.ScreenPage })));
 
 const AppContent: React.FC = () => {
   useVisualViewport();
@@ -180,8 +183,25 @@ const AppContent: React.FC = () => {
     if (value) query.set(key,value); else query.delete(key);
     navigate({ pathname: location.pathname, search: query.toString() }, { replace });
   };
-  const setActiveTab = (tab: WorkspaceTab) => navigate(tab === 'notes' ? notebookRoute(selectedNotebookId,selectedFolder)+location.search : `/${tab}?notebook=${encodeURIComponent(selectedNotebookId)}`);
-  const setSelectedNotebookId = (id: string) => navigate(activeTab === 'assets' ? `/assets?notebook=${encodeURIComponent(id)}` : notebookRoute(id));
+  const setActiveTab = async (tab: WorkspaceTab) => {
+    if (resourceNavigationBusy || notebookSwitchBusy || activeTab === tab) return;
+    setNotebookSwitchBusy(true);
+    try {
+      if (activeTab === 'agent' && !await agentSystemRef.current?.prepareLeave()) return;
+      navigate(tab === 'notes' ? notebookRoute(selectedNotebookId,selectedFolder)+location.search : `/${tab}?notebook=${encodeURIComponent(selectedNotebookId)}`);
+    } finally { setNotebookSwitchBusy(false); }
+  };
+  const agentSystemRef = useRef<AgentSystemHandle>(null);
+  const [resourceNavigationBusy, setResourceNavigationBusy] = useState(false);
+  const [notebookSwitchBusy, setNotebookSwitchBusy] = useState(false);
+  const setSelectedNotebookId = async (id: string) => {
+    if (id === selectedNotebookId || resourceNavigationBusy || notebookSwitchBusy) return;
+    setNotebookSwitchBusy(true);
+    try {
+      if (activeTab === 'agent' && !await agentSystemRef.current?.prepareNotebookChange(id)) return;
+      navigate(activeTab !== 'notes' ? `/${activeTab}?notebook=${encodeURIComponent(id)}` : notebookRoute(id));
+    } finally { setNotebookSwitchBusy(false); }
+  };
   const setSelectedFolder = (folder: string | null) => navigate(notebookRoute(selectedNotebookId,folder)+location.search);
   const setSelectedStatus = (status: string | null) => updateQuery('status',status);
   const setSelectedTag = (tag: string | null) => updateQuery('tag',tag);
@@ -331,14 +351,16 @@ const AppContent: React.FC = () => {
   }, [selectedFolder, folders, selectedNotebookId, t]);
 
   // Note Handlers
-  const handleOpenNote = (note: NoteItem) => {
+  const handleOpenNote = (note: NoteItem, anchor = '') => {
     setEditingNote(note);
 
     const notebook = config?.notebooks.find(nb => nb.id === note.notebookId);
     if (notebook) {
       const query = new URLSearchParams(location.search);
-      if (selectedFolder) query.set('folder',selectedFolder); else query.delete('folder');
-      navigate(noteRoute(notebook.id,note.path.slice(notebook.root.length+1))+'?'+query.toString());
+      query.delete('notebook');
+      if (activeTab === 'screen') query.set('returnTo', 'screen');
+      if (selectedFolder && note.notebookId === selectedNotebookId) query.set('folder',selectedFolder); else query.delete('folder');
+      navigate(noteRoute(notebook.id,note.path.slice(notebook.root.length+1))+'?'+query.toString()+(anchor ? '#'+encodeURIComponent(anchor) : ''));
     }
     const targetNotebook = note.notebookId || selectedNotebookId;
     if (targetNotebook) {
@@ -625,6 +647,7 @@ const AppContent: React.FC = () => {
   if (loading || loadError) return <ConnectionState loading={loading} error={loadError} onRetry={refreshWorkspace} />;
 
   return (
+    <WorkspaceLinks notebooks={config?.notebooks || []} notes={notes} folders={folders} onOpenNote={handleOpenNote}>
     <div
       className="app-shell h-dvh w-full overflow-hidden flex flex-col font-sans transition-colors duration-200"
       data-workspace-tab={activeTab}
@@ -660,6 +683,10 @@ const AppContent: React.FC = () => {
         workspaceTitle={config?.workspace.title || 'GitHub Notes'}
         sourceLabel={remote ? `${sourceId.replace(/^github:/, '')}${canWrite ? '' : ' · Read-only'}` : undefined}
         accountControls={<AuthControls local={!remote} />}
+        notebooks={config?.notebooks || []}
+        selectedNotebookId={selectedNotebookId}
+        onSelectNotebook={id => void setSelectedNotebookId(id)}
+        notebookDisabled={loading || resourceNavigationBusy || notebookSwitchBusy}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
       />
@@ -681,9 +708,7 @@ const AppContent: React.FC = () => {
             <div id="notebook-panel" className={`notebook-panel ${filtersOpen ? 'is-open' : ''}`}>
             <Sidebar
               statuses={notebookStatuses}
-              notebooks={config?.notebooks || []}
               selectedNotebookId={selectedNotebookId}
-              onSelectNotebook={setSelectedNotebookId}
               folders={folders}
               selectedFolder={selectedFolder}
               onSelectFolder={setSelectedFolder}
@@ -775,6 +800,10 @@ const AppContent: React.FC = () => {
         {activeTab === 'agent' && (
           <main className="workspace-route agent-main">
             <AgentSystemView
+              notebooks={config?.notebooks || []}
+              selectedNotebookId={selectedNotebookId}
+              ref={agentSystemRef}
+              onBusyChange={setResourceNavigationBusy}
               readOnly={!canWrite}
               remote={remote}
               readOnlyNotice={t(remote ? 'agent.remoteReadOnlyNotice' : branch === 'core' ? 'agent.coreBranchNotice' : 'agent.workspaceReadOnlyNotice')}
@@ -788,13 +817,15 @@ const AppContent: React.FC = () => {
               assets={assets}
               notebooks={config?.notebooks || []}
               selectedNotebookId={selectedNotebookId}
-              onSelectNotebook={setSelectedNotebookId}
+              onBusyChange={setResourceNavigationBusy}
               onUploadAsset={!canWrite ? undefined : handleUploadAsset}
               onDeleteAsset={!canWrite ? undefined : handleDeleteAsset}
               onMoveAsset={!canWrite ? undefined : handleMoveAsset}
             />
           </main>
         )}
+
+        {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} scope={remote ? sourceId : `local:${repoRoot}`} notebooks={config?.notebooks || []} notes={notes} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} onSaved={() => { void fetchGitStatus().then(result => setGitStatus(result.status)); }} /></React.Suspense>}
 
         {activeTab === 'settings' && (
           <main className="workspace-route settings-main">
@@ -855,7 +886,8 @@ const AppContent: React.FC = () => {
 
           setEditingNote(null);
           const query = new URLSearchParams(location.search); query.delete('folder');
-          navigate(notebookRoute(selectedNotebookId,selectedFolder)+'?'+query.toString());
+          if (query.get('returnTo') === 'screen') navigate(`/screen?notebook=${encodeURIComponent(selectedNotebookId)}`);
+          else navigate(notebookRoute(selectedNotebookId,selectedFolder)+'?'+query.toString());
         }}
         onSave={handleSaveNote}
         onRestoreFile={handleRestoreNoteFile}
@@ -949,6 +981,7 @@ const AppContent: React.FC = () => {
         </div>
       )}
     </div>
+    </WorkspaceLinks>
   );
 };
 

@@ -31,6 +31,8 @@ import {
   runGit,
 } from '@github-notes/git';
 
+import { SCREEN_PAGE_FILE } from '@github-notes/core';
+
 export function createLocalApp(repoRoot: string): express.Express {
 const app = express();
 app.use(async (req, res, next) => {
@@ -44,8 +46,9 @@ app.use(async (req, res, next) => {
       resolveSafePath(repoRoot, candidate);
       const resource = classifyResource(candidate, config);
       const agentAccess = (req.path.startsWith('/api/agent-resources') || req.path.startsWith('/api/git/')) && workspaceAgentKind(candidate);
+      const screenAccess = req.path.startsWith('/api/git/') && candidate === SCREEN_PAGE_FILE;
       if (agentAccess) resolveWorkspaceAgentPath(repoRoot, candidate);
-      if (!agentAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/'))) return res.status(403).json({ error: 'Path is outside configured workspace resources.' });
+      if (!agentAccess && !screenAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/'))) return res.status(403).json({ error: 'Path is outside configured workspace resources.' });
     }
     next();
   } catch (error) { res.status(400).json({ error: (error as Error).message }); }
@@ -60,8 +63,9 @@ app.use((req, res, next) => {
       resolveSafePath(repoRoot, candidate);
       const resource = classifyResource(candidate, config);
       const agentAccess = (req.path.startsWith('/api/agent-resources') || req.path.startsWith('/api/git/')) && workspaceAgentKind(candidate);
+      const screenAccess = req.path.startsWith('/api/git/') && candidate === SCREEN_PAGE_FILE;
       if (agentAccess) resolveWorkspaceAgentPath(repoRoot, candidate);
-      if (!agentAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/'))) return res.status(403).json({ error: 'Path is outside configured workspace resources.' });
+      if (!agentAccess && !screenAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/'))) return res.status(403).json({ error: 'Path is outside configured workspace resources.' });
     }
     next();
   } catch (error) { res.status(400).json({ error: (error as Error).message }); }

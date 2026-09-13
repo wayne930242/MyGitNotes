@@ -6,27 +6,40 @@ import { useTranslation } from '../lib/i18n/index.js';
 
 export interface AssetLibraryProps {
   assets: AssetItem[];
+  initialAssetPath?: string;
+  initialDirectory?: string;
   renderHeader?: (busy: boolean) => React.ReactNode;
   renderSidebar?: (navigation: { folders: string[]; directory: string; busy: boolean; onSelectDirectory: (directory: string) => void }) => React.ReactNode;
   onUploadAsset?: (file: File, directory: string) => Promise<AssetItem>;
   onDeleteAsset?: (asset: AssetItem) => Promise<void>;
   onMoveAsset?: (asset: AssetItem, directory: string) => Promise<AssetItem>;
   onInsert?: (asset: AssetItem) => void;
+  onBusyChange?: (busy: boolean) => void;
 }
 const button = 'ui-button';
 const imageFile = (name: string) => /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(name);
 
-export function AssetLibrary({ assets, onUploadAsset, onDeleteAsset, onMoveAsset, onInsert, renderHeader, renderSidebar }: AssetLibraryProps) {
+export function AssetLibrary({ assets, initialAssetPath, initialDirectory, onUploadAsset, onDeleteAsset, onMoveAsset, onInsert, renderHeader, renderSidebar, onBusyChange }: AssetLibraryProps) {
   const { t } = useTranslation();
   const [directory, setDirectory] = useState('');
+  useEffect(() => { if (initialDirectory !== undefined) { setDirectory(initialDirectory); setSelectedPath(''); } }, [initialDirectory]);
   const [selectedPath, setSelectedPath] = useState('');
   const [destination, setDestination] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
   const [copiedRef, setCopiedRef] = useState(false);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<AssetItem | null>(null);
   const folderList = useId();
+  useEffect(() => {
+    if (!initialAssetPath) return;
+    const asset = assets.find(item => item.path === initialAssetPath);
+    if (asset) { setDirectory(asset.directory || ''); setSelectedPath(asset.path); }
+  }, [initialAssetPath, assets]);
   const selected = assets.find(a => a.path === selectedPath);
   const folders = [...new Set(assets.flatMap(a => {
     const parts = (a.directory || '').split('/'); return parts.map((_, i) => parts.slice(0,i+1).join('/'));
