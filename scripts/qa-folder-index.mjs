@@ -1,0 +1,136 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { createServer } from 'node:http';
+
+const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(`${product}/apps/web/package.json`);
+const puppeteer = require('puppeteer-core');
+const root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-index-'));
+const write = (file, content) => {
+  fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+  fs.writeFileSync(path.join(root, file), content);
+};
+const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+write('notes/.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Folder Index QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: other\n    title: Other\n    root: notes/other\n');
+write('notes/example/index.md', '---\ntitle: Notebook introduction\ncustom: preserve\n---\n# 根目錄介紹\n\n這是 **索引內容**。\n\n[進入資料夾](projects/)\n\n[開啟筆記](regular.md)\n\n<img src="bad" onerror="window.indexUnsafe=true">\n<script>window.indexUnsafe=true</script>\n');
+write('notes/example/regular.md', '# Regular Note\n');
+write('notes/example/projects/index.md', '# 專案介紹\n\n[深入閱讀](deep/index.md)\n\n[同頁段落](#細節)\n\n## 細節\n\n專案內容。\n');
+write('notes/example/projects/deep/index.md', '# 深層介紹\n');
+write('notes/example/empty/note.md', '# No Index\n');
+write('notes/example/hidden/index.md', '---\nhiden: true\n---\n# 隱藏介紹\n');
+write('notes/example/blank/index.md', '');
+write('notes/other/index.md', '# 其他筆記本\n');
+git('init', '-b', 'main'); git('config', 'user.name', 'Browser QA'); git('config', 'user.email', 'qa@example.com');
+git('add', '.'); git('commit', '-m', 'fixture');
+process.env.GITHUB_NOTES_SOURCE = 'local'; process.env.GITHUB_NOTES_LOCAL_PATH = root;
+delete process.env.VERCEL; delete process.env.APP_URL;
+const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
+const server = createServer(createApp(product));
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+const base = `http://127.0.0.1:${server.address().port}`;
+const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || path.join(os.homedir(), '.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const page = await browser.newPage();
+const errors = []; page.on('pageerror', error => errors.push(error.message));
+const visit = route => page.goto(base + route, { waitUntil: 'networkidle0' });
+const content = () => page.$eval('[data-folder-index]', element => element.textContent);
+try {
+  await page.setViewport({ width: 1440, height: 1000 });
+  await visit('/notebooks/example');
+  assert(await page.$('[data-folder-index]'), 'Root index.md must render above the folder listing');
+  assert((await content()).includes('根目錄介紹'));
+  assert(await page.$('[data-folder-index] strong'), 'Markdown should render');
+  assert(!await page.$('[data-folder-index] script, [data-folder-index] [onerror]'), 'Unsafe HTML survived');
+  assert(!await page.evaluate(() => window.indexUnsafe), 'Unsafe HTML executed');
+  assert(await page.$('.note-list'), 'Ordinary note listing should remain');
+  await page.click('[data-folder-index] a[data-workspace-link="regular.md"]');
+  await page.waitForSelector('[aria-label="Close note"]');
+  assert(page.url().includes('/notes/regular.md'));
+  await page.click('[aria-label="Close note"]');
+  await page.click('[data-folder-index] a[data-workspace-link="projects/"]');
+  await page.waitForFunction(() => document.querySelector('[data-folder-index]')?.textContent.includes('專案介紹'));
+  await page.click('[data-folder-index] a[data-workspace-link^="#"]');
+  assert(!await page.$('.workspace-link-error'), 'Same-document anchor failed');
+  await page.click('[data-folder-index] a[data-workspace-link="deep/index.md"]');
+  await page.waitForSelector('[aria-label="Close note"]');
+  assert(page.url().includes('/notes/projects/deep/index.md'));
+  for (const view of ['list', 'card', 'kanban']) {
+    await visit(`/notebooks/example/folders/projects/deep?view=${view}`);
+    assert((await content()).includes('深層介紹'), `Nested index missing in ${view}`);
+  }
+  for (const query of ['view=flat', 'q=Regular', 'status=inbox', 'tag=missing']) {
+    await visit(`/notebooks/example?${query}`);
+    assert(!await page.$('[data-folder-index]'), `Index should not displace filtered or flat results: ${query}`);
+  }
+  await visit('/notebooks/example/folders/empty');
+  assert(!await page.$('[data-folder-index]'), 'Parent index must not leak into a folder with no index');
+  await visit('/notebooks/other');
+  assert((await content()).includes('其他筆記本'), 'Notebook selection must isolate indexes');
+  await visit('/notebooks/example/folders/hidden');
+  assert(!await page.$('[data-folder-index]'), 'Hidden index was exposed');
+  await visit('/notebooks/example/folders/hidden?showHidden=true');
+  assert((await content()).includes('隱藏介紹'));
+  await visit('/notebooks/example/folders/blank');
+  assert(await page.$('[data-folder-index] button'), 'Empty index must still be openable');
+  await visit('/notebooks/example');
+  await page.click('[data-folder-index] button');
+  await page.waitForSelector('[aria-label="Close note"]');
+  assert(page.url().includes('/notes/index.md'), 'Open action must use the regular editor');
+  await page.click('[aria-label="Close note"]');
+  fs.mkdirSync(`${product}/artifacts/qa`, { recursive: true });
+  await page.screenshot({ path: `${product}/artifacts/qa/folder-index-desktop.png`, fullPage: true });
+  await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+  await visit('/notebooks/example');
+  assert((await content()).includes('根目錄介紹'));
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile horizontal overflow');
+  await page.screenshot({ path: `${product}/artifacts/qa/folder-index-mobile.png`, fullPage: true });
+  assert.equal(git('status', '--porcelain').toString(), '', 'Viewing indexes must not modify notes');
+
+  // Exercise the same view against hosted data, including unsent working copies.
+  let writable = true;
+  let remoteIndex = { id: 'index', path: 'notes/example/index.md', notebookId: 'example', title: 'Hosted introduction', content: '# Hosted introduction\n', tags: [], metadata: { custom: 'preserve' }, revision: 'one' };
+  let writes = 0;
+  await page.setViewport({ width: 1440, height: 1000 });
+  await page.setRequestInterception(true);
+  page.on('request', request => {
+    const url = new URL(request.url()); let body;
+    if (url.pathname === '/api/workspace') body = { config: { schema_version: 1, workspace: { title: 'Hosted index QA', default_notebook: 'example' }, notebooks: [{ id: 'example', title: 'Example', root: 'notes/example' }] }, branch: 'main', repoRoot: '', gitStatus: { branch: 'main', isClean: true, staged: [], modified: [], untracked: [] }, source: { type: 'github', identity: 'github:index/fixture@main' }, capabilities: { write: writable, local: false }, revision: 'one' };
+    if (url.pathname === '/api/notes') body = { notes: [remoteIndex] };
+    if (url.pathname === '/api/notes/read') body = { note: remoteIndex };
+    if (url.pathname === '/api/auth/session') body = { authenticated: writable, configured: true, login: 'fixture' };
+    if (url.pathname === '/api/folders') body = { folders: [] };
+    if (url.pathname === '/api/assets') body = { assets: [] };
+    if (url.pathname.startsWith('/api/notes') && request.method() !== 'GET') writes++;
+    if (body) void request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    else void request.continue();
+  });
+  await visit('/notebooks/example');
+  assert((await content()).includes('Hosted introduction'));
+  await page.click('[data-folder-index] button');
+  await page.waitForSelector('[aria-label="Close note"]');
+  await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Source').click());
+  await page.focus('textarea[aria-label="Note content"]');
+  await page.keyboard.down('Control'); await page.keyboard.press('KeyA'); await page.keyboard.up('Control');
+  await page.keyboard.type('# Updated introduction\n\nWorking copy content\n');
+  await page.waitForFunction(() => document.body.innerText.includes('Saved locally'));
+  await page.click('[aria-label="Close note"]');
+  await page.waitForFunction(() => document.querySelector('[data-folder-index]')?.textContent.includes('Working copy content'));
+  await page.reload({ waitUntil: 'networkidle0' });
+  assert((await content()).includes('Working copy content'), 'Reload lost the index working copy');
+  assert.equal(writes, 0, 'Index editing must retain the existing explicit commit workflow');
+  writable = false;
+  await page.reload({ waitUntil: 'networkidle0' });
+  assert((await content()).includes('Hosted introduction'), 'Read-only view must use source data');
+  await page.click('[data-folder-index] button');
+  await page.waitForSelector('[aria-label="Close note"]');
+  assert.equal(writes, 0, 'Read-only index viewing attempted a write');
+  assert.deepEqual(errors, []);
+  console.log('PASS root/nested/missing/blank indexes, notebook isolation, views, filters, hidden notes, Markdown safety, links, editor, mobile, unchanged files, hosted working copies and read-only viewing');
+} finally {
+  await browser.close(); await new Promise(resolve => server.close(resolve));
+  fs.rmSync(root, { recursive: true, force: true });
+}
