@@ -1,182 +1,124 @@
 # GitHub Notes
 
-A Git-native, local-first application for high-density, purpose-specific notebooks. Notes are stored as pure Markdown files with optional YAML frontmatter, organized into isolated notebooks, and tracked via Git commits. Agents can work within the same notebook boundaries.
+A high-density, local-first document interface with Git-native storage and a remote serverless MCP powered by GitHub and Vercel.
+
+Your Markdown, repository, deployment, commit history, and agent access remain under your control.
 
 [English](README.md) · [繁體中文](README.zh-TW.md)
 
 [Live Demo](https://my-gh-core.vercel.app) · [Example Repository](https://github.com/wayne930242/github-notes/tree/main)
 
-## What a notebook is for
+## What it is
 
-GitHub Notes serves an active task with a clear purpose: preparing a TRPG campaign, designing a single project, or following a vocabulary study plan. A notebook gathers the notes, resources, working rules and progress needed for that activity, so you can read and revise them intensively while doing the work.
+GitHub Notes turns a Git repository into a focused workspace for notes, documents, assets, and AI agents. You work through a purpose-built note UI while Markdown files, Git history, and repository permissions remain the source of truth.
 
-Isolation is central to the product. Each notebook keeps its own context, structure and working conventions. Cross-notebook views such as Screen are deliberate references chosen by the user; they do not merge notebook ownership or turn every document into one shared pool.
+It runs in two modes:
 
-This is a different need from a long-term knowledge base. A tool such as Obsidian can hold material accumulated and revisited over years; GitHub Notes focuses on the denser reading, editing and coordination around a particular activity. Its organizing question is: **what is this notebook helping me do?**
+- **Local:** the UI reads and writes your local repository directly.
+- **Remote:** Vercel serves the UI and a serverless MCP endpoint; GitHub stores the files and commit history.
 
-## Branch Architecture
+The same workspace can therefore stay fully local, travel through Git, or be securely accessed from a browser and MCP clients without operating a permanent server.
 
-This repository uses a two-branch model to separate product source code from personal notes:
+## Core features
 
-- **`core` (Default Branch)**: The canonical product branch. Contains application source code, packages, scripts, tests, and documentation. Never contains user notes.
-- **`main`**: Your personal notes workspace branch. Created when you run `pnpm bootstrap-workspace`. Stores your notebooks, workspace configuration (`.github-notes.yaml`), and markdown notes (`notes/**`).
+- **High-density note UI:** List, Card, and Kanban views; full-text search; tags and statuses; nested folders; folder index cards; Markdown editing with live preview; asset management; responsive desktop and mobile layouts.
+- **Screen:** arrange notes, folders, images, and YouTube videos into reading lanes across notebooks. Dynamic lanes can follow a tag or folder.
+- **Pure Markdown:** notes remain ordinary `.md` files with optional YAML frontmatter. Existing Markdown and unknown metadata survive round trips.
+- **Git-native workflow:** local edits save to disk; selected changes are committed explicitly. Remote writes use revision checks and non-forced commits to reject stale updates.
+- **Local and remote sources:** open a local checkout or a configured GitHub repository through the same interface.
+- **Local and hosted MCP:** connect agents through local stdio or Vercel-hosted Streamable HTTP to list, read, search, create, edit, move, and commit workspace content.
+- **Controlled agent access:** create named read-only or write grants, copy the connection URL once, and revoke each grant at any time.
+- **Safe product updates:** product code lives on `core`; personal workspace content lives on `main`. Core updates preserve `notes/**` and workspace-owned Agent settings.
 
-## Workspace Agent System
+## Design logic
 
-Each main workspace owns and tracks `AGENTS.md`, `.agents/`, and `.codex/`. Core keeps only product guidance and starter templates; updates preserve your Agent settings. Product contributors start with [the product instructions](docs/agent/product/index.md).
+```text
+Local browser  ── local API ── local files + Git
 
-For an existing workspace's first migration, run `pnpm update-core --workspace /absolute/workspace/path` from the updated product checkout. See [initialization, migration and editable documents](docs/agent/workflows/workspace-agent-system.md).
+Remote browser ─┐
+MCP client     ──┴─ Vercel serverless API ── GitHub repository
+                                      └────── Redis sessions and grants
+```
 
-## Quick Start
+The boundaries are intentional:
 
-### Prerequisites
-- Node.js 22+
-- pnpm 9+
-- Git
+- **Markdown owns the content.** There is no proprietary note database to export from.
+- **Git owns history and publication.** You choose what to commit and can inspect or revert every change.
+- **GitHub owns remote persistence.** Vercel provides the interface and serverless transport; Redis stores sessions and MCP grants, not notes.
+- **You own the system boundary.** You choose the repository, branch, deployment, credentials, Core updates, and every agent grant.
+- **The UI and agents share the same rules.** Path guards, branch guards, revision checks, and repository permissions apply to both.
 
-### Installation & Setup
+## Repository model
+
+- **`core`** — product source, packages, tests, scripts, and documentation. It contains no personal notes.
+- **`main`** — your workspace branch containing `.github-notes.yaml`, `notes/**`, assets, and workspace Agent configuration.
+
+This separation lets the application evolve without taking ownership of your content.
+
+## Quick start
+
+Requires Node.js 22+, pnpm 9+, and Git.
 
 ```bash
-# Clone the repository (defaults to the `core` branch)
 git clone <repository-url> github-notes
 cd github-notes
-
-# Install dependencies and build packages
 pnpm install
 pnpm build
-
-# Initialize your personal workspace branch (creates and switches to `main`)
 pnpm bootstrap-workspace
-
-# Start local development servers
 pnpm dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser. The local API runs on `http://127.0.0.1:4321`.
-Alternatively, run `pnpm dev:server` to preview the built frontend directly on `http://127.0.0.1:4321`.
+Open [http://localhost:5173](http://localhost:5173). The development commands use the local repository and do not require GitHub sign-in.
 
-Development commands read the local repository without GitHub sign-in, even if `.env` contains deployment settings. Set `REPO_ROOT=/path/to/workspace pnpm dev` to open another local checkout. To run with the configured source (including GitHub), use `pnpm --filter @github-notes/local-server start`; `pnpm dev:web` can run the frontend alongside it.
+To open another checkout:
 
-## Key Features
+```bash
+REPO_ROOT=/absolute/path/to/workspace pnpm dev
+```
 
-- **Local-First & Git-Native**: Full local filesystem control. Editing saves locally; the Commit footer publishes selected note changes as one Git commit.
-- **Flexible Note Views**: Switch instantly between List, Card, and Kanban views.
-- **Hierarchical Folders**: Organize notes in nested directories. Use optional `_dir.yml` files for custom titles and ordering.
-- **Configurable Note Sources**: Work against your local filesystem or connect to remote GitHub repositories.
-- **Agent Integration (MCP)**: Built-in Model Context Protocol server for local (stdio) and remote AI coding agents.
-- **Safe Core Updates**: Update product code anytime via `pnpm update-core` while keeping your notes in `notes/**` intact.
-
-## Keeping Core Updated
-
-To pull updates from the product repository into your workspace:
+To update an existing workspace from the product branch:
 
 ```bash
 git remote add upstream <product-repository-url>
 pnpm update-core
 ```
 
-This merges the latest changes from `upstream/core` into your current branch without modifying your notes.
+## Remote deployment and serverless MCP
 
-## Deploying to Vercel
+Deploy the `main` branch to your own Vercel project. The included [`vercel.json`](vercel.json) builds the web app and routes `/api/*`, `/mcp/*`, and `/raw-assets/*` to the serverless API.
 
-GitHub Notes can be deployed to Vercel as a cloud-hosted, Git-backed workspace frontend. In production, notes are loaded directly from your GitHub repository branch, and user sessions are stored securely in Upstash Redis.
+You need:
 
-### 1. Register a GitHub OAuth App
-
-To allow users to sign in with GitHub and commit notes:
-
-1. Go to GitHub -> **Settings** -> **Developer Settings** -> **OAuth Apps** -> **New OAuth App** (or your organization's Developer Settings).
-2. Configure the OAuth application:
-   - **Application name**: e.g., `GitHub Notes`
-   - **Homepage URL**: `https://<your-project>.vercel.app` (or your custom domain)
-   - **Authorization callback URL**: `https://<your-project>.vercel.app/api/auth/github/callback`
-3. Click **Register application**.
-4. Copy the **Client ID**.
-5. Click **Generate a new client secret** and copy the **Client Secret**.
-
-> [!NOTE]
-> Standard OAuth Apps request the `repo` scope to read and write notes on behalf of authenticated users.
-
-### 2. Set Up Upstash Redis (Session Storage)
-
-Vercel Serverless Functions require an external Redis instance to store encrypted user sessions and agent grants:
-
-1. Create a free database at [Upstash Redis](https://upstash.com), or add the **Upstash Redis** integration directly from the Vercel Marketplace on your project dashboard.
-2. Retrieve the REST connection credentials:
-   - `UPSTASH_REDIS_REST_URL`
-   - `UPSTASH_REDIS_REST_TOKEN`
-
-### 3. Configure Environment Variables
-
-Create or update `.env` with the following variables:
+1. A GitHub OAuth App with callback URL `https://<your-project>.vercel.app/api/auth/github/callback`.
+2. An Upstash Redis database for encrypted browser sessions and persistent MCP grants.
+3. These Vercel environment variables:
 
 ```bash
-# Data source: connect to a GitHub repository
 GITHUB_NOTES_SOURCE=github
-GITHUB_NOTES_REPOSITORY=your-username/github-notes
+GITHUB_NOTES_REPOSITORY=your-username/your-repository
 GITHUB_NOTES_BRANCH=main
 
-# Public URL and GitHub OAuth credentials
 APP_URL=https://<your-project>.vercel.app
 GITHUB_CLIENT_ID=your_oauth_client_id
 GITHUB_CLIENT_SECRET=your_oauth_client_secret
 GITHUB_APP_TYPE=oauth-app
+SESSION_SECRET=your_random_secret_of_at_least_32_characters
 
-# 32+ character random secret (generate with: openssl rand -hex 32)
-SESSION_SECRET=your_32_character_session_secret
-
-# Upstash Redis REST API credentials
 UPSTASH_REDIS_REST_URL=https://...upstash.io
 UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_token
-
-# Optional: Gemini API key for AI-assisted semantic commit messages
-GEMINI_API_KEY=your_gemini_api_key
 ```
 
-### 4. Deploy with Vercel CLI or Dashboard
+After deployment, sign in with GitHub. Under **Settings → MCP Access Control**, create a read-only or write grant and paste the generated `/mcp/<token>` URL into ChatGPT, Claude, Cursor, Windsurf, or another MCP client.
 
-#### Option A: Using Vercel CLI
-
-```bash
-# Link the repository to your Vercel project
-vercel link
-
-# Import configured variables from .env to Vercel production
-pnpm env:vercel production
-
-# Deploy to production
-vercel --prod
-```
-
-#### Option B: Using Vercel Dashboard
-
-1. Import your Git repository into Vercel.
-2. The included [`vercel.json`](vercel.json) automatically configures the build settings (`pnpm build`), output directory (`apps/web/dist`), and API rewrites (`/api/*`, `/mcp/*`).
-3. Add the environment variables listed above under **Project Settings** -> **Environment Variables**.
-4. Deploy the project.
+Standard GitHub OAuth Apps request the `repo` scope so authenticated owners can read and write private repositories. MCP grants remain scoped to the configured repository and can be revoked individually.
 
 ## Documentation
 
-- [Agent & Developer Documentation](docs/agent/index.md): Architecture, branch lifecycle, security boundaries, and MCP specifications.
-- [Demo Workspace](examples/demo-workspace/README.md): Example notebooks, folder structure, and sample notes.
+- [Agent and developer documentation](docs/agent/index.md)
+- [Architecture](docs/agent/architecture/index.md)
+- [MCP interface and security model](docs/agent/mcp/index.md)
+- [Demo workspace](examples/demo-workspace/README.md)
 
 ## License
 
 MIT
-
-
-## Screen
-
-Screen provides reading swimlanes across notebooks. Pin notes, folders, images or YouTube videos to custom lanes, or populate dynamic lanes from a tag or folder. Each lane supports thumbnail, small and medium views. Drag items between custom lanes; use the sidebar to add, name and reorder lanes.
-
-Changes save automatically. Local workspaces store `.github-notes-screen.yaml` on disk; GitHub mode keeps a device draft until you commit. The shared commit bar lets you review and commit Screen together with selected notes. The configuration belongs to the user workspace and travels through Git; Redis is not required. Unpinning never deletes source content.
-
-The wheel scrolls a lane horizontally, while scrollable note bodies retain vertical reading. Hold Alt to restore vertical page scrolling, or use the lane arrows.
-
-## Folder organization
-
-Create folders from the notes sidebar. Drag to an insertion line to reorder siblings, or onto a folder to change hierarchy. The folder menu also provides a move-and-order dialog. Deleting a folder moves its contents to its parent by default, or another folder you choose; notes and subfolders are preserved, and filename collisions are rejected. Recognized Markdown links and Screen references follow moved content. Folder order is stored in `_dir.yml`.
-
-The Expand note view lists notes in the current folder and all descendants without grouping them into folders.
-
-Place an optional `index.md` or `README.md` in any notebook root or nested folder to add a white Index card before that folder's other folder cards in List, Card or Kanban view. When both exist, `index.md` takes precedence and `README.md` remains an ordinary note. The card uses a document icon and opens the regular note editor; the selected index is omitted from the notes below its card. Hidden-note visibility applies after selection, so a hidden `index.md` does not fall back to `README.md`. Search, status/tag filters and Expand show results without the index card.
