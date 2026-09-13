@@ -1,3 +1,4 @@
+import { FolderLinks } from './FolderLinks.js';
 import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import {
   FileText,
@@ -11,12 +12,13 @@ import {
 } from 'lucide-react';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import { NoteItem } from '../lib/types.js';
+import { SubfolderInfo } from '../lib/folder-tree.js';
 import { SortField, SortOrder } from '../lib/note-sort.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
 interface ListViewProps {
   notes: NoteItem[];
-  hasFolderEntries?: boolean;
+  subfolders?: SubfolderInfo[];
   statuses: string[];
   readOnly?: boolean;
   canDelete?: boolean;
@@ -24,6 +26,7 @@ interface ListViewProps {
   onDeleteNote: (note: NoteItem) => void;
   onUpdateNoteStatus: (note: NoteItem, newStatus: string) => void;
   onNewNote: () => void;
+  onSelectFolder?: (folder: string | null) => void;
   sortField?: SortField;
   sortOrder?: SortOrder;
   onSortChange?: (field: SortField) => void;
@@ -121,7 +124,7 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
 
 export const ListView: React.FC<ListViewProps> = ({
   notes,
-  hasFolderEntries = false,
+  subfolders = [],
   statuses,
   readOnly = false,
   canDelete = true,
@@ -129,6 +132,7 @@ export const ListView: React.FC<ListViewProps> = ({
   onDeleteNote,
   onUpdateNoteStatus,
   onNewNote,
+  onSelectFolder,
   sortField = 'updated',
   sortOrder = 'desc',
   onSortChange,
@@ -147,7 +151,7 @@ export const ListView: React.FC<ListViewProps> = ({
     full: new Intl.DateTimeFormat(language, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }),
   }), [language]);
 
-  const isEmpty = notes.length === 0 && !hasFolderEntries;
+  const isEmpty = notes.length === 0 && subfolders.length === 0;
 
   if (isEmpty) {
     return (
@@ -206,6 +210,7 @@ export const ListView: React.FC<ListViewProps> = ({
 
   return (
     <>
+    <FolderLinks folders={subfolders} onSelect={onSelectFolder} />
     {notes.length > 0 && <div
       className="note-list rounded-xl border shadow-xs overflow-hidden transition-colors"
       style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
