@@ -19,12 +19,15 @@ const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' })
 write('notes/.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Folder Index QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: other\n    title: Other\n    root: notes/other\n');
 write('notes/example/index.md', '---\ntitle: Notebook introduction\ncustom: preserve\n---\n# 根目錄介紹\n\n這是 **索引內容**。\n\n[進入資料夾](projects/)\n\n[開啟筆記](regular.md)\n\n<img src="bad" onerror="window.indexUnsafe=true">\n<script>window.indexUnsafe=true</script>\n');
 write('notes/example/regular.md', '# Regular Note\n');
+write('notes/example/README.md', '# Secondary README\n');
+write('notes/example/readme/deep/README.md', '# README guide\n');
 write('notes/example/projects/index.md', '# 專案介紹\n\n[深入閱讀](deep/index.md)\n\n[同頁段落](#細節)\n\n## 細節\n\n專案內容。\n');
 write('notes/example/projects/deep/index.md', '# 深層介紹\n');
 write('notes/example/empty/note.md', '# No Index\n');
 write('notes/example/hidden/index.md', '---\nhiden: true\n---\n# 隱藏介紹\n');
+write('notes/example/hidden/README.md', '# Visible fallback\n');
 write('notes/example/blank/index.md', '');
-write('notes/other/index.md', '# 其他筆記本\n');
+write('notes/other/README.md', '# 其他筆記本\n');
 git('init', '-b', 'main'); git('config', 'user.name', 'Browser QA'); git('config', 'user.email', 'qa@example.com');
 git('add', '.'); git('commit', '-m', 'fixture');
 process.env.GITHUB_NOTES_SOURCE = 'local'; process.env.GITHUB_NOTES_LOCAL_PATH = root;
@@ -40,11 +43,18 @@ const visit = route => page.goto(base + route, { waitUntil: 'networkidle0' });
 const openIndex = async (relativePath = 'index.md') => {
   await page.click('button[data-folder-index]');
   await page.waitForSelector('[aria-label="Close note"]');
-  assert(page.url().endsWith(`/notes/${relativePath}`), 'Index must use the regular note route');
+  assert(new URL(page.url()).pathname.endsWith(`/notes/${relativePath}`), 'Index must use the regular note route');
 };
 const closeIndex = () => page.click('[aria-label="Close note"]');
 try {
   await page.setViewport({ width: 1440, height: 1000 });
+  for (const view of ['list', 'card', 'kanban']) {
+    await visit(`/notebooks/example/folders/readme/deep?view=${view}`);
+    assert(await page.$('.folder-links > button[data-folder-index]:first-child'), 'README.md must provide the index card when index.md is absent');
+    assert(!await page.$('[aria-label="Status for README guide"], [data-notepath$="/README.md"]'), 'Selected README must not be duplicated below');
+    await openIndex('readme/deep/README.md');
+    await closeIndex();
+  }
   await visit('/notebooks/example');
   assert(await page.$('.folder-links > button[data-folder-index]:first-child'), 'Index must be the first folder card');
   assert.equal(await page.$eval('[data-folder-index]', element => element.textContent.trim()), 'Index');
@@ -58,6 +68,8 @@ try {
   assert(await page.$eval('.workspace-page-header', element => element.getBoundingClientRect().height <= 64), 'Toolbar is too tall');
   assert(await page.$('.note-list'), 'Ordinary note listing should remain');
   assert(!await page.$('[aria-label="Status for Notebook introduction"]'), 'Index must not also appear in the note list');
+  assert(await page.$('[aria-label="Status for Secondary README"]'), 'Unselected README must remain an ordinary note');
+  assert.equal((await page.$$('[data-folder-index]')).length, 1, 'Both files must produce only one index card');
   await openIndex();
   await page.waitForFunction(() => document.body.innerText.includes('根目錄介紹') || document.querySelector('textarea[aria-label="Note content"]')?.value.includes('根目錄介紹'));
   await closeIndex();
@@ -78,13 +90,15 @@ try {
   await visit('/notebooks/example/folders/empty');
   assert(!await page.$('[data-folder-index]'), 'Parent index must not leak into a folder with no index');
   await visit('/notebooks/other');
-  await openIndex();
-  assert(page.url().includes('/notebooks/other/notes/index.md'), 'Notebook selection must isolate indexes');
+  await openIndex('README.md');
+  assert(page.url().includes('/notebooks/other/notes/README.md'), 'Notebook selection must isolate README indexes');
   await closeIndex();
   await visit('/notebooks/example/folders/hidden');
   assert(!await page.$('[data-folder-index]'), 'Hidden index was exposed');
   await visit('/notebooks/example/folders/hidden?showHidden=true');
   assert(await page.$('button[data-folder-index]'));
+  await openIndex('hidden/index.md');
+  await closeIndex();
   await visit('/notebooks/example/folders/blank');
   assert(await page.$('button[data-folder-index]'), 'Empty index must still be openable');
   await visit('/notebooks/example');
@@ -151,6 +165,11 @@ try {
   await openIndex();
   assert(!await page.evaluate(() => document.body.innerText.includes('Working copy content')), 'Read-only view must use source data');
   assert.equal(writes, 0, 'Read-only index viewing attempted a write');
+  await closeIndex();
+  remoteIndex = { ...remoteIndex, id: 'readme', path: 'notes/example/README.md' };
+  await visit('/notebooks/example');
+  await openIndex('README.md');
+  assert.equal(writes, 0, 'Hosted README viewing attempted a write');
   assert.deepEqual(errors, []);
   console.log('PASS first white Index card, root/nested/missing/blank indexes, notebook isolation, all page headings removed, compact toolbar, views, filters, hidden notes, keyboard, mobile, locales, unchanged files, hosted working copies and read-only viewing');
 } finally {
