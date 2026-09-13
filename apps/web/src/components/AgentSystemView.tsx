@@ -1,19 +1,19 @@
+import { useWorkspaceLinks } from './WorkspaceLinks.js';
+import { AgentFileTree } from './AgentFileTree.js';
+import { groupAgentResources } from '../lib/agent-tree.js';
 import { PageHeader, WorkspaceSidebar } from './WorkspaceChrome.js';
 import { EditorNotice } from './EditorNotice.js';
 import { Select } from './Select.js';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useImperativeHandle } from 'react';
 import {
   Bot,
-  Edit3,
   RotateCcw,
   Check,
   AlertTriangle,
-  Sparkles,
-  BookOpen,
   Plus,
 } from 'lucide-react';
 import { MarkdownEditor, MarkdownEditorMode, MarkdownEditorModeSwitch } from './MarkdownEditor.js';
-import { AgentResource } from '../lib/types.js';
+import { AgentResource, NotebookConfig } from '../lib/types.js';
 import {
   fetchAgentResources,
   readAgentResource,
@@ -22,7 +22,12 @@ import {
 } from '../lib/api.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
-export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: string; remote?: boolean }> = ({ readOnly = false, readOnlyNotice, remote = false }) => {
+export interface AgentSystemHandle { prepareNotebookChange: (id: string) => Promise<boolean>; prepareLeave: () => Promise<boolean> }
+
+export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
+  readOnly?: boolean; readOnlyNotice?: string; remote?: boolean;
+  notebooks: NotebookConfig[]; selectedNotebookId: string; onBusyChange: (busy: boolean) => void;
+}>(({ readOnly = false, readOnlyNotice, remote = false, notebooks, selectedNotebookId, onBusyChange }, ref) => {
   const { t } = useTranslation();
   const [instructions, setInstructions] = useState<AgentResource[]>([]);
   const [selectedPath, setSelectedPath] = useState<string>('');
@@ -127,13 +132,15 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
   }, [content, hasUnsavedChanges, selectedPath, locked]);
 
   const selectDocument = async (file: string) => {
-    if (switching || restoring || file === selectedPath) return;
+    if (switching || restoring) return false;
+    if (file === selectedPath) return true;
     clearTimeout(saveTimer.current); setSwitching(true); setError('');
     try {
       if (hasUnsavedChanges && editable) await saveDocument(selectedPath, content);
       else await saveQueue.current;
       setLoadedPath(''); setSelectedPath(file);
-    } catch (error) { setError((error as Error).message); }
+      return true;
+    } catch (error) { setError((error as Error).message); return false; }
     finally { setSwitching(false); }
   };
 
@@ -183,12 +190,44 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
     }
   };
 
-  const workspaceInstructions = instructions.filter(
-    (i) => i.scope !== 'product'
-  );
-  const systemInstructions = instructions.filter(
-    (i) => i.scope === 'product'
-  );
+  const { registerBeforeNavigate } = useWorkspaceLinks();
+  const prepareLeave = async () => {
+    if (switching || restoring || loading) return false;
+    try {
+      clearTimeout(saveTimer.current);
+      if (hasUnsavedChanges && editable) await saveDocument(selectedPath, content);
+      else await saveQueue.current;
+      return true;
+    } catch (error) { setError((error as Error).message); return false; }
+  };
+  useEffect(() => registerBeforeNavigate(prepareLeave), [registerBeforeNavigate, switching, restoring, loading, hasUnsavedChanges, editable, selectedPath, content]);
+
+  const groups = groupAgentResources(instructions, notebooks, selectedNotebookId);
+  const visibleResources = [...groups.shared, ...groups.notebook, ...groups.product];
+  const selectedNotebook = notebooks.find(nb => nb.id === selectedNotebookId);
+  const treeNavigation = { selectedPath, disabled: switching || restoring, onSelect: (path: string) => void selectDocument(path) };
+  const prepareNotebookChange = async (id: string) => {
+    if (loading || switching || restoring || isCreating) return false;
+    const next = groupAgentResources(instructions, notebooks, id);
+    const visible = [...next.shared, ...next.notebook, ...next.product];
+    const path = visible.some(resource => resource.path === selectedPath)
+      ? selectedPath : (next.notebook[0] || next.shared[0] || next.product[0])?.path || '';
+    return selectDocument(path);
+  };
+
+  useImperativeHandle(ref, () => ({ prepareNotebookChange, prepareLeave }));
+  const navigationBusy = loading || switching || restoring || isCreating;
+  useEffect(() => {
+    onBusyChange(navigationBusy);
+    return () => onBusyChange(false);
+  }, [navigationBusy, onBusyChange]);
+
+  // Browser history can also change the notebook without remounting the editor.
+  useEffect(() => {
+    if (!instructions.length || visibleResources.some(resource => resource.path === selectedPath)) return;
+    const fallback = groups.notebook[0] || groups.shared[0] || groups.product[0];
+    void selectDocument(fallback?.path || '');
+  }, [selectedNotebookId, instructions]);
 
   return (
     <div
@@ -200,104 +239,23 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
     >
       {/* Left Navigation: Notes & System Agent Files */}
       <WorkspaceSidebar label={t('agent.title')} className="agent-sidebar">
-        {/* 1. Workspace Guidelines */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-[11px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
-              {t('agent.workspaceGuidelines')}
-            </h4>
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded font-semibold text-white uppercase tracking-wider"
-              style={{ backgroundColor: 'var(--color-primary)' }}
-            >
-              {readOnly ? t('agent.readOnly') : t('agent.editable')}
-            </span>
-          </div>
-          <div className="space-y-1">
-            {workspaceInstructions.map((res) => (
-              <button
-                key={res.path}
-                disabled={switching || restoring}
-                onClick={() => void selectDocument(res.path)}
-                className={`w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed ${
-                  selectedPath === res.path
-                    ? 'font-semibold shadow-xs hover:opacity-90'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-100'
-                }`}
-                style={
-                  selectedPath === res.path
-                    ? {
-                        backgroundColor: 'var(--color-primary-light)',
-                        color: 'var(--color-primary)',
-                      }
-                    : undefined
-                }
-              >
-                <div className="flex items-center gap-2 truncate">
-                  <Sparkles className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--color-primary)' }} />
-                  <span className="truncate">{res.name}</span>
-                </div>
-                <Edit3 className="w-3 h-3 opacity-60 shrink-0" />
-              </button>
-            ))}
-
-            {!readOnly && !workspaceInstructions.some((i) => i.path === 'AGENTS.md') && (
-              <button
-                disabled={isCreating}
-                onClick={() => void handleCreateWorkspaceGuidelines()}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border border-dashed border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>{t('agent.createWorkspaceGuidelines')}</span>
-              </button>
-            )}
-
-            {workspaceInstructions.length === 0 && readOnly && (
-              <p className="text-[11px] text-slate-400 px-1 py-1">{t('agent.noDocuments')}</p>
-            )}
-          </div>
-        </div>
-
-        {/* 2. System Guidelines (Reference) */}
-        {systemInstructions.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-[11px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
-                {t('agent.systemGuidelines')}
-              </h4>
-              <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-black/5 dark:bg-white/10 text-slate-500 uppercase tracking-wider">
-                {t('agent.readOnly')}
-              </span>
-            </div>
-            <div className="space-y-1">
-              {systemInstructions.map((res) => (
-                <button
-                  key={res.path}
-                  disabled={switching || restoring}
-                  onClick={() => void selectDocument(res.path)}
-                  className={`w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed ${
-                    selectedPath === res.path
-                      ? 'font-semibold shadow-xs hover:opacity-90'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-100'
-                  }`}
-                  style={
-                    selectedPath === res.path
-                      ? {
-                          backgroundColor: 'var(--color-primary-light)',
-                          color: 'var(--color-primary)',
-                        }
-                      : undefined
-                  }
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <BookOpen className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--color-primary)' }} />
-                    <span className="truncate">{res.name}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        <section aria-label={t('agent.sharedDocuments')}>
+          <div className="sidebar-section-label">{t('agent.sharedDocuments')}</div>
+          <AgentFileTree resources={groups.shared} {...treeNavigation} />
+          {!readOnly && !instructions.some(resource => resource.path === 'AGENTS.md') && (
+            <button disabled={isCreating || switching || restoring} onClick={() => void handleCreateWorkspaceGuidelines()}
+              className="sidebar-link"><Plus aria-hidden="true" /><span>{t('agent.createWorkspaceGuidelines')}</span></button>
+          )}
+        </section>
+        <section aria-label={t('agent.notebookDocuments')}>
+          <div className="sidebar-section-label">{t('agent.notebookDocuments')}</div>
+          <AgentFileTree resources={groups.notebook} {...treeNavigation} />
+          {!groups.notebook.length && <p className="agent-empty-scope">{t('agent.noNotebookDocuments')}</p>}
+        </section>
+        {groups.product.length > 0 && <section aria-label={t('agent.systemGuidelines')}>
+          <div className="sidebar-section-label">{t('agent.systemGuidelines')}<span>{t('agent.readOnly')}</span></div>
+          <AgentFileTree resources={groups.product} {...treeNavigation} />
+        </section>}
 
         {/* Informational Callout */}
         <div
@@ -311,23 +269,24 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
           <strong className="block mb-1 font-semibold" style={{ color: 'var(--color-primary)' }}>
             {t('agent.guidelinesTitle')}
           </strong>
+          <p className="mb-2">{t('agent.scopeDescription')}</p>
           {t(readOnly ? 'agent.guidelinesReadOnlyDescription' : remote ? 'agent.remoteGuidelinesDescription' : 'agent.guidelinesDescription')}
         </div>
       </WorkspaceSidebar>
 
       {/* Right Content Viewer / Editor */}
       <div className="workspace-content agent-content">
-        <PageHeader title={t('nav.agent')} />
+        <PageHeader title={t('nav.agent')} description={selectedNotebook?.title} />
         <label className="agent-document-picker mobile-only flex-col gap-1 p-3 border-b text-xs" style={{ borderColor: 'var(--color-border)' }}>
           {t('agent.document')}
           <Select
             aria-label={t('agent.document')}
             value={selectedPath}
-            disabled={switching || restoring || !instructions.length}
+            disabled={switching || restoring || !visibleResources.length}
             onValueChange={(value) => void selectDocument(value)}
-            options={instructions.map((resource) => ({
+            options={visibleResources.map((resource) => ({
               value: resource.path,
-              label: `${resource.scope === 'product' ? `[${t('agent.systemGuidelines')}] ` : ''}${resource.name}`,
+              label: `${resource.scope === 'product' ? `[${t('agent.systemGuidelines')}] ` : ''}${resource.path}`,
             }))}
             className="w-full"
           />
@@ -455,4 +414,4 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
       </div>
     </div>
   );
-};
+});

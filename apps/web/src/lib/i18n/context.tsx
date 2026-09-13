@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { en, TranslationKey } from './en.js';
 import { zhTW } from './zh-TW.js';
 
@@ -39,6 +39,10 @@ export const I18nProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Ignore quota/storage errors
     }
   }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
 
   const t = useCallback(
     (key: TranslationKey, params?: Record<string, string | number>): string => {

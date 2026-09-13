@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Folder, Tag, Filter, GitBranch, CheckCircle2, Heart, Eye, EyeOff, Search, X } from 'lucide-react';
-import { NotebookConfig, NoteItem, GitStatus, FolderItem } from '../lib/types.js';
+import { Folder, Tag, Filter, GitBranch, CheckCircle2, Eye, EyeOff, Search, X } from 'lucide-react';
+import { NoteItem, GitStatus, FolderItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { WorkspaceSidebar } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
@@ -15,9 +15,7 @@ interface SidebarProps {
   folders?: FolderItem[];
   selectedFolder?: string | null;
   onSelectFolder?: (folder: string | null) => void;
-  notebooks: NotebookConfig[];
   selectedNotebookId: string;
-  onSelectNotebook: (id: string) => void;
   notes: NoteItem[];
   statuses: string[];
   showHidden: boolean;
@@ -34,9 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   folders = [],
   selectedFolder = null,
   onSelectFolder,
-  notebooks,
   selectedNotebookId,
-  onSelectNotebook,
   notes,
   statuses,
   showHidden,
@@ -52,12 +48,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [tagQuery, setTagQuery] = useState('');
   const [tagSort, setTagSort] = useState<TagSort>(getSavedTagSort);
   useEffect(() => { setTagQuery(''); }, [selectedNotebookId]);
-
-  // Aggregate note counts per notebook
-  const notebookCounts = notebooks.reduce<Record<string, number>>((acc, nb) => {
-    acc[nb.id] = notes.filter((n) => n.notebookId === nb.id).length;
-    return acc;
-  }, {});
 
   const notebookNotes = notes.filter((note) => note.notebookId === selectedNotebookId);
 
@@ -85,7 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const dirtyCount = modifiedCount + untrackedCount + stagedCount;
 
   return (
-    <WorkspaceSidebar label={t('sidebar.notebooks')} className="notes-sidebar" footer={
+    <WorkspaceSidebar label={t('sidebar.statusFilter')} className="notes-sidebar" footer={
       <div
         className="pt-3 mt-3 border-t shrink-0 flex flex-col gap-2.5"
         style={{ borderColor: 'var(--color-border)' }}
@@ -128,76 +118,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* Sidebar Footer */}
-        <div className="text-center text-[11px] text-slate-400 dark:text-slate-500 leading-tight flex flex-col items-center gap-0.5 pb-0.5">
-          <div className="flex items-center gap-1">
-            <span>powered by</span>
-            <a
-              href="https://github.com/wayne930242/github-notes"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium hover:underline transition hover:text-slate-600 dark:hover:text-slate-300"
-            >
-              github-notes
-            </a>
-          </div>
-          <div>
-            <a
-              href="https://github.com/wayne930242/github-notes"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 hover:underline transition hover:text-slate-600 dark:hover:text-slate-300"
-            >
-              <span>Made with</span>
-              <Heart className="w-3 h-3 fill-red-500 text-red-500" />
-              <span>by wayne930242</span>
-            </a>
-          </div>
-        </div>
+        <a className="sidebar-credit" href="https://github.com/wayne930242/github-notes"
+          target="_blank" rel="noopener noreferrer" title="GitHub Notes by wayne930242">
+          powered by <span>github-notes</span>
+        </a>
       </div>
     }>
-        {/* Notebooks Section */}
-        <div>
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5 px-2">
-            <span>{t('sidebar.notebooks')}</span>
-            <span className="text-slate-400">{notebooks.length}</span>
-          </div>
-          <div className="space-y-1">
-            {notebooks.map((nb) => {
-              const isSelected = selectedNotebookId === nb.id;
-              const count = notebookCounts[nb.id] || 0;
-              return (
-                <button
-                  type="button"
-                  key={nb.id}
-                  onClick={() => onSelectNotebook(nb.id)}
-                  aria-pressed={isSelected}
-                  style={isSelected ? selectedItemStyle : undefined}
-                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-sm font-medium transition ${
-                    isSelected
-                      ? 'font-semibold hover:opacity-90'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 truncate">
-                    <Folder className="w-4 h-4" />
-                    <span className="truncate">{nb.title}</span>
-                  </div>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 ${
-                      isSelected
-                        ? 'font-semibold'
-                        : 'text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {onSelectFolder && (
           <div>
             <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-2">

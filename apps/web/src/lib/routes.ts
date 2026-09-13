@@ -1,13 +1,13 @@
 import { matchPath } from 'react-router-dom';
 import type { ViewMode } from './types.js';
-export type WorkspaceTab = 'notes' | 'assets' | 'agent' | 'settings';
+export type WorkspaceTab = 'notes' | 'assets' | 'agent' | 'screen' | 'settings';
 export function parseWorkspaceRoute(pathname: string, search: string) {
   pathname = pathname.replace(/\/+$/, '') || '/';
   if (pathname === '/index.html' || pathname === '/index' || pathname === '/notebooks') pathname = '/notes';
   const query = new URLSearchParams(search);
   let tab: WorkspaceTab = 'notes'; let notebook: string | null = null; let folder: string | null = null; let note: string | null = null; let valid = true;
   try {
-    if (['/assets','/agent','/settings'].includes(pathname)) tab=pathname.slice(1) as WorkspaceTab;
+    if (['/assets','/agent','/screen','/settings'].includes(pathname)) tab=pathname.slice(1) as WorkspaceTab;
     else if (pathname !== '/' && pathname !== '/notes') {
       const entry=matchPath('/notebooks/:notebook/notes/*',pathname);
       const directory=matchPath('/notebooks/:notebook/folders/*',pathname);

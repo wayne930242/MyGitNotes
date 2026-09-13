@@ -1,3 +1,4 @@
+import { useWorkspaceLinks } from './WorkspaceLinks.js';
 import { isNoteHidden, withNoteStatus } from '@github-notes/core/note-status';
 import { EditorNotice } from './EditorNotice.js';
 import { Select } from './Select.js';
@@ -292,6 +293,20 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
       } else handleRemoteFailure(error);
     } finally { operation.current = false; if (mounted.current) setIsSaving(false); }
   };
+  const { registerBeforeNavigate } = useWorkspaceLinks();
+  useEffect(() => registerBeforeNavigate(async () => {
+    if (readOnly) return true;
+    if (operation.current || current.current.blocked) return false;
+    const draft = current.current;
+    if (draft.content === note.content && sameValue(draft.metadata, note.metadata)) return true;
+    saveLocalDraft(draftScope || branch, note.path, draft.content, draft.metadata);
+    try {
+      await onSave({ path: note.path, content: draft.content, metadata: draft.metadata, baseNote: draft.baseNote });
+      clearLocalDraft(draftScope || branch, note.path);
+      return true;
+    } catch (error) { setSaveError((error as Error).message); return false; }
+  }), [registerBeforeNavigate, readOnly, note, onSave, draftScope, branch]);
+
   const close = async () => {
     if (draftMode && !readOnly && !current.current.blocked) {
       try { await onSave({ path: note.path, content: current.current.content, metadata: current.current.metadata, baseNote: current.current.baseNote }); }
@@ -304,7 +319,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   escapeAction.current = () => isAssetPickerOpen ? setIsAssetPickerOpen(false) : close();
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !document.querySelector('dialog[open]')) {
         event.preventDefault(); event.stopPropagation(); escapeAction.current();
       }
     };

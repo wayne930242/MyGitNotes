@@ -1,17 +1,27 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { headingSlug, resolveWorkspaceHref } from './workspace-links.js';
 
 export function renderNote(content: string, notePath: string): string {
   const parsed = new DOMParser().parseFromString(DOMPurify.sanitize(marked.parse(content, { gfm: true, breaks: true }) as string), 'text/html');
   for (const image of parsed.querySelectorAll('img')) {
     const src = image.getAttribute('src') || '';
-    if (!/^(https?:|data:|\/|#)/i.test(src)) {
-      const base = new URL(`/raw-assets/${notePath.split('/').map(encodeURIComponent).join('/')}`, window.location.origin);
-      const resolved = new URL(src, base);
-      if (resolved.pathname.startsWith('/raw-assets/')) image.setAttribute('src', resolved.pathname);
-      else image.remove();
+    const target = resolveWorkspaceHref(src, notePath);
+    if (target && target.kind !== 'external') {
+      image.dataset.workspaceLink = src; image.dataset.sourcePath = notePath;
+      image.tabIndex = 0; image.setAttribute('role', 'button');
     }
+    if (target?.kind === 'path') image.setAttribute('src', `/raw-assets/${target.path.split('/').map(encodeURIComponent).join('/')}`);
+    else if (!target && !/^data:image\//i.test(src)) image.remove();
   }
-  for (const link of parsed.querySelectorAll('a')) { link.setAttribute('rel', 'noopener noreferrer'); }
+  for (const heading of parsed.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6')) heading.dataset.headingSlug = headingSlug(heading.textContent || '');
+  for (const link of parsed.querySelectorAll('a')) {
+    const href = link.getAttribute('href') || '';
+    const target = resolveWorkspaceHref(href, notePath);
+    if (!target) { link.removeAttribute('href'); continue; }
+    link.dataset.workspaceLink = href; link.dataset.sourcePath = notePath;
+    link.setAttribute('rel', 'noopener noreferrer');
+    if (target.kind === 'external') link.setAttribute('target', '_blank');
+  }
   return DOMPurify.sanitize(parsed.body.innerHTML);
 }

@@ -54,3 +54,8 @@ pnpm check:core-ownership # Verify workspace paths are absent from the Core inde
 pnpm test          # Run test suite across all packages
 pnpm build         # Verify build succeeds cleanly
 ```
+
+
+### Screen 配置所有權
+
+工作區根目錄 `.github-notes-screen.yaml` 是使用者資料。Core 不得追蹤真實配置，工作區更新必須保留此檔案；測試配置只建立於隔離暫存工作區。

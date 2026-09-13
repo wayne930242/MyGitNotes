@@ -6,6 +6,7 @@ import { loadSourceConfig, sourceIdentity, GitHubSource, SourceError, workspaceA
 import { createRemoteMCP } from './mcp.js';
 import { createLocalApp } from './local-app.js';
 import { createAuth, authToken } from './auth.js';
+import { createScreenPageRouter } from './screen-page.js';
 
 export function applicationRoot() {
   let dir = path.dirname(fileURLToPath(import.meta.url));
@@ -36,6 +37,7 @@ export function createApp(base: string): express.Express {
   });
   app.use(express.json({ limit: '8mb' }));
   app.use('/api/auth', createAuth(base));
+  if (source) app.use('/api/screen-page', createScreenPageRouter(base, source));
   app.use('/mcp', createRemoteMCP(base, source));
   if (source?.type === 'local') app.use(createLocalApp(source.path));
   else {

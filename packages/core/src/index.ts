@@ -1,4 +1,5 @@
 export * from './types.js';
+export * from './screen-page.js';
 export * from './note-status.js';
 export * from './config.js';
 export * from './frontmatter.js';

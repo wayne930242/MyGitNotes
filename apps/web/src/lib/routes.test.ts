@@ -15,7 +15,7 @@ describe('workspace URLs', () => {
     expect(parseWorkspaceRoute('/notes', '?showHidden=true').showHidden).toBe(true);
     expect(parseWorkspaceRoute('/notes', '').showHidden).toBe(false);
     expect(parseWorkspaceRoute('/notes', '?folder=').valid).toBe(true);
-    for (const tab of ['settings','assets','agent']) for (const suffix of ['', '/']) expect(parseWorkspaceRoute('/'+tab+suffix,'?notebook=work').tab).toBe(tab);
+    for (const tab of ['settings','assets','agent','screen']) for (const suffix of ['', '/']) expect(parseWorkspaceRoute('/'+tab+suffix,'?notebook=work').tab).toBe(tab);
     expect(parseWorkspaceRoute(noteRoute('work','note.md'),'?folder=projects&q=hello&tag=demo')).toMatchObject({ notebook:'work',folder:'projects',q:'hello',tag:'demo' });
   });
   it('rejects unknown pages, traversal and malformed URLs', () => {

@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 
 export const workspaceAgentRoots = ['AGENTS.md', '.agents', '.codex'];
+export const workspaceOwnedRoots = [...workspaceAgentRoots, '.github-notes-screen.yaml'];
 
 /** Merge without committing; the caller validates before committing or publishing. */
 export function mergeWorkspaceCore(repoRoot, revision) {
@@ -8,7 +9,7 @@ export function mergeWorkspaceCore(repoRoot, revision) {
   if (git('status', '--porcelain').trim()) throw new Error('Workspace must be clean before merging Core.');
   const before = git('rev-parse', 'HEAD').trim();
   // Literal root paths include the complete namespace, including user deletions.
-  const roots = workspaceAgentRoots.filter(root =>
+  const roots = workspaceOwnedRoots.filter(root =>
     git('ls-tree', '--name-only', before, '--', root).trim() || git('ls-tree', '--name-only', revision, '--', root).trim());
   let mergeError;
   try {

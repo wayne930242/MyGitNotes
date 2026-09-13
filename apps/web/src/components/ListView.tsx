@@ -47,7 +47,7 @@ export const ListView: React.FC<ListViewProps> = ({
   sortOrder = 'desc',
   onSortChange,
 }) => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   const isEmpty = notes.length === 0 && subfolders.length === 0;
 
@@ -131,9 +131,10 @@ export const ListView: React.FC<ListViewProps> = ({
             {/* Notes row rendering */}
             {notes.map((note) => {
               const formattedDate = note.mtime
-                ? new Date(note.mtime).toLocaleDateString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
+                ? new Date(note.mtime).toLocaleString(language, {
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour12: false,
                     hour: '2-digit',
                     minute: '2-digit',
                   })
@@ -188,10 +189,11 @@ export const ListView: React.FC<ListViewProps> = ({
                     </div>
                   </td>
 
-                  <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400 flex-nowrap">
+                  <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap tabular-nums">
                     <div className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{formattedDate}</span>
+                      <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <time dateTime={note.mtime ? new Date(note.mtime).toISOString() : undefined}
+                        title={note.mtime ? new Date(note.mtime).toLocaleString(language) : undefined}>{formattedDate}</time>
                     </div>
                   </td>
 

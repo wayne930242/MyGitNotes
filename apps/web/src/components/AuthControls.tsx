@@ -1,6 +1,6 @@
 import { Select } from './Select.js';
 import { useEffect, useState } from 'react';
-import { KeyRound, Copy, Check, Plus, Trash2, HelpCircle } from 'lucide-react';
+import { KeyRound, Copy, Check, Plus, Trash2, HelpCircle, Github, ChevronDown, LogOut } from 'lucide-react';
 import { McpTutorialModal } from './McpTutorialModal.js';
 import { copyToClipboard } from '../lib/clipboard.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -42,13 +42,13 @@ export function AuthControls({ local = false, connection = false }: { local?: bo
   const { t } = useTranslation();
   const session = useSession();
   if (local) return null;
-  return session.authenticated ? <div className="flex items-center gap-2 text-xs shrink-0 text-slate-600 dark:text-slate-300">
-    <span>{session.login}</span>
-    <button className="underline hover:opacity-80 transition" onClick={async () => {
+  return session.authenticated ? <details className="header-user-menu">
+    <summary className="header-user-button" aria-label={session.login}><span className="header-user-avatar">{session.login?.slice(0, 1).toUpperCase()}</span><span className="header-user-login">{session.login}</span><ChevronDown size={12} /></summary>
+    <div className="header-user-popover"><span>{session.login}</span><button onClick={async () => {
       const response = await fetch('/api/auth/logout', { method: 'POST' });
       if (response.ok) window.location.reload();
-    }}>{t('auth.signOut')}</button>
-  </div> : <a href="/api/auth/github" className={`${connection ? connectionActionClass : 'px-3 py-1.5 rounded-lg text-xs shrink-0'} text-white hover:opacity-90 active:scale-95 transition`} style={{ backgroundColor: 'var(--color-primary)' }}>{t('auth.signInWithGithub')}</a>;
+    }}><LogOut size={14} />{t('auth.signOut')}</button></div>
+  </details> : <a href="/api/auth/github" className={connection ? `${connectionActionClass} ui-button-primary` : 'header-login'}><Github size={16} /><span>{t('auth.signInWithGithub')}</span></a>;
 }
 export function AgentAccessSettings({ local = false }: { local?: boolean }) {
   const { t, language } = useTranslation();
