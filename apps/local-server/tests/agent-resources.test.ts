@@ -12,6 +12,12 @@ const files: Record<string,string> = {
   '.github-notes.yaml': 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n',
   'AGENTS.md': '# Workspace\n', '.agents/skills/custom/SKILL.md': '# Skill\n',
   '.agents/skills/custom/agents/openai.yaml': 'interface:\n  display_name: Custom\ncustom_field: keep\n',
+  'CLAUDE.md': '# Custom Claude instructions\n',
+  '.claude/CLAUDE.md': '# Custom Claude scoped instructions\n',
+  '.claude/skills/review/SKILL.md': '# Custom Claude skill\n',
+  'GEMINI.md': '# Custom Antigravity instructions\n',
+  '.agent/skills/review/SKILL.md': '# Custom Antigravity legacy skill\n',
+  '.agents/skills/format-tests.md': '# Custom Antigravity command\n',
   '.codex/agents/reviewer.toml': 'description = "Reviewer"\n', '.codex/auth.json': '{"token":"fixture"}',
 };
 const session = 'a'.repeat(43);
@@ -57,9 +63,11 @@ it('serves workspace Agent settings with revision and enforces login for remote 
   expect(writes.find(w=>w.endpoint==='/git/trees')?.body.tree).toEqual([{path:'AGENTS.md',mode:'100644',type:'blob',content:'# Updated\n'}]);
 });
 
-it('reads and saves native skill interface settings at their original Git path', async () => {
+it.each([
+  '.agents/skills/custom/agents/openai.yaml', 'CLAUDE.md', '.claude/CLAUDE.md',
+  '.claude/skills/review/SKILL.md', 'GEMINI.md', '.agent/skills/review/SKILL.md', '.agents/skills/format-tests.md',
+])('reads and saves native Agent settings at their original Git path: %s', async (path) => {
   const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
-  const path = '.agents/skills/custom/agents/openai.yaml';
   const original = files[path];
   const read = await fetch(`${base}/api/agent-resources/read?path=${encodeURIComponent(path)}`, { headers });
   expect(read.status).toBe(200);

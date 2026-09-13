@@ -69,8 +69,8 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
         if (all.length > 0) {
           const defaultRes =
             all.find((i) => i.path === 'notes/AGENTS.md') ||
-            all.find((i) => i.scope !== 'product') ||
             all.find((i) => i.path === 'AGENTS.md') ||
+            all.find((i) => i.scope !== 'product') ||
             all[0];
           setSelectedPath(defaultRes.path);
         }

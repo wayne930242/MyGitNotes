@@ -17,7 +17,7 @@ export function groupAgentResources(resources: AgentResource[], notebooks: Noteb
       groups.product.push(resource);
       continue;
     }
-    if (/^\.(agents|codex)\/skills\//.test(resource.path)) {
+    if (/^\.(agents|codex|claude|agent)\/skills\//.test(resource.path)) {
       groups.skills.push(resource);
       continue;
     }

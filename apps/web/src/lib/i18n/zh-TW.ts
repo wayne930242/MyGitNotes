@@ -353,7 +353,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'agent.workspaceSkills': '工作區技能',
   'agent.noWorkspaceSkills': '尚無工作區技能。可在根目錄 .agents/skills/ 加入 SKILL.md。',
   'agent.notebookDocuments': '筆記本文件',
-  'agent.scopeDescription': '工作區技能保留在根目錄 .agents/skills/，供 Codex 直接使用。技能與共用規則適用於所有筆記本；下方顯示目前筆記本的專屬文件。',
+  'agent.scopeDescription': '管理 Codex、Claude Code 與 Antigravity 的技能及指引，保留各工具的原生路徑。工作區技能跨筆記本共用；下方顯示目前筆記本的專屬文件。',
   'agent.noNotebookDocuments': '目前沒有專屬文件，仍適用工作區共用規則。',
   'agent.document': 'Agent 文件',
   'agent.loading': '載入中…',

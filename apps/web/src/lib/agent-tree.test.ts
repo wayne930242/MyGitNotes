@@ -58,4 +58,12 @@ describe('Agent document navigation', () => {
       expect(groups.product).toEqual([files[3]]);
     }
   });
+
+  it('keeps Claude and Antigravity skills in the shared skills section', () => {
+    const files: AgentResource[] = ['.claude/skills/review/SKILL.md', '.agent/skills/review/SKILL.md', '.agents/skills/format-tests.md', 'CLAUDE.md', 'GEMINI.md']
+      .map(path => ({ path, name: path, scope: 'workspace' }));
+    const groups = groupAgentResources(files, notebooks, 'a');
+    expect(groups.skills).toEqual(files.slice(0, 3));
+    expect(groups.shared).toEqual(files.slice(3));
+  });
 });

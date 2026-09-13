@@ -13,7 +13,7 @@ GitHub Notes is a Git-native, local-first notes application and agent-operable w
 
 ### Path Ownership Invariants
 - **Core-owned paths**: `apps/**`, `packages/**`, `scripts/**`, `docs/**`, `examples/**`, `README.md`, `package.json`, `pnpm-workspace.yaml`.
-- **User-owned paths**: `notes/**`, `/.github-notes.yaml`, `/AGENTS.md`, `/.agents/**`, `/.codex/**`. Core must not track workspace Agent files; keep product guidance here and starter templates in `examples/workspace-agent-system/`.
+- **User-owned paths**: `notes/**`, `/.github-notes.yaml`, `/AGENTS.md`, `/CLAUDE.md`, `/GEMINI.md`, `/.agents/**`, `/.codex/**`, `/.claude/**`, `/.agent/**`. Core must not track workspace Agent files; keep product guidance here and starter templates in `examples/workspace-agent-system/`.
 - **Rule**: NEVER overwrite, alter, or delete content under `notes/**` during Core maintenance or Core update merges.
 
 ## 3. Product Documentation Map
