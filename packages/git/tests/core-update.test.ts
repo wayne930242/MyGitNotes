@@ -97,7 +97,8 @@ describe('Core Update Engine Rules', () => {
       fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       fs.writeFileSync(path.join(root, file), text);
     };
-    const files = ['AGENTS.md', '.agents/skills/範例/SKILL.md', '.codex/agents/reviewer.toml'];
+    const files = ['AGENTS.md', '.agents/skills/範例/SKILL.md', '.codex/agents/reviewer.toml',
+      'CLAUDE.md', '.claude/skills/review/SKILL.md', 'GEMINI.md', '.agent/skills/review/SKILL.md'];
     for (const file of files) write(upstreamRepo, file, 'Core baseline\n');
     await stageAndCommit(upstreamRepo, files, 'legacy agent settings');
     await runGit(['pull', '--ff-only'], userRepo);
@@ -119,6 +120,7 @@ describe('Core Update Engine Rules', () => {
     expect((await updateCore({ repoRoot: userRepo })).success).toBe(true);
     expect(fs.readFileSync(path.join(userRepo, 'AGENTS.md'), 'utf8')).toBe('Workspace rules\n');
     expect(fs.readFileSync(path.join(userRepo, '.agents/skills/範例/SKILL.md'), 'utf8')).toBe('Core baseline\n');
+    for (const file of files.slice(3)) expect(fs.readFileSync(path.join(userRepo, file), 'utf8')).toBe('Core baseline\n');
     expect(fs.existsSync(path.join(userRepo, '.codex/agents/reviewer.toml'))).toBe(false);
     expect(fs.existsSync(path.join(userRepo, '.agents/skills/new/SKILL.md'))).toBe(false);
     expect(fs.readFileSync(path.join(userRepo, 'feature.txt'), 'utf8')).toBe('Product update\n');

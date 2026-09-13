@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 
-export const workspaceAgentRoots = ['AGENTS.md', '.agents', '.codex'];
+export const workspaceAgentRoots = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md', '.agents', '.codex', '.claude', '.agent'];
 export const workspaceOwnedRoots = [...workspaceAgentRoots, '.github-notes-screen.yaml'];
 
 /** Merge without committing; the caller validates before committing or publishing. */

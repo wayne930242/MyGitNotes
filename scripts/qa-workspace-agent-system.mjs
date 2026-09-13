@@ -19,6 +19,16 @@ write('.agents/skills/custom/SKILL.md', '---\nname: Custom skill\n---\n# Custom 
 write('.agents/skills/custom/agents/openai.yaml', 'interface:\n  display_name: Custom\ncustom_field: keep\n');
 write('.agents/skills/custom/references/check.md', '# Reference\n');
 write('.agents/docs/setup.md', '# Setup\n');
+const nativeDocuments = {
+  'CLAUDE.md': '# Claude instructions\n',
+  '.claude/CLAUDE.md': '# Claude scoped instructions\n',
+  '.claude/skills/review/SKILL.md': '# Claude skill\n',
+  'GEMINI.md': '# Antigravity instructions\n',
+  '.agent/skills/review/SKILL.md': '# Antigravity legacy skill\n',
+  '.agents/skills/format-tests.md': '# Antigravity command\n',
+};
+for (const [file, content] of Object.entries(nativeDocuments)) write(file, content);
+write('.claude/settings.local.json', '{"secret":"fixture-only"}');
 write('.codex/agents/reviewer.toml', 'description = "Reviewer"\n');
 write('.codex/auth.json', '{"token":"fixture-only"}');
 git('init','-b','main'); git('config','user.name','QA'); git('config','user.email','qa@example.com'); git('add','.'); git('commit','-m','fixture');
@@ -49,6 +59,7 @@ try {
   const append = async text => { await page.focus(editor); await page.keyboard.down('Control'); await page.keyboard.press('End'); await page.keyboard.up('Control'); await page.keyboard.type(text); };
   await page.goto(base+'/agent',{waitUntil:'networkidle0'});
   await click('Source'); await page.waitForSelector(editor);
+  if (!await page.$eval(editor, e => e.value.includes('# Workspace Rules'))) throw Error('Root workspace instructions were not the initial document');
   const sections = await page.$$eval('.agent-sidebar section', nodes => nodes.map(node => node.getAttribute('aria-label')));
   if (sections[0] !== 'Workspace skills' || sections.indexOf('Shared workspace') < 1) throw Error('Skills were not presented before shared documents');
   if (await page.$eval(editor,e=>e.readOnly)) throw Error('Root Agent instructions remained read-only');
@@ -67,6 +78,17 @@ try {
   if (!fs.readFileSync(path.join(root,'.agents/skills/custom/SKILL.md'),'utf8').includes('Skill edited in browser')) throw Error('Skill edit was lost');
   const interfaceContent = fs.readFileSync(path.join(root,'.agents/skills/custom/agents/openai.yaml'),'utf8');
   if (!interfaceContent.includes('custom_field: keep') || !interfaceContent.includes('Interface edited in browser')) throw Error('Skill interface edit or custom field was lost');
+  for (const [file, original] of Object.entries(nativeDocuments)) {
+    await selectFile(file);
+    await page.waitForFunction(original => document.querySelector('textarea[aria-label="Agent document content"]')?.value === original, {}, original);
+    if (await page.$eval(editor, e => e.readOnly)) throw Error(`Native document remained read-only: ${file}`);
+    await append('\nNative document edited in browser');
+    await selectFile('AGENTS.md');
+    await page.waitForFunction(() => document.querySelector('textarea[aria-label="Agent document content"]')?.value.includes('Root edited in browser'));
+    if (!fs.readFileSync(path.join(root, file), 'utf8').includes('Native document edited in browser')) throw Error(`Native edit lost: ${file}`);
+  }
+  const resources = await fetch(base + '/api/agent-resources').then(response => response.json());
+  if (JSON.stringify(resources).includes('settings.local.json')) throw Error('Private Claude settings were exposed');
   await click('Restore'); await click('Confirm Restore?');
   await page.waitForFunction(()=>!document.querySelector('textarea[aria-label="Agent document content"]')?.value.includes('Root edited in browser'));
   if (fs.readFileSync(path.join(root,'AGENTS.md'),'utf8')!=='# Workspace Rules\n\nKeep our custom instructions.\n') throw Error('Restore did not preserve original root rules');
@@ -78,7 +100,8 @@ try {
   await page.click('.agent-document-picker [role="combobox"]');
   await page.waitForSelector('[role="option"]');
   const options = await page.$$eval('[role="option"]', nodes => nodes.map(node => node.textContent));
-  if (!options[0]?.includes('.agents/skills/') || !options.some(text => text.includes('agents/openai.yaml'))) throw Error('Mobile picker did not prioritize complete workspace skills');
+  if (!/^\.(agent|agents|claude|codex)\/skills\//.test(options[0] || '') || !options.some(text => text.includes('agents/openai.yaml'))) throw Error('Mobile picker did not prioritize complete workspace skills');
+  for (const file of Object.keys(nativeDocuments)) if (!options.some(text => text.includes(file))) throw Error(`Native document missing from mobile picker: ${file}`);
   await page.click('[data-option-value=".agents/skills/custom/agents/openai.yaml"]');
   await page.waitForFunction(() => document.querySelector('textarea[aria-label="Agent document content"]')?.value.includes('Interface edited in browser'));
   await page.screenshot({path:path.join(product,'artifacts/qa/workspace-agent-skills-mobile.png'),fullPage:true});
@@ -87,5 +110,5 @@ try {
   await page.reload({waitUntil:'networkidle0'}); await click('Source'); await page.waitForSelector(editor);
   if (!await page.$eval(editor,e=>e.readOnly)) throw Error('Core branch offered Agent editing');
   if (errors.length) throw Error(errors.join('; '));
-  console.log('PASS prioritized skills, desktop/mobile navigation, Markdown and interface YAML edits, switch flushing, Git restore, tracked skill commit, secret exclusion and Core read-only UI');
+  console.log('PASS Codex/Claude/Antigravity skills and instructions, desktop/mobile navigation, Markdown and interface YAML edits, switch flushing, Git restore, tracked skill commit, secret exclusion and Core read-only UI');
 } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); fs.rmSync(root,{recursive:true,force:true}); }

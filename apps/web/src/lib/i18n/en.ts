@@ -352,7 +352,7 @@ export const en = {
   'agent.workspaceSkills': 'Workspace skills',
   'agent.noWorkspaceSkills': 'No workspace skills yet. Add a SKILL.md under .agents/skills/ at the repository root.',
   'agent.notebookDocuments': 'Notebook documents',
-  'agent.scopeDescription': 'Workspace skills stay in .agents/skills/ at the repository root for Codex to use directly. Skills and shared rules apply across notebooks; the current notebook’s documents appear below.',
+  'agent.scopeDescription': 'Manage Codex, Claude Code and Antigravity skills and instructions at their native paths. Workspace skills are shared across notebooks; the current notebook’s documents appear below.',
   'agent.noNotebookDocuments': 'No notebook-specific documents. Shared workspace rules still apply.',
   'agent.document': 'Agent document',
   'agent.loading': 'Loading…',

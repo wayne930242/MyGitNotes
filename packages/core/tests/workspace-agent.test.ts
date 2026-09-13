@@ -28,6 +28,17 @@ function remote(token: string | undefined = 'fixture', push = true, branch = 'ma
 }
 
 describe('workspace Agent documents', () => {
+  it('classifies Claude and Antigravity skills and instructions without exposing runtime settings', () => {
+    for (const file of ['CLAUDE.md', '.claude/CLAUDE.md', 'GEMINI.md', 'notes/ex/CLAUDE.md', 'notes/ex/GEMINI.md']) {
+      expect(workspaceAgentKind(file)).toBe('instructions');
+    }
+    for (const file of ['.claude/skills/review/SKILL.md', '.claude/skills/review/references/guide.md', '.agent/skills/review/SKILL.md', '.agents/skills/format-tests.md']) {
+      expect(workspaceAgentKind(file)).toBe('skills');
+    }
+    for (const file of ['.claude/settings.json', '.claude/settings.local.json', '.claude/.credentials.json', '.claude/projects/log.md', '.agent/skills/run.sh', '.agent/.env', '.gemini/oauth_creds.json', 'CLAUDE.local.md']) {
+      expect(workspaceAgentKind(file)).toBeUndefined();
+    }
+  });
   it('includes native skill interface YAML without opening arbitrary skill files', () => {
     for (const root of ['.agents', '.codex']) {
       expect(workspaceAgentKind(`${root}/skills/review/agents/openai.yaml`)).toBe('skills');

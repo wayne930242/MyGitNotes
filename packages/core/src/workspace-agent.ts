@@ -10,19 +10,24 @@ export interface WorkspaceAgentResource {
   scope: 'workspace' | 'notes';
 }
 
+const instructionFiles = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'];
+const agentDirectories = ['.agents', '.codex', '.claude', '.agent'];
+
 /** UI document allowlist, deliberately narrower than Git namespace ownership. */
 export function workspaceAgentKind(file: string): WorkspaceAgentKind | undefined {
   if (file.includes('\\') || /[\x00-\x1f\x7f]/.test(file) || file.split('/').some(p => !p || p === '.' || p === '..')) return;
-  if (file === 'AGENTS.md') return 'instructions';
+  if (instructionFiles.includes(file)) return 'instructions';
   const parts = file.split('/');
   if (parts[0] === 'notes') {
     if (parts.some(p => p.startsWith('.'))) return;
-    if (parts.at(-1)?.toLowerCase() === 'agents.md') return 'instructions';
+    if (instructionFiles.some(name => name.toLowerCase() === parts.at(-1)?.toLowerCase())) return 'instructions';
     if (/\/docs\/agent\/.+\.(md|markdown|txt)$/i.test(file)) return 'docs';
     return;
   }
-  if (!['.agents', '.codex'].includes(parts[0]) || parts.slice(1).some(p => p.startsWith('.'))) return;
+  if (!agentDirectories.includes(parts[0]) || parts.slice(1).some(p => p.startsWith('.'))) return;
   if (parts.length === 2 && parts[1] === 'AGENTS.md') return 'instructions';
+  if (file === '.claude/CLAUDE.md') return 'instructions';
+  if (parts[0] === '.agents' && parts[1] === 'skills' && parts.length === 3 && /\.md$/i.test(file)) return 'skills';
   if (parts[1] === 'skills' && parts.length === 5 && parts[3] === 'agents' && parts[4] === 'openai.yaml') return 'skills';
   if (parts[1] === 'skills' && parts.length >= 4 && /\.(md|markdown|txt)$/i.test(file)) return 'skills';
   if (parts[1] === 'agents' && parts.length >= 3 && /\.(md|markdown|txt|toml|ya?ml)$/i.test(file)) return 'docs';
@@ -53,7 +58,7 @@ export function listWorkspaceAgentFiles(root: string): string[] {
       if (!entry.isSymbolicLink() && !entry.name.startsWith('.') && !['node_modules', 'dist', 'build'].includes(entry.name)) walk(path.posix.join(relative, entry.name));
     }
   };
-  for (const entry of ['AGENTS.md', '.agents', '.codex', 'notes']) walk(entry);
+  for (const entry of [...instructionFiles, ...agentDirectories, 'notes']) walk(entry);
   return files.sort();
 }
 
