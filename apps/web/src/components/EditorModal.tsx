@@ -94,12 +94,13 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   const [remoteNotice, setRemoteNotice] = useState('');
   const [conflictDraft, setConflictDraft] = useState<NoteDraft | null>(() => getLocalDraft(`${draftScope || branch}:conflict`, note.path));
   const operation = useRef(false);
+  const closing = useRef(false);
   const nextRemoteCheck = useRef(0);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const current = useRef({ content, metadata, baseNote, blocked });
   current.current = { content, metadata, baseNote, blocked };
-  const locked = readOnly || blocked || (!autoSave && isSaving);
+  const locked = readOnly || blocked || closing.current || (!autoSave && isSaving);
   const preserveConflict = () => {
     const draft = { content: current.current.content, metadata: current.current.metadata };
     saveLocalDraft(`${draftScope || branch}:conflict`, note.path, draft.content, draft.metadata);
@@ -219,7 +220,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
   // Debounced auto-save directly to disk on edit (Requirement 1)
   useEffect(() => {
-    if (readOnly) return;
+    if (readOnly || closing.current) return;
     const baseline = autoSave ? note : baseNote;
     const isDifferent = content !== baseline.content || !sameValue(metadata, baseline.metadata);
 
@@ -308,9 +309,14 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   }), [registerBeforeNavigate, readOnly, note, onSave, draftScope, branch]);
 
   const close = async () => {
-    if (draftMode && !readOnly && !current.current.blocked) {
-      try { await onSave({ path: note.path, content: current.current.content, metadata: current.current.metadata, baseNote: current.current.baseNote }); }
-      catch (error) { setSaveError(`Local save failed: ${(error as Error).message}`); return; }
+    if (closing.current) return;
+    if (autoSave && !readOnly && !current.current.blocked && (draftMode || current.current.content !== note.content || !sameValue(current.current.metadata, note.metadata))) {
+      closing.current = true; setIsSaving(true);
+      try {
+        await onSave({ path: note.path, content: current.current.content, metadata: current.current.metadata, baseNote: current.current.baseNote });
+        clearLocalDraft(draftScope || branch, note.path);
+      }
+      catch (error) { closing.current = false; setIsSaving(false); setSaveError(`Local save failed: ${(error as Error).message}`); return; }
     }
     if (!autoSave && !readOnly && hasUnsavedChanges && !window.confirm('Close with unsaved changes? Your local draft will be kept.')) return;
     onClose();

@@ -533,6 +533,28 @@ const AppContent: React.FC = () => {
     } catch (error) { setActionError((error as Error).message); }
   };
 
+  const handleOpenFolderIndex = async (folder: string, folderRevision?: string) => {
+    if (!canWrite) throw new Error(t('folder.readOnly'));
+    const notebook = config?.notebooks.find(item => item.id === selectedNotebookId);
+    if (!notebook) throw new Error(t('route.notebookNotFound'));
+    const path = `${notebook.root.replace(/\/$/, '')}/${folder}/index.md`;
+    let note = (remote ? readWorkingNotes(workingScope)[path]?.note : undefined) || notes.find(item => item.path === path);
+    if (!note) {
+      const metadata = { title: t('folder.index'), tags: [] };
+      const content = `# ${t('folder.index')}\n\n`;
+      note = remote ? stageWorkingNote({
+        id: path, path, notebookId: notebook.id, title: metadata.title,
+        content, metadata, tags: [], revision: folderRevision || revision,
+      }, null) : (await saveNote({ path, notebookId: notebook.id, content, metadata, createOnly: true, noCommit: true })).note;
+      if (!remote) setNotes(previous => [...previous.filter(item => item.path !== path), note!]);
+    }
+    setEditingNote(note);
+    const query = new URLSearchParams(location.search);
+    query.delete('notebook'); query.set('folder', folder);
+    navigate(noteRoute(notebook.id, `${folder}/index.md`) + '?' + query.toString());
+    if (!remote) void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError(error.message));
+  };
+
   const handleCreateNewNote = async (statusOverride?: string) => {
     try {
       setCreateError('');
@@ -750,6 +772,11 @@ const AppContent: React.FC = () => {
               selectedNotebookId={selectedNotebookId}
               folders={folders}
               foldersWritable={canWrite}
+              indexFolders={notes.filter(note => note.notebookId === selectedNotebookId && note.path.endsWith('/index.md')).map(note => {
+                const root = config?.notebooks.find(notebook => notebook.id === selectedNotebookId)?.root.replace(/\/$/, '') || '';
+                return note.path.slice(root.length + 1, -'/index.md'.length);
+              })}
+              onOpenFolderIndex={handleOpenFolderIndex}
               beforeFolderChange={() => {
                 if (Object.keys(activeWorkingNotes).length || listLocalDrafts(workingScope).length || screen.dirty) throw new Error(t('folder.draftsHint'));
               }}

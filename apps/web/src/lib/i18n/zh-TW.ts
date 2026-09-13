@@ -1,6 +1,11 @@
 import { TranslationKey } from './en.js';
 
 export const zhTW: Record<TranslationKey, string> = {
+  "folder.createIndex": "建立 index.md",
+  "folder.editIndex": "編輯 index.md",
+  "folder.createIndexAfter": "建立資料夾後，建立並編輯 index.md",
+  "folder.indexFailed": "資料夾已建立，但無法開啟 index.md。請從此選單重試。{error}",
+  "folder.readOnly": "此工作區為唯讀。",
   "folder.create": "新增資料夾",
   "folder.manage": "管理資料夾",
   "folder.createChild": "新增子資料夾",

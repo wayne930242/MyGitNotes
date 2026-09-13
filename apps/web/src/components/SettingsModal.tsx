@@ -388,6 +388,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
         </p>
         <textarea
+          style={{ caretColor: 'currentColor' }}
           readOnly={!local || branch === 'core'}
           aria-label={t('settings.manifest')}
           value={yamlContent}

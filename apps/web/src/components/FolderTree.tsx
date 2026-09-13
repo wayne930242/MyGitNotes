@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
-import { Folder, FolderPlus, GripVertical, MoreHorizontal, ArrowRight, Trash2 } from 'lucide-react';
+import { Folder, FolderPlus, GripVertical, MoreHorizontal, ArrowRight, Trash2, FileText } from 'lucide-react';
 import type { FolderCommand } from '@github-notes/core';
 import type { FolderItem } from '../lib/types.js';
 import { folderDropCommand, folderParent } from '../lib/folder-drag.js';
@@ -25,12 +25,14 @@ function TreeItem({ folder, disabled, selected, onSelect, onManage }: { folder: 
     <DropZone path={folder.path} position="after" disabled={disabled} />
   </div>;
 }
-export function FolderTree({ folders, notebookId, selected, onSelect, writable, beforeChange, onChanged }: {
+export function FolderTree({ folders, notebookId, selected, onSelect, writable, beforeChange, onChanged, indexFolders, onOpenIndex }: {
   folders: FolderItem[]; notebookId: string; selected: string | null; onSelect: (folder: string | null) => void;
+  indexFolders: string[]; onOpenIndex: (folder: string, revision?: string) => Promise<void>;
   writable: boolean; beforeChange?: () => void; onChanged?: () => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [dialog, setDialog] = useState<{ kind: 'manage' | 'create' | 'move' | 'delete'; path: string }>();
+  const [createIndex, setCreateIndex] = useState(false);
   const [parent, setParent] = useState(''), [name, setName] = useState(''), [before, setBefore] = useState('');
   const [revision, setRevision] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [dragging, setDragging] = useState<string>();
   const list = folders.filter(folder => folder.notebookId === notebookId);
@@ -42,19 +44,33 @@ export function FolderTree({ folders, notebookId, selected, onSelect, writable, 
   };
   useEffect(() => { setDialog(undefined); setError(''); setRevision(''); if (writable) void refresh().catch(error => setError(error.message)); }, [notebookId, folders, writable]);
   const open = (kind: 'manage' | 'create' | 'move' | 'delete', path: string) => {
-    setError(''); setName(''); setBefore(''); setParent(kind === 'create' ? path : folderParent(path)); setDialog({ kind, path });
+    setCreateIndex(false); setError(''); setName(''); setBefore(''); setParent(kind === 'create' ? path : folderParent(path)); setDialog({ kind, path });
   };
   const mutate = async (command: FolderCommand) => {
     if (busy || !writable) return;
     setBusy(true); setError('');
+    let createdPath: string | undefined;
     try {
       beforeChange?.();
       const response = await fetch('/api/folder-manager', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, revision }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || t('folder.failed'));
+      if (command.kind === 'create') createdPath = data.selectedPath;
       setRevision(data.revision); setDialog(undefined);
-      await onChanged?.(); onSelect(data.selectedPath || null);
-    } catch (error) { setError((error as Error).message); }
+      await onChanged?.();
+      if (command.kind === 'create' && createIndex) await onOpenIndex(data.selectedPath, data.revision);
+      else onSelect(data.selectedPath || null);
+    } catch (error) {
+      if (createdPath) setDialog({ kind: 'manage', path: createdPath });
+      setError(createdPath ? t('folder.indexFailed', { error: (error as Error).message }) : (error as Error).message);
+    }
+    finally { setBusy(false); }
+  };
+  const openIndex = async (path: string) => {
+    if (busy || !writable) return;
+    setBusy(true); setError('');
+    try { await onOpenIndex(path); setDialog(undefined); }
+    catch (error) { setError((error as Error).message); }
     finally { setBusy(false); }
   };
   const disabled = !writable || busy || !revision;
@@ -76,14 +92,17 @@ export function FolderTree({ folders, notebookId, selected, onSelect, writable, 
     </DndContext>
     {dialog && <WorkspaceDialog title={dialog.kind === 'manage' ? target?.title || dialog.path : t(`folder.${dialog.kind}`)} onClose={() => { if (!busy) setDialog(undefined); }}>
       {dialog.kind === 'manage' ? <div className="folder-dialog-actions">
-        <button className="ui-button" onClick={() => open('create', dialog.path)}><FolderPlus size={16} />{t('folder.createChild')}</button>
-        <button className="ui-button" onClick={() => open('move', dialog.path)}><ArrowRight size={16} />{t('folder.move')}</button>
-        <button className="ui-button ui-button-danger" onClick={() => open('delete', dialog.path)}><Trash2 size={16} />{t('folder.delete')}</button>
+        <button className="ui-button" disabled={busy} onClick={() => void openIndex(dialog.path)}><FileText size={16} />{t(indexFolders.includes(dialog.path) ? 'folder.editIndex' : 'folder.createIndex')}</button>
+        <button className="ui-button" disabled={busy} onClick={() => open('create', dialog.path)}><FolderPlus size={16} />{t('folder.createChild')}</button>
+        <button className="ui-button" disabled={busy} onClick={() => open('move', dialog.path)}><ArrowRight size={16} />{t('folder.move')}</button>
+        <button className="ui-button ui-button-danger" disabled={busy} onClick={() => open('delete', dialog.path)}><Trash2 size={16} />{t('folder.delete')}</button>
+        {errorMessage}
       </div> : <form className="screen-form" onSubmit={event => {
         event.preventDefault();
         void mutate(dialog.kind === 'create' ? { kind: 'create', notebookId, parent, name: name.trim(), title: name.trim() } : dialog.kind === 'delete' ? { kind: 'delete', notebookId, path: dialog.path, destination: parent } : { kind: 'move', notebookId, path: dialog.path, parent, ...(before ? { before } : {}) });
       }}>
         {dialog.kind === 'create' ? <label>{t('folder.name')}<input autoFocus className="ui-control" value={name} onChange={event => setName(event.target.value)} required maxLength={120} /></label> : <p className="screen-dialog-hint">{target?.title || dialog.path}</p>}
+        {dialog.kind === 'create' && <label className="screen-checkbox"><input type="checkbox" name="createIndex" checked={createIndex} disabled={busy} onChange={event => setCreateIndex(event.target.checked)} />{t('folder.createIndexAfter')}</label>}
         {dialog.kind === 'delete' && <p>{t('folder.deleteHint')}</p>}
         <label>{t(dialog.kind === 'delete' ? 'folder.moveContentsTo' : 'folder.parent')}<Select aria-label={t(dialog.kind === 'delete' ? 'folder.moveContentsTo' : 'folder.parent')} value={parent} onValueChange={value => { setParent(value); setBefore(''); }} options={destinationOptions} disabled={busy} /></label>
         {dialog.kind === 'move' && <label>{t('folder.position')}<Select aria-label={t('folder.position')} value={before} onValueChange={setBefore} options={[{ value: '', label: t('folder.last') }, ...list.filter(folder => folderParent(folder.path) === parent && folder.path !== dialog.path).map(folder => ({ value: folder.path, label: t('folder.before', { name: folder.title }) }))]} disabled={busy} /></label>}

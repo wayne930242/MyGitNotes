@@ -59,3 +59,16 @@ it('rolls back completed writes when a later write fails', () => {
   expect(() => applyLocalFolderPlan(root, before, after)).toThrow('Injected disk failure');
   expect(localFolderSnapshot(root)).toEqual(before);
 });
+
+it.each(['', 'two'])('moving contents on deletion preserves destination metadata and nested metadata: %s', async destination => {
+  const target = path.join(root, 'notes/a', destination);
+  fs.writeFileSync(path.join(target, '_dir.yml'), 'title: Destination\ncustom: preserve exactly\n');
+  fs.writeFileSync(path.join(root, 'notes/a/one/_dir.yml'), 'title: Deleted folder\norder: 99\n');
+  fs.writeFileSync(path.join(root, 'notes/a/one/child/_dir.yml'), 'title: Child\ncustom: keep child\n');
+  const response = await post({ kind: 'delete', notebookId: 'a', path: 'one', destination });
+  expect(response.status).toBe(200);
+  expect(fs.existsSync(path.join(root, 'notes/a/one'))).toBe(false);
+  expect(fs.readFileSync(path.join(target, '_dir.yml'), 'utf8')).toBe('title: Destination\ncustom: preserve exactly\n');
+  expect(fs.readFileSync(path.join(target, 'child/_dir.yml'), 'utf8')).toBe('title: Child\ncustom: keep child\n');
+  expect(fs.readFileSync(path.join(target, 'note.md'), 'utf8')).toBe('# Keep me\n');
+});
