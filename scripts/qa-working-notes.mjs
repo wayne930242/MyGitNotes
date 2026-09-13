@@ -68,6 +68,10 @@ page.on('request',request=>{
   const file=url.searchParams.get('path');reads.push(file);const note=remoteNotes.find(n=>n.path===file);
   body=note?{note}:{error:'Missing'};status=note?200:404;
  }
+ if(url.pathname==='/api/notes/read-batch'){
+  const payload=JSON.parse(request.postData());reads.push(...payload.paths);
+  body={notes:payload.paths.map(file=>remoteNotes.find(n=>n.path===file)).filter(Boolean)};
+ }
  if(url.pathname==='/api/notes/commit'){
   const payload=JSON.parse(request.postData());
   if(failCommit||payload.revision!==String(rev)){status=409;body={error:'Remote revision changed. Retry Commit.'};}
@@ -83,7 +87,7 @@ const pending=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('gh_notes_wo
 const open=async(name)=>{await page.goto(base+`/notebooks/example/notes/${name}.md`,{waitUntil:'networkidle0'});await page.waitForSelector('[aria-label="Close note"]');await click('Source');};
 const edit=async(text)=>{await replace('textarea[aria-label="Note content"]',text);await page.waitForFunction(()=>document.body.innerText.includes('Saved locally'));};
 const close=()=>page.click('[aria-label="Close note"]');
-const commit=async()=>{await click('Commit');await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit changes"]'));};
+const commit=async()=>{await click('Commit');await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));};
 try {
  await open('welcome');
  assert(reads.includes('notes/example/welcome.md'),'Read lost configured path');
@@ -92,12 +96,12 @@ try {
  await open('welcome');
  assert((await page.$eval('textarea[aria-label="Note content"]',e=>e.value)).includes('Local first'),'Reload lost local save');await close();
  await open('second');await edit('# second\n\nOther local\n\nLast line\n');await close();
- await click('Commit');await page.click('[aria-label="Commit notes/example/second.md"]');await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit changes"]'));
+ await click('Commit');await page.click('[aria-label="Commit notes/example/second.md"]');await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
  assert(commits.length===1&&commits[0].notes.length===1,'Selection did not isolate one commit');
  assert(Object.keys(await pending()).join()==='notes/example/second.md','Unselected draft lost');
  failCommit=true;await click('Commit');await click('Commit to GitHub');await page.waitForSelector('[role="alert"]');
  assert(Object.keys(await pending()).length===1,'Failed commit cleared drafts');
- failCommit=false;await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit changes"]'));
+ failCommit=false;await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
  assert(commits.length===2&&Object.keys(await pending()).length===0,'Retry did not clear committed drafts');
  console.log('PASS exact read path, local save/reload, explicit partial commit and failed commit retention');
 
@@ -106,7 +110,7 @@ try {
  await click('Commit');await click('Commit to GitHub');await page.waitForFunction(()=>document.body.innerText.includes('Review the updated diff'));
  assert(commits.length===2,'Merge review committed immediately');
  const merged=(await pending())['notes/example/welcome.md'];assert(merged.note.content.includes('Local second')&&merged.note.content.includes('Remote last'),'Nonoverlap merge dropped text');
- await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit changes"]'));
+ await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
  await open('welcome');await edit('# welcome\n\nConflict local\n\nRemote last\n');await close();
  remoteNotes=remoteNotes.map(n=>n.path.endsWith('/welcome.md')?{...n,content:n.content.replace('Local second','Conflict remote')}:n);bump();
  await click('Commit');await click('Commit to GitHub');await page.waitForFunction(()=>document.body.innerText.includes('Remote changes conflict'));
@@ -123,9 +127,9 @@ try {
  assert(commits.length===3&&!reads.includes('notes/example/new-local.md'),'New local note required remote persistence');
  await page.setViewport({width:320,height:700,isMobile:true,hasTouch:true});
  await page.goto(base+'/notebooks/example',{waitUntil:'networkidle0'});await click('Commit');
- const rect=await page.$eval('[aria-label="Commit changes"]',e=>{const r=e.getBoundingClientRect();return {x:r.x,right:r.right,bottom:r.bottom};});
+ const rect=await page.$eval('[aria-label="Commit Changes"]',e=>{const r=e.getBoundingClientRect();return {x:r.x,right:r.right,bottom:r.bottom};});
  assert(rect.x>=0&&rect.right<=320&&rect.bottom<=700,'Mobile commit dialog overflow');
- await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit changes"]'));
+ await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
  assert(commits.length===4&&commits[3].notes[0].createOnly,'New note did not commit explicitly');
  console.log('PASS new-note local draft and mobile explicit Commit');
  await page.setViewport({width:1440,height:1000});await open('welcome');

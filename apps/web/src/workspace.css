@@ -312,6 +312,11 @@
   .folder-link .folder-link-arrow { display: none; }
   .asset-library .asset-tile > div:first-child { height: 112px; }
 }
+@media (max-width: 767px) and (max-height: 500px) {
+  .agent-main { padding-bottom: 0; }
+  .app-shell[data-workspace-tab="agent"] .workspace-header .header-notebook { display: none; }
+  .agent-content .workspace-page-header { display: none; }
+}
 @media (prefers-reduced-motion: reduce) {
   .workspace-sidebar, .workspace-header, .workspace-sidebar * { transition: none; }
 }

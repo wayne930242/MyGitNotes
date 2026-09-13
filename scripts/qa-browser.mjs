@@ -52,7 +52,7 @@ try {
  if(await page.$eval('textarea[aria-label="Note content"]',e=>e.value.includes('/raw-assets/')))throw Error('Upload inserted without explicit Insert');
  await click('View');await page.waitForSelector('[aria-label="Asset preview"]');await page.keyboard.press('Escape');
  await page.waitForFunction(()=>!document.querySelector('[aria-label="Asset preview"]'));
- if(!await page.$('[aria-label="Note assets"]'))throw Error('Preview Escape closed asset dialog');
+ if(!await page.$('[aria-label="Notebook Assets"]'))throw Error('Preview Escape closed asset dialog');
  await click('Insert');
  await page.waitForFunction(()=>Array.from(document.querySelectorAll('textarea')).some(t=>t.value.includes('/raw-assets/by-hash/')));
  await click('Live Preview');
@@ -125,8 +125,8 @@ try {
  await page.keyboard.press('Escape');
  await page.waitForFunction(()=>!document.querySelector('button[aria-label="Close note"]'));
  console.log('PASS readonly asset browser and layered Escape shortcuts');
- await page.click('button[aria-label="Settings"]');await page.waitForSelector('textarea[aria-label="Workspace manifest"]');
- if(!await page.$eval('textarea[aria-label="Workspace manifest"]',e=>e.readOnly))throw Error('Remote manifest editable');
+ await page.click('button[aria-label="Settings"]');await page.waitForSelector('#settings-manifest textarea');
+ if(!await page.$eval('#settings-manifest textarea',e=>e.readOnly))throw Error('Remote manifest editable');
  await page.evaluate(()=>Array.from(document.querySelectorAll('button')).find(b=>b.textContent.includes('GitHub Dark'))?.click());
  await page.waitForFunction(()=>document.documentElement.classList.contains('dark'));
  await page.screenshot({path:`${product}/artifacts/qa/restored-settings-dark.png`,fullPage:true});
