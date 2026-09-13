@@ -103,8 +103,10 @@ export function getImmediateSubfolders(
     subfolder.noteCount = count;
   }
 
+  const orders = new Map(notebookFolders.map(folder => [folder.path, folder.order]));
   return Array.from(folderMap.values()).sort((a, b) =>
-    a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' })
+    (orders.get(a.path) || 0) - (orders.get(b.path) || 0) ||
+    a.title.localeCompare(b.title) || a.path.localeCompare(b.path)
   );
 }
 

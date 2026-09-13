@@ -1,10 +1,18 @@
 # GitHub Notes
 
-A Git-native, local-first notes application and agent-operable workspace frontend. Notes are stored as pure Markdown files with optional YAML frontmatter, organized into notebooks, and tracked via Git commits.
+A Git-native, local-first application for high-density, purpose-specific notebooks. Notes are stored as pure Markdown files with optional YAML frontmatter, organized into isolated notebooks, and tracked via Git commits. Agents can work within the same notebook boundaries.
 
 [English](README.md) · [繁體中文](README.zh-TW.md)
 
 [Live Demo](https://my-gh-core.vercel.app) · [Example Repository](https://github.com/wayne930242/github-notes/tree/main)
+
+## What a notebook is for
+
+GitHub Notes serves an active task with a clear purpose: preparing a TRPG campaign, designing a single project, or following a vocabulary study plan. A notebook gathers the notes, resources, working rules and progress needed for that activity, so you can read and revise them intensively while doing the work.
+
+Isolation is central to the product. Each notebook keeps its own context, structure and working conventions. Cross-notebook views such as Screen are deliberate references chosen by the user; they do not merge notebook ownership or turn every document into one shared pool.
+
+This is a different need from a long-term knowledge base. A tool such as Obsidian can hold material accumulated and revisited over years; GitHub Notes focuses on the denser reading, editing and coordination around a particular activity. Its organizing question is: **what is this notebook helping me do?**
 
 ## Branch Architecture
 
@@ -157,12 +165,16 @@ vercel --prod
 MIT
 
 
-## Screen Page
+## Screen
 
-主導覽的 Screen 提供跨筆記本閱讀泳道。新增空白泳道後可釘選筆記、資料夾、資源或 YouTube；也可新增依標籤或資料夾自動列出內容的動態泳道。
+Screen provides reading swimlanes across notebooks. Pin notes, folders, images or YouTube videos to custom lanes, or populate dynamic lanes from a tag or folder. Each lane supports thumbnail, small and medium views. Drag items between custom lanes; use the sidebar to add, name and reorder lanes.
 
-每道可切換縮圖、小、中。拖曳把手可排序或跨自訂泳道移動；「泳道編輯」可命名、排序與移除泳道。動態泳道不接受項目拖入或拖出。滾輪在泳道標題或空白處左右捲動，在卡片內文優先上下閱讀；按住 Alt 暫停轉換，左右箭頭也能捲動。
+Changes save automatically. Local workspaces store `.github-notes-screen.yaml` on disk; GitHub mode keeps a device draft until you commit. The shared commit bar lets you review and commit Screen together with selected notes. The configuration belongs to the user workspace and travels through Git; Redis is not required. Unpinning never deletes source content.
 
-「儲存配置」寫入工作區根目錄 `.github-notes-screen.yaml`。本地使用者再透過既有 Git 提交／同步流程將配置帶到其他機器；GitHub 來源則需要 main 分支寫入權限並直接提交這份檔案。Screen 不需要 Redis。此檔案屬於使用者工作區，不應放入產品 core 分支。取消釘選不會刪除原始內容。
+The wheel scrolls a lane horizontally, while scrollable note bodies retain vertical reading. Hold Alt to restore vertical page scrolling, or use the lane arrows.
 
-Markdown 連結支援相對筆記與資料夾、跨筆記本路徑、標題錨點與外部網址。圖片可點選預覽，再選「在資源庫中顯示」定位原始資源。
+## Folder organization
+
+Create folders from the notes sidebar. Drag to an insertion line to reorder siblings, or onto a folder to change hierarchy. The folder menu also provides a move-and-order dialog. Deleting a folder moves its contents to its parent by default, or another folder you choose; notes and subfolders are preserved, and filename collisions are rejected. Recognized Markdown links and Screen references follow moved content. Folder order is stored in `_dir.yml`.
+
+The Expand note view lists notes in the current folder and all descendants without grouping them into folders.

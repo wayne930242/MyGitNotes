@@ -8,6 +8,7 @@ export * from './path-guard.js';
 export * from './note-service.js';
 export * from './source-config.js';
 export * from './folders.js';
+export * from './folder-plan.js';
 export * from './github-source.js';
 export * from './note-shell.js';
 export * from './assets.js';

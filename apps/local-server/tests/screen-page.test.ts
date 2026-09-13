@@ -36,6 +36,7 @@ it('persists a cross-notebook YAML layout and rejects stale writes', async () =>
   // Configuration participates in the existing Git review interface.
   const diff = await fetch(url.replace('/screen-page', `/git/diff?path=${SCREEN_PAGE_FILE}`));
   expect(diff.status).toBe(200);
+  expect((await diff.json()).diff).toContain(`+++ ${SCREEN_PAGE_FILE}`);
 });
 it('protects Core, rejects symlink targets and reports invalid YAML without replacing it', async () => {
   execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/core'], { cwd: root });

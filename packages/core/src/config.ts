@@ -110,7 +110,7 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
       title: item.title,
       root: normalizedRoot,
       assets: assetPath,
-      default_view: (item.default_view as 'list' | 'card' | 'kanban') || 'list',
+      default_view: (item.default_view as 'list' | 'card' | 'kanban' | 'flat') || 'list',
       ...(item.statuses !== undefined ? { statuses: [...item.statuses as string[]] } : {}),
     });
   }

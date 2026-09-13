@@ -6,6 +6,7 @@ describe('workspace URLs', () => {
       expect(parseWorkspaceRoute(noteRoute('example',path),'').note).toBe(path);
     }
     expect(parseWorkspaceRoute(notebookRoute('example','projects/week'),'?view=kanban&status=inbox')).toMatchObject({ valid:true,folder:'projects/week',view:'kanban',status:'inbox' });
+    expect(parseWorkspaceRoute(notebookRoute('example','projects'),'?view=flat')).toMatchObject({ folder:'projects', view:'flat' });
   });
   it('restores pages, notebook and filters from URLs', () => {
     expect(parseWorkspaceRoute('/', '')).toMatchObject({ valid: true, tab: 'notes' });

@@ -53,19 +53,22 @@ export async function getCurrentBranch(repoRoot: string): Promise<string> {
  */
 export async function getGitStatus(repoRoot: string): Promise<GitStatusResult> {
   const branch = await getCurrentBranch(repoRoot);
-  const { stdout } = await runGit(['status', '--porcelain'], repoRoot);
+  const { stdout } = await runGit(['status', '--porcelain=v1', '-z', '--untracked-files=all'], repoRoot);
 
   const staged: string[] = [];
   const modified: string[] = [];
   const untracked: string[] = [];
 
   if (stdout.length > 0) {
-    const lines = stdout.split('\n');
-    for (const line of lines) {
+    const lines = stdout.split('\0');
+    for (let index = 0; index < lines.length; index++) {
+      const line = lines[index];
       if (!line) continue;
       const indexStatus = line[0];
       const workTreeStatus = line[1];
-      const filePath = line.slice(3).trim();
+      const filePath = line.slice(3);
+      // In NUL mode a rename/copy emits destination first, then its original path.
+      if ('RC'.includes(indexStatus) || 'RC'.includes(workTreeStatus)) index++;
 
       if (indexStatus !== ' ' && indexStatus !== '?') {
         staged.push(filePath);

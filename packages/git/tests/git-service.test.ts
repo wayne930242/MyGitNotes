@@ -65,4 +65,15 @@ describe('Guarded Git Service', () => {
     expect(commits[0].message).toBe('second commit');
     expect(commits[1].message).toBe('first commit');
   });
+
+  it('keeps exact Unicode, spaces and rename paths in status', async () => {
+    fs.mkdirSync(path.join(testRepo, '資料夾'));
+    fs.writeFileSync(path.join(testRepo, '資料夾/原始.md'), 'original');
+    await stageAndCommit(testRepo, ['資料夾/原始.md'], 'original');
+    await runGit(['mv', '資料夾/原始.md', '資料夾/已搬移.md'], testRepo);
+    fs.writeFileSync(path.join(testRepo, '資料夾/ 空白 \n.md'), 'new');
+    const status = await getGitStatus(testRepo);
+    expect(status.staged).toEqual(['資料夾/已搬移.md']);
+    expect(status.untracked).toEqual(['資料夾/ 空白 \n.md']);
+  });
 });

@@ -1,5 +1,6 @@
+import { FolderTree } from './FolderTree.js';
 import React, { useEffect, useState } from 'react';
-import { Folder, Tag, Filter, GitBranch, CheckCircle2, Eye, EyeOff, Search, X } from 'lucide-react';
+import { Tag, Filter, GitBranch, CheckCircle2, Eye, EyeOff, Search, X } from 'lucide-react';
 import { NoteItem, GitStatus, FolderItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { WorkspaceSidebar } from './WorkspaceChrome.js';
@@ -13,6 +14,9 @@ const selectedItemStyle: React.CSSProperties = {
 
 interface SidebarProps {
   folders?: FolderItem[];
+  foldersWritable?: boolean;
+  beforeFolderChange?: () => void;
+  onFoldersChanged?: () => Promise<void>;
   selectedFolder?: string | null;
   onSelectFolder?: (folder: string | null) => void;
   selectedNotebookId: string;
@@ -30,6 +34,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({
   folders = [],
+  foldersWritable = false, beforeFolderChange, onFoldersChanged,
   selectedFolder = null,
   onSelectFolder,
   selectedNotebookId,
@@ -124,49 +129,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </a>
       </div>
     }>
-        {onSelectFolder && (
-          <div>
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-2">
-              {t('folder.folders')}
-            </div>
-            <button
-              type="button"
-              className={`w-full text-left px-2.5 py-2 text-sm rounded-lg transition ${
-                selectedFolder === null
-                  ? 'font-semibold hover:opacity-90'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-              aria-pressed={selectedFolder === null}
-              onClick={() => onSelectFolder(null)}
-              style={selectedFolder === null ? selectedItemStyle : undefined}
-            >
-              {t('folder.allFolders')}
-            </button>
-            {folders
-              .filter((f) => f.notebookId === selectedNotebookId)
-              .map((folder) => (
-                <button
-                  type="button"
-                  key={folder.path}
-                  title={folder.description || folder.path}
-                  aria-pressed={selectedFolder === folder.path}
-                  onClick={() => onSelectFolder(folder.path)}
-                  className={`w-full flex items-center gap-2 py-2 pr-2 text-sm rounded-lg text-left transition ${
-                    selectedFolder === folder.path
-                      ? 'font-semibold hover:opacity-90'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                  style={{
-                    paddingLeft: 10 + (folder.path.split('/').length - 1) * 14,
-                    ...(selectedFolder === folder.path ? selectedItemStyle : {}),
-                  }}
-                >
-                  <Folder className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{folder.title}</span>
-                </button>
-              ))}
-          </div>
-        )}
+        {onSelectFolder && <FolderTree folders={folders} notebookId={selectedNotebookId} selected={selectedFolder} onSelect={onSelectFolder}
+          writable={foldersWritable} beforeChange={beforeFolderChange} onChanged={onFoldersChanged} />}
 
         {/* Status Filters */}
         <div>
