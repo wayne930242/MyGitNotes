@@ -36,6 +36,8 @@ try {
   });
   await page.goto(`http://127.0.0.1:${server.address().port}/screen`,{waitUntil:'networkidle0'});
   await page.waitForSelector('.screen-error');
+  const headerHeight = await page.$eval('.header-layout', e => e.getBoundingClientRect().height);
+  assert(headerHeight <= 56, `Desktop navigation is too tall: ${headerHeight}`);
   const lane='#screen-lane-reading', body=`${lane} .screen-card-content`, strip=`${lane} .screen-lane-strip`;
   const first=await page.$(body); const rect=await first.boundingBox();
   await page.mouse.move(rect.x+100,rect.y+100); await page.mouse.wheel({deltaY:180});
@@ -55,6 +57,14 @@ try {
     await page.click(`${lane} button[aria-label="${label}"]`);
     await page.waitForSelector(`${lane}.screen-view-${value} button[aria-label="${label}"][aria-pressed="true"]`);
   }
+  for (const [value, title] of [['title:desc','Note 5'], ['title:asc','Note 0'], ['title:desc','Note 5']]) {
+    await page.click(`${lane} .screen-sort-select`);
+    await page.waitForSelector(`[data-option-value="${value}"]`);
+    await page.click(`[data-option-value="${value}"]`);
+    await page.waitForFunction((selector, expected) => document.querySelector(`${selector} .screen-card-title`)?.textContent === expected, {}, lane, title);
+  }
+  assert(!await page.$('#screen-lane-pins .screen-sort-select'), 'Custom lane must retain manual ordering');
+  console.log('PASS independent dynamic lane sorting');
   const inset=await page.$eval(lane,e=>{const a=e.getBoundingClientRect(),b=e.querySelector('h3').getBoundingClientRect();return {x:b.x-a.x,y:b.y-a.y};});
   assert(inset.x>=12 && inset.y>=12,'Lane heading lacks top/left padding');
   assert(!await page.$('.screen-sidebar button[aria-label="Edit swimlanes"]'),'Old lane editor remains');
@@ -81,10 +91,16 @@ try {
   await page.waitForFunction(()=>!Object.keys(localStorage).some(key=>key.startsWith('github-notes:screen-draft:')));
   await page.reload({waitUntil:'networkidle0'});
   assert(await page.$eval('.screen-lane',e=>e.id==='screen-lane-reading' && e.querySelector('h3').textContent==='Renamed'),'Lane changes did not persist');
+  assert(await page.$eval(`${lane} .screen-sort-select`,e=>e.getAttribute('value')==='title:desc'), 'Sort selection did not persist');
+  assert(await page.$eval(`${lane} .screen-card-title`,e=>e.textContent==='Note 5'), 'Sorted content did not persist');
   for(const width of [320,390,1440]) {
     await page.setViewport({width,height:1000});
     const fit=await page.$eval('.screen-lane-actions',e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;});
     assert(fit,`Lane controls overflow at ${width}`);
+    const navFits = await page.$$eval('.header-nav button', buttons => buttons.every(button => {
+      const r = button.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth && r.height >= 32;
+    }));
+    assert(navFits, `Navigation buttons clipped or undersized at ${width}`);
   }
   fs.mkdirSync(path.join(product,'artifacts/qa'),{recursive:true}); await page.screenshot({path:path.join(product,'artifacts/qa/screen-lanes.png')});
   assert(!errors.length,errors.join('; '));

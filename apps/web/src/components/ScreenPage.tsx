@@ -19,6 +19,8 @@ import { ScreenAddRow, ScreenAddItem } from './ScreenDialogs.js';
 import { ScreenLaneNavigation } from './ScreenLaneNavigation.js';
 import { WorkspaceSidebar } from './WorkspaceChrome.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
+import { Select } from './Select.js';
+import type { SortConfig } from '../lib/note-sort.js';
 
 function MovableCard({ item, row, disabled, remove, ...content }: ScreenContentProps & {
   item: ScreenItem; row: ScreenRow; disabled: boolean; remove: () => void;
@@ -33,12 +35,13 @@ function MovableCard({ item, row, disabled, remove, ...content }: ScreenContentP
   </div>;
 }
 
-function Lane({ row, disabled, onView, onAdd, onRemove, ...content }: ScreenContentProps & {
+function Lane({ row, disabled, onView, onSort, onAdd, onRemove, ...content }: ScreenContentProps & {
   row: ScreenRow; disabled: boolean; onView: (view: ScreenRow['view']) => void; onAdd: () => void; onRemove: (id: string) => void;
+  onSort: (sort: SortConfig) => void;
 }) {
   const { t } = useTranslation(); const host = useRef<HTMLElement>(null), strip = useRef<HTMLDivElement>(null);
   const drop = useDroppable({ id: `lane:${row.id}`, disabled: disabled || row.kind !== 'custom', data: { rowId: row.id, empty: row.kind === 'custom' && !row.items.length } });
-  const items = screenRowItems(row, content.notes, content.assets);
+  const items = screenRowItems(row, content.notes, content.assets, content.notebooks);
   useEffect(() => {
     const element = host.current!, scroller = strip.current!;
     const wheel = (event: WheelEvent) => {
@@ -54,7 +57,16 @@ function Lane({ row, disabled, onView, onAdd, onRemove, ...content }: ScreenCont
   return <section id={`screen-lane-${row.id}`} ref={host} className={`screen-lane screen-view-${row.view} ${row.kind === 'dynamic' ? 'screen-lane-dynamic' : ''}`} aria-label={row.name}>
     <header className="screen-lane-header"><div className="screen-lane-heading"><h3>{row.name}</h3><span className="screen-count">{items.length}</span>
       {row.kind === 'dynamic' && <span className="screen-dynamic-label" title={t('screen.dynamicHint')}><Zap size={12} />{t('screen.dynamic')} · {source}</span>}</div>
-      <div className="screen-lane-actions"><div className="screen-view-tabs" role="group" aria-label={`${t('screen.view')}: ${row.name}`}>
+      <div className="screen-lane-actions">
+        {row.kind === 'dynamic' && <Select className="screen-sort-select" aria-label={`${t('sort.select')}: ${row.name}`} disabled={disabled}
+          value={`${row.sort?.field || 'title'}:${row.sort?.order || 'asc'}`}
+          onValueChange={value => { const [field, order] = value.split(':') as [SortConfig['field'], SortConfig['order']]; onSort({field, order}); }}
+          options={([
+            ['updated:desc','sort.updatedDesc'], ['updated:asc','sort.updatedAsc'],
+            ['created:desc','sort.createdDesc'], ['created:asc','sort.createdAsc'],
+            ['title:asc','sort.titleAsc'], ['title:desc','sort.titleDesc'], ['status:asc','sort.status'],
+          ] as const).map(([value,label]) => ({value,label:t(label)}))} />}
+        <div className="screen-view-tabs" role="group" aria-label={`${t('screen.view')}: ${row.name}`}>
         {([{value:'thumbnail',icon:LayoutGrid},{value:'small',icon:Columns3},{value:'medium',icon:Columns2}] as const).map(({value,icon:Icon}) => <button key={value} type="button" disabled={disabled} className="ui-icon-button" title={t(`screen.${value}`)} aria-label={t(`screen.${value}`)} aria-pressed={row.view === value} onClick={() => onView(value)}><Icon size={16} /></button>)}
       </div>
         {row.kind === 'custom' && <button type="button" className="ui-icon-button" disabled={disabled} onClick={onAdd} aria-label={`${t('screen.addItem')}: ${row.name}`}><Plus size={16} /></button>}
@@ -148,6 +160,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
           }}>
           {screen.page.rows.map(row => <Lane key={row.id} row={row} {...content} disabled={disabled} onAdd={() => setAddTo(row.id)}
             onView={view => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id ? { ...value, view } : value) })}
+            onSort={sort => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id && value.kind === 'dynamic' ? { ...value, sort } : value) })}
             onRemove={id => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.kind === 'custom' ? { ...value, items: value.items.filter(item => item.id !== id) } : value) })} />)}
           <DragOverlay>{dragging && <div className="screen-drag-overlay"><GripVertical size={16} />{screenItemTitle(dragging, notes, assets)}</div>}</DragOverlay>
         </DndContext>

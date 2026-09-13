@@ -14,7 +14,10 @@ export const ScreenItemSchema = z.discriminatedUnion('kind', [
 const row = { id, name: z.string().trim().min(1).max(100), view: z.enum(['thumbnail', 'small', 'medium']) };
 export const ScreenRowSchema = z.discriminatedUnion('kind', [
   z.object({ ...row, kind: z.literal('custom'), items: z.array(ScreenItemSchema).max(100) }).strict(),
-  z.object({ ...row, kind: z.literal('dynamic'), source: z.discriminatedUnion('kind', [
+  z.object({ ...row, kind: z.literal('dynamic'), sort: z.object({
+    field: z.enum(['updated', 'created', 'title', 'status']),
+    order: z.enum(['asc', 'desc']),
+  }).strict().optional(), source: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('tag'), tag: z.string().min(1).max(200), notebookId: z.string().min(1).max(128).optional() }).strict(),
     z.object({ kind: z.literal('folder'), notebookId: z.string().min(1).max(128), path: repoPath, recursive: z.boolean().default(true) }).strict(),
   ]) }).strict(),

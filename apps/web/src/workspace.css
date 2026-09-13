@@ -73,7 +73,8 @@
 .screen-lane-heading h3 { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 .screen-count { font-size: 10px; color: var(--color-muted); }
 .screen-dynamic-label { display: inline-flex; align-items: center; gap: 5px; color: var(--color-primary); font-size: 10px; max-width: 360px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.screen-lane-actions { flex: none; gap: 3px; }
+.screen-lane-actions { flex: none; gap: 3px; flex-wrap: wrap; max-width: 100%; }
+.screen-sort-select { width: 170px; max-width: 100%; margin-right: 6px; }
 .screen-view-tabs { display: flex; align-items: center; gap: 3px; padding: 3px; margin-right: 6px; border-radius: 8px; background: var(--workspace-selection); }
 .screen-view-tabs [aria-pressed="true"] { background: var(--color-surface); color: var(--color-primary); box-shadow: 0 1px 3px #0001; }
 .screen-lane-strip { display: flex; gap: 14px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 12px; min-height: 120px; scrollbar-width: thin; }
@@ -130,7 +131,7 @@
   --workspace-selection: color-mix(in srgb, var(--color-text) 7%, transparent);
 }
 .workspace-header { flex: none; z-index: 22; border-bottom: 1px solid var(--workspace-divider); background: var(--color-surface); }
-.workspace-header .header-layout { display: grid; grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr) auto; gap: 0; height: 68px; padding: 0 24px 0 0; }
+.workspace-header .header-layout { display: grid; grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr) auto; gap: 0; height: 56px; padding: 0 24px 0 0; }
 .workspace-header .header-brand { display: flex; gap: 10px; align-items: center; min-width: 0; padding: 0 20px; }
 .workspace-brand-icon { width: 32px; height: 32px; flex: none; border-radius: 8px; object-fit: contain; }
 .workspace-header h1 { margin: 0; font: 500 14px/1.5 var(--font-body); color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
