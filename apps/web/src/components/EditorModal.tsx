@@ -421,8 +421,8 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
 
   return (
-    <div className="note-overlay viewport-overlay fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 md:p-6 animate-fadeIn">
-      <div role="dialog" aria-modal="true" aria-label="Note editor" className="note-dialog ui-dialog shadow-2xl w-full max-w-6xl h-[90dvh] flex flex-col overflow-hidden transition-colors">
+    <div className="note-overlay viewport-overlay fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn">
+      <div role="dialog" aria-modal="true" aria-label="Note editor" className="note-dialog ui-dialog shadow-2xl w-full max-w-none h-full flex flex-col overflow-hidden transition-colors">
         <div className="editor-notices">
         {/* Crash recovery banner if draft differs from disk */}
         {recoveredDraft && !blocked && (

@@ -75,6 +75,18 @@ try {
       assert(layout.index.x + layout.index.width <= layout.actions.x, 'Toolbar index overlaps other controls');
       assert(layout.search.width >= 40, `Search field collapsed at ${width}px in ${view}: ${JSON.stringify(layout)}`);
       assert(!layout.overflow, `Horizontal overflow at ${width}px in ${view}`);
+      if (width === 1440 && view === 'flat') {
+        const spacing = await page.evaluate(() => {
+          const scroll = getComputedStyle(document.querySelector('.workspace-scroll'));
+          const firstCell = getComputedStyle(document.querySelector('.note-list td:first-child'));
+          return {
+            scroll: [scroll.paddingTop, scroll.paddingRight, scroll.paddingBottom, scroll.paddingLeft],
+            firstCellLeft: firstCell.paddingLeft,
+          };
+        });
+        assert.deepEqual(spacing.scroll, ['16px', '24px', '24px', '24px'], 'Workspace content padding is too loose');
+        assert.equal(spacing.firstCellLeft, '12px', 'List rows sit too close to the left edge');
+      }
       if (view === 'kanban') {
         assert(await page.$('[aria-label="排序"]'), 'Kanban sort label must be concise');
         assert(!await page.evaluate(() => document.body.textContent.includes('卡片排序方式')));
@@ -119,6 +131,16 @@ try {
   assert(await page.$('[aria-label="Status for Secondary README"]'), 'Unselected README must remain an ordinary note');
   assert.equal((await page.$$('[data-folder-index]')).length, 1, 'Both files must produce only one index card');
   await openIndex();
+  const editorSpacing = await page.evaluate(() => {
+    const overlay = getComputedStyle(document.querySelector('.note-overlay'));
+    const dialog = document.querySelector('.note-dialog').getBoundingClientRect();
+    return {
+      overlay: [overlay.paddingTop, overlay.paddingRight, overlay.paddingBottom, overlay.paddingLeft],
+      dialog: { top: dialog.top, right: innerWidth - dialog.right, bottom: innerHeight - dialog.bottom, left: dialog.left },
+    };
+  });
+  assert.deepEqual(editorSpacing.overlay, ['12px', '12px', '12px', '12px'], 'Editor overlay padding is too large');
+  assert.deepEqual(editorSpacing.dialog, { top: 12, right: 12, bottom: 12, left: 12 }, 'Editor dialog should use the viewport inside the compact edge padding');
   await page.waitForFunction(() => document.body.innerText.includes('根目錄介紹') || document.querySelector('textarea[aria-label="Note content"]')?.value.includes('根目錄介紹'));
   await closeIndex();
   for (const view of ['list', 'card', 'kanban', 'flat']) {
