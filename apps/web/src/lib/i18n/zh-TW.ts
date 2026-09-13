@@ -27,6 +27,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "screen.editRows": "泳道編輯",
   "screen.editRowsHint": "拖曳把手調整順序，也可重新命名。",
   "screen.rowName": "泳道名稱",
+  "screen.editRow": "編輯泳道",
   "screen.renameRow": "重新命名泳道",
   "screen.confirmRemoveRow": "確認移除",
   "screen.removeRowHint": "移除此泳道及其釘選項目？原始筆記與資源會保留。",

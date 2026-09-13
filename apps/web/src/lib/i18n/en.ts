@@ -25,6 +25,7 @@ export const en = {
   "screen.editRows": "Edit swimlanes",
   "screen.editRowsHint": "Drag handles to reorder or rename lanes.",
   "screen.rowName": "Swimlane name",
+  "screen.editRow": "Edit swimlane",
   "screen.renameRow": "Rename swimlane",
   "screen.confirmRemoveRow": "Confirm removal",
   "screen.removeRowHint": "Remove this lane and its pins? The original notes and assets will remain.",
