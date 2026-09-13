@@ -17,9 +17,15 @@
 - `git diff --check` 與 `git diff --cached --check`：通過。
 - 瀏覽器畫面：`artifacts/qa/workspace-agent-system.png`，已檢查；畫面套用同時進行的 workspace layout 變更。
 
-## 工作區與交付狀態
+## 實際提交與遷移（2026-09-13）
 
-- `trpg-notes` 的 `AGENTS.md` 仍由 Git 追蹤，保留前一輪新增的介面修改規則；本次未改動其筆記、設定或產品檔案。
-- 產品目錄同時有另一個 workspace layout 任務；其專屬檔案及共用前端檔案的版面修改皆保留。整體建置與測試包含該並行工作，並非獨立發布產物。
-- 本次尚未提交或推送 Core，也尚未對真實 `trpg-notes` 執行遷移。Core 舊指引／技能的刪除已暫存，以便 Git index 所有權檢查；其替代文件與功能修改仍待一併提交，不能只提交刪除項目。
-- 無待確認的外觀決策。正式 GitHub／Vercel 部署及真實工作區遷移不列為已完成的驗證。
+- Core 功能提交：`779572f`，已推送至 `github-notes/core`。HTTPS 因缺少 workflow scope 拒絕，改用現有 SSH Git 連線成功推送，未變更帳號憑證或遠端設定。
+- 已在獨立 checkout `/tmp/github-notes-agent-release` 驗證此提交，未帶入並行版面任務的差異：Core 所有權檢查、build、169 tests 與瀏覽器檢查全部通過。
+- `trpg-notes` 先提交既有規則為 `67af454`，再從已驗證的產品 checkout 執行 `pnpm update-core --workspace /home/weihung/trpg-notes`。
+- 真實工作區遷移提交：`9a76f69`，已推送至 `trpg-notes/main`。Core 版本 `779572f` 為此提交祖先。
+- 遷移前後，`notes/**`、工作區 manifest、`AGENTS.md`、`.agents/**` 與 `.codex/**` 共 82 個已追蹤檔案的 blob 雜湊與模式完全相同。根目錄指引與原有四個技能仍由 main 正常追蹤。
+- 真實 `trpg-notes` 上的 `pnpm build` 與 `pnpm test` 通過（32 個測試檔、169 項測試）。
+- 已實際啟動遷移後的工作區介面，確認 root 指引與四個技能列出；透過瀏覽器在 root 指引加入測試標記，確認磁碟儲存及 Git 差異，再透過 UI 還原。最終原文逐位元組相同、工作目錄乾淨且 HEAD 不變。
+- 瀏覽器實測截圖：`/tmp/trpg-agent-migrated.png`；測試期間沒有提交測試標記。
+- 另一個 workspace layout 任務的暫存與未提交內容均保留；本功能提交不含其版面差異。後續 UI 更新由該任務接手。
+- 本次完成 commit、Core 推送、真實 workspace 遷移與 main 推送；尚未把 Vercel 遠端部署結果當作驗證通過的證據。
