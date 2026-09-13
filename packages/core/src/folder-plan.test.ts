@@ -46,3 +46,18 @@ it('rejects cycles, traversal, notebook roots and protected descendants', () => 
   expect(() => planFolderChange(protectedTree, { kind: 'move', notebookId: 'a', path: 'one', parent: 'two' })).toThrow(/protected/i);
   expect(planFolderChange(protectedTree, { kind: 'move', notebookId: 'a', path: 'one', parent: '' }).folders.map(folder => folder.path)).toEqual(['two','one','one/sub']);
 });
+
+it.each(['', 'two'])('deleting a folder discards its own metadata instead of moving it to %s', destination => {
+  for (const hasDestinationMetadata of [false, true]) {
+    const before = snapshot();
+    const targetMetadata = `notes/a/${destination ? destination + '/' : ''}_dir.yml`;
+    if (hasDestinationMetadata) before.files.set(targetMetadata, 'title: Keep destination\norder: 42\ncustom: unchanged\n');
+    else before.files.delete(targetMetadata);
+    const original = before.files.get(targetMetadata);
+    const childMetadata = before.files.get('notes/a/one/sub/_dir.yml');
+    const after = planFolderChange(before, { kind: 'delete', notebookId: 'a', path: 'one', destination });
+    expect(after.files.get(targetMetadata)).toBe(original);
+    expect(after.files.has('notes/a/one/_dir.yml')).toBe(false);
+    expect(after.files.get(`notes/a/${destination ? destination + '/' : ''}sub/_dir.yml`)).toBe(childMetadata);
+  }
+});

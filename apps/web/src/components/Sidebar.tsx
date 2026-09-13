@@ -15,6 +15,8 @@ const selectedItemStyle: React.CSSProperties = {
 interface SidebarProps {
   folders?: FolderItem[];
   foldersWritable?: boolean;
+  indexFolders: string[];
+  onOpenFolderIndex: (folder: string, revision?: string) => Promise<void>;
   beforeFolderChange?: () => void;
   onFoldersChanged?: () => Promise<void>;
   selectedFolder?: string | null;
@@ -34,6 +36,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({
   folders = [],
+  indexFolders, onOpenFolderIndex,
   foldersWritable = false, beforeFolderChange, onFoldersChanged,
   selectedFolder = null,
   onSelectFolder,
@@ -130,7 +133,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
     }>
         {onSelectFolder && <FolderTree folders={folders} notebookId={selectedNotebookId} selected={selectedFolder} onSelect={onSelectFolder}
-          writable={foldersWritable} beforeChange={beforeFolderChange} onChanged={onFoldersChanged} />}
+          indexFolders={indexFolders} onOpenIndex={onOpenFolderIndex} writable={foldersWritable} beforeChange={beforeFolderChange} onChanged={onFoldersChanged} />}
 
         {/* Status Filters */}
         <div>

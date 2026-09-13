@@ -1,4 +1,9 @@
 export const en = {
+  "folder.createIndex": "Create index.md",
+  "folder.editIndex": "Edit index.md",
+  "folder.createIndexAfter": "Create and edit index.md after creating the folder",
+  "folder.indexFailed": "The folder was created, but index.md could not be opened. Retry from this menu. {error}",
+  "folder.readOnly": "This workspace is read-only.",
   "folder.create": "New folder",
   "folder.manage": "Manage folder",
   "folder.createChild": "New subfolder",
