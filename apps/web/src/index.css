@@ -441,11 +441,12 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
     max-width: calc(100% - 56px);
     transform: translateX(-100%);
     visibility: hidden;
+    pointer-events: none;
     transition: transform 180ms ease, visibility 180ms;
     box-shadow: 8px 0 24px #0002;
   }
-  .notebook-panel.is-open { transform: translateX(0); visibility: visible; }
-  .notebook-panel.is-dragging { transform: translateX(var(--sidebar-drag)); visibility: visible; transition: none; }
+  .notebook-panel.is-open { transform: translateX(0); visibility: visible; pointer-events: auto; }
+  .notebook-panel.is-dragging { transform: translateX(var(--sidebar-drag)); visibility: visible; pointer-events: auto; transition: none; }
   .notebook-panel aside { max-width: 100%; }
   .workspace-main { padding-bottom: 96px; }
   .agent-main { padding-bottom: 12px; }

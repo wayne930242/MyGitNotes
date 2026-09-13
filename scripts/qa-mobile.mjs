@@ -77,7 +77,7 @@ try {
    await fits('button[aria-label="Notebooks and filters"]');
    if(width<768) {
     const nav=await bounds('nav');assert(nav.bottom===844&&nav.height>=64,'Mobile navigation is not at the bottom');
-    const items=await page.$$eval('nav button',buttons=>buttons.map(e=>({icon:e.querySelector('svg').getBoundingClientRect().width,label:e.querySelector('span').getBoundingClientRect().height,height:e.getBoundingClientRect().height})));
+    const items=await page.$$eval('nav[aria-label="Main navigation"] button',buttons=>buttons.map(e=>({icon:e.querySelector('svg').getBoundingClientRect().width,label:e.querySelector('span').getBoundingClientRect().height,height:e.getBoundingClientRect().height})));
     assert(items.length===4&&items.every(item=>item.icon>=20&&item.label<=16&&item.height>=44),'Bottom navigation compresses icons or wraps labels');
    }
    if(width<768) {
@@ -132,7 +132,7 @@ try {
  console.log('PASS edge swipe open/close, vertical/non-edge/short/cancelled gestures and no accidental note');
  await tap('button[aria-label="Notebooks and filters"]');await page.waitForSelector('#notebook-panel.is-open');
  await page.touchscreen.tap(370,250);await page.waitForFunction(()=>!document.querySelector('#notebook-panel.is-open'));
- await tap('button[aria-label="Notebooks and filters"]');await click('Projects');
+ await tap('button[aria-label="Notebooks and filters"]');await page.waitForFunction(()=>document.querySelector('#notebook-panel').getBoundingClientRect().left>=0);await tap('#notebook-panel .folder-tree-select[title="projects"]');
  await page.waitForFunction(()=>!document.querySelector('#notebook-panel.is-open'));
  assert(page.url().includes('folder'),'Folder selection did not navigate');
  await page.goto(base+'/notes?view=card',{waitUntil:'networkidle0'});
@@ -141,19 +141,19 @@ try {
  await page.waitForSelector('.commit-footer');await fits('.commit-footer');
  assert((await bounds('.commit-footer')).bottom<=(await bounds('nav')).y,'Commit overlaps bottom navigation');
  await tap('button[aria-label="Settings"]');
- await page.waitForSelector('textarea[aria-label="Workspace manifest"]');
+ await page.waitForSelector('#settings-manifest textarea');
  await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('GitHub Dark')).click());
  await page.waitForFunction(()=>document.documentElement.classList.contains('dark'));
  await click('Notes');
  for(const view of ['list','card']) {
-  await chooseSelect(page, 'button[role="combobox"][aria-label="Note view"]',view);await page.waitForSelector('button[role="combobox"][aria-label="Status for Root Note"]');
+  await chooseSelect(page, 'button[role="combobox"][aria-label="Note view"]',view);await page.waitForFunction(expected=>{const current=new URL(location.href).searchParams.get('view');return expected==='list'?!current||current==='list':current===expected;},{},view);await page.waitForSelector('button[role="combobox"][aria-label="Status for Root Note"]');
   await tap('button[role="combobox"][aria-label="Status for Root Note"]');await page.waitForSelector('[role="listbox"]');await fits('[role="listbox"]');
   const option=await page.$eval('.select-popup',e=>({color:getComputedStyle(e).color,background:getComputedStyle(e).backgroundColor}));
   await page.keyboard.press('Escape');await page.waitForFunction(()=>!document.querySelector('[role="listbox"]'));
   const rgb=color=>color.match(/\d+/g).slice(0,3).map(Number);
   const lum=color=>rgb(color).map(v=>v/255).map(v=>v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[0.2126,0.7152,0.0722][i],0);
   const a=lum(option.color),b=lum(option.background);assert((Math.max(a,b)+0.05)/(Math.min(a,b)+0.05)>=4.5,'Low contrast dark status options');
-  const input=await page.$eval('input[aria-label="Search notes"]',e=>({caret:getComputedStyle(e).caretColor,background:getComputedStyle(e).backgroundColor}));
+  const input=await page.$eval('.header-search input',e=>({caret:getComputedStyle(e).caretColor,background:getComputedStyle(e).backgroundColor}));
   const c=lum(input.caret),d=lum(input.background);assert((Math.max(c,d)+0.05)/(Math.min(c,d)+0.05)>=4.5,'Dark input caret lacks contrast');
  }
  console.log('PASS dark List/Card select option contrast');
@@ -170,10 +170,10 @@ try {
  await page.keyboard.type('\nMobile live edit');
  await page.waitForSelector('.cm-cursor');
  assert(await page.$eval('.cm-cursor',e=>parseFloat(getComputedStyle(e).borderLeftWidth)>=2),'Dark live caret is too thin');
- assert(await page.$eval('.cm-cursor',e=>getComputedStyle(e).borderLeftColor===getComputedStyle(document.querySelector('input[aria-label="Search notes"]')).caretColor),'Dark live caret does not use readable foreground');
+ assert(await page.$eval('.cm-cursor',e=>getComputedStyle(e).borderLeftColor===getComputedStyle(document.querySelector('.header-search input')).caretColor),'Dark live caret does not use readable foreground');
  await click('Source');await page.waitForSelector('textarea[aria-label="Note content"]');
  assert(await page.$eval('textarea[aria-label="Note content"]',e=>e.value.includes('Mobile live edit')),'Mode switch lost mobile edit');
- assert(await page.$eval('textarea[aria-label="Note content"]',e=>getComputedStyle(e).caretColor===getComputedStyle(document.querySelector('input[aria-label="Search notes"]')).caretColor),'Dark source caret differs from input foreground');
+ assert(await page.$eval('textarea[aria-label="Note content"]',e=>getComputedStyle(e).caretColor===getComputedStyle(document.querySelector('.header-search input')).caretColor),'Dark source caret differs from input foreground');
  const noteFile=await page.$eval('.note-heading',e=>e.querySelector('.font-mono').textContent);
  await waitDisk(noteFile,'Mobile live edit');
  await click('Frontmatter');await page.waitForSelector('.note-metadata');
@@ -188,12 +188,12 @@ try {
  await tap('textarea[aria-label="Note content"]');await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.type('\nReduced viewport edit');
  await waitDisk(noteFile,'Reduced viewport edit');
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
- await tap('button[title="Insert image from notebook assets"]');await page.waitForSelector('[aria-label="Note assets"]');
+ await tap('button[title="Insert image from notebook assets"]');await page.waitForSelector('[aria-label="Notebook Assets"]');
  write('mobile-upload.png',fs.readFileSync(path.join(root,'notes/example/assets/pixel.png')));
- const upload=await page.$('[aria-label="Note assets"] input[type="file"]');await upload.uploadFile(path.join(root,'mobile-upload.png'));
- await page.waitForFunction(()=>document.querySelector('[aria-label="Note assets"] button[aria-pressed="true"]'));
+ const upload=await page.$('[aria-label="Notebook Assets"] input[type="file"]');await upload.uploadFile(path.join(root,'mobile-upload.png'));
+ await page.waitForFunction(()=>document.querySelector('[aria-label="Notebook Assets"] button[aria-pressed="true"]'));
  await click('View');await page.waitForSelector('[aria-label="Asset preview"]');await fits('[aria-label="Close asset preview"]');await tap('[aria-label="Close asset preview"]');
- await click('Insert');await page.waitForFunction(()=>!document.querySelector('[aria-label="Note assets"]'));
+ await click('Insert');await page.waitForFunction(()=>!document.querySelector('[aria-label="Notebook Assets"]'));
  await waitDisk(noteFile,'/raw-assets/by-hash/');
  await tap('[aria-label="Close note"]');
  await click('Agent System');await page.waitForSelector('.cm-content[aria-label="Agent document content"]');
@@ -205,10 +205,10 @@ try {
  await tap('.cm-content');await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.type('\nMobile agent edit');
  await waitDisk('notes/example/AGENTS.md','Mobile agent edit');
  await page.setViewport({width:320,height:844,isMobile:true,hasTouch:true});
- await tap('button[aria-label="Restore agent document"]');
- await fits('button[aria-label="Confirm restore agent document"]');
+ await tap('button[aria-label="Restore"]');
+ await fits('button[aria-label="Confirm Restore?"]');
  assert((await bounds('.agent-toolbar')).height<=64,'Agent restore confirmation wraps toolbar');
- await tap('button[aria-label="Confirm restore agent document"]');
+ await tap('button[aria-label="Confirm Restore?"]');
  await page.waitForFunction(()=>document.querySelector('.cm-content')?.innerText.includes('Preserve frontmatter.')&&!document.querySelector('.cm-content')?.innerText.includes('Mobile agent edit'));
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
  await page.screenshot({path:product+'/artifacts/qa/mobile-agent.png'});
@@ -226,6 +226,7 @@ try {
   if(url.pathname==='/api/notes') {if(request.method()==='POST'){saved=JSON.parse(request.postData());Object.assign(remoteNote,saved,{revision:'two'});body={note:remoteNote,commit:{commitHash:'two'}};}else body={notes:[remoteNote]};}
   if(url.pathname==='/api/notes/commit'){const payload=JSON.parse(request.postData());saved={...payload.notes[0],revision:payload.revision};Object.assign(remoteNote,saved,{revision:'two'});body={revision:'two',commit:{commitHash:'two'}};}
   if(url.pathname==='/api/notes/read')body={note:remoteNote};
+  if(url.pathname==='/api/notes/read-batch')body={notes:[remoteNote]};
   if(url.pathname==='/api/folders')body={folders:[]};if(url.pathname==='/api/assets')body={assets:[]};
   if(url.pathname==='/api/auth/session')body={authenticated:true,login:'mobile-owner',configured:true};
   if(url.pathname==='/api/auth/agent-tokens')body={grants:[]};
@@ -238,12 +239,13 @@ try {
  await fits('[aria-label="Close note"]');await fits('button[title="Insert image from notebook assets"]');
  await page.waitForFunction(()=>document.body.innerText.includes('Saved locally'));
  assert(!saved,'Editing committed before explicit Commit');
- await tap('[aria-label="Close note"]');await click('Commit');await page.waitForSelector('[aria-label="Commit changes"]');
- await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit changes"]'));
+ await tap('[aria-label="Close note"]');await click('Commit');await page.waitForSelector('[aria-label="Commit Changes"]');
+ await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
  assert(saved?.content.includes('Mobile remote save')&&saved.revision==='one','Remote save lost content or revision');
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});await page.waitForFunction(()=>document.querySelector('nav').getBoundingClientRect().bottom===844);await tap('button[aria-label="Settings"]');
  await page.waitForSelector('input[aria-label="MCP client name"]');assert(!await page.$eval('input[aria-label="MCP client name"]',e=>e.disabled),'Authenticated access disabled');
  assert(!await page.evaluate(()=>[...document.querySelectorAll('button')].some(e=>e.textContent==='Agent access')),'Remote shortcut remains');
+ await tap('summary[aria-label="mobile-owner"]');
  assert(await page.evaluate(()=>document.body.innerText.includes('mobile-owner')&&document.body.innerText.includes('Sign out')),'Account controls removed');
  assert(errors.length===0,errors.join('; '));console.log('PASS mobile GitHub revision-aware save, account controls and Settings-only access; no runtime errors');
 } catch(error) {console.log(await page.evaluate(()=>({url:location.href,text:document.body.innerText.slice(-2000)})));throw error;} finally {await browser.close();await new Promise(r=>server.close(r));fs.rmSync(root,{recursive:true,force:true});}

@@ -1,5 +1,5 @@
 import { Select } from './Select.js';
-import React, { forwardRef, useImperativeHandle, useRef } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Code2, Eye } from 'lucide-react';
 import type { LiveMarkdownHandle } from './LiveMarkdownEditor.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -49,8 +49,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   const live = useRef<LiveMarkdownHandle>(null);
   const source = useRef<HTMLTextAreaElement>(null);
   const sourceLineNumbers = useRef<HTMLDivElement>(null);
+  const [activeSourceLine, setActiveSourceLine] = useState(1);
   const isMarkdown = /\.(md|markdown)$/i.test(path);
   const sourceLineCount = content.split('\n').length;
+
+  useEffect(() => setActiveSourceLine(1), [path, mode]);
+  const updateActiveSourceLine = (target: HTMLTextAreaElement) => {
+    setActiveSourceLine(target.value.slice(0, target.selectionStart).split('\n').length);
+  };
 
   useImperativeHandle(ref, () => ({
     insert(text) {
@@ -82,7 +88,19 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
               className="w-12 shrink-0 overflow-hidden border-r border-slate-200/70 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900 text-slate-400/70 dark:text-slate-500/70"
             >
               <div ref={sourceLineNumbers} className="py-4 pr-3 text-right font-mono text-xs tabular-nums" style={{ lineHeight: '1.421875rem' }}>
-                {Array.from({ length: sourceLineCount }, (_, index) => <div key={index} data-line-number>{index + 1}</div>)}
+                {Array.from({ length: sourceLineCount }, (_, index) => {
+                  const line = index + 1;
+                  return (
+                    <div
+                      key={index}
+                      data-line-number
+                      data-active-line={line === activeSourceLine ? 'true' : undefined}
+                      className={`origin-right transition-[color,opacity,transform,font-weight] duration-150 ${line === activeSourceLine ? 'scale-[1.08] font-semibold text-slate-600 dark:text-slate-300' : ''}`}
+                    >
+                      {line}
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <textarea
@@ -90,7 +108,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
               readOnly={readOnly}
               aria-label={ariaLabel}
               value={content}
-              onChange={event => onChange(event.target.value)}
+              onChange={event => { updateActiveSourceLine(event.currentTarget); onChange(event.target.value); }}
+              onFocus={event => updateActiveSourceLine(event.currentTarget)}
+              onSelect={event => updateActiveSourceLine(event.currentTarget)}
               onScroll={event => {
                 if (sourceLineNumbers.current) sourceLineNumbers.current.style.transform = `translateY(-${event.currentTarget.scrollTop}px)`;
               }}

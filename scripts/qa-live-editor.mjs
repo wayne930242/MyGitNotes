@@ -34,6 +34,9 @@ try {
  if(!liveLines.includes('1'))throw Error('Live preview line numbers do not include line 1');
  const liveLineStyle=await page.evaluate(()=>{const gutter=getComputedStyle(document.querySelector('[data-live-markdown] .cm-lineNumbers'));const content=getComputedStyle(document.querySelector('[data-live-markdown] .cm-content'));return {opacity:Number(gutter.opacity),gutterFont:parseFloat(gutter.fontSize),contentFont:parseFloat(content.fontSize)};});
  if(liveLineStyle.opacity>=0.8||liveLineStyle.gutterFont>=liveLineStyle.contentFont)throw Error('Live preview line numbers are not visually subdued');
+ await page.focus('.cm-content');await page.keyboard.down('Control');await page.keyboard.press('Home');await page.keyboard.up('Control');
+ const liveActiveLine=await page.$eval('[data-live-markdown] .cm-activeLineGutter',node=>{const style=getComputedStyle(node);return {text:node.textContent.trim(),weight:Number(style.fontWeight),transform:style.transform};});
+ if(liveActiveLine.text!=='1'||liveActiveLine.weight<600||liveActiveLine.transform==='none')throw Error('Live preview active line number is not emphasized');
  await page.waitForSelector('.live-md-heading');await page.waitForSelector('.live-md-rendered table');await page.waitForSelector('.live-md-rendered img');
  if(await page.$eval('.cm-content',e=>e.innerText.includes('**bold**')))throw Error('Inactive bold markers visible');
  await page.click('input[aria-label="Toggle task"]');await click('Source');
@@ -43,6 +46,10 @@ try {
  if(sourceLines.length!==sourceLineCount||sourceLines[0]!=='1'||sourceLines.at(-1)!==String(sourceLineCount))throw Error('Source line numbers do not match the document');
  const sourceLineStyle=await page.evaluate(()=>{const gutter=getComputedStyle(document.querySelector('[data-source-line-numbers] > div'));const source=getComputedStyle(document.querySelector('textarea[aria-label="Note content"]'));return {gutterFont:parseFloat(gutter.fontSize),sourceFont:parseFloat(source.fontSize),gutterLineHeight:gutter.lineHeight,sourceLineHeight:source.lineHeight};});
  if(sourceLineStyle.gutterFont>=sourceLineStyle.sourceFont||sourceLineStyle.gutterLineHeight!==sourceLineStyle.sourceLineHeight)throw Error('Source line numbers are not subdued and aligned');
+ await page.focus('textarea[aria-label="Note content"]');await page.keyboard.down('Control');await page.keyboard.press('Home');await page.keyboard.up('Control');await page.keyboard.press('ArrowDown');await page.keyboard.press('ArrowDown');
+ await page.waitForFunction(()=>{const node=document.querySelector('[data-line-number][data-active-line="true"]');const style=node&&getComputedStyle(node);return node?.textContent.trim()==='3'&&Number(style?.fontWeight)>=600&&style?.transform!=='none'&&style?.transform!=='matrix(1, 0, 0, 1, 0, 0)';});
+ const sourceActiveLine=await page.evaluate(()=>{const node=document.querySelector('[data-line-number][data-active-line="true"]');const style=node&&getComputedStyle(node);return {text:node?.textContent.trim(),weight:Number(style?.fontWeight),transform:style?.transform};});
+ if(sourceActiveLine.text!=='3'||sourceActiveLine.weight<600||sourceActiveLine.transform==='none')throw Error(`Source active line number is not emphasized: ${JSON.stringify(sourceActiveLine)}`);
  fs.mkdirSync(path.join(product,'artifacts/qa'),{recursive:true});
  await page.screenshot({path:product+'/artifacts/qa/source-line-numbers.png',fullPage:true});
  const sourceScroll=await page.evaluate(async()=>{const source=document.querySelector('textarea[aria-label="Note content"]');const frame=source.parentElement;frame.style.flex='none';frame.style.height='100px';source.scrollTop=120;source.dispatchEvent(new Event('scroll',{bubbles:true}));await new Promise(resolve=>requestAnimationFrame(resolve));return {scrollTop:source.scrollTop,transform:document.querySelector('[data-source-line-numbers] > div').style.transform};});
@@ -57,7 +64,7 @@ try {
  await click('Source');if(await page.$eval('textarea[aria-label="Note content"]',e=>e.value.includes('繁體中文 live edit')))throw Error('Undo failed');
  await click('Live Preview');await page.focus('.cm-content');await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.type('繁體中文 live edit');
  await page.click('button[title="Insert image from notebook assets"]');await page.waitForSelector('button[aria-label="Select pixel.png"]');await page.click('button[aria-label="Select pixel.png"]');await click('Insert');
- await page.waitForFunction(()=>!document.querySelector('[aria-label="Note assets"]'));
+ await page.waitForFunction(()=>!document.querySelector('[aria-label="Notebook Assets"]'));
  await click('Source');const text=await page.$eval('textarea[aria-label="Note content"]',e=>e.value);
  if(!text.includes('繁體中文 live edit')||!text.includes('/raw-assets/by-hash/'))throw Error('Live insertion lost content');
  await click('Live Preview');await page.waitForSelector('.live-md-rendered img');

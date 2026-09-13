@@ -53,9 +53,10 @@ const equal=(actual,expected,message)=>assert(JSON.stringify(actual)===JSON.stri
 const waitDisk=async(file,text)=>{for(let i=0;i<100;i++){if(fs.existsSync(path.join(root,file))&&fs.readFileSync(path.join(root,file),'utf8').includes(text))return;await new Promise(r=>setTimeout(r,50));}throw Error(`Missing saved text: ${text}`);};
 const manifest='schema_version: 1\nworkspace:\n  title: Status QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: research\n    title: Research\n    root: notes/research\n    statuses: [capture, published]\n';
 const replace=async(selector,text)=>{await page.focus(selector);await page.keyboard.down('Control');await page.keyboard.press('KeyA');await page.keyboard.up('Control');await page.keyboard.type(text);};
+const showFrontmatter=async()=>{if(!await page.$('[aria-label="Status"]'))await page.click('[aria-label="Frontmatter"]');await page.waitForSelector('[aria-label="Status"]');};
 try {
  await page.goto(base+'/settings',{waitUntil:'networkidle0'});
- await replace('textarea[aria-label="Workspace manifest"]',manifest);
+ await replace('#settings-manifest textarea',manifest);
  await click('Save & Commit');
  await page.waitForFunction(()=>document.body.innerText.includes('Workspace configuration saved and committed.'));
  assert(fs.readFileSync(path.join(root,'notes/.github-notes.yaml'),'utf8').includes('published'),'Settings dropped statuses');
@@ -63,7 +64,9 @@ try {
  console.log('PASS notebook definitions persist through Settings validation, commit and reload');
  await page.goto(base+'/notebooks/example',{waitUntil:'networkidle0'});
  equal(await options(selector('Root Note')),['','inbox','working','done','archived','doing'],'Fallback and legacy options');
+ await page.goto(base+'/notebooks/example/folders/projects/deep',{waitUntil:'networkidle0'});
  equal(await page.$eval(selector('Nested Note'),e=>e.value),'','Unassigned note incorrectly shows inbox');
+ await page.goto(base+'/notebooks/example',{waitUntil:'networkidle0'});
  await chooseSelect(page,selector('Root Note'),'working');await waitDisk('notes/example/root.md','status: working');
  assert(fs.readFileSync(path.join(root,'notes/example/root.md'),'utf8').includes('custom: keep'),'Inline status dropped custom metadata');
  assert(!await page.$('[aria-label="Close note"]'),'Status selector opened note');
@@ -85,9 +88,9 @@ try {
  await page.click('[aria-label="Show hidden notes"]');await page.waitForSelector(selector('Archived Note'));
  await page.goto(base+'/notebooks/example/notes/archived.md',{waitUntil:'networkidle0'});
  await page.waitForSelector('[aria-label="Close note"]');
- await page.click('[aria-label="Frontmatter"]');
+ await showFrontmatter();
  assert(await page.$eval('[aria-label="Hide note"]',e=>e.checked),'Legacy archive not marked hidden');
- await chooseSelect(page,'[aria-label="Note status"]','working');await waitDisk('notes/example/archived.md','hiden: false');
+ await chooseSelect(page,'[aria-label="Status"]','working');await waitDisk('notes/example/archived.md','hiden: false');
  await page.click('[aria-label="Close note"]');await page.waitForSelector(selector('Archived Note'));
  await chooseSelect(page,selector('Root Note'),'archived');await waitDisk('notes/example/root.md','hiden: true');
  await page.waitForFunction(()=>!document.querySelector('button[aria-label="Status for Root Note"]'));
@@ -99,7 +102,7 @@ try {
  await page.click('[aria-label="Show hidden notes"]');await page.waitForFunction(()=>!document.querySelector('button[aria-label="Status for Hidden Note"]'));
  assert(await page.$(selector('Root Note')),'Unarchived note stayed hidden');
  await page.goto(base+'/notebooks/example/notes/hidden.md',{waitUntil:'networkidle0'});
- await page.click('[aria-label="Frontmatter"]');await page.click('[aria-label="Hide note"]');await waitDisk('notes/example/hidden.md','hiden: false');
+ await showFrontmatter();await page.click('[aria-label="Hide note"]');await waitDisk('notes/example/hidden.md','hiden: false');
  await page.click('[aria-label="Close note"]');await page.waitForSelector(selector('Hidden Note'));
  console.log('PASS archived visibility in all views, explicit booleans, direct links, Sidebar/reload, archive/unarchive and manual hiding');
 
@@ -115,17 +118,17 @@ try {
  console.log('PASS per-notebook isolation, unknown filters, exact values and stable Kanban columns');
 
  await page.goto(base+'/notebooks/research',{waitUntil:'networkidle0'});
- await click('New Note');equal(await page.$eval('[aria-label="Initial status"]',e=>e.value),'capture','Custom initial status');
+ await click('New Note');equal(await page.$eval('[aria-label="Initial Status"]',e=>e.value),'capture','Custom initial status');
  await page.type('input[aria-describedby="create-note-error"]','Created Research');await click('Create Note');
  await page.waitForSelector('[aria-label="Close note"]');await waitDisk('notes/research/created-research.md','status: capture');
- await page.click('button[aria-label="Frontmatter"]');
- equal(await options('[aria-label="Note status"]'),['','capture','published','Review','review'],'Editor options');
+ await showFrontmatter();
+ equal(await options('[aria-label="Status"]'),['','capture','published','Review','review'],'Editor options');
  assert(await page.$('[aria-label="Close note"]'),'Popup Escape closed editor');
- await chooseSelect(page,'[aria-label="Note status"]','review');await waitDisk('notes/research/created-research.md','status: review');
+ await chooseSelect(page,'[aria-label="Status"]','review');await waitDisk('notes/research/created-research.md','status: review');
  await page.click('[aria-label="Close note"]');
  await page.goto(base+'/notebooks/research?view=kanban',{waitUntil:'networkidle0'});
  await page.click('[data-status-column="published"] button[title="Add note to published"]');
- equal(await page.$eval('[aria-label="Initial status"]',e=>e.value),'published','Kanban creation status');
+ equal(await page.$eval('[aria-label="Initial Status"]',e=>e.value),'published','Kanban creation status');
  await click('Cancel');
  console.log('PASS custom first-status creation, column creation and metadata save');
 
@@ -134,7 +137,7 @@ try {
 
  // A removed definition is still offered when a note uses it; config has no inferred writes.
  await page.goto(base+'/settings',{waitUntil:'networkidle0'});
- await replace('textarea[aria-label="Workspace manifest"]',manifest.replace('[capture, published]','[capture]'));
+ await replace('#settings-manifest textarea',manifest.replace('[capture, published]','[capture]'));
  await click('Save & Commit');await page.waitForFunction(()=>document.body.innerText.includes('Workspace configuration saved and committed.'));
  const configBefore=fs.readFileSync(path.join(root,'notes/.github-notes.yaml'),'utf8');
  await page.setViewport({width:320,height:700,isMobile:true,hasTouch:true});
@@ -163,6 +166,7 @@ try {
    else body={notes:[remoteNote]};
   }
   if(url.pathname==='/api/notes/read')body={note:remoteNote};
+  if(url.pathname==='/api/notes/read-batch')body={notes:[remoteNote]};
   if(url.pathname==='/api/auth/session')body={authenticated:true,user:{login:'fixture'}};
   if(url.pathname==='/api/folders')body={folders:[]};
   if(url.pathname==='/api/assets')body={assets:[]};
@@ -174,7 +178,7 @@ try {
  await chooseSelect(page,selector('Remote Note'),'published');
  await page.waitForFunction(()=>document.querySelector('button[aria-label="Status for Remote Note"]').value==='published');
  assert(!saved,'Inline status committed immediately');
- await click('Commit');await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit changes"]'));
+ await click('Commit');await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
  assert(saved.revision==='one'&&saved.metadata.custom==='remote'&&saved.metadata.status==='published','Hosted save lost revision or metadata');
  fs.mkdirSync(`${product}/artifacts/qa`,{recursive:true});await page.screenshot({path:`${product}/artifacts/qa/mobile-note-statuses.png`,fullPage:true});
  await chooseSelect(page,selector('Remote Note'),'archived');
@@ -185,7 +189,7 @@ try {
  await page.waitForFunction(()=>document.querySelector('#notebook-panel').getBoundingClientRect().right<=1);
  await chooseSelect(page,selector('Remote Note'),'capture');
  await page.waitForFunction(()=>document.querySelector('button[aria-label="Status for Remote Note"]').value==='capture');
- await click('Commit');await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit changes"]'));
+ await click('Commit');await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
  assert(saved.metadata.hiden===false&&saved.revision==='two','Hosted unarchive did not persist visibility on Commit');
  console.log('PASS hosted mobile choices, Sidebar visibility, archive/unarchive and revision-aware status save');
  assert(!errors.length,errors.join('; '));console.log('PASS no browser runtime errors');
