@@ -135,8 +135,7 @@ export const en = {
   // Folders & Breadcrumbs
   'folder.allFolders': 'All folders',
   'folder.folders': 'Folders',
-  'folder.index': 'Folder introduction',
-  'folder.openIndex': 'Open index note',
+  'folder.index': 'Index',
   'folder.up': 'Up',
   'folder.goUpTooltip': 'Go up one folder',
   'folder.noteCount': '{count} note',

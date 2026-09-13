@@ -37,30 +37,39 @@ const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_E
 const page = await browser.newPage();
 const errors = []; page.on('pageerror', error => errors.push(error.message));
 const visit = route => page.goto(base + route, { waitUntil: 'networkidle0' });
-const content = () => page.$eval('[data-folder-index]', element => element.textContent);
+const openIndex = async (relativePath = 'index.md') => {
+  await page.click('button[data-folder-index]');
+  await page.waitForSelector('[aria-label="Close note"]');
+  assert(page.url().endsWith(`/notes/${relativePath}`), 'Index must use the regular note route');
+};
+const closeIndex = () => page.click('[aria-label="Close note"]');
 try {
   await page.setViewport({ width: 1440, height: 1000 });
   await visit('/notebooks/example');
-  assert(await page.$('[data-folder-index]'), 'Root index.md must render above the folder listing');
-  assert((await content()).includes('根目錄介紹'));
-  assert(await page.$('[data-folder-index] strong'), 'Markdown should render');
-  assert(!await page.$('[data-folder-index] script, [data-folder-index] [onerror]'), 'Unsafe HTML survived');
-  assert(!await page.evaluate(() => window.indexUnsafe), 'Unsafe HTML executed');
+  assert(await page.$('.folder-links > button[data-folder-index]:first-child'), 'Index must be the first folder card');
+  assert.equal(await page.$eval('[data-folder-index]', element => element.textContent.trim()), 'Index');
+  assert.equal(await page.$eval('[data-folder-index]', element => getComputedStyle(element).backgroundColor), 'rgb(255, 255, 255)');
+  assert(await page.$('[data-folder-index] .lucide-file-text'), 'Index needs a note icon');
+  assert(!await page.$('.folder-index-content, .folder-index-header'), 'Inline introduction must be removed');
+  const bounds = await page.$$eval('.folder-links > button', elements => elements.slice(0, 2).map(element => { const box = element.getBoundingClientRect(); return { x: box.x, y: box.y, w: box.width, h: box.height }; }));
+  assert.equal(bounds[0].y, bounds[1].y, 'Index must sit alongside folders');
+  assert.equal(bounds[0].w, bounds[1].w); assert.equal(bounds[0].h, bounds[1].h);
+  assert(!await page.$('.workspace-page-heading'), 'Page title and subtitle must be removed');
+  assert(await page.$eval('.workspace-page-header', element => element.getBoundingClientRect().height <= 64), 'Toolbar is too tall');
   assert(await page.$('.note-list'), 'Ordinary note listing should remain');
-  await page.click('[data-folder-index] a[data-workspace-link="regular.md"]');
-  await page.waitForSelector('[aria-label="Close note"]');
-  assert(page.url().includes('/notes/regular.md'));
-  await page.click('[aria-label="Close note"]');
-  await page.click('[data-folder-index] a[data-workspace-link="projects/"]');
-  await page.waitForFunction(() => document.querySelector('[data-folder-index]')?.textContent.includes('專案介紹'));
-  await page.click('[data-folder-index] a[data-workspace-link^="#"]');
-  assert(!await page.$('.workspace-link-error'), 'Same-document anchor failed');
-  await page.click('[data-folder-index] a[data-workspace-link="deep/index.md"]');
-  await page.waitForSelector('[aria-label="Close note"]');
-  assert(page.url().includes('/notes/projects/deep/index.md'));
+  assert(!await page.$('[aria-label="Status for Notebook introduction"]'), 'Index must not also appear in the note list');
+  await openIndex();
+  await page.waitForFunction(() => document.body.innerText.includes('根目錄介紹') || document.querySelector('textarea[aria-label="Note content"]')?.value.includes('根目錄介紹'));
+  await closeIndex();
   for (const view of ['list', 'card', 'kanban']) {
     await visit(`/notebooks/example/folders/projects/deep?view=${view}`);
-    assert((await content()).includes('深層介紹'), `Nested index missing in ${view}`);
+    assert(await page.$('.folder-links > button[data-folder-index]:first-child'), `Nested index missing in ${view}`);
+    assert(!await page.$('[data-notepath$="/index.md"], [aria-label="Status for 深層介紹"]'), `Index duplicated in ${view}`);
+    assert(!await page.evaluate(() => document.body.innerText.includes('No notes yet')), 'An index-only folder must not appear empty');
+    await page.click('button[data-folder-index]');
+    await page.waitForSelector('[aria-label="Close note"]');
+    assert(new URL(page.url()).pathname.endsWith('/notes/projects/deep/index.md'));
+    await closeIndex();
   }
   for (const query of ['view=flat', 'q=Regular', 'status=inbox', 'tag=missing']) {
     await visit(`/notebooks/example?${query}`);
@@ -69,25 +78,39 @@ try {
   await visit('/notebooks/example/folders/empty');
   assert(!await page.$('[data-folder-index]'), 'Parent index must not leak into a folder with no index');
   await visit('/notebooks/other');
-  assert((await content()).includes('其他筆記本'), 'Notebook selection must isolate indexes');
+  await openIndex();
+  assert(page.url().includes('/notebooks/other/notes/index.md'), 'Notebook selection must isolate indexes');
+  await closeIndex();
   await visit('/notebooks/example/folders/hidden');
   assert(!await page.$('[data-folder-index]'), 'Hidden index was exposed');
   await visit('/notebooks/example/folders/hidden?showHidden=true');
-  assert((await content()).includes('隱藏介紹'));
+  assert(await page.$('button[data-folder-index]'));
   await visit('/notebooks/example/folders/blank');
-  assert(await page.$('[data-folder-index] button'), 'Empty index must still be openable');
+  assert(await page.$('button[data-folder-index]'), 'Empty index must still be openable');
   await visit('/notebooks/example');
-  await page.click('[data-folder-index] button');
-  await page.waitForSelector('[aria-label="Close note"]');
-  assert(page.url().includes('/notes/index.md'), 'Open action must use the regular editor');
-  await page.click('[aria-label="Close note"]');
+  await page.focus('button[data-folder-index]'); await page.keyboard.press('Enter');
+  await page.waitForSelector('[aria-label="Close note"]'); await closeIndex();
   fs.mkdirSync(`${product}/artifacts/qa`, { recursive: true });
   await page.screenshot({ path: `${product}/artifacts/qa/folder-index-desktop.png`, fullPage: true });
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
   await visit('/notebooks/example');
-  assert((await content()).includes('根目錄介紹'));
+  assert(await page.$('.folder-links > button[data-folder-index]:first-child'));
+  assert(await page.$eval('.workspace-page-header', element => element.getBoundingClientRect().height <= 64), 'Mobile toolbar is too tall');
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile horizontal overflow');
   await page.screenshot({ path: `${product}/artifacts/qa/folder-index-mobile.png`, fullPage: true });
+  for (const width of [1440, 390]) {
+    await page.setViewport({ width, height: 900 });
+    for (const route of ['/assets?notebook=example', '/agent?notebook=example', '/settings', '/screen?notebook=example']) {
+      await visit(route);
+      assert(!await page.$('.workspace-page-heading'), `Page heading remains on ${route}`);
+      assert(!await page.$('.workspace-page-header'), `Empty title space remains on ${route}`);
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow on ${route}`);
+    }
+  }
+  await page.evaluate(() => localStorage.setItem('github-notes:language', 'zh-TW'));
+  await visit('/notebooks/example');
+  assert.equal(await page.$eval('[data-folder-index]', element => element.textContent.trim()), '索引');
+  await page.evaluate(() => localStorage.setItem('github-notes:language', 'en'));
   assert.equal(git('status', '--porcelain').toString(), '', 'Viewing indexes must not modify notes');
 
   // Exercise the same view against hosted data, including unsent working copies.
@@ -109,27 +132,27 @@ try {
     else void request.continue();
   });
   await visit('/notebooks/example');
-  assert((await content()).includes('Hosted introduction'));
-  await page.click('[data-folder-index] button');
-  await page.waitForSelector('[aria-label="Close note"]');
+  await openIndex();
   await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Source').click());
   await page.focus('textarea[aria-label="Note content"]');
   await page.keyboard.down('Control'); await page.keyboard.press('KeyA'); await page.keyboard.up('Control');
   await page.keyboard.type('# Updated introduction\n\nWorking copy content\n');
   await page.waitForFunction(() => document.body.innerText.includes('Saved locally'));
-  await page.click('[aria-label="Close note"]');
-  await page.waitForFunction(() => document.querySelector('[data-folder-index]')?.textContent.includes('Working copy content'));
+  await closeIndex();
   await page.reload({ waitUntil: 'networkidle0' });
-  assert((await content()).includes('Working copy content'), 'Reload lost the index working copy');
+  await openIndex();
+  await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Source').click());
+  await page.waitForSelector('textarea[aria-label="Note content"]');
+  assert(await page.$eval('textarea[aria-label="Note content"]', element => element.value.includes('Working copy content')), 'Reload lost the index working copy');
+  await closeIndex();
   assert.equal(writes, 0, 'Index editing must retain the existing explicit commit workflow');
   writable = false;
   await page.reload({ waitUntil: 'networkidle0' });
-  assert((await content()).includes('Hosted introduction'), 'Read-only view must use source data');
-  await page.click('[data-folder-index] button');
-  await page.waitForSelector('[aria-label="Close note"]');
+  await openIndex();
+  assert(!await page.evaluate(() => document.body.innerText.includes('Working copy content')), 'Read-only view must use source data');
   assert.equal(writes, 0, 'Read-only index viewing attempted a write');
   assert.deepEqual(errors, []);
-  console.log('PASS root/nested/missing/blank indexes, notebook isolation, views, filters, hidden notes, Markdown safety, links, editor, mobile, unchanged files, hosted working copies and read-only viewing');
+  console.log('PASS first white Index card, root/nested/missing/blank indexes, notebook isolation, all page headings removed, compact toolbar, views, filters, hidden notes, keyboard, mobile, locales, unchanged files, hosted working copies and read-only viewing');
 } finally {
   await browser.close(); await new Promise(resolve => server.close(resolve));
   fs.rmSync(root, { recursive: true, force: true });

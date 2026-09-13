@@ -40,7 +40,7 @@ import { AuthControls, ConnectionState, AgentAccessSettings } from './components
 import { inFolder } from './lib/note-paths.js';
 import { Header } from './components/Header.js';
 import { NoteToolbar } from './components/NoteToolbar.js';
-import { PageHeader } from './components/WorkspaceChrome.js';
+import { PageToolbar } from './components/WorkspaceChrome.js';
 import { useVisualViewport } from './lib/use-visual-viewport.js';
 import { useSidebarSwipe } from './lib/use-sidebar-swipe.js';
 import { Sidebar } from './components/Sidebar.js';
@@ -55,6 +55,7 @@ import { CommitModal } from './components/CommitModal.js';
 import { FloatingCommitFooter } from './components/FloatingCommitFooter.js';
 import { Breadcrumbs } from './components/Breadcrumbs.js';
 import { FolderIndex } from './components/FolderIndex.js';
+import { FolderLinks } from './components/FolderLinks.js';
 import {
   getImmediateSubfolders,
   getImmediateNotes,
@@ -367,14 +368,16 @@ const AppContent: React.FC = () => {
     return visibleNotes.find(note => note.notebookId === notebook.id && note.path === indexPath);
   }, [visibleNotes, config, selectedNotebookId, selectedFolder, viewMode, searchQuery, selectedStatus, selectedTag]);
 
+  const notesBelowFolders = useMemo(() => filteredNotes.filter(note => note.path !== folderIndex?.path), [filteredNotes, folderIndex]);
+
   // Direct notes in current folder (or flat list during search/filter), sorted
   const displayedNotes = useMemo(() => {
     const root = config?.notebooks.find((nb) => nb.id === selectedNotebookId)?.root || '';
     const base = viewMode === 'flat' || searchQuery.trim() || selectedStatus || selectedTag
-      ? filteredNotes
-      : getImmediateNotes(filteredNotes, root, selectedFolder);
+      ? notesBelowFolders
+      : getImmediateNotes(notesBelowFolders, root, selectedFolder);
     return sortNotes(base, sortField, sortOrder, notebookStatuses);
-  }, [filteredNotes, config, selectedNotebookId, selectedFolder, searchQuery, selectedStatus, selectedTag, sortField, sortOrder, notebookStatuses, viewMode]);
+  }, [notesBelowFolders, config, selectedNotebookId, selectedFolder, searchQuery, selectedStatus, selectedTag, sortField, sortOrder, notebookStatuses, viewMode]);
 
   // Breadcrumb Trail from Root to current folder
   const breadcrumbs = useMemo(() => {
@@ -764,12 +767,12 @@ const AppContent: React.FC = () => {
 
             {/* Main Content Area */}
             <main className="workspace-main notes-main">
-              <PageHeader title={t('nav.notes')} description={config?.notebooks.find(nb => nb.id === selectedNotebookId)?.title}>
+              <PageToolbar>
                 <NoteToolbar readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode}
                   searchQuery={searchQuery} setSearchQuery={setSearchQuery}
                   onOpenNewNoteModal={() => openNewNote()} filtersOpen={filtersOpen}
                   onToggleFilters={() => setFiltersOpen(open => !open)} />
-              </PageHeader>
+              </PageToolbar>
               <div className="workspace-scroll">
               {actionError && <p role="alert" className="mb-3 text-sm text-rose-600">{actionError}</p>}
               <Breadcrumbs
@@ -782,19 +785,20 @@ const AppContent: React.FC = () => {
                 sortOrder={sortOrder}
                 onSortChange={viewMode !== 'kanban' ? handleSortChange : undefined}
               />
-              {folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
+              <FolderLinks folders={immediateSubfolders} onSelect={setSelectedFolder}>
+                {folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
+              </FolderLinks>
               {(viewMode === 'list' || viewMode === 'flat') && (
                 <ListView
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
                   canDelete={!remote && canWrite}
                   notes={displayedNotes}
-                  subfolders={immediateSubfolders}
+                  hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
                   onOpenNote={handleOpenNote}
                   onDeleteNote={handleDeleteNote}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
                   onNewNote={() => openNewNote()}
-                  onSelectFolder={setSelectedFolder}
                   sortField={sortField}
                   sortOrder={sortOrder}
                   onSortChange={handleSortChange}
@@ -806,12 +810,11 @@ const AppContent: React.FC = () => {
                   readOnly={!canWrite}
                   canDelete={!remote && canWrite}
                   notes={displayedNotes}
-                  subfolders={immediateSubfolders}
+                  hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
                   onOpenNote={handleOpenNote}
                   onDeleteNote={handleDeleteNote}
                   onNewNote={() => openNewNote()}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
-                  onSelectFolder={setSelectedFolder}
                 />
               )}
               {viewMode === 'kanban' && (
@@ -819,7 +822,7 @@ const AppContent: React.FC = () => {
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
                   canDelete={!remote && canWrite}
-                  notes={filteredNotes}
+                  notes={notesBelowFolders}
                   onOpenNote={handleOpenNote}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
                   onDeleteNote={handleDeleteNote}
@@ -854,7 +857,6 @@ const AppContent: React.FC = () => {
           <main className="workspace-route assets-main">
             <AssetBrowser
               assets={assets}
-              notebooks={config?.notebooks || []}
               selectedNotebookId={selectedNotebookId}
               onBusyChange={setResourceNavigationBusy}
               onUploadAsset={!canWrite ? undefined : handleUploadAsset}
