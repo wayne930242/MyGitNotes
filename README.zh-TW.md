@@ -42,6 +42,17 @@ GitHub Notes 把一個 Git 儲存庫變成集中處理筆記、文件、素材�
 - **使用者掌管系統邊界。**儲存庫、分支、部署、憑證、Core 更新與每一筆 Agent 授權都由你決定。
 - **介面與 Agent 遵守同一套規則。**路徑限制、分支限制、revision 檢查與儲存庫權限同時約束兩者。
 
+## 為什麼要把兩邊接起來
+
+市面上的筆記工具通常把這兩種路線當成不同的產品模型：
+
+- **像 [Obsidian](https://obsidian.md/blog/free-your-notes/) 的本地優先：**一般檔案保存在自己的裝置上，可離線使用，也能直接透過 IDE、CLI 或本地 Agent 編輯。
+- **像 [Craft](https://support.craft.do/en/account-and-subscription/data-and-security/data-storage)／[Notion](https://www.notion.com/help/notion-for-web) 的雲端文件：**提供完整的瀏覽器與多裝置體驗，以及自動同步、分享和遠端協作。
+
+即使同一產品支援兩種模式，通常也只是二選一。以 Craft 為例，它支援本地 [External Locations](https://support.craft.do/en/account-and-subscription/storage-and-recovery/external-locations)，但該模式不提供內建分享與協作。
+
+GitHub Notes 則把兩種介面接到同一個 Markdown 與 Git 工作區。本地 UI 和本地 Agent 直接編輯檔案；Git 將內容同步到 GitHub；Vercel 再以同一個儲存庫提供高密度遠端筆記介面與 serverless MCP。不需要匯出、匯入或對帳第二份雲端副本。
+
 ## 儲存庫模型
 
 - **`core`**：產品原始碼、套件、測試、指令稿與說明文件，不包含個人筆記。
