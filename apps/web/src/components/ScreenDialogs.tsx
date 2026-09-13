@@ -7,34 +7,68 @@ import type { FolderItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { screenFolderOptions } from '../lib/screen-content.js';
 
-export function ScreenAddRow({ notebooks, notes, assets, folders, selectedNotebookId, onAdd, onClose }: Pick<ScreenContentProps, 'notebooks' | 'notes' | 'assets'> & {
-  folders: FolderItem[]; selectedNotebookId: string; onAdd: (row: ScreenRow) => void; onClose: () => void;
+type RowDialogContent = Pick<ScreenContentProps, 'notebooks' | 'notes' | 'assets'> & {
+  folders: FolderItem[];
+  selectedNotebookId: string;
+};
+
+function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId, row, disabled, onApply, onClose, onRemove }: RowDialogContent & {
+  row?: ScreenRow;
+  disabled?: boolean;
+  onApply: (row: ScreenRow) => void;
+  onClose: () => void;
+  onRemove?: () => void;
 }) {
   const { t } = useTranslation();
-  const [kind, setKind] = useState('custom'), [name, setName] = useState(''), [tag, setTag] = useState('');
-  const [notebookId, setNotebook] = useState(selectedNotebookId), [folder, setFolder] = useState(''), [recursive, setRecursive] = useState(true);
-  const [allNotebooks, setAllNotebooks] = useState(true);
+  const source = row?.kind === 'dynamic' ? row.source : undefined;
+  const [kind, setKind] = useState(row?.kind === 'dynamic' ? row.source.kind : 'custom');
+  const [name, setName] = useState(row?.name || ''), [tag, setTag] = useState(source?.kind === 'tag' ? source.tag : '');
+  const [notebookId, setNotebook] = useState(source?.notebookId || selectedNotebookId);
+  const [tagNotebookId, setTagNotebook] = useState(source?.kind === 'tag' ? source.notebookId || '' : source?.notebookId || selectedNotebookId);
+  const [folder, setFolder] = useState(source?.kind === 'folder' ? source.path : ''), [recursive, setRecursive] = useState(source?.kind === 'folder' ? source.recursive : true);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const nb = notebooks.find(nb => nb.id === notebookId);
-  return <WorkspaceDialog title={t('screen.addRow')} onClose={onClose}>
+  const tags = [...new Set(notes.filter(note => !tagNotebookId || note.notebookId === tagNotebookId).flatMap(note => note.tags))].sort();
+  const options = !row ? [{ value: 'custom', label: t('screen.custom') }, { value: 'tag', label: t('screen.tagRow') }, { value: 'folder', label: t('screen.folderRow') }]
+    : row.kind === 'dynamic' ? [{ value: 'tag', label: t('screen.tagRow') }, { value: 'folder', label: t('screen.folderRow') }]
+    : [{ value: 'custom', label: t('screen.custom') }];
+  return <WorkspaceDialog title={t(row ? 'screen.editRow' : 'screen.addRow')} onClose={onClose}>
     <form className="screen-form" onSubmit={event => {
       event.preventDefault();
-      const base = { id: crypto.randomUUID(), name: name.trim() || t(kind === 'custom' ? 'screen.custom' : 'screen.dynamic'), view: 'small' as const };
-      onAdd(kind === 'custom' ? { ...base, kind: 'custom', items: [] } : { ...base, kind: 'dynamic', source: kind === 'tag'
-        ? { kind: 'tag', tag: tag.trim(), ...(allNotebooks ? {} : { notebookId }) }
-        : { kind: 'folder', notebookId, path: folder || nb!.root, recursive } });
+      if (disabled || row && !name.trim()) return;
+      const base = { id: row?.id || crypto.randomUUID(), name: name.trim() || t(kind === 'custom' ? 'screen.custom' : 'screen.dynamic'), view: row?.view || 'small' as const };
+      const sort = row?.kind === 'dynamic' && row.sort ? { sort: row.sort } : {};
+      onApply(kind === 'custom'
+        ? { ...base, kind: 'custom', items: row?.kind === 'custom' ? row.items : [] }
+        : { ...base, kind: 'dynamic', ...sort, source: kind === 'tag'
+          ? { kind: 'tag', tag: tag.trim(), ...(tagNotebookId ? { notebookId: tagNotebookId } : {}) }
+          : { kind: 'folder', notebookId, path: folder || nb!.root, recursive } });
       onClose();
     }}>
-      <label>{t('screen.rowName')}<input className="ui-control" value={name} maxLength={100} onChange={e => setName(e.target.value)} autoFocus /></label>
-      <label>{t('screen.rowType')}<Select value={kind} onValueChange={setKind} options={[{ value: 'custom', label: t('screen.custom') }, { value: 'tag', label: t('screen.tagRow') }, { value: 'folder', label: t('screen.folderRow') }]} /></label>
-      {kind === 'tag' && <><label>{t('screen.tag')}<input className="ui-control" value={tag} onChange={e => setTag(e.target.value)} list="screen-tags" required maxLength={200} /></label>
-        <datalist id="screen-tags">{[...new Set(notes.flatMap(note => note.tags))].sort().map(tag => <option key={tag} value={tag} />)}</datalist>
-        <label className="screen-checkbox"><input type="checkbox" checked={allNotebooks} onChange={e => setAllNotebooks(e.target.checked)} />{t('screen.allNotebooks')}</label></>}
-      {(kind === 'folder' || kind === 'tag' && !allNotebooks) && <label>{t('sidebar.notebooks')}<Select value={notebookId} onValueChange={id => { setNotebook(id); setFolder(''); }} options={notebooks.map(nb => ({ value: nb.id, label: nb.title }))} /></label>}
+      <label>{t('screen.rowName')}<input className="ui-control" aria-label={t('screen.rowName')} value={name} maxLength={100} onChange={e => setName(e.target.value)} autoFocus /></label>
+      {(!row || row.kind === 'dynamic') && <label>{t('screen.rowType')}<Select value={kind} disabled={disabled} onValueChange={setKind} options={options} /></label>}
+      {kind === 'tag' && <><label>{t('sidebar.notebooks')}<Select value={tagNotebookId} onValueChange={id => { setTagNotebook(id); if (id) setNotebook(id); setTag(''); }} options={[{ value: '', label: t('screen.allNotebooks') }, ...notebooks.map(nb => ({ value: nb.id, label: nb.title }))]} /></label>
+        <label>{t('screen.tag')}<input className="ui-control" value={tag} onChange={e => setTag(e.target.value)} list="screen-tags" required maxLength={200} /></label>
+        <datalist id="screen-tags">{tags.map(tag => <option key={tag} value={tag} />)}</datalist></>}
+      {kind === 'folder' && <label>{t('sidebar.notebooks')}<Select value={notebookId} onValueChange={id => { setNotebook(id); setFolder(''); }} options={notebooks.map(nb => ({ value: nb.id, label: nb.title }))} /></label>}
       {kind === 'folder' && <><label>{t('folder.folders')}<Select value={folder || nb?.root || ''} onValueChange={setFolder} options={screenFolderOptions(nb, folders, assets).map(folder => ({ value: folder.path, label: folder.title }))} /></label>
         <label className="screen-checkbox"><input type="checkbox" checked={recursive} onChange={e => setRecursive(e.target.checked)} />{t('screen.recursive')}</label></>}
-      <div className="workspace-dialog-actions"><button className="ui-button" type="button" onClick={onClose}>{t('common.cancel')}</button><button className="ui-button ui-button-primary" disabled={kind === 'folder' && !nb || kind === 'tag' && !tag.trim()}>{t('screen.addRow')}</button></div>
+      {confirmRemove && <p className="screen-dialog-hint">{t('screen.removeRowHint')}</p>}
+      <div className="workspace-dialog-actions">
+        {onRemove && <button type="button" className="ui-button" disabled={disabled} onClick={() => { if (!confirmRemove) setConfirmRemove(true); else { onRemove(); onClose(); } }}>{t(confirmRemove ? 'screen.confirmRemoveRow' : 'screen.removeRow')}</button>}
+        <button className="ui-button" type="button" onClick={onClose}>{t('common.cancel')}</button>
+        <button className="ui-button ui-button-primary" disabled={disabled || Boolean(row && !name.trim()) || kind === 'folder' && !nb || kind === 'tag' && !tag.trim()}>{t(row ? 'screen.apply' : 'screen.addRow')}</button>
+      </div>
     </form>
   </WorkspaceDialog>;
+}
+
+export function ScreenAddRow(props: RowDialogContent & { onAdd: (row: ScreenRow) => void; onClose: () => void }) {
+  return <ScreenRowDialog {...props} onApply={props.onAdd} />;
+}
+
+export function ScreenEditRow(props: RowDialogContent & { row: ScreenRow; disabled?: boolean; onApply: (row: ScreenRow) => void; onRemove: () => void; onClose: () => void }) {
+  return <ScreenRowDialog {...props} />;
 }
 
 export function ScreenAddItem({ rowName, notebooks, notes, assets, folders, selectedNotebookId, onAdd, onClose }: Omit<ScreenContentProps, 'onOpen'> & {

@@ -135,7 +135,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
         <div className="screen-sidebar-controls">
           <button className="screen-sidebar-action" disabled={disabled || screen.page.rows.length >= 40} onClick={() => { setSidebarOpen(false); setDialog('add'); }}><Plus size={16} />{t('screen.addRow')}</button>
         </div>
-        {screen.page.rows.length > 0 && <ScreenLaneNavigation page={screen.page} disabled={disabled} onChange={screen.change} onSelect={id => { document.getElementById(`screen-lane-${id}`)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); setSidebarOpen(false); }} />}
+        {screen.page.rows.length > 0 && <ScreenLaneNavigation page={screen.page} disabled={disabled} notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onChange={screen.change} onSelect={id => { document.getElementById(`screen-lane-${id}`)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); setSidebarOpen(false); }} />}
       </WorkspaceSidebar>
     </div>
     <main className="screen-content">
