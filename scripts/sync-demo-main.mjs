@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { mergeWorkspaceCore } from './lib/workspace-agent-merge.mjs';
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const output = (key, value) => {
@@ -13,11 +14,11 @@ try {
   const core = git('rev-parse', 'origin/core');
   const expected = process.env.CORE_REVISION || core;
   if (expected !== core) { output('synced', 'false'); console.log('A newer Core revision superseded this run.'); process.exit(0); }
-  const previousMain = git('rev-parse', 'origin/main');
   const previousBase = git('merge-base', 'origin/core', 'origin/main');
   const oldTemplates = git('ls-tree', '-r', '--name-only', previousBase, '--', 'examples/demo-workspace/notes').split('\n').filter(Boolean);
   git('checkout', '-B', 'release-main', 'origin/main');
-  git('rebase', '--rebase-merges', 'origin/core');
+  const merge = mergeWorkspaceCore(process.cwd(), core);
+  if (merge.conflictedFiles.length) throw Error(`Core merge conflicts: ${merge.conflictedFiles.join(', ')}`);
   const template = 'examples/demo-workspace';
   const copied = [];
   const safeTarget = relative => {
@@ -57,16 +58,16 @@ try {
     }
   }
   git('add', '--', ...copied);
-  if (git('diff', '--cached', '--name-only')) git('commit', '-m', 'docs(workspace): sync canonical examples');
+  if (merge.pending || git('diff', '--cached', '--name-only')) git('commit', '-m', 'chore(workspace): merge Core and sync canonical examples');
   const sha = git('rev-parse', 'HEAD');
   git('merge-base', '--is-ancestor', core, sha);
   // Confirm the tested Core is still current and preserve concurrent note commits.
   git('fetch', 'origin', 'core');
   if (git('rev-parse', 'origin/core') !== core) { output('synced', 'false'); console.log('Core advanced during synchronization.'); process.exit(0); }
-  git('push', `--force-with-lease=refs/heads/main:${previousMain}`, 'origin', 'HEAD:refs/heads/main');
+  git('push', 'origin', 'HEAD:refs/heads/main');
   output('main_sha', sha); output('synced', 'true');
 } catch (error) {
-  try { git('rebase', '--abort'); } catch {}
+  try { git('merge', '--abort'); } catch {}
   console.error(error.stderr?.toString() || error.message);
   process.exitCode = 1;
 }

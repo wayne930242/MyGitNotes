@@ -10,3 +10,4 @@ export * from './folders.js';
 export * from './github-source.js';
 export * from './note-shell.js';
 export * from './assets.js';
+export * from './workspace-agent.js';

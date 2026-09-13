@@ -13,6 +13,12 @@ Git 原生、本地優先（Local-first）的筆記應用程式與可由 AI Agen
 - **`core`（預設分支）**：標準產品核心分支。包含應用程式原始碼、套件、指令稿、測試與說明文件。絕不包含使用者個人筆記。
 - **`main`**：個人筆記工作區分支。於執行 `pnpm bootstrap-workspace` 時建立。存放筆記本、工作區設定檔（`.github-notes.yaml`）以及 Markdown 筆記（`notes/**`）。
 
+## 工作區 Agent System
+
+每個 main 工作區自行追蹤 `AGENTS.md`、`.agents/` 與 `.codex/`。Core 僅維護產品指引及初始範本，更新會保留工作區的 Agent 設定。產品開發請先閱讀[產品指引](docs/agent/product/index.md)。
+
+既有工作區第一次遷移，請從已更新的產品目錄執行 `pnpm update-core --workspace /absolute/workspace/path`。詳細流程與介面支援範圍見[工作區 Agent System](docs/agent/workflows/workspace-agent-system.md)。
+
 ## 快速開始（Quick Start）
 
 ### 先決條件

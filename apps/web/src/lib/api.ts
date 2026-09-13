@@ -134,13 +134,14 @@ export async function fetchAgentResources(): Promise<{
   instructions: AgentResource[];
   skills: AgentResource[];
   docs: AgentResource[];
+  revision?: string;
 }> {
   const res = await fetch(`${API_BASE}/agent-resources`);
   if (!res.ok) throw new Error('Failed to fetch agent resources');
   return res.json();
 }
 
-export async function readAgentResource(path: string): Promise<{ path: string; content: string }> {
+export async function readAgentResource(path: string): Promise<{ path: string; content: string; revision?: string }> {
   const res = await fetch(`${API_BASE}/agent-resources/read?path=${encodeURIComponent(path)}`);
   if (!res.ok) throw new Error('Failed to read agent resource');
   return res.json();
@@ -149,7 +150,8 @@ export async function readAgentResource(path: string): Promise<{ path: string; c
 export async function saveAgentResource(params: {
   path: string;
   content: string;
-}): Promise<{ success: boolean; path: string }> {
+  revision?: string;
+}): Promise<{ success: boolean; path: string; revision?: string }> {
   const res = await fetch(`${API_BASE}/agent-resources/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

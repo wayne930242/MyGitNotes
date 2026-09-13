@@ -6,6 +6,7 @@ import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js'
 import { WorkspaceConfig, NotebookConfig, NoteItem, FolderItem, NoteMetadata } from './types.js';
 import { GitHubApi, SourceError } from './github-api.js';
 import { readGitHubArchive } from './github-archive.js';
+import { workspaceAgentKind } from './workspace-agent.js';
 
 export { SourceError } from './github-api.js';
 export interface GitHubEntry { path: string; type: string; mode: string; sha: string; size?: number }
@@ -219,7 +220,13 @@ export class GitHubSource {
   }
 
   /** One Git tree, commit and non-force ref update for the entire mutation. */
-  async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null }[], expected: string, operation: string, scope: 'notes' | 'assets' = 'notes', requestedMessage?: string) {
+  async saveAgentResource(file: string, content: string, expected: string) {
+    if (typeof file !== 'string' || !workspaceAgentKind(file)) throw new SourceError('Path is not a workspace Agent document.', 403);
+    if (typeof content !== 'string') throw new SourceError('Agent document content is required.');
+    return this.commitChanges([{path:file,content}], expected, 'write', 'agents');
+  }
+
+  async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null }[], expected: string, operation: string, scope: 'notes' | 'assets' | 'agents' = 'notes', requestedMessage?: string) {
     const snapshot = await this.getSnapshot(true);
     if (!this.token || !snapshot.info.permissions?.push || this.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
     if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
@@ -230,8 +237,9 @@ export class GitHubSource {
     for (const change of changes) {
       const file = change.path;
       const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
-      if (!nb || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..') ||
-        (scope === 'assets' ? !isAssetPath(file, nb) : (!isNotebookContent(file.slice(nb.root.length + 1), nb) || !(/\.(md|markdown|txt)$/i.test(file) || path.posix.basename(file) === '_dir.yml')))) throw new SourceError('Path is not a configured note or folder metadata file.', 403);
+      const allowed = scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb &&
+        (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (/\.(md|markdown|txt)$/i.test(file) || path.posix.basename(file) === '_dir.yml'));
+      if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
       if (snapshot.entries.some(e => (e.path === file || file.startsWith(e.path + '/')) && (e.mode === '120000' || (e.path !== file && e.type !== 'tree')))) throw new SourceError('Path crosses a non-directory or symlink.', 403);
       const existing = snapshot.entries.find(e => e.path === file);
       if (existing && existing.type !== 'blob') throw new SourceError('A directory occupies the target path.', 409);

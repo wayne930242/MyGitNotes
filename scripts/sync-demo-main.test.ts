@@ -24,7 +24,17 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
 describe('release transaction', () => {
-  it('rebases main, copies canonical examples and retains other notes', () => {
+  it('keeps main Agent settings when Core removes legacy settings', () => {
+    git('checkout', 'core'); write('AGENTS.md', '# Legacy\n'); write('.agents/skills/demo/SKILL.md', '# Skill\n');
+    git('add', '.'); git('commit', '-m', 'legacy settings'); git('push', 'origin', 'core');
+    git('checkout', 'main'); git('merge', 'core', '--no-edit');
+    write('AGENTS.md', '# Demo rules\n'); git('add', 'AGENTS.md'); git('commit', '-m', 'demo rules'); git('push', 'origin', 'main');
+    git('checkout', 'core'); git('rm', '-r', 'AGENTS.md', '.agents'); git('commit', '-m', 'workspace ownership'); git('push', 'origin', 'core');
+    expect(run()).toContain('synced=true');
+    expect(remoteGit('show', 'main:AGENTS.md')).toBe('# Demo rules');
+    expect(remoteGit('show', 'main:.agents/skills/demo/SKILL.md')).toBe('# Skill');
+  });
+  it('merges Core into main, copies canonical examples and retains other notes', () => {
     const core = git('rev-parse', 'core');
     expect(run()).toContain('synced=true');
     const main = remoteGit('rev-parse', 'main');
@@ -37,7 +47,7 @@ describe('release transaction', () => {
     expect(run(git('rev-parse', 'core~1'))).toContain('synced=false');
     expect(remoteGit('rev-parse', 'main')).toBe(old);
   });
-  it('stops a rebase conflict without changing the remote workspace', () => {
+  it('stops a merge conflict without changing the remote workspace', () => {
     git('checkout', 'main'); write('product.txt', 'workspace customization\n'); git('add', 'product.txt'); git('commit', '-m', 'customize'); git('push', 'origin', 'main'); git('checkout', 'core');
     const old = remoteGit('rev-parse', 'main');
     expect(() => run()).toThrow();

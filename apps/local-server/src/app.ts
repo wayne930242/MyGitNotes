@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { loadSourceConfig, sourceIdentity, GitHubSource, SourceError } from '@github-notes/core';
+import { loadSourceConfig, sourceIdentity, GitHubSource, SourceError, workspaceAgentKind, workspaceAgentResource, type WorkspaceAgentResource } from '@github-notes/core';
 import { createRemoteMCP } from './mcp.js';
 import { createLocalApp } from './local-app.js';
 import { createAuth, authToken } from './auth.js';
@@ -118,30 +118,31 @@ export function createApp(base: string): express.Express {
         const reader: GitHubSource = res.locals.reader;
         const snapshot = await reader.getSnapshot();
         const entries = snapshot.entries;
-        const instructions: { path: string; name: string; editable?: boolean; scope?: 'notes' | 'product' }[] = [];
-        if (entries.some(e => e.path === 'AGENTS.md' && e.type === 'blob')) {
-          instructions.push({ path: 'AGENTS.md', name: 'System Guidelines', editable: false, scope: 'product' });
-        }
-        if (entries.some(e => e.path === 'notes/AGENTS.md' && e.type === 'blob')) {
-          instructions.push({ path: 'notes/AGENTS.md', name: 'Notes Workspace Guidelines', editable: false, scope: 'notes' });
-        }
+        const groups: { instructions: WorkspaceAgentResource[]; skills: WorkspaceAgentResource[]; docs: WorkspaceAgentResource[] } = { instructions: [], skills: [], docs: [] };
+        const editable = Boolean(res.locals.authenticated && snapshot.info.permissions?.push && reader.branch === 'main');
         for (const entry of entries) {
-          const match = entry.path.match(/^notes\/([^/]+)\/AGENTS\.md$/);
-          if (match && entry.type === 'blob') {
-            instructions.push({ path: entry.path, name: `Notebook: ${match[1].charAt(0).toUpperCase() + match[1].slice(1)} Guidelines`, editable: false, scope: 'notes' });
-          }
+          const kind = workspaceAgentKind(entry.path);
+          if (kind && entry.type === 'blob' && entry.mode !== '120000') groups[kind].push(workspaceAgentResource(entry.path, editable));
         }
-        res.json({ instructions, skills: [], docs: [] });
+        res.json({ ...groups, revision: snapshot.sha });
       } catch (error) { fail(res, error); }
     });
     app.get('/api/agent-resources/read', async (req, res) => {
       try {
         const targetPath = req.query.path as string;
         if (!targetPath) throw new SourceError('path query required', 400);
-        if (targetPath !== 'AGENTS.md' && !targetPath.startsWith('notes/')) throw new SourceError('Access to core product internal docs is restricted', 403);
+        if (!workspaceAgentKind(targetPath)) throw new SourceError('Path is not a workspace Agent document.', 403);
         const reader: GitHubSource = res.locals.reader;
         const buf = await reader.readFile(targetPath);
-        res.json({ path: targetPath, content: buf.toString('utf8') });
+        res.json({ path: targetPath, content: buf.toString('utf8'), revision: (await reader.getSnapshot()).sha });
+      } catch (error) { fail(res, error); }
+    });
+    app.post('/api/agent-resources/save', async (req, res) => {
+      try {
+        if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit Agent documents.', 403);
+        const { path: file, content, revision } = req.body;
+        const result = await (res.locals.reader as GitHubSource).saveAgentResource(file, content, revision);
+        res.json({ ...result, path: file });
       } catch (error) { fail(res, error); }
     });
     app.use('/api', (req, res) => res.status(403).json({ error: 'This operation is available only in a local workspace.' }));

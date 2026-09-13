@@ -30,7 +30,7 @@ export interface AgentResource {
   path: string;
   name: string;
   editable?: boolean;
-  scope?: 'notes' | 'product';
+  scope?: 'notes' | 'workspace' | 'product';
 }
 
 export interface GitStatus {

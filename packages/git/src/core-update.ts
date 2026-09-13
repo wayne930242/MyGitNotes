@@ -1,8 +1,9 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { runGit, getCurrentBranch, getGitStatus, GitExecutionError } from './git-service.js';
+import { runGit, getCurrentBranch, getGitStatus } from './git-service.js';
 import { CoreUpdateOptions, CoreUpdateResult } from './types.js';
 import { loadWorkspaceConfig, WORKSPACE_CONFIG_FILENAME } from '@github-notes/core';
+import { mergeWorkspaceCore } from '../../../scripts/lib/workspace-agent-merge.mjs';
 
 export class CoreUpdateError extends Error {
   constructor(message: string, public readonly code?: string) {
@@ -38,10 +39,14 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
   const { repoRoot, autoPush = false } = options;
 
   // 1. Detect repository root
+  let root: string;
   try {
-    await runGit(['rev-parse', '--show-toplevel'], repoRoot);
+    root = (await runGit(['rev-parse', '--show-toplevel'], repoRoot)).stdout;
   } catch {
     throw new CoreUpdateError(`Not a valid Git repository: '${repoRoot}'`, 'NOT_GIT_REPO');
+  }
+  if (fs.realpathSync(root) !== fs.realpathSync(repoRoot)) {
+    throw new CoreUpdateError('The workspace path must be the repository root.', 'NOT_REPO_ROOT');
   }
 
   // 2. Verify the active user branch is main
@@ -56,7 +61,7 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
   // 3. Refuse to continue with a dirty working tree
   const status = await getGitStatus(repoRoot);
   if (!status.isClean) {
-    const dirtyItems = [...status.staged, ...status.modified].join(', ');
+    const dirtyItems = [...status.staged, ...status.modified, ...status.untracked].join(', ');
     throw new CoreUpdateError(
       `Working tree has uncommitted modifications (${dirtyItems}). Commit or clean working directory before updating Core. Auto-stash is strictly prohibited.`,
       'DIRTY_WORKING_TREE'
@@ -98,20 +103,9 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
     };
   }
 
-  // 7. Merge Core into main with normal Git merge semantics
-  try {
-    await runGit(
-      ['merge', `${remote}/core`, '--no-edit', '-m', `chore(core): merge ${remote}/core (${coreRemoteHash.slice(0, 7)}) into main`],
-      repoRoot
-    );
-  } catch (err: unknown) {
-    // 10. Stop and explain conflicts rather than hiding them
-    const { stdout: unmerged } = await runGit(
-      ['diff', '--name-only', '--diff-filter=U'],
-      repoRoot
-    );
-    const conflictedFiles = unmerged.split('\n').map((f) => f.trim()).filter(Boolean);
-
+  // 7. Protect workspace Agent settings before any merge commit is created.
+  const { pending, conflictedFiles } = mergeWorkspaceCore(repoRoot, coreRemoteHash);
+  if (conflictedFiles.length) {
     return {
       success: false,
       currentHash,
@@ -144,6 +138,10 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new CoreUpdateError(`Post-merge workspace validation failed: ${msg}`, 'VALIDATION_FAILED');
+  }
+
+  if (pending) {
+    await runGit(['commit', '-m', `chore(core): merge ${remote}/core (${coreRemoteHash.slice(0, 7)}) into main`], repoRoot);
   }
 
   // 15. Do not auto-push unless explicitly requested
