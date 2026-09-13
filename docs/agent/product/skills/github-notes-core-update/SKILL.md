@@ -14,7 +14,7 @@ Follow this workflow when updating a user's workspace with upstream Core changes
 3. **Discover Remote**: Check `upstream/core` first; fall back to `origin/core`.
 4. **Fetch**: Fetch the remote Core branch without altering working tree.
 5. **Compare**: Output current commit hash vs incoming Core revision.
-6. **Merge**: Merge the Core branch with standard Git merge semantics (`git merge <remote>/core`).
+6. **Update**: Use `pnpm update-core` to merge Core while preserving workspace Agent settings before committing. For the first migration from an older workspace, run `pnpm update-core --workspace /absolute/workspace/path` from the updated product checkout. See `docs/agent/workflows/workspace-agent-system.md`.
 7. **Migrations**: Apply schema migrations if `schema_version` changed.
 8. **Validate**: Run validation to verify workspace integrity.
 9. **No destructive commands**: Never auto-stash, never use `reset --hard`, never force-push, never discard user changes silently.

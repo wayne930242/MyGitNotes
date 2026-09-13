@@ -21,7 +21,7 @@ import {
 } from '../lib/api.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
-export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: string }> = ({ readOnly = false, readOnlyNotice }) => {
+export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: string; remote?: boolean }> = ({ readOnly = false, readOnlyNotice, remote = false }) => {
   const { t } = useTranslation();
   const [instructions, setInstructions] = useState<AgentResource[]>([]);
   const [selectedPath, setSelectedPath] = useState<string>('');
@@ -35,6 +35,7 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
   const [initialLoading, setInitialLoading] = useState(true);
   const [contentLoading, setContentLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const revision = useRef<string>();
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
   const current = useRef({ path: selectedPath, content }); current.current = { path: selectedPath, content };
@@ -44,7 +45,7 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
   const loading = initialLoading || contentLoading || (selectedPath !== '' && loadedPath !== selectedPath);
 
   const currentResource = instructions.find((resource) => resource.path === selectedPath);
-  const isProductResource = currentResource?.scope === 'product' || selectedPath === 'AGENTS.md';
+  const isProductResource = currentResource?.scope === 'product';
   const editable = !readOnly && !isProductResource && currentResource?.editable !== false;
   const locked = !editable || loading || switching || restoring;
   const [confirmRestore, setConfirmRestore] = useState<boolean>(false);
@@ -55,13 +56,14 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
       setInitialLoading(true);
       try {
         const res = await fetchAgentResources();
-        const all = res.instructions || [];
+        const all = [...(res.instructions || []), ...(res.skills || []), ...(res.docs || [])];
+        revision.current = res.revision;
         setInstructions(all);
 
         if (all.length > 0) {
           const defaultRes =
             all.find((i) => i.path === 'notes/AGENTS.md') ||
-            all.find((i) => i.scope === 'notes' || i.path.startsWith('notes/')) ||
+            all.find((i) => i.scope !== 'product') ||
             all.find((i) => i.path === 'AGENTS.md') ||
             all[0];
           setSelectedPath(defaultRes.path);
@@ -89,6 +91,7 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
     void readAgentResource(selectedPath)
       .then((resource) => {
         if (cancelled) return;
+        revision.current = resource.revision;
         setContent(resource.content);
         setSavedContent(resource.content);
         setLoadedPath(selectedPath);
@@ -105,7 +108,8 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
   const saveDocument = async (file: string, snapshot: string) => {
     pendingSaves.current++; setIsSaving(true);
     const request = saveQueue.current.catch(() => {}).then(async () => {
-      await saveAgentResource({ path: file, content: snapshot });
+      const receipt = await saveAgentResource({ path: file, content: snapshot, revision: revision.current });
+      revision.current = receipt.revision;
       if (current.current.path === file) setSavedContent(snapshot);
     });
     saveQueue.current = request;
@@ -153,17 +157,18 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
 
   const handleCreateWorkspaceGuidelines = async () => {
     if (readOnly || isCreating) return;
-    const path = 'notes/AGENTS.md';
+    const path = 'AGENTS.md';
     const defaultContent = `# Notes Workspace Guidelines\n\nOperational guidelines for AI agents working within this note repository.\n`;
     setIsCreating(true);
     setError('');
     try {
-      await saveAgentResource({ path, content: defaultContent });
+      const receipt = await saveAgentResource({ path, content: defaultContent, revision: revision.current });
+      revision.current = receipt.revision;
       const newResource: AgentResource = {
         path,
         name: t('agent.workspaceGuidelines'),
         editable: true,
-        scope: 'notes',
+        scope: 'workspace',
       };
       setInstructions((prev) => [newResource, ...prev.filter((i) => i.path !== path)]);
       setSelectedPath(path);
@@ -178,10 +183,10 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
   };
 
   const workspaceInstructions = instructions.filter(
-    (i) => i.scope === 'notes' || i.path.startsWith('notes/')
+    (i) => i.scope !== 'product'
   );
   const systemInstructions = instructions.filter(
-    (i) => i.scope === 'product' || i.path === 'AGENTS.md'
+    (i) => i.scope === 'product'
   );
 
   return (
@@ -249,7 +254,7 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
               </button>
             ))}
 
-            {!readOnly && !workspaceInstructions.some((i) => i.path === 'notes/AGENTS.md') && (
+            {!readOnly && !workspaceInstructions.some((i) => i.path === 'AGENTS.md') && (
               <button
                 disabled={isCreating}
                 onClick={() => void handleCreateWorkspaceGuidelines()}
@@ -319,7 +324,7 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
           <strong className="block mb-1 font-semibold" style={{ color: 'var(--color-primary)' }}>
             {t('agent.guidelinesTitle')}
           </strong>
-          {t(readOnly ? 'agent.guidelinesReadOnlyDescription' : 'agent.guidelinesDescription')}
+          {t(readOnly ? 'agent.guidelinesReadOnlyDescription' : remote ? 'agent.remoteGuidelinesDescription' : 'agent.guidelinesDescription')}
         </div>
       </div>
 
@@ -379,14 +384,14 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
               ) : (
                 <span className="text-emerald-500 dark:text-emerald-400 flex items-center gap-1">
                   <Check className="w-3.5 h-3.5" />
-                  <span className="agent-status-detail">{t(editable ? 'agent.savedToDisk' : 'agent.loaded')}</span>
+                  <span className="agent-status-detail">{t(editable ? remote ? 'agent.savedToRepository' : 'agent.savedToDisk' : 'agent.loaded')}</span>
                   <span className="agent-status-compact">{t(editable ? 'agent.saved' : 'agent.loaded')}</span>
                 </span>
               )}
             </div>
 
-            {/* Single-file restore button with two-click confirmation */}
-            <button
+            {/* Single-file restore applies to uncommitted local edits. */}
+            {!remote && <button
               disabled={locked}
               aria-label={confirmRestore ? t('agent.confirmRestore') : t('agent.restore')}
               onClick={handleRestoreClick}
@@ -408,7 +413,7 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
                   <span>{t('agent.restore')}</span>
                 </>
               )}
-            </button>
+            </button>}
 
             <MarkdownEditorModeSwitch mode={viewMode} onChange={setViewMode} />
           </div>
@@ -425,7 +430,7 @@ export const AgentSystemView: React.FC<{ readOnly?: boolean; readOnlyNotice?: st
             {t('agent.systemNotice')}
           </div>
         )}
-        {!editable && !isProductResource && selectedPath.startsWith('notes/') && (
+        {!editable && !isProductResource && selectedPath && (
           <div className="px-6 py-2 border-b text-[11px] leading-relaxed text-amber-700 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-950/20">
             {readOnlyNotice || t('agent.workspaceReadOnlyNotice')}
           </div>

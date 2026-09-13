@@ -8,12 +8,12 @@ GitHub Notes is a Git-native, local-first notes application and agent-operable w
 
 ## 2. Branch & Ownership Contract
 
-- **`core`**: Canonical product branch and default branch of the public repository. Contains application source code, packages, scripts, tests, skills, and documentation. Never contains real user data.
-- **`main`**: User workspace branch created after cloning via `pnpm bootstrap-workspace`. Contains user workspace config (`/.github-notes.yaml`) and user notes (`notes/**`). In the public repository, `main` also serves as the demo workspace branch and is **automatically rebased onto `core` via GitHub Actions (`.github/workflows/release-main.yml`)** whenever `core` is pushed.
+- **`core`**: Canonical product branch and default branch of the public repository. Contains application source code, packages, scripts, tests, Agent templates, and documentation. Never contains real user data.
+- **`main`**: User workspace branch created after cloning via `pnpm bootstrap-workspace`. Contains user workspace config (`/.github-notes.yaml`) and user notes (`notes/**`). In the public repository, `main` also serves as the demo workspace branch and is **automatically merged with `core` via GitHub Actions (`.github/workflows/release-main.yml`)** whenever `core` is pushed.
 
 ### Path Ownership Invariants
-- **Core-owned paths**: `apps/**`, `packages/**`, `scripts/**`, `docs/**`, `.agents/**`, `examples/**`, `AGENTS.md`, `README.md`, `package.json`, `pnpm-workspace.yaml`.
-- **User-owned paths**: `notes/**`, `/.github-notes.yaml`.
+- **Core-owned paths**: `apps/**`, `packages/**`, `scripts/**`, `docs/**`, `examples/**`, `README.md`, `package.json`, `pnpm-workspace.yaml`.
+- **User-owned paths**: `notes/**`, `/.github-notes.yaml`, `/AGENTS.md`, `/.agents/**`, `/.codex/**`. Core must not track workspace Agent files; keep product guidance here and starter templates in `examples/workspace-agent-system/`.
 - **Rule**: NEVER overwrite, alter, or delete content under `notes/**` during Core maintenance or Core update merges.
 
 ## 3. Product Documentation Map
@@ -27,7 +27,7 @@ Detailed architecture, security, and workflow guides live in `docs/agent/`:
 
 ## 4. Repo-Local Codex Skills
 
-Repo-local skills are defined in `.agents/skills/`:
+Product development skills are maintained in `docs/agent/product/skills/`:
 - `github-notes-dev`: Product development, testing, boundaries, and validation.
 - `github-notes-workspace`: Initializing and manipulating workspaces, notebooks, notes, and manifests.
 - `github-notes-core-update`: Safe fetch/merge updates from Core into user branches without data loss.
@@ -50,6 +50,7 @@ Repo-local skills are defined in `.agents/skills/`:
 
 Before concluding any work on the product source:
 ```bash
+pnpm check:core-ownership # Verify workspace paths are absent from the Core index
 pnpm test          # Run test suite across all packages
 pnpm build         # Verify build succeeds cleanly
 ```

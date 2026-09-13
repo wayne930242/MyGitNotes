@@ -1,7 +1,12 @@
 import { updateCore } from '../packages/git/src/index.js';
+import path from 'node:path';
 
 async function main() {
-  const repoRoot = process.cwd();
+  const workspaceIndex = process.argv.indexOf('--workspace');
+  if (workspaceIndex >= 0 && (!process.argv[workspaceIndex + 1] || process.argv[workspaceIndex + 1].startsWith('--'))) {
+    throw new Error('--workspace requires the path to a workspace.');
+  }
+  const repoRoot = workspaceIndex >= 0 ? path.resolve(process.argv[workspaceIndex + 1]) : process.cwd();
   const autoPush = process.argv.includes('--push');
 
   console.log(`[update-core] Checking for Core product updates...`);

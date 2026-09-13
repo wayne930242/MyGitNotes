@@ -13,7 +13,10 @@ const write = (name: string, content: string) => { const target = path.join(root
 const files = (directory: string): string[] => fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? files(path.join(directory, entry.name)) : [path.join(directory, entry.name)]);
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-bootstrap-'));
-  write('AGENTS.md', '# Fixture'); write('packages/core/.keep', '');
+  write('packages/core/.keep', '');
+  write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n');
+  write('examples/workspace-agent-system/AGENTS.md', '# 工作區指引\n');
+  write('examples/workspace-agent-system/.agents/skills/workspace/SKILL.md', '# 工作區技能\n');
   fs.cpSync(path.join(product, 'examples/demo-workspace'), path.join(root, 'examples/demo-workspace'), { recursive: true });
   git('init', '-b', 'core'); git('config', 'user.name', 'Test'); git('config', 'user.email', 'test@example.com'); git('add', '.'); git('commit', '-m', 'product fixture');
 });
@@ -25,12 +28,19 @@ describe('canonical starter workspace CLI', () => {
     expect(git('branch', '--show-current')).toBe('main');
     expect(git('rev-list', '--count', 'HEAD')).toBe('2');
     expect(git('ls-tree', '-r', '--name-only', 'core', '--', 'notes', '.github-notes.yaml')).toBe('');
+    expect(git('ls-tree', '-r', '--name-only', 'core', '--', 'AGENTS.md', '.agents', '.codex')).toBe('');
+    expect(git('ls-files', '--', 'AGENTS.md', '.agents')).toContain('AGENTS.md');
+    expect(git('ls-files', '--', '.agents')).toContain('.agents/skills/workspace/SKILL.md');
     const template = path.join(root, 'examples/demo-workspace');
     expect(fs.readFileSync(path.join(root, '.github-notes.yaml'), 'utf8')).toBe(fs.readFileSync(path.join(template, '.github-notes.yaml'), 'utf8'));
     for (const source of files(path.join(template, 'notes'))) expect(fs.readFileSync(path.join(root, path.relative(template, source)))).toEqual(fs.readFileSync(source));
     const head = git('rev-parse', 'HEAD');
     write('notes/example/welcome.md', '# My own welcome\n');
+    write('AGENTS.md', '# 自訂指引\n');
+    write('.agents/skills/workspace/SKILL.md', '# 自訂技能\n');
     bootstrap();
+    expect(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')).toBe('# 自訂指引\n');
+    expect(fs.readFileSync(path.join(root, '.agents/skills/workspace/SKILL.md'), 'utf8')).toBe('# 自訂技能\n');
     expect(fs.readFileSync(path.join(root, 'notes/example/welcome.md'), 'utf8')).toBe('# My own welcome\n');
     expect(git('rev-parse', 'HEAD')).toBe(head);
     expect(fs.existsSync(path.join(root, 'notes/.github-notes.yaml'))).toBe(false);

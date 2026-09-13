@@ -1,4 +1,4 @@
-name: Rebase and deploy main
+name: Merge and deploy main
 on:
   push:
     branches: [core]
@@ -27,9 +27,10 @@ jobs:
           pnpm install --frozen-lockfile
       - name: Verify Core
         run: |
+          pnpm check:core-ownership --core
           pnpm build
           pnpm test
-      - name: Rebase main and synchronize examples
+      - name: Merge Core and synchronize examples
         id: sync
         env:
           CORE_REVISION: ${{ github.sha }}

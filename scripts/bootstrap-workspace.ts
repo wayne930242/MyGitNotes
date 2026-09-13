@@ -8,9 +8,9 @@ async function bootstrapWorkspace() {
   console.log(`[bootstrap] Starting workspace initialization for: ${repoRoot}`);
 
   // 1. Verify this is a GitHub Notes clone
-  const agentsPath = path.join(repoRoot, 'AGENTS.md');
+  const workspaceMarker = path.join(repoRoot, 'pnpm-workspace.yaml');
   const packagesCore = path.join(repoRoot, 'packages/core');
-  if (!fs.existsSync(agentsPath) || !fs.existsSync(packagesCore)) {
+  if (!fs.existsSync(workspaceMarker) || !fs.existsSync(packagesCore)) {
     console.error('[bootstrap] Error: This directory does not appear to be a GitHub Notes repository.');
     process.exit(1);
   }
@@ -58,6 +58,7 @@ async function bootstrapWorkspace() {
       else if (entry.isFile()) copyMissing(source, target);
     }
   };
+  copyDirectory(path.join(repoRoot, 'examples/workspace-agent-system'), '');
   if (config.notebooks.some(notebook => notebook.id === 'example' && notebook.root === 'notes/example')) {
     copyDirectory(path.join(template, 'notes/example'), 'notes/example');
     fs.mkdirSync(resolveSafePath(repoRoot, 'notes/example/assets'), { recursive: true });

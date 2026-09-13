@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { ClassifiedResource, ResourceType, WorkspaceConfig } from './types.js';
 import { WORKSPACE_CONFIG_FILENAME } from './config.js';
+import { workspaceAgentKind } from './workspace-agent.js';
 
 const HIDDEN_PATTERNS = [
   /(?:^|\/)\.[^/]/,           // Any dotfile/dotdirectory (.git, .github, etc.)
@@ -28,6 +29,9 @@ export function classifyResource(
   config?: WorkspaceConfig | null
 ): ClassifiedResource {
   const normalized = path.posix.normalize(relPath.replace(/\\/g, '/')).replace(/^\.\//, '');
+
+  const agentKind = workspaceAgentKind(relPath);
+  if (agentKind) return { path: normalized, type: agentKind === 'instructions' ? 'agent_instruction' : 'agent_doc' };
 
   // 1. Workspace / System configuration file
   if (normalized === WORKSPACE_CONFIG_FILENAME || normalized === `notes/${WORKSPACE_CONFIG_FILENAME}`) {

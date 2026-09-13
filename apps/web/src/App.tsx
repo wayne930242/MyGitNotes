@@ -773,7 +773,8 @@ const AppContent: React.FC = () => {
         {activeTab === 'agent' && (
           <main className="workspace-main agent-main flex-1 min-w-0 p-3 md:p-6 overflow-y-auto">
             <AgentSystemView
-              readOnly={remote || !canWrite}
+              readOnly={!canWrite}
+              remote={remote}
               readOnlyNotice={t(remote ? 'agent.remoteReadOnlyNotice' : branch === 'core' ? 'agent.coreBranchNotice' : 'agent.workspaceReadOnlyNotice')}
             />
           </main>

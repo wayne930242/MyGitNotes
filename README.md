@@ -13,6 +13,12 @@ This repository uses a two-branch model to separate product source code from per
 - **`core` (Default Branch)**: The canonical product branch. Contains application source code, packages, scripts, tests, and documentation. Never contains user notes.
 - **`main`**: Your personal notes workspace branch. Created when you run `pnpm bootstrap-workspace`. Stores your notebooks, workspace configuration (`.github-notes.yaml`), and markdown notes (`notes/**`).
 
+## Workspace Agent System
+
+Each main workspace owns and tracks `AGENTS.md`, `.agents/`, and `.codex/`. Core keeps only product guidance and starter templates; updates preserve your Agent settings. Product contributors start with [the product instructions](docs/agent/product/index.md).
+
+For an existing workspace's first migration, run `pnpm update-core --workspace /absolute/workspace/path` from the updated product checkout. See [initialization, migration and editable documents](docs/agent/workflows/workspace-agent-system.md).
+
 ## Quick Start
 
 ### Prerequisites

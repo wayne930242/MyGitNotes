@@ -17,6 +17,8 @@ import {
   WORKSPACE_CONFIG_FILENAME,
   extractFirstH1,
   parseNoteContent,
+  workspaceAgentKind, workspaceAgentResource, listWorkspaceAgentFiles, resolveWorkspaceAgentPath,
+  type WorkspaceAgentResource,
 } from '@github-notes/core';
 import {
   getGitStatus,
@@ -41,7 +43,9 @@ app.use(async (req, res, next) => {
     if (typeof candidate === 'string') {
       resolveSafePath(repoRoot, candidate);
       const resource = classifyResource(candidate, config);
-      if (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || (!candidate.startsWith('notes/') && candidate !== 'AGENTS.md')) return res.status(403).json({ error: 'Path is outside configured workspace resources.' });
+      const agentAccess = (req.path.startsWith('/api/agent-resources') || req.path.startsWith('/api/git/')) && workspaceAgentKind(candidate);
+      if (agentAccess) resolveWorkspaceAgentPath(repoRoot, candidate);
+      if (!agentAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/'))) return res.status(403).json({ error: 'Path is outside configured workspace resources.' });
     }
     next();
   } catch (error) { res.status(400).json({ error: (error as Error).message }); }
@@ -55,7 +59,9 @@ app.use((req, res, next) => {
       if (typeof candidate !== 'string') throw new Error('Paths must be strings.');
       resolveSafePath(repoRoot, candidate);
       const resource = classifyResource(candidate, config);
-      if (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/')) return res.status(403).json({ error: 'Path is outside configured workspace resources.' });
+      const agentAccess = (req.path.startsWith('/api/agent-resources') || req.path.startsWith('/api/git/')) && workspaceAgentKind(candidate);
+      if (agentAccess) resolveWorkspaceAgentPath(repoRoot, candidate);
+      if (!agentAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/'))) return res.status(403).json({ error: 'Path is outside configured workspace resources.' });
     }
     next();
   } catch (error) { res.status(400).json({ error: (error as Error).message }); }
@@ -296,50 +302,17 @@ function extractResourceTitle(fullPath: string, relPath: string): string {
 // 3. Agent Resources (Instructions, Skills & Docs)
 app.get('/api/agent-resources', async (req: Request, res: Response) => {
   try {
-    const branch = await getCurrentBranch(repoRoot).catch(() => 'main');
-    const instructions: { path: string; name: string; editable?: boolean; scope?: 'notes' | 'product' }[] = [];
-    const skills: { path: string; name: string; editable?: boolean; scope?: 'notes' | 'product' }[] = [];
-    const docs: { path: string; name: string; editable?: boolean; scope?: 'notes' | 'product' }[] = [];
-
-    // 1. Root AGENTS.md (Product / System Guidelines - read-only reference)
-    const rootAgents = path.join(repoRoot, 'AGENTS.md');
-    if (fs.existsSync(rootAgents)) {
-      instructions.push({
-        path: 'AGENTS.md',
-        name: extractResourceTitle(rootAgents, 'AGENTS.md') || 'System Guidelines',
-        editable: false,
-        scope: 'product',
-      });
-    }
-
-    // 2. Notes Root AGENTS.md (Primary notes workspace agent system)
-    const notesAgents = path.join(repoRoot, 'notes/AGENTS.md');
-    if (fs.existsSync(notesAgents)) {
-      instructions.push({
-        path: 'notes/AGENTS.md',
-        name: extractResourceTitle(notesAgents, 'notes/AGENTS.md') || 'Notes Workspace Guidelines',
-        editable: branch === 'main',
-        scope: 'notes',
-      });
-    }
-
-    // 3. Scan for any notebook-level AGENTS.md inside notes/
-    const notesDir = path.join(repoRoot, 'notes');
-    if (fs.existsSync(notesDir)) {
-      for (const entry of fs.readdirSync(notesDir, { withFileTypes: true })) {
-        if (entry.isDirectory() && !entry.name.startsWith('.')) {
-          const nbAgentFile = path.join(notesDir, entry.name, 'AGENTS.md');
-          if (fs.existsSync(nbAgentFile)) {
-            const rel = path.relative(repoRoot, nbAgentFile).replace(/\\/g, '/');
-            instructions.push({
-              path: rel,
-              name: `Notebook: ${entry.name.charAt(0).toUpperCase() + entry.name.slice(1)} Guidelines`,
-              editable: branch === 'main',
-              scope: 'notes',
-            });
-          }
-        }
+    const branch = await getCurrentBranch(repoRoot);
+    const instructions: WorkspaceAgentResource[] = [];
+    const skills: WorkspaceAgentResource[] = [];
+    const docs: WorkspaceAgentResource[] = [];
+    const groups = { instructions, skills, docs };
+    for (const file of listWorkspaceAgentFiles(repoRoot)) {
+      const resource = workspaceAgentResource(file, branch === 'main');
+      if (!/^notes\/[^/]+\/AGENTS\.md$/.test(file)) {
+        resource.name = extractResourceTitle(resolveWorkspaceAgentPath(repoRoot, file), file) || resource.name;
       }
+      groups[workspaceAgentKind(file)!].push(resource);
     }
 
     res.json({ instructions, skills, docs });
@@ -352,11 +325,7 @@ app.get('/api/agent-resources/read', (req: Request, res: Response) => {
   try {
     const targetPath = req.query.path as string;
     if (!targetPath) return res.status(400).json({ error: 'path query required' });
-    // Allow reading AGENTS.md (product system guideline) and notes/** workspace resources
-    if (targetPath !== 'AGENTS.md' && !targetPath.startsWith('notes/')) {
-      return res.status(403).json({ error: 'Access to core product internal docs is restricted' });
-    }
-    const safePath = resolveSafePath(repoRoot, targetPath);
+    const safePath = resolveWorkspaceAgentPath(repoRoot, targetPath);
     const content = fs.readFileSync(safePath, 'utf-8');
     res.json({ path: targetPath, content });
   } catch (err: unknown) {
@@ -364,17 +333,14 @@ app.get('/api/agent-resources/read', (req: Request, res: Response) => {
   }
 });
 
-// Save agent resource file (restricted to notes/ workspace)
+// Save agent resource file (workspace Agent documents)
 app.post('/api/agent-resources/save', async (req: Request, res: Response) => {
   try {
     const { path: relPath, content } = req.body;
     if (!relPath || typeof content !== 'string') {
       return res.status(400).json({ error: 'path and content are required' });
     }
-    if (!relPath.startsWith('notes/')) {
-      return res.status(403).json({ error: 'Only notes workspace agent resources may be modified' });
-    }
-    const safePath = resolveSafePath(repoRoot, relPath);
+    const safePath = resolveWorkspaceAgentPath(repoRoot, relPath);
     const dir = path.dirname(safePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -386,17 +352,14 @@ app.post('/api/agent-resources/save', async (req: Request, res: Response) => {
   }
 });
 
-// Restore agent resource from Git HEAD (restricted to notes/ workspace)
+// Restore agent resource from Git HEAD (workspace Agent documents)
 app.post('/api/agent-resources/restore', async (req: Request, res: Response) => {
   try {
     const { path: relPath } = req.body;
     if (!relPath) {
       return res.status(400).json({ error: 'path is required' });
     }
-    if (!relPath.startsWith('notes/')) {
-      return res.status(403).json({ error: 'Only notes workspace agent resources may be restored' });
-    }
-    const safePath = resolveSafePath(repoRoot, relPath);
+    const safePath = resolveWorkspaceAgentPath(repoRoot, relPath);
     await runGit(['checkout', 'HEAD', '--', relPath], repoRoot);
     const content = fs.readFileSync(safePath, 'utf-8');
     res.json({ success: true, path: relPath, content });

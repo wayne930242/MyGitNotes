@@ -28,6 +28,39 @@ beforeEach(async () => {
 afterEach(async()=>{ await new Promise<void>(resolve=>server.close(()=>resolve())); fs.rmSync(root,{recursive:true,force:true}); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe('real HTTP local boundaries',()=>{
+  it('lists, edits, commits and restores workspace Agent documents while protecting secrets and product paths', async () => {
+    const settings = ['AGENTS.md', '.agents/skills/custom/SKILL.md', '.codex/agents/reviewer.toml'];
+    for (const file of settings) {
+      fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      fs.writeFileSync(path.join(root, file), '# Custom settings\n');
+    }
+    fs.writeFileSync(path.join(root, '.codex/auth.json'), '{"token":"fixture-secret"}');
+    git('add', '.'); git('commit', '-m', 'workspace agent settings');
+    const request = (body: unknown) => ({ method: 'POST', headers: {'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    const listing = await fetch(`${base}/api/agent-resources`).then(r => r.json());
+    const resources = [...listing.instructions, ...listing.skills, ...listing.docs];
+    for (const file of settings) expect(resources).toContainEqual(expect.objectContaining({ path: file, editable: true, scope: 'workspace' }));
+    expect(resources.some(r => r.path === '.codex/auth.json')).toBe(false);
+    for (const file of settings) {
+      expect((await fetch(`${base}/api/agent-resources/save`, request({path:file,content:'# Changed\n'}))).status).toBe(200);
+      expect(await fetch(`${base}/api/agent-resources/read?path=${encodeURIComponent(file)}`).then(r => r.json())).toMatchObject({content:'# Changed\n'});
+      expect((await fetch(`${base}/api/agent-resources/restore`, request({path:file}))).status).toBe(200);
+      expect(fs.readFileSync(path.join(root, file), 'utf8')).toBe('# Custom settings\n');
+    }
+    for (const file of ['.codex/auth.json', '.codex/config.toml', '.agents/skills/custom/.env', '.agents/skills/custom/run.sh', 'apps/web/AGENTS.md', '.agents/../README.md']) {
+      expect((await fetch(`${base}/api/agent-resources/read?path=${encodeURIComponent(file)}`)).ok).toBe(false);
+      expect((await fetch(`${base}/api/agent-resources/save`, request({path:file,content:'bad'}))).ok).toBe(false);
+    }
+    fs.symlinkSync(path.join(root, '.env'), path.join(root, '.agents/skills/custom/secret.md'));
+    expect((await fetch(`${base}/api/agent-resources/read?path=.agents/skills/custom/secret.md`)).ok).toBe(false);
+    expect((await fetch(`${base}/api/agent-resources/save`, request({path:'.agents/skills/custom/secret.md',content:'bad'}))).ok).toBe(false);
+    expect(fs.readFileSync(path.join(root, '.env'), 'utf8')).toBe('SECRET=hidden');
+    expect((await fetch(`${base}/api/agent-resources/save`, request({path:'AGENTS.md',content:'# Committed\n'}))).ok).toBe(true);
+    expect((await fetch(`${base}/api/git/commit`, request({files:['AGENTS.md'],message:'docs(workspace): update rules'}))).ok).toBe(true);
+    expect(git('show','HEAD:AGENTS.md').toString()).toBe('# Committed\n');
+    git('checkout','-b','core');
+    expect((await fetch(`${base}/api/agent-resources/save`, request({path:'AGENTS.md',content:'bad'}))).status).toBe(403);
+  });
   it('uploads into directories, keeps hash URLs after moves, and restricts deletion to assets', async () => {
     const request = (method: string, body: unknown) => ({ method, headers: {'Content-Type':'application/json'}, body:JSON.stringify(body) });
     const uploaded = await fetch(`${base}/api/assets`, request('POST', {notebookId:'example',filename:'test.txt',directory:'projects/images',base64Content:Buffer.from('asset bytes').toString('base64')})).then(r=>r.json());
@@ -215,27 +248,27 @@ describe('durable Redis grant records',()=>{
 });
 
 describe('agent resources discovery and security boundaries', () => {
-  it('discovers system and workspace guidelines, allows reading root AGENTS.md, and rejects modifying non-notes resources', async () => {
-    fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Product System Guidelines\n');
+  it('discovers and edits root and notebook workspace guidelines', async () => {
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Root Workspace Guidelines\n');
     fs.writeFileSync(path.join(root, 'notes/AGENTS.md'), '# Workspace Guidelines\n');
 
     const res = await fetch(`${base}/api/agent-resources`).then((r) => r.json());
     expect(res.instructions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: 'AGENTS.md', scope: 'product', editable: false }),
+        expect.objectContaining({ path: 'AGENTS.md', scope: 'workspace', editable: true }),
         expect.objectContaining({ path: 'notes/AGENTS.md', scope: 'notes', editable: true }),
       ])
     );
 
     const rootDoc = await fetch(`${base}/api/agent-resources/read?path=AGENTS.md`).then((r) => r.json());
-    expect(rootDoc.content).toBe('# Product System Guidelines\n');
+    expect(rootDoc.content).toBe('# Root Workspace Guidelines\n');
 
     const saveRoot = await fetch(`${base}/api/agent-resources/save`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: 'AGENTS.md', content: 'attempted overwrite' }),
     });
-    expect(saveRoot.status).toBe(403);
+    expect(saveRoot.status).toBe(200);
 
     const saveWorkspace = await fetch(`${base}/api/agent-resources/save`, {
       method: 'POST',
