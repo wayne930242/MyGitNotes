@@ -65,3 +65,11 @@ StudyLane 持有佇列與次要操作視窗，StudyLaneCard 持有固定頁序�
 ScreenRowDialog 移除 studySettings 分流，使用原生 details 與獨立進階草稿。未改進階欄位時保留既有 progression，未保存預設隨來源筆記本變動；恢復預設為明確操作。core 的 studyLaneStatuses 與 defaultStudyProgression 由設定預覽、學習頁及 HTTP 操作共同使用，避免不同筆記本狀態污染與自動封存。
 
 交付摩擦：遠端同時新增共用 GitLab 來源，推送被非快轉拒絕。依原流程合併遠端並保留雙方匯入，重新驗證，未覆寫他人變更。
+
+## 上次移動時間
+
+沿用 core study 模型，新增可選 note.lastMovedAt 與 before.lastMovedAt。Stage action 用同一個伺服器時間產生移動時間、事件與到期；自訂延後保留時間。一般學習操作、重新配對與撤銷沿用同一快照欄位。
+
+StudyWorkspaceSchema 解析後以一次事件序列掃描補齊舊資料缺少的時間，處理 undoOf 還原前次評分，並補齊舊 before 快照。解析維持純資料轉換，HTTP GET 不寫回；下次明確保存才持久化補齊值。既有明確時間保持原值。這將相容性集中在共用解析邊界，HTTP、瀏覽器及遠端來源沿用既有介面。
+
+排序繼續使用已保存的 stage.due；測試以跨日及同日不同時刻評分確認來源時間和目的階段間隔共同決定卡片順序。測試涵蓋所有評分、同階段、延後、撤銷、舊事件回補、HTTP 重讀與衝突、Chrome 操作。

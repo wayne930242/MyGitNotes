@@ -29,9 +29,9 @@ const NoteSchema = z.object({
     && value.split('/').every(part => part && part !== '.' && part !== '..'), 'Invalid note path.'),
   sourceId: z.string().min(1).max(200).optional(), title: z.string().max(2000),
   pages: z.array(z.object({ id, source: z.string().max(1024 * 1024) }).strict()).min(1).max(100),
-  cards: z.array(CardSchema).min(1).max(200), reading: ReadingSchema, stage: StageScheduleSchema.optional(),
+  cards: z.array(CardSchema).min(1).max(200), reading: ReadingSchema, stage: StageScheduleSchema.optional(), lastMovedAt: date.optional(),
 }).strict();
-const BeforeSchema = z.object({ stage: StageScheduleSchema.optional(), reading: ReadingSchema, cards: z.array(z.object(schedule).strict()).max(200) }).strict();
+const BeforeSchema = z.object({ stage: StageScheduleSchema.optional(), lastMovedAt: date.optional(), reading: ReadingSchema, cards: z.array(z.object(schedule).strict()).max(200) }).strict();
 const EventSchema = z.object({
   id, noteId: id, cardId: id.optional(), at: date,
   kind: z.enum(['read', 'snooze', 'fixed', 'review', 'configure', 'suspend', 'resume', 'rebind', 'undo', 'stage-review', 'stage-read', 'stage-postpone']),
@@ -63,6 +63,26 @@ export const StudyWorkspaceSchema = z.object({ version: z.literal(1), notes: z.a
       if (event.kind === 'review' ? !event.rating || !event.algorithm || !event.cardId : ['stage-review', 'stage-read'].includes(event.kind) ? !event.rating || !event.transition : event.rating !== undefined) ctx.addIssue({ code: 'custom', message: 'Review events require a rating, algorithm and card.' });
       if (!note || event.cardId && !note.cards.some(card => card.id === event.cardId)) ctx.addIssue({ code: 'custom', message: 'Unknown event target.' });
     }
+  }).transform(workspace => {
+    // Restore missing move timestamps in version 1 files from the ordered history.
+    // Undo restores the prior move; postponement and browsing are not moves.
+    const moved = new Map<string, string>();
+    const previous = new Map<string, string | undefined>();
+    for (const event of workspace.events) {
+      if (event.before) {
+        if (!event.before.lastMovedAt && moved.has(event.noteId)) event.before.lastMovedAt = moved.get(event.noteId);
+        previous.set(event.id, event.before.lastMovedAt);
+        if (event.before.lastMovedAt) moved.set(event.noteId, event.before.lastMovedAt);
+      }
+      if (event.kind === 'stage-review' || event.kind === 'stage-read') moved.set(event.noteId, event.at);
+      else if (event.kind === 'undo' && event.undoOf && previous.has(event.undoOf)) {
+        const at = previous.get(event.undoOf);
+        if (at) moved.set(event.noteId, at);
+        else moved.delete(event.noteId);
+      }
+    }
+    for (const note of workspace.notes) if (!note.lastMovedAt && moved.has(note.id)) note.lastMovedAt = moved.get(note.id);
+    return workspace;
   });
 
 export type StudyWorkspace = z.infer<typeof StudyWorkspaceSchema>;
@@ -127,7 +147,7 @@ type Action = { kind: 'review'; rating: Grade } | { kind: 'read' | 'snooze'; due
 export function applyStudyAction(workspace: StudyWorkspace, note: StudyNote, cardId: string, action: Action, now = new Date()): StudyWorkspace {
   const next = structuredClone(note), card = next.cards.find(card => card.id === cardId);
   if (!card) throw new Error('Unknown study card.');
-  const before = { ...(note.stage ? { stage: note.stage } : {}), reading: note.reading, cards: note.cards.map(({ id, enabled, suspended, policy, scheduler }) => ({ id, enabled, suspended, policy, scheduler })) };
+  const before = { ...(note.stage ? { stage: note.stage } : {}), ...(note.lastMovedAt ? { lastMovedAt: note.lastMovedAt } : {}), reading: note.reading, cards: note.cards.map(({ id, enabled, suspended, policy, scheduler }) => ({ id, enabled, suspended, policy, scheduler })) };
   const at = now.toISOString();
   switch (action.kind) {
     case 'review':
@@ -155,7 +175,7 @@ export function undoStudyAction(workspace: StudyWorkspace, now = new Date()): St
   const event = workspace.events.at(-1);
   if (!event?.before || event.kind === 'undo') throw new Error('No study action to undo.');
   return StudyWorkspaceSchema.parse({ ...workspace, notes: workspace.notes.map(note => note.id !== event.noteId ? note : {
-    ...note, stage: event.before!.stage, reading: event.before!.reading, cards: note.cards.map(card => ({ ...card, ...event.before!.cards.find(value => value.id === card.id) })),
+    ...note, stage: event.before!.stage, lastMovedAt: event.before!.lastMovedAt, reading: event.before!.reading, cards: note.cards.map(card => ({ ...card, ...event.before!.cards.find(value => value.id === card.id) })),
   }), events: [...workspace.events, { id: newId(), noteId: event.noteId, at: now.toISOString(), kind: 'undo', undoOf: event.id }] });
 }
 
@@ -163,7 +183,7 @@ export function undoStudyAction(workspace: StudyWorkspace, now = new Date()): St
 export function rebindStudyNote(workspace: StudyWorkspace, note: StudyNote, source: StudySource, reset: boolean, now = new Date()): StudyWorkspace {
   if (note.cards.length !== 1 || note.cards[0].kind !== 'forward') throw new Error('This note requires the multi-card mapping editor.');
   const fresh = createStudyNote(source, now);
-  fresh.id = note.id; fresh.reading = note.reading; if (note.stage) fresh.stage = note.stage;
+  fresh.id = note.id; fresh.reading = note.reading; if (note.lastMovedAt) fresh.lastMovedAt = note.lastMovedAt; if (note.stage) fresh.stage = note.stage;
   fresh.cards[0] = { ...fresh.cards[0], id: note.cards[0].id, enabled: note.cards[0].enabled, suspended: note.cards[0].suspended, policy: note.cards[0].policy,
     scheduler: reset ? fresh.cards[0].scheduler : note.cards[0].scheduler };
   return StudyWorkspaceSchema.parse({ ...workspace, notes: workspace.notes.map(value => value.id === note.id ? fresh : value),
@@ -178,7 +198,8 @@ export function applyStageAction(workspace: StudyWorkspace, note: StudyNote, lan
   if (!Number.isFinite(Date.parse(due)) || Date.parse(due) <= now.getTime()) throw new Error('Choose a future time.');
   const next = structuredClone(note);
   next.stage = { laneId, status: stage.status, due };
-  const before = { ...(note.stage ? { stage: note.stage } : {}), reading: note.reading, cards: note.cards.map(({ id, enabled, suspended, policy, scheduler }) => ({ id, enabled, suspended, policy, scheduler })) };
+  if (action.kind !== 'stage-postpone') next.lastMovedAt = now.toISOString();
+  const before = { ...(note.stage ? { stage: note.stage } : {}), ...(note.lastMovedAt ? { lastMovedAt: note.lastMovedAt } : {}), reading: note.reading, cards: note.cards.map(({ id, enabled, suspended, policy, scheduler }) => ({ id, enabled, suspended, policy, scheduler })) };
   const event = { id: newId(), noteId: note.id, cardId: note.cards[0].id, at: now.toISOString(), kind: action.kind, before,
     transition: { laneId, fromStatus: status ?? null, toStatus: stage.status, intervalDays: stage.intervalDays },
     ...(action.kind === 'stage-postpone' ? {} : { rating: action.rating }) };
