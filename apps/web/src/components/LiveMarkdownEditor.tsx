@@ -6,6 +6,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { defaultHighlightStyle, HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import { marked } from 'marked';
+import { parseYouTubeUrl } from '@github-notes/core/screen-page';
 import { renderNote } from '../lib/markdown.js';
 import { headingSlug, resolveWorkspaceHref } from '../lib/workspace-links.js';
 import { useLocation } from 'react-router-dom';
@@ -75,6 +76,64 @@ class BulletMarker extends WidgetType {
   eq() { return true; }
   toDOM() { const span=document.createElement('span');span.textContent='•';span.setAttribute('aria-hidden','true');return span; }
 }
+class YouTubeWidget extends WidgetType {
+  constructor(readonly videoId: string, readonly start: number, readonly from: number) { super(); }
+  eq(other: YouTubeWidget) { return this.videoId === other.videoId && this.start === other.start && this.from === other.from; }
+  toDOM(view: EditorView) {
+    const container = document.createElement('div');
+    container.className = 'note-youtube-embed';
+    container.dataset.videoId = this.videoId;
+    container.dataset.start = String(this.start);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'note-youtube-poster';
+    button.setAttribute('aria-label', 'Play YouTube video');
+
+    const img = document.createElement('img');
+    img.src = `https://img.youtube.com/vi/${encodeURIComponent(this.videoId)}/hqdefault.jpg`;
+    img.alt = '';
+    img.loading = 'lazy';
+    img.addEventListener('load', () => view.requestMeasure());
+
+    const playBtn = document.createElement('span');
+    playBtn.className = 'note-youtube-play-btn';
+    playBtn.setAttribute('aria-hidden', 'true');
+    playBtn.innerHTML = '<svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+
+    button.appendChild(img);
+    button.appendChild(playBtn);
+    container.appendChild(button);
+
+    const activate = () => {
+      const iframe = document.createElement('iframe');
+      iframe.title = 'YouTube video player';
+      iframe.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(this.videoId)}?start=${this.start}&autoplay=1&playsinline=1&rel=0`;
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+      iframe.allowFullscreen = true;
+      iframe.className = 'note-youtube-iframe';
+      container.replaceChildren(iframe);
+      view.requestMeasure();
+    };
+
+    button.addEventListener('mousedown', event => { event.stopPropagation(); });
+    button.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      activate();
+    });
+
+    container.addEventListener('mousedown', event => {
+      if ((event.target as HTMLElement).closest('.note-youtube-poster, iframe')) return;
+      event.preventDefault();
+      view.dispatch({ selection: { anchor: this.from } });
+      view.focus();
+    });
+
+    return container;
+  }
+  get estimatedHeight() { return 280; }
+}
 function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string, pageLabel: string): DecorationSet {
   const marks: Range<Decoration>[] = [];
   let pageNumber = 1;
@@ -102,6 +161,18 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
       if (editing) marks.push(Decoration.line({ class: 'live-md-page-divider', attributes: { 'data-page-break': '' } }).range(state.doc.lineAt(from).from));
       else marks.push(Decoration.replace({ widget: new PageBreak(from, `${pageLabel} ${pageNumber}`), block: true }).range(from, to));
       return false;
+    }
+    if (name === 'Paragraph' && node.node.parent?.name !== 'ListItem') {
+      const text = state.sliceDoc(from, to).trim();
+      const match = text.match(/^\[([^\]]*)\]\(([^)]+)\)$/);
+      const url = match ? match[2].trim() : text.replace(/^<|>$/g, '');
+      const video = parseYouTubeUrl(url);
+      if (video) {
+        if (!editing) {
+          marks.push(Decoration.replace({ widget: new YouTubeWidget(video.videoId, video.start, from), block: true }).range(from, to));
+          return false;
+        }
+      }
     }
     if (!editing && (name === 'Image' || name === 'Table' || name === 'HorizontalRule')) {
       marks.push(Decoration.replace({widget:new RenderedMarkdown(state.sliceDoc(from,to),notePath,from,name !== 'Image',linkLabel,tableLabel),block:name !== 'Image'}).range(from,to)); return false;
