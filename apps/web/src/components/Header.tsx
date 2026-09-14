@@ -26,7 +26,7 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
   notebooks, selectedNotebookId, onSelectNotebook, notebookDisabled, onCreateNote, createNoteDisabled, onOpenCommands, navigationDisabled = false }: HeaderProps) {
   const { t } = useTranslation();
   useEffect(() => {
-    document.title = `${t(`nav.${activeTab}`)} · GitHub Notes`;
+    document.title = `${t(`nav.${activeTab}`)} · MyGitNotes`;
   }, [activeTab, t]);
   const items = [
     { id: 'notes', label: t('nav.notes'), icon: BookOpen },
@@ -39,9 +39,9 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
     <div className="header-layout">
       <div className="header-brand">
         <img src={`${import.meta.env.BASE_URL}brand/github-notes-64.png`} width="32" height="32"
-          alt="GitHub Notes" className="workspace-brand-icon" />
+          alt="MyGitNotes" className="workspace-brand-icon" />
         <div className="min-w-0">
-          <h1>{workspaceTitle || 'GitHub Notes'}</h1>
+          <h1>{workspaceTitle || 'MyGitNotes'}</h1>
           <p>{sourceLabel || t('header.gitWorkspace')}</p>
         </div>
       </div>

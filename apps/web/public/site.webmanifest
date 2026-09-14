@@ -1,6 +1,6 @@
 {
-  "name": "GitHub Notes",
-  "short_name": "GitHub Notes",
+  "name": "MyGitNotes",
+  "short_name": "MyGitNotes",
   "description": "A Git-native Markdown workspace.",
   "start_url": "./",
   "display": "standalone",

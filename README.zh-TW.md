@@ -1,6 +1,6 @@
-# GitHub Notes
+# MyGitNotes
 
-一個高密度、功能集中的本地優先文件介面；以 Git 原生保存資料，並透過 GitHub 與 Vercel 提供可遠端存取的 serverless MCP。
+一個高密度、功能集中的本地優先文件介面；以 Git 原生保存資料，並透過 GitHub／GitLab 與 Vercel 提供可遠端存取的 serverless MCP。
 
 Markdown、儲存庫、部署、版本歷史與 Agent 存取權，全都由使用者掌控。
 
@@ -10,12 +10,12 @@ Markdown、儲存庫、部署、版本歷史與 Agent 存取權，全都由使�
 
 ## 這是什麼
 
-GitHub Notes 把一個 Git 儲存庫變成集中處理筆記、文件、素材與 AI Agent 的工作區。你使用專為筆記設計的介面工作，而 Markdown 檔案、Git 歷史與儲存庫權限始終是資料的最終依據。
+MyGitNotes 把一個 Git 儲存庫變成集中處理筆記、文件、素材與 AI Agent 的工作區。你使用專為筆記設計的介面工作，而 Markdown 檔案、Git 歷史與儲存庫權限始終是資料的最終依據。
 
 它有兩種運作模式：
 
 - **本地模式：**介面直接讀寫本機儲存庫。
-- **遠端模式：**Vercel 提供介面與 serverless MCP 端點，GitHub 保存檔案與 commit 歷史。
+- **遠端模式：**Vercel 提供介面與 serverless MCP 端點，GitHub 或 GitLab 保存檔案與 commit 歷史。
 
 因此，同一個工作區可以完全留在本機、透過 Git 在裝置間移動，也能讓瀏覽器與 MCP 用戶端安全地遠端存取，不必自行維護常駐伺服器。
 
@@ -25,20 +25,45 @@ GitHub Notes 把一個 Git 儲存庫變成集中處理筆記、文件、素材�
 - **屏幕：**把不同筆記本的筆記、資料夾、圖片與 YouTube 影片排進閱讀泳道；動態泳道可依標籤或資料夾自動收集內容。
 - **純 Markdown：**筆記是一般 `.md` 檔，可選用 YAML frontmatter。既有 Markdown 與未知 metadata 在讀寫後仍會保留。
 - **Git 原生工作流：**本地編輯先寫入磁碟，再由你明確選取並提交。遠端寫入使用 revision 檢查與非強制 commit，拒絕覆蓋過期版本。
-- **本地與遠端來源：**用同一套介面開啟本機 checkout 或指定的 GitHub 儲存庫。
+- **本地與遠端來源：**用同一套介面開啟本機 checkout 或指定的 GitHub 或 GitLab 儲存庫。
 - **本地與託管 MCP：**Agent 可透過本地 stdio 或 Vercel 託管的 Streamable HTTP，列出、讀取、搜尋、建立、編輯、移動與提交工作區內容。
 - **可控的 Agent 權限：**建立具名的唯讀或寫入授權；連線網址只顯示一次，任何授權都能隨時個別撤銷。
 - **安全的產品更新：**產品程式碼放在 `core`，個人工作區放在 `main`；更新 Core 時保留 `notes/**` 與工作區自己的 Agent 設定。
 
 ## 設計邏輯
 
-![GitHub Notes 本地與遠端架構](docs/assets/github-notes-architecture-zh-TW.png)
+```mermaid
+flowchart LR
+  subgraph device["你的裝置"]
+    localUI["MyGitNotes 本機介面"]
+    localMCP["本機 Agent · stdio MCP"]
+    files["本機 Git 工作區<br/>Markdown · 資源 · 歷史"]
+    localUI --> files
+    localMCP --> files
+  end
+  subgraph deployment["MyGitNotes 部署"]
+    web["瀏覽器介面"]
+    agents["遠端 Agent · HTTP MCP"]
+    service["共用工作區操作<br/>固定一個平台與儲存庫"]
+    credentials["加密憑證<br/>Session · 憑證更新 · MCP 授權"]
+    web --> service
+    agents --> service
+    service --> credentials
+  end
+  subgraph storage["選定的 Git 託管平台"]
+    github["GitHub"]
+    gitlab["GitLab.com 或自架 GitLab"]
+  end
+  files <-->|Git 同步| storage
+  service <-->|固定版本讀取 · 原子提交| storage
+  web -. OAuth 登入 .-> storage
+```
 
 各層的責任刻意分開：
 
 - **Markdown 掌管內容。**沒有需要匯出的專有筆記資料庫。
 - **Git 掌管歷史與發布。**你決定提交哪些變更，也能檢查或還原每一次修改。
-- **GitHub 掌管遠端保存。**Vercel 只提供介面與 serverless 傳輸；Redis 保存 session 與 MCP 授權，不保存筆記。
+- **GitHub 或 GitLab 掌管遠端保存。**Vercel 只提供介面與 serverless 傳輸；Redis 保存 session 與 MCP 授權，不保存筆記。
 - **使用者掌管系統邊界。**儲存庫、分支、部署、憑證、Core 更新與每一筆 Agent 授權都由你決定。
 - **介面與 Agent 遵守同一套規則。**路徑限制、分支限制、revision 檢查與儲存庫權限同時約束兩者。
 
@@ -51,7 +76,7 @@ GitHub Notes 把一個 Git 儲存庫變成集中處理筆記、文件、素材�
 
 即使同一產品支援兩種模式，通常也只是二選一。以 Craft 為例，它支援本地 [External Locations](https://support.craft.do/en/account-and-subscription/storage-and-recovery/external-locations)，但該模式不提供內建分享與協作。
 
-GitHub Notes 則把兩種介面接到同一個 Markdown 與 Git 工作區。本地 UI 和本地 Agent 直接編輯檔案；Git 將內容同步到 GitHub；Vercel 再以同一個儲存庫提供高密度遠端筆記介面與 serverless MCP。不需要匯出、匯入或對帳第二份雲端副本。
+MyGitNotes 則把兩種介面接到同一個 Markdown 與 Git 工作區。本地 UI 和本地 Agent 直接編輯檔案；Git 將內容同步到 GitHub 或 GitLab；Vercel 再以同一個儲存庫提供高密度遠端筆記介面與 serverless MCP。不需要匯出、匯入或對帳第二份雲端副本。
 
 ## 儲存庫模型
 
@@ -65,15 +90,15 @@ GitHub Notes 則把兩種介面接到同一個 Markdown 與 Git 工作區。本�
 需要 Node.js 22+、pnpm 9+ 與 Git。
 
 ```bash
-git clone <repository-url> github-notes
-cd github-notes
+git clone <repository-url> mygitnotes
+cd mygitnotes
 pnpm install
 pnpm build
 pnpm bootstrap-workspace
 pnpm dev
 ```
 
-開啟 [http://localhost:5173](http://localhost:5173)。開發指令直接使用本機儲存庫，不需要登入 GitHub。
+開啟 [http://localhost:5173](http://localhost:5173)。開發指令直接使用本機儲存庫，不需要平台登入。
 
 若要開啟另一個 checkout：
 
@@ -116,6 +141,27 @@ UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_token
 部署後以 GitHub 登入，在「**設定 → MCP 存取控制**」建立唯讀或寫入授權，再把產生的 `/mcp/<token>` 網址貼到 ChatGPT、Claude、Cursor、Windsurf 或其他 MCP 用戶端。
 
 標準 GitHub OAuth App 會要求 `repo` scope，讓通過驗證的擁有者讀寫私人儲存庫。MCP 授權只適用於指定的儲存庫，並可逐一撤銷。
+
+## GitLab 部署
+
+每個部署指定一個平台、站台、專案與分支。沿用上方的建置、APP_URL、SESSION_SECRET 與 Redis 設定，來源與 OAuth 改用：
+
+```bash
+MYGITNOTES_SOURCE=gitlab
+MYGITNOTES_REPOSITORY=group/subgroup/project
+MYGITNOTES_BRANCH=main
+GITLAB_URL=https://gitlab.com
+GITLAB_CLIENT_ID=your_application_id
+GITLAB_CLIENT_SECRET=your_application_secret
+```
+
+自架 GitLab 的 `GITLAB_URL` 填入 HTTPS 站台網址；安裝於子路徑時包含該路徑。部署環境須能連線至該站台，並信任其 TLS 憑證。在所選站台註冊 OAuth application，啟用 `api` scope，callback 設為 `${APP_URL}/api/auth/gitlab/callback`。介面會顯示 GitLab 登入入口。Access token 與 refresh token 加密保存在伺服器端，持久 MCP 授權共用更新後的憑證。
+
+登入帳號需有 `main` 的 push 權限才能寫入。GitLab 將多檔修改批次提交為一個 commit，並以各既有檔案的最後提交 ID 檢查並行修改。公開儲存庫支援匿名讀取。內網 GitLab 須搭配能連入該網路的部署環境。
+
+產品已更名為 **MyGitNotes**。既有 `.github-notes.yaml`、Screen／Study 側錄檔、`@github-notes/*` 套件、GitHub OAuth callback 及 MCP 授權保持相容。新的 `MYGITNOTES_*` 來源設定優先於對應的 `GITHUB_NOTES_*`。伺服器設定新名稱為 `mygitnotes.server.yaml`，同時支援 `github-notes.server.yaml`。既有儲存庫與部署網址繼續沿用。
+
+參考：[GitLab OAuth](https://docs.gitlab.com/api/oauth2/)、[批次提交](https://docs.gitlab.com/api/commits/)。
 
 ## 說明文件
 

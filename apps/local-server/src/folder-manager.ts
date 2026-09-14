@@ -2,7 +2,7 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { loadWorkspaceConfig, resolveSafePath, isNotebookContent, planFolderChange, FolderCommandSchema, GitHubSource, SourceError, SCREEN_PAGE_FILE, type FolderSnapshot, type SourceConfig } from '@github-notes/core';
+import { loadWorkspaceConfig, resolveSafePath, isNotebookContent, planFolderChange, FolderCommandSchema, RemoteSource, createRemoteSource, SourceError, SCREEN_PAGE_FILE, type FolderSnapshot, type SourceConfig } from '@github-notes/core';
 import { getCurrentBranch } from '@github-notes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
@@ -87,7 +87,7 @@ export function applyLocalFolderPlan(root: string, before: FolderSnapshot, after
   }
 }
 
-async function remoteSnapshot(reader: GitHubSource): Promise<FolderSnapshot> {
+async function remoteSnapshot(reader: RemoteSource): Promise<FolderSnapshot> {
   const { entries } = await reader.getSnapshot(true);
   const config = await reader.config();
   const snapshot: FolderSnapshot = { notebooks: config.notebooks, directories: [], protectedPaths: [], files: new Map() };
@@ -113,7 +113,7 @@ export function createFolderManagerRouter(base: string, source: SourceConfig): R
     try {
       if (source.type === 'local') return res.json({ revision: revision(localFolderSnapshot(source.path)), writable: await getCurrentBranch(source.path) === 'main' });
       const token = await authToken(req, base);
-      const snapshot = await new GitHubSource(source.repository, source.branch, token).getSnapshot(true);
+      const snapshot = await createRemoteSource(source, token).getSnapshot(true);
       res.json({ revision: snapshot.sha, writable: Boolean(token && snapshot.info.permissions?.push && source.branch === 'main') });
     } catch (error) { fail(res, error); }
   });
@@ -133,7 +133,7 @@ export function createFolderManagerRouter(base: string, source: SourceConfig): R
       }
       const token = await authToken(req, base);
       if (!token) throw new SourceError('Sign in with write access to manage folders.', 403);
-      const reader = new GitHubSource(source.repository, source.branch, token);
+      const reader = createRemoteSource(source, token);
       const before = await remoteSnapshot(reader);
       const current = await reader.getSnapshot();
       if (current.sha !== req.body.revision) throw new SourceError('The workspace changed. Reload the folders and try again.', 409);
