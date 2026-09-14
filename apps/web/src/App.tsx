@@ -3,23 +3,20 @@ import { filterParsers, writeFilterQuery, type FilterQuery } from './lib/filter-
 import { filterNotes, legacyFolderPaths, type NoteFilters } from '@mygitnotes/core/note-filters';
 import type { FilterControls } from './lib/filter-controls.js';
 import { listLocalDrafts } from './lib/storage.js';
-import { useScreenPage } from './lib/use-screen-page.js';
+import { useWorkspaceSync } from './lib/use-workspace-sync.js';
 import { SCREEN_PAGE_FILE } from '@mygitnotes/core/screen-page';
 import { WorkspaceLinks } from './components/WorkspaceLinks.js';
 import { resolveNoteStatuses, isNoteHidden, withNoteStatus } from '@mygitnotes/core/note-status';
 import { Select } from './components/Select.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { notebookRoute, noteRoute, noteReturnRoute, parseWorkspaceRoute, WorkspaceTab } from './lib/routes.js';
-import { readWorkingNotes, updateWorkingNote, clearCommittedNotes, overlayWorkingNotes, workingDiff, WorkingNotes } from './lib/working-notes.js';
+import { readWorkingNotes, updateWorkingNote, clearCommittedNotes, overlayWorkingNotes, workingDiff, type WorkingNotes } from './lib/working-notes.js';
 import { mergeNote, sameValue } from './lib/merge-note.js';
-import { mergeNoteSnapshot } from './lib/note-snapshot.js';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   fetchWorkspace,
   commitRemoteNotes,
   ApiError,
-  fetchFolders,
-  fetchNotes,
   readNote,
   readNotes,
   saveNote,
@@ -31,12 +28,9 @@ import {
   moveAsset,
   fetchGitStatus,
 } from './lib/api.js';
-import {
-  WorkspaceConfig,
-  FolderItem,
+import type {
   NoteItem,
   AssetItem,
-  GitStatus,
   ViewMode,
 } from './lib/types.js';
 import { ThemeDefinition, getSavedTheme, applyTheme } from './lib/themes.js';
@@ -109,18 +103,7 @@ const AppContent: React.FC = () => {
     document.addEventListener('keydown', close);
     return () => document.removeEventListener('keydown', close);
   }, [filtersOpen]);
-  const [folders, setFolders] = useState<FolderItem[]>([]);
-  const [sourceId, setSourceId] = useState('');
-  const [remote, setRemote] = useState(false);
-  const loadedRemote = useRef(false);
-  const loadedWorkspace = useRef('');
-  const refreshRequest = useRef(0);
-  const [canWrite, setCanWrite] = useState(false);
-  const [revision, setRevision] = useState('');
-  const [loadError, setLoadError] = useState('');
-  const [loading, setLoading] = useState(true);
   const [createError, setCreateError] = useState('');
-  const [actionError, setActionError] = useState('');
   // Theme State
   const [currentTheme, setCurrentTheme] = useState<ThemeDefinition>(() => getSavedTheme());
 
@@ -133,52 +116,50 @@ const AppContent: React.FC = () => {
     applyTheme(theme);
   };
 
-  // Application Data State
-  const [repoRoot, setRepoRoot] = useState<string>('');
-  const [branch, setBranch] = useState<string>('core');
-  const [config, setConfig] = useState<WorkspaceConfig | null>(null);
-  const [serverGitStatus, setGitStatus] = useState<GitStatus | null>(null);
-  const [sourceNotes, setNotes] = useState<NoteItem[]>([]);
-  const [assets, setAssets] = useState<AssetItem[]>([]);
-  const [workingNotes, setWorkingNotes] = useState<WorkingNotes>({});
-  const workingScope = `${sourceId}:${branch}`;
-  const screen = useScreenPage(remote ? sourceId : `local:${repoRoot}`, () => { void fetchGitStatus().then(result => setGitStatus(result.status)); }, remote, Boolean(config && sourceId));
-  const screenPending = remote && canWrite && screen.dirty;
-  const activeWorkingNotes = remote && canWrite ? workingNotes : {};
-  const notes = useMemo(() => remote && canWrite ? overlayWorkingNotes(sourceNotes, workingNotes) : sourceNotes, [remote, canWrite, sourceNotes, workingNotes]);
-  const gitStatus = useMemo<GitStatus | null>(() => remote ? {
-    branch, isClean: !screenPending && Object.keys(activeWorkingNotes).length === 0, staged: [],
-    modified: [...Object.values(activeWorkingNotes).filter(entry => entry.base).map(entry => entry.note.path), ...(screenPending ? [SCREEN_PAGE_FILE] : [])],
-    untracked: Object.values(activeWorkingNotes).filter(entry => !entry.base).map(entry => entry.note.path),
-  } : serverGitStatus, [remote, branch, workingNotes, canWrite, serverGitStatus, screenPending]);
-  useEffect(() => {
-    const refresh = (event: StorageEvent) => {
-      if (event.key === `gh_notes_working:${workingScope}`) {
-        try { setWorkingNotes(readWorkingNotes(workingScope)); }
-        catch (error) { setActionError((error as Error).message); }
-      }
-    };
-    window.addEventListener('storage', refresh);
-    return () => window.removeEventListener('storage', refresh);
-  }, [workingScope]);
-  const stageWorkingNote = (note: NoteItem, base: NoteItem | null, blocked?: string) => {
-    note = { ...note, status: typeof note.metadata.status === 'string' ? note.metadata.status : undefined,
-      tags: Array.isArray(note.metadata.tags) ? note.metadata.tags.map(String) : [],
-      title: typeof note.metadata.title === 'string' && note.metadata.title ? note.metadata.title : note.content.match(/^#\s+(.+)$/m)?.[1] || note.title };
-    const previous = readWorkingNotes(workingScope)[note.path];
-    const entry = { note, base, ...(blocked ? { blocked } : {}) };
-    if (!sameValue(previous, entry)) setWorkingNotes(updateWorkingNote(workingScope, note.path, entry));
-    setEditingNote(current => current?.path === note.path && !sameValue(current, note) ? note : current);
-    return note;
-  };
+  const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
+
+  // The URL owns page, notebook, folder and filter selection.
+  const navigate = useNavigate();
+  const editorRoute = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
+
+  const {
+    selectedNotebookId,
+    folders,
+    sourceId,
+    remote,
+    canWrite,
+    revision,
+    setRevision,
+    loadError,
+    loading,
+    actionError,
+    setActionError,
+    repoRoot,
+    branch,
+    config,
+    gitStatus,
+    setGitStatus,
+    sourceNotes,
+    setNotes,
+    notes,
+    assets,
+    setAssets,
+    setWorkingNotes,
+    workingScope,
+    activeWorkingNotes,
+    screen,
+    screenPending,
+    refreshWorkspace,
+    stageWorkingNote,
+  } = useWorkspaceSync({
+    routeNotebook: editorRoute.notebook || undefined,
+    onStageNote: note => setEditingNote(current => current?.path === note.path && !sameValue(current, note) ? note : current),
+  });
 
   // Deletion and Undo Buffer State (Requirement 2)
   const [deletedNotes, setDeletedNotes] = useState<NoteItem[]>([]);
   const [undoToast, setUndoToast] = useState<{ note: NoteItem; timerId: any } | null>(null);
 
-  // The URL owns page, notebook, folder and filter selection.
-  const navigate = useNavigate();
-  const editorRoute = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
   const editorNotebookId = editorRoute.notebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
   const returnTo = noteReturnRoute(location.search, editorNotebookId, editorRoute.folder);
   const route = useMemo(() => {
@@ -189,7 +170,6 @@ const AppContent: React.FC = () => {
   const activeTab = route.tab;
   useEffect(() => { setFolderReorder(false); }, [activeTab, route.notebook]);
   const sidebarGestureRef = useSidebarSwipe(activeTab === 'notes' && !loading && !loadError, filtersOpen, setFiltersOpen);
-  const selectedNotebookId = route.notebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
   const notebookStatuses = useMemo(() => resolveNoteStatuses(
     config?.notebooks.find(nb => nb.id === selectedNotebookId),
     notes.filter(note => selectedNotebookId === 'all' || note.notebookId === selectedNotebookId).map(note => note.status),
@@ -268,7 +248,6 @@ const AppContent: React.FC = () => {
 
 
   // Modal States
-  const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
   const [isCommitOpen, setIsCommitOpen] = useState<boolean>(false);
   const [isNewNoteOpen, setIsNewNoteOpen] = useState<boolean>(false);
 
@@ -313,55 +292,6 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     setEditingNote(null);  setDeletedNotes([]); setIsNewNoteOpen(false);
   }, [sourceId]);
-
-  const refreshWorkspace = async (notebookId?: string) => {
-    const request = ++refreshRequest.current;
-    try {
-      const ws = await fetchWorkspace();
-      if (request !== refreshRequest.current) return;
-      // A different source, branch or notebook root needs a complete snapshot.
-      const workspace = JSON.stringify([ws.source.identity, ws.branch, ws.config?.notebooks.map(nb => [nb.id, nb.root])]);
-      const sameWorkspace = loadedWorkspace.current === workspace;
-      const scope = ws.capabilities.local && sameWorkspace && ws.config?.notebooks.some(nb => nb.id === notebookId) ? notebookId : undefined;
-      const [folderList, noteList] = await Promise.all([fetchFolders(), fetchNotes(scope)]);
-      if (request !== refreshRequest.current) return;
-      loadedWorkspace.current = workspace;
-      loadedRemote.current = !ws.capabilities.local;
-      setSourceId(ws.source.identity);
-      setRemote(!ws.capabilities.local);
-      setCanWrite(ws.capabilities.write);
-      setRevision(ws.revision || '');
-      setLoadError('');
-      setRepoRoot(ws.repoRoot);
-      setBranch(ws.branch);
-      setConfig(previous => sameValue(previous, ws.config) ? previous : ws.config);
-      setWorkingNotes(ws.capabilities.local ? {} : readWorkingNotes(`${ws.source.identity}:${ws.branch}`));
-      setGitStatus(ws.gitStatus);
-
-      setFolders(previous => sameValue(previous, folderList) ? previous : folderList);
-      setNotes(previous => mergeNoteSnapshot(sameWorkspace ? previous : [], noteList, scope));
-
-    } catch (err) {
-      if (request !== refreshRequest.current) return;
-      loadedWorkspace.current = ''; loadedRemote.current = false;
-      setNotes([]); setFolders([]); setAssets([]); setConfig(null);
-      setLoadError(err instanceof Error ? err.message : 'Failed to load workspace');
-    } finally { if (request === refreshRequest.current) setLoading(false); }
-  };
-
-  useEffect(() => {
-    if (!loadedRemote.current) {
-      void refreshWorkspace(loadedWorkspace.current ? selectedNotebookId : undefined);
-    }
-    return () => { refreshRequest.current++; };
-  }, [selectedNotebookId]);
-
-  useEffect(() => {
-    if (!sourceId || !config || selectedNotebookId === 'all') return;
-    let active = true;
-    fetchAssets(selectedNotebookId).then(items => { if (active) setAssets(items); }).catch(console.error);
-    return () => { active = false; };
-  }, [sourceId, selectedNotebookId, config]);
 
   useEffect(() => {
     if (loading || !config) return;
