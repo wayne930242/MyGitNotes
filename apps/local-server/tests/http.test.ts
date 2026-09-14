@@ -28,6 +28,32 @@ beforeEach(async () => {
 afterEach(async()=>{ await new Promise<void>(resolve=>server.close(()=>resolve())); fs.rmSync(root,{recursive:true,force:true}); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe('real HTTP local boundaries',()=>{
+  it('manages exact file changes and refuses stale or protected mutations', async () => {
+    const file = 'notes/example/projects/deep/note.md';
+    const other = 'notes/example/other.md';
+    const request = (body: unknown) => ({ method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    fs.writeFileSync(path.join(root, file), '# Changed');
+    fs.writeFileSync(path.join(root, other), '# New');
+    let changes = (await fetch(`${base}/api/git/changes`).then(r => r.json())).changes;
+    const changed = changes.find((entry: any) => entry.path === file);
+    expect(changed).toMatchObject({ available: true, staged: false, unstaged: true, tracked: true });
+    expect((await fetch(`${base}/api/git/change`, request({ ...changed, action: 'stage' }))).status).toBe(200);
+    expect((await fetch(`${base}/api/git/file-diff?path=${file}&side=staged`).then(r => r.json())).diff).toContain('+# Changed');
+    fs.writeFileSync(path.join(root, file), '# Later');
+    expect((await fetch(`${base}/api/git/change`, request({ ...changed, action: 'restore' }))).status).toBe(409);
+    for (const target of ['notes/example', '.env', ':(glob)notes/**', '../outside']) {
+      expect((await fetch(`${base}/api/git/change`, request({ path: target, revision: changed.revision, action: 'restore' }))).ok).toBe(false);
+    }
+    changes = (await fetch(`${base}/api/git/changes`).then(r => r.json())).changes;
+    const staged = changes.find((entry: any) => entry.path === file);
+    expect((await fetch(`${base}/api/git/commit-staged`, request({ files: [file], revisions: { [file]: staged.revision }, message: 'only staged' }))).status).toBe(200);
+    expect(git('show', `HEAD:${file}`).toString()).toBe('# Changed');
+    expect(fs.readFileSync(path.join(root, file), 'utf8')).toBe('# Later');
+    const fresh = changes.find((entry: any) => entry.path === other);
+    expect((await fetch(`${base}/api/git/change`, request({ ...fresh, action: 'restore' }))).status).toBe(200);
+    expect(fs.existsSync(path.join(root, other))).toBe(false);
+    expect(fs.readFileSync(path.join(root, '.env'), 'utf8')).toBe('SECRET=hidden');
+  });
   it('lists, edits, commits and restores workspace Agent documents while protecting secrets and product paths', async () => {
     const settings = ['AGENTS.md', '.agents/skills/custom/SKILL.md', '.codex/agents/reviewer.toml'];
     for (const file of settings) {

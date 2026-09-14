@@ -16,6 +16,8 @@ import {
   ListTree,
   ChevronUp,
   ChevronDown,
+  GitBranch,
+  PanelRight,
 } from 'lucide-react';
 import { mergeNote, sameValue, NoteDraft } from '../lib/merge-note.js';
 import { ApiError } from '../lib/api.js';
@@ -25,7 +27,9 @@ import { NoteItem, AssetItem } from '../lib/types.js';
 import { saveLocalDraft, getLocalDraft, clearLocalDraft } from '../lib/storage.js';
 import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
 import { useTranslation } from '../lib/i18n/index.js';
-import { findTextMatches, parseMarkdownOutline } from '../lib/note-navigation.js';
+import { findOutlineIndexForLine, findTextMatches, parseMarkdownOutline } from '../lib/note-navigation.js';
+
+type NotePanelMode = 'find' | 'outline' | 'frontmatter' | 'assets' | 'git';
 
 interface EditorModalProps {
   note: NoteItem | null;
@@ -90,8 +94,9 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   const [content, setContent] = useState(note.content);
   const [metadata, setMetadata] = useState<Record<string, unknown>>(note.metadata || {});
   const [editorMode, setEditorMode] = useState<MarkdownEditorMode>('live');
-  const [showFrontmatter, setShowFrontmatter] = useState(false);
+  const [notePanel, setNotePanel] = useState<NotePanelMode | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [saveError, setSaveError] = useState(conflictReason || '');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [baseNote, setBaseNote] = useState(remoteBase || note);
@@ -105,7 +110,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const current = useRef({ content, metadata, baseNote, blocked });
   current.current = { content, metadata, baseNote, blocked };
-  const locked = readOnly || blocked || closing.current || (!autoSave && isSaving);
+  const locked = readOnly || blocked || isRestoring || closing.current || (!autoSave && isSaving);
   const preserveConflict = () => {
     const draft = { content: current.current.content, metadata: current.current.metadata };
     saveLocalDraft(`${draftScope || branch}:conflict`, note.path, draft.content, draft.metadata);
@@ -182,12 +187,13 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  // Asset picker modal state (Requirement 2)
-  const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false);
-  const [isFindOpen, setIsFindOpen] = useState(false);
+  const isAssetPickerOpen = notePanel === 'assets';
+  const isFindOpen = notePanel === 'find';
+  const isOutlineOpen = notePanel === 'outline';
+  const showFrontmatter = notePanel === 'frontmatter';
+  const isGitPanelOpen = notePanel === 'git';
   const [findQuery, setFindQuery] = useState('');
   const [findIndex, setFindIndex] = useState(0);
-  const [isOutlineOpen, setIsOutlineOpen] = useState(false);
   const [outlineIndex, setOutlineIndex] = useState(0);
   const [isEditorLeaderOpen, setIsEditorLeaderOpen] = useState(false);
   const findInputRef = useRef<HTMLInputElement>(null);
@@ -212,8 +218,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   }, [editorMode, findIndex, isFindOpen, matches]);
 
   const openFind = () => {
-    setIsEditorLeaderOpen(false); setIsOutlineOpen(false);
-    setIsFindOpen(true);
+    setIsEditorLeaderOpen(false); setNotePanel('find');
     requestAnimationFrame(() => { findInputRef.current?.focus(); findInputRef.current?.select(); });
   };
   const stepFind = (delta: number) => {
@@ -223,6 +228,13 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
   // Note is considered dirty if it has uncommitted edits on disk OR unsaved session edits
   const isDirty = Boolean(propIsDirty || hasUnsavedChanges);
+  const canRestore = autoSave && !readOnly && !isSaving && !isRestoring && (draftMode ? isDirty : propIsDirty);
+  const editorState = isSaving ? 'saving' : isDirty ? 'pending' : 'saved';
+  const editorStatus = isSaving
+    ? t(draftMode ? 'editor.savingLocally' : autoSave ? 'editor.autoSavingToDisk' : 'editor.savingToGitHub')
+    : isDirty
+      ? t(draftMode ? hasUnsavedChanges ? 'editor.unsavedLocalChanges' : 'editor.savedLocallyPendingCommit' : autoSave ? 'editor.uncommittedChanges' : 'editor.unsavedChanges')
+      : t(readOnly ? 'editor.readOnly' : draftMode ? 'editor.noPendingChanges' : autoSave ? 'editor.cleanSavedToDisk' : 'editor.savedToGitHub');
 
   // Crash recovery state
   const [recoveredDraft, setRecoveredDraft] = useState<{
@@ -240,11 +252,9 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     setConfirmRestore(false);
     setTagInput('');
     setIsTagDropdownOpen(false);
-    setIsAssetPickerOpen(false);
-    setIsFindOpen(false);
+    setNotePanel(null);
     setFindQuery('');
     setFindIndex(0);
-    setIsOutlineOpen(false);
     setOutlineIndex(0);
     setIsEditorLeaderOpen(false);
 
@@ -268,7 +278,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
       // Save local draft for crash recovery
       saveLocalDraft(draftScope || branch, note.path, content, metadata);
 
-      if (!autoSave || blocked) return;
+      if (!autoSave || blocked || isRestoring) return;
 
       if (draftMode) {
         setIsSaving(true);
@@ -303,7 +313,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     } else {
       setHasUnsavedChanges(false);
     }
-  }, [content, metadata, note, branch, draftScope, onSave, readOnly, autoSave, baseNote, blocked, draftMode]);
+  }, [content, metadata, note, branch, draftScope, onSave, readOnly, autoSave, baseNote, blocked, draftMode, isRestoring]);
 
   const handleExplicitSave = async () => {
     if (locked || operation.current) return;
@@ -347,7 +357,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   }), [registerBeforeNavigate, readOnly, note, onSave, draftScope, branch]);
 
   const close = async () => {
-    if (closing.current) return;
+    if (closing.current || isRestoring || operation.current) return;
     if (autoSave && !readOnly && !current.current.blocked && (draftMode || current.current.content !== note.content || !sameValue(current.current.metadata, note.metadata))) {
       closing.current = true; setIsSaving(true);
       try {
@@ -361,19 +371,26 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   };
   const escapeAction = useRef(() => {});
   escapeAction.current = () => {
-    if (isAssetPickerOpen) setIsAssetPickerOpen(false);
-    else if (isEditorLeaderOpen) setIsEditorLeaderOpen(false);
-    else if (isFindOpen) setIsFindOpen(false);
-    else if (isOutlineOpen) setIsOutlineOpen(false);
+    if (isEditorLeaderOpen) setIsEditorLeaderOpen(false);
+    else if (notePanel) setNotePanel(null);
     else void close();
   };
   const openOutline = () => {
-    setIsEditorLeaderOpen(false); setIsFindOpen(false); setOutlineIndex(0); setIsOutlineOpen(true);
+    const currentLine = editorRef.current?.getCurrentLine() ?? 1;
+    setIsEditorLeaderOpen(false);
+    setOutlineIndex(findOutlineIndexForLine(outline, currentLine));
+    setNotePanel('outline');
   };
   const chooseOutline = (index: number, closeAfter = true) => {
     const heading = outline[index]; if (!heading) return;
     editorRef.current?.goToLine(heading.line, { focus: closeAfter, smooth: true });
-    if (closeAfter) setIsOutlineOpen(false);
+    if (closeAfter) setNotePanel(null);
+  };
+  const moveOutline = (delta: number) => {
+    if (outline.length === 0) return;
+    const nextIndex = (outlineIndex + delta + outline.length) % outline.length;
+    setOutlineIndex(nextIndex);
+    chooseOutline(nextIndex, false);
   };
   const shortcutAction = useRef<(event: KeyboardEvent) => boolean>(() => false);
   shortcutAction.current = event => {
@@ -387,10 +404,10 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     }
     if (isOutlineOpen && !event.ctrlKey && !event.metaKey && !event.altKey) {
       if (event.key.toLowerCase() === 'j' || event.key === 'ArrowDown') {
-        setOutlineIndex(index => outline.length ? (index + 1) % outline.length : 0); return true;
+        moveOutline(1); return true;
       }
       if (event.key.toLowerCase() === 'k' || event.key === 'ArrowUp') {
-        setOutlineIndex(index => outline.length ? (index - 1 + outline.length) % outline.length : 0); return true;
+        moveOutline(-1); return true;
       }
       if (event.key === 'Enter') { chooseOutline(outlineIndex); return true; }
     }
@@ -402,7 +419,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
       if (shortcutAction.current(event)) {
         event.preventDefault(); event.stopPropagation(); return;
       }
-      if (event.key === 'Escape' && !document.querySelector('dialog[open]')) {
+      if (event.key === 'Escape' && !document.querySelector('dialog[open], [aria-label="Asset preview"]')) {
         event.preventDefault(); event.stopPropagation(); escapeAction.current();
       }
     };
@@ -414,7 +431,6 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     if (!isOutlineOpen || outline.length === 0) return;
     const index = Math.min(outlineIndex, outline.length - 1);
     if (index !== outlineIndex) { setOutlineIndex(index); return; }
-    editorRef.current?.goToLine(outline[index].line, { focus: false, smooth: true });
     requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-outline-index="${index}"]`)?.focus());
   }, [isOutlineOpen, outline, outlineIndex]);
 
@@ -433,6 +449,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
   // Two-click confirm single-file restore (Requirement 1 & 3)
   const handleRestoreClick = async () => {
+    if (!canRestore) return;
     if (!confirmRestore) {
       // First click: prompt confirmation
       setConfirmRestore(true);
@@ -447,9 +464,10 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     try {
       if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
       setConfirmRestore(false);
+      setIsRestoring(true); operation.current = true;
       setIsSaving(true);
-      clearLocalDraft(draftScope || branch, note.path);
       const restored = await onRestoreFile(note.path);
+      clearLocalDraft(draftScope || branch, note.path);
       if (restored) {
         setBaseNote(restored);
         setContent(restored.content);
@@ -457,8 +475,9 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
       }
       setHasUnsavedChanges(false);
     } catch (err) {
-      console.error('Failed to restore note file:', err);
+      setSaveError((err as Error).message);
     } finally {
+      setIsRestoring(false); operation.current = false;
       setIsSaving(false);
     }
   };
@@ -467,7 +486,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   const handleInsertAssetRef = (ref: string) => {
     if (locked) return;
     editorRef.current?.insert(`\n${ref}\n`);
-    setIsAssetPickerOpen(false);
+    setNotePanel(null);
   };
 
   // Tag autocomplete helpers (Requirement 4)
@@ -556,78 +575,9 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
           <div className="note-controls flex items-center gap-2">
             {!autoSave && !readOnly && <button aria-label={t('editor.saveToGitHub')} title={t('editor.saveToGitHub')} disabled={locked || !hasUnsavedChanges} onClick={handleExplicitSave} className="note-save editor-action px-3 py-1.5 rounded-lg text-xs text-white transition hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: 'var(--color-primary)' }}><Save className="editor-mobile-icon w-5 h-5" /><span>{isSaving ? t('editor.saving') : t('editor.saveToGitHub')}</span></button>}
             {isMarkdown && <MarkdownEditorModeSwitch mode={editorMode} onChange={setEditorMode} />}
-
-            <button type="button" aria-label={t('editor.findInNote')} title={`${t('editor.findInNote')} · ${t('editor.findShortcut')}`}
-              aria-pressed={isFindOpen} onClick={() => isFindOpen ? setIsFindOpen(false) : openFind()}
-              className="editor-action editor-secondary-action editor-find-action"><Search className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('editor.find')}</span></button>
-
-            {isMarkdown && <button type="button" aria-label={t('editor.outline')} title={t('editor.outline')}
-              aria-pressed={isOutlineOpen} onClick={() => isOutlineOpen ? setIsOutlineOpen(false) : openOutline()}
-              className="editor-action editor-secondary-action editor-outline-action"><ListTree className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('editor.outline')}</span></button>}
-
-            {/* Frontmatter Toggle */}
-            <button
-              aria-label={t('editor.frontmatter')} aria-pressed={showFrontmatter}
-              onClick={() => setShowFrontmatter(!showFrontmatter)}
-              className={`editor-action flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
-                showFrontmatter
-                  ? 'border-slate-300 dark:border-slate-600 font-semibold hover:opacity-90'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100'
-              }`}
-              style={
-                showFrontmatter
-                  ? {
-                      backgroundColor: 'var(--color-primary-light)',
-                      color: 'var(--color-primary)',
-                      borderColor: 'var(--color-primary)',
-                    }
-                  : undefined
-              }
-            >
-              <Settings2 className="w-3.5 h-3.5" />
-              <span>{t('editor.frontmatter')}</span>
-            </button>
-
-            {/* Insert Asset Helper (Requirement 2: Directly opens inline Asset Picker) */}
-            <button
-              aria-label={t('editor.asset')}
-              onClick={() => setIsAssetPickerOpen(true)}
-              className="editor-action flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 transition"
-              title={t('editor.insertAssetTooltip')}
-            >
-              <ImageIcon className="w-3.5 h-3.5" style={{ color: 'var(--color-primary)' }} />
-              <span>{t('editor.asset')}</span>
-            </button>
-
-            {/* Single-File Restore Button with Two-Click Confirmation (Requirement 3: Only shown when note is dirty!) */}
-            {autoSave && !readOnly && isDirty && (
-              <button
-                aria-label={confirmRestore ? t('editor.confirmRestoreNote') : t('editor.restoreNote')}
-                onClick={handleRestoreClick}
-                className={`editor-action ${confirmRestore ? 'editor-confirming' : ''} flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium transition active:scale-95 shadow-xs ${
-                  confirmRestore
-                    ? 'bg-rose-600 hover:bg-rose-700 text-white font-bold animate-pulse'
-                    : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-amber-600'
-                }`}
-                title={
-                  confirmRestore
-                    ? t('editor.confirmRestoreTooltip')
-                    : t('editor.restoreTooltip')
-                }
-              >
-                {confirmRestore ? (
-                  <>
-                    <AlertTriangle className="w-3.5 h-3.5 text-white" />
-                    <span>{t('editor.confirmRestore')}</span>
-                  </>
-                ) : (
-                  <>
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>{t('editor.restore')}</span>
-                  </>
-                )}
-              </button>
-            )}
+            <button type="button" aria-label={t('editor.documentPanel')} title={t('editor.documentPanel')}
+              aria-pressed={Boolean(notePanel)} onClick={() => notePanel ? setNotePanel(null) : isMarkdown ? openOutline() : openFind()}
+              className="editor-action editor-secondary-action editor-panel-action"><PanelRight className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('editor.documentPanel')}</span></button>
 
             {/* Close Button */}
             <button
@@ -640,9 +590,47 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
           </div>
         </div>
 
-        {/* Optional Frontmatter Inspector Drawer with Autocomplete Tag Editor (Requirement 4) */}
-        {showFrontmatter && (
-          <fieldset disabled={locked} className="note-metadata shrink-0 min-w-0 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 p-4 grid grid-cols-1 md:grid-cols-4 gap-4 text-xs animate-fadeIn">
+        <div className="note-editor-body">
+          <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} ariaLabel="Note content" />
+          {notePanel && <aside className="note-document-panel" data-panel={notePanel} aria-label={t('editor.documentPanel')}>
+            <div className="note-panel-tabs" role="tablist" aria-label={t('editor.documentPanel')}>
+              <button type="button" role="tab" aria-selected={isFindOpen} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={openFind}><Search aria-hidden="true" /><span>{t('editor.find')}</span></button>
+              {isMarkdown && <button type="button" role="tab" aria-selected={isOutlineOpen} aria-label={t('editor.outline')} title={t('editor.outline')} onClick={openOutline}><ListTree aria-hidden="true" /><span>{t('editor.outline')}</span></button>}
+              <button type="button" role="tab" aria-selected={showFrontmatter} aria-label={t('editor.frontmatter')} title={t('editor.frontmatter')} onClick={() => setNotePanel('frontmatter')}><Settings2 aria-hidden="true" /><span>{t('editor.frontmatter')}</span></button>
+              <button type="button" role="tab" aria-selected={isAssetPickerOpen} aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onClick={() => setNotePanel('assets')}><ImageIcon aria-hidden="true" /><span>{t('editor.asset')}</span></button>
+              <button type="button" role="tab" aria-selected={isGitPanelOpen} aria-label={t('editor.fileGitStatus')} title={t('editor.fileGitStatus')} onClick={() => setNotePanel('git')}><GitBranch aria-hidden="true" /><span>{t('editor.git')}</span></button>
+              <button type="button" className="note-panel-close ui-icon-button" aria-label={t('common.close')} onClick={() => setNotePanel(null)}><X aria-hidden="true" /></button>
+            </div>
+
+            {isFindOpen && <form className="note-find-panel" role="search" aria-label={t('editor.findInNote')}
+              onSubmit={event => { event.preventDefault(); stepFind(1); }}>
+              <label className="note-find-field"><Search aria-hidden="true" />
+                <input ref={findInputRef} type="search" value={findQuery} onChange={event => setFindQuery(event.target.value)}
+                  onKeyDown={event => { if (event.key === 'Enter' && event.shiftKey) { event.preventDefault(); stepFind(-1); } }}
+                  aria-label={t('editor.findInNote')} placeholder={t('editor.findPlaceholder')} autoComplete="off" />
+              </label>
+              <div className="note-find-navigation">
+                <span className="note-find-count" aria-live="polite">{findQuery
+                  ? matches.length ? t('editor.matchCount', { current: Math.min(findIndex + 1, matches.length), total: matches.length }) : t('editor.noMatches')
+                  : ''}</span>
+                <button type="button" className="ui-icon-button" aria-label={t('editor.previousMatch')} disabled={matches.length === 0} onClick={() => stepFind(-1)}><ChevronUp aria-hidden="true" /></button>
+                <button type="submit" className="ui-icon-button" aria-label={t('editor.nextMatch')} disabled={matches.length === 0}><ChevronDown aria-hidden="true" /></button>
+              </div>
+            </form>}
+
+            {isOutlineOpen && <section className="note-outline" aria-label={t('editor.outline')}>
+              {outline.length > 0 ? <nav aria-label={t('editor.outline')}>
+                {outline.map((heading, index) => <button type="button" key={`${heading.from}-${index}`} data-outline-index={index}
+                  aria-current={index === outlineIndex ? 'true' : undefined}
+                  style={{ paddingInlineStart: `${12 + (heading.depth - 1) * 14}px` }}
+                  title={heading.label} onFocus={() => setOutlineIndex(index)} onClick={() => chooseOutline(index)}>
+                  <span>{heading.label}</span><small>{heading.line}</small>
+                </button>)}
+              </nav> : <p>{t('editor.outlineEmpty')}</p>}
+            </section>}
+
+            {showFrontmatter && <div className="note-panel-scroll">
+          <fieldset disabled={locked} className="note-metadata min-w-0 text-xs animate-fadeIn">
             <div>
               <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">{t('editor.title')}</label>
               <input
@@ -665,7 +653,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
             </div>
 
             {/* Tags with Autocomplete (Requirement 4) */}
-            <div className="md:col-span-2 relative">
+            <div className="relative">
               <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">
                 {t('editor.tags')}
               </label>
@@ -747,35 +735,29 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
                 </div>
               )}
             </div>
-          </fieldset>
-        )}
+          </fieldset></div>}
 
-        {isFindOpen && <form className="note-find-bar" role="search" aria-label={t('editor.findInNote')}
-          onSubmit={event => { event.preventDefault(); stepFind(1); }}>
-          <Search aria-hidden="true" />
-          <input ref={findInputRef} type="search" value={findQuery} onChange={event => setFindQuery(event.target.value)}
-            onKeyDown={event => { if (event.key === 'Enter' && event.shiftKey) { event.preventDefault(); stepFind(-1); } }}
-            aria-label={t('editor.findInNote')} placeholder={t('editor.findPlaceholder')} autoComplete="off" />
-          <span className="note-find-count" aria-live="polite">{findQuery
-            ? matches.length ? t('editor.matchCount', { current: Math.min(findIndex + 1, matches.length), total: matches.length }) : t('editor.noMatches')
-            : ''}</span>
-          <button type="button" className="ui-icon-button" aria-label={t('editor.previousMatch')} disabled={matches.length === 0} onClick={() => stepFind(-1)}><ChevronUp aria-hidden="true" /></button>
-          <button type="submit" className="ui-icon-button" aria-label={t('editor.nextMatch')} disabled={matches.length === 0}><ChevronDown aria-hidden="true" /></button>
-          <button type="button" className="ui-icon-button" aria-label={t('editor.closeSearch')} onClick={() => setIsFindOpen(false)}><X aria-hidden="true" /></button>
-        </form>}
+            {isAssetPickerOpen && <div className="note-panel-assets note-panel-scroll">
+              <AssetLibrary assets={assets} onUploadAsset={locked ? undefined : onUploadAsset} onDeleteAsset={locked ? undefined : onDeleteAsset} onMoveAsset={locked ? undefined : onMoveAsset} onInsert={locked ? undefined : asset => handleInsertAssetRef(asset.markdownRef)} />
+            </div>}
 
-        <div className="note-editor-body">
-          <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} ariaLabel="Note content" />
-          {isOutlineOpen && <aside className="note-outline" aria-label={t('editor.outline')}>
-            <div className="note-outline-heading"><strong>{t('editor.outline')}</strong><button type="button" className="ui-icon-button" aria-label={t('editor.closeOutline')} onClick={() => setIsOutlineOpen(false)}><X aria-hidden="true" /></button></div>
-            {outline.length > 0 ? <nav aria-label={t('editor.outline')}>
-              {outline.map((heading, index) => <button type="button" key={`${heading.from}-${index}`} data-outline-index={index}
-                aria-current={index === outlineIndex ? 'true' : undefined}
-                style={{ paddingInlineStart: `${12 + (heading.depth - 1) * 14}px` }}
-                title={heading.label} onMouseEnter={() => setOutlineIndex(index)} onClick={() => chooseOutline(index)}>
-                <span>{heading.label}</span><small>{heading.line}</small>
-              </button>)}
-            </nav> : <p>{t('editor.outlineEmpty')}</p>}
+            {isGitPanelOpen && <div className="note-git-panel note-panel-scroll">
+              <dl>
+                <div><dt>{t('editor.filePath')}</dt><dd className="font-mono">{note.path}</dd></div>
+                <div><dt>{t('editor.currentBranch')}</dt><dd className="font-mono">{branch}</dd></div>
+              </dl>
+              <div className="note-git-state" data-state={editorState} role="status"><span aria-hidden="true" />{editorStatus}</div>
+              {autoSave && !readOnly ? <button type="button"
+                aria-label={confirmRestore ? t('editor.confirmRestoreNote') : t('editor.restoreNote')}
+                disabled={!canRestore}
+                onClick={handleRestoreClick}
+                className={`ui-button ${confirmRestore ? 'ui-button-danger note-restore-confirm' : ''}`}
+                title={confirmRestore ? t('editor.confirmRestoreTooltip') : t('editor.restoreTooltip')}>
+                {confirmRestore ? <AlertTriangle aria-hidden="true" /> : <RotateCcw aria-hidden="true" />}
+                {confirmRestore ? t('editor.confirmRestore') : t('editor.restore')}
+              </button> : <p className="note-git-help">{t('editor.restoreUnavailable')}</p>}
+              {!isDirty && autoSave && !readOnly && <p className="note-git-help">{t('editor.noFileChanges')}</p>}
+            </div>}
           </aside>}
         </div>
 
@@ -783,12 +765,8 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
           content={content}
           path={note.path}
           branch={branch}
-          state={isSaving ? 'saving' : isDirty ? 'pending' : 'saved'}
-          status={isSaving
-            ? t(draftMode ? 'editor.savingLocally' : autoSave ? 'editor.autoSavingToDisk' : 'editor.savingToGitHub')
-            : isDirty
-              ? t(draftMode ? hasUnsavedChanges ? 'editor.unsavedLocalChanges' : 'editor.savedLocallyPendingCommit' : autoSave ? 'editor.uncommittedChanges' : 'editor.unsavedChanges')
-              : t(readOnly ? 'editor.readOnly' : draftMode ? 'editor.noPendingChanges' : autoSave ? 'editor.cleanSavedToDisk' : 'editor.savedToGitHub')}
+          state={editorState}
+          status={editorStatus}
         />
         {isEditorLeaderOpen && <div className="note-editor-leader" role="dialog" aria-modal="false" aria-label={t('editor.noteCommands')}>
           <div><strong>{t('editor.noteCommands')}</strong><small>{t('editor.leaderHint')}</small></div>
@@ -797,12 +775,6 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
         </div>}
       </div>
 
-      {isAssetPickerOpen && <div role="dialog" aria-label={t('editor.notebookAssets')} aria-modal="true" className="viewport-overlay fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="ui-dialog shadow-2xl w-full max-w-3xl max-h-[85dvh] flex flex-col overflow-hidden">
-          <div className="p-4 border-b shrink-0 flex items-center justify-between" style={{ borderColor:'var(--color-border)' }}><span className="font-semibold text-sm theme-text">{t('editor.notebookAssets')}</span><button aria-label={t('editor.closeNotebookAssets')} onClick={() => setIsAssetPickerOpen(false)} className="ui-icon-button"><X className="w-5 h-5" /></button></div>
-          <div className="p-4 overflow-y-auto"><AssetLibrary assets={assets} onUploadAsset={locked ? undefined : onUploadAsset} onDeleteAsset={locked ? undefined : onDeleteAsset} onMoveAsset={locked ? undefined : onMoveAsset} onInsert={locked ? undefined : asset => handleInsertAssetRef(asset.markdownRef)} /></div>
-        </div>
-      </div>}
     </div>
   );
 };

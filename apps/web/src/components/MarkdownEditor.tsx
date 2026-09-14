@@ -10,6 +10,7 @@ export interface MarkdownEditorHandle {
   insert: (text: string) => void;
   revealRange: (from: number, to: number, focus?: boolean) => void;
   goToLine: (line: number, options?: { focus?: boolean; smooth?: boolean }) => void;
+  getCurrentLine: () => number;
 }
 interface Props {
   content: string;
@@ -91,7 +92,16 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
       target.setSelectionRange(from, from); setActiveSourceLine(targetLine);
       target.scrollTo({ top: Math.max(0, (targetLine - 1) * 22.75 - 16), behavior: options.smooth ? 'smooth' : 'auto' });
       if (options.focus !== false) target.focus();
-    }
+    },
+    getCurrentLine() {
+      if (mode === 'live' && isMarkdown) return live.current?.getCurrentLine() ?? 1;
+      const target = source.current;
+      if (!target) return 1;
+      const lineCount = target.value.split('\n').length;
+      if (target.scrollTop + target.clientHeight >= target.scrollHeight - 2) return lineCount;
+      const lineHeight = Number.parseFloat(getComputedStyle(target).lineHeight) || 22.75;
+      return Math.max(1, Math.min(Math.floor(target.scrollTop / lineHeight) + 1, lineCount));
+    },
   }), [content, mode, readOnly, isMarkdown, onChange]);
 
   return (

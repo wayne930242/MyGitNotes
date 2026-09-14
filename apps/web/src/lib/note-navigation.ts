@@ -10,6 +10,16 @@ export interface OutlineHeading {
   from: number;
 }
 
+export function findOutlineIndexForLine(outline: OutlineHeading[], line: number): number {
+  if (outline.length === 0) return 0;
+  let active = 0;
+  for (let index = 0; index < outline.length; index += 1) {
+    if (outline[index].line > line) break;
+    active = index;
+  }
+  return active;
+}
+
 export function findTextMatches(content: string, query: string): TextMatch[] {
   const needle = query.trim();
   if (!needle) return [];
