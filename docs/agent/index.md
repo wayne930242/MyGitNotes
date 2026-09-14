@@ -1,6 +1,6 @@
 # Product Agent Documentation Index
 
-This directory contains technical documentation for coding agents working on the GitHub Notes product codebase.
+This directory contains technical documentation for coding agents working on the MyGitNotes product codebase.
 
 ## Sections
 

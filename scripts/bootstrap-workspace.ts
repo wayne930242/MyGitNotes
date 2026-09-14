@@ -7,11 +7,11 @@ async function bootstrapWorkspace() {
   const repoRoot = process.cwd();
   console.log(`[bootstrap] Starting workspace initialization for: ${repoRoot}`);
 
-  // 1. Verify this is a GitHub Notes clone
+  // 1. Verify this is a MyGitNotes clone
   const workspaceMarker = path.join(repoRoot, 'pnpm-workspace.yaml');
   const packagesCore = path.join(repoRoot, 'packages/core');
   if (!fs.existsSync(workspaceMarker) || !fs.existsSync(packagesCore)) {
-    console.error('[bootstrap] Error: This directory does not appear to be a GitHub Notes repository.');
+    console.error('[bootstrap] Error: This directory does not appear to be a MyGitNotes repository.');
     process.exit(1);
   }
 
@@ -69,7 +69,7 @@ async function bootstrapWorkspace() {
     fs.mkdirSync(path.dirname(notesAgentsPath), { recursive: true });
     fs.writeFileSync(
       notesAgentsPath,
-      `# GitHub Notes Workspace Agent System\n\nOperational guidelines for AI agents working within this note repository.\n`
+      `# MyGitNotes Workspace Agent System\n\nOperational guidelines for AI agents working within this note repository.\n`
     );
     filesToStage.push('notes/AGENTS.md');
     needsCommit = true;
@@ -89,7 +89,7 @@ async function bootstrapWorkspace() {
   }
 
   console.log(`\n======================================================`);
-  console.log(`✅ GitHub Notes workspace ready on branch 'main'!`);
+  console.log(`✅ MyGitNotes workspace ready on branch 'main'!`);
   console.log(`   - Config: ${WORKSPACE_CONFIG_FILENAME}`);
   console.log(`   - Default Notebook: ${config.workspace.default_notebook}`);
   console.log(`   - Next steps: Run 'pnpm dev' to launch the application.`);

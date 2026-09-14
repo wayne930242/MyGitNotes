@@ -1,6 +1,6 @@
-# GitHub Notes
+# MyGitNotes
 
-A high-density, local-first document interface with Git-native storage and a remote serverless MCP powered by GitHub and Vercel.
+A high-density, local-first document interface with Git-native storage and a remote serverless MCP powered by GitHub or GitLab and Vercel.
 
 Your Markdown, repository, deployment, commit history, and agent access remain under your control.
 
@@ -10,12 +10,12 @@ Your Markdown, repository, deployment, commit history, and agent access remain u
 
 ## What it is
 
-GitHub Notes turns a Git repository into a focused workspace for notes, documents, assets, and AI agents. You work through a purpose-built note UI while Markdown files, Git history, and repository permissions remain the source of truth.
+MyGitNotes turns a Git repository into a focused workspace for notes, documents, assets, and AI agents. You work through a purpose-built note UI while Markdown files, Git history, and repository permissions remain the source of truth.
 
 It runs in two modes:
 
 - **Local:** the UI reads and writes your local repository directly.
-- **Remote:** Vercel serves the UI and a serverless MCP endpoint; GitHub stores the files and commit history.
+- **Remote:** Vercel serves the UI and a serverless MCP endpoint; GitHub or GitLab stores the files and commit history.
 
 The same workspace can therefore stay fully local, travel through Git, or be securely accessed from a browser and MCP clients without operating a permanent server.
 
@@ -25,20 +25,45 @@ The same workspace can therefore stay fully local, travel through Git, or be sec
 - **Screen:** arrange notes, folders, images, and YouTube videos into reading lanes across notebooks. Dynamic lanes can follow a tag or folder.
 - **Pure Markdown:** notes remain ordinary `.md` files with optional YAML frontmatter. Existing Markdown and unknown metadata survive round trips.
 - **Git-native workflow:** local edits save to disk; selected changes are committed explicitly. Remote writes use revision checks and non-forced commits to reject stale updates.
-- **Local and remote sources:** open a local checkout or a configured GitHub repository through the same interface.
+- **Local and remote sources:** open a local checkout or a configured GitHub or GitLab repository through the same interface.
 - **Local and hosted MCP:** connect agents through local stdio or Vercel-hosted Streamable HTTP to list, read, search, create, edit, move, and commit workspace content.
 - **Controlled agent access:** create named read-only or write grants, copy the connection URL once, and revoke each grant at any time.
 - **Safe product updates:** product code lives on `core`; personal workspace content lives on `main`. Core updates preserve `notes/**` and workspace-owned Agent settings.
 
 ## Design logic
 
-![GitHub Notes local and remote architecture](docs/assets/github-notes-architecture-en.png)
+```mermaid
+flowchart LR
+  subgraph device["Your device"]
+    localUI["MyGitNotes local UI"]
+    localMCP["Local agents · stdio MCP"]
+    files["Local Git workspace<br/>Markdown · assets · history"]
+    localUI --> files
+    localMCP --> files
+  end
+  subgraph deployment["MyGitNotes deployment"]
+    web["Browser UI"]
+    agents["Remote agents · HTTP MCP"]
+    service["Shared workspace operations<br/>One configured provider and repository"]
+    credentials["Encrypted credentials<br/>Sessions · refresh · MCP grants"]
+    web --> service
+    agents --> service
+    service --> credentials
+  end
+  subgraph storage["Selected Git hosting platform"]
+    github["GitHub"]
+    gitlab["GitLab.com or self-managed GitLab"]
+  end
+  files <-->|Git sync| storage
+  service <-->|Read pinned revision · atomic commit| storage
+  web -. OAuth sign-in .-> storage
+```
 
 The boundaries are intentional:
 
 - **Markdown owns the content.** There is no proprietary note database to export from.
 - **Git owns history and publication.** You choose what to commit and can inspect or revert every change.
-- **GitHub owns remote persistence.** Vercel provides the interface and serverless transport; Redis stores sessions and MCP grants, not notes.
+- **GitHub or GitLab owns remote persistence.** Vercel provides the interface and serverless transport; Redis stores sessions and MCP grants, not notes.
 - **You own the system boundary.** You choose the repository, branch, deployment, credentials, Core updates, and every agent grant.
 - **The UI and agents share the same rules.** Path guards, branch guards, revision checks, and repository permissions apply to both.
 
@@ -51,7 +76,7 @@ The market usually treats these as separate product models:
 
 Even products that support both models often present them as alternatives. Craft, for example, supports local [External Locations](https://support.craft.do/en/account-and-subscription/storage-and-recovery/external-locations), but sharing and collaboration are unavailable there.
 
-GitHub Notes connects both interfaces to the same Markdown and Git workspace. The local UI and local agents edit the files directly; Git syncs them to GitHub; Vercel exposes the same repository through a high-density remote note UI and serverless MCP. There is no second cloud copy to export, import, or reconcile.
+MyGitNotes connects both interfaces to the same Markdown and Git workspace. The local UI and local agents edit the files directly; Git syncs them to GitHub or GitLab; Vercel exposes the same repository through a high-density remote note UI and serverless MCP. There is no second cloud copy to export, import, or reconcile.
 
 ## Repository model
 
@@ -65,8 +90,8 @@ This separation lets the application evolve without taking ownership of your con
 Requires Node.js 22+, pnpm 9+, and Git.
 
 ```bash
-git clone <repository-url> github-notes
-cd github-notes
+git clone <repository-url> mygitnotes
+cd mygitnotes
 pnpm install
 pnpm build
 pnpm bootstrap-workspace
@@ -116,6 +141,27 @@ UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_token
 After deployment, sign in with GitHub. Under **Settings → MCP Access Control**, create a read-only or write grant and paste the generated `/mcp/<token>` URL into ChatGPT, Claude, Cursor, Windsurf, or another MCP client.
 
 Standard GitHub OAuth Apps request the `repo` scope so authenticated owners can read and write private repositories. MCP grants remain scoped to the configured repository and can be revoked individually.
+
+## GitLab deployment
+
+Each deployment selects one provider, site, project and branch. Use the same build and Redis settings as above, with these source and OAuth values:
+
+```bash
+MYGITNOTES_SOURCE=gitlab
+MYGITNOTES_REPOSITORY=group/subgroup/project
+MYGITNOTES_BRANCH=main
+GITLAB_URL=https://gitlab.com
+GITLAB_CLIENT_ID=your_application_id
+GITLAB_CLIENT_SECRET=your_application_secret
+```
+
+For self-managed GitLab, set `GITLAB_URL` to its HTTPS base URL, including an installation subpath when applicable. The deployment must be able to reach that site and trust its TLS certificate. Register an OAuth application on the selected site with the `api` scope and callback `${APP_URL}/api/auth/gitlab/callback`. The UI uses GitLab sign-in automatically. Access and refresh tokens remain encrypted on the server; persistent MCP grants share the refreshed credential.
+
+Authenticated writes require push permission on `main`. GitLab batches all changed files into one commit and supplies each existing file's last commit ID to detect concurrent edits. Public repositories support anonymous reads. GitLab instances with private network access require a deployment with network access to that instance.
+
+The product is now **MyGitNotes**. Existing `.github-notes.yaml`, Screen/Study sidecars, `@github-notes/*` packages, GitHub OAuth callbacks and MCP grants remain compatible. New `MYGITNOTES_*` source settings take precedence over corresponding `GITHUB_NOTES_*` settings. `mygitnotes.server.yaml` is the new server configuration filename; `github-notes.server.yaml` remains supported. Existing repository and deployment URLs continue to work.
+
+See [GitLab OAuth](https://docs.gitlab.com/api/oauth2/) and [commit actions](https://docs.gitlab.com/api/commits/).
 
 ## Documentation
 

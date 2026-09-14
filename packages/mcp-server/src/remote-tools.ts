@@ -1,6 +1,6 @@
 import path from 'node:path';
 import {
-  GitHubSource,
+  RemoteSource,
   callNoteShell,
   noteShellWrites,
   withNoteStatus,
@@ -21,7 +21,7 @@ const patternField = str('Repository-relative Bash glob, e.g. notes/example/**/*
 const metadata: Schema = { type: 'object', additionalProperties: true };
 const noteSchema = object({ id: str('Note identifier'), path: pathField, notebookId: str('Notebook ID'), title: str('Title'), content: str('Markdown body'), metadata, tags: array(str('Tag')), revision: str('Read commit SHA') }, ['path','title','content','metadata','revision'], true);
 const nullableInteger: Schema = { type: ['integer','null'] };
-const receiptSchema = object({ success: { const: true }, committed: { const: true }, pushed: { const: true }, repository: str('GitHub owner/repo'), branch: str('Updated branch'), revision: str('Resulting commit SHA'), changedPaths: array(pathField), commit: object({ commitHash: str('Resulting commit SHA'), message: str('Program-generated commit message') }) }, undefined, true);
+const receiptSchema = object({ success: { const: true }, committed: { const: true }, pushed: { const: true }, repository: str('Repository project path'), branch: str('Updated branch'), revision: str('Resulting commit SHA'), changedPaths: array(pathField), commit: object({ commitHash: str('Resulting commit SHA'), message: str('Program-generated commit message') }) }, undefined, true);
 
 const mutatingTools = new Set([
   'save_note',
@@ -113,7 +113,7 @@ function validate(value: unknown, schema: Schema, label: string) {
 }
 
 export async function callRemoteTool(
-  reader: GitHubSource,
+  reader: RemoteSource,
   name: string,
   args: Record<string, unknown>,
   write: boolean

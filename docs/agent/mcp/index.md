@@ -1,6 +1,6 @@
 # Model Context Protocol (MCP) Server
 
-The `@github-notes/mcp-server` package provides an MCP interface for external agents to safely inspect and manipulate a GitHub Notes workspace.
+The `@github-notes/mcp-server` package provides an MCP interface for external agents to safely inspect and manipulate a MyGitNotes workspace.
 
 ## Transport
 
@@ -32,8 +32,8 @@ Default transport is **stdio** for local agent integration (e.g. Claude Desktop,
 
 ## Source selection and hosted access
 
-The stdio entry resolves `github-notes.server.yaml` from its repository argument.
-A local source uses the filesystem tools above; a GitHub source exposes the
+The stdio entry resolves `mygitnotes.server.yaml` (or legacy `github-notes.server.yaml`) from its repository argument.
+A local source uses the filesystem tools above; a GitHub or GitLab source exposes the
 remote read tools against the configured public repository.
 
 Hosted `/mcp` uses stateless Streamable HTTP. Settings → Access control creates
@@ -42,7 +42,7 @@ once. ChatGPT uses that URL with No Authentication. Bearer headers at `/mcp`
 remain supported. The URL is a credential scoped to the configured source and
 canonical audience. New grants have no application TTL and survive logout,
 session expiry and deployments; owners revoke individual grants in Settings.
-Upstream GitHub expiration or revocation can require another GitHub login.
+GitLab access tokens refresh through the shared server credential. Revoked provider authorization requires signing in again.
 Legacy session-bound grants retain their original expiry.
 
 Hosted tools include `ls`, `glob`, `read`, `find`, `write`, `append`, `edit`,
@@ -51,7 +51,7 @@ and line edits include frontmatter; lines are one-based. `find` performs literal
 text search over glob-selected notes. Listing and reading return a revision.
 All writes require that revision, push permission and the `main` branch. Each
 successful mutation creates one program-named commit and updates the remote
-branch without force. Multi-file changes share one tree and commit. Stale
+branch without force. Multi-file changes share one commit; GitLab uses batch actions with per-file version checks. Stale
 revisions reject the operation. Mutations allow at most 200 files and 5 MiB of
 new text. Directory operations require recursive consent; protected files and
 asset-containing directories reject the complete operation. Moves preserve file

@@ -127,8 +127,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <a className="sidebar-credit" href="https://github.com/wayne930242/github-notes"
-          target="_blank" rel="noopener noreferrer" title="GitHub Notes by wayne930242">
-          powered by <span>github-notes</span>
+          target="_blank" rel="noopener noreferrer" title="MyGitNotes by wayne930242">
+          powered by <span>MyGitNotes</span>
         </a>
       </div>
     }>

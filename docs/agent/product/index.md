@@ -1,10 +1,10 @@
-# GitHub Notes — Product Agent Instructions
+# MyGitNotes — Product Agent Instructions
 
-Welcome to the **GitHub Notes** product codebase. This document guides AI coding and maintenance agents working on the application source code and infrastructure.
+Welcome to the **MyGitNotes** product codebase. This document guides AI coding and maintenance agents working on the application source code and infrastructure.
 
-## 1. What GitHub Notes Is
+## 1. What MyGitNotes Is
 
-GitHub Notes is a Git-native, local-first notes application and agent-operable workspace frontend. It stores notes as pure Markdown with optional YAML frontmatter, provides List, Card, and Kanban views, tracks every explicit save as a Git commit, and exposes a safe local MCP interface for coding agents.
+MyGitNotes is a Git-native, local-first notes application and agent-operable workspace frontend. It stores notes as pure Markdown with optional YAML frontmatter, provides List, Card, and Kanban views, tracks every explicit save as a Git commit, and exposes a safe local MCP interface for coding agents.
 
 ## 2. Branch & Ownership Contract
 

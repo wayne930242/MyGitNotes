@@ -1,6 +1,6 @@
 # Architecture
 
-GitHub Notes is structured as a TypeScript monorepo using pnpm workspaces.
+MyGitNotes is structured as a TypeScript monorepo using pnpm workspaces.
 
 ## Monorepo Layout
 
@@ -19,18 +19,13 @@ GitHub Notes is structured as a TypeScript monorepo using pnpm workspaces.
 
 ## Configurable sources
 
-`github-notes.server.yaml` selects a local Git repository or a GitHub repository
-and branch. Deployment environment variables can supply the same selection.
-`packages/core` owns source parsing, folder metadata and the request-scoped
-GitHub reader. The selected repository supplies its notebook manifest.
+`mygitnotes.server.yaml` (or the compatible `github-notes.server.yaml`) selects a local repository, GitHub repository or GitLab project. Source configuration accepts `MYGITNOTES_*` and legacy `GITHUB_NOTES_*` environment variables.
 
-`apps/local-server/src/app.ts` composes the local adapter, GitHub HTTP routes,
-GitHub login, server-held sessions and scoped remote MCP. The Vercel entry
-imports the compiled server after the workspace build. Cloud notes persist
-through GitHub APIs; local filesystem mutation remains in the local adapter.
+`RemoteSource` contains shared note, folder, asset, Screen and Study rules. `GitHubSource` and `GitLabSource` implement immutable reads and atomic commits. `createRemoteSource` selects the adapter for HTTP and remote MCP. GitLab supports an HTTPS base URL and nested project namespaces.
 
-See [source design](../../specs/2026-09-12-configurable-note-sources/design.md)
-and the [usage guide](../../../README.md) for configuration and deployment.
+OAuth follows the selected provider. Encrypted server records isolate site and account identity. GitLab refresh tokens are rotated under a credential lock and shared by browser sessions and persistent MCP grants. GitHub keeps its existing credential and grant identifiers.
+
+See [the approved contract](../../specs/2026-09-14-mygitnotes-gitlab/spec.md), [design](../../specs/2026-09-14-mygitnotes-gitlab/design.md), and [deployment guide](../../../README.md).
 
 ## Notebook statuses and visibility
 
