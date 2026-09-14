@@ -123,6 +123,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'graph.resetZoom': '重置視野',
   'graph.minimap': '小地圖',
   'graph.preview': '筆記預覽',
+  'preview.scrollableTable': '可水平捲動的表格（Alt＋滾輪）',
   'graph.openEditor': '開啟完整編輯器',
   'graph.minimapHint': '拖曳視野框平移 · 點選框外定位 · Enter 重置視野',
   'graph.allTags': '全部標籤',

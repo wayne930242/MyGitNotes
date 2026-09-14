@@ -33,14 +33,15 @@ class ExternalLink extends WidgetType {
   toDOM() { return externalLinkIcon(this.href, this.label, this.path); }
 }
 class RenderedMarkdown extends WidgetType {
-  constructor(readonly text: string, readonly path: string, readonly from: number, readonly block: boolean, readonly linkLabel: string) { super(); }
-  eq(other: RenderedMarkdown) { return this.text === other.text && this.path === other.path && this.from === other.from && this.linkLabel === other.linkLabel; }
+  constructor(readonly text: string, readonly path: string, readonly from: number, readonly block: boolean, readonly linkLabel: string, readonly tableLabel: string) { super(); }
+  eq(other: RenderedMarkdown) { return this.text === other.text && this.path === other.path && this.from === other.from && this.linkLabel === other.linkLabel && this.tableLabel === other.tableLabel; }
   toDOM(view: EditorView) {
     const dom = document.createElement(this.block ? 'div' : 'span'); dom.className = 'live-md-rendered prose-custom';
-    dom.innerHTML = renderNote(this.text, this.path);
+    dom.innerHTML = renderNote(this.text, this.path, this.tableLabel);
     dom.setAttribute('aria-label', 'Rendered Markdown; click to edit');
     dom.addEventListener('mousedown', event => {
       if ((event.target as HTMLElement).closest('a, [data-workspace-link]')) return;
+      if ((event.target as HTMLElement).matches('.markdown-table-scroll')) return;
       event.preventDefault(); view.dispatch({selection:{anchor:this.from}}); view.focus();
     });
     for (const image of dom.querySelectorAll('img')) image.addEventListener('load', () => view.requestMeasure());
@@ -62,7 +63,7 @@ class BulletMarker extends WidgetType {
   eq() { return true; }
   toDOM() { const span=document.createElement('span');span.textContent='•';span.setAttribute('aria-hidden','true');return span; }
 }
-function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string): DecorationSet {
+function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string): DecorationSet {
   const marks: Range<Decoration>[] = [];
   const references = marked.lexer(state.doc.toString()).links;
   const active = (from: number, to: number) => focused && !state.readOnly && state.selection.ranges.some(range => state.doc.lineAt(range.from).from <= to && state.doc.lineAt(range.to).to >= from);
@@ -84,7 +85,7 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
     const styles: Record<string,string> = {StrongEmphasis:'live-md-strong',Emphasis:'live-md-emphasis',Strikethrough:'live-md-strike',InlineCode:'live-md-code',Link:'live-md-link'};
     if (styles[name] && from < to) marks.push(Decoration.mark({class:styles[name]}).range(from,to));
     if (!editing && (name === 'Image' || name === 'Table' || name === 'HorizontalRule')) {
-      marks.push(Decoration.replace({widget:new RenderedMarkdown(state.sliceDoc(from,to),notePath,from,name !== 'Image',linkLabel),block:name !== 'Image'}).range(from,to)); return false;
+      marks.push(Decoration.replace({widget:new RenderedMarkdown(state.sliceDoc(from,to),notePath,from,name !== 'Image',linkLabel,tableLabel),block:name !== 'Image'}).range(from,to)); return false;
     }
     if (!editing && name === 'TaskMarker') { marks.push(Decoration.replace({widget:new TaskCheckbox(state.sliceDoc(from,to).toLowerCase()==='[x]',from,state.readOnly)}).range(from,to)); return false; }
     if (!editing && name === 'ListMark' && node.node.parent?.parent?.name === 'BulletList') {
@@ -143,6 +144,7 @@ const theme = EditorView.theme({
 });
 export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content,notePath,readOnly,onChange,ariaLabel = 'Note content'},ref) => {
   const { t } = useTranslation(); const linkLabel = t('links.open');
+  const tableLabel = t('preview.scrollableTable');
   const location = useLocation();
   const host = useRef<HTMLDivElement>(null); const editor = useRef<EditorView>();
   const callback = useRef(onChange); callback.current = onChange;
@@ -173,10 +175,10 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
   }),[]);
   useEffect(() => {
     const field = StateField.define<{decorations:DecorationSet;focused:boolean}>({
-      create(state) {return {decorations:liveDecorations(state,false,notePath,linkLabel),focused:false};},
+      create(state) {return {decorations:liveDecorations(state,false,notePath,linkLabel,tableLabel),focused:false};},
       update(value,tr) {
         let focused=value.focused;for(const effect of tr.effects)if(effect.is(focusChanged))focused=effect.value;
-        return {focused,decorations:liveDecorations(tr.state,focused,notePath,linkLabel)};
+        return {focused,decorations:liveDecorations(tr.state,focused,notePath,linkLabel,tableLabel)};
       },
       provide: field => EditorView.decorations.from(field,value=>value.decorations),
     });
@@ -189,7 +191,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
       EditorView.updateListener.of(update=>{if(update.docChanged)callback.current(update.state.doc.toString());}),
     ]})});
     editor.current=view;return()=>{view.destroy();editor.current=undefined;};
-  },[notePath,ariaLabel,linkLabel]);
+  },[notePath,ariaLabel,linkLabel,tableLabel]);
   useEffect(()=>{const view=editor.current;if(view && view.state.doc.toString()!==content)view.dispatch({changes:{from:0,to:view.state.doc.length,insert:content},annotations:Transaction.addToHistory.of(false)});},[content]);
   useEffect(()=>{editor.current?.dispatch({effects:permission.current.reconfigure([EditorState.readOnly.of(readOnly),EditorView.editable.of(!readOnly)])});},[readOnly]);
   useEffect(() => {

@@ -278,6 +278,27 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   margin-bottom: 1rem;
 }
 
+.markdown-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  margin-bottom: 1rem;
+}
+
+.markdown-table-scroll table {
+  width: max-content;
+  min-width: 100%;
+  margin-bottom: 0;
+}
+
+.markdown-table-scroll th,
+.markdown-table-scroll td {
+  min-width: 7rem;
+  max-width: 22rem;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
 .prose-custom th, .prose-custom td {
   border: 1px solid #e2e8f0;
   padding: 0.5rem 0.75rem;
