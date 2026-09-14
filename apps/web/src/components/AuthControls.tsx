@@ -1,6 +1,6 @@
 import { Select } from './Select.js';
 import { useEffect, useState } from 'react';
-import { KeyRound, Copy, Check, Plus, Trash2, HelpCircle, Github, ChevronDown, LogOut } from 'lucide-react';
+import { KeyRound, Copy, Check, Plus, Trash2, HelpCircle, Github, Gitlab, ChevronDown, LogOut } from 'lucide-react';
 import { McpTutorialModal } from './McpTutorialModal.js';
 import { copyToClipboard } from '../lib/clipboard.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -29,7 +29,7 @@ async function requestGrant(url: string, fallback: TranslationKey, init?: Reques
   }
 }
 
-type Session = { authenticated?: boolean; login?: string; configured?: boolean };
+type Session = { authenticated?: boolean; login?: string; configured?: boolean; provider?: 'github' | 'gitlab'; loginUrl?: string };
 type Grant = { id: string; name: string; write: boolean; source: string; createdAt: number; expiresAt: null };
 function useSession() {
   const [session, setSession] = useState<Session>({});
@@ -41,14 +41,14 @@ const connectionActionClass = 'inline-flex min-h-11 items-center justify-center 
 export function AuthControls({ local = false, connection = false }: { local?: boolean; connection?: boolean }) {
   const { t } = useTranslation();
   const session = useSession();
-  if (local) return null;
+  if (local || !session.provider) return null;
   return session.authenticated ? <details className="header-user-menu">
     <summary className="header-user-button" aria-label={session.login}><span className="header-user-avatar">{session.login?.slice(0, 1).toUpperCase()}</span><span className="header-user-login">{session.login}</span><ChevronDown size={12} /></summary>
     <div className="header-user-popover"><span>{session.login}</span><button onClick={async () => {
       const response = await fetch('/api/auth/logout', { method: 'POST' });
       if (response.ok) window.location.reload();
     }}><LogOut size={14} />{t('auth.signOut')}</button></div>
-  </details> : <a href="/api/auth/github" className={connection ? `${connectionActionClass} ui-button-primary` : 'header-login'}><Github size={16} /><span>{t('auth.signInWithGithub')}</span></a>;
+  </details> : <a href={session.provider === 'gitlab' ? '/api/auth/gitlab' : '/api/auth/github'} className={connection ? `${connectionActionClass} ui-button-primary` : 'header-login'}>{session.provider === 'gitlab' ? <Gitlab size={16} /> : <Github size={16} />}<span>{t(session.provider === 'gitlab' ? 'auth.signInWithGitlab' : 'auth.signInWithGithub')}</span></a>;
 }
 export function AgentAccessSettings({ local = false }: { local?: boolean }) {
   const { t, language } = useTranslation();
@@ -116,7 +116,7 @@ export function AgentAccessSettings({ local = false }: { local?: boolean }) {
     </div>
     <p className="text-xs text-slate-500 dark:text-slate-400">{t('auth.grantsActiveNotice')}</p>
     <p className="text-xs text-slate-500 dark:text-slate-400">{t('auth.chatgptConnectorNotice')}</p>
-    {local ? <p role="status" className="text-sm text-slate-600 dark:text-slate-300">{t('auth.localAccessNotice')}</p> : !session.authenticated && <p className="text-sm"><a className="underline" href="/api/auth/github">{t('auth.signInWithGithub')}</a>{t('auth.signInToManage')}</p>}
+    {local ? <p role="status" className="text-sm text-slate-600 dark:text-slate-300">{t('auth.localAccessNotice')}</p> : !session.authenticated && <p className="text-sm"><a className="underline" href={session.provider === 'gitlab' ? '/api/auth/gitlab' : '/api/auth/github'}>{t(session.provider === 'gitlab' ? 'auth.signInWithGitlab' : 'auth.signInWithGithub')}</a>{t('auth.signInToManage')}</p>}
     <>
       <div className="flex flex-wrap gap-3 items-end">
         <label className="text-xs text-slate-600 dark:text-slate-300 flex flex-col gap-1">{t('auth.clientName')}<input disabled={!canManage || busy} aria-label={t('auth.clientName')} maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder={t('auth.clientNamePlaceholder')} className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-transparent" /></label>
@@ -167,7 +167,7 @@ export function AgentAccessSettings({ local = false }: { local?: boolean }) {
         {copyError && <p role="alert" className="text-xs text-amber-600 dark:text-amber-400">{t('auth.copyErrorManual')}</p>}
       </div>}
       {canManage && <div className="divide-y divide-slate-200 dark:divide-slate-800">{grants.map(grant => <div key={grant.id} className="py-3 flex items-center justify-between gap-3">
-        <div className="min-w-0"><p className="text-sm font-medium truncate">{grant.name}</p><p className="text-xs text-slate-500 dark:text-slate-400">{grant.write ? t('auth.readAndWrite') : t('auth.readOnly')} · {t('auth.untilRevoked')} · {new Date(grant.createdAt).toLocaleDateString(language)}</p><p className="text-xs font-mono text-slate-400 truncate">{grant.source.replace(/^github:/, '')}</p></div>
+        <div className="min-w-0"><p className="text-sm font-medium truncate">{grant.name}</p><p className="text-xs text-slate-500 dark:text-slate-400">{grant.write ? t('auth.readAndWrite') : t('auth.readOnly')} · {t('auth.untilRevoked')} · {new Date(grant.createdAt).toLocaleDateString(language)}</p><p className="text-xs font-mono text-slate-400 truncate">{grant.source.replace(/^(github|gitlab):/, '')}</p></div>
         {confirmRevoke === grant.id ? <div className="flex gap-3 text-xs shrink-0"><button disabled={busy} className="text-rose-600 font-semibold hover:underline disabled:opacity-40 disabled:cursor-not-allowed transition" onClick={() => revoke(grant.id)}>{t('auth.confirmRevoke')}</button><button onClick={() => setConfirmRevoke(null)} className="hover:underline transition">{t('common.cancel')}</button></div> : <button disabled={busy} className="text-xs text-rose-600 hover:text-rose-700 flex items-center gap-1 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed transition" onClick={() => setConfirmRevoke(grant.id)}><Trash2 className="w-3.5 h-3.5" />{t('auth.revoke')}</button>}
       </div>)}{!grants.length && <p className="text-xs text-slate-400 py-2">{t('auth.noGrants')}</p>}</div>}
     </>
@@ -181,5 +181,5 @@ export function AgentAccessSettings({ local = false }: { local?: boolean }) {
 }
 export function ConnectionState({ loading, error, onRetry }: { loading: boolean; error: string; onRetry: () => void }) {
   const { t } = useTranslation();
-  return <main className="min-h-screen p-8 flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}><div className="max-w-xl w-full p-8 rounded-2xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}><h1 className="text-2xl font-semibold mb-4">GitHub Notes</h1><p role="status" className="mb-6">{loading ? t('auth.openingWorkspace') : error}</p>{!loading && <div className="flex flex-wrap items-center gap-3"><button onClick={onRetry} className={`${connectionActionClass} border hover:bg-black/5 dark:hover:bg-white/10 transition active:scale-95`}>{t('auth.retry')}</button><AuthControls connection /></div>}</div></main>;
+  return <main className="min-h-screen p-8 flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}><div className="max-w-xl w-full p-8 rounded-2xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}><h1 className="text-2xl font-semibold mb-4">MyGitNotes</h1><p role="status" className="mb-6">{loading ? t('auth.openingWorkspace') : error}</p>{!loading && <div className="flex flex-wrap items-center gap-3"><button onClick={onRetry} className={`${connectionActionClass} border hover:bg-black/5 dark:hover:bg-white/10 transition active:scale-95`}>{t('auth.retry')}</button><AuthControls connection /></div>}</div></main>;
 }

@@ -1,4 +1,4 @@
-import { loadSourceConfig, GitHubSource } from '@github-notes/core';
+import { loadSourceConfig, createRemoteSource } from '@github-notes/core';
 import { callRemoteTool, remoteTools, isMutationTool } from './remote-tools.js';
 import { localTools } from './local-tools.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -40,7 +40,7 @@ export function createMCPServer(repoRoot: string): Server {
 
   const server = new Server(
     {
-      name: 'github-notes-mcp',
+      name: 'mygitnotes-mcp',
       version: '0.1.0',
     },
     {
@@ -51,7 +51,7 @@ export function createMCPServer(repoRoot: string): Server {
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    if (source.type === 'github') {
+    if (source.type !== 'local') {
       return { tools: remoteTools.filter((t) => !isMutationTool(t.name)) };
     }
     return { tools: localTools };
@@ -63,9 +63,9 @@ export function createMCPServer(repoRoot: string): Server {
     try {
       let result: unknown;
 
-      if (source.type === 'github') {
+      if (source.type !== 'local') {
         result = await callRemoteTool(
-          new GitHubSource(source.repository, source.branch),
+          createRemoteSource(source),
           name,
           args,
           false

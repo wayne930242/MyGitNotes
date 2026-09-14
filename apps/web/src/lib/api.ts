@@ -31,7 +31,7 @@ export async function fetchWorkspace(fresh = false): Promise<{
   config: WorkspaceConfig | null;
   gitStatus: GitStatus;
   isCoreBranch: boolean;
-  source: { type: 'local' | 'github'; identity: string; repository?: string };
+  source: { type: 'local' | 'github' | 'gitlab'; identity: string; repository?: string };
   capabilities: { write: boolean; local: boolean };
   revision?: string;
 }> {

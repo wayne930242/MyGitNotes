@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { loadSourceConfig, sourceIdentity, GitHubSource, SourceError, workspaceAgentKind, workspaceAgentResource, type WorkspaceAgentResource } from '@github-notes/core';
+import { loadSourceConfig, sourceIdentity, RemoteSource, createRemoteSource, SourceError, workspaceAgentKind, workspaceAgentResource, type WorkspaceAgentResource } from '@github-notes/core';
 import { createRemoteMCP } from './mcp.js';
 import { createLocalApp } from './local-app.js';
 import { createAuth, authToken } from './auth.js';
@@ -21,7 +21,7 @@ export function createApp(base: string): express.Express {
   app.disable('x-powered-by');
   let source: ReturnType<typeof loadSourceConfig> | undefined;
   let setupError = '';
-  try { source = loadSourceConfig(base); if (process.env.VERCEL && source.type === 'local') throw new Error('Vercel requires a GitHub source. Configure GITHUB_NOTES_SOURCE, GITHUB_NOTES_REPOSITORY and GITHUB_NOTES_BRANCH.'); }
+  try { source = loadSourceConfig(base); if (process.env.VERCEL && source.type === 'local') throw new Error('Vercel requires a GitHub or GitLab source. Configure GITHUB_NOTES_SOURCE, GITHUB_NOTES_REPOSITORY and GITHUB_NOTES_BRANCH.'); }
   catch (error) { setupError = (error as Error).message; source = undefined; }
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -49,41 +49,41 @@ export function createApp(base: string): express.Express {
       if (!source) return res.status(503).json({ error: setupError, setupRequired: true });
       try {
         const token = await authToken(req, base);
-        res.locals.reader = new GitHubSource(source.repository, source.branch, token);
+        res.locals.reader = createRemoteSource(source, token);
         res.locals.authenticated = Boolean(token);
         next();
       } catch (error) { res.status(401).json({ error: 'Session unavailable. Sign in again.' }); }
     });
     app.get('/api/workspace', async (req, res) => {
       try {
-        const reader: GitHubSource = res.locals.reader;
+        const reader: RemoteSource = res.locals.reader;
         const snapshot = await reader.getSnapshot(req.query.fresh === '1');
         const config = await reader.config();
         res.json({ repoRoot: '', branch: reader.branch, config, gitStatus: { branch: reader.branch, isClean: true, staged: [], modified: [], untracked: [] },
-          isCoreBranch: reader.branch === 'core', source: { type: 'github', identity: sourceIdentity(source!), repository: reader.repository },
+          isCoreBranch: reader.branch === 'core', source: { type: source!.type, identity: sourceIdentity(source!), repository: reader.repository },
           revision: snapshot.sha, capabilities: { write: Boolean(res.locals.authenticated && snapshot.info.permissions?.push && reader.branch === 'main'), local: false } });
       } catch (error) { fail(res, error); }
     });
-    app.get('/api/notes', async (req, res) => { try { res.json({ notes: await (res.locals.reader as GitHubSource).notes(req.query.notebookId as string) }); } catch (error) { fail(res, error); } });
-    app.get('/api/folders', async (req, res) => { try { res.json({ folders: await (res.locals.reader as GitHubSource).folders() }); } catch (error) { fail(res, error); } });
-    app.get('/api/notes/read', async (req, res) => { try { res.json({ note: await (res.locals.reader as GitHubSource).note(String(req.query.path || '')) }); } catch (error) { fail(res, error); } });
+    app.get('/api/notes', async (req, res) => { try { res.json({ notes: await (res.locals.reader as RemoteSource).notes(req.query.notebookId as string) }); } catch (error) { fail(res, error); } });
+    app.get('/api/folders', async (req, res) => { try { res.json({ folders: await (res.locals.reader as RemoteSource).folders() }); } catch (error) { fail(res, error); } });
+    app.get('/api/notes/read', async (req, res) => { try { res.json({ note: await (res.locals.reader as RemoteSource).note(String(req.query.path || '')) }); } catch (error) { fail(res, error); } });
     app.post('/api/notes/read-batch', async (req, res) => {
-      try { res.json({ notes: await (res.locals.reader as GitHubSource).readNotes(req.body.paths, req.body.revision) }); }
+      try { res.json({ notes: await (res.locals.reader as RemoteSource).readNotes(req.body.paths, req.body.revision) }); }
       catch (error) { fail(res, error); }
     });
-    app.get('/api/assets', async (req, res) => { try { res.json({ assets: await (res.locals.reader as GitHubSource).assets(req.query.notebookId as string) }); } catch (error) { fail(res, error); } });
+    app.get('/api/assets', async (req, res) => { try { res.json({ assets: await (res.locals.reader as RemoteSource).assets(req.query.notebookId as string) }); } catch (error) { fail(res, error); } });
     for (const [method, operation] of [['post', 'upload'], ['patch', 'move'], ['delete', 'delete']] as const) {
       app[method]('/api/assets', async (req, res) => {
         try {
           if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to manage assets.', 403);
-          res.json(await (res.locals.reader as GitHubSource).mutateAsset(operation, { ...req.query, ...req.body }));
+          res.json(await (res.locals.reader as RemoteSource).mutateAsset(operation, { ...req.query, ...req.body }));
         } catch (error) { fail(res, error); }
       });
     }
     app.get('/raw-assets/by-hash/:hash', async (req, res) => {
       try {
         if (!/^[a-f0-9]{40}$/.test(req.params.hash)) throw new SourceError('Invalid asset hash.');
-        const reader: GitHubSource = res.locals.reader;
+        const reader: RemoteSource = res.locals.reader;
         const config = await reader.config();
         const assets = (await Promise.all(config.notebooks.map(nb => reader.assets(nb.id)))).flat();
         const asset = assets.find(a => a.hash === req.params.hash);
@@ -94,7 +94,7 @@ export function createApp(base: string): express.Express {
     });
     app.get('/raw-assets/*', async (req, res) => {
       try {
-        const reader: GitHubSource = res.locals.reader;
+        const reader: RemoteSource = res.locals.reader;
         const file = (req.params as Record<string, string>)[0];
         const config = await reader.config();
         const assetLists = await Promise.all(config.notebooks.map(nb => reader.assets(nb.id)));
@@ -107,7 +107,7 @@ export function createApp(base: string): express.Express {
       try {
         if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to commit notes.', 403);
         const { notes, revision, message, screen } = req.body;
-        res.json(await (res.locals.reader as GitHubSource).commitNotes(notes, revision, message, screen));
+        res.json(await (res.locals.reader as RemoteSource).commitNotes(notes, revision, message, screen));
       } catch (error) { fail(res, error); }
     });
     app.post('/api/notes', async (req, res) => {
@@ -115,13 +115,13 @@ export function createApp(base: string): express.Express {
         if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit notes.', 403);
         const { path: file, content, metadata, revision, createOnly } = req.body;
         if (typeof file !== 'string' || typeof content !== 'string') throw new SourceError('path and content are required.');
-        res.json(await (res.locals.reader as GitHubSource).save(file, content, metadata, revision, createOnly));
+        res.json(await (res.locals.reader as RemoteSource).save(file, content, metadata, revision, createOnly));
       } catch (error) { fail(res, error); }
     });
-    app.get('/api/git/status', (req, res) => res.json({ status: { branch: source?.type === 'github' ? source.branch : '', isClean: true, staged: [], modified: [], untracked: [] }, commits: [] }));
+    app.get('/api/git/status', (req, res) => res.json({ status: { branch: source?.branch || '', isClean: true, staged: [], modified: [], untracked: [] }, commits: [] }));
     app.get('/api/agent-resources', async (req, res) => {
       try {
-        const reader: GitHubSource = res.locals.reader;
+        const reader: RemoteSource = res.locals.reader;
         const snapshot = await reader.getSnapshot();
         const entries = snapshot.entries;
         const groups: { instructions: WorkspaceAgentResource[]; skills: WorkspaceAgentResource[]; docs: WorkspaceAgentResource[] } = { instructions: [], skills: [], docs: [] };
@@ -138,7 +138,7 @@ export function createApp(base: string): express.Express {
         const targetPath = req.query.path as string;
         if (!targetPath) throw new SourceError('path query required', 400);
         if (!workspaceAgentKind(targetPath)) throw new SourceError('Path is not a workspace Agent document.', 403);
-        const reader: GitHubSource = res.locals.reader;
+        const reader: RemoteSource = res.locals.reader;
         const buf = await reader.readFile(targetPath);
         res.json({ path: targetPath, content: buf.toString('utf8'), revision: (await reader.getSnapshot()).sha });
       } catch (error) { fail(res, error); }
@@ -147,7 +147,7 @@ export function createApp(base: string): express.Express {
       try {
         if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit Agent documents.', 403);
         const { path: file, content, revision } = req.body;
-        const result = await (res.locals.reader as GitHubSource).saveAgentResource(file, content, revision);
+        const result = await (res.locals.reader as RemoteSource).saveAgentResource(file, content, revision);
         res.json({ ...result, path: file });
       } catch (error) { fail(res, error); }
     });

@@ -1,6 +1,6 @@
 # Security & Guards
 
-GitHub Notes handles local filesystem and Git operations with defense-in-depth boundaries.
+MyGitNotes handles local filesystem and Git operations with defense-in-depth boundaries.
 
 ## 1. Path Traversal & Symlink Guards
 
@@ -20,9 +20,11 @@ All file paths received by the MCP server or local API bridge are validated thro
 - `.env` files are ignored by Git.
 - Local MCP stdio operates within the local user process boundary and does not expose open network ports.
 - The local HTTP bridge binds to `127.0.0.1`, validates loopback hosts and origins, and restricts workspace mutations to `main`.
-- Hosted `/mcp` uses HTTPS and a service-issued bearer grant scoped to its audience, configured repository and persistent account credential. Write grants additionally require GitHub push permission and the `main` workspace branch.
-- GitHub tokens stay in encrypted server records. Browsers receive opaque HttpOnly session cookies. Hosted records use a durable Redis store; logout deletes the browser session. New agent grants have no TTL and use owner-authorized manual revocation; legacy session-linked grants retain their original lifecycle.
+- Hosted `/mcp` uses HTTPS and a service-issued bearer grant scoped to its audience, configured repository and persistent account credential. Write grants additionally require the selected provider's push permission and the `main` workspace branch.
+- Provider tokens stay in encrypted server records. Browsers receive opaque HttpOnly session cookies. Hosted records use a durable Redis store; logout deletes the browser session. New agent grants have no TTL and use owner-authorized manual revocation; legacy session-linked grants retain their original lifecycle.
 - Credential-bearing MCP URLs and Bearer headers resolve the same grant. Grant lists contain record digests and metadata; token values are shown only at creation.
-- Public GitHub reads use anonymous requests. Private reads use the authenticated user's GitHub authorization. Responses containing workspace data are private/no-store.
+- Public remote reads use anonymous requests. Private reads use the authenticated user's provider authorization. Responses containing workspace data are private/no-store.
 - Browser Markdown is sanitized before rendering. Raw assets are restricted to workspace asset paths and served with a restrictive content security policy.
 - `.vercelignore` excludes local notes, secrets, session files and local source settings from uploads.
+
+GitLab site URLs are deployment settings. OAuth state, credentials and account keys are bound to the configured site and OAuth application. GitLab API and OAuth calls reject redirects. Refresh-token rotation is serialized across hosted instances through Redis; local development serializes refresh in process. GitLab commits use per-file last_commit_id checks and preserve unrelated concurrent history.

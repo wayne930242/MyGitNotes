@@ -30,3 +30,5 @@ coverage/
 .github-notes-sessions/
 github-notes.server.yaml
 artifacts/
+
+mygitnotes.server.yaml

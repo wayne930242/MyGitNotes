@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { parse, stringify } from 'yaml';
-import { emptyScreenPage, ScreenPageSchema, SCREEN_PAGE_FILE, GitHubSource, SourceError, type SourceConfig } from '@github-notes/core';
+import { emptyScreenPage, ScreenPageSchema, SCREEN_PAGE_FILE, createRemoteSource, SourceError, type SourceConfig } from '@github-notes/core';
 import { getCurrentBranch } from '@github-notes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
@@ -35,7 +35,7 @@ export function createScreenPageRouter(base: string, source: SourceConfig): Rout
         return res.json({ page: decode(raw), revision: revisionOf(raw), path: SCREEN_PAGE_FILE, writable: await getCurrentBranch(source.path) === 'main' });
       }
       const token = await authToken(req, base);
-      const reader = new GitHubSource(source.repository, source.branch, token);
+      const reader = createRemoteSource(source, token);
       const snapshot = await reader.getSnapshot();
       const exists = snapshot.entries.some(entry => entry.path === SCREEN_PAGE_FILE);
       const raw = exists ? (await reader.readFile(SCREEN_PAGE_FILE)).toString('utf8') : null;
@@ -63,7 +63,7 @@ export function createScreenPageRouter(base: string, source: SourceConfig): Rout
       }
       const token = await authToken(req, base);
       if (!token) throw new SourceError('Sign in with write access to save the Screen Page.', 403);
-      const reader = new GitHubSource(source.repository, source.branch, token);
+      const reader = createRemoteSource(source, token);
       const saved = await reader.saveScreenPage(yaml, revision);
       res.json({ page: value.data, revision: saved.revision, path: SCREEN_PAGE_FILE, writable: true });
     } catch (error) { fail(res, error); }

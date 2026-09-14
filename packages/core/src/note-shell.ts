@@ -1,6 +1,6 @@
 import path from 'node:path';
 import picomatch from 'picomatch';
-import { GitHubSource, GitHubEntry, SourceError } from './github-source.js';
+import { RemoteSource, RemoteEntry, SourceError } from './remote-source.js';
 import { isNotebookContent, serializeFolderConfig } from './folders.js';
 import { NotebookConfig } from './types.js';
 import YAML from 'yaml';
@@ -43,7 +43,7 @@ function noteFile(file: string, notebooks: NotebookConfig[]) {
 }
 
 /** Shell-shaped operations over the configured note tree, pinned to one commit. */
-export async function callNoteShell(reader: GitHubSource, operation: string, args: Args, write: boolean): Promise<Record<string, unknown>> {
+export async function callNoteShell(reader: RemoteSource, operation: string, args: Args, write: boolean): Promise<Record<string, unknown>> {
   if (mutating.has(operation) && !write) throw new SourceError('This agent grant is read-only.', 403);
   const [config, snapshot] = await Promise.all([reader.config(), reader.getSnapshot()]);
   const notebooks = config.notebooks;
@@ -178,7 +178,7 @@ export async function callNoteShell(reader: GitHubSource, operation: string, arg
   }
   if (operation === 'rm') {
     if(!Array.isArray(args.paths)||!args.paths.length||args.paths.length>200||args.paths.some(p=>typeof p!=='string'))throw new SourceError('paths must be an explicit list of 1 to 200 paths.');
-    const files=new Map<string,GitHubEntry>();for(const file of args.paths as string[])for(const entry of selected(file,args.recursive===true))files.set(entry.path,entry);
+    const files=new Map<string,RemoteEntry>();for(const file of args.paths as string[])for(const entry of selected(file,args.recursive===true))files.set(entry.path,entry);
     return receipt([...files.keys()].map(file=>({path:file,sha:null})));
   }
   if (operation === 'mv' || operation === 'cp') {

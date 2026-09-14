@@ -754,8 +754,8 @@ const AppContent: React.FC = () => {
 
       {/* Top Header */}
       <Header
-        workspaceTitle={config?.workspace.title || 'GitHub Notes'}
-        sourceLabel={remote ? `${sourceId.replace(/^github:/, '')}${canWrite ? '' : ' · Read-only'}` : undefined}
+        workspaceTitle={config?.workspace.title || 'MyGitNotes'}
+        sourceLabel={remote ? `${sourceId.replace(/^(github|gitlab):/, '')}${canWrite ? '' : ' · Read-only'}` : undefined}
         accountControls={<AuthControls local={!remote} />}
         notebooks={config?.notebooks || []}
         selectedNotebookId={selectedNotebookId}
@@ -960,7 +960,7 @@ const AppContent: React.FC = () => {
             <SettingsModal
               config={config}
               branch={branch}
-              repoRoot={remote ? sourceId.replace(/^github:/, '') : repoRoot}
+              repoRoot={remote ? sourceId.replace(/^(github|gitlab):/, '') : repoRoot}
               local={!remote}
               accountSettings={<AgentAccessSettings local={!remote} />}
               onRefreshWorkspace={refreshWorkspace}

@@ -5,7 +5,7 @@ import { isDeepStrictEqual } from 'node:util';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { parse, stringify } from 'yaml';
-import { emptyStudyWorkspace, StudyWorkspaceSchema, STUDY_FILE, STUDY_MAX_BYTES, GitHubSource, SourceError, type SourceConfig } from '@github-notes/core';
+import { emptyStudyWorkspace, StudyWorkspaceSchema, STUDY_FILE, STUDY_MAX_BYTES, createRemoteSource, SourceError, type SourceConfig } from '@github-notes/core';
 import { defaultStudyProgression, studyLaneStatuses, StudyLaneActionSchema, loadWorkspaceConfig, resolveSafePath, isNotebookContent, readNoteFile, parseNoteContent, replaceNoteStatus, ScreenPageSchema, SCREEN_PAGE_FILE, createStudyNote, findStudyNote, reconcileStudyNote, applyStageAction, undoStudyAction } from '@github-notes/core';
 import { getCurrentBranch } from '@github-notes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
@@ -39,7 +39,7 @@ export function createStudyRouter(base: string, source: SourceConfig): Router {
         return res.json({ study: decode(raw), revision: revisionOf(raw), path: STUDY_FILE, writable: await getCurrentBranch(source.path) === 'main' });
       }
       const token = await authToken(req, base);
-      const reader = new GitHubSource(source.repository, source.branch, token);
+      const reader = createRemoteSource(source, token);
       const snapshot = await reader.getSnapshot();
       const exists = snapshot.entries.some(entry => entry.path === STUDY_FILE);
       const raw = exists ? (await reader.readFile(STUDY_FILE)).toString('utf8') : null;
@@ -52,9 +52,9 @@ export function createStudyRouter(base: string, source: SourceConfig): Router {
       if (!validation.success) throw new SourceError('Invalid review action.', 400);
       const body = validation.data;
       const execute = async () => {
-        const token = source.type === 'github' ? await authToken(req, base) : undefined;
-        if (source.type === 'github' && !token) throw new SourceError('Sign in with write access.', 403);
-        const reader = source.type === 'github' ? new GitHubSource(source.repository, source.branch, token!) : undefined;
+        const token = source.type !== 'local' ? await authToken(req, base) : undefined;
+        if (source.type !== 'local' && !token) throw new SourceError('Sign in with write access.', 403);
+        const reader = source.type !== 'local' ? createRemoteSource(source, token!) : undefined;
         const snapshot = await reader?.getSnapshot();
         if (source.type === 'local' && await getCurrentBranch(source.path) !== 'main') throw new SourceError('Switch to main to review cards.', 403);
         const config = reader ? await reader.config() : loadWorkspaceConfig(source.type === 'local' ? source.path : '');
@@ -121,7 +121,7 @@ export function createStudyRouter(base: string, source: SourceConfig): Router {
       }
       const token = await authToken(req, base);
       if (!token) throw new SourceError('Sign in with write access to save the study workspace.', 403);
-      const reader = new GitHubSource(source.repository, source.branch, token);
+      const reader = createRemoteSource(source, token);
       const saved = await reader.saveStudyWorkspace(yaml, revision);
       res.json({ study: value.data, revision: saved.revision, path: STUDY_FILE, writable: true });
     } catch (error) { fail(res, error); }
