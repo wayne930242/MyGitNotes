@@ -8,7 +8,7 @@ import { GraphControls } from './graph/GraphControls.js';
 import { GraphPreview } from './graph/GraphPreview.js';
 import { nodeRadius, useGraphPainting } from './graph/useGraphPainting.js';
 import { useGraphMinimap } from './graph/useGraphMinimap.js';
-import { graphFocus } from '../lib/graph-focus.js';
+import { graphFocus, toggleGraphFocus } from '../lib/graph-focus.js';
 import { useGraphRelaxation } from './graph/useGraphRelaxation.js';
 import { createInitialGraphFit } from '../lib/graph-initial-fit.js';
 
@@ -51,6 +51,7 @@ export function GraphPage({
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showOrphans, setShowOrphans] = useState(true);
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const suppressedHoverId = useRef<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const previewNote = notes.find(note => note.path === previewPath);
@@ -226,11 +227,20 @@ export function GraphPage({
             }}
             linkDirectionalArrowLength={2.5}
             linkDirectionalArrowRelPos={0.8}
-            onNodeHover={(node) => setHoverId(node ? (node as NoteGraphNode).id : null)}
+            onNodeHover={(node) => {
+              const id = node ? (node as NoteGraphNode).id : null;
+              if (id !== suppressedHoverId.current) suppressedHoverId.current = null;
+              setHoverId(id === suppressedHoverId.current ? null : id);
+            }}
             onNodeClick={(node) => {
               const n = node as NoteGraphNode;
               const target = notes.find((item) => item.path === n.id);
-              if (target) setPreviewPath(target.path);
+              if (target) {
+                const next = toggleGraphFocus(previewPath, target.path);
+                suppressedHoverId.current = next === null ? target.path : null;
+                setHoverId(null);
+                setPreviewPath(next);
+              }
             }}
             onBackgroundClick={() => setHoverId(null)}
             cooldownTicks={100}
