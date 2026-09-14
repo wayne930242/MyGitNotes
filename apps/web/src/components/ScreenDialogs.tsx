@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { parseYouTubeUrl, type ScreenItem, type ScreenRow } from '@github-notes/core/screen-page';
+import { defaultStudyProgression, StudyProgressionSchema } from '@github-notes/core/study-stages';
+import { resolveNoteStatuses } from '@github-notes/core/note-status';
+import { StudyLaneSettings } from './StudyLane.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { Select } from './Select.js';
 import type { ScreenContentProps } from './ScreenCard.js';
@@ -26,6 +29,10 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
   const [notebookId, setNotebook] = useState(source?.notebookId || selectedNotebookId);
   const [tagNotebookId, setTagNotebook] = useState(source?.kind === 'tag' ? source.notebookId || '' : source?.notebookId || selectedNotebookId);
   const [folder, setFolder] = useState(source?.kind === 'folder' ? source.path : ''), [recursive, setRecursive] = useState(source?.kind === 'folder' ? source.recursive : true);
+  const [view, setView] = useState<ScreenRow['view']>(row?.view || 'small');
+  const [progression, setProgression] = useState(() => row?.progression || defaultStudyProgression([...new Set(notebooks.flatMap(notebook => resolveNoteStatuses(notebook)))]));
+  const [stageError, setStageError] = useState(false);
+  const studying = view === 'study' || view === 'reading';
   const [confirmRemove, setConfirmRemove] = useState(false);
   const nb = notebooks.find(nb => nb.id === notebookId);
   const tags = [...new Set(notes.filter(note => !tagNotebookId || note.notebookId === tagNotebookId).flatMap(note => note.tags))].sort();
@@ -36,7 +43,9 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
     <form className="screen-form" onSubmit={event => {
       event.preventDefault();
       if (disabled || row && !name.trim()) return;
-      const base = { id: row?.id || crypto.randomUUID(), name: name.trim() || t(kind === 'custom' ? 'screen.custom' : 'screen.dynamic'), view: row?.view || 'small' as const, ...(row?.study ? { study: row.study } : {}) };
+      const result = StudyProgressionSchema.safeParse(progression);
+      if (studying && !result.success) { setStageError(true); return; }
+      const base = { id: row?.id || crypto.randomUUID(), name: name.trim() || t(kind === 'custom' ? 'screen.custom' : 'screen.dynamic'), view, ...(row?.study ? { study: row.study } : {}), ...(studying && result.success ? { progression: result.data } : row?.progression ? { progression: row.progression } : {}) };
       const sort = row?.kind === 'dynamic' && row.sort ? { sort: row.sort } : {};
       onApply(kind === 'custom'
         ? { ...base, kind: 'custom', items: row?.kind === 'custom' ? row.items : [] }
@@ -53,6 +62,9 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
       {kind === 'folder' && <label>{t('sidebar.notebooks')}<Select value={notebookId} onValueChange={id => { setNotebook(id); setFolder(''); }} options={notebooks.map(nb => ({ value: nb.id, label: nb.title }))} /></label>}
       {kind === 'folder' && <><label>{t('folder.folders')}<Select value={folder || nb?.root || ''} onValueChange={setFolder} options={screenFolderOptions(nb, folders, assets).map(folder => ({ value: folder.path, label: folder.title }))} /></label>
         <label className="screen-checkbox"><input type="checkbox" checked={recursive} onChange={e => setRecursive(e.target.checked)} />{t('screen.recursive')}</label></>}
+      <label>{t('screen.view')}<Select aria-label={t('screen.view')} value={view} disabled={disabled} onValueChange={value => setView(value as ScreenRow['view'])} options={(['thumbnail', 'small', 'medium', 'reading', 'study'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} /></label>
+      {studying && <StudyLaneSettings progression={progression} disabled={Boolean(disabled)} onChange={value => { setProgression(value); setStageError(false); }} />}
+      {studying && stageError && <p role="alert">{t('study.invalidStages')}</p>}
       {confirmRemove && <p className="screen-dialog-hint">{t('screen.removeRowHint')}</p>}
       <div className="workspace-dialog-actions">
         {onRemove && <button type="button" className="ui-button" disabled={disabled} onClick={() => { if (!confirmRemove) setConfirmRemove(true); else { onRemove(); onClose(); } }}>{t(confirmRemove ? 'screen.confirmRemoveRow' : 'screen.removeRow')}</button>}

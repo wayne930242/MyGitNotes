@@ -17,3 +17,5 @@ export * from './workspace-links.js';
 export * from './note-graph.js';
 export * from './note-pages.js';
 export * from './study.js';
+
+export * from './study-stages.js';

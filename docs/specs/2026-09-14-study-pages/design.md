@@ -8,9 +8,15 @@ Study workspace 以版本化 YAML 保存 notes、pages、cards 與 events。頁�
 
 HTTP study endpoint 沿用 Screen Page 的 local 原子寫入與 GitHub CAS commit 模式，增加 schema、大小、分支及 regular-file 驗證。local 保存後走既有 Git commit 流程，GitHub 每個明確學習操作直接提交，狀態文字區分保存及同步。撤銷是新的持久化事件，保留歷史。
 
-Screen 保存篩選條件，study controller 提供學習狀態、保存與衝突處理，StudyDialog 負責單卡操作。排程由 ts-fsrs 提供；呼叫端只傳入評分與時間。學習控制器不更新 note status。
+Screen 保存篩選條件，study controller 提供學習狀態、保存與衝突處理，StudyLane 負責泳道單卡操作。stage action 由伺服器依持久化泳道配置計算目的 status 與間隔，原有 ts-fsrs 資料及方法保留相容性。
 
 驗證面：Markdown 結構與重排、多卡身分、閱讀／評分／撤銷事件、HTTP local 保存／競爭／授權及 GitHub adapter，桌面與手機真實瀏覽器操作。
+
+## 工具列與共用頁首
+
+河道篩選及排序沿用同一組控制與保存邏輯，桌面顯示於 header，手機由按鈕展開。標籤與控制一組排列，文字保持單行；手機保留 44px 操作目標，一般卡片在手機以原生觸控捲動；閱讀／學習泳道的左右箭頭切換前後卡片。
+
+Header 提供固定側欄開關插槽；WorkspaceSidebarToggle 透過 React portal 將各頁現有開關呈現在該插槽，開關狀態與處理仍由原頁面持有。筆記頁也使用共用開關。移除內容區為浮動開關預留的上方空白；低高度 Agent 頁收起品牌列，保留筆記本與側欄入口。
 
 ## Friction Notes
 
@@ -21,3 +27,17 @@ Git 檢視具有 query 與 body 兩層路徑限制；學習檔一併加入，並
 既有瀏覽器測試在下拉選單關閉後遇到焦點恢復競爭；測試等待實際焦點恢復再輸入，跨平台全選改用 input.select()。暫停狀態新增獨立旗標，讓閱讀提醒與記憶暫停可同時成立。
 
 Reflexive：已依 solid-loop 移除產品指南中的機器限定絕對連結，改用相對文件連結。其餘摩擦以測試同步與領域狀態修正處理，未新增技能或流程規則。
+
+## 河道階段實作
+
+ScreenRow 增加閱讀／學習版型與 progression 設定，階段以 status 和 intervalDays 定義。核心模組負責計算流轉與可撤銷事件；畫面只提供當前卡片的翻頁、揭示與熟悉程度，設定集中在河道設定區。保存介面核對筆記正文／metadata 與學習版本，將狀態及事件一起保存；GitHub 使用同一個 Git commit，本機以序列化操作及失敗回復處理兩個檔案。純正文與未知 metadata 保留。
+
+編輯器以可見分頁 widget 取代會縮成零寬的水平線 widget，沿用頂層 Markdown 分頁判斷。驗證點涵蓋四種評分、階段間隔、跨狀態河道移動、保存失敗停留、撤銷與 Markdown 原稿一致性。
+
+## 專屬泳道頁與配置
+
+路由解析新增 lane 身分，ScreenPage 僅呈現選定泳道，App 收起全域頁首及 Git footer。保留相同 React lane key，切換專屬頁延續當前卡片狀態；編輯器 returnTo 接受同一有效工作區路由。不存在的泳道提供返回提示。
+
+StudyLane 提供受邊界及保存狀態限制的前後卡片操作；一般工具列與專屬頁呼叫同一組方法。答案揭示後，正面與背面組成連續頁序，回看題目保留揭示狀態。設定欄位是泳道編輯表單的一部分，提交時整體驗證，取消即捨棄本次草稿。
+
+Reflexive：移除與泳道排序重複的最早到期勾選、分散的學習配置及筆記彈窗模式，使用既有版型、泳道編輯與路由結構承接需求。驗證使用隔離工作區，保持示範與真實筆記資料獨立。

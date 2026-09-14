@@ -59,13 +59,16 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
         </React.Fragment>)}
       </nav>
       <div className="header-account">
-        {notebooks.length > 0 && <div className="header-notebook">
+        <div className="header-notebook">
+          <span id="workspace-sidebar-toggle-slot" />
+          {notebooks.length > 0 && <>
           <BookOpen aria-hidden="true" />
           <Select aria-label={t('sidebar.notebooks')} value={selectedNotebookId}
             title={notebooks.find(nb => nb.id === selectedNotebookId)?.title}
             disabled={notebookDisabled || navigationDisabled} onValueChange={onSelectNotebook}
             options={notebooks.map(nb => ({ value: nb.id, label: nb.title }))} />
-        </div>}
+          </>}
+        </div>
         <div className="header-utilities">
           <button type="button" disabled={navigationDisabled} className="ui-icon-button header-command" data-header-command="" aria-label={t('shortcuts.open')} title={t('shortcuts.open')} onClick={onOpenCommands}><Keyboard size={17} /></button>
           <button type="button" disabled={navigationDisabled} className="ui-icon-button header-settings" data-header-settings="" aria-label={t('nav.settings')} title={t('nav.settings')} aria-current={activeTab === 'settings' ? 'page' : undefined} onClick={() => setActiveTab('settings')}><Settings size={17} /></button>

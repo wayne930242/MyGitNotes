@@ -11,7 +11,6 @@ export type ScreenAsset = AssetItem & { notebookId: string };
 export interface ScreenContentProps {
   notebooks: NotebookConfig[]; notes: NoteItem[]; assets: ScreenAsset[];
   onOpen: (item: ScreenItem) => void;
-  onStudy?: (note: NoteItem) => void;
 }
 export function screenItemTitle(item: ScreenItem, notes: NoteItem[], assets: ScreenAsset[]): string {
   if (item.kind === 'youtube') return item.title || 'YouTube';
@@ -56,6 +55,6 @@ export function ScreenCard({ item, view, controls, ...content }: ScreenContentPr
           </button>
         : <p className="screen-missing">{t('screen.missing')}</p>}
     </div>
-    <footer className="screen-card-footer" title={item.kind === 'youtube' ? item.videoId : item.path}><span>{notebook?.title || (item.kind === 'youtube' ? 'YouTube' : t('screen.missing'))}</span>{note && content.onStudy && <button className="ui-button screen-study-button" aria-label={`${t('study.open')}: ${note.title}`} onClick={() => content.onStudy?.(note)}>{t('study.open')}</button>}</footer>
+    <footer className="screen-card-footer" title={item.kind === 'youtube' ? item.videoId : item.path}><span>{notebook?.title || (item.kind === 'youtube' ? 'YouTube' : t('screen.missing'))}</span></footer>
   </article>;
 }
