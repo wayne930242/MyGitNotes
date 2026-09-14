@@ -231,7 +231,8 @@ export function GraphPage({
         <span className="graph-stats" role="status" data-filter-results={filters.count} data-graph-nodes={graphData.nodes.length} data-graph-links={graphData.links.length}
           title={`${t('filters.results', { count: filters.count })} · ${t('filters.graphTotal', { count: graphData.nodes.length })} · ${graphData.links.length} ${t('graph.links')}`}
           aria-label={`${t('filters.results', { count: filters.count })} · ${t('filters.graphTotal', { count: graphData.nodes.length })} · ${graphData.links.length} ${t('graph.links')}`}>
-          {graphData.nodes.length} · {graphData.links.length} -
+          <span className="graph-stat" data-graph-stat="nodes">{graphData.nodes.length}<svg aria-hidden="true" width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3.5" fill="currentColor" /></svg></span>
+          <span className="graph-stat" data-graph-stat="links">{graphData.links.length}<svg aria-hidden="true" width="28" height="12" viewBox="0 0 28 12"><path d="M2 6H26" stroke="currentColor" strokeWidth="2" /><circle cx="2" cy="6" r="2" fill="currentColor" /><circle cx="26" cy="6" r="2" fill="currentColor" /></svg></span>
         </span>
         {minimap}
       </div>

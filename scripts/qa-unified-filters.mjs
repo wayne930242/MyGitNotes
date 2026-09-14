@@ -49,9 +49,9 @@ try {
      const stats=document.querySelector('.graph-stats');const label=stats.getBoundingClientRect();
      const mini=document.querySelector('.graph-minimap-panel > button').getBoundingClientRect();
      const color=document.querySelector('.graph-appearance').getBoundingClientRect();
-     return {text:stats.textContent.trim(),expected:`${stats.dataset.graphNodes} · ${stats.dataset.graphLinks} -`,statsCount:document.querySelectorAll('[data-filter-results]').length,above:label.bottom<=mini.top,right:Math.abs(label.right-mini.right)<1,colorRight:graph.right-color.right,colorTop:color.top-graph.top};
+     return {nodeText:stats.querySelector('[data-graph-stat="nodes"]').textContent,linkText:stats.querySelector('[data-graph-stat="links"]').textContent,nodes:stats.dataset.graphNodes,links:stats.dataset.graphLinks,lineWidth:stats.querySelector('[data-graph-stat="links"] svg').getBoundingClientRect().width,dotWidth:stats.querySelector('[data-graph-stat="nodes"] svg').getBoundingClientRect().width,statsCount:document.querySelectorAll('[data-filter-results]').length,above:label.bottom<=mini.top,right:Math.abs(label.right-mini.right)<1,colorRight:graph.right-color.right,colorTop:color.top-graph.top};
    });
-   assert.equal(layout.text,layout.expected);assert.equal(layout.statsCount,1);assert.ok(layout.above&&layout.right);assert.ok(layout.colorRight<=13&&layout.colorTop<=13,JSON.stringify(layout));
+   assert.equal(layout.nodeText,layout.nodes);assert.equal(layout.linkText,layout.links);assert.ok(layout.lineWidth>=24&&layout.dotWidth>=7);assert.equal(layout.statsCount,1);assert.ok(layout.above&&layout.right);assert.ok(layout.colorRight<=13&&layout.colorTop<=13,JSON.stringify(layout));
    await page.click('.graph-appearance summary');
    const bounds=await page.$eval('.graph-appearance > div',el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight};});
    assert.ok(bounds.left>=0&&bounds.right<=bounds.width&&bounds.bottom<=bounds.height,JSON.stringify(bounds));

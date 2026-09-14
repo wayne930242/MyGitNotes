@@ -4,4 +4,6 @@
 .graph-appearance { position: relative; grid-column: 2; grid-row: 1; padding: .375rem; pointer-events: auto; }
 .graph-view-actions { grid-column: 1; grid-row: 2; justify-self: start; display: flex; flex-wrap: wrap; gap: .5rem; padding: .375rem; pointer-events: auto; }
 .graph-minimap-panel { position: absolute; right: 1rem; bottom: 1rem; display: flex; flex-direction: column; align-items: flex-end; gap: .5rem; }
-.graph-stats { padding: .3rem .65rem; color: var(--color-muted); font-variant-numeric: tabular-nums; }
+.graph-stats { display: flex; align-items: center; gap: .85rem; padding: .4rem .65rem; color: var(--color-text); font-variant-numeric: tabular-nums; font-weight: 500; }
+.graph-stat { display: inline-flex; align-items: center; gap: .375rem; white-space: nowrap; }
+.graph-stat svg { flex: none; opacity: .8; }
