@@ -69,6 +69,14 @@ try {
   const inset=await page.$eval(lane,e=>{const a=e.getBoundingClientRect(),b=e.querySelector('h3').getBoundingClientRect();return {x:b.x-a.x,y:b.y-a.y};});
   assert(inset.x>=8 && inset.y>=8,`Lane heading lacks top/left padding: ${JSON.stringify(inset)}`);
   assert(!await page.$('.screen-sidebar button[aria-label="Edit swimlanes"]'),'Old lane editor remains');
+  const ensureSidebar = async () => {
+    const isOpen = await page.$eval('.workspace-responsive-sidebar', el => el.classList.contains('is-open')).catch(() => false);
+    if (!isOpen) {
+      await page.click('[data-sidebar-toggle]');
+      await page.waitForFunction(() => document.querySelector('.workspace-responsive-sidebar')?.classList.contains('is-open'));
+    }
+  };
+  await ensureSidebar();
   await page.click('.screen-sidebar-controls .screen-sidebar-action');
   await page.waitForSelector('dialog[open]');
   let dialogSelects = await page.$$('dialog[open] .select-trigger');
@@ -85,6 +93,7 @@ try {
   await page.waitForFunction(() => [...document.querySelectorAll('.screen-lane')].some(lane => lane.querySelector('.screen-dynamic-label')?.textContent.includes('#archive-only') && lane.querySelector('.screen-card-title')?.textContent === 'Archive Note'));
   console.log('PASS notebook-first cross-notebook dynamic tag lane creation');
 
+  await ensureSidebar();
   await page.click('[aria-label="Edit swimlane: Reading"]');
   await page.waitForSelector('input[aria-label="Swimlane name"]');
   dialogSelects = await page.$$('dialog[open] .select-trigger');
@@ -97,6 +106,7 @@ try {
   await page.type('dialog[open] input[list="screen-tags"]', 'archive-only');
   await page.focus('input[aria-label="Swimlane name"]'); await page.$eval('input[aria-label="Swimlane name"]', input => input.select()); await page.keyboard.type('Renamed'); await page.keyboard.press('Enter');
   await page.waitForFunction(()=>document.querySelector('#screen-lane-reading h3')?.textContent==='Renamed' && document.querySelector('#screen-lane-reading .screen-dynamic-label')?.textContent.includes('#archive-only') && document.querySelector('#screen-lane-reading .screen-card-title')?.textContent === 'Archive Note');
+  await ensureSidebar();
   await page.focus('[aria-label="Move swimlane: Renamed"]'); await page.keyboard.press('Space');
   await page.waitForFunction(()=>document.querySelector('[aria-label="Move swimlane: Renamed"]')?.getAttribute('aria-pressed')==='true');
   await page.waitForFunction(()=>[...document.querySelectorAll('[role="status"]')].some(e=>e.textContent.includes('over droppable area reading')));

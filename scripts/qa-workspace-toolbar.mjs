@@ -60,6 +60,8 @@ try {
         assert(await page.$eval('[data-sidebar-toggle]', button => button.getAttribute('aria-expanded') === 'true'), 'Toggle does not reflect open state');
         await page.click('[data-sidebar-toggle]');
         await page.waitForFunction(selector => !document.querySelector(selector)?.classList.contains('is-open'), {}, panel);
+      } else if (route === 'screen') {
+        assert(await page.$eval('[data-sidebar-toggle]', button => button.getBoundingClientRect().width > 0), `Screen toggle hidden on desktop`);
       } else {
         assert(await page.$eval('[data-sidebar-toggle]', button => button.getBoundingClientRect().width === 0), `Mobile toggle visible on desktop: ${route}`);
       }
@@ -113,7 +115,15 @@ try {
   await fits('.header-notebook .select-trigger');
   assert(await page.$eval('[data-markdown-editor]', editor => editor.getBoundingClientRect().height >= 100), 'Reduced-height header crowds out editor');
   await page.setViewport({ width: 1440, height: 1000, isMobile: false, hasTouch: false });
+  const ensureScreenSidebar = async () => {
+    const isOpen = await page.$eval('.workspace-responsive-sidebar', el => el.classList.contains('is-open')).catch(() => false);
+    if (!isOpen) {
+      await page.click('[data-sidebar-toggle]');
+      await page.waitForFunction(() => document.querySelector('.workspace-responsive-sidebar')?.classList.contains('is-open'));
+    }
+  };
   await page.goto(`${base}/screen`, { waitUntil: 'networkidle0' });
+  await ensureScreenSidebar();
   await page.click('.screen-sidebar-controls button');
   await page.waitForSelector('dialog[open]');
   assert(await page.$eval('dialog[open] .select-trigger[aria-label]', select => select.getAttribute('value') === 'small'), 'New lane defaults to study');
@@ -123,6 +133,7 @@ try {
   const readScreen = () => parse(fs.readFileSync(path.join(root, '.github-notes-screen.yaml'), 'utf8'));
   assert(readScreen().rows.at(-1).view === 'small' && !readScreen().rows.at(-1).progression, 'Default lane persists study configuration');
   assert(await page.$$eval('#screen-lane-custom .screen-view-tabs button', buttons => buttons.length === 3), 'Study is still a view option');
+  await ensureScreenSidebar();
   await page.click('.screen-sidebar-lanes button[aria-label="編輯泳道: Custom"]');
   assert(await page.$eval('dialog[open] .study-advanced', details => !details.open), 'Ordinary edit opens advanced settings automatically');
   await page.click('dialog[open] .study-advanced > summary');
@@ -160,6 +171,7 @@ try {
     config.notebooks[0].statuses = statuses;
     fs.writeFileSync(configPath, JSON.stringify(config));
     await page.reload({ waitUntil: 'networkidle0' });
+    await ensureScreenSidebar();
     await page.click('.screen-sidebar-lanes button[aria-label="編輯泳道: Reading"]');
     assert(await page.$eval('dialog[open] .study-advanced', details => !details.open), 'Advanced section did not reset to collapsed');
     await page.click('dialog[open] .study-advanced > summary');
@@ -169,6 +181,7 @@ try {
     await page.keyboard.press('Escape');
     assert(JSON.stringify(readScreen()) === unchangedScreen, 'Previewing defaults rewrote learning settings');
   }
+  await ensureScreenSidebar();
   await page.click('.screen-sidebar-lanes button[aria-label="編輯泳道: Custom"]');
   await page.click('dialog[open] .study-advanced > summary');
   await page.click('dialog[open] .study-advanced-content > button');

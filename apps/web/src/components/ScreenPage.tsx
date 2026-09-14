@@ -1,3 +1,5 @@
+import { ReorderToggle } from './ReorderToggle.js';
+import { PageToolbar } from './WorkspaceChrome.js';
 import { Button } from './Button.js';
 import './study.css';
 import { useEffect, useRef, useState } from 'react';
@@ -29,14 +31,14 @@ import { Select } from './Select.js';
 import type { SortConfig } from '../lib/note-sort.js';
 import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
 
-function MovableCard({ item, row, disabled, remove, ...content }: ScreenContentProps & {
-  item: ScreenItem; row: ScreenRow; disabled: boolean; remove: () => void;
+function MovableCard({ item, row, reorder, disabled, remove, ...content }: ScreenContentProps & {
+  item: ScreenItem; row: ScreenRow; reorder: boolean; disabled: boolean; remove: () => void;
 }) {
   const { t } = useTranslation();
-  const sort = useSortable({ id: item.id, disabled, data: { rowId: row.id } });
+  const sort = useSortable({ id: item.id, disabled: disabled || !reorder, data: { rowId: row.id } });
   return <div ref={sort.setNodeRef} className="screen-card-slot" style={{ transform: CSS.Transform.toString(sort.transform), transition: sort.transition, opacity: sort.isDragging ? .3 : undefined }}>
     <ScreenCard {...content} item={item} view={row.view} controls={!disabled && <>
-      <Button type="button" ref={sort.setActivatorNodeRef} {...sort.attributes} {...sort.listeners} size="icon" className="screen-drag-handle" aria-label={`${t('screen.moveItem')}: ${screenItemTitle(item, content.notes, content.assets)}`}><GripVertical size={14} /></Button>
+      {reorder && <Button type="button" ref={sort.setActivatorNodeRef} {...sort.attributes} {...sort.listeners} size="icon" className="screen-drag-handle" aria-label={`${t('screen.moveItem')}: ${screenItemTitle(item, content.notes, content.assets)}`}><GripVertical size={14} /></Button>}
       <Button type="button" size="icon" className="screen-remove" aria-label={`${t('screen.unpin')}: ${screenItemTitle(item, content.notes, content.assets)}`} onClick={remove}><X size={12} /></Button>
     </>} />
   </div>;
@@ -61,8 +63,8 @@ export function createLaneNoteContext(
   return null;
 }
 
-function Lane({ row, disabled, study, onStudy, onStudyChange, onView, onSort, onAdd, onRemove, onCreateNote, ...content }: ScreenContentProps & {
-  row: ScreenRow; disabled: boolean; onStudy: () => void; onView: (view: ScreenRow['view']) => void; onAdd: () => void; onRemove: (id: string) => void;
+function Lane({ row, reorder, disabled, study, onStudy, onStudyChange, onView, onSort, onAdd, onRemove, onCreateNote, ...content }: ScreenContentProps & {
+  row: ScreenRow; reorder: boolean; disabled: boolean; onStudy: () => void; onView: (view: ScreenRow['view']) => void; onAdd: () => void; onRemove: (id: string) => void;
   onSort: (sort: SortConfig) => void; study: StudyController; onStudyChange: (study: NonNullable<ScreenRow['study']>) => void;
   onCreateNote?: (context?: { notebookId?: string; folder?: string; tag?: string }) => void;
 }) {
@@ -74,7 +76,7 @@ function Lane({ row, disabled, study, onStudy, onStudyChange, onView, onSort, on
   const items = studyRowItems(screenRowItems(row, content.notes, content.assets, content.notebooks), ordinaryRow, content.notes, study.study, clock);
   const query = row.study || { filter: 'all' as const, dueFirst: false };
   const filtered = Boolean(query.status);
-  const drop = useDroppable({ id: `lane:${row.id}`, disabled: disabled || filtered || row.kind !== 'custom', data: { rowId: row.id, empty: row.kind === 'custom' && !row.items.length } });
+  const drop = useDroppable({ id: `lane:${row.id}`, disabled: disabled || !reorder || filtered || row.kind !== 'custom', data: { rowId: row.id, empty: row.kind === 'custom' && !row.items.length } });
   const statuses = [...new Set(content.notebooks.flatMap(notebook => resolveNoteStatuses(notebook, content.notes.filter(note => note.notebookId === notebook.id).map(note => note.status))))];
   useAltWheelHorizontalScroll(host, strip);
   const scroll = (direction: number) => strip.current?.scrollBy({ left: direction * strip.current.clientWidth * .8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
@@ -123,7 +125,7 @@ function Lane({ row, disabled, study, onStudy, onStudyChange, onView, onSort, on
     <div ref={drop.setNodeRef} className={drop.isOver ? 'screen-drop-target' : ''}>
       <div ref={strip} className="screen-lane-strip" tabIndex={0} aria-label={`${row.name} · ${t('screen.items')}`}>
         {row.kind === 'custom' ? <SortableContext items={items.map(item => item.id)} strategy={horizontalListSortingStrategy}>
-          {items.map(item => <MovableCard key={item.id} {...content} item={item} row={row} disabled={disabled || filtered} remove={() => onRemove(item.id)} />)}
+          {items.map(item => <MovableCard reorder={reorder} key={item.id} {...content} item={item} row={row} disabled={disabled || filtered} remove={() => onRemove(item.id)} />)}
         </SortableContext> : items.map(item => <div className="screen-card-slot" key={item.id}><ScreenCard {...content} item={item} view={row.view} /></div>)}
         {!items.length && <div className="screen-lane-empty">{t(row.kind === 'custom' ? 'screen.emptyCustom' : 'screen.emptyDynamic')}
           {!disabled && <Button onClick={row.kind === 'custom' ? onAdd : handleCreateInLane}><Plus size={14} />{t(row.kind === 'custom' ? 'screen.addItem' : 'screen.createNoteInLane')}</Button>}</div>}
@@ -139,6 +141,8 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
 }) {
   const { t } = useTranslation(); const navigate = useNavigate(); const location = useLocation();
   const sidebar = useWorkspaceSidebarDrawer();
+  const [reorder, setReorder] = useState(false);
+  useEffect(() => { setReorder(false); }, [selectedNotebookId, focusedLaneId]);
   const study = useStudyWorkspace(onStudySaved);
   const [assets, setAssets] = useState<ScreenAsset[]>([]), [assetError, setAssetError] = useState(false);
   const [assetAttempt, setAssetAttempt] = useState(0), [assetsLoading, setAssetsLoading] = useState(false);
@@ -156,6 +160,23 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
   const [dialog, setDialog] = useState<'add' | 'reload' | null>(null), [addTo, setAddTo] = useState<string | null>(null);
   const [preview, setPreview] = useState<ScreenAsset>(), [dragging, setDragging] = useState<ScreenItem>();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: screenKeyboardCoordinates }));
+  useEffect(() => {
+    if (focusedLaneId) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === '[' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], .cm-content')) return;
+        event.preventDefault();
+        sidebar.setOpen(open => !open);
+      }
+    };
+    const onToggle = () => sidebar.setOpen(open => !open);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('toggle-screen-sidebar', onToggle);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('toggle-screen-sidebar', onToggle);
+    };
+  }, [focusedLaneId, sidebar.setOpen]);
   useEffect(() => {
     let active = true; setAssetsLoading(true);
     void Promise.allSettled(notebooks.map(async nb => (await fetchAssets(nb.id)).map(asset => ({ ...asset, notebookId: nb.id })))).then(results => {
@@ -189,12 +210,13 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
         <div className="screen-sidebar-controls">
           <Button className="screen-sidebar-action" disabled={disabled || screen.page.rows.length >= 40} onClick={() => { sidebar.setOpen(false); setDialog('add'); }}><Plus size={16} />{t('screen.addRow')}</Button>
         </div>
-        {screen.page.rows.length > 0 && <ScreenLaneNavigation page={screen.page} disabled={disabled} notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onChange={screen.change} onSelect={id => { document.getElementById(`screen-lane-${id}`)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); sidebar.setOpen(false); }} />}
+        {screen.page.rows.length > 0 && <ScreenLaneNavigation reorder={reorder} page={screen.page} disabled={disabled} notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onChange={screen.change} onSelect={id => { document.getElementById(`screen-lane-${id}`)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); sidebar.setOpen(false); }} />}
       </WorkspaceSidebar>
     </WorkspaceSidebarDrawer>
     <WorkspaceSidebarToggle label={t('screen.controls')} open={sidebar.open} onClick={() => sidebar.setOpen(open => !open)} />
     </>}
     <main className="screen-content">
+      {!focusedLaneId && screen.writable && <PageToolbar><ReorderToggle active={reorder} disabled={disabled} onToggle={() => setReorder(value => !value)} /></PageToolbar>}
       {focusedLaneId && <header className="screen-focus-header">
         <Button className="study-back" aria-label={t('screen.backToScreen')} onClick={returnToScreen}><ArrowLeft size={18} /><span>{t('screen.backToScreen')}</span></Button>
         {focusedRow && <div className="study-header-actions"><div className="study-undo-slot" ref={setStudyToolbar} /><Button size="icon" disabled={disabled} aria-label={`${t('screen.editRow')}: ${focusedRow.name}`} onClick={() => setEditing(focusedRow.id)}><Pencil size={18} /></Button></div>}
@@ -217,12 +239,12 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
           <StudyLane toolbar={studyToolbar} key={reviewRow.id} row={reviewRow} notes={reviewNotes} allNotes={notes} controller={study} disabled={disabled || screen.dirty || screen.saving} onOpen={onOpenNote} />
         </section> : <DndContext sensors={sensors} collisionDetection={screenCollision} onDragStart={({ active }) => setDragging(screen.page.rows.flatMap(row => row.kind === 'custom' ? row.items : []).find(item => item.id === active.id))}
           onDragCancel={() => setDragging(undefined)} onDragEnd={({ active, over }) => {
-            setDragging(undefined); if (!over || active.id === over.id || disabled) return;
+            setDragging(undefined); if (!over || active.id === over.id || disabled || !reorder) return;
             const target = screen.page.rows.find(row => row.kind === 'custom' && (`lane:${row.id}` === over.id || row.items.some(item => item.id === over.id)));
             if (target?.study?.status) return;
             if (target?.kind === 'custom') screen.change(moveScreenItem(screen.page, String(active.id), target.id, over.id === `lane:${target.id}` ? target.items.length : target.items.findIndex(item => item.id === over.id)));
           }}>
-          {screen.page.rows.map(row => <Lane key={row.id} row={row} {...content} disabled={disabled} study={study}
+          {screen.page.rows.map(row => <Lane reorder={reorder} key={row.id} row={row} {...content} disabled={disabled} study={study}
             onCreateNote={onCreateNote}
             onStudy={() => navigate(screenLaneRoute(row.id) + location.search)}
             onStudyChange={study => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id ? { ...value, study } : value) })} onAdd={() => setAddTo(row.id)}

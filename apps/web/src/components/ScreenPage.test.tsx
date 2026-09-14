@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import type { ScreenRow } from '@github-notes/core/screen-page';
 import type { NotebookConfig } from '../lib/types.js';
 import { createLaneNoteContext } from './ScreenPage.js';
+import { KeyboardShortcuts } from './KeyboardShortcuts.js';
 
 describe('createLaneNoteContext', () => {
   const notebooks: NotebookConfig[] = [
@@ -74,5 +77,35 @@ describe('createLaneNoteContext', () => {
       items: [],
     };
     expect(createLaneNoteContext(row, notebooks)).toBeNull();
+  });
+});
+
+describe('Screen sidebar keyboard shortcuts', () => {
+  it('renders toggle-screen-sidebar enabled when on screen tab', () => {
+    const html = renderToStaticMarkup(createElement(KeyboardShortcuts, {
+      mode: 'palette',
+      onModeChange: () => {},
+      activeTab: 'screen',
+      canCreateNote: true,
+      onNavigate: () => {},
+      onCreateNote: () => {},
+      onFocusSearch: () => {},
+    }));
+    expect(html).toContain('data-command-id="toggle-screen-sidebar"');
+    expect(html).toContain('<kbd>[</kbd>');
+  });
+
+  it('renders toggle-screen-sidebar disabled when on other tab', () => {
+    const html = renderToStaticMarkup(createElement(KeyboardShortcuts, {
+      mode: 'palette',
+      onModeChange: () => {},
+      activeTab: 'notes',
+      canCreateNote: true,
+      onNavigate: () => {},
+      onCreateNote: () => {},
+      onFocusSearch: () => {},
+    }));
+    expect(html).toContain('data-command-id="toggle-screen-sidebar"');
+    expect(html).toContain('aria-disabled="true"');
   });
 });

@@ -1,5 +1,5 @@
+import { readFilterQuery } from './filter-query.js';
 import { matchPath } from 'react-router-dom';
-import type { ViewMode } from './types.js';
 export type WorkspaceTab = 'notes' | 'assets' | 'agent' | 'screen' | 'graph' | 'settings';
 export function parseWorkspaceRoute(pathname: string, search: string) {
   pathname = pathname.replace(/\/+$/, '') || '/';
@@ -29,7 +29,8 @@ export function parseWorkspaceRoute(pathname: string, search: string) {
   const queryFolder = query.get('folder');
   if (queryFolder) folder = queryFolder;
   if((note!==null&&!safeRelative(note))||(folder!==null&&!safeRelative(folder)))valid=false;
-  return {valid,tab,lane,notebook,folder,note,showHidden:query.get('showHidden') === 'true',view:(['flat','list','card','kanban','graph'].includes(query.get('view')||'')?query.get('view'):'flat') as ViewMode,status:query.get('status'),tag:query.get('tag'),q:query.get('q')||''};
+  const filters = readFilterQuery(query);
+  return {valid,tab,lane,notebook,folder,note,...filters,tag:filters.tag[0] || null,tags:filters.tag};
 }
 export function safeRelative(value: string) { return Boolean(value)&&!value.includes('\\')&&!value.includes('\0')&&value.split('/').every(part=>Boolean(part)&&part!=='.'&&part!=='..'); }
 const encodePath = (value: string) => value.split('/').map(encodeURIComponent).join('/');

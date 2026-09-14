@@ -10,18 +10,19 @@ import { ScreenEditRow } from './ScreenDialogs.js';
 import type { ScreenAsset } from './ScreenCard.js';
 import type { FolderItem, NoteItem, NotebookConfig } from '../lib/types.js';
 
-function LaneLink({ row, disabled, onSelect, onEdit }: { row: ScreenRow; disabled: boolean; onSelect: () => void; onEdit: () => void }) {
+function LaneLink({ row, reorder, disabled, onSelect, onEdit }: { row: ScreenRow; reorder: boolean; disabled: boolean; onSelect: () => void; onEdit: () => void }) {
   const { t } = useTranslation();
-  const sort = useSortable({ id: row.id, disabled });
+  const sort = useSortable({ id: row.id, disabled: disabled || !reorder });
   return <div ref={sort.setNodeRef} className="screen-sidebar-lane" style={{ transform: CSS.Transform.toString(sort.transform), transition: sort.transition, opacity: sort.isDragging ? .5 : undefined }}>
-    <button type="button" ref={sort.setActivatorNodeRef} {...sort.attributes} {...sort.listeners} disabled={disabled} className="screen-drag-handle ui-icon-button" aria-label={`${t('screen.moveRow')}: ${row.name}`}><GripVertical size={14} /></button>
+    {reorder && <button type="button" ref={sort.setActivatorNodeRef} {...sort.attributes} {...sort.listeners} disabled={disabled} className="screen-drag-handle ui-icon-button" aria-label={`${t('screen.moveRow')}: ${row.name}`}><GripVertical size={14} /></button>}
     <button type="button" className="screen-sidebar-action" onClick={onSelect}>{row.kind === 'dynamic' ? <Zap size={15} /> : <ScreenIcon size={15} />}<span>{row.name}</span></button>
     <button type="button" className="ui-icon-button" disabled={disabled} title={t('screen.editRow')} aria-label={`${t('screen.editRow')}: ${row.name}`} onClick={onEdit}><Pencil size={14} /></button>
   </div>;
 }
 
-export function ScreenLaneNavigation({ page, disabled, notebooks, notes, assets, folders, selectedNotebookId, onChange, onSelect }: {
+export function ScreenLaneNavigation({ page, reorder = false, disabled, notebooks, notes, assets, folders, selectedNotebookId, onChange, onSelect }: {
   page: ScreenPage;
+  reorder?: boolean;
   disabled: boolean;
   notebooks: NotebookConfig[];
   notes: NoteItem[];
@@ -40,11 +41,11 @@ export function ScreenLaneNavigation({ page, disabled, notebooks, notes, assets,
     <nav aria-label={t('screen.lanes')} className="screen-sidebar-lanes">
       <h4>{t('screen.lanes')}</h4>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={({active,over}) => {
-        if (disabled || !over || active.id === over.id) return;
+        if (disabled || !reorder || !over || active.id === over.id) return;
         const index = page.rows.findIndex(row => row.id === over.id);
         if (index >= 0) onChange(moveScreenRow(page, String(active.id), index));
       }}><SortableContext items={page.rows.map(row => row.id)} strategy={verticalListSortingStrategy}>
-        {page.rows.map(row => <LaneLink key={row.id} row={row} disabled={disabled} onSelect={() => onSelect(row.id)} onEdit={() => setEditing(row.id)} />)}
+        {page.rows.map(row => <LaneLink reorder={reorder} key={row.id} row={row} disabled={disabled} onSelect={() => onSelect(row.id)} onEdit={() => setEditing(row.id)} />)}
       </SortableContext></DndContext>
     </nav>
     {editingRow && <ScreenEditRow row={editingRow} disabled={disabled} notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onClose={close}

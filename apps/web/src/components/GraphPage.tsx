@@ -1,3 +1,7 @@
+import { filterNotes, selectFilteredGraph } from '@github-notes/core/note-filters';
+import { isNoteHidden } from '@github-notes/core/note-status';
+import { WorkspaceFilters, type WorkspaceFiltersProps } from './WorkspaceFilters.js';
+import { useTranslation } from '../lib/i18n/index.js';
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { buildNoteGraph, NoteGraphNode, NoteGraphLink } from '@github-notes/core/note-graph';
@@ -17,20 +21,17 @@ const nodeValue = (node: unknown) => Math.pow(nodeRadius(node as NoteGraphNode) 
 export interface GraphPageProps {
   notebooks: NotebookConfig[];
   notes: NoteItem[];
-  selectedNotebookId: string;
-  onSelectNotebook?: (id: string) => void;
+  filters: WorkspaceFiltersProps;
   onOpenNote: (note: NoteItem) => void;
-  showHidden?: boolean;
 }
 
 export function GraphPage({
   notebooks,
   notes,
-  selectedNotebookId,
-  onSelectNotebook,
+  filters,
   onOpenNote,
-  showHidden = false,
 }: GraphPageProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
   const [previewTop, setPreviewTop] = useState(0);
@@ -48,11 +49,9 @@ export function GraphPage({
     try { localStorage.setItem(GRAPH_APPEARANCE_KEY, JSON.stringify(next)); setAppearanceSaveError(false); }
     catch { setAppearanceSaveError(true); }
   };
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showOrphans, setShowOrphans] = useState(true);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const suppressedHoverId = useRef<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const previewNote = notes.find(note => note.path === previewPath);
 
@@ -84,27 +83,12 @@ export function GraphPage({
     return () => observer.disconnect();
   }, []);
 
-  // Collect all unique tags for filter
-  const allTags = useMemo(() => {
-    const set = new Set<string>();
-    for (const note of notes) {
-      if (note.tags) {
-        for (const tag of note.tags) {
-          if (tag) set.add(tag);
-        }
-      }
-    }
-    return Array.from(set).sort();
-  }, [notes]);
-
-  // Compute graph data
   const rawGraphData = useMemo(() => {
-    return buildNoteGraph(notes, {
-      notebookId: selectedNotebookId === 'all' ? null : selectedNotebookId,
-      includeHidden: showHidden,
-      tag: selectedTag || null,
-    });
-  }, [notes, selectedNotebookId, showHidden, selectedTag]);
+    const eligible = notes.filter(note => filters.value.showHidden || !isNoteHidden({ ...note.metadata, status: note.status }));
+    const graph = buildNoteGraph(eligible, { includeHidden: true });
+    const matches = new Set(filterNotes(notes, filters.value).map(note => note.path));
+    return selectFilteredGraph(graph, matches, filters.neighbors);
+  }, [notes, filters.value, filters.neighbors]);
 
   // Filter orphans if disabled
   const graphData = useMemo(() => {
@@ -122,19 +106,8 @@ export function GraphPage({
       nodes = nodes.filter((n) => connectedIds.has(n.id));
     }
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      nodes = nodes.filter((n) => n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q));
-      const filteredIds = new Set(nodes.map((n) => n.id));
-      links = links.filter((l) => {
-        const sourceId = typeof l.source === 'object' ? (l.source as { id: string }).id : l.source;
-        const targetId = typeof l.target === 'object' ? (l.target as { id: string }).id : l.target;
-        return filteredIds.has(sourceId) && filteredIds.has(targetId);
-      });
-    }
-
     return { nodes, links };
-  }, [rawGraphData, showOrphans, searchQuery]);
+  }, [rawGraphData, showOrphans]);
 
   const visibleColorGroups = useMemo(() => {
     const keys = new Set(graphData.nodes.map(node => graphColorGroup(node, notebooks, appearance.mode).key));
@@ -177,7 +150,7 @@ export function GraphPage({
 
   return (
     <div className="graph-page-container relative w-full h-full flex flex-col bg-transparent overflow-hidden" ref={containerRef}>
-      <GraphControls controlsRef={controlsRef} notebooks={notebooks} selectedNotebookId={selectedNotebookId} onSelectNotebook={onSelectNotebook} searchQuery={searchQuery} onSearchChange={setSearchQuery} allTags={allTags} selectedTag={selectedTag} onTagChange={setSelectedTag} appearance={appearance} onAppearanceChange={changeAppearance} visibleColorGroups={visibleColorGroups} appearanceSaveError={appearanceSaveError} showOrphans={showOrphans} onToggleOrphans={() => setShowOrphans(value => !value)} onReset={resetView} nodeCount={graphData.nodes.length} linkCount={graphData.links.length} />
+      <GraphControls controlsRef={controlsRef} filterPanel={<WorkspaceFilters {...filters} compact />} appearance={appearance} onAppearanceChange={changeAppearance} visibleColorGroups={visibleColorGroups} appearanceSaveError={appearanceSaveError} showOrphans={showOrphans} onToggleOrphans={() => setShowOrphans(value => !value)} onReset={resetView} nodeCount={graphData.nodes.length} linkCount={graphData.links.length} matchingCount={filters.count} />
 
       {/* Force Graph Canvas */}
       <div className="flex-1 w-full h-full" onPointerDownCapture={initialFit.cancel} onWheelCapture={initialFit.cancel}>
@@ -249,6 +222,7 @@ export function GraphPage({
           />
         )}
       </div>
+      {!graphData.nodes.length && <p role="status" className="absolute inset-x-4 top-1/2 text-center text-sm text-slate-500 pointer-events-none">{t('filters.graphEmpty')}</p>}
       {previewNote && <GraphPreview note={previewNote} notebookTitle={notebooks.find(nb => nb.id === previewNote.notebookId)?.title} top={previewTop} onClose={() => { setPreviewPath(null); setHoverId(null); }} onClearHover={() => setHoverId(null)} onOpenNote={onOpenNote} />}
       {minimap}
 
