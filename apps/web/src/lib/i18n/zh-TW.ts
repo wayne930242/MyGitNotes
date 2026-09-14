@@ -1,6 +1,7 @@
 import { TranslationKey } from './en.js';
 
 export const zhTW: Record<TranslationKey, string> = {
+  "table.multilineHint": "Enter 換行 · Ctrl／⌘+Enter 套用 · Esc 取消",
   "table.inlineHint": "連按兩下或按 Enter 編輯儲存格",
   "table.insertRowHere": "在此插入列",
   "table.insertColumnHere": "在此插入欄",

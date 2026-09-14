@@ -54,6 +54,11 @@ function escapeCell(value: string): string {
   return value.replace(/\r?\n/g, '<br>').replace(/(\\*)\|/g, (match, slashes: string) => slashes.length % 2 === 0 ? `\\${match}` : match);
 }
 
+export function tableCellEditorText(value: string): string {
+  // Display HTML line breaks as editable newlines, preserving code and escapes.
+  return value.replace(/(`+)([\s\S]*?)\1(?!`)|\\[\\<]|<br\s*\/?>/gi, token => /^<br\s*\/?>$/i.test(token) ? '\n' : token);
+}
+
 export function serializeMarkdownTable(table: Pick<MarkdownTable, 'rows' | 'alignments'>, newline = '\n'): string {
   const row = (values: string[]) => `| ${values.map(escapeCell).join(' | ')} |`;
   const separators = { none: '---', left: ':---', center: ':---:', right: '---:' };

@@ -56,8 +56,8 @@ try {
  await hoverEdge('row',1);await page.click('.live-table-insert-row');
  await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows.length===3);
  await page.click(bodyCell(1,1),{count:2});
- await page.waitForSelector('.live-table-cell-input');
- await page.keyboard.type('new|value');await page.keyboard.press('Enter');
+ await page.waitForSelector('.live-table-cell-editor');
+ await page.keyboard.type('new|value');await page.keyboard.down('Control');await page.keyboard.press('Enter');await page.keyboard.up('Control');
  await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows[1].cells[1].textContent==='new|value');
  await page.click(bodyCell(1,1));await page.select(`${tableRoot} select[aria-label="Column alignment"]`,'center');
  await page.waitForFunction(()=>getComputedStyle(document.querySelector('.live-md-table table').rows[1].cells[1]).textAlign==='center');
@@ -74,13 +74,13 @@ try {
  await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows.length===3);
  await page.click(`${tableRoot} th`);
  if(!await page.$eval(toolbar('Delete row'),e=>e.disabled))throw Error('Header row must stay present');
- await page.click(toolbar('Edit cell'));await page.waitForSelector('.live-table-cell-input');
+ await page.click(toolbar('Edit cell'));await page.waitForSelector('.live-table-cell-editor');
  await page.keyboard.type('cancelled');await page.keyboard.press('Escape');
  if(await page.$eval(`${tableRoot} th`,e=>e.textContent)!=='A')throw Error('Escape did not cancel cell edit');
- await page.click(bodyCell(2,0),{count:2});await page.waitForSelector('.live-table-cell-input');
+ await page.click(bodyCell(2,0),{count:2});await page.waitForSelector('.live-table-cell-editor');
  await page.keyboard.type('a updated');await page.keyboard.press('Tab');
  await page.waitForFunction(()=>document.activeElement===document.querySelector('.live-md-table table').rows[2].cells[1]);
- await page.click(bodyCell(2,0),{count:2});await page.waitForSelector('.live-table-cell-input');
+ await page.click(bodyCell(2,0),{count:2});await page.waitForSelector('.live-table-cell-editor');
  await page.keyboard.type('blur saved');await page.click('.live-md-heading');
  await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows[2].cells[0].textContent==='blur saved');
  await click('Source');
@@ -92,6 +92,7 @@ try {
  for(let attempt=0;attempt<50;attempt++){if(fs.readFileSync(path.join(root,'notes/example/root.md'),'utf8').split('\n').find(line=>line.startsWith('| A |'))?.split('|').length===finalColumns+2)break;await new Promise(resolve=>setTimeout(resolve,100));}
  if(fs.readFileSync(path.join(root,'notes/example/root.md'),'utf8').split('\n').find(line=>line.startsWith('| A |'))?.split('|').length!==finalColumns+2)throw Error('Inline table edits were not saved to disk');
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
+ await page.waitForSelector(tableRoot);
  await page.tap(`${tableRoot} th`);
  await page.waitForSelector('.live-table-insert-row[data-visible="true"]');
  await page.waitForFunction(()=>{const e=document.querySelector('.markdown-table-scroll');return e.scrollWidth>e.clientWidth+10;});

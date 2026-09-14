@@ -1,7 +1,7 @@
 import { StateEffect, StateField } from '@codemirror/state';
 import { EditorView, WidgetType } from '@codemirror/view';
 import { undo, redo, isolateHistory } from '@codemirror/commands';
-import { findMarkdownTables, serializeMarkdownTable, type TableAlignment } from '../lib/markdown-tables.js';
+import { findMarkdownTables, serializeMarkdownTable, tableCellEditorText, type TableAlignment } from '../lib/markdown-tables.js';
 import { renderNote } from '../lib/markdown.js';
 import type { TranslationKey } from '../lib/i18n/en.js';
 
@@ -44,7 +44,8 @@ export class LiveMarkdownTable extends WidgetType {
     root.dataset.tableWidth = width;
     let row = Math.min(this.ui?.row ?? 0, model.rows.length - 1);
     let column = Math.min(this.ui?.column ?? 0, model.alignments.length - 1);
-    let input: HTMLInputElement | null = null;
+    let input: HTMLTextAreaElement | null = null;
+    let initialValue = '';
     let committing = false;
     const toolbar = document.createElement('div');
     toolbar.className = 'live-table-toolbar'; toolbar.setAttribute('role', 'toolbar'); toolbar.setAttribute('aria-label', this.t('table.operations'));
@@ -64,7 +65,7 @@ export class LiveMarkdownTable extends WidgetType {
       if (cell) cell.focus({ preventScroll: true });
       else view.focus();
     });
-    const captureInput = () => { if (input) model.rows[row][column] = input.value; };
+    const captureInput = () => { if (input && input.value !== initialValue) model.rows[row][column] = input.value; };
     const save = (focusAfter = true) => {
       if (this.readOnly || view.state.readOnly || committing || !root.isConnected || view.state.sliceDoc(this.from, this.from + this.text.length) !== this.text) return;
       captureInput(); committing = true;
@@ -118,13 +119,16 @@ export class LiveMarkdownTable extends WidgetType {
     const editCell = (cell: HTMLTableCellElement, nextRow: number, nextColumn: number) => {
       if (input || view.state.readOnly) return;
       selectCell(nextRow, nextColumn);
-      input = document.createElement('input'); input.className = 'live-table-cell-input'; input.value = model.rows[row][column];
+      initialValue = tableCellEditorText(model.rows[row][column]);
+      input = document.createElement('textarea'); input.className = 'live-table-cell-editor'; input.value = initialValue;
+      input.rows = 1; input.wrap = 'soft'; input.title = this.t('table.multilineHint');
+      input.setAttribute('aria-description', this.t('table.multilineHint'));
       input.setAttribute('aria-label', this.t('table.cell', { row: row + 1, column: column + 1 }));
       const original = cell.innerHTML;
       const cancel = (focusAfter = true) => { input = null; cell.innerHTML = original; if (focusAfter) cell.focus(); };
       input.addEventListener('blur', event => {
         if (!input || committing) return;
-        if (input.value === model.rows[row][column]) { cancel(false); return; }
+        if (input.value === initialValue) { cancel(false); return; }
         const next = event.relatedTarget;
         if (next instanceof HTMLTableCellElement && table.contains(next)) {
           captureInput(); input = null; row = (next.parentElement as HTMLTableRowElement).rowIndex; column = next.cellIndex; save();
@@ -132,8 +136,9 @@ export class LiveMarkdownTable extends WidgetType {
       });
       input.addEventListener('keydown', event => {
         event.stopPropagation();
+        if (event.isComposing) return;
         if (event.key === 'Escape') { event.preventDefault(); cancel(); }
-        else if (event.key === 'Enter') { event.preventDefault(); save(); }
+        else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); save(); }
         else if (event.key === 'Tab') {
           const next = row * model.alignments.length + column + (event.shiftKey ? -1 : 1);
           if (next >= 0 && next < model.rows.length * model.alignments.length) {
@@ -142,15 +147,17 @@ export class LiveMarkdownTable extends WidgetType {
           }
         }
       });
-      cell.replaceChildren(input); input.focus(); input.select(); view.requestMeasure();
+      const display = document.createElement('div'); display.className = 'live-table-cell-display';
+      display.setAttribute('aria-hidden', 'true'); display.append(...cell.childNodes);
+      cell.append(display, input); input.focus(); input.select(); view.requestMeasure();
     };
     const editButton = button(toolbar, this.t('table.editCell'), 'edit', () => editCell(table.rows[row].cells[column], row, column));
     toolbar.prepend(editButton);
     for (const [r, values] of [...table.rows].entries()) for (const [c, cell] of [...values.cells].entries()) {
       cell.tabIndex = 0;
       cell.title = this.t('table.inlineHint');
-      cell.addEventListener('click', event => { if (!(event.target as HTMLElement).closest('a, input')) selectCell(r, c); });
-      cell.addEventListener('dblclick', event => { if (!(event.target as HTMLElement).closest('a, input')) { event.preventDefault(); editCell(cell, r, c); } });
+      cell.addEventListener('click', event => { if (!(event.target as HTMLElement).closest('a, textarea')) selectCell(r, c); });
+      cell.addEventListener('dblclick', event => { if (!(event.target as HTMLElement).closest('a, textarea')) { event.preventDefault(); editCell(cell, r, c); } });
       cell.addEventListener('keydown', event => {
         if (event.target !== cell) return;
         if (event.key === 'Enter' || event.key === 'F2') { event.preventDefault(); editCell(cell, r, c); }
@@ -188,7 +195,7 @@ export class LiveMarkdownTable extends WidgetType {
     root.addEventListener('pointermove', event => {
       if (event.pointerType === 'touch') return;
       delete root.dataset.touchActive;
-      if ((event.target as HTMLElement).closest('button, select, input, .live-table-toolbar')) return;
+      if ((event.target as HTMLElement).closest('button, select, textarea, .live-table-toolbar')) return;
       positionHandles(event.clientX, event.clientY);
     });
     root.addEventListener('pointerdown', event => {

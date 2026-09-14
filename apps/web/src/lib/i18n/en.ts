@@ -1,4 +1,5 @@
 export const en = {
+  "table.multilineHint": "Enter: new line · Ctrl/⌘+Enter: apply · Esc: cancel",
   "table.inlineHint": "Double-click or press Enter to edit this cell",
   "table.insertRowHere": "Insert row here",
   "table.insertColumnHere": "Insert column here",
