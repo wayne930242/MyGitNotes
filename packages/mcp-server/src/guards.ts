@@ -1,5 +1,5 @@
-import { getCurrentBranch } from '@github-notes/git';
-import { resolveSafePath } from '@github-notes/core';
+import { getCurrentBranch } from '@mygitnotes/git';
+import { resolveSafePath } from '@mygitnotes/core';
 
 export class MCPGuardError extends Error {
   constructor(message: string) {

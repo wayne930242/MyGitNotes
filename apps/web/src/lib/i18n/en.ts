@@ -1,4 +1,5 @@
 export const en = {
+  "filters.directOnly": "Direct folder contents only",
   "reorder.toggle": "Toggle drag handles",
   "filters.title": "Filters",
   "filters.clear": "Clear all",

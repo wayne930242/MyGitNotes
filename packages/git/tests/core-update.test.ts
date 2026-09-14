@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { runGit, stageAndCommit } from '../src/git-service.js';
 import { updateCore, CoreUpdateError } from '../src/core-update.js';
-import { WORKSPACE_CONFIG_FILENAME } from '@github-notes/core';
+import { WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
 
 describe('Core Update Engine Rules', () => {
   let upstreamRepo: string;

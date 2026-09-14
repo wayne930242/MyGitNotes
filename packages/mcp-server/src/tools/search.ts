@@ -6,8 +6,8 @@ import {
   matchNoteGlob,
   textLines,
   NoteItem,
-} from '@github-notes/core';
-import { stageAndCommit } from '@github-notes/git';
+} from '@mygitnotes/core';
+import { stageAndCommit } from '@mygitnotes/git';
 import { assertUserWorkspaceBranch } from '../guards.js';
 import type { ToolContext } from './context.js';
 

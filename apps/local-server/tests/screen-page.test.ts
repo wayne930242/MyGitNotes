@@ -5,7 +5,7 @@ import { mkdtemp, readFile, writeFile, symlink, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
-import { SCREEN_PAGE_FILE } from '@github-notes/core';
+import { SCREEN_PAGE_FILE } from '@mygitnotes/core';
 
 let root: string, server: Server, url: string;
 const page = { version: 1, rows: [{ id: 'row', kind: 'custom', name: '閱讀', view: 'small', items: [

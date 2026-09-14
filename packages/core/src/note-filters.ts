@@ -50,7 +50,7 @@ export function selectFilteredGraph(graph: NoteGraphData, matchingIds: Set<strin
       if (matchingIds.has(link.target)) included.add(link.source);
     }
   }
-  const links = graph.links.filter(link => included.has(link.source) && included.has(link.target));
+  const links = graph.links.filter(link => included.has(link.source) && included.has(link.target)).map(link => ({ ...link }));
   const inbound = new Map<string, number>();
   const outbound = new Map<string, number>();
   for (const link of links) {

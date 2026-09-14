@@ -57,7 +57,7 @@ MyGitNotes 把一個 Git 儲存庫變成集中處理筆記、文件、素材與 
 git clone <repository-url> mygitnotes
 cd mygitnotes
 pnpm install
-pnpm build              # 編譯 local-server 所需的 @github-notes 核心套件產物
+pnpm build              # 編譯 local-server 所需的 @mygitnotes 核心套件產物
 pnpm bootstrap-workspace
 pnpm dev
 ```
@@ -190,7 +190,7 @@ GITLAB_CLIENT_SECRET=your_application_secret
 
 登入帳號需有 `main` 的 push 權限才能寫入。GitLab 將多檔修改批次提交為一個 commit，並以各既有檔案的最後提交 ID 檢查並行修改。公開儲存庫支援匿名讀取。內網 GitLab 須搭配能連入該網路的部署環境。
 
-產品已更名為 **MyGitNotes**。既有 `.github-notes.yaml`、Screen／Study 側錄檔、`@github-notes/*` 套件、GitHub OAuth callback 及 MCP 授權保持相容。新的 `MYGITNOTES_*` 來源設定優先於對應的 `GITHUB_NOTES_*`。伺服器設定新名稱為 `mygitnotes.server.yaml`，同時支援 `github-notes.server.yaml`。正式儲存庫為 `wayne930242/MyGitNotes`，部署網址維持不變。Repo 更名後直接更新來源的儲存庫路徑；綁定舊路徑的 MCP 授權需要重新建立。
+產品已更名為 **MyGitNotes**。既有 `.github-notes.yaml`、Screen／Study 側錄檔、`@mygitnotes/*` 套件、GitHub OAuth callback 及 MCP 授權保持相容。新的 `MYGITNOTES_*` 來源設定優先於對應的 `GITHUB_NOTES_*`。伺服器設定新名稱為 `mygitnotes.server.yaml`，同時支援 `github-notes.server.yaml`。正式儲存庫為 `wayne930242/MyGitNotes`，部署網址維持不變。Repo 更名後直接更新來源的儲存庫路徑；綁定舊路徑的 MCP 授權需要重新建立。
 
 參考：[GitLab OAuth](https://docs.gitlab.com/api/oauth2/)、[批次提交](https://docs.gitlab.com/api/commits/)。
 

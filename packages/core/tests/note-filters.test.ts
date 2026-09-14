@@ -39,6 +39,9 @@ describe('shared note filters', () => {
     expect(expanded.nodes.map(n => n.id)).toEqual(notes.slice(0, 3).map(n => n.path));
     expect(expanded.nodes.map(n => n.external)).toEqual([true, false, true]);
     expect(expanded.links).toHaveLength(2);
+    expect(expanded.links[0]).not.toBe(graph.links[0]);
+    expanded.links[0].source = 'mutated-by-renderer';
+    expect(selectFilteredGraph(graph, matches, true).links[0].source).toBe(notes[0].path);
     expect(selectFilteredGraph(graph, new Set(), true).nodes).toEqual([]);
     expect(graph.nodes.every(n => n.external === undefined)).toBe(true);
   });

@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { loadSourceConfig, sourceIdentity, RemoteSource, createRemoteSource, SourceError, workspaceAgentKind, workspaceAgentResource, type WorkspaceAgentResource } from '@github-notes/core';
+import { loadSourceConfig, sourceIdentity, RemoteSource, createRemoteSource, SourceError, workspaceAgentKind, workspaceAgentResource, type WorkspaceAgentResource } from '@mygitnotes/core';
 import { createRemoteMCP } from './mcp.js';
 import { createLocalApp } from './local-app.js';
 import { createAuth, authToken } from './auth.js';

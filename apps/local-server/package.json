@@ -1,5 +1,5 @@
 {
-  "name": "@github-notes/local-server",
+  "name": "@mygitnotes/local-server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,9 +11,9 @@
     "start": "tsx src/index.ts"
   },
   "dependencies": {
-    "@github-notes/core": "workspace:*",
-    "@github-notes/git": "workspace:*",
-    "@github-notes/mcp-server": "workspace:^",
+    "@mygitnotes/core": "workspace:*",
+    "@mygitnotes/git": "workspace:*",
+    "@mygitnotes/mcp-server": "workspace:^",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",

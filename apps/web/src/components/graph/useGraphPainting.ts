@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { NoteGraphNode } from '@github-notes/core/note-graph';
+import type { NoteGraphNode } from '@mygitnotes/core/note-graph';
 
 export const nodeRadius = (node: NoteGraphNode) => 3.5 + Math.min(5, Math.sqrt(node.inDegree || 0) * 1.5);
 type PositionedNode = NoteGraphNode & { x?: number; y?: number };

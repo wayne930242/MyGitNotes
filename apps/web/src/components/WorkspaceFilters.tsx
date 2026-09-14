@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from 'react';
 import { Filter, Search, X, Network } from 'lucide-react';
-import type { NoteFilters } from '@github-notes/core/note-filters';
+import type { NoteFilters } from '@mygitnotes/core/note-filters';
 import type { FolderItem, NotebookConfig } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import './workspace-filters.css';
@@ -37,6 +37,8 @@ export function WorkspaceFilters({ value, neighbors, notebooks, folders, tags, s
   const chips: { key: string; label: string; remove: () => void }[] = [
     ...value.folders.map(folder => ({ key: `folder:${folder}`, label: folderLabel(folder), remove: () => onChange({ folders: value.folders.filter(item => item !== folder) }) })),
     ...value.tags.map(tag => ({ key: `tag:${tag}`, label: `#${tag}`, remove: () => onChange({ tags: value.tags.filter(item => item !== tag) }) })),
+    ...(!value.descendants ? [{ key: 'descendants', label: t('filters.directOnly'), remove: () => onChange({ descendants: true }) }] : []),
+    ...(value.tagMode === 'all' ? [{ key: 'tagMode', label: t('filters.all'), remove: () => onChange({ tagMode: 'any' }) }] : []),
     ...(value.q ? [{ key: 'q', label: value.q, remove: () => onChange({ q: '' }) }] : []),
     ...(value.status ? [{ key: 'status', label: value.status, remove: () => onChange({ status: null }) }] : []),
     ...(value.showHidden ? [{ key: 'hidden', label: t('filters.hidden'), remove: () => onChange({ showHidden: false }) }] : []),

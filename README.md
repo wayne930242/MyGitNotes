@@ -57,7 +57,7 @@ Requires Node.js 22+, pnpm 9+, and Git. (On pnpm 10+, dependency build scripts a
 git clone <repository-url> mygitnotes
 cd mygitnotes
 pnpm install
-pnpm build              # Compiles @github-notes packages required by local-server
+pnpm build              # Compiles @mygitnotes packages required by local-server
 pnpm bootstrap-workspace
 pnpm dev
 ```
@@ -190,7 +190,7 @@ For self-managed GitLab, set `MYGITNOTES_GITLAB_URL` to its HTTPS base URL, incl
 
 Authenticated writes require push permission on `main`. GitLab batches all changed files into one commit and supplies each existing file's last commit ID to detect concurrent edits. Public repositories support anonymous reads. GitLab instances with private network access require a deployment with network access to that instance.
 
-The product is now **MyGitNotes**. Existing `.github-notes.yaml`, Screen/Study sidecars, `@github-notes/*` packages, GitHub OAuth callbacks and MCP grants remain compatible. New `MYGITNOTES_*` source settings take precedence over corresponding `GITHUB_NOTES_*` settings. `mygitnotes.server.yaml` is the new server configuration filename; `github-notes.server.yaml` remains supported. The canonical repository is `wayne930242/MyGitNotes`; deployment URLs are unchanged. Update configured repository paths directly after a rename. MCP grants bound to a previous repository path require a new grant.
+The product is now **MyGitNotes**. Existing `.github-notes.yaml`, Screen/Study sidecars, `@mygitnotes/*` packages, GitHub OAuth callbacks and MCP grants remain compatible. New `MYGITNOTES_*` source settings take precedence over corresponding `GITHUB_NOTES_*` settings. `mygitnotes.server.yaml` is the new server configuration filename; `github-notes.server.yaml` remains supported. The canonical repository is `wayne930242/MyGitNotes`; deployment URLs are unchanged. Update configured repository paths directly after a rename. MCP grants bound to a previous repository path require a new grant.
 
 See [GitLab OAuth](https://docs.gitlab.com/api/oauth2/) and [commit actions](https://docs.gitlab.com/api/commits/).
 

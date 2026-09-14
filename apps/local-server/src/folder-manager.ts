@@ -2,8 +2,8 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { loadWorkspaceConfig, resolveSafePath, isNotebookContent, planFolderChange, FolderCommandSchema, RemoteSource, createRemoteSource, SourceError, SCREEN_PAGE_FILE, type FolderSnapshot, type SourceConfig } from '@github-notes/core';
-import { getCurrentBranch } from '@github-notes/git';
+import { loadWorkspaceConfig, resolveSafePath, isNotebookContent, planFolderChange, FolderCommandSchema, RemoteSource, createRemoteSource, SourceError, SCREEN_PAGE_FILE, type FolderSnapshot, type SourceConfig } from '@mygitnotes/core';
+import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
 

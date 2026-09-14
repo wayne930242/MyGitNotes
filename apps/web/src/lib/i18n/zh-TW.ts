@@ -1,6 +1,7 @@
 import { TranslationKey } from './en.js';
 
 export const zhTW: Record<TranslationKey, string> = {
+  "filters.directOnly": "僅資料夾直屬內容",
   "reorder.toggle": "切換拖曳把手",
   "filters.title": "篩選",
   "filters.clear": "全部清除",

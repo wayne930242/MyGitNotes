@@ -23,18 +23,18 @@ importers:
 
   apps/local-server:
     dependencies:
-      '@github-notes/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@github-notes/git':
-        specifier: workspace:*
-        version: link:../../packages/git
-      '@github-notes/mcp-server':
-        specifier: workspace:^
-        version: link:../../packages/mcp-server
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
         version: 1.30.0(zod@3.25.76)
+      '@mygitnotes/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@mygitnotes/git':
+        specifier: workspace:*
+        version: link:../../packages/git
+      '@mygitnotes/mcp-server':
+        specifier: workspace:^
+        version: link:../../packages/mcp-server
       cors:
         specifier: ^2.8.5
         version: 2.8.6
@@ -87,12 +87,12 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@18.3.1)
-      '@github-notes/core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@lezer/highlight':
         specifier: ^1.2.3
         version: 1.2.3
+      '@mygitnotes/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@radix-ui/react-select':
         specifier: ^2.3.7
         version: 2.3.7(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -200,7 +200,7 @@ importers:
 
   packages/git:
     dependencies:
-      '@github-notes/core':
+      '@mygitnotes/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -216,15 +216,15 @@ importers:
 
   packages/mcp-server:
     dependencies:
-      '@github-notes/core':
-        specifier: workspace:*
-        version: link:../core
-      '@github-notes/git':
-        specifier: workspace:*
-        version: link:../git
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.1
         version: 1.30.0(zod@3.25.76)
+      '@mygitnotes/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mygitnotes/git':
+        specifier: workspace:*
+        version: link:../git
     devDependencies:
       '@types/node':
         specifier: ^22.5.4

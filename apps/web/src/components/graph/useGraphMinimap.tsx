@@ -1,6 +1,6 @@
 import { useCallback, useRef, type RefObject } from 'react';
 import type { ForceGraphMethods } from 'react-force-graph-2d';
-import type { NoteGraphNode, NoteGraphLink } from '@github-notes/core/note-graph';
+import type { NoteGraphNode, NoteGraphLink } from '@mygitnotes/core/note-graph';
 import { useTranslation } from '../../lib/i18n/index.js';
 type PositionedNode = NoteGraphNode & { x?: number; y?: number };
 

@@ -9,14 +9,14 @@ import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, useSensor, useS
 import { SortableContext, useSortable, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Plus, GripVertical, X, Zap, ChevronLeft, ChevronRight, LayoutGrid, Columns3, Columns2, SlidersHorizontal, Brain, ArrowLeft, Pencil } from 'lucide-react';
-import { moveScreenItem, type ScreenItem, type ScreenRow } from '@github-notes/core/screen-page';
+import { moveScreenItem, type ScreenItem, type ScreenRow } from '@mygitnotes/core/screen-page';
 import type { NoteItem, NotebookConfig, FolderItem } from '../lib/types.js';
 import { fetchAssets } from '../lib/api.js';
 import { notebookRoute, screenLaneRoute } from '../lib/routes.js';
 import { useStudyWorkspace, type StudyController } from '../lib/use-study-workspace.js';
 import { StudyLane } from './StudyLane.js';
-import { defaultStudyProgression, studyLaneStatuses } from '@github-notes/core/study-stages';
-import { resolveNoteStatuses } from '@github-notes/core/note-status';
+import { defaultStudyProgression, studyLaneStatuses } from '@mygitnotes/core/study-stages';
+import { resolveNoteStatuses } from '@mygitnotes/core/note-status';
 import { screenRowItems, studyRowItems } from '../lib/screen-content.js';
 import type { ScreenController } from '../lib/use-screen-page.js';
 import { ScreenIcon } from './ScreenIcon.js';

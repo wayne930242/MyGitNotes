@@ -1,10 +1,10 @@
-import { filterNotes, selectFilteredGraph } from '@github-notes/core/note-filters';
-import { isNoteHidden } from '@github-notes/core/note-status';
+import { filterNotes, selectFilteredGraph } from '@mygitnotes/core/note-filters';
+import { isNoteHidden } from '@mygitnotes/core/note-status';
 import { WorkspaceFilters, type WorkspaceFiltersProps } from './WorkspaceFilters.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { buildNoteGraph, NoteGraphNode, NoteGraphLink } from '@github-notes/core/note-graph';
+import { buildNoteGraph, NoteGraphNode, NoteGraphLink } from '@mygitnotes/core/note-graph';
 import type { NoteItem, NotebookConfig } from '../lib/types.js';
 import { GRAPH_APPEARANCE_KEY, graphColorGroup, graphColorGroups, readGraphAppearance, type GraphAppearance } from '../lib/graph-colors.js';
 
@@ -83,12 +83,14 @@ export function GraphPage({
     return () => observer.disconnect();
   }, []);
 
-  const rawGraphData = useMemo(() => {
+  const eligibleGraph = useMemo(() => {
     const eligible = notes.filter(note => filters.value.showHidden || !isNoteHidden({ ...note.metadata, status: note.status }));
-    const graph = buildNoteGraph(eligible, { includeHidden: true });
+    return buildNoteGraph(eligible, { includeHidden: true });
+  }, [notes, filters.value.showHidden]);
+  const rawGraphData = useMemo(() => {
     const matches = new Set(filterNotes(notes, filters.value).map(note => note.path));
-    return selectFilteredGraph(graph, matches, filters.neighbors);
-  }, [notes, filters.value, filters.neighbors]);
+    return selectFilteredGraph(eligibleGraph, matches, filters.neighbors);
+  }, [eligibleGraph, notes, filters.value, filters.neighbors]);
 
   // Filter orphans if disabled
   const graphData = useMemo(() => {

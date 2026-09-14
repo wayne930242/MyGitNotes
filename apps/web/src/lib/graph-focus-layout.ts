@@ -1,4 +1,4 @@
-import type { NoteGraphNode, NoteGraphLink } from '@github-notes/core/note-graph';
+import type { NoteGraphNode, NoteGraphLink } from '@mygitnotes/core/note-graph';
 
 export type PositionedNode = NoteGraphNode & { x?: number; y?: number; fx?: number; fy?: number };
 export type GraphData = { nodes: NoteGraphNode[]; links: NoteGraphLink[] };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NoteGraphNode, NoteGraphLink } from '@github-notes/core/note-graph';
+import type { NoteGraphNode, NoteGraphLink } from '@mygitnotes/core/note-graph';
 import { expandGraphFocus } from './graph-focus-layout.js';
 
 const data = {

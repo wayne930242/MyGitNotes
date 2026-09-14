@@ -6,7 +6,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { defaultHighlightStyle, HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import { marked } from 'marked';
-import { parseYouTubeUrl } from '@github-notes/core/screen-page';
+import { parseYouTubeUrl } from '@mygitnotes/core/screen-page';
 import { renderNote } from '../lib/markdown.js';
 import { headingSlug, resolveWorkspaceHref } from '../lib/workspace-links.js';
 import { useLocation } from 'react-router-dom';

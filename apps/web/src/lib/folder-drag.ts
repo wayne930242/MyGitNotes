@@ -1,4 +1,4 @@
-import type { FolderCommand } from '@github-notes/core';
+import type { FolderCommand } from '@mygitnotes/core';
 import type { FolderItem } from './types.js';
 export const folderParent = (file: string) => file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '';
 export function folderDropCommand(notebookId: string, source: string, target: string, position: 'inside' | 'before' | 'after', folders: FolderItem[]): FolderCommand | null {

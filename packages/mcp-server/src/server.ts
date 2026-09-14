@@ -1,4 +1,4 @@
-import { loadSourceConfig, createRemoteSource } from '@github-notes/core';
+import { loadSourceConfig, createRemoteSource } from '@mygitnotes/core';
 import { callRemoteTool, remoteTools, isMutationTool } from './remote-tools.js';
 import { localTools } from './local-tools.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';

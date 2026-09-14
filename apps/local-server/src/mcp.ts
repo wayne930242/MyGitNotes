@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { SourceError, createRemoteSource, SourceConfig, sourceIdentity } from '@github-notes/core';
-import { callRemoteTool, remoteTools, isMutationTool } from '@github-notes/mcp-server';
+import { SourceError, createRemoteSource, SourceConfig, sourceIdentity } from '@mygitnotes/core';
+import { callRemoteTool, remoteTools, isMutationTool } from '@mygitnotes/mcp-server';
 import { SessionStore, credentialToken } from './auth.js';
 
 export function createRemoteMCP(base: string, source: SourceConfig | undefined): Router {

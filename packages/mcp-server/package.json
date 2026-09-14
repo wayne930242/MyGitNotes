@@ -1,5 +1,5 @@
 {
-  "name": "@github-notes/mcp-server",
+  "name": "@mygitnotes/mcp-server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,8 +14,8 @@
     "start": "tsx src/index.ts"
   },
   "dependencies": {
-    "@github-notes/core": "workspace:*",
-    "@github-notes/git": "workspace:*",
+    "@mygitnotes/core": "workspace:*",
+    "@mygitnotes/git": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.0.1"
   },
   "devDependencies": {

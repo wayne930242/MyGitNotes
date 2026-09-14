@@ -1,4 +1,4 @@
-import { loadSourceConfig, sourceIdentity, SourceError } from '@github-notes/core';
+import { loadSourceConfig, sourceIdentity, SourceError } from '@mygitnotes/core';
 import { Router, Request, Response } from 'express';
 import { createHash, randomBytes, createCipheriv, createDecipheriv, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs/promises';

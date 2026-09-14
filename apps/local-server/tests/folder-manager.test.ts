@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
 import { applyLocalFolderPlan, localFolderSnapshot } from '../src/folder-manager.js';
-import { planFolderChange } from '@github-notes/core';
+import { planFolderChange } from '@mygitnotes/core';
 
 let root: string, server: Server, base: string;
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });

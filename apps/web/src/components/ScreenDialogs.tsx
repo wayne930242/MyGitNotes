@@ -1,7 +1,7 @@
 import { Button } from './Button.js';
 import { useState } from 'react';
-import { parseYouTubeUrl, type ScreenItem, type ScreenRow } from '@github-notes/core/screen-page';
-import { defaultStudyProgression, studyLaneStatuses, StudyProgressionSchema, type StudyProgression } from '@github-notes/core/study-stages';
+import { parseYouTubeUrl, type ScreenItem, type ScreenRow } from '@mygitnotes/core/screen-page';
+import { defaultStudyProgression, studyLaneStatuses, StudyProgressionSchema, type StudyProgression } from '@mygitnotes/core/study-stages';
 import { StudyLaneSettings } from './StudyLane.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { Select } from './Select.js';
