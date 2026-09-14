@@ -1,0 +1,21 @@
+# Standalone Compose configuration for a local workspace checkout.
+services:
+  mygitnotes:
+    build: .
+    image: mygitnotes:local
+    init: true
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4321
+      APP_URL: http://localhost:${MYGITNOTES_PORT:-4321}
+      MYGITNOTES_SOURCE: local
+      MYGITNOTES_LOCAL_PATH: /workspace
+    ports:
+      - "127.0.0.1:${MYGITNOTES_PORT:-4321}:4321"
+    volumes:
+      - type: bind
+        source: ${WORKSPACE_PATH:?Set WORKSPACE_PATH to an existing workspace checkout on main}
+        target: /workspace
+        bind:
+          create_host_path: false
