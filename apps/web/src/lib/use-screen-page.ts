@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { stringify } from 'yaml';
 import { ScreenPageSchema, emptyScreenPage, SCREEN_PAGE_FILE, type ScreenPage } from '@mygitnotes/core/screen-page';
 import { useTranslation } from './i18n/index.js';
+import { createUnifiedDiff } from './unified-diff.js';
 
 interface Snapshot { page: ScreenPage; revision: string; writable: boolean; path: string }
 interface Draft { page: ScreenPage; base: ScreenPage; revision: string; legacy?: boolean }
@@ -94,8 +95,7 @@ export function useScreenPage(scope: string, onSaved: () => void, remote = false
       localStorage.setItem(key, JSON.stringify({ page: latest.page, base: sent.page, revision: nextRevision }));
     }
   };
-  const before = stringify(base.current).split('\n'), after = stringify(page).split('\n');
-  const diff = dirty ? `--- ${SCREEN_PAGE_FILE}\n+++ ${SCREEN_PAGE_FILE}\n@@ -1,${before.length} +1,${after.length} @@\n${before.map(line => '-' + line).join('\n')}\n${after.map(line => '+' + line).join('\n')}` : '';
+  const diff = dirty ? createUnifiedDiff(SCREEN_PAGE_FILE, SCREEN_PAGE_FILE, stringify(base.current), stringify(page)) : '';
   return { page, change, save, reload: () => load(true), refresh: () => load(), loading, saving, dirty, error, writable: Boolean(snapshot?.writable), setError, commitDraft, committed, diff };
 }
 export type ScreenController = ReturnType<typeof useScreenPage>;

@@ -1,6 +1,7 @@
 import YAML from 'yaml';
 import type { NoteItem } from './types.js';
 import { sameValue } from './merge-note.js';
+import { createUnifiedDiff } from './unified-diff.js';
 
 export interface WorkingNote { note: NoteItem; base: NoteItem | null; blocked?: string }
 export type WorkingNotes = Record<string, WorkingNote>;
@@ -40,9 +41,7 @@ export function overlayWorkingNotes(notes: NoteItem[], entries: WorkingNotes): N
 
 export function workingDiff(entries: WorkingNotes): string {
   const raw = (note: NoteItem) => `---\n${YAML.stringify(note.metadata)}---\n${note.content}`;
-  return Object.values(entries).map(({ note, base }) => {
-    const before = base ? raw(base).split('\n') : [];
-    const after = raw(note).split('\n');
-    return `--- ${base ? note.path : '/dev/null'}\n+++ ${note.path}\n@@ -1,${before.length} +1,${after.length} @@\n${before.map(line => '-' + line).join('\n')}\n${after.map(line => '+' + line).join('\n')}`;
-  }).join('\n\n');
+  return Object.values(entries).map(({ note, base }) =>
+    createUnifiedDiff(note.path, note.path, base ? raw(base) : null, raw(note))
+  ).filter(Boolean).join('\n');
 }
