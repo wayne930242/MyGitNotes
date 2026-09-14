@@ -57,3 +57,5 @@ StudyLane 持有佇列與次要操作視窗，StudyLaneCard 持有固定頁序�
 ## 固定操作位置
 
 共用 StudyFooter 同時呈現一般卡片及空佇列，熟悉程度常駐並依揭示狀態停用。儲存狀態供輔助工具讀取，錯誤置於卡片上方，維持底部位置。撤銷沿用頁首插槽及 React portal，佇列仍由 StudyLane 持有。
+
+熟悉程度採用 CSS Grid 列高與透明度過渡展開，主要操作列保持底部對齊。收起時使用 aria-hidden 與停用按鈕，系統 reduced-motion 關閉過渡。

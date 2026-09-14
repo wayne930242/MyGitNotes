@@ -74,26 +74,47 @@ try {
   const undo = async count => { await page.click('.screen-focus-header button[aria-label="Undo last action"]'); await saved(count); await waitCard(); };
   await waitCard();
   assert(!await page.$('.study-dialog'), 'Study is still a note dialog');
-  assert(await page.$$eval(`${lane} .study-ratings button`, buttons => buttons.length === 4 && buttons.every(button => button.disabled)), 'Ratings must stay in place and be disabled before reveal');
+  assert(await page.$$eval(`${lane} .study-ratings button`, buttons => buttons.length === 4 && buttons.every(button => button.disabled)), 'Hidden ratings must be disabled before reveal');
   assert(await page.$eval('.screen-focus-header .study-undo', button => button.disabled), 'Undo without history is enabled');
-  const positions = async () => page.$$eval('.study-footer-navigation button, .study-ratings button, .study-more, .study-undo', buttons => buttons.map(button => { const r = button.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; }));
+  const positions = async () => page.$$eval('.study-footer-navigation button, .study-undo', buttons => buttons.map(button => { const r = button.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; }));
   const stable = async before => assert(JSON.stringify(await positions()) === JSON.stringify(before), 'Study controls moved');
   const initialPositions = await positions();
+  const revealSettled = async () => page.waitForFunction(() => document.querySelector('.study-ratings-region')?.getAnimations().every(animation => animation.playState !== 'running'));
+  assert(await page.$eval('.study-ratings-region', region => region.getAttribute('aria-hidden') === 'true' && region.getBoundingClientRect().height === 0), 'Ratings not collapsed before reveal');
   assert(!await page.$eval(`${lane} .study-page`, node => node.textContent.includes('Give up.')), 'Answer leaked');
   let count = 0;
   await page.click(`${lane} button[aria-label="Next card"]`);
   await page.waitForSelector(`${lane} [data-study-note="notes/example/other.md"]`);
   await page.click(`${lane} button[aria-label="Previous card"]`); await waitCard();
   assert(fs.readFileSync(path.join(root, '.github-notes-study.yaml'), 'utf8') === initialStudy, 'Browsing cards wrote a study event');
-  await page.click(`${lane} .study-reveal`);
+  const motion = await page.evaluate(async () => {
+    const region = document.querySelector('.study-ratings-region');
+    const buttons = [...document.querySelectorAll('.study-footer-navigation button')];
+    const initial = buttons.map(button => button.getBoundingClientRect().y);
+    const samples = [];
+    document.querySelector('.study-reveal').click();
+    const start = performance.now();
+    await new Promise(resolve => {
+      const sample = () => {
+        samples.push({ height: region.getBoundingClientRect().height, positions: buttons.map(button => button.getBoundingClientRect().y) });
+        if (performance.now() - start < 350) requestAnimationFrame(sample); else resolve();
+      };
+      requestAnimationFrame(sample);
+    });
+    return { initial, samples };
+  });
+  const finalHeight = motion.samples.at(-1).height;
+  assert(finalHeight >= 52 && motion.samples.some(sample => sample.height > 0 && sample.height < finalHeight), 'Ratings did not animate open');
+  assert(motion.samples.every(sample => sample.positions.every((position, i) => Math.abs(position - motion.initial[i]) < .5)), 'Bottom controls moved during expansion');
+  await revealSettled();
   await page.click(`${lane} button[aria-label="Page 1"]`);
   assert(await page.$eval(`${lane} .study-page`, node => node.textContent.includes('What does abandon mean?')), 'Cannot return to the question');
-  await page.click(`${lane} .study-reveal`);
+  await page.click(`${lane} .study-reveal`); await revealSettled();
   assert(await page.$eval(`${lane} .study-page`, node => node.textContent.includes('Give up.')), 'Cannot return to the revealed answer');
-  await page.click(`${lane} .study-reveal`);
+  await page.click(`${lane} .study-reveal`); await revealSettled();
   assert(await page.$eval(`${lane} .study-page`, node => node.textContent.includes('They abandoned the plan.')), 'Later answer page missing');
   await stable(initialPositions);
-  await page.click('.study-reveal');
+  await page.click('.study-reveal'); await revealSettled();
   assert(await page.$eval('.study-pages [aria-pressed="true"]', button => button.textContent === '1'), 'Last page did not cycle to page 1');
   await stable(initialPositions);
   assert(await page.$$eval('.study-pages button', buttons => buttons.length === 3), 'Three-page card lost pages');
@@ -105,7 +126,7 @@ try {
   await page.reload({ waitUntil: 'networkidle0' }); await waitCard();
   console.log('PASS stable footer before/after reveal and empty queue, circular pages, card browsing without writes');
   for (const [rating, status, days] of [[1, 'new', 1], [2, 'new', 1], [3, 'learning', 3], [4, 'review', 7]]) {
-    await page.click(`${lane} .study-reveal`);
+    await page.click(`${lane} .study-reveal`); await revealSettled();
     assert(await page.$eval(`${lane} .study-page`, node => node.textContent.includes('Give up.')), 'Answer not revealed');
     await page.click(`${lane} [data-rating="${rating}"]`); await saved(++count);
     const note = state().notes.find(note => note.path === 'notes/example/vocabulary.md'), event = state().events.at(-1);
@@ -124,7 +145,7 @@ try {
   await chooseSelect(page, 'dialog[open] .study-stage-settings .select-trigger', 'last');
   await page.click('dialog[open] .workspace-dialog-actions .ui-button-primary');
   await page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('github-notes:screen-draft:')));
-  await page.click(`${lane} .study-reveal`); await page.click(`${lane} [data-rating="4"]`); await saved(++count);
+  await page.click(`${lane} .study-reveal`); await revealSettled(); await page.click(`${lane} [data-rating="4"]`); await saved(++count);
   assert(state().events.at(-1).transition.toStatus === 'known' && state().events.at(-1).transition.intervalDays === 30, 'Easy-to-last setting ignored');
   await undo(++count);
   console.log('PASS due-first session order independent of lane title sort and configurable easy-to-last progression');
@@ -134,7 +155,7 @@ try {
     if (failSave && request.method() === 'POST' && new URL(request.url()).pathname === '/api/study/action') void request.respond({ status: 503, contentType: 'application/json', body: '{"error":"Temporary outage"}' });
     else void request.continue();
   });
-  await page.click(`${lane} .study-reveal`); await page.click(`${lane} [data-rating="3"]`);
+  await page.click(`${lane} .study-reveal`); await revealSettled(); await page.click(`${lane} [data-rating="3"]`);
   await page.waitForSelector(`${lane} .study-alert`);
   assert(state().events.length === count && await page.$(`${lane} .study-ratings`), 'Failed save advanced the card or lost the answer');
   await stable(initialPositions);
@@ -150,6 +171,7 @@ try {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: start, y }] });
     for (let i = 1; i <= 6; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: start + (end - start) * i / 6, y }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await revealSettled();
   };
   await swipe(`${lane} .study-page`, 'right'); assert(state().events.length === count, 'Question swipe recorded a rating');
   assert(await page.$eval('.study-pages [aria-pressed="true"]', button => button.textContent === '3'), 'Backward swipe did not cycle');
@@ -165,7 +187,7 @@ try {
   for (const width of [320, 390]) {
     await page.setViewport({ width, height: 844, isMobile: true, hasTouch: true });
     const mobilePositions = await positions();
-    await page.click(`${lane} .study-reveal`);
+    await page.click(`${lane} .study-reveal`); await revealSettled();
     await stable(mobilePositions);
     assert(await page.$$eval(`${lane} .study-ratings button`, buttons => buttons.every(button => { const box = button.getBoundingClientRect(); return box.width > 40 && box.left >= 0 && box.right <= innerWidth && box.height >= 44; })), 'Rating controls overflow');
     fs.mkdirSync(path.join(product, 'artifacts/qa'), { recursive: true }); await page.screenshot({ path: path.join(product, `artifacts/qa/study-lane-${width}.png`) });
@@ -173,7 +195,7 @@ try {
   }
   await page.setViewport({ width: 320, height: 420, isMobile: true, hasTouch: true });
   await page.reload({ waitUntil: 'networkidle0' }); await waitCard();
-  await page.click('.study-reveal');
+  await page.click('.study-reveal'); await revealSettled();
   assert(await page.$eval('.study-footer', node => { const r = node.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }), 'Footer below viewport');
   assert(await page.$eval('.study-page', node => node.getBoundingClientRect().height >= 80), 'Low viewport has no reading space');
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
@@ -206,10 +228,10 @@ try {
   await pick('notes/example/other.md');
   await page.click('.study-footer-navigation button[aria-label="Next card"]');
   await page.waitForSelector(`${lane} [data-study-note="notes/example/vocabulary.md"]`);
-  await page.click(`${lane} .study-reveal`);
+  await page.click(`${lane} .study-reveal`); await revealSettled();
   await page.click(`${lane} button[aria-label="Page 1"]`);
   assert(await page.$eval(`${lane} .study-page`, node => node.textContent.includes('What does abandon mean?')), 'Focused mobile answer cannot return to question');
-  await page.click(`${lane} .study-reveal`);
+  await page.click(`${lane} .study-reveal`); await revealSettled();
   assert(await page.$$eval('.study-ratings button', buttons => buttons.every(button => { const rect = button.getBoundingClientRect(); return rect.left >= 0 && rect.right <= innerWidth && rect.height >= 44; })), 'Focused mobile rating controls overflow');
   await page.screenshot({ path: path.join(product, 'artifacts/qa/study-focus-mobile.png') });
   await page.click(`${lane} [data-rating="3"]`); await saved(++count); await undo(++count);
@@ -276,6 +298,12 @@ try {
     }
   }
   console.log('PASS one-row study navbar, filter persistence and shared button hover/focus/disabled states across all themes');
+  await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+  await page.reload({ waitUntil: 'networkidle0' });
+  await page.click('.study-reveal');
+  assert(await page.$eval('.study-ratings-region', region => getComputedStyle(region).transitionDuration === '0s' && region.getBoundingClientRect().height >= 52), 'Reduced motion still animates ratings');
+  await page.emulateMediaFeatures([]);
+  console.log('PASS animated expansion, fixed bottom controls throughout animation and reduced motion');
   const diskBefore = fs.readFileSync(path.join(root, 'notes/example/vocabulary.md'), 'utf8');
   await page.setViewport({ width: 1440, height: 1000, isMobile: false, hasTouch: false });
   await page.goto(url.replace('/screen', '/notebooks/example/notes/vocabulary.md'), { waitUntil: 'networkidle0' });
