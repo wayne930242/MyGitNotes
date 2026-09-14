@@ -59,3 +59,9 @@ StudyLane 持有佇列與次要操作視窗，StudyLaneCard 持有固定頁序�
 共用 StudyFooter 同時呈現一般卡片及空佇列，熟悉程度常駐並依揭示狀態停用。儲存狀態供輔助工具讀取，錯誤置於卡片上方，維持底部位置。撤銷沿用頁首插槽及 React portal，佇列仍由 StudyLane 持有。
 
 熟悉程度採用 CSS Grid 列高與透明度過渡展開，主要操作列保持底部對齊。收起時使用 aria-hidden 與停用按鈕，系統 reduced-motion 關閉過渡。
+
+## 共用進階設定與預設策略
+
+ScreenRowDialog 移除 studySettings 分流，使用原生 details 與獨立進階草稿。未改進階欄位時保留既有 progression，未保存預設隨來源筆記本變動；恢復預設為明確操作。core 的 studyLaneStatuses 與 defaultStudyProgression 由設定預覽、學習頁及 HTTP 操作共同使用，避免不同筆記本狀態污染與自動封存。
+
+交付摩擦：遠端同時新增共用 GitLab 來源，推送被非快轉拒絕。依原流程合併遠端並保留雙方匯入，重新驗證，未覆寫他人變更。
