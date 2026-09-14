@@ -6,6 +6,7 @@ import { useTranslation } from '../lib/i18n/index.js';
 import { Select } from './Select.js';
 import { RotateCcw, Filter, Eye, EyeOff, Search, X, Maximize2 } from 'lucide-react';
 import { renderNote } from '../lib/markdown.js';
+import { GRAPH_COLOR_MODES, GRAPH_PALETTES, GRAPH_APPEARANCE_KEY, graphColorGroup, graphColorGroups, readGraphAppearance, type GraphAppearance } from '../lib/graph-colors.js';
 
 const nodeRadius = (node: NoteGraphNode) => 3.5 + Math.min(5, Math.sqrt(node.inDegree || 0) * 1.5);
 type PositionedNode = NoteGraphNode & { x?: number; y?: number };
@@ -40,6 +41,16 @@ export function GraphPage({
   const fgRef = useRef<any>(null);
 
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [appearance, setAppearance] = useState(readGraphAppearance);
+  const [appearanceSaveError, setAppearanceSaveError] = useState(false);
+  const colorGroups = useMemo(() => graphColorGroups(notes.map(note => ({ id: note.path, notebookId: note.notebookId, status: note.status })), notebooks, appearance), [notes, notebooks, appearance]);
+  const groupColors = useMemo(() => new Map(colorGroups.map(group => [group.key, group.color])), [colorGroups]);
+  const nodeColor = useCallback((node: NoteGraphNode) => groupColors.get(graphColorGroup(node, notebooks, appearance.mode).key) || '#94a3b8', [groupColors, notebooks, appearance.mode]);
+  const changeAppearance = (next: GraphAppearance) => {
+    setAppearance(next);
+    try { localStorage.setItem(GRAPH_APPEARANCE_KEY, JSON.stringify(next)); setAppearanceSaveError(false); }
+    catch { setAppearanceSaveError(true); }
+  };
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showOrphans, setShowOrphans] = useState(true);
   const [hoverNode, setHoverNode] = useState<NoteGraphNode | null>(null);
@@ -119,6 +130,11 @@ export function GraphPage({
     return { nodes, links };
   }, [rawGraphData, showOrphans, searchQuery]);
 
+  const visibleColorGroups = useMemo(() => {
+    const keys = new Set(graphData.nodes.map(node => graphColorGroup(node, notebooks, appearance.mode).key));
+    return colorGroups.filter(group => keys.has(group.key));
+  }, [graphData.nodes, notebooks, appearance.mode, colorGroups]);
+
   useEffect(() => {
     if (previewPath && !graphData.nodes.some(node => node.id === previewPath)) setPreviewPath(null);
   }, [graphData.nodes, previewPath]);
@@ -149,12 +165,7 @@ export function GraphPage({
       const isNeighbor = neighbors.has(n.id);
       const isDimmed = hoverNode && !isHovered && !isNeighbor;
 
-      // Color mapping by note status
-      let color = '#7895b5';
-      if (n.status === 'done') color = '#7fa58d';
-      else if (n.status === 'archived') color = '#94a3b8';
-      else if (n.status === 'inbox') color = '#a799be';
-      else if (n.status === 'working') color = '#c5a16b';
+      const color = nodeColor(n);
 
       const radius = nodeRadius(n);
 
@@ -182,7 +193,7 @@ export function GraphPage({
 
       ctx.restore();
     },
-    [hoverNode, neighbors, isDark]
+    [hoverNode, neighbors, isDark, nodeColor]
   );
 
   // Lay labels out after the nodes, in screen-sized units, with priority for focus.
@@ -287,7 +298,7 @@ export function GraphPage({
     for (const n of nodes) {
       ctx.beginPath();
       ctx.arc(n.x * scale + x, n.y * scale + y, 2.2, 0, Math.PI * 2);
-      ctx.fillStyle = hoverNode?.id === n.id ? '#6366f1' : '#8a9eab';
+      ctx.fillStyle = nodeColor(n);
       ctx.fill();
     }
     const start = graph.screen2GraphCoords(0, 0);
@@ -302,7 +313,7 @@ export function GraphPage({
     ctx.lineWidth = 1;
     ctx.fillRect(vx, vy, vw, vh);
     ctx.strokeRect(vx, vy, vw, vh);
-  }, [graphData, dimensions, hoverNode, isDark]);
+  }, [graphData, dimensions, hoverNode, isDark, nodeColor]);
 
   const handleResetZoom = useCallback(() => {
     const graph = fgRef.current;
@@ -365,6 +376,20 @@ export function GraphPage({
           )}
 
           {/* Toggle Unlinked */}
+          <details className="relative">
+            <summary className="cursor-pointer rounded-md px-2.5 py-1 text-slate-600 dark:text-slate-300">{t('graph.appearance')}</summary>
+            <div className="absolute left-0 top-full mt-2 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+              <label className="mb-1 block text-slate-500">{t('graph.colorBy')}</label>
+              <Select aria-label={t('graph.colorBy')} value={appearance.mode} onValueChange={mode => changeAppearance({ ...appearance, mode: mode as GraphAppearance['mode'] })} options={GRAPH_COLOR_MODES.map(mode => ({ value: mode, label: t(`graph.color.${mode}`) }))} className="mb-3 w-full" />
+              <label className="mb-1 block text-slate-500">{t('graph.palette')}</label>
+              <Select aria-label={t('graph.palette')} value={appearance.palette} onValueChange={palette => changeAppearance({ ...appearance, palette: palette as GraphAppearance['palette'] })} options={GRAPH_PALETTES.map(palette => ({ value: palette, label: t(`graph.palette.${palette}`) }))} className="mb-3 w-full" />
+              <p className="mb-2 text-[11px] text-slate-400">{t('graph.appearanceHint')}</p>
+              <ul aria-label={t('graph.legend')} className="max-h-40 space-y-2 overflow-y-auto border-t border-slate-100 pt-2 dark:border-slate-800">
+                {visibleColorGroups.map(group => <li key={group.key} className="flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} /><span className="break-words text-slate-600 dark:text-slate-300">{group.label || t('editor.noStatus')}</span></li>)}
+              </ul>
+              {appearanceSaveError && <p role="status" className="mt-2 text-amber-600">{t('graph.appearanceSaveError')}</p>}
+            </div>
+          </details>
           <button
             type="button"
             onClick={() => setShowOrphans((prev) => !prev)}
