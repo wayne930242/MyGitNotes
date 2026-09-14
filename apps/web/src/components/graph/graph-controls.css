@@ -7,3 +7,6 @@
 .graph-stats { display: flex; align-items: center; gap: .85rem; padding: .4rem .65rem; color: var(--color-text); font-variant-numeric: tabular-nums; font-weight: 500; }
 .graph-stat { display: inline-flex; align-items: center; gap: .375rem; white-space: nowrap; }
 .graph-stat svg { flex: none; opacity: .8; }
+@media (max-height: 500px) {
+  .graph-appearance > div { max-height: min(44vh, 200px); }
+}

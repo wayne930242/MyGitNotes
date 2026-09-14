@@ -30,10 +30,9 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
   }, [activeTab, t]);
   const items = [
     { id: 'notes', label: t('nav.notes'), icon: BookOpen },
-    { id: 'agent', label: t('nav.agent'), icon: Bot },
+    { id: 'graph', label: t('nav.graph'), icon: Network },
     { id: 'assets', label: t('nav.assets'), icon: ImageIcon },
     { id: 'screen', label: t('nav.screen'), icon: ScreenIcon },
-    { id: 'graph', label: t('nav.graph'), icon: Network, desktopOnly: true },
   ] as const;
   return <header className="workspace-header">
     <div className="header-layout">
@@ -44,6 +43,7 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
           <h1>{workspaceTitle || 'MyGitNotes'}</h1>
           <p>{sourceLabel || t('header.gitWorkspace')}</p>
         </div>
+        <span id="workspace-sidebar-toggle-slot" />
       </div>
       <nav aria-label="Main navigation" className="header-nav">
         {items.map(({id, label, icon: Icon, ...item}, index) => <React.Fragment key={id}>
@@ -60,7 +60,6 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
       </nav>
       <div className="header-account">
         <div className="header-notebook">
-          <span id="workspace-sidebar-toggle-slot" />
           {notebooks.length > 0 && <>
           <BookOpen aria-hidden="true" />
           <Select aria-label={t('sidebar.notebooks')} value={selectedNotebookId}
@@ -70,6 +69,7 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
           </>}
         </div>
         <div className="header-utilities">
+          <button type="button" disabled={navigationDisabled} className="ui-icon-button header-agent" data-header-agent="" aria-label={t('nav.agent')} title={t('nav.agent')} aria-current={activeTab === 'agent' ? 'page' : undefined} onClick={() => setActiveTab('agent')}><Bot size={17} /></button>
           <button type="button" disabled={navigationDisabled} className="ui-icon-button header-command" data-header-command="" aria-label={t('shortcuts.open')} title={t('shortcuts.open')} onClick={onOpenCommands}><Keyboard size={17} /></button>
           <button type="button" disabled={navigationDisabled} className="ui-icon-button header-settings" data-header-settings="" aria-label={t('nav.settings')} title={t('nav.settings')} aria-current={activeTab === 'settings' ? 'page' : undefined} onClick={() => setActiveTab('settings')}><Settings size={17} /></button>
           {accountControls}

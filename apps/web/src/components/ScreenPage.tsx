@@ -1,5 +1,4 @@
 import { ReorderToggle } from './ReorderToggle.js';
-import { PageToolbar } from './WorkspaceChrome.js';
 import { Button } from './Button.js';
 import './study.css';
 import { useEffect, useRef, useState } from 'react';
@@ -208,7 +207,8 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
     <WorkspaceSidebarDrawer open={sidebar.open} onClose={() => sidebar.setOpen(false)} closeLabel={t('common.close')}>
       <WorkspaceSidebar label={t('screen.controls')} className="screen-sidebar" footer={<p className="screen-wheel-help">{t('screen.wheelHint')}</p>}>
         <div className="screen-sidebar-controls">
-          <Button className="screen-sidebar-action" disabled={disabled || screen.page.rows.length >= 40} onClick={() => { sidebar.setOpen(false); setDialog('add'); }}><Plus size={16} />{t('screen.addRow')}</Button>
+          <Button className="screen-sidebar-action" disabled={disabled || screen.page.rows.length >= 40} onClick={() => { sidebar.setOpen(false); setDialog('add'); }}><Plus size={16} /><span>{t('screen.addRow')}</span></Button>
+          {screen.writable && <ReorderToggle active={reorder} disabled={disabled} onToggle={() => setReorder(value => !value)} />}
         </div>
         {screen.page.rows.length > 0 && <ScreenLaneNavigation reorder={reorder} page={screen.page} disabled={disabled} notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onChange={screen.change} onSelect={id => { document.getElementById(`screen-lane-${id}`)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); sidebar.setOpen(false); }} />}
       </WorkspaceSidebar>
@@ -216,7 +216,6 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
     <WorkspaceSidebarToggle label={t('screen.controls')} open={sidebar.open} onClick={() => sidebar.setOpen(open => !open)} />
     </>}
     <main className="screen-content">
-      {!focusedLaneId && screen.writable && <PageToolbar><ReorderToggle active={reorder} disabled={disabled} onToggle={() => setReorder(value => !value)} /></PageToolbar>}
       {focusedLaneId && <header className="screen-focus-header">
         <Button className="study-back" aria-label={t('screen.backToScreen')} onClick={returnToScreen}><ArrowLeft size={18} /><span>{t('screen.backToScreen')}</span></Button>
         {focusedRow && <div className="study-header-actions"><div className="study-undo-slot" ref={setStudyToolbar} /><Button size="icon" disabled={disabled} aria-label={`${t('screen.editRow')}: ${focusedRow.name}`} onClick={() => setEditing(focusedRow.id)}><Pencil size={18} /></Button></div>}

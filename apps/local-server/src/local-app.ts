@@ -34,6 +34,30 @@ import {
 
 import { SCREEN_PAGE_FILE } from '@mygitnotes/core';
 
+function validateWorkspacePath(
+  repoRoot: string,
+  reqPath: string,
+  candidate: unknown,
+  config: ReturnType<typeof loadWorkspaceConfig>
+): void {
+  if (typeof candidate !== 'string') throw new Error('Paths must be strings.');
+  resolveSafePath(repoRoot, candidate);
+  const resource = classifyResource(candidate, config);
+  const agentAccess = (reqPath.startsWith('/api/agent-resources') || reqPath.startsWith('/api/git/')) && workspaceAgentKind(candidate);
+  const screenAccess = reqPath.startsWith('/api/git/') && (candidate === SCREEN_PAGE_FILE || candidate === STUDY_FILE || resource.type === 'workspace_config');
+  if (agentAccess) resolveWorkspaceAgentPath(repoRoot, candidate);
+  if (!agentAccess && !screenAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/'))) {
+    const err = new Error('Path is outside configured workspace resources.') as Error & { status?: number };
+    err.status = 403;
+    throw err;
+  }
+}
+
+function handlePathValidationError(res: express.Response, error: unknown): void {
+  const status = (error as { status?: number }).status || 400;
+  res.status(status).json({ error: (error as Error).message });
+}
+
 export function createLocalApp(repoRoot: string): express.Express {
 const app = express();
 app.use(async (req, res, next) => {
@@ -44,15 +68,10 @@ app.use(async (req, res, next) => {
     const config = loadWorkspaceConfig(repoRoot);
     const candidate = req.query.path;
     if (typeof candidate === 'string') {
-      resolveSafePath(repoRoot, candidate);
-      const resource = classifyResource(candidate, config);
-      const agentAccess = (req.path.startsWith('/api/agent-resources') || req.path.startsWith('/api/git/')) && workspaceAgentKind(candidate);
-      const screenAccess = req.path.startsWith('/api/git/') && (candidate === SCREEN_PAGE_FILE || candidate === STUDY_FILE || resource.type === 'workspace_config');
-      if (agentAccess) resolveWorkspaceAgentPath(repoRoot, candidate);
-      if (!agentAccess && !screenAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/'))) return res.status(403).json({ error: 'Path is outside configured workspace resources.' });
+      validateWorkspacePath(repoRoot, req.path, candidate, config);
     }
     next();
-  } catch (error) { res.status(400).json({ error: (error as Error).message }); }
+  } catch (error) { handlePathValidationError(res, error); }
 });
 app.use(express.json({ limit: '8mb' }));
 app.use((req, res, next) => {
@@ -60,16 +79,10 @@ app.use((req, res, next) => {
     const config = loadWorkspaceConfig(repoRoot);
     const candidates = [req.body?.path, ...(Array.isArray(req.body?.files) ? req.body.files : [])].filter(p => p !== undefined);
     for (const candidate of candidates) {
-      if (typeof candidate !== 'string') throw new Error('Paths must be strings.');
-      resolveSafePath(repoRoot, candidate);
-      const resource = classifyResource(candidate, config);
-      const agentAccess = (req.path.startsWith('/api/agent-resources') || req.path.startsWith('/api/git/')) && workspaceAgentKind(candidate);
-      const screenAccess = req.path.startsWith('/api/git/') && (candidate === SCREEN_PAGE_FILE || candidate === STUDY_FILE || resource.type === 'workspace_config');
-      if (agentAccess) resolveWorkspaceAgentPath(repoRoot, candidate);
-      if (!agentAccess && !screenAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/'))) return res.status(403).json({ error: 'Path is outside configured workspace resources.' });
+      validateWorkspacePath(repoRoot, req.path, candidate, config);
     }
     next();
-  } catch (error) { res.status(400).json({ error: (error as Error).message }); }
+  } catch (error) { handlePathValidationError(res, error); }
 });
 
 app.get('/raw-assets/by-hash/:hash', (req, res) => {

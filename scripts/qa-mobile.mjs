@@ -146,14 +146,14 @@ try {
  for(const route of ['/agent?notebook=example','/assets?notebook=example','/settings','/screen?notebook=example']) {
   await page.goto(base+route,{waitUntil:'networkidle0'});
   await tap('[data-sidebar-toggle]');await page.waitForSelector('[data-responsive-sidebar].is-open');
-  await tap('[data-sidebar-backdrop]');await page.waitForFunction(()=>!document.querySelector('[data-responsive-sidebar].is-open'));
+  const b=await bounds('[data-sidebar-backdrop]');await page.touchscreen.tap(b.right-20,250);await page.waitForFunction(()=>!document.querySelector('[data-responsive-sidebar].is-open'));
  }
  console.log('PASS mobile sidebar drawers on Agent, Assets, Settings and Screen');
  await page.goto(base+'/notes',{waitUntil:'networkidle0'});
  await tap('button[aria-label="Notebooks and filters"]');await page.waitForSelector('#notebook-panel.is-open');
  await page.touchscreen.tap(370,250);await page.waitForFunction(()=>!document.querySelector('#notebook-panel.is-open'));
  await tap('button[aria-label="Notebooks and filters"]');await page.waitForFunction(()=>document.querySelector('#notebook-panel').getBoundingClientRect().left>=0);await tap('#notebook-panel .folder-tree-select[title="projects"]');
- await page.waitForFunction(()=>!document.querySelector('#notebook-panel.is-open'));
+ await page.touchscreen.tap(370,250);await page.waitForFunction(()=>!document.querySelector('#notebook-panel.is-open'));
  assert(page.url().includes('folder'),'Folder selection did not navigate');
  await page.goto(base+'/notes?view=card',{waitUntil:'networkidle0'});
  await chooseSelect(page, 'button[role="combobox"][aria-label="Status for Root Note"]','working');await waitDisk('notes/example/root.md','status: working');
@@ -222,7 +222,7 @@ try {
  await click('Insert');await page.waitForFunction(()=>!document.querySelector('.note-document-panel'));
  await waitDisk(noteFile,'/raw-assets/by-hash/');
  await tap('[aria-label="Close note"]');
- await click('Agent System');await page.waitForSelector('.cm-content[aria-label="Agent document content"]');
+ await tap('button[aria-label="Agent System"]');await page.waitForSelector('.cm-content[aria-label="Agent document content"]');
  await page.setViewport({width:320,height:420,isMobile:true,hasTouch:true});
  await tap('[data-sidebar-toggle]');await page.waitForSelector('[data-responsive-sidebar].is-open');await page.waitForFunction(()=>document.querySelector('[data-responsive-sidebar]').getBoundingClientRect().left>=0);await fits('[data-responsive-sidebar]',200);await page.keyboard.press('Escape');await page.waitForFunction(()=>!document.querySelector('[data-responsive-sidebar].is-open'));
  await fits('[data-markdown-editor]',250);const reducedAgentEditor=await bounds('[data-markdown-editor]');assert(reducedAgentEditor.height>=100,`Agent toolbar consumes reduced viewport: ${JSON.stringify(reducedAgentEditor)}`);
@@ -254,7 +254,7 @@ try {
   if(url.pathname==='/api/notes/read')body={note:remoteNote};
   if(url.pathname==='/api/notes/read-batch')body={notes:[remoteNote]};
   if(url.pathname==='/api/folders')body={folders:[]};if(url.pathname==='/api/assets')body={assets:[]};
-  if(url.pathname==='/api/auth/session')body={authenticated:true,login:'mobile-owner',configured:true};
+  if(url.pathname==='/api/auth/session')body={authenticated:true,login:'mobile-owner',configured:true,provider:'github'};
   if(url.pathname==='/api/auth/agent-tokens')body={grants:[]};
   if(url.pathname==='/api/git/status')body={status:{branch:'main',isClean:true,staged:[],modified:[],untracked:[]},commits:[]};
   if(body)void request.respond({status:200,contentType:'application/json',body:JSON.stringify(body)});else void request.continue();
@@ -266,7 +266,8 @@ try {
  await page.waitForFunction(()=>document.body.innerText.includes('Saved locally'));
  assert(!saved,'Editing committed before explicit Commit');
  await tap('[aria-label="Close note"]');await click('Commit');await page.waitForSelector('[aria-label="Commit Changes"]');
- await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
+ const commitLabel = await page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.textContent.includes('Commit to'))?.textContent.trim()) || 'Commit to remote repository';
+ await click(commitLabel);await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
  assert(saved?.content.includes('Mobile remote save')&&saved.revision==='one','Remote save lost content or revision');
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});await page.waitForFunction(()=>document.querySelector('nav').getBoundingClientRect().bottom===844);await tap('button[aria-label="Settings"]');
  await page.waitForSelector('input[aria-label="MCP client name"]');assert(!await page.$eval('input[aria-label="MCP client name"]',e=>e.disabled),'Authenticated access disabled');

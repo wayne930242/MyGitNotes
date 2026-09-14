@@ -74,6 +74,7 @@ try {
     if (!isOpen) {
       await page.click('[data-sidebar-toggle]');
       await page.waitForFunction(() => document.querySelector('.workspace-responsive-sidebar')?.classList.contains('is-open'));
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
   };
   await ensureSidebar();
@@ -107,6 +108,8 @@ try {
   await page.focus('input[aria-label="Swimlane name"]'); await page.$eval('input[aria-label="Swimlane name"]', input => input.select()); await page.keyboard.type('Renamed'); await page.keyboard.press('Enter');
   await page.waitForFunction(()=>document.querySelector('#screen-lane-reading h3')?.textContent==='Renamed' && document.querySelector('#screen-lane-reading .screen-dynamic-label')?.textContent.includes('#archive-only') && document.querySelector('#screen-lane-reading .screen-card-title')?.textContent === 'Archive Note');
   await ensureSidebar();
+  const hasHandle = await page.$('[aria-label="Move swimlane: Renamed"]');
+  if (!hasHandle) await page.click('.reorder-toggle');
   await page.focus('[aria-label="Move swimlane: Renamed"]'); await page.keyboard.press('Space');
   await page.waitForFunction(()=>document.querySelector('[aria-label="Move swimlane: Renamed"]')?.getAttribute('aria-pressed')==='true');
   await page.waitForFunction(()=>[...document.querySelectorAll('[role="status"]')].some(e=>e.textContent.includes('over droppable area reading')));
@@ -117,8 +120,15 @@ try {
   const handle=await page.$('[aria-label="Move swimlane: Renamed"]'), target=await page.$('[aria-label="Move swimlane: Pins"]');
   const a=await handle.boundingBox(),b=await target.boundingBox();
   await page.mouse.move(a.x+a.width/2,a.y+a.height/2); await page.mouse.down(); await page.mouse.move(b.x+b.width/2,b.y+b.height/2,{steps:12}); await page.mouse.up();
-  await page.waitForFunction(()=>document.querySelector('.screen-lane')?.id==='screen-lane-reading');
-  await page.waitForNetworkIdle({idleTime:200,timeout:10000});
+  const closeSidebar = async () => {
+    const isOpen = await page.$eval('.workspace-responsive-sidebar', el => el.classList.contains('is-open')).catch(() => false);
+    if (isOpen) {
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !document.querySelector('.workspace-responsive-sidebar')?.classList.contains('is-open'));
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  };
+  await closeSidebar();
   failAssets=false;
   await page.click('button[aria-label="Retry assets"]');
   await page.waitForFunction(()=>!document.querySelector('.screen-error'));

@@ -29,14 +29,14 @@ const openPalette = async () => {
   await page.$eval('[data-header-command]', button => button.click());
   await page.waitForSelector(palette);
 };
-const focusNav = async (label = 'Notes') => { await page.focus(`.header-nav button[aria-label="${label}"]`); };
+const focusNav = async (label = 'Notes') => { const target = await page.$(`.header-nav button[aria-label="${label}"], [data-header-agent][aria-label="${label}"]`); await target?.focus(); };
 const assert = (value, message) => { if (!value) throw Error(message); };
 
 try {
   await page.goto(`${base}/notes`, { waitUntil: 'networkidle0' });
   await focusNav(); await openPalette();
   assert(await page.$eval(palette, panel => panel.getAttribute('data-mode')) === 'palette', 'Alt+/ did not open command palette mode');
-  assert(await page.$$eval(`${palette} [data-shortcut-key]`, items => items.map(item => item.getAttribute('data-shortcut-key')).join(',')) === '1,2,3,4,N,/,comma,?', 'Palette command set is incomplete');
+  assert(await page.$$eval(`${palette} [data-shortcut-key]`, items => items.map(item => item.getAttribute('data-shortcut-key')).join(',')) === '1,2,3,4,N,/,comma,[,?', 'Palette command set is incomplete');
   assert(await page.$eval(`${palette} input`, input => input === document.activeElement), 'Palette search did not receive focus');
   await page.keyboard.press('Escape');
   assert(await page.$eval('.header-nav button[aria-label="Notes"]', button => button === document.activeElement), 'Escape did not restore previous focus');
