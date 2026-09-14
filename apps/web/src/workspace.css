@@ -61,8 +61,8 @@
 .screen-sidebar-lane .screen-sidebar-action { flex: 1; min-width: 0; padding-left: 4px; }
 .screen-sidebar-lane > .ui-icon-button { width: 26px; }
 .screen-wheel-help { padding: 6px 0; font-size: 10px; line-height: 1.6; color: var(--color-muted); }
-.workspace-responsive-sidebar { display: contents; }
-.workspace-sidebar-toggle, #workspace-sidebar-toggle-slot { display: none; }
+.ui-icon-button.workspace-sidebar-toggle, .workspace-sidebar-toggle, #workspace-sidebar-toggle-slot { display: none; }
+.workspace-sidebar-toggle span { display: none; }
 #workspace-sidebar-toggle-slot:empty { display: none !important; }
 .workspace-sidebar-toggle[aria-expanded="true"] { background: var(--workspace-selection); color: var(--color-text); }
 .screen-sidebar-controls { display: flex; align-items: center; gap: 6px; }
@@ -172,7 +172,7 @@
 .workspace-header .header-layout { display: grid; grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr) auto; gap: 0; height: 56px; padding: 0 24px 0 0; }
 .workspace-header .header-brand { display: flex; gap: 8px; align-items: center; min-width: 0; padding: 0 20px; }
 .workspace-header .header-brand .min-w-0 { min-width: 0; flex: 0 1 auto; }
-.workspace-header .header-brand #workspace-sidebar-toggle-slot { display: flex; align-items: center; }
+.workspace-header .header-brand #workspace-sidebar-toggle-slot { align-items: center; }
 .workspace-brand-icon { width: 32px; height: 32px; flex: none; border-radius: 8px; object-fit: contain; }
 .workspace-header h1 { margin: 0; font: 500 14px/1.5 var(--font-body); color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-header .header-brand p { font-size: 11px; color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -294,6 +294,7 @@
 }
 @media (min-width: 1101px) {
   .app-shell[data-workspace-tab="screen"] #workspace-sidebar-toggle-slot:not(:empty) { display: flex; flex: none; }
+  .app-shell[data-workspace-tab="screen"] .ui-icon-button.workspace-sidebar-toggle,
   .app-shell[data-workspace-tab="screen"] .workspace-sidebar-toggle {
     display: inline-flex;
     align-items: center;
@@ -316,7 +317,7 @@
   .workspace-responsive-sidebar.is-open { transform: translateX(0); visibility: visible; pointer-events: auto; }
   .workspace-responsive-sidebar .workspace-sidebar { display: flex; width: 100%; max-width: 100%; height: 100%; }
   #workspace-sidebar-toggle-slot:not(:empty) { display: flex; flex: none; }
-  .workspace-sidebar-toggle { display: inline-flex; flex: none; width: 44px; height: 44px; padding: 0; justify-content: center; }
+  .ui-icon-button.workspace-sidebar-toggle, .workspace-sidebar-toggle { display: inline-flex; flex: none; width: 44px; height: 44px; padding: 0; justify-content: center; }
   .workspace-sidebar-toggle span { display: none; }
   .agent-layout .agent-document-picker { display: none; }
   .agent-toolbar { padding: 8px var(--workspace-padding); }
