@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nextStudyStage, StudyProgressionSchema, defaultStudyProgression, studyLaneStatuses } from '../src/study-stages.js';
+import { nextStudyStage, deduplicatedStudyRatings, StudyProgressionSchema, defaultStudyProgression, studyLaneStatuses } from '../src/study-stages.js';
 import { applyStageAction, createStudyNote, emptyStudyWorkspace, studyDue, undoStudyAction, StudyWorkspaceSchema, applyStudyAction, rebindStudyNote } from '../src/study.js';
 import { parseNoteContent, replaceNoteStatus } from '../src/frontmatter.js';
 
@@ -127,5 +127,75 @@ describe('Last learning move time', () => {
     expect(StudyWorkspaceSchema.parse(workspace).notes[0].lastMovedAt).toBe(now.toISOString());
     workspace.notes[0].lastMovedAt = 'invalid';
     expect(StudyWorkspaceSchema.safeParse(workspace).success).toBe(false);
+  });
+});
+
+describe('Deduplicated study ratings', () => {
+  const fiveStagePlan = {
+    stages: [
+      { status: 's1', intervalDays: 1 },
+      { status: 's2', intervalDays: 3 },
+      { status: 's3', intervalDays: 7 },
+      { status: 's4', intervalDays: 14 },
+      { status: 's5', intervalDays: 30 },
+    ],
+    easy: 'two' as const,
+  };
+
+  it('deduplicates ratings at the initial stage (s1) to avoid duplicate 1-day actions', () => {
+    const options = deduplicatedStudyRatings(fiveStagePlan, 's1');
+    expect(options.map(o => o.targetIndex)).toEqual([0, 1, 2]);
+    expect(options.map(o => o.rating)).toEqual([1, 3, 4]);
+    expect(options.map(o => o.targetStage.intervalDays)).toEqual([1, 3, 7]);
+    expect(options.map(o => o.starCount)).toEqual([1, 2, 3]);
+  });
+
+  it('provides all 4 distinct ratings at middle stages', () => {
+    const options = deduplicatedStudyRatings(fiveStagePlan, 's2');
+    expect(options.map(o => o.targetIndex)).toEqual([0, 1, 2, 3]);
+    expect(options.map(o => o.rating)).toEqual([1, 2, 3, 4]);
+    expect(options.map(o => o.targetStage.intervalDays)).toEqual([1, 3, 7, 14]);
+    expect(options.map(o => o.starCount)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('deduplicates ratings at the penultimate stage (s4) to avoid duplicate last-stage actions', () => {
+    const options = deduplicatedStudyRatings(fiveStagePlan, 's4');
+    expect(options.map(o => o.targetIndex)).toEqual([0, 3, 4]);
+    expect(options.map(o => o.rating)).toEqual([1, 2, 3]);
+    expect(options.map(o => o.targetStage.intervalDays)).toEqual([1, 14, 30]);
+  });
+
+  it('deduplicates ratings at the max stage (s5) to reset (rating 1) and maintain (rating 3)', () => {
+    const options = deduplicatedStudyRatings(fiveStagePlan, 's5');
+    expect(options.map(o => o.targetIndex)).toEqual([0, 4]);
+    expect(options.map(o => o.rating)).toEqual([1, 3]);
+    expect(options.map(o => o.targetStage.intervalDays)).toEqual([1, 30]);
+    expect(options.map(o => o.starCount)).toEqual([1, 5]);
+  });
+
+  it('handles a 2-stage plan cleanly without duplicate buttons', () => {
+    const twoStagePlan = {
+      stages: [
+        { status: 'learning', intervalDays: 1 },
+        { status: 'known', intervalDays: 3 },
+      ],
+      easy: 'two' as const,
+    };
+    const options0 = deduplicatedStudyRatings(twoStagePlan, 'learning');
+    expect(options0.map(o => o.targetIndex)).toEqual([0, 1]);
+    expect(options0.map(o => o.rating)).toEqual([1, 3]);
+    expect(options0.map(o => o.targetStage.intervalDays)).toEqual([1, 3]);
+
+    const options1 = deduplicatedStudyRatings(twoStagePlan, 'known');
+    expect(options1.map(o => o.targetIndex)).toEqual([0, 1]);
+    expect(options1.map(o => o.rating)).toEqual([1, 3]);
+  });
+
+  it('handles a single stage plan by showing a single review button', () => {
+    const singleStage = { stages: [{ status: 'only', intervalDays: 1 }], easy: 'two' as const };
+    const options = deduplicatedStudyRatings(singleStage, 'only');
+    expect(options).toHaveLength(1);
+    expect(options[0].rating).toBe(3);
+    expect(options[0].targetStage.intervalDays).toBe(1);
   });
 });

@@ -18,6 +18,53 @@ export function nextStudyStage(progression: StudyProgression, status: string | u
   return plan.stages[Math.min(index, plan.stages.length - 1)];
 }
 
+export interface StudyRatingOption {
+  rating: Familiarity;
+  targetIndex: number;
+  targetStage: { status: string; intervalDays: number };
+  starCount: number;
+  totalStages: number;
+}
+
+export function deduplicatedStudyRatings(progression: StudyProgression, status: string | undefined): StudyRatingOption[] {
+  const plan = StudyProgressionSchema.parse(progression);
+  const stages = plan.stages;
+  const current = Math.max(0, stages.findIndex(stage => stage.status === status));
+  const total = stages.length;
+
+  const rawRatings: { rating: Familiarity; targetIndex: number }[] = [
+    { rating: 1, targetIndex: 0 },
+    { rating: 2, targetIndex: current },
+    { rating: 3, targetIndex: Math.min(current + 1, total - 1) },
+    { rating: 4, targetIndex: Math.min(plan.easy === 'last' ? total - 1 : current + 2, total - 1) },
+  ];
+
+  const chosenByTarget = new Map<number, Familiarity>();
+  for (const { rating, targetIndex } of rawRatings) {
+    if (!chosenByTarget.has(targetIndex)) {
+      chosenByTarget.set(targetIndex, rating);
+    } else {
+      if (targetIndex === 0 && rating === 1) {
+        chosenByTarget.set(targetIndex, 1);
+      } else if (targetIndex === total - 1 && current === total - 1) {
+        if (rating === 3) chosenByTarget.set(targetIndex, 3);
+      } else if (targetIndex > current) {
+        if (rating === 3) chosenByTarget.set(targetIndex, 3);
+      }
+    }
+  }
+
+  return Array.from(chosenByTarget.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([targetIndex, rating]) => ({
+      rating,
+      targetIndex,
+      targetStage: stages[targetIndex],
+      starCount: targetIndex + 1,
+      totalStages: total,
+    }));
+}
+
 /** Use only notebooks represented by the lane; preserve their configured order. */
 export function studyLaneStatuses(lane: ScreenRow, notebooks: Pick<NotebookConfig, 'id' | 'statuses'>[]): string[] {
   const ids = lane.kind === 'dynamic' ? lane.source.notebookId ? [lane.source.notebookId] : undefined
