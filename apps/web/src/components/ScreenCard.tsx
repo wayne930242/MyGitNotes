@@ -32,9 +32,11 @@ export function ScreenCard({ item, view, controls, ...content }: ScreenContentPr
   const icon = item.kind === 'note' ? <FileText /> : item.kind === 'folder' ? <Folder /> : item.kind === 'asset' ? <ImageIcon /> : <Youtube />;
   const members = item.kind === 'folder' ? content.notes.filter(note => note.notebookId === item.notebookId && note.path.startsWith(`${item.path}/`) && !isNoteHidden({ ...note.metadata, status: note.status })) : [];
   const memberAssets = item.kind === 'folder' ? content.assets.filter(asset => asset.notebookId === item.notebookId && asset.path.startsWith(`${item.path}/`)) : [];
-  return <article className={`screen-card screen-item-${item.kind}`} data-screen-item={item.id}>
+  return <article className={`screen-card screen-item-${item.kind}`} data-screen-item={item.id} onClick={event => {
+    if (note && !(event.target as HTMLElement).closest('a,button,input,select,textarea,summary,[role="button"]') && !window.getSelection()?.toString()) content.onOpen(item);
+  }}>
     <header className="screen-card-header">{controls}{icon}<button type="button" className="screen-card-title" title={title} onClick={() => content.onOpen(item)}>{title}</button>
-      <button type="button" className="screen-open ui-icon-button" aria-label={`${t('links.open')}: ${title}`} onClick={() => content.onOpen(item)}><ExternalLink size={13} /></button>
+      {item.kind !== 'note' && <button type="button" className="screen-open ui-icon-button" aria-label={`${t('links.open')}: ${title}`} onClick={() => content.onOpen(item)}><ExternalLink size={13} /></button>}
     </header>
     <div className="screen-card-content" tabIndex={0} aria-label={title}>
       {note ? view === 'thumbnail' ? <p className="screen-summary">{noteSummary(note.content)}</p>
