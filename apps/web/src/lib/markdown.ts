@@ -1,5 +1,6 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { parseYouTubeUrl } from '@github-notes/core/screen-page';
 import { headingSlug, resolveWorkspaceHref } from './workspace-links.js';
 
 export function renderNote(content: string, notePath: string, tableLabel = 'Horizontally scrollable table (Alt + wheel)'): string {
@@ -24,6 +25,21 @@ export function renderNote(content: string, notePath: string, tableLabel = 'Hori
     else if (!target && !/^data:image\//i.test(src)) image.remove();
   }
   for (const heading of parsed.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6')) heading.dataset.headingSlug = headingSlug(heading.textContent || '');
+  for (const p of parsed.querySelectorAll('p')) {
+    if (p.children.length === 1 && p.children[0].tagName.toLowerCase() === 'a') {
+      const anchor = p.children[0] as HTMLAnchorElement;
+      const href = anchor.getAttribute('href') || '';
+      const video = parseYouTubeUrl(href);
+      if (video && (p.textContent || '').trim() === (anchor.textContent || '').trim()) {
+        const embed = parsed.createElement('div');
+        embed.className = 'note-youtube-embed';
+        embed.dataset.videoId = video.videoId;
+        embed.dataset.start = String(video.start);
+        embed.innerHTML = `<button type="button" class="note-youtube-poster" aria-label="Play YouTube video"><img src="https://img.youtube.com/vi/${encodeURIComponent(video.videoId)}/hqdefault.jpg" alt="" loading="lazy" /><span class="note-youtube-play-btn" aria-hidden="true"><svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span></button>`;
+        p.replaceWith(embed);
+      }
+    }
+  }
   for (const link of parsed.querySelectorAll('a')) {
     const href = link.getAttribute('href') || '';
     const target = resolveWorkspaceHref(href, notePath);
@@ -32,5 +48,8 @@ export function renderNote(content: string, notePath: string, tableLabel = 'Hori
     link.setAttribute('rel', 'noopener noreferrer');
     if (target.kind === 'external') link.setAttribute('target', '_blank');
   }
-  return DOMPurify.sanitize(parsed.body.innerHTML);
+  return DOMPurify.sanitize(parsed.body.innerHTML, {
+    ADD_TAGS: ['iframe'],
+    ADD_ATTR: ['allow', 'allowfullscreen', 'loading', 'data-video-id', 'data-start']
+  });
 }

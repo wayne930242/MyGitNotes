@@ -128,6 +128,14 @@
 .screen-youtube-poster img { width: 100%; height: 100%; object-fit: cover; opacity: .8; }
 .screen-youtube-poster span { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; gap: 9px; color: white; text-shadow: 0 1px 4px #0008; font-size: 12px; }
 .screen-card-content iframe { height: 100%; width: 100%; border: 0; border-radius: 6px; }
+.note-youtube-embed { width: 100%; max-width: 640px; margin: 16px 0; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: #0f1416; position: relative; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+.note-youtube-poster { width: 100%; height: 100%; border: 0; padding: 0; margin: 0; background: transparent; cursor: pointer; display: block; position: relative; overflow: hidden; }
+.note-youtube-poster img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.88; transition: opacity 150ms ease, transform 150ms ease; }
+.note-youtube-poster:hover img { opacity: 0.98; transform: scale(1.02); }
+.note-youtube-play-btn { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.note-youtube-play-btn svg { width: 56px; height: 56px; color: #ffffff; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6)); transition: transform 150ms ease, color 150ms ease; }
+.note-youtube-poster:hover .note-youtube-play-btn svg { transform: scale(1.1); color: #ff0000; }
+.note-youtube-iframe { width: 100%; height: 100%; border: 0; display: block; }
 .screen-file { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; justify-content: center; height: 100%; color: var(--color-muted); }
 .screen-file p { overflow-wrap: anywhere; }.screen-file small { font-size: 10px; }
 .screen-missing { color: var(--color-muted); font-size: 12px; }

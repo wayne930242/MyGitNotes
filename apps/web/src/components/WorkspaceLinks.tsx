@@ -7,6 +7,7 @@ import { headingSlug, resolveWorkspaceHref } from '../lib/workspace-links.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
+import { useNoteYouTubeEmbed } from '../lib/use-note-youtube-embed.js';
 
 type BeforeNavigate = () => Promise<boolean>;
 const Context = createContext({ registerBeforeNavigate: (_handler: BeforeNavigate): (() => void) => () => {} });
@@ -20,6 +21,7 @@ export function WorkspaceLinks({ notebooks, notes, folders, children, onOpenNote
   const before = useRef<BeforeNavigate>();
   const surfaceRef = useRef<HTMLDivElement>(null);
   useAltWheelHorizontalScroll(surfaceRef, surfaceRef, '.markdown-table-scroll');
+  useNoteYouTubeEmbed(surfaceRef);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<{ asset: AssetItem; notebookId: string } | null>(null);
   const registerBeforeNavigate = useCallback((handler: BeforeNavigate) => {
