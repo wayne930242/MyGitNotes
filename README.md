@@ -6,7 +6,7 @@ Your Markdown, repository, deployment, commit history, and agent access remain u
 
 [English](README.md) · [繁體中文](README.zh-TW.md)
 
-[Live Demo](https://my-gh-core.vercel.app) · [Example Repository](https://github.com/wayne930242/MyGitNotes/tree/main)
+[Live Demo](https://my-gh-core.vercel.app) · [Flashcard Learning Demo](https://my-gh-core.vercel.app/screen/lanes/explore) · [Example Repository](https://github.com/wayne930242/MyGitNotes/tree/main)
 
 ## Design logic
 
@@ -212,7 +212,7 @@ See [GitLab OAuth](https://docs.gitlab.com/api/oauth2/) and [commit actions](htt
 
 ### Flashcards and reading mode
 
-Start learning from any Screen lane. The first Markdown page is the question and the remaining pages are the answer; separate pages with a standalone `---` surrounded by blank lines. A note without page breaks uses its title as the question and its body as the answer.
+Try the [live flashcard demo](https://my-gh-core.vercel.app/screen/lanes/explore) directly in your browser. Start learning from any Screen lane. The first Markdown page is the question and the remaining pages are the answer; separate pages with a standalone `---` surrounded by blank lines. A note without page breaks uses its title as the question and its body as the answer.
 
 Reveal the answer, then choose **Again**, **Hard**, **Good**, or **Easy**. Lane settings map each stage to a note status and an interval; successful ratings save the status, due date, and study history together. Filter all, due, future, or suspended cards, switch to reading mode, and use touch gestures on mobile. Screen layouts and learning progress live in workspace YAML files and travel with Git.
 
@@ -236,6 +236,7 @@ Open **Graph** to see how Markdown links connect your notes. Explore the canvas 
 - [Architecture](docs/agent/architecture/index.md)
 - [MCP interface and security model](docs/agent/mcp/index.md)
 - [Demo workspace](examples/demo-workspace/README.md)
+- [Study and flashcard guide](docs/agent/study.md)
 
 ## License
 
