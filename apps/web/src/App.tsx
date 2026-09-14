@@ -73,6 +73,7 @@ import { I18nProvider, useTranslation } from './lib/i18n/index.js';
 import { AlertTriangle, FileText, X } from 'lucide-react';
 
 const ScreenPage = React.lazy(() => import('./components/ScreenPage.js').then(module => ({ default: module.ScreenPage })));
+const GraphPage = React.lazy(() => import('./components/GraphPage.js').then(module => ({ default: module.GraphPage })));
 
 const AppContent: React.FC = () => {
   useVisualViewport();
@@ -881,6 +882,20 @@ const AppContent: React.FC = () => {
                   onSortChange={handleSortChange}
                 />
               )}
+              {viewMode === 'graph' && (
+                <div style={{ height: 'calc(100vh - 220px)', minHeight: 480, width: '100%', position: 'relative' }}>
+                  <React.Suspense fallback={<p role="status" className="p-8">{t('graph.title')}</p>}>
+                    <GraphPage
+                      notebooks={config?.notebooks || []}
+                      notes={notes}
+                      selectedNotebookId={selectedNotebookId}
+                      onSelectNotebook={setSelectedNotebookId}
+                      onOpenNote={handleOpenNote}
+                      showHidden={showHidden}
+                    />
+                  </React.Suspense>
+                </div>
+              )}
               </div>
             </main>
           </>
@@ -915,6 +930,22 @@ const AppContent: React.FC = () => {
         )}
 
         {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} notebooks={config?.notebooks || []} notes={notes} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} /></React.Suspense>}
+
+        {activeTab === 'graph' && (
+          <main className="workspace-route graph-main flex-1 w-full h-full relative" style={{ minHeight: 'calc(100vh - 64px)' }}>
+            <React.Suspense fallback={<p role="status" className="p-8">{t('graph.title')}</p>}>
+              <GraphPage
+                key={remote ? sourceId : repoRoot}
+                notebooks={config?.notebooks || []}
+                notes={notes}
+                selectedNotebookId={selectedNotebookId}
+                onSelectNotebook={setSelectedNotebookId}
+                onOpenNote={handleOpenNote}
+                showHidden={showHidden}
+              />
+            </React.Suspense>
+          </main>
+        )}
 
         {activeTab === 'settings' && (
           <main className="workspace-route settings-main has-sidebar-drawer">

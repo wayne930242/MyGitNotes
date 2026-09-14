@@ -13,3 +13,5 @@ export * from './github-source.js';
 export * from './note-shell.js';
 export * from './assets.js';
 export * from './workspace-agent.js';
+export * from './workspace-links.js';
+export * from './note-graph.js';

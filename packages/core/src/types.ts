@@ -1,4 +1,4 @@
-export type ViewMode = 'list' | 'card' | 'kanban' | 'flat';
+export type ViewMode = 'list' | 'card' | 'kanban' | 'flat' | 'graph';
 
 export interface NotebookConfig {
   id: string;

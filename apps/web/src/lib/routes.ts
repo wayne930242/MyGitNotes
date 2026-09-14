@@ -1,13 +1,13 @@
 import { matchPath } from 'react-router-dom';
 import type { ViewMode } from './types.js';
-export type WorkspaceTab = 'notes' | 'assets' | 'agent' | 'screen' | 'settings';
+export type WorkspaceTab = 'notes' | 'assets' | 'agent' | 'screen' | 'graph' | 'settings';
 export function parseWorkspaceRoute(pathname: string, search: string) {
   pathname = pathname.replace(/\/+$/, '') || '/';
   if (pathname === '/index.html' || pathname === '/index' || pathname === '/notebooks') pathname = '/notes';
   const query = new URLSearchParams(search);
   let tab: WorkspaceTab = 'notes'; let notebook: string | null = null; let folder: string | null = null; let note: string | null = null; let valid = true;
   try {
-    if (['/assets','/agent','/screen','/settings'].includes(pathname)) tab=pathname.slice(1) as WorkspaceTab;
+    if (['/assets','/agent','/screen','/graph','/settings'].includes(pathname)) tab=pathname.slice(1) as WorkspaceTab;
     else if (pathname !== '/' && pathname !== '/notes') {
       const entry=matchPath('/notebooks/:notebook/notes/*',pathname);
       const directory=matchPath('/notebooks/:notebook/folders/*',pathname);
@@ -26,7 +26,7 @@ export function parseWorkspaceRoute(pathname: string, search: string) {
   const queryFolder = query.get('folder');
   if (queryFolder) folder = queryFolder;
   if((note!==null&&!safeRelative(note))||(folder!==null&&!safeRelative(folder)))valid=false;
-  return {valid,tab,notebook,folder,note,showHidden:query.get('showHidden') === 'true',view:(['flat','list','card','kanban'].includes(query.get('view')||'')?query.get('view'):'flat') as ViewMode,status:query.get('status'),tag:query.get('tag'),q:query.get('q')||''};
+  return {valid,tab,notebook,folder,note,showHidden:query.get('showHidden') === 'true',view:(['flat','list','card','kanban','graph'].includes(query.get('view')||'')?query.get('view'):'flat') as ViewMode,status:query.get('status'),tag:query.get('tag'),q:query.get('q')||''};
 }
 export function safeRelative(value: string) { return Boolean(value)&&!value.includes('\\')&&!value.includes('\0')&&value.split('/').every(part=>Boolean(part)&&part!=='.'&&part!=='..'); }
 const encodePath = (value: string) => value.split('/').map(encodeURIComponent).join('/');

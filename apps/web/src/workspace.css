@@ -307,6 +307,7 @@
   .app-shell { --workspace-padding: 16px; }
   .workspace-header .header-layout { padding: calc(8px + env(safe-area-inset-top)) 12px 8px; }
   .workspace-header .header-nav { padding: 4px env(safe-area-inset-right) calc(4px + env(safe-area-inset-bottom)) env(safe-area-inset-left); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--color-surface); }
+  .workspace-header .header-nav .desktop-only { display: none !important; }
   .workspace-header .header-nav button { height: 56px; gap: 4px; padding: 4px 0; font-size: 11px; }
   .workspace-header .header-nav button svg { width: 20px; height: 20px; }
   .workspace-header .header-nav .mobile-nav-create { display: flex; width: 52px; height: 52px; justify-self: center; align-self: center; margin-top: -14px; padding: 0; border-radius: 9999px; color: white; background: var(--color-primary); box-shadow: 0 6px 16px color-mix(in srgb, var(--color-primary) 36%, transparent); }
