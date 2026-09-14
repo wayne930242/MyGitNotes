@@ -35,12 +35,15 @@ describe('release transaction', () => {
     expect(remoteGit('show', 'main:.agents/skills/demo/SKILL.md')).toBe('# Skill');
   });
   it('merges Core into main, copies canonical examples and retains other notes', () => {
+    write('examples/demo-workspace/.github-notes-screen.yaml', 'version: 1\n');
+    git('add', '.'); git('commit', '-m', 'screen fixture'); git('push', 'origin', 'core');
     const core = git('rev-parse', 'core');
     expect(run()).toContain('synced=true');
     const main = remoteGit('rev-parse', 'main');
     expect(remoteGit('merge-base', main, core)).toBe(core);
     expect(remoteGit('show', 'main:notes/example/welcome.md')).toBe('# Updated tutorial');
     expect(remoteGit('show', 'main:notes/personal.md')).toBe('# Keep personal note');
+    expect(remoteGit('show', 'main:.github-notes-screen.yaml')).toBe('version: 1');
   });
   it('skips superseded Core runs before changing main', () => {
     const old = remoteGit('rev-parse', 'main');
