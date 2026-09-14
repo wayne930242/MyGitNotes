@@ -6,6 +6,7 @@ import { noteRoute, notebookRoute } from '../lib/routes.js';
 import { headingSlug, resolveWorkspaceHref } from '../lib/workspace-links.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
 
 type BeforeNavigate = () => Promise<boolean>;
 const Context = createContext({ registerBeforeNavigate: (_handler: BeforeNavigate): (() => void) => () => {} });
@@ -17,6 +18,8 @@ export function WorkspaceLinks({ notebooks, notes, folders, children, onOpenNote
 }) {
   const { t } = useTranslation(); const navigate = useNavigate();
   const before = useRef<BeforeNavigate>();
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  useAltWheelHorizontalScroll(surfaceRef, surfaceRef, '.markdown-table-scroll');
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<{ asset: AssetItem; notebookId: string } | null>(null);
   const registerBeforeNavigate = useCallback((handler: BeforeNavigate) => {
@@ -77,7 +80,7 @@ export function WorkspaceLinks({ notebooks, notes, folders, children, onOpenNote
   };
   const clickedLink = (target: EventTarget) => target instanceof Element ? target.closest<HTMLElement>('[data-workspace-link]') : null;
   return <Context.Provider value={{ registerBeforeNavigate }}>
-    <div className="workspace-link-surface" onMouseDownCapture={event => {
+    <div ref={surfaceRef} className="workspace-link-surface" onMouseDownCapture={event => {
       if (event.button === 0 && clickedLink(event.target)) { event.preventDefault(); event.stopPropagation(); }
     }} onClickCapture={event => {
       const element = clickedLink(event.target);

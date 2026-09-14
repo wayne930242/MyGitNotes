@@ -2,8 +2,17 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { headingSlug, resolveWorkspaceHref } from './workspace-links.js';
 
-export function renderNote(content: string, notePath: string): string {
+export function renderNote(content: string, notePath: string, tableLabel = 'Horizontally scrollable table (Alt + wheel)'): string {
   const parsed = new DOMParser().parseFromString(DOMPurify.sanitize(marked.parse(content, { gfm: true, breaks: true }) as string), 'text/html');
+  for (const table of parsed.querySelectorAll('table')) {
+    const scroller = parsed.createElement('div');
+    scroller.className = 'markdown-table-scroll';
+    scroller.tabIndex = 0;
+    scroller.setAttribute('role', 'region');
+    scroller.setAttribute('aria-label', tableLabel);
+    table.replaceWith(scroller);
+    scroller.append(table);
+  }
   for (const image of parsed.querySelectorAll('img')) {
     const src = image.getAttribute('src') || '';
     const target = resolveWorkspaceHref(src, notePath);
