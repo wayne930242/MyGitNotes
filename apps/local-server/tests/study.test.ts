@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, writeFile, symlink, rm, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import syncFs from 'node:fs';
-import { stringify } from 'yaml';
+import { parse, stringify } from 'yaml';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
 import { STUDY_FILE, createStudyNote, emptyStudyWorkspace, applyStudyAction, parseNoteContent, readNoteFile } from '@github-notes/core';
@@ -107,4 +107,30 @@ it('rejects stage actions on Core and note symlinks', async () => {
   await writeFile(path.join(root, 'target.md'), raw); await rm(path.join(root, source.path));
   await symlink(path.join(root, 'target.md'), path.join(root, source.path));
   expect((await act(request)).status).toBe(403);
+});
+
+it('uses only the lane notebook statuses when its progression is omitted', async () => {
+  await stageFixture();
+  await writeFile(path.join(root, '.github-notes.yaml'), stringify({ schema_version: 1, workspace: { title: 'Test', default_notebook: 'a' }, notebooks: [
+    { id: 'b', title: 'Other', root: 'notes/b', statuses: ['unrelated', 'other'] },
+    { id: 'a', title: 'A', root: 'notes/a', statuses: ['new', 'known'] },
+  ] }));
+  const screenPath = path.join(root, '.github-notes-screen.yaml');
+  const screen = parse(await readFile(screenPath, 'utf8')); delete screen.rows[0].progression;
+  await writeFile(screenPath, stringify(screen));
+  const response = await act(await stageRequest()); expect(response.status).toBe(200);
+  const saved = await response.json();
+  expect(saved.note.status).toBe('known');
+  expect(saved.study.events.at(-1).transition.intervalDays).toBe(3);
+  expect(saved.note.metadata.custom).toBe('keep-me');
+});
+it('requires explicit stages when only an archival status is configured', async () => {
+  const original = await stageFixture();
+  const configPath = path.join(root, '.github-notes.yaml'), config = parse(await readFile(configPath, 'utf8'));
+  config.notebooks[0].statuses = ['archived']; await writeFile(configPath, stringify(config));
+  const screenPath = path.join(root, '.github-notes-screen.yaml'), screen = parse(await readFile(screenPath, 'utf8'));
+  delete screen.rows[0].progression; await writeFile(screenPath, stringify(screen));
+  expect((await act(await stageRequest())).status).toBe(400);
+  expect(await readFile(path.join(root, source.path), 'utf8')).toBe(original);
+  expect((await fetch(url).then(response => response.json())).study.events).toEqual([]);
 });

@@ -70,3 +70,8 @@
   .study-more { margin-left: auto; }
   .study-ratings .ui-button { font-size: 12px; }
 }
+
+.study-advanced { border-top: 1px solid var(--workspace-divider); }
+.study-advanced > summary { cursor: pointer; padding: 12px 0; min-height: 44px; font-weight: 500; }
+.study-advanced-content { display: flex; flex-direction: column; gap: 12px; padding-bottom: 8px; }
+.study-advanced-content > p { font-size: 12px; color: var(--color-muted); margin: 0; }

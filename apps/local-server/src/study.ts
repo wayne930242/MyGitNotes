@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { parse, stringify } from 'yaml';
 import { emptyStudyWorkspace, StudyWorkspaceSchema, STUDY_FILE, STUDY_MAX_BYTES, createRemoteSource, SourceError, type SourceConfig } from '@github-notes/core';
-import { defaultStudyProgression, resolveNoteStatuses, StudyLaneActionSchema, loadWorkspaceConfig, resolveSafePath, isNotebookContent, readNoteFile, parseNoteContent, replaceNoteStatus, ScreenPageSchema, SCREEN_PAGE_FILE, createStudyNote, findStudyNote, reconcileStudyNote, applyStageAction, undoStudyAction } from '@github-notes/core';
+import { defaultStudyProgression, studyLaneStatuses, StudyLaneActionSchema, loadWorkspaceConfig, resolveSafePath, isNotebookContent, readNoteFile, parseNoteContent, replaceNoteStatus, ScreenPageSchema, SCREEN_PAGE_FILE, createStudyNote, findStudyNote, reconcileStudyNote, applyStageAction, undoStudyAction } from '@github-notes/core';
 import { getCurrentBranch } from '@github-notes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
@@ -76,7 +76,8 @@ export function createStudyRouter(base: string, source: SourceConfig): Router {
           const screen = ScreenPageSchema.parse(parse(await read(SCREEN_PAGE_FILE), { maxAliasCount: 20 }));
           const lane = screen.rows.find(row => row.id === body.laneId);
           if (!lane) throw new SourceError('This lane no longer exists. Reload before reviewing.', 409);
-          const progression = lane.progression || defaultStudyProgression(config!.notebooks.flatMap(notebook => resolveNoteStatuses(notebook)));
+          const progression = lane.progression || defaultStudyProgression(studyLaneStatuses(lane, config!.notebooks));
+          if (!progression) throw new SourceError('Configure learning stages for this lane before reviewing.', 400);
           const stored = findStudyNote(currentStudy, currentNote), resolved = stored ? reconcileStudyNote(stored, currentNote) : createStudyNote(currentNote);
           if (!resolved || resolved.cards.length !== 1 || resolved.cards[0].kind !== 'forward') throw new SourceError('Rebind this card before reviewing.', 409);
           if (body.action !== 'stage-postpone' && !body.rating || body.action === 'stage-postpone' && !body.due) throw new SourceError('A rating or postponement time is required.', 400);

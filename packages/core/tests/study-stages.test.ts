@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nextStudyStage, StudyProgressionSchema } from '../src/study-stages.js';
+import { nextStudyStage, StudyProgressionSchema, defaultStudyProgression, studyLaneStatuses } from '../src/study-stages.js';
 import { applyStageAction, createStudyNote, emptyStudyWorkspace, studyDue, undoStudyAction } from '../src/study.js';
 import { parseNoteContent, replaceNoteStatus } from '../src/frontmatter.js';
 
@@ -42,5 +42,32 @@ describe('Lane stage progression', () => {
     expect(parseNoteContent(updated).content).toBe(parseNoteContent(raw).content);
     expect(parseNoteContent(updated).metadata).toEqual({ ...parseNoteContent(raw).metadata, status: 'review' });
     expect(parseNoteContent(replaceNoteStatus(updated, null)).metadata.status).toBeUndefined();
+  });
+});
+
+describe('Default learning strategies', () => {
+  it.each([
+    [['only'], [1]],
+    [['new', 'known'], [1, 3]],
+    [['new', 'learning', 'known'], [1, 3, 7]],
+    [['a', 'b', 'c', 'd', 'e', 'f'], [1, 3, 7, 14, 30, 30]],
+  ])('uses the available status count without inventing stages: %j', (statuses, intervals) => {
+    const progression = defaultStudyProgression(statuses as string[])!;
+    expect(progression.stages.map(stage => stage.status)).toEqual(statuses);
+    expect(progression.stages.map(stage => stage.intervalDays)).toEqual(intervals);
+    for (const rating of [1, 2, 3, 4] as const) expect(nextStudyStage(progression, statuses.at(-1) as string, rating)).toEqual(progression.stages[rating === 1 ? 0 : progression.stages.length - 1]);
+  });
+  it('uses normal default statuses when absent and excludes archival from generated plans', () => {
+    expect(defaultStudyProgression([])?.stages).toEqual([{ status: 'inbox', intervalDays: 1 }, { status: 'working', intervalDays: 3 }, { status: 'done', intervalDays: 7 }]);
+    expect(defaultStudyProgression(['new', 'archived', 'known', 'new'])?.stages.map(stage => stage.status)).toEqual(['new', 'known']);
+    expect(defaultStudyProgression(['archived'])).toBeUndefined();
+  });
+  it('scopes defaults to the lane notebooks and preserves YAML ordering', () => {
+    const notebooks = [{ id: 'a', statuses: ['new', 'known'] }, { id: 'b', statuses: ['todo', 'review', 'done'] }];
+    const row = { id: 'lane', name: 'Lane', view: 'small' as const, kind: 'dynamic' as const, source: { kind: 'folder' as const, notebookId: 'b', path: 'notes/b', recursive: true } };
+    expect(studyLaneStatuses(row, notebooks)).toEqual(['todo', 'review', 'done']);
+    expect(studyLaneStatuses({ ...row, source: { kind: 'tag', tag: 'review', notebookId: 'a' } }, notebooks)).toEqual(['new', 'known']);
+    expect(studyLaneStatuses({ ...row, kind: 'custom', items: [{ id: 'note', kind: 'note', notebookId: 'a', path: 'notes/a/test.md' }] }, notebooks)).toEqual(['new', 'known']);
+    expect(studyLaneStatuses({ ...row, source: { kind: 'tag', tag: 'review' } }, notebooks)).toEqual(['new', 'known', 'todo', 'review', 'done']);
   });
 });

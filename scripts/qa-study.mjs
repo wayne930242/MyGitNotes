@@ -142,6 +142,8 @@ try {
   }
   console.log('PASS four familiarity levels, destination intervals, status routing, next card and undo');
   await page.click('.screen-focus-header button[aria-label="Edit swimlane: Study"]');
+  assert(await page.$eval('dialog[open] .study-advanced', details => !details.open), 'Learning settings should start collapsed');
+  await page.click('dialog[open] .study-advanced > summary');
   await chooseSelect(page, 'dialog[open] .study-stage-settings .select-trigger', 'last');
   await page.click('dialog[open] .workspace-dialog-actions .ui-button-primary');
   await page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('github-notes:screen-draft:')));
@@ -260,6 +262,8 @@ try {
   }
   const configureFilter = async value => {
     await page.click('.screen-focus-header button[aria-label="Edit swimlane: Study"]');
+  assert(await page.$eval('dialog[open] .study-advanced', details => !details.open), 'Learning settings should start collapsed');
+  await page.click('dialog[open] .study-advanced > summary');
     await chooseSelect(page, 'dialog[open] [aria-label="Study filter"]', value);
     await page.click('dialog[open] .workspace-dialog-actions .ui-button-primary');
     await page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('github-notes:screen-draft:')));
@@ -269,6 +273,8 @@ try {
   assert(parse(fs.readFileSync(path.join(root, '.github-notes-screen.yaml'), 'utf8')).rows[0].study.filter === 'future', 'Study filter lost on reload');
   assert(!await page.$('.study-navbar') && !await page.$('.study-mode-tabs'), 'Obsolete navbar controls remain');
   await page.click('.screen-focus-header button[aria-label="Edit swimlane: Study"]');
+  assert(await page.$eval('dialog[open] .study-advanced', details => !details.open), 'Learning settings should start collapsed');
+  await page.click('dialog[open] .study-advanced > summary');
   await chooseSelect(page, 'dialog[open] [aria-label="Study filter"]', 'paused');
   await page.click('dialog[open] button[aria-label="Close"]');
   assert(parse(fs.readFileSync(path.join(root, '.github-notes-screen.yaml'), 'utf8')).rows[0].study.filter === 'future', 'Canceled filter was saved');

@@ -13,7 +13,7 @@ import { fetchAssets } from '../lib/api.js';
 import { notebookRoute, screenLaneRoute } from '../lib/routes.js';
 import { useStudyWorkspace, type StudyController } from '../lib/use-study-workspace.js';
 import { StudyLane } from './StudyLane.js';
-import { defaultStudyProgression } from '@github-notes/core/study-stages';
+import { defaultStudyProgression, studyLaneStatuses } from '@github-notes/core/study-stages';
 import { resolveNoteStatuses } from '@github-notes/core/note-status';
 import { screenRowItems, studyRowItems } from '../lib/screen-content.js';
 import type { ScreenController } from '../lib/use-screen-page.js';
@@ -118,7 +118,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
   const focusedRow = screen.page.rows.find(row => row.id === focusedLaneId);
   const editingRow = screen.page.rows.find(row => row.id === editing);
   const returnToScreen = () => { const query = new URLSearchParams(location.search); query.delete('mode'); query.delete('studyFilter'); navigate(`/screen${query.size ? '?' + query.toString() : ''}#screen-lane-${focusedLaneId}`); };
-  const reviewRow = focusedRow && { ...focusedRow, progression: focusedRow.progression || defaultStudyProgression(notebooks.flatMap(notebook => resolveNoteStatuses(notebook))), study: { ...(focusedRow.study || {}), filter: focusedRow.study?.filter || 'all', dueFirst: true } };
+  const reviewRow = focusedRow && { ...focusedRow, progression: focusedRow.progression || defaultStudyProgression(studyLaneStatuses(focusedRow, notebooks)), study: { ...(focusedRow.study || {}), filter: focusedRow.study?.filter || 'all', dueFirst: true } };
   const reviewItems = reviewRow ? studyRowItems(screenRowItems(reviewRow, notes, [], notebooks), reviewRow, notes, study.study) : [];
   const reviewNotes = reviewItems.flatMap(item => item.kind === 'note' ? notes.filter(note => note.notebookId === item.notebookId && note.path === item.path) : []);
   useEffect(() => {
@@ -207,7 +207,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
     </div>
     </main>
 
-    {editingRow && <ScreenEditRow studySettings row={editingRow} disabled={disabled} {...content} folders={folders} selectedNotebookId={selectedNotebookId} onClose={() => setEditing(undefined)}
+    {editingRow && <ScreenEditRow row={editingRow} disabled={disabled} {...content} folders={folders} selectedNotebookId={selectedNotebookId} onClose={() => setEditing(undefined)}
       onApply={next => screen.change({ ...screen.page, rows: screen.page.rows.map(row => row.id === next.id ? next : row) })}
       onRemove={() => { screen.change({ ...screen.page, rows: screen.page.rows.filter(row => row.id !== editingRow.id) }); if (focusedLaneId === editingRow.id) navigate('/screen' + location.search); }} />}
     {dialog === 'add' && <ScreenAddRow notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onClose={() => setDialog(null)} onAdd={row => screen.change({ ...screen.page, rows: [...screen.page.rows, row] })} />}
