@@ -42,8 +42,8 @@ export function GraphFilters({ value, neighbors, notebooks, folders, tags, statu
       <label className="filter-search header-search"><Search size={15} aria-hidden="true" />
         <input type="search" aria-label={t('header.searchPlaceholder')} placeholder={t('header.searchPlaceholder')} value={value.q} onChange={event => onChange({ q: event.target.value })} />
       </label>
-      <button type="button" className="ui-button filter-trigger" ref={trigger} aria-expanded={open} aria-controls={id} onClick={() => setOpen(value => !value)}>
-        <Filter size={14} aria-hidden="true" />{t('filters.title')}<span className="filter-count">{chips.length}</span>
+      <button type="button" className="ui-button filter-trigger" ref={trigger} aria-label={t('filters.title')} title={t('filters.title')} aria-expanded={open} aria-controls={id} onClick={() => setOpen(value => !value)}>
+        <Filter size={14} aria-hidden="true" /><span className="filter-count">{chips.length}</span>
       </button>
     </div>
     {open && <div id={id} className="filter-details">

@@ -56,7 +56,7 @@ try {
  assert.equal(await page.$eval('.sidebar-filter-section:last-child',el=>el.open),false);
  await page.click('.sidebar-filter-section:last-child summary');await count(1);
  results.push('Direct sidebar tag multiselect, any/all and collapsible sections preserve selection');
- await graph();await count(1);assert.equal(await page.$('.filter-details'),null);
+ await graph();await count(1);assert.equal(await page.$('.filter-details'),null);assert.equal(await page.$eval('.filter-trigger',el=>el.textContent), '3');assert.equal(await page.$eval('.filter-trigger',el=>el.getAttribute('aria-label')), 'Filters');
  assert.equal(new URL(page.url()).searchParams.getAll('tag').length,2);
  await open();await checkbox('Show directly connected notes outside filters');await page.waitForFunction(()=>document.querySelector('[data-graph-nodes]')?.getAttribute('data-graph-nodes')==='2');
  await page.keyboard.press('Escape');await page.screenshot({path:product+'/artifacts/qa/unified-graph-collapsed.png'});
