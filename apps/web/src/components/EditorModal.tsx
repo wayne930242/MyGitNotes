@@ -369,11 +369,12 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     if (!autoSave && !readOnly && hasUnsavedChanges && !window.confirm('Close with unsaved changes? Your local draft will be kept.')) return;
     onClose();
   };
-  const escapeAction = useRef(() => {});
+  const escapeAction = useRef<() => boolean>(() => false);
   escapeAction.current = () => {
     if (isEditorLeaderOpen) setIsEditorLeaderOpen(false);
     else if (notePanel) setNotePanel(null);
-    else void close();
+    else return false;
+    return true;
   };
   const openOutline = () => {
     const currentLine = editorRef.current?.getCurrentLine() ?? 1;
@@ -420,7 +421,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
         event.preventDefault(); event.stopPropagation(); return;
       }
       if (event.key === 'Escape' && !document.querySelector('dialog[open], [aria-label="Asset preview"]')) {
-        event.preventDefault(); event.stopPropagation(); escapeAction.current();
+        if (escapeAction.current()) { event.preventDefault(); event.stopPropagation(); }
       }
     };
     document.addEventListener('keydown', onKeyDown, true);
