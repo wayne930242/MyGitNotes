@@ -48,7 +48,9 @@ try {
     }
   };
   // This script owns the public demo; normal bootstrap preserves existing user files.
-  copy('.github-notes.yaml'); walk('notes');
+  copy('.github-notes.yaml');
+  if (fs.existsSync(path.join(template, '.github-notes-screen.yaml'))) copy('.github-notes-screen.yaml');
+  walk('notes');
   for (const old of oldTemplates) {
     const relative = old.slice(template.length + 1);
     if (copied.includes(relative)) continue;

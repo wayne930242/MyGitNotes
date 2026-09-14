@@ -63,6 +63,12 @@ async function bootstrapWorkspace() {
     copyDirectory(path.join(template, 'notes/example'), 'notes/example');
     fs.mkdirSync(resolveSafePath(repoRoot, 'notes/example/assets'), { recursive: true });
   }
+  if (config.notebooks.some(notebook => notebook.id === 'learning' && notebook.root === 'notes/learning')) {
+    copyDirectory(path.join(template, 'notes/learning'), 'notes/learning');
+  }
+  if (fs.existsSync(path.join(template, '.github-notes-screen.yaml')) && !fs.existsSync(resolveSafePath(repoRoot, '.github-notes-screen.yaml'))) {
+    copyMissing(path.join(template, '.github-notes-screen.yaml'), '.github-notes-screen.yaml');
+  }
 
   const notesAgentsPath = resolveSafePath(repoRoot, 'notes/AGENTS.md');
   if (!fs.existsSync(notesAgentsPath)) {
