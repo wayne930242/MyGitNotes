@@ -1,3 +1,4 @@
+import './graph-controls.css';
 import type { ReactNode, RefObject } from 'react';
 import { RotateCcw, Eye, EyeOff } from 'lucide-react';
 import { Select } from '../Select.js';
@@ -6,21 +7,18 @@ import { GRAPH_COLOR_MODES, GRAPH_PALETTES, type GraphAppearance } from '../../l
 
 interface GraphControlsProps {
   controlsRef: RefObject<HTMLDivElement>;
-  filterPanel: ReactNode; matchingCount: number;
+  filterPanel: ReactNode;
   appearance: GraphAppearance; onAppearanceChange: (appearance: GraphAppearance) => void;
   visibleColorGroups: { key: string; label: string; color: string }[]; appearanceSaveError: boolean;
   showOrphans: boolean; onToggleOrphans: () => void; onReset: () => void;
-  nodeCount: number; linkCount: number;
 }
 
-export function GraphControls({ controlsRef, filterPanel, matchingCount, appearance, onAppearanceChange, visibleColorGroups, appearanceSaveError, showOrphans, onToggleOrphans, onReset, nodeCount, linkCount }: GraphControlsProps) {
+export function GraphControls({ controlsRef, filterPanel, appearance, onAppearanceChange, visibleColorGroups, appearanceSaveError, showOrphans, onToggleOrphans, onReset }: GraphControlsProps) {
   const { t } = useTranslation();
   return (
-      <div ref={controlsRef} className="absolute top-3 left-3 right-3 z-40 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-        <div className="pointer-events-auto w-full max-w-md">{filterPanel}</div>
-        <div className="flex flex-wrap items-center gap-2 pointer-events-auto bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-xs">
-          {/* Toggle Unlinked */}
-          <details className="relative">
+      <div ref={controlsRef} className="graph-controls">
+        <div className="graph-filter-slot">{filterPanel}</div>
+        <details className="graph-appearance">
             <summary className="cursor-pointer rounded-md px-2.5 py-1 text-slate-600 dark:text-slate-300">{t('graph.appearance')}</summary>
             <div className="absolute right-0 top-full mt-2 max-h-[50dvh] overflow-y-auto w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-900">
               <label className="mb-1 block text-slate-500">{t('graph.colorBy')}</label>
@@ -33,7 +31,8 @@ export function GraphControls({ controlsRef, filterPanel, matchingCount, appeara
               </ul>
               {appearanceSaveError && <p role="status" className="mt-2 text-amber-600">{t('graph.appearanceSaveError')}</p>}
             </div>
-          </details>
+        </details>
+        <div className="graph-view-actions">
           <button
             type="button"
             onClick={onToggleOrphans}
@@ -61,15 +60,6 @@ export function GraphControls({ controlsRef, filterPanel, matchingCount, appeara
           </button>
         </div>
 
-        {/* Stats Pill */}
-        <div className="pointer-events-auto bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-xs text-slate-500 dark:text-slate-400 flex items-center gap-3">
-          <span data-filter-results={matchingCount}>{t('filters.results', { count: matchingCount })}</span>
-          <span data-graph-nodes={nodeCount}>{t('filters.graphTotal', { count: nodeCount })}</span>
-          <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
-          <span>
-            <strong className="text-slate-800 dark:text-slate-200">{linkCount}</strong> {t('graph.links')}
-          </span>
-        </div>
       </div>
 
   );

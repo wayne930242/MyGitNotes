@@ -5,7 +5,7 @@ import { useTranslation } from '../lib/i18n/index.js';
 import './graph-filters.css';
 
 
-export function GraphFilters({ value, neighbors, notebooks, folders, tags, statuses, count, onChange, onNotebookChange, onClear }: FilterControls) {
+export function GraphFilters({ value, neighbors, notebooks, folders, tags, statuses, onChange, onNotebookChange, onClear }: FilterControls) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [optionSearch, setOptionSearch] = useState('');
@@ -48,7 +48,7 @@ export function GraphFilters({ value, neighbors, notebooks, folders, tags, statu
     </div>
     {open && <div id={id} className="filter-details">
       <div className="filter-details-heading"><strong>{t('filters.title')}</strong><button type="button" className="ui-button" aria-label={t('filters.close')} onClick={close}><X size={14} /></button></div>
-      <><span className="filter-results" role="status" data-filter-results={count}>{t('filters.results', { count })}</span>{conditionChips}</>
+      {conditionChips}
       <div className="filter-fields">
         <label>{t('filters.notebook')}<select value={value.notebookId} onChange={event => onNotebookChange(event.target.value)}>
           <option value="all">{t('graph.allNotebooks')}</option>{notebooks.map(nb => <option key={nb.id} value={nb.id}>{nb.title}</option>)}

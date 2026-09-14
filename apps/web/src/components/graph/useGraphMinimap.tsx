@@ -84,7 +84,7 @@ export function useGraphMinimap({ graphRef: fgRef, graphData, dimensions, isDark
         aria-label={t('graph.minimap')}
         title={t('graph.minimapHint')}
         onMouseEnter={onClearHover}
-        className="absolute bottom-4 right-4 overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 shadow-sm backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+        className="overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 shadow-sm backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
         onClick={(event) => {
           if (!fgRef.current || !graphData.nodes.length) return;
           if (event.detail === 0) handleResetZoom();

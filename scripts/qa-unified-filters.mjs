@@ -43,6 +43,20 @@ try {
  const checkbox=async(label)=>{await page.evaluate(label=>{const target=[...document.querySelectorAll('.graph-filters label, .notes-sidebar label')].find(el=>el.textContent.trim()===label);if(!target)throw Error('Missing checkbox '+label);target.querySelector('input[type=checkbox]').click();},label);};
  const select=async(label,value)=>{await page.evaluate((label,value)=>{const el=[...document.querySelectorAll('.graph-filters label, .notes-sidebar label')].find(el=>el.firstChild?.textContent===label)?.querySelector('select');if(!el)throw Error('Missing select '+label);el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));},label,value);};
  const graph=async()=>{await page.evaluate(()=>document.querySelector('nav[aria-label="Main navigation"] button[aria-label="Graph"]').click());await page.waitForSelector('.graph-page-container');};
+ const placement=async()=>{
+   const layout=await page.evaluate(()=>{
+     const graph=document.querySelector('.graph-page-container').getBoundingClientRect();
+     const stats=document.querySelector('.graph-stats');const label=stats.getBoundingClientRect();
+     const mini=document.querySelector('.graph-minimap-panel > button').getBoundingClientRect();
+     const color=document.querySelector('.graph-appearance').getBoundingClientRect();
+     return {text:stats.textContent.trim(),expected:`${stats.dataset.graphNodes} · ${stats.dataset.graphLinks}`,statsCount:document.querySelectorAll('[data-filter-results]').length,above:label.bottom<=mini.top,right:Math.abs(label.right-mini.right)<1,colorRight:graph.right-color.right,colorTop:color.top-graph.top};
+   });
+   assert.equal(layout.text,layout.expected);assert.equal(layout.statsCount,1);assert.ok(layout.above&&layout.right);assert.ok(layout.colorRight<=13&&layout.colorTop<=13,JSON.stringify(layout));
+   await page.click('.graph-appearance summary');
+   const bounds=await page.$eval('.graph-appearance > div',el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight};});
+   assert.ok(bounds.left>=0&&bounds.right<=bounds.width&&bounds.bottom<=bounds.height,JSON.stringify(bounds));
+   await page.click('.graph-appearance summary');
+ };
  const open=async()=>{if(await page.$('.filter-details')===null)await page.click('.filter-trigger');await page.waitForSelector('.filter-details');};
  await go('/notebooks/a');await count(5);
  assert.equal(await page.$('.folder-grip'),null);await page.click('.folder-heading-actions .reorder-toggle');await page.waitForSelector('.folder-grip');await page.click('.folder-heading-actions .reorder-toggle');assert.equal(await page.$('.folder-grip'),null);
@@ -56,7 +70,7 @@ try {
  assert.equal(await page.$eval('.sidebar-filter-section:last-child',el=>el.open),false);
  await page.click('.sidebar-filter-section:last-child summary');await count(1);
  results.push('Direct sidebar tag multiselect, any/all and collapsible sections preserve selection');
- await graph();await count(1);assert.equal(await page.$('.filter-details'),null);assert.equal(await page.$eval('.filter-trigger',el=>el.textContent), '3');assert.equal(await page.$eval('.filter-trigger',el=>el.getAttribute('aria-label')), 'Filters');
+ await graph();await count(1);await placement();assert.equal(await page.$('.filter-details'),null);assert.equal(await page.$eval('.filter-trigger',el=>el.textContent), '3');assert.equal(await page.$eval('.filter-trigger',el=>el.getAttribute('aria-label')), 'Filters');
  assert.equal(new URL(page.url()).searchParams.getAll('tag').length,2);
  await open();await checkbox('Show directly connected notes outside filters');await page.waitForFunction(()=>document.querySelector('[data-graph-nodes]')?.getAttribute('data-graph-nodes')==='2');
  await page.keyboard.press('Escape');await page.screenshot({path:product+'/artifacts/qa/unified-graph-collapsed.png'});
@@ -87,12 +101,12 @@ try {
  const copy=await browser.newPage();await copy.goto(page.url(),{waitUntil:'networkidle0'});assert.equal(await copy.$eval('[data-filter-results]',el=>el.getAttribute('data-filter-results')),'1');await copy.close();
  results.push('All notebooks, hidden eligibility, scoped folder and copied URL');
  for(const [width,height] of [[390,844],[820,460]]) {
-   await page.setViewport({width,height});await go('/graph?notebook=a');await open();
+   await page.setViewport({width,height});await go('/graph?notebook=a');await placement();await open();
    const bounds=await page.evaluate(()=>{const panel=document.querySelector('.filter-details').getBoundingClientRect();const canvas=document.querySelector('.graph-page-container').getBoundingClientRect();return {x:panel.x,right:panel.right,bottom:panel.bottom,width:innerWidth,height:innerHeight,canvasHeight:canvas.height};});
    assert.ok(bounds.x>=0&&bounds.right<=bounds.width&&bounds.bottom<=bounds.height,JSON.stringify(bounds));assert.ok(bounds.canvasHeight>150);
    await page.screenshot({path:product+`/artifacts/qa/unified-graph-${width}.png`});
  }
- results.push('Compact panel fits mobile and short viewport');
+ results.push('Compact statistics above minimap and upper-right appearance fit desktop, mobile and short viewport');
  await page.setViewport({width:390,height:844});await go('/notebooks/a');
  await page.click('[data-sidebar-toggle]');await page.waitForSelector('#notebook-panel.is-open');await page.waitForFunction(()=>Math.abs(document.querySelector('#notebook-panel').getBoundingClientRect().x)<1);await page.click('.sidebar-note-search input');
  await page.type('.sidebar-note-search input','needle');await count(1);

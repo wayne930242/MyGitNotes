@@ -153,7 +153,7 @@ export function GraphPage({
 
   return (
     <div className="graph-page-container relative w-full h-full flex flex-col bg-transparent overflow-hidden" ref={containerRef}>
-      <GraphControls controlsRef={controlsRef} filterPanel={<GraphFilters {...filters} />} appearance={appearance} onAppearanceChange={changeAppearance} visibleColorGroups={visibleColorGroups} appearanceSaveError={appearanceSaveError} showOrphans={showOrphans} onToggleOrphans={() => setShowOrphans(value => !value)} onReset={resetView} nodeCount={graphData.nodes.length} linkCount={graphData.links.length} matchingCount={filters.count} />
+      <GraphControls controlsRef={controlsRef} filterPanel={<GraphFilters {...filters} />} appearance={appearance} onAppearanceChange={changeAppearance} visibleColorGroups={visibleColorGroups} appearanceSaveError={appearanceSaveError} showOrphans={showOrphans} onToggleOrphans={() => setShowOrphans(value => !value)} onReset={resetView} />
 
       {/* Force Graph Canvas */}
       <div className="flex-1 w-full h-full" onPointerDownCapture={initialFit.cancel} onWheelCapture={initialFit.cancel}>
@@ -227,7 +227,14 @@ export function GraphPage({
       </div>
       {!graphData.nodes.length && <p role="status" className="absolute inset-x-4 top-1/2 text-center text-sm text-slate-500 pointer-events-none">{t('filters.graphEmpty')}</p>}
       {previewNote && <GraphPreview note={previewNote} notebookTitle={notebooks.find(nb => nb.id === previewNote.notebookId)?.title} top={previewTop} onClose={() => { setPreviewPath(null); setHoverId(null); }} onClearHover={() => setHoverId(null)} onOpenNote={onOpenNote} />}
-      {minimap}
+      <div className="graph-minimap-panel">
+        <span className="graph-stats" role="status" data-filter-results={filters.count} data-graph-nodes={graphData.nodes.length} data-graph-links={graphData.links.length}
+          title={`${t('filters.results', { count: filters.count })} · ${t('filters.graphTotal', { count: graphData.nodes.length })} · ${graphData.links.length} ${t('graph.links')}`}
+          aria-label={`${t('filters.results', { count: filters.count })} · ${t('filters.graphTotal', { count: graphData.nodes.length })} · ${graphData.links.length} ${t('graph.links')}`}>
+          {graphData.nodes.length} · {graphData.links.length}
+        </span>
+        {minimap}
+      </div>
 
     </div>
   );
