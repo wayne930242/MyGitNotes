@@ -71,10 +71,14 @@ try {
   };
   const more = async () => { await page.click('.study-more'); await page.waitForSelector('dialog[open]'); };
   const pick = async value => { await more(); await chooseSelect(page, 'dialog[open] .study-pick-card', value); if (await page.$('dialog[open]')) await page.click('dialog[open] button[aria-label="Close"]'); };
-  const undo = async count => { await more(); await page.click('dialog[open] button[aria-label="Undo last action"]'); await saved(count); await waitCard(); };
+  const undo = async count => { await page.click('.screen-focus-header button[aria-label="Undo last action"]'); await saved(count); await waitCard(); };
   await waitCard();
   assert(!await page.$('.study-dialog'), 'Study is still a note dialog');
-  assert(!await page.$(`${lane} .study-ratings`), 'Answer ratings shown before reveal');
+  assert(await page.$$eval(`${lane} .study-ratings button`, buttons => buttons.length === 4 && buttons.every(button => button.disabled)), 'Ratings must stay in place and be disabled before reveal');
+  assert(await page.$eval('.screen-focus-header .study-undo', button => button.disabled), 'Undo without history is enabled');
+  const positions = async () => page.$$eval('.study-footer-navigation button, .study-ratings button, .study-more, .study-undo', buttons => buttons.map(button => { const r = button.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; }));
+  const stable = async before => assert(JSON.stringify(await positions()) === JSON.stringify(before), 'Study controls moved');
+  const initialPositions = await positions();
   assert(!await page.$eval(`${lane} .study-page`, node => node.textContent.includes('Give up.')), 'Answer leaked');
   let count = 0;
   await page.click(`${lane} button[aria-label="Next card"]`);
@@ -88,10 +92,18 @@ try {
   assert(await page.$eval(`${lane} .study-page`, node => node.textContent.includes('Give up.')), 'Cannot return to the revealed answer');
   await page.click(`${lane} .study-reveal`);
   assert(await page.$eval(`${lane} .study-page`, node => node.textContent.includes('They abandoned the plan.')), 'Later answer page missing');
-  assert(await page.$eval('.study-reveal', button => button.disabled), 'Last page still advances');
+  await stable(initialPositions);
+  await page.click('.study-reveal');
+  assert(await page.$eval('.study-pages [aria-pressed="true"]', button => button.textContent === '1'), 'Last page did not cycle to page 1');
+  await stable(initialPositions);
   assert(await page.$$eval('.study-pages button', buttons => buttons.length === 3), 'Three-page card lost pages');
   await page.reload({ waitUntil: 'networkidle0' }); await waitCard();
-  console.log('PASS previous/next cards without writes and question/answer page navigation');
+  await page.click('.study-skip'); await page.click('.study-skip');
+  await page.waitForSelector('.study-lane-empty');
+  await stable(initialPositions);
+  assert(await page.$eval('.study-reveal', button => button.disabled), 'Empty queue has enabled page button');
+  await page.reload({ waitUntil: 'networkidle0' }); await waitCard();
+  console.log('PASS stable footer before/after reveal and empty queue, circular pages, card browsing without writes');
   for (const [rating, status, days] of [[1, 'new', 1], [2, 'new', 1], [3, 'learning', 3], [4, 'review', 7]]) {
     await page.click(`${lane} .study-reveal`);
     assert(await page.$eval(`${lane} .study-page`, node => node.textContent.includes('Give up.')), 'Answer not revealed');
@@ -103,7 +115,9 @@ try {
     assert(disk.status === status && disk.custom === 'keep-me', 'Status was not persisted or metadata changed');
     await page.waitForFunction(selector => document.querySelector(selector)?.getAttribute('data-study-note') !== 'notes/example/vocabulary.md', {}, `${lane} [data-study-note]`);
 
+    await stable(initialPositions);
     await undo(++count);
+    await stable(initialPositions);
   }
   console.log('PASS four familiarity levels, destination intervals, status routing, next card and undo');
   await page.click('.screen-focus-header button[aria-label="Edit swimlane: Study"]');
@@ -123,6 +137,7 @@ try {
   await page.click(`${lane} .study-reveal`); await page.click(`${lane} [data-rating="3"]`);
   await page.waitForSelector(`${lane} .study-alert`);
   assert(state().events.length === count && await page.$(`${lane} .study-ratings`), 'Failed save advanced the card or lost the answer');
+  await stable(initialPositions);
   failSave = false; await page.click(`${lane} [data-rating="3"]`); await saved(++count); await undo(++count);
   console.log('PASS failed-save feedback and retry without duplicate history');
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
@@ -137,6 +152,8 @@ try {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   };
   await swipe(`${lane} .study-page`, 'right'); assert(state().events.length === count, 'Question swipe recorded a rating');
+  assert(await page.$eval('.study-pages [aria-pressed="true"]', button => button.textContent === '3'), 'Backward swipe did not cycle');
+  await page.click('button[aria-label="Page 1"]');
   await swipe(`${lane} .study-page`, 'left');
   assert(await page.$eval(`${lane} .study-page`, node => node.textContent.includes('Give up.')), 'Swipe did not reveal page 2');
   await swipe(`${lane} .study-page`, 'left');
@@ -147,7 +164,9 @@ try {
   await page.reload({ waitUntil: 'networkidle0' }); await waitCard();
   for (const width of [320, 390]) {
     await page.setViewport({ width, height: 844, isMobile: true, hasTouch: true });
+    const mobilePositions = await positions();
     await page.click(`${lane} .study-reveal`);
+    await stable(mobilePositions);
     assert(await page.$$eval(`${lane} .study-ratings button`, buttons => buttons.every(button => { const box = button.getBoundingClientRect(); return box.width > 40 && box.left >= 0 && box.right <= innerWidth && box.height >= 44; })), 'Rating controls overflow');
     fs.mkdirSync(path.join(product, 'artifacts/qa'), { recursive: true }); await page.screenshot({ path: path.join(product, `artifacts/qa/study-lane-${width}.png`) });
     await page.reload({ waitUntil: 'networkidle0' }); await waitCard();

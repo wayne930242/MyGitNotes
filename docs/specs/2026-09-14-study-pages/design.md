@@ -53,3 +53,7 @@ Button 以原生 button 屬性、variant 和 size 提供共用元件。ui-button
 ## 精簡單卡操作
 
 StudyLane 持有佇列與次要操作視窗，StudyLaneCard 持有固定頁序與揭示狀態。卡片正文獨立捲動，底部控制為 flex 固定區；更多操作沿用 WorkspaceDialog 的焦點與關閉管理。篩選由 ScreenRowDialog 草稿與階段一起保存。
+
+## 固定操作位置
+
+共用 StudyFooter 同時呈現一般卡片及空佇列，熟悉程度常駐並依揭示狀態停用。儲存狀態供輔助工具讀取，錯誤置於卡片上方，維持底部位置。撤銷沿用頁首插槽及 React portal，佇列仍由 StudyLane 持有。

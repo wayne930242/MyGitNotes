@@ -113,6 +113,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
   const study = useStudyWorkspace(onStudySaved);
   const [assets, setAssets] = useState<ScreenAsset[]>([]), [assetError, setAssetError] = useState(false);
   const [assetAttempt, setAssetAttempt] = useState(0), [assetsLoading, setAssetsLoading] = useState(false);
+  const [studyToolbar, setStudyToolbar] = useState<HTMLDivElement | null>(null);
   const [editing, setEditing] = useState<string>();
   const focusedRow = screen.page.rows.find(row => row.id === focusedLaneId);
   const editingRow = screen.page.rows.find(row => row.id === editing);
@@ -167,7 +168,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
     <main className="screen-content">
       {focusedLaneId && <header className="screen-focus-header">
         <Button className="study-back" aria-label={t('screen.backToScreen')} onClick={returnToScreen}><ArrowLeft size={18} /><span>{t('screen.backToScreen')}</span></Button>
-        {focusedRow && <Button size="icon" disabled={disabled} aria-label={`${t('screen.editRow')}: ${focusedRow.name}`} onClick={() => setEditing(focusedRow.id)}><Pencil size={18} /></Button>}
+        {focusedRow && <div className="study-header-actions"><div className="study-undo-slot" ref={setStudyToolbar} /><Button size="icon" disabled={disabled} aria-label={`${t('screen.editRow')}: ${focusedRow.name}`} onClick={() => setEditing(focusedRow.id)}><Pencil size={18} /></Button></div>}
       </header>}
       <div className="screen-board-scroll">
       {study.error && <div className="screen-error" role="alert">{study.error}<Button  onClick={() => void study.reload()}>{t('study.reload')}</Button></div>}
@@ -184,7 +185,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
         {!focusedLaneId && !screen.page.rows.length && <div className="screen-board-empty"><ScreenIcon size={36} /><h3>{t('screen.startTitle')}</h3><p>{t('screen.startHint')}</p>
           <Button variant="primary" disabled={disabled} onClick={() => setDialog('add')}><Plus size={16} />{t('screen.addRow')}</Button></div>}
         {focusedLaneId ? reviewRow && <section id={`screen-lane-${reviewRow.id}`} className="screen-study-session" aria-label={reviewRow.name}>
-          <StudyLane key={reviewRow.id} row={reviewRow} notes={reviewNotes} allNotes={notes} controller={study} disabled={disabled || screen.dirty || screen.saving} onOpen={onOpenNote} />
+          <StudyLane toolbar={studyToolbar} key={reviewRow.id} row={reviewRow} notes={reviewNotes} allNotes={notes} controller={study} disabled={disabled || screen.dirty || screen.saving} onOpen={onOpenNote} />
         </section> : <DndContext sensors={sensors} collisionDetection={screenCollision} onDragStart={({ active }) => setDragging(screen.page.rows.flatMap(row => row.kind === 'custom' ? row.items : []).find(item => item.id === active.id))}
           onDragCancel={() => setDragging(undefined)} onDragEnd={({ active, over }) => {
             setDragging(undefined); if (!over || active.id === over.id || disabled) return;
