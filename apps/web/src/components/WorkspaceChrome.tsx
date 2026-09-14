@@ -34,7 +34,7 @@ export function WorkspaceSidebarToggle({ label, open, onClick, controlsId }: {
   const [host, setHost] = useState<HTMLElement | null>(null);
   useEffect(() => { setHost(document.getElementById('workspace-sidebar-toggle-slot')); }, []);
   return host && createPortal(<button type="button" data-sidebar-toggle="" className="ui-icon-button workspace-sidebar-toggle"
-    aria-label={label} title={label} aria-expanded={open} aria-controls={controlsId} onClick={onClick}><PanelLeft size={17} /><span>{label}</span></button>, host);
+    aria-label={label} title={label} aria-expanded={open} aria-controls={controlsId} onClick={onClick}><PanelLeft size={17} /><span className="sr-only">{label}</span></button>, host);
 }
 
 /** One content origin and one scroll boundary for every workspace section. */
