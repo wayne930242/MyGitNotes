@@ -30,7 +30,7 @@ notes/example/
 
 索引是一份普通 Markdown 文件，可以寫導覽、閱讀順序、資料夾說明或常用連結，不需要額外的設定檔，也不一定要有 frontmatter。卡片固定標示「索引／Index」，正文和筆記標題可以自行命名。
 
-編輯後沿用一般儲存方式：本機寫入工作目錄；GitHub 模式先保留瀏覽器草稿，再透過底部的 Commit 提交。詳見[編輯與提交](getting-started/edit-and-commit.md)。
+編輯後沿用一般儲存方式：本機寫入工作目錄；GitHub／GitLab 遠端模式先保留瀏覽器草稿，再透過底部的 Commit 提交。詳見[編輯與提交](getting-started/edit-and-commit.md)。
 
 ## 用連結串起內容
 

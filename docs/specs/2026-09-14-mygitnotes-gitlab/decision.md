@@ -12,3 +12,5 @@
 | 原始碼所有權 | macOS 產品 checkout 的 core；驗證並推送後以 update-core 更新 trpg-notes | 兩倉庫 remote 與產品指南 | grounded |
 
 核心規則已確認：[產品指引](../../agent/product/index.md)。產品與使用者工作區資料分離。更名涵蓋產品標題、操作提示、文件與架構圖；遠端儲存庫 URL、部署 URL 與已發布套件識別沿用既有值，保持更新路徑。
+
+- 使用者核准測試部署共用既有免費 Upstash Redis。新增可選資料前綴以隔離 sessions、credentials、grants 與 refresh locks；既有部署未設定時沿用原有鍵值。

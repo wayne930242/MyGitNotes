@@ -26,13 +26,23 @@ export function unseal(value: string): any {
   return JSON.parse(Buffer.concat([decipher.update(data.subarray(12, -16)), decipher.final()]).toString());
 }
 
+function redisConnection() {
+  return process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_TOKEN
+    ? { url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN }
+    : { url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN };
+}
+
 /** Encrypted records remain server-side; production requires a durable Redis REST store. */
 export class SessionStore {
-  constructor(private base: string) {}
-  private get redis() { return Boolean(process.env.VERCEL || process.env.UPSTASH_REDIS_REST_URL); }
+  private readonly prefix: string;
+  constructor(private base: string) {
+    const namespace = process.env.MYGITNOTES_SESSION_NAMESPACE || '';
+    if (namespace && !/^[A-Za-z0-9_-]{1,64}$/.test(namespace)) throw new Error('MYGITNOTES_SESSION_NAMESPACE must contain 1-64 letters, digits, underscores or hyphens.');
+    this.prefix = namespace ? `gh-notes:${namespace}` : 'gh-notes';
+  }
+  private get redis() { return Boolean(process.env.VERCEL || redisConnection().url); }
   async command(command: string[]): Promise<any> {
-    const url = process.env.UPSTASH_REDIS_REST_URL;
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+    const { url, token } = redisConnection();
     if (!url || !token || !url.startsWith('https://')) throw new Error('Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN for server-held sessions.');
     const response = await fetch(url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(command) });
     if (!response.ok) throw new Error('Session store unavailable.');
@@ -43,7 +53,7 @@ export class SessionStore {
   async set(id: string, value: unknown, ttl: number | null = lifetime) {
     const record = seal({ value, expires: ttl === null ? null : Date.now() + ttl * 1000 });
     if (this.redis) {
-      await this.command(['SET', `gh-notes:${digest(id)}`, record, ...(ttl === null ? [] : ['EX', String(ttl)])]);
+      await this.command(['SET', `${this.prefix}:${digest(id)}`, record, ...(ttl === null ? [] : ['EX', String(ttl)])]);
       return;
     }
     const dir = path.join(this.base, '.github-notes-sessions');
@@ -57,7 +67,7 @@ export class SessionStore {
   async getByDigest(hash: string) {
     if (!/^[a-f0-9]{64}$/.test(hash)) return null;
     let raw: string | null;
-    if (this.redis) raw = await this.command(['GET', `gh-notes:${hash}`]);
+    if (this.redis) raw = await this.command(['GET', `${this.prefix}:${hash}`]);
     else {
       try { raw = await fs.readFile(path.join(this.base, '.github-notes-sessions', hash), 'utf8'); }
       catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
@@ -79,18 +89,18 @@ export class SessionStore {
   }
   async deleteByDigest(hash: string) {
     if (!/^[a-f0-9]{64}$/.test(hash)) return;
-    if (this.redis) await this.command(['DEL', `gh-notes:${hash}`]);
+    if (this.redis) await this.command(['DEL', `${this.prefix}:${hash}`]);
     else await fs.rm(path.join(this.base, '.github-notes-sessions', hash), { force: true });
   }
   async withCredentialLock<T>(id: string, work: () => Promise<T>): Promise<T> {
-    const lockKey = `${this.base}:${id}`;
+    const lockKey = `${this.base}:${this.prefix}:${id}`;
     const previous = credentialLocks.get(lockKey) || Promise.resolve();
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
     const tail = previous.then(() => gate);
     credentialLocks.set(lockKey, tail);
     await previous;
-    const nonce = random(), redisKey = `gh-notes:refresh:${digest(id)}`;
+    const nonce = random(), redisKey = `${this.prefix}:refresh:${digest(id)}`;
     let acquired = false;
     try {
       if (this.redis) {
@@ -108,11 +118,11 @@ export class SessionStore {
     }
   }
   async indexGrant(token: string, ownerId: number | string) {
-    if (this.redis) await this.command(['SADD', `gh-notes:grants:${ownerId}`, digest(token)]);
+    if (this.redis) await this.command(['SADD', `${this.prefix}:grants:${ownerId}`, digest(token)]);
   }
   async listGrants(ownerId: number | string) {
     let hashes: string[];
-    if (this.redis) hashes = await this.command(['SMEMBERS', `gh-notes:grants:${ownerId}`]);
+    if (this.redis) hashes = await this.command(['SMEMBERS', `${this.prefix}:grants:${ownerId}`]);
     else {
       try { hashes = await fs.readdir(path.join(this.base, '.github-notes-sessions')); }
       catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
@@ -121,7 +131,7 @@ export class SessionStore {
     for (const id of hashes) {
       const grant = await this.getByDigest(id);
       if (grant?.kind === 'agent' && grant.ownerId === ownerId) results.push({ id, name: grant.name, write: grant.write, source: grant.source, createdAt: grant.createdAt, expiresAt: null });
-      else if (!grant && this.redis) await this.command(['SREM', `gh-notes:grants:${ownerId}`, id]);
+      else if (!grant && this.redis) await this.command(['SREM', `${this.prefix}:grants:${ownerId}`, id]);
     }
     return results.sort((a, b) => b.createdAt - a.createdAt);
   }
@@ -129,7 +139,7 @@ export class SessionStore {
     const grant = await this.getByDigest(id);
     if (grant?.kind !== 'agent' || grant.ownerId !== ownerId) return false;
     await this.deleteByDigest(id);
-    if (this.redis) await this.command(['SREM', `gh-notes:grants:${ownerId}`, id]);
+    if (this.redis) await this.command(['SREM', `${this.prefix}:grants:${ownerId}`, id]);
     return true;
   }
 }
@@ -205,7 +215,7 @@ export function createAuth(base: string): Router {
     try {
       const provider = providerFor(base), session = await getSession(req, store, provider);
       res.json({ authenticated: Boolean(session), login: session?.login, provider: provider.type, loginUrl: `/api/auth/${provider.type}`,
-        configured: Boolean(provider.clientId && provider.clientSecret && process.env.SESSION_SECRET && (!process.env.VERCEL || (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN))) });
+        configured: Boolean(provider.clientId && provider.clientSecret && process.env.SESSION_SECRET && (!process.env.VERCEL || (redisConnection().url && redisConnection().token))) });
     } catch { res.status(503).json({ error: 'Session store or source configuration unavailable.' }); }
   });
   router.get('/:provider(github|gitlab)', async (req, res) => {

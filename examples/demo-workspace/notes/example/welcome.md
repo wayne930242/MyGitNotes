@@ -1,9 +1,9 @@
 ---
-title: Welcome to GitHub Notes
+title: Welcome to MyGitNotes
 tags: [getting-started]
 status: done
 ---
-# Welcome to GitHub Notes
+# Welcome to MyGitNotes
 
 This example workspace serves as both a starter template and an interactive tutorial. Content is maintained in `examples/demo-workspace` on the product `core` branch, and the public demo workspace on `main` uses the exact same notes.
 
@@ -17,4 +17,4 @@ This example workspace serves as both a starter template and an interactive tuto
 
 List view is ideal for quickly opening notes; Card view displays content summaries; Kanban groups notes into columns by status. Note statuses can be changed directly from the status menu, and changes are staged for review and committed together via the bottom Commit bar.
 
-The public website is readable by anyone; log in with GitHub and grant repository write access to edit and save notes.
+The public website is readable by anyone; log in with the configured GitHub or GitLab provider and grant repository write access to edit and save notes.

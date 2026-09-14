@@ -32,32 +32,9 @@ MyGitNotes 把一個 Git 儲存庫變成集中處理筆記、文件、素材與 
 
 ## 設計邏輯
 
-```mermaid
-flowchart LR
-  subgraph device["你的裝置"]
-    localUI["MyGitNotes 本機介面"]
-    localMCP["本機 Agent · stdio MCP"]
-    files["本機 Git 工作區<br/>Markdown · 資源 · 歷史"]
-    localUI --> files
-    localMCP --> files
-  end
-  subgraph deployment["MyGitNotes 部署"]
-    web["瀏覽器介面"]
-    agents["遠端 Agent · HTTP MCP"]
-    service["共用工作區操作<br/>固定一個平台與儲存庫"]
-    credentials["加密憑證<br/>Session · 憑證更新 · MCP 授權"]
-    web --> service
-    agents --> service
-    service --> credentials
-  end
-  subgraph storage["選定的 Git 託管平台"]
-    github["GitHub"]
-    gitlab["GitLab.com 或自架 GitLab"]
-  end
-  files <-->|Git 同步| storage
-  service <-->|固定版本讀取 · 原子提交| storage
-  web -. OAuth 登入 .-> storage
-```
+![MyGitNotes architecture](docs/assets/mygitnotes-architecture-zh-TW.svg)
+
+[Mermaid source](docs/assets/mygitnotes-architecture-zh-TW.mmd)
 
 各層的責任刻意分開：
 
@@ -136,6 +113,8 @@ SESSION_SECRET=your_random_secret_of_at_least_32_characters
 
 UPSTASH_REDIS_REST_URL=https://...upstash.io
 UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_token
+# Optional for a new deployment sharing Redis
+MYGITNOTES_SESSION_NAMESPACE=your_unique_deployment_name
 ```
 
 部署後以 GitHub 登入，在「**設定 → MCP 存取控制**」建立唯讀或寫入授權，再把產生的 `/mcp/<token>` 網址貼到 ChatGPT、Claude、Cursor、Windsurf 或其他 MCP 用戶端。
