@@ -18,7 +18,7 @@ write('notes/example/projects/deep/_dir.yml','title: Deep work\n');
 write('notes/example/projects/deep/nested.md','# Nested Note\n');
 write('notes/example/assets/pixel.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64'));
 git('init','-b','main');git('config','user.name','Browser QA');git('config','user.email','qa@example.com');git('add','.');git('commit','-m','fixture');
-process.env.GITHUB_NOTES_SOURCE='local';process.env.GITHUB_NOTES_LOCAL_PATH=root;delete process.env.VERCEL;delete process.env.APP_URL;
+process.env.MYGITNOTES_SOURCE='local';process.env.MYGITNOTES_LOCAL_PATH=root;delete process.env.VERCEL;delete process.env.APP_URL;
 const {createApp}=await import(`${product}/apps/local-server/dist/app.js`);
 const server=createServer(createApp(product));await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${server.address().port}`;

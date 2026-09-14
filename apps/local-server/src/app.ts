@@ -21,7 +21,7 @@ export function createApp(base: string): express.Express {
   app.disable('x-powered-by');
   let source: ReturnType<typeof loadSourceConfig> | undefined;
   let setupError = '';
-  try { source = loadSourceConfig(base); if (process.env.VERCEL && source.type === 'local') throw new Error('Vercel requires a GitHub or GitLab source. Configure GITHUB_NOTES_SOURCE, GITHUB_NOTES_REPOSITORY and GITHUB_NOTES_BRANCH.'); }
+  try { source = loadSourceConfig(base); if (process.env.VERCEL && source.type === 'local') throw new Error('Vercel requires a GitHub or GitLab source. Configure MYGITNOTES_SOURCE, MYGITNOTES_REPOSITORY and MYGITNOTES_BRANCH.'); }
   catch (error) { setupError = (error as Error).message; source = undefined; }
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');

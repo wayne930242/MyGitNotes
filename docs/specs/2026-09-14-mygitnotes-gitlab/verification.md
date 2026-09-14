@@ -47,3 +47,16 @@
 ## Reflexive
 
 使用者指出 Mermaid 取代原圖造成視覺退步，已改為直接編輯原始 PNG 並移除新建的 Mermaid／SVG 替代圖。圖中文字與構圖已檢查；使用者對新版美感的評價仍以實際回饋為準。提示詞保存在 [architecture-image-prompts.md](architecture-image-prompts.md)。
+
+## Repo 與環境變數遷移
+
+使用者已更名為 [wayne930242/MyGitNotes](https://github.com/wayne930242/MyGitNotes)，產品 origin 與 trpg-notes upstream 已更新並成功 fetch。update-core 使用設定的 Git remote，不含固定產品 URL。
+
+| Requirement | Evidence | Result |
+|---|---|---|
+| 新舊環境變數相容 | 來源測試涵蓋新名稱優先、GitHub／GitLab 舊名稱及本機路徑 fallback；完整 59 files / 319 tests 與 build 通過 | pass |
+| 本機模式 | 實際啟動 --local，預設 MYGITNOTES_SOURCE=gitlab 且 repository 無效，仍能讀取隔離本機工作區 | pass |
+| Vercel 匯入 | 隔離 CLI fixture 執行真正 vercel-env.ts，驗證舊輸入轉成新鍵、新值優先；修正 root script 的 core 套件解析路徑 | pass |
+| Repo 更名方式 | 使用者直接更名，程式沿用既有 GitHub API 行為；先前未提交的 repo 轉址程式與測試已移除 | pass |
+
+Vercel my-gh-core 正式環境與 trpg-notes 正式／預覽環境改用 MYGITNOTES_SOURCE、MYGITNOTES_REPOSITORY、MYGITNOTES_BRANCH。GitLab 測試站已使用新名稱。平台 OAuth、Redis、SESSION_SECRET 與部署網址保留。my-gh-core 來源 repo 路徑更新為 wayne930242/MyGitNotes，舊 repo 路徑綁定的 MCP grants 不會自動移轉。

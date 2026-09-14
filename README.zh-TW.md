@@ -6,7 +6,7 @@ Markdown、儲存庫、部署、版本歷史與 Agent 存取權，全都由使�
 
 [English](README.md) · [繁體中文](README.zh-TW.md)
 
-[線上展示](https://my-gh-core.vercel.app) · [範例儲存庫](https://github.com/wayne930242/github-notes/tree/main)
+[線上展示](https://my-gh-core.vercel.app) · [範例儲存庫](https://github.com/wayne930242/MyGitNotes/tree/main)
 
 ## 這是什麼
 
@@ -99,9 +99,9 @@ pnpm update-core
 3. 以下 Vercel 環境變數：
 
 ```bash
-GITHUB_NOTES_SOURCE=github
-GITHUB_NOTES_REPOSITORY=your-username/your-repository
-GITHUB_NOTES_BRANCH=main
+MYGITNOTES_SOURCE=github
+MYGITNOTES_REPOSITORY=your-username/your-repository
+MYGITNOTES_BRANCH=main
 
 APP_URL=https://<your-project>.vercel.app
 GITHUB_CLIENT_ID=your_oauth_client_id
@@ -127,16 +127,16 @@ MYGITNOTES_SESSION_NAMESPACE=your_unique_deployment_name
 MYGITNOTES_SOURCE=gitlab
 MYGITNOTES_REPOSITORY=group/subgroup/project
 MYGITNOTES_BRANCH=main
-GITLAB_URL=https://gitlab.com
+MYGITNOTES_GITLAB_URL=https://gitlab.com
 GITLAB_CLIENT_ID=your_application_id
 GITLAB_CLIENT_SECRET=your_application_secret
 ```
 
-自架 GitLab 的 `GITLAB_URL` 填入 HTTPS 站台網址；安裝於子路徑時包含該路徑。部署環境須能連線至該站台，並信任其 TLS 憑證。在所選站台註冊 OAuth application，啟用 `api` scope，callback 設為 `${APP_URL}/api/auth/gitlab/callback`。介面會顯示 GitLab 登入入口。Access token 與 refresh token 加密保存在伺服器端，持久 MCP 授權共用更新後的憑證。
+自架 GitLab 的 `MYGITNOTES_GITLAB_URL` 填入 HTTPS 站台網址；安裝於子路徑時包含該路徑。部署環境須能連線至該站台，並信任其 TLS 憑證。在所選站台註冊 OAuth application，啟用 `api` scope，callback 設為 `${APP_URL}/api/auth/gitlab/callback`。介面會顯示 GitLab 登入入口。Access token 與 refresh token 加密保存在伺服器端，持久 MCP 授權共用更新後的憑證。
 
 登入帳號需有 `main` 的 push 權限才能寫入。GitLab 將多檔修改批次提交為一個 commit，並以各既有檔案的最後提交 ID 檢查並行修改。公開儲存庫支援匿名讀取。內網 GitLab 須搭配能連入該網路的部署環境。
 
-產品已更名為 **MyGitNotes**。既有 `.github-notes.yaml`、Screen／Study 側錄檔、`@github-notes/*` 套件、GitHub OAuth callback 及 MCP 授權保持相容。新的 `MYGITNOTES_*` 來源設定優先於對應的 `GITHUB_NOTES_*`。伺服器設定新名稱為 `mygitnotes.server.yaml`，同時支援 `github-notes.server.yaml`。既有儲存庫與部署網址繼續沿用。
+產品已更名為 **MyGitNotes**。既有 `.github-notes.yaml`、Screen／Study 側錄檔、`@github-notes/*` 套件、GitHub OAuth callback 及 MCP 授權保持相容。新的 `MYGITNOTES_*` 來源設定優先於對應的 `GITHUB_NOTES_*`。伺服器設定新名稱為 `mygitnotes.server.yaml`，同時支援 `github-notes.server.yaml`。正式儲存庫為 `wayne930242/MyGitNotes`，部署網址維持不變。Repo 更名後直接更新來源的儲存庫路徑；綁定舊路徑的 MCP 授權需要重新建立。
 
 參考：[GitLab OAuth](https://docs.gitlab.com/api/oauth2/)、[批次提交](https://docs.gitlab.com/api/commits/)。
 

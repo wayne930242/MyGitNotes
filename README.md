@@ -6,7 +6,7 @@ Your Markdown, repository, deployment, commit history, and agent access remain u
 
 [English](README.md) · [繁體中文](README.zh-TW.md)
 
-[Live Demo](https://my-gh-core.vercel.app) · [Example Repository](https://github.com/wayne930242/github-notes/tree/main)
+[Live Demo](https://my-gh-core.vercel.app) · [Example Repository](https://github.com/wayne930242/MyGitNotes/tree/main)
 
 ## What it is
 
@@ -99,9 +99,9 @@ You need:
 3. These Vercel environment variables:
 
 ```bash
-GITHUB_NOTES_SOURCE=github
-GITHUB_NOTES_REPOSITORY=your-username/your-repository
-GITHUB_NOTES_BRANCH=main
+MYGITNOTES_SOURCE=github
+MYGITNOTES_REPOSITORY=your-username/your-repository
+MYGITNOTES_BRANCH=main
 
 APP_URL=https://<your-project>.vercel.app
 GITHUB_CLIENT_ID=your_oauth_client_id
@@ -127,16 +127,16 @@ Each deployment selects one provider, site, project and branch. Use the same bui
 MYGITNOTES_SOURCE=gitlab
 MYGITNOTES_REPOSITORY=group/subgroup/project
 MYGITNOTES_BRANCH=main
-GITLAB_URL=https://gitlab.com
+MYGITNOTES_GITLAB_URL=https://gitlab.com
 GITLAB_CLIENT_ID=your_application_id
 GITLAB_CLIENT_SECRET=your_application_secret
 ```
 
-For self-managed GitLab, set `GITLAB_URL` to its HTTPS base URL, including an installation subpath when applicable. The deployment must be able to reach that site and trust its TLS certificate. Register an OAuth application on the selected site with the `api` scope and callback `${APP_URL}/api/auth/gitlab/callback`. The UI uses GitLab sign-in automatically. Access and refresh tokens remain encrypted on the server; persistent MCP grants share the refreshed credential.
+For self-managed GitLab, set `MYGITNOTES_GITLAB_URL` to its HTTPS base URL, including an installation subpath when applicable. The deployment must be able to reach that site and trust its TLS certificate. Register an OAuth application on the selected site with the `api` scope and callback `${APP_URL}/api/auth/gitlab/callback`. The UI uses GitLab sign-in automatically. Access and refresh tokens remain encrypted on the server; persistent MCP grants share the refreshed credential.
 
 Authenticated writes require push permission on `main`. GitLab batches all changed files into one commit and supplies each existing file's last commit ID to detect concurrent edits. Public repositories support anonymous reads. GitLab instances with private network access require a deployment with network access to that instance.
 
-The product is now **MyGitNotes**. Existing `.github-notes.yaml`, Screen/Study sidecars, `@github-notes/*` packages, GitHub OAuth callbacks and MCP grants remain compatible. New `MYGITNOTES_*` source settings take precedence over corresponding `GITHUB_NOTES_*` settings. `mygitnotes.server.yaml` is the new server configuration filename; `github-notes.server.yaml` remains supported. Existing repository and deployment URLs continue to work.
+The product is now **MyGitNotes**. Existing `.github-notes.yaml`, Screen/Study sidecars, `@github-notes/*` packages, GitHub OAuth callbacks and MCP grants remain compatible. New `MYGITNOTES_*` source settings take precedence over corresponding `GITHUB_NOTES_*` settings. `mygitnotes.server.yaml` is the new server configuration filename; `github-notes.server.yaml` remains supported. The canonical repository is `wayne930242/MyGitNotes`; deployment URLs are unchanged. Update configured repository paths directly after a rename. MCP grants bound to a previous repository path require a new grant.
 
 See [GitLab OAuth](https://docs.gitlab.com/api/oauth2/) and [commit actions](https://docs.gitlab.com/api/commits/).
 

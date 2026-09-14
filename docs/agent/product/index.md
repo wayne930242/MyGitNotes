@@ -42,7 +42,7 @@ Product development skills are maintained in `docs/agent/product/skills/`:
 
 ## 6. Secrets Policy
 
-- Never commit secrets, tokens, or API keys (`GEMINI_API_KEY`, `GH_TOKEN`, `GITHUB_NOTES_MCP_TOKEN`).
+- Never commit secrets, tokens, or API keys (`GEMINI_API_KEY`, `GH_TOKEN`, `SESSION_SECRET`).
 - Respect `.gitignore` for `.env*` files.
 - `.env.example` contains only placeholder names.
 

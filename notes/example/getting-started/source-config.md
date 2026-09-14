@@ -5,11 +5,11 @@ status: done
 ---
 # Configuring Note Sources
 
-Application deployment is configured independently from note storage. This demo site reads and writes notes from the `main` branch of `wayne930242/github-notes`, while application product code is maintained on `core`.
+Application deployment is configured independently from note storage. This demo site reads and writes notes from the `main` branch of `wayne930242/MyGitNotes`, while application product code is maintained on `core`.
 
 ## Local Directory
 
-Specify your local folder in `github-notes.server.yaml` at the application root:
+Specify your local folder in `mygitnotes.server.yaml` at the application root:
 
 ```yaml
 source:
@@ -28,6 +28,6 @@ source:
   branch: main
 ```
 
-You can also configure sources using `.env` variables (`GITHUB_NOTES_SOURCE`, `GITHUB_NOTES_REPOSITORY`, `GITHUB_NOTES_BRANCH`). Environment variables take precedence over YAML. Keep access tokens in local `.env` or deployment secrets.
+You can also configure sources using `.env` variables (`MYGITNOTES_SOURCE`, `MYGITNOTES_REPOSITORY`, `MYGITNOTES_BRANCH`). Environment variables take precedence over YAML. Keep access tokens in local `.env` or deployment secrets.
 
 The `.github-notes.yaml` file in the source repository defines notebooks. New workspaces use the root config; legacy `notes/.github-notes.yaml` maintains backward compatibility. Each notebook's `root` is a path relative to the repository root.

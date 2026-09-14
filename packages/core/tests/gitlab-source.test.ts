@@ -9,6 +9,15 @@ const source = {type:'gitlab' as const,url:site,repository:'group/subgroup/proje
 const reader = (f: ReturnType<typeof gitlabFixture>, token: string | undefined = 'fixture-token', branch='main') => new GitLabSource(site,source.repository,branch,token,f.request);
 
 describe('GitLab source configuration',()=>{
+  it('prefers MyGitNotes environment values while retaining legacy fallbacks',()=>{
+    expect(loadSourceConfig('/tmp',{
+      MYGITNOTES_SOURCE:'gitlab',MYGITNOTES_REPOSITORY:source.repository,MYGITNOTES_BRANCH:'main',MYGITNOTES_GITLAB_URL:site,
+      GITHUB_NOTES_SOURCE:'github',GITHUB_NOTES_REPOSITORY:'old/repo',GITHUB_NOTES_BRANCH:'old',GITHUB_NOTES_GITLAB_URL:'https://old.test',GITLAB_URL:'https://fallback.test',
+    })).toEqual(source);
+    expect(loadSourceConfig('/tmp',{GITHUB_NOTES_SOURCE:'gitlab',GITHUB_NOTES_REPOSITORY:source.repository,GITHUB_NOTES_BRANCH:'main',GITHUB_NOTES_GITLAB_URL:site})).toEqual(source);
+    expect(loadSourceConfig('/tmp',{MYGITNOTES_SOURCE:'local',MYGITNOTES_LOCAL_PATH:'new',GITHUB_NOTES_LOCAL_PATH:'old'})).toEqual({type:'local',path:'/tmp/new'});
+    expect(loadSourceConfig('/tmp',{GITHUB_NOTES_SOURCE:'local',GITHUB_NOTES_LOCAL_PATH:'old'})).toEqual({type:'local',path:'/tmp/old'});
+  });
   it('supports SaaS, self-managed subpaths and nested namespaces with stable source identity',()=>{
     expect(parseSourceConfig({source:{...source,url:site+'/'}},'/tmp')).toEqual(source);
     expect(parseSourceConfig({source:{...source,url:undefined}},'/tmp')).toMatchObject({url:'https://gitlab.com'});
