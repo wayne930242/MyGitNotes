@@ -27,6 +27,14 @@ OAuth follows the selected provider. Encrypted server records isolate site and a
 
 See [the approved contract](../../specs/2026-09-14-mygitnotes-gitlab/spec.md), [design](../../specs/2026-09-14-mygitnotes-gitlab/design.md), and [deployment guide](../../../README.md).
 
+## Self-hosted runtime
+
+The [Dockerfile](../../../Dockerfile) builds the web application and runs the compiled Express server as the `node` user. `HOST` defaults to loopback for direct startup and is set to `0.0.0.0` inside the image. The local-source Host and Origin checks remain active; `compose.local.yaml` binds an existing workspace checkout at `/workspace` and publishes only a loopback port.
+
+`compose.yaml` runs the remote-source application with its own Redis service on an internal network. Redis persists AOF data in `redis-data`; only the application HTTP port is published. `SessionStore` chooses native Redis via `REDIS_URL`, then the existing Redis REST configuration, then a local encrypted session directory outside Vercel. Native Redis reuses connections, bounds connection/command waits, and propagates errors; a later request reconnects after a failure. Session/grant keys, encryption, TTLs, indexes, and credential refresh locks use the same operations across both Redis transports.
+
+See the [deployment guide](../../../README.md#docker-and-docker-compose-deployment) for volumes, OAuth callbacks, reverse proxies, and updates.
+
 ## Notebook statuses and visibility
 
 Each manifest notebook accepts an optional ordered `statuses` array, for example

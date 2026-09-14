@@ -3,6 +3,7 @@ import { Router, Request, Response } from 'express';
 import { createHash, randomBytes, createCipheriv, createDecipheriv, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { nativeRedisCommand } from './redis-store.js';
 
 const lifetime = 30 * 24 * 60 * 60;
 const cookieName = 'gh_notes_session';
@@ -32,7 +33,7 @@ function redisConnection() {
     : { url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN };
 }
 
-/** Encrypted records remain server-side; production requires a durable Redis REST store. */
+/** Encrypted records use native Redis, Redis REST, or a persistent local directory. */
 export class SessionStore {
   private readonly prefix: string;
   constructor(private base: string) {
@@ -40,8 +41,9 @@ export class SessionStore {
     if (namespace && !/^[A-Za-z0-9_-]{1,64}$/.test(namespace)) throw new Error('MYGITNOTES_SESSION_NAMESPACE must contain 1-64 letters, digits, underscores or hyphens.');
     this.prefix = namespace ? `gh-notes:${namespace}` : 'gh-notes';
   }
-  private get redis() { return Boolean(process.env.VERCEL || redisConnection().url); }
+  private get redis() { return Boolean(process.env.REDIS_URL || process.env.VERCEL || redisConnection().url); }
   async command(command: string[]): Promise<any> {
+    if (process.env.REDIS_URL) return nativeRedisCommand(process.env.REDIS_URL, command);
     const { url, token } = redisConnection();
     if (!url || !token || !url.startsWith('https://')) throw new Error('Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN for server-held sessions.');
     const response = await fetch(url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(command) });

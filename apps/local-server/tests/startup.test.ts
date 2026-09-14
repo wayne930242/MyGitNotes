@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
+import { get } from 'node:http';
 
 let child: ChildProcess | undefined;
 let root: string | undefined;
@@ -16,7 +17,7 @@ afterEach(async () => {
   if (root) fs.rmSync(root, { recursive: true, force: true });
 });
 
-it('local development opens the selected local checkout anonymously despite deployment source settings', async () => {
+it.each(['127.0.0.1', '0.0.0.0'])('local development supports HOST=%s and opens the selected checkout despite deployment settings', async host => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-startup-'));
   execFileSync('git', ['init', '-b', 'main', root], { stdio: 'pipe' });
   const reservation = createServer();
@@ -28,6 +29,7 @@ it('local development opens the selected local checkout anonymously despite depl
     env: {
       ...process.env,
       PORT: String(port),
+      HOST: host,
       REPO_ROOT: root,
       GITHUB_NOTES_LOCAL_PATH: root,
       GITHUB_NOTES_SOURCE: 'github',
@@ -54,4 +56,11 @@ it('local development opens the selected local checkout anonymously despite depl
   expect((await fetch(`http://127.0.0.1:${port}/api/workspace`, {
     headers: { Origin: 'https://deployment.example' },
   })).status).toBe(403);
+  const externalHostStatus = await new Promise<number | undefined>((resolve, reject) => {
+    get(`http://127.0.0.1:${port}/api/workspace`, { headers: { Host: 'public.example' } }, response => {
+      response.resume();
+      resolve(response.statusCode);
+    }).on('error', reject);
+  });
+  expect(externalHostStatus).toBe(403);
 }, 15000);
