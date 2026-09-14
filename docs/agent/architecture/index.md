@@ -25,7 +25,7 @@ MyGitNotes is structured as a TypeScript monorepo using pnpm workspaces.
 
 OAuth follows the selected provider. Encrypted server records isolate site and account identity. GitLab refresh tokens are rotated under a credential lock and shared by browser sessions and persistent MCP grants. GitHub keeps its existing credential and grant identifiers.
 
-See [the approved contract](../../specs/2026-09-14-mygitnotes-gitlab/spec.md), [design](../../specs/2026-09-14-mygitnotes-gitlab/design.md), and [deployment guide](../../../README.md).
+See the [deployment guide](../../../README.md).
 
 ## Self-hosted runtime
 
