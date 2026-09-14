@@ -6,4 +6,8 @@ notebooks:
   - id: learning
     title: 學習示範
     root: notes/learning
-    statuses: [inbox, working, done]
+    statuses:
+      - inbox
+      - working
+      - review
+      - done

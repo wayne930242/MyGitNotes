@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { PanelLeft } from 'lucide-react';
 
 export function useWorkspaceSidebarDrawer() {
@@ -24,13 +25,16 @@ export function WorkspaceSidebarDrawer({ open, onClose, closeLabel, children }: 
   </>;
 }
 
-export function WorkspaceSidebarToggle({ label, open, onClick }: {
+export function WorkspaceSidebarToggle({ label, open, onClick, controlsId }: {
   label: string;
+  controlsId?: string;
   open: boolean;
   onClick: () => void;
 }) {
-  return <button type="button" data-sidebar-toggle="" className="workspace-sidebar-toggle ui-button mobile-only"
-    aria-label={label} aria-expanded={open} onClick={onClick}><PanelLeft size={16} /><span>{label}</span></button>;
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  useEffect(() => { setHost(document.getElementById('workspace-sidebar-toggle-slot')); }, []);
+  return host && createPortal(<button type="button" data-sidebar-toggle="" className="workspace-sidebar-toggle ui-button mobile-only"
+    aria-label={label} aria-expanded={open} aria-controls={controlsId} onClick={onClick}><PanelLeft size={20} /><span>{label}</span></button>, host);
 }
 
 /** One content origin and one scroll boundary for every workspace section. */

@@ -64,7 +64,7 @@ try {
     await page.click(`[data-option-value="${value}"]`);
     await page.waitForFunction((selector, expected) => document.querySelector(`${selector} .screen-card-title`)?.textContent === expected, {}, lane, title);
   }
-  assert(!await page.$('#screen-lane-pins .screen-sort-select'), 'Custom lane must retain manual ordering');
+  assert(await page.$eval('#screen-lane-pins .screen-sort-select', select => select.getAttribute('value') === 'manual'), 'Custom lane must default to manual ordering');
   console.log('PASS independent dynamic lane sorting');
   const inset=await page.$eval(lane,e=>{const a=e.getBoundingClientRect(),b=e.querySelector('h3').getBoundingClientRect();return {x:b.x-a.x,y:b.y-a.y};});
   assert(inset.x>=8 && inset.y>=8,`Lane heading lacks top/left padding: ${JSON.stringify(inset)}`);

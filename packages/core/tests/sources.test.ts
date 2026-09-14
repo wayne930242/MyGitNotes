@@ -196,6 +196,22 @@ describe('GitHub study workspace writes', () => {
     expect(await reader.saveStudyWorkspace(yaml, 'commit1')).toMatchObject({ revision: 'study-commit', commit: { commitHash: 'study-commit' } });
     expect(request.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(1);
   });
+  it('commits the note and stage history through one non-force update', async () => {
+    const base = githubMock(false, true), content = '---\nstatus: review\n---\n\nQuestion\n';
+    const request = vi.fn(async (input: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && input.endsWith('/git/trees')) {
+        expect(JSON.parse(String(init.body)).tree.map((entry: { path: string }) => entry.path)).toEqual([STUDY_FILE, 'notes/example/hello.md']);
+        return new Response(JSON.stringify({ sha: 'study-tree' }));
+      }
+      if (init?.method === 'POST' && input.endsWith('/git/commits')) return new Response(JSON.stringify({ sha: 'study-commit' }));
+      if (init?.method === 'PATCH') { expect(JSON.parse(String(init.body)).force).toBe(false); return new Response(JSON.stringify({ object: { sha: 'study-commit' } })); }
+      return base(input, init);
+    });
+    const reader = new GitHubSource('owner/repo', 'main', 'test-token', request as typeof fetch);
+    expect(await reader.saveStudyTransition(yaml, { path: 'notes/example/hello.md', content }, 'commit1')).toMatchObject({ revision: 'study-commit' });
+    expect(request.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(1);
+    await expect(reader.saveStudyTransition(yaml, { path: 'apps/escape.md', content }, 'commit1')).rejects.toMatchObject({ status: 403 });
+  });
   it('rejects stale revisions, Core writes, invalid schemas and paths outside the study sidecar', async () => {
     const request = githubMock(false, true);
     const reader = new GitHubSource('owner/repo', 'main', 'test-token', request as typeof fetch);

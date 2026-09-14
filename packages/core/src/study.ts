@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createEmptyCard, fsrs, type Card, type Grade } from 'ts-fsrs';
+import { nextStudyStage, type StudyProgression, type Familiarity } from './study-stages.js';
 import { splitNotePages } from './note-pages.js';
 
 export const STUDY_FILE = '.github-notes-study.yaml';
@@ -22,18 +23,20 @@ const CardSchema = z.object({ ...schedule,
     .refine(mask => mask.end > mask.start, 'A mask requires a nonempty range.')).max(100).optional(),
 }).strict();
 const ReadingSchema = z.object({ due: date.optional(), lastRead: date.optional(), step: finite.int() }).strict();
+const StageScheduleSchema = z.object({ laneId: id, status: z.string().max(200), due: date }).strict();
 const NoteSchema = z.object({
   id, notebookId: z.string().min(1).max(128), path: z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value)
     && value.split('/').every(part => part && part !== '.' && part !== '..'), 'Invalid note path.'),
   sourceId: z.string().min(1).max(200).optional(), title: z.string().max(2000),
   pages: z.array(z.object({ id, source: z.string().max(1024 * 1024) }).strict()).min(1).max(100),
-  cards: z.array(CardSchema).min(1).max(200), reading: ReadingSchema,
+  cards: z.array(CardSchema).min(1).max(200), reading: ReadingSchema, stage: StageScheduleSchema.optional(),
 }).strict();
-const BeforeSchema = z.object({ reading: ReadingSchema, cards: z.array(z.object(schedule).strict()).max(200) }).strict();
+const BeforeSchema = z.object({ stage: StageScheduleSchema.optional(), reading: ReadingSchema, cards: z.array(z.object(schedule).strict()).max(200) }).strict();
 const EventSchema = z.object({
   id, noteId: id, cardId: id.optional(), at: date,
-  kind: z.enum(['read', 'snooze', 'fixed', 'review', 'configure', 'suspend', 'resume', 'rebind', 'undo']),
+  kind: z.enum(['read', 'snooze', 'fixed', 'review', 'configure', 'suspend', 'resume', 'rebind', 'undo', 'stage-review', 'stage-read', 'stage-postpone']),
   rating: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
+  transition: z.object({ laneId: id, fromStatus: z.string().max(200).nullable(), toStatus: z.string().max(200), intervalDays: z.number().finite().positive().max(3650) }).strict().optional(),
   algorithm: z.literal('ts-fsrs@5.4.2').optional(), before: BeforeSchema.optional(), undoOf: id.optional(),
 }).strict();
 export const StudyWorkspaceSchema = z.object({ version: z.literal(1), notes: z.array(NoteSchema).max(2000), events: z.array(EventSchema).max(50000) }).strict()
@@ -57,7 +60,7 @@ export const StudyWorkspaceSchema = z.object({ version: z.literal(1), notes: z.a
     for (const event of value.events) {
       unique(event.id);
       const note = notes.get(event.noteId);
-      if (event.kind === 'review' ? !event.rating || !event.algorithm || !event.cardId : event.rating !== undefined) ctx.addIssue({ code: 'custom', message: 'Review events require a rating, algorithm and card.' });
+      if (event.kind === 'review' ? !event.rating || !event.algorithm || !event.cardId : ['stage-review', 'stage-read'].includes(event.kind) ? !event.rating || !event.transition : event.rating !== undefined) ctx.addIssue({ code: 'custom', message: 'Review events require a rating, algorithm and card.' });
       if (!note || event.cardId && !note.cards.some(card => card.id === event.cardId)) ctx.addIssue({ code: 'custom', message: 'Unknown event target.' });
     }
   });
@@ -103,6 +106,7 @@ export function studyCardContent(note: StudyNote, card: StudyCard, face: 'front'
   return ids.map(id => note.pages.find(page => page.id === id)!.source);
 }
 export function studyDue(note: StudyNote): string | undefined {
+  if (note.stage) return note.stage.due;
   const due = [...note.cards.filter(card => card.enabled).map(card => card.scheduler.due), ...(note.reading.due ? [note.reading.due] : [])];
   return due.sort()[0];
 }
@@ -123,7 +127,7 @@ type Action = { kind: 'review'; rating: Grade } | { kind: 'read' | 'snooze'; due
 export function applyStudyAction(workspace: StudyWorkspace, note: StudyNote, cardId: string, action: Action, now = new Date()): StudyWorkspace {
   const next = structuredClone(note), card = next.cards.find(card => card.id === cardId);
   if (!card) throw new Error('Unknown study card.');
-  const before = { reading: note.reading, cards: note.cards.map(({ id, enabled, suspended, policy, scheduler }) => ({ id, enabled, suspended, policy, scheduler })) };
+  const before = { ...(note.stage ? { stage: note.stage } : {}), reading: note.reading, cards: note.cards.map(({ id, enabled, suspended, policy, scheduler }) => ({ id, enabled, suspended, policy, scheduler })) };
   const at = now.toISOString();
   switch (action.kind) {
     case 'review':
@@ -151,7 +155,7 @@ export function undoStudyAction(workspace: StudyWorkspace, now = new Date()): St
   const event = workspace.events.at(-1);
   if (!event?.before || event.kind === 'undo') throw new Error('No study action to undo.');
   return StudyWorkspaceSchema.parse({ ...workspace, notes: workspace.notes.map(note => note.id !== event.noteId ? note : {
-    ...note, reading: event.before!.reading, cards: note.cards.map(card => ({ ...card, ...event.before!.cards.find(value => value.id === card.id) })),
+    ...note, stage: event.before!.stage, reading: event.before!.reading, cards: note.cards.map(card => ({ ...card, ...event.before!.cards.find(value => value.id === card.id) })),
   }), events: [...workspace.events, { id: newId(), noteId: event.noteId, at: now.toISOString(), kind: 'undo', undoOf: event.id }] });
 }
 
@@ -159,9 +163,24 @@ export function undoStudyAction(workspace: StudyWorkspace, now = new Date()): St
 export function rebindStudyNote(workspace: StudyWorkspace, note: StudyNote, source: StudySource, reset: boolean, now = new Date()): StudyWorkspace {
   if (note.cards.length !== 1 || note.cards[0].kind !== 'forward') throw new Error('This note requires the multi-card mapping editor.');
   const fresh = createStudyNote(source, now);
-  fresh.id = note.id; fresh.reading = note.reading;
+  fresh.id = note.id; fresh.reading = note.reading; if (note.stage) fresh.stage = note.stage;
   fresh.cards[0] = { ...fresh.cards[0], id: note.cards[0].id, enabled: note.cards[0].enabled, suspended: note.cards[0].suspended, policy: note.cards[0].policy,
     scheduler: reset ? fresh.cards[0].scheduler : note.cards[0].scheduler };
   return StudyWorkspaceSchema.parse({ ...workspace, notes: workspace.notes.map(value => value.id === note.id ? fresh : value),
     events: [...workspace.events, { id: newId(), noteId: note.id, at: now.toISOString(), kind: 'rebind' }] });
+}
+
+export function applyStageAction(workspace: StudyWorkspace, note: StudyNote, laneId: string, status: string | undefined,
+  progression: StudyProgression, action: { kind: 'stage-review' | 'stage-read'; rating: Familiarity } | { kind: 'stage-postpone'; due: string }, now = new Date()): StudyWorkspace {
+  const stage = action.kind === 'stage-postpone' ? { status: status || progression.stages[0].status, intervalDays: (Date.parse(action.due) - now.getTime()) / 86400000 }
+    : nextStudyStage(progression, status, action.rating);
+  const due = action.kind === 'stage-postpone' ? action.due : new Date(now.getTime() + stage.intervalDays * 86400000).toISOString();
+  if (!Number.isFinite(Date.parse(due)) || Date.parse(due) <= now.getTime()) throw new Error('Choose a future time.');
+  const next = structuredClone(note);
+  next.stage = { laneId, status: stage.status, due };
+  const before = { ...(note.stage ? { stage: note.stage } : {}), reading: note.reading, cards: note.cards.map(({ id, enabled, suspended, policy, scheduler }) => ({ id, enabled, suspended, policy, scheduler })) };
+  const event = { id: newId(), noteId: note.id, cardId: note.cards[0].id, at: now.toISOString(), kind: action.kind, before,
+    transition: { laneId, fromStatus: status ?? null, toStatus: stage.status, intervalDays: stage.intervalDays },
+    ...(action.kind === 'stage-postpone' ? {} : { rating: action.rating }) };
+  return StudyWorkspaceSchema.parse({ ...workspace, notes: [...workspace.notes.filter(value => value.id !== note.id), next], events: [...workspace.events, event] });
 }

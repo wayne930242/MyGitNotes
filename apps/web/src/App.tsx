@@ -724,6 +724,7 @@ const AppContent: React.FC = () => {
     <div
       className="app-shell h-dvh w-full overflow-hidden flex flex-col font-sans transition-colors duration-200"
       data-workspace-tab={activeTab}
+      data-screen-focus={activeTab === 'screen' && Boolean(route.lane)}
       style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
     >
       {/* Core Branch User Guidance Banner (Theme-aware, harmonized with active palette) */}
@@ -936,7 +937,7 @@ const AppContent: React.FC = () => {
           </main>
         )}
 
-        {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} onStudySaved={() => { void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message)); }} notebooks={config?.notebooks || []} notes={notes} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} /></React.Suspense>}
+        {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} focusedLaneId={route.lane} onStudySaved={note => { if (note) { setNotes(values => values.map(value => value.path === note.path && value.notebookId === note.notebookId ? note : value)); } else { void refreshWorkspace(); } void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message)); }} notebooks={config?.notebooks || []} notes={notes} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} /></React.Suspense>}
 
         {activeTab === 'graph' && (
           <main className="workspace-route graph-main flex-1 w-full h-full relative min-h-0">

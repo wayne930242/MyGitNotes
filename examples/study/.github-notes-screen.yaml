@@ -1,32 +1,60 @@
 version: 1
 rows:
   - id: explore
-    name: 自選閱讀與記憶練習
+    name: 學習：一次一張卡片
     kind: dynamic
-    view: medium
-    source:
+    view: study
+    source: &a2
       kind: tag
       tag: study-demo
       notebookId: learning
-  - id: due
-    name: 目前到期
+    progression: &a1
+      stages:
+        - status: inbox
+          intervalDays: 1
+        - status: working
+          intervalDays: 3
+        - status: review
+          intervalDays: 7
+        - status: done
+          intervalDays: 30
+      easy: two
+    study:
+      filter: all
+      dueFirst: true
+      status: working
+  - id: reading
+    name: 隨選閱讀
+    kind: dynamic
+    view: reading
+    source:
+      kind: tag
+      tag: reading
+      notebookId: learning
+    progression: *a1
+  - id: review-stage
+    name: 進階複習 · 7 天
     kind: dynamic
     view: small
-    source:
-      kind: tag
-      tag: study-demo
-      notebookId: learning
+    source: *a2
     study:
-      filter: due
+      filter: all
       dueFirst: true
+      status: review
+  - id: done-stage
+    name: 熟悉 · 30 天
+    kind: dynamic
+    view: thumbnail
+    source: *a2
+    study:
+      filter: all
+      dueFirst: true
+      status: done
   - id: later
     name: 延後再看
     kind: dynamic
     view: small
-    source:
-      kind: tag
-      tag: study-demo
-      notebookId: learning
+    source: *a2
     study:
       filter: future
       dueFirst: true

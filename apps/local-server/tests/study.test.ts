@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, writeFile, symlink, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, symlink, rm, mkdir } from 'node:fs/promises';
 import os from 'node:os';
+import syncFs from 'node:fs';
+import { stringify } from 'yaml';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
-import { STUDY_FILE, createStudyNote, emptyStudyWorkspace, applyStudyAction } from '@github-notes/core';
+import { STUDY_FILE, createStudyNote, emptyStudyWorkspace, applyStudyAction, parseNoteContent, readNoteFile } from '@github-notes/core';
 
 let root: string, server: Server, url: string;
 const source = { notebookId: 'a', path: 'notes/a/guide.md', title: 'Question', metadata: {}, content: 'Question\n\n---\n\nAnswer' };
@@ -48,4 +50,61 @@ it('protects Core, rejects symlink targets and reports invalid YAML without repl
   await writeFile(path.join(root, STUDY_FILE), 'version: nope\n');
   expect((await fetch(url)).status).toBe(422);
   expect(await readFile(path.join(root, STUDY_FILE), 'utf8')).toBe('version: nope\n');
+});
+
+async function stageFixture() {
+  const raw = '---\ntitle: Question\ncustom: keep-me\nstatus: new\n---\n\nQuestion\n\n---\n\nAnswer  \n';
+  await mkdir(path.join(root, 'notes/a'), { recursive: true });
+  await writeFile(path.join(root, source.path), raw);
+  await writeFile(path.join(root, '.github-notes-screen.yaml'), stringify({ version: 1, rows: [{ id: 'lane', name: 'Study', kind: 'dynamic', view: 'study',
+    source: { kind: 'folder', notebookId: 'a', path: 'notes/a', recursive: true },
+    progression: { stages: [{ status: 'new', intervalDays: 1 }, { status: 'learning', intervalDays: 3 }, { status: 'review', intervalDays: 7 }, { status: 'known', intervalDays: 30 }], easy: 'two' },
+  }] }));
+  return raw;
+}
+async function stageRequest(action = 'stage-review', extra: Record<string, unknown> = {}) {
+  const current = await fetch(url).then(response => response.json());
+  const note = readNoteFile(root, source.path, 'a');
+  return { laneId: 'lane', path: source.path, notebookId: 'a', revision: current.revision, expected: { content: note.content, metadata: note.metadata }, action, ...(action === 'stage-review' ? { rating: 4 } : {}), ...extra };
+}
+const act = (body: unknown) => fetch(url + '/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+it('saves a stage transition with note status, preserves the body and undoes both', async () => {
+  const raw = await stageFixture(), request = await stageRequest();
+  const response = await act(request); expect(response.status).toBe(200);
+  const saved = await response.json(); expect(saved.note.status).toBe('review');
+  expect(saved.study.notes[0].stage.status).toBe('review');
+  expect(parseNoteContent(await readFile(path.join(root, source.path), 'utf8')).content).toBe(parseNoteContent(raw).content);
+  expect(saved.note.metadata.custom).toBe('keep-me');
+  expect((await act(request)).status).toBe(409);
+  const undone = await act(await stageRequest('undo', { eventId: saved.study.events[0].id }));
+  expect(undone.status).toBe(200);
+  expect((await undone.json()).note.status).toBe('new');
+  expect(readNoteFile(root, source.path, 'a').status).toBe('new');
+});
+it('refuses a stale note without writing its stage history', async () => {
+  await stageFixture(); const request = await stageRequest();
+  await writeFile(path.join(root, source.path), '# Edited outside\n');
+  expect((await act(request)).status).toBe(409);
+  expect((await fetch(url).then(response => response.json())).study.events).toEqual([]);
+  expect(await readFile(path.join(root, source.path), 'utf8')).toBe('# Edited outside\n');
+});
+it('restores the note if the study file cannot be published', async () => {
+  const raw = await stageFixture(), request = await stageRequest();
+  const rename = syncFs.renameSync;
+  const spy = vi.spyOn(syncFs, 'renameSync').mockImplementation((from, to) => {
+    if (String(to) === path.join(root, STUDY_FILE)) throw new Error('Injected storage failure');
+    return rename(from, to);
+  });
+  try { expect((await act(request)).status).toBe(500); } finally { spy.mockRestore(); }
+  expect(await readFile(path.join(root, source.path), 'utf8')).toBe(raw);
+  expect((await fetch(url).then(response => response.json())).study.events).toEqual([]);
+});
+it('rejects stage actions on Core and note symlinks', async () => {
+  const raw = await stageFixture(), request = await stageRequest();
+  execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/core'], { cwd: root });
+  expect((await act(request)).status).toBe(403);
+  execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/main'], { cwd: root });
+  await writeFile(path.join(root, 'target.md'), raw); await rm(path.join(root, source.path));
+  await symlink(path.join(root, 'target.md'), path.join(root, source.path));
+  expect((await act(request)).status).toBe(403);
 });

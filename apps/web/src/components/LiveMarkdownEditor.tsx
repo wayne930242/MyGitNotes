@@ -37,6 +37,7 @@ class RenderedMarkdown extends WidgetType {
   eq(other: RenderedMarkdown) { return this.text === other.text && this.path === other.path && this.from === other.from && this.linkLabel === other.linkLabel && this.tableLabel === other.tableLabel; }
   toDOM(view: EditorView) {
     const dom = document.createElement(this.block ? 'div' : 'span'); dom.className = 'live-md-rendered prose-custom';
+    if (this.block) { dom.style.display = 'block'; dom.style.width = '100%'; }
     dom.innerHTML = renderNote(this.text, this.path, this.tableLabel);
     dom.setAttribute('aria-label', 'Rendered Markdown; click to edit');
     dom.addEventListener('mousedown', event => {
@@ -48,6 +49,17 @@ class RenderedMarkdown extends WidgetType {
     return dom;
   }
   get estimatedHeight() { return this.block ? 100 : 160; }
+}
+class PageBreak extends WidgetType {
+  constructor(readonly from: number, readonly label: string) { super(); }
+  eq(other: PageBreak) { return this.from === other.from && this.label === other.label; }
+  toDOM(view: EditorView) {
+    const dom = document.createElement('div'); dom.className = 'live-md-page-break';
+    dom.dataset.pageBreak = ''; dom.textContent = this.label;
+    dom.addEventListener('mousedown', event => { event.preventDefault(); view.dispatch({ selection: { anchor: this.from } }); view.focus(); });
+    return dom;
+  }
+  get estimatedHeight() { return 64; }
 }
 class TaskCheckbox extends WidgetType {
   constructor(readonly checked: boolean, readonly from: number, readonly readonly: boolean) { super(); }
@@ -63,8 +75,9 @@ class BulletMarker extends WidgetType {
   eq() { return true; }
   toDOM() { const span=document.createElement('span');span.textContent='•';span.setAttribute('aria-hidden','true');return span; }
 }
-function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string): DecorationSet {
+function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string, pageLabel: string): DecorationSet {
   const marks: Range<Decoration>[] = [];
+  let pageNumber = 1;
   const references = marked.lexer(state.doc.toString()).links;
   const active = (from: number, to: number) => focused && !state.readOnly && state.selection.ranges.some(range => state.doc.lineAt(range.from).from <= to && state.doc.lineAt(range.to).to >= from);
   const hide = (from: number, to: number) => { if (from < to) marks.push(Decoration.replace({}).range(from,to)); };
@@ -84,6 +97,12 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
     }
     const styles: Record<string,string> = {StrongEmphasis:'live-md-strong',Emphasis:'live-md-emphasis',Strikethrough:'live-md-strike',InlineCode:'live-md-code',Link:'live-md-link'};
     if (styles[name] && from < to) marks.push(Decoration.mark({class:styles[name]}).range(from,to));
+    if (name === 'HorizontalRule' && node.node.parent?.name === 'Document' && state.sliceDoc(from, to).trim() === '---') {
+      pageNumber++;
+      if (editing) marks.push(Decoration.line({ class: 'live-md-page-divider', attributes: { 'data-page-break': '' } }).range(state.doc.lineAt(from).from));
+      else marks.push(Decoration.replace({ widget: new PageBreak(from, `${pageLabel} ${pageNumber}`), block: true }).range(from, to));
+      return false;
+    }
     if (!editing && (name === 'Image' || name === 'Table' || name === 'HorizontalRule')) {
       marks.push(Decoration.replace({widget:new RenderedMarkdown(state.sliceDoc(from,to),notePath,from,name !== 'Image',linkLabel,tableLabel),block:name !== 'Image'}).range(from,to)); return false;
     }
@@ -144,7 +163,7 @@ const theme = EditorView.theme({
 });
 export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content,notePath,readOnly,onChange,ariaLabel = 'Note content'},ref) => {
   const { t } = useTranslation(); const linkLabel = t('links.open');
-  const tableLabel = t('preview.scrollableTable');
+  const tableLabel = t('preview.scrollableTable'), pageLabel = t('editor.page');
   const location = useLocation();
   const host = useRef<HTMLDivElement>(null); const editor = useRef<EditorView>();
   const callback = useRef(onChange); callback.current = onChange;
@@ -175,10 +194,10 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
   }),[]);
   useEffect(() => {
     const field = StateField.define<{decorations:DecorationSet;focused:boolean}>({
-      create(state) {return {decorations:liveDecorations(state,false,notePath,linkLabel,tableLabel),focused:false};},
+      create(state) {return {decorations:liveDecorations(state,false,notePath,linkLabel,tableLabel,pageLabel),focused:false};},
       update(value,tr) {
         let focused=value.focused;for(const effect of tr.effects)if(effect.is(focusChanged))focused=effect.value;
-        return {focused,decorations:liveDecorations(tr.state,focused,notePath,linkLabel,tableLabel)};
+        return {focused,decorations:liveDecorations(tr.state,focused,notePath,linkLabel,tableLabel,pageLabel)};
       },
       provide: field => EditorView.decorations.from(field,value=>value.decorations),
     });
@@ -191,7 +210,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
       EditorView.updateListener.of(update=>{if(update.docChanged)callback.current(update.state.doc.toString());}),
     ]})});
     editor.current=view;return()=>{view.destroy();editor.current=undefined;};
-  },[notePath,ariaLabel,linkLabel,tableLabel]);
+  },[notePath,ariaLabel,linkLabel,tableLabel,pageLabel]);
   useEffect(()=>{const view=editor.current;if(view && view.state.doc.toString()!==content)view.dispatch({changes:{from:0,to:view.state.doc.length,insert:content},annotations:Transaction.addToHistory.of(false)});},[content]);
   useEffect(()=>{editor.current?.dispatch({effects:permission.current.reconfigure([EditorState.readOnly.of(readOnly),EditorView.editable.of(!readOnly)])});},[readOnly]);
   useEffect(() => {

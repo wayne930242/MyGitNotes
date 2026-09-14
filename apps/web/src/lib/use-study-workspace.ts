@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { StudyWorkspaceSchema, emptyStudyWorkspace, type StudyWorkspace } from '@github-notes/core/study';
+import type { NoteItem } from './types.js';
 import { useTranslation } from './i18n/index.js';
 
 interface Snapshot { study: StudyWorkspace; revision: string; writable: boolean; commit?: string }
 const same = (a: StudyWorkspace, b: StudyWorkspace) => JSON.stringify(a) === JSON.stringify(b);
-export function useStudyWorkspace(onSaved: () => void) {
+export function useStudyWorkspace(onSaved: (note?: NoteItem) => void) {
   const { t } = useTranslation();
   const [study, setStudy] = useState(emptyStudyWorkspace), [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false), [error, setError] = useState(''), [writable, setWritable] = useState(false);
@@ -44,6 +45,22 @@ export function useStudyWorkspace(onSaved: () => void) {
     } catch (error) { if (alive.current) setError((error as Error).message); return false; }
     finally { busy.current = false; if (alive.current) setSaving(false); }
   };
-  return { study, save, reload, loading, saving, error, writable };
+  const action = async (note: NoteItem, laneId: string, action: 'stage-review' | 'stage-read' | 'stage-postpone' | 'undo', options: { rating?: 1 | 2 | 3 | 4; due?: string; eventId?: string } = {}): Promise<boolean> => {
+    if (busy.current || !snapshot.current?.writable) return false;
+    busy.current = true; setSaving(true); setError('');
+    try {
+      const base = snapshot.current, latest = await read();
+      if (!same(latest.study, base.study)) throw new Error(t('study.conflict'));
+      const response = await fetch('/api/study/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        laneId, notebookId: note.notebookId, path: note.path, expected: { content: note.content, metadata: note.metadata }, revision: latest.revision, action, ...options,
+      }) });
+      if (!response.ok) throw new Error(t(response.status === 409 ? 'study.conflict' : response.status === 422 ? 'study.configureLane' : 'study.saveError'));
+      const result = await response.json(); result.study = StudyWorkspaceSchema.parse(result.study);
+      if (alive.current) { snapshot.current = result; setStudy(result.study); setWritable(result.writable); saved.current(result.note); }
+      return true;
+    } catch (error) { if (alive.current) setError((error as Error).message); return false; }
+    finally { busy.current = false; if (alive.current) setSaving(false); }
+  };
+  return { study, save, action, reload: async () => { await reload(); saved.current(); }, loading, saving, error, writable };
 }
 export type StudyController = ReturnType<typeof useStudyWorkspace>;

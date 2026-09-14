@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { noteRoute, notebookRoute, noteReturnRoute, parseWorkspaceRoute } from './routes.js';
+import { screenLaneRoute, noteRoute, notebookRoute, noteReturnRoute, parseWorkspaceRoute } from './routes.js';
 describe('workspace URLs', () => {
   it('returns editors to their original workspace and preserves filters', () => {
     for (const origin of ['/graph?notebook=example', '/screen?notebook=work', '/notebooks/example/folders/projects?view=graph&tag=demo&q=hello']) {
@@ -45,4 +45,12 @@ describe('workspace URLs', () => {
   it('rejects unknown pages, traversal and malformed URLs', () => {
     for(const route of ['/missing','/notebooks/work/notes/../secret.md','/notebooks/work/notes/%00.md','/notebooks/work/notes/%zz']) expect(parseWorkspaceRoute(route,'').valid).toBe(false);
   });
+});
+
+it('opens a dedicated lane and preserves it as the editor return route', () => {
+  const origin = screenLaneRoute('review-1') + '?notebook=work';
+  expect(parseWorkspaceRoute('/screen/lanes/review-1/', '?notebook=work')).toMatchObject({ valid: true, tab: 'screen', lane: 'review-1', notebook: 'work' });
+  expect(noteReturnRoute('?' + new URLSearchParams({ returnTo: origin }), 'work')).toBe(origin);
+  expect(parseWorkspaceRoute('/screen', '').lane).toBeNull();
+  for (const invalid of ['/screen/lanes/a/b', '/screen/lanes/%00', '/screen/lanes/' + 'a'.repeat(65)]) expect(parseWorkspaceRoute(invalid, '').valid).toBe(false);
 });

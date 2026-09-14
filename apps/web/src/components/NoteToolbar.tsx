@@ -1,4 +1,5 @@
-import { LayoutList, LayoutGrid, Kanban, ListTree, Plus, Search, PanelLeft, Network } from 'lucide-react';
+import { LayoutList, LayoutGrid, Kanban, ListTree, Plus, Search, Network } from 'lucide-react';
+import { WorkspaceSidebarToggle } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
 import { ViewMode } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -18,17 +19,8 @@ export function NoteToolbar({ readOnly, viewMode, setViewMode, searchQuery, setS
   const { t } = useTranslation();
   return (
             <div className="header-note-actions flex items-center gap-2.5 flex-1 min-w-0 justify-end">
-              <button
-                type="button"
-                aria-label="Notebooks and filters"
-                aria-expanded={filtersOpen}
-                aria-controls="notebook-panel"
-                onClick={onToggleFilters}
-                className="mobile-only items-center justify-center rounded-lg border hover:bg-black/5 dark:hover:bg-white/10 transition"
-                style={{ borderColor: 'var(--color-border)' }}
-              >
-                <PanelLeft className="w-5 h-5" />
-              </button>
+              <WorkspaceSidebarToggle label="Notebooks and filters" open={filtersOpen}
+                controlsId="notebook-panel" onClick={onToggleFilters} />
 
               {/* Search Bar */}
               <div className="header-search relative w-full min-w-0 max-w-xs">

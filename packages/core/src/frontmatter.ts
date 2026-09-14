@@ -94,3 +94,15 @@ export function serializeNoteContent(metadata: NoteMetadata, content: string): s
 
   return `---\n${yamlStr}\n---\n\n${trimmedContent}\n`;
 }
+
+/** Patch only status; keep the Markdown body and other YAML fields intact. */
+export function replaceNoteStatus(raw: string, status: string | null): string {
+  const match = raw.match(FRONTMATTER_REGEX);
+  if (match && parseNoteContent(raw).hasFrontmatter) {
+    const document = YAML.parseDocument(match[1]);
+    if (status === null) document.delete('status'); else document.set('status', status);
+    const newline = match[0].includes('\r\n') ? '\r\n' : '\n';
+    return `---${newline}${document.toString().replace(/\n/g, newline)}---${newline}${raw.slice(match[0].length)}`;
+  }
+  return status === null ? raw : `---\n${YAML.stringify({ status })}---\n${raw}`;
+}

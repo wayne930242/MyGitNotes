@@ -33,6 +33,10 @@
     "./study": {
       "types": "./dist/study.d.ts",
       "import": "./dist/study.js"
+    },
+    "./study-stages": {
+      "types": "./dist/study-stages.d.ts",
+      "default": "./dist/study-stages.js"
     }
   },
   "scripts": {
