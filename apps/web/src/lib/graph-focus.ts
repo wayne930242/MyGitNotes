@@ -1,5 +1,7 @@
 import type { NoteGraphNode, NoteGraphLink } from '@github-notes/core/note-graph';
 
+export const toggleGraphFocus = (selectedId: string | null, clickedId: string) => selectedId === clickedId ? null : clickedId;
+
 export function graphFocus(nodes: NoteGraphNode[], links: NoteGraphLink[], selectedId: string | null, hoverNode: NoteGraphNode | null) {
   const selected = nodes.find(node => node.id === selectedId) || null;
   const highlighted = selected || hoverNode;
