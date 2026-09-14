@@ -231,7 +231,7 @@ export function GraphPage({
         <span className="graph-stats" role="status" data-filter-results={filters.count} data-graph-nodes={graphData.nodes.length} data-graph-links={graphData.links.length}
           title={`${t('filters.results', { count: filters.count })} · ${t('filters.graphTotal', { count: graphData.nodes.length })} · ${graphData.links.length} ${t('graph.links')}`}
           aria-label={`${t('filters.results', { count: filters.count })} · ${t('filters.graphTotal', { count: graphData.nodes.length })} · ${graphData.links.length} ${t('graph.links')}`}>
-          {graphData.nodes.length} · {graphData.links.length}
+          {graphData.nodes.length} · {graphData.links.length} -
         </span>
         {minimap}
       </div>

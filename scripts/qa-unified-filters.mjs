@@ -49,7 +49,7 @@ try {
      const stats=document.querySelector('.graph-stats');const label=stats.getBoundingClientRect();
      const mini=document.querySelector('.graph-minimap-panel > button').getBoundingClientRect();
      const color=document.querySelector('.graph-appearance').getBoundingClientRect();
-     return {text:stats.textContent.trim(),expected:`${stats.dataset.graphNodes} · ${stats.dataset.graphLinks}`,statsCount:document.querySelectorAll('[data-filter-results]').length,above:label.bottom<=mini.top,right:Math.abs(label.right-mini.right)<1,colorRight:graph.right-color.right,colorTop:color.top-graph.top};
+     return {text:stats.textContent.trim(),expected:`${stats.dataset.graphNodes} · ${stats.dataset.graphLinks} -`,statsCount:document.querySelectorAll('[data-filter-results]').length,above:label.bottom<=mini.top,right:Math.abs(label.right-mini.right)<1,colorRight:graph.right-color.right,colorTop:color.top-graph.top};
    });
    assert.equal(layout.text,layout.expected);assert.equal(layout.statsCount,1);assert.ok(layout.above&&layout.right);assert.ok(layout.colorRight<=13&&layout.colorTop<=13,JSON.stringify(layout));
    await page.click('.graph-appearance summary');
