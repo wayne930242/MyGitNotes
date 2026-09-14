@@ -1,4 +1,3 @@
-import { ReorderToggle } from './ReorderToggle.js';
 import { LayoutList, LayoutGrid, Kanban, ListTree, Plus } from 'lucide-react';
 import { WorkspaceSidebarToggle } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
@@ -7,8 +6,6 @@ import { useTranslation } from '../lib/i18n/index.js';
 
 interface NoteToolbarProps {
   readOnly: boolean;
-  reorder: boolean;
-  onToggleReorder: () => void;
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
   onOpenNewNoteModal: () => void;
@@ -16,14 +13,13 @@ interface NoteToolbarProps {
   onToggleFilters: () => void;
 }
 
-export function NoteToolbar({ reorder, onToggleReorder, readOnly, viewMode, setViewMode, onOpenNewNoteModal, filtersOpen, onToggleFilters }: NoteToolbarProps) {
+export function NoteToolbar({ readOnly, viewMode, setViewMode, onOpenNewNoteModal, filtersOpen, onToggleFilters }: NoteToolbarProps) {
   const { t } = useTranslation();
   return (
             <div className="header-note-actions flex items-center gap-2.5 flex-1 min-w-0 justify-end">
               <WorkspaceSidebarToggle label="Notebooks and filters" open={filtersOpen}
                 controlsId="notebook-panel" onClick={onToggleFilters} />
 
-              {!readOnly && <ReorderToggle active={reorder} onToggle={onToggleReorder} />}
               {/* View Switcher Mobile */}
               <Select
                 aria-label="Note view"

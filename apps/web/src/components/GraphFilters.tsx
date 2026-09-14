@@ -1,26 +1,11 @@
 import { useId, useRef, useState } from 'react';
-import { Filter, Search, X, Network } from 'lucide-react';
-import type { NoteFilters } from '@mygitnotes/core/note-filters';
-import type { FolderItem, NotebookConfig } from '../lib/types.js';
+import { Filter, Search, X } from 'lucide-react';
+import type { FilterControls } from '../lib/filter-controls.js';
 import { useTranslation } from '../lib/i18n/index.js';
-import './workspace-filters.css';
+import './graph-filters.css';
 
-export interface WorkspaceFiltersProps {
-  value: NoteFilters;
-  neighbors: boolean;
-  notebooks: NotebookConfig[];
-  folders: FolderItem[];
-  tags: string[];
-  statuses: string[];
-  count: number;
-  onChange: (patch: Partial<NoteFilters> & { neighbors?: boolean }) => void;
-  onNotebookChange: (id: string) => void;
-  onClear: () => void;
-  onOpenGraph?: () => void;
-  compact?: boolean;
-}
 
-export function WorkspaceFilters({ value, neighbors, notebooks, folders, tags, statuses, count, onChange, onNotebookChange, onClear, onOpenGraph, compact = false }: WorkspaceFiltersProps) {
+export function GraphFilters({ value, neighbors, notebooks, folders, tags, statuses, count, onChange, onNotebookChange, onClear }: FilterControls) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [optionSearch, setOptionSearch] = useState('');
@@ -51,7 +36,7 @@ export function WorkspaceFilters({ value, neighbors, notebooks, folders, tags, s
     {chips.map(chip => <button type="button" className="filter-chip" key={chip.key} onClick={chip.remove} aria-label={t('filters.remove', { value: chip.label })}><span>{chip.label}</span><X size={12} aria-hidden="true" /></button>)}
     {chips.length > 0 && <button type="button" className="filter-clear" onClick={onClear}>{t('filters.clear')}</button>}
   </div>;
-  return <section className={`workspace-filters ${compact ? 'is-compact' : ''}`} aria-label={t('filters.title')}
+  return <section className="graph-filters is-compact" aria-label={t('filters.title')}
     onKeyDown={event => { if (event.key === 'Escape' && open) { event.stopPropagation(); close(); } }}>
     <div className="filter-summary">
       <label className="filter-search header-search"><Search size={15} aria-hidden="true" />
@@ -60,13 +45,10 @@ export function WorkspaceFilters({ value, neighbors, notebooks, folders, tags, s
       <button type="button" className="ui-button filter-trigger" ref={trigger} aria-expanded={open} aria-controls={id} onClick={() => setOpen(value => !value)}>
         <Filter size={14} aria-hidden="true" />{t('filters.title')}<span className="filter-count">{chips.length}</span>
       </button>
-      {!compact && <span className="filter-results" role="status" data-filter-results={count}>{t('filters.results', { count })}</span>}
-      {onOpenGraph && <button type="button" className="ui-button" onClick={onOpenGraph}><Network size={14} aria-hidden="true" /><span>{t('filters.openGraph')}</span></button>}
     </div>
-    {!compact && chips.length > 0 && conditionChips}
     {open && <div id={id} className="filter-details">
       <div className="filter-details-heading"><strong>{t('filters.title')}</strong><button type="button" className="ui-button" aria-label={t('filters.close')} onClick={close}><X size={14} /></button></div>
-      {compact && <><span className="filter-results" role="status" data-filter-results={count}>{t('filters.results', { count })}</span>{conditionChips}</>}
+      <><span className="filter-results" role="status" data-filter-results={count}>{t('filters.results', { count })}</span>{conditionChips}</>
       <div className="filter-fields">
         <label>{t('filters.notebook')}<select value={value.notebookId} onChange={event => onNotebookChange(event.target.value)}>
           <option value="all">{t('graph.allNotebooks')}</option>{notebooks.map(nb => <option key={nb.id} value={nb.id}>{nb.title}</option>)}
@@ -92,7 +74,7 @@ export function WorkspaceFilters({ value, neighbors, notebooks, folders, tags, s
         </div>
       </fieldset>
       <label className="filter-check"><input type="checkbox" checked={value.showHidden} onChange={event => onChange({ showHidden: event.target.checked })} />{t('filters.hidden')}</label>
-      {compact && <label className="filter-check"><input type="checkbox" checked={neighbors} onChange={event => onChange({ neighbors: event.target.checked })} />{t('filters.neighbors')}</label>}
+      <label className="filter-check"><input type="checkbox" checked={neighbors} onChange={event => onChange({ neighbors: event.target.checked })} />{t('filters.neighbors')}</label>
     </div>}
   </section>;
 }

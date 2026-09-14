@@ -8,7 +8,6 @@ export const zhTW: Record<TranslationKey, string> = {
   "filters.close": "關閉篩選",
   "filters.remove": "移除 {value}",
   "filters.results": "{count} 篇符合條件的筆記",
-  "filters.openGraph": "在關聯圖中查看",
   "filters.notebook": "筆記本",
   "filters.hidden": "顯示隱藏筆記",
   "filters.neighbors": "顯示直接相連的範圍外筆記",
