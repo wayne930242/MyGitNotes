@@ -2,13 +2,13 @@
 
 | Requirement | Evidence | Result |
 |---|---|---|
-| 三種来源、GitLab.com／自架、舊設定相容 | gitlab-source tests：站台子路徑、巢狀群組、設定驗證、舊環境變數 | pass |
+| 三種來源、GitLab.com／自架、舊設定相容 | gitlab-source tests：站台子路徑、巢狀群組、設定驗證、舊環境變數 | pass |
 | GitLab 登入、憑證更新及站台隔離 | gitlab-http tests：HTTP OAuth state / PKCE / callback、token rotation、兩個 lock scope 共用 Redis lock、跨站台拒絕 | pass |
-| 遠端讀写及原子提交 | source + HTTP + MCP tests：固定 revision、分頁、未知 frontmatter、多檔提交、main 權限、移動／刪除 | pass |
+| 遠端讀寫及原子提交 | source + HTTP + MCP tests：固定 revision、分頁、未知 frontmatter、多檔提交、main 權限、移動／刪除 | pass |
 | 版本衝突及資料邊界 | source tests：過期 revision、提交時衝突、symlink、產品路徑及唯讀拒絕 | pass |
 | MCP grant 生命週期 | HTTP/MCP tests：唯讀工具列表、寫入、登出後存續、撤銷與憑證隔離；GitHub 既有 grant regression | pass |
 | MyGitNotes 品牌與文件 | Chrome 實際渲染筆記與設定頁：MyGitNotes 標題、GitLab 登入、MCP 設定；雙語 README 與 Mermaid 架構來源更新 | pass |
-| 本機與 GitHub 相容 | pnpm test：57 files / 300 tests；pnpm build 成功；針對性 GitHub / local 測試通過 | pass |
+| 本機與 GitHub 相容 | pnpm test：58 files / 301 tests；pnpm build 成功；針對性 GitHub / local 測試通過 | pass |
 | GitLab stdio source | SDK in-memory transport 驗證公開讀取、唯讀工具及禁止本機寫入 | pass |
 | trpg-notes 更新與資料保存 | 尚待 Core 推送後執行 update-core | unknown |
 | 真實 GitLab.com OAuth／提交 | 等待瀏覽器登入及測試專案設定；目前來源與 OAuth 整合測試使用可驗證的 API fixtures | unknown |
