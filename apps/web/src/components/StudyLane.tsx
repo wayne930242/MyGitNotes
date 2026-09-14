@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Ellipsis, Undo2 } from 'lucide-react';
 import type { ScreenRow } from '@github-notes/core/screen-page';
 import { findStudyNote, createStudyNote, reconcileStudyNote, rebindStudyNote } from '@github-notes/core/study';
-import { nextStudyStage, type StudyProgression, type Familiarity } from '@github-notes/core/study-stages';
+import { deduplicatedStudyRatings, type StudyProgression, type Familiarity } from '@github-notes/core/study-stages';
 import { splitNotePages } from '@github-notes/core/note-pages';
 import type { NoteItem } from '../lib/types.js';
 import type { StudyController } from '../lib/use-study-workspace.js';
@@ -106,9 +106,26 @@ function StudyLaneCard({ note, row, controller, disabled, onDone, onOpen, previo
     pageBody.current?.scrollTo({ top: 0 });
   };
   const rate = (rating: Familiarity) => { if (canRate) void controller.action(note, row.id, 'stage-review', { rating }).then(ok => { if (ok) onDone(); }); };
+  const stages = row.progression?.stages || [];
+  const totalStages = stages.length;
+  const currentStatus = note.status || stages[0]?.status;
+  const currentStageIndex = stages.findIndex(stage => stage.status === currentStatus);
+  const activeIndex = currentStageIndex >= 0 ? currentStageIndex : 0;
+  const currentStar = activeIndex + 1;
+  const currentStage = stages[activeIndex];
+  const starDisplay = totalStages <= 7
+    ? `${'★'.repeat(currentStar)}${'☆'.repeat(totalStages - currentStar)}`
+    : `★${currentStar}/${totalStages}`;
+
   return <>
     <article className="study-lane-card" data-study-note={note.path}>
-      <header><button type="button" className="screen-card-title" aria-label={`${t('links.open')}: ${note.title}`} onClick={onOpen}>{note.title}</button><span>{note.status || row.progression!.stages[0].status}</span></header>
+      <header>
+        <button type="button" className="screen-card-title" aria-label={`${t('links.open')}: ${note.title}`} onClick={onOpen}>{note.title}</button>
+        {totalStages > 0 && <div className="study-card-stage" title={`${currentStatus} · ${currentStage?.intervalDays ?? 0} ${t('study.days')}`}>
+          <span className="study-card-stars" aria-label={`Stage ${currentStar} of ${totalStages}`}>{starDisplay}</span>
+          <span className="study-card-stage-status">{currentStatus}</span>
+        </div>}
+      </header>
       {!resolved && <div className="study-alert" role="alert"><p>{t('study.changed')}</p><Button disabled={disabled || !supported} onClick={() => void controller.save(workspace => rebindStudyNote(workspace, stored!, note, false))}>{t('study.rebindKeep')}</Button></div>}
       <div ref={pageBody} className="study-page" tabIndex={0} aria-label={t('study.page')}
         onPointerDown={event => { if (event.pointerType !== 'mouse' && !(event.target as HTMLElement).closest('a,button,input,select,pre')) pointer.current = { x: event.clientX, y: event.clientY, id: event.pointerId }; }}
@@ -129,16 +146,20 @@ function StudyFooter({ progression, status, pageCount, page, revealed = false, c
   onRate: (rating: Familiarity) => void; onDone: () => void; more: ReactNode; remaining: number;
 }) {
   const { t } = useTranslation();
+  const ratingOptions = useMemo(() => deduplicatedStudyRatings(progression, status), [progression, status]);
   return <footer className="study-footer" aria-label={t('study.controls')}>
       <div className="study-footer-meta">
         <nav className="study-pages" aria-label={t('study.page')}><span>Page</span>{Array.from({ length: pageCount }, (_, i) => <Button key={i} aria-label={`Page ${i + 1}`} aria-pressed={page === i} onClick={() => onPage(i)}>{i + 1}</Button>)}</nav>
         <span className="study-remaining">{remaining} {t('study.remaining')}</span>{more}
       </div>
       <div className={`study-ratings-region${revealed ? ' is-revealed' : ''}`} aria-hidden={!revealed}>
-      <div className="study-ratings">{([1, 2, 3, 4] as const).map(rating => {
-        const target = nextStudyStage(progression, status, rating);
-        return <Button data-rating={rating} key={rating} disabled={!canRate} onClick={() => onRate(rating)} title={`${target.status} · ${target.intervalDays} ${t('study.days')}`}>
-          <span>{t((['study.again', 'study.hard', 'study.good', 'study.easy'] as const)[rating - 1])}</span><small>{target.intervalDays} {t('study.days')}</small>
+      <div className="study-ratings" style={{ '--rating-columns': ratingOptions.length } as React.CSSProperties}>{ratingOptions.map(({ rating, targetStage, starCount, totalStages }) => {
+        const labelKey = (['study.again', 'study.hard', 'study.good', 'study.easy'] as const)[rating - 1];
+        const starDisplay = totalStages <= 7 ? '★'.repeat(starCount) : `★${starCount}`;
+        return <Button data-rating={rating} key={rating} disabled={!canRate} onClick={() => onRate(rating)} title={`${t(labelKey)} · ${targetStage.status} · ${targetStage.intervalDays} ${t('study.days')}`}>
+          <span className="study-rating-label">{t(labelKey)}</span>
+          <span className="study-rating-stars" aria-label={`Stage ${starCount} of ${totalStages}`}>{starDisplay}</span>
+          <small>{targetStage.intervalDays} {t('study.days')}</small>
         </Button>;
       })}</div>
       </div>
