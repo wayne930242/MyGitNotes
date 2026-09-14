@@ -52,3 +52,17 @@ Reflexive：沿用既有頁首插槽與共用 footer，這次無新增流程摩�
 Reflexive：移除普通／學習編輯表單分流，將預設階段產生集中在 core，避免前端預覽與後端套用各自推算。
 
 交付前遠端新增 MyGitNotes／GitLab 來源支援（442eae6）。整合後重跑 pnpm build、309 項測試及兩組學習／工具列瀏覽器驗證，全部通過。匯入列保留 createRemoteSource 與本次 studyLaneStatuses。
+
+## 上次移動時間（2026-09-14）
+
+| Requirement | Evidence | Result |
+|---|---|---|
+| 22：四級評分保存時間，包含同階段；到期依操作時間與目的間隔排序 | core 固定時間四級評分；HTTP 同卡 08:00、11:00 留在原階段，重讀檔案與 API；前端跨日、跨階段交錯排序；Chrome 四級按鈕寫入等於事件 at | pass |
+| 23：閱讀零寫入，延後保留時間，撤銷還原，失敗／衝突保持資料 | Chrome 翻頁／切卡／略過比對原側錄檔；core 與 HTTP 延後／撤銷；HTTP 過期 revision 比對原檔與注入保存失敗回復 | pass |
+| 24：舊紀錄回補含撤銷快照，讀取不保存，無歷史維持缺省 | core 舊歷史、撤銷首筆／第二筆及撤銷後再評分；HTTP GET 前後 YAML 相同，延後後持久化原移動時間；明確時間／缺少歷史／非法日期測試 | pass |
+
+本機驗證：pnpm test 316 tests / 58 files；pnpm build 通過（既有 bundle size 提示）；node scripts/qa-study.mjs 真實 Chrome 全部通過。未更動 UI 版面；本次無新增視覺設計驗收項目。
+
+交付前確認 demo 5185 與 API 4335 HTTP 200；trpg-notes 267 份已保護檔案雜湊相同。提交、推送、CI 與工作區更新另行核對。
+
+Reflexive：測試發現缺省欄位被填入 undefined，與 JSON 序列化後的形狀不同；已改為有值才補齊，保留缺省契約。既有核心／HTTP 測試定位問題，流程與技能毋須增加規則。

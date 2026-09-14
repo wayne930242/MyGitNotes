@@ -131,6 +131,9 @@ try {
     await page.click(`${lane} [data-rating="${rating}"]`); await saved(++count);
     const note = state().notes.find(note => note.path === 'notes/example/vocabulary.md'), event = state().events.at(-1);
     assert(note.stage.status === status && event.transition.intervalDays === days, 'Wrong stage or interval');
+    assert(note.lastMovedAt === event.at, 'Familiarity did not persist its move time');
+    const reloaded = await page.evaluate(() => fetch('/api/study').then(response => response.json()));
+    assert(reloaded.study.notes.find(value => value.id === note.id).lastMovedAt === event.at, 'Move time was lost on reload');
     assert(Math.abs(Date.parse(note.stage.due) - Date.parse(event.at) - days * 86400000) < 5, 'Interval differs from destination stage');
     const disk = parse(fs.readFileSync(path.join(root, 'notes/example/vocabulary.md'), 'utf8').split('---')[1]);
     assert(disk.status === status && disk.custom === 'keep-me', 'Status was not persisted or metadata changed');
@@ -138,6 +141,7 @@ try {
 
     await stable(initialPositions);
     await undo(++count);
+    assert(state().notes.find(note => note.path === 'notes/example/vocabulary.md').lastMovedAt === undefined, 'Undo did not restore the previous move time');
     await stable(initialPositions);
   }
   console.log('PASS four familiarity levels, destination intervals, status routing, next card and undo');

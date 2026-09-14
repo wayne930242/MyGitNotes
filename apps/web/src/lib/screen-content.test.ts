@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { createStudyNote, applyStudyAction, emptyStudyWorkspace } from '@github-notes/core/study';
+import { createStudyNote, applyStudyAction, emptyStudyWorkspace, applyStageAction, undoStudyAction } from '@github-notes/core/study';
 import { screenRowItems, studyRowItems } from './screen-content.js';
 import type { NoteItem } from './types.js';
 import type { ScreenRow } from '@github-notes/core/screen-page';
@@ -49,4 +49,28 @@ it('filters and sorts study views while preserving custom pin order and note sta
   expect(studyRowItems(row.items, { ...row, study: { filter: 'due', dueFirst: true } }, selected, study, now)).toEqual([]);
   expect(row.items.map(item => item.id)).toEqual(['pin-0', 'pin-1']);
   expect(selected.map(note => note.status)).toEqual(['working', 'done']);
+});
+
+
+it('orders cards by each move time plus its destination interval across days and after a same-stage move', () => {
+  const selected = notes.slice(0, 3).map(note => ({ ...note, status: 'working' }));
+  const progression = { stages: [{ status: 'working', intervalDays: 3 }, { status: 'review', intervalDays: 7 }], easy: 'two' as const };
+  let study = emptyStudyWorkspace();
+  // The older review-stage card is due between two working-stage cards.
+  const times = ['2026-09-14T08:00:00.000Z', '2026-09-10T09:00:00.000Z', '2026-09-14T10:00:00.000Z'];
+  selected.forEach((source, i) => {
+    const now = new Date(times[i]);
+    study = applyStageAction(study, createStudyNote(source, now), 'lane', 'working', progression, { kind: 'stage-review', rating: i === 1 ? 3 : 2 }, now);
+  });
+  const row: ScreenRow = { id: 'lane', name: 'Study', kind: 'custom', view: 'small', items: selected.map((note, i) => ({ id: `pin-${i}`, kind: 'note', notebookId: note.notebookId, path: note.path })), study: { filter: 'all', dueFirst: true } };
+  const ordered = () => studyRowItems([...row.items].reverse(), row, selected, study).map(item => item.id);
+  expect(study.notes.map(note => note.lastMovedAt)).toEqual(times);
+  expect(ordered()).toEqual(['pin-0', 'pin-1', 'pin-2']);
+  const first = study.notes[0];
+  study = applyStageAction(study, first, 'lane', 'working', progression, { kind: 'stage-review', rating: 2 }, new Date('2026-09-14T11:00:00.000Z'));
+  expect(ordered()).toEqual(['pin-1', 'pin-2', 'pin-0']);
+  const dueRow = { ...row, study: { filter: 'due' as const, dueFirst: true } };
+  expect(studyRowItems(row.items, dueRow, selected, study, new Date('2026-09-17T09:30:00.000Z')).map(item => item.id)).toEqual(['pin-1']);
+  study = undoStudyAction(study);
+  expect(ordered()).toEqual(['pin-0', 'pin-1', 'pin-2']);
 });

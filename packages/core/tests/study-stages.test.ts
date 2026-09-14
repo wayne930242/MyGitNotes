@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { nextStudyStage, StudyProgressionSchema, defaultStudyProgression, studyLaneStatuses } from '../src/study-stages.js';
-import { applyStageAction, createStudyNote, emptyStudyWorkspace, studyDue, undoStudyAction } from '../src/study.js';
+import { applyStageAction, createStudyNote, emptyStudyWorkspace, studyDue, undoStudyAction, StudyWorkspaceSchema, applyStudyAction, rebindStudyNote } from '../src/study.js';
 import { parseNoteContent, replaceNoteStatus } from '../src/frontmatter.js';
 
 const plan = { stages: [{ status: 'new', intervalDays: 1 }, { status: 'learning', intervalDays: 3 }, { status: 'review', intervalDays: 7 }, { status: 'known', intervalDays: 30 }], easy: 'two' as const };
@@ -12,6 +12,9 @@ describe('Lane stage progression', () => {
     const note = createStudyNote(source, now);
     const result = applyStageAction(emptyStudyWorkspace(), note, 'lane', 'learning', plan, { kind: 'stage-review', rating }, now);
     expect(result.notes[0].stage).toEqual({ laneId: 'lane', status, due: new Date(now.getTime() + intervalDays * 86400000).toISOString() });
+    expect(result.notes[0].lastMovedAt).toBe(now.toISOString());
+    expect(result.events[0].at).toBe(result.notes[0].lastMovedAt);
+    expect(undoStudyAction(result).notes[0].lastMovedAt).toBeUndefined();
     expect(result.events[0].transition).toMatchObject({ fromStatus: 'learning', toStatus: status });
     expect(studyDue(result.notes[0])).toBe(result.notes[0].stage!.due);
     expect(result.notes[0].cards[0].scheduler.reps).toBe(0);
@@ -69,5 +72,60 @@ describe('Default learning strategies', () => {
     expect(studyLaneStatuses({ ...row, source: { kind: 'tag', tag: 'review', notebookId: 'a' } }, notebooks)).toEqual(['new', 'known']);
     expect(studyLaneStatuses({ ...row, kind: 'custom', items: [{ id: 'note', kind: 'note', notebookId: 'a', path: 'notes/a/test.md' }] }, notebooks)).toEqual(['new', 'known']);
     expect(studyLaneStatuses({ ...row, source: { kind: 'tag', tag: 'review' } }, notebooks)).toEqual(['new', 'known', 'todo', 'review', 'done']);
+  });
+});
+
+
+describe('Last learning move time', () => {
+  const later = new Date('2026-09-16T09:30:00.000Z');
+  const firstMove = () => applyStageAction(emptyStudyWorkspace(), createStudyNote(source, now), 'lane', 'learning', plan, { kind: 'stage-review', rating: 2 }, now);
+  const legacy = (workspace: ReturnType<typeof firstMove>) => {
+    const copy = structuredClone(workspace);
+    for (const note of copy.notes) delete note.lastMovedAt;
+    for (const event of copy.events) if (event.before) delete event.before.lastMovedAt;
+    return copy;
+  };
+  it('restarts the interval when a later rating stays in the same stage and restores it on undo', () => {
+    const first = firstMove();
+    const second = applyStageAction(first, first.notes[0], 'lane', 'learning', plan, { kind: 'stage-review', rating: 2 }, later);
+    expect(second.notes[0]).toMatchObject({ lastMovedAt: later.toISOString(), stage: { status: 'learning', due: '2026-09-19T09:30:00.000Z' } });
+    expect(second.events.at(-1)?.transition).toMatchObject({ fromStatus: 'learning', toStatus: 'learning' });
+    expect(undoStudyAction(second).notes[0]).toEqual(first.notes[0]);
+  });
+  it('preserves the move time through postponement, legacy configuration and rebinding', () => {
+    const first = firstMove();
+    const postponed = applyStageAction(first, first.notes[0], 'lane', 'learning', plan, { kind: 'stage-postpone', due: '2026-10-01T00:00:00.000Z' }, later);
+    expect(postponed.notes[0].lastMovedAt).toBe(now.toISOString());
+    expect(undoStudyAction(postponed).notes[0]).toEqual(first.notes[0]);
+    const paused = applyStudyAction(first, first.notes[0], first.notes[0].cards[0].id, { kind: 'suspend' }, later);
+    expect(paused.notes[0].lastMovedAt).toBe(now.toISOString());
+    expect(undoStudyAction(paused).notes[0]).toEqual(first.notes[0]);
+    const rebound = rebindStudyNote(first, first.notes[0], { ...source, content: 'Updated question\n\n---\n\nAnswer' }, true, later);
+    expect(rebound.notes[0].lastMovedAt).toBe(now.toISOString());
+    const unread = applyStageAction(emptyStudyWorkspace(), createStudyNote(source, now), 'lane', 'learning', plan, { kind: 'stage-postpone', due: '2026-10-01T00:00:00.000Z' }, later);
+    expect(unread.notes[0].lastMovedAt).toBeUndefined();
+  });
+  it('backfills old ratings and undo snapshots without changing the input or inventing missing history', () => {
+    const first = firstMove();
+    const second = applyStageAction(first, first.notes[0], 'lane', 'learning', plan, { kind: 'stage-read', rating: 2 }, later);
+    const old = legacy(second), text = JSON.stringify(old);
+    const restored = StudyWorkspaceSchema.parse(old);
+    expect(restored.notes[0].lastMovedAt).toBe(later.toISOString());
+    expect(restored.events.at(-1)?.before?.lastMovedAt).toBe(now.toISOString());
+    expect(undoStudyAction(restored).notes[0]).toEqual(first.notes[0]);
+    expect(JSON.stringify(old)).toBe(text);
+    expect(StudyWorkspaceSchema.parse(legacy(undoStudyAction(second))).notes[0].lastMovedAt).toBe(now.toISOString());
+    expect(StudyWorkspaceSchema.parse(legacy(undoStudyAction(first))).notes[0].lastMovedAt).toBeUndefined();
+    const afterUndo = undoStudyAction(second);
+    const third = applyStageAction(afterUndo, afterUndo.notes[0], 'lane', 'learning', plan, { kind: 'stage-review', rating: 3 }, new Date('2026-09-17T12:00:00.000Z'));
+    expect(StudyWorkspaceSchema.parse(legacy(third)).notes[0].lastMovedAt).toBe('2026-09-17T12:00:00.000Z');
+    const unknown = { ...emptyStudyWorkspace(), notes: [createStudyNote(source, now)] };
+    expect(StudyWorkspaceSchema.parse(unknown).notes[0].lastMovedAt).toBeUndefined();
+  });
+  it('keeps explicit timestamps when event history is unavailable and validates them', () => {
+    const workspace = firstMove(); workspace.events = [];
+    expect(StudyWorkspaceSchema.parse(workspace).notes[0].lastMovedAt).toBe(now.toISOString());
+    workspace.notes[0].lastMovedAt = 'invalid';
+    expect(StudyWorkspaceSchema.safeParse(workspace).success).toBe(false);
   });
 });

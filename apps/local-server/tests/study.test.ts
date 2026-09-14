@@ -22,7 +22,7 @@ beforeEach(async () => {
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   url = `http://127.0.0.1:${(server.address() as {port: number}).port}/api/study`;
 });
-afterEach(async () => { await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true }); vi.unstubAllEnvs(); });
+afterEach(async () => { await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true }); vi.unstubAllEnvs(); vi.useRealTimers(); });
 const put = (value: unknown, revision = 'missing') => fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ study: value, revision }) });
 
 it('persists a study events and memory state and rejects stale writes', async () => {
@@ -133,4 +133,56 @@ it('requires explicit stages when only an archival status is configured', async 
   expect((await act(await stageRequest())).status).toBe(400);
   expect(await readFile(path.join(root, source.path), 'utf8')).toBe(original);
   expect((await fetch(url).then(response => response.json())).study.events).toEqual([]);
+});
+
+
+it('persists each same-stage move time, reloads it and restores the previous time on undo', async () => {
+  await stageFixture();
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-09-14T08:00:00.000Z'));
+  const first = await act(await stageRequest('stage-review', { rating: 2 }));
+  expect(first.status).toBe(200);
+  const initial = await first.json();
+  const firstAt = initial.study.notes[0].lastMovedAt;
+  expect(firstAt).toBe(initial.study.events.at(-1).at);
+  const request = await stageRequest('stage-review', { rating: 2 });
+  vi.setSystemTime(new Date('2026-09-14T11:00:00.000Z'));
+  const response = await act(request); expect(response.status).toBe(200);
+  const saved = await response.json(), moved = saved.study.notes[0];
+  expect(saved.note.status).toBe('new');
+  expect(moved.lastMovedAt).toBe(saved.study.events.at(-1).at);
+  expect(Date.parse(moved.lastMovedAt)).toBeGreaterThan(Date.parse(firstAt));
+  expect(Date.parse(moved.stage.due) - Date.parse(moved.lastMovedAt)).toBe(86400000);
+  const file = path.join(root, STUDY_FILE), persisted = await readFile(file, 'utf8');
+  expect(parse(persisted).notes[0].lastMovedAt).toBe(moved.lastMovedAt);
+  expect((await fetch(url).then(r => r.json())).study.notes[0].lastMovedAt).toBe(moved.lastMovedAt);
+  expect((await act(request)).status).toBe(409);
+  expect(await readFile(file, 'utf8')).toBe(persisted);
+  const undone = await act(await stageRequest('undo', { eventId: saved.study.events.at(-1).id }));
+  expect(undone.status).toBe(200);
+  expect((await undone.json()).study.notes[0]).toEqual(initial.study.notes[0]);
+  expect((await fetch(url).then(r => r.json())).study.notes[0].lastMovedAt).toBe(firstAt);
+});
+
+it('reads legacy move history without rewriting YAML and keeps its timestamp through postponement', async () => {
+  await stageFixture();
+  const response = await act(await stageRequest('stage-review', { rating: 2 }));
+  expect(response.status).toBe(200);
+  const saved = await response.json(), firstAt = saved.study.notes[0].lastMovedAt;
+  delete saved.study.notes[0].lastMovedAt;
+  for (const event of saved.study.events) if (event.before) delete event.before.lastMovedAt;
+  const file = path.join(root, STUDY_FILE), legacy = stringify(saved.study);
+  await writeFile(file, legacy);
+  const restored = await fetch(url).then(r => r.json());
+  expect(restored.study.notes[0].lastMovedAt).toBe(firstAt);
+  expect(await readFile(file, 'utf8')).toBe(legacy);
+  const due = new Date(Date.parse(firstAt) + 7 * 86400000).toISOString();
+  const postponed = await act(await stageRequest('stage-postpone', { due }));
+  expect(postponed.status).toBe(200);
+  const result = await postponed.json();
+  expect(result.study.notes[0]).toMatchObject({ lastMovedAt: firstAt, stage: { due } });
+  expect(parse(await readFile(file, 'utf8')).notes[0].lastMovedAt).toBe(firstAt);
+  const undone = await act(await stageRequest('undo', { eventId: result.study.events.at(-1).id }));
+  expect(undone.status).toBe(200);
+  expect((await undone.json()).study.notes[0].lastMovedAt).toBe(firstAt);
 });
