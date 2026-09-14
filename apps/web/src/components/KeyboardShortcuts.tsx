@@ -56,6 +56,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
     { id: 'new-note', accelerator: 'N', label: t('header.newNote'), disabled: !canCreateNote, run: onCreateNote },
     { id: 'search', accelerator: '/', label: t('shortcuts.search'), disabled: activeTab !== 'notes', run: onFocusSearch },
     { id: 'settings', accelerator: ',', dataKey: 'comma', label: t('nav.settings'), disabled: false, run: () => onNavigate('settings') },
+    { id: 'toggle-screen-sidebar', accelerator: '[', label: t('shortcuts.toggleScreenSidebar'), disabled: activeTab !== 'screen', run: () => window.dispatchEvent(new CustomEvent('toggle-screen-sidebar')) },
     { id: 'help', accelerator: '?', label: t('shortcuts.help'), disabled: false, run: () => onModeChange('help') },
   ], [activeTab, canCreateNote, onCreateNote, onFocusSearch, onModeChange, onNavigate, t]);
 

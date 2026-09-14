@@ -37,6 +37,10 @@
     "./study-stages": {
       "types": "./dist/study-stages.d.ts",
       "default": "./dist/study-stages.js"
+    },
+    "./note-filters": {
+      "types": "./dist/note-filters.d.ts",
+      "import": "./dist/note-filters.js"
     }
   },
   "scripts": {

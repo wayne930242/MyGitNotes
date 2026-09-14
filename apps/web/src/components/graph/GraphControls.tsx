@@ -1,73 +1,28 @@
-import type { RefObject } from 'react';
-import { RotateCcw, Filter, Eye, EyeOff, Search } from 'lucide-react';
+import type { ReactNode, RefObject } from 'react';
+import { RotateCcw, Eye, EyeOff } from 'lucide-react';
 import { Select } from '../Select.js';
 import { useTranslation } from '../../lib/i18n/index.js';
-import type { NotebookConfig } from '../../lib/types.js';
 import { GRAPH_COLOR_MODES, GRAPH_PALETTES, type GraphAppearance } from '../../lib/graph-colors.js';
 
 interface GraphControlsProps {
   controlsRef: RefObject<HTMLDivElement>;
-  notebooks: NotebookConfig[]; selectedNotebookId: string; onSelectNotebook?: (id: string) => void;
-  searchQuery: string; onSearchChange: (value: string) => void;
-  allTags: string[]; selectedTag: string | null; onTagChange: (tag: string | null) => void;
+  filterPanel: ReactNode; matchingCount: number;
   appearance: GraphAppearance; onAppearanceChange: (appearance: GraphAppearance) => void;
   visibleColorGroups: { key: string; label: string; color: string }[]; appearanceSaveError: boolean;
   showOrphans: boolean; onToggleOrphans: () => void; onReset: () => void;
   nodeCount: number; linkCount: number;
 }
 
-export function GraphControls({ controlsRef, notebooks, selectedNotebookId, onSelectNotebook, searchQuery, onSearchChange, allTags, selectedTag, onTagChange, appearance, onAppearanceChange, visibleColorGroups, appearanceSaveError, showOrphans, onToggleOrphans, onReset, nodeCount, linkCount }: GraphControlsProps) {
+export function GraphControls({ controlsRef, filterPanel, matchingCount, appearance, onAppearanceChange, visibleColorGroups, appearanceSaveError, showOrphans, onToggleOrphans, onReset, nodeCount, linkCount }: GraphControlsProps) {
   const { t } = useTranslation();
   return (
-      <div ref={controlsRef} className="absolute top-3 left-3 right-3 z-30 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+      <div ref={controlsRef} className="absolute top-3 left-3 right-3 z-40 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        <div className="pointer-events-auto w-full max-w-md">{filterPanel}</div>
         <div className="flex flex-wrap items-center gap-2 pointer-events-auto bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-xs">
-          {/* Notebook selector if multiple */}
-          {notebooks.length > 1 && onSelectNotebook && (
-            <Select
-              aria-label="Notebook"
-              value={selectedNotebookId}
-              onValueChange={onSelectNotebook}
-              options={[
-                { value: 'all', label: t('graph.allNotebooks') },
-                ...notebooks.map((nb) => ({ value: nb.id, label: nb.title })),
-              ]}
-              className="h-7 text-xs px-2"
-            />
-          )}
-
-          {/* Quick search input */}
-          <div className="relative flex items-center">
-            <Search size={12} className="text-slate-400 absolute left-2 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder={t('header.searchPlaceholder')}
-              className="h-7 text-xs pl-6 pr-2 bg-transparent border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 w-28 md:w-36"
-            />
-          </div>
-
-          {/* Tag filter */}
-          {allTags.length > 0 && (
-            <div className="flex items-center gap-1">
-              <Filter size={13} className="text-slate-400 shrink-0" />
-              <Select
-                aria-label={t('graph.filterTag')}
-                value={selectedTag || 'all'}
-                onValueChange={(val) => onTagChange(val === 'all' ? null : val)}
-                options={[
-                  { value: 'all', label: t('graph.allTags') },
-                  ...allTags.map((tag) => ({ value: tag, label: `#${tag}` })),
-                ]}
-                className="h-7 text-xs px-2"
-              />
-            </div>
-          )}
-
           {/* Toggle Unlinked */}
           <details className="relative">
             <summary className="cursor-pointer rounded-md px-2.5 py-1 text-slate-600 dark:text-slate-300">{t('graph.appearance')}</summary>
-            <div className="absolute left-0 top-full mt-2 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+            <div className="absolute right-0 top-full mt-2 max-h-[50dvh] overflow-y-auto w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-900">
               <label className="mb-1 block text-slate-500">{t('graph.colorBy')}</label>
               <Select aria-label={t('graph.colorBy')} value={appearance.mode} onValueChange={mode => onAppearanceChange({ ...appearance, mode: mode as GraphAppearance['mode'] })} options={GRAPH_COLOR_MODES.map(mode => ({ value: mode, label: t(`graph.color.${mode}`) }))} className="mb-3 w-full" />
               <label className="mb-1 block text-slate-500">{t('graph.palette')}</label>
@@ -108,9 +63,8 @@ export function GraphControls({ controlsRef, notebooks, selectedNotebookId, onSe
 
         {/* Stats Pill */}
         <div className="pointer-events-auto bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm text-xs text-slate-500 dark:text-slate-400 flex items-center gap-3">
-          <span>
-            <strong className="text-slate-800 dark:text-slate-200">{nodeCount}</strong> {t('graph.nodes')}
-          </span>
+          <span data-filter-results={matchingCount}>{t('filters.results', { count: matchingCount })}</span>
+          <span data-graph-nodes={nodeCount}>{t('filters.graphTotal', { count: nodeCount })}</span>
           <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
           <span>
             <strong className="text-slate-800 dark:text-slate-200">{linkCount}</strong> {t('graph.links')}

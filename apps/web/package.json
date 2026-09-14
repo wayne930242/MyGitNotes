@@ -25,6 +25,7 @@
     "lucide-react": "^0.441.0",
     "marked": "^14.1.1",
     "node-diff3": "^3.2.1",
+    "nuqs": "^2.10.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-force-graph-2d": "^1.29.1",

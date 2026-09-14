@@ -12,20 +12,21 @@ function DropZone({ path, position, disabled, children }: { path: string; positi
   const drop = useDroppable({ id: `${position}:${path}`, disabled, data: { path, position } });
   return <div ref={drop.setNodeRef} data-folder-drop={`${position}:${path}`} className={`${position === 'inside' ? 'folder-drop-body' : 'folder-drop-line'} ${drop.isOver ? 'is-over' : ''}`}>{children}</div>;
 }
-function TreeItem({ folder, disabled, selected, onSelect, onManage }: { folder: FolderItem; disabled: boolean; selected: boolean; onSelect: () => void; onManage: () => void }) {
+function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage }: { folder: FolderItem; reorder: boolean; disabled: boolean; selected: boolean; onSelect: () => void; onManage: () => void }) {
   const { t } = useTranslation();
-  const drag = useDraggable({ id: folder.path, disabled });
+  const drag = useDraggable({ id: folder.path, disabled: disabled || !reorder });
   return <div ref={drag.setNodeRef} className={`folder-tree-item ${selected ? 'is-selected' : ''}`} style={{ marginLeft: (folder.path.split('/').length - 1) * 14, opacity: drag.isDragging ? .35 : undefined }}>
-    <DropZone path={folder.path} position="before" disabled={disabled} />
-    <DropZone path={folder.path} position="inside" disabled={disabled}>
-      {!disabled && <button className="folder-grip" ref={drag.setActivatorNodeRef} {...drag.listeners} {...drag.attributes} aria-label={`${t('folder.move')}: ${folder.title}`}><GripVertical size={12} /></button>}
+    <DropZone path={folder.path} position="before" disabled={disabled || !reorder} />
+    <DropZone path={folder.path} position="inside" disabled={disabled || !reorder}>
+      {!disabled && reorder && <button type="button" className="folder-grip" ref={drag.setActivatorNodeRef} {...drag.listeners} {...drag.attributes} aria-label={`${t('folder.move')}: ${folder.title}`}><GripVertical size={12} /></button>}
       <button type="button" className="folder-tree-select" aria-pressed={selected} title={folder.description || folder.path} onClick={onSelect}><Folder size={16} /><span>{folder.title}</span></button>
       {!disabled && <button type="button" className="folder-manage" aria-label={`${t('folder.manage')}: ${folder.title}`} onClick={onManage}><MoreHorizontal size={15} /></button>}
     </DropZone>
-    <DropZone path={folder.path} position="after" disabled={disabled} />
+    <DropZone path={folder.path} position="after" disabled={disabled || !reorder} />
   </div>;
 }
-export function FolderTree({ folders, notebookId, selected, onSelect, writable, beforeChange, onChanged, indexFolders, onOpenIndex }: {
+export function FolderTree({ reorder = false, folders, notebookId, selected, onSelect, writable, beforeChange, onChanged, indexFolders, onOpenIndex }: {
+  reorder?: boolean;
   folders: FolderItem[]; notebookId: string; selected: string | null; onSelect: (folder: string | null) => void;
   indexFolders: string[]; onOpenIndex: (folder: string, revision?: string) => Promise<void>;
   writable: boolean; beforeChange?: () => void; onChanged?: () => Promise<void>;
@@ -81,13 +82,13 @@ export function FolderTree({ folders, notebookId, selected, onSelect, writable, 
     <div className="folder-tree-heading"><h4>{t('folder.folders')}</h4>{writable && <button type="button" className="ui-icon-button" disabled={busy} aria-label={t('folder.create')} onClick={() => open('create', selected || '')}><FolderPlus size={16} /></button>}</div>
     {!dialog && errorMessage}
     <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={({ active }) => setDragging(String(active.id))} onDragCancel={() => setDragging(undefined)} onDragEnd={({ active, over }) => {
-      setDragging(undefined); if (!over || disabled) return;
+      setDragging(undefined); if (!over || disabled || !reorder) return;
       const data = over.data.current;
       const command = folderDropCommand(notebookId, String(active.id), data?.path || '', data?.position || 'inside', list);
       if (command) void mutate(command);
     }}>
-      <DropZone path="" position="inside" disabled={disabled}><button type="button" className={`folder-tree-root ${selected === null ? 'is-selected' : ''}`} aria-pressed={selected === null} onClick={() => onSelect(null)}>{t('folder.allFolders')}</button></DropZone>
-      {list.map(folder => <TreeItem key={folder.path} folder={folder} disabled={disabled} selected={selected === folder.path} onSelect={() => onSelect(folder.path)} onManage={() => open('manage', folder.path)} />)}
+      <DropZone path="" position="inside" disabled={disabled || !reorder}><button type="button" className={`folder-tree-root ${selected === null ? 'is-selected' : ''}`} aria-pressed={selected === null} onClick={() => onSelect(null)}>{t('folder.allFolders')}</button></DropZone>
+      {list.map(folder => <TreeItem reorder={reorder} key={folder.path} folder={folder} disabled={disabled} selected={selected === folder.path} onSelect={() => onSelect(folder.path)} onManage={() => open('manage', folder.path)} />)}
       <DragOverlay>{dragging && <div className="screen-drag-overlay"><Folder size={16} />{list.find(folder => folder.path === dragging)?.title}</div>}</DragOverlay>
     </DndContext>
     {dialog && <WorkspaceDialog title={dialog.kind === 'manage' ? target?.title || dialog.path : t(`folder.${dialog.kind}`)} onClose={() => { if (!busy) setDialog(undefined); }}>

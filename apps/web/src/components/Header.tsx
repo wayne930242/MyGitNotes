@@ -66,7 +66,7 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
           <Select aria-label={t('sidebar.notebooks')} value={selectedNotebookId}
             title={notebooks.find(nb => nb.id === selectedNotebookId)?.title}
             disabled={notebookDisabled || navigationDisabled} onValueChange={onSelectNotebook}
-            options={notebooks.map(nb => ({ value: nb.id, label: nb.title }))} />
+            options={[...((activeTab === 'notes' || activeTab === 'graph') ? [{ value: 'all', label: t('graph.allNotebooks') }] : []), ...notebooks.map(nb => ({ value: nb.id, label: nb.title }))]} />
           </>}
         </div>
         <div className="header-utilities">

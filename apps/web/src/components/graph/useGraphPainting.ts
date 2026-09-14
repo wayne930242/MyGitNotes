@@ -22,7 +22,7 @@ export function useGraphPainting({ nodes, hoverNode, focusNodeId, neighbors, isD
       const radius = nodeRadius(n);
 
       ctx.save();
-      ctx.globalAlpha = isDimmed ? 0.25 : 1.0;
+      ctx.globalAlpha = (isDimmed ? 0.25 : 1.0) * (n.external ? 0.35 : 1);
 
       // Outer glow for hovered
       if (isHovered) {
@@ -113,6 +113,7 @@ export function useGraphPainting({ nodes, hoverNode, focusNodeId, neighbors, isD
       const box = candidates.find(b => !occupied.some(o => b.x < o.x + o.w && b.x + b.w > o.x && b.y < o.y + o.h && b.y + b.h > o.y)) || (hoverNode ? candidates[candidates.length - 1] : undefined);
       if (!box) continue;
       occupied.push(box);
+      ctx.globalAlpha = n.external ? 0.45 : 1;
       ctx.fillStyle = isDark ? 'rgba(15,23,42,0.9)' : 'rgba(248,250,252,0.94)';
       ctx.beginPath();
       ctx.roundRect(box.x, box.y, w, h, 4 / scale);

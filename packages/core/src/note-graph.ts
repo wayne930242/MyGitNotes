@@ -3,6 +3,7 @@ import { resolveWorkspaceHref } from './workspace-links.js';
 
 export interface NoteGraphNode {
   id: string;
+  external?: boolean;
   title: string;
   notebookId: string;
   status?: string;
