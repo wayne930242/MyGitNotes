@@ -7,6 +7,9 @@
 .study-page .prose-custom { overflow-wrap: anywhere; }
 .study-page pre { max-width: 100%; overflow: auto; touch-action: auto; }
 .study-page img { max-width: 100%; }
+.study-save-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.study-header-actions { display: flex; align-items: center; gap: 8px; }
+.study-undo-slot { width: 44px; height: 44px; }
 .study-footer { flex: none; display: flex; flex-direction: column; gap: 6px; padding-bottom: env(safe-area-inset-bottom); }
 .study-footer-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .study-pages { display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; flex: 1; }

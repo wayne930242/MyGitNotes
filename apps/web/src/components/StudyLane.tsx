@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { Button } from './Button.js';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Ellipsis, Undo2 } from 'lucide-react';
@@ -28,8 +29,8 @@ export function StudyLaneSettings({ progression, disabled, onChange }: { progres
   </fieldset>;
 }
 
-export function StudyLane({ row, notes, allNotes, controller, disabled, onOpen }: {
-  row: ScreenRow; notes: NoteItem[]; allNotes: NoteItem[]; controller: StudyController; disabled: boolean; onOpen: (note: NoteItem) => void;
+export function StudyLane({ row, notes, allNotes, controller, disabled, onOpen, toolbar }: {
+  toolbar: HTMLElement | null; row: ScreenRow; notes: NoteItem[]; allNotes: NoteItem[]; controller: StudyController; disabled: boolean; onOpen: (note: NoteItem) => void;
 }) {
   const { t } = useTranslation();
   const [skipped, setSkipped] = useState<string[]>([]), [selected, setSelected] = useState<string>();
@@ -49,22 +50,22 @@ export function StudyLane({ row, notes, allNotes, controller, disabled, onOpen }
   const advance = () => { if (current) setSkipped(values => [...values, current.path]); setSelected(undefined); };
   const more = <Button size="icon" className="study-more" aria-label={t('study.more')} title={t('study.more')} onClick={() => setActionsOpen(true)}><Ellipsis size={20} /></Button>;
   return <div className="study-lane">
+    {toolbar && createPortal(<Button size="icon" className="study-undo" title={t('study.undo')} disabled={busy || !undoNote} onClick={() => {
+          if (undoNote && last) void controller.action(undoNote, row.id, 'undo', { eventId: last.id }).then(ok => { if (ok) { setSkipped(values => values.filter(path => path !== undoNote.path)); setSelected(undoNote.path); setActionsOpen(false); } });
+        }} aria-label={t('study.undo')}><Undo2 size={18} /></Button>, toolbar)}
+    {controller.error && <div className="study-alert" role="alert">{controller.error}<Button disabled={controller.saving} onClick={() => void controller.reload()}>{t('study.reload')}</Button></div>}
+    <span className="study-save-status" role="status">{controller.saving ? t('study.saving') : ''}</span>
     {!row.progression ? <p>{t('study.configureLane')}</p> : current ? <StudyLaneCard key={`${current.notebookId}:${current.path}`} note={current} row={row} controller={controller} disabled={busy} onDone={advance} onOpen={() => onOpen(current)} previous={previous} next={next} onMove={move} more={more} remaining={queue.length} />
-      : <div className="study-lane-empty"><p>{t('study.queueComplete')}</p>{more}</div>}
+      : <><div className="study-lane-empty"><p>{t('study.queueComplete')}</p></div><StudyFooter progression={row.progression} pageCount={0} page={0} canRate={false} disabled previous={false} next={false} onMove={move} onPage={() => {}} onRate={() => {}} onDone={advance} more={more} remaining={0} /></>}
     {actionsOpen && <WorkspaceDialog title={t('study.more')} onClose={() => setActionsOpen(false)}>
       <div className="study-session-actions">
         <p>{queue.length} {t('study.remaining')}</p>
         <label>{t('study.pickCard')}<Select className="study-pick-card" aria-label={t('study.pickCard')} value={current?.path || ''} disabled={busy || !notes.length}
           onValueChange={value => { setSelected(value); setActionsOpen(false); }} options={[{ value: '', label: t('study.queueComplete') }, ...notes.map(note => ({ value: note.path, label: note.title }))]} /></label>
-        <Button disabled={busy || !undoNote} onClick={() => {
-          if (undoNote && last) void controller.action(undoNote, row.id, 'undo', { eventId: last.id }).then(ok => { if (ok) { setSkipped(values => values.filter(path => path !== undoNote.path)); setSelected(undoNote.path); setActionsOpen(false); } });
-        }} aria-label={t('study.undo')}><Undo2 size={18} />{t('study.undo')}</Button>
         {current && <StudyPostpone key={`${current.notebookId}:${current.path}`} note={current} row={row} controller={controller} disabled={busy} onDone={() => { advance(); setActionsOpen(false); }} />}
         {controller.error && <p role="alert">{controller.error}</p>}
       </div>
     </WorkspaceDialog>}
-    {controller.error && <div className="study-alert" role="alert">{controller.error}<Button disabled={controller.saving} onClick={() => void controller.reload()}>{t('study.reload')}</Button></div>}
-    {controller.saving && <p role="status">{t('study.saving')}</p>}
   </div>;
 }
 
@@ -99,7 +100,7 @@ function StudyLaneCard({ note, row, controller, disabled, onDone, onOpen, previo
   }, [note.content, note.title]);
   const index = Math.min(page, pages.length - 1), canRate = !disabled && Boolean(resolved) && supported && revealed;
   const turnPage = (target: number) => {
-    const value = Math.max(0, Math.min(pages.length - 1, target));
+    const value = (target % pages.length + pages.length) % pages.length;
     setPage(value);
     if (value > 0) setRevealed(true);
     pageBody.current?.scrollTo({ top: 0 });
@@ -118,23 +119,32 @@ function StudyLaneCard({ note, row, controller, disabled, onDone, onOpen, previo
           if (Math.abs(dx) >= 75 && Math.abs(dx) >= Math.abs(dy) * 1.5) turnPage(index + (dx < 0 ? 1 : -1));
         }}><div className="prose-custom" data-markdown-view dangerouslySetInnerHTML={{ __html: renderNote(pages[index], note.path) }} /></div>
     </article>
-    <footer className="study-footer" aria-label={t('study.controls')}>
+    <StudyFooter progression={row.progression!} status={note.status} pageCount={pages.length} page={index} canRate={canRate} disabled={disabled} previous={previous} next={next} onMove={onMove} onPage={turnPage} onRate={rate} onDone={onDone} more={more} remaining={remaining} />
+  </>;
+}
+
+function StudyFooter({ progression, status, pageCount, page, canRate, disabled, previous, next, onMove, onPage, onRate, onDone, more, remaining }: {
+  progression: StudyProgression; status?: string; pageCount: number; page: number; canRate: boolean; disabled: boolean;
+  previous: boolean; next: boolean; onMove: (direction: number) => void; onPage: (page: number) => void;
+  onRate: (rating: Familiarity) => void; onDone: () => void; more: ReactNode; remaining: number;
+}) {
+  const { t } = useTranslation();
+  return <footer className="study-footer" aria-label={t('study.controls')}>
       <div className="study-footer-meta">
-        <nav className="study-pages" aria-label={t('study.page')}><span>Page</span>{pages.map((_, i) => <Button key={i} aria-label={`Page ${i + 1}`} aria-pressed={index === i} onClick={() => turnPage(i)}>{i + 1}</Button>)}</nav>
+        <nav className="study-pages" aria-label={t('study.page')}><span>Page</span>{Array.from({ length: pageCount }, (_, i) => <Button key={i} aria-label={`Page ${i + 1}`} aria-pressed={page === i} onClick={() => onPage(i)}>{i + 1}</Button>)}</nav>
         <span className="study-remaining">{remaining} {t('study.remaining')}</span>{more}
       </div>
+      <div className="study-ratings">{([1, 2, 3, 4] as const).map(rating => {
+        const target = nextStudyStage(progression, status, rating);
+        return <Button data-rating={rating} key={rating} disabled={!canRate} onClick={() => onRate(rating)} title={`${target.status} · ${target.intervalDays} ${t('study.days')}`}>
+          <span>{t((['study.again', 'study.hard', 'study.good', 'study.easy'] as const)[rating - 1])}</span><small>{target.intervalDays} {t('study.days')}</small>
+        </Button>;
+      })}</div>
       <div className="study-footer-navigation">
         <Button size="icon" disabled={!previous} aria-label={t('study.previousCard')} onClick={() => onMove(-1)}><ChevronLeft size={24} /></Button>
-        <Button variant="primary" className="study-reveal" disabled={index === pages.length - 1} onClick={() => turnPage(index + 1)}>{t('study.reveal')}</Button>
+        <Button variant="primary" className="study-reveal" disabled={pageCount === 0} onClick={() => onPage(page + 1)}>{t('study.reveal')}</Button>
         <Button className="study-skip" disabled={disabled} onClick={onDone}>{t('study.skip')}</Button>
         <Button size="icon" disabled={!next} aria-label={t('study.nextCard')} onClick={() => onMove(1)}><ChevronRight size={24} /></Button>
       </div>
-      {revealed && <div className="study-ratings">{([1, 2, 3, 4] as const).map(rating => {
-        const target = nextStudyStage(row.progression!, note.status, rating);
-        return <Button data-rating={rating} key={rating} disabled={!canRate} onClick={() => rate(rating)} title={`${target.status} · ${target.intervalDays} ${t('study.days')}`}>
-          <span>{t((['study.again', 'study.hard', 'study.good', 'study.easy'] as const)[rating - 1])}</span><small>{target.intervalDays} {t('study.days')}</small>
-        </Button>;
-      })}</div>}
-    </footer>
-  </>;
+    </footer>;
 }
