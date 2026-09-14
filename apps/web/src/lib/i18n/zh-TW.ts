@@ -34,7 +34,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "study.previousPage": "上一頁",
   "study.nextPage": "下一頁",
   "study.more": "更多操作",
-  "study.reveal": "顯示下頁",
+  "study.reveal": "翻頁",
   "study.again": "忘記",
   "study.hard": "吃力",
   "study.good": "記得",
