@@ -238,10 +238,16 @@ const AppContent: React.FC = () => {
   const [newNoteStatus, setNewNoteStatus] = useState<string>('inbox');
   const [newNoteFolder, setNewNoteFolder] = useState<string>('');
   const [shortcutMode, setShortcutMode] = useState<ShortcutSurfaceMode | null>(null);
+  const [newNoteTags, setNewNoteTags] = useState<string[]>([]);
   const newNoteFolders = useMemo(() => folders.filter(folder => folder.notebookId === selectedNotebookId).map(folder => folder.path).sort(), [folders, selectedNotebookId]);
-  const openNewNote = (status = notebookStatuses[0]) => {
-    setNewNoteStatus(status);
-    setNewNoteFolder('');
+  const openNewNote = (options?: string | { status?: string; folder?: string; tag?: string; tags?: string[]; notebookId?: string }) => {
+    const opts = typeof options === 'string' ? { status: options } : options || {};
+    if (opts.notebookId && opts.notebookId !== selectedNotebookId && config?.notebooks.some(n => n.id === opts.notebookId)) {
+      setSelectedNotebookId(opts.notebookId);
+    }
+    setNewNoteStatus(opts.status || notebookStatuses[0]);
+    setNewNoteFolder(opts.folder || '');
+    setNewNoteTags(opts.tags || (opts.tag ? [opts.tag] : []));
     setCreateError('');
     setIsNewNoteOpen(true);
   };
@@ -586,12 +592,12 @@ const AppContent: React.FC = () => {
         id: slug,
         title,
         status: status || undefined,
-        tags: [],
+        tags: newNoteTags,
       }, status);
 
       const res = remote ? { note: stageWorkingNote({
         id: slug, path: notePath, notebookId: currentNotebook!.id, title,
-        content: initialContent, metadata: initialMetadata, status, tags: [], revision,
+        content: initialContent, metadata: initialMetadata, status, tags: newNoteTags, revision,
       }, null) } : await saveNote({
         path: notePath,
         notebookId: currentNotebook?.id,
@@ -607,6 +613,7 @@ const AppContent: React.FC = () => {
       setIsNewNoteOpen(false);
       setNewNoteTitle('');
       setNewNoteFolder('');
+      setNewNoteTags([]);
       setNewNoteStatus(notebookStatuses[0]);
       const statusRes = await fetchGitStatus();
       setGitStatus(statusRes.status);
@@ -937,7 +944,7 @@ const AppContent: React.FC = () => {
           </main>
         )}
 
-        {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} focusedLaneId={route.lane} onStudySaved={note => { if (note) { setNotes(values => values.map(value => value.path === note.path && value.notebookId === note.notebookId ? note : value)); } else { void refreshWorkspace(); } void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message)); }} notebooks={config?.notebooks || []} notes={notes} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} /></React.Suspense>}
+        {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} focusedLaneId={route.lane} onStudySaved={note => { if (note) { setNotes(values => values.map(value => value.path === note.path && value.notebookId === note.notebookId ? note : value)); } else { void refreshWorkspace(); } void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message)); }} notebooks={config?.notebooks || []} notes={notes} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} onCreateNote={openNewNote} /></React.Suspense>}
 
         {activeTab === 'graph' && (
           <main className="workspace-route graph-main flex-1 w-full h-full relative min-h-0">
@@ -1114,6 +1121,21 @@ const AppContent: React.FC = () => {
                 <datalist id="create-note-folders">{newNoteFolders.map(folder => <option key={folder} value={folder} />)}</datalist>
               </div>
 
+              {newNoteTags.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                    {t('notes.tags')}
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 py-1">
+                    {newNoteTags.map(tag => (
+                      <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                   {t('createNote.initialStatus')}
@@ -1124,7 +1146,7 @@ const AppContent: React.FC = () => {
 
             <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
               <button
-                onClick={() => setIsNewNoteOpen(false)}
+                onClick={() => { setIsNewNoteOpen(false); setNewNoteTags([]); }}
                 className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition active:scale-95"
               >
                 {t('common.cancel')}

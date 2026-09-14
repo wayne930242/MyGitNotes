@@ -42,9 +42,29 @@ function MovableCard({ item, row, disabled, remove, ...content }: ScreenContentP
   </div>;
 }
 
-function Lane({ row, disabled, study, onStudy, onStudyChange, onView, onSort, onAdd, onRemove, ...content }: ScreenContentProps & {
+export function createLaneNoteContext(
+  row: ScreenRow,
+  notebooks: NotebookConfig[]
+): { notebookId?: string; folder?: string; tag?: string } | null {
+  if (row.kind !== 'dynamic') return null;
+  if (row.source.kind === 'tag') {
+    return { tag: row.source.tag, notebookId: row.source.notebookId };
+  }
+  if (row.source.kind === 'folder') {
+    const nb = notebooks.find(n => n.id === row.source.notebookId);
+    const root = nb?.root || '';
+    const relativeFolder = row.source.path === root || !row.source.path.startsWith(`${root}/`)
+      ? ''
+      : row.source.path.slice(root.length + 1);
+    return { notebookId: row.source.notebookId, folder: relativeFolder };
+  }
+  return null;
+}
+
+function Lane({ row, disabled, study, onStudy, onStudyChange, onView, onSort, onAdd, onRemove, onCreateNote, ...content }: ScreenContentProps & {
   row: ScreenRow; disabled: boolean; onStudy: () => void; onView: (view: ScreenRow['view']) => void; onAdd: () => void; onRemove: (id: string) => void;
   onSort: (sort: SortConfig) => void; study: StudyController; onStudyChange: (study: NonNullable<ScreenRow['study']>) => void;
+  onCreateNote?: (context?: { notebookId?: string; folder?: string; tag?: string }) => void;
 }) {
   const { t } = useTranslation(); const host = useRef<HTMLElement>(null), strip = useRef<HTMLDivElement>(null);
   const [queryOpen, setQueryOpen] = useState(false);
@@ -59,6 +79,10 @@ function Lane({ row, disabled, study, onStudy, onStudyChange, onView, onSort, on
   useAltWheelHorizontalScroll(host, strip);
   const scroll = (direction: number) => strip.current?.scrollBy({ left: direction * strip.current.clientWidth * .8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   const source = row.kind === 'dynamic' ? row.source.kind === 'tag' ? `#${row.source.tag}` : row.source.path : '';
+  const handleCreateInLane = () => {
+    const context = createLaneNoteContext(row, content.notebooks);
+    if (context) onCreateNote?.(context);
+  };
   return <section id={`screen-lane-${row.id}`} ref={host} className={`screen-lane screen-view-${row.view} ${row.kind === 'dynamic' ? 'screen-lane-dynamic' : ''}`} aria-label={row.name}>
     <header className="screen-lane-header"><div className="screen-lane-heading"><h3>{row.name}</h3><span className="screen-count">{items.length}</span>
       {row.kind === 'dynamic' && <span className="screen-dynamic-label" title={t('screen.dynamicHint')}><Zap size={12} />{t('screen.dynamic')} · {source}</span>}</div>
@@ -87,7 +111,11 @@ function Lane({ row, disabled, study, onStudy, onStudyChange, onView, onSort, on
         {([{value:'thumbnail',icon:LayoutGrid},{value:'small',icon:Columns3},{value:'medium',icon:Columns2}] as const).map(({value,icon:Icon}) => <Button key={value} type="button" disabled={disabled} size="icon" title={t(`screen.${value}`)} aria-label={t(`screen.${value}`)} aria-pressed={row.view === value} onClick={() => onView(value)}><Icon size={16} /></Button>)}
       </div>
         <Button type="button" size="icon" className="screen-start-study" aria-label={`${t('study.start')}: ${row.name}`} title={t('study.start')} onClick={onStudy}><Brain size={18} /></Button>
-        {row.kind === 'custom' && <Button type="button" size="icon" disabled={disabled} onClick={onAdd} aria-label={`${t('screen.addItem')}: ${row.name}`}><Plus size={16} /></Button>}
+        {row.kind === 'custom' ? (
+          <Button type="button" size="icon" disabled={disabled} onClick={onAdd} aria-label={`${t('screen.addItem')}: ${row.name}`}><Plus size={16} /></Button>
+        ) : (
+          <Button type="button" size="icon" disabled={disabled} onClick={handleCreateInLane} aria-label={`${t('screen.createNoteInLane')}: ${row.name}`} title={t('screen.createNoteInLane')}><Plus size={16} /></Button>
+        )}
         <Button type="button" size="icon" className="screen-lane-scroll" aria-label={`${t('screen.scrollLeft')}: ${row.name}`} onClick={() => scroll(-1)}><ChevronLeft size={16} /></Button>
         <Button type="button" size="icon" className="screen-lane-scroll" aria-label={`${t('screen.scrollRight')}: ${row.name}`} onClick={() => scroll(1)}><ChevronRight size={16} /></Button>
       </div>
@@ -98,15 +126,16 @@ function Lane({ row, disabled, study, onStudy, onStudyChange, onView, onSort, on
           {items.map(item => <MovableCard key={item.id} {...content} item={item} row={row} disabled={disabled || filtered} remove={() => onRemove(item.id)} />)}
         </SortableContext> : items.map(item => <div className="screen-card-slot" key={item.id}><ScreenCard {...content} item={item} view={row.view} /></div>)}
         {!items.length && <div className="screen-lane-empty">{t(row.kind === 'custom' ? 'screen.emptyCustom' : 'screen.emptyDynamic')}
-          {row.kind === 'custom' && !disabled && <Button  onClick={onAdd}><Plus size={14} />{t('screen.addItem')}</Button>}</div>}
+          {!disabled && <Button onClick={row.kind === 'custom' ? onAdd : handleCreateInLane}><Plus size={14} />{t(row.kind === 'custom' ? 'screen.addItem' : 'screen.createNoteInLane')}</Button>}</div>}
       </div>
     </div>
   </section>;
 }
 
-export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, screen, onOpenNote, onStudySaved, focusedLaneId }: {
+export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, screen, onOpenNote, onStudySaved, focusedLaneId, onCreateNote }: {
   notebooks: NotebookConfig[]; notes: NoteItem[]; folders: FolderItem[]; selectedNotebookId: string; screen: ScreenController;
   focusedLaneId?: string | null; onOpenNote: (note: NoteItem) => void; onStudySaved: (note?: NoteItem) => void;
+  onCreateNote?: (context?: { notebookId?: string; folder?: string; tag?: string }) => void;
 }) {
   const { t } = useTranslation(); const navigate = useNavigate(); const location = useLocation();
   const sidebar = useWorkspaceSidebarDrawer();
@@ -194,6 +223,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
             if (target?.kind === 'custom') screen.change(moveScreenItem(screen.page, String(active.id), target.id, over.id === `lane:${target.id}` ? target.items.length : target.items.findIndex(item => item.id === over.id)));
           }}>
           {screen.page.rows.map(row => <Lane key={row.id} row={row} {...content} disabled={disabled} study={study}
+            onCreateNote={onCreateNote}
             onStudy={() => navigate(screenLaneRoute(row.id) + location.search)}
             onStudyChange={study => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id ? { ...value, study } : value) })} onAdd={() => setAddTo(row.id)}
             onView={view => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id ? { ...value, view } : value) })}

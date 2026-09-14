@@ -155,6 +155,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "screen.items": "項目",
   "screen.emptyCustom": "加入筆記、資料夾、資源或 YouTube，也可從其他自訂泳道拖入。",
   "screen.emptyDynamic": "目前沒有符合條件的內容。",
+  "screen.createNoteInLane": "在此河道新增筆記",
   "screen.saving": "儲存中…",
   "screen.save": "儲存配置",
   "screen.unsaved": "配置尚未儲存 · 已保留本機草稿",

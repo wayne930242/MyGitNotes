@@ -153,6 +153,7 @@ export const en = {
   "screen.items": "Items",
   "screen.emptyCustom": "Add notes, folders, assets or YouTube, or drag from another custom lane.",
   "screen.emptyDynamic": "No matching content yet.",
+  "screen.createNoteInLane": "Create note in lane",
   "screen.saving": "Saving…",
   "screen.save": "Save configuration",
   "screen.unsaved": "Unsaved configuration · device draft retained",
