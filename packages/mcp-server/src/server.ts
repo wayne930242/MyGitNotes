@@ -100,61 +100,43 @@ export function createMCPServer(repoRoot: string): Server {
   return server;
 }
 
+type ToolHandler = (ctx: ToolContext, args: Record<string, any>) => Promise<unknown>;
+
+const localToolHandlers: Record<string, ToolHandler> = {
+  list_folders: (ctx, args) => handleListFolders(ctx, args as { path?: string; notebookId?: string }),
+  get_workspace_config: (ctx) => handleGetWorkspaceConfig(ctx),
+  list_notebooks: (ctx) => handleListNotebooks(ctx),
+  list_notes: (ctx, args) => handleListNotes(ctx, args),
+  read_note: (ctx, args) => handleReadNote(ctx, args as { path: string; notebookId?: string; metadataOnly?: boolean }),
+  save_note: (ctx, args) => handleSaveNote(ctx, args as any),
+  delete_note: (ctx, args) => handleDeleteNote(ctx, args as { path: string; commitMessage?: string }),
+  list_agent_resources: (ctx) => handleListAgentResources(ctx),
+  read_agent_resource: (ctx, args) => handleReadAgentResource(ctx, args as { path?: string }),
+  list_assets: (ctx, args) => handleListAssets(ctx, args as { notebookId: string }),
+  add_asset: (ctx, args) => handleAddAsset(ctx, args as any),
+  delete_asset: (ctx, args) => handleDeleteAsset(ctx, args as { path: string; commitMessage?: string }),
+  get_git_status: (ctx) => handleGetGitStatus(ctx),
+  git_commit: (ctx, args) => handleGitCommit(ctx, args as { files: string[]; message: string }),
+  check_core_update: (ctx) => handleCheckCoreUpdate(ctx),
+  update_core: (ctx, args) => handleUpdateCore(ctx, args as { autoPush?: boolean; checkOnly?: boolean }),
+  search_notes: (ctx, args) => handleSearchNotes(ctx, args as any),
+  replace_notes: (ctx, args) => handleReplaceNotes(ctx, args as any),
+  get_statuses: (ctx, args) => handleGetStatuses(ctx, args),
+  get_note_metadata: (ctx, args) => handleGetNoteMetadata(ctx, args as { path: string }),
+  update_note_metadata: (ctx, args) => handleUpdateNoteMetadata(ctx, args as any),
+  mkdir: (ctx, args) => handleMkdir(ctx, args as any),
+  get_folder_metadata: (ctx, args) => handleGetFolderMetadata(ctx, args as { path: string }),
+  update_folder_metadata: (ctx, args) => handleUpdateFolderMetadata(ctx, args as any),
+};
+
 async function dispatchLocalTool(
   ctx: ToolContext,
   name: string,
   args: Record<string, any>
 ): Promise<unknown> {
-  switch (name) {
-    case 'list_folders':
-      return handleListFolders(ctx, args as { path?: string; notebookId?: string });
-    case 'get_workspace_config':
-      return handleGetWorkspaceConfig(ctx);
-    case 'list_notebooks':
-      return handleListNotebooks(ctx);
-    case 'list_notes':
-      return handleListNotes(ctx, args);
-    case 'read_note':
-      return handleReadNote(ctx, args as { path: string; notebookId?: string; metadataOnly?: boolean });
-    case 'save_note':
-      return handleSaveNote(ctx, args as any);
-    case 'delete_note':
-      return handleDeleteNote(ctx, args as { path: string; commitMessage?: string });
-    case 'list_agent_resources':
-      return handleListAgentResources(ctx);
-    case 'read_agent_resource':
-      return handleReadAgentResource(ctx, args as { path?: string });
-    case 'list_assets':
-      return handleListAssets(ctx, args as { notebookId: string });
-    case 'add_asset':
-      return handleAddAsset(ctx, args as any);
-    case 'delete_asset':
-      return handleDeleteAsset(ctx, args as { path: string; commitMessage?: string });
-    case 'get_git_status':
-      return handleGetGitStatus(ctx);
-    case 'git_commit':
-      return handleGitCommit(ctx, args as { files: string[]; message: string });
-    case 'check_core_update':
-      return handleCheckCoreUpdate(ctx);
-    case 'update_core':
-      return handleUpdateCore(ctx, args as { autoPush?: boolean; checkOnly?: boolean });
-    case 'search_notes':
-      return handleSearchNotes(ctx, args as any);
-    case 'replace_notes':
-      return handleReplaceNotes(ctx, args as any);
-    case 'get_statuses':
-      return handleGetStatuses(ctx, args);
-    case 'get_note_metadata':
-      return handleGetNoteMetadata(ctx, args as { path: string });
-    case 'update_note_metadata':
-      return handleUpdateNoteMetadata(ctx, args as any);
-    case 'mkdir':
-      return handleMkdir(ctx, args as any);
-    case 'get_folder_metadata':
-      return handleGetFolderMetadata(ctx, args as { path: string });
-    case 'update_folder_metadata':
-      return handleUpdateFolderMetadata(ctx, args as any);
-    default:
-      throw new Error(`Unknown tool: ${name}`);
+  const handler = localToolHandlers[name];
+  if (!handler) {
+    throw new Error(`Unknown tool: ${name}`);
   }
+  return handler(ctx, args);
 }
