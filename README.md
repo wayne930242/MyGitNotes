@@ -32,32 +32,9 @@ The same workspace can therefore stay fully local, travel through Git, or be sec
 
 ## Design logic
 
-```mermaid
-flowchart LR
-  subgraph device["Your device"]
-    localUI["MyGitNotes local UI"]
-    localMCP["Local agents · stdio MCP"]
-    files["Local Git workspace<br/>Markdown · assets · history"]
-    localUI --> files
-    localMCP --> files
-  end
-  subgraph deployment["MyGitNotes deployment"]
-    web["Browser UI"]
-    agents["Remote agents · HTTP MCP"]
-    service["Shared workspace operations<br/>One configured provider and repository"]
-    credentials["Encrypted credentials<br/>Sessions · refresh · MCP grants"]
-    web --> service
-    agents --> service
-    service --> credentials
-  end
-  subgraph storage["Selected Git hosting platform"]
-    github["GitHub"]
-    gitlab["GitLab.com or self-managed GitLab"]
-  end
-  files <-->|Git sync| storage
-  service <-->|Read pinned revision · atomic commit| storage
-  web -. OAuth sign-in .-> storage
-```
+![MyGitNotes architecture](docs/assets/mygitnotes-architecture-en.svg)
+
+[Mermaid source](docs/assets/mygitnotes-architecture-en.mmd)
 
 The boundaries are intentional:
 
@@ -136,6 +113,8 @@ SESSION_SECRET=your_random_secret_of_at_least_32_characters
 
 UPSTASH_REDIS_REST_URL=https://...upstash.io
 UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_token
+# Optional for a new deployment sharing Redis
+MYGITNOTES_SESSION_NAMESPACE=your_unique_deployment_name
 ```
 
 After deployment, sign in with GitHub. Under **Settings → MCP Access Control**, create a read-only or write grant and paste the generated `/mcp/<token>` URL into ChatGPT, Claude, Cursor, Windsurf, or another MCP client.

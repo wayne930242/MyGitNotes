@@ -1,6 +1,6 @@
 schema_version: 1
 workspace:
-  title: GitHub Notes Example Workspace
+  title: MyGitNotes Example Workspace
   default_notebook: example
 notebooks:
   - id: example
