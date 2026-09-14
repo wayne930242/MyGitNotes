@@ -63,7 +63,7 @@ try {
  const shared=page.url();await page.reload({waitUntil:'networkidle0'});await count(1);assert.equal(new URL(page.url()).searchParams.get('neighbors'),'true');
  await open();await checkbox('Show directly connected notes outside filters');await page.waitForFunction(()=>new URL(location.href).searchParams.get('neighbors')===null);await page.goBack({waitUntil:'networkidle0'});await page.waitForFunction(()=>document.querySelector('[data-graph-nodes]')?.getAttribute('data-graph-nodes')==='2');await page.goForward({waitUntil:'networkidle0'});await page.waitForFunction(()=>document.querySelector('[data-graph-nodes]')?.getAttribute('data-graph-nodes')==='1');
  results.push('Graph transfer, one-hop neighbors, reload and history');
- await go('/notebooks/a?folders=notes/a/research&folders=notes/a/other');await count(4);await checkbox('Include subfolders');await count(3);await checkbox('Include subfolders');await count(4);
+ await go('/notebooks/a');await page.click('.folder-tree-select[title="research"]');await count(3);await page.click('.folder-tree-select[title="other"]');await count(4);assert.equal(await page.$$eval('.folder-tree-select[aria-pressed=true]',els=>els.length),2);await checkbox('Include subfolders');await count(3);await checkbox('Include subfolders');await count(4);
  await page.screenshot({path:product+'/artifacts/qa/unified-notebook-filters.png'});
  await page.click('.sidebar-clear-filters');await count(5);
  await page.type('.sidebar-note-search input','needle');await count(1);await graph();await count(1);assert.equal(new URL(page.url()).searchParams.get('q'),'needle');
@@ -93,6 +93,18 @@ try {
    await page.screenshot({path:product+`/artifacts/qa/unified-graph-${width}.png`});
  }
  results.push('Compact panel fits mobile and short viewport');
+ await page.setViewport({width:390,height:844});await go('/notebooks/a');
+ await page.click('[data-sidebar-toggle]');await page.waitForSelector('#notebook-panel.is-open');await page.waitForFunction(()=>Math.abs(document.querySelector('#notebook-panel').getBoundingClientRect().x)<1);await page.click('.sidebar-note-search input');
+ await page.type('.sidebar-note-search input','needle');await count(1);
+ assert.ok(await page.$('#notebook-panel.is-open'));assert.equal(await page.$('.filter-trigger'),null);
+ await page.click('.sidebar-clear-filters');await count(5);
+ await page.click('[data-tag-filter="blue"]');await count(2);await page.click('[data-tag-filter="red"]');await count(4);
+ await page.screenshot({path:product+'/artifacts/qa/sidebar-filters-mobile.png'});
+ await page.click('.folder-heading-actions .reorder-toggle');await page.waitForSelector('.folder-grip');
+ assert.equal(await page.$eval('.folder-heading-actions',el=>el.querySelectorAll('button').length),2);
+ await page.click('.folder-heading-actions .reorder-toggle');assert.equal(await page.$('.folder-grip'),null);
+ results.push('Mobile sidebar direct search and tag multiselect stay open; folder icon beside create');
+
  await page.setViewport({width:1440,height:950});await go('/screen?notebook=a');await page.keyboard.press('[');await page.waitForSelector('.screen-sidebar-lane');await page.waitForFunction(()=>document.querySelector('.screen-sidebar')?.getBoundingClientRect().width>150);assert.equal(await page.$('.screen-drag-handle'),null);await page.click('.reorder-toggle');await page.waitForSelector('.screen-drag-handle');assert.equal(await page.evaluate(()=>document.querySelector('.reorder-toggle').textContent),'');const handle=await page.$('.screen-sidebar-lane .screen-drag-handle');await handle.focus();await page.keyboard.press('Space');await new Promise(resolve=>setTimeout(resolve,120));await page.keyboard.press('ArrowDown');await new Promise(resolve=>setTimeout(resolve,120));await page.keyboard.press('Space');await page.waitForFunction(()=>document.querySelector('.screen-sidebar-lane .screen-sidebar-action').textContent.includes('Second lane'));
  await page.click('.reorder-toggle');assert.equal(await page.$('.screen-drag-handle'),null);
  results.push('Lane/card handles default hidden, icon toggle and actual keyboard reorder');
