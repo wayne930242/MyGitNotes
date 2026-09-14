@@ -51,13 +51,13 @@ MyGitNotes 把一個 Git 儲存庫變成集中處理筆記、文件、素材與 
 
 ## 快速開始
 
-需要 Node.js 22+、pnpm 9+ 與 Git。
+需要 Node.js 22+、pnpm 9+ 與 Git（若使用 pnpm 10+，相依套件建置腳本已由 `pnpm-workspace.yaml` 的 `allowBuilds` 配置，亦可使用 `pnpm approve-builds`）。
 
 ```bash
 git clone <repository-url> mygitnotes
 cd mygitnotes
 pnpm install
-pnpm build
+pnpm build              # 編譯 local-server 所需的 @github-notes 核心套件產物
 pnpm bootstrap-workspace
 pnpm dev
 ```

@@ -51,13 +51,13 @@ This separation lets the application evolve without taking ownership of your con
 
 ## Quick start
 
-Requires Node.js 22+, pnpm 9+, and Git.
+Requires Node.js 22+, pnpm 9+, and Git. (On pnpm 10+, dependency build scripts are configured via `allowBuilds` in `pnpm-workspace.yaml` or `pnpm approve-builds`).
 
 ```bash
 git clone <repository-url> mygitnotes
 cd mygitnotes
 pnpm install
-pnpm build
+pnpm build              # Compiles @github-notes packages required by local-server
 pnpm bootstrap-workspace
 pnpm dev
 ```
