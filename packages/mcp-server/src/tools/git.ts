@@ -3,7 +3,7 @@ import {
   stageAndCommit,
   updateCore,
   runGit,
-} from '@github-notes/git';
+} from '@mygitnotes/git';
 import { assertSafeRepoPath } from '../guards.js';
 import type { ToolContext } from './context.js';
 

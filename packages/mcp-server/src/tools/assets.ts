@@ -6,8 +6,8 @@ import {
   assetPath,
   isAssetPath,
   decodeAsset,
-} from '@github-notes/core';
-import { stageAndCommit } from '@github-notes/git';
+} from '@mygitnotes/core';
+import { stageAndCommit } from '@mygitnotes/git';
 import { assertUserWorkspaceBranch, assertSafeRepoPath } from '../guards.js';
 import type { ToolContext } from './context.js';
 

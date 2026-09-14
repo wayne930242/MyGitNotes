@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StudyWorkspaceSchema, emptyStudyWorkspace, type StudyWorkspace } from '@github-notes/core/study';
+import { StudyWorkspaceSchema, emptyStudyWorkspace, type StudyWorkspace } from '@mygitnotes/core/study';
 import type { NoteItem } from './types.js';
 import { useTranslation } from './i18n/index.js';
 

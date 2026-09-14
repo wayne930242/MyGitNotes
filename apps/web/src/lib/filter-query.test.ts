@@ -15,6 +15,7 @@ describe('shared nuqs query contract', () => {
   });
   it('reads legacy filters and defaults malformed values safely', () => {
     expect(parseWorkspaceRoute('/notebooks/a/folders/projects', '?tag=demo')).toMatchObject({ folder: 'projects', tags: ['demo'], tagMode: 'any', descendants: true });
+    expect(readFilterQuery('?tag=&tag=blue').tag).toEqual(['blue']);
     expect(readFilterQuery('?tagMode=broken&view=broken&folders=../secret&folders=notes/a/valid')).toMatchObject({ tagMode: 'any', view: 'flat', folders: ['notes/a/valid'] });
     expect(writeFilterQuery('?q=hi&tag=old&keep=yes', { q: '', tag: [], neighbors: false })).toBe('?keep=yes');
   });

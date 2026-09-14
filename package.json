@@ -6,12 +6,12 @@
   "scripts": {
     "bootstrap-workspace": "tsx scripts/bootstrap-workspace.ts",
     "update-core": "tsx scripts/update-core.ts",
-    "build": "pnpm --filter \"@github-notes/*\" run build",
+    "build": "pnpm --filter \"@mygitnotes/*\" run build",
     "test": "node scripts/check-core-ownership.mjs && vitest run",
     "check:core-ownership": "node scripts/check-core-ownership.mjs",
-    "dev": "pnpm --parallel --filter \"@github-notes/local-server\" --filter \"@github-notes/web\" dev",
-    "dev:server": "pnpm --filter \"@github-notes/local-server\" dev",
-    "dev:web": "pnpm --filter \"@github-notes/web\" dev",
+    "dev": "pnpm --parallel --filter \"@mygitnotes/local-server\" --filter \"@mygitnotes/web\" dev",
+    "dev:server": "pnpm --filter \"@mygitnotes/local-server\" dev",
+    "dev:web": "pnpm --filter \"@mygitnotes/web\" dev",
     "env:vercel": "tsx scripts/vercel-env.ts"
   },
   "devDependencies": {

@@ -1,11 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { ExternalLink, FileText, Folder, Image as ImageIcon, Play, Youtube } from 'lucide-react';
-import type { ScreenItem, ScreenRow } from '@github-notes/core/screen-page';
+import type { ScreenItem, ScreenRow } from '@mygitnotes/core/screen-page';
 import type { AssetItem, NoteItem, NotebookConfig } from '../lib/types.js';
 import { noteSummary } from '../lib/screen-content.js';
 import { renderNote } from '../lib/markdown.js';
 import { useTranslation } from '../lib/i18n/index.js';
-import { isNoteHidden } from '@github-notes/core/note-status';
+import { isNoteHidden } from '@mygitnotes/core/note-status';
 
 export type ScreenAsset = AssetItem & { notebookId: string };
 export interface ScreenContentProps {

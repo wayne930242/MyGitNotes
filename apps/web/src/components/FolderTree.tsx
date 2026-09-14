@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import { Folder, FolderPlus, GripVertical, MoreHorizontal, ArrowRight, Trash2, FileText } from 'lucide-react';
-import type { FolderCommand } from '@github-notes/core';
+import type { FolderCommand } from '@mygitnotes/core';
 import type { FolderItem } from '../lib/types.js';
 import { folderDropCommand, folderParent } from '../lib/folder-drag.js';
 import { useTranslation } from '../lib/i18n/index.js';

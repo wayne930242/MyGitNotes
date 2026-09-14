@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { resolveSafePath } from '@github-notes/core';
+import { resolveSafePath } from '@mygitnotes/core';
 import { runGit } from './git-service.js';
 
 export interface FileChange {

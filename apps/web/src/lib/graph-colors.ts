@@ -1,4 +1,4 @@
-import type { NoteGraphNode } from '@github-notes/core/note-graph';
+import type { NoteGraphNode } from '@mygitnotes/core/note-graph';
 import type { NotebookConfig } from './types.js';
 
 export const GRAPH_COLOR_MODES = ['folder', 'notebook', 'status'] as const;

@@ -7,7 +7,7 @@ import syncFs from 'node:fs';
 import { parse, stringify } from 'yaml';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
-import { STUDY_FILE, createStudyNote, emptyStudyWorkspace, applyStudyAction, parseNoteContent, readNoteFile } from '@github-notes/core';
+import { STUDY_FILE, createStudyNote, emptyStudyWorkspace, applyStudyAction, parseNoteContent, readNoteFile } from '@mygitnotes/core';
 
 let root: string, server: Server, url: string;
 const source = { notebookId: 'a', path: 'notes/a/guide.md', title: 'Question', metadata: {}, content: 'Question\n\n---\n\nAnswer' };

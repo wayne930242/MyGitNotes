@@ -19,5 +19,5 @@ Follow this workflow when developing or interacting with the GitHub Notes MCP se
 
 Run unit tests:
 ```bash
-pnpm --filter @github-notes/mcp-server test
+pnpm --filter @mygitnotes/mcp-server test
 ```

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { runGit, stageAndCommit } from '@github-notes/git';
-import { WORKSPACE_CONFIG_FILENAME } from '@github-notes/core';
+import { runGit, stageAndCommit } from '@mygitnotes/git';
+import { WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
 import {
   handleGetWorkspaceConfig,
   handleListNotes,

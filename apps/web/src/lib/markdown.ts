@@ -1,6 +1,6 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { parseYouTubeUrl } from '@github-notes/core/screen-page';
+import { parseYouTubeUrl } from '@mygitnotes/core/screen-page';
 import { headingSlug, resolveWorkspaceHref } from './workspace-links.js';
 
 export function renderNote(content: string, notePath: string, tableLabel = 'Horizontally scrollable table (Alt + wheel)'): string {

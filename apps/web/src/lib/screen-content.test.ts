@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest';
-import { createStudyNote, applyStudyAction, emptyStudyWorkspace, applyStageAction, undoStudyAction } from '@github-notes/core/study';
+import { createStudyNote, applyStudyAction, emptyStudyWorkspace, applyStageAction, undoStudyAction } from '@mygitnotes/core/study';
 import { screenRowItems, studyRowItems } from './screen-content.js';
 import type { NoteItem } from './types.js';
-import type { ScreenRow } from '@github-notes/core/screen-page';
+import type { ScreenRow } from '@mygitnotes/core/screen-page';
 const notes = [
   { notebookId: 'a', path: 'notes/a/one.md', title: 'One', tags: ['clue'] },
   { notebookId: 'b', path: 'notes/b/two.md', title: 'Two', tags: ['clue'] },

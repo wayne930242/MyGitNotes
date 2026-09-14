@@ -1,6 +1,6 @@
 # Model Context Protocol (MCP) Server
 
-The `@github-notes/mcp-server` package provides an MCP interface for external agents to safely inspect and manipulate a MyGitNotes workspace.
+The `@mygitnotes/mcp-server` package provides an MCP interface for external agents to safely inspect and manipulate a MyGitNotes workspace.
 
 ## Transport
 

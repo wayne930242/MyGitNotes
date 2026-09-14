@@ -1,6 +1,6 @@
-import { findStudyNote, matchesStudyFilter, studyDue, type StudyWorkspace } from '@github-notes/core/study';
-import type { ScreenItem, ScreenRow } from '@github-notes/core/screen-page';
-import { isNoteHidden, resolveNoteStatuses } from '@github-notes/core/note-status';
+import { findStudyNote, matchesStudyFilter, studyDue, type StudyWorkspace } from '@mygitnotes/core/study';
+import type { ScreenItem, ScreenRow } from '@mygitnotes/core/screen-page';
+import { isNoteHidden, resolveNoteStatuses } from '@mygitnotes/core/note-status';
 import type { AssetItem, NoteItem, NotebookConfig, FolderItem } from './types.js';
 import { sortNotes } from './note-sort.js';
 

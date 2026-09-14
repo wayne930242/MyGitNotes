@@ -1,4 +1,4 @@
-import type { NoteGraphNode, NoteGraphLink } from '@github-notes/core/note-graph';
+import type { NoteGraphNode, NoteGraphLink } from '@mygitnotes/core/note-graph';
 
 export const toggleGraphFocus = (selectedId: string | null, clickedId: string) => selectedId === clickedId ? null : clickedId;
 

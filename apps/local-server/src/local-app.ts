@@ -1,4 +1,4 @@
-import { STUDY_FILE, STUDY_MAX_BYTES } from '@github-notes/core';
+import { STUDY_FILE, STUDY_MAX_BYTES } from '@mygitnotes/core';
 import express, { Request, Response } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -20,7 +20,7 @@ import {
   parseNoteContent,
   workspaceAgentKind, workspaceAgentResource, listWorkspaceAgentFiles, resolveWorkspaceAgentPath,
   type WorkspaceAgentResource,
-} from '@github-notes/core';
+} from '@mygitnotes/core';
 import {
   getGitStatus,
   getCurrentBranch,
@@ -30,9 +30,9 @@ import {
   generateCommitMessage,
   updateCore,
   listChanges, changeFile, fileDiff, commitStagedFiles,
-} from '@github-notes/git';
+} from '@mygitnotes/git';
 
-import { SCREEN_PAGE_FILE } from '@github-notes/core';
+import { SCREEN_PAGE_FILE } from '@mygitnotes/core';
 
 export function createLocalApp(repoRoot: string): express.Express {
 const app = express();

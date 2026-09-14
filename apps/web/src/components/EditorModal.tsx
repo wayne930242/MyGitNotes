@@ -1,5 +1,5 @@
 import { useWorkspaceLinks } from './WorkspaceLinks.js';
-import { isNoteHidden, withNoteStatus } from '@github-notes/core/note-status';
+import { isNoteHidden, withNoteStatus } from '@mygitnotes/core/note-status';
 import { EditorNotice } from './EditorNotice.js';
 import { EditorFooter } from './EditorFooter.js';
 import { Select } from './Select.js';

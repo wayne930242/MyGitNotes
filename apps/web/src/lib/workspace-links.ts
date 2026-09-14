@@ -1,1 +1,1 @@
-export * from '@github-notes/core/workspace-links';
+export * from '@mygitnotes/core/workspace-links';

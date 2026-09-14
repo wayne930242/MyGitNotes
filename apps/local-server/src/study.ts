@@ -5,9 +5,9 @@ import { isDeepStrictEqual } from 'node:util';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { parse, stringify } from 'yaml';
-import { emptyStudyWorkspace, StudyWorkspaceSchema, STUDY_FILE, STUDY_MAX_BYTES, createRemoteSource, SourceError, type SourceConfig } from '@github-notes/core';
-import { defaultStudyProgression, studyLaneStatuses, StudyLaneActionSchema, loadWorkspaceConfig, resolveSafePath, isNotebookContent, readNoteFile, parseNoteContent, replaceNoteStatus, ScreenPageSchema, SCREEN_PAGE_FILE, createStudyNote, findStudyNote, reconcileStudyNote, applyStageAction, undoStudyAction } from '@github-notes/core';
-import { getCurrentBranch } from '@github-notes/git';
+import { emptyStudyWorkspace, StudyWorkspaceSchema, STUDY_FILE, STUDY_MAX_BYTES, createRemoteSource, SourceError, type SourceConfig } from '@mygitnotes/core';
+import { defaultStudyProgression, studyLaneStatuses, StudyLaneActionSchema, loadWorkspaceConfig, resolveSafePath, isNotebookContent, readNoteFile, parseNoteContent, replaceNoteStatus, ScreenPageSchema, SCREEN_PAGE_FILE, createStudyNote, findStudyNote, reconcileStudyNote, applyStageAction, undoStudyAction } from '@mygitnotes/core';
+import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
 

@@ -3,7 +3,7 @@ import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, close
 import { SortableContext, useSortable, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Pencil, Zap } from 'lucide-react';
-import { moveScreenRow, type ScreenPage, type ScreenRow } from '@github-notes/core/screen-page';
+import { moveScreenRow, type ScreenPage, type ScreenRow } from '@mygitnotes/core/screen-page';
 import { useTranslation } from '../lib/i18n/index.js';
 import { ScreenIcon } from './ScreenIcon.js';
 import { ScreenEditRow } from './ScreenDialogs.js';

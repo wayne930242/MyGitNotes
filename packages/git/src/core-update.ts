@@ -2,7 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { runGit, getCurrentBranch, getGitStatus } from './git-service.js';
 import { CoreUpdateOptions, CoreUpdateResult } from './types.js';
-import { loadWorkspaceConfig, WORKSPACE_CONFIG_FILENAME } from '@github-notes/core';
+import { loadWorkspaceConfig, WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
 import { mergeWorkspaceCore } from '../../../scripts/lib/workspace-agent-merge.mjs';
 
 export class CoreUpdateError extends Error {

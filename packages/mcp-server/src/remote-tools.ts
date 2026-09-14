@@ -5,7 +5,7 @@ import {
   noteShellWrites,
   withNoteStatus,
   serializeNoteContent,
-} from '@github-notes/core';
+} from '@mygitnotes/core';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 type Schema = Record<string, any>;

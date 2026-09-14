@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { stringify } from 'yaml';
-import { ScreenPageSchema, emptyScreenPage, SCREEN_PAGE_FILE, type ScreenPage } from '@github-notes/core/screen-page';
+import { ScreenPageSchema, emptyScreenPage, SCREEN_PAGE_FILE, type ScreenPage } from '@mygitnotes/core/screen-page';
 import { useTranslation } from './i18n/index.js';
 
 interface Snapshot { page: ScreenPage; revision: string; writable: boolean; path: string }

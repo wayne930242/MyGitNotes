@@ -1,12 +1,12 @@
 import { useQueryStates } from 'nuqs';
 import { filterParsers, writeFilterQuery, type FilterQuery } from './lib/filter-query.js';
-import { filterNotes, legacyFolderPaths, type NoteFilters } from '@github-notes/core/note-filters';
+import { filterNotes, legacyFolderPaths, type NoteFilters } from '@mygitnotes/core/note-filters';
 import { WorkspaceFilters, type WorkspaceFiltersProps } from './components/WorkspaceFilters.js';
 import { listLocalDrafts } from './lib/storage.js';
 import { useScreenPage } from './lib/use-screen-page.js';
-import { SCREEN_PAGE_FILE } from '@github-notes/core/screen-page';
+import { SCREEN_PAGE_FILE } from '@mygitnotes/core/screen-page';
 import { WorkspaceLinks } from './components/WorkspaceLinks.js';
-import { resolveNoteStatuses, isNoteHidden, withNoteStatus } from '@github-notes/core/note-status';
+import { resolveNoteStatuses, isNoteHidden, withNoteStatus } from '@mygitnotes/core/note-status';
 import { Select } from './components/Select.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { notebookRoute, noteRoute, noteReturnRoute, parseWorkspaceRoute, WorkspaceTab } from './lib/routes.js';
@@ -192,7 +192,7 @@ const AppContent: React.FC = () => {
   const selectedNotebookId = route.notebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
   const notebookStatuses = useMemo(() => resolveNoteStatuses(
     config?.notebooks.find(nb => nb.id === selectedNotebookId),
-    notes.filter(note => note.notebookId === selectedNotebookId).map(note => note.status),
+    notes.filter(note => selectedNotebookId === 'all' || note.notebookId === selectedNotebookId).map(note => note.status),
   ), [config, notes, selectedNotebookId]);
   const selectedFolders = useMemo(() => route.folders.length ? [...new Set(route.folders)] : legacyFolderPaths(config?.notebooks || [], selectedNotebookId, route.folder), [route.folders, route.folder, config, selectedNotebookId]);
   const folderRoot = config?.notebooks.find(nb => nb.id === selectedNotebookId)?.root.replace(/\/$/, '');
@@ -201,7 +201,7 @@ const AppContent: React.FC = () => {
   const selectedStatus = route.status;
   const showHidden = route.showHidden;
   const visibleNotes = useMemo(() => notes.filter(note => showHidden || !isNoteHidden({ ...note.metadata, status: note.status })), [notes, showHidden]);
-  const selectedTags = route.tags;
+  const selectedTags = useMemo(() => [...new Set(route.tags)], [route.tags]);
   const searchQuery = route.q;
   const viewMode = route.view;
   const indexInToolbar = viewMode === 'flat' || viewMode === 'kanban';
@@ -280,7 +280,8 @@ const AppContent: React.FC = () => {
   const [newNoteTags, setNewNoteTags] = useState<string[]>([]);
   const newNoteFolders = useMemo(() => folders.filter(folder => folder.notebookId === selectedNotebookId).map(folder => folder.path).sort(), [folders, selectedNotebookId]);
   const openNewNote = (options?: string | { status?: string; folder?: string; tag?: string; tags?: string[]; notebookId?: string }) => {
-    const opts = typeof options === 'string' ? { status: options } : options || {};
+    const opts = typeof options === 'string' ? { status: options } : { ...options };
+    if (selectedNotebookId === 'all' && !opts.notebookId) opts.notebookId = config?.workspace.default_notebook || config?.notebooks[0]?.id;
     if (opts.notebookId && opts.notebookId !== selectedNotebookId && config?.notebooks.some(n => n.id === opts.notebookId)) {
       setSelectedNotebookId(opts.notebookId);
     }

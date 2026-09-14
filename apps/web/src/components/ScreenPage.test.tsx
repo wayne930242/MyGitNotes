@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { ScreenRow } from '@github-notes/core/screen-page';
+import type { ScreenRow } from '@mygitnotes/core/screen-page';
 import type { NotebookConfig } from '../lib/types.js';
 import { createLaneNoteContext } from './ScreenPage.js';
 import { KeyboardShortcuts } from './KeyboardShortcuts.js';

@@ -12,8 +12,8 @@ import {
   DEFAULT_NOTE_STATUSES,
   resolveNoteStatuses,
   withNoteStatus,
-} from '@github-notes/core';
-import { stageAndCommit, generateCommitMessage } from '@github-notes/git';
+} from '@mygitnotes/core';
+import { stageAndCommit, generateCommitMessage } from '@mygitnotes/git';
 import { assertUserWorkspaceBranch, assertSafeRepoPath } from '../guards.js';
 import type { ToolContext } from './context.js';
 
