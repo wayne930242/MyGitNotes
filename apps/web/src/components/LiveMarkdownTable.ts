@@ -125,7 +125,7 @@ export class LiveMarkdownTable extends WidgetType {
       input.setAttribute('aria-description', this.t('table.multilineHint'));
       input.setAttribute('aria-label', this.t('table.cell', { row: row + 1, column: column + 1 }));
       const original = cell.innerHTML;
-      const cancel = (focusAfter = true) => { input = null; cell.innerHTML = original; if (focusAfter) cell.focus(); };
+      const cancel = (focusAfter = true) => { input = null; cell.innerHTML = original; view.requestMeasure(); if (focusAfter) cell.focus(); };
       input.addEventListener('blur', event => {
         if (!input || committing) return;
         if (input.value === initialValue) { cancel(false); return; }
@@ -149,7 +149,17 @@ export class LiveMarkdownTable extends WidgetType {
       });
       const display = document.createElement('div'); display.className = 'live-table-cell-display';
       display.setAttribute('aria-hidden', 'true'); display.append(...cell.childNodes);
-      cell.append(display, input); input.focus(); input.select(); view.requestMeasure();
+      const resizeInput = () => {
+        if (!input) return;
+        // Measure content independently of the row height so deleting lines can shrink it.
+        const style = getComputedStyle(input);
+        input.style.height = '0px';
+        display.style.height = `${input.scrollHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)}px`;
+        input.style.removeProperty('height');
+        view.requestMeasure();
+      };
+      input.addEventListener('input', resizeInput);
+      cell.append(display, input); resizeInput(); input.focus(); input.select();
     };
     const editButton = button(toolbar, this.t('table.editCell'), 'edit', () => editCell(table.rows[row].cells[column], row, column));
     toolbar.prepend(editButton);
