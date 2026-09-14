@@ -32,6 +32,7 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
   const [folder, setFolder] = useState(source?.kind === 'folder' ? source.path : ''), [recursive, setRecursive] = useState(source?.kind === 'folder' ? source.recursive : true);
   const [view, setView] = useState<ScreenRow['view']>(row?.view || 'small');
   const [progression, setProgression] = useState(() => row?.progression || defaultStudyProgression([...new Set(notebooks.flatMap(notebook => resolveNoteStatuses(notebook)))]));
+  const [studyFilter, setStudyFilter] = useState<NonNullable<ScreenRow['study']>['filter']>(row?.study?.filter || 'all');
   const [stageError, setStageError] = useState(false);
   const studying = studySettings;
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -46,7 +47,7 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
       if (disabled || row && !name.trim()) return;
       const result = StudyProgressionSchema.safeParse(progression);
       if (studying && !result.success) { setStageError(true); return; }
-      const base = { id: row?.id || crypto.randomUUID(), name: name.trim() || t(kind === 'custom' ? 'screen.custom' : 'screen.dynamic'), view, ...(row?.study ? { study: row.study } : {}), ...(studying && result.success ? { progression: result.data } : row?.progression ? { progression: row.progression } : {}) };
+      const base = { id: row?.id || crypto.randomUUID(), name: name.trim() || t(kind === 'custom' ? 'screen.custom' : 'screen.dynamic'), view, ...(studying ? { study: { ...row?.study, filter: studyFilter, dueFirst: true } } : row?.study ? { study: row.study } : {}), ...(studying && result.success ? { progression: result.data } : row?.progression ? { progression: row.progression } : {}) };
       const sort = row?.kind === 'dynamic' && row.sort ? { sort: row.sort } : {};
       onApply(kind === 'custom'
         ? { ...base, kind: 'custom', items: row?.kind === 'custom' ? row.items : [] }
@@ -64,6 +65,7 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
       {kind === 'folder' && <><label>{t('folder.folders')}<Select value={folder || nb?.root || ''} onValueChange={setFolder} options={screenFolderOptions(nb, folders, assets).map(folder => ({ value: folder.path, label: folder.title }))} /></label>
         <label className="screen-checkbox"><input type="checkbox" checked={recursive} onChange={e => setRecursive(e.target.checked)} />{t('screen.recursive')}</label></>}
       <label>{t('screen.view')}<Select aria-label={t('screen.view')} value={view} disabled={disabled} onValueChange={value => setView(value as ScreenRow['view'])} options={(['thumbnail', 'small', 'medium'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} /></label>
+      {studying && <label>{t('study.filter')}<Select aria-label={t('study.filter')} value={studyFilter} disabled={disabled} onValueChange={value => setStudyFilter(value as typeof studyFilter)} options={(['all', 'due', 'future', 'paused'] as const).map(value => ({ value, label: t(`study.filter.${value}`) }))} /></label>}
       {studying && <StudyLaneSettings progression={progression} disabled={Boolean(disabled)} onChange={value => { setProgression(value); setStageError(false); }} />}
       {studying && stageError && <p role="alert">{t('study.invalidStages')}</p>}
       {confirmRemove && <p className="screen-dialog-hint">{t('screen.removeRowHint')}</p>}

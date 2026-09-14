@@ -113,15 +113,12 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
   const study = useStudyWorkspace(onStudySaved);
   const [assets, setAssets] = useState<ScreenAsset[]>([]), [assetError, setAssetError] = useState(false);
   const [assetAttempt, setAssetAttempt] = useState(0), [assetsLoading, setAssetsLoading] = useState(false);
+  const [studyToolbar, setStudyToolbar] = useState<HTMLDivElement | null>(null);
   const [editing, setEditing] = useState<string>();
-  const studyParams = new URLSearchParams(location.search);
-  const mode = studyParams.get('mode') === 'reading' ? 'reading' : 'study';
-  const studyFilter = (['all', 'due', 'future', 'paused'].includes(studyParams.get('studyFilter') || '') ? studyParams.get('studyFilter') : 'all') as NonNullable<ScreenRow['study']>['filter'];
-  const changeStudyQuery = (key: string, value: string) => { const query = new URLSearchParams(location.search); query.set(key, value); navigate(location.pathname + '?' + query.toString(), { replace: true }); };
   const focusedRow = screen.page.rows.find(row => row.id === focusedLaneId);
   const editingRow = screen.page.rows.find(row => row.id === editing);
   const returnToScreen = () => { const query = new URLSearchParams(location.search); query.delete('mode'); query.delete('studyFilter'); navigate(`/screen${query.size ? '?' + query.toString() : ''}#screen-lane-${focusedLaneId}`); };
-  const reviewRow = focusedRow && { ...focusedRow, progression: focusedRow.progression || defaultStudyProgression(notebooks.flatMap(notebook => resolveNoteStatuses(notebook))), study: { ...(focusedRow.study || {}), filter: studyFilter, dueFirst: true } };
+  const reviewRow = focusedRow && { ...focusedRow, progression: focusedRow.progression || defaultStudyProgression(notebooks.flatMap(notebook => resolveNoteStatuses(notebook))), study: { ...(focusedRow.study || {}), filter: focusedRow.study?.filter || 'all', dueFirst: true } };
   const reviewItems = reviewRow ? studyRowItems(screenRowItems(reviewRow, notes, [], notebooks), reviewRow, notes, study.study) : [];
   const reviewNotes = reviewItems.flatMap(item => item.kind === 'note' ? notes.filter(note => note.notebookId === item.notebookId && note.path === item.path) : []);
   useEffect(() => {
@@ -171,16 +168,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
     <main className="screen-content">
       {focusedLaneId && <header className="screen-focus-header">
         <Button className="study-back" aria-label={t('screen.backToScreen')} onClick={returnToScreen}><ArrowLeft size={18} /><span>{t('screen.backToScreen')}</span></Button>
-        {focusedRow && <nav className="study-navbar" aria-label={t('study.controls')}>
-          <div className="study-mode-tabs" role="group" aria-label={t('study.mode')}>
-            <Button  aria-pressed={mode === 'study'} onClick={() => changeStudyQuery('mode', 'study')}>{t('screen.study')}</Button>
-            <Button  aria-pressed={mode === 'reading'} onClick={() => changeStudyQuery('mode', 'reading')}>{t('screen.reading')}</Button>
-          </div>
-          <label><span>{t('study.filter')}</span><select className="ui-control" aria-label={t('study.filter')} value={studyFilter} onChange={event => changeStudyQuery('studyFilter', event.target.value)}>
-            {(['all', 'due', 'future', 'paused'] as const).map(value => <option key={value} value={value}>{t(`study.filter.${value}`)}</option>)}
-          </select></label>
-        </nav>}
-        {focusedRow && <Button size="icon" disabled={disabled} aria-label={`${t('screen.editRow')}: ${focusedRow.name}`} onClick={() => setEditing(focusedRow.id)}><Pencil size={18} /></Button>}
+        {focusedRow && <div className="study-header-actions"><div className="study-undo-slot" ref={setStudyToolbar} /><Button size="icon" disabled={disabled} aria-label={`${t('screen.editRow')}: ${focusedRow.name}`} onClick={() => setEditing(focusedRow.id)}><Pencil size={18} /></Button></div>}
       </header>}
       <div className="screen-board-scroll">
       {study.error && <div className="screen-error" role="alert">{study.error}<Button  onClick={() => void study.reload()}>{t('study.reload')}</Button></div>}
@@ -197,7 +185,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
         {!focusedLaneId && !screen.page.rows.length && <div className="screen-board-empty"><ScreenIcon size={36} /><h3>{t('screen.startTitle')}</h3><p>{t('screen.startHint')}</p>
           <Button variant="primary" disabled={disabled} onClick={() => setDialog('add')}><Plus size={16} />{t('screen.addRow')}</Button></div>}
         {focusedLaneId ? reviewRow && <section id={`screen-lane-${reviewRow.id}`} className="screen-study-session" aria-label={reviewRow.name}>
-          <StudyLane key={`${reviewRow.id}:${mode}`} row={reviewRow} mode={mode} notes={reviewNotes} allNotes={notes} controller={study} disabled={disabled || screen.dirty || screen.saving} onOpen={onOpenNote} />
+          <StudyLane toolbar={studyToolbar} key={reviewRow.id} row={reviewRow} notes={reviewNotes} allNotes={notes} controller={study} disabled={disabled || screen.dirty || screen.saving} onOpen={onOpenNote} />
         </section> : <DndContext sensors={sensors} collisionDetection={screenCollision} onDragStart={({ active }) => setDragging(screen.page.rows.flatMap(row => row.kind === 'custom' ? row.items : []).find(item => item.id === active.id))}
           onDragCancel={() => setDragging(undefined)} onDragEnd={({ active, over }) => {
             setDragging(undefined); if (!over || active.id === over.id || disabled) return;

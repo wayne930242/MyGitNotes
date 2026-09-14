@@ -49,3 +49,11 @@ ScreenPage 的一般 Lane 只呈現三種卡片大小。開始學習只改路由
 StudyLane 接收獨立 mode，負責閱讀／回想差異及前後卡片。Screen schema 讀取舊 reading／study view 時轉為 small，其他配置及身分保留。配置入口在學習 navbar，沿用泳道編輯表單的整體提交與取消。
 
 Button 以原生 button 屬性、variant 和 size 提供共用元件。ui-buttons.css 是按鈕幾何與狀態配色的唯一來源；index.css 與 workspace.css 移除重複按鈕規則。hover 使用相同 variant 的 token，選中狀態由 aria-pressed 決定。主題設定分別計算主色與 hover 背景的文字顏色，維持對比。既有採用 ui-button class 的頁面共用同一套修正。
+
+## 精簡單卡操作
+
+StudyLane 持有佇列與次要操作視窗，StudyLaneCard 持有固定頁序與揭示狀態。卡片正文獨立捲動，底部控制為 flex 固定區；更多操作沿用 WorkspaceDialog 的焦點與關閉管理。篩選由 ScreenRowDialog 草稿與階段一起保存。
+
+## 固定操作位置
+
+共用 StudyFooter 同時呈現一般卡片及空佇列，熟悉程度常駐並依揭示狀態停用。儲存狀態供輔助工具讀取，錯誤置於卡片上方，維持底部位置。撤銷沿用頁首插槽及 React portal，佇列仍由 StudyLane 持有。
