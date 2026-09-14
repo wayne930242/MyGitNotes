@@ -1,3 +1,4 @@
+import { LiveMarkdownTable, tableUIState } from './LiveMarkdownTable.js';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { Compartment, EditorState, StateEffect, StateField, Transaction, type Range } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType, keymap, drawSelection, highlightActiveLineGutter, lineNumbers, type DecorationSet } from '@codemirror/view';
@@ -10,11 +11,9 @@ import { parseYouTubeUrl } from '@mygitnotes/core/screen-page';
 import { renderNote } from '../lib/markdown.js';
 import { headingSlug, resolveWorkspaceHref } from '../lib/workspace-links.js';
 import { useLocation } from 'react-router-dom';
-import { useTranslation } from '../lib/i18n/index.js';
+import { useTranslation, type I18nContextValue } from '../lib/i18n/index.js';
 
 export interface LiveMarkdownHandle {
-  getSelection: () => number;
-  replaceRange: (from: number, to: number, text: string) => void;
   insert: (text: string) => void;
   revealRange: (from: number, to: number, focus?: boolean) => void;
   goToLine: (line: number, options?: { focus?: boolean; smooth?: boolean }) => void;
@@ -136,7 +135,7 @@ class YouTubeWidget extends WidgetType {
   }
   get estimatedHeight() { return 280; }
 }
-function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string, pageLabel: string): DecorationSet {
+function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string, pageLabel: string, t: I18nContextValue['t']): DecorationSet {
   const marks: Range<Decoration>[] = [];
   let pageNumber = 1;
   const references = marked.lexer(state.doc.toString()).links;
@@ -175,6 +174,10 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
           return false;
         }
       }
+    }
+    if (name === 'Table' && node.node.parent?.name === 'Document') {
+      marks.push(Decoration.replace({ widget: new LiveMarkdownTable(state.sliceDoc(from, to), notePath, from, state.readOnly, t, state.field(tableUIState).get(from)), block: true }).range(from, to));
+      return false;
     }
     if (!editing && (name === 'Image' || name === 'Table' || name === 'HorizontalRule')) {
       marks.push(Decoration.replace({widget:new RenderedMarkdown(state.sliceDoc(from,to),notePath,from,name !== 'Image',linkLabel,tableLabel),block:name !== 'Image'}).range(from,to)); return false;
@@ -242,8 +245,6 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
   const callback = useRef(onChange); callback.current = onChange;
   const permission = useRef(new Compartment());
   useImperativeHandle(ref, () => ({
-    getSelection() { return editor.current?.state.selection.main.head ?? content.length; },
-    replaceRange(from, to, text) { const view = editor.current; if (!view || view.state.readOnly) return; view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from }, userEvent: 'input.table' }); },
     insert(text) {const view=editor.current;if(!view||view.state.readOnly)return;view.dispatch(view.state.replaceSelection(text),{scrollIntoView:true,userEvent:'input'});view.focus();},
     revealRange(from, to, focus = false) {
       const view = editor.current; if (!view) return;
@@ -269,23 +270,24 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
   }),[]);
   useEffect(() => {
     const field = StateField.define<{decorations:DecorationSet;focused:boolean}>({
-      create(state) {return {decorations:liveDecorations(state,false,notePath,linkLabel,tableLabel,pageLabel),focused:false};},
+      create(state) {return {decorations:liveDecorations(state,false,notePath,linkLabel,tableLabel,pageLabel,t),focused:false};},
       update(value,tr) {
         let focused=value.focused;for(const effect of tr.effects)if(effect.is(focusChanged))focused=effect.value;
-        return {focused,decorations:liveDecorations(tr.state,focused,notePath,linkLabel,tableLabel,pageLabel)};
+        return {focused,decorations:liveDecorations(tr.state,focused,notePath,linkLabel,tableLabel,pageLabel,t)};
       },
       provide: field => EditorView.decorations.from(field,value=>value.decorations),
     });
     const view = new EditorView({parent:host.current!,state:EditorState.create({doc:content,extensions:[
       markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),lineNumbers(),highlightActiveLineGutter(),EditorView.lineWrapping,
-      syntaxHighlighting(defaultHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'}])),theme,field,
+      syntaxHighlighting(defaultHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'}])),theme,tableUIState,field,
+      EditorView.atomicRanges.of(view => view.state.field(field).decorations.update({ filter: (_from, _to, decoration) => decoration.spec.widget instanceof LiveMarkdownTable })),
       permission.current.of([EditorState.readOnly.of(readOnly),EditorView.editable.of(!readOnly)]),
       EditorView.contentAttributes.of({'aria-label':ariaLabel,'role':'textbox','aria-multiline':'true'}),
       EditorView.domEventHandlers({focus:(_event,view)=>{view.dispatch({effects:focusChanged.of(true)});},blur:(_event,view)=>{view.dispatch({effects:focusChanged.of(false)});}}),
       EditorView.updateListener.of(update=>{if(update.docChanged)callback.current(update.state.doc.toString());}),
     ]})});
     editor.current=view;return()=>{view.destroy();editor.current=undefined;};
-  },[notePath,ariaLabel,linkLabel,tableLabel,pageLabel]);
+  },[notePath,ariaLabel,linkLabel,tableLabel,pageLabel,t]);
   useEffect(()=>{const view=editor.current;if(view && view.state.doc.toString()!==content)view.dispatch({changes:{from:0,to:view.state.doc.length,insert:content},annotations:Transaction.addToHistory.of(false)});},[content]);
   useEffect(()=>{editor.current?.dispatch({effects:permission.current.reconfigure([EditorState.readOnly.of(readOnly),EditorView.editable.of(!readOnly)])});},[readOnly]);
   useEffect(() => {

@@ -1,4 +1,3 @@
-import { MarkdownTableTools } from './MarkdownTableTools.js';
 import { Select } from './Select.js';
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Code2, Eye } from 'lucide-react';
@@ -56,9 +55,6 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   const source = useRef<HTMLTextAreaElement>(null);
   const sourceLineNumbers = useRef<HTMLDivElement>(null);
   const [activeSourceLine, setActiveSourceLine] = useState(1);
-  const [tableWidth, setTableWidth] = useState<'fit' | 'expanded'>(() => {
-    try { return localStorage.getItem('github-notes:table-width') === 'fit' ? 'fit' : 'expanded'; } catch { return 'expanded'; }
-  });
   const isMarkdown = /\.(md|markdown)$/i.test(path);
   const sourceLineCount = content.split('\n').length;
 
@@ -109,19 +105,16 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   }), [content, mode, readOnly, isMarkdown, onChange]);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden" data-markdown-editor data-table-width={tableWidth}>
-      {isMarkdown && <div className="markdown-table-actions markdown-table-toolbar">
-        <MarkdownTableTools key={path} content={content} readOnly={readOnly}
-          selection={() => mode === 'live' ? live.current?.getSelection() ?? content.length : source.current?.selectionStart ?? content.length}
-          replace={(from, to, text) => {
-            if (readOnly) return;
-            if (mode === 'live') live.current?.replaceRange(from, to, text);
-            else { onChange(content.slice(0, from) + text + content.slice(to)); requestAnimationFrame(() => { source.current?.focus(); source.current?.setSelectionRange(from, from + text.length); }); }
-          }} />
-        {mode === 'live' && <label className="ml-auto"><span>{t('table.width')}</span> <select aria-label={t('table.width')} value={tableWidth} onChange={event => {
-          const value = event.target.value as 'fit' | 'expanded'; setTableWidth(value);
-          try { localStorage.setItem('github-notes:table-width', value); } catch { /* Keep the session preference. */ }
-        }}><option value="fit">{t('table.fit')}</option><option value="expanded">{t('table.expanded')}</option></select></label>}
+    <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden" data-markdown-editor>
+      {isMarkdown && !readOnly && <div className="markdown-insert-toolbar">
+        <button type="button" onClick={() => {
+          const text = `\n\n| ${t('table.column')} 1 | ${t('table.column')} 2 |\n| --- | --- |\n|  |  |\n\n`;
+          if (mode === 'live') live.current?.insert(text);
+          else {
+            const position = source.current?.selectionStart ?? content.length;
+            onChange(content.slice(0, position) + text + content.slice(position));
+          }
+        }}>{t('table.insert')}</button>
       </div>}
       {mode === 'live' && isMarkdown ? (
         <React.Suspense fallback={<p className="p-6 text-sm text-slate-400">{t('editor.loadingEditor')}</p>}>
