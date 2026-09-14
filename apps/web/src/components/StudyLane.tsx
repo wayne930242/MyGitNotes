@@ -119,12 +119,12 @@ function StudyLaneCard({ note, row, controller, disabled, onDone, onOpen, previo
           if (Math.abs(dx) >= 75 && Math.abs(dx) >= Math.abs(dy) * 1.5) turnPage(index + (dx < 0 ? 1 : -1));
         }}><div className="prose-custom" data-markdown-view dangerouslySetInnerHTML={{ __html: renderNote(pages[index], note.path) }} /></div>
     </article>
-    <StudyFooter progression={row.progression!} status={note.status} pageCount={pages.length} page={index} canRate={canRate} disabled={disabled} previous={previous} next={next} onMove={onMove} onPage={turnPage} onRate={rate} onDone={onDone} more={more} remaining={remaining} />
+    <StudyFooter progression={row.progression!} status={note.status} pageCount={pages.length} page={index} revealed={revealed} canRate={canRate} disabled={disabled} previous={previous} next={next} onMove={onMove} onPage={turnPage} onRate={rate} onDone={onDone} more={more} remaining={remaining} />
   </>;
 }
 
-function StudyFooter({ progression, status, pageCount, page, canRate, disabled, previous, next, onMove, onPage, onRate, onDone, more, remaining }: {
-  progression: StudyProgression; status?: string; pageCount: number; page: number; canRate: boolean; disabled: boolean;
+function StudyFooter({ progression, status, pageCount, page, revealed = false, canRate, disabled, previous, next, onMove, onPage, onRate, onDone, more, remaining }: {
+  progression: StudyProgression; status?: string; pageCount: number; page: number; revealed?: boolean; canRate: boolean; disabled: boolean;
   previous: boolean; next: boolean; onMove: (direction: number) => void; onPage: (page: number) => void;
   onRate: (rating: Familiarity) => void; onDone: () => void; more: ReactNode; remaining: number;
 }) {
@@ -134,12 +134,14 @@ function StudyFooter({ progression, status, pageCount, page, canRate, disabled, 
         <nav className="study-pages" aria-label={t('study.page')}><span>Page</span>{Array.from({ length: pageCount }, (_, i) => <Button key={i} aria-label={`Page ${i + 1}`} aria-pressed={page === i} onClick={() => onPage(i)}>{i + 1}</Button>)}</nav>
         <span className="study-remaining">{remaining} {t('study.remaining')}</span>{more}
       </div>
+      <div className={`study-ratings-region${revealed ? ' is-revealed' : ''}`} aria-hidden={!revealed}>
       <div className="study-ratings">{([1, 2, 3, 4] as const).map(rating => {
         const target = nextStudyStage(progression, status, rating);
         return <Button data-rating={rating} key={rating} disabled={!canRate} onClick={() => onRate(rating)} title={`${target.status} · ${target.intervalDays} ${t('study.days')}`}>
           <span>{t((['study.again', 'study.hard', 'study.good', 'study.easy'] as const)[rating - 1])}</span><small>{target.intervalDays} {t('study.days')}</small>
         </Button>;
       })}</div>
+      </div>
       <div className="study-footer-navigation">
         <Button size="icon" disabled={!previous} aria-label={t('study.previousCard')} onClick={() => onMove(-1)}><ChevronLeft size={24} /></Button>
         <Button variant="primary" className="study-reveal" disabled={pageCount === 0} onClick={() => onPage(page + 1)}>{t('study.reveal')}</Button>

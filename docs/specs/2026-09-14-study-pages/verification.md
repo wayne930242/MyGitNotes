@@ -1,6 +1,6 @@
 # 驗證
 
-2026-09-14：產品隔離 checkout `github-notes-study`，基底 core `111a3d3`，本次固定熟悉程度與底部主要操作的位置、加入循環翻頁，撤銷常駐頁首。
+2026-09-14：產品隔離 checkout `github-notes-study`，基底 core `ff9eb33`，本次將熟悉程度先收起、揭示後向上展開，主要按鈕保持底部原位。
 
 | Requirement | Evidence | Result |
 |---|---|---|
@@ -12,7 +12,7 @@
 | 6. 卡片身分與重新配對 | 核心 study 測試涵蓋多卡、唯一內容重排、歧義及身分保留 | pass |
 | 7. 保存、撤銷及衝突 | HTTP 與瀏覽器驗證撤銷、過期筆記拒絕、503 後停留原卡及重試事件數 | pass |
 | 8. 來源邊界與資料保存 | local HTTP 驗證 main／symlink／兩檔保存失敗回復；GitHub adapter 模擬同一 tree 保存兩檔及非強制更新；core-update 保留測試 | pass |
-| 9. 手機手勢與控制 | qa-study 原生觸控換頁、揭示前評分停用、左右滑動只換頁、320／390px 按鈕尺寸及寬度 | pass |
+| 9. 手機手勢與控制 | qa-study 原生觸控換頁、揭示前評分收起並停用、左右滑動只換頁、320／390px 按鈕尺寸及寬度 | pass |
 | 10. 工具列與標籤 | qa-workspace-toolbar 驗證折疊單列、篩選展開、標籤不換行、控制留在 viewport | pass |
 | 11. 手機共用頁首 | 筆記、屏幕、資源庫、Agent、設定五頁，320／390／820／1440px，以及 SPA 切頁後側欄開關同列且唯一 | pass |
 | 12. 編輯器分頁版型 | qa-study 驗證兩個可見分頁間距、尺寸及原始 Markdown 不變 | pass |
@@ -36,6 +36,10 @@ Reflexive：低高度瀏覽器檢查發現全螢幕隱藏全域 footer 後仍有
 
 | Requirement | Evidence | Result |
 |---|---|---|
-| 19. 底部固定位置與循環 | qa-study 比對翻頁列、評分、更多與撤銷的座標及尺寸，涵蓋揭示、切卡、評分後、撤銷後、儲存失敗及空佇列；桌面及手機揭示前後相同，三頁按鈕與觸控可循環 | pass |
+| 19. 底部固定位置與循環 | qa-study 比對翻頁列與撤銷的座標及尺寸，涵蓋揭示、切卡、評分後、撤銷後、儲存失敗及空佇列；桌面及手機揭示前後相同，三頁按鈕與觸控可循環 | pass |
 
 Reflexive：沿用既有頁首插槽與共用 footer，這次無新增流程摩擦。
+
+| Requirement | Evidence | Result |
+|---|---|---|
+| 熟悉程度展開動畫 | qa-study 在真實瀏覽器以 requestAnimationFrame 取樣，觀察高度從 0 經中間值展開，主要列每幀位置偏差小於 0.5px；減少動態效果設定時無過渡並直接呈現 | pass |
