@@ -28,7 +28,8 @@ export function ScreenCard({ item, view, controls, ...content }: ScreenContentPr
   const asset = item.kind === 'asset' ? content.assets.find(asset => asset.path === item.path && asset.notebookId === item.notebookId) : undefined;
   const notebook = item.kind !== 'youtube' ? content.notebooks.find(nb => nb.id === item.notebookId) : undefined;
   const title = screenItemTitle(item, content.notes, content.assets);
-  const html = useMemo(() => note && view !== 'thumbnail' ? renderNote(note.content, note.path) : '', [note?.content, note?.path, view]);
+  const tableLabel = t('preview.scrollableTable');
+  const html = useMemo(() => note && view !== 'thumbnail' ? renderNote(note.content, note.path, tableLabel) : '', [note?.content, note?.path, view, tableLabel]);
   const icon = item.kind === 'note' ? <FileText /> : item.kind === 'folder' ? <Folder /> : item.kind === 'asset' ? <ImageIcon /> : <Youtube />;
   const members = item.kind === 'folder' ? content.notes.filter(note => note.notebookId === item.notebookId && note.path.startsWith(`${item.path}/`) && !isNoteHidden({ ...note.metadata, status: note.status })) : [];
   const memberAssets = item.kind === 'folder' ? content.assets.filter(asset => asset.notebookId === item.notebookId && asset.path.startsWith(`${item.path}/`)) : [];

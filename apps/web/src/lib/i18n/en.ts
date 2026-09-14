@@ -178,6 +178,7 @@ export const en = {
   'graph.resetZoom': 'Reset view',
   'graph.minimap': 'Overview',
   'graph.preview': 'Note preview',
+  'preview.scrollableTable': 'Horizontally scrollable table (Alt + wheel)',
   'graph.openEditor': 'Open full editor',
   'graph.minimapHint': 'Drag the viewport to pan · Click outside it to navigate · Enter to reset',
   'graph.allTags': 'All tags',
