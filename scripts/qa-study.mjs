@@ -12,7 +12,7 @@ const puppeteer = require('puppeteer-core'), { parse } = require('yaml');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-study-qa-'));
 const write = (file, text) => { fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true }); fs.writeFileSync(path.join(root, file), text); };
 const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
-const original = '---\ntitle: Vocabulary\nstatus: working\ncustom: keep-me\n---\n\nWhat does abandon mean?\n\n---\n\nGive up.\n\n---\n\nThey abandoned the plan.\n';
+const original = '---\ntitle: Vocabulary\nstatus: working\ncustom: keep-me\n---\n\nWhat does abandon mean?\n\n---\n\nGive up.\n\n---\n\nThey abandoned the plan.\n' + '\nA longer example paragraph for reading and scrolling.\n'.repeat(40);
 write('.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Study QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
 write('notes/example/vocabulary.md', original);
 write('notes/example/other.md', '# Other\n\nA single-page note.');
@@ -105,6 +105,14 @@ try {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   };
   await swipe('left'); await page.waitForFunction(() => document.querySelector('.study-page')?.textContent.includes('Give up.'));
+  await swipe('left');
+  await page.waitForFunction(() => document.querySelector('.study-page')?.textContent.includes('They abandoned'));
+  const scrollBox = await (await page.$('.study-page')).boundingBox();
+  const scrollX = scrollBox.x + scrollBox.width / 2, scrollY = scrollBox.y + scrollBox.height * .8;
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: scrollX, y: scrollY }] });
+  for (let i = 1; i <= 8; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: scrollX, y: scrollY - 120 * i / 8 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.waitForFunction(() => document.querySelector('.study-page')?.scrollTop > 0);
   await click('Recall'); await swipe('right'); assert(state().events.length === 6, 'Question swipe rated an unrevealed answer');
   await click('Show answer'); await swipe('right'); await saved(7);
   assert(state().events.at(-1).rating === 3, 'Right swipe did not rate Remembered');
@@ -130,6 +138,30 @@ try {
   assert(state().notes[0].cards[0].id === cardId && state().notes[0].cards[0].scheduler.reps === 0, 'Remapping lost identity or failed to reset');
   assert(!errors.length, errors.join('; '));
   console.log('PASS external Markdown edit detection and explicit remapping');
+  let failSave = true;
+  await page.setRequestInterception(true);
+  page.on('request', request => {
+    if (failSave && request.method() === 'PUT' && new URL(request.url()).pathname === '/api/study') void request.respond({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Temporary outage' }) });
+    else void request.continue();
+  });
+  await click('Read · tomorrow'); await page.waitForSelector('.study-alert');
+  assert(state().events.length === 10 && await page.$('.study-dialog[open]'), 'Failed save lost the card or changed persisted history');
+  failSave = false; await click('Read · tomorrow'); await saved(11);
+  console.log('PASS failed-save feedback and action retry without duplicate history');
+  const custom = await page.$eval('.study-custom-delay input', input => {
+    const date = new Date(); date.setFullYear(date.getFullYear() + 1);
+    const value = `${date.getFullYear()}-01-02T12:34`;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return new Date(value).toISOString();
+  });
+  await click('Read and postpone'); await saved(12);
+  assert(state().notes[0].reading.due === custom, 'Custom local date did not round-trip');
+  await click('Recall'); await click('Pause memory reviews'); await saved(13);
+  assert(state().notes[0].cards[0].suspended && state().notes[0].reading.due === custom, 'Pausing memory changed the reading schedule');
+  await click('Enable memory reviews'); await saved(14);
+  assert(state().notes[0].cards[0].enabled && !state().notes[0].cards[0].suspended, 'Resume did not enable the card');
+  console.log('PASS custom date input and independent pause/resume controls');
 } catch (error) {
   fs.mkdirSync(path.join(product, 'artifacts/qa'), { recursive: true });
   if (page) { await page.screenshot({ path: path.join(product, 'artifacts/qa/study-failure.png') }); console.error(await page.$eval('body', element => element.innerText)); }

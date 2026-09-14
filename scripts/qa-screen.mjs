@@ -78,6 +78,7 @@ try {
   dialogSelects = await page.$$('dialog[open] .select-trigger');
   await dialogSelects[1].click();
   await page.click('[data-option-value="archive"]');
+  await page.waitForFunction(() => document.activeElement?.matches('dialog[open] .select-trigger[value="archive"]'));
   assert(await page.$$eval('#screen-tags option', options => options.map(option => option.value).join(',') === 'archive-only'), 'Tag suggestions were not scoped to the selected notebook');
   await page.type('dialog[open] input[list="screen-tags"]', 'archive-only');
   await page.click('dialog[open] button.ui-button-primary');
@@ -92,8 +93,9 @@ try {
   dialogSelects = await page.$$('dialog[open] .select-trigger');
   await dialogSelects[1].click();
   await page.click('[data-option-value="archive"]');
+  await page.waitForFunction(() => document.activeElement?.matches('dialog[open] .select-trigger[value="archive"]'));
   await page.type('dialog[open] input[list="screen-tags"]', 'archive-only');
-  await page.focus('input[aria-label="Swimlane name"]'); await page.keyboard.down('Control'); await page.keyboard.press('KeyA'); await page.keyboard.up('Control'); await page.keyboard.type('Renamed'); await page.keyboard.press('Enter');
+  await page.focus('input[aria-label="Swimlane name"]'); await page.$eval('input[aria-label="Swimlane name"]', input => input.select()); await page.keyboard.type('Renamed'); await page.keyboard.press('Enter');
   await page.waitForFunction(()=>document.querySelector('#screen-lane-reading h3')?.textContent==='Renamed' && document.querySelector('#screen-lane-reading .screen-dynamic-label')?.textContent.includes('#archive-only') && document.querySelector('#screen-lane-reading .screen-card-title')?.textContent === 'Archive Note');
   await page.focus('[aria-label="Move swimlane: Renamed"]'); await page.keyboard.press('Space');
   await page.waitForFunction(()=>document.querySelector('[aria-label="Move swimlane: Renamed"]')?.getAttribute('aria-pressed')==='true');
@@ -130,6 +132,6 @@ try {
   assert(!errors.length,errors.join('; '));
   console.log('PASS size tabs, heading inset, sidebar reorder, dynamic source persistence and non-destructive asset retry');
 } catch(error) {
-  console.log(await page.evaluate(()=>({focus:document.activeElement?.outerHTML,nav:document.querySelector('.screen-sidebar-lanes')?.innerText,status:[...document.querySelectorAll('[role="status"]')].map(e=>e.textContent),alerts:[...document.querySelectorAll('[role="alert"]')].map(e=>e.textContent)})));
+  console.log(await page.evaluate(()=>({lanes:[...document.querySelectorAll('.screen-lane')].map(lane=>({source:lane.querySelector('.screen-dynamic-label')?.textContent,titles:[...lane.querySelectorAll('.screen-card-title')].map(title=>title.textContent)})),focus:document.activeElement?.outerHTML,nav:document.querySelector('.screen-sidebar-lanes')?.innerText,status:[...document.querySelectorAll('[role="status"]')].map(e=>e.textContent),alerts:[...document.querySelectorAll('[role="alert"]')].map(e=>e.textContent)})));
   throw error;
 } finally {await browser.close();await new Promise(resolve=>server.close(resolve));fs.rmSync(root,{recursive:true,force:true});}

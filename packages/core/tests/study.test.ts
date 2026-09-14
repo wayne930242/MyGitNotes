@@ -55,6 +55,15 @@ describe('Study identity and memory', () => {
     expect(matchesStudyFilter(workspace.notes[0], 'due', new Date('2026-09-18T04:00:00Z'))).toBe(true);
     expect(() => applyStudyAction(workspace, note, card.id, { kind: 'read', due: now.toISOString() }, now)).toThrow('future');
   });
+  it('distinguishes reading-only cards from paused memory reviews', () => {
+    const note = createStudyNote(source, now);
+    const reading = applyStudyAction(emptyStudyWorkspace(), note, note.cards[0].id, { kind: 'read', due: '2026-09-18T04:00:00.000Z' }, now);
+    expect(matchesStudyFilter(reading.notes[0], 'paused', now)).toBe(false);
+    const paused = applyStudyAction(reading, reading.notes[0], note.cards[0].id, { kind: 'suspend' }, now);
+    expect(matchesStudyFilter(paused.notes[0], 'paused', now)).toBe(true);
+    expect(matchesStudyFilter(paused.notes[0], 'future', now)).toBe(true);
+    expect(paused.notes[0].reading).toEqual(reading.notes[0].reading);
+  });
   it('updates policy for future ratings, preserves schedule on pause and restores it', () => {
     const note = createStudyNote(source, now), card = note.cards[0];
     const reviewed = applyStudyAction(emptyStudyWorkspace(), note, card.id, { kind: 'review', rating: 4 }, now);

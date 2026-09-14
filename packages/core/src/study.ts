@@ -15,7 +15,7 @@ const SchedulerSchema = z.object({
 export const StudyPolicySchema = z.object({
   retention: z.number().min(.7).max(.97), intervals: z.array(z.number().int().min(1).max(3650)).min(1).max(20),
 }).strict().refine(value => value.intervals.every((days, i) => i === 0 || days >= value.intervals[i - 1]), 'Intervals must be nondecreasing.');
-const schedule = { id, enabled: z.boolean(), policy: StudyPolicySchema, scheduler: SchedulerSchema };
+const schedule = { id, enabled: z.boolean(), suspended: z.boolean().default(false), policy: StudyPolicySchema, scheduler: SchedulerSchema };
 const CardSchema = z.object({ ...schedule,
   kind: z.enum(['forward', 'reverse', 'cloze']), front: z.array(id).max(100), back: z.array(id).min(1).max(100),
   masks: z.array(z.object({ pageId: id, start: finite.int(), end: finite.int(), text: z.string().min(1) }).strict()
@@ -48,6 +48,7 @@ export const StudyWorkspaceSchema = z.object({ version: z.literal(1), notes: z.a
       note.pages.forEach(page => unique(page.id));
       for (const card of note.cards) {
         unique(card.id);
+        if (card.enabled && card.suspended) ctx.addIssue({ code: 'custom', message: 'A suspended card must be disabled.' });
         if ([...card.front, ...card.back].some(page => !pages.has(page))) ctx.addIssue({ code: 'custom', message: 'Unknown card page.' });
         for (const mask of card.masks || []) if (pages.get(mask.pageId)?.slice(mask.start, mask.end) !== mask.text) ctx.addIssue({ code: 'custom', message: 'Mask does not match its source.' });
       }
@@ -80,7 +81,7 @@ export function createStudyNote(source: StudySource, now = new Date()): StudyNot
   const pages = splitNotePages(source.content).map(source => ({ id: newId(), source }));
   return { id: newId(), notebookId: source.notebookId, path: source.path,
     ...(typeof source.metadata.id === 'string' ? { sourceId: source.metadata.id } : {}), title: source.title,
-    pages, reading: { step: 0 }, cards: [{ id: newId(), kind: 'forward', enabled: false,
+    pages, reading: { step: 0 }, cards: [{ id: newId(), kind: 'forward', enabled: false, suspended: false,
       front: pages.length > 1 ? [pages[0].id] : [], back: (pages.length > 1 ? pages.slice(1) : pages).map(page => page.id),
       policy: { retention: .9, intervals: [1, 3, 7, 14, 30] }, scheduler: serializedCard(createEmptyCard(now)),
     }] };
@@ -109,7 +110,7 @@ export function matchesStudyFilter(note: StudyNote | undefined, filter: 'all' | 
   if (filter === 'all') return true;
   if (!note) return false;
   const due = studyDue(note);
-  if (filter === 'paused') return !due && note.cards.every(card => !card.enabled);
+  if (filter === 'paused') return note.cards.some(card => card.suspended);
   return Boolean(due && (filter === 'due' ? Date.parse(due) <= now.getTime() : Date.parse(due) > now.getTime()));
 }
 export function previewStudyRating(card: StudyCard, rating: Grade, now = new Date()) {
@@ -122,12 +123,12 @@ type Action = { kind: 'review'; rating: Grade } | { kind: 'read' | 'snooze'; due
 export function applyStudyAction(workspace: StudyWorkspace, note: StudyNote, cardId: string, action: Action, now = new Date()): StudyWorkspace {
   const next = structuredClone(note), card = next.cards.find(card => card.id === cardId);
   if (!card) throw new Error('Unknown study card.');
-  const before = { reading: note.reading, cards: note.cards.map(({ id, enabled, policy, scheduler }) => ({ id, enabled, policy, scheduler })) };
+  const before = { reading: note.reading, cards: note.cards.map(({ id, enabled, suspended, policy, scheduler }) => ({ id, enabled, suspended, policy, scheduler })) };
   const at = now.toISOString();
   switch (action.kind) {
     case 'review':
       if (card.scheduler.last_review && Date.parse(card.scheduler.last_review) > now.getTime()) throw new Error('The review time precedes the previous review.');
-      card.scheduler = previewStudyRating(card, action.rating, now); card.enabled = true; break;
+      card.scheduler = previewStudyRating(card, action.rating, now); card.enabled = true; card.suspended = false; break;
     case 'read': case 'snooze':
       if (Date.parse(date.parse(action.due)) <= now.getTime()) throw new Error('Choose a future time.');
       next.reading.due = action.due;
@@ -138,8 +139,8 @@ export function applyStudyAction(workspace: StudyWorkspace, note: StudyNote, car
       const due = new Date(now); due.setDate(due.getDate() + days);
       next.reading = { step: next.reading.step + 1, due: due.toISOString(), lastRead: at }; break;
     }
-    case 'suspend': card.enabled = false; break;
-    case 'resume': card.enabled = true; break;
+    case 'suspend': card.enabled = false; card.suspended = true; break;
+    case 'resume': card.enabled = true; card.suspended = false; break;
     case 'configure': card.policy = StudyPolicySchema.parse(action.policy); break;
   }
   const event: StudyEvent = { id: newId(), noteId: note.id, cardId, at, kind: action.kind, before,
@@ -159,7 +160,7 @@ export function rebindStudyNote(workspace: StudyWorkspace, note: StudyNote, sour
   if (note.cards.length !== 1 || note.cards[0].kind !== 'forward') throw new Error('This note requires the multi-card mapping editor.');
   const fresh = createStudyNote(source, now);
   fresh.id = note.id; fresh.reading = note.reading;
-  fresh.cards[0] = { ...fresh.cards[0], id: note.cards[0].id, enabled: note.cards[0].enabled, policy: note.cards[0].policy,
+  fresh.cards[0] = { ...fresh.cards[0], id: note.cards[0].id, enabled: note.cards[0].enabled, suspended: note.cards[0].suspended, policy: note.cards[0].policy,
     scheduler: reset ? fresh.cards[0].scheduler : note.cards[0].scheduler };
   return StudyWorkspaceSchema.parse({ ...workspace, notes: workspace.notes.map(value => value.id === note.id ? fresh : value),
     events: [...workspace.events, { id: newId(), noteId: note.id, at: now.toISOString(), kind: 'rebind' }] });
