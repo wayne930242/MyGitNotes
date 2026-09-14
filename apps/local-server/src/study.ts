@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { parse, stringify } from 'yaml';
 import { emptyStudyWorkspace, StudyWorkspaceSchema, STUDY_FILE, STUDY_MAX_BYTES, GitHubSource, SourceError, type SourceConfig } from '@github-notes/core';
-import { StudyLaneActionSchema, loadWorkspaceConfig, resolveSafePath, isNotebookContent, readNoteFile, parseNoteContent, replaceNoteStatus, ScreenPageSchema, SCREEN_PAGE_FILE, createStudyNote, findStudyNote, reconcileStudyNote, applyStageAction, undoStudyAction } from '@github-notes/core';
+import { defaultStudyProgression, resolveNoteStatuses, StudyLaneActionSchema, loadWorkspaceConfig, resolveSafePath, isNotebookContent, readNoteFile, parseNoteContent, replaceNoteStatus, ScreenPageSchema, SCREEN_PAGE_FILE, createStudyNote, findStudyNote, reconcileStudyNote, applyStageAction, undoStudyAction } from '@github-notes/core';
 import { getCurrentBranch } from '@github-notes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
@@ -75,12 +75,12 @@ export function createStudyRouter(base: string, source: SourceConfig): Router {
         } else {
           const screen = ScreenPageSchema.parse(parse(await read(SCREEN_PAGE_FILE), { maxAliasCount: 20 }));
           const lane = screen.rows.find(row => row.id === body.laneId);
-          if (!lane?.progression || !['reading', 'study'].includes(lane.view)) throw new SourceError('Configure this lane before reviewing.', 422);
-          if (body.action === 'stage-review' && lane.view !== 'study' || body.action === 'stage-read' && lane.view !== 'reading') throw new SourceError('The lane mode changed. Reload before reviewing.', 409);
+          if (!lane) throw new SourceError('This lane no longer exists. Reload before reviewing.', 409);
+          const progression = lane.progression || defaultStudyProgression(config!.notebooks.flatMap(notebook => resolveNoteStatuses(notebook)));
           const stored = findStudyNote(currentStudy, currentNote), resolved = stored ? reconcileStudyNote(stored, currentNote) : createStudyNote(currentNote);
           if (!resolved || resolved.cards.length !== 1 || resolved.cards[0].kind !== 'forward') throw new SourceError('Rebind this card before reviewing.', 409);
           if (body.action !== 'stage-postpone' && !body.rating || body.action === 'stage-postpone' && !body.due) throw new SourceError('A rating or postponement time is required.', 400);
-          nextStudy = applyStageAction(currentStudy, resolved, lane.id, currentNote.status, lane.progression,
+          nextStudy = applyStageAction(currentStudy, resolved, lane.id, currentNote.status, progression,
             body.action === 'stage-postpone' ? { kind: body.action, due: body.due! } : { kind: body.action, rating: body.rating! });
           status = nextStudy.events.at(-1)!.transition!.toStatus;
         }

@@ -12,7 +12,7 @@ export const ScreenItemSchema = z.discriminatedUnion('kind', [
   z.object({ ...reference, kind: z.literal('asset') }).strict(),
   z.object({ id, kind: z.literal('youtube'), videoId: z.string().regex(/^[\w-]{11}$/), start: z.number().int().min(0).max(86400).default(0), title: z.string().max(160).optional() }).strict(),
 ]);
-const row = { id, name: z.string().trim().min(1).max(100), view: z.enum(['thumbnail', 'small', 'medium', 'reading', 'study']), progression: StudyProgressionSchema.optional(), study: z.object({ filter: z.enum(['all', 'due', 'future', 'paused']), dueFirst: z.boolean(), status: z.string().max(200).optional() }).strict().optional() };
+const row = { id, name: z.string().trim().min(1).max(100), view: z.enum(['thumbnail', 'small', 'medium', 'reading', 'study']).transform(value => value === 'reading' || value === 'study' ? 'small' as const : value), progression: StudyProgressionSchema.optional(), study: z.object({ filter: z.enum(['all', 'due', 'future', 'paused']), dueFirst: z.boolean(), status: z.string().max(200).optional() }).strict().optional() };
 export const ScreenRowSchema = z.discriminatedUnion('kind', [
   z.object({ ...row, kind: z.literal('custom'), items: z.array(ScreenItemSchema).max(100) }).strict(),
   z.object({ ...row, kind: z.literal('dynamic'), sort: z.object({

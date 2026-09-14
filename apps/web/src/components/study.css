@@ -29,42 +29,38 @@
 .study-stage-row .ui-icon-button { width: 44px; height: 44px; }
 .study-stage-settings > label { display: flex; gap: 8px; white-space: nowrap; }
 .study-stage-settings .select-trigger { min-width: 0; }
-.screen-lane-focus.ui-icon-button { margin-left: auto; flex: none; width: 44px; height: 44px; }
 .app-shell[data-screen-focus="true"] .workspace-header,
 .app-shell[data-screen-focus="true"] .workspace-commit-footer { display: none; }
-.screen-focus-header { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--workspace-divider); }
-.screen-focus-header h2 { flex: 1; min-width: 0; margin: 0; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.screen-focus-header { flex: none; display: flex; align-items: center; gap: 12px; min-width: 0; padding: 8px 16px; border-bottom: 1px solid var(--workspace-divider); }
 .screen-focus-header button { flex: none; min-height: 44px; }
 .screen-focus-header .ui-icon-button { width: 44px; }
-.screen-focused .screen-lane-header { display: none; }
-.screen-focused .screen-lane { border: none; background: transparent; margin: 0; }
+.study-navbar { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.study-navbar label { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; min-width: 0; }
+.study-navbar select { min-height: 44px; font-size: 16px; min-width: 90px; }
+.study-mode-tabs { display: flex; gap: 4px; flex: none; }
 .screen-focused .screen-board-scroll { display: flex; flex-direction: column; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
-.screen-focused .screen-view-study, .screen-focused .screen-view-reading { flex: 1; display: flex; flex-direction: column; }
-.screen-focused .study-lane { flex: 1; display: flex; flex-direction: column; }
-.screen-focused .study-lane-card { flex: 1; display: flex; flex-direction: column; }
-.screen-focused .study-page { flex: 1; max-height: none; }
-.screen-focused .study-page-nav .ui-icon-button { width: 44px; height: 44px; }
+.screen-focused .screen-study-session { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.screen-focused .study-lane, .screen-focused .study-lane-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.screen-focused .study-page { flex: 1; min-height: 120px; max-height: none; }
+.study-page-nav .ui-icon-button, .study-card-navigation .ui-icon-button { width: 44px; height: 44px; }
+.study-card-navigation { display: flex; gap: 4px; }
 .screen-view-select { display: none; }
 @media (max-width: 767px) {
   .screen-view-tabs { display: none; }
-  .screen-view-select { display: inline-flex; width: 140px; min-height: 44px; }
+  .screen-view-select { display: inline-flex; flex: 1; min-width: 70px; width: auto; min-height: 44px; }
   .study-lane-card { padding: 8px; }
-  .study-page { padding: 8px; max-height: 38dvh; }
+  .study-page { padding: 8px; }
   .study-ratings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .study-stage-settings { width: 100%; }
-  .screen-focus-header { gap: 8px; padding: 8px; }
+  .screen-focus-header { gap: 4px; padding: 8px; }
+  .study-navbar { gap: 4px; }
+  .study-navbar label { flex: 1; }
+  .study-navbar label select { width: 100%; min-width: 64px; padding-left: 6px; padding-right: 6px; }
+  .study-navbar label > span, .study-back > span { display: none; }
+  .screen-focus-header .study-back { width: 44px; padding: 8px; }
+  .study-mode-tabs .ui-button { padding: 8px; min-width: 44px; }
   .screen-focused .screen-board-scroll { padding: 8px; }
   .screen-focused .study-page { max-height: 55dvh; }
-}
-
-.study-card-navigation { display: flex; gap: 4px; }
-.study-card-navigation .ui-icon-button { width: 44px; height: 44px; }
-.screen-focused .screen-view-study, .screen-focused .screen-view-reading, .screen-focused .study-lane, .screen-focused .study-lane-card { min-height: 0; }
-.screen-focused .study-page { min-height: 120px; }
-@media (max-width: 767px) {
-  .screen-lane-scroll.screen-study-navigation { display: inline-flex; }
-  .screen-view-reading .screen-view-select, .screen-view-study .screen-view-select { flex: 1; min-width: 60px; width: auto; }
-  .screen-view-reading .screen-lane-actions, .screen-view-study .screen-lane-actions { gap: 2px; }
   .screen-focused .study-lane-navigation { flex-wrap: wrap; }
   .screen-focused .study-pick-card { flex-basis: calc(100% - 100px); order: -1; }
 }

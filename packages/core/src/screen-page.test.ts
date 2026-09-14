@@ -18,6 +18,12 @@ describe('Screen Page swimlanes', () => {
     }
     expect(ScreenPageSchema.safeParse({ ...page, rows: [{ ...page.rows[0], sort: { field: 'title', order: 'asc' } }] }).success).toBe(false);
   });
+  it('restores ordinary layout for legacy study views while preserving progression', () => {
+    const progression = { stages: [{ status: 'new', intervalDays: 1 }], easy: 'two' };
+    for (const view of ['reading', 'study']) {
+      expect(ScreenPageSchema.parse({ version: 1, rows: [{ ...page.rows[0], view, progression }] }).rows[0]).toMatchObject({ view: 'small', progression });
+    }
+  });
   it('moves references across custom rows without changing notebook identity', () => {
     const config = ScreenPageSchema.parse(page);
     const moved = moveScreenItem(config, 'a', 'second', 1);

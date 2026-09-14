@@ -33,7 +33,7 @@
 
 @layer components {
   /* Shared field and action geometry; callers only add layout or semantic variants. */
-  .ui-control, .ui-button {
+  .ui-control {
     min-height: 32px;
     padding: 6px 10px;
     border: 1px solid var(--color-border);
@@ -44,34 +44,12 @@
     line-height: 18px;
     transition: background-color 150ms, border-color 150ms, box-shadow 150ms;
   }
-  .ui-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-weight: 500;
-    white-space: nowrap;
-  }
-  .ui-button:not(:disabled):not([aria-disabled="true"]):hover,
   .select-trigger:not(:disabled):hover { background: var(--color-sidebar); }
-  .ui-control:focus-visible, .ui-button:focus-visible, .ui-button:focus-within,
-  .ui-icon-button:focus-visible, .asset-tile:focus-visible {
+  .ui-control:focus-visible, .asset-tile:focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
   }
-  .ui-control:disabled, .ui-button[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
-  .ui-button-primary { background: var(--color-primary); border-color: var(--color-primary); color: white; }
-  .ui-button-primary:not(:disabled):not([aria-disabled="true"]):hover { background: var(--color-primary-hover); }
-  .ui-button-danger { @apply text-rose-600 dark:text-rose-400; }
-  .ui-icon-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px;
-    border-radius: var(--radius-control);
-    color: var(--color-muted);
-  }
-  .ui-icon-button:hover { background: var(--color-sidebar); color: var(--color-text); }
+  .ui-control:disabled { opacity: .45; cursor: not-allowed; }
   .ui-panel, .ui-dialog {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-panel);

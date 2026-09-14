@@ -41,3 +41,11 @@ ScreenRow 增加閱讀／學習版型與 progression 設定，階段以 status �
 StudyLane 提供受邊界及保存狀態限制的前後卡片操作；一般工具列與專屬頁呼叫同一組方法。答案揭示後，正面與背面組成連續頁序，回看題目保留揭示狀態。設定欄位是泳道編輯表單的一部分，提交時整體驗證，取消即捨棄本次草稿。
 
 Reflexive：移除與泳道排序重複的最早到期勾選、分散的學習配置及筆記彈窗模式，使用既有版型、泳道編輯與路由結構承接需求。驗證使用隔離工作區，保持示範與真實筆記資料獨立。
+
+## 獨立學習入口與控制樣式單一來源
+
+ScreenPage 的一般 Lane 只呈現三種卡片大小。開始學習只改路由，不寫入 view 或 progression；學習頁將泳道候選筆記依到期排序，頁面的 mode 與 studyFilter 放在 query。伺服器依泳道已保存 progression 或工作區 status 的預設階段處理動作，不以 view 限制學習。
+
+StudyLane 接收獨立 mode，負責閱讀／回想差異及前後卡片。Screen schema 讀取舊 reading／study view 時轉為 small，其他配置及身分保留。配置入口在學習 navbar，沿用泳道編輯表單的整體提交與取消。
+
+Button 以原生 button 屬性、variant 和 size 提供共用元件。ui-buttons.css 是按鈕幾何與狀態配色的唯一來源；index.css 與 workspace.css 移除重複按鈕規則。hover 使用相同 variant 的 token，選中狀態由 aria-pressed 決定。主題設定分別計算主色與 hover 背景的文字顏色，維持對比。既有採用 ui-button class 的頁面共用同一套修正。

@@ -3,7 +3,7 @@ rows:
   - id: explore
     name: 學習：一次一張卡片
     kind: dynamic
-    view: study
+    view: small
     source: &a2
       kind: tag
       tag: study-demo
@@ -26,7 +26,7 @@ rows:
   - id: reading
     name: 隨選閱讀
     kind: dynamic
-    view: reading
+    view: medium
     source:
       kind: tag
       tag: reading

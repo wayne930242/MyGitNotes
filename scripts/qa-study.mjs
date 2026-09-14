@@ -20,10 +20,20 @@ write('notes/example/other.md', '---\ntitle: Other\nstatus: new\n---\n\nA single
 const progression = { stages: [{ status: 'new', intervalDays: 1 }, { status: 'learning', intervalDays: 3 }, { status: 'review', intervalDays: 7 }, { status: 'known', intervalDays: 30 }], easy: 'two' };
 const source = { kind: 'folder', notebookId: 'example', path: 'notes/example', recursive: true };
 write('.github-notes-screen.yaml', JSON.stringify({ version: 1, rows: [
-  { id: 'study', name: 'Study', kind: 'dynamic', view: 'study', source, progression, sort: { field: 'title', order: 'desc' }, study: { filter: 'all', dueFirst: false, status: 'new' } },
+  { id: 'study', name: 'Study', kind: 'dynamic', view: 'small', source, progression, sort: { field: 'title', order: 'asc' }, study: { filter: 'all', dueFirst: false, status: 'new' } },
   { id: 'arrivals', name: 'Next stage', kind: 'dynamic', view: 'small', source, study: { filter: 'all', dueFirst: true, status: 'learning' } },
-  { id: 'reading', name: 'Reading', kind: 'dynamic', view: 'reading', source, progression, sort: { field: 'title', order: 'desc' } },
+  { id: 'reading', name: 'Reading', kind: 'dynamic', view: 'medium', source, progression, sort: { field: 'title', order: 'asc' } },
 ] }));
+const { createStudyNote, parseNoteContent } = await import(`${product}/packages/core/dist/index.js`);
+const seeded = ['vocabulary.md', 'other.md'].map((file, index) => {
+  const parsed = parseNoteContent(fs.readFileSync(path.join(root, 'notes/example', file), 'utf8'), file);
+  const note = createStudyNote({ ...parsed, path: `notes/example/${file}`, notebookId: 'example' });
+  note.stage = { laneId: 'study', status: 'new', due: new Date(Date.now() - (2 - index) * 86400000).toISOString() };
+  return note;
+});
+write('.github-notes-study.yaml', JSON.stringify({ version: 1, notes: seeded, events: [] }));
+const initialStudy = fs.readFileSync(path.join(root, '.github-notes-study.yaml'), 'utf8');
+const initialScreen = fs.readFileSync(path.join(root, '.github-notes-screen.yaml'), 'utf8');
 git('init', '-b', 'main'); git('config', 'user.name', 'QA'); git('config', 'user.email', 'qa@example.com'); git('add', '.'); git('commit', '-m', 'fixture');
 process.env.GITHUB_NOTES_SOURCE = 'local'; process.env.GITHUB_NOTES_LOCAL_PATH = root; delete process.env.VERCEL; delete process.env.APP_URL;
 const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
@@ -39,6 +49,13 @@ try {
   await page.evaluateOnNewDocument(() => localStorage.setItem('github-notes:language', 'en'));
   const url = `http://127.0.0.1:${server.address().port}/screen`, lane = '#screen-lane-study';
   await page.goto(url, { waitUntil: 'networkidle0' });
+  assert(!await page.$('.study-lane') && !await page.$('.screen-lane-focus'), 'Study is still a lane layout or there is an extra fullscreen button');
+  assert(await page.$eval(`${lane} .screen-card-title`, node => node.textContent === 'Other'), 'Ordinary title sorting is wrong');
+  assert(await page.$$eval(`${lane} .screen-view-tabs button`, buttons => buttons.length === 3), 'Study appears in view tabs');
+  await page.click(`${lane} .screen-start-study`);
+  await page.waitForSelector('.screen-study-session');
+  assert(!await page.$('.screen-sort-select') && !await page.$('.study-sort-hint') && !await page.$('.screen-focus-header h2'), 'Study navbar contains a sort selector or redundant heading');
+  assert(fs.readFileSync(path.join(root, '.github-notes-screen.yaml'), 'utf8') === initialScreen, 'Starting study changed the lane layout');
   const waitCard = async () => page.waitForSelector(`${lane} [data-study-note="notes/example/vocabulary.md"]`);
   const saved = async count => {
     await page.waitForFunction(async count => {
@@ -53,10 +70,10 @@ try {
   assert(!await page.$(`${lane} .study-ratings`), 'Answer ratings shown before reveal');
   assert(!await page.$eval(`${lane} .study-page`, node => node.textContent.includes('Give up.')), 'Answer leaked');
   let count = 0;
-  await page.click(`${lane} button[aria-label="Next card: Study"]`);
+  await page.click(`${lane} button[aria-label="Next card"]`);
   await page.waitForSelector(`${lane} [data-study-note="notes/example/other.md"]`);
-  await page.click(`${lane} button[aria-label="Previous card: Study"]`); await waitCard();
-  assert(!fs.existsSync(path.join(root, '.github-notes-study.yaml')), 'Browsing cards wrote a study event');
+  await page.click(`${lane} button[aria-label="Previous card"]`); await waitCard();
+  assert(fs.readFileSync(path.join(root, '.github-notes-study.yaml'), 'utf8') === initialStudy, 'Browsing cards wrote a study event');
   await page.click(`${lane} .study-reveal`);
   await page.click(`${lane} button[aria-label="Previous page"]`);
   assert(await page.$eval(`${lane} .study-page`, node => node.textContent.includes('What does abandon mean?')), 'Cannot return to the question');
@@ -76,23 +93,18 @@ try {
     const disk = parse(fs.readFileSync(path.join(root, 'notes/example/vocabulary.md'), 'utf8').split('---')[1]);
     assert(disk.status === status && disk.custom === 'keep-me', 'Status was not persisted or metadata changed');
     await page.waitForFunction(selector => document.querySelector(selector)?.getAttribute('data-study-note') !== 'notes/example/vocabulary.md', {}, `${lane} [data-study-note]`);
-    if (rating === 3) await page.waitForSelector('#screen-lane-arrivals .screen-card');
+
     await undo(++count);
   }
   console.log('PASS four familiarity levels, destination intervals, status routing, next card and undo');
-  await chooseSelect(page, `${lane} .screen-sort-select`, 'due');
-  await page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('github-notes:screen-draft:')));
-  await chooseSelect(page, `${lane} .screen-sort-select`, 'title:desc');
-  await page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('github-notes:screen-draft:')));
-  assert(!parse(fs.readFileSync(path.join(root, '.github-notes-screen.yaml'), 'utf8')).rows[0].study.dueFirst, 'Two sorting policies remain active');
-  await page.click('.screen-sidebar-lane button[aria-label="Edit swimlane: Study"]');
+  await page.click('.screen-focus-header button[aria-label="Edit swimlane: Study"]');
   await chooseSelect(page, 'dialog[open] .study-stage-settings .select-trigger', 'last');
   await page.click('dialog[open] .workspace-dialog-actions .ui-button-primary');
   await page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('github-notes:screen-draft:')));
   await page.click(`${lane} .study-reveal`); await page.click(`${lane} [data-rating="4"]`); await saved(++count);
   assert(state().events.at(-1).transition.toStatus === 'known' && state().events.at(-1).transition.intervalDays === 30, 'Easy-to-last setting ignored');
   await undo(++count);
-  console.log('PASS single sorting selector and configurable easy-to-last progression');
+  console.log('PASS due-first session order independent of lane title sort and configurable easy-to-last progression');
   let failSave = true;
   await page.setRequestInterception(true);
   page.on('request', request => {
@@ -126,6 +138,7 @@ try {
     await page.reload({ waitUntil: 'networkidle0' }); await waitCard();
   }
   console.log('PASS mobile inline card, reveal gate, native touch ratings and 320/390px controls');
+  await page.goto(url.replace('/screen', '/screen/lanes/reading?mode=reading'), { waitUntil: 'networkidle0' });
   const reading = '#screen-lane-reading';
   await chooseSelect(page, `${reading} .study-pick-card`, 'notes/example/vocabulary.md');
   await swipe(`${reading} .study-page`, 'left');
@@ -143,16 +156,16 @@ try {
   console.log('PASS reading lane page swipes, reading events and manual postponement');
   await page.goto(url, { waitUntil: 'networkidle0' });
   await page.click(`${lane} .screen-lane-query-toggle`);
-  await page.select(`${lane} .screen-lane-filter:nth-of-type(2) select`, '');
+  await page.select(`${lane} .screen-lane-filter select`, '');
   await page.waitForFunction(() => !Object.keys(localStorage).some(key => key.startsWith('github-notes:screen-draft:')));
-  await page.click(`${lane} .screen-lane-focus`);
+  await page.click(`${lane} .screen-start-study`);
   await page.waitForFunction(() => location.pathname === '/screen/lanes/study');
   await page.reload({ waitUntil: 'networkidle0' });
-  assert(await page.$$eval('.screen-lane', lanes => lanes.length === 1), 'Focus page includes other lanes');
+  assert(await page.$$eval('.screen-study-session', lanes => lanes.length === 1), 'Focus page includes other lanes');
   assert(await page.$eval('.workspace-header', header => header.getBoundingClientRect().height === 0), 'Global header visible in focus mode');
   assert(!await page.$('[data-sidebar-toggle]'), 'Sidebar toggle remains in focus mode');
   await chooseSelect(page, `${lane} .study-pick-card`, 'notes/example/other.md');
-  await page.click('.study-card-navigation button[aria-label="Previous card"]');
+  await page.click('.study-card-navigation button[aria-label="Next card"]');
   await page.waitForSelector(`${lane} [data-study-note="notes/example/vocabulary.md"]`);
   await page.click(`${lane} .study-reveal`);
   await page.click(`${lane} button[aria-label="Previous page"]`);
@@ -168,13 +181,51 @@ try {
   await page.waitForSelector('[data-markdown-editor]');
   await page.click('.note-close');
   await page.waitForFunction(() => location.pathname === '/screen/lanes/study');
-  await page.click('.screen-focus-header .ui-button');
+  await page.click('.study-back');
   await page.waitForSelector('[data-sidebar-toggle]');
   assert(await page.$$eval('.screen-lane', lanes => lanes.length === 3), 'Returning did not restore screen lanes');
   await page.goto(url.replace('/screen', '/screen/lanes/missing'), { waitUntil: 'networkidle0' });
   await page.waitForSelector('.screen-board-empty[role="status"]');
-  await page.click('.screen-focus-header .ui-button');
+  await page.click('.study-back');
   console.log('PASS focused route reload, mobile paging/navigation, editor return and missing lane recovery');
+  await page.goto(url.replace('/screen', '/screen/lanes/study'), { waitUntil: 'networkidle0' });
+  for (const width of [320, 390, 820, 1440]) {
+    await page.setViewport({ width, height: 844, isMobile: width < 768, hasTouch: width < 768 });
+    await page.reload({ waitUntil: 'networkidle0' });
+    assert(await page.$eval('.screen-focus-header', header => {
+      const controls = [...header.querySelectorAll('button,select')].map(control => control.getBoundingClientRect());
+      return header.getBoundingClientRect().height <= 62 && controls.every(rect => rect.left >= 0 && rect.right <= innerWidth && rect.height >= 44 && Math.abs(rect.top - controls[0].top) < 2);
+    }), `Study navbar is not a single reachable row at ${width}px`);
+  }
+  await page.select('.study-navbar select', 'future');
+  await page.reload({ waitUntil: 'networkidle0' });
+  assert(await page.$eval('.study-navbar select', select => select.value === 'future'), 'Study filter lost on reload');
+  await page.select('.study-navbar select', 'all');
+  const { THEMES } = await import(`${product}/apps/web/src/lib/themes.ts`);
+  for (const theme of THEMES) {
+    await page.evaluate(id => localStorage.setItem('github_notes_theme', id), theme.id);
+    await page.reload({ waitUntil: 'networkidle0' }); await page.waitForSelector('.study-mode-tabs button');
+    for (const selector of ['.study-mode-tabs [aria-pressed="true"]', '.study-mode-tabs [aria-pressed="false"]', '.study-back', '.study-reveal']) {
+      const button = await page.$(selector); if (!button) continue;
+      await button.hover();
+      await page.waitForFunction(selector => document.querySelector(selector).getAnimations().every(animation => animation.playState !== 'running'), {}, selector);
+      assert(await button.evaluate(element => {
+        const style = getComputedStyle(element);
+        const luminance = color => { const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1; const context = canvas.getContext('2d'); context.fillStyle = color; context.fillRect(0, 0, 1, 1); const rgb = [...context.getImageData(0, 0, 1, 1).data].slice(0, 3).map(value => value / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4); return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722; };
+        const a = luminance(style.backgroundColor), b = luminance(style.color);
+        return (Math.max(a, b) + .05) / (Math.min(a, b) + .05) >= 4.5;
+      }), `Shared button hover contrast failed: ${theme.id} ${selector}`);
+    }
+    await page.focus('.study-back'); await page.keyboard.press('Tab');
+    assert(await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle !== 'none'), 'Shared button lost keyboard focus indication');
+    const disabled = await page.$('.study-card-navigation button:disabled');
+    if (disabled) {
+      const before = await page.$eval('[data-study-note]', node => node.getAttribute('data-study-note'));
+      await disabled.click();
+      assert(await page.$eval('[data-study-note]', node => node.getAttribute('data-study-note')) === before, 'Disabled navigation changed card');
+    }
+  }
+  console.log('PASS one-row study navbar, filter persistence and shared button hover/focus/disabled states across all themes');
   const diskBefore = fs.readFileSync(path.join(root, 'notes/example/vocabulary.md'), 'utf8');
   await page.setViewport({ width: 1440, height: 1000, isMobile: false, hasTouch: false });
   await page.goto(url.replace('/screen', '/notebooks/example/notes/vocabulary.md'), { waitUntil: 'networkidle0' });

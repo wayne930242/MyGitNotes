@@ -20,6 +20,8 @@ export const en = {
   "study.invalidPolicy": "Use retention 70–97% and ascending whole-day intervals (1–3650).",
   "study.question": "Question",
   "study.answer": "Answer",
+  'study.start': 'Start studying',
+  'study.controls': 'Study controls',
   'study.previousCard': 'Previous card',
   'study.nextCard': 'Next card',
   'screen.focusLane': 'Focus lane',
