@@ -6,7 +6,7 @@ Markdown、儲存庫、部署、版本歷史與 Agent 存取權，全都由使�
 
 [English](README.md) · [繁體中文](README.zh-TW.md)
 
-[線上展示](https://my-gh-core.vercel.app) · [範例儲存庫](https://github.com/wayne930242/MyGitNotes/tree/main)
+[線上展示](https://my-gh-core.vercel.app) · [單字卡學習展示](https://my-gh-core.vercel.app/screen/lanes/explore) · [範例儲存庫](https://github.com/wayne930242/MyGitNotes/tree/main)
 
 ## 設計邏輯
 
@@ -212,31 +212,32 @@ GITLAB_CLIENT_SECRET=your_application_secret
 
 ### 單字卡學習與閱讀模式
 
-從屏幕的任一泳道開始學習。Markdown 第一頁是題目，其餘頁是答案；使用前後保留空行、獨立一行的 `---` 分頁。沒有分頁的筆記，以標題為題目、正文為答案。
+可直接在瀏覽器體驗[單字卡學習展示](https://my-gh-core.vercel.app/screen/lanes/explore)。從任意屏幕泳道即可開始學習：正文第一頁為題目，其餘頁為答案；頂層獨立 `---` 分頁。沒有分頁時以標題為題目、內文為答案。
 
-揭示答案後，選擇「忘記」、「吃力」、「記得」或「輕鬆」。泳道設定把每個階段對應到筆記狀態與間隔天數；評分成功時，一起保存狀態、到期時間與學習歷史。可篩選全部、到期、未來或暫停卡片，切換自由閱讀，並在手機上使用滑動手勢。屏幕配置與學習進度保存在工作區 YAML，隨 Git 同步。
+揭示答案後，選擇熟悉程度（**忘記**、**吃力**、**記得**、**輕鬆**）。泳道設定將每個階段對應到特定 status 與間隔天數；評分成功後會同時更新筆記 status、到期時間與學習紀錄。可按全部、到期、未來或暫停篩選卡片，也能切換為純閱讀模式，手機支援左右滑動手勢。屏幕版面與學習進度保存在工作區 YAML 檔中，隨 Git 帶著走。
 
 ![揭示單字答案的學習模式](docs/assets/feature-study.png)
 
 ### 屏幕：跨筆記本的閱讀桌面
 
-把相關筆記與素材並排閱讀。自訂泳道放置釘選內容，動態泳道依標籤或資料夾收集內容；各自設定縮圖、小、中卡片與排序，並可進入專屬學習頁。圖片保持比例，YouTube 卡片在播放時才載入嵌入播放器。
+把相關筆記與外部資源排在同一張工作桌上。自訂泳道釘選筆記卡；動態泳道依標籤或資料夾自動匯整。提供縮圖、小、中三種版型，每條泳道各自排序，並可獨立進入專屬學習頁。圖片維持原始比例，YouTube 卡片支援隨選載入播放器。
 
-![閱讀與學習泳道組成的屏幕](docs/assets/feature-screen.png)
+![排滿閱讀與學習泳道的屏幕](docs/assets/feature-screen.png)
 
 ### 筆記關聯圖
 
-開啟「關聯圖」，查看 Markdown 連結如何串起筆記。透過縮放、平移、拖曳節點與相鄰筆記高亮探索內容，並直接開啟筆記閱讀或編輯。手機可從筆記的檢視選單進入。可搜尋筆記、依標籤篩選、選擇資料夾／筆記本／狀態配色，並透過小地圖導覽。圖形直接從筆記與連結產生。
+開啟 **Graph**，直觀查看 Markdown 雙向連結構成的筆記網路。支援縮放、平移與節點拖曳，點選節點高亮相鄰關聯並快速開啟正文；手機端可從筆記檢視切換。提供搜尋、標籤篩選，並能依資料夾、筆記本或狀態著色，搭配鷹眼導航迷你地圖。關聯圖完全源自筆記內容與連結。
 
-![互動筆記關聯圖](docs/assets/feature-graph.png)
+![互動式筆記關聯圖](docs/assets/feature-graph.png)
 
-## 說明文件
+## 文件與範例
 
 - [Agent 與開發者說明](docs/agent/index.md)
-- [系統架構](docs/agent/architecture/index.md)
-- [MCP 介面與安全模型](docs/agent/mcp/index.md)
-- [展示工作區](examples/demo-workspace/README.md)
+- [架構說明](docs/agent/architecture/index.md)
+- [MCP 介面與安全性模型](docs/agent/mcp/index.md)
+- [示範工作區](examples/demo-workspace/README.md)
+- [學習與閱讀指南](docs/agent/study.md)
 
-## 授權
+## 授權條款
 
 MIT
