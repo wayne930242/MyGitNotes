@@ -39,6 +39,35 @@ const checkGeometry=async before=>{
  const after=await rect(cell),area=await rect(editor);
  for(const axis of ['x','y','width','height'])if(Math.abs(before[axis]-after[axis])>1)throw Error('Cell geometry changed while editing: '+JSON.stringify({before,after}));
  for(const axis of ['x','y','width','height'])if(Math.abs(after[axis]-area[axis])>2)throw Error('Textarea does not cover its cell: '+JSON.stringify({after,area}));
+ if(!await page.$eval(editor,e=>e.scrollHeight<=e.clientHeight+1))throw Error('Textarea clips its content');
+};
+const checkAutoHeight=async()=>{
+ const before=await rect(cell);
+ const lineHeight=await page.$eval(editor,e=>parseFloat(getComputedStyle(e).lineHeight));
+ await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');
+ for(let line=1;line<=3;line++){
+   await page.keyboard.press('Enter');
+   const grown=await rect(cell);
+   if(Math.abs(grown.height-before.height-line*lineHeight)>2)throw Error('Enter did not grow the row by one line: '+JSON.stringify({before,grown,line,lineHeight}));
+   await checkGeometry(grown);
+   const adjacent=await rect('.live-md-table tbody tr:first-child td:first-child');
+   if(Math.abs(adjacent.height-grown.height)>1)throw Error('Adjacent cell did not grow with the row');
+ }
+ for(let line=2;line>=0;line--){
+   await page.keyboard.press('Backspace');
+   const shrunk=await rect(cell);
+   if(Math.abs(shrunk.height-before.height-line*lineHeight)>2)throw Error('Backspace did not shrink the row by one line');
+   await checkGeometry(shrunk);
+ }
+ // Replacing existing multiline content must shrink below the opening height.
+ await page.keyboard.down('Control');await page.keyboard.press('KeyA');await page.keyboard.up('Control');await page.keyboard.type('Short');
+ if((await rect(cell)).height>=before.height-2)throw Error('Replacing multiline text did not shrink the row');
+ const short=await rect(cell);
+ await page.keyboard.sendCharacter('\nPasted second line\nPasted third line');
+ if((await rect(cell)).height<=short.height+lineHeight)throw Error('Pasting multiline text did not grow the row');
+ await checkGeometry(await rect(cell));
+ await page.keyboard.press('Escape');
+ if(Math.abs((await rect(cell)).height-before.height)>1)throw Error('Cancel did not restore the original row height');
 };
 try {
  fs.mkdirSync(path.join(product,'artifacts/qa'),{recursive:true});
@@ -58,7 +87,7 @@ try {
    const before=await rect(cell);await page.click(cell,{count:2});await page.waitForSelector('textarea'+editor);
    await checkGeometry(before);
    const value=await page.$eval(editor,e=>e.value);if(!value.includes('\nSecond line'))throw Error('Existing Markdown breaks are not editable newlines');
-   await page.keyboard.press('Escape');
+   await checkAutoHeight();
  }
  const before=await rect(cell);await page.click(cell,{count:2});await page.waitForSelector(editor);await checkGeometry(before);
  await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');
@@ -66,7 +95,7 @@ try {
  if(!await page.$eval(editor,e=>e.value.endsWith('\nThird line with additional details.')))throw Error('Enter failed to insert a newline');
  await page.$eval(editor,e=>e.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,isComposing:true,bubbles:true})));
  if(!await page.$(editor))throw Error('IME composition committed the cell');
- await checkGeometry(before);await page.screenshot({path:product+'/artifacts/qa/table-dark-textarea.png',fullPage:true});
+ await checkGeometry(await rect(cell));await page.screenshot({path:product+'/artifacts/qa/table-dark-textarea.png',fullPage:true});
  await page.keyboard.down('Control');await page.keyboard.press('Enter');await page.keyboard.up('Control');
  await page.waitForFunction(()=>document.querySelector('.live-md-table tbody tr:first-child td:nth-child(2)').querySelectorAll('br').length===2);
  await page.click(cell,{count:2});await page.waitForSelector(editor);
@@ -82,10 +111,16 @@ try {
  await page.waitForFunction(()=>document.querySelector('.live-md-table tbody tr:nth-child(2) td:nth-child(2)').textContent==='Short note');
  for(let attempt=0;attempt<50;attempt++){const text=fs.readFileSync(path.join(root,'notes/example/root.md'),'utf8');if(text.includes('<br>Third line')&&text.includes('Short note'))break;await new Promise(resolve=>setTimeout(resolve,100));}
  const saved=fs.readFileSync(path.join(root,'notes/example/root.md'),'utf8');if(!saved.includes('<br>Third line')||!saved.includes('Short note'))throw Error('Multiline edits were not saved');
+ const neighborHeight=(await rect(cell)).height;
+ await page.click('.live-md-table tbody tr:first-child td:first-child',{count:2});await page.waitForSelector(editor);
+ await page.keyboard.type('A');
+ if(Math.abs((await rect(cell)).height-neighborHeight)>1)throw Error('Editing a short cell reduced the height needed by its neighbor');
+ await page.keyboard.press('Escape');
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});await page.waitForSelector(tableRoot);
  const mobileBefore=await rect(cell);await page.tap(cell);await page.tap('button[aria-label="Edit cell"]');await page.waitForSelector(editor);await checkGeometry(mobileBefore);
  await page.screenshot({path:product+'/artifacts/qa/table-mobile-textarea.png',fullPage:true});
+ await checkAutoHeight();
  if(errors.length)throw Error(errors.join('; '));
- console.log('PASS native select contrast in light and two dark themes; cell-aligned textarea in both width modes and on mobile; Enter newline; Ctrl/Meta+Enter apply; IME protection; Escape; undo; multiline disk round trip');
+ console.log('PASS native select contrast; cell-aligned textarea; automatic row growth and shrinkage in both width modes and on mobile; cancel restores height; Ctrl/Meta+Enter apply; IME protection; undo; multiline disk round trip');
 } catch(error){console.error(error);await page.screenshot({path:product+'/artifacts/qa/table-cell-editing-failure.png',fullPage:true});throw error;}
 finally {await browser.close();await new Promise(r=>server.close(r));fs.rmSync(root,{recursive:true,force:true});}
