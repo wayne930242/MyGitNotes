@@ -101,7 +101,7 @@
 .screen-sort-select { width: 140px; max-width: 100%; min-height: 28px; padding: 4px 8px; font-size: 12px; line-height: 18px; margin-right: 4px; }
 .screen-view-tabs { display: flex; align-items: center; gap: 2px; padding: 2px; margin-right: 4px; border-radius: 8px; background: var(--workspace-selection); }
 .screen-view-tabs [aria-pressed="true"] { background: var(--color-surface); color: var(--color-primary); box-shadow: 0 1px 3px #0001; }
-.screen-lane-strip { display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 6px; min-height: 120px; scrollbar-width: thin; }
+.screen-lane-strip { display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 6px; min-height: 120px; }
 .screen-card-slot { flex: 0 0 var(--screen-card-width); width: var(--screen-card-width); max-width: calc(100vw - 44px); min-width: 0; }
 .screen-card { position: relative; display: flex; flex-direction: column; border: 1px solid var(--workspace-divider); border-radius: 10px; background: var(--color-surface); overflow: hidden; box-shadow: 0 2px 4px #00000003; }
 .screen-card-header { display: flex; align-items: center; gap: 7px; padding: 6px 10px; min-width: 0; }
@@ -112,7 +112,7 @@
 .screen-drag-handle { touch-action: none; cursor: grab; }
 .screen-drag-handle:active { cursor: grabbing; }
 .screen-remove { position: absolute; right: 8px; bottom: 5px; }
-.screen-card-content { height: var(--screen-content-height); overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding: 8px 16px 16px; min-height: 0; font-size: 13px; }
+.screen-card-content { height: var(--screen-content-height); overflow-y: auto; overflow-x: hidden; padding: 8px 16px 16px; min-height: 0; font-size: 13px; }
 .screen-card-footer { font-size: 10px; color: var(--color-muted); padding: 5px 30px 5px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-top: 1px solid var(--workspace-divider); }
 .screen-summary { color: var(--color-muted); line-height: 1.9; font-size: 12px; margin: 0; }
 .screen-view-thumbnail .screen-summary { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
@@ -274,7 +274,7 @@
 .app-shell ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--color-muted) 30%, transparent); border-radius: 8px; }
 .app-shell ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--color-muted) 60%, transparent); }
 @supports not selector(::-webkit-scrollbar) {
-  .workspace-sidebar-scroll, .workspace-scroll { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--color-muted) 30%, transparent) transparent; }
+  .workspace-sidebar-scroll, .workspace-scroll, .screen-board-scroll, .screen-lane-strip, .screen-card-content { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--color-muted) 30%, transparent) transparent; }
 }
 @media (min-width: 1101px) {
 }
