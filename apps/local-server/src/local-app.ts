@@ -28,7 +28,7 @@ import {
   getRecentCommits,
   generateCommitMessage,
   updateCore,
-  runGit,
+  listChanges, changeFile, fileDiff, commitStagedFiles,
 } from '@github-notes/git';
 
 import { SCREEN_PAGE_FILE } from '@github-notes/core';
@@ -46,7 +46,7 @@ app.use(async (req, res, next) => {
       resolveSafePath(repoRoot, candidate);
       const resource = classifyResource(candidate, config);
       const agentAccess = (req.path.startsWith('/api/agent-resources') || req.path.startsWith('/api/git/')) && workspaceAgentKind(candidate);
-      const screenAccess = req.path.startsWith('/api/git/') && candidate === SCREEN_PAGE_FILE;
+      const screenAccess = req.path.startsWith('/api/git/') && (candidate === SCREEN_PAGE_FILE || resource.type === 'workspace_config');
       if (agentAccess) resolveWorkspaceAgentPath(repoRoot, candidate);
       if (!agentAccess && !screenAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/'))) return res.status(403).json({ error: 'Path is outside configured workspace resources.' });
     }
@@ -63,7 +63,7 @@ app.use((req, res, next) => {
       resolveSafePath(repoRoot, candidate);
       const resource = classifyResource(candidate, config);
       const agentAccess = (req.path.startsWith('/api/agent-resources') || req.path.startsWith('/api/git/')) && workspaceAgentKind(candidate);
-      const screenAccess = req.path.startsWith('/api/git/') && candidate === SCREEN_PAGE_FILE;
+      const screenAccess = req.path.startsWith('/api/git/') && (candidate === SCREEN_PAGE_FILE || resource.type === 'workspace_config');
       if (agentAccess) resolveWorkspaceAgentPath(repoRoot, candidate);
       if (!agentAccess && !screenAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/'))) return res.status(403).json({ error: 'Path is outside configured workspace resources.' });
     }
@@ -258,8 +258,10 @@ app.post('/api/notes/restore', async (req: Request, res: Response) => {
       return res.json({ success: true, note: restored });
     }
 
-    // Restore from Git HEAD
-    await runGit(['checkout', 'HEAD', '--', notePath], repoRoot);
+    const change = (await listChanges(repoRoot)).find(file => file.path === notePath);
+    if (!change) return res.status(409).json({ error: 'This note has no changes to restore.' });
+    const restored = await changeFile(repoRoot, notePath, 'restore', req.body.revision || change.revision);
+    if (!change.tracked) return res.json({ success: true, note: null, ...restored });
     let resolvedNb = notebookId;
     if (!resolvedNb) {
       try {
@@ -364,7 +366,9 @@ app.post('/api/agent-resources/restore', async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'path is required' });
     }
     const safePath = resolveWorkspaceAgentPath(repoRoot, relPath);
-    await runGit(['checkout', 'HEAD', '--', relPath], repoRoot);
+    const change = (await listChanges(repoRoot)).find(file => file.path === relPath);
+    if (!change?.tracked || !change.available) return res.status(409).json({ error: 'This file has no committed version to restore.' });
+    await changeFile(repoRoot, relPath, 'restore', req.body.revision || change.revision);
     const content = fs.readFileSync(safePath, 'utf-8');
     res.json({ success: true, path: relPath, content });
   } catch (err: unknown) {
@@ -476,6 +480,42 @@ app.delete('/api/assets', async (req: Request, res: Response) => {
 });
 
 // 5. Git Status & Commits
+const canManageChange = (file: string) => {
+  try {
+    const target = resolveSafePath(repoRoot, file);
+    if (fs.existsSync(target) && !fs.lstatSync(target).isFile()) return false;
+    if (workspaceAgentKind(file)) { resolveWorkspaceAgentPath(repoRoot, file); return true; }
+    const resource = classifyResource(file, loadWorkspaceConfig(repoRoot));
+    return file === SCREEN_PAGE_FILE || resource.type === 'workspace_config' || file.startsWith('notes/') && ['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type);
+  } catch { return false; }
+};
+app.get('/api/git/changes', async (_req, res) => {
+  try { res.json({ changes: (await listChanges(repoRoot)).map(file => ({ ...file, available: file.available && canManageChange(file.path) })) }); }
+  catch (error) { res.status(400).json({ error: (error as Error).message }); }
+});
+app.get('/api/git/file-diff', async (req, res) => {
+  try {
+    const file = String(req.query.path || '');
+    if (!canManageChange(file)) return res.status(403).json({ error: 'This file is outside workspace resources.' });
+    res.json({ diff: await fileDiff(repoRoot, file, req.query.side === 'staged' ? 'staged' : 'working') });
+  } catch (error) { res.status(400).json({ error: (error as Error).message }); }
+});
+app.post('/api/git/change', async (req, res) => {
+  try {
+    const { path: file, action, revision } = req.body;
+    if (!['stage', 'unstage', 'restore'].includes(action) || typeof revision !== 'string') return res.status(400).json({ error: 'An action and reviewed revision are required.' });
+    if (!canManageChange(file)) return res.status(403).json({ error: 'This file is outside workspace resources.' });
+    res.json({ success: true, ...await changeFile(repoRoot, file, action, revision) });
+  } catch (error) { res.status(409).json({ error: (error as Error).message }); }
+});
+app.post('/api/git/commit-staged', async (req, res) => {
+  try {
+    const { files, revisions, message } = req.body;
+    if (!Array.isArray(files) || !files.length || files.some(file => !canManageChange(file)) || typeof message !== 'string') return res.status(400).json({ error: 'Select writable workspace files and provide a message.' });
+    const commit = await commitStagedFiles(repoRoot, files.map(file => ({ path: file, revision: revisions?.[file] })), message);
+    res.json({ success: true, commit });
+  } catch (error) { res.status(409).json({ error: (error as Error).message }); }
+});
 app.get('/api/git/status', async (req: Request, res: Response) => {
   try {
     const status = await getGitStatus(repoRoot);

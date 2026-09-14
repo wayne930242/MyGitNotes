@@ -63,8 +63,8 @@ try {
  await page.keyboard.down('Control');await page.keyboard.press('KeyZ');await page.keyboard.up('Control');
  await click('Source');if(await page.$eval('textarea[aria-label="Note content"]',e=>e.value.includes('繁體中文 live edit')))throw Error('Undo failed');
  await click('Live Preview');await page.focus('.cm-content');await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.type('繁體中文 live edit');
- await page.click('button[title="Insert image from notebook assets"]');await page.waitForSelector('button[aria-label="Select pixel.png"]');await page.click('button[aria-label="Select pixel.png"]');await click('Insert');
- await page.waitForFunction(()=>!document.querySelector('[aria-label="Notebook Assets"]'));
+ await page.click('button[aria-label="Document tools"]');await page.click('.note-panel-tabs [role="tab"][aria-label="Notebook Assets"]');await page.waitForSelector('button[aria-label="Select pixel.png"]');await page.click('button[aria-label="Select pixel.png"]');await click('Insert');
+ await page.waitForFunction(()=>!document.querySelector('.note-document-panel'));
  await click('Source');const text=await page.$eval('textarea[aria-label="Note content"]',e=>e.value);
  if(!text.includes('繁體中文 live edit')||!text.includes('/raw-assets/by-hash/'))throw Error('Live insertion lost content');
  await click('Live Preview');await page.waitForSelector('.live-md-rendered img');

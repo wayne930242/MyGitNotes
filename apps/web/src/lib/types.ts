@@ -41,6 +41,16 @@ export interface GitStatus {
   untracked: string[];
 }
 
+export interface FileChange {
+  path: string;
+  staged: boolean;
+  unstaged: boolean;
+  kind: 'added' | 'modified' | 'deleted' | 'conflict';
+  tracked: boolean;
+  revision: string;
+  available?: boolean;
+}
+
 export interface GitCommit {
   hash: string;
   shortHash: string;

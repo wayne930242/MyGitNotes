@@ -53,7 +53,7 @@ const equal=(actual,expected,message)=>assert(JSON.stringify(actual)===JSON.stri
 const waitDisk=async(file,text)=>{for(let i=0;i<100;i++){if(fs.existsSync(path.join(root,file))&&fs.readFileSync(path.join(root,file),'utf8').includes(text))return;await new Promise(r=>setTimeout(r,50));}throw Error(`Missing saved text: ${text}`);};
 const manifest='schema_version: 1\nworkspace:\n  title: Status QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: research\n    title: Research\n    root: notes/research\n    statuses: [capture, published]\n';
 const replace=async(selector,text)=>{await page.focus(selector);await page.keyboard.down('Control');await page.keyboard.press('KeyA');await page.keyboard.up('Control');await page.keyboard.type(text);};
-const showFrontmatter=async()=>{if(!await page.$('[aria-label="Status"]'))await page.click('[aria-label="Frontmatter"]');await page.waitForSelector('[aria-label="Status"]');};
+const showFrontmatter=async()=>{if(!await page.$('[aria-label="Status"]')){await page.click('button[aria-label="Document tools"]');await page.click('.note-panel-tabs [role="tab"][aria-label="Frontmatter"]');}await page.waitForSelector('[aria-label="Status"]');};
 try {
  await page.goto(base+'/settings',{waitUntil:'networkidle0'});
  await replace('#settings-manifest textarea',manifest);

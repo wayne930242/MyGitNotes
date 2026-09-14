@@ -19,10 +19,7 @@ export const FloatingCommitFooter: React.FC<FloatingCommitFooterProps> = ({
   const { t } = useTranslation();
   const [showTrashPopover, setShowTrashPopover] = useState(false);
 
-  const modifiedCount = gitStatus?.modified.length || 0;
-  const untrackedCount = gitStatus?.untracked.length || 0;
-  const stagedCount = gitStatus?.staged.length || 0;
-  const dirtyCount = modifiedCount + untrackedCount + stagedCount;
+  const dirtyCount = new Set([...(gitStatus?.modified || []), ...(gitStatus?.untracked || []), ...(gitStatus?.staged || [])]).size;
 
   if (dirtyCount === 0 && deletedNotes.length === 0) {
     return null;
@@ -37,10 +34,10 @@ export const FloatingCommitFooter: React.FC<FloatingCommitFooterProps> = ({
             <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
           </span>
 
-          <span className="theme-muted text-xs flex items-center gap-1">
+          <button type="button" onClick={onOpenCommitModal} aria-label={t('changes.title')} className="theme-muted text-xs flex items-center gap-1">
             <AlertCircle className="w-3.5 h-3.5" />
             <span>{t('footer.dirtyCount', { count: dirtyCount })}</span>
-          </span>
+          </button>
         </div>
 
         {/* Trash Popover Toggle for Uncommitted Deleted Notes (Requirement 2) */}

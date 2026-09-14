@@ -106,10 +106,10 @@ export async function stageAndCommit(
   }
 
   // Stage files
-  await runGit(['add', '--', ...files], repoRoot);
+  await runGit(['add', '--', ...files.map(file => `:(literal)${file}`)], repoRoot);
 
   // Commit
-  await runGit(['commit', '-m', message], repoRoot);
+  await runGit(['commit', '--only', '-m', message, '--', ...files.map(file => `:(literal)${file}`)], repoRoot);
 
   // Get commit hash
   const { stdout: hash } = await runGit(['rev-parse', 'HEAD'], repoRoot);

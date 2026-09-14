@@ -35,14 +35,16 @@ try {
  await click('New Note');
  await page.waitForSelector('input[aria-describedby="create-note-error"]');
  await page.type('input[aria-describedby="create-note-error"]','Created Nested');
+ await page.type('input[aria-label="Folder path"]','projects/deep');
  await click('Create Note');
  await page.waitForFunction(()=>document.body.innerText.includes('created-nested.md'));
  await page.waitForSelector('[data-live-markdown] .cm-content');
  await click('Source');
  if(!fs.existsSync(path.join(root,'notes/example/projects/deep/created-nested.md')))throw Error('Created note missing from selected folder');
  console.log('PASS nested note creation');
- await page.waitForSelector('button[title="Insert image from notebook assets"]');
- await page.click('button[title="Insert image from notebook assets"]');
+ await page.waitForSelector('button[aria-label="Document tools"]');
+ await page.click('button[aria-label="Document tools"]');
+ await page.click('.note-panel-tabs [role="tab"][aria-label="Notebook Assets"]');
  await page.waitForFunction(()=>document.body.innerText.includes('pixel.png'));
  // Upload selects an asset without changing the note; Insert is explicit.
  const uploadFile = path.join(root, 'upload.png');fs.copyFileSync(path.join(root,'notes/example/assets/pixel.png'),uploadFile);
@@ -52,7 +54,7 @@ try {
  if(await page.$eval('textarea[aria-label="Note content"]',e=>e.value.includes('/raw-assets/')))throw Error('Upload inserted without explicit Insert');
  await click('View');await page.waitForSelector('[aria-label="Asset preview"]');await page.keyboard.press('Escape');
  await page.waitForFunction(()=>!document.querySelector('[aria-label="Asset preview"]'));
- if(!await page.$('[aria-label="Notebook Assets"]'))throw Error('Preview Escape closed asset dialog');
+ if(!await page.$('.note-document-panel[data-panel="assets"]'))throw Error('Preview Escape closed asset panel');
  await click('Insert');
  await page.waitForFunction(()=>Array.from(document.querySelectorAll('textarea')).some(t=>t.value.includes('/raw-assets/by-hash/')));
  await click('Live Preview');
@@ -60,10 +62,11 @@ try {
  console.log('PASS hash asset insertion and rendered image');
  fs.mkdirSync(`${product}/artifacts/qa`,{recursive:true});
  await page.screenshot({path:`${product}/artifacts/qa/nested-editor.png`,fullPage:true});
- await page.evaluate(()=>{const buttons=Array.from(document.querySelectorAll('button'));const index=buttons.findIndex(b=>b.title==='Insert image from notebook assets');buttons.slice(index+1).find(b=>!b.textContent.trim())?.click();});
+ await page.click('button[aria-label="Close note"]');
  await click('New Note');
  await page.waitForSelector('input[aria-describedby="create-note-error"]');
  await page.type('input[aria-describedby="create-note-error"]','Created Nested');
+ await page.type('input[aria-label="Folder path"]','projects/deep');
  await click('Create Note');
  await page.waitForFunction(()=>document.querySelector('#create-note-error')?.closest('.fixed')&&document.querySelector('#create-note-error').textContent.includes('already exists'));
  console.log('PASS duplicate creation error is visible inside the modal');
@@ -114,12 +117,13 @@ try {
  await page.waitForSelector('table');
  if(!await page.$('button[title="Card View"]')||!await page.$('button[title="Kanban View"]'))throw Error('Original view controls missing');
  if(await page.$eval('tbody button[role="combobox"]',e=>!e.disabled))throw Error('Public status control editable');
- if(await page.evaluate(()=>Array.from(document.querySelectorAll('button')).some(b=>['New Note','Create Note'].includes(b.textContent.trim()))))throw Error('Public new note exposed');
+ if(await page.evaluate(()=>Array.from(document.querySelectorAll('button')).some(b=>['New Note','Create Note'].includes(b.textContent.trim())&&!b.disabled)))throw Error('Public new note action enabled');
  await page.click('tbody tr');await page.waitForSelector('[data-live-markdown]');
  if(await page.evaluate(()=>window.__xss))throw Error('Unsafe Markdown');
  await click('Source');if(!await page.$eval('textarea[aria-label="Note content"]',e=>e.readOnly))throw Error('Public editor not readonly');
- await page.click('button[title="Insert image from notebook assets"]');
- await page.waitForFunction(()=>document.body.innerText.includes('Notebook Assets'));
+ await page.click('button[aria-label="Document tools"]');
+ await page.click('.note-panel-tabs [role="tab"][aria-label="Notebook Assets"]');
+ await page.waitForSelector('.note-document-panel[data-panel="assets"]');
  await page.keyboard.press('Escape');
  if(!await page.$('button[aria-label="Close note"]'))throw Error('Asset Escape closed entire note');
  await page.keyboard.press('Escape');

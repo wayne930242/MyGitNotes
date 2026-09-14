@@ -1,228 +1,157 @@
-import React, { useState, useEffect } from 'react';
-import { X, GitCommit as GitCommitIcon, Sparkles, Check, FileDiff, AlertCircle } from 'lucide-react';
-import { GitStatus } from '../lib/types.js';
-import { fetchGitDiff, generateSemanticCommit, createCommit } from '../lib/api.js';
+import { useEffect, useRef, useState } from 'react';
+import { X, GitCommit, RotateCcw, Plus, Minus, RefreshCw, FileDiff } from 'lucide-react';
+import type { FileChange, GitStatus } from '../lib/types.js';
+import { fetchFileChanges, fetchFileDiff, manageFileChange, commitStagedChanges, generateSemanticCommit } from '../lib/api.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
-interface CommitModalProps {
+interface Props {
   isOpen: boolean;
-  previewDiff?: string;
-  commitFiles?: (files: string[], message: string) => Promise<void>;
-  onClose: () => void;
+  writable: boolean;
   gitStatus: GitStatus | null;
+  remoteChanges?: FileChange[];
+  getPreview?: (file: string) => string;
+  restoreFile?: (file: FileChange) => Promise<void>;
+  commitFiles?: (files: string[], message: string) => Promise<void>;
+  onChanged: () => Promise<void>;
   onCommitted: () => Promise<void>;
+  onClose: () => void;
 }
+export const CommitModal = (props: Props) => props.isOpen ? <Changes {...props} /> : null;
 
-export const CommitModal: React.FC<CommitModalProps> = props => props.isOpen ? <CommitModalContent {...props} /> : null;
-
-const CommitModalContent: React.FC<CommitModalProps> = ({
-  previewDiff,
-  commitFiles,
-  onClose,
-  gitStatus,
-  onCommitted,
-}) => {
-
+function Changes({ writable, gitStatus, remoteChanges, getPreview, restoreFile, commitFiles, onChanged, onCommitted, onClose }: Props) {
   const { t } = useTranslation();
-  const changedFiles = Array.from(new Set([
-    ...(gitStatus?.staged || []),
-    ...(gitStatus?.modified || []),
-    ...(gitStatus?.untracked || []),
-  ]));
-  const fileKey = changedFiles.join('\0');
-  const generatedMessage = `docs(notes): update ${changedFiles.length === 1 ? changedFiles[0].split('/').pop() : `${changedFiles.length} notes`}`;
-
-  const [selectedFiles, setSelectedFiles] = useState<string[]>(changedFiles);
-  const [localDiff, setDiff] = useState<string>('');
-  const diff = previewDiff ?? localDiff;
-  const [message, setMessage] = useState<string>(commitFiles ? generatedMessage : '');
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [isCommitting, setIsCommitting] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
+  const remote = Boolean(commitFiles);
+  const [localChanges, setChanges] = useState<FileChange[]>([]);
+  const [included, setIncluded] = useState<string[]>(remoteChanges?.map(file => file.path) || []);
+  const changes = remoteChanges ? remoteChanges.map(file => ({ ...file, staged: included.includes(file.path), unstaged: !included.includes(file.path) })) : localChanges;
+  const dialog = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    setSelectedFiles(previous => previous.filter(file => changedFiles.includes(file)));
-    async function loadDiff() {
-      try {
-        const d = await fetchGitDiff();
-        setDiff(d);
-      } catch {
-        setDiff('');
+    const previous = document.activeElement;
+    dialog.current?.focus();
+    return () => { if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
+  }, []);
+  const [active, setActive] = useState<{ path: string; side: 'working' | 'staged' }>();
+  const [diff, setDiff] = useState('');
+  const [loading, setLoading] = useState(!remote);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [confirm, setConfirm] = useState<FileChange>();
+  const [message, setMessage] = useState(remote ? `docs(notes): update ${remoteChanges?.length || 0} notes` : '');
+  const staged = changes.filter(file => file.staged);
+  const selected = changes.find(file => file.path === active?.path);
+  const refresh = async () => {
+    if (!remote) setChanges(await fetchFileChanges());
+    await onChanged();
+  };
+  useEffect(() => {
+    let cancelled = false;
+    if (!remote) void fetchFileChanges().then(files => { if (!cancelled) setChanges(files); })
+      .catch(error => { if (!cancelled) setError(error.message); }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [remote]);
+  const fileKey = changes.map(file => `${file.path}:${file.revision}:${file.staged}:${file.unstaged}`).join('|');
+  useEffect(() => {
+    if (!changes.length) { setActive(undefined); return; }
+    if (!selected || active?.side === 'staged' && !selected.staged || active?.side === 'working' && !selected.unstaged) {
+      const file = selected || changes[0];
+      setActive({ path: file.path, side: file.unstaged ? 'working' : 'staged' });
+    }
+  }, [fileKey]);
+  const remoteDiff = active && getPreview ? getPreview(active.path) : undefined;
+  useEffect(() => {
+    let cancelled = false;
+    setDiff('');
+    if (!active || !selected?.available) return;
+    if (remoteDiff !== undefined) { setDiff(remoteDiff); return; }
+    void fetchFileDiff(active.path, active.side).then(value => { if (!cancelled) setDiff(value); }).catch(error => { if (!cancelled) setError(error.message); });
+    return () => { cancelled = true; };
+  }, [active?.path, active?.side, selected?.revision, selected?.available, remoteDiff]);
+  useEffect(() => {
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!busy) { if (confirm) setConfirm(undefined); else onClose(); }
+    };
+    document.addEventListener('keydown', escape, true);
+    return () => document.removeEventListener('keydown', escape, true);
+  }, [busy, confirm, onClose]);
+
+  const act = async (file: FileChange, action: 'stage' | 'unstage' | 'restore', confirmed = false) => {
+    if (busy || !writable || !file.available) return;
+    if (action === 'restore' && !confirmed) { setConfirm(file); return; }
+    setBusy(true); setError(''); setNotice('');
+    try {
+      if (remote && action !== 'restore') setIncluded(previous => action === 'stage' ? [...new Set([...previous, file.path])] : previous.filter(path => path !== file.path));
+      else {
+        if (remote) await restoreFile?.(file);
+        else {
+          const result = await manageFileChange(file, action);
+          if (result.backup) setNotice(t('changes.backup', { path: result.backup }));
+        }
+        await refresh();
       }
-    }
-    if (previewDiff === undefined) void loadDiff();
-  }, [fileKey, previewDiff]);
-
-  const handleGenerateAiMessage = async () => {
-    setIsGenerating(true);
-    setError(null);
+      setConfirm(undefined);
+    } catch (error) {
+      setError((error as Error).message); setConfirm(undefined);
+      if (!remote) try { setChanges(await fetchFileChanges()); } catch { /* Keep the reviewed snapshot on read failure. */ }
+    } finally { setBusy(false); }
+  };
+  const commit = async () => {
+    if (busy || !writable || !staged.length || !message.trim()) return;
+    setBusy(true); setError('');
     try {
-      const generated = commitFiles ? `docs(notes): update ${selectedFiles.length === 1 ? selectedFiles[0].split('/').pop() : `${selectedFiles.length} notes`}` : await generateSemanticCommit(diff, selectedFiles[0]);
-      setMessage(generated);
-    } catch {
-      setMessage('minor-mod');
-    } finally {
-      setIsGenerating(false);
-    }
+      if (commitFiles) await commitFiles(staged.map(file => file.path), message.trim());
+      else await commitStagedChanges(staged, message.trim());
+      await onCommitted(); onClose();
+    } catch (error) { setError((error as Error).message); await refresh().catch(() => {}); }
+    finally { setBusy(false); }
   };
-
-  const handleCommit = async () => {
-    if (selectedFiles.length === 0) {
-      setError(t('commit.selectAtLeastOneFile'));
-      return;
-    }
-    if (!message.trim()) {
-      setError(t('commit.provideCommitMessage'));
-      return;
-    }
-
-    setIsCommitting(true);
-    setError(null);
+  const generate = async () => {
+    setBusy(true); setError('');
     try {
-      await (commitFiles || createCommit)(selectedFiles, message.trim());
-      await onCommitted();
-      onClose();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsCommitting(false);
-    }
+      setMessage(remote ? `docs(notes): update ${staged.length} files` : await generateSemanticCommit((await Promise.all(staged.map(file => fetchFileDiff(file.path, 'staged')))).join('\n'), staged[0]?.path));
+    } catch (error) { setError((error as Error).message); }
+    finally { setBusy(false); }
   };
-
-  const toggleFile = (file: string) => {
-    setSelectedFiles((prev) =>
-      prev.includes(file) ? prev.filter((f) => f !== file) : [...prev, file]
-    );
-  };
-
-  return (
-    <div className="viewport-overlay fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div role="dialog" aria-modal="true" aria-label={t('commit.title')} className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[85dvh]">
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <GitCommitIcon className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-900 text-sm">{t('commit.title')}</h3>
-              <p className="text-xs text-slate-400">
-                {t('commit.branch', { branch: gitStatus?.branch || '' })}
-              </p>
-            </div>
-          </div>
-          <button
-            aria-label={t('commit.close')} disabled={isCommitting} onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 overflow-y-auto space-y-4 flex-1">
-          {changedFiles.length === 0 ? (
-            <div className="py-8 text-center text-sm text-slate-500">
-              <Check className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-              {t('commit.cleanWorkingTree')}
-            </div>
-          ) : (
-            <>
-              {/* File list */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-                  {t('commit.filesToStage', { selected: selectedFiles.length, total: changedFiles.length })}
-                </label>
-                <div className="max-h-36 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100 bg-slate-50/30">
-                  {changedFiles.map((file) => {
-                    const isSelected = selectedFiles.includes(file);
-                    return (
-                      <label
-                        key={file}
-                        className="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-slate-50 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          aria-label={`Commit ${file}`} disabled={isCommitting}
-                          checked={isSelected}
-                          onChange={() => toggleFile(file)}
-                          className="rounded text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className="font-mono text-slate-800 break-all min-w-0">{file}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Commit Message Input */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                    {t('commit.message')}
-                  </label>
-                  <button
-                    onClick={handleGenerateAiMessage}
-                    disabled={isGenerating || changedFiles.length === 0}
-                    className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 hover:underline font-medium disabled:opacity-40 disabled:cursor-not-allowed transition"
-                  >
-                    <Sparkles className="w-3 h-3 text-amber-500" />
-                    <span>{isGenerating ? t('commit.generating') : commitFiles ? t('commit.generateMessage') : t('commit.semanticMessage')}</span>
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  aria-label={t('commit.message')} disabled={isCommitting}
-                  placeholder={t('commit.placeholder')}
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                />
-              </div>
-
-              {/* Diff Snippet */}
-              {diff && (
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1">
-                    <FileDiff className="w-3.5 h-3.5" />
-                    <span>{t('commit.diffPreview')}</span>
-                  </div>
-                  <pre className="max-h-40 overflow-y-auto p-3 bg-slate-900 text-slate-200 rounded-lg font-mono text-[11px] leading-relaxed">
-                    {diff.slice(0, 3000)}
-                    {diff.length > 3000 ? '\n...[truncated]' : ''}
-                  </pre>
-                </div>
-              )}
-
-              {error && (
-                <div role="alert" className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/50 flex items-center justify-end gap-2">
-          <button
-            disabled={isCommitting} onClick={onClose}
-            className="px-4 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {t('common.cancel')}
-          </button>
-          {changedFiles.length > 0 && (
-            <button
-              onClick={handleCommit}
-              disabled={isCommitting}
-              className="px-4 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg shadow-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {isCommitting ? t('commit.committing') : commitFiles ? t('commit.commitToGithub') : t('commit.commitAndSave')}
-            </button>
-          )}
-        </div>
+  const group = (side: 'working' | 'staged') => <section className="changes-group" aria-label={t(side === 'working' ? 'changes.unstaged' : remote ? 'changes.included' : 'changes.staged')}>
+    <h4>{t(side === 'working' ? 'changes.unstaged' : remote ? 'changes.included' : 'changes.staged')} <small>{changes.filter(file => side === 'working' ? file.unstaged : file.staged).length}</small></h4>
+    {changes.filter(file => side === 'working' ? file.unstaged : file.staged).map(file => <div className="changes-row" key={file.path} data-change-path={file.path} data-side={side}>
+      <input type="checkbox" aria-label={`Commit ${file.path}`} checked={file.staged} disabled={busy || !writable || !file.available} onChange={() => void act(file, file.staged ? 'unstage' : 'stage')} />
+      <button type="button" className="changes-file" aria-pressed={active?.path === file.path && active.side === side} onClick={() => setActive({ path: file.path, side })} title={file.path}>
+        <span>{file.path}</span><small>{t(`changes.${file.kind}`)}</small>
+      </button>
+      <button type="button" className="ui-icon-button" aria-label={`${t(side === 'working' ? 'changes.stage' : 'changes.unstage')} ${file.path}`} title={t(side === 'working' ? 'changes.stage' : 'changes.unstage')} disabled={busy || !writable || !file.available} onClick={() => void act(file, side === 'working' ? 'stage' : 'unstage')}>{side === 'working' ? <Plus /> : <Minus />}</button>
+      <button type="button" className="ui-icon-button" aria-label={`${t('common.restore')} ${file.path}`} title={t(file.tracked ? 'common.restore' : 'changes.discardNew')} disabled={busy || !writable || !file.available} onClick={() => void act(file, 'restore')}><RotateCcw /></button>
+    </div>)}
+  </section>;
+  return <div className="viewport-overlay changes-overlay">
+    <div ref={dialog} tabIndex={-1} className="changes-dialog ui-dialog" role="dialog" aria-modal="true" aria-label={t('commit.title')} onKeyDown={event => {
+      if (event.key !== 'Tab') return;
+      const controls = [...(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex="0"]') || [])].filter(node => node.getClientRects().length);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (!first) { event.preventDefault(); return; }
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog.current)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }}>
+      <header><div><strong>{t('changes.title')}</strong><small>{t('commit.branch', { branch: gitStatus?.branch || '' })}</small></div>
+        <button className="ui-icon-button" aria-label={t('changes.refresh')} disabled={busy} onClick={() => { setError(''); void refresh().catch(error => setError(error.message)); }}><RefreshCw /></button>
+        <button className="ui-icon-button" aria-label={t('commit.close')} disabled={busy} onClick={onClose}><X /></button></header>
+      {remote && <p className="changes-help">{t('changes.remoteHint')}</p>}
+      <div className="changes-body">
+        <div className="changes-list">{loading ? <p role="status">{t('agent.loadingDocument')}</p> : changes.length ? <>{group('working')}{group('staged')}</> : <p>{t('commit.cleanWorkingTree')}</p>}</div>
+        <section className="changes-preview" aria-label={t('commit.diffPreview')}><h4><FileDiff />{active?.path || t('commit.diffPreview')}</h4>
+          {selected && !selected.available ? <p>{t('changes.unavailable')}</p> : <pre tabIndex={0}>{diff ? diff.split('\n').map((line, index) => <span key={index} className={line.startsWith('+') ? 'diff-added' : line.startsWith('-') ? 'diff-removed' : line.startsWith('@@') ? 'diff-range' : undefined}>{line}{'\n'}</span>) : t('changes.noDiff')}</pre>}
+        </section>
       </div>
+      {confirm && <div className="changes-confirm" role="alert"><p>{t(confirm.tracked ? 'changes.confirmRestore' : 'changes.confirmDiscard', { path: confirm.path })}</p>
+        <button className="ui-button" disabled={busy} onClick={() => setConfirm(undefined)}>{t('common.cancel')}</button>
+        <button className="ui-button ui-button-danger" aria-label={t('changes.confirm')} disabled={busy} onClick={() => void act(confirm, 'restore', true)}>{t('changes.confirm')}</button></div>}
+      {error && <p role="alert" className="changes-error">{error}</p>}
+      {notice && <p role="status" className="changes-help">{notice}</p>}
+      <footer><input className="ui-control" aria-label={t('commit.message')} placeholder={t('commit.placeholder')} value={message} disabled={busy} onChange={event => setMessage(event.target.value)} />
+        <button className="ui-button" disabled={busy || !staged.length} onClick={() => void generate()}>{t(remote ? 'commit.generateMessage' : 'commit.semanticMessage')}</button>
+        <button className="ui-button ui-button-primary" disabled={busy || !writable || !staged.length || !message.trim() || staged.some(file => !file.available)} onClick={() => void commit()}><GitCommit />{t(busy ? 'commit.committing' : remote ? 'commit.commitToGithub' : 'commit.commitAndSave')}</button></footer>
     </div>
-  );
-};
+  </div>;
+}

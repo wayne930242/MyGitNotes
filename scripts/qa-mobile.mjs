@@ -91,17 +91,17 @@ try {
   }
   await page.goto(base+'/notebooks/example/notes/root.md',{waitUntil:'networkidle0'});
   await page.waitForSelector('.cm-content');await fits('button[aria-label="Close note"]');
-  await fits('button[title="Insert image from notebook assets"]');
+  await fits('button[aria-label="Document tools"]');
   await fits('[data-markdown-editor]',Math.min(width-40,500));
   if(width<768) {
    assert((await bounds('.note-controls')).height<=48,'Note toolbar wraps on mobile');
    const close=await bounds('button[aria-label="Close note"]');assert(close.width>=44&&close.height>=44,'Small Close target');
    await page.screenshot({path:product+'/artifacts/qa/mobile-note-'+width+'.png'});
    if(width===320) {
-    await tap('button[aria-label="Find in note"]');await fits('.note-find-bar');
-    await tap('button[aria-label="Close search"]');
-    await tap('button[aria-label="Outline"]');await fits('.note-outline');
-    assert((await bounds('.note-outline')).width<=300,'Mobile outline is too wide');
+    await tap('.note-controls button[aria-label="Document tools"]');await tap('.note-panel-tabs [role="tab"][aria-label="Find in note"]');await fits('.note-document-panel[data-panel="find"]');await fits('.note-find-field');
+    await page.keyboard.press('Escape');
+    await tap('.note-controls button[aria-label="Document tools"]');await fits('.note-document-panel[data-panel="outline"]');
+    assert((await bounds('.note-document-panel')).width<=320,'Mobile document panel is too wide');
     await page.screenshot({path:product+'/artifacts/qa/mobile-note-outline.png'});
     await page.keyboard.press('Escape');assert(await page.$('[aria-label="Note editor"]'),'Outline Escape closed the note');
    }
@@ -125,7 +125,8 @@ try {
  await page.keyboard.press('Escape');await page.waitForFunction(()=>!document.querySelector('[role="listbox"]'));assert(await page.$('[aria-label="Note editor"]'),'Select Escape closed the note');
  await click('Restore Draft');await waitDisk('notes/example/root.md','Recovered mobile draft');
  await page.waitForFunction(()=>!document.querySelector('.editor-notice-actions'));
- await tap('button[aria-label="Restore note"]');await fits('button[aria-label="Confirm restore note"]');assert((await bounds('.note-controls')).height<=48,'Note restore confirmation wraps toolbar');
+ await tap('button[aria-label="Document tools"]');await tap('.note-panel-tabs [role="tab"][aria-label="File Git status"]');await page.waitForSelector('.note-document-panel[data-panel="git"]');
+ await tap('button[aria-label="Restore note"]');await fits('button[aria-label="Confirm restore note"]');assert((await bounds('.note-document-panel')).width<=320,'Note restore confirmation overflows panel');
  await tap('button[aria-label="Confirm restore note"]');await page.waitForFunction(()=>!document.querySelector('.cm-content')?.innerText.includes('Recovered mobile draft'));
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});await tap('[aria-label="Close note"]');await page.waitForFunction(()=>!document.querySelector('[aria-label="Note editor"]'));
  console.log('PASS bounded recovery, draft restore, note restore confirmation and select-only Escape');
@@ -199,10 +200,12 @@ try {
  const noteFile=await page.$eval('.note-heading',e=>e.querySelector('.font-mono').textContent);
  assert(noteFile.startsWith('notes/example/projects/deep/'),'Selected folder path was not used for the new note');
  await waitDisk(noteFile,'Mobile live edit');
- await click('Frontmatter');await page.waitForSelector('.note-metadata');
+ await tap('button[aria-label="Document tools"]');await tap('.note-panel-tabs [role="tab"][aria-label="Frontmatter"]');await page.waitForSelector('.note-document-panel[data-panel="frontmatter"] .note-metadata');
+ await fits('.note-document-panel');
+ assert(await page.$$eval('.note-panel-tabs [role="tab"]',buttons=>buttons.map(button=>button.getAttribute('aria-label')).join(',')==='Find in note,Outline,Frontmatter,Notebook Assets,File Git status'),'Mobile document panel tabs are incomplete');
  await page.$eval('.note-metadata input',e=>e.scrollIntoView());
  assert(await page.$eval('.note-metadata input',e=>parseFloat(getComputedStyle(e).fontSize)>=16),'Metadata input triggers mobile zoom');
- await click('Frontmatter');
+ await tap('.note-panel-close');
  // Resizing emulates the layout consequence of a software keyboard, not native IME behavior.
  await page.setViewport({width:390,height:420,isMobile:true,hasTouch:true});
  await page.waitForFunction(()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--visual-height'))<430);
@@ -211,12 +214,12 @@ try {
  await tap('textarea[aria-label="Note content"]');await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.type('\nReduced viewport edit');
  await waitDisk(noteFile,'Reduced viewport edit');
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
- await tap('button[title="Insert image from notebook assets"]');await page.waitForSelector('[aria-label="Notebook Assets"]');
+ await tap('button[aria-label="Document tools"]');await tap('.note-panel-tabs [role="tab"][aria-label="Notebook Assets"]');await page.waitForSelector('.note-document-panel[data-panel="assets"]');
  write('mobile-upload.png',fs.readFileSync(path.join(root,'notes/example/assets/pixel.png')));
- const upload=await page.$('[aria-label="Notebook Assets"] input[type="file"]');await upload.uploadFile(path.join(root,'mobile-upload.png'));
- await page.waitForFunction(()=>document.querySelector('[aria-label="Notebook Assets"] button[aria-pressed="true"]'));
+ const upload=await page.$('.note-document-panel[data-panel="assets"] input[type="file"]');await upload.uploadFile(path.join(root,'mobile-upload.png'));
+ await page.waitForFunction(()=>document.querySelector('.note-document-panel[data-panel="assets"] button[aria-pressed="true"]'));
  await click('View');await page.waitForSelector('[aria-label="Asset preview"]');await fits('[aria-label="Close asset preview"]');await tap('[aria-label="Close asset preview"]');
- await click('Insert');await page.waitForFunction(()=>!document.querySelector('[aria-label="Notebook Assets"]'));
+ await click('Insert');await page.waitForFunction(()=>!document.querySelector('.note-document-panel'));
  await waitDisk(noteFile,'/raw-assets/by-hash/');
  await tap('[aria-label="Close note"]');
  await click('Agent System');await page.waitForSelector('.cm-content[aria-label="Agent document content"]');
@@ -259,7 +262,7 @@ try {
  await page.goto(base+'/notebooks/example/notes/remote.md',{waitUntil:'networkidle0'});await page.waitForSelector('.cm-content');
  await click('Source');await tap('textarea[aria-label="Note content"]');await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.type('\nMobile remote save');
  await page.setViewport({width:320,height:420,isMobile:true,hasTouch:true});
- await fits('[aria-label="Close note"]');await fits('button[title="Insert image from notebook assets"]');
+ await fits('[aria-label="Close note"]');await fits('button[aria-label="Document tools"]');
  await page.waitForFunction(()=>document.body.innerText.includes('Saved locally'));
  assert(!saved,'Editing committed before explicit Commit');
  await tap('[aria-label="Close note"]');await click('Commit');await page.waitForSelector('[aria-label="Commit Changes"]');

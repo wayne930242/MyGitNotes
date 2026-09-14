@@ -13,21 +13,23 @@ import {
   Plus,
 } from 'lucide-react';
 import { MarkdownEditor, MarkdownEditorMode, MarkdownEditorModeSwitch } from './MarkdownEditor.js';
-import { AgentResource, NotebookConfig } from '../lib/types.js';
+import { AgentResource, NotebookConfig, GitStatus } from '../lib/types.js';
 import {
   fetchAgentResources,
   readAgentResource,
   saveAgentResource,
   restoreAgentResource,
+  fetchGitStatus, fetchFileChanges,
 } from '../lib/api.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
-export interface AgentSystemHandle { prepareNotebookChange: (id: string) => Promise<boolean>; prepareLeave: () => Promise<boolean> }
+export interface AgentSystemHandle { prepareNotebookChange: (id: string) => Promise<boolean>; prepareLeave: () => Promise<boolean>; refresh: () => Promise<void> }
 
 export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
   readOnly?: boolean; readOnlyNotice?: string; remote?: boolean;
+  onGitStatus?: (status: GitStatus) => void;
   notebooks: NotebookConfig[]; selectedNotebookId: string; onBusyChange: (busy: boolean) => void;
-}>(({ readOnly = false, readOnlyNotice, remote = false, notebooks, selectedNotebookId, onBusyChange }, ref) => {
+}>(({ readOnly = false, readOnlyNotice, remote = false, notebooks, selectedNotebookId, onBusyChange, onGitStatus }, ref) => {
   const { t } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
   const [instructions, setInstructions] = useState<AgentResource[]>([]);
@@ -56,6 +58,17 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
   const editable = !readOnly && !isProductResource && currentResource?.editable !== false;
   const locked = !editable || loading || switching || restoring;
   const [confirmRestore, setConfirmRestore] = useState<boolean>(false);
+  const [fileStatus, setFileStatus] = useState<GitStatus | null>(null);
+  const [restorableFiles, setRestorableFiles] = useState<Record<string, string>>({});
+  const canRestore = !remote && !locked && !isSaving && Boolean(fileStatus &&
+    (fileStatus.modified.includes(selectedPath) || fileStatus.staged.includes(selectedPath)) && restorableFiles[selectedPath]);
+  const refreshGitStatus = async () => {
+    if (remote) return;
+    const { status } = await fetchGitStatus();
+    const changes = await fetchFileChanges();
+    setRestorableFiles(Object.fromEntries(changes.filter(file => file.available && file.tracked).map(file => [file.path, file.revision])));
+    setFileStatus(status); onGitStatus?.(status);
+  };
   const restoreTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -93,6 +106,8 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
     }
     let cancelled = false;
     setContentLoading(true);
+    setFileStatus(null);
+    void refreshGitStatus().catch(error => setError(error.message));
     setError(''); setLoadedPath(''); setConfirmRestore(false);
     if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
     void readAgentResource(selectedPath)
@@ -118,6 +133,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
       const receipt = await saveAgentResource({ path: file, content: snapshot, revision: revision.current });
       revision.current = receipt.revision;
       if (current.current.path === file) setSavedContent(snapshot);
+      await refreshGitStatus();
     });
     saveQueue.current = request;
     try { await request; }
@@ -146,7 +162,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
   };
 
   const handleRestoreClick = async () => {
-    if (locked) return;
+    if (!canRestore) return;
     if (!confirmRestore) {
       setConfirmRestore(true);
       restoreTimerRef.current = setTimeout(() => setConfirmRestore(false), 4000);
@@ -157,8 +173,9 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
     setConfirmRestore(false); setRestoring(true); setError('');
     try {
       await saveQueue.current.catch(() => {});
-      const resource = await restoreAgentResource(selectedPath);
+      const resource = await restoreAgentResource(selectedPath, restorableFiles[selectedPath]);
       setContent(resource.content); setSavedContent(resource.content);
+      await refreshGitStatus();
     } catch (error) { setError((error as Error).message); }
     finally { setRestoring(false); }
   };
@@ -216,7 +233,19 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
     return selectDocument(path);
   };
 
-  useImperativeHandle(ref, () => ({ prepareNotebookChange, prepareLeave }));
+  useImperativeHandle(ref, () => ({ prepareNotebookChange, prepareLeave, refresh: async () => {
+    await refreshGitStatus();
+    if (!selectedPath || hasUnsavedChanges) return;
+    const listing = await fetchAgentResources();
+    const resources = [...listing.instructions, ...listing.skills, ...listing.docs];
+    setInstructions(resources);
+    if (!resources.some(resource => resource.path === selectedPath)) {
+      setSelectedPath(resources[0]?.path || ''); return;
+    }
+    const resource = await readAgentResource(selectedPath);
+    revision.current = resource.revision;
+    setContent(resource.content); setSavedContent(resource.content);
+  } }));
   const navigationBusy = loading || switching || restoring || isCreating;
   useEffect(() => {
     onBusyChange(navigationBusy);
@@ -322,7 +351,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
           <div className="agent-controls flex items-center gap-3">
             {/* Single-file restore applies to uncommitted local edits. */}
             {!remote && <button
-              disabled={locked}
+              disabled={!canRestore}
               aria-label={confirmRestore ? t('agent.confirmRestore') : t('agent.restore')}
               onClick={handleRestoreClick}
               className={`editor-action ${confirmRestore ? 'editor-confirming' : ''} flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed ${

@@ -120,7 +120,7 @@ export async function restoreNote(params: {
   content?: string;
   metadata?: Record<string, unknown>;
   notebookId?: string;
-}): Promise<{ success: boolean; note: NoteItem }> {
+}): Promise<{ success: boolean; note: NoteItem | null }> {
   const res = await fetch(`${API_BASE}/notes/restore`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -164,11 +164,11 @@ export async function saveAgentResource(params: {
   return res.json();
 }
 
-export async function restoreAgentResource(path: string): Promise<{ success: boolean; path: string; content: string }> {
+export async function restoreAgentResource(path: string, revision?: string): Promise<{ success: boolean; path: string; content: string }> {
   const res = await fetch(`${API_BASE}/agent-resources/restore`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path }),
+    body: JSON.stringify({ path, revision }),
   });
   if (!res.ok) {
     const err = await res.json();
@@ -223,6 +223,30 @@ export async function fetchGitStatus(): Promise<{ status: GitStatus; commits: Gi
   const res = await fetch(`${API_BASE}/git/status`);
   if (!res.ok) throw new Error('Failed to fetch git status');
   return res.json();
+}
+
+export async function fetchFileChanges(): Promise<import('./types.js').FileChange[]> {
+  const response = await fetch(`${API_BASE}/git/changes`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to read changes');
+  return data.changes;
+}
+export async function fetchFileDiff(file: string, side: 'working' | 'staged'): Promise<string> {
+  const response = await fetch(`${API_BASE}/git/file-diff?path=${encodeURIComponent(file)}&side=${side}`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Failed to read diff');
+  return data.diff;
+}
+export async function manageFileChange(file: import('./types.js').FileChange, action: 'stage' | 'unstage' | 'restore'): Promise<{ backup?: string }> {
+  const response = await fetch(`${API_BASE}/git/change`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: file.path, revision: file.revision, action }) });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'File operation failed');
+  return data;
+}
+export async function commitStagedChanges(files: import('./types.js').FileChange[], message: string) {
+  const response = await fetch(`${API_BASE}/git/commit-staged`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: files.map(file => file.path), revisions: Object.fromEntries(files.map(file => [file.path, file.revision])), message }) });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Commit failed');
 }
 
 export async function fetchGitDiff(path?: string): Promise<string> {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findTextMatches, parseMarkdownOutline } from './note-navigation.js';
+import { findOutlineIndexForLine, findTextMatches, parseMarkdownOutline } from './note-navigation.js';
 
 describe('note editor navigation', () => {
   it('finds every case-insensitive, non-overlapping text match', () => {
@@ -31,5 +31,19 @@ describe('note editor navigation', () => {
       { depth: 1, label: 'Introduction', line: 3, from: 9 },
       { depth: 3, label: 'Details code', line: 10, from: 64 },
     ]);
+  });
+
+  it('selects the heading containing the current visible line', () => {
+    const outline = [
+      { depth: 1, label: 'Title', line: 2, from: 1 },
+      { depth: 2, label: 'Middle', line: 12, from: 80 },
+      { depth: 2, label: 'End', line: 30, from: 240 },
+    ];
+
+    expect(findOutlineIndexForLine(outline, 1)).toBe(0);
+    expect(findOutlineIndexForLine(outline, 2)).toBe(0);
+    expect(findOutlineIndexForLine(outline, 20)).toBe(1);
+    expect(findOutlineIndexForLine(outline, 99)).toBe(2);
+    expect(findOutlineIndexForLine([], 20)).toBe(0);
   });
 });

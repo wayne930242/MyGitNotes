@@ -256,16 +256,6 @@ const AppContent: React.FC = () => {
     return Array.from(set).filter(Boolean).sort();
   }, [notes]);
 
-  // Determine if the currently edited note has uncommitted changes in Git
-  const isEditingNoteDirty = useMemo(() => {
-    if (!editingNote || !gitStatus) return false;
-    return Boolean(
-      gitStatus.modified.includes(editingNote.path) ||
-      gitStatus.staged.includes(editingNote.path) ||
-      gitStatus.untracked.includes(editingNote.path)
-    );
-  }, [editingNote, gitStatus]);
-
   useEffect(() => {
     setEditingNote(null);  setDeletedNotes([]); setIsNewNoteOpen(false);
   }, [sourceId]);
@@ -484,7 +474,9 @@ const AppContent: React.FC = () => {
       metadata: note.metadata,
       notebookId: note.notebookId,
     });
-    setNotes((prev) => [res.note, ...prev.filter((n) => n.path !== note.path)]);
+    if (!res.note) throw new Error('The deleted note could not be restored.');
+    const restoredNote = res.note;
+    setNotes((prev) => [restoredNote, ...prev.filter((n) => n.path !== note.path)]);
     setDeletedNotes((prev) => prev.filter((n) => n.path !== note.path));
 
     if (undoToast?.note.path === note.path) {
@@ -514,14 +506,16 @@ const AppContent: React.FC = () => {
         return latest;
       }
       const res = await restoreNote({ path: notePath });
-      setNotes((prev) => prev.map((n) => (n.path === res.note.path ? res.note : n)));
+      const restored = res.note;
+      setNotes((prev) => restored ? prev.map((n) => (n.path === notePath ? restored : n)) : prev.filter(n => n.path !== notePath));
       setEditingNote(res.note);
+      if (!restored) navigate(notebookRoute(selectedNotebookId, selectedFolder) + location.search);
       const statusRes = await fetchGitStatus();
       setGitStatus(statusRes.status);
       return res.note;
     } catch (err) {
       console.error('Failed to restore note file:', err);
-      return null;
+      throw err;
     }
   };
 
@@ -763,10 +757,10 @@ const AppContent: React.FC = () => {
         onCreateNote={() => openNewNote()}
         createNoteDisabled={!canWrite}
         onOpenCommands={() => setShortcutMode('palette')}
-        navigationDisabled={noteEditorOpen}
+        navigationDisabled={noteEditorOpen || isCommitOpen}
       />
       <KeyboardShortcuts mode={shortcutMode} onModeChange={setShortcutMode}
-        suspended={noteEditorOpen}
+        suspended={noteEditorOpen || isCommitOpen}
         activeTab={activeTab} canCreateNote={canWrite}
         onNavigate={tab => void setActiveTab(tab)} onCreateNote={() => openNewNote()}
         onFocusSearch={() => requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.header-search input')?.focus())} />
@@ -901,6 +895,7 @@ const AppContent: React.FC = () => {
               onBusyChange={setResourceNavigationBusy}
               readOnly={!canWrite}
               remote={remote}
+              onGitStatus={setGitStatus}
               readOnlyNotice={t(remote ? 'agent.remoteReadOnlyNotice' : branch === 'core' ? 'agent.coreBranchNotice' : 'agent.workspaceReadOnlyNotice')}
             />
           </main>
@@ -941,7 +936,11 @@ const AppContent: React.FC = () => {
       {activeTab !== 'screen' && screen.dirty && screen.error && <div role="alert" className="workspace-link-error">{screen.error}<button className="ui-button" onClick={() => navigate('/screen')}>{t('nav.screen')}</button></div>}
       <FloatingCommitFooter
         gitStatus={gitStatus}
-        onOpenCommitModal={() => setIsCommitOpen(true)}
+        onOpenCommitModal={() => { void (async () => {
+          if (activeTab === 'agent' && !await agentSystemRef.current?.prepareLeave()) return;
+          if (!remote && screen.dirty) await screen.save();
+          setIsCommitOpen(true);
+        })().catch(error => setActionError(error.message)); }}
         deletedNotes={deletedNotes}
         onRestoreNote={handleRestoreNote}
       />
@@ -986,7 +985,7 @@ const AppContent: React.FC = () => {
         }}
         onSave={handleSaveNote}
         onRestoreFile={handleRestoreNoteFile}
-        isDirty={isEditingNoteDirty}
+        isDirty={Boolean(routedNote && gitStatus && [ ...gitStatus.modified, ...gitStatus.staged, ...gitStatus.untracked ].includes(routedNote.path))}
         availableTags={availableTags}
         assets={assets}
         onUploadAsset={!canWrite ? undefined : handleUploadAsset}
@@ -1005,13 +1004,33 @@ const AppContent: React.FC = () => {
 
       {/* Commit Modal */}
       <CommitModal
-        previewDiff={remote ? [workingDiff(activeWorkingNotes), screenPending ? screen.diff : ''].filter(Boolean).join('\n\n') : undefined}
+        writable={canWrite}
+        remoteChanges={remote ? [
+          ...Object.values(activeWorkingNotes).map(entry => ({ path: entry.note.path, kind: entry.blocked ? 'conflict' as const : entry.base ? 'modified' as const : 'added' as const,
+            tracked: Boolean(entry.base), revision: JSON.stringify(entry), available: canWrite, staged: false, unstaged: true })),
+          ...(screenPending ? [{ path: SCREEN_PAGE_FILE, kind: 'modified' as const, tracked: true, revision: screen.diff, available: canWrite && !screen.error, staged: false, unstaged: true }] : []),
+        ] : undefined}
+        getPreview={remote ? file => file === SCREEN_PAGE_FILE ? screen.diff : activeWorkingNotes[file] ? workingDiff({ [file]: activeWorkingNotes[file] }) : '' : undefined}
+        restoreFile={remote ? async file => {
+          if (file.path === SCREEN_PAGE_FILE) { if (file.revision !== screen.diff) throw new Error('Draft changed. Review it again.'); await screen.reload(); return; }
+          const entry = readWorkingNotes(workingScope)[file.path];
+          if (!entry || JSON.stringify(entry) !== file.revision) throw new Error('Draft changed. Review it again.');
+          const latest = entry.base ? await readNote(file.path) : null;
+          if (JSON.stringify(readWorkingNotes(workingScope)[file.path]) !== file.revision) throw new Error('Draft changed. Review it again.');
+          setWorkingNotes(updateWorkingNote(workingScope, file.path, null));
+          setNotes(previous => latest ? previous.map(note => note.path === file.path ? latest : note) : previous.filter(note => note.path !== file.path));
+        } : undefined}
         commitFiles={remote ? commitWorkingNotes : undefined}
         isOpen={isCommitOpen}
         onClose={() => setIsCommitOpen(false)}
         gitStatus={gitStatus}
+        onChanged={async () => {
+          await refreshWorkspace();
+          if (!remote) { await screen.refresh(); await agentSystemRef.current?.refresh(); }
+        }}
         onCommitted={async () => {
           await refreshWorkspace();
+          if (!remote) { await screen.refresh(); await agentSystemRef.current?.refresh(); }
           setDeletedNotes([]);
           setUndoToast(null);
         }}

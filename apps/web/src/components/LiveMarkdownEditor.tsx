@@ -15,6 +15,7 @@ export interface LiveMarkdownHandle {
   insert: (text: string) => void;
   revealRange: (from: number, to: number, focus?: boolean) => void;
   goToLine: (line: number, options?: { focus?: boolean; smooth?: boolean }) => void;
+  getCurrentLine: () => number;
 }
 interface Props { content: string; notePath: string; readOnly: boolean; ariaLabel?: string; onChange: (content: string) => void }
 const focusChanged = StateEffect.define<boolean>();
@@ -162,6 +163,12 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
       if (options.smooth) requestAnimationFrame(() => view.scrollDOM.scrollTo({ top: Math.max(0, view.lineBlockAt(target).top - 20), behavior: 'smooth' }));
       else view.dispatch({ effects: EditorView.scrollIntoView(target, { y: 'start', yMargin: 20 }) });
       if (options.focus !== false) view.focus();
+    },
+    getCurrentLine() {
+      const view = editor.current;
+      if (!view) return 1;
+      const atEnd = view.scrollDOM.scrollTop + view.scrollDOM.clientHeight >= view.scrollDOM.scrollHeight - 2;
+      return atEnd ? view.state.doc.lines : view.state.doc.lineAt(view.viewport.from).number;
     },
   }),[]);
   useEffect(() => {
