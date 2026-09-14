@@ -5,7 +5,7 @@ import { WorkspaceLinks } from './components/WorkspaceLinks.js';
 import { resolveNoteStatuses, isNoteHidden, withNoteStatus } from '@github-notes/core/note-status';
 import { Select } from './components/Select.js';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { notebookRoute, noteRoute, parseWorkspaceRoute, WorkspaceTab } from './lib/routes.js';
+import { notebookRoute, noteRoute, noteReturnRoute, parseWorkspaceRoute, WorkspaceTab } from './lib/routes.js';
 import { readWorkingNotes, updateWorkingNote, clearCommittedNotes, overlayWorkingNotes, workingDiff, WorkingNotes } from './lib/working-notes.js';
 import { mergeNote, sameValue } from './lib/merge-note.js';
 import { mergeNoteSnapshot } from './lib/note-snapshot.js';
@@ -173,7 +173,14 @@ const AppContent: React.FC = () => {
 
   // The URL owns page, notebook, folder and filter selection.
   const navigate = useNavigate();
-  const route = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
+  const editorRoute = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
+  const editorNotebookId = editorRoute.notebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
+  const returnTo = noteReturnRoute(location.search, editorNotebookId, editorRoute.folder);
+  const route = useMemo(() => {
+    if (!editorRoute.note) return editorRoute;
+    const origin = new URL(returnTo, window.location.origin);
+    return parseWorkspaceRoute(origin.pathname, origin.search);
+  }, [editorRoute, returnTo]);
   const activeTab = route.tab;
   const sidebarGestureRef = useSidebarSwipe(activeTab === 'notes' && !loading && !loadError, filtersOpen, setFiltersOpen);
   const selectedNotebookId = route.notebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
@@ -312,16 +319,16 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     if (loading || !config) return;
-    if (!route.valid) { setRouteError('route.pageNotFound');  return; }
-    const notebook = config.notebooks.find(nb => nb.id === selectedNotebookId) || (!route.notebook ? config.notebooks[0] : null);
+    if (!editorRoute.valid) { setRouteError('route.pageNotFound');  return; }
+    const notebook = config.notebooks.find(nb => nb.id === editorNotebookId) || (!editorRoute.notebook ? config.notebooks[0] : null);
     if (!notebook) { setRouteError('route.notebookNotFound');  return; }
-    if (route.folder && !folders.some(f => f.notebookId === notebook.id && f.path === route.folder)) { setRouteError('route.folderNotFound'); return; }
-    if (!route.note) { setRouteError(''); setEditingNote(null);  return; }
-    const file = `${notebook.root}/${route.note}`;
+    if (editorRoute.folder && !folders.some(f => f.notebookId === notebook.id && f.path === editorRoute.folder)) { setRouteError('route.folderNotFound'); return; }
+    if (!editorRoute.note) { setRouteError(''); setEditingNote(null);  return; }
+    const file = `${notebook.root}/${editorRoute.note}`;
     const note = notes.find(n => n.path === file);
     if (note) { setRouteError(''); setEditingNote(previous => previous?.path === file ? previous : note);  }
     else if (editingNote?.path !== file) { setRouteError('route.noteNotFound');  }
-  }, [route, config, notes, folders, loading, selectedNotebookId, sourceId]);
+  }, [editorRoute, config, notes, folders, loading, editorNotebookId, sourceId]);
 
   // Filter notes by active notebook, search query, status, and tags
   const filteredNotes = useMemo(() => {
@@ -392,7 +399,7 @@ const AppContent: React.FC = () => {
     if (notebook) {
       const query = new URLSearchParams(location.search);
       query.delete('notebook');
-      if (activeTab === 'screen') query.set('returnTo', 'screen');
+      query.set('returnTo', editorRoute.note ? returnTo : location.pathname + location.search + location.hash);
       if (selectedFolder && note.notebookId === selectedNotebookId) query.set('folder',selectedFolder); else query.delete('folder');
       navigate(noteRoute(notebook.id,note.path.slice(notebook.root.length+1))+'?'+query.toString()+(anchor ? '#'+encodeURIComponent(anchor) : ''));
     }
@@ -497,7 +504,7 @@ const AppContent: React.FC = () => {
           setWorkingNotes(updateWorkingNote(workingScope, notePath, null));
           setNotes(previous => previous.filter(note => note.path !== notePath));
           setEditingNote(null);
-          navigate(notebookRoute(selectedNotebookId, selectedFolder) + location.search);
+          navigate(returnTo, { replace: true });
           return null;
         }
         const latest = await readNote(notePath);
@@ -510,7 +517,7 @@ const AppContent: React.FC = () => {
       const restored = res.note;
       setNotes((prev) => restored ? prev.map((n) => (n.path === notePath ? restored : n)) : prev.filter(n => n.path !== notePath));
       setEditingNote(res.note);
-      if (!restored) navigate(notebookRoute(selectedNotebookId, selectedFolder) + location.search);
+      if (!restored) navigate(returnTo, { replace: true });
       const statusRes = await fetchGitStatus();
       setGitStatus(statusRes.status);
       return res.note;
@@ -706,7 +713,7 @@ const AppContent: React.FC = () => {
     return result;
   };
 
-  const routedPath = route.note ? `${config?.notebooks.find(nb => nb.id === selectedNotebookId)?.root}/${route.note}` : null;
+  const routedPath = editorRoute.note ? `${config?.notebooks.find(nb => nb.id === editorNotebookId)?.root}/${editorRoute.note}` : null;
   const routedNote = routedPath ? (editingNote?.path === routedPath ? editingNote : notes.find(note => note.path === routedPath) || null) : null;
   const noteEditorOpen = Boolean(routedNote) && !routeError;
 
@@ -932,7 +939,7 @@ const AppContent: React.FC = () => {
         {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} notebooks={config?.notebooks || []} notes={notes} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} /></React.Suspense>}
 
         {activeTab === 'graph' && (
-          <main className="workspace-route graph-main flex-1 w-full h-full relative" style={{ minHeight: 'calc(100vh - 64px)' }}>
+          <main className="workspace-route graph-main flex-1 w-full h-full relative min-h-0">
             <React.Suspense fallback={<p role="status" className="p-8">{t('graph.title')}</p>}>
               <GraphPage
                 key={remote ? sourceId : repoRoot}
@@ -1010,9 +1017,7 @@ const AppContent: React.FC = () => {
         onClose={() => {
 
           setEditingNote(null);
-          const query = new URLSearchParams(location.search); query.delete('folder');
-          if (query.get('returnTo') === 'screen') navigate(`/screen?notebook=${encodeURIComponent(selectedNotebookId)}`);
-          else navigate(notebookRoute(selectedNotebookId,selectedFolder)+'?'+query.toString());
+          navigate(returnTo, { replace: true });
         }}
         onSave={handleSaveNote}
         onRestoreFile={handleRestoreNoteFile}

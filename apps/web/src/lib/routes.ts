@@ -34,3 +34,18 @@ export function notebookRoute(notebook: string, folder: string | null = null) {
   return `/notebooks/${encodeURIComponent(notebook)}${folder ? '/folders/'+encodePath(folder) : ''}`;
 }
 export function noteRoute(notebook: string, relativePath: string) { return `/notebooks/${encodeURIComponent(notebook)}/notes/${encodePath(relativePath)}`; }
+
+// Editor URLs carry their workspace origin so closing and reloading preserve context.
+export function noteReturnRoute(search: string, notebook: string, folder: string | null = null): string {
+  const query = new URLSearchParams(search);
+  const origin = query.get('returnTo');
+  if (origin === 'screen' || origin === 'graph') return `/${origin}?notebook=${encodeURIComponent(notebook)}`;
+  if (origin?.startsWith('/') && !origin.startsWith('//') && !origin.includes('\\')) {
+    const url = new URL(origin, 'https://workspace.invalid');
+    const route = parseWorkspaceRoute(url.pathname, url.search);
+    if (route.valid && !route.note && !url.searchParams.has('returnTo')) return url.pathname + url.search + url.hash;
+  }
+  query.delete('returnTo');
+  query.delete('folder');
+  return notebookRoute(notebook, folder) + (query.size ? '?' + query.toString() : '');
+}

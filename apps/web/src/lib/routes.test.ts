@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { noteRoute, notebookRoute, parseWorkspaceRoute } from './routes.js';
+import { noteRoute, notebookRoute, noteReturnRoute, parseWorkspaceRoute } from './routes.js';
 describe('workspace URLs', () => {
+  it('returns editors to their original workspace and preserves filters', () => {
+    for (const origin of ['/graph?notebook=example', '/screen?notebook=work', '/notebooks/example/folders/projects?view=graph&tag=demo&q=hello']) {
+      const search = '?' + new URLSearchParams({ returnTo: origin });
+      expect(noteReturnRoute(search, 'other')).toBe(origin);
+    }
+    expect(noteReturnRoute('?returnTo=screen', 'work')).toBe('/screen?notebook=work');
+    expect(noteReturnRoute('?returnTo=graph', 'work')).toBe('/graph?notebook=work');
+    expect(noteReturnRoute('?folder=projects&view=card', 'work', 'projects')).toBe('/notebooks/work/folders/projects?view=card');
+  });
+  it('falls back to the notebook for invalid or recursive editor origins', () => {
+    for (const returnTo of ['https://example.com', '//example.com', '/missing', '/notebooks/work/notes/note.md', '/graph?returnTo=/screen']) {
+      expect(noteReturnRoute('?' + new URLSearchParams({ returnTo }), 'work')).toBe('/notebooks/work');
+    }
+  });
   it('defaults to flat while preserving explicit view links', () => {
     for (const pathname of ['/', '/notes', '/notebooks/example', '/notebooks/example/folders/projects']) {
       expect(parseWorkspaceRoute(pathname, '').view).toBe('flat');

@@ -109,6 +109,10 @@ export const zhTW: Record<TranslationKey, string> = {
   'graph.filterTag': '依標籤篩選',
   'graph.showOrphans': '顯示孤立筆記',
   'graph.resetZoom': '重置視野',
+  'graph.minimap': '小地圖',
+  'graph.preview': '筆記預覽',
+  'graph.openEditor': '開啟完整編輯器',
+  'graph.minimapHint': '拖曳視野框平移 · 點選框外定位 · Enter 重置視野',
   'graph.allTags': '全部標籤',
   'graph.allNotebooks': '全部筆記本',
 

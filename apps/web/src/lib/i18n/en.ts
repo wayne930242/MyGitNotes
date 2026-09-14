@@ -108,6 +108,10 @@ export const en = {
   'graph.filterTag': 'Filter by tag',
   'graph.showOrphans': 'Show unlinked notes',
   'graph.resetZoom': 'Reset view',
+  'graph.minimap': 'Overview',
+  'graph.preview': 'Note preview',
+  'graph.openEditor': 'Open full editor',
+  'graph.minimapHint': 'Drag the viewport to pan · Click outside it to navigate · Enter to reset',
   'graph.allTags': 'All tags',
   'graph.allNotebooks': 'All notebooks',
 
