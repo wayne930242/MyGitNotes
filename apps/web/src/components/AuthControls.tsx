@@ -41,7 +41,7 @@ const connectionActionClass = 'inline-flex min-h-11 items-center justify-center 
 export function AuthControls({ local = false, connection = false }: { local?: boolean; connection?: boolean }) {
   const { t } = useTranslation();
   const session = useSession();
-  if (local || !session.provider) return null;
+  if (local || (!session.authenticated && !session.provider)) return null;
   return session.authenticated ? <details className="header-user-menu">
     <summary className="header-user-button" aria-label={session.login}><span className="header-user-avatar">{session.login?.slice(0, 1).toUpperCase()}</span><span className="header-user-login">{session.login}</span><ChevronDown size={12} /></summary>
     <div className="header-user-popover"><span>{session.login}</span><button onClick={async () => {

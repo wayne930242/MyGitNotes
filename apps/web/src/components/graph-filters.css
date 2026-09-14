@@ -23,4 +23,4 @@
 .filter-empty { color: var(--color-muted); font-size: .75rem; padding: .4rem; }
 .graph-filters.is-compact { padding: .5rem; width: min(27rem, 100%); background: color-mix(in srgb, var(--color-surface) 92%, transparent); backdrop-filter: blur(12px); border: 1px solid var(--color-border); border-radius: .75rem; box-shadow: 0 3px 12px #0001; }
 .is-compact .filter-details { left: 0; width: 100%; top: calc(100% + .5rem); max-height: min(60dvh, 33rem); }
-@media (max-height: 500px) { .is-compact .filter-details { max-height: 45dvh; } }
+@media (max-height: 500px) { .is-compact .filter-details { max-height: min(44vh, 260px); } }
