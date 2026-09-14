@@ -1,7 +1,7 @@
 import { useQueryStates } from 'nuqs';
 import { filterParsers, writeFilterQuery, type FilterQuery } from './lib/filter-query.js';
 import { filterNotes, legacyFolderPaths, type NoteFilters } from '@mygitnotes/core/note-filters';
-import { WorkspaceFilters, type WorkspaceFiltersProps } from './components/WorkspaceFilters.js';
+import type { FilterControls } from './lib/filter-controls.js';
 import { listLocalDrafts } from './lib/storage.js';
 import { useScreenPage } from './lib/use-screen-page.js';
 import { SCREEN_PAGE_FILE } from '@mygitnotes/core/screen-page';
@@ -216,7 +216,7 @@ const AppContent: React.FC = () => {
     await setFilterQuery({});
     navigate({ pathname, search: query.toString() }, { replace });
   };
-  const changeFilters: WorkspaceFiltersProps['onChange'] = patch => {
+  const changeFilters: FilterControls['onChange'] = patch => {
     const { tags, notebookId: _notebookId, ...values } = patch;
     const next = { ...values, ...(tags ? { tag: tags } : {}) };
     if (patch.folders && route.folder) {
@@ -383,7 +383,7 @@ const AppContent: React.FC = () => {
   }), [selectedNotebookId, selectedFolders, selectedTags, route.descendants, route.tagMode, searchQuery, selectedStatus, showHidden]);
   const filteredNotes = useMemo(() => filterNotes(notes, noteFilters), [notes, noteFilters]);
   const hasCollectionFilter = selectedFolders.length > 0 || selectedTags.length > 0 || selectedNotebookId === 'all';
-  const filterProps: WorkspaceFiltersProps = {
+  const filterProps: FilterControls = {
     value: noteFilters, neighbors: route.neighbors, notebooks: config?.notebooks || [], folders,
     tags: [...new Set(visibleNotes.filter(note => selectedNotebookId === 'all' || note.notebookId === selectedNotebookId).flatMap(note => note.tags))],
     statuses: notebookStatuses, count: filteredNotes.length,
@@ -807,7 +807,7 @@ const AppContent: React.FC = () => {
         suspended={noteEditorOpen || isCommitOpen}
         activeTab={activeTab} canCreateNote={canWrite}
         onNavigate={tab => void setActiveTab(tab)} onCreateNote={() => openNewNote()}
-        onFocusSearch={() => requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.header-search input')?.focus())} />
+        onFocusSearch={() => { if (activeTab === 'notes') setFiltersOpen(true); requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.header-search input')?.focus()); }} />
 
       {routeError && (
         <div role="alert" className="px-6 py-3 text-sm text-rose-600">
@@ -829,6 +829,10 @@ const AppContent: React.FC = () => {
               folders={folders}
               foldersWritable={canWrite && selectedNotebookId !== 'all'}
               reorder={folderReorder}
+              onToggleReorder={() => setFolderReorder(value => !value)}
+              filters={filterProps}
+              notes={visibleNotes}
+              hiddenNoteCount={notes.filter(note => (selectedNotebookId === 'all' || note.notebookId === selectedNotebookId) && isNoteHidden({ ...note.metadata, status: note.status })).length}
               indexFolders={notes.filter(note => note.notebookId === selectedNotebookId && note.path.endsWith('/index.md')).map(note => {
                 const root = config?.notebooks.find(notebook => notebook.id === selectedNotebookId)?.root.replace(/\/$/, '') || '';
                 return note.path.slice(root.length + 1, -'/index.md'.length);
@@ -848,11 +852,10 @@ const AppContent: React.FC = () => {
             <main className="workspace-main notes-main">
               <PageToolbar>
                 {indexInToolbar && folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
-                <NoteToolbar reorder={folderReorder} onToggleReorder={() => setFolderReorder(value => !value)} readOnly={!canWrite || selectedNotebookId === 'all'} viewMode={viewMode} setViewMode={setViewMode}
+                <NoteToolbar readOnly={!canWrite || selectedNotebookId === 'all'} viewMode={viewMode} setViewMode={setViewMode}
                   onOpenNewNoteModal={() => openNewNote()} filtersOpen={filtersOpen}
                   onToggleFilters={() => setFiltersOpen(open => !open)} />
               </PageToolbar>
-              <WorkspaceFilters {...filterProps} onOpenGraph={() => void setActiveTab('graph')} />
               <div className="workspace-scroll">
               {actionError && <p role="alert" className="mb-3 text-sm text-rose-600">{actionError}</p>}
               {!indexInToolbar && <>

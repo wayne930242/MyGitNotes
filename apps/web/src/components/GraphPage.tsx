@@ -1,6 +1,7 @@
 import { filterNotes, selectFilteredGraph } from '@mygitnotes/core/note-filters';
 import { isNoteHidden } from '@mygitnotes/core/note-status';
-import { WorkspaceFilters, type WorkspaceFiltersProps } from './WorkspaceFilters.js';
+import { GraphFilters } from './GraphFilters.js';
+import type { FilterControls } from '../lib/filter-controls.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
@@ -21,7 +22,7 @@ const nodeValue = (node: unknown) => Math.pow(nodeRadius(node as NoteGraphNode) 
 export interface GraphPageProps {
   notebooks: NotebookConfig[];
   notes: NoteItem[];
-  filters: WorkspaceFiltersProps;
+  filters: FilterControls;
   onOpenNote: (note: NoteItem) => void;
 }
 
@@ -152,7 +153,7 @@ export function GraphPage({
 
   return (
     <div className="graph-page-container relative w-full h-full flex flex-col bg-transparent overflow-hidden" ref={containerRef}>
-      <GraphControls controlsRef={controlsRef} filterPanel={<WorkspaceFilters {...filters} compact />} appearance={appearance} onAppearanceChange={changeAppearance} visibleColorGroups={visibleColorGroups} appearanceSaveError={appearanceSaveError} showOrphans={showOrphans} onToggleOrphans={() => setShowOrphans(value => !value)} onReset={resetView} nodeCount={graphData.nodes.length} linkCount={graphData.links.length} matchingCount={filters.count} />
+      <GraphControls controlsRef={controlsRef} filterPanel={<GraphFilters {...filters} />} appearance={appearance} onAppearanceChange={changeAppearance} visibleColorGroups={visibleColorGroups} appearanceSaveError={appearanceSaveError} showOrphans={showOrphans} onToggleOrphans={() => setShowOrphans(value => !value)} onReset={resetView} nodeCount={graphData.nodes.length} linkCount={graphData.links.length} matchingCount={filters.count} />
 
       {/* Force Graph Canvas */}
       <div className="flex-1 w-full h-full" onPointerDownCapture={initialFit.cancel} onWheelCapture={initialFit.cancel}>

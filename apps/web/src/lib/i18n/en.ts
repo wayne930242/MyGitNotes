@@ -6,7 +6,6 @@ export const en = {
   "filters.close": "Close filters",
   "filters.remove": "Remove {value}",
   "filters.results": "{count} matching notes",
-  "filters.openGraph": "View graph",
   "filters.notebook": "Notebook",
   "filters.hidden": "Show hidden notes",
   "filters.neighbors": "Show directly connected notes outside filters",

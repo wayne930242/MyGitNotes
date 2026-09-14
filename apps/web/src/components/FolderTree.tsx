@@ -1,3 +1,4 @@
+import { ReorderToggle } from './ReorderToggle.js';
 import { useEffect, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import { Folder, FolderPlus, GripVertical, MoreHorizontal, ArrowRight, Trash2, FileText } from 'lucide-react';
@@ -25,8 +26,12 @@ function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage }: {
     <DropZone path={folder.path} position="after" disabled={disabled || !reorder} />
   </div>;
 }
-export function FolderTree({ reorder = false, folders, notebookId, selected, onSelect, writable, beforeChange, onChanged, indexFolders, onOpenIndex }: {
+export function FolderTree({ reorder = false, onToggleReorder, selectedPaths, allFoldersSelected, onFilterFolder, folders, notebookId, selected, onSelect, writable, beforeChange, onChanged, indexFolders, onOpenIndex }: {
   reorder?: boolean;
+  onToggleReorder?: () => void;
+  selectedPaths?: string[];
+  allFoldersSelected?: boolean;
+  onFilterFolder?: (folder: string | null) => void;
   folders: FolderItem[]; notebookId: string; selected: string | null; onSelect: (folder: string | null) => void;
   indexFolders: string[]; onOpenIndex: (folder: string, revision?: string) => Promise<void>;
   writable: boolean; beforeChange?: () => void; onChanged?: () => Promise<void>;
@@ -36,6 +41,8 @@ export function FolderTree({ reorder = false, folders, notebookId, selected, onS
   const [createIndex, setCreateIndex] = useState(false);
   const [parent, setParent] = useState(''), [name, setName] = useState(''), [before, setBefore] = useState('');
   const [revision, setRevision] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [dragging, setDragging] = useState<string>();
+  const selectFolder = onFilterFolder || onSelect;
+  const isSelected = (path: string | null) => selectedPaths ? path === null ? (allFoldersSelected ?? selectedPaths.length === 0) : selectedPaths.includes(path) : selected === path;
   const list = folders.filter(folder => folder.notebookId === notebookId);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const refresh = async () => {
@@ -79,7 +86,7 @@ export function FolderTree({ reorder = false, folders, notebookId, selected, onS
   const destinationOptions = [{ value: '', label: t('folder.notebookRoot') }, ...list.filter(folder => dialog?.kind === 'create' || folder.path !== dialog?.path && !folder.path.startsWith(dialog?.path + '/')).map(folder => ({ value: folder.path, label: folder.path.split('/').slice(0, -1).concat(folder.title).join(' / ') }))];
   const errorMessage = error && <div role="alert" className="folder-error">{error}<button type="button" className="ui-button" onClick={() => { void refresh().then(() => { setError(''); return onChanged?.(); }).catch(error => setError(error.message)); }}>{t('folder.reload')}</button></div>;
   return <section aria-label={t('folder.folders')}>
-    <div className="folder-tree-heading"><h4>{t('folder.folders')}</h4>{writable && <button type="button" className="ui-icon-button" disabled={busy} aria-label={t('folder.create')} onClick={() => open('create', selected || '')}><FolderPlus size={16} /></button>}</div>
+    <div className="folder-tree-heading"><h4>{t('folder.folders')}</h4>{writable && <div className="folder-heading-actions">{onToggleReorder && <ReorderToggle active={reorder} onToggle={onToggleReorder} disabled={busy} />}<button type="button" className="ui-icon-button" disabled={busy} aria-label={t('folder.create')} onClick={() => open('create', selected || '')}><FolderPlus size={16} /></button></div>}</div>
     {!dialog && errorMessage}
     <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={({ active }) => setDragging(String(active.id))} onDragCancel={() => setDragging(undefined)} onDragEnd={({ active, over }) => {
       setDragging(undefined); if (!over || disabled || !reorder) return;
@@ -87,8 +94,8 @@ export function FolderTree({ reorder = false, folders, notebookId, selected, onS
       const command = folderDropCommand(notebookId, String(active.id), data?.path || '', data?.position || 'inside', list);
       if (command) void mutate(command);
     }}>
-      <DropZone path="" position="inside" disabled={disabled || !reorder}><button type="button" className={`folder-tree-root ${selected === null ? 'is-selected' : ''}`} aria-pressed={selected === null} onClick={() => onSelect(null)}>{t('folder.allFolders')}</button></DropZone>
-      {list.map(folder => <TreeItem reorder={reorder} key={folder.path} folder={folder} disabled={disabled} selected={selected === folder.path} onSelect={() => onSelect(folder.path)} onManage={() => open('manage', folder.path)} />)}
+      <DropZone path="" position="inside" disabled={disabled || !reorder}><button type="button" className={`folder-tree-root ${isSelected(null) ? 'is-selected' : ''}`} aria-pressed={isSelected(null)} onClick={() => selectFolder(null)}>{t('folder.allFolders')}</button></DropZone>
+      {list.map(folder => <TreeItem reorder={reorder} key={folder.path} folder={folder} disabled={disabled} selected={isSelected(folder.path)} onSelect={() => selectFolder(folder.path)} onManage={() => open('manage', folder.path)} />)}
       <DragOverlay>{dragging && <div className="screen-drag-overlay"><Folder size={16} />{list.find(folder => folder.path === dragging)?.title}</div>}</DragOverlay>
     </DndContext>
     {dialog && <WorkspaceDialog title={dialog.kind === 'manage' ? target?.title || dialog.path : t(`folder.${dialog.kind}`)} onClose={() => { if (!busy) setDialog(undefined); }}>
