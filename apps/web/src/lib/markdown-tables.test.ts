@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findMarkdownTables, serializeMarkdownTable } from './markdown-tables.js';
+import { findMarkdownTables, serializeMarkdownTable, tableCellEditorText } from './markdown-tables.js';
 
 describe('Markdown table editing', () => {
   it('finds document tables and preserves their source boundaries', () => {
@@ -35,5 +35,13 @@ describe('Markdown table editing', () => {
     const [table] = findMarkdownTables(text);
     expect(table.alignments).toEqual(['center', 'right']);
     expect(serializeMarkdownTable(table, '\r\n')).toBe(text);
+  });
+  it('round trips multiline cell text through Markdown line breaks', () => {
+    const text = serializeMarkdownTable({ rows: [['A'], ['First line\nSecond | line']], alignments: ['none'] });
+    expect(text).toContain('First line<br>Second \\| line');
+    expect(findMarkdownTables(text)[0].rows).toHaveLength(2);
+    expect(tableCellEditorText(findMarkdownTables(text)[0].rows[1][0])).toBe('First line\nSecond \\| line');
+    expect(tableCellEditorText('one<BR />two<br/>three')).toBe('one\ntwo\nthree');
+    expect(tableCellEditorText('`<br>` and \\<br> and ``code `<br>` text``')).toBe('`<br>` and \\<br> and ``code `<br>` text``');
   });
 });
