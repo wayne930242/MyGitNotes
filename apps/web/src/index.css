@@ -277,6 +277,45 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   word-break: normal;
 }
 
+[data-table-width="fit"] .markdown-table-scroll table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+[data-table-width="fit"] .markdown-table-scroll th,
+[data-table-width="fit"] .markdown-table-scroll td {
+  min-width: 0;
+  max-width: none;
+  overflow-wrap: anywhere;
+  padding: 0.5rem 0.3rem;
+}
+[data-table-width="fit"] .markdown-table-scroll pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.markdown-table-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.75rem; }
+.markdown-table-toolbar { padding: 0.35rem 0.75rem; border-bottom: 1px solid var(--color-border); flex-shrink: 0; }
+.markdown-table-toolbar > select { max-width: 14rem; min-width: 0; }
+.markdown-table-actions button, .markdown-table-dialog button, .markdown-table-actions select, .markdown-table-dialog select {
+  padding: 0.3rem 0.5rem; border: 1px solid var(--color-border); border-radius: 0.375rem; background: var(--color-bg); color: var(--color-text);
+}
+.markdown-table-actions button:hover, .markdown-table-dialog button:hover { border-color: var(--color-primary); }
+.markdown-table-actions button:disabled, .markdown-table-dialog button:disabled { opacity: 0.4; cursor: default; }
+.markdown-table-dialog { width: min(64rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); border: 1px solid var(--color-border); border-radius: 0.75rem; background: var(--color-bg); color: var(--color-text); }
+.markdown-table-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.markdown-table-grid { overflow: auto; max-height: 50dvh; }
+.markdown-table-grid table { border-collapse: collapse; width: 100%; }
+.markdown-table-grid td { border: 1px solid var(--color-border); min-width: 10rem; }
+.markdown-table-grid td[data-selected="true"] { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+.markdown-table-grid input { width: 100%; min-width: 10rem; padding: 0.5rem; background: transparent; color: inherit; font-size: 1rem; }
+@media (max-width: 640px) {
+  .markdown-table-toolbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .markdown-table-toolbar > select { max-width: 100%; }
+  .markdown-table-toolbar > label { margin-left: 0; }
+  .markdown-table-toolbar > label span { display: none; }
+  .markdown-table-toolbar > label select { width: 100%; }
+}
+
 .prose-custom th, .prose-custom td {
   border: 1px solid #e2e8f0;
   padding: 0.5rem 0.75rem;
@@ -287,6 +326,10 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   background-color: #f8fafc;
   font-weight: 600;
 }
+
+.prose-custom [align="left"] { text-align: left; }
+.prose-custom [align="center"] { text-align: center; }
+.prose-custom [align="right"] { text-align: right; }
 
 .prose-custom img {
   max-width: 100%;

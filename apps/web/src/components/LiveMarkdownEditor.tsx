@@ -13,6 +13,8 @@ import { useLocation } from 'react-router-dom';
 import { useTranslation } from '../lib/i18n/index.js';
 
 export interface LiveMarkdownHandle {
+  getSelection: () => number;
+  replaceRange: (from: number, to: number, text: string) => void;
   insert: (text: string) => void;
   revealRange: (from: number, to: number, focus?: boolean) => void;
   goToLine: (line: number, options?: { focus?: boolean; smooth?: boolean }) => void;
@@ -240,6 +242,8 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
   const callback = useRef(onChange); callback.current = onChange;
   const permission = useRef(new Compartment());
   useImperativeHandle(ref, () => ({
+    getSelection() { return editor.current?.state.selection.main.head ?? content.length; },
+    replaceRange(from, to, text) { const view = editor.current; if (!view || view.state.readOnly) return; view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from }, userEvent: 'input.table' }); },
     insert(text) {const view=editor.current;if(!view||view.state.readOnly)return;view.dispatch(view.state.replaceSelection(text),{scrollIntoView:true,userEvent:'input'});view.focus();},
     revealRange(from, to, focus = false) {
       const view = editor.current; if (!view) return;
