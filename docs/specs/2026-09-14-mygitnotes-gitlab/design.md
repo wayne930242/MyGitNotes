@@ -15,3 +15,7 @@ OAuth 由部署來源決定端點。GitLab refresh token 存於加密 credential
 ## Redis 資料前綴
 
 SessionStore 建立時固定資料前綴，涵蓋 encrypted records、grant indexes 與 distributed refresh locks。預設 `gh-notes` 保持相容；測試部署使用 `gh-notes:mygitnotes-gitlab-test`。同一 Redis 上使用不同加密金鑰時，前綴避免一個部署將另一部署的紀錄誤判為損壞並清除。前綴於首次登入前設定，既有登入資料不會自動搬移。
+
+## 架構圖
+
+依使用者回饋，以 imagegen 編輯原有中英文 PNG，保留插畫、構圖、配色與箭頭，只更新 MyGitNotes 品牌和 GitHub／GitLab 平台選項。README 使用編輯後的 PNG；原始 PNG 保留作為編輯來源。[實際提示詞](architecture-image-prompts.md)。

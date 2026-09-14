@@ -32,9 +32,7 @@ The same workspace can therefore stay fully local, travel through Git, or be sec
 
 ## Design logic
 
-![MyGitNotes architecture](docs/assets/mygitnotes-architecture-en.svg)
-
-[Mermaid source](docs/assets/mygitnotes-architecture-en.mmd)
+![MyGitNotes architecture](docs/assets/mygitnotes-architecture-en.png)
 
 The boundaries are intentional:
 

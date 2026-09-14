@@ -32,9 +32,7 @@ MyGitNotes 把一個 Git 儲存庫變成集中處理筆記、文件、素材與 
 
 ## 設計邏輯
 
-![MyGitNotes architecture](docs/assets/mygitnotes-architecture-zh-TW.svg)
-
-[Mermaid source](docs/assets/mygitnotes-architecture-zh-TW.mmd)
+![MyGitNotes architecture](docs/assets/mygitnotes-architecture-zh-TW.png)
 
 各層的責任刻意分開：
 
