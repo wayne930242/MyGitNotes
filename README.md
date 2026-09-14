@@ -8,54 +8,6 @@ Your Markdown, repository, deployment, commit history, and agent access remain u
 
 [Live Demo](https://my-gh-core.vercel.app) · [Example Repository](https://github.com/wayne930242/MyGitNotes/tree/main)
 
-## What it is
-
-MyGitNotes turns a Git repository into a focused workspace for notes, documents, assets, and AI agents. You work through a purpose-built note UI while Markdown files, Git history, and repository permissions remain the source of truth.
-
-It runs in two modes:
-
-- **Local:** the UI reads and writes your local repository directly.
-- **Remote:** Docker / Docker Compose or Vercel serves the UI and an HTTP MCP endpoint; GitHub or GitLab stores the files and commit history.
-
-The same workspace can stay fully local, travel through Git, or be accessed from a browser and MCP clients. Choose a self-hosted Node.js container or a serverless deployment to suit your infrastructure.
-
-## Core features
-
-- **High-density note UI:** List, Card, and Kanban views; full-text search; tags and statuses; nested folders; folder index cards; Markdown editing with live preview; asset management; responsive desktop and mobile layouts.
-- **Flashcard learning:** turn Markdown notes into question-and-answer cards for vocabulary or any subject. Reveal multi-page answers, rate recall, and review by due date. Configure status stages and intervals per lane; switch to free reading, postpone a card, or undo the latest action.
-- **Screen:** arrange notes, folders, images, and YouTube videos into reading lanes across notebooks. Pin and reorder content, or build dynamic lanes from tags and folders with independent sorting and card sizes.
-- **Knowledge graph:** explore links between notes on an interactive graph. Zoom, pan, drag nodes, inspect connected notes, and open a note from the graph; color nodes by folder, notebook, or status.
-- **Pure Markdown:** notes remain ordinary `.md` files with optional YAML frontmatter. Existing Markdown and unknown metadata survive round trips.
-- **Git-native workflow:** local edits save to disk; selected changes are committed explicitly. Remote writes use revision checks and non-forced commits to reject stale updates.
-- **Local and remote sources:** open a local checkout or a configured GitHub or GitLab repository through the same interface.
-- **Local and hosted MCP:** connect agents through local stdio or self-hosted / Vercel-hosted Streamable HTTP to list, read, search, create, edit, move, and commit workspace content.
-- **Controlled agent access:** create named read-only or write grants, copy the connection URL once, and revoke each grant at any time.
-- **Safe product updates:** product code lives on `core`; personal workspace content lives on `main`. Core updates preserve `notes/**` and workspace-owned Agent settings.
-
-## Feature tour
-
-The screenshots below show a local Docker deployment with demonstration notes.
-
-### Flashcards and reading mode
-
-Start learning from any Screen lane. The first Markdown page is the question and the remaining pages are the answer; separate pages with a standalone `---` surrounded by blank lines. A note without page breaks uses its title as the question and its body as the answer.
-
-Reveal the answer, then choose **Again**, **Hard**, **Good**, or **Easy**. Lane settings map each stage to a note status and an interval; successful ratings save the status, due date, and study history together. Filter all, due, future, or suspended cards, switch to reading mode, and use touch gestures on mobile. Screen layouts and learning progress live in workspace YAML files and travel with Git.
-
-![Flashcard learning with a revealed vocabulary answer](docs/assets/feature-study.png)
-
-### Screen: a reading desk across notebooks
-
-Keep related notes and resources side by side. Custom lanes hold pinned content; dynamic lanes gather content by tag or folder. Choose thumbnail, small, or medium cards, sort each lane independently, and enter its dedicated learning page. Images keep their proportions, and YouTube cards load the embedded player on demand.
-
-![Screen with reading and learning lanes](docs/assets/feature-screen.png)
-
-### Knowledge graph
-
-Open **Graph** to see how Markdown links connect your notes. Explore the canvas with zoom, pan, and node dragging, highlight neighboring notes, and open a linked note for reading or editing. On mobile, choose Graph from the Notes view selector. Search notes, filter by tag, choose colors by folder, notebook, or status, and navigate with the minimap. The graph is derived from your notes and links.
-
-![Interactive note relationship graph](docs/assets/feature-graph.png)
-
 ## Design logic
 
 ![MyGitNotes architecture](docs/assets/mygitnotes-architecture-en.png)
@@ -78,6 +30,17 @@ The market usually treats these as separate product models:
 Even products that support both models often present them as alternatives. Craft, for example, supports local [External Locations](https://support.craft.do/en/account-and-subscription/storage-and-recovery/external-locations), but sharing and collaboration are unavailable there.
 
 MyGitNotes connects both interfaces to the same Markdown and Git workspace. The local UI and local agents edit the files directly; Git syncs them to GitHub or GitLab; a self-hosted container or Vercel exposes the same repository through a high-density remote note UI and HTTP MCP. There is no second cloud copy to export, import, or reconcile.
+
+## What it is
+
+MyGitNotes turns a Git repository into a focused workspace for notes, documents, assets, and AI agents. You work through a purpose-built note UI while Markdown files, Git history, and repository permissions remain the source of truth.
+
+It runs in two modes:
+
+- **Local:** the UI reads and writes your local repository directly.
+- **Remote:** Docker / Docker Compose or Vercel serves the UI and an HTTP MCP endpoint; GitHub or GitLab stores the files and commit history.
+
+The same workspace can stay fully local, travel through Git, or be accessed from a browser and MCP clients. Choose a self-hosted Node.js container or a serverless deployment to suit your infrastructure.
 
 ## Repository model
 
@@ -230,6 +193,42 @@ Authenticated writes require push permission on `main`. GitLab batches all chang
 The product is now **MyGitNotes**. Existing `.github-notes.yaml`, Screen/Study sidecars, `@github-notes/*` packages, GitHub OAuth callbacks and MCP grants remain compatible. New `MYGITNOTES_*` source settings take precedence over corresponding `GITHUB_NOTES_*` settings. `mygitnotes.server.yaml` is the new server configuration filename; `github-notes.server.yaml` remains supported. The canonical repository is `wayne930242/MyGitNotes`; deployment URLs are unchanged. Update configured repository paths directly after a rename. MCP grants bound to a previous repository path require a new grant.
 
 See [GitLab OAuth](https://docs.gitlab.com/api/oauth2/) and [commit actions](https://docs.gitlab.com/api/commits/).
+
+## Core features
+
+- **High-density note UI:** List, Card, and Kanban views; full-text search; tags and statuses; nested folders; folder index cards; Markdown editing with live preview; asset management; responsive desktop and mobile layouts.
+- **Six themes:** choose from three light and three dark palettes, including paper tones, forest greens, and GitHub Dark. Your selection is saved in the browser.
+- **Flashcard learning:** turn Markdown notes into question-and-answer cards for vocabulary or any subject. Reveal multi-page answers, rate recall, and review by due date. Configure status stages and intervals per lane; switch to free reading, postpone a card, or undo the latest action.
+- **Screen:** arrange notes, folders, images, and YouTube videos into reading lanes across notebooks. Pin and reorder content, or build dynamic lanes from tags and folders with independent sorting and card sizes.
+- **Knowledge graph:** explore links between notes on an interactive graph. Zoom, pan, drag nodes, inspect connected notes, and open a note from the graph; color nodes by folder, notebook, or status.
+- **Pure Markdown:** notes remain ordinary `.md` files with optional YAML frontmatter. Existing Markdown and unknown metadata survive round trips.
+- **Git-native workflow:** local edits save to disk; selected changes are committed explicitly. Remote writes use revision checks and non-forced commits to reject stale updates.
+- **Local and remote sources:** open a local checkout or a configured GitHub or GitLab repository through the same interface.
+- **Local and hosted MCP:** connect agents through local stdio or self-hosted / Vercel-hosted Streamable HTTP to list, read, search, create, edit, move, and commit workspace content.
+- **Controlled agent access:** create named read-only or write grants, copy the connection URL once, and revoke each grant at any time.
+- **Safe product updates:** product code lives on `core`; personal workspace content lives on `main`. Core updates preserve `notes/**` and workspace-owned Agent settings.
+
+## Feature tour
+
+### Flashcards and reading mode
+
+Start learning from any Screen lane. The first Markdown page is the question and the remaining pages are the answer; separate pages with a standalone `---` surrounded by blank lines. A note without page breaks uses its title as the question and its body as the answer.
+
+Reveal the answer, then choose **Again**, **Hard**, **Good**, or **Easy**. Lane settings map each stage to a note status and an interval; successful ratings save the status, due date, and study history together. Filter all, due, future, or suspended cards, switch to reading mode, and use touch gestures on mobile. Screen layouts and learning progress live in workspace YAML files and travel with Git.
+
+![Flashcard learning with a revealed vocabulary answer](docs/assets/feature-study.png)
+
+### Screen: a reading desk across notebooks
+
+Keep related notes and resources side by side. Custom lanes hold pinned content; dynamic lanes gather content by tag or folder. Choose thumbnail, small, or medium cards, sort each lane independently, and enter its dedicated learning page. Images keep their proportions, and YouTube cards load the embedded player on demand.
+
+![Screen with reading and learning lanes](docs/assets/feature-screen.png)
+
+### Knowledge graph
+
+Open **Graph** to see how Markdown links connect your notes. Explore the canvas with zoom, pan, and node dragging, highlight neighboring notes, and open a linked note for reading or editing. On mobile, choose Graph from the Notes view selector. Search notes, filter by tag, choose colors by folder, notebook, or status, and navigate with the minimap. The graph is derived from your notes and links.
+
+![Interactive note relationship graph](docs/assets/feature-graph.png)
 
 ## Documentation
 
