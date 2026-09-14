@@ -8,7 +8,9 @@
   "exports": {
     ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
     "./note-status": { "types": "./dist/note-status.d.ts", "import": "./dist/note-status.js" },
-    "./screen-page": { "types": "./dist/screen-page.d.ts", "import": "./dist/screen-page.js" }
+    "./screen-page": { "types": "./dist/screen-page.d.ts", "import": "./dist/screen-page.js" },
+    "./note-graph": { "types": "./dist/note-graph.d.ts", "import": "./dist/note-graph.js" },
+    "./workspace-links": { "types": "./dist/workspace-links.d.ts", "import": "./dist/workspace-links.js" }
   },
   "scripts": {
     "build": "tsc",

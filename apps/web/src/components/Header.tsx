@@ -1,6 +1,6 @@
 import { ScreenIcon } from './ScreenIcon.js';
 import React, { useEffect } from 'react';
-import { BookOpen, Bot, Image as ImageIcon, Keyboard, Plus, Settings } from 'lucide-react';
+import { BookOpen, Bot, Image as ImageIcon, Keyboard, Plus, Settings, Network } from 'lucide-react';
 import { useTranslation } from '../lib/i18n/index.js';
 import type { WorkspaceTab } from '../lib/routes.js';
 import type { NotebookConfig } from '../lib/types.js';
@@ -33,6 +33,7 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
     { id: 'agent', label: t('nav.agent'), icon: Bot },
     { id: 'assets', label: t('nav.assets'), icon: ImageIcon },
     { id: 'screen', label: t('nav.screen'), icon: ScreenIcon },
+    { id: 'graph', label: t('nav.graph'), icon: Network, desktopOnly: true },
   ] as const;
   return <header className="workspace-header">
     <div className="header-layout">
@@ -45,12 +46,13 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
         </div>
       </div>
       <nav aria-label="Main navigation" className="header-nav">
-        {items.map(({id, label, icon: Icon}, index) => <React.Fragment key={id}>
+        {items.map(({id, label, icon: Icon, ...item}, index) => <React.Fragment key={id}>
           {index === 2 && <button type="button" className="mobile-nav-create" aria-label={t('header.newNote')}
             disabled={createNoteDisabled || navigationDisabled} onClick={onCreateNote}>
             <Plus aria-hidden="true" /><span>{t('header.newNote')}</span>
           </button>}
           <button type="button" disabled={navigationDisabled} onClick={() => setActiveTab(id)} aria-label={label}
+            className={'desktopOnly' in item && item.desktopOnly ? 'desktop-only' : undefined}
             aria-current={activeTab === id ? 'page' : undefined}>
             <Icon aria-hidden="true" /><span>{label}</span>
           </button>
