@@ -126,7 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        <a className="sidebar-credit" href="https://github.com/wayne930242/github-notes"
+        <a className="sidebar-credit" href="https://github.com/wayne930242/MyGitNotes"
           target="_blank" rel="noopener noreferrer" title="MyGitNotes by wayne930242">
           powered by <span>MyGitNotes</span>
         </a>

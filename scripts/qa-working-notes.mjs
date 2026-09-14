@@ -26,7 +26,7 @@ write('notes/example/archived.md','---\nstatus: archived\n---\n# Archived Note\n
 write('notes/example/hidden.md','---\nstatus: working\nhiden: true\n---\n# Hidden Note\n');
 write('notes/example/visible-archive.md','---\nstatus: archived\nhiden: false\n---\n# Visible Archive\n');
 git('init','-b','main');git('config','user.name','Browser QA');git('config','user.email','qa@example.com');git('add','.');git('commit','-m','fixture');
-process.env.GITHUB_NOTES_SOURCE='local';process.env.GITHUB_NOTES_LOCAL_PATH=root;delete process.env.VERCEL;delete process.env.APP_URL;
+process.env.MYGITNOTES_SOURCE='local';process.env.MYGITNOTES_LOCAL_PATH=root;delete process.env.VERCEL;delete process.env.APP_URL;
 const {createApp}=await import(`${product}/apps/local-server/dist/app.js`);
 const server=createServer(createApp(product));await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${server.address().port}`;

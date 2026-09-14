@@ -17,7 +17,7 @@ write('notes/example/b.md', '# B\n\nOriginal B\n');
 git('init', '-b', 'main'); git('config', 'user.name', 'QA'); git('config', 'user.email', 'qa@example.com'); git('add', '.'); git('commit', '-m', 'fixture');
 write('notes/example/a.md', '# A\n\nUnsaved A\n');
 write('notes/example/b.md', '# B\n\nUnrelated B\n');
-process.env.GITHUB_NOTES_SOURCE = 'local'; process.env.GITHUB_NOTES_LOCAL_PATH = root; delete process.env.VERCEL; delete process.env.APP_URL;
+process.env.MYGITNOTES_SOURCE = 'local'; process.env.MYGITNOTES_LOCAL_PATH = root; delete process.env.VERCEL; delete process.env.APP_URL;
 const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
 const server = createServer(createApp(product)); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;

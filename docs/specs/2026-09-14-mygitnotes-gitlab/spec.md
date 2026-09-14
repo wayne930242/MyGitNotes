@@ -14,8 +14,12 @@ Approved from: 本對話逐項確認完整功能、兩種 GitLab 站台、單一
 
 Reality anchor：公開來源介面與 HTTP/MCP 路由的整合測試，完整 pnpm test / pnpm build，瀏覽器品牌與登入入口檢查。真實 GitLab OAuth／寫入以可用測試站台另行驗證；沒有實際執行的項目記 unknown。
 
-標準：[產品指引](../../agent/product/index.md)、[安全邊界](../../agent/security/index.md)。本次沿用既有遠端 URL、使用者資料檔名與部署服務。
+標準：[產品指引](../../agent/product/index.md)、[安全邊界](../../agent/security/index.md)。正式 repo 為 `wayne930242/MyGitNotes`；使用者資料檔名與部署服務沿用。
 
 ## 共用 Redis 部署
 
 新部署可設定 `MYGITNOTES_SESSION_NAMESPACE`，將登入狀態、共享憑證、MCP 授權索引與 refresh lock 存於獨立前綴。未設定的既有部署持續讀取原有鍵值。支援 Vercel 原生 Upstash 整合的 `KV_REST_API_URL` 與 `KV_REST_API_TOKEN`；明確設定的 `UPSTASH_REDIS_REST_*` 優先。資料前綴隔離應用程式的讀寫範圍，Redis 存取憑證仍具有整個資料庫的權限。
+
+## Repo 與環境變數更名契約
+
+產品 origin 與 trpg-notes upstream 使用 MyGitNotes 新 URL。Vercel 與設定範例使用 MYGITNOTES_*；程式仍讀取 GITHUB_NOTES_* fallback，新值優先。--local 明確選擇本機來源。來源 repo 路徑直接更新；綁定舊路徑的 MCP 授權由使用者重新授權。既有部署網址與筆記內容保留。

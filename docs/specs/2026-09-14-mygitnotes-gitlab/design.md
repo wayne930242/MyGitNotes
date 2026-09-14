@@ -23,3 +23,7 @@ SessionStore 建立時固定資料前綴，涵蓋 encrypted records、grant inde
 ## 登入入口的載入狀態
 
 AuthControls 與 MCP 授權設定皆等待 session 回傳 provider 後，再顯示對應平台的登入連結。實站複查發現 MCP 設定將初始空 session 視為未登入 GitHub；沿用標頭已有的 provider 判斷，修正短暫錯誤入口。初始元件渲染可重現修正前的連結，修正後該檢查通過。
+
+## 直接更新 repo 與環境設定
+
+以使用者提供的新 repo URL 更新 Git remotes 與產品連結。來源設定集中於 loadSourceConfig，保留新舊環境變數的優先序。Vercel 匯入工具讀取舊值時以新鍵名寫入，QA 與 --local 也寫入新名稱。既有雲端環境先建立新鍵、確認後移除舊鍵，再隨發布套用。GitHub 來源更新為新 repo 路徑，既有 MCP source identity 若包含舊路徑則需重新建立授權。

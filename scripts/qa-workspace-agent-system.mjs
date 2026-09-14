@@ -32,7 +32,7 @@ write('.claude/settings.local.json', '{"secret":"fixture-only"}');
 write('.codex/agents/reviewer.toml', 'description = "Reviewer"\n');
 write('.codex/auth.json', '{"token":"fixture-only"}');
 git('init','-b','main'); git('config','user.name','QA'); git('config','user.email','qa@example.com'); git('add','.'); git('commit','-m','fixture');
-process.env.GITHUB_NOTES_SOURCE='local'; process.env.GITHUB_NOTES_LOCAL_PATH=root; delete process.env.VERCEL; delete process.env.APP_URL;
+process.env.MYGITNOTES_SOURCE='local'; process.env.MYGITNOTES_LOCAL_PATH=root; delete process.env.VERCEL; delete process.env.APP_URL;
 const {createApp} = await import(`${product}/apps/local-server/dist/app.js`);
 const server = createServer(createApp(product)); await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
