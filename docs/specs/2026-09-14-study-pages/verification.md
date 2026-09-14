@@ -1,6 +1,6 @@
 # 驗證
 
-2026-09-14：產品隔離 checkout `github-notes-study`，基底 core `ff9eb33`，本次將熟悉程度先收起、揭示後向上展開，主要按鈕保持底部原位。
+2026-09-14：產品隔離 checkout `github-notes-study`，基底 core `1c47a82`，本次統一預設收合的進階學習設定，並依來源筆記本產生任意階段數的預設策略。
 
 | Requirement | Evidence | Result |
 |---|---|---|
@@ -24,7 +24,7 @@
 
 | 18. 整張摘要卡開啟 | qa-study 點擊筆記卡內容開啟編輯器並返回；開啟圖示已移除；qa-screen 通過既有捲動與拖曳鍵盤排序 | pass |
 
-本機自動化：`pnpm test` 通過 55 個測試檔、288 項測試。`pnpm build` 通過，保留既有的大型 bundle 提示。
+本機自動化：`pnpm test` 通過 55 個測試檔、296 項測試。`pnpm build` 通過，保留既有的大型 bundle 提示。
 
 瀏覽器：`node scripts/qa-study.mjs`、`node scripts/qa-workspace-toolbar.mjs` 與 `node scripts/qa-screen.mjs` 通過。後者驗證既有一般泳道捲動、排序、來源編輯、拖曳排序與資源載入重試。截圖位於忽略版控的 `artifacts/qa/`，已檢視手機學習與全螢幕、編輯器分頁及配置視窗畫面。
 
@@ -43,3 +43,10 @@ Reflexive：沿用既有頁首插槽與共用 footer，這次無新增流程摩�
 | Requirement | Evidence | Result |
 |---|---|---|
 | 熟悉程度展開動畫 | qa-study 在真實瀏覽器以 requestAnimationFrame 取樣，觀察高度從 0 經中間值展開，主要列每幀位置偏差小於 0.5px；減少動態效果設定時無過渡並直接呈現 | pass |
+
+| Requirement | Evidence | Result |
+|---|---|---|
+| 20. 共用收合的進階設定 | qa-workspace-toolbar 從一般編輯儲存學習設定，從學習頁取消／套用；每次開啟均收合，展開不寫入，明確恢復預設可保存。320px 實際瀏覽器確認展開及欄位寬度 | pass |
+| 21. YAML 預設策略 | 核心測試涵蓋 1、2、3、6 階與空設定、去重及 archived 排除；HTTP 證實只使用來源筆記本狀態且 intervalDays 為 3，僅 archived 時拒絕寫入。瀏覽器預覽 1／2／3／未設定 statuses 後取消，Screen YAML 保持相同 | pass |
+
+Reflexive：移除普通／學習編輯表單分流，將預設階段產生集中在 core，避免前端預覽與後端套用各自推算。

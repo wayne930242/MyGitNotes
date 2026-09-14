@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { DEFAULT_NOTE_STATUSES, resolveNoteStatuses } from './note-status.js';
+import type { ScreenRow } from './screen-page.js';
+import type { NotebookConfig } from './types.js';
 
 export const StudyProgressionSchema = z.object({
   stages: z.array(z.object({ status: z.string().trim().min(1).max(200), intervalDays: z.number().finite().min(1 / 1440).max(3650) }).strict()).min(1).max(20),
@@ -15,9 +18,19 @@ export function nextStudyStage(progression: StudyProgression, status: string | u
   return plan.stages[Math.min(index, plan.stages.length - 1)];
 }
 
-export function defaultStudyProgression(statuses: string[]): StudyProgression {
-  const values = [...new Set(statuses)].slice(0, 20);
-  return { stages: (values.length ? values : ['inbox', 'working', 'done', 'archived']).map((status, index) => ({
+/** Use only notebooks represented by the lane; preserve their configured order. */
+export function studyLaneStatuses(lane: ScreenRow, notebooks: Pick<NotebookConfig, 'id' | 'statuses'>[]): string[] {
+  const ids = lane.kind === 'dynamic' ? lane.source.notebookId ? [lane.source.notebookId] : undefined
+    : lane.items.filter(item => item.kind === 'note' || item.kind === 'folder').map(item => item.notebookId);
+  const included = ids?.length ? notebooks.filter(notebook => ids.includes(notebook.id)) : notebooks;
+  return [...new Set(included.flatMap(notebook => resolveNoteStatuses(notebook)))];
+}
+
+/** Defaults are editable starting intervals, with no implicit archival transition. */
+export function defaultStudyProgression(statuses: string[]): StudyProgression | undefined {
+  const values = [...new Set(statuses.length ? statuses : DEFAULT_NOTE_STATUSES)].filter(status => status !== 'archived').slice(0, 20);
+  if (!values.length) return undefined;
+  return { stages: values.map((status, index) => ({
     status, intervalDays: [1, 3, 7, 14, 30][Math.min(index, 4)],
   })), easy: 'two' };
 }

@@ -1,8 +1,7 @@
 import { Button } from './Button.js';
 import { useState } from 'react';
 import { parseYouTubeUrl, type ScreenItem, type ScreenRow } from '@github-notes/core/screen-page';
-import { defaultStudyProgression, StudyProgressionSchema } from '@github-notes/core/study-stages';
-import { resolveNoteStatuses } from '@github-notes/core/note-status';
+import { defaultStudyProgression, studyLaneStatuses, StudyProgressionSchema, type StudyProgression } from '@github-notes/core/study-stages';
 import { StudyLaneSettings } from './StudyLane.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { Select } from './Select.js';
@@ -16,8 +15,8 @@ type RowDialogContent = Pick<ScreenContentProps, 'notebooks' | 'notes' | 'assets
   selectedNotebookId: string;
 };
 
-function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId, row, studySettings = false, disabled, onApply, onClose, onRemove }: RowDialogContent & {
-  row?: ScreenRow; studySettings?: boolean;
+function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId, row, disabled, onApply, onClose, onRemove }: RowDialogContent & {
+  row?: ScreenRow;
   disabled?: boolean;
   onApply: (row: ScreenRow) => void;
   onClose: () => void;
@@ -31,12 +30,16 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
   const [tagNotebookId, setTagNotebook] = useState(source?.kind === 'tag' ? source.notebookId || '' : source?.notebookId || selectedNotebookId);
   const [folder, setFolder] = useState(source?.kind === 'folder' ? source.path : ''), [recursive, setRecursive] = useState(source?.kind === 'folder' ? source.recursive : true);
   const [view, setView] = useState<ScreenRow['view']>(row?.view || 'small');
-  const [progression, setProgression] = useState(() => row?.progression || defaultStudyProgression([...new Set(notebooks.flatMap(notebook => resolveNoteStatuses(notebook)))]));
+  const [customProgression, setProgression] = useState<StudyProgression | undefined>(row?.progression);
+  const [studyChanged, setStudyChanged] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [studyFilter, setStudyFilter] = useState<NonNullable<ScreenRow['study']>['filter']>(row?.study?.filter || 'all');
   const [stageError, setStageError] = useState(false);
-  const studying = studySettings;
   const [confirmRemove, setConfirmRemove] = useState(false);
   const nb = notebooks.find(nb => nb.id === notebookId);
+  const draftRow: ScreenRow = kind === 'custom' ? { id: row?.id || 'draft', name: name || 'draft', view, kind: 'custom', items: row?.kind === 'custom' ? row.items : [] }
+    : { id: row?.id || 'draft', name: name || 'draft', view, kind: 'dynamic', source: kind === 'tag' ? { kind: 'tag', tag, ...(tagNotebookId ? { notebookId: tagNotebookId } : {}) } : { kind: 'folder', notebookId, path: folder || nb?.root || '', recursive } };
+  const progression = customProgression || defaultStudyProgression(studyLaneStatuses(draftRow, notebooks)) || { stages: [], easy: 'two' as const };
   const tags = [...new Set(notes.filter(note => !tagNotebookId || note.notebookId === tagNotebookId).flatMap(note => note.tags))].sort();
   const options = !row ? [{ value: 'custom', label: t('screen.custom') }, { value: 'tag', label: t('screen.tagRow') }, { value: 'folder', label: t('screen.folderRow') }]
     : row.kind === 'dynamic' ? [{ value: 'tag', label: t('screen.tagRow') }, { value: 'folder', label: t('screen.folderRow') }]
@@ -46,8 +49,8 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
       event.preventDefault();
       if (disabled || row && !name.trim()) return;
       const result = StudyProgressionSchema.safeParse(progression);
-      if (studying && !result.success) { setStageError(true); return; }
-      const base = { id: row?.id || crypto.randomUUID(), name: name.trim() || t(kind === 'custom' ? 'screen.custom' : 'screen.dynamic'), view, ...(studying ? { study: { ...row?.study, filter: studyFilter, dueFirst: true } } : row?.study ? { study: row.study } : {}), ...(studying && result.success ? { progression: result.data } : row?.progression ? { progression: row.progression } : {}) };
+      if (studyChanged && !result.success) { setStageError(true); setAdvancedOpen(true); return; }
+      const base = { id: row?.id || crypto.randomUUID(), name: name.trim() || t(kind === 'custom' ? 'screen.custom' : 'screen.dynamic'), view, ...(studyChanged ? { study: { ...row?.study, filter: studyFilter, dueFirst: true } } : row?.study ? { study: row.study } : {}), ...(studyChanged && result.success ? { progression: result.data } : row?.progression ? { progression: row.progression } : {}) };
       const sort = row?.kind === 'dynamic' && row.sort ? { sort: row.sort } : {};
       onApply(kind === 'custom'
         ? { ...base, kind: 'custom', items: row?.kind === 'custom' ? row.items : [] }
@@ -65,9 +68,18 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
       {kind === 'folder' && <><label>{t('folder.folders')}<Select value={folder || nb?.root || ''} onValueChange={setFolder} options={screenFolderOptions(nb, folders, assets).map(folder => ({ value: folder.path, label: folder.title }))} /></label>
         <label className="screen-checkbox"><input type="checkbox" checked={recursive} onChange={e => setRecursive(e.target.checked)} />{t('screen.recursive')}</label></>}
       <label>{t('screen.view')}<Select aria-label={t('screen.view')} value={view} disabled={disabled} onValueChange={value => setView(value as ScreenRow['view'])} options={(['thumbnail', 'small', 'medium'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} /></label>
-      {studying && <label>{t('study.filter')}<Select aria-label={t('study.filter')} value={studyFilter} disabled={disabled} onValueChange={value => setStudyFilter(value as typeof studyFilter)} options={(['all', 'due', 'future', 'paused'] as const).map(value => ({ value, label: t(`study.filter.${value}`) }))} /></label>}
-      {studying && <StudyLaneSettings progression={progression} disabled={Boolean(disabled)} onChange={value => { setProgression(value); setStageError(false); }} />}
-      {studying && stageError && <p role="alert">{t('study.invalidStages')}</p>}
+      <details className="study-advanced" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}>
+        <summary>{t('study.advanced')}</summary>
+        <div className="study-advanced-content">
+          <p>{t('study.defaultsHint')}</p>
+          {progression.stages.length === 1 && <p className="study-single-stage">{t('study.singleStage')}</p>}
+          {progression.stages.length === 0 && <p>{t('study.configureLane')}</p>}
+          <label>{t('study.filter')}<Select aria-label={t('study.filter')} value={studyFilter} disabled={disabled} onValueChange={value => { setStudyFilter(value as typeof studyFilter); setStudyChanged(true); }} options={(['all', 'due', 'future', 'paused'] as const).map(value => ({ value, label: t(`study.filter.${value}`) }))} /></label>
+          <StudyLaneSettings progression={progression} disabled={Boolean(disabled) || !advancedOpen} onChange={value => { setProgression(value); setStudyChanged(true); setStageError(false); }} />
+          <Button disabled={disabled} onClick={() => { setProgression(undefined); setStudyChanged(true); setStageError(false); }}>{t('study.restoreDefaults')}</Button>
+          {stageError && <p role="alert">{t('study.invalidStages')}</p>}
+        </div>
+      </details>
       {confirmRemove && <p className="screen-dialog-hint">{t('screen.removeRowHint')}</p>}
       <div className="workspace-dialog-actions">
         {onRemove && <Button type="button"  disabled={disabled} onClick={() => { if (!confirmRemove) setConfirmRemove(true); else { onRemove(); onClose(); } }}>{t(confirmRemove ? 'screen.confirmRemoveRow' : 'screen.removeRow')}</Button>}
@@ -82,7 +94,7 @@ export function ScreenAddRow(props: RowDialogContent & { onAdd: (row: ScreenRow)
   return <ScreenRowDialog {...props} onApply={props.onAdd} />;
 }
 
-export function ScreenEditRow(props: RowDialogContent & { row: ScreenRow; studySettings?: boolean; disabled?: boolean; onApply: (row: ScreenRow) => void; onRemove: () => void; onClose: () => void }) {
+export function ScreenEditRow(props: RowDialogContent & { row: ScreenRow; disabled?: boolean; onApply: (row: ScreenRow) => void; onRemove: () => void; onClose: () => void }) {
   return <ScreenRowDialog {...props} />;
 }
 
