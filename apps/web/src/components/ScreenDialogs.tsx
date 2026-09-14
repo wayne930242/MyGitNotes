@@ -36,7 +36,7 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
     <form className="screen-form" onSubmit={event => {
       event.preventDefault();
       if (disabled || row && !name.trim()) return;
-      const base = { id: row?.id || crypto.randomUUID(), name: name.trim() || t(kind === 'custom' ? 'screen.custom' : 'screen.dynamic'), view: row?.view || 'small' as const };
+      const base = { id: row?.id || crypto.randomUUID(), name: name.trim() || t(kind === 'custom' ? 'screen.custom' : 'screen.dynamic'), view: row?.view || 'small' as const, ...(row?.study ? { study: row.study } : {}) };
       const sort = row?.kind === 'dynamic' && row.sort ? { sort: row.sort } : {};
       onApply(kind === 'custom'
         ? { ...base, kind: 'custom', items: row?.kind === 'custom' ? row.items : [] }

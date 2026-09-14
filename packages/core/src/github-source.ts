@@ -1,3 +1,4 @@
+import { STUDY_FILE, STUDY_MAX_BYTES, StudyWorkspaceSchema } from './study.js';
 import path from 'node:path';
 import { assetInfo, assetRoot, assetPath, isAssetPath, decodeAsset } from './assets.js';
 import { parseWorkspaceConfig } from './config.js';
@@ -236,11 +237,15 @@ export class GitHubSource {
     return this.commitChanges([{path:file,content}], expected, 'write', 'agents');
   }
 
+  async saveStudyWorkspace(content: string, expected: string) {
+    return this.commitChanges([{ path: STUDY_FILE, content }], expected, 'save', 'study');
+  }
+
   async saveScreenPage(content: string, expected: string) {
     return this.commitChanges([{ path: SCREEN_PAGE_FILE, content }], expected, 'save', 'screen');
   }
 
-  async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null }[], expected: string, operation: string, scope: 'notes' | 'assets' | 'agents' | 'screen' | 'folders' = 'notes', requestedMessage?: string) {
+  async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null }[], expected: string, operation: string, scope: 'notes' | 'assets' | 'agents' | 'screen' | 'folders' | 'study' = 'notes', requestedMessage?: string) {
     const snapshot = await this.getSnapshot(true);
     if (!this.token || !snapshot.info.permissions?.push || this.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
     if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
@@ -252,9 +257,15 @@ export class GitHubSource {
       const file = change.path;
       const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
       const screenFile = (scope === 'screen' || scope === 'folders') && file === SCREEN_PAGE_FILE;
-      const allowed = scope === 'screen' ? screenFile : screenFile || (scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb &&
+      const studyFile = scope === 'study' && file === STUDY_FILE;
+      const allowed = scope === 'study' ? studyFile : scope === 'screen' ? screenFile : screenFile || (scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb &&
         (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (/\.(md|markdown|txt)$/i.test(file) || path.posix.basename(file) === '_dir.yml')));
       if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
+      if (studyFile) {
+        if (typeof change.content !== 'string' || Buffer.byteLength(change.content) > STUDY_MAX_BYTES) throw new SourceError('Study YAML is required.');
+        try { StudyWorkspaceSchema.parse(parseYaml(change.content, { maxAliasCount: 20 })); }
+        catch { throw new SourceError('Invalid study YAML.'); }
+      }
       if (screenFile) {
         if (typeof change.content !== 'string' || Buffer.byteLength(change.content) > 512 * 1024) throw new SourceError('Screen Page YAML is required.');
         try { ScreenPageSchema.parse(parseYaml(change.content, { maxAliasCount: 20 })); }

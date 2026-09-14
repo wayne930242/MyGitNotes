@@ -1,3 +1,4 @@
+import './study.css';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { stringify } from 'yaml';
@@ -9,7 +10,10 @@ import { moveScreenItem, type ScreenItem, type ScreenRow } from '@github-notes/c
 import type { NoteItem, NotebookConfig, FolderItem } from '../lib/types.js';
 import { fetchAssets } from '../lib/api.js';
 import { notebookRoute } from '../lib/routes.js';
-import { screenRowItems } from '../lib/screen-content.js';
+import { useStudyWorkspace, type StudyController } from '../lib/use-study-workspace.js';
+import { StudyDialog } from './StudyDialog.js';
+import { resolveNoteStatuses } from '@github-notes/core/note-status';
+import { screenRowItems, studyRowItems } from '../lib/screen-content.js';
 import type { ScreenController } from '../lib/use-screen-page.js';
 import { ScreenIcon } from './ScreenIcon.js';
 import { screenCollision, screenKeyboardCoordinates } from '../lib/screen-drag.js';
@@ -36,13 +40,18 @@ function MovableCard({ item, row, disabled, remove, ...content }: ScreenContentP
   </div>;
 }
 
-function Lane({ row, disabled, onView, onSort, onAdd, onRemove, ...content }: ScreenContentProps & {
+function Lane({ row, disabled, study, onStudyChange, onView, onSort, onAdd, onRemove, ...content }: ScreenContentProps & {
   row: ScreenRow; disabled: boolean; onView: (view: ScreenRow['view']) => void; onAdd: () => void; onRemove: (id: string) => void;
-  onSort: (sort: SortConfig) => void;
+  onSort: (sort: SortConfig) => void; study: StudyController; onStudyChange: (study: NonNullable<ScreenRow['study']>) => void;
 }) {
   const { t } = useTranslation(); const host = useRef<HTMLElement>(null), strip = useRef<HTMLDivElement>(null);
-  const drop = useDroppable({ id: `lane:${row.id}`, disabled: disabled || row.kind !== 'custom', data: { rowId: row.id, empty: row.kind === 'custom' && !row.items.length } });
-  const items = screenRowItems(row, content.notes, content.assets, content.notebooks);
+  const [clock, setClock] = useState(() => new Date());
+  useEffect(() => { const timer = setInterval(() => setClock(new Date()), 30000); return () => clearInterval(timer); }, []);
+  const items = studyRowItems(screenRowItems(row, content.notes, content.assets, content.notebooks), row, content.notes, study.study, clock);
+  const query = row.study || { filter: 'all' as const, dueFirst: false };
+  const filtered = query.filter !== 'all' || query.dueFirst || Boolean(query.status);
+  const drop = useDroppable({ id: `lane:${row.id}`, disabled: disabled || filtered || row.kind !== 'custom', data: { rowId: row.id, empty: row.kind === 'custom' && !row.items.length } });
+  const statuses = [...new Set(content.notebooks.flatMap(notebook => resolveNoteStatuses(notebook, content.notes.filter(note => note.notebookId === notebook.id).map(note => note.status))))];
   useAltWheelHorizontalScroll(host, strip);
   const scroll = (direction: number) => strip.current?.scrollBy({ left: direction * strip.current.clientWidth * .8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   const source = row.kind === 'dynamic' ? row.source.kind === 'tag' ? `#${row.source.tag}` : row.source.path : '';
@@ -66,10 +75,19 @@ function Lane({ row, disabled, onView, onSort, onAdd, onRemove, ...content }: Sc
         <button type="button" className="ui-icon-button" aria-label={`${t('screen.scrollRight')}: ${row.name}`} onClick={() => scroll(1)}><ChevronRight size={16} /></button>
       </div>
     </header>
+    <div className="screen-study-controls">
+      <label>{t('study.filter')}<select className="ui-control" disabled={disabled} value={query.filter} onChange={event => onStudyChange({ ...query, filter: event.target.value as typeof query.filter })}>
+        {(['all', 'due', 'future', 'paused'] as const).map(value => <option key={value} value={value}>{t(`study.filter.${value}`)}</option>)}
+      </select></label>
+      <label>{t('study.status')}<select className="ui-control" disabled={disabled} value={query.status || ''} onChange={event => onStudyChange({ ...query, status: event.target.value || undefined })}>
+        <option value="">{t('study.filter.all')}</option>{statuses.map(status => <option key={status} value={status}>{status}</option>)}
+      </select></label>
+      <label className="study-checkbox"><input type="checkbox" disabled={disabled} checked={query.dueFirst} onChange={event => onStudyChange({ ...query, dueFirst: event.target.checked })} />{t('study.dueFirst')}</label>
+    </div>
     <div ref={drop.setNodeRef} className={drop.isOver ? 'screen-drop-target' : ''}>
       <div ref={strip} className="screen-lane-strip" tabIndex={0} aria-label={`${row.name} · ${t('screen.items')}`}>
         {row.kind === 'custom' ? <SortableContext items={items.map(item => item.id)} strategy={horizontalListSortingStrategy}>
-          {items.map(item => <MovableCard key={item.id} {...content} item={item} row={row} disabled={disabled} remove={() => onRemove(item.id)} />)}
+          {items.map(item => <MovableCard key={item.id} {...content} item={item} row={row} disabled={disabled || filtered} remove={() => onRemove(item.id)} />)}
         </SortableContext> : items.map(item => <div className="screen-card-slot" key={item.id}><ScreenCard {...content} item={item} view={row.view} /></div>)}
         {!items.length && <div className="screen-lane-empty">{t(row.kind === 'custom' ? 'screen.emptyCustom' : 'screen.emptyDynamic')}
           {row.kind === 'custom' && !disabled && <button className="ui-button" onClick={onAdd}><Plus size={14} />{t('screen.addItem')}</button>}</div>}
@@ -78,12 +96,14 @@ function Lane({ row, disabled, onView, onSort, onAdd, onRemove, ...content }: Sc
   </section>;
 }
 
-export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, screen, onOpenNote }: {
+export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, screen, onOpenNote, onStudySaved }: {
   notebooks: NotebookConfig[]; notes: NoteItem[]; folders: FolderItem[]; selectedNotebookId: string; screen: ScreenController;
-  onOpenNote: (note: NoteItem) => void;
+  onOpenNote: (note: NoteItem) => void; onStudySaved: () => void;
 }) {
   const { t } = useTranslation(); const navigate = useNavigate();
   const sidebar = useWorkspaceSidebarDrawer();
+  const study = useStudyWorkspace(onStudySaved);
+  const [studying, setStudying] = useState<NoteItem>();
   const [assets, setAssets] = useState<ScreenAsset[]>([]), [assetError, setAssetError] = useState(false);
   const [assetAttempt, setAssetAttempt] = useState(0), [assetsLoading, setAssetsLoading] = useState(false);
   const [dialog, setDialog] = useState<'add' | 'reload' | null>(null), [addTo, setAddTo] = useState<string | null>(null);
@@ -99,7 +119,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
     return () => { active = false; };
   }, [notebooks, notes, assetAttempt]);
   const disabled = !screen.writable || screen.loading;
-  const content: ScreenContentProps = { notebooks, notes, assets, onOpen: item => {
+  const content: ScreenContentProps = { notebooks, notes, assets, onStudy: setStudying, onOpen: item => {
     if (item.kind === 'youtube') { window.open(`https://www.youtube.com/watch?v=${item.videoId}&t=${item.start}`, '_blank', 'noopener,noreferrer'); return; }
     const nb = notebooks.find(nb => nb.id === item.notebookId);
     if (!nb) { screen.setError(t('screen.missing')); return; }
@@ -127,6 +147,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
     <WorkspaceSidebarToggle label={t('screen.controls')} open={sidebar.open} onClick={() => sidebar.setOpen(open => !open)} />
     <main className="screen-content">
       <div className="screen-board-scroll">
+      {study.error && !studying && <div className="screen-error" role="alert">{study.error}<button className="ui-button" onClick={() => void study.reload()}>{t('study.reload')}</button></div>}
       {assetError && <div role="alert" className="screen-error">{t('screen.assetsError')}
         <button type="button" className="ui-button" aria-label={t('screen.retryAssets')} disabled={assetsLoading} onClick={() => setAssetAttempt(value => value + 1)}>{t('screen.retryAssets')}</button>
       </div>}
@@ -142,9 +163,11 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
           onDragCancel={() => setDragging(undefined)} onDragEnd={({ active, over }) => {
             setDragging(undefined); if (!over || active.id === over.id || disabled) return;
             const target = screen.page.rows.find(row => row.kind === 'custom' && (`lane:${row.id}` === over.id || row.items.some(item => item.id === over.id)));
+            if (target?.study && (target.study.filter !== 'all' || target.study.dueFirst || target.study.status)) return;
             if (target?.kind === 'custom') screen.change(moveScreenItem(screen.page, String(active.id), target.id, over.id === `lane:${target.id}` ? target.items.length : target.items.findIndex(item => item.id === over.id)));
           }}>
-          {screen.page.rows.map(row => <Lane key={row.id} row={row} {...content} disabled={disabled} onAdd={() => setAddTo(row.id)}
+          {screen.page.rows.map(row => <Lane key={row.id} row={row} {...content} disabled={disabled} study={study}
+            onStudyChange={study => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id ? { ...value, study } : value) })} onAdd={() => setAddTo(row.id)}
             onView={view => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id ? { ...value, view } : value) })}
             onSort={sort => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id && value.kind === 'dynamic' ? { ...value, sort } : value) })}
             onRemove={id => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.kind === 'custom' ? { ...value, items: value.items.filter(item => item.id !== id) } : value) })} />)}
@@ -153,6 +176,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
       </>}
     </div>
     </main>
+    {studying && <StudyDialog key={`${studying.notebookId}:${studying.path}`} note={notes.find(note => note.notebookId === studying.notebookId && note.path === studying.path) || studying} controller={study} onClose={() => setStudying(undefined)} />}
     {dialog === 'add' && <ScreenAddRow notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onClose={() => setDialog(null)} onAdd={row => screen.change({ ...screen.page, rows: [...screen.page.rows, row] })} />}
     {dialog === 'reload' && <WorkspaceDialog title={t('screen.reload')} onClose={() => setDialog(null)}><p>{t('screen.reloadHint')}</p><div className="workspace-dialog-actions"><button className="ui-button" onClick={() => setDialog(null)}>{t('common.cancel')}</button><button className="ui-button" onClick={() => { setDialog(null); void screen.reload(); }}>{t('screen.reload')}</button></div></WorkspaceDialog>}
     {row?.kind === 'custom' && <ScreenAddItem {...content} folders={folders} rowName={row.name} selectedNotebookId={selectedNotebookId} onClose={() => setAddTo(null)} onAdd={item => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id && value.kind === 'custom' ? { ...value, items: [...value.items, item] } : value) })} />}

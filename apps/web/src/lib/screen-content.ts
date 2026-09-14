@@ -1,3 +1,4 @@
+import { findStudyNote, matchesStudyFilter, studyDue, type StudyWorkspace } from '@github-notes/core/study';
 import type { ScreenItem, ScreenRow } from '@github-notes/core/screen-page';
 import { isNoteHidden, resolveNoteStatuses } from '@github-notes/core/note-status';
 import type { AssetItem, NoteItem, NotebookConfig, FolderItem } from './types.js';
@@ -57,4 +58,15 @@ export function screenRowItems(row: ScreenRow, notes: NoteItem[], assets: (Asset
 export function noteSummary(content: string): string {
   return content.replace(/^#{1,6}\s+.*$/gm, '').replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[`*_>#]/g, '').replace(/\s+/g, ' ').trim().slice(0, 180);
+}
+
+export function studyRowItems(items: ScreenItem[], row: ScreenRow, notes: NoteItem[], study: StudyWorkspace, now = new Date()): ScreenItem[] {
+  if (!row.study) return items;
+  const sources = new Map(notes.map(note => [JSON.stringify([note.notebookId, note.path]), note]));
+  const lookup = (item: ScreenItem) => item.kind === 'note' ? sources.get(JSON.stringify([item.notebookId, item.path])) : undefined;
+  const entries = items.map(item => { const note = lookup(item); return { item, note, study: note ? findStudyNote(study, note) : undefined }; })
+    .filter(entry => (!row.study!.status || entry.note?.status === row.study!.status)
+      && matchesStudyFilter(entry.study, row.study!.filter, now));
+  if (row.study.dueFirst) entries.sort((a, b) => (a.study ? studyDue(a.study) || '~' : '~').localeCompare(b.study ? studyDue(b.study) || '~' : '~'));
+  return entries.map(entry => entry.item);
 }

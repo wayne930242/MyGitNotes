@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { screenRowItems } from './screen-content.js';
+import { createStudyNote, applyStudyAction, emptyStudyWorkspace } from '@github-notes/core/study';
+import { screenRowItems, studyRowItems } from './screen-content.js';
 import type { NoteItem } from './types.js';
 import type { ScreenRow } from '@github-notes/core/screen-page';
 const notes = [
@@ -32,4 +33,20 @@ it('applies independent dynamic sorting to notes and assets without mutating inp
   expect(row.sort).toEqual({field:'title',order:'desc'});
   const tagged: ScreenRow = {...row, source:{kind:'tag',tag:'clue'},sort:{field:'updated',order:'desc'}};
   expect(screenRowItems(tagged,selected.map(note=>({...note,tags:['clue']})),assets).map(item=>item.kind!=='youtube'&&item.path)).toEqual(['notes/a/sub/three.md','notes/a/one.md']);
+});
+
+it('filters and sorts study views while preserving custom pin order and note status', () => {
+  const now = new Date('2026-09-14T04:00:00Z');
+  const selected = notes.slice(0, 2).map((note, i) => ({ ...note, status: i ? 'done' : 'working', content: 'Question\n\n---\n\nAnswer' }));
+  let study = emptyStudyWorkspace();
+  for (const [index, source] of selected.entries()) {
+    const note = createStudyNote(source, now);
+    study = applyStudyAction(study, note, note.cards[0].id, { kind: 'read', due: index ? '2026-09-16T04:00:00.000Z' : '2026-09-17T04:00:00.000Z' }, now);
+  }
+  const row: ScreenRow = { id: 'custom', name: 'Selected', kind: 'custom', view: 'small', items: selected.map((note, i) => ({ id: `pin-${i}`, kind: 'note', notebookId: note.notebookId, path: note.path })) };
+  expect(studyRowItems(row.items, { ...row, study: { filter: 'future', dueFirst: true } }, selected, study, now).map(item => item.id)).toEqual(['pin-1', 'pin-0']);
+  expect(studyRowItems(row.items, { ...row, study: { filter: 'future', dueFirst: false, status: 'working' } }, selected, study, now).map(item => item.id)).toEqual(['pin-0']);
+  expect(studyRowItems(row.items, { ...row, study: { filter: 'due', dueFirst: true } }, selected, study, now)).toEqual([]);
+  expect(row.items.map(item => item.id)).toEqual(['pin-0', 'pin-1']);
+  expect(selected.map(note => note.status)).toEqual(['working', 'done']);
 });

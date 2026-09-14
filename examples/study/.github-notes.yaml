@@ -1,0 +1,9 @@
+schema_version: 1
+workspace:
+  title: 分頁與記憶練習示範
+  default_notebook: learning
+notebooks:
+  - id: learning
+    title: 學習示範
+    root: notes/learning
+    statuses: [inbox, working, done]
