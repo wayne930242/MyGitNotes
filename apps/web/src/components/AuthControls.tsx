@@ -116,7 +116,7 @@ export function AgentAccessSettings({ local = false }: { local?: boolean }) {
     </div>
     <p className="text-xs text-slate-500 dark:text-slate-400">{t('auth.grantsActiveNotice')}</p>
     <p className="text-xs text-slate-500 dark:text-slate-400">{t('auth.chatgptConnectorNotice')}</p>
-    {local ? <p role="status" className="text-sm text-slate-600 dark:text-slate-300">{t('auth.localAccessNotice')}</p> : !session.authenticated && <p className="text-sm"><a className="underline" href={session.provider === 'gitlab' ? '/api/auth/gitlab' : '/api/auth/github'}>{t(session.provider === 'gitlab' ? 'auth.signInWithGitlab' : 'auth.signInWithGithub')}</a>{t('auth.signInToManage')}</p>}
+    {local ? <p role="status" className="text-sm text-slate-600 dark:text-slate-300">{t('auth.localAccessNotice')}</p> : session.provider && !session.authenticated && <p className="text-sm"><a className="underline" href={session.provider === 'gitlab' ? '/api/auth/gitlab' : '/api/auth/github'}>{t(session.provider === 'gitlab' ? 'auth.signInWithGitlab' : 'auth.signInWithGithub')}</a>{t('auth.signInToManage')}</p>}
     <>
       <div className="flex flex-wrap gap-3 items-end">
         <label className="text-xs text-slate-600 dark:text-slate-300 flex flex-col gap-1">{t('auth.clientName')}<input disabled={!canManage || busy} aria-label={t('auth.clientName')} maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder={t('auth.clientNamePlaceholder')} className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-transparent" /></label>

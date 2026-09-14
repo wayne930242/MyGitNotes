@@ -19,3 +19,7 @@ SessionStore 建立時固定資料前綴，涵蓋 encrypted records、grant inde
 ## 架構圖
 
 依使用者回饋，以 imagegen 編輯原有中英文 PNG，保留插畫、構圖、配色與箭頭，只更新 MyGitNotes 品牌和 GitHub／GitLab 平台選項。README 使用編輯後的 PNG；原始 PNG 保留作為編輯來源。[實際提示詞](architecture-image-prompts.md)。
+
+## 登入入口的載入狀態
+
+AuthControls 與 MCP 授權設定皆等待 session 回傳 provider 後，再顯示對應平台的登入連結。實站複查發現 MCP 設定將初始空 session 視為未登入 GitHub；沿用標頭已有的 provider 判斷，修正短暫錯誤入口。初始元件渲染可重現修正前的連結，修正後該檢查通過。

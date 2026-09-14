@@ -12,8 +12,9 @@
 | GitLab stdio source | SDK in-memory transport 驗證公開讀取、唯讀工具及禁止本機寫入 | pass |
 | 共用 Redis 隔離與整合環境變數 | session-namespace tests：相同 token / owner 的隔離、撤銷、鎖、既有鍵值保留、原生 KV 環境變數 | pass |
 | MyGitNotes 品牌與原有架構圖風格 | Chrome 筆記與設定頁檢查；以 imagegen 編輯原始中英文 PNG，逐張檢查名稱、繁體文字、雙平台圖示與箭頭；README 引用 PNG | pass |
+| MCP 設定的登入入口載入 | 初始元件渲染先重現錯誤、修正後通過；Chrome fixture 延遲 session 五秒，載入期間無平台登入連結，完成後僅出現 GitLab；完整 318 tests 與 build 通過 | pass |
 | 本機與 GitHub 相容 | 圖片修正整合 core f45a311 後，完整 pnpm test 59 files / 318 tests 與 pnpm build 通過；包含既有 GitHub / local regression；check:core-ownership 通過 | pass |
-| trpg-notes 更新與資料保存 | 圖片修正前已匯入 core 22ccbce、main 743b11b 已推送；59 files / 311 tests、build 通過；追蹤筆記、設定與代理檔案雜湊一致 | pass |
+| trpg-notes 更新與資料保存 | 圖片修正已匯入 core 7afaa96、main 7c8c75c 已推送；59 files / 318 tests、build 通過；追蹤筆記、設定與代理檔案雜湊一致 | pass |
 
 ## 真實 GitLab.com 與 Vercel
 
@@ -31,6 +32,13 @@
 | Redis 配置 | 使用者同意連接既有免費 my-gh-core-sessions；部署使用獨立 mygitnotes-gitlab-test namespace 與加密金鑰；未建立付費資料庫 | pass |
 | 真實自架 GitLab | 尚未提供實際站台；站台子路徑與 API 行為由自動化測試覆蓋 | unknown |
 | 真實 OAuth token 到期更新 | 實站登入已通過；未等待 token 到期，更新與並行鎖以自動化測試驗證 | unknown |
+
+## 最新發布與收尾
+
+- 圖片修正 core 7afaa96 的 [GitHub Actions 34829585212](https://github.com/wayne930242/github-notes/actions/runs/34829585212) 已 completed / success；遠端 main a2d1356 包含此版本。
+- 測試站最新部署 dpl_LbAeE9QxB92MDUfbxjNXTtpZ9JCs 已 Ready；重新載入後可讀取兩篇測試筆記，MCP 設定頁顯示沒有持久化 Agent 授權。
+- 三個暫時驗證服務已停止，Vercel CLI 自動建立的暫存 .env.local 已移除。正式測試站、OAuth 應用程式及既有 Redis 連接保留供後續使用。
+- 最終複查修正 MCP 設定初始空 session 短暫顯示 GitHub 登入的問題：初始元件渲染檢查先失敗，加入 provider 載入條件後通過。
 
 ## 證據界線
 
