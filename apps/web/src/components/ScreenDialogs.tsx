@@ -1,3 +1,4 @@
+import { Button } from './Button.js';
 import { useState } from 'react';
 import { parseYouTubeUrl, type ScreenItem, type ScreenRow } from '@github-notes/core/screen-page';
 import { defaultStudyProgression, StudyProgressionSchema } from '@github-notes/core/study-stages';
@@ -15,8 +16,8 @@ type RowDialogContent = Pick<ScreenContentProps, 'notebooks' | 'notes' | 'assets
   selectedNotebookId: string;
 };
 
-function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId, row, disabled, onApply, onClose, onRemove }: RowDialogContent & {
-  row?: ScreenRow;
+function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId, row, studySettings = false, disabled, onApply, onClose, onRemove }: RowDialogContent & {
+  row?: ScreenRow; studySettings?: boolean;
   disabled?: boolean;
   onApply: (row: ScreenRow) => void;
   onClose: () => void;
@@ -32,7 +33,7 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
   const [view, setView] = useState<ScreenRow['view']>(row?.view || 'small');
   const [progression, setProgression] = useState(() => row?.progression || defaultStudyProgression([...new Set(notebooks.flatMap(notebook => resolveNoteStatuses(notebook)))]));
   const [stageError, setStageError] = useState(false);
-  const studying = view === 'study' || view === 'reading';
+  const studying = studySettings;
   const [confirmRemove, setConfirmRemove] = useState(false);
   const nb = notebooks.find(nb => nb.id === notebookId);
   const tags = [...new Set(notes.filter(note => !tagNotebookId || note.notebookId === tagNotebookId).flatMap(note => note.tags))].sort();
@@ -62,14 +63,14 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
       {kind === 'folder' && <label>{t('sidebar.notebooks')}<Select value={notebookId} onValueChange={id => { setNotebook(id); setFolder(''); }} options={notebooks.map(nb => ({ value: nb.id, label: nb.title }))} /></label>}
       {kind === 'folder' && <><label>{t('folder.folders')}<Select value={folder || nb?.root || ''} onValueChange={setFolder} options={screenFolderOptions(nb, folders, assets).map(folder => ({ value: folder.path, label: folder.title }))} /></label>
         <label className="screen-checkbox"><input type="checkbox" checked={recursive} onChange={e => setRecursive(e.target.checked)} />{t('screen.recursive')}</label></>}
-      <label>{t('screen.view')}<Select aria-label={t('screen.view')} value={view} disabled={disabled} onValueChange={value => setView(value as ScreenRow['view'])} options={(['thumbnail', 'small', 'medium', 'reading', 'study'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} /></label>
+      <label>{t('screen.view')}<Select aria-label={t('screen.view')} value={view} disabled={disabled} onValueChange={value => setView(value as ScreenRow['view'])} options={(['thumbnail', 'small', 'medium'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} /></label>
       {studying && <StudyLaneSettings progression={progression} disabled={Boolean(disabled)} onChange={value => { setProgression(value); setStageError(false); }} />}
       {studying && stageError && <p role="alert">{t('study.invalidStages')}</p>}
       {confirmRemove && <p className="screen-dialog-hint">{t('screen.removeRowHint')}</p>}
       <div className="workspace-dialog-actions">
-        {onRemove && <button type="button" className="ui-button" disabled={disabled} onClick={() => { if (!confirmRemove) setConfirmRemove(true); else { onRemove(); onClose(); } }}>{t(confirmRemove ? 'screen.confirmRemoveRow' : 'screen.removeRow')}</button>}
-        <button className="ui-button" type="button" onClick={onClose}>{t('common.cancel')}</button>
-        <button className="ui-button ui-button-primary" disabled={disabled || Boolean(row && !name.trim()) || kind === 'folder' && !nb || kind === 'tag' && !tag.trim()}>{t(row ? 'screen.apply' : 'screen.addRow')}</button>
+        {onRemove && <Button type="button"  disabled={disabled} onClick={() => { if (!confirmRemove) setConfirmRemove(true); else { onRemove(); onClose(); } }}>{t(confirmRemove ? 'screen.confirmRemoveRow' : 'screen.removeRow')}</Button>}
+        <Button  type="button" onClick={onClose}>{t('common.cancel')}</Button>
+        <Button type="submit" variant="primary" disabled={disabled || Boolean(row && !name.trim()) || kind === 'folder' && !nb || kind === 'tag' && !tag.trim()}>{t(row ? 'screen.apply' : 'screen.addRow')}</Button>
       </div>
     </form>
   </WorkspaceDialog>;
@@ -79,7 +80,7 @@ export function ScreenAddRow(props: RowDialogContent & { onAdd: (row: ScreenRow)
   return <ScreenRowDialog {...props} onApply={props.onAdd} />;
 }
 
-export function ScreenEditRow(props: RowDialogContent & { row: ScreenRow; disabled?: boolean; onApply: (row: ScreenRow) => void; onRemove: () => void; onClose: () => void }) {
+export function ScreenEditRow(props: RowDialogContent & { row: ScreenRow; studySettings?: boolean; disabled?: boolean; onApply: (row: ScreenRow) => void; onRemove: () => void; onClose: () => void }) {
   return <ScreenRowDialog {...props} />;
 }
 
@@ -99,12 +100,12 @@ export function ScreenAddItem({ rowName, notebooks, notes, assets, folders, sele
       {kind === 'youtube' ? <><label>YouTube URL<input autoFocus className="ui-control" type="url" value={youtube} onChange={e => setYoutube(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" /></label>
         <label>{t('screen.videoTitle')}<input className="ui-control" maxLength={160} value={title} onChange={e => setTitle(e.target.value)} /></label>
         {youtube && !video && <p className="screen-form-error">{t('screen.invalidVideo')}</p>}
-        <div className="workspace-dialog-actions"><button className="ui-button ui-button-primary" disabled={!video} onClick={() => { if (video) { onAdd({ id: crypto.randomUUID(), kind: 'youtube', ...video, title: title.trim() || 'YouTube' }); onClose(); } }}>{t('screen.pin')}</button></div>
+        <div className="workspace-dialog-actions"><Button variant="primary" disabled={!video} onClick={() => { if (video) { onAdd({ id: crypto.randomUUID(), kind: 'youtube', ...video, title: title.trim() || 'YouTube' }); onClose(); } }}>{t('screen.pin')}</Button></div>
       </> : <><label>{t('sidebar.notebooks')}<Select value={notebookId} onValueChange={id => { setNotebook(id); setQuery(''); }} options={notebooks.map(nb => ({ value: nb.id, label: nb.title }))} /></label>
         <input className="ui-control" type="search" aria-label={t('screen.findItem')} placeholder={t('screen.findItem')} value={query} onChange={e => setQuery(e.target.value)} />
-        <div className="screen-item-options">{options.filter(option => `${option.title} ${option.path}`.toLowerCase().includes(query.toLowerCase())).map(option => <button className="screen-item-option" key={option.path} onClick={() => {
+        <div className="screen-item-options">{options.filter(option => `${option.title} ${option.path}`.toLowerCase().includes(query.toLowerCase())).map(option => <Button className="screen-item-option" key={option.path} onClick={() => {
           onAdd({ id: crypto.randomUUID(), kind: kind as 'note' | 'asset' | 'folder', notebookId, path: option.path }); onClose();
-        }}><span>{option.title}</span><small>{option.path}</small></button>)}</div></>}
+        }}><span>{option.title}</span><small>{option.path}</small></Button>)}</div></>}
     </div>
   </WorkspaceDialog>;
 }

@@ -1,0 +1,29 @@
+/* Shared action geometry and state colors. Variants change tokens, including hover. */
+.ui-button, .ui-icon-button {
+  --button-bg: var(--color-surface);
+  --button-hover-bg: color-mix(in srgb, var(--color-text) 6%, var(--color-surface));
+  --button-text: var(--color-text);
+  --button-hover-text: var(--button-text);
+  --button-border: var(--color-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--button-bg);
+  color: var(--button-text);
+  transition: background-color 150ms, border-color 150ms, box-shadow 150ms;
+}
+.ui-button { min-height: 32px; gap: 7px; border: 1px solid var(--button-border); border-radius: 8px; padding: 8px 12px; font-size: 12px; line-height: 18px; font-weight: 500; white-space: nowrap; }
+.ui-icon-button { --button-bg: transparent; --button-text: var(--color-muted); --button-hover-text: var(--color-text); flex: none; width: 30px; height: 30px; padding: 6px; border-radius: 6px; }
+.ui-button-primary, .ui-button[aria-pressed="true"] {
+  --button-bg: var(--color-primary);
+  --button-hover-bg: var(--color-primary-hover);
+  --button-text: var(--color-on-primary, white);
+  --button-hover-text: var(--color-on-primary-hover, white);
+  --button-border: var(--color-primary);
+}
+.ui-button-danger { --button-text: #e11d48; }
+.dark .ui-button-danger { --button-text: #fb7185; }
+.ui-button:not(:disabled):not([aria-disabled="true"]):hover,
+.ui-icon-button:not(:disabled):not([aria-disabled="true"]):hover { background: var(--button-hover-bg); color: var(--button-hover-text); }
+.ui-button:focus-visible, .ui-button:focus-within, .ui-icon-button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.ui-button:disabled, .ui-button[aria-disabled="true"], .ui-icon-button:disabled, .ui-icon-button[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }

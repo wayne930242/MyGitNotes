@@ -132,6 +132,13 @@ export function getSavedTheme(): ThemeDefinition {
   return THEMES[0];
 }
 
+export function buttonTextColor(background: string): string {
+  const rgb = background.replace('#', '').match(/.{2}/g)!.map(value => parseInt(value, 16) / 255);
+  const linear = rgb.map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
+  const luminance = .2126 * linear[0] + .7152 * linear[1] + .0722 * linear[2];
+  return (luminance + .05) / .05 >= 1.05 / (luminance + .05) ? '#000000' : '#ffffff';
+}
+
 export function applyTheme(theme: ThemeDefinition): void {
   try {
     localStorage.setItem('github_notes_theme', theme.id);
@@ -148,6 +155,8 @@ export function applyTheme(theme: ThemeDefinition): void {
 
   root.style.setProperty('--color-primary', theme.colors.primary);
   root.style.setProperty('--color-primary-hover', theme.colors.primaryHover || theme.colors.primary);
+  root.style.setProperty('--color-on-primary', buttonTextColor(theme.colors.primary));
+  root.style.setProperty('--color-on-primary-hover', buttonTextColor(theme.colors.primaryHover || theme.colors.primary));
   root.style.setProperty('--color-primary-light', `${theme.colors.primary}22`);
   root.style.setProperty('--color-bg', theme.colors.background);
   root.style.setProperty('--color-surface', theme.colors.surface);

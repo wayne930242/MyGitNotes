@@ -22,6 +22,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "study.invalidPolicy": "請設定 70–97% 保留率，以及遞增的整數天數（1–3650）。",
   "study.question": "題目",
   "study.answer": "答案",
+  'study.start': '開始學習',
+  'study.controls': '學習控制',
   'study.previousCard': '上一張卡片',
   'study.nextCard': '下一張卡片',
   'screen.focusLane': '泳道全螢幕',
