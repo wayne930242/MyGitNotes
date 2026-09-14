@@ -11,3 +11,7 @@ OAuth 由部署來源決定端點。GitLab refresh token 存於加密 credential
 驗證：來源 contract、OAuth state/PKCE/refresh、憑證隔離、MCP 唯讀與撤銷、GitHub regression，以及前端實際頁面。
 
 參考：[GitLab OAuth](https://docs.gitlab.com/api/oauth2/)、[批次提交](https://docs.gitlab.com/api/commits/)、[檔案版本](https://docs.gitlab.com/api/repository_files/)、[分支權限](https://docs.gitlab.com/api/branches/)。
+
+## Redis 資料前綴
+
+SessionStore 建立時固定資料前綴，涵蓋 encrypted records、grant indexes 與 distributed refresh locks。預設 `gh-notes` 保持相容；測試部署使用 `gh-notes:mygitnotes-gitlab-test`。同一 Redis 上使用不同加密金鑰時，前綴避免一個部署將另一部署的紀錄誤判為損壞並清除。前綴於首次登入前設定，既有登入資料不會自動搬移。
