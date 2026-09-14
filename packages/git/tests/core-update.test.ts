@@ -98,7 +98,7 @@ describe('Core Update Engine Rules', () => {
       fs.writeFileSync(path.join(root, file), text);
     };
     const files = ['AGENTS.md', '.agents/skills/範例/SKILL.md', '.codex/agents/reviewer.toml',
-      'CLAUDE.md', '.claude/skills/review/SKILL.md', 'GEMINI.md', '.agent/skills/review/SKILL.md'];
+      'CLAUDE.md', '.claude/skills/review/SKILL.md', 'GEMINI.md', '.agent/skills/review/SKILL.md', '.github-notes-study.yaml'];
     for (const file of files) write(upstreamRepo, file, 'Core baseline\n');
     await stageAndCommit(upstreamRepo, files, 'legacy agent settings');
     await runGit(['pull', '--ff-only'], userRepo);

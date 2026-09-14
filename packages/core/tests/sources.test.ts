@@ -1,3 +1,5 @@
+import { stringify } from 'yaml';
+import { STUDY_FILE, createStudyNote, emptyStudyWorkspace, applyStudyAction } from '../src/study.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -169,5 +171,47 @@ describe('successful remote save',()=>{
     const reader=new GitHubSource('owner/repo','main','token',request as typeof fetch);
     const result=await reader.save('notes/example/hello.md','# Updated',{custom:'kept'},'commit1');
     expect(result.commit.commitHash).toBe('commit2');expect(result.note.revision).toBe('commit2');expect(result.note.title).toBe('Updated');expect(result.note.metadata.custom).toBe('kept');
+  });
+});
+
+describe('GitHub study workspace writes', () => {
+  const source = { notebookId: 'example', path: 'notes/example/hello.md', title: 'Hello', content: 'Question\n\n---\n\nAnswer', metadata: {} };
+  const note = createStudyNote(source);
+  const yaml = stringify(applyStudyAction(emptyStudyWorkspace(), note, note.cards[0].id, { kind: 'review', rating: 3 }));
+  it('commits only the study sidecar through a non-force branch update', async () => {
+    const base = githubMock(false, true);
+    const request = vi.fn(async (input: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && input.endsWith('/git/trees')) {
+        expect(JSON.parse(String(init.body)).tree).toEqual([{ path: STUDY_FILE, mode: '100644', type: 'blob', content: yaml }]);
+        return new Response(JSON.stringify({ sha: 'study-tree' }));
+      }
+      if (init?.method === 'POST' && input.endsWith('/git/commits')) return new Response(JSON.stringify({ sha: 'study-commit' }));
+      if (init?.method === 'PATCH') {
+        expect(JSON.parse(String(init.body))).toEqual({ sha: 'study-commit', force: false });
+        return new Response(JSON.stringify({ object: { sha: 'study-commit' } }));
+      }
+      return base(input, init);
+    });
+    const reader = new GitHubSource('owner/repo', 'main', 'test-token', request as typeof fetch);
+    expect(await reader.saveStudyWorkspace(yaml, 'commit1')).toMatchObject({ revision: 'study-commit', commit: { commitHash: 'study-commit' } });
+    expect(request.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(1);
+  });
+  it('rejects stale revisions, Core writes, invalid schemas and paths outside the study sidecar', async () => {
+    const request = githubMock(false, true);
+    const reader = new GitHubSource('owner/repo', 'main', 'test-token', request as typeof fetch);
+    await expect(reader.saveStudyWorkspace(yaml, 'stale')).rejects.toMatchObject({ status: 409 });
+    await expect(reader.saveStudyWorkspace('version: invalid', 'commit1')).rejects.toThrow('Invalid study YAML');
+    await expect(reader.commitChanges([{ path: 'notes/example/hello.md', content: yaml }], 'commit1', 'save', 'study')).rejects.toMatchObject({ status: 403 });
+    await expect(new GitHubSource('owner/repo', 'core', 'test-token', request as typeof fetch).saveStudyWorkspace(yaml, 'commit1')).rejects.toMatchObject({ status: 403 });
+    expect(request.mock.calls.some(([, init]) => init?.method)).toBe(false);
+  });
+  it('rejects a sidecar symlink before writing', async () => {
+    const base = githubMock(false, true);
+    const request = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.endsWith('/git/trees/tree1?recursive=1')) return new Response(JSON.stringify({ tree: [...tree(), { path: STUDY_FILE, type: 'blob', mode: '120000', sha: 'symlink' }], truncated: false }));
+      return base(input, init);
+    });
+    await expect(new GitHubSource('owner/repo', 'main', 'test-token', request as typeof fetch).saveStudyWorkspace(yaml, 'commit1')).rejects.toMatchObject({ status: 403 });
+    expect(request.mock.calls.some(([, init]) => init?.method)).toBe(false);
   });
 });

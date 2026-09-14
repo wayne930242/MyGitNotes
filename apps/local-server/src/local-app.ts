@@ -1,3 +1,4 @@
+import { STUDY_FILE, STUDY_MAX_BYTES } from '@github-notes/core';
 import express, { Request, Response } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -46,7 +47,7 @@ app.use(async (req, res, next) => {
       resolveSafePath(repoRoot, candidate);
       const resource = classifyResource(candidate, config);
       const agentAccess = (req.path.startsWith('/api/agent-resources') || req.path.startsWith('/api/git/')) && workspaceAgentKind(candidate);
-      const screenAccess = req.path.startsWith('/api/git/') && (candidate === SCREEN_PAGE_FILE || resource.type === 'workspace_config');
+      const screenAccess = req.path.startsWith('/api/git/') && (candidate === SCREEN_PAGE_FILE || candidate === STUDY_FILE || resource.type === 'workspace_config');
       if (agentAccess) resolveWorkspaceAgentPath(repoRoot, candidate);
       if (!agentAccess && !screenAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/'))) return res.status(403).json({ error: 'Path is outside configured workspace resources.' });
     }
@@ -63,7 +64,7 @@ app.use((req, res, next) => {
       resolveSafePath(repoRoot, candidate);
       const resource = classifyResource(candidate, config);
       const agentAccess = (req.path.startsWith('/api/agent-resources') || req.path.startsWith('/api/git/')) && workspaceAgentKind(candidate);
-      const screenAccess = req.path.startsWith('/api/git/') && (candidate === SCREEN_PAGE_FILE || resource.type === 'workspace_config');
+      const screenAccess = req.path.startsWith('/api/git/') && (candidate === SCREEN_PAGE_FILE || candidate === STUDY_FILE || resource.type === 'workspace_config');
       if (agentAccess) resolveWorkspaceAgentPath(repoRoot, candidate);
       if (!agentAccess && !screenAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/'))) return res.status(403).json({ error: 'Path is outside configured workspace resources.' });
     }
@@ -486,7 +487,7 @@ const canManageChange = (file: string) => {
     if (fs.existsSync(target) && !fs.lstatSync(target).isFile()) return false;
     if (workspaceAgentKind(file)) { resolveWorkspaceAgentPath(repoRoot, file); return true; }
     const resource = classifyResource(file, loadWorkspaceConfig(repoRoot));
-    return file === SCREEN_PAGE_FILE || resource.type === 'workspace_config' || file.startsWith('notes/') && ['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type);
+    return file === STUDY_FILE || file === SCREEN_PAGE_FILE || resource.type === 'workspace_config' || file.startsWith('notes/') && ['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type);
   } catch { return false; }
 };
 app.get('/api/git/changes', async (_req, res) => {
@@ -537,6 +538,14 @@ app.get('/api/git/diff', async (req: Request, res: Response) => {
       if (stat.isFile() && !stat.isSymbolicLink() && stat.size <= 512 * 1024) {
         const lines = fs.readFileSync(file, 'utf8').split('\n');
         diff += `\n--- /dev/null\n+++ ${SCREEN_PAGE_FILE}\n@@ -0,0 +1,${lines.length} @@\n${lines.map(line => '+' + line).join('\n')}`;
+      }
+    }
+    if ((!filePath || filePath === STUDY_FILE) && (await getGitStatus(repoRoot)).untracked.includes(STUDY_FILE)) {
+      const file = resolveSafePath(repoRoot, STUDY_FILE);
+      const stat = fs.lstatSync(file);
+      if (stat.isFile() && !stat.isSymbolicLink() && stat.size <= STUDY_MAX_BYTES) {
+        const lines = fs.readFileSync(file, 'utf8').split('\n');
+        diff += `\n--- /dev/null\n+++ ${STUDY_FILE}\n@@ -0,0 +1,${lines.length} @@\n${lines.map(line => '+' + line).join('\n')}`;
       }
     }
     res.json({ diff });

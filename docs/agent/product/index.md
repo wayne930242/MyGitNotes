@@ -19,11 +19,11 @@ GitHub Notes is a Git-native, local-first notes application and agent-operable w
 ## 3. Product Documentation Map
 
 Detailed architecture, security, and workflow guides live in `docs/agent/`:
-- Overview: [`docs/agent/index.md`](file:///home/weihung/github-notes/docs/agent/index.md)
-- Architecture: [`docs/agent/architecture/index.md`](file:///home/weihung/github-notes/docs/agent/architecture/index.md)
-- Workflows: [`docs/agent/workflows/index.md`](file:///home/weihung/github-notes/docs/agent/workflows/index.md)
-- Security & Guards: [`docs/agent/security/index.md`](file:///home/weihung/github-notes/docs/agent/security/index.md)
-- MCP Server: [`docs/agent/mcp/index.md`](file:///home/weihung/github-notes/docs/agent/mcp/index.md)
+- Overview: [`docs/agent/index.md`](../index.md)
+- Architecture: [`docs/agent/architecture/index.md`](../architecture/index.md)
+- Workflows: [`docs/agent/workflows/index.md`](../workflows/index.md)
+- Security & Guards: [`docs/agent/security/index.md`](../security/index.md)
+- MCP Server: [`docs/agent/mcp/index.md`](../mcp/index.md)
 
 ## 4. Repo-Local Codex Skills
 
@@ -59,3 +59,7 @@ pnpm build         # Verify build succeeds cleanly
 ### Screen 配置所有權
 
 工作區根目錄 `.github-notes-screen.yaml` 是使用者資料。Core 不得追蹤真實配置，工作區更新必須保留此檔案；測試配置只建立於隔離暫存工作區。
+
+### 學習資料所有權
+
+工作區根目錄 `.github-notes-study.yaml` 保存使用者的卡片對應、排程與事件。Core 維護及更新保留此檔案；示範正文位於 `examples/study/`，測試學習紀錄建立於隔離工作區。使用方式見 [學習指南](../study.md)。

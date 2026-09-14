@@ -6,19 +6,44 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./note-status": { "types": "./dist/note-status.d.ts", "import": "./dist/note-status.js" },
-    "./screen-page": { "types": "./dist/screen-page.d.ts", "import": "./dist/screen-page.js" },
-    "./note-graph": { "types": "./dist/note-graph.d.ts", "import": "./dist/note-graph.js" },
-    "./workspace-links": { "types": "./dist/workspace-links.d.ts", "import": "./dist/workspace-links.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./note-status": {
+      "types": "./dist/note-status.d.ts",
+      "import": "./dist/note-status.js"
+    },
+    "./screen-page": {
+      "types": "./dist/screen-page.d.ts",
+      "import": "./dist/screen-page.js"
+    },
+    "./note-graph": {
+      "types": "./dist/note-graph.d.ts",
+      "import": "./dist/note-graph.js"
+    },
+    "./workspace-links": {
+      "types": "./dist/workspace-links.d.ts",
+      "import": "./dist/workspace-links.js"
+    },
+    "./note-pages": {
+      "types": "./dist/note-pages.d.ts",
+      "import": "./dist/note-pages.js"
+    },
+    "./study": {
+      "types": "./dist/study.d.ts",
+      "import": "./dist/study.js"
+    }
   },
   "scripts": {
     "build": "tsc",
     "test": "vitest run"
   },
   "dependencies": {
+    "marked": "14.1.4",
     "picomatch": "^4.0.3",
     "tar-stream": "^3.2.1",
+    "ts-fsrs": "5.4.2",
     "yaml": "^2.5.1",
     "zod": "^3.23.8"
   },
