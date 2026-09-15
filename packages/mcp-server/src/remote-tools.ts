@@ -357,7 +357,7 @@ export async function callRemoteTool(
       const rev = String(args.revision || snapshot.sha);
       const changes = modified.map((n) => ({
         path: n.path,
-        content: serializeNoteContent(n.metadata, n.content),
+        content: serializeNoteContent(n.metadata, n.content, false),
       }));
       const receipt = await reader.commitChanges(
         changes,

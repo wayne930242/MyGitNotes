@@ -28,8 +28,15 @@ import { saveLocalDraft, getLocalDraft, clearLocalDraft } from '../lib/storage.j
 import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { findOutlineIndexForLine, findTextMatches, parseMarkdownOutline } from '../lib/note-navigation.js';
+import { usePanelContext } from '../lib/panel-context.js';
 
 type NotePanelMode = 'find' | 'outline' | 'frontmatter' | 'assets' | 'git';
+
+/** Server-managed on every save; excluded when deciding whether there is a new edit to save. */
+function sameIgnoringTimestamps(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const strip = ({ created, updated, ...rest }: Record<string, unknown>) => rest;
+  return sameValue(strip(a), strip(b));
+}
 
 interface EditorModalProps {
   note: NoteItem | null;
@@ -89,6 +96,8 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
   const isMarkdown = note.path.endsWith('.md') || note.path.endsWith('.markdown');
   const { t } = useTranslation();
+  const panel = usePanelContext();
+  useEffect(() => { panel.setHasOpenNote(true); return () => panel.setHasOpenNote(false); }, []);
 
   // Editor states
   const [content, setContent] = useState(note.content);
@@ -252,7 +261,6 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     setConfirmRestore(false);
     setTagInput('');
     setIsTagDropdownOpen(false);
-    setNotePanel(null);
     setFindQuery('');
     setFindIndex(0);
     setOutlineIndex(0);
@@ -270,7 +278,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   useEffect(() => {
     if (readOnly || closing.current) return;
     const baseline = autoSave ? note : baseNote;
-    const isDifferent = content !== baseline.content || !sameValue(metadata, baseline.metadata);
+    const isDifferent = content !== baseline.content || !sameIgnoringTimestamps(metadata, baseline.metadata);
 
     if (isDifferent) {
       setHasUnsavedChanges(true);
@@ -280,11 +288,21 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
       if (!autoSave || blocked || isRestoring) return;
 
+      // Timestamps are stamped server-side on every save; absorb them so the next
+      // comparison against the refreshed `note`/`baseNote` prop doesn't see a
+      // spurious difference and re-save in a loop.
+      const absorbTimestamps = (saved: NoteItem) => setMetadata(current => (
+        current.created === saved.metadata.created && current.updated === saved.metadata.updated
+          ? current
+          : { ...current, created: saved.metadata.created, updated: saved.metadata.updated }
+      ));
+
       if (draftMode) {
         setIsSaving(true);
-        void onSave({ path: note.path, content, metadata, baseNote }).then(() => {
+        void onSave({ path: note.path, content, metadata, baseNote }).then(saved => {
           if (!mounted.current) return;
           clearLocalDraft(draftScope || branch, note.path);
+          absorbTimestamps(saved);
           setHasUnsavedChanges(false); setSaveError('');
         }).catch(error => { if (mounted.current) setSaveError(`Local save failed: ${error.message}`); })
           .finally(() => { if (mounted.current) setIsSaving(false); });
@@ -295,12 +313,13 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
       const timer = setTimeout(async () => {
         setIsSaving(true);
         try {
-          await onSave({
+          const saved = await onSave({
             path: note.path,
             content,
             metadata,
           });
           clearLocalDraft(draftScope || branch, note.path);
+          absorbTimestamps(saved);
           setHasUnsavedChanges(false);
         } catch (err) {
           setSaveError((err as Error).message);
@@ -358,7 +377,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
   const close = async () => {
     if (closing.current || isRestoring || operation.current) return;
-    if (autoSave && !readOnly && !current.current.blocked && (draftMode || current.current.content !== note.content || !sameValue(current.current.metadata, note.metadata))) {
+    if (autoSave && !readOnly && !current.current.blocked && (draftMode || current.current.content !== note.content || !sameIgnoringTimestamps(current.current.metadata, note.metadata))) {
       closing.current = true; setIsSaving(true);
       try {
         await onSave({ path: note.path, content: current.current.content, metadata: current.current.metadata, baseNote: current.current.baseNote });
@@ -595,12 +614,11 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
           <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} ariaLabel="Note content" />
           {notePanel && <aside className="note-document-panel" data-panel={notePanel} aria-label={t('editor.documentPanel')}>
             <div className="note-panel-tabs" role="tablist" aria-label={t('editor.documentPanel')}>
-              <button type="button" role="tab" aria-selected={isFindOpen} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={openFind}><Search aria-hidden="true" /><span>{t('editor.find')}</span></button>
-              {isMarkdown && <button type="button" role="tab" aria-selected={isOutlineOpen} aria-label={t('editor.outline')} title={t('editor.outline')} onClick={openOutline}><ListTree aria-hidden="true" /><span>{t('editor.outline')}</span></button>}
-              <button type="button" role="tab" aria-selected={showFrontmatter} aria-label={t('editor.frontmatter')} title={t('editor.frontmatter')} onClick={() => setNotePanel('frontmatter')}><Settings2 aria-hidden="true" /><span>{t('editor.frontmatter')}</span></button>
-              <button type="button" role="tab" aria-selected={isAssetPickerOpen} aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onClick={() => setNotePanel('assets')}><ImageIcon aria-hidden="true" /><span>{t('editor.asset')}</span></button>
-              <button type="button" role="tab" aria-selected={isGitPanelOpen} aria-label={t('editor.fileGitStatus')} title={t('editor.fileGitStatus')} onClick={() => setNotePanel('git')}><GitBranch aria-hidden="true" /><span>{t('editor.git')}</span></button>
-              <button type="button" className="note-panel-close ui-icon-button" aria-label={t('common.close')} onClick={() => setNotePanel(null)}><X aria-hidden="true" /></button>
+              <button type="button" role="tab" aria-selected={isFindOpen} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}><Search aria-hidden="true" /><span>{t('editor.find')}</span></button>
+              {isMarkdown && <button type="button" role="tab" aria-selected={isOutlineOpen} aria-label={t('editor.outline')} title={t('editor.outline')} onClick={() => isOutlineOpen ? setNotePanel(null) : openOutline()}><ListTree aria-hidden="true" /><span>{t('editor.outline')}</span></button>}
+              <button type="button" role="tab" aria-selected={showFrontmatter} aria-label={t('editor.frontmatter')} title={t('editor.frontmatter')} onClick={() => setNotePanel(showFrontmatter ? null : 'frontmatter')}><Settings2 aria-hidden="true" /><span>{t('editor.frontmatter')}</span></button>
+              <button type="button" role="tab" aria-selected={isAssetPickerOpen} aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onClick={() => setNotePanel(isAssetPickerOpen ? null : 'assets')}><ImageIcon aria-hidden="true" /><span>{t('editor.asset')}</span></button>
+              <button type="button" role="tab" aria-selected={isGitPanelOpen} aria-label={t('editor.fileGitStatus')} title={t('editor.fileGitStatus')} onClick={() => setNotePanel(isGitPanelOpen ? null : 'git')}><GitBranch aria-hidden="true" /><span>{t('editor.git')}</span></button>
             </div>
 
             {isFindOpen && <form className="note-find-panel" role="search" aria-label={t('editor.findInNote')}

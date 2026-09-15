@@ -154,7 +154,7 @@ export abstract class RemoteSource {
     const existing = snapshot.entries.find(e => e.path === file);
     if (existing && (existing.type !== 'blob' || existing.mode === '120000')) throw new SourceError('Path is not a regular note file.', 403);
     if (file.includes('\0') || (metadata !== undefined && (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)))) throw new SourceError('Invalid note path or metadata.');
-    const raw = metadata ? serializeNoteContent(metadata, content) : content;
+    const raw = metadata ? serializeNoteContent(metadata, content, !existing) : content;
     if (Buffer.byteLength(raw) > 5 * 1024 * 1024) throw new SourceError('Note exceeds the 5 MiB limit.', 413);
     const receipt = await this.commitChanges([{ path: file, content: raw }], expected, existing ? 'write' : 'create');
     const parsed = parseNoteContent(raw, path.posix.basename(file));
@@ -172,7 +172,7 @@ export abstract class RemoteSource {
       if (!note || typeof note.path !== 'string' || !/\.(md|markdown|txt)$/i.test(note.path) || typeof note.content !== 'string' || !note.metadata || typeof note.metadata !== 'object' || Array.isArray(note.metadata)) throw new SourceError('Invalid note change.');
       if (note.createOnly && snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`A note already exists at ${note.path}.`, 409);
       if (!note.createOnly && !snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`Note moved or deleted: ${note.path}.`, 409);
-      return { path: note.path, content: serializeNoteContent(note.metadata, note.content) };
+      return { path: note.path, content: serializeNoteContent(note.metadata, note.content, Boolean(note.createOnly)) };
     });
     if (screen) {
       const page = ScreenPageSchema.safeParse(screen.page), base = ScreenPageSchema.safeParse(screen.base);

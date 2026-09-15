@@ -46,11 +46,11 @@ import { ListView } from './components/ListView.js';
 import { CardView } from './components/CardView.js';
 import { KanbanView } from './components/KanbanView.js';
 import { EditorModal } from './components/EditorModal.js';
+import { RightPanel } from './components/RightPanel.js';
 import { AssetBrowser } from './components/AssetBrowser.js';
 import { AgentSystemView, type AgentSystemHandle } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { CommitModal } from './components/CommitModal.js';
-import { FloatingCommitFooter } from './components/FloatingCommitFooter.js';
 import { Breadcrumbs } from './components/Breadcrumbs.js';
 import { FolderIndex } from './components/FolderIndex.js';
 import { FolderLinks } from './components/FolderLinks.js';
@@ -682,6 +682,12 @@ const AppContent: React.FC = () => {
   const routedNote = routedPath ? (editingNote?.path === routedPath ? editingNote : notes.find(note => note.path === routedPath) || null) : null;
   const noteEditorOpen = Boolean(routedNote) && !routeError;
 
+  const openCommitModal = () => { void (async () => {
+    if (activeTab === 'agent' && !await agentSystemRef.current?.prepareLeave()) return;
+    if (!remote && screen.dirty) await screen.save();
+    setIsCommitOpen(true);
+  })().catch(error => setActionError(error.message)); };
+
   if (loading || loadError) return <ConnectionState loading={loading} error={loadError} onRetry={refreshWorkspace} />;
 
   return (
@@ -913,20 +919,21 @@ const AppContent: React.FC = () => {
             />
           </main>
         )}
+
+        <RightPanel
+          notes={notes}
+          notebooks={config?.notebooks || []}
+          selectedNotebookId={selectedNotebookId}
+          onOpenNote={handleOpenNote}
+          onSaveNote={handleSaveNote}
+          gitStatus={gitStatus}
+          deletedNotes={deletedNotes}
+          onRestoreNote={handleRestoreNote}
+          onOpenCommitModal={openCommitModal}
+        />
       </div>
 
-      {/* Floating Commit Footer: only shows when working tree is dirty, with restore button (Requirement 1 & 2) */}
       {activeTab !== 'screen' && screen.dirty && screen.error && <div role="alert" className="workspace-link-error">{screen.error}<button className="ui-button" onClick={() => navigate('/screen')}>{t('nav.screen')}</button></div>}
-      <FloatingCommitFooter
-        gitStatus={gitStatus}
-        onOpenCommitModal={() => { void (async () => {
-          if (activeTab === 'agent' && !await agentSystemRef.current?.prepareLeave()) return;
-          if (!remote && screen.dirty) await screen.save();
-          setIsCommitOpen(true);
-        })().catch(error => setActionError(error.message)); }}
-        deletedNotes={deletedNotes}
-        onRestoreNote={handleRestoreNote}
-      />
 
       {/* Undo Toast Notification (Requirement 2) */}
       {undoToast && (

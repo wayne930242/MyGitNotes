@@ -3,6 +3,7 @@ import { NuqsAdapter } from 'nuqs/adapters/react-router/v6';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { App } from './App.js';
+import { PanelProvider } from './lib/panel-context.js';
 import './index.css';
 import './workspace.css';
 import './ui-buttons.css';
@@ -11,6 +12,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <NuqsAdapter>
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <PanelProvider>
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/notes" element={<App />} />
@@ -24,6 +26,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
         <Route path="/settings" element={<App />} />
         <Route path="*" element={<App />} />
       </Routes>
+      </PanelProvider>
     </BrowserRouter>
     </NuqsAdapter>
   </React.StrictMode>

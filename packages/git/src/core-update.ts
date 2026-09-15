@@ -2,7 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { runGit, getCurrentBranch, getGitStatus } from './git-service.js';
 import { CoreUpdateOptions, CoreUpdateResult } from './types.js';
-import { loadWorkspaceConfig, WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
+import { loadWorkspaceConfig, WORKSPACE_CONFIG_FILENAME, scanNotebookNotes } from '@mygitnotes/core';
 import { mergeWorkspaceCore } from '../../../scripts/lib/workspace-agent-merge.mjs';
 
 export class CoreUpdateError extends Error {
@@ -132,6 +132,16 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
     }
   }
 
+  // Notes without created/updated predate this feature; point the user at the backfill command.
+  let notesMissingTimestamps = 0;
+  if (config) {
+    for (const notebook of config.notebooks) {
+      for (const note of scanNotebookNotes(repoRoot, notebook)) {
+        if (!note.metadata.created || !note.metadata.updated) notesMissingTimestamps++;
+      }
+    }
+  }
+
   // 9. Validate the workspace after merge
   try {
     loadWorkspaceConfig(repoRoot);
@@ -149,12 +159,17 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
     await runGit(['push', 'origin', 'main'], repoRoot);
   }
 
+  const backfillHint = notesMissingTimestamps > 0
+    ? ` ${notesMissingTimestamps} note(s) are missing created/updated. Run \`pnpm backfill-note-timestamps\` and review the diff.`
+    : '';
+
   return {
     success: true,
     currentHash,
     coreRemoteHash,
     remoteUsed: remote,
     alreadyUpToDate: false,
-    message: `Successfully merged ${remote}/core (${coreRemoteHash.slice(0, 7)}) into main.`,
+    notesMissingTimestamps,
+    message: `Successfully merged ${remote}/core (${coreRemoteHash.slice(0, 7)}) into main.${backfillHint}`,
   };
 }
