@@ -276,11 +276,21 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
       if (!autoSave || blocked || isRestoring) return;
 
+      // Timestamps are stamped server-side on every save; absorb them so the next
+      // comparison against the refreshed `note`/`baseNote` prop doesn't see a
+      // spurious difference and re-save in a loop.
+      const absorbTimestamps = (saved: NoteItem) => setMetadata(current => (
+        current.created === saved.metadata.created && current.updated === saved.metadata.updated
+          ? current
+          : { ...current, created: saved.metadata.created, updated: saved.metadata.updated }
+      ));
+
       if (draftMode) {
         setIsSaving(true);
-        void onSave({ path: note.path, content, metadata, baseNote }).then(() => {
+        void onSave({ path: note.path, content, metadata, baseNote }).then(saved => {
           if (!mounted.current) return;
           clearLocalDraft(draftScope || branch, note.path);
+          absorbTimestamps(saved);
           setHasUnsavedChanges(false); setSaveError('');
         }).catch(error => { if (mounted.current) setSaveError(`Local save failed: ${error.message}`); })
           .finally(() => { if (mounted.current) setIsSaving(false); });
@@ -291,12 +301,13 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
       const timer = setTimeout(async () => {
         setIsSaving(true);
         try {
-          await onSave({
+          const saved = await onSave({
             path: note.path,
             content,
             metadata,
           });
           clearLocalDraft(draftScope || branch, note.path);
+          absorbTimestamps(saved);
           setHasUnsavedChanges(false);
         } catch (err) {
           setSaveError((err as Error).message);
