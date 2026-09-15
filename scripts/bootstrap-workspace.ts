@@ -3,8 +3,23 @@ import fs from 'node:fs';
 import { runGit, getCurrentBranch, stageAndCommit } from '../packages/git/src/index.js';
 import { WORKSPACE_CONFIG_FILENAME, loadWorkspaceConfig, resolveSafePath } from '../packages/core/src/index.js';
 
+const EMPTY_WORKSPACE_CONFIG = `schema_version: 1
+workspace:
+  title: My Notes
+  default_notebook: personal
+notebooks:
+  - id: personal
+    title: Personal
+    root: notes/personal
+    assets: assets
+    default_view: list
+files:
+  hide_dotfiles: true
+`;
+
 async function bootstrapWorkspace() {
   const repoRoot = process.cwd();
+  const withExamples = !process.argv.includes('--no-examples');
   console.log(`[bootstrap] Starting workspace initialization for: ${repoRoot}`);
 
   // 1. Verify this is a MyGitNotes clone
@@ -46,7 +61,12 @@ async function bootstrapWorkspace() {
   const notesConfig = resolveSafePath(repoRoot, `notes/${WORKSPACE_CONFIG_FILENAME}`);
   const rootConfig = resolveSafePath(repoRoot, WORKSPACE_CONFIG_FILENAME);
   if (!fs.existsSync(notesConfig) && !fs.existsSync(rootConfig)) {
-    copyMissing(path.join(template, WORKSPACE_CONFIG_FILENAME), WORKSPACE_CONFIG_FILENAME);
+    if (withExamples) copyMissing(path.join(template, WORKSPACE_CONFIG_FILENAME), WORKSPACE_CONFIG_FILENAME);
+    else {
+      fs.writeFileSync(rootConfig, EMPTY_WORKSPACE_CONFIG, { flag: 'wx' });
+      filesToStage.push(WORKSPACE_CONFIG_FILENAME);
+      needsCommit = true;
+    }
   }
   const config = loadWorkspaceConfig(repoRoot);
   if (!config) throw new Error('Workspace configuration could not be loaded.');
@@ -59,14 +79,14 @@ async function bootstrapWorkspace() {
     }
   };
   copyDirectory(path.join(repoRoot, 'examples/workspace-agent-system'), '');
-  if (config.notebooks.some(notebook => notebook.id === 'example' && notebook.root === 'notes/example')) {
+  if (withExamples && config.notebooks.some(notebook => notebook.id === 'example' && notebook.root === 'notes/example')) {
     copyDirectory(path.join(template, 'notes/example'), 'notes/example');
     fs.mkdirSync(resolveSafePath(repoRoot, 'notes/example/assets'), { recursive: true });
   }
-  if (config.notebooks.some(notebook => notebook.id === 'learning' && notebook.root === 'notes/learning')) {
+  if (withExamples && config.notebooks.some(notebook => notebook.id === 'learning' && notebook.root === 'notes/learning')) {
     copyDirectory(path.join(template, 'notes/learning'), 'notes/learning');
   }
-  if (fs.existsSync(path.join(template, '.github-notes-screen.yaml')) && !fs.existsSync(resolveSafePath(repoRoot, '.github-notes-screen.yaml'))) {
+  if (withExamples && fs.existsSync(path.join(template, '.github-notes-screen.yaml')) && !fs.existsSync(resolveSafePath(repoRoot, '.github-notes-screen.yaml'))) {
     copyMissing(path.join(template, '.github-notes-screen.yaml'), '.github-notes-screen.yaml');
   }
 
