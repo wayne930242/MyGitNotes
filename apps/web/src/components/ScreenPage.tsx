@@ -11,7 +11,7 @@ import { stringify } from 'yaml';
 import { DndContext, DragOverlay, PointerSensor, KeyboardSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, GripVertical, X, Zap, ChevronLeft, ChevronRight, LayoutGrid, Columns3, Columns2, SlidersHorizontal, Brain, ArrowLeft, Pencil } from 'lucide-react';
+import { Plus, GripVertical, X, Zap, ChevronLeft, ChevronRight, LayoutGrid, Columns3, Columns2, SlidersHorizontal, Brain, ArrowLeft, Pencil, Network } from 'lucide-react';
 import { moveScreenItem, type ScreenItem, type ScreenRow } from '@mygitnotes/core/screen-page';
 import type { NoteItem, NotebookConfig, FolderItem } from '../lib/types.js';
 import { fetchAssets } from '../lib/api.js';
@@ -33,6 +33,13 @@ import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { Select } from './Select.js';
 import type { SortConfig } from '../lib/note-sort.js';
 import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
+
+export const screenViewTabs = [
+  { value: 'thumbnail', icon: LayoutGrid },
+  { value: 'small', icon: Columns3 },
+  { value: 'medium', icon: Columns2 },
+  { value: 'graph', icon: Network },
+] as const;
 
 function MovableCard({ item, row, reorder, disabled, remove, ...content }: ScreenContentProps & {
   item: ScreenItem; row: ScreenRow; reorder: boolean; disabled: boolean; remove: () => void;
@@ -114,7 +121,7 @@ function Lane({ row, graph, reorder, disabled, study, onStudy, onStudyChange, on
         <Select className="screen-view-select" aria-label={`${t('screen.view')}: ${row.name}`} value={row.view} disabled={disabled} onValueChange={value => onView(value as ScreenRow['view'])}
           options={(['thumbnail', 'small', 'medium', 'graph'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} />
         <div className="screen-view-tabs" role="group" aria-label={`${t('screen.view')}: ${row.name}`}>
-        {([{value:'thumbnail',icon:LayoutGrid},{value:'small',icon:Columns3},{value:'medium',icon:Columns2},{value:'graph',icon:Zap}] as const).map(({value,icon:Icon}) => <Button key={value} type="button" disabled={disabled} size="icon" title={t(`screen.${value}`)} aria-label={t(`screen.${value}`)} aria-pressed={row.view === value} onClick={() => onView(value)}><Icon size={16} /></Button>)}
+        {screenViewTabs.map(({value,icon:Icon}) => <Button key={value} type="button" disabled={disabled} size="icon" title={t(`screen.${value}`)} aria-label={t(`screen.${value}`)} aria-pressed={row.view === value} onClick={() => onView(value)}><Icon size={16} /></Button>)}
       </div>
         <Button type="button" size="icon" className="screen-start-study" aria-label={`${t('study.start')}: ${row.name}`} title={t('study.start')} onClick={onStudy}><Brain size={18} /></Button>
         {row.kind === 'custom' ? (

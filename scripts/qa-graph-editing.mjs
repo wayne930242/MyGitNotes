@@ -84,6 +84,16 @@ try {
  await page.$eval('.graph-card-position.is-closing .graph-note-card',el=>el.getAnimations().forEach(animation=>animation.finish()));
  await page.waitForFunction(()=>document.querySelectorAll('[data-graph-note]').length===1);
  assert.equal(await page.$$eval('[data-graph-note]',cards=>cards.length),1);
+ const collapsedLayoutA=saved.graph.nodes.find(node=>node.path==='notes/a/a.md'), collapsedLayoutB=saved.graph.nodes.find(node=>node.path==='notes/a/b.md');
+ const collapsedCardB=await (await page.$(cardB)).boundingBox(), collapsedScale=collapsedCardB.width/(collapsedLayoutB.width||360);
+ const collapsedAlpha={x:collapsedCardB.x+collapsedCardB.width/2+(collapsedLayoutA.x-collapsedLayoutB.x)*collapsedScale,y:collapsedCardB.y+collapsedCardB.height/2+(collapsedLayoutA.y-collapsedLayoutB.y)*collapsedScale};
+ await page.mouse.move(collapsedAlpha.x,collapsedAlpha.y); await page.waitForSelector('.graph-hover-expand');
+ const expandButton=await (await page.$('.graph-hover-expand')).boundingBox();
+ await page.$eval('canvas',(canvas,point)=>canvas.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,clientX:point.x,clientY:point.y})),{x:expandButton.x-15,y:expandButton.y+14});
+ await page.waitForSelector(cardA);
+ console.log('PASS double-click expands a collapsed note node');
+ await page.click(cardA+' button[aria-label="Collapse notes"]');
+ await page.waitForFunction(()=>document.querySelectorAll('[data-graph-note]').length===1);
  console.log('PASS save selected membership, restore layout, collapse independently');
  await page.goto(base+'/screen',{waitUntil:'networkidle0'});await page.waitForSelector('#screen-lane-'+saved.id+' .graph-page-container');
  await page.click('#screen-lane-dynamic button[aria-label="Graph"]');await page.waitForSelector('#screen-lane-dynamic .graph-page-container');
