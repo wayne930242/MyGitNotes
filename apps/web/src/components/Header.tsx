@@ -1,3 +1,4 @@
+import { Button } from './Button.js';
 import { ScreenIcon } from './ScreenIcon.js';
 import React, { useEffect } from 'react';
 import { BookOpen, Bot, Image as ImageIcon, Keyboard, Plus, Settings, Network } from 'lucide-react';
@@ -47,10 +48,10 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
       </div>
       <nav aria-label="Main navigation" className="header-nav">
         {items.map(({id, label, icon: Icon, ...item}, index) => <React.Fragment key={id}>
-          {index === 2 && <button type="button" className="mobile-nav-create" aria-label={t('header.newNote')}
+          {index === 2 && <Button variant="primary" type="button" className="mobile-nav-create" aria-label={t('header.newNote')}
             disabled={createNoteDisabled || navigationDisabled} onClick={onCreateNote}>
             <Plus aria-hidden="true" /><span>{t('header.newNote')}</span>
-          </button>}
+          </Button>}
           <button type="button" disabled={navigationDisabled} onClick={() => setActiveTab(id)} aria-label={label}
             className={'desktopOnly' in item && item.desktopOnly ? 'desktop-only' : undefined}
             aria-current={activeTab === id ? 'page' : undefined}>

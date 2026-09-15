@@ -10,7 +10,7 @@ interface GraphControlsProps {
   filterPanel: ReactNode;
   appearance: GraphAppearance; onAppearanceChange: (appearance: GraphAppearance) => void;
   visibleColorGroups: { key: string; label: string; color: string }[]; appearanceSaveError: boolean;
-  showOrphans: boolean; onToggleOrphans: () => void; onReset: () => void;
+  showOrphans?: boolean; onToggleOrphans?: () => void; onReset?: () => void;
 }
 
 export function GraphControls({ controlsRef, filterPanel, appearance, onAppearanceChange, visibleColorGroups, appearanceSaveError, showOrphans, onToggleOrphans, onReset }: GraphControlsProps) {
@@ -32,7 +32,7 @@ export function GraphControls({ controlsRef, filterPanel, appearance, onAppearan
               {appearanceSaveError && <p role="status" className="mt-2 text-amber-600">{t('graph.appearanceSaveError')}</p>}
             </div>
         </details>
-        <div className="graph-view-actions">
+        {onToggleOrphans && <div className="graph-view-actions">
           <button
             type="button"
             onClick={onToggleOrphans}
@@ -58,7 +58,7 @@ export function GraphControls({ controlsRef, filterPanel, appearance, onAppearan
             <RotateCcw size={13} />
             <span>{t('graph.resetZoom')}</span>
           </button>
-        </div>
+        </div>}
 
       </div>
 

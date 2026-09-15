@@ -7,9 +7,9 @@ status: working
 
 ## Completed This Week
 
-- [x] Set up notes workspace
-- [x] Test nested directories and view modes
-- [ ] Organize captured thoughts into actionable next steps
+- [x] Set up notes workspace ✅ 2026-09-12
+- [x] Test nested directories and view modes ✅ 2026-09-14
+- [ ] Organize captured thoughts into actionable next steps 📅 2026-09-18
 
 ## In Progress
 

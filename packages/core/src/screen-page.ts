@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { StudyProgressionSchema } from './study-stages.js';
+import { isNoteHidden } from './note-status.js';
+import type { NoteItem } from './types.js';
 
 export const SCREEN_PAGE_FILE = '.github-notes-screen.yaml';
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
@@ -12,7 +14,13 @@ export const ScreenItemSchema = z.discriminatedUnion('kind', [
   z.object({ ...reference, kind: z.literal('asset') }).strict(),
   z.object({ id, kind: z.literal('youtube'), videoId: z.string().regex(/^[\w-]{11}$/), start: z.number().int().min(0).max(86400).default(0), title: z.string().max(160).optional() }).strict(),
 ]);
-const row = { id, name: z.string().trim().min(1).max(100), view: z.enum(['thumbnail', 'small', 'medium', 'reading', 'study']).transform(value => value === 'reading' || value === 'study' ? 'small' as const : value), progression: StudyProgressionSchema.optional(), study: z.object({ filter: z.enum(['all', 'due', 'future', 'paused']), dueFirst: z.boolean(), status: z.string().max(200).optional() }).strict().optional() };
+export const GraphLayoutSchema = z.object({ nodes: z.array(z.object({
+  path: repoPath, x: z.number().finite().min(-1e7).max(1e7), y: z.number().finite().min(-1e7).max(1e7),
+  width: z.number().min(240).max(1600).optional(), height: z.number().min(180).max(1400).optional(),
+  expanded: z.boolean().optional(), pinned: z.boolean().optional(),
+}).strict()).max(5000) }).strict();
+export type GraphLayout = z.infer<typeof GraphLayoutSchema>;
+const row = { id, name: z.string().trim().min(1).max(100), view: z.enum(['thumbnail', 'small', 'medium', 'graph', 'reading', 'study']).transform(value => value === 'reading' || value === 'study' ? 'small' as const : value), graph: GraphLayoutSchema.optional(), progression: StudyProgressionSchema.optional(), study: z.object({ filter: z.enum(['all', 'due', 'future', 'paused']), dueFirst: z.boolean(), status: z.string().max(200).optional() }).strict().optional() };
 export const ScreenRowSchema = z.discriminatedUnion('kind', [
   z.object({ ...row, kind: z.literal('custom'), items: z.array(ScreenItemSchema).max(100) }).strict(),
   z.object({ ...row, kind: z.literal('dynamic'), sort: z.object({
@@ -40,6 +48,19 @@ export type ScreenItem = z.infer<typeof ScreenItemSchema>;
 export type ScreenRow = z.infer<typeof ScreenRowSchema>;
 export type ScreenPage = z.infer<typeof ScreenPageSchema>;
 export const emptyScreenPage = (): ScreenPage => ({ version: 1, rows: [] });
+
+/** Membership is shared by lane cards and graph views; folder shortcuts stay shortcuts. */
+export function screenRowNotes(row: ScreenRow, notes: NoteItem[]): NoteItem[] {
+  return notes.filter(note => {
+    if (row.study?.status && note.status !== row.study.status) return false;
+    if (row.kind === 'custom') return row.items.some(item => item.kind === 'note' && item.path === note.path && item.notebookId === note.notebookId);
+    const source = row.source;
+    if (isNoteHidden({ ...note.metadata, status: note.status }) || source.notebookId && source.notebookId !== note.notebookId) return false;
+    if (source.kind === 'tag') return note.tags.includes(source.tag);
+    return note.path.startsWith(source.path + '/') && (source.recursive || !note.path.slice(source.path.length + 1).includes('/'));
+  });
+}
+export function screenRowNotePaths(row: ScreenRow, notes: NoteItem[]): string[] { return screenRowNotes(row, notes).map(note => note.path); }
 
 export function moveScreenRow(page: ScreenPage, rowId: string, index: number): ScreenPage {
   const selected = page.rows.find(row => row.id === rowId);

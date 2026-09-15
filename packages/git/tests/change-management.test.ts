@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runGit, stageAndCommit } from '../src/git-service.js';
-import { listChanges, changeFile, commitStagedFiles, fileDiff } from '../src/change-management.js';
+import { listChanges, changeFile, commitStagedFiles, commitSelectedFiles, fileDiff } from '../src/change-management.js';
 
 let root: string;
 beforeEach(async () => {
@@ -17,6 +17,28 @@ beforeEach(async () => {
 });
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
+it('commits selected working files while preserving unrelated staged and working content', async () => {
+  fs.writeFileSync(path.join(root, 'a.md'), 'selected a');
+  fs.writeFileSync(path.join(root, 'b.md'), 'staged b');
+  await runGit(['add', '--', 'b.md'], root);
+  fs.writeFileSync(path.join(root, 'b.md'), 'later b');
+  const selected = (await listChanges(root)).filter(file => file.path === 'a.md');
+  await commitSelectedFiles(root, selected, 'selected only');
+  expect((await runGit(['show', 'HEAD:a.md'], root)).stdout).toBe('selected a');
+  expect((await runGit(['show', 'HEAD:b.md'], root)).stdout).toBe('original b');
+  expect((await runGit(['show', ':b.md'], root)).stdout).toBe('staged b');
+  expect(fs.readFileSync(path.join(root, 'b.md'), 'utf8')).toBe('later b');
+});
+
+it('rejects a stale selection before staging any selected file', async () => {
+  fs.writeFileSync(path.join(root, 'a.md'), 'reviewed');
+  fs.writeFileSync(path.join(root, 'b.md'), 'reviewed');
+  const selected = await listChanges(root);
+  fs.writeFileSync(path.join(root, 'b.md'), 'newer');
+  await expect(commitSelectedFiles(root, selected, 'stale')).rejects.toThrow();
+  expect((await listChanges(root)).every(file => !file.staged)).toBe(true);
+});
+
 it('stages a snapshot, shows both diffs, and commits only the staged version', async () => {
   fs.writeFileSync(path.join(root, 'a.md'), 'staged a\n');
   const change = (await listChanges(root))[0];
@@ -25,6 +47,8 @@ it('stages a snapshot, shows both diffs, and commits only the staged version', a
   fs.writeFileSync(path.join(root, 'b.md'), 'other b\n');
   expect(await fileDiff(root, 'a.md', 'staged')).toContain('+staged a');
   expect(await fileDiff(root, 'a.md', 'working')).toContain('+later a');
+  expect(await fileDiff(root, 'a.md', 'current')).toContain('-original a');
+  expect(await fileDiff(root, 'a.md', 'current')).toContain('+later a');
   const staged = (await listChanges(root)).filter(file => file.staged);
   await commitStagedFiles(root, staged, 'selected snapshot');
   expect((await runGit(['show', 'HEAD:a.md'], root)).stdout).toBe('staged a');

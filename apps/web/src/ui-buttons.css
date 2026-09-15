@@ -13,6 +13,8 @@
   transition: background-color 150ms, border-color 150ms, box-shadow 150ms;
 }
 .ui-button { min-height: 32px; gap: 7px; border: 1px solid var(--button-border); border-radius: 8px; padding: 8px 12px; font-size: 12px; line-height: 18px; font-weight: 500; white-space: nowrap; }
+.ui-button.ui-button-small { min-height: 24px; gap: 4px; padding: 2px 6px; border-radius: 6px; font-size: 11px; line-height: 16px; }
+.ui-button.ui-button-small svg { width: 12px; height: 12px; }
 .ui-icon-button { --button-bg: transparent; --button-text: var(--color-muted); --button-hover-text: var(--color-text); flex: none; width: 30px; height: 30px; padding: 6px; border-radius: 6px; }
 .ui-button-primary, .ui-button[aria-pressed="true"] {
   --button-bg: var(--color-primary);
@@ -27,3 +29,12 @@
 .ui-icon-button:not(:disabled):not([aria-disabled="true"]):hover { background: var(--button-hover-bg); color: var(--button-hover-text); }
 .ui-button:focus-visible, .ui-button:focus-within, .ui-icon-button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .ui-button:disabled, .ui-button[aria-disabled="true"], .ui-icon-button:disabled, .ui-icon-button[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
+/* Fade the primary surface, not its label, so disabled actions remain readable. */
+.ui-button.ui-button-primary:disabled,
+.ui-button.ui-button-primary[aria-disabled="true"],
+.ui-button[aria-pressed="true"]:disabled,
+.ui-button[aria-pressed="true"][aria-disabled="true"] {
+  --button-bg: color-mix(in srgb, var(--color-primary) 45%, var(--color-surface));
+  --button-text: var(--color-text);
+  opacity: 1 !important;
+}

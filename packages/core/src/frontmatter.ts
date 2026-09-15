@@ -119,10 +119,45 @@ export function serializeNoteContent(metadata: NoteMetadata, content: string, is
 export function replaceNoteStatus(raw: string, status: string | null): string {
   const match = raw.match(FRONTMATTER_REGEX);
   if (match && parseNoteContent(raw).hasFrontmatter) {
-    const document = YAML.parseDocument(match[1]);
-    if (status === null) document.delete('status'); else document.set('status', status);
+    const yaml = match[1];
+    const document = YAML.parseDocument(yaml);
+    if (!YAML.isMap(document.contents)) return raw;
+    const map = document.contents;
+    const index = map.items.findIndex(pair => YAML.isScalar(pair.key) && pair.key.value === 'status');
+    const pair = map.items[index];
+    if (!pair && status === null || pair && document.get('status') === status) return raw;
     const newline = match[0].includes('\r\n') ? '\r\n' : '\n';
-    return `---${newline}${document.toString().replace(/\n/g, newline)}---${newline}${raw.slice(match[0].length)}`;
+    const offset = raw.indexOf('\n') + 1;
+    const patch = (start: number, end: number, text: string) => raw.slice(0, offset + start) + text + raw.slice(offset + end);
+    const node = new YAML.Scalar(status);
+    if (YAML.isScalar(pair?.value) && ['QUOTE_SINGLE', 'QUOTE_DOUBLE'].includes(pair.value.type || '')) node.type = pair.value.type;
+    const rendered = new YAML.Document(node).toString({ lineWidth: 0 }).trimEnd();
+    if (!pair) {
+      if (map.flow) {
+        const end = yaml.lastIndexOf('}');
+        return patch(end, end, `${map.items.length ? ', ' : ''}status: ${rendered}`);
+      }
+      return patch(yaml.length, yaml.length, `${newline}status: ${rendered}`);
+    }
+    const key = pair.key as YAML.Scalar;
+    const value = pair.value as YAML.Node;
+    if (status !== null) {
+      const [start, end] = value.range!;
+      const trailingNewline = yaml.slice(start, end).endsWith('\n') ? newline : '';
+      const spacing = start === end && !/\s/.test(yaml[start - 1]) ? ' ' : '';
+      return patch(start, end, spacing + rendered + trailingNewline);
+    }
+    let start = key.range![0], end = value.range![2];
+    if (map.flow) {
+      end = value.range![1];
+      if (index < map.items.length - 1) end = (map.items[index + 1].key as YAML.Node).range![0];
+      else if (index > 0) start = yaml.lastIndexOf(',', start);
+    } else {
+      start = yaml.lastIndexOf('\n', start - 1) + 1;
+      // The extracted YAML omits the newline before the closing delimiter.
+      if (end === yaml.length) end += newline.length;
+    }
+    return patch(start, end, !map.flow && map.items.length === 1 ? `{}${newline}` : '');
   }
   return status === null ? raw : `---\n${YAML.stringify({ status })}---\n${raw}`;
 }

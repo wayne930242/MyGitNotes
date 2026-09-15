@@ -50,7 +50,7 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
       if (disabled || row && !name.trim()) return;
       const result = StudyProgressionSchema.safeParse(progression);
       if (studyChanged && !result.success) { setStageError(true); setAdvancedOpen(true); return; }
-      const base = { id: row?.id || crypto.randomUUID(), name: name.trim() || t(kind === 'custom' ? 'screen.custom' : 'screen.dynamic'), view, ...(studyChanged ? { study: { ...row?.study, filter: studyFilter, dueFirst: true } } : row?.study ? { study: row.study } : {}), ...(studyChanged && result.success ? { progression: result.data } : row?.progression ? { progression: row.progression } : {}) };
+      const base = { id: row?.id || crypto.randomUUID(), name: name.trim() || t(kind === 'custom' ? 'screen.custom' : 'screen.dynamic'), view, ...(row?.graph ? { graph: row.graph } : {}), ...(studyChanged ? { study: { ...row?.study, filter: studyFilter, dueFirst: true } } : row?.study ? { study: row.study } : {}), ...(studyChanged && result.success ? { progression: result.data } : row?.progression ? { progression: row.progression } : {}) };
       const sort = row?.kind === 'dynamic' && row.sort ? { sort: row.sort } : {};
       onApply(kind === 'custom'
         ? { ...base, kind: 'custom', items: row?.kind === 'custom' ? row.items : [] }
@@ -67,7 +67,7 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
       {kind === 'folder' && <label>{t('sidebar.notebooks')}<Select value={notebookId} onValueChange={id => { setNotebook(id); setFolder(''); }} options={notebooks.map(nb => ({ value: nb.id, label: nb.title }))} /></label>}
       {kind === 'folder' && <><label>{t('folder.folders')}<Select value={folder || nb?.root || ''} onValueChange={setFolder} options={screenFolderOptions(nb, folders, assets).map(folder => ({ value: folder.path, label: folder.title }))} /></label>
         <label className="screen-checkbox"><input type="checkbox" checked={recursive} onChange={e => setRecursive(e.target.checked)} />{t('screen.recursive')}</label></>}
-      <label>{t('screen.view')}<Select aria-label={t('screen.view')} value={view} disabled={disabled} onValueChange={value => setView(value as ScreenRow['view'])} options={(['thumbnail', 'small', 'medium'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} /></label>
+      <label>{t('screen.view')}<Select aria-label={t('screen.view')} value={view} disabled={disabled} onValueChange={value => setView(value as ScreenRow['view'])} options={(['thumbnail', 'small', 'medium', 'graph'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} /></label>
       <details className="study-advanced" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}>
         <summary>{t('study.advanced')}</summary>
         <div className="study-advanced-content">

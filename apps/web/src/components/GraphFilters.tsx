@@ -1,11 +1,11 @@
-import { useId, useRef, useState } from 'react';
+import { useId, useRef, useState, type ReactNode } from 'react';
 import { Filter, Search, X } from 'lucide-react';
 import type { FilterControls } from '../lib/filter-controls.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import './graph-filters.css';
 
 
-export function GraphFilters({ value, neighbors, notebooks, folders, tags, statuses, onChange, onNotebookChange, onClear }: FilterControls) {
+export function GraphFilters({ value, neighbors, notebooks, folders, tags, statuses, onChange, onNotebookChange, onClear, showOrphans, onToggleOrphans, children, extraCount = 0 }: FilterControls & { showOrphans?: boolean; onToggleOrphans?: () => void; children?: ReactNode; extraCount?: number }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [optionSearch, setOptionSearch] = useState('');
@@ -34,7 +34,7 @@ export function GraphFilters({ value, neighbors, notebooks, folders, tags, statu
   const visibleTags = [...new Set([...value.tags, ...tags])].filter(tag => tag.toLocaleLowerCase().includes(needle)).sort();
   const conditionChips = <div className="filter-chips">
     {chips.map(chip => <button type="button" className="filter-chip" key={chip.key} onClick={chip.remove} aria-label={t('filters.remove', { value: chip.label })}><span>{chip.label}</span><X size={12} aria-hidden="true" /></button>)}
-    {chips.length > 0 && <button type="button" className="filter-clear" onClick={onClear}>{t('filters.clear')}</button>}
+    {chips.length + extraCount > 0 && <button type="button" className="filter-clear" onClick={onClear}>{t('filters.clear')}</button>}
   </div>;
   return <section className="graph-filters is-compact" aria-label={t('filters.title')}
     onKeyDown={event => { if (event.key === 'Escape' && open) { event.stopPropagation(); close(); } }}>
@@ -43,12 +43,14 @@ export function GraphFilters({ value, neighbors, notebooks, folders, tags, statu
         <input type="search" aria-label={t('header.searchPlaceholder')} placeholder={t('header.searchPlaceholder')} value={value.q} onChange={event => onChange({ q: event.target.value })} />
       </label>
       <button type="button" className="ui-button filter-trigger" ref={trigger} aria-label={t('filters.title')} title={t('filters.title')} aria-expanded={open} aria-controls={id} onClick={() => setOpen(value => !value)}>
-        <Filter size={14} aria-hidden="true" /><span className="filter-count">{chips.length}</span>
+        <Filter size={14} aria-hidden="true" /><span className="filter-count">{chips.length + extraCount}</span>
       </button>
+      {onToggleOrphans && <button type="button" className="ui-button" aria-pressed={showOrphans} onClick={onToggleOrphans}>{t('graph.showOrphans')}</button>}
     </div>
     {open && <div id={id} className="filter-details">
       <div className="filter-details-heading"><strong>{t('filters.title')}</strong><button type="button" className="ui-button" aria-label={t('filters.close')} onClick={close}><X size={14} /></button></div>
       {conditionChips}
+      {children}
       <div className="filter-fields">
         <label>{t('filters.notebook')}<select value={value.notebookId} onChange={event => onNotebookChange(event.target.value)}>
           <option value="all">{t('graph.allNotebooks')}</option>{notebooks.map(nb => <option key={nb.id} value={nb.id}>{nb.title}</option>)}

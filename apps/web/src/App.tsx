@@ -1,4 +1,7 @@
+import { Button } from './components/Button.js';
+import type { ChangeRequest } from './lib/types.js';
 import { useQueryStates } from 'nuqs';
+import { useGraphEditing } from './lib/use-graph-editing.js';
 import { filterParsers, writeFilterQuery, type FilterQuery } from './lib/filter-query.js';
 import { filterNotes, legacyFolderPaths, type NoteFilters } from '@mygitnotes/core/note-filters';
 import type { FilterControls } from './lib/filter-controls.js';
@@ -206,6 +209,7 @@ const AppContent: React.FC = () => {
   };
   const clearFilters = () => {
     const query = currentFilterSearch({ q: '', tag: [], folders: [], descendants: true, tagMode: 'any', status: null, showHidden: false, neighbors: false });
+    query.delete('lanes');
     void navigateFiltered(activeTab === 'graph' ? '/graph' : notebookRoute(selectedNotebookId), query);
   };
   const setActiveTab = async (tab: WorkspaceTab) => {
@@ -248,6 +252,7 @@ const AppContent: React.FC = () => {
 
 
   // Modal States
+  const [commitRequest, setCommitRequest] = useState<ChangeRequest>();
   const [isCommitOpen, setIsCommitOpen] = useState<boolean>(false);
   const [isNewNoteOpen, setIsNewNoteOpen] = useState<boolean>(false);
 
@@ -356,7 +361,9 @@ const AppContent: React.FC = () => {
   }, [selectedFolder, folders, selectedNotebookId, t]);
 
   // Note Handlers
-  const handleOpenNote = (note: NoteItem, anchor = '') => {
+  const handleOpenNote = async (note: NoteItem, anchor = '') => {
+    try { await graphEditing.store.flushAll(); note = graphEditing.store.get(note).draft; }
+    catch (error) { setActionError((error as Error).message); return; }
     setEditingNote(note);
 
     const notebook = config?.notebooks.find(nb => nb.id === note.notebookId);
@@ -411,6 +418,12 @@ const AppContent: React.FC = () => {
     setGitStatus(statusRes.status);
     return res.note;
   };
+
+  const graphEditing = useGraphEditing(`${sourceId}:${branch}`, notes, canWrite, params => {
+    const pending = remote ? readWorkingNotes(workingScope)[params.path] : undefined;
+    if (pending?.blocked) return Promise.reject(new Error(pending.blocked));
+    return handleSaveNote({ ...params, baseNote: pending?.base || params.baseNote });
+  });
 
   // Trash action: delete without immediate commit, allowing restore (Requirement 2)
   const handleDeleteNote = async (note: NoteItem) => {
@@ -682,11 +695,19 @@ const AppContent: React.FC = () => {
   const routedNote = routedPath ? (editingNote?.path === routedPath ? editingNote : notes.find(note => note.path === routedPath) || null) : null;
   const noteEditorOpen = Boolean(routedNote) && !routeError;
 
-  const openCommitModal = () => { void (async () => {
+  const openCommitModal = (request?: ChangeRequest) => { void (async () => {
     if (activeTab === 'agent' && !await agentSystemRef.current?.prepareLeave()) return;
     if (!remote && screen.dirty) await screen.save();
+    setCommitRequest(request);
     setIsCommitOpen(true);
   })().catch(error => setActionError(error.message)); };
+
+  const panelRemoteChanges = remote ? [
+          ...Object.values(activeWorkingNotes).map(entry => ({ path: entry.note.path, kind: entry.blocked ? 'conflict' as const : entry.base ? 'modified' as const : 'added' as const,
+            tracked: Boolean(entry.base), revision: JSON.stringify(entry), available: canWrite && !entry.blocked, staged: false, unstaged: true })),
+          ...(screenPending ? [{ path: SCREEN_PAGE_FILE, kind: 'modified' as const, tracked: true, revision: screen.diff, available: canWrite && !screen.error, staged: false, unstaged: true }] : []),
+        ] : undefined;
+  const panelGetPreview = remote ? (file: string) => file === SCREEN_PAGE_FILE ? screen.diff : activeWorkingNotes[file] ? workingDiff({ [file]: activeWorkingNotes[file] }) : '' : undefined;
 
   if (loading || loadError) return <ConnectionState loading={loading} error={loadError} onRetry={refreshWorkspace} />;
 
@@ -712,7 +733,7 @@ const AppContent: React.FC = () => {
             <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
             <span
               className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-white shrink-0 shadow-xs"
-              style={{ backgroundColor: 'var(--color-primary)' }}
+              style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-on-primary)' }}
             >
               {t('nav.coreBaseline')}
             </span>
@@ -788,7 +809,7 @@ const AppContent: React.FC = () => {
             <main className="workspace-main notes-main">
               <PageToolbar>
                 {indexInToolbar && folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
-                <NoteToolbar readOnly={!canWrite || selectedNotebookId === 'all'} viewMode={viewMode} setViewMode={setViewMode}
+                <NoteToolbar sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite || selectedNotebookId === 'all'} viewMode={viewMode} setViewMode={setViewMode}
                   onOpenNewNoteModal={() => openNewNote()} filtersOpen={filtersOpen}
                   onToggleFilters={() => setFiltersOpen(open => !open)} />
               </PageToolbar>
@@ -811,7 +832,7 @@ const AppContent: React.FC = () => {
               </>}
               {(viewMode === 'list' || viewMode === 'flat') && (
                 <ListView
-                  showMobileSort={viewMode === 'flat'}
+                  showMobileSort={false}
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
                   canDelete={!remote && canWrite}
@@ -889,7 +910,7 @@ const AppContent: React.FC = () => {
           </main>
         )}
 
-        {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} focusedLaneId={route.lane} onStudySaved={note => { if (note) { setNotes(values => values.map(value => value.path === note.path && value.notebookId === note.notebookId ? note : value)); } else { void refreshWorkspace(); } void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message)); }} notebooks={config?.notebooks || []} notes={notes} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} onCreateNote={openNewNote} /></React.Suspense>}
+        {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} editing={graphEditing} focusedLaneId={route.lane} onStudySaved={note => { if (note) { setNotes(values => values.map(value => value.path === note.path && value.notebookId === note.notebookId ? note : value)); } else { void refreshWorkspace(); } void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message)); }} notebooks={config?.notebooks || []} notes={notes} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} onCreateNote={openNewNote} /></React.Suspense>}
 
         {activeTab === 'graph' && (
           <main className="workspace-route graph-main flex-1 w-full h-full relative min-h-0">
@@ -899,6 +920,9 @@ const AppContent: React.FC = () => {
                 notebooks={config?.notebooks || []}
                 notes={notes}
                 filters={filterProps}
+                folders={folders}
+                screen={screen}
+                editing={graphEditing}
                 onOpenNote={handleOpenNote}
               />
             </React.Suspense>
@@ -930,6 +954,9 @@ const AppContent: React.FC = () => {
           deletedNotes={deletedNotes}
           onRestoreNote={handleRestoreNote}
           onOpenCommitModal={openCommitModal}
+          writable={canWrite}
+          remoteChanges={panelRemoteChanges}
+          getPreview={panelGetPreview}
         />
       </div>
 
@@ -993,12 +1020,9 @@ const AppContent: React.FC = () => {
       {/* Commit Modal */}
       <CommitModal
         writable={canWrite}
-        remoteChanges={remote ? [
-          ...Object.values(activeWorkingNotes).map(entry => ({ path: entry.note.path, kind: entry.blocked ? 'conflict' as const : entry.base ? 'modified' as const : 'added' as const,
-            tracked: Boolean(entry.base), revision: JSON.stringify(entry), available: canWrite, staged: false, unstaged: true })),
-          ...(screenPending ? [{ path: SCREEN_PAGE_FILE, kind: 'modified' as const, tracked: true, revision: screen.diff, available: canWrite && !screen.error, staged: false, unstaged: true }] : []),
-        ] : undefined}
-        getPreview={remote ? file => file === SCREEN_PAGE_FILE ? screen.diff : activeWorkingNotes[file] ? workingDiff({ [file]: activeWorkingNotes[file] }) : '' : undefined}
+        remoteChanges={panelRemoteChanges}
+        getPreview={panelGetPreview}
+        request={commitRequest}
         restoreFile={remote ? async file => {
           if (file.path === SCREEN_PAGE_FILE) { if (file.revision !== screen.diff) throw new Error('Draft changed. Review it again.'); await screen.reload(); return; }
           const entry = readWorkingNotes(workingScope)[file.path];
@@ -1095,14 +1119,12 @@ const AppContent: React.FC = () => {
               >
                 {t('common.cancel')}
               </button>
-              <button
+              <Button variant="primary"
                 onClick={() => handleCreateNewNote()}
                 disabled={!newNoteTitle.trim()}
-                style={{ backgroundColor: 'var(--color-primary)' }}
-                className="px-4 py-2 text-xs font-medium text-white rounded-lg shadow-sm transition hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
+>
                 {t('createNote.submit')}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

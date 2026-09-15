@@ -1,5 +1,6 @@
 import { NoteItem } from './types.js';
-import { resolveWorkspaceHref } from './workspace-links.js';
+import { resolveWorkspaceHref, noteMarkdownLink } from './workspace-links.js';
+import { marked } from 'marked';
 
 export interface NoteGraphNode {
   id: string;
@@ -34,11 +35,10 @@ export function extractNoteLinks(content: string, sourcePath: string, validNoteP
   const targets = new Set<string>();
 
   // 1. Regular markdown links: [text](target) - exclude image embeds ![alt](...)
-  const mdLinkRegex = /(?:^|[^!])\[([^\]]*)\]\(([^)]+)\)/g;
-  let match: RegExpExecArray | null;
-  while ((match = mdLinkRegex.exec(content)) !== null) {
-    const rawHref = match[2]?.trim();
-    if (!rawHref) continue;
+  marked.walkTokens(marked.lexer(content), token => {
+    if (token.type !== 'link') return;
+    const rawHref = token.href?.trim();
+    if (!rawHref) return;
     const resolved = resolveWorkspaceHref(rawHref, sourcePath);
     if (resolved && resolved.kind === 'path') {
       const targetPath = resolved.path;
@@ -50,10 +50,11 @@ export function extractNoteLinks(content: string, sourcePath: string, validNoteP
         targets.add(`${targetPath}/index.md`);
       }
     }
-  }
+  });
 
   // 2. Wikilinks: [[target]] or [[target|label]]
   const wikiLinkRegex = /\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]/g;
+  let match: RegExpExecArray | null;
   while ((match = wikiLinkRegex.exec(content)) !== null) {
     const targetName = match[1]?.trim();
     if (!targetName) continue;
@@ -69,6 +70,13 @@ export function extractNoteLinks(content: string, sourcePath: string, validNoteP
   targets.delete(sourcePath);
 
   return Array.from(targets);
+}
+
+export function insertNoteLink(content: string, sourcePath: string, targetPath: string, title: string, caret?: number): { content: string; position: number } {
+  if (sourcePath === targetPath || extractNoteLinks(content, sourcePath, new Set([targetPath])).includes(targetPath)) return { content, position: caret ?? content.length };
+  const position = caret === undefined ? content.length : Math.max(0, Math.min(content.length, caret));
+  const link = (caret === undefined && content && !content.endsWith('\n\n') ? '\n\n' : '') + noteMarkdownLink(sourcePath, targetPath, title);
+  return { content: content.slice(0, position) + link + content.slice(position), position: position + link.length };
 }
 
 export function buildNoteGraph(notes: NoteItem[], options?: NoteGraphOptions): NoteGraphData {

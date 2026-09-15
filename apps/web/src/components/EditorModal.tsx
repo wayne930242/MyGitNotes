@@ -1,3 +1,4 @@
+import { Button } from './Button.js';
 import { useWorkspaceLinks } from './WorkspaceLinks.js';
 import { isNoteHidden, withNoteStatus } from '@mygitnotes/core/note-status';
 import { EditorNotice } from './EditorNotice.js';
@@ -593,7 +594,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
           </div>
 
           <div className="note-controls flex items-center gap-2">
-            {!autoSave && !readOnly && <button aria-label={t('editor.saveToGitHub')} title={t('editor.saveToGitHub')} disabled={locked || !hasUnsavedChanges} onClick={handleExplicitSave} className="note-save editor-action px-3 py-1.5 rounded-lg text-xs text-white transition hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: 'var(--color-primary)' }}><Save className="editor-mobile-icon w-5 h-5" /><span>{isSaving ? t('editor.saving') : t('editor.saveToGitHub')}</span></button>}
+            {!autoSave && !readOnly && <Button variant="primary" aria-label={t('editor.saveToGitHub')} title={t('editor.saveToGitHub')} disabled={locked || !hasUnsavedChanges} onClick={handleExplicitSave} className="note-save editor-action" ><Save className="editor-mobile-icon w-5 h-5" /><span>{isSaving ? t('editor.saving') : t('editor.saveToGitHub')}</span></Button>}
             {isMarkdown && <MarkdownEditorModeSwitch mode={editorMode} onChange={setEditorMode} />}
             <button type="button" aria-label={t('editor.documentPanel')} title={t('editor.documentPanel')}
               aria-pressed={Boolean(notePanel)} onClick={() => notePanel ? setNotePanel(null) : isMarkdown ? openOutline() : openFind()}
@@ -612,13 +613,13 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
         <div className="note-editor-body">
           <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} ariaLabel="Note content" />
-          {notePanel && <aside className="note-document-panel" data-panel={notePanel} aria-label={t('editor.documentPanel')}>
+          <aside className="note-document-panel" data-open={Boolean(notePanel)} data-panel={notePanel || undefined} aria-label={t('editor.documentPanel')}>
             <div className="note-panel-tabs" role="tablist" aria-label={t('editor.documentPanel')}>
-              <button type="button" role="tab" aria-selected={isFindOpen} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}><Search aria-hidden="true" /><span>{t('editor.find')}</span></button>
-              {isMarkdown && <button type="button" role="tab" aria-selected={isOutlineOpen} aria-label={t('editor.outline')} title={t('editor.outline')} onClick={() => isOutlineOpen ? setNotePanel(null) : openOutline()}><ListTree aria-hidden="true" /><span>{t('editor.outline')}</span></button>}
-              <button type="button" role="tab" aria-selected={showFrontmatter} aria-label={t('editor.frontmatter')} title={t('editor.frontmatter')} onClick={() => setNotePanel(showFrontmatter ? null : 'frontmatter')}><Settings2 aria-hidden="true" /><span>{t('editor.frontmatter')}</span></button>
-              <button type="button" role="tab" aria-selected={isAssetPickerOpen} aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onClick={() => setNotePanel(isAssetPickerOpen ? null : 'assets')}><ImageIcon aria-hidden="true" /><span>{t('editor.asset')}</span></button>
-              <button type="button" role="tab" aria-selected={isGitPanelOpen} aria-label={t('editor.fileGitStatus')} title={t('editor.fileGitStatus')} onClick={() => setNotePanel(isGitPanelOpen ? null : 'git')}><GitBranch aria-hidden="true" /><span>{t('editor.git')}</span></button>
+              <Button type="button" role="tab" aria-selected={isFindOpen} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}><Search aria-hidden="true" /><span>{t('editor.find')}</span></Button>
+              {isMarkdown && <Button type="button" role="tab" aria-selected={isOutlineOpen} aria-label={t('editor.outline')} title={t('editor.outline')} onClick={() => isOutlineOpen ? setNotePanel(null) : openOutline()}><ListTree aria-hidden="true" /><span>{t('editor.outline')}</span></Button>}
+              <Button type="button" role="tab" aria-selected={showFrontmatter} aria-label={t('editor.frontmatter')} title={t('editor.frontmatter')} onClick={() => setNotePanel(showFrontmatter ? null : 'frontmatter')}><Settings2 aria-hidden="true" /><span>{t('editor.frontmatter')}</span></Button>
+              <Button type="button" role="tab" aria-selected={isAssetPickerOpen} aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onClick={() => setNotePanel(isAssetPickerOpen ? null : 'assets')}><ImageIcon aria-hidden="true" /><span>{t('editor.asset')}</span></Button>
+              <Button type="button" role="tab" aria-selected={isGitPanelOpen} aria-label={t('editor.fileGitStatus')} title={t('editor.fileGitStatus')} onClick={() => setNotePanel(isGitPanelOpen ? null : 'git')}><GitBranch aria-hidden="true" /><span>{t('editor.git')}</span></Button>
             </div>
 
             {isFindOpen && <form className="note-find-panel" role="search" aria-label={t('editor.findInNote')}
@@ -777,7 +778,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
               </button> : <p className="note-git-help">{t('editor.restoreUnavailable')}</p>}
               {!isDirty && autoSave && !readOnly && <p className="note-git-help">{t('editor.noFileChanges')}</p>}
             </div>}
-          </aside>}
+          </aside>
         </div>
 
         <EditorFooter

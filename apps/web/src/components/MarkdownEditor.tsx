@@ -3,6 +3,11 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import { Code2, Eye } from 'lucide-react';
 import type { LiveMarkdownHandle } from './LiveMarkdownEditor.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { useWorkspaceLinks } from './WorkspaceLinks.js';
+import { noteCandidates, noteCompletionAt } from '../lib/note-completion.js';
+import { noteLinkHref, noteMarkdownLink } from '@mygitnotes/core/workspace-links';
+import type { NoteItem } from '../lib/types.js';
+import './note-completion.css';
 
 const LiveMarkdownEditor = React.lazy(() => import('./LiveMarkdownEditor.js').then(module => ({ default: module.LiveMarkdownEditor })));
 export type MarkdownEditorMode = 'live' | 'raw';
@@ -19,6 +24,8 @@ interface Props {
   readOnly: boolean;
   onChange: (content: string) => void;
   ariaLabel?: string;
+  onCaret?: (position: number) => void;
+  compact?: boolean;
 }
 
 export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEditorMode; onChange: (mode: MarkdownEditorMode) => void }) {
@@ -49,8 +56,13 @@ export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEdi
   );
 }
 
-export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, mode, readOnly, onChange, ariaLabel = 'Document content' }, ref) => {
+export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, mode, readOnly, onChange, onCaret, compact = false, ariaLabel = 'Document content' }, ref) => {
   const { t } = useTranslation();
+  const { notes } = useWorkspaceLinks();
+  const [caret, setCaret] = useState<number | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+  const [choice, setChoice] = useState(0);
+  const [picker, setPicker] = useState(false), [query, setQuery] = useState('');
   const live = useRef<LiveMarkdownHandle>(null);
   const source = useRef<HTMLTextAreaElement>(null);
   const sourceLineNumbers = useRef<HTMLDivElement>(null);
@@ -61,6 +73,21 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   useEffect(() => setActiveSourceLine(1), [path, mode]);
   const updateActiveSourceLine = (target: HTMLTextAreaElement) => {
     setActiveSourceLine(target.value.slice(0, target.selectionStart).split('\n').length);
+    setCaret(target.selectionStart); onCaret?.(target.selectionStart);
+  };
+  const match = !readOnly && mode === 'raw' && !dismissed && caret !== null ? noteCompletionAt(content, caret) : null;
+  const suggestions = match ? noteCandidates(notes, match.query, path) : [];
+  const accept = (note: NoteItem) => {
+    if (!match) return;
+    const insert = noteLinkHref(path, note.path) + (content[match.to] === ')' ? '' : ')');
+    onChange(content.slice(0, match.from) + insert + content.slice(match.to)); setDismissed(true);
+    requestAnimationFrame(() => { const pos = match.from + insert.length; source.current?.focus(); source.current?.setSelectionRange(pos, pos); });
+  };
+  const insertPicked = (note: NoteItem) => {
+    const text = noteMarkdownLink(path, note.path, note.title);
+    if (mode === 'live') live.current?.insert(text);
+    else { const position = source.current?.selectionStart ?? content.length; onChange(content.slice(0, position) + text + content.slice(position)); }
+    setPicker(false);
   };
 
   useImperativeHandle(ref, () => ({
@@ -106,7 +133,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden" data-markdown-editor>
-      {isMarkdown && !readOnly && <div className="markdown-insert-toolbar">
+      {isMarkdown && !readOnly && !compact && <div className="markdown-insert-toolbar">
+        <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => { setPicker(value => !value); setQuery(''); }}>{t('graph.insertLink')}</button>
         <button type="button" onClick={() => {
           const text = `\n\n| ${t('table.column')} 1 | ${t('table.column')} 2 |\n| --- | --- |\n|  |  |\n\n`;
           if (mode === 'live') live.current?.insert(text);
@@ -116,17 +144,23 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
           }
         }}>{t('table.insert')}</button>
       </div>}
+      {picker && <div className="note-link-picker"><input autoFocus type="search" aria-label={t('graph.findNote')} placeholder={t('graph.findNote')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setPicker(false); }} />
+        {noteCandidates(notes, query, path).map(note => <button type="button" key={note.path} onClick={() => insertPicked(note)}>{note.title}<small>{note.notebookId} · {note.path}</small></button>)}
+      </div>}
       {mode === 'live' && isMarkdown ? (
         <React.Suspense fallback={<p className="p-6 text-sm text-slate-400">{t('editor.loadingEditor')}</p>}>
-          <LiveMarkdownEditor key={path} ref={live} content={content} notePath={path} readOnly={readOnly} onChange={onChange} ariaLabel={ariaLabel} />
+          <LiveMarkdownEditor key={path} ref={live} content={content} notePath={path} readOnly={readOnly} onChange={onChange} onCaret={onCaret} noteOptions={notes} ariaLabel={ariaLabel} />
         </React.Suspense>
       ) : (
         <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900">
-          <div className="px-3 py-1 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between gap-4">
+          {!compact && <div className="px-3 py-1 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between gap-4">
             <span>{isMarkdown ? t('editor.rawSource') : t('editor.plainTextSource')}</span>
             <span className="font-mono truncate">{path}</span>
-          </div>
-          <div key={path} className="flex-1 flex min-h-0 overflow-hidden">
+          </div>}
+          <div key={path} className="relative flex-1 flex min-h-0 overflow-hidden">
+            {suggestions.length > 0 && <div role="listbox" aria-label={t('graph.findNote')} className="note-source-completions">
+              {suggestions.map((note, index) => <button type="button" role="option" aria-selected={index === choice % suggestions.length} key={note.path} onMouseDown={event => event.preventDefault()} onClick={() => accept(note)}>{note.title}<small>{note.notebookId} · {note.path}</small></button>)}
+            </div>}
             <div
               data-source-line-numbers
               aria-hidden="true"
@@ -153,7 +187,13 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
               readOnly={readOnly}
               aria-label={ariaLabel}
               value={content}
-              onChange={event => { updateActiveSourceLine(event.currentTarget); onChange(event.target.value); }}
+              onChange={event => { setDismissed(false); setChoice(0); updateActiveSourceLine(event.currentTarget); onChange(event.target.value); }}
+              onKeyDown={event => {
+                if (event.nativeEvent.isComposing || !suggestions.length) return;
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setChoice(value => (value + (event.key === 'ArrowDown' ? 1 : suggestions.length - 1)) % suggestions.length); }
+                if (event.key === 'Enter') { event.preventDefault(); accept(suggestions[choice % suggestions.length]); }
+                if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setDismissed(true); }
+              }}
               onFocus={event => updateActiveSourceLine(event.currentTarget)}
               onSelect={event => updateActiveSourceLine(event.currentTarget)}
               onScroll={event => {

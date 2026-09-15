@@ -74,7 +74,7 @@ export const McpTutorialModal: React.FC<McpTutorialModalProps> = ({
           <div className="flex items-center gap-2.5">
             <div
               className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-sm"
-              style={{ backgroundColor: 'var(--color-primary, #4f46e5)' }}
+              style={{ backgroundColor: 'var(--color-primary, #4f46e5)', color: 'var(--color-on-primary, white)' }}
             >
               <Sparkles className="w-5 h-5" />
             </div>

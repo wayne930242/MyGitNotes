@@ -49,6 +49,7 @@ export interface FileChange {
   tracked: boolean;
   revision: string;
   available?: boolean;
+  unavailableReason?: 'conflict' | 'protected' | 'unsupported';
 }
 
 export interface GitCommit {
@@ -67,3 +68,5 @@ export interface LocalDraft {
 }
 
 export interface FolderItem { notebookId: string; path: string; title: string; order: number; description?: string; }
+
+export interface ChangeRequest { action: 'review' | 'commit' | 'restore'; paths: string[]; }
