@@ -717,6 +717,27 @@ export const en = {
   'settings.remoteGitHubMode': 'This is a remote workspace. Run Core updates and edit workspace configuration in a local checkout.',
   'settings.remoteManifestHint': 'This manifest comes from the selected repository. Edit it in that repository or a local checkout. Run Core updates locally.',
   'settings.coreBranchConfigReadOnlyTitle': 'Workspace config can only be edited on the main branch',
+
+  // Right-side tool panel
+  'panel.title': 'Tools',
+  'panel.close': 'Close panel',
+  'panel.calendar': 'Calendar',
+  'panel.todo': 'Todo',
+  'panel.scopeCurrentNotebook': 'This notebook',
+  'panel.scopeAllNotebooks': 'All notebooks',
+  'panel.calendarCreated': 'Created',
+  'panel.calendarUpdated': 'Updated',
+  'panel.calendarDue': '{count} due',
+  'panel.calendarToday': 'Today',
+  'panel.calendarNoNotes': 'No notes on this day.',
+  'panel.calendarNoTasks': 'No todos due this day.',
+  'panel.todoOverdue': 'Overdue',
+  'panel.todoToday': 'Today',
+  'panel.todoUpcoming': 'Upcoming',
+  'panel.todoNoDate': 'No date',
+  'panel.todoCompleted': 'Completed',
+  'panel.todoEmpty': 'No open todos.',
+  'panel.todoStale': 'This note changed since the list was loaded. Reopen it to see the latest version.',
 };
 
 export type TranslationKey = keyof typeof en;

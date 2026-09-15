@@ -46,6 +46,7 @@ import { ListView } from './components/ListView.js';
 import { CardView } from './components/CardView.js';
 import { KanbanView } from './components/KanbanView.js';
 import { EditorModal } from './components/EditorModal.js';
+import { RightPanel } from './components/RightPanel.js';
 import { AssetBrowser } from './components/AssetBrowser.js';
 import { AgentSystemView, type AgentSystemHandle } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
@@ -913,6 +914,14 @@ const AppContent: React.FC = () => {
             />
           </main>
         )}
+
+        <RightPanel
+          notes={notes}
+          notebooks={config?.notebooks || []}
+          selectedNotebookId={selectedNotebookId}
+          onOpenNote={handleOpenNote}
+          onSaveNote={handleSaveNote}
+        />
       </div>
 
       {/* Floating Commit Footer: only shows when working tree is dirty, with restore button (Requirement 1 & 2) */}

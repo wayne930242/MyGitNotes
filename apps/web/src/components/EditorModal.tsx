@@ -4,20 +4,16 @@ import { EditorNotice } from './EditorNotice.js';
 import { EditorFooter } from './EditorFooter.js';
 import { Select } from './Select.js';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
-  Settings2,
   Save,
-  Image as ImageIcon,
   FileText,
   RotateCcw,
   AlertTriangle,
   Search,
-  ListTree,
   ChevronUp,
   ChevronDown,
-  GitBranch,
-  PanelRight,
 } from 'lucide-react';
 import { mergeNote, sameValue, NoteDraft } from '../lib/merge-note.js';
 import { ApiError } from '../lib/api.js';
@@ -28,8 +24,7 @@ import { saveLocalDraft, getLocalDraft, clearLocalDraft } from '../lib/storage.j
 import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { findOutlineIndexForLine, findTextMatches, parseMarkdownOutline } from '../lib/note-navigation.js';
-
-type NotePanelMode = 'find' | 'outline' | 'frontmatter' | 'assets' | 'git';
+import { usePanelContext, isNoteToolId, type NoteToolId } from '../lib/panel-context.js';
 
 interface EditorModalProps {
   note: NoteItem | null;
@@ -89,12 +84,14 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
   const isMarkdown = note.path.endsWith('.md') || note.path.endsWith('.markdown');
   const { t } = useTranslation();
+  const panel = usePanelContext();
+  const notePanel: NoteToolId | null = panel.isOpen && isNoteToolId(panel.activeTool) ? panel.activeTool : null;
+  useEffect(() => { panel.setNoteContext(true, isMarkdown); return () => panel.setNoteContext(false, false); }, [isMarkdown]);
 
   // Editor states
   const [content, setContent] = useState(note.content);
   const [metadata, setMetadata] = useState<Record<string, unknown>>(note.metadata || {});
   const [editorMode, setEditorMode] = useState<MarkdownEditorMode>('live');
-  const [notePanel, setNotePanel] = useState<NotePanelMode | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [saveError, setSaveError] = useState(conflictReason || '');
@@ -218,7 +215,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   }, [editorMode, findIndex, isFindOpen, matches]);
 
   const openFind = () => {
-    setIsEditorLeaderOpen(false); setNotePanel('find');
+    setIsEditorLeaderOpen(false); panel.openTool('find');
     requestAnimationFrame(() => { findInputRef.current?.focus(); findInputRef.current?.select(); });
   };
   const stepFind = (delta: number) => {
@@ -252,7 +249,6 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     setConfirmRestore(false);
     setTagInput('');
     setIsTagDropdownOpen(false);
-    setNotePanel(null);
     setFindQuery('');
     setFindIndex(0);
     setOutlineIndex(0);
@@ -372,7 +368,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   const escapeAction = useRef<() => boolean>(() => false);
   escapeAction.current = () => {
     if (isEditorLeaderOpen) setIsEditorLeaderOpen(false);
-    else if (notePanel) setNotePanel(null);
+    else if (notePanel) panel.close();
     else return false;
     return true;
   };
@@ -380,12 +376,12 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     const currentLine = editorRef.current?.getCurrentLine() ?? 1;
     setIsEditorLeaderOpen(false);
     setOutlineIndex(findOutlineIndexForLine(outline, currentLine));
-    setNotePanel('outline');
+    panel.openTool('outline');
   };
   const chooseOutline = (index: number, closeAfter = true) => {
     const heading = outline[index]; if (!heading) return;
     editorRef.current?.goToLine(heading.line, { focus: closeAfter, smooth: true });
-    if (closeAfter) setNotePanel(null);
+    if (closeAfter) panel.close();
   };
   const moveOutline = (delta: number) => {
     if (outline.length === 0) return;
@@ -487,7 +483,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   const handleInsertAssetRef = (ref: string) => {
     if (locked) return;
     editorRef.current?.insert(`\n${ref}\n`);
-    setNotePanel(null);
+    panel.close();
   };
 
   // Tag autocomplete helpers (Requirement 4)
@@ -576,9 +572,6 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
           <div className="note-controls flex items-center gap-2">
             {!autoSave && !readOnly && <button aria-label={t('editor.saveToGitHub')} title={t('editor.saveToGitHub')} disabled={locked || !hasUnsavedChanges} onClick={handleExplicitSave} className="note-save editor-action px-3 py-1.5 rounded-lg text-xs text-white transition hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: 'var(--color-primary)' }}><Save className="editor-mobile-icon w-5 h-5" /><span>{isSaving ? t('editor.saving') : t('editor.saveToGitHub')}</span></button>}
             {isMarkdown && <MarkdownEditorModeSwitch mode={editorMode} onChange={setEditorMode} />}
-            <button type="button" aria-label={t('editor.documentPanel')} title={t('editor.documentPanel')}
-              aria-pressed={Boolean(notePanel)} onClick={() => notePanel ? setNotePanel(null) : isMarkdown ? openOutline() : openFind()}
-              className="editor-action editor-secondary-action editor-panel-action"><PanelRight className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('editor.documentPanel')}</span></button>
 
             {/* Close Button */}
             <button
@@ -593,16 +586,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
         <div className="note-editor-body">
           <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} ariaLabel="Note content" />
-          {notePanel && <aside className="note-document-panel" data-panel={notePanel} aria-label={t('editor.documentPanel')}>
-            <div className="note-panel-tabs" role="tablist" aria-label={t('editor.documentPanel')}>
-              <button type="button" role="tab" aria-selected={isFindOpen} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={openFind}><Search aria-hidden="true" /><span>{t('editor.find')}</span></button>
-              {isMarkdown && <button type="button" role="tab" aria-selected={isOutlineOpen} aria-label={t('editor.outline')} title={t('editor.outline')} onClick={openOutline}><ListTree aria-hidden="true" /><span>{t('editor.outline')}</span></button>}
-              <button type="button" role="tab" aria-selected={showFrontmatter} aria-label={t('editor.frontmatter')} title={t('editor.frontmatter')} onClick={() => setNotePanel('frontmatter')}><Settings2 aria-hidden="true" /><span>{t('editor.frontmatter')}</span></button>
-              <button type="button" role="tab" aria-selected={isAssetPickerOpen} aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onClick={() => setNotePanel('assets')}><ImageIcon aria-hidden="true" /><span>{t('editor.asset')}</span></button>
-              <button type="button" role="tab" aria-selected={isGitPanelOpen} aria-label={t('editor.fileGitStatus')} title={t('editor.fileGitStatus')} onClick={() => setNotePanel('git')}><GitBranch aria-hidden="true" /><span>{t('editor.git')}</span></button>
-              <button type="button" className="note-panel-close ui-icon-button" aria-label={t('common.close')} onClick={() => setNotePanel(null)}><X aria-hidden="true" /></button>
-            </div>
-
+          {notePanel && panel.noteToolPortalTarget && createPortal(<div className="note-document-panel-content" data-panel={notePanel} aria-label={t('editor.documentPanel')}>
             {isFindOpen && <form className="note-find-panel" role="search" aria-label={t('editor.findInNote')}
               onSubmit={event => { event.preventDefault(); stepFind(1); }}>
               <label className="note-find-field"><Search aria-hidden="true" />
@@ -759,7 +743,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
               </button> : <p className="note-git-help">{t('editor.restoreUnavailable')}</p>}
               {!isDirty && autoSave && !readOnly && <p className="note-git-help">{t('editor.noFileChanges')}</p>}
             </div>}
-          </aside>}
+          </div>, panel.noteToolPortalTarget)}
         </div>
 
         <EditorFooter
