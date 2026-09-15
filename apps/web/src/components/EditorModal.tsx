@@ -26,6 +26,12 @@ import { useTranslation } from '../lib/i18n/index.js';
 import { findOutlineIndexForLine, findTextMatches, parseMarkdownOutline } from '../lib/note-navigation.js';
 import { usePanelContext, isNoteToolId, type NoteToolId } from '../lib/panel-context.js';
 
+/** Server-managed on every save; excluded when deciding whether there is a new edit to save. */
+function sameIgnoringTimestamps(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const strip = ({ created, updated, ...rest }: Record<string, unknown>) => rest;
+  return sameValue(strip(a), strip(b));
+}
+
 interface EditorModalProps {
   note: NoteItem | null;
   statuses: string[];
@@ -266,7 +272,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   useEffect(() => {
     if (readOnly || closing.current) return;
     const baseline = autoSave ? note : baseNote;
-    const isDifferent = content !== baseline.content || !sameValue(metadata, baseline.metadata);
+    const isDifferent = content !== baseline.content || !sameIgnoringTimestamps(metadata, baseline.metadata);
 
     if (isDifferent) {
       setHasUnsavedChanges(true);
@@ -365,7 +371,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
 
   const close = async () => {
     if (closing.current || isRestoring || operation.current) return;
-    if (autoSave && !readOnly && !current.current.blocked && (draftMode || current.current.content !== note.content || !sameValue(current.current.metadata, note.metadata))) {
+    if (autoSave && !readOnly && !current.current.blocked && (draftMode || current.current.content !== note.content || !sameIgnoringTimestamps(current.current.metadata, note.metadata))) {
       closing.current = true; setIsSaving(true);
       try {
         await onSave({ path: note.path, content: current.current.content, metadata: current.current.metadata, baseNote: current.current.baseNote });
