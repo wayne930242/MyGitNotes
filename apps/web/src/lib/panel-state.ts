@@ -1,4 +1,4 @@
-import type { PanelToolId, WorkspaceToolId } from './panel-context.js';
+import type { WorkspaceToolId } from './panel-context.js';
 
 export const PANEL_OPEN_STORAGE_KEY = 'github-notes:panel-open';
 export const PANEL_TOOL_STORAGE_KEY = 'github-notes:panel-tool';
@@ -7,16 +7,16 @@ export const DEFAULT_PANEL_TOOL: WorkspaceToolId = 'todo';
 
 export interface SavedPanelState {
   open: boolean;
-  tool: PanelToolId;
+  tool: WorkspaceToolId;
 }
 
-export function getSavedPanelState(validToolIds: readonly PanelToolId[]): SavedPanelState {
+export function getSavedPanelState(validToolIds: readonly WorkspaceToolId[]): SavedPanelState {
   if (typeof window === 'undefined' || !window.localStorage) {
     return { open: false, tool: DEFAULT_PANEL_TOOL };
   }
   try {
     const rawTool = window.localStorage.getItem(PANEL_TOOL_STORAGE_KEY);
-    const tool = validToolIds.includes(rawTool as PanelToolId) ? (rawTool as PanelToolId) : DEFAULT_PANEL_TOOL;
+    const tool = validToolIds.includes(rawTool as WorkspaceToolId) ? (rawTool as WorkspaceToolId) : DEFAULT_PANEL_TOOL;
     const open = window.localStorage.getItem(PANEL_OPEN_STORAGE_KEY) === 'true';
     return { open, tool };
   } catch {

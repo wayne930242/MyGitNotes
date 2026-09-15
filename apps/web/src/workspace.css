@@ -222,9 +222,6 @@
 .workspace-page-actions .desktop-views button { padding: 8px; box-shadow: none; }
 .workspace-page-actions .header-new-note { box-shadow: none; font-size: 12px; padding: 8px 12px; border-radius: 6px; }
 .workspace-scroll { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 16px 24px 24px; }
-.app-shell .commit-footer.workspace-commit-footer { position: relative; flex: none; align-self: stretch; z-index: 23; left: auto; bottom: auto; transform: none; width: 100%; max-width: none; margin: 0; padding: 8px var(--workspace-padding); background: var(--color-surface); border-top: 1px solid var(--workspace-divider); }
-.workspace-commit-bar { justify-content: flex-end; min-height: 32px; }
-.workspace-commit-bar > .w-px { background: var(--workspace-divider); }
 .settings-sidebar .workspace-sidebar-scroll { gap: 4px; }
 .settings-sidebar .sidebar-section-label { margin-bottom: 10px; }
 .workspace-breadcrumbs { padding: 0 0 18px; margin-bottom: 0; border: 0; border-radius: 0; background: transparent; min-height: 48px; }

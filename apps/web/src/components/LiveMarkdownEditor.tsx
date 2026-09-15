@@ -319,8 +319,8 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
       else marks.push(Decoration.replace({ widget: new TokenChip(emoji, token.value, from, state.readOnly) }).range(from, to));
     }
     if (!state.readOnly && isTaskLine(line.text) && !findToken(line.text, DUE_EMOJI)) {
-      if (editingChips.has(line.to)) marks.push(Decoration.widget({ widget: new TokenEditor(DUE_EMOJI, false, undefined, line.from, line.to, line.to), side: 1 }).range(line.to));
-      else marks.push(Decoration.widget({ widget: new DueDateAdder(line.to) }).range(line.to));
+      if (editingChips.has(line.to)) marks.push(Decoration.widget({ widget: new TokenEditor(DUE_EMOJI, false, undefined, line.from, line.to, line.to), side: 2 }).range(line.to));
+      else marks.push(Decoration.widget({ widget: new DueDateAdder(line.to), side: 2 }).range(line.to));
     }
   }
   return Decoration.set(marks,true);

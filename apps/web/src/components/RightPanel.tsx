@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { CalendarDays, ListTodo, Search, ListTree, Settings2, Image as ImageIcon, GitBranch, X } from 'lucide-react';
-import type { NoteItem, NotebookConfig } from '../lib/types.js';
+import { CalendarDays, ListTodo, GitBranch } from 'lucide-react';
+import type { GitStatus, NoteItem, NotebookConfig } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
-import { isNoteToolId, usePanelContext, WORKSPACE_TOOL_IDS, type NoteToolId, type PanelToolId } from '../lib/panel-context.js';
+import { usePanelContext, WORKSPACE_TOOL_IDS, type WorkspaceToolId } from '../lib/panel-context.js';
 import { CalendarTool } from './CalendarTool.js';
 import { TodoTool } from './TodoTool.js';
+import { ChangesTool } from './ChangesTool.js';
 
 interface RightPanelProps {
   notes: NoteItem[];
@@ -12,56 +13,63 @@ interface RightPanelProps {
   selectedNotebookId: string;
   onOpenNote: (note: NoteItem) => void;
   onSaveNote: (params: { path: string; content: string; metadata?: Record<string, unknown>; notebookId?: string }) => Promise<NoteItem>;
+  gitStatus: GitStatus | null;
+  deletedNotes: NoteItem[];
+  onRestoreNote: (note: NoteItem) => void;
+  onOpenCommitModal: () => void;
 }
 
-const WORKSPACE_TOOL_ICONS: Record<(typeof WORKSPACE_TOOL_IDS)[number], typeof CalendarDays> = {
+const WORKSPACE_TOOL_ICONS: Record<WorkspaceToolId, typeof CalendarDays> = {
   calendar: CalendarDays,
   todo: ListTodo,
+  changes: GitBranch,
 };
-const WORKSPACE_TOOL_LABELS: Record<(typeof WORKSPACE_TOOL_IDS)[number], 'panel.calendar' | 'panel.todo'> = {
+const WORKSPACE_TOOL_LABELS: Record<WorkspaceToolId, 'panel.calendar' | 'panel.todo' | 'panel.changes'> = {
   calendar: 'panel.calendar',
   todo: 'panel.todo',
-};
-const NOTE_TOOL_ICONS: Record<NoteToolId, typeof Search> = {
-  find: Search, outline: ListTree, frontmatter: Settings2, assets: ImageIcon, git: GitBranch,
+  changes: 'panel.changes',
 };
 
-export function RightPanel({ notes, notebooks, selectedNotebookId, onOpenNote, onSaveNote }: RightPanelProps) {
+/** The workspace-level Calendar/Todo/Changes panel. Hidden while a note is open — the editor has its own document panel. */
+export function RightPanel({ notes, notebooks, selectedNotebookId, onOpenNote, onSaveNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal }: RightPanelProps) {
   const { t } = useTranslation();
   const panel = usePanelContext();
+  const visible = !panel.hasOpenNote;
 
   useEffect(() => {
+    if (!visible) {
+      document.documentElement.style.setProperty('--right-panel-width', '0px');
+      return;
+    }
     document.documentElement.style.setProperty('--right-panel-width', panel.isOpen ? '364px' : '44px');
     return () => document.documentElement.style.setProperty('--right-panel-width', '0px');
-  }, [panel.isOpen]);
+  }, [panel.isOpen, visible]);
 
-  const tab = (id: PanelToolId, Icon: typeof Search, label: string) => (
-    <button key={id} type="button" role="tab" aria-selected={panel.isOpen && panel.activeTool === id} title={label} aria-label={label}
-      onClick={() => panel.openTool(id)}>
-      <Icon aria-hidden="true" />
-    </button>
-  );
+  if (!visible) return null;
+
+  const changesCount = new Set([...(gitStatus?.staged || []), ...(gitStatus?.modified || []), ...(gitStatus?.untracked || [])]).size + deletedNotes.length;
 
   return (
     <aside className="right-panel" data-open={panel.isOpen}>
       {panel.isOpen && (
         <div className="right-panel-content">
-          <div className="right-panel-content-header">
-            <button type="button" className="ui-icon-button" aria-label={t('panel.close')} onClick={panel.close}><X aria-hidden="true" /></button>
-          </div>
           {panel.activeTool === 'calendar' && <CalendarTool notes={notes} notebooks={notebooks} selectedNotebookId={selectedNotebookId} onOpenNote={onOpenNote} />}
           {panel.activeTool === 'todo' && <TodoTool notes={notes} notebooks={notebooks} selectedNotebookId={selectedNotebookId} onOpenNote={onOpenNote} onSaveNote={onSaveNote} />}
-          <div ref={panel.registerNoteToolPortal} className="right-panel-note-tool-slot" style={{ display: isNoteToolId(panel.activeTool) ? 'contents' : 'none' }} />
+          {panel.activeTool === 'changes' && <ChangesTool gitStatus={gitStatus} deletedNotes={deletedNotes} onRestoreNote={onRestoreNote} onOpenCommitModal={onOpenCommitModal} />}
         </div>
       )}
       <div className="right-panel-rail" role="tablist" aria-label={t('panel.title')}>
-        {WORKSPACE_TOOL_IDS.map(id => tab(id, WORKSPACE_TOOL_ICONS[id], t(WORKSPACE_TOOL_LABELS[id])))}
-        {panel.hasOpenNote && <div className="right-panel-divider" role="separator" />}
-        {panel.hasOpenNote && tab('find', NOTE_TOOL_ICONS.find, t('editor.find'))}
-        {panel.hasOpenNote && panel.isMarkdownNote && tab('outline', NOTE_TOOL_ICONS.outline, t('editor.outline'))}
-        {panel.hasOpenNote && tab('frontmatter', NOTE_TOOL_ICONS.frontmatter, t('editor.frontmatter'))}
-        {panel.hasOpenNote && tab('assets', NOTE_TOOL_ICONS.assets, t('editor.asset'))}
-        {panel.hasOpenNote && tab('git', NOTE_TOOL_ICONS.git, t('editor.git'))}
+        {WORKSPACE_TOOL_IDS.map(id => {
+          const Icon = WORKSPACE_TOOL_ICONS[id];
+          const label = t(WORKSPACE_TOOL_LABELS[id]);
+          return (
+            <button key={id} type="button" role="tab" aria-selected={panel.isOpen && panel.activeTool === id} title={label} aria-label={label}
+              onClick={() => panel.openTool(id)}>
+              <Icon aria-hidden="true" />
+              {id === 'changes' && changesCount > 0 && <span className="right-panel-badge" aria-hidden="true">{changesCount > 99 ? '99+' : changesCount}</span>}
+            </button>
+          );
+        })}
       </div>
     </aside>
   );

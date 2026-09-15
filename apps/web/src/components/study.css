@@ -50,8 +50,7 @@
 .study-stage-settings > label { display: flex; gap: 8px; white-space: nowrap; }
 .study-stage-settings .select-trigger { min-width: 0; }
 .app-shell[data-screen-focus="true"] { padding-bottom: 0; }
-.app-shell[data-screen-focus="true"] .workspace-header,
-.app-shell[data-screen-focus="true"] .workspace-commit-footer { display: none; }
+.app-shell[data-screen-focus="true"] .workspace-header { display: none; }
 .screen-focus-header { flex: none; display: flex; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; padding: 8px 16px; border-bottom: 1px solid var(--workspace-divider); }
 .screen-focus-header button { flex: none; min-height: 44px; }
 .screen-focus-header .ui-icon-button { width: 44px; }

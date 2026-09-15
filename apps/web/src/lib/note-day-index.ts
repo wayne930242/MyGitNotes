@@ -42,3 +42,17 @@ export function notesForDay(notes: NoteItem[], day: string, field: 'created' | '
 export function tasksForDay(tasks: TodoTask[], day: string): TodoTask[] {
   return tasks.filter(task => task.due === day);
 }
+
+function monthPrefix(year: number, month: number): string {
+  return `${year}-${String(month + 1).padStart(2, '0')}`;
+}
+
+export function notesForMonth(notes: NoteItem[], year: number, month: number, field: 'created' | 'updated'): NoteItem[] {
+  const prefix = monthPrefix(year, month);
+  return notes.filter(note => dayKeyFromISO(note.metadata[field])?.startsWith(prefix));
+}
+
+export function tasksForMonth(tasks: TodoTask[], year: number, month: number): TodoTask[] {
+  const prefix = monthPrefix(year, month);
+  return tasks.filter(task => task.due?.startsWith(prefix));
+}

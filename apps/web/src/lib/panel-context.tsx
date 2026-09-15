@@ -1,28 +1,21 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { DEFAULT_PANEL_TOOL, getSavedPanelState, savePanelState } from './panel-state.js';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { getSavedPanelState, savePanelState } from './panel-state.js';
 
-export type NoteToolId = 'find' | 'outline' | 'frontmatter' | 'assets' | 'git';
-export type WorkspaceToolId = 'calendar' | 'todo';
-export type PanelToolId = NoteToolId | WorkspaceToolId;
+export type WorkspaceToolId = 'calendar' | 'todo' | 'changes';
+export const WORKSPACE_TOOL_IDS: readonly WorkspaceToolId[] = ['calendar', 'todo', 'changes'];
 
-export const NOTE_TOOL_IDS: readonly NoteToolId[] = ['find', 'outline', 'frontmatter', 'assets', 'git'];
-export const WORKSPACE_TOOL_IDS: readonly WorkspaceToolId[] = ['calendar', 'todo'];
-const ALL_TOOL_IDS: readonly PanelToolId[] = [...WORKSPACE_TOOL_IDS, ...NOTE_TOOL_IDS];
-
-export function isNoteToolId(id: PanelToolId): id is NoteToolId {
-  return (NOTE_TOOL_IDS as readonly string[]).includes(id);
-}
-
+/**
+ * Tracks the workspace-level tool panel (Calendar/Todo). It hides itself
+ * while a note is open — the editor owns its own document panel (find,
+ * outline, frontmatter, assets, git) rather than sharing this one.
+ */
 interface PanelContextValue {
   isOpen: boolean;
-  activeTool: PanelToolId;
+  activeTool: WorkspaceToolId;
   hasOpenNote: boolean;
-  isMarkdownNote: boolean;
-  noteToolPortalTarget: HTMLDivElement | null;
-  registerNoteToolPortal: (node: HTMLDivElement | null) => void;
-  openTool: (id: PanelToolId) => void;
+  openTool: (id: WorkspaceToolId) => void;
   close: () => void;
-  setNoteContext: (open: boolean, isMarkdown: boolean) => void;
+  setHasOpenNote: (open: boolean) => void;
 }
 
 const PanelContext = createContext<PanelContextValue | null>(null);
@@ -34,31 +27,20 @@ export function usePanelContext(): PanelContextValue {
 }
 
 export function PanelProvider({ children }: { children: ReactNode }) {
-  const saved = useMemo(() => getSavedPanelState(ALL_TOOL_IDS), []);
+  const saved = useMemo(() => getSavedPanelState(WORKSPACE_TOOL_IDS), []);
   const [isOpen, setIsOpen] = useState(saved.open);
-  const [activeTool, setActiveTool] = useState<PanelToolId>(saved.tool);
+  const [activeTool, setActiveTool] = useState<WorkspaceToolId>(saved.tool);
   const [hasOpenNote, setHasOpenNote] = useState(false);
-  const [isMarkdownNote, setIsMarkdownNote] = useState(false);
-  const [portalTarget, setPortalTarget] = useState<HTMLDivElement | null>(null);
-  const lastWorkspaceTool = useRef<WorkspaceToolId>(isNoteToolId(saved.tool) ? DEFAULT_PANEL_TOOL : (saved.tool as WorkspaceToolId));
 
   useEffect(() => savePanelState({ open: isOpen, tool: activeTool }), [isOpen, activeTool]);
 
-  const openTool = (id: PanelToolId) => {
-    if (!isNoteToolId(id)) lastWorkspaceTool.current = id;
+  const openTool = (id: WorkspaceToolId) => {
+    if (isOpen && activeTool === id) { setIsOpen(false); return; }
     setActiveTool(id);
     setIsOpen(true);
   };
   const close = () => setIsOpen(false);
-  const setNoteContext = (open: boolean, isMarkdown: boolean) => {
-    setHasOpenNote(open);
-    setIsMarkdownNote(isMarkdown);
-    if (!open) setActiveTool(current => (isNoteToolId(current) ? lastWorkspaceTool.current : current));
-  };
 
-  const value: PanelContextValue = {
-    isOpen, activeTool, hasOpenNote, isMarkdownNote, noteToolPortalTarget: portalTarget,
-    registerNoteToolPortal: setPortalTarget, openTool, close, setNoteContext,
-  };
+  const value: PanelContextValue = { isOpen, activeTool, hasOpenNote, openTool, close, setHasOpenNote };
   return <PanelContext.Provider value={value}>{children}</PanelContext.Provider>;
 }

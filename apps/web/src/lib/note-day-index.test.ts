@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteItem } from './types.js';
 import type { TodoTask } from './todo-list.js';
-import { buildDayCounts, dayKeyFromISO, notesForDay, tasksForDay } from './note-day-index.js';
+import { buildDayCounts, dayKeyFromISO, notesForDay, notesForMonth, tasksForDay, tasksForMonth } from './note-day-index.js';
 
 function note(path: string, metadata: Record<string, unknown>): NoteItem {
   return { id: path, path, notebookId: 'nb', title: path, tags: [], metadata, content: '' };
@@ -49,5 +49,21 @@ describe('notesForDay / tasksForDay', () => {
 
     const tasks = [task('t1', day), task('t2', '2026-09-16')];
     expect(tasksForDay(tasks, day).map(t => t.id)).toEqual(['t1']);
+  });
+});
+
+describe('notesForMonth / tasksForMonth', () => {
+  it('filters notes and tasks to the given year/month regardless of day', () => {
+    // Times are kept well clear of local midnight so this holds regardless of the runner's timezone.
+    const notes = [
+      note('a', { created: '2026-09-01T12:00:00.000Z' }),
+      note('b', { created: '2026-09-30T12:00:00.000Z' }),
+      note('c', { created: '2026-10-01T12:00:00.000Z' }),
+      note('d', { created: '2025-09-15T12:00:00.000Z' }),
+    ];
+    expect(notesForMonth(notes, 2026, 8, 'created').map(n => n.path).sort()).toEqual(['a', 'b']);
+
+    const tasks = [task('t1', '2026-09-05'), task('t2', '2026-10-01'), task('t3', undefined)];
+    expect(tasksForMonth(tasks, 2026, 8).map(t => t.id)).toEqual(['t1']);
   });
 });

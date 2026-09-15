@@ -3,7 +3,7 @@ import { getSavedPanelState, PANEL_OPEN_STORAGE_KEY, PANEL_TOOL_STORAGE_KEY, sav
 
 afterEach(() => vi.unstubAllGlobals());
 
-const TOOL_IDS = ['calendar', 'todo', 'find', 'outline', 'frontmatter', 'assets', 'git'] as const;
+const TOOL_IDS = ['calendar', 'todo'] as const;
 
 describe('panel state persistence', () => {
   it('defaults to closed with the todo tool when nothing is stored', () => {
