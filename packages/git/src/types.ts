@@ -27,4 +27,5 @@ export interface CoreUpdateResult {
   message: string;
   conflictedFiles?: string[];
   alreadyUpToDate?: boolean;
+  notesMissingTimestamps?: number;
 }

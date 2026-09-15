@@ -125,6 +125,37 @@ notebooks:
     expect(log).toMatch(/minor-mod|my-note/);
   });
 
+  it('stamps created on a new note and refreshes updated on resave via save_note', async () => {
+    await runGit(['checkout', '-b', 'main'], testRepo);
+    const configContent = `schema_version: 1
+workspace:
+  title: "Test Workspace"
+  default_notebook: example
+notebooks:
+  - id: example
+    title: "Example Notebook"
+    root: notes/example
+`;
+    fs.writeFileSync(path.join(testRepo, WORKSPACE_CONFIG_FILENAME), configContent);
+    await stageAndCommit(testRepo, [WORKSPACE_CONFIG_FILENAME], 'add workspace config');
+
+    const first = await handleSaveNote(
+      { repoRoot: testRepo },
+      { path: 'notes/example/timestamped.md', content: 'First version.', metadata: { title: 'Timestamped' } }
+    );
+    const createdAt = first.note.metadata.created as string;
+    const firstUpdatedAt = first.note.metadata.updated as string;
+    expect(typeof createdAt).toBe('string');
+    expect(typeof firstUpdatedAt).toBe('string');
+
+    const second = await handleSaveNote(
+      { repoRoot: testRepo },
+      { path: 'notes/example/timestamped.md', content: 'Second version.', metadata: first.note.metadata }
+    );
+    expect(second.note.metadata.created).toBe(createdAt);
+    expect(second.note.metadata.updated >= firstUpdatedAt).toBe(true);
+  });
+
   it('reads workspace configuration properly', async () => {
     await runGit(['checkout', '-b', 'main'], testRepo);
     fs.writeFileSync(
@@ -242,7 +273,7 @@ notebooks:
     );
     expect(litSearch.totalMatches).toBe(1);
     expect(litSearch.matches[0].path).toBe('notes/example/user-guide.md');
-    expect(litSearch.matches[0].line).toBe(7);
+    expect(litSearch.matches[0].line).toBe(9);
 
     // 2. Regex search
     const regexSearch = await handleSearchNotes(
@@ -251,7 +282,7 @@ notebooks:
     );
     expect(regexSearch.totalMatches).toBe(1);
     expect(regexSearch.matches[0].matches).toContain('TICKET-1234');
-    expect(regexSearch.matches[0].line).toBe(8);
+    expect(regexSearch.matches[0].line).toBe(10);
   });
 
   it('supports replace_notes with dryRun and regex replacement with commit', async () => {

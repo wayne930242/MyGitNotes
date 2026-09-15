@@ -1,6 +1,7 @@
 import YAML from 'yaml';
 import path from 'node:path';
 import { NoteMetadata } from './types.js';
+import { stampSaveTimestamps } from './note-timestamps.js';
 
 export interface ParsedNote {
   metadata: NoteMetadata;
@@ -75,19 +76,36 @@ export function parseNoteContent(rawContent: string, fallbackFilename?: string):
   };
 }
 
+/** Forces a document's `created`/`updated` scalars to render double-quoted, matching existing note style. */
+function quoteTimestampScalars(document: YAML.Document): void {
+  for (const key of ['created', 'updated']) {
+    if (typeof document.get(key) !== 'string') continue;
+    const node = document.get(key, true);
+    if (node instanceof YAML.Scalar) node.type = 'QUOTE_DOUBLE';
+  }
+}
+
+function stringifyMetadata(metadata: NoteMetadata): string {
+  const doc = new YAML.Document(metadata);
+  quoteTimestampScalars(doc);
+  return doc.toString();
+}
+
 /**
  * Serializes metadata and Markdown body back into file format.
- * Preserves all unknown frontmatter keys.
+ * Preserves all unknown frontmatter keys. Stamps `created`/`updated`
+ * (see `stampSaveTimestamps`) on every save.
  */
-export function serializeNoteContent(metadata: NoteMetadata, content: string): string {
-  const keys = Object.keys(metadata);
+export function serializeNoteContent(metadata: NoteMetadata, content: string, now: Date = new Date()): string {
+  const stamped = stampSaveTimestamps(metadata, now);
+  const keys = Object.keys(stamped);
   const trimmedContent = content.trim();
 
   if (keys.length === 0) {
     return trimmedContent ? `${trimmedContent}\n` : '';
   }
 
-  const yamlStr = YAML.stringify(metadata).trim();
+  const yamlStr = stringifyMetadata(stamped).trim();
   if (!trimmedContent) {
     return `---\n${yamlStr}\n---\n`;
   }
@@ -105,4 +123,40 @@ export function replaceNoteStatus(raw: string, status: string | null): string {
     return `---${newline}${document.toString().replace(/\n/g, newline)}---${newline}${raw.slice(match[0].length)}`;
   }
   return status === null ? raw : `---\n${YAML.stringify({ status })}---\n${raw}`;
+}
+
+/**
+ * Fills `created`/`updated` only where missing, from the given fallbacks.
+ * Never overwrites an existing value or touches any other frontmatter key
+ * or the Markdown body. Used by the one-time backfill command.
+ */
+function setQuoted(document: YAML.Document, key: string, value: string): void {
+  const node = document.createNode(value) as YAML.Scalar;
+  node.type = 'QUOTE_DOUBLE';
+  document.set(key, node);
+}
+
+export function fillMissingNoteTimestamps(
+  raw: string,
+  created: string | undefined,
+  updated: string | undefined
+): { raw: string; changed: boolean } {
+  const match = raw.match(FRONTMATTER_REGEX);
+  if (match && parseNoteContent(raw).hasFrontmatter) {
+    const document = YAML.parseDocument(match[1]);
+    let changed = false;
+    if (!document.get('created') && created) { setQuoted(document, 'created', created); changed = true; }
+    if (!document.get('updated') && updated) { setQuoted(document, 'updated', updated); changed = true; }
+    if (!changed) return { raw, changed: false };
+    const newline = match[0].includes('\r\n') ? '\r\n' : '\n';
+    return { raw: `---${newline}${document.toString().replace(/\n/g, newline)}---${newline}${raw.slice(match[0].length)}`, changed: true };
+  }
+
+  const fields: [string, string][] = [];
+  if (created) fields.push(['created', created]);
+  if (updated) fields.push(['updated', updated]);
+  if (fields.length === 0) return { raw, changed: false };
+  const document = new YAML.Document({});
+  for (const [key, value] of fields) setQuoted(document, key, value);
+  return { raw: `---\n${document.toString()}---\n${raw}`, changed: true };
 }

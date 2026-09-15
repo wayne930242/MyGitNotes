@@ -92,6 +92,43 @@ describe('Core Update Engine Rules', () => {
     );
   });
 
+  it('hints at the backfill command when merged notes are missing created/updated', async () => {
+    await runGit(['checkout', '-b', 'main'], userRepo);
+    fs.writeFileSync(
+      path.join(userRepo, WORKSPACE_CONFIG_FILENAME),
+      `schema_version: 1\nworkspace:\n  title: "My Notes"\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: "Example"\n    root: notes/example\n`
+    );
+    fs.mkdirSync(path.join(userRepo, 'notes/example'), { recursive: true });
+    fs.writeFileSync(path.join(userRepo, 'notes/example/no-timestamps.md'), '# Old note');
+    fs.writeFileSync(path.join(userRepo, 'notes/example/complete.md'), '---\ncreated: "2020-01-01T00:00:00.000Z"\nupdated: "2020-01-02T00:00:00.000Z"\n---\n\nComplete note.\n');
+    await stageAndCommit(userRepo, [WORKSPACE_CONFIG_FILENAME, 'notes/example/no-timestamps.md', 'notes/example/complete.md'], 'init workspace');
+
+    fs.writeFileSync(path.join(upstreamRepo, 'NEW_FEATURE.md'), '# New Core Feature');
+    await stageAndCommit(upstreamRepo, ['NEW_FEATURE.md'], 'feat: add new feature');
+
+    const result = await updateCore({ repoRoot: userRepo });
+    expect(result.notesMissingTimestamps).toBe(1);
+    expect(result.message).toContain('pnpm backfill-note-timestamps');
+  });
+
+  it('gives no backfill hint when every note already has created and updated', async () => {
+    await runGit(['checkout', '-b', 'main'], userRepo);
+    fs.writeFileSync(
+      path.join(userRepo, WORKSPACE_CONFIG_FILENAME),
+      `schema_version: 1\nworkspace:\n  title: "My Notes"\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: "Example"\n    root: notes/example\n`
+    );
+    fs.mkdirSync(path.join(userRepo, 'notes/example'), { recursive: true });
+    fs.writeFileSync(path.join(userRepo, 'notes/example/complete.md'), '---\ncreated: "2020-01-01T00:00:00.000Z"\nupdated: "2020-01-02T00:00:00.000Z"\n---\n\nComplete note.\n');
+    await stageAndCommit(userRepo, [WORKSPACE_CONFIG_FILENAME, 'notes/example/complete.md'], 'init workspace');
+
+    fs.writeFileSync(path.join(upstreamRepo, 'NEW_FEATURE.md'), '# New Core Feature');
+    await stageAndCommit(upstreamRepo, ['NEW_FEATURE.md'], 'feat: add new feature');
+
+    const result = await updateCore({ repoRoot: userRepo });
+    expect(result.notesMissingTimestamps).toBe(0);
+    expect(result.message).not.toContain('backfill-note-timestamps');
+  });
+
   it('preserves tracked agent settings through Core deletion, later edits and additions', async () => {
     const write = (root: string, file: string, text: string) => {
       fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });

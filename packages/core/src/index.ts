@@ -3,6 +3,7 @@ export * from './screen-page.js';
 export * from './note-status.js';
 export * from './config.js';
 export * from './frontmatter.js';
+export * from './note-timestamps.js';
 export * from './classifier.js';
 export * from './path-guard.js';
 export * from './note-service.js';

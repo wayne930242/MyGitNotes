@@ -153,3 +153,22 @@ export async function getRecentCommits(
     return [];
   }
 }
+
+/**
+ * Returns the author date of a path's first and last commit (following
+ * renames), as ISO 8601 UTC strings. Used by the note-timestamps backfill.
+ */
+export async function getFirstAndLastCommitDates(
+  repoRoot: string,
+  relPath: string
+): Promise<{ first?: string; last?: string }> {
+  try {
+    const { stdout } = await runGit(['log', '--follow', '--format=%aI', '--', relPath], repoRoot);
+    if (!stdout) return {};
+    const dates = stdout.split('\n').filter(Boolean).map(date => new Date(date).toISOString());
+    if (dates.length === 0) return {};
+    return { first: dates[dates.length - 1], last: dates[0] };
+  } catch {
+    return {};
+  }
+}

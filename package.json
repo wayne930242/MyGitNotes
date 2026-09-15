@@ -6,6 +6,7 @@
   "scripts": {
     "bootstrap-workspace": "tsx scripts/bootstrap-workspace.ts",
     "update-core": "tsx scripts/update-core.ts",
+    "backfill-note-timestamps": "tsx scripts/backfill-note-timestamps.ts",
     "build": "pnpm --filter \"@mygitnotes/*\" run build",
     "test": "node scripts/check-core-ownership.mjs && vitest run",
     "check:core-ownership": "node scripts/check-core-ownership.mjs",
