@@ -1,4 +1,8 @@
 import { ReorderToggle } from './ReorderToggle.js';
+import { lazy } from 'react';
+const GraphPage = lazy(() => import('./GraphPage.js').then(module => ({ default: module.GraphPage })));
+import type { GraphEditing } from '../lib/use-graph-editing.js';
+import type { ReactNode } from 'react';
 import { Button } from './Button.js';
 import './study.css';
 import { useEffect, useRef, useState } from 'react';
@@ -62,7 +66,8 @@ export function createLaneNoteContext(
   return null;
 }
 
-function Lane({ row, reorder, disabled, study, onStudy, onStudyChange, onView, onSort, onAdd, onRemove, onCreateNote, ...content }: ScreenContentProps & {
+function Lane({ row, graph, reorder, disabled, study, onStudy, onStudyChange, onView, onSort, onAdd, onRemove, onCreateNote, ...content }: ScreenContentProps & {
+  graph?: ReactNode;
   row: ScreenRow; reorder: boolean; disabled: boolean; onStudy: () => void; onView: (view: ScreenRow['view']) => void; onAdd: () => void; onRemove: (id: string) => void;
   onSort: (sort: SortConfig) => void; study: StudyController; onStudyChange: (study: NonNullable<ScreenRow['study']>) => void;
   onCreateNote?: (context?: { notebookId?: string; folder?: string; tag?: string }) => void;
@@ -107,9 +112,9 @@ function Lane({ row, reorder, disabled, study, onStudy, onStudyChange, onView, o
             ] as const).map(([value,label]) => ({value,label:t(label)}))} /></label>}
         </div>
         <Select className="screen-view-select" aria-label={`${t('screen.view')}: ${row.name}`} value={row.view} disabled={disabled} onValueChange={value => onView(value as ScreenRow['view'])}
-          options={(['thumbnail', 'small', 'medium'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} />
+          options={(['thumbnail', 'small', 'medium', 'graph'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} />
         <div className="screen-view-tabs" role="group" aria-label={`${t('screen.view')}: ${row.name}`}>
-        {([{value:'thumbnail',icon:LayoutGrid},{value:'small',icon:Columns3},{value:'medium',icon:Columns2}] as const).map(({value,icon:Icon}) => <Button key={value} type="button" disabled={disabled} size="icon" title={t(`screen.${value}`)} aria-label={t(`screen.${value}`)} aria-pressed={row.view === value} onClick={() => onView(value)}><Icon size={16} /></Button>)}
+        {([{value:'thumbnail',icon:LayoutGrid},{value:'small',icon:Columns3},{value:'medium',icon:Columns2},{value:'graph',icon:Zap}] as const).map(({value,icon:Icon}) => <Button key={value} type="button" disabled={disabled} size="icon" title={t(`screen.${value}`)} aria-label={t(`screen.${value}`)} aria-pressed={row.view === value} onClick={() => onView(value)}><Icon size={16} /></Button>)}
       </div>
         <Button type="button" size="icon" className="screen-start-study" aria-label={`${t('study.start')}: ${row.name}`} title={t('study.start')} onClick={onStudy}><Brain size={18} /></Button>
         {row.kind === 'custom' ? (
@@ -121,7 +126,7 @@ function Lane({ row, reorder, disabled, study, onStudy, onStudyChange, onView, o
         <Button type="button" size="icon" className="screen-lane-scroll" aria-label={`${t('screen.scrollRight')}: ${row.name}`} onClick={() => scroll(1)}><ChevronRight size={16} /></Button>
       </div>
     </header>
-    <div ref={drop.setNodeRef} className={drop.isOver ? 'screen-drop-target' : ''}>
+    {row.view === 'graph' ? graph : <div ref={drop.setNodeRef} className={drop.isOver ? 'screen-drop-target' : ''}>
       <div ref={strip} className="screen-lane-strip" tabIndex={0} aria-label={`${row.name} · ${t('screen.items')}`}>
         {row.kind === 'custom' ? <SortableContext items={items.map(item => item.id)} strategy={horizontalListSortingStrategy}>
           {items.map(item => <MovableCard reorder={reorder} key={item.id} {...content} item={item} row={row} disabled={disabled || filtered} remove={() => onRemove(item.id)} />)}
@@ -129,11 +134,12 @@ function Lane({ row, reorder, disabled, study, onStudy, onStudyChange, onView, o
         {!items.length && <div className="screen-lane-empty">{t(row.kind === 'custom' ? 'screen.emptyCustom' : 'screen.emptyDynamic')}
           {!disabled && <Button onClick={row.kind === 'custom' ? onAdd : handleCreateInLane}><Plus size={14} />{t(row.kind === 'custom' ? 'screen.addItem' : 'screen.createNoteInLane')}</Button>}</div>}
       </div>
-    </div>
+    </div>}
   </section>;
 }
 
-export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, screen, onOpenNote, onStudySaved, focusedLaneId, onCreateNote }: {
+export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, screen, editing: graphEditing, onOpenNote, onStudySaved, focusedLaneId, onCreateNote }: {
+  editing?: GraphEditing;
   notebooks: NotebookConfig[]; notes: NoteItem[]; folders: FolderItem[]; selectedNotebookId: string; screen: ScreenController;
   focusedLaneId?: string | null; onOpenNote: (note: NoteItem) => void; onStudySaved: (note?: NoteItem) => void;
   onCreateNote?: (context?: { notebookId?: string; folder?: string; tag?: string }) => void;
@@ -244,6 +250,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
             if (target?.kind === 'custom') screen.change(moveScreenItem(screen.page, String(active.id), target.id, over.id === `lane:${target.id}` ? target.items.length : target.items.findIndex(item => item.id === over.id)));
           }}>
           {screen.page.rows.map(row => <Lane reorder={reorder} key={row.id} row={row} {...content} disabled={disabled} study={study}
+            graph={row.view === 'graph' ? <GraphPage notebooks={notebooks} notes={notes} lane={row} screen={screen} editing={graphEditing} onOpenNote={onOpenNote} /> : undefined}
             onCreateNote={onCreateNote}
             onStudy={() => navigate(screenLaneRoute(row.id) + location.search)}
             onStudyChange={study => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id ? { ...value, study } : value) })} onAdd={() => setAddTo(row.id)}

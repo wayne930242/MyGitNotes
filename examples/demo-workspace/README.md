@@ -8,4 +8,10 @@ The workspace configures two notebooks: `example` (general tutorials and project
 
 Browser editing saves locally; the Commit footer publishes selected changes. MCP mutations and hosted asset operations create their own commits.
 
+## Graph and media examples
+
+Start with `notes/example/graph-playground.md`. Four additional swimlanes demonstrate editable graph nodes, mixed media, dated tasks, and a dynamic project folder. `todo-demo.md` includes overdue, today, future, undated, and completed tasks using September 15, 2026 as the reference day; adjust those dates for later testing.
+
+The two sample illustrations in `notes/example/assets/` were generated with the built-in image generation tool. Prompts describe a watercolor riverside reading desk and a gouache evening desk beside a rainy window, both without text or logos. `music-resources.md` links to Rick Astley's official “Never Gonna Give You Up” video.
+
 `notes/example/index.md` demonstrates the notebook-root Index card and teaches folder indexes, relative links and visibility. `welcome.md` links to it so the tutorial is also reachable from an ordinary note.

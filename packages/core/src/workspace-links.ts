@@ -5,6 +5,16 @@ export type WorkspaceLink =
   | { kind: 'route'; url: string }
   | { kind: 'asset-hash'; hash: string };
 
+export function noteLinkHref(sourcePath: string, targetPath: string): string {
+  const source = sourcePath.split('/').slice(0, -1), target = targetPath.split('/');
+  while (source.length && target.length && source[0] === target[0]) { source.shift(); target.shift(); }
+  return [...source.map(() => '..'), ...target.map(part => encodeURIComponent(part).replace(/[!'()*]/g, value => '%' + value.charCodeAt(0).toString(16).toUpperCase()))].join('/');
+}
+
+export function noteMarkdownLink(sourcePath: string, targetPath: string, title: string): string {
+  return `[${title.replace(/[\\[\]]/g, '\\$&').replace(/[\r\n]+/g, ' ')}](${noteLinkHref(sourcePath, targetPath)})`;
+}
+
 export function headingSlug(text: string): string {
   return text
     .replace(/^#{1,6}\s*/, '')

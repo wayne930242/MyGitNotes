@@ -1,6 +1,6 @@
 import { findStudyNote, matchesStudyFilter, studyDue, type StudyWorkspace } from '@mygitnotes/core/study';
-import type { ScreenItem, ScreenRow } from '@mygitnotes/core/screen-page';
-import { isNoteHidden, resolveNoteStatuses } from '@mygitnotes/core/note-status';
+import { screenRowNotes, type ScreenItem, type ScreenRow } from '@mygitnotes/core/screen-page';
+import { resolveNoteStatuses } from '@mygitnotes/core/note-status';
 import type { AssetItem, NoteItem, NotebookConfig, FolderItem } from './types.js';
 import { sortNotes } from './note-sort.js';
 
@@ -24,9 +24,7 @@ export function screenRowItems(row: ScreenRow, notes: NoteItem[], assets: (Asset
   const source = row.source;
   const within = (file: string) => file.startsWith(`${source.kind === 'folder' ? source.path : ''}/`)
     && (source.kind !== 'folder' || source.recursive || !file.slice(source.path.length + 1).includes('/'));
-  const selectedNotes = notes.filter(note => !isNoteHidden({ ...note.metadata, status: note.status })
-    && (!source.notebookId || note.notebookId === source.notebookId)
-    && (source.kind === 'tag' ? note.tags.includes(source.tag) : within(note.path)));
+  const selectedNotes = screenRowNotes({ ...row, study: undefined }, notes);
   const selectedAssets = source.kind === 'folder' ? assets.filter(asset => asset.notebookId === source.notebookId && within(asset.path)) : [];
   if (row.sort) {
     const entries = [

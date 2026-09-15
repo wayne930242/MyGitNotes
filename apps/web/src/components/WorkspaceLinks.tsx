@@ -11,7 +11,7 @@ import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scr
 import { useNoteYouTubeEmbed } from '../lib/use-note-youtube-embed.js';
 
 type BeforeNavigate = () => Promise<boolean>;
-const Context = createContext({ registerBeforeNavigate: (_handler: BeforeNavigate): (() => void) => () => {} });
+const Context = createContext({ notes: [] as NoteItem[], registerBeforeNavigate: (_handler: BeforeNavigate): (() => void) => () => {} });
 export const useWorkspaceLinks = () => useContext(Context);
 
 export function WorkspaceLinks({ notebooks, notes, folders, children, onOpenNote }: {
@@ -19,17 +19,17 @@ export function WorkspaceLinks({ notebooks, notes, folders, children, onOpenNote
   onOpenNote: (note: NoteItem, anchor?: string) => void;
 }) {
   const { t } = useTranslation(); const navigate = useNavigate();
-  const before = useRef<BeforeNavigate>();
+  const before = useRef(new Set<BeforeNavigate>());
   const surfaceRef = useRef<HTMLDivElement>(null);
   useAltWheelHorizontalScroll(surfaceRef, surfaceRef, '.markdown-table-scroll');
   useNoteYouTubeEmbed(surfaceRef);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<{ asset: AssetItem; notebookId: string } | null>(null);
   const registerBeforeNavigate = useCallback((handler: BeforeNavigate) => {
-    before.current = handler;
-    return () => { if (before.current === handler) before.current = undefined; };
+    before.current.add(handler);
+    return () => { before.current.delete(handler); };
   }, []);
-  const ready = async () => !before.current || await before.current();
+  const ready = async () => { for (const handler of before.current) if (!await handler()) return false; return true; };
   const open = async (element: HTMLElement, newTab: boolean) => {
     const href = element.dataset.workspaceLink || '';
     const sourcePath = element.dataset.sourcePath || '';
@@ -82,7 +82,7 @@ export function WorkspaceLinks({ notebooks, notes, folders, children, onOpenNote
     } catch { setError(t('links.loadFailed')); }
   };
   const clickedLink = (target: EventTarget) => target instanceof Element ? target.closest<HTMLElement>('[data-workspace-link]') : null;
-  return <Context.Provider value={{ registerBeforeNavigate }}>
+  return <Context.Provider value={{ notes, registerBeforeNavigate }}>
     <div ref={surfaceRef} className="workspace-link-surface" onMouseDownCapture={event => {
       if (event.button === 0 && clickedLink(event.target)) { event.preventDefault(); event.stopPropagation(); }
     }} onClickCapture={event => {

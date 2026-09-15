@@ -1,6 +1,7 @@
 import { Button } from './components/Button.js';
 import type { ChangeRequest } from './lib/types.js';
 import { useQueryStates } from 'nuqs';
+import { useGraphEditing } from './lib/use-graph-editing.js';
 import { filterParsers, writeFilterQuery, type FilterQuery } from './lib/filter-query.js';
 import { filterNotes, legacyFolderPaths, type NoteFilters } from '@mygitnotes/core/note-filters';
 import type { FilterControls } from './lib/filter-controls.js';
@@ -208,6 +209,7 @@ const AppContent: React.FC = () => {
   };
   const clearFilters = () => {
     const query = currentFilterSearch({ q: '', tag: [], folders: [], descendants: true, tagMode: 'any', status: null, showHidden: false, neighbors: false });
+    query.delete('lanes');
     void navigateFiltered(activeTab === 'graph' ? '/graph' : notebookRoute(selectedNotebookId), query);
   };
   const setActiveTab = async (tab: WorkspaceTab) => {
@@ -359,7 +361,9 @@ const AppContent: React.FC = () => {
   }, [selectedFolder, folders, selectedNotebookId, t]);
 
   // Note Handlers
-  const handleOpenNote = (note: NoteItem, anchor = '') => {
+  const handleOpenNote = async (note: NoteItem, anchor = '') => {
+    try { await graphEditing.store.flushAll(); note = graphEditing.store.get(note).draft; }
+    catch (error) { setActionError((error as Error).message); return; }
     setEditingNote(note);
 
     const notebook = config?.notebooks.find(nb => nb.id === note.notebookId);
@@ -415,6 +419,11 @@ const AppContent: React.FC = () => {
     return res.note;
   };
 
+  const graphEditing = useGraphEditing(`${sourceId}:${branch}`, notes, canWrite, params => {
+    const pending = remote ? readWorkingNotes(workingScope)[params.path] : undefined;
+    if (pending?.blocked) return Promise.reject(new Error(pending.blocked));
+    return handleSaveNote({ ...params, baseNote: pending?.base || params.baseNote });
+  });
 
   // Trash action: delete without immediate commit, allowing restore (Requirement 2)
   const handleDeleteNote = async (note: NoteItem) => {
@@ -901,7 +910,7 @@ const AppContent: React.FC = () => {
           </main>
         )}
 
-        {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} focusedLaneId={route.lane} onStudySaved={note => { if (note) { setNotes(values => values.map(value => value.path === note.path && value.notebookId === note.notebookId ? note : value)); } else { void refreshWorkspace(); } void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message)); }} notebooks={config?.notebooks || []} notes={notes} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} onCreateNote={openNewNote} /></React.Suspense>}
+        {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} editing={graphEditing} focusedLaneId={route.lane} onStudySaved={note => { if (note) { setNotes(values => values.map(value => value.path === note.path && value.notebookId === note.notebookId ? note : value)); } else { void refreshWorkspace(); } void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message)); }} notebooks={config?.notebooks || []} notes={notes} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} onCreateNote={openNewNote} /></React.Suspense>}
 
         {activeTab === 'graph' && (
           <main className="workspace-route graph-main flex-1 w-full h-full relative min-h-0">
@@ -911,6 +920,9 @@ const AppContent: React.FC = () => {
                 notebooks={config?.notebooks || []}
                 notes={notes}
                 filters={filterProps}
+                folders={folders}
+                screen={screen}
+                editing={graphEditing}
                 onOpenNote={handleOpenNote}
               />
             </React.Suspense>

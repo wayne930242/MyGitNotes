@@ -14,6 +14,9 @@ import { headingSlug, resolveWorkspaceHref } from '../lib/workspace-links.js';
 import { useLocation } from 'react-router-dom';
 import { useTranslation, type I18nContextValue } from '../lib/i18n/index.js';
 import { getAtCompletionItems } from '../lib/at-completion.js';
+import { noteCompletionAt, noteCandidates } from '../lib/note-completion.js';
+import { noteLinkHref } from '@mygitnotes/core/workspace-links';
+import type { NoteItem } from '../lib/types.js';
 import { formatDateYMD } from '../lib/date-utils.js';
 import { DONE_EMOJI, DUE_EMOJI, TIMESTAMP_EMOJI, findToken, isTaskLine, setTaskChecked, setTokenValue } from '../lib/task-tokens.js';
 
@@ -23,7 +26,7 @@ export interface LiveMarkdownHandle {
   goToLine: (line: number, options?: { focus?: boolean; smooth?: boolean }) => void;
   getCurrentLine: () => number;
 }
-interface Props { content: string; notePath: string; readOnly: boolean; ariaLabel?: string; onChange: (content: string) => void }
+interface Props { content: string; notePath: string; readOnly: boolean; ariaLabel?: string; onChange: (content: string) => void; noteOptions?: NoteItem[]; onCaret?: (position: number) => void }
 const focusChanged = StateEffect.define<boolean>();
 function externalLinkIcon(href: string, label: string, sourcePath: string): HTMLAnchorElement {
   const anchor = document.createElement('a');
@@ -352,12 +355,14 @@ const theme = EditorView.theme({
   '.live-md-token-clear':{cursor:'pointer',color:'var(--color-muted)',fontWeight:'700',lineHeight:'1',border:'none',background:'none',padding:'0 2px'},
   '.live-md-due-adder':{display:'inline-flex',alignItems:'center',marginLeft:'6px',padding:'0 6px',borderRadius:'999px',fontSize:'0.8em',cursor:'pointer',color:'var(--color-muted)',border:'1px dashed var(--color-border)',background:'none'},
 });
-export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content,notePath,readOnly,onChange,ariaLabel = 'Note content'},ref) => {
+export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content,notePath,readOnly,onChange,noteOptions = [],onCaret,ariaLabel = 'Note content'},ref) => {
   const { t } = useTranslation(); const linkLabel = t('links.open');
   const tableLabel = t('preview.scrollableTable'), pageLabel = t('editor.page');
   const location = useLocation();
   const host = useRef<HTMLDivElement>(null); const editor = useRef<EditorView>();
   const callback = useRef(onChange); callback.current = onChange;
+  const completionNotes = useRef(noteOptions); completionNotes.current = noteOptions;
+  const caretCallback = useRef(onCaret); caretCallback.current = onCaret;
   const permission = useRef(new Compartment());
   useImperativeHandle(ref, () => ({
     insert(text) {const view=editor.current;if(!view||view.state.readOnly)return;view.dispatch(view.state.replaceSelection(text),{scrollIntoView:true,userEvent:'input'});view.focus();},
@@ -395,12 +400,19 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
     const view = new EditorView({parent:host.current!,state:EditorState.create({doc:content,extensions:[
       markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),lineNumbers(),highlightActiveLineGutter(),EditorView.lineWrapping,
       syntaxHighlighting(defaultHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'}])),theme,tableUIState,chipEditState,field,
-      autocompletion({ override: [atCompletionSource] }),
+      autocompletion({ override: [atCompletionSource, context => {
+        const text = context.state.doc.toString(), match = noteCompletionAt(text, context.pos);
+        if (!match || context.state.readOnly) return null;
+        return { from: match.from, to: match.to, filter: false, options: noteCandidates(completionNotes.current, match.query, notePath).map(note => ({
+          label: note.title, detail: `${note.notebookId} · ${note.path}`,
+          apply: noteLinkHref(notePath, note.path) + (text[context.pos] === ')' ? '' : ')'),
+        })) };
+      }] }),
       EditorView.atomicRanges.of(view => view.state.field(field).decorations.update({ filter: (_from, _to, decoration) => decoration.spec.widget instanceof LiveMarkdownTable })),
       permission.current.of([EditorState.readOnly.of(readOnly),EditorView.editable.of(!readOnly)]),
       EditorView.contentAttributes.of({'aria-label':ariaLabel,'role':'textbox','aria-multiline':'true'}),
       EditorView.domEventHandlers({focus:(_event,view)=>{view.dispatch({effects:focusChanged.of(true)});},blur:(_event,view)=>{view.dispatch({effects:focusChanged.of(false)});}}),
-      EditorView.updateListener.of(update=>{if(update.docChanged)callback.current(update.state.doc.toString());}),
+      EditorView.updateListener.of(update=>{if(update.docChanged)callback.current(update.state.doc.toString()); if ((update.selectionSet || update.docChanged || update.focusChanged) && update.view.hasFocus) caretCallback.current?.(update.state.selection.main.head);}),
     ]})});
     editor.current=view;return()=>{view.destroy();editor.current=undefined;};
   },[notePath,ariaLabel,linkLabel,tableLabel,pageLabel,t]);
