@@ -6,21 +6,33 @@ describe('stampSaveTimestamps', () => {
   const now = new Date('2026-09-15T10:00:00.000Z');
 
   it('sets created on a new note with no existing timestamps', () => {
-    const stamped = stampSaveTimestamps({}, now);
+    const stamped = stampSaveTimestamps({}, true, now);
     expect(stamped.created).toBe('2026-09-15T10:00:00.000Z');
     expect(stamped.updated).toBe('2026-09-15T10:00:00.000Z');
   });
 
   it('keeps an existing created value but always refreshes updated', () => {
-    const stamped = stampSaveTimestamps({ created: '2020-01-01T00:00:00.000Z', updated: '2020-01-02T00:00:00.000Z' }, now);
+    const stamped = stampSaveTimestamps({ created: '2020-01-01T00:00:00.000Z', updated: '2020-01-02T00:00:00.000Z' }, true, now);
     expect(stamped.created).toBe('2020-01-01T00:00:00.000Z');
     expect(stamped.updated).toBe('2026-09-15T10:00:00.000Z');
   });
 
   it('does not mutate the input object', () => {
     const input = { title: 'Note' };
-    stampSaveTimestamps(input, now);
+    stampSaveTimestamps(input, true, now);
     expect(input).toEqual({ title: 'Note' });
+  });
+
+  it('leaves created missing on an edit to a pre-existing note that predates this feature', () => {
+    const stamped = stampSaveTimestamps({ title: 'Old note' }, false, now);
+    expect(stamped.created).toBeUndefined();
+    expect(stamped.updated).toBe('2026-09-15T10:00:00.000Z');
+  });
+
+  it('never overwrites an existing created value on an edit, whether new or not', () => {
+    const stamped = stampSaveTimestamps({ created: '2020-01-01T00:00:00.000Z' }, false, now);
+    expect(stamped.created).toBe('2020-01-01T00:00:00.000Z');
+    expect(stamped.updated).toBe('2026-09-15T10:00:00.000Z');
   });
 });
 
@@ -66,7 +78,7 @@ describe('serializeNoteContent timestamp stamping', () => {
   const now = new Date('2026-09-15T10:00:00.000Z');
 
   it('stamps created and updated on a brand-new note and quotes the ISO string in YAML', () => {
-    const serialized = serializeNoteContent({ title: 'New note' }, 'Body.', now);
+    const serialized = serializeNoteContent({ title: 'New note' }, 'Body.', true, now);
     expect(serialized).toContain('created: "2026-09-15T10:00:00.000Z"');
     expect(serialized).toContain('updated: "2026-09-15T10:00:00.000Z"');
     const reparsed = parseNoteContent(serialized);
@@ -78,10 +90,22 @@ describe('serializeNoteContent timestamp stamping', () => {
     const serialized = serializeNoteContent(
       { title: 'Existing note', created: '2015-09-17T16:48:45.115Z', updated: '2015-09-18T00:00:00.000Z' },
       'Body.',
+      false,
       now
     );
     const reparsed = parseNoteContent(serialized);
     expect(reparsed.metadata.created).toBe('2015-09-17T16:48:45.115Z');
+    expect(reparsed.metadata.updated).toBe('2026-09-15T10:00:00.000Z');
+  });
+
+  it('does not invent a created date when editing a pre-existing note that predates this feature', () => {
+    // Regression: an existing note (e.g. from a workspace created before this feature)
+    // that lacks `created` must NOT get today's date on an ordinary edit — that would
+    // permanently hide its real creation date from the backfill command, which only
+    // fills fields that are still missing.
+    const serialized = serializeNoteContent({ title: 'Pre-existing note' }, 'Edited body.', false, now);
+    const reparsed = parseNoteContent(serialized);
+    expect(reparsed.metadata.created).toBeUndefined();
     expect(reparsed.metadata.updated).toBe('2026-09-15T10:00:00.000Z');
   });
 });

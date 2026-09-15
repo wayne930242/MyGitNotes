@@ -54,13 +54,14 @@ export function writeNoteFile(
   notebookId?: string
 ): NoteItem {
   const safePath = resolveSafePath(repoRoot, relPath);
+  const isNew = !fs.existsSync(safePath);
   const dir = path.dirname(safePath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
   const finalOutput = metadata
-    ? serializeNoteContent(metadata, content)
+    ? serializeNoteContent(metadata, content, isNew)
     : content;
 
   fs.writeFileSync(safePath, finalOutput, 'utf-8');

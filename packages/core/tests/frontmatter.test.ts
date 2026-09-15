@@ -45,7 +45,7 @@ Body text here.
     };
     const body = 'This is the note content that should remain unchanged.';
 
-    const serialized = serializeNoteContent(originalMetadata, body);
+    const serialized = serializeNoteContent(originalMetadata, body, true);
     const reparsed = parseNoteContent(serialized);
 
     expect(reparsed.title).toBe('Preserved Title');

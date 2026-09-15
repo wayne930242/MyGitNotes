@@ -94,10 +94,12 @@ function stringifyMetadata(metadata: NoteMetadata): string {
 /**
  * Serializes metadata and Markdown body back into file format.
  * Preserves all unknown frontmatter keys. Stamps `created`/`updated`
- * (see `stampSaveTimestamps`) on every save.
+ * (see `stampSaveTimestamps`) on every save; `isNew` must reflect whether
+ * this note existed before this save, so an edit to a pre-existing note
+ * that predates this feature never invents a `created` date.
  */
-export function serializeNoteContent(metadata: NoteMetadata, content: string, now: Date = new Date()): string {
-  const stamped = stampSaveTimestamps(metadata, now);
+export function serializeNoteContent(metadata: NoteMetadata, content: string, isNew: boolean, now: Date = new Date()): string {
+  const stamped = stampSaveTimestamps(metadata, isNew, now);
   const keys = Object.keys(stamped);
   const trimmedContent = content.trim();
 

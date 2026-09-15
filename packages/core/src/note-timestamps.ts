@@ -1,13 +1,16 @@
 import { NoteMetadata } from './types.js';
 
 /**
- * Stamps `created` (only if missing) and `updated` (always) as ISO 8601 UTC
- * strings. Used on every note content save so `created`/`updated` reflect
- * the note's own save history rather than filesystem mtimes.
+ * Stamps `updated` (always) and, only for a genuinely new note (`isNew`),
+ * fills `created` when missing. An existing note that predates this feature
+ * and lacks `created` keeps it missing on ordinary edits, so the one-time
+ * backfill command (which reads git history) is the only thing that fills
+ * it in — an edit must never invent today's date as a stand-in for a note's
+ * real, unknown creation date.
  */
-export function stampSaveTimestamps(metadata: NoteMetadata, now: Date = new Date()): NoteMetadata {
+export function stampSaveTimestamps(metadata: NoteMetadata, isNew: boolean, now: Date = new Date()): NoteMetadata {
   const iso = now.toISOString();
-  return { ...metadata, created: metadata.created ?? iso, updated: iso };
+  return { ...metadata, created: isNew ? (metadata.created ?? iso) : metadata.created, updated: iso };
 }
 
 /**
