@@ -151,6 +151,19 @@ describe('fillMissingNoteTimestamps', () => {
     expect(patched).toContain('Body text.');
   });
 
+  it('appends missing keys without reformatting existing frontmatter', () => {
+    const raw = '---\ntitle: 追逐\ncreated: "2015-09-19T07:55:15.622Z"\ntags: ["規則","追逐"]\nsource: {"a":"b","c":"d"}\n---\n\nBody.\n';
+    const { raw: patched, changed } = fillMissingNoteTimestamps(raw, '2020-01-01T00:00:00.000Z', '2021-01-01T00:00:00.000Z');
+    expect(changed).toBe(true);
+    expect(patched).toBe('---\ntitle: 追逐\ncreated: "2015-09-19T07:55:15.622Z"\ntags: ["規則","追逐"]\nsource: {"a":"b","c":"d"}\nupdated: "2021-01-01T00:00:00.000Z"\n---\n\nBody.\n');
+  });
+
+  it('keeps CRLF line endings when appending keys', () => {
+    const raw = '---\r\ntitle: Note\r\n---\r\nBody.\r\n';
+    const { raw: patched } = fillMissingNoteTimestamps(raw, '2020-01-01T00:00:00.000Z', undefined);
+    expect(patched).toBe('---\r\ntitle: Note\r\ncreated: "2020-01-01T00:00:00.000Z"\r\n---\r\nBody.\r\n');
+  });
+
   it('makes no change when both timestamps already exist', () => {
     const raw = '---\ncreated: "2015-09-17T16:48:45.115Z"\nupdated: "2015-09-18T00:00:00.000Z"\n---\n\nBody.\n';
     const { raw: patched, changed } = fillMissingNoteTimestamps(raw, '2020-01-01T00:00:00.000Z', '2021-01-01T00:00:00.000Z');
