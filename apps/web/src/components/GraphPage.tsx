@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Scan, ListChecks, PanelTopOpen, PanelTopClose, Focus, Save, LayoutGrid, Maximize2, PanelsTopLeft, Pencil, Plus, Minus, X } from 'lucide-react';
 import ForceGraph2D from 'react-force-graph-2d';
@@ -11,6 +11,8 @@ import type { FilterControls } from '../lib/filter-controls.js';
 import type { ScreenController } from '../lib/use-screen-page.js';
 import type { GraphEditing } from '../lib/use-graph-editing.js';
 import { arrangeGraphLayout, graphLaneViewport } from '../lib/graph-layout.js';
+import { optimizeGraphLayout } from '../lib/graph-topology-layout.js';
+import { initializeGraphLayout } from '../lib/graph-initial-layout.js';
 import { useWorkspaceLinks } from './WorkspaceLinks.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { GRAPH_APPEARANCE_KEY, graphColorGroup, graphColorGroups, readGraphAppearance, type GraphAppearance } from '../lib/graph-colors.js';
@@ -63,15 +65,15 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
   const [pickerOpen, setPickerOpen] = useState(false);
   const [appearance, setAppearance] = useState(readGraphAppearance), [appearanceError, setAppearanceError] = useState(false);
   const positions = useRef(new Map<string, LayoutNode>()), carets = useRef(new Map<string, number>());
-  const frozen = useRef(Boolean(activeLane?.graph)), fitted = useRef(false), interacted = useRef(false);
+  const fitted = useRef(false), interacted = useRef(false);
   const [gesture, setGesture] = useState<{ kind: 'box' | 'link'; start: { x: number; y: number }; end: { x: number; y: number }; source?: string } | null>(null);
   const rows = screen?.page.rows || [];
   const latest = useRef({ screen, layout }); latest.current = { screen, layout };
-  useEffect(() => {
+  useLayoutEffect(() => {
     setLayout(activeLane?.graph || { nodes: [] }); setSelected([]); setOnly(null); setMaximized(null);
-    positions.current.clear(); frozen.current = Boolean(activeLane?.graph); fitted.current = false; interacted.current = false;
+    positions.current.clear(); fitted.current = false; interacted.current = false;
   }, [laneKey]);
-  useEffect(() => { if (activeLane?.graph && JSON.stringify(activeLane.graph) !== JSON.stringify(latest.current.layout)) { setLayout(activeLane.graph); frozen.current = true; } }, [activeLane?.graph]);
+  useLayoutEffect(() => { if (activeLane?.graph && JSON.stringify(activeLane.graph) !== JSON.stringify(latest.current.layout)) setLayout(activeLane.graph); }, [activeLane?.graph]);
   useEffect(() => {
     const host = container.current; if (!host) return;
     const measure = () => setSize({ width: host.clientWidth || 800, height: host.clientHeight || 600 });
@@ -97,10 +99,14 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
     const full = buildNoteGraph(eligible, { includeHidden: true });
     const graph = selectFilteredGraph(full, new Set(matching.map(note => note.path)), filters?.neighbors || false);
     const connected = new Set(graph.links.flatMap(link => [link.source, link.target]));
-    const saved = new Map(layout.nodes.map(node => [node.path, node]));
-    return { links: graph.links, nodes: graph.nodes.filter(node => showOrphans || connected.has(node.id)).map(node => {
-      const previous = saved.get(node.id) || positions.current.get(node.id);
-      return { ...node, ...(previous ? { x: previous.x, y: previous.y, ...((frozen.current || previous.pinned || previous.expanded) ? { fx: previous.x, fy: previous.y } : {}) } : {}) };
+    const visible = graph.nodes.filter(node => showOrphans || connected.has(node.id));
+    const saved = new Map([...positions.current, ...layout.nodes.map(node => [node.path, node] as const)]);
+    const initial = initializeGraphLayout({ nodes: visible, links: graph.links }, { nodes: [...saved.values()] });
+    const initialized = new Map(initial.nodes.map(node => [node.path, node]));
+    for (const node of initial.nodes) positions.current.set(node.path, node);
+    return { links: graph.links, nodes: visible.map(node => {
+      const position = initialized.get(node.id)!;
+      return { ...node, x: position.x, y: position.y, fx: position.x, fy: position.y };
     }) };
   }, [effective, matching, layout, showOrphans, filters?.neighbors, filters?.value.showHidden]);
   const colors = useMemo(() => graphColorGroups(graphData.nodes, notebooks, appearance), [graphData, notebooks, appearance]);
@@ -122,10 +128,11 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
     setSaveLayoutRequested(false);
     void screen.save();
   }, [saveLayoutRequested, screen?.saving, screen?.page, screen?.save]);
-  const freeze = () => { frozen.current = true; interacted.current = true; for (const node of graphData.nodes as Node[]) { node.fx = node.x; node.fy = node.y; } };
-  const reflow = (next: GraphLayout) => {
+  const freeze = () => { interacted.current = true; for (const node of graphData.nodes as Node[]) { node.fx = node.x; node.fy = node.y; } };
+  const reflow = (next: GraphLayout, topology = false) => {
     const visible = new Set(graphData.nodes.map(node => node.id));
-    const arranged = arrangeGraphLayout({ nodes: next.nodes.filter(node => visible.has(node.path)) }, { compact: true });
+    const visibleLayout = { nodes: next.nodes.filter(node => visible.has(node.path)) };
+    const arranged = topology ? optimizeGraphLayout(visibleLayout, graphData.links) : arrangeGraphLayout(visibleLayout, { compact: true });
     const byPath = new Map(arranged.nodes.map(node => [node.path, node]));
     return { nodes: next.nodes.map(node => byPath.get(node.path) || node) };
   };
@@ -195,10 +202,10 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
   }, [laneViewport.height, laneViewport.x, laneViewport.y, laneViewport.zoom, size.width, size.height, Boolean(lane)]);
   const { paintMinimap, minimap } = useGraphMinimap({ graphRef: fg, graphData, dimensions: size, isDark, nodeColor, onClearHover: () => setHover(null), onReset: resetView, onNavigate: () => { interacted.current = true; } });
   useEffect(() => {
-    if (!layout.nodes.length || fitted.current || interacted.current) return;
+    if (!graphData.nodes.length || fitted.current || interacted.current) return;
     const timer = setTimeout(() => { if (!interacted.current) { resetView(); fitted.current = true; } }, 100);
     return () => clearTimeout(timer);
-  }, [layout.nodes.length, size.width, size.height, laneKey]);
+  }, [graphData.nodes.length, size.width, size.height, laneKey]);
   const frameSignature = useRef('');
   const frame = () => {
     paintMinimap(); if (!fg.current) return;
@@ -288,7 +295,7 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
       <GraphTool label={t('graph.saveLane')} disabled={!visibleSelected.length || !screen?.writable} onClick={() => { setName(''); setSaveOpen(true); }}><Save size={18} /></GraphTool>
       <GraphTool label={t('graph.arrange')} onClick={() => {
         freeze();
-        const arranged = reflow(currentLayout()); persistLayout(arranged); requestAnimationFrame(() => fitView(arranged));
+        const arranged = reflow(currentLayout(), true); persistLayout(arranged); requestAnimationFrame(() => fitView(arranged));
       }}><LayoutGrid size={18} /></GraphTool>
       <GraphTool label={t('graph.chooseLane')} pressed={lanePanel || Boolean(activeLane)} onClick={() => { setLanePanel(v => !v); setPickerOpen(false); }}><PanelsTopLeft size={18} /></GraphTool>
       {activeLane && <GraphTool label={t('screen.editRow')} disabled={!screen?.writable} onClick={() => setEditLane(true)}><Pencil size={18} /></GraphTool>}
@@ -310,8 +317,8 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
     {editLane && activeLane && screen && <ScreenEditRow row={activeLane} notebooks={notebooks} notes={notes} assets={[]} folders={folders} selectedNotebookId={filters?.value.notebookId === 'all' ? notebooks[0]?.id || '' : filters?.value.notebookId || notebooks[0]?.id || ''} disabled={!screen.writable} onClose={() => setEditLane(false)} onApply={row => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id ? row : value) })} onRemove={() => { screen.change({ ...screen.page, rows: screen.page.rows.filter(row => row.id !== activeLane.id) }); selectLane(''); }} />}
     {pickerOpen && <div className="graph-note-selector" style={activeLane ? { top: 124 } : undefined}>{graphData.nodes.map(node => <label key={node.id}><input type="checkbox" checked={selected.includes(node.id)} onChange={() => select(node.id, { shiftKey: true })} />{node.title}</label>)}</div>}
     {notice && <div role="status" className="graph-notice" onClick={() => setNotice('')}>{notice}</div>}
-    <ForceGraph2D ref={fg} width={size.width} height={size.height} graphData={graphData} nodeId="id" cooldownTicks={80}
-      onRenderFramePost={frame} onEngineStop={() => { captureLaneGeometry(); if (!fitted.current && !interacted.current) { fitted.current = true; resetView(); } }}
+    <ForceGraph2D ref={fg} width={size.width} height={size.height} graphData={graphData} nodeId="id" cooldownTicks={1}
+      onRenderFramePost={frame} onEngineStop={() => { captureLaneGeometry(); if (graphData.nodes.length && !fitted.current && !interacted.current) { fitted.current = true; resetView(); } }}
       onNodeDragEnd={node => { freeze(); const next = currentLayout(); const saved = next.nodes.find(n => n.path === node.id); if (saved) saved.pinned = true; persistLayout(next); }}
       onNodeClick={(node, event) => select(node.id, event)} onNodeHover={node => { clearTimeout(hoverTimer.current); if (node) setHover(node.id); else hoverTimer.current = setTimeout(() => setHover(null), 250); }}
       onBackgroundClick={() => setSelected([])}
