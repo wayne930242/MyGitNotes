@@ -268,7 +268,13 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
     <fieldset><legend>{t('graph.lanes')}</legend>{[...new Set([...rows.map(row => row.id), ...laneIds])].map(id => <label className="filter-check" key={id}><input type="checkbox" checked={laneIds.includes(id)} onChange={() => { const next = new URLSearchParams(params); next.delete('lanes'); (laneIds.includes(id) ? laneIds.filter(v => v !== id) : [...laneIds, id]).forEach(value => next.append('lanes', value)); setParams(next); }} />{rows.find(row => row.id === id)?.name || t('screen.laneMissing')}</label>)}</fieldset>
   </GraphFilters> : null;
 
-  return <div ref={container} style={lane ? { height: laneViewport.height } : undefined} data-selected-count={visibleSelected.length} tabIndex={0} aria-label={t('graph.canvasHelp')} className={`graph-page-container graph-editing-surface ${lane ? 'graph-in-lane' : ''}`} onKeyDown={event => {
+  return <div ref={container} style={lane ? { height: laneViewport.height } : undefined} data-selected-count={visibleSelected.length} tabIndex={0} aria-label={t('graph.canvasHelp')} className={`graph-page-container graph-editing-surface ${lane ? 'graph-in-lane' : ''}`} onDoubleClickCapture={event => {
+    if ((event.target as Element).tagName !== 'CANVAS') return;
+    const box = container.current!.getBoundingClientRect();
+    const cursor = fg.current?.screen2GraphCoords(event.clientX - box.left, event.clientY - box.top);
+    const node = cursor && (graphData.nodes as Node[]).find(node => node.x !== undefined && Math.hypot(node.x - cursor.x, node.y! - cursor.y) < 12 / fg.current.zoom());
+    if (node && !expanded.has(node.id) && !closing.has(node.id)) setExpanded([node.id], true);
+  }} onKeyDown={event => {
     if (event.key !== 'Enter' || !visibleSelected.length || (event.target as Element).closest('button,input,textarea,select,[contenteditable="true"],[role="dialog"]')) return;
     event.preventDefault(); setExpanded(visibleSelected, !visibleSelected.every(path => expanded.has(path)));
   }} onWheelCapture={() => { interacted.current = true; }} onPointerDownCapture={event => { if ((event.target as Element).tagName === 'CANVAS') { interacted.current = true; container.current?.focus({ preventScroll: true }); } }}>

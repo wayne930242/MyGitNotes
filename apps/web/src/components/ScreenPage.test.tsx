@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { Network } from 'lucide-react';
 import type { ScreenRow } from '@mygitnotes/core/screen-page';
 import type { NotebookConfig } from '../lib/types.js';
-import { createLaneNoteContext } from './ScreenPage.js';
+import { createLaneNoteContext, screenViewTabs } from './ScreenPage.js';
 import { KeyboardShortcuts } from './KeyboardShortcuts.js';
 
 describe('createLaneNoteContext', () => {
@@ -77,6 +78,12 @@ describe('createLaneNoteContext', () => {
       items: [],
     };
     expect(createLaneNoteContext(row, notebooks)).toBeNull();
+  });
+});
+
+describe('Screen view icons', () => {
+  it('uses the same network icon for a lane graph as the main Graph navigation', () => {
+    expect(screenViewTabs.find(item => item.value === 'graph')?.icon).toBe(Network);
   });
 });
 
