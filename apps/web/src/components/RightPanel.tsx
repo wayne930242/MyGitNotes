@@ -1,6 +1,7 @@
+import { Button } from './Button.js';
 import { useEffect } from 'react';
 import { CalendarDays, ListTodo, GitBranch } from 'lucide-react';
-import type { GitStatus, NoteItem, NotebookConfig } from '../lib/types.js';
+import type { ChangeRequest, FileChange, GitStatus, NoteItem, NotebookConfig } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { usePanelContext, WORKSPACE_TOOL_IDS, type WorkspaceToolId } from '../lib/panel-context.js';
 import { CalendarTool } from './CalendarTool.js';
@@ -16,7 +17,10 @@ interface RightPanelProps {
   gitStatus: GitStatus | null;
   deletedNotes: NoteItem[];
   onRestoreNote: (note: NoteItem) => void;
-  onOpenCommitModal: () => void;
+  onOpenCommitModal: (request?: ChangeRequest) => void;
+  remoteChanges?: FileChange[];
+  getPreview?: (file: string) => string;
+  writable: boolean;
 }
 
 const WORKSPACE_TOOL_ICONS: Record<WorkspaceToolId, typeof CalendarDays> = {
@@ -31,7 +35,7 @@ const WORKSPACE_TOOL_LABELS: Record<WorkspaceToolId, 'panel.calendar' | 'panel.t
 };
 
 /** The workspace-level Calendar/Todo/Changes panel. Hidden while a note is open — the editor has its own document panel. */
-export function RightPanel({ notes, notebooks, selectedNotebookId, onOpenNote, onSaveNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal }: RightPanelProps) {
+export function RightPanel({ notes, notebooks, selectedNotebookId, onOpenNote, onSaveNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable }: RightPanelProps) {
   const { t } = useTranslation();
   const panel = usePanelContext();
   const visible = !panel.hasOpenNote;
@@ -41,7 +45,7 @@ export function RightPanel({ notes, notebooks, selectedNotebookId, onOpenNote, o
       document.documentElement.style.setProperty('--right-panel-width', '0px');
       return;
     }
-    document.documentElement.style.setProperty('--right-panel-width', panel.isOpen ? '364px' : '44px');
+    document.documentElement.style.setProperty('--right-panel-width', panel.isOpen ? 'calc(320px + var(--right-panel-rail-width))' : 'var(--right-panel-rail-width)');
     return () => document.documentElement.style.setProperty('--right-panel-width', '0px');
   }, [panel.isOpen, visible]);
 
@@ -55,7 +59,7 @@ export function RightPanel({ notes, notebooks, selectedNotebookId, onOpenNote, o
         <div className="right-panel-content">
           {panel.activeTool === 'calendar' && <CalendarTool notes={notes} notebooks={notebooks} selectedNotebookId={selectedNotebookId} onOpenNote={onOpenNote} />}
           {panel.activeTool === 'todo' && <TodoTool notes={notes} notebooks={notebooks} selectedNotebookId={selectedNotebookId} onOpenNote={onOpenNote} onSaveNote={onSaveNote} />}
-          {panel.activeTool === 'changes' && <ChangesTool gitStatus={gitStatus} deletedNotes={deletedNotes} onRestoreNote={onRestoreNote} onOpenCommitModal={onOpenCommitModal} />}
+          {panel.activeTool === 'changes' && <ChangesTool writable={writable} remoteChanges={remoteChanges} getPreview={getPreview} gitStatus={gitStatus} deletedNotes={deletedNotes} onRestoreNote={onRestoreNote} onOpenCommitModal={onOpenCommitModal} />}
         </div>
       )}
       <div className="right-panel-rail" role="tablist" aria-label={t('panel.title')}>
@@ -63,11 +67,11 @@ export function RightPanel({ notes, notebooks, selectedNotebookId, onOpenNote, o
           const Icon = WORKSPACE_TOOL_ICONS[id];
           const label = t(WORKSPACE_TOOL_LABELS[id]);
           return (
-            <button key={id} type="button" role="tab" aria-selected={panel.isOpen && panel.activeTool === id} title={label} aria-label={label}
+            <Button key={id} type="button" role="tab" aria-selected={panel.isOpen && panel.activeTool === id} title={label} aria-label={label}
               onClick={() => panel.openTool(id)}>
               <Icon aria-hidden="true" />
               {id === 'changes' && changesCount > 0 && <span className="right-panel-badge" aria-hidden="true">{changesCount > 99 ? '99+' : changesCount}</span>}
-            </button>
+            </Button>
           );
         })}
       </div>

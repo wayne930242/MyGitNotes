@@ -29,7 +29,7 @@ import {
   getRecentCommits,
   generateCommitMessage,
   updateCore,
-  listChanges, changeFile, fileDiff, commitStagedFiles,
+  listChanges, changeFile, fileDiff, commitStagedFiles, commitSelectedFiles,
 } from '@mygitnotes/git';
 
 import { SCREEN_PAGE_FILE } from '@mygitnotes/core';
@@ -504,14 +504,15 @@ const canManageChange = (file: string) => {
   } catch { return false; }
 };
 app.get('/api/git/changes', async (_req, res) => {
-  try { res.json({ changes: (await listChanges(repoRoot)).map(file => ({ ...file, available: file.available && canManageChange(file.path) })) }); }
+  try { res.json({ changes: (await listChanges(repoRoot)).map(file => ({ ...file, available: file.available && canManageChange(file.path),
+    unavailableReason: file.kind === 'conflict' ? 'conflict' : !canManageChange(file.path) ? 'protected' : !file.available ? 'unsupported' : undefined })) }); }
   catch (error) { res.status(400).json({ error: (error as Error).message }); }
 });
 app.get('/api/git/file-diff', async (req, res) => {
   try {
     const file = String(req.query.path || '');
     if (!canManageChange(file)) return res.status(403).json({ error: 'This file is outside workspace resources.' });
-    res.json({ diff: await fileDiff(repoRoot, file, req.query.side === 'staged' ? 'staged' : 'working') });
+    res.json({ diff: await fileDiff(repoRoot, file, req.query.side === 'staged' ? 'staged' : req.query.side === 'current' ? 'current' : 'working') });
   } catch (error) { res.status(400).json({ error: (error as Error).message }); }
 });
 app.post('/api/git/change', async (req, res) => {
@@ -524,9 +525,9 @@ app.post('/api/git/change', async (req, res) => {
 });
 app.post('/api/git/commit-staged', async (req, res) => {
   try {
-    const { files, revisions, message } = req.body;
+    const { files, revisions, message, selected } = req.body;
     if (!Array.isArray(files) || !files.length || files.some(file => !canManageChange(file)) || typeof message !== 'string') return res.status(400).json({ error: 'Select writable workspace files and provide a message.' });
-    const commit = await commitStagedFiles(repoRoot, files.map(file => ({ path: file, revision: revisions?.[file] })), message);
+    const commit = await (selected === true ? commitSelectedFiles : commitStagedFiles)(repoRoot, files.map(file => ({ path: file, revision: revisions?.[file] })), message);
     res.json({ success: true, commit });
   } catch (error) { res.status(409).json({ error: (error as Error).message }); }
 });

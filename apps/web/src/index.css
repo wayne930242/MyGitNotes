@@ -316,7 +316,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 .live-table-insert { position: absolute; z-index: 5; width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--color-primary); border-radius: 50%; color: var(--color-primary); background: var(--color-surface); font: 18px/1 sans-serif; transform: translate(-50%, -50%); opacity: 0; pointer-events: none; }
 .live-table-insert[data-visible="true"] { opacity: 1; pointer-events: auto; }
 .live-md-table:not(:hover):not(:focus-within):not([data-touch-active="true"]) .live-table-insert { opacity: 0; pointer-events: none; }
-.live-table-insert:hover { color: white; background: var(--color-primary); }
+.live-table-insert:hover { color: var(--color-on-primary); background: var(--color-primary); }
 @media (pointer: coarse) {
   .live-table-toolbar button, .live-table-toolbar select { min-height: 34px; min-width: 34px; }
   .live-md-table { padding-top: 70px; }
@@ -527,9 +527,9 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 .note-git-help { color: var(--color-muted); font-size: 11px; line-height: 1.5; }
 
 /* Right-side tool panel (Calendar / Todo / note tools) */
-:root { --right-panel-width: 0px; }
+:root { --right-panel-width: 0px; --right-panel-rail-width: 49px; }
 .right-panel { position: absolute; inset: 0 0 0 auto; z-index: 55; display: flex; }
-.right-panel-rail { display: flex; flex: none; flex-direction: column; align-items: center; gap: 2px; width: 44px; padding: 8px 4px; border-left: 1px solid var(--color-border); background: var(--color-surface); }
+.right-panel-rail { display: flex; flex: none; flex-direction: column; align-items: center; gap: 8px; width: var(--right-panel-rail-width); padding: 8px 6px; border-left: 1px solid var(--color-border); background: var(--color-surface); }
 .right-panel-rail button[role="tab"] { position: relative; display: flex; width: 36px; height: 36px; align-items: center; justify-content: center; border-radius: var(--radius-control); color: var(--color-muted); }
 .right-panel-rail button[role="tab"]:hover { background: var(--color-sidebar); color: var(--color-text); }
 .right-panel-rail button[role="tab"][aria-selected="true"] { background: var(--color-primary-light); color: var(--color-primary); }
@@ -553,10 +553,14 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 .calendar-day { display: flex; flex-direction: column; align-items: center; gap: 2px; aspect-ratio: 1; padding: 4px 0; border-radius: var(--radius-control); color: var(--color-text); font-size: 11px; }
 .calendar-day[data-in-month="false"] { color: var(--color-muted); opacity: .5; }
 .calendar-day:hover { background: var(--color-sidebar); }
-.calendar-day[data-today="true"] { font-weight: 700; color: var(--color-primary); }
-.calendar-day[data-selected="true"] { background: var(--color-primary-light); }
+.calendar-day[data-today="true"] { font-weight: 700; }
+.calendar-day[data-today="true"]:not([data-selected="true"]) { color: var(--color-primary); }
+.calendar-day[data-selected="true"] { background: var(--button-bg); color: var(--button-text); }
 .calendar-day-counts { display: flex; gap: 3px; }
-.calendar-dot { width: 5px; height: 5px; border-radius: 999px; background: var(--color-muted); }
+.calendar-dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.calendar-month-count { display: inline-flex; flex: none; align-items: center; gap: 4px; padding: 3px 6px; border-radius: 999px; background: var(--color-primary-light); color: var(--color-text); font-size: 11px; font-variant-numeric: tabular-nums; }
+.calendar-month-count svg { width: 12px; height: 12px; }
+.calendar-day[data-selected="true"] .calendar-dot-due { box-shadow: 0 0 0 1px currentColor; }
 .calendar-dot-due { background: #f59e0b; }
 .calendar-day-detail { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border); font-size: 12px; }
 .calendar-day-detail-header { display: flex; align-items: center; justify-content: space-between; }
@@ -564,7 +568,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 .calendar-day-toggle button[aria-selected="true"] { color: var(--color-primary); font-weight: 600; }
 .calendar-day-notes, .calendar-day-tasks { display: flex; flex-direction: column; gap: 2px; }
 .calendar-day-notes button, .calendar-day-tasks button { text-align: left; color: var(--color-text); }
-.calendar-day-notes button:hover, .calendar-day-tasks button:hover { text-decoration: underline; }
+
 .calendar-day-empty { color: var(--color-muted); font-size: 11px; }
 .calendar-day-tasks li[data-checked="true"] button { color: var(--color-muted); text-decoration: line-through; }
 
@@ -572,21 +576,21 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 .todo-group-mode-toggle { display: flex; gap: 4px; margin-bottom: 4px; font-size: 11px; }
 .todo-group-mode-toggle button[aria-selected="true"] { color: var(--color-primary); font-weight: 600; }
 .todo-group h4 { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; color: var(--color-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
-.todo-group-note-link { color: var(--color-text); text-transform: none; letter-spacing: normal; text-decoration: underline; }
+.todo-group-note-link { text-transform: none; letter-spacing: normal; }
 .todo-group-count { color: var(--color-muted); font-weight: 500; }
 .todo-group ul { display: flex; flex-direction: column; gap: 4px; }
 .todo-task { display: flex; flex-direction: column; gap: 0; padding: 4px 2px; border-radius: var(--radius-control); }
 .todo-task label { display: flex; align-items: center; gap: 6px; }
 .todo-task-text { flex: 1; min-width: 0; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text); font-size: 12px; }
-.todo-task-note { align-self: flex-start; margin-left: 22px; color: var(--color-link); font-size: 10px; text-decoration: underline; }
-.todo-task-note:hover { color: var(--color-primary-hover); }
+.todo-task-note { align-self: flex-start; margin-left: 22px; max-width: calc(100% - 22px); white-space: normal; text-align: left; }
+
 .todo-task-stale { padding-left: 22px; color: #be123c; font-size: 10px; }
 .todo-completed-toggle { display: flex; align-items: center; gap: 4px; color: var(--color-muted); }
 .todo-completed-toggle svg { width: 14px; height: 14px; }
 
 .changes-file-list { display: flex; flex-direction: column; gap: 4px; }
-.changes-file-button { width: 100%; overflow: hidden; color: var(--color-link); text-align: left; text-decoration: underline; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-family: ui-monospace, monospace; }
-.changes-file-button:hover { color: var(--color-primary-hover); }
+
+
 .changes-file-label { overflow: hidden; color: var(--color-text); font-size: 11px; font-family: ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .changes-deleted-item { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .changes-deleted-item .ui-icon-button { flex: none; width: 24px; height: 24px; min-height: 0; }
@@ -783,18 +787,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   .note-metadata { padding: 12px; gap: 12px; }
   .note-panel-assets { padding: 10px; }
 
-  .note-document-panel {
-    position: absolute;
-    z-index: 20;
-    inset: 0 0 0 auto;
-    width: min(100%, 360px);
-    flex-basis: auto;
-    box-shadow: -12px 0 28px #0002;
-  }
 
-  .right-panel { flex-direction: row-reverse; pointer-events: none; }
-  .right-panel-rail { pointer-events: auto; box-shadow: -8px 0 24px #0002; }
-  .right-panel-content { pointer-events: auto; position: fixed; inset: 0 44px 0 0; width: auto; flex-basis: auto; box-shadow: -12px 0 28px #0002; }
 }
 
 @media (pointer: coarse), (max-width: 767px) {
@@ -809,4 +802,103 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 
 @media (prefers-reduced-motion: reduce) {
   .notebook-panel { transition: none; }
+}
+
+/* Workspace tools share Button, Select, and EditorNotice with the editor. */
+.panel-tool h3 { font-size: 14px; font-weight: 600; }
+.panel-tool svg { width: 16px; height: 16px; flex: none; }
+.panel-tool .ui-button { white-space: normal; }
+.todo-group-mode-toggle, .calendar-day-toggle { display: flex; gap: 6px; }
+.todo-group-mode-toggle > .ui-button, .calendar-day-toggle > .ui-button { flex: 1; padding: 6px 8px; }
+.todo-task { gap: 8px; padding: 10px; border: 1px solid var(--color-border); background: var(--color-bg); }
+.todo-task label { align-items: flex-start; line-height: 1.6; }
+.todo-task input { margin-top: 4px; accent-color: var(--color-primary); }
+.todo-task-text { overflow-wrap: anywhere; white-space: normal; }
+.todo-task[data-checked="true"] .todo-task-text { text-decoration: line-through; color: var(--color-muted); }
+.todo-completed-toggle { width: 100%; justify-content: flex-start; }
+.todo-completed-toggle h4 { margin: 0; }
+.calendar-day.ui-button { min-width: 0; min-height: 32px; padding: 3px 0; gap: 2px; border-color: transparent; }
+.calendar-day[data-today="true"] { border-color: var(--color-primary); }
+.calendar-day-detail-header { flex-wrap: wrap; gap: 8px; }
+.calendar-day-detail h4 { color: var(--color-muted); font-weight: 600; }
+.panel-note-row.ui-button { width: 100%; justify-content: flex-start; align-items: flex-start; text-align: left; padding: 8px; }
+.panel-note-row > span { min-width: 0; overflow-wrap: anywhere; }
+.panel-note-row small, .panel-file-title small { display: block; font-size: 10px; opacity: .7; overflow-wrap: anywhere; margin-top: 3px; }
+.panel-select-all { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.panel-select-all input, .panel-change input { accent-color: var(--color-primary); }
+.panel-change { border: 1px solid var(--color-border); border-radius: var(--radius-control); padding: 8px; background: var(--color-bg); }
+.panel-change-heading { display: flex; gap: 8px; align-items: flex-start; }
+.panel-change-heading > input { margin-top: 10px; }
+.panel-file-title.ui-button { flex: 1; min-width: 0; justify-content: flex-start; align-items: flex-start; text-align: left; padding: 6px 8px; }
+.panel-file-title > span { min-width: 0; overflow-wrap: anywhere; }
+.panel-change-actions { display: flex; gap: 4px; align-items: center; margin: 6px 0 0 20px; }
+.change-kind { margin-right: auto; color: var(--color-muted); font-size: 11px; }
+.change-kind[data-kind="added"] { color: #16834b; }
+.change-kind[data-kind="deleted"], .change-kind[data-kind="conflict"] { color: #bc343e; }
+.panel-bulk-actions { display: flex; flex-direction: column; gap: 8px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--color-border); }
+.changes-tool > .changes-preview { flex: none; min-height: 120px; max-height: 340px; border: 1px solid var(--color-border); border-radius: var(--radius-control); overflow: hidden; }
+.changes-preview h4 > span:first-of-type { min-width: 0; flex: 1; }
+.diff-stats { display: flex; gap: 8px; flex: none; font: 12px ui-monospace, monospace; }
+.diff-empty { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 20px; color: var(--color-muted); font-size: 12px; line-height: 1.7; }
+.changes-preview .editor-notice { margin: 12px; }
+.changes-preview .diff-code { padding: 0; tab-size: 4; }
+.diff-line { display: flex; width: max-content; min-width: 100%; }
+.diff-line-number { flex: none; width: 3.5em; text-align: right; padding: 0 8px; color: var(--color-muted); user-select: none; border-right: 1px solid var(--color-border); }
+.diff-line-number::before { content: attr(data-number); }
+.diff-line-text { padding: 0 10px; }
+.diff-range { background: var(--color-sidebar); }
+.changes-preview .diff-line.diff-added { background: color-mix(in srgb, #22c55e 14%, var(--color-bg)); }
+.changes-preview .diff-line.diff-removed { background: color-mix(in srgb, #f43f5e 14%, var(--color-bg)); }
+.changes-file.ui-button { justify-content: start; text-align: left; white-space: normal; padding: 6px 8px; }
+.changes-dialog > .editor-notice { margin: 10px 12px; flex-shrink: 0; }
+.restore-file-list { max-height: 140px; overflow: auto; margin-top: 8px; font-size: 12px; overflow-wrap: anywhere; }
+.changes-help { white-space: pre-wrap; }
+
+.workspace-dialog.changes-dialog[open] { width: min(1100px, calc(100vw - 32px)); height: min(820px, 90dvh); padding: 0; overflow: hidden; gap: 0; }
+.changes-dialog > .workspace-dialog-heading { padding: 14px 16px; border-bottom: 1px solid var(--color-border); }
+.changes-dialog > header { flex: none; }
+@media (max-width: 767px) {
+  .workspace-dialog.changes-dialog[open] { width: calc(100vw - 12px); max-height: 96dvh; height: 96dvh; }
+  .changes-tool > .changes-preview { max-height: 260px; }
+}
+
+.changes-file[aria-pressed="true"] small { color: inherit; opacity: .8; }
+
+/* Both tool surfaces retain their controls when the mobile drawer is closed. */
+@media (min-width: 768px) {
+  .note-document-panel[data-open="false"] { display: none; }
+}
+@media (max-width: 767px) {
+  .right-panel, .note-document-panel {
+    display: flex; flex-direction: column; width: auto; min-height: 0;
+    border: 1px solid var(--color-border); border-radius: 12px 12px 0 0;
+    background: var(--color-surface); box-shadow: 0 -6px 20px #0003;
+    pointer-events: auto;
+  }
+  .right-panel {
+    position: fixed; inset: auto 8px auto 8px;
+    top: calc(var(--visual-top, 0px) + var(--visual-height, 100dvh) - 76px - env(safe-area-inset-bottom));
+    transform: translateY(-100%);
+  }
+  .right-panel-content {
+    position: static; inset: auto; width: auto; flex: 0 1 auto;
+    max-height: min(44dvh, 360px); border: 0; border-bottom: 1px solid var(--color-border);
+    border-radius: 12px 12px 0 0; box-shadow: none;
+  }
+  .right-panel-rail, .note-panel-tabs {
+    display: flex; flex-direction: row; align-items: center; justify-content: center;
+    width: auto; gap: 8px; padding: 6px; border: 0; box-shadow: none;
+  }
+  .right-panel-rail button[role="tab"], .note-panel-tabs > button[role="tab"] {
+    flex: 1; min-width: 0; height: 44px; padding: 0; max-width: 80px;
+  }
+  .workspace-body { padding-bottom: 68px; }
+  .note-document-panel {
+    position: absolute; inset: auto 8px 0; max-height: min(50dvh, 400px);
+    flex-basis: auto; z-index: 20;
+  }
+  .note-panel-tabs { order: 2; flex: none; }
+  .note-document-panel > :not(.note-panel-tabs) { overflow-y: auto; min-height: 0; }
+  .note-editor-body { padding-bottom: 56px; }
+  .note-controls .editor-panel-action { display: none; }
 }

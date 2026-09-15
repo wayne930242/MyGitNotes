@@ -1,3 +1,4 @@
+import { Button } from './Button.js';
 import React, { useEffect, useId, useState } from 'react';
 import { Check, File, Folder, Image as ImageIcon, Upload, X } from 'lucide-react';
 import type { AssetItem } from '../lib/types.js';
@@ -110,7 +111,7 @@ export function AssetLibrary({ assets, initialAssetPath, initialDirectory, onUpl
         if (!confirmDelete) { setConfirmDelete(true); return; }
         void run(async () => { await onDeleteAsset(selected); setSelectedPath(''); setConfirmDelete(false); });
       }}>{confirmDelete ? t('assets.confirmDelete') : t('common.delete')}</button>
-      {onInsert && <button className={`${button} ui-button-primary`} disabled={!selected || busy} onClick={() => selected && onInsert(selected)}>{t('assets.insert')}</button>}
+      {onInsert && <Button variant="primary"  disabled={!selected || busy} onClick={() => selected && onInsert(selected)}>{t('assets.insert')}</Button>}
     </div>}
     {onMoveAsset && selected && <div className="flex gap-2 items-center">
       <input aria-label="Move asset to folder" list={folderList} placeholder={t('assets.destinationPlaceholder')} value={destination} disabled={!selected || busy} onChange={e => setDestination(e.target.value)} className="ui-control min-w-0 flex-1" />

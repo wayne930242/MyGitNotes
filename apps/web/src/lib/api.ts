@@ -231,7 +231,7 @@ export async function fetchFileChanges(): Promise<import('./types.js').FileChang
   if (!response.ok) throw new Error(data.error || 'Failed to read changes');
   return data.changes;
 }
-export async function fetchFileDiff(file: string, side: 'working' | 'staged'): Promise<string> {
+export async function fetchFileDiff(file: string, side: 'working' | 'staged' | 'current'): Promise<string> {
   const response = await fetch(`${API_BASE}/git/file-diff?path=${encodeURIComponent(file)}&side=${side}`);
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Failed to read diff');
@@ -243,8 +243,8 @@ export async function manageFileChange(file: import('./types.js').FileChange, ac
   if (!response.ok) throw new Error(data.error || 'File operation failed');
   return data;
 }
-export async function commitStagedChanges(files: import('./types.js').FileChange[], message: string) {
-  const response = await fetch(`${API_BASE}/git/commit-staged`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: files.map(file => file.path), revisions: Object.fromEntries(files.map(file => [file.path, file.revision])), message }) });
+export async function commitStagedChanges(files: import('./types.js').FileChange[], message: string, selected = false) {
+  const response = await fetch(`${API_BASE}/git/commit-staged`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: files.map(file => file.path), revisions: Object.fromEntries(files.map(file => [file.path, file.revision])), message, selected }) });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Commit failed');
 }

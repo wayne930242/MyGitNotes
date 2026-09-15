@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { resolveSafePath } from '@mygitnotes/core';
-import { runGit } from './git-service.js';
+import { runGit, stageAndCommit } from './git-service.js';
 
 export interface FileChange {
   path: string;
@@ -84,18 +84,18 @@ export async function changeFile(root: string, file: string, action: 'stage' | '
   });
 }
 
-export async function fileDiff(root: string, file: string, side: 'working' | 'staged'): Promise<string> {
+export async function fileDiff(root: string, file: string, side: 'working' | 'staged' | 'current'): Promise<string> {
   const target = regularFile(root, file);
   const change = (await listChanges(root)).find(entry => entry.path === file);
   if (!change || !change.available) return '';
-  if (side === 'working' && !change.tracked && !change.staged && fs.existsSync(target)) {
+  if ((side === 'current' || side === 'working' && !change.staged) && !change.tracked && fs.existsSync(target)) {
     if (fs.statSync(target).size > 1024 * 1024) return 'File exceeds the 1 MiB preview limit.';
     const bytes = fs.readFileSync(target);
     if (bytes.includes(0)) return 'Binary file added.';
     const lines = bytes.toString('utf8').split('\n');
     return `--- /dev/null\n+++ ${file}\n@@ -0,0 +1,${lines.length} @@\n${lines.map(line => '+' + line).join('\n')}`;
   }
-  return (await runGit(['diff', '--no-ext-diff', '--no-textconv', ...(side === 'staged' ? ['--cached'] : []), '--', `:(literal)${file}`], root)).stdout;
+  return (await runGit(['diff', '--no-ext-diff', '--no-textconv', ...(side === 'staged' ? ['--cached'] : side === 'current' ? ['HEAD'] : []), '--', `:(literal)${file}`], root)).stdout;
 }
 
 export async function commitStagedFiles(root: string, expected: Pick<FileChange, 'path' | 'revision'>[], message: string) {
@@ -106,5 +106,17 @@ export async function commitStagedFiles(root: string, expected: Pick<FileChange,
     }
     await runGit(['commit', '-m', message], root);
     return { commitHash: (await runGit(['rev-parse', 'HEAD'], root)).stdout };
+  });
+}
+
+/** Commit the reviewed working copies without including unrelated index entries. */
+export async function commitSelectedFiles(root: string, expected: Pick<FileChange, 'path' | 'revision'>[], message: string) {
+  return exclusive(root, async () => {
+    const changes = await listChanges(root);
+    if (!message.trim() || !expected.length || new Set(expected.map(file => file.path)).size !== expected.length ||
+      expected.some(file => !changes.some(current => current.path === file.path && current.available && current.revision === file.revision))) {
+      throw new Error('Selected files changed. Refresh and review them before committing.');
+    }
+    return stageAndCommit(root, expected.map(file => file.path), message);
   });
 }

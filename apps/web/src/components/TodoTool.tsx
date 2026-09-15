@@ -1,3 +1,4 @@
+import { Button } from './Button.js';
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { NoteItem, NotebookConfig } from '../lib/types.js';
@@ -69,15 +70,12 @@ export function TodoTool({ notes, notebooks, selectedNotebookId, onOpenNote, onS
     }
   };
 
-  const renderTask = (task: TodoTask, showNoteLink = true) => (
-    <li key={task.id} className="todo-task">
+  const renderTask = (task: TodoTask) => (
+    <li key={task.id} className="todo-task" data-checked={task.checked}>
       <label>
         <input type="checkbox" checked={task.checked} disabled={pendingIds.has(task.id)} onChange={() => void toggleTask(task)} />
         <span className="todo-task-text">{task.lineText.replace(/^\s*[-*+]\s\[[ xX]\]\s?/, '')}</span>
       </label>
-      {showNoteLink && <button type="button" className="todo-task-note" title={t('panel.todoOpenNote')} onClick={() => onOpenNote(notes.find(n => n.path === task.notePath)!)}>
-        {task.noteTitle}
-      </button>}
       {staleIds.has(task.id) && <p className="todo-task-stale" role="alert">{t('panel.todoStale')}</p>}
       {saveErrors.has(task.id) && <p className="todo-task-stale" role="alert">{saveErrors.get(task.id)}</p>}
     </li>
@@ -85,19 +83,19 @@ export function TodoTool({ notes, notebooks, selectedNotebookId, onOpenNote, onS
 
   return (
     <div className="panel-tool todo-tool">
-      <div className="panel-tool-header">
+      {notebooks.length > 1 && <div className="panel-tool-header">
         {notebooks.length > 1 && (
           <Select aria-label={t('filters.notebook')} value={scope} onValueChange={value => setScope(value as 'current' | 'all')}
             options={[{ value: 'current', label: t('panel.scopeCurrentNotebook') }, { value: 'all', label: t('panel.scopeAllNotebooks') }]} />
         )}
-      </div>
+      </div>}
 
       {totalOpen === 0 && groups.completed.length === 0 && <p className="todo-empty">{t('panel.todoEmpty')}</p>}
 
       {(totalOpen > 0 || groups.completed.length > 0) && (
-        <div className="todo-group-mode-toggle" role="tablist">
-          <button type="button" role="tab" aria-selected={groupMode === 'date'} onClick={() => setGroupMode('date')}>{t('panel.todoGroupByDate')}</button>
-          <button type="button" role="tab" aria-selected={groupMode === 'note'} onClick={() => setGroupMode('note')}>{t('panel.todoGroupByNote')}</button>
+        <div className="todo-group-mode-toggle" role="group">
+          <Button type="button" aria-pressed={groupMode === 'date'} onClick={() => setGroupMode('date')}>{t('panel.todoGroupByDate')}</Button>
+          <Button type="button" aria-pressed={groupMode === 'note'} onClick={() => setGroupMode('note')}>{t('panel.todoGroupByNote')}</Button>
         </div>
       )}
 
@@ -111,10 +109,10 @@ export function TodoTool({ notes, notebooks, selectedNotebookId, onOpenNote, onS
 
         {groups.completed.length > 0 && (
           <section className="todo-group todo-group-completed">
-            <button type="button" className="todo-completed-toggle" aria-expanded={showCompleted} onClick={() => setShowCompleted(value => !value)}>
+            <Button type="button" className="todo-completed-toggle" aria-expanded={showCompleted} onClick={() => setShowCompleted(value => !value)}>
               {showCompleted ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
               <h4>{t('panel.todoCompleted')} <span className="todo-group-count">{groups.completed.length}</span></h4>
-            </button>
+            </Button>
             {showCompleted && <ul>{groups.completed.map(task => renderTask(task))}</ul>}
           </section>
         )}
@@ -123,10 +121,10 @@ export function TodoTool({ notes, notebooks, selectedNotebookId, onOpenNote, onS
       {groupMode === 'note' && noteGroups.map(([path, { title, tasks: noteTasks }]) => (
         <section key={path} className="todo-group">
           <h4>
-            <button type="button" className="todo-group-note-link" title={t('panel.todoOpenNote')} onClick={() => onOpenNote(notes.find(n => n.path === path)!)}>{title}</button>
+            <Button type="button" className="todo-group-note-link" title={t('panel.todoOpenNote')} onClick={() => onOpenNote(notes.find(n => n.path === path)!)}>{title}</Button>
             <span className="todo-group-count">{noteTasks.length}</span>
           </h4>
-          <ul>{noteTasks.map(task => renderTask(task, false))}</ul>
+          <ul>{noteTasks.map(task => renderTask(task))}</ul>
         </section>
       ))}
     </div>

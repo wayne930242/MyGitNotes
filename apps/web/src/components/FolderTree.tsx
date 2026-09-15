@@ -1,3 +1,4 @@
+import { Button } from './Button.js';
 import { ReorderToggle } from './ReorderToggle.js';
 import { useEffect, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
@@ -115,7 +116,7 @@ export function FolderTree({ reorder = false, onToggleReorder, selectedPaths, al
         <label>{t(dialog.kind === 'delete' ? 'folder.moveContentsTo' : 'folder.parent')}<Select aria-label={t(dialog.kind === 'delete' ? 'folder.moveContentsTo' : 'folder.parent')} value={parent} onValueChange={value => { setParent(value); setBefore(''); }} options={destinationOptions} disabled={busy} /></label>
         {dialog.kind === 'move' && <label>{t('folder.position')}<Select aria-label={t('folder.position')} value={before} onValueChange={setBefore} options={[{ value: '', label: t('folder.last') }, ...list.filter(folder => folderParent(folder.path) === parent && folder.path !== dialog.path).map(folder => ({ value: folder.path, label: t('folder.before', { name: folder.title }) }))]} disabled={busy} /></label>}
         {errorMessage}
-        <div className="workspace-dialog-actions"><button type="button" className="ui-button" disabled={busy} onClick={() => setDialog(undefined)}>{t('common.cancel')}</button><button className="ui-button ui-button-primary" type="submit" disabled={disabled || dialog.kind === 'create' && !name.trim()}>{t(busy ? 'screen.saving' : dialog.kind === 'delete' ? 'folder.confirmDelete' : 'common.save')}</button></div>
+        <div className="workspace-dialog-actions"><button type="button" className="ui-button" disabled={busy} onClick={() => setDialog(undefined)}>{t('common.cancel')}</button><Button variant="primary"  type="submit" disabled={disabled || dialog.kind === 'create' && !name.trim()}>{t(busy ? 'screen.saving' : dialog.kind === 'delete' ? 'folder.confirmDelete' : 'common.save')}</Button></div>
       </form>}
     </WorkspaceDialog>}
   </section>;

@@ -1,3 +1,4 @@
+import { Button } from './Button.js';
 import { Select } from './Select.js';
 import { useEffect, useState } from 'react';
 import { KeyRound, Copy, Check, Plus, Trash2, HelpCircle, Github, Gitlab, ChevronDown, LogOut } from 'lucide-react';
@@ -48,7 +49,7 @@ export function AuthControls({ local = false, connection = false }: { local?: bo
       const response = await fetch('/api/auth/logout', { method: 'POST' });
       if (response.ok) window.location.reload();
     }}><LogOut size={14} />{t('auth.signOut')}</button></div>
-  </details> : <a href={session.provider === 'gitlab' ? '/api/auth/gitlab' : '/api/auth/github'} className={connection ? `${connectionActionClass} ui-button-primary` : 'header-login'}>{session.provider === 'gitlab' ? <Gitlab size={16} /> : <Github size={16} />}<span>{t(session.provider === 'gitlab' ? 'auth.signInWithGitlab' : 'auth.signInWithGithub')}</span></a>;
+  </details> : <a href={session.provider === 'gitlab' ? '/api/auth/gitlab' : '/api/auth/github'} className={connection ? `${connectionActionClass} ui-button ui-button-primary` : 'header-login'}>{session.provider === 'gitlab' ? <Gitlab size={16} /> : <Github size={16} />}<span>{t(session.provider === 'gitlab' ? 'auth.signInWithGitlab' : 'auth.signInWithGithub')}</span></a>;
 }
 export function AgentAccessSettings({ local = false }: { local?: boolean }) {
   const { t, language } = useTranslation();
@@ -121,7 +122,7 @@ export function AgentAccessSettings({ local = false }: { local?: boolean }) {
       <div className="flex flex-wrap gap-3 items-end">
         <label className="text-xs text-slate-600 dark:text-slate-300 flex flex-col gap-1">{t('auth.clientName')}<input disabled={!canManage || busy} aria-label={t('auth.clientName')} maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder={t('auth.clientNamePlaceholder')} className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-transparent" /></label>
         <label className="text-xs text-slate-600 dark:text-slate-300 flex flex-col gap-1">{t('auth.access')}<Select disabled={!canManage || busy} aria-label={t('auth.access')} value={write ? 'write' : 'read'} onValueChange={value => setWrite(value === 'write')} options={[{ value: 'read', label: t('auth.readOnly') }, { value: 'write', label: t('auth.readAndWrite') }]} /></label>
-        <button disabled={!canManage || busy} onClick={create} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs text-white transition hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: 'var(--color-primary)' }}><Plus className="w-3.5 h-3.5" />{t('auth.createGrant')}</button>
+        <Button variant="primary" disabled={!canManage || busy} onClick={create}><Plus className="w-3.5 h-3.5" />{t('auth.createGrant')}</Button>
       </div>
       {canManage && token && <div className="p-3 rounded-lg bg-black/5 dark:bg-white/5 flex flex-col gap-2">
         <label className="text-xs font-semibold" htmlFor="agent-token">{t('auth.copyUrlPrompt')}</label>
@@ -135,19 +136,14 @@ export function AgentAccessSettings({ local = false }: { local?: boolean }) {
             onFocus={e => e.target.select()}
             className="flex-1 min-w-0 p-2 rounded border border-slate-300 dark:border-slate-700 bg-transparent font-mono text-xs cursor-pointer select-all focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
-          <button
+          <Button variant="primary"
             type="button"
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition active:scale-95 shadow-xs shrink-0 cursor-pointer ${
-              copied
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                : 'bg-indigo-600 dark:bg-indigo-500 text-white hover:bg-indigo-700 dark:hover:bg-indigo-600'
-            }`}
             onClick={handleCopyToken}
             title={copied ? t('common.copied') : t('common.copy')}
-          >
+>
             {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copied ? t('common.copied') : t('common.copy')}</span>
-          </button>
+          </Button>
           <button
             type="button"
             className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition active:scale-95 shadow-xs shrink-0 cursor-pointer"

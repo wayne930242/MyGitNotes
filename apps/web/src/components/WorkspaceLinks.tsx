@@ -1,3 +1,4 @@
+import { Button } from './Button.js';
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AssetItem, NoteItem, NotebookConfig, FolderItem } from '../lib/types.js';
@@ -99,10 +100,10 @@ export function WorkspaceLinks({ notebooks, notes, folders, children, onOpenNote
           ? <img src={preview.asset.rawUrl} alt={preview.asset.name} /> : <p>{t('assets.openToViewFormat')}</p>}
         <div className="workspace-dialog-actions">
           <a href={preview.asset.rawUrl} target="_blank" rel="noopener noreferrer" className="ui-button">{t('assets.openOriginal')}</a>
-          <button className="ui-button ui-button-primary" onClick={async () => {
+          <Button variant="primary"  onClick={async () => {
             if (!await ready()) return;
             navigate(`/assets?notebook=${encodeURIComponent(preview.notebookId)}&asset=${encodeURIComponent(preview.asset.path)}`); setPreview(null);
-          }}>{t('links.locateAsset')}</button>
+          }}>{t('links.locateAsset')}</Button>
         </div>
       </WorkspaceDialog>}
     </div>

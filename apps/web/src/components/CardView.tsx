@@ -1,3 +1,4 @@
+import { Button } from './Button.js';
 import React from 'react';
 import { FileText, Tag, Clock, Trash2, Plus } from 'lucide-react';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
@@ -44,14 +45,12 @@ export const CardView: React.FC<CardViewProps> = ({
           {t('notes.emptyDescription')}
         </p>
         {!readOnly && (
-          <button
+          <Button variant="primary"
             onClick={onNewNote}
-            style={{ backgroundColor: 'var(--color-primary)' }}
-            className="inline-flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg shadow-sm transition hover:opacity-90 active:scale-95"
-          >
+>
             <Plus className="w-4 h-4" />
             {t('notes.createNote')}
-          </button>
+          </Button>
         )}
       </div>
     );

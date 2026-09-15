@@ -1,3 +1,4 @@
+import { Button } from './Button.js';
 import { WorkspaceSidebar, WorkspaceSidebarDrawer, WorkspaceSidebarToggle, useWorkspaceSidebarDrawer } from './WorkspaceChrome.js';
 import React, { useState, useEffect } from 'react';
 import {
@@ -282,23 +283,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </p>
           </div>
 
-          <button
+          <Button variant="primary"
             type="button"
             onClick={handleUpdateCoreClick}
             disabled={isUpdatingCore}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium text-white transition shrink-0 ${
-              isUpdatingCore
-                ? 'bg-slate-400 dark:bg-slate-600 cursor-not-allowed opacity-50'
-                : branch === 'core'
-                ? 'bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500 shadow-sm active:scale-95 cursor-pointer'
-                : 'bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 shadow-sm shadow-indigo-100 dark:shadow-none active:scale-95 cursor-pointer'
-            }`}
             title={
               branch === 'core'
                 ? t('settings.viewCoreStatusTitle')
                 : t('settings.runCoreUpdateTitle')
             }
-          >
+>
             <RefreshCw className={`w-3.5 h-3.5 ${isUpdatingCore ? 'animate-spin' : ''}`} />
             <span>
               {isUpdatingCore
@@ -307,7 +301,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 ? t('settings.checkCoreStatus')
                 : t('settings.checkUpdateCore')}
             </span>
-          </button>
+          </Button>
         </div>
 
         {/* Branch Context Guidance */}
@@ -369,16 +363,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </span>
             )}
           </div>
-          <button
+          <Button variant="primary"
             type="button"
             onClick={handleSaveConfig}
             disabled={!local || isSaving || branch === 'core'}
-            className="flex items-center gap-1.5 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-indigo-600 text-white rounded-md text-xs font-medium transition cursor-pointer"
             title={branch === 'core' ? t('settings.coreBranchConfigReadOnlyTitle') : t('settings.saveCommit')}
-          >
+>
             <Save className="w-3.5 h-3.5" />
             <span>{isSaving ? t('settings.saving') : t('settings.saveCommit')}</span>
-          </button>
+          </Button>
         </div>
 
         <p className="text-xs text-slate-500 dark:text-slate-400">

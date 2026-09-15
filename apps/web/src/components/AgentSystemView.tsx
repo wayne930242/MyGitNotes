@@ -1,3 +1,4 @@
+import { Button } from './Button.js';
 import { useWorkspaceLinks } from './WorkspaceLinks.js';
 import { AgentFileTree } from './AgentFileTree.js';
 import { groupAgentResources } from '../lib/agent-tree.js';
@@ -342,6 +343,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
               className="text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider text-white"
               style={{
                 backgroundColor: editable ? 'var(--color-primary)' : 'var(--color-text-muted, #64748b)',
+                color: editable ? 'var(--color-on-primary)' : 'white',
               }}
             >
               {editable ? t('agent.editable') : t('agent.readOnly')}
@@ -411,15 +413,13 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
             <Bot className="w-10 h-10 text-slate-400" />
             <p className="text-sm text-slate-500 dark:text-slate-400">{t('agent.noDocuments')}</p>
             {!readOnly && (
-              <button
+              <Button variant="primary"
                 disabled={isCreating}
                 onClick={() => void handleCreateWorkspaceGuidelines()}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white transition shadow-xs hover:opacity-90"
-                style={{ backgroundColor: 'var(--color-primary)' }}
-              >
+>
                 <Plus className="w-4 h-4" />
                 <span>{t('agent.createWorkspaceGuidelines')}</span>
-              </button>
+              </Button>
             )}
           </div>
         )}

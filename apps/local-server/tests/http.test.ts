@@ -28,6 +28,20 @@ beforeEach(async () => {
 afterEach(async()=>{ await new Promise<void>(resolve=>server.close(()=>resolve())); fs.rmSync(root,{recursive:true,force:true}); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe('real HTTP local boundaries',()=>{
+  it('commits a reviewed selection without including other staged files', async () => {
+    const file = 'notes/example/projects/deep/note.md', other = 'notes/example/other.md';
+    fs.writeFileSync(path.join(root, file), '# Selected');
+    fs.writeFileSync(path.join(root, other), '# Staged elsewhere');
+    git('add', other);
+    const changes = (await fetch(`${base}/api/git/changes`).then(r => r.json())).changes;
+    const selected = changes.find((entry: any) => entry.path === file);
+    const response = await fetch(`${base}/api/git/commit-staged`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ selected: true, files: [file], revisions: { [file]: selected.revision }, message: 'only selected' }) });
+    expect(response.status).toBe(200);
+    expect(git('show', `HEAD:${file}`).toString()).toBe('# Selected');
+    expect(git('diff', '--cached', '--name-only').toString().trim()).toBe(other);
+    expect(git('ls-tree', '--name-only', 'HEAD', other).toString()).toBe('');
+  });
   it('manages exact file changes and refuses stale or protected mutations', async () => {
     const file = 'notes/example/projects/deep/note.md';
     const other = 'notes/example/other.md';
