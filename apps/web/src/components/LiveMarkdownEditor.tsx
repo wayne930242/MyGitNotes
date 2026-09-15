@@ -2,6 +2,7 @@ import { LiveMarkdownTable, tableUIState } from './LiveMarkdownTable.js';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { Compartment, EditorState, StateEffect, StateField, Transaction, type Range } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType, keymap, drawSelection, highlightActiveLineGutter, lineNumbers, type DecorationSet } from '@codemirror/view';
+import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { defaultHighlightStyle, HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
@@ -12,6 +13,9 @@ import { renderNote } from '../lib/markdown.js';
 import { headingSlug, resolveWorkspaceHref } from '../lib/workspace-links.js';
 import { useLocation } from 'react-router-dom';
 import { useTranslation, type I18nContextValue } from '../lib/i18n/index.js';
+import { getAtCompletionItems } from '../lib/at-completion.js';
+import { formatDateYMD } from '../lib/date-utils.js';
+import { DONE_EMOJI, DUE_EMOJI, TIMESTAMP_EMOJI, findToken, isTaskLine, setTaskChecked, setTokenValue } from '../lib/task-tokens.js';
 
 export interface LiveMarkdownHandle {
   insert: (text: string) => void;
@@ -69,9 +73,99 @@ class TaskCheckbox extends WidgetType {
   toDOM(view: EditorView) {
     const input = document.createElement('input'); input.type = 'checkbox'; input.checked = this.checked; input.disabled = this.readonly;
     input.setAttribute('aria-label', 'Toggle task');
-    input.addEventListener('change', () => { if (!view.state.readOnly) view.dispatch({changes:{from:this.from,to:this.from+3,insert:input.checked ? '[x]' : '[ ]'},userEvent:'input'}); });
+    input.addEventListener('change', () => {
+      if (view.state.readOnly) return;
+      const line = view.state.doc.lineAt(this.from);
+      const newLine = setTaskChecked(line.text, input.checked, formatDateYMD(new Date()));
+      view.dispatch({ changes: { from: line.from, to: line.to, insert: newLine }, userEvent: 'input' });
+    });
     return input;
   }
+}
+const chipEditChanged = StateEffect.define<{ pos: number; editing: boolean }>();
+const chipEditState = StateField.define<Set<number>>({
+  create: () => new Set(),
+  update(value, transaction) {
+    const next = new Set([...value].map(pos => transaction.changes.mapPos(pos, -1)));
+    for (const effect of transaction.effects) if (effect.is(chipEditChanged)) {
+      if (effect.value.editing) next.add(effect.value.pos); else next.delete(effect.value.pos);
+    }
+    return next;
+  },
+});
+class TokenChip extends WidgetType {
+  constructor(readonly emoji: string, readonly value: string, readonly posKey: number, readonly readonly: boolean) { super(); }
+  eq(other: TokenChip) { return this.emoji === other.emoji && this.value === other.value && this.posKey === other.posKey && this.readonly === other.readonly; }
+  toDOM(view: EditorView) {
+    const span = document.createElement('span'); span.className = 'live-md-token-chip'; span.textContent = `${this.emoji} ${this.value}`;
+    if (!this.readonly) {
+      span.setAttribute('role', 'button'); span.tabIndex = 0; span.title = 'Click to change or clear this date';
+      const open = (event: Event) => {
+        event.preventDefault(); event.stopPropagation();
+        view.dispatch({ effects: chipEditChanged.of({ pos: this.posKey, editing: true }) });
+      };
+      span.addEventListener('mousedown', event => event.preventDefault());
+      span.addEventListener('click', open);
+      span.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') open(event); });
+    }
+    return span;
+  }
+}
+class TokenEditor extends WidgetType {
+  constructor(readonly emoji: string, readonly withTime: boolean, readonly value: string | undefined, readonly lineFrom: number, readonly lineTo: number, readonly posKey: number) { super(); }
+  eq(other: TokenEditor) { return this.emoji === other.emoji && this.value === other.value && this.lineFrom === other.lineFrom && this.posKey === other.posKey; }
+  toDOM(view: EditorView) {
+    const wrap = document.createElement('span'); wrap.className = 'live-md-token-editor';
+    const input = document.createElement('input'); input.className = 'ui-control'; input.type = this.withTime ? 'datetime-local' : 'date';
+    if (this.value) input.value = this.withTime ? this.value.replace(' ', 'T') : this.value;
+    /** `undefined` cancels with no change; `null` clears the token; a string sets its value. */
+    const close = (newValue: string | null | undefined) => {
+      const line = view.state.doc.lineAt(this.lineFrom);
+      const effects = chipEditChanged.of({ pos: this.posKey, editing: false });
+      if (newValue === undefined) {
+        view.dispatch({ effects });
+      } else {
+        const newLine = setTokenValue(line.text, this.emoji, newValue, this.withTime);
+        view.dispatch({ changes: { from: line.from, to: line.to, insert: newLine }, effects, userEvent: 'input' });
+      }
+      view.focus();
+    };
+    input.addEventListener('change', () => close(input.value ? (this.withTime ? input.value.replace('T', ' ') : input.value) : null));
+    input.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); close(undefined); } });
+    const clear = document.createElement('button'); clear.type = 'button'; clear.className = 'live-md-token-clear'; clear.setAttribute('aria-label', 'Clear date'); clear.textContent = '×';
+    clear.addEventListener('mousedown', event => event.preventDefault());
+    clear.addEventListener('click', () => close(null));
+    wrap.appendChild(input); wrap.appendChild(clear);
+    requestAnimationFrame(() => input.focus());
+    return wrap;
+  }
+}
+class DueDateAdder extends WidgetType {
+  constructor(readonly posKey: number) { super(); }
+  eq(other: DueDateAdder) { return this.posKey === other.posKey; }
+  toDOM(view: EditorView) {
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'live-md-due-adder'; button.textContent = `+${DUE_EMOJI}`;
+    button.title = 'Add a due date'; button.setAttribute('aria-label', 'Add a due date');
+    button.addEventListener('mousedown', event => event.preventDefault());
+    button.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); view.dispatch({ effects: chipEditChanged.of({ pos: this.posKey, editing: true }) }); });
+    return button;
+  }
+}
+function atCompletionSource(context: CompletionContext): CompletionResult | null {
+  const match = context.matchBefore(/@\w*/);
+  if (!match || (match.from === match.to && !context.explicit)) return null;
+  const onTaskLine = isTaskLine(context.state.doc.lineAt(match.from).text);
+  return {
+    from: match.from,
+    to: match.to,
+    options: getAtCompletionItems({ onTaskLine, now: new Date() }).map(item => ({
+      label: item.label,
+      apply: item.insertText !== undefined ? item.insertText : (view: EditorView, _completion: unknown, from: number, to: number) => {
+        const newLineTo = view.state.doc.lineAt(from).to - (to - from);
+        view.dispatch({ changes: { from, to, insert: '' }, effects: chipEditChanged.of({ pos: newLineTo, editing: true }) });
+      },
+    })),
+  };
 }
 class BulletMarker extends WidgetType {
   eq() { return true; }
@@ -213,6 +307,22 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
       hide(from,end);
     }
   }});
+  const editingChips = state.field(chipEditState);
+  const TOKENS: [string, boolean][] = [[DUE_EMOJI, false], [DONE_EMOJI, false], [TIMESTAMP_EMOJI, true]];
+  for (let lineNumber = 1; lineNumber <= state.doc.lines; lineNumber++) {
+    const line = state.doc.line(lineNumber);
+    for (const [emoji, withTime] of TOKENS) {
+      const token = findToken(line.text, emoji, withTime);
+      if (!token) continue;
+      const from = line.from + token.start, to = line.from + token.end;
+      if (editingChips.has(from)) marks.push(Decoration.replace({ widget: new TokenEditor(emoji, withTime, token.value, line.from, line.to, from), side: 1 }).range(from, to));
+      else marks.push(Decoration.replace({ widget: new TokenChip(emoji, token.value, from, state.readOnly) }).range(from, to));
+    }
+    if (!state.readOnly && isTaskLine(line.text) && !findToken(line.text, DUE_EMOJI)) {
+      if (editingChips.has(line.to)) marks.push(Decoration.widget({ widget: new TokenEditor(DUE_EMOJI, false, undefined, line.from, line.to, line.to), side: 1 }).range(line.to));
+      else marks.push(Decoration.widget({ widget: new DueDateAdder(line.to) }).range(line.to));
+    }
+  }
   return Decoration.set(marks,true);
 }
 const theme = EditorView.theme({
@@ -236,6 +346,11 @@ const theme = EditorView.theme({
   '.live-md-rendered':{display:'inline-block',maxWidth:'100%',cursor:'text'},
   '.live-md-rendered p':{margin:'0'},'.live-md-rendered img':{maxWidth:'100%',maxHeight:'360px',borderRadius:'8px'},
   '.cm-content input[type=checkbox]':{accentColor:'var(--color-primary)',verticalAlign:'middle',marginRight:'4px'},
+  '.live-md-token-chip':{display:'inline-flex',alignItems:'center',padding:'0 6px',borderRadius:'999px',fontSize:'0.85em',cursor:'pointer',backgroundColor:'var(--color-sidebar)',color:'var(--color-muted)',border:'1px solid var(--color-border)'},
+  '.live-md-token-editor':{display:'inline-flex',alignItems:'center',gap:'4px'},
+  '.live-md-token-editor input':{fontSize:'0.85em',padding:'1px 4px'},
+  '.live-md-token-clear':{cursor:'pointer',color:'var(--color-muted)',fontWeight:'700',lineHeight:'1',border:'none',background:'none',padding:'0 2px'},
+  '.live-md-due-adder':{display:'inline-flex',alignItems:'center',marginLeft:'6px',padding:'0 6px',borderRadius:'999px',fontSize:'0.8em',cursor:'pointer',color:'var(--color-muted)',border:'1px dashed var(--color-border)',background:'none'},
 });
 export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content,notePath,readOnly,onChange,ariaLabel = 'Note content'},ref) => {
   const { t } = useTranslation(); const linkLabel = t('links.open');
@@ -279,7 +394,8 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
     });
     const view = new EditorView({parent:host.current!,state:EditorState.create({doc:content,extensions:[
       markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),lineNumbers(),highlightActiveLineGutter(),EditorView.lineWrapping,
-      syntaxHighlighting(defaultHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'}])),theme,tableUIState,field,
+      syntaxHighlighting(defaultHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'}])),theme,tableUIState,chipEditState,field,
+      autocompletion({ override: [atCompletionSource] }),
       EditorView.atomicRanges.of(view => view.state.field(field).decorations.update({ filter: (_from, _to, decoration) => decoration.spec.widget instanceof LiveMarkdownTable })),
       permission.current.of([EditorState.readOnly.of(readOnly),EditorView.editable.of(!readOnly)]),
       EditorView.contentAttributes.of({'aria-label':ariaLabel,'role':'textbox','aria-multiline':'true'}),
