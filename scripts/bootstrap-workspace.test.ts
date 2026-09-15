@@ -8,7 +8,7 @@ import { parseNoteContent, parseWorkspaceConfig, resolveNoteStatuses } from '../
 const product = process.cwd();
 let root: string;
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim();
-const bootstrap = () => execFileSync(process.execPath, [path.join(product, 'node_modules/tsx/dist/cli.mjs'), path.join(product, 'scripts/bootstrap-workspace.ts')], { cwd: root, stdio: 'pipe' });
+const bootstrap = (...args: string[]) => execFileSync(process.execPath, [path.join(product, 'node_modules/tsx/dist/cli.mjs'), path.join(product, 'scripts/bootstrap-workspace.ts'), ...args], { cwd: root, stdio: 'pipe' });
 const write = (name: string, content: string) => { const target = path.join(root, name); fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, content); };
 const files = (directory: string): string[] => fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? files(path.join(directory, entry.name)) : [path.join(directory, entry.name)]);
 beforeEach(() => {
@@ -44,6 +44,19 @@ describe('canonical starter workspace CLI', () => {
     expect(fs.readFileSync(path.join(root, 'notes/example/welcome.md'), 'utf8')).toBe('# My own welcome\n');
     expect(git('rev-parse', 'HEAD')).toBe(head);
     expect(fs.existsSync(path.join(root, 'notes/.github-notes.yaml'))).toBe(false);
+  });
+
+  it('initializes an empty workspace without examples when --no-examples is passed', () => {
+    bootstrap('--no-examples');
+    expect(git('branch', '--show-current')).toBe('main');
+    expect(git('rev-list', '--count', 'HEAD')).toBe('2');
+    const config = parseWorkspaceConfig(fs.readFileSync(path.join(root, '.github-notes.yaml'), 'utf8'));
+    expect(config.notebooks.map(notebook => notebook.id)).toEqual(['personal']);
+    expect(config.workspace.default_notebook).toBe('personal');
+    expect(fs.existsSync(path.join(root, 'notes/example'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'notes/learning'))).toBe(false);
+    expect(fs.existsSync(path.join(root, '.github-notes-screen.yaml'))).toBe(false);
+    expect(git('ls-files', '--', 'AGENTS.md', '.agents')).toContain('.agents/skills/workspace/SKILL.md');
   });
 
   it('respects an existing root manifest and does not add an unconfigured notebook', () => {

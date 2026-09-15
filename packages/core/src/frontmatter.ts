@@ -146,12 +146,14 @@ export function fillMissingNoteTimestamps(
   const match = raw.match(FRONTMATTER_REGEX);
   if (match && parseNoteContent(raw).hasFrontmatter) {
     const document = YAML.parseDocument(match[1]);
-    let changed = false;
-    if (!document.get('created') && created) { setQuoted(document, 'created', created); changed = true; }
-    if (!document.get('updated') && updated) { setQuoted(document, 'updated', updated); changed = true; }
-    if (!changed) return { raw, changed: false };
+    const lines: string[] = [];
+    if (!document.get('created') && created) lines.push(`created: ${JSON.stringify(created)}`);
+    if (!document.get('updated') && updated) lines.push(`updated: ${JSON.stringify(updated)}`);
+    if (lines.length === 0) return { raw, changed: false };
+    // Append raw lines instead of re-serializing, so existing YAML keeps its original formatting.
     const newline = match[0].includes('\r\n') ? '\r\n' : '\n';
-    return { raw: `---${newline}${document.toString().replace(/\n/g, newline)}---${newline}${raw.slice(match[0].length)}`, changed: true };
+    const insertAt = `---${newline}`.length + match[1].length;
+    return { raw: `${raw.slice(0, insertAt)}${lines.map(line => `${newline}${line}`).join('')}${raw.slice(insertAt)}`, changed: true };
   }
 
   const fields: [string, string][] = [];

@@ -58,7 +58,7 @@ git clone <repository-url> mygitnotes
 cd mygitnotes
 pnpm install
 pnpm build              # Compiles @mygitnotes packages required by local-server
-pnpm bootstrap-workspace
+pnpm bootstrap-workspace  # Add --no-examples for an empty workspace
 pnpm dev
 ```
 

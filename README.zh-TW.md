@@ -58,7 +58,7 @@ git clone <repository-url> mygitnotes
 cd mygitnotes
 pnpm install
 pnpm build              # 編譯 local-server 所需的 @mygitnotes 核心套件產物
-pnpm bootstrap-workspace
+pnpm bootstrap-workspace  # 加上 --no-examples 建立不含範例的空工作區
 pnpm dev
 ```
 
