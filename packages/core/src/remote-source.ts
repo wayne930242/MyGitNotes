@@ -30,7 +30,7 @@ export abstract class RemoteSource {
   protected invalidate() {}
   async prefetchFiles(_files: string[]): Promise<void> {}
   async getSnapshot(fresh = false): Promise<RemoteSnapshot> {
-    if (fresh && !this.fresh) { this.snapshot = undefined; this.manifest = undefined; this.fresh = true; }
+    if (fresh) { this.snapshot = undefined; this.manifest = undefined; this.fresh = true; }
     this.snapshot ??= this.loadSnapshot();
     return this.snapshot;
   }
@@ -196,7 +196,7 @@ export abstract class RemoteSource {
       if (JSON.stringify(current) !== JSON.stringify(base.data)) throw new SourceError('Screen configuration changed. Reload and review your draft.', 409);
       changes.push({ path: SCREEN_PAGE_FILE, content: stringifyYaml(page.data, { lineWidth: 0 }) });
     }
-    return this.commitChanges(changes, expected, 'update', screen ? 'folders' : 'notes', message.trim());
+    return this.commitChanges(changes, expected, 'update', screen ? 'folders' : 'notes', message.trim(), snapshot);
   }
 
   /** One Git tree, commit and non-force ref update for the entire mutation. */
@@ -218,8 +218,8 @@ export abstract class RemoteSource {
     return this.commitChanges([{ path: SCREEN_PAGE_FILE, content }], expected, 'save', 'screen');
   }
 
-  async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null }[], expected: string, operation: string, scope: 'notes' | 'assets' | 'agents' | 'screen' | 'folders' | 'study' | 'study-transition' | 'files' = 'notes', requestedMessage?: string) {
-    const snapshot = await this.getSnapshot(true);
+  async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null }[], expected: string, operation: string, scope: 'notes' | 'assets' | 'agents' | 'screen' | 'folders' | 'study' | 'study-transition' | 'files' = 'notes', requestedMessage?: string, knownSnapshot?: RemoteSnapshot) {
+    const snapshot = knownSnapshot || await this.getSnapshot(true);
     if (!this.token || !snapshot.info.permissions?.push || this.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
     if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
     if (!changes.length || changes.length > 200) throw new SourceError('A mutation requires between 1 and 200 changed files.');

@@ -1,13 +1,13 @@
-import { ApiError } from './api.js';
+import { ApiError, responseError } from './api.js';
 
 export interface R2Object { key: string; size: number; lastModified: string }
 export interface R2Listing { prefix: string; objects: R2Object[] }
 export interface R2References { objects: string[]; notes: string[] }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init), data = await response.json();
-  if (!response.ok) throw new ApiError(data.error || 'R2 operation failed.', response.status);
-  return data;
+  const response = await fetch(url, init);
+  if (!response.ok) throw await responseError(response, 'R2 operation failed.');
+  return response.json();
 }
 const post = <T>(url: string, body: Record<string, unknown>) => request<T>(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const query = (values: Record<string, string>) => new URLSearchParams(values).toString();
@@ -30,5 +30,5 @@ export async function uploadR2(notebookId: string, key: string, file: File): Pro
   const { url } = await post<{ url: string }>('/api/r2/upload', { notebookId, key });
   const response = await fetch(url, { method: 'PUT', body: file, headers: { 'If-None-Match': '*' } });
   if (response.status === 412) throw new ApiError('Destination already exists.', 409);
-  if (!response.ok) throw new ApiError(`R2 upload failed with status ${response.status}.`, response.status);
+  if (!response.ok) throw await responseError(response, `R2 upload failed with status ${response.status}.`);
 }

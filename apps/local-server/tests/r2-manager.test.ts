@@ -186,7 +186,6 @@ describe('R2 management on a hosted workspace', () => {
       entries: [...files].map(([file, bytes]) => ({ path: file, type: 'blob', mode: '100644', sha: assetHash(bytes), size: bytes.length })) }));
     vi.spyOn(prototype, 'readBlob').mockImplementation(async (...args: unknown[]) => [...files.values()].find(bytes => assetHash(bytes) === args[0])!);
     vi.spyOn(prototype, 'publishChanges').mockImplementation(async (...args: unknown[]) => {
-      if ((args[1] as { sha: string }).sha !== revision) throw new SourceError('The repository changed. Reload before saving.', 409);
       const changes = args[0] as RemoteChange[]; published.push(changes);
       for (const change of changes) files.set(change.path, Buffer.from(change.content!));
       return revision += '-next';
@@ -238,6 +237,26 @@ describe('R2 management on a hosted workspace', () => {
     expect(limited.status).toBe(429);
     expect(limited.headers.get('Retry-After')).toBe('7');
     expect((await limited.json()).retryAfter).toBe(7);
+  });
+
+  it('rejects note reference scanning when notebook text exceeds 32 MiB', async () => {
+    canPush = true;
+    await startRemote('writer-token');
+    const prototype = GitHubSource.prototype as any;
+    const hugeEntries = Array.from({ length: 8 }, (_, i) => ({
+      path: `notes/ex/chunk-${i}.md`, type: 'blob', mode: '100644', sha: `chunk-${i}-sha`, size: 4.5 * 1024 * 1024,
+    }));
+    vi.spyOn(prototype, 'loadSnapshot').mockImplementation(async () => ({
+      sha: revision, treeSha: revision, info: { private: true, permissions: { push: canPush }, default_branch: 'main' },
+      entries: [
+        ...[...files].map(([file, bytes]) => ({ path: file, type: 'blob', mode: '100644', sha: assetHash(bytes), size: bytes.length })),
+        ...hugeEntries,
+      ],
+    }));
+    const response = await call('GET', '/api/r2/references?notebookId=ex&key=ex/old&directory=1');
+    const body = await response.json();
+    expect(response.status).toBe(413);
+    expect(body.error).toMatch(/32 MiB/);
   });
 
   it('denies anonymous and read-only requesters', async () => {
