@@ -19,7 +19,7 @@ export class ApiError extends Error {
   constructor(message: string, public status: number, public retryAfter?: number) { super(message); }
 }
 
-async function responseError(res: Response, fallback: string): Promise<ApiError> {
+export async function responseError(res: Response, fallback: string): Promise<ApiError> {
   const data = await res.json().catch(() => ({}));
   const seconds = Number(res.headers.get('Retry-After') || data.retryAfter);
   return new ApiError(data.error || fallback, res.status, Number.isFinite(seconds) && seconds > 0 ? seconds : undefined);

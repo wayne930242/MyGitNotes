@@ -1,10 +1,15 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { readNote, fetchWorkspace, readNotes } from './api.js';
+import { fetchR2References } from './r2-api.js';
 
 afterEach(() => vi.unstubAllGlobals());
 it('preserves the upstream retry time so background polling can pause', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'Wait for GitHub', retryAfter: 120 }), { status: 429, headers: { 'Retry-After': '120' } })));
   await expect(readNote('notes/ex/a.md')).rejects.toMatchObject({ status: 429, retryAfter: 120 });
+});
+it('propagates retry hints through R2 API errors', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'GitHub API is temporarily rate limited. Retry in 7 seconds.', retryAfter: 7 }), { status: 429, headers: { 'Retry-After': '7' } })));
+  await expect(fetchR2References('ex', 'ex/old', true)).rejects.toMatchObject({ status: 429, retryAfter: 7 });
 });
 it('requests a fresh commit base and reads selected notes together at that revision', async () => {
   const requests: {url: string; body: any}[] = [];

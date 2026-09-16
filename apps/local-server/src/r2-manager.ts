@@ -52,10 +52,17 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
     return {
       notebooks: config.notebooks,
       notes: async () => {
-        const files = snapshot.entries.filter(entry => entry.type === 'blob' && entry.mode !== '120000' && markdown(entry.path) && managedNotebook(entry.path, config.notebooks)).map(entry => entry.path);
-        return new Map(await Promise.all(files.map(async file => [file, (await reader.readFile(file)).toString('utf8')] as [string, string])));
+        const matching = snapshot.entries.filter(entry => entry.type === 'blob' && entry.mode !== '120000' && markdown(entry.path) && managedNotebook(entry.path, config.notebooks));
+        const totalBytes = matching.reduce((sum, entry) => sum + (entry.size || 0), 0);
+        if (totalBytes > 32 * 1024 * 1024) throw new SourceError('R2 operations support up to 32 MiB of notebook text.', 413);
+        const files = matching.map(entry => entry.path);
+        // One archive download warms the blob cache; sequential reads keep any misses within GitHub's request queue.
+        await reader.prefetchFiles(files);
+        const notes = new Map<string, string>();
+        for (const file of files) notes.set(file, (await reader.readFile(file)).toString('utf8'));
+        return notes;
       },
-      commit: async changes => { await reader.commitChanges([...changes].map(([path, content]) => ({ path, content })), snapshot.sha, 'move', 'files'); },
+      commit: async (changes, _read) => { await reader.commitChanges([...changes].map(([path, content]) => ({ path, content })), snapshot.sha, 'move', 'files'); },
     };
   };
   const context = async (req: Request, input: Record<string, unknown>) => {
@@ -81,7 +88,11 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
     [...notes].filter(([, content]) => r2ReferenceKeys(content).some(key => keys.includes(key))).map(([file]) => file).sort();
   const handle = (action: (req: Request, res: Response) => Promise<unknown>) => async (req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'private, no-store');
-    try { await action(req, res); } catch (error) { res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'R2 operation failed.' }); }
+    try { await action(req, res); } catch (error) {
+      const retryAfter = error instanceof SourceError ? error.retryAfter : undefined;
+      if (retryAfter) res.setHeader('Retry-After', String(retryAfter));
+      res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'R2 operation failed.', ...(retryAfter ? { retryAfter } : {}) });
+    }
   };
 
   router.get('/api/r2', handle(async (req, res) => {
