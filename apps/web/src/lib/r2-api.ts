@@ -28,6 +28,7 @@ export const deleteR2 = (notebookId: string, key: string, directory: boolean) =>
 /** Uploads directly to the bucket through a presigned PUT URL; the file body never passes through the server. */
 export async function uploadR2(notebookId: string, key: string, file: File): Promise<void> {
   const { url } = await post<{ url: string }>('/api/r2/upload', { notebookId, key });
-  const response = await fetch(url, { method: 'PUT', body: file });
+  const response = await fetch(url, { method: 'PUT', body: file, headers: { 'If-None-Match': '*' } });
+  if (response.status === 412) throw new ApiError('Destination already exists.', 409);
   if (!response.ok) throw new ApiError(`R2 upload failed with status ${response.status}.`, response.status);
 }

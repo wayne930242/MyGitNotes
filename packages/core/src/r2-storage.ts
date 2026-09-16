@@ -22,9 +22,9 @@ function objectUrl(settings: R2Settings, key: string): URL {
   return new URL(`${bucketUrl(settings)}/${key.split('/').map(encodeURIComponent).join('/')}`);
 }
 
-async function presign(settings: R2Settings, url: URL, method: 'GET' | 'PUT', expiresInSeconds: number): Promise<string> {
+async function presign(settings: R2Settings, url: URL, method: 'GET' | 'PUT', expiresInSeconds: number, headers?: Record<string, string>): Promise<string> {
   url.searchParams.set('X-Amz-Expires', String(expiresInSeconds));
-  const signer = new AwsV4Signer({ url: url.toString(), method, accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey,
+  const signer = new AwsV4Signer({ url: url.toString(), method, headers, accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey,
     service: 's3', region: 'auto', signQuery: true });
   return (await signer.sign()).url.toString();
 }
@@ -39,16 +39,19 @@ export async function presignR2Object(settings: R2Settings, key: string, expires
   return presign(settings, url, 'GET', expiresInSeconds);
 }
 
-/** Creates a short-lived presigned PUT URL so the browser uploads directly to the bucket. */
+/** Headers a create-only PUT sends; the bucket answers 412 when the key already exists. */
+export const R2_CREATE_ONLY_HEADERS = { 'If-None-Match': '*' };
+
+/** Creates a short-lived presigned create-only PUT URL; the browser must send `R2_CREATE_ONLY_HEADERS`. */
 export function presignR2Upload(settings: R2Settings, key: string, expiresInSeconds = 900): Promise<string> {
-  return presign(settings, objectUrl(settings, key), 'PUT', expiresInSeconds);
+  return presign(settings, objectUrl(settings, key), 'PUT', expiresInSeconds, R2_CREATE_ONLY_HEADERS);
 }
 
 const client = (settings: R2Settings) => new AwsClient({ accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey, service: 's3', region: 'auto' });
 
 async function send(settings: R2Settings, url: URL | string, init: RequestInit = {}): Promise<Response> {
   const response = await client(settings).fetch(url.toString(), init);
-  if (!response.ok && response.status !== 404) throw new Error(`R2 request failed with status ${response.status}.`);
+  if (!response.ok && response.status !== 404 && response.status !== 412) throw new Error(`R2 request failed with status ${response.status}.`);
   return response;
 }
 
@@ -80,8 +83,9 @@ export async function r2ObjectExists(settings: R2Settings, key: string): Promise
   return (await send(settings, objectUrl(settings, key), { method: 'HEAD' })).ok;
 }
 
-export async function putEmptyR2Object(settings: R2Settings, key: string): Promise<void> {
-  await send(settings, objectUrl(settings, key), { method: 'PUT', body: '' });
+/** Creates an empty object; returns false when the key already exists. */
+export async function putEmptyR2Object(settings: R2Settings, key: string): Promise<boolean> {
+  return (await send(settings, objectUrl(settings, key), { method: 'PUT', body: '', headers: R2_CREATE_ONLY_HEADERS })).ok;
 }
 
 export async function copyR2Object(settings: R2Settings, source: string, destination: string): Promise<void> {

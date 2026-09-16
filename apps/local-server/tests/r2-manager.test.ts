@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { GitHubSource, assetHash, type RemoteChange } from '@mygitnotes/core';
+import { GitHubSource, SourceError, assetHash, type RemoteChange } from '@mygitnotes/core';
 import { createApp } from '../src/app.js';
 
 let remoteToken: string | undefined;
@@ -15,7 +15,7 @@ const NOTE = '# Rules\n\n![Core](<r2:ex/old/Core Rules.pdf>)\n[map](r2:ex/old/ma
 
 /** Minimal S3-compatible stand-in recording every request. */
 async function startBucket() {
-  const objects = new Map<string, Buffer>(), requests: string[] = [];
+  const objects = new Map<string, Buffer>(), requests: string[] = [], hooks: { onCopy?: () => void } = {};
   const server = createServer((req, res) => {
     const url = new URL(req.url!, 'http://bucket'), [, bucket, ...parts] = url.pathname.split('/');
     const key = parts.map(decodeURIComponent).join('/');
@@ -30,11 +30,12 @@ async function startBucket() {
       }
       if (req.method === 'HEAD') { res.statusCode = objects.has(key) ? 200 : 404; return res.end(); }
       if (req.method === 'PUT') {
+        if (req.headers['if-none-match'] === '*' && objects.has(key)) { res.statusCode = 412; return res.end(); }
         const copy = req.headers['x-amz-copy-source'];
         if (copy) {
           const from = decodeURIComponent(String(copy)).split('/').slice(2).join('/');
           if (!objects.has(from)) { res.statusCode = 404; return res.end(); }
-          objects.set(key, objects.get(from)!);
+          objects.set(key, objects.get(from)!); hooks.onCopy?.();
         } else objects.set(key, Buffer.concat(chunks));
         return res.end('<CopyObjectResult/>');
       }
@@ -43,7 +44,7 @@ async function startBucket() {
     });
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  return { objects, requests, server, endpoint: `http://127.0.0.1:${(server.address() as any).port}` };
+  return { objects, requests, hooks, server, endpoint: `http://127.0.0.1:${(server.address() as any).port}` };
 }
 
 let root: string, app: Server, base: string, bucket: Awaited<ReturnType<typeof startBucket>>;
@@ -103,6 +104,7 @@ describe('R2 management on a local workspace', () => {
     const upload = await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex/docs/big file.pdf' }).then(r => r.json());
     expect(new URL(upload.url).pathname).toBe('/private-assets/ex/docs/big%20file.pdf');
     expect(new URL(upload.url).searchParams.get('X-Amz-Signature')).toMatch(/^[a-f0-9]{64}$/);
+    expect(new URL(upload.url).searchParams.get('X-Amz-SignedHeaders')).toContain('if-none-match');
     expect(bucket.objects.has('ex/docs/big file.pdf')).toBe(false);
     expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex/keep.pdf' })).status).toBe(409);
     expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: 'ex/new folder' })).status).toBe(200);
@@ -132,6 +134,16 @@ describe('R2 management on a local workspace', () => {
     expect(bucket.objects.has('ex/new/Core Rules.pdf')).toBe(false);
     expect(fs.readFileSync(path.join(root, 'notes/ex/rules.md'), 'utf8')).toBe(NOTE);
     expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old', destination: 'ex/old/inner', directory: true })).status).toBe(400);
+  });
+
+  it('refuses a move whose referencing note changed during the copies and rolls the copies back', async () => {
+    await startLocal();
+    const edited = NOTE + '\nSaved while copying.\n';
+    bucket.hooks.onCopy = () => fs.writeFileSync(path.join(root, 'notes/ex/rules.md'), edited);
+    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old', destination: 'ex/archive', directory: true })).status).toBe(409);
+    expect(fs.readFileSync(path.join(root, 'notes/ex/rules.md'), 'utf8')).toBe(edited);
+    expect(fs.readFileSync(path.join(root, 'notes/other/cross.md'), 'utf8')).toBe('![x](r2:ex/old/map.webp)\n');
+    expect([...bucket.objects.keys()].sort()).toEqual(['ex/keep.pdf', 'ex/old/Core Rules.pdf', 'ex/old/map.webp', 'other/secret.pdf']);
   });
 
   it('deletes a file or folder and leaves notes unchanged', async () => {
@@ -174,6 +186,7 @@ describe('R2 management on a hosted workspace', () => {
       entries: [...files].map(([file, bytes]) => ({ path: file, type: 'blob', mode: '100644', sha: assetHash(bytes), size: bytes.length })) }));
     vi.spyOn(prototype, 'readBlob').mockImplementation(async (...args: unknown[]) => [...files.values()].find(bytes => assetHash(bytes) === args[0])!);
     vi.spyOn(prototype, 'publishChanges').mockImplementation(async (...args: unknown[]) => {
+      if ((args[1] as { sha: string }).sha !== revision) throw new SourceError('The repository changed. Reload before saving.', 409);
       const changes = args[0] as RemoteChange[]; published.push(changes);
       for (const change of changes) files.set(change.path, Buffer.from(change.content!));
       return revision += '-next';
@@ -192,6 +205,16 @@ describe('R2 management on a hosted workspace', () => {
     expect(files.get('notes/ex/rules.md')!.toString()).toContain('[map](r2:ex/maps/region.webp)');
     expect(bucket.objects.has('ex/maps/region.webp')).toBe(true);
     expect(bucket.objects.has('ex/old/map.webp')).toBe(false);
+  });
+
+  it('rolls copied objects back when the rewrite commit hits a revision conflict', async () => {
+    canPush = true;
+    await startRemote('writer-token');
+    bucket.hooks.onCopy = () => { revision = 'moved-on'; };
+    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old/map.webp', destination: 'ex/maps/region.webp' })).status).toBe(409);
+    expect(published).toEqual([]);
+    expect(files.get('notes/ex/rules.md')!.toString()).toBe(NOTE);
+    expect([...bucket.objects.keys()].sort()).toEqual(['ex/keep.pdf', 'ex/old/Core Rules.pdf', 'ex/old/map.webp']);
   });
 
   it('denies anonymous and read-only requesters', async () => {

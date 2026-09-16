@@ -17,8 +17,8 @@ interface Workspace {
   notebooks: NotebookConfig[];
   /** Reads every Markdown note in managed notebooks. */
   notes: () => Promise<Map<string, string>>;
-  /** Persists rewritten notes as one workspace mutation. */
-  commit: (changes: Map<string, string>) => Promise<void>;
+  /** Persists rewritten notes as one workspace mutation, rejecting when a note changed since `read`. */
+  commit: (changes: Map<string, string>, read: Map<string, string>) => Promise<void>;
 }
 
 /**
@@ -35,7 +35,8 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
       return {
         notebooks: config.notebooks,
         notes: async () => new Map([...localFileCatalog(root).files.keys()].filter(markdown).map(file => [file, fs.readFileSync(resolveSafePath(root, file), 'utf8')])),
-        commit: changes => serializeWorkspaceMutation(root, async () => {
+        commit: (changes, read) => serializeWorkspaceMutation(root, async () => {
+          for (const file of changes.keys()) if (fs.readFileSync(resolveSafePath(root, file), 'utf8') !== read.get(file)) throw new SourceError('A note changed during the move. Reload and try again.', 409);
           for (const [file, content] of changes) {
             const target = resolveSafePath(root, file), temp = `${target}.${randomUUID()}.tmp`;
             try { fs.writeFileSync(temp, content, { flag: 'wx', mode: fs.statSync(target).mode }); fs.renameSync(temp, target); }
@@ -101,8 +102,7 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
   router.post('/api/r2/mkdir', handle(async (req, res) => {
     const { notebook, settings } = await context(req, req.body);
     const key = notebookKey(`${req.body.key}/.keep`, notebook.id);
-    if ((await listR2Objects(settings, `${req.body.key}/`)).length || await r2ObjectExists(settings, req.body.key)) throw new SourceError('Destination already exists.', 409);
-    await putEmptyR2Object(settings, key);
+    if ((await listR2Objects(settings, `${req.body.key}/`)).length || await r2ObjectExists(settings, req.body.key) || !await putEmptyR2Object(settings, key)) throw new SourceError('Destination already exists.', 409);
     res.json({ key });
   }));
   router.get('/api/r2/references', handle(async (req, res) => {
@@ -115,6 +115,7 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
     const key = notebookKey(req.body.key, notebook.id), destination = notebookKey(req.body.destination, notebook.id);
     if (withinPath(destination, key)) throw new SourceError('Choose a destination outside the moved item.', 400);
     const objects = await affected(settings, key, req.body.directory === true);
+    // CopyObject has no destination precondition on R2, so this check stays check-then-act.
     const moves = Object.fromEntries(objects.map(object => [object, destination + object.slice(key.length)]));
     for (const target of Object.values(moves)) if (await r2ObjectExists(settings, target)) throw new SourceError('Destination already exists.', 409);
     const notes = await space.notes();
@@ -122,7 +123,7 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
     const copied: string[] = [];
     try {
       for (const [from, to] of Object.entries(moves)) { await copyR2Object(settings, from, to); copied.push(to); }
-      if (rewritten.size) await space.commit(rewritten);
+      if (rewritten.size) await space.commit(rewritten, notes);
     } catch (error) {
       await Promise.allSettled(copied.map(target => deleteR2Object(settings, target)));
       throw error;
