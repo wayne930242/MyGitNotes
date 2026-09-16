@@ -52,8 +52,8 @@ import { CardView } from './components/CardView.js';
 import { KanbanView } from './components/KanbanView.js';
 import { EditorModal } from './components/EditorModal.js';
 import { RightPanel } from './components/RightPanel.js';
-import { FileManager, FileManagerDialog, type FileManagerHandle } from './components/FileManager.js';
-import type { FileResult } from './lib/files-api.js';
+import { FileManager, FileManagerDialog, FileMetadata, type FileManagerHandle } from './components/FileManager.js';
+import type { FileResult, FileEntry } from './lib/files-api.js';
 import { AgentSystemView, type AgentSystemHandle } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { CommitModal } from './components/CommitModal.js';
@@ -125,6 +125,8 @@ const AppContent: React.FC = () => {
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
   const [fileEditorRevision, setFileEditorRevision] = useState(0);
   const [fileDialog, setFileDialog] = useState<{ notebookId: string; path?: string; movePath?: string }>();
+  const [fileMetadataContainer, setFileMetadataContainer] = useState<HTMLDivElement | null>(null);
+  const [selectedFileEntry, setSelectedFileEntry] = useState<FileEntry>();
   const fileManagerRef = useRef<FileManagerHandle>(null);
 
   // The URL owns page, notebook, folder and filter selection.
@@ -974,7 +976,7 @@ const AppContent: React.FC = () => {
         {activeTab === 'assets' && (
           <main className="workspace-route assets-main has-sidebar-drawer">
             <FileManager key={`${sourceId}:${selectedNotebookId}`} ref={fileManagerRef}
-              notebookId={selectedNotebookId} writable={canWrite}
+              notebookId={selectedNotebookId} writable={canWrite} onSelectionChange={setSelectedFileEntry} metadataContainer={fileMetadataContainer}
               initialPath={new URLSearchParams(location.search).get('asset') || (new URLSearchParams(location.search).has('directory') ? `${folderRoot}/${config?.notebooks.find(nb => nb.id === selectedNotebookId)?.assets || 'assets'}${new URLSearchParams(location.search).get('directory') ? '/' + new URLSearchParams(location.search).get('directory') : ''}` : undefined)}
               onBusyChange={setResourceNavigationBusy} beforeChange={beforeFileChange}
               onChanged={onFilesChanged} onOpenIndex={openFileIndex} />
@@ -1016,6 +1018,9 @@ const AppContent: React.FC = () => {
         )}
 
         <RightPanel
+          fileMode={activeTab === 'assets'}
+          fileMetadata={selectedFileEntry ? <FileMetadata entry={selectedFileEntry} onEdit={canWrite && !resourceNavigationBusy ? () => void fileManagerRef.current?.editMetadata() : undefined} /> : undefined}
+          onFileMetadataContainer={setFileMetadataContainer}
           notes={notes}
           notebooks={config?.notebooks || []}
           selectedNotebookId={selectedNotebookId}

@@ -1,6 +1,8 @@
+import { createPortal } from 'react-dom';
+import type { ReactNode } from 'react';
 import { Button } from './Button.js';
 import { forwardRef, lazy, Suspense, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Folder, File, FolderPlus, FilePlus, Upload, ArrowUp, FolderInput, Pencil, Trash2, RefreshCw, Eye, Code2, Download } from 'lucide-react';
+import { Folder, File, FolderPlus, FilePlus, Upload, CornerLeftUp, FolderInput, Pencil, Trash2, RefreshCw, Eye, Code2, Download, X, EyeOff } from 'lucide-react';
 import type { FileCommand } from '@mygitnotes/core';
 import { fetchFiles, readFile, mutateFile, rawFileUrl, type FileEntry, type FileListing, type FileRead, type FileResult } from '../lib/files-api.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -8,7 +10,7 @@ import { WorkspaceDialog } from './WorkspaceDialog.js';
 import './file-manager.css';
 const FileSourceEditor = lazy(() => import('./FileSourceEditor.js').then(module => ({ default: module.FileSourceEditor })));
 
-export interface FileManagerHandle { prepareLeave: () => Promise<boolean> }
+export interface FileManagerHandle { prepareLeave: () => Promise<boolean>; editMetadata: () => Promise<void> }
 export interface FileManagerProps {
   notebookId: string;
   writable: boolean;
@@ -19,6 +21,8 @@ export interface FileManagerProps {
   onChanged?: (result: FileResult) => Promise<void>;
   onOpenIndex?: (path: string) => Promise<void>;
   onInsert?: (reference: string) => void;
+  metadataContainer?: HTMLElement | null;
+  onSelectionChange?: (entry: FileEntry | undefined) => void;
   onBusyChange?: (busy: boolean) => void;
 }
 type Operation = 'create' | 'mkdir' | 'move' | 'delete' | 'remove-directory' | 'metadata';
@@ -36,7 +40,7 @@ function Preview({ entry, url }: { entry: FileEntry; url: string }) {
   return <p className="file-empty">{t('files.binaryHint')}</p>;
 }
 
-export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(function FileManager({ notebookId, writable, initialPath, movePath, mode = 'manage', beforeChange, onChanged, onOpenIndex, onInsert, onBusyChange }, ref) {
+export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(function FileManager({ notebookId, writable, initialPath, movePath, mode = 'manage', beforeChange, onChanged, onOpenIndex, onInsert, onBusyChange, onSelectionChange, metadataContainer }, ref) {
   const { t } = useTranslation();
   const [listing, setListing] = useState<FileListing>();
   const [directory, setDirectory] = useState(''), [selected, setSelected] = useState('');
@@ -52,6 +56,10 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
   const mutable = mode === 'manage' && writable && listing?.writable;
   const dirty = typeof detail?.content === 'string' && content !== detail.content;
   const selectedEntry = listing?.entries.find(entry => entry.path === selected);
+  useEffect(() => {
+    onSelectionChange?.(selectedEntry || (listing && directory ? listing.entries.find(entry => entry.path === directory) || { path: directory, name: basename(directory), directory: true, size: 0, hidden: false, presentation: 'file' } : undefined));
+    return () => onSelectionChange?.(undefined);
+  }, [selectedEntry, listing, directory, onSelectionChange]);
   const entries = listing?.entries.filter(entry => showHidden || !entry.hidden) || [];
   const dirs = entries.filter(entry => entry.directory);
   const current = entries.filter(entry => parentOf(entry.path) === directory).sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
@@ -119,13 +127,13 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
     setConfirmLeave(true);
     return new Promise<boolean>(resolve => { leaveResolver.current = resolve; });
   };
-  useImperativeHandle(ref, () => ({ prepareLeave }));
+  useImperativeHandle(ref, () => ({ prepareLeave, editMetadata: () => openOperation('metadata') }));
   const finishLeave = (value: boolean) => { const resolve = leaveResolver.current; leaveResolver.current = undefined; setConfirmLeave(false); resolve?.(value); };
   const navigate = async (path: string, select = false) => {
     if (!await prepareLeave()) return;
     setError('');
     if (select) await loadDetail(path);
-    else { setDirectory(path); setSelected(''); setDetail(undefined); setOperation(undefined); readSequence.current++; }
+    else { setDirectory(path); setSelected(''); setDetail(undefined); setOperation(undefined); setReading(false); readSequence.current++; }
     setTreeOpen(false);
   };
   const openOperation = async (kind: Operation) => {
@@ -162,25 +170,25 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
   const operationLabel = operation ? t(`files.${operation}`) : '';
   const destinationDirs = listing ? [{ path: listing.root, name: t('files.root') }, ...dirs.filter(entry => (!movePath || entry.noteDirectory) && entry.path !== selected && !entry.path.startsWith(selected + '/'))] : [];
   const relative = (path: string) => path === listing?.root ? t('files.root') : path.slice((listing?.root.length || 0) + 1);
+  const renderOperation = (form: ReactNode) => operation === 'metadata' && metadataContainer ? createPortal(form, metadataContainer) : form;
   const rawUrl = selected ? rawFileUrl(notebookId, selected) : '';
   return <div className="file-manager" data-mode={mode} aria-busy={busy || reading || !listing}>
     <header className="file-manager-toolbar">
       <button type="button" className="ui-button file-tree-toggle" aria-expanded={treeOpen} onClick={() => setTreeOpen(!treeOpen)}><Folder size={16} />{t('folder.folders')}</button>
-      <nav aria-label={t('files.location')} className="file-breadcrumbs">
-        {listing && <><button type="button" disabled={busy} onClick={() => void navigate(listing.root)}>{t('files.root')}</button>{directory.slice(listing.root.length + 1).split('/').filter(Boolean).map((part, index, parts) => <span key={index}> / <button type="button" disabled={busy} onClick={() => void navigate(listing.root + '/' + parts.slice(0, index + 1).join('/'))}>{part}</button></span>)}</>}
-      </nav>
-      <label className="file-hidden-toggle"><input type="checkbox" checked={showHidden} disabled={busy} onChange={event => { const next = event.target.checked; void (async () => { if (await prepareLeave()) { setShowHidden(next); if (!next && (selectedEntry?.hidden || directory.slice((listing?.root.length || 0) + 1).split('/').some(p => p.startsWith('.')))) { setDirectory(listing!.root); setSelected(''); setDetail(undefined); setOperation(undefined); readSequence.current++; } } })(); }} />{t('files.showHidden')}</label>
+      {directory !== listing?.root && <nav aria-label={t('files.location')} className="file-breadcrumbs">
+        {listing && <>{directory.slice(listing.root.length + 1).split('/').filter(Boolean).map((part, index, parts) => <span key={index}> / <button type="button" disabled={busy} onClick={() => void navigate(listing.root + '/' + parts.slice(0, index + 1).join('/'))}>{part}</button></span>)}</>}
+      </nav>}
+      <button type="button" className="ui-icon-button file-hidden-toggle" aria-label={t('files.showHidden')} title={t('files.showHidden')} aria-pressed={showHidden} disabled={busy || !listing} onClick={() => { const next = !showHidden; void (async () => { if (await prepareLeave()) { setShowHidden(next); if (!next && (selectedEntry?.hidden || directory.slice((listing?.root.length || 0) + 1).split('/').some(p => p.startsWith('.')))) { setDirectory(listing!.root); setSelected(''); setDetail(undefined); setOperation(undefined); readSequence.current++; } } })(); }}>{showHidden ? <Eye size={18} /> : <EyeOff size={18} />}</button>
       <button type="button" className="ui-icon-button" aria-label={t('folder.reload')} disabled={busy} onClick={() => void (async () => { if (await prepareLeave()) await run(async () => { const next = await refresh(); if (selected && next.entries.some(e => e.path === selected)) await loadDetail(selected); else { setDirectory(next.root); setSelected(''); setDetail(undefined); setOperation(undefined); readSequence.current++; } }); })()}><RefreshCw size={16} /></button>
     </header>
     {error && <p role="alert" className="file-error">{error}</p>}
     {!listing ? <p role="status">{error ? t('files.unavailable') : t('files.loading')}</p> : <>
     <div className="file-manager-body">
       <nav className={`file-tree ${treeOpen ? 'is-open' : ''}`} aria-label={t('folder.folders')}>
-        {[{ path: listing.root, name: t('files.root') }, ...dirs].map(entry => <button type="button" key={entry.path} disabled={busy} aria-current={directory === entry.path ? 'location' : undefined} style={{ paddingInlineStart: 10 + Math.max(0, entry.path.slice(listing.root.length + 1).split('/').length - 1) * 12 }} onClick={() => void navigate(entry.path)}><Folder size={15} /><span>{entry.name}</span></button>)}
+        {[...(directory !== listing.root ? [{ path: listing.root, name: '<note>' }] : []), ...dirs].map(entry => <button type="button" key={entry.path} disabled={busy} aria-current={directory === entry.path ? 'location' : undefined} style={{ paddingInlineStart: 10 + Math.max(0, entry.path.slice(listing.root.length + 1).split('/').length - 1) * 12 }} onClick={() => void navigate(entry.path)}><Folder size={15} /><span>{entry.name}</span></button>)}
       </nav>
-      <section className="file-content">
+      <section className={`file-content ${selectedEntry ? 'has-selection' : ''}`}>
         <div className="file-actions">
-          <button type="button" className="ui-button" disabled={busy || directory === listing.root} onClick={() => void navigate(parentOf(directory))}><ArrowUp size={15} />{t('files.up')}</button>
           {mutable && <>
             <button type="button" className="ui-button" disabled={busy} onClick={() => void openOperation('mkdir')}><FolderPlus size={15} />{t('files.mkdir')}</button>
             <button type="button" className="ui-button" disabled={busy} onClick={() => void openOperation('create')}><FilePlus size={15} />{t('files.create')}</button>
@@ -191,6 +199,8 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
         </div>
         <p className="file-storage-hint">{mode === 'pick-image' ? t('files.pickerHint') : !mutable ? t('files.readOnly') : listing.remote ? t('files.remoteHint') : t('files.localHint')}</p>
         <div className="file-list" aria-label={t('files.list')}>
+          {directory !== listing.root && <div className="file-row file-navigation-row"><button type="button" className="file-row-name" aria-label={t('files.root')} title={t('files.root')} disabled={busy} onClick={() => void navigate(listing.root)}><Folder size={18} /><span>{'<note>'}</span></button></div>}
+          {directory !== listing.root && <div className="file-row file-navigation-row"><button type="button" className="file-row-name" aria-label={t('files.up')} title={t('files.up')} disabled={busy} onClick={() => void navigate(parentOf(directory))}><CornerLeftUp size={18} /><span>..</span></button></div>}
           {current.map(entry => <div key={entry.path} className={`file-row ${selected === entry.path ? 'is-selected' : ''}`}>
             <button type="button" disabled={busy} className="file-row-name" title={entry.path} aria-label={`${entry.directory ? t('files.openFolder') : t('files.select')}: ${entry.name}`} onClick={() => void navigate(entry.path, !entry.directory)}>{entry.directory ? <Folder size={18} /> : <File size={18} />}<span>{entry.name}</span><small>{entry.directory ? t('files.directory') : `${(entry.size / 1024).toFixed(1)} KB`}</small></button>
             {entry.directory && mutable && <button type="button" className="ui-icon-button" disabled={busy} aria-label={`${t('files.metadata')}: ${entry.name}`} onClick={() => void navigate(entry.path, true)}><Pencil size={15} /></button>}
@@ -198,9 +208,12 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
           {!current.length && <p className="file-empty">{t('files.empty')}</p>}
         </div>
         {selectedEntry && <section className="file-detail" aria-label={t('files.details')}>
-          <div className="file-detail-heading"><strong>{selectedEntry.name}</strong><code>{relative(selected)}</code>{!selectedEntry.directory && <small>{selectedEntry.name.includes('.') ? selectedEntry.name.split('.').pop()?.toUpperCase() : t('files.unknownType')} · {selectedEntry.size.toLocaleString()} bytes</small>}</div>
+          <div className="file-detail-heading"><div className="file-detail-title"><strong>{selectedEntry.name}</strong><div className="file-detail-icons">
+            {!selectedEntry.directory && <a className="ui-icon-button" href={rawUrl + '&download=1'} download aria-label={t('files.download')} title={t('files.download')}><Download size={18} /></a>}
+            <button type="button" className="ui-icon-button" aria-label={t('files.close')} title={t('files.close')} disabled={busy} onClick={() => void navigate(directory)}><X size={18} /></button>
+          </div></div></div>
+          {!onSelectionChange && <details className="file-metadata-disclosure" key={selected}><summary>{t('files.metadataLabel')}</summary><FileMetadata entry={selectedEntry} /></details>}
           <div className="file-actions">
-            {!selectedEntry.directory && <a className="ui-button" href={rawUrl + '&download=1'} download><Download size={15} />{t('files.download')}</a>}
             {mutable && <>
               <button type="button" className="ui-button" disabled={busy} onClick={() => void openOperation('move')}><FolderInput size={15} />{t('files.move')}</button>
               {selectedEntry.directory && <button type="button" className="ui-button" disabled={busy || reading} onClick={() => void openOperation('metadata')}><Pencil size={15} />{t('files.metadata')}</button>}
@@ -218,7 +231,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
             </> : <Preview key={selected + listing.revision} entry={selectedEntry} url={rawUrl} />}
           </>}
         </section>}
-        {operation && mutable && <form ref={operationForm} className="file-operation" aria-label={operationLabel} onSubmit={event => { event.preventDefault(); void submit(); }}>
+        {operation && mutable && renderOperation(<form ref={operationForm} className="file-operation" aria-label={operationLabel} onSubmit={event => { event.preventDefault(); void submit(); }}>
           <h3>{operationLabel}</h3>
           {['move', 'delete', 'remove-directory'].includes(operation) && <p><code>{selected}</code></p>}
           {['create', 'mkdir', 'move'].includes(operation) && <label>{t('files.name')}<input className="ui-control" autoFocus required maxLength={120} pattern="[^/\\\\]+" value={name} disabled={busy} onChange={event => setName(event.target.value)} /></label>}
@@ -232,7 +245,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
             <label>{t('files.order')}<input type="number" className="ui-control" value={order} required disabled={busy} onChange={event => setOrder(Number(event.target.value))} /></label>
           </>}
           <div className="file-actions"><button type="button" className="ui-button" disabled={busy} onClick={() => setOperation(undefined)}>{t('common.cancel')}</button><Button type="submit" variant="primary" disabled={busy || operation === 'move' && destination + '/' + name.trim() === selected}>{operation === 'delete' || operation === 'remove-directory' ? t('files.confirmDelete') : t('common.save')}</Button></div>
-        </form>}
+        </form>)}
       </section>
     </div>
     </>}
@@ -243,4 +256,13 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
 export function FileManagerDialog({ onClose, ...props }: FileManagerProps & { onClose: () => void }) {
   const { t } = useTranslation(), manager = useRef<FileManagerHandle>(null);
   return <WorkspaceDialog title={t(props.mode === 'pick-image' ? 'files.chooseImage' : 'files.titleLabel')} className="file-manager-dialog" onClose={() => void manager.current?.prepareLeave().then(ok => { if (ok) onClose(); })}><FileManager ref={manager} {...props} /></WorkspaceDialog>;
+}
+
+export function FileMetadata({ entry, onEdit }: { entry: FileEntry; onEdit?: () => void }) {
+  const { t } = useTranslation();
+  return <><dl className="file-metadata">
+    <dt>{t('files.location')}</dt><dd><code>{entry.path}</code></dd>
+    <dt>{t('files.type')}</dt><dd>{entry.directory ? t('files.directory') : entry.name.includes('.') ? entry.name.split('.').pop()?.toUpperCase() : t('files.unknownType')}</dd>
+    {!entry.directory && <><dt>{t('files.size')}</dt><dd>{entry.size.toLocaleString()} bytes</dd></>}
+  </dl>{entry.directory && onEdit && <button type="button" className="ui-button file-edit-metadata" onClick={onEdit}><Pencil size={15} />{t('files.editDirectoryMetadata')}</button>}</>;
 }
