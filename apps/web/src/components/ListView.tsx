@@ -16,6 +16,7 @@ import { Select } from './Select.js';
 import { NoteItem } from '../lib/types.js';
 import { SortField, SortOrder } from '../lib/note-sort.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 
 interface ListViewProps {
   notes: NoteItem[];
@@ -23,6 +24,7 @@ interface ListViewProps {
   statuses: string[];
   readOnly?: boolean;
   canDelete?: boolean;
+  confirmDelete?: boolean;
   onOpenNote: (note: NoteItem) => void;
   onDeleteNote: (note: NoteItem) => void;
   onMoveNote?: (note: NoteItem) => void;
@@ -41,8 +43,8 @@ interface NoteRowActions {
   status: (note: NoteItem, status: string) => void;
 }
 
-const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelete, actions, dates }: {
-  note: NoteItem; statuses: string[]; readOnly: boolean; canDelete: boolean;
+const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelete, isPendingDelete, actions, dates }: {
+  note: NoteItem; statuses: string[]; readOnly: boolean; canDelete: boolean; isPendingDelete: boolean;
   actions: NoteRowActions; dates: { short: Intl.DateTimeFormat; full: Intl.DateTimeFormat };
 }) {
   const { t } = useTranslation();
@@ -114,8 +116,10 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
             <button
               type="button"
               onClick={() => actions.remove(note)}
-              title={t('notes.delete')}
-              className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition"
+              title={isPendingDelete ? t('notes.confirmDelete') : t('notes.delete')}
+              className={isPendingDelete
+                ? 'p-1.5 text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition'
+                : 'p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition'}
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -132,6 +136,7 @@ export const ListView: React.FC<ListViewProps> = ({
   statuses,
   readOnly = false,
   canDelete = true,
+  confirmDelete = false,
   onOpenNote,
   onDeleteNote,
   onMoveNote,
@@ -146,12 +151,18 @@ export const ListView: React.FC<ListViewProps> = ({
   // Rows retain stable actions while invoking the latest committed callbacks.
   const handlers = useRef({ onOpenNote, onDeleteNote, onUpdateNoteStatus, onMoveNote });
   useLayoutEffect(() => { handlers.current = { onOpenNote, onDeleteNote, onUpdateNoteStatus, onMoveNote }; });
+  const notesRef = useRef(notes);
+  useLayoutEffect(() => { notesRef.current = notes; });
+  const { pendingDeletePath, requestDelete } = useDeleteConfirm(confirmDelete, path => {
+    const note = notesRef.current.find(n => n.path === path);
+    if (note) handlers.current.onDeleteNote(note);
+  });
   const actions = useMemo<NoteRowActions>(() => ({
     open: note => handlers.current.onOpenNote(note),
-    remove: note => handlers.current.onDeleteNote(note),
+    remove: note => requestDelete(note.path),
     move: note => handlers.current.onMoveNote?.(note),
     status: (note, status) => handlers.current.onUpdateNoteStatus(note, status),
-  }), []);
+  }), [requestDelete]);
   const dates = useMemo(() => ({
     short: new Intl.DateTimeFormat(language, { month: '2-digit', day: '2-digit', hour12: false, hour: '2-digit', minute: '2-digit' }),
     full: new Intl.DateTimeFormat(language, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }),
@@ -255,7 +266,7 @@ export const ListView: React.FC<ListViewProps> = ({
           <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
             {/* Notes row rendering */}
             {notes.map(note => <NoteRow key={note.path} note={note} statuses={statuses}
-              readOnly={readOnly} canDelete={canDelete} actions={actions} dates={dates} />)}
+              readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} />)}
           </tbody>
         </table>
       </div>

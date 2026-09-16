@@ -434,13 +434,17 @@ const AppContent: React.FC = () => {
   // Remote delete: no working tree to trash into, so commit the removal immediately.
   const handleRemoteDeleteNote = async (note: NoteItem) => {
     if (!canWrite) return;
+    let result: FileResult;
     try {
-      await mutateFile({ kind: 'delete', notebookId: note.notebookId, path: note.path }, note.revision || revision);
+      result = await mutateFile({ kind: 'delete', notebookId: note.notebookId, path: note.path }, note.revision || revision);
     } catch (error) { setActionError((error as Error).message); throw error; }
+    // Apply everything in one synchronous batch: an async refetch here would leave a gap where
+    // routedNote still resolves the stale sourceNotes entry and the still-mounted editor re-stages
+    // a phantom draft for the path we just deleted.
+    setRevision(result.revision);
     setNotes((prev) => prev.filter((n) => n.path !== note.path));
-    if (editingNote?.path === note.path) setEditingNote(null);
-    const statusRes = await fetchGitStatus();
-    setGitStatus(statusRes.status);
+    setWorkingNotes(updateWorkingNote(workingScope, note.path, null));
+    if (editingNote?.path === note.path) { setEditingNote(null); navigate(returnTo, { replace: true }); }
   };
 
   // Trash action: delete without immediate commit, allowing restore (Requirement 2)
@@ -897,6 +901,7 @@ const AppContent: React.FC = () => {
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
                   canDelete={canWrite}
+                  confirmDelete={remote}
                   notes={displayedNotes}
                   hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
                   onOpenNote={handleOpenNote}
@@ -914,6 +919,7 @@ const AppContent: React.FC = () => {
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
                   canDelete={canWrite}
+                  confirmDelete={remote}
                   notes={displayedNotes}
                   hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
                   onOpenNote={handleOpenNote}
@@ -928,6 +934,7 @@ const AppContent: React.FC = () => {
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
                   canDelete={canWrite}
+                  confirmDelete={remote}
                   notes={notesBelowFolders}
                   onOpenNote={handleOpenNote}
                   onUpdateNoteStatus={handleUpdateNoteStatus}

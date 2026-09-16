@@ -428,6 +428,7 @@ export const en = {
   'notes.modified': 'Modified',
   'notes.actions': 'Actions',
   'notes.delete': 'Delete note',
+  'notes.confirmDelete': 'Click again to confirm deletion',
   'notes.noContent': 'No content',
   'notes.noStatus': '(No status)',
 
