@@ -135,11 +135,26 @@
 .screen-youtube-poster img { width: 100%; height: 100%; object-fit: cover; opacity: .8; }
 .screen-youtube-poster span { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; gap: 9px; color: white; text-shadow: 0 1px 4px #0008; font-size: 12px; }
 .screen-card-content iframe { height: 100%; width: 100%; border: 0; border-radius: 6px; }
-.note-r2-asset { margin: 16px 0; }
-.note-r2-asset figcaption { margin-top: 6px; font-size: 0.85em; }
-.note-r2-pdf iframe { display: block; width: 100%; height: min(80vh, 900px); border: 1px solid var(--color-border); border-radius: 8px; background: #fff; }
-.note-r2-image img, .note-r2-video video { display: block; max-width: 100%; border-radius: 8px; }
-.note-r2-audio audio { width: 100%; max-width: 640px; }
+.note-r2-asset { margin: 18px 0; max-width: 100%; }
+.note-r2-asset figcaption { margin-top: 8px; font-size: 12px; color: var(--color-muted); }
+.note-r2-asset figcaption a { color: var(--color-muted); text-decoration: none; display: inline-flex; align-items: center; gap: 4px; transition: color 150ms ease; }
+.note-r2-asset figcaption a:hover { color: var(--color-primary); text-decoration: underline; }
+.note-r2-ext-icon { font-size: 11px; opacity: 0.7; }
+.note-r2-pdf iframe { display: block; width: 100%; height: min(75vh, 850px); border: 1px solid var(--color-border); border-radius: 8px; background: #fff; }
+.dark .note-r2-pdf iframe { background: #1a1f24; }
+.note-r2-image img { display: block; max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--color-border); margin: 0; }
+.note-r2-video video { display: block; width: 100%; max-width: 720px; border-radius: 8px; border: 1px solid var(--color-border); background: #000; }
+.note-r2-audio audio { display: block; width: 100%; max-width: 540px; margin: 0; }
+.note-r2-file { margin: 12px 0; }
+.note-r2-file-link { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; font-size: 13px; color: var(--color-text); text-decoration: none; transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease; }
+.note-r2-file-link:hover { border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 6%, transparent); text-decoration: none; }
+.note-r2-file-icon { font-size: 14px; }
+.note-r2-file-name { font-weight: 500; }
+.note-r2-file-badge { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: color-mix(in srgb, var(--color-primary) 12%, transparent); color: var(--color-primary); }
+@media (max-width: 640px) {
+  .note-r2-pdf iframe { height: min(60vh, 500px); }
+  .note-r2-file-link { width: 100%; justify-content: space-between; }
+}
 .note-youtube-embed { width: 100%; max-width: 640px; margin: 16px 0; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: #0f1416; position: relative; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
 .note-youtube-poster { width: 100%; height: 100%; border: 0; padding: 0; margin: 0; background: transparent; cursor: pointer; display: block; position: relative; overflow: hidden; }
 .note-youtube-poster img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.88; transition: opacity 150ms ease, transform 150ms ease; }

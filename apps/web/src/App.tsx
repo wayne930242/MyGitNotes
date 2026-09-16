@@ -272,6 +272,23 @@ const AppContent: React.FC = () => {
   const [newNoteTemplateId, setNewNoteTemplateId] = useState<string>('');
   const newNoteFolders = useMemo(() => folders.filter(folder => folder.notebookId === selectedNotebookId).map(folder => folder.path).sort(), [folders, selectedNotebookId]);
   const newNoteTemplates = useMemo(() => config?.notebooks.find(n => n.id === selectedNotebookId)?.templates || [], [config, selectedNotebookId]);
+  const handleTemplateChange = async (templateId: string) => {
+    setNewNoteTemplateId(templateId);
+    if (!templateId) return;
+    const currentNotebook = config?.notebooks.find((n) => n.id === selectedNotebookId) || config?.notebooks[0];
+    if (!currentNotebook) return;
+    try {
+      const rendered = await renderNoteTemplate({ notebookId: currentNotebook.id, templateId, title: newNoteTitle || 'Untitled' });
+      if (typeof rendered.metadata.status === 'string' && notebookStatuses.includes(rendered.metadata.status)) {
+        setNewNoteStatus(rendered.metadata.status);
+      }
+      if (Array.isArray(rendered.metadata.tags)) {
+        setNewNoteTags(rendered.metadata.tags.map(String));
+      }
+    } catch {
+      // Ignore template preview error
+    }
+  };
   const openNewNote = (options?: string | { status?: string; folder?: string; tag?: string; tags?: string[]; notebookId?: string }) => {
     const opts = typeof options === 'string' ? { status: options } : { ...options };
     if (selectedNotebookId === 'all' && !opts.notebookId) opts.notebookId = config?.workspace.default_notebook || config?.notebooks[0]?.id;
@@ -1156,7 +1173,7 @@ const AppContent: React.FC = () => {
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                     {t('createNote.template')}
                   </label>
-                  <Select aria-label={t('createNote.template')} value={newNoteTemplateId} onValueChange={setNewNoteTemplateId}
+                  <Select aria-label={t('createNote.template')} value={newNoteTemplateId} onValueChange={handleTemplateChange}
                     options={[{ value: '', label: t('createNote.noTemplate') }, ...newNoteTemplates.map(tpl => ({ value: tpl.id, label: tpl.title }))]}
                     className="w-full" />
                 </div>
@@ -1187,7 +1204,7 @@ const AppContent: React.FC = () => {
 
             <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
               <button
-                onClick={() => { setIsNewNoteOpen(false); setNewNoteTags([]); }}
+                onClick={() => { setIsNewNoteOpen(false); setNewNoteTags([]); setNewNoteTemplateId(''); }}
                 className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition active:scale-95"
               >
                 {t('common.cancel')}

@@ -71,8 +71,18 @@ function r2Preview(doc: Document, key: string, notePath: string, label: string):
   figure.className = `note-r2-asset note-r2-${kind}`;
   if (kind === 'file') {
     const link = doc.createElement('a');
+    link.className = 'note-r2-file-link';
     link.setAttribute('href', url); link.setAttribute('target', '_blank'); link.setAttribute('rel', 'noopener noreferrer');
-    link.textContent = name;
+    const icon = doc.createElement('span');
+    icon.className = 'note-r2-file-icon';
+    icon.textContent = '📎';
+    const text = doc.createElement('span');
+    text.className = 'note-r2-file-name';
+    text.textContent = name;
+    const badge = doc.createElement('span');
+    badge.className = 'note-r2-file-badge';
+    badge.textContent = 'R2';
+    link.append(icon); link.append(text); link.append(badge);
     figure.append(link);
     return figure;
   }
@@ -85,6 +95,10 @@ function r2Preview(doc: Document, key: string, notePath: string, label: string):
   const open = doc.createElement('a');
   open.setAttribute('href', url); open.setAttribute('target', '_blank'); open.setAttribute('rel', 'noopener noreferrer');
   open.textContent = name;
+  const extIcon = doc.createElement('span');
+  extIcon.className = 'note-r2-ext-icon';
+  extIcon.textContent = ' ↗';
+  open.append(extIcon);
   caption.append(open);
   figure.append(media);
   figure.append(caption);
