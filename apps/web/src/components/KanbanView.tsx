@@ -15,12 +15,14 @@ import { SortField, SortOrder, sortNotes } from '../lib/note-sort.js';
 import { Select } from './Select.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
+import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 
 interface KanbanViewProps {
   notes: NoteItem[];
   statuses: string[];
   readOnly?: boolean;
   canDelete?: boolean;
+  confirmDelete?: boolean;
   onOpenNote: (note: NoteItem) => void;
   onUpdateNoteStatus: (note: NoteItem, newStatus: string) => void;
   onDeleteNote: (note: NoteItem) => void;
@@ -36,6 +38,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
   statuses,
   readOnly = false,
   canDelete = true,
+  confirmDelete = false,
   onOpenNote,
   onUpdateNoteStatus,
   onDeleteNote,
@@ -46,6 +49,10 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
   onSortChange,
 }) => {
   const { t } = useTranslation();
+  const { pendingDeletePath, requestDelete } = useDeleteConfirm(confirmDelete, path => {
+    const note = notes.find(n => n.path === path);
+    if (note) onDeleteNote(note);
+  });
   const [draggedNotePath, setDraggedNotePath] = useState<string | null>(null);
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
   const columnsRef = useRef<HTMLDivElement>(null);
@@ -358,9 +365,11 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                             {!readOnly && canDelete && (
                               <button
                                 type="button"
-                                onClick={() => onDeleteNote(note)}
-                                title={t('notes.delete')}
-                                className="p-1 hover:text-rose-600 dark:hover:text-rose-400 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 transition opacity-40 hover:opacity-100"
+                                onClick={() => requestDelete(note.path)}
+                                title={pendingDeletePath === note.path ? t('notes.confirmDelete') : t('notes.delete')}
+                                className={pendingDeletePath === note.path
+                                  ? 'p-1 text-white bg-rose-600 hover:bg-rose-700 rounded transition'
+                                  : 'p-1 hover:text-rose-600 dark:hover:text-rose-400 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 transition opacity-40 hover:opacity-100'}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>

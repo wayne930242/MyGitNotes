@@ -434,6 +434,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'notes.modified': '修改時間',
   'notes.actions': '操作',
   'notes.delete': '刪除筆記',
+  'notes.confirmDelete': '再次點擊以確認刪除',
   'notes.noContent': '無內容',
   'notes.noStatus': '（無狀態）',
 

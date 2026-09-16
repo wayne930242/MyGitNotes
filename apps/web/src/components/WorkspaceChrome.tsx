@@ -32,7 +32,13 @@ export function WorkspaceSidebarToggle({ label, open, onClick, controlsId }: {
   onClick: () => void;
 }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
-  useEffect(() => { setHost(document.getElementById('workspace-sidebar-toggle-slot')); }, []);
+  useEffect(() => {
+    const mobile = window.matchMedia('(max-width: 767px)');
+    const pick = () => setHost(document.getElementById(mobile.matches ? 'workspace-sidebar-toggle-slot-mobile' : 'workspace-sidebar-toggle-slot'));
+    pick();
+    mobile.addEventListener('change', pick);
+    return () => mobile.removeEventListener('change', pick);
+  }, []);
   return host && createPortal(<button type="button" data-sidebar-toggle="" className="ui-icon-button workspace-sidebar-toggle"
     aria-label={label} title={label} aria-expanded={open} aria-controls={controlsId} onClick={onClick}><PanelLeft size={17} /><span className="sr-only">{label}</span></button>, host);
 }

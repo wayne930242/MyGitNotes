@@ -58,3 +58,54 @@ it.each(['github', 'gitlab'])('%s file HTTP adapter uses an atomic revision-chec
     expect((await post({ notebookId: 'a', kind: 'delete', path: 'notes/a/empty.txt' })).status).toBe(403);
   } finally { await new Promise<void>(resolve => server.close(() => resolve())); vi.restoreAllMocks(); vi.unstubAllEnvs(); }
 });
+
+it.each(['github', 'gitlab'])('%s note delete and move go through the same atomic revision-checked commit as other remote writes', async provider => {
+  const files = new Map([
+    ['.github-notes.yaml', Buffer.from('schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n')],
+    ['notes/a/note.md', Buffer.from('# Note\n')], ['notes/a/second.md', Buffer.from('# Second\n')],
+  ]);
+  let revision = 'one', canPush = true;
+  const published: RemoteChange[][] = [];
+  const prototype = (provider === 'github' ? GitHubSource : GitLabSource).prototype as any;
+  vi.spyOn(prototype, 'loadSnapshot').mockImplementation(async () => {
+    const dirs = new Set<string>();
+    for (const file of files.keys()) { const parts = file.split('/'); for (let i = 1; i < parts.length; i++) dirs.add(parts.slice(0, i).join('/')); }
+    return { sha: revision, treeSha: revision, info: { private: true, permissions: { push: canPush }, default_branch: 'main' }, entries: [
+      ...[...dirs].map(path => ({ path, type: 'tree', mode: '040000', sha: path })),
+      ...[...files].map(([path, bytes]) => ({ path, type: 'blob', mode: '100644', sha: assetHash(bytes), size: bytes.length })),
+    ] };
+  });
+  vi.spyOn(prototype, 'readBlob').mockImplementation(async (...args: unknown[]) => [...files.values()].find(bytes => assetHash(bytes) === args[0])!);
+  vi.spyOn(prototype, 'publishChanges').mockImplementation(async (...args: unknown[]) => {
+    const changes = args[0] as RemoteChange[]; published.push(changes);
+    for (const change of changes) {
+      if (change.sha === null) files.delete(change.path);
+      else files.set(change.path, change.content !== undefined ? Buffer.from(change.content) : Buffer.alloc(0));
+    }
+    return revision += '-next';
+  });
+  vi.stubEnv('MYGITNOTES_SOURCE', provider); vi.stubEnv('MYGITNOTES_REPOSITORY', 'example/notes'); vi.stubEnv('MYGITNOTES_BRANCH', 'main'); vi.stubEnv('APP_URL', ''); vi.stubEnv('VERCEL', '');
+  const server = createServer(createApp(process.cwd()));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${(server.address() as any).port}`;
+  const post = (command: unknown, expected = revision) => fetch(base + '/api/files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, revision: expected }) });
+  try {
+    const moved = await post({ notebookId: 'a', kind: 'move', path: 'notes/a/note.md', destination: 'notes/a/renamed.md' });
+    expect(moved.status).toBe(200);
+    expect(files.has('notes/a/note.md')).toBe(false);
+    expect(files.get('notes/a/renamed.md')!.toString()).toBe('# Note\n');
+
+    expect((await post({ notebookId: 'a', kind: 'delete', path: 'notes/a/second.md' }, 'one')).status).toBe(409);
+    expect(files.has('notes/a/second.md')).toBe(true);
+
+    canPush = false;
+    expect((await post({ notebookId: 'a', kind: 'delete', path: 'notes/a/second.md' })).status).toBe(403);
+    expect(files.has('notes/a/second.md')).toBe(true);
+
+    canPush = true;
+    const deleted = await post({ notebookId: 'a', kind: 'delete', path: 'notes/a/second.md' });
+    expect(deleted.status).toBe(200);
+    expect(files.has('notes/a/second.md')).toBe(false);
+    expect(published.at(-1)!.find(change => change.path === 'notes/a/second.md')?.sha).toBeNull();
+  } finally { await new Promise<void>(resolve => server.close(() => resolve())); vi.restoreAllMocks(); vi.unstubAllEnvs(); }
+});

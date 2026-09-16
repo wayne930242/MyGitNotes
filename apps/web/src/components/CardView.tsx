@@ -5,6 +5,7 @@ import { FileText, Tag, Clock, Trash2, Plus } from 'lucide-react';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import { NoteItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 
 interface CardViewProps {
   notes: NoteItem[];
@@ -12,6 +13,7 @@ interface CardViewProps {
   statuses: string[];
   readOnly?: boolean;
   canDelete?: boolean;
+  confirmDelete?: boolean;
   onOpenNote: (note: NoteItem) => void;
   onDeleteNote: (note: NoteItem) => void;
   onMoveNote?: (note: NoteItem) => void;
@@ -25,6 +27,7 @@ export const CardView: React.FC<CardViewProps> = ({
   statuses,
   readOnly = false,
   canDelete = true,
+  confirmDelete = false,
   onOpenNote,
   onDeleteNote,
   onMoveNote,
@@ -32,6 +35,10 @@ export const CardView: React.FC<CardViewProps> = ({
   onUpdateNoteStatus,
 }) => {
   const { t } = useTranslation();
+  const { pendingDeletePath, requestDelete } = useDeleteConfirm(confirmDelete, path => {
+    const note = notes.find(n => n.path === path);
+    if (note) onDeleteNote(note);
+  });
 
   const isEmpty = notes.length === 0 && !hasFolderEntries;
 
@@ -148,9 +155,11 @@ export const CardView: React.FC<CardViewProps> = ({
                   {!readOnly && canDelete && (
                     <button
                       type="button"
-                      onClick={() => onDeleteNote(note)}
-                      title={t('notes.delete')}
-                      className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition rounded"
+                      onClick={() => requestDelete(note.path)}
+                      title={pendingDeletePath === note.path ? t('notes.confirmDelete') : t('notes.delete')}
+                      className={pendingDeletePath === note.path
+                        ? 'p-1 text-white bg-rose-600 hover:bg-rose-700 transition rounded'
+                        : 'p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition rounded'}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
