@@ -4,6 +4,7 @@ import {
   getImmediateNotes,
   getBreadcrumbs,
   resolveFolderClick,
+  resolveAllNotebooksFolderSelect,
 } from './folder-tree.js';
 import { NoteItem, FolderItem } from './types.js';
 
@@ -120,5 +121,33 @@ describe('folder-tree', () => {
     const onSelect = vi.fn();
     resolveFolderClick({ shiftKey: true }, onSelect)('projects');
     expect(onSelect).toHaveBeenCalledWith('projects');
+  });
+
+  it('resolves a ctrl+click to the multi-select toggle callback', () => {
+    const onSelect = vi.fn();
+    const onFilterFolder = vi.fn();
+    resolveFolderClick({ shiftKey: false, ctrlKey: true }, onSelect, onFilterFolder)('projects');
+    expect(onFilterFolder).toHaveBeenCalledWith('projects');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('resolves a cmd(meta)+click to the multi-select toggle callback', () => {
+    const onSelect = vi.fn();
+    const onFilterFolder = vi.fn();
+    resolveFolderClick({ shiftKey: false, metaKey: true }, onSelect, onFilterFolder)('projects');
+    expect(onFilterFolder).toHaveBeenCalledWith('projects');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('resolves a plain click to null when only one notebook is shown, deferring to the caller', () => {
+    expect(resolveAllNotebooksFolderSelect('nb1', 'notes/nb1', 'projects')).toBeNull();
+  });
+
+  it('scopes a plain click in the "all notebooks" view to that folder\'s own notebook path', () => {
+    expect(resolveAllNotebooksFolderSelect('all', 'notes/nb1', 'projects')).toEqual(['notes/nb1/projects']);
+  });
+
+  it('clears the filter when switching to "All folders" in the "all notebooks" view', () => {
+    expect(resolveAllNotebooksFolderSelect('all', 'notes/nb1', null)).toEqual([]);
   });
 });

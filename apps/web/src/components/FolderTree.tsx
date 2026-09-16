@@ -12,7 +12,7 @@ function DropZone({ path, position, disabled, children }: { path: string; positi
   const drop = useDroppable({ id: `${position}:${path}`, disabled, data: { path, position } });
   return <div ref={drop.setNodeRef} data-folder-drop={`${position}:${path}`} className={`${position === 'inside' ? 'folder-drop-body' : 'folder-drop-line'} ${drop.isOver ? 'is-over' : ''}`}>{children}</div>;
 }
-function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage, multiSelectable }: { folder: FolderItem; reorder: boolean; disabled: boolean; selected: boolean; onSelect: (event: { shiftKey: boolean }) => void; onManage: () => void; multiSelectable: boolean }) {
+function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage, multiSelectable }: { folder: FolderItem; reorder: boolean; disabled: boolean; selected: boolean; onSelect: (event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void; onManage: () => void; multiSelectable: boolean }) {
   const { t } = useTranslation();
   const drag = useDraggable({ id: folder.path, disabled: disabled || !reorder });
   const title = `${folder.description || folder.path}${multiSelectable ? ` (${t('folder.multiSelectHint')})` : ''}`;
@@ -38,7 +38,7 @@ export function FolderTree({ onManageFiles, reorder = false, onToggleReorder, se
 }) {
   const { t } = useTranslation();
   const [revision, setRevision] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [dragging, setDragging] = useState<string>();
-  const selectFolder = (folder: string | null, event: { shiftKey: boolean }) => resolveFolderClick(event, onSelect, onFilterFolder)(folder);
+  const selectFolder = (folder: string | null, event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean }) => resolveFolderClick(event, onSelect, onFilterFolder)(folder);
   const isSelected = (path: string | null) => selectedPaths ? path === null ? (allFoldersSelected ?? selectedPaths.length === 0) : selectedPaths.includes(path) : selected === path;
   const list = folders.filter(folder => folder.notebookId === notebookId);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -75,7 +75,7 @@ export function FolderTree({ onManageFiles, reorder = false, onToggleReorder, se
       const command = folderDropCommand(notebookId, String(active.id), data?.path || '', data?.position || 'inside', list);
       if (command) void mutate(command);
     }}>
-      <DropZone path="" position="inside" disabled={disabled || !reorder}><button type="button" className={`folder-tree-root ${isSelected(null) ? 'is-selected' : ''}`} aria-pressed={isSelected(null)} onClick={event => selectFolder(null, event)}>{t('folder.allFolders')}</button></DropZone>
+      <DropZone path="" position="inside" disabled={disabled || !reorder}><button type="button" className={`folder-tree-root ${isSelected(null) ? 'is-selected' : ''}`} aria-pressed={isSelected(null)} title={t('folder.allFolders')}onClick={event => selectFolder(null, event)}>{t('folder.allFolders')}</button></DropZone>
       {list.map(folder => <TreeItem reorder={reorder} key={folder.path} folder={folder} disabled={disabled} selected={isSelected(folder.path)} onSelect={event => selectFolder(folder.path, event)} onManage={() => onManageFiles(folder.path)} multiSelectable={Boolean(onFilterFolder)} />)}
       <DragOverlay>{dragging && <div className="screen-drag-overlay"><Folder size={16} />{list.find(folder => folder.path === dragging)?.title}</div>}</DragOverlay>
     </DndContext>
