@@ -15,6 +15,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { notebookRoute, noteRoute, noteReturnRoute, parseWorkspaceRoute, WorkspaceTab } from './lib/routes.js';
 import { readWorkingNotes, updateWorkingNote, clearCommittedNotes, overlayWorkingNotes, workingDiff, type WorkingNotes } from './lib/working-notes.js';
 import { mergeNote, sameValue } from './lib/merge-note.js';
+import { buildNewNoteDraft } from './lib/new-note.js';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   fetchWorkspace,
@@ -23,6 +24,7 @@ import {
   readNote,
   readNotes,
   saveNote,
+  renderNoteTemplate,
   deleteNote,
   restoreNote,
   fetchAssets,
@@ -50,8 +52,8 @@ import { CardView } from './components/CardView.js';
 import { KanbanView } from './components/KanbanView.js';
 import { EditorModal } from './components/EditorModal.js';
 import { RightPanel } from './components/RightPanel.js';
-import { FileManager, FileManagerDialog, type FileManagerHandle } from './components/FileManager.js';
-import { mutateFile, type FileResult } from './lib/files-api.js';
+import { FileManager, FileManagerDialog, FileMetadata, type FileManagerHandle } from './components/FileManager.js';
+import { mutateFile, type FileResult, type FileEntry } from './lib/files-api.js';
 import { AgentSystemView, type AgentSystemHandle } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { CommitModal } from './components/CommitModal.js';
@@ -123,6 +125,8 @@ const AppContent: React.FC = () => {
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
   const [fileEditorRevision, setFileEditorRevision] = useState(0);
   const [fileDialog, setFileDialog] = useState<{ notebookId: string; path?: string; movePath?: string }>();
+  const [fileMetadataContainer, setFileMetadataContainer] = useState<HTMLDivElement | null>(null);
+  const [selectedFileEntry, setSelectedFileEntry] = useState<FileEntry>();
   const fileManagerRef = useRef<FileManagerHandle>(null);
 
   // The URL owns page, notebook, folder and filter selection.
@@ -268,7 +272,26 @@ const AppContent: React.FC = () => {
   const [newNoteFolder, setNewNoteFolder] = useState<string>('');
   const [shortcutMode, setShortcutMode] = useState<ShortcutSurfaceMode | null>(null);
   const [newNoteTags, setNewNoteTags] = useState<string[]>([]);
+  const [newNoteTemplateId, setNewNoteTemplateId] = useState<string>('');
   const newNoteFolders = useMemo(() => folders.filter(folder => folder.notebookId === selectedNotebookId).map(folder => folder.path).sort(), [folders, selectedNotebookId]);
+  const newNoteTemplates = useMemo(() => config?.notebooks.find(n => n.id === selectedNotebookId)?.templates || [], [config, selectedNotebookId]);
+  const handleTemplateChange = async (templateId: string) => {
+    setNewNoteTemplateId(templateId);
+    if (!templateId) return;
+    const currentNotebook = config?.notebooks.find((n) => n.id === selectedNotebookId) || config?.notebooks[0];
+    if (!currentNotebook) return;
+    try {
+      const rendered = await renderNoteTemplate({ notebookId: currentNotebook.id, templateId, title: newNoteTitle || 'Untitled' });
+      if (typeof rendered.metadata.status === 'string' && notebookStatuses.includes(rendered.metadata.status)) {
+        setNewNoteStatus(rendered.metadata.status);
+      }
+      if (Array.isArray(rendered.metadata.tags)) {
+        setNewNoteTags(rendered.metadata.tags.map(String));
+      }
+    } catch {
+      // Ignore template preview error
+    }
+  };
   const openNewNote = (options?: string | { status?: string; folder?: string; tag?: string; tags?: string[]; notebookId?: string }) => {
     const opts = typeof options === 'string' ? { status: options } : { ...options };
     if (selectedNotebookId === 'all' && !opts.notebookId) opts.notebookId = config?.workspace.default_notebook || config?.notebooks[0]?.id;
@@ -278,6 +301,7 @@ const AppContent: React.FC = () => {
     setNewNoteStatus(opts.status || notebookStatuses[0]);
     setNewNoteFolder(opts.folder || '');
     setNewNoteTags(opts.tags || (opts.tag ? [opts.tag] : []));
+    setNewNoteTemplateId('');
     setCreateError('');
     setIsNewNoteOpen(true);
   };
@@ -581,17 +605,17 @@ const AppContent: React.FC = () => {
       if (notes.some(n => n.path === notePath)) throw new Error('A note with this filename already exists in this folder. Choose another title.');
 
       const status = statusOverride || newNoteStatus;
-      const initialContent = `# ${title}\n\nWrite your note here.\n`;
-      const initialMetadata = withNoteStatus({
-        id: slug,
-        title,
-        status: status || undefined,
-        tags: newNoteTags,
-      }, status);
+      const template = newNoteTemplateId
+        ? await renderNoteTemplate({ notebookId: currentNotebook!.id, templateId: newNoteTemplateId, title })
+        : undefined;
+      const draft = buildNewNoteDraft({ slug, title, tags: newNoteTags, status, template });
+      const initialContent = draft.content;
+      const finalStatus = draft.status;
+      const initialMetadata = withNoteStatus(draft.metadata, finalStatus);
 
       const res = remote ? { note: stageWorkingNote({
         id: slug, path: notePath, notebookId: currentNotebook!.id, title,
-        content: initialContent, metadata: initialMetadata, status, tags: newNoteTags, revision,
+        content: initialContent, metadata: initialMetadata, status: finalStatus, tags: Array.isArray(initialMetadata.tags) ? initialMetadata.tags.map(String) : [], revision,
       }, null) } : await saveNote({
         path: notePath,
         notebookId: currentNotebook?.id,
@@ -608,6 +632,7 @@ const AppContent: React.FC = () => {
       setNewNoteTitle('');
       setNewNoteFolder('');
       setNewNoteTags([]);
+      setNewNoteTemplateId('');
       setNewNoteStatus(notebookStatuses[0]);
       const statusRes = await fetchGitStatus();
       setGitStatus(statusRes.status);
@@ -971,7 +996,7 @@ const AppContent: React.FC = () => {
         {activeTab === 'assets' && (
           <main className="workspace-route assets-main has-sidebar-drawer">
             <FileManager key={`${sourceId}:${selectedNotebookId}`} ref={fileManagerRef}
-              notebookId={selectedNotebookId} writable={canWrite}
+              notebookId={selectedNotebookId} writable={canWrite} onSelectionChange={setSelectedFileEntry} metadataContainer={fileMetadataContainer}
               initialPath={new URLSearchParams(location.search).get('asset') || (new URLSearchParams(location.search).has('directory') ? `${folderRoot}/${config?.notebooks.find(nb => nb.id === selectedNotebookId)?.assets || 'assets'}${new URLSearchParams(location.search).get('directory') ? '/' + new URLSearchParams(location.search).get('directory') : ''}` : undefined)}
               onBusyChange={setResourceNavigationBusy} beforeChange={beforeFileChange}
               onChanged={onFilesChanged} onOpenIndex={openFileIndex} />
@@ -1013,6 +1038,9 @@ const AppContent: React.FC = () => {
         )}
 
         <RightPanel
+          fileMode={activeTab === 'assets'}
+          fileMetadata={selectedFileEntry ? <FileMetadata entry={selectedFileEntry} onEdit={canWrite && !resourceNavigationBusy ? () => void fileManagerRef.current?.editMetadata() : undefined} /> : undefined}
+          onFileMetadataContainer={setFileMetadataContainer}
           notes={notes}
           notebooks={config?.notebooks || []}
           selectedNotebookId={selectedNotebookId}
@@ -1163,6 +1191,17 @@ const AppContent: React.FC = () => {
                 <datalist id="create-note-folders">{newNoteFolders.map(folder => <option key={folder} value={folder} />)}</datalist>
               </div>
 
+              {newNoteTemplates.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                    {t('createNote.template')}
+                  </label>
+                  <Select aria-label={t('createNote.template')} value={newNoteTemplateId} onValueChange={handleTemplateChange}
+                    options={[{ value: '', label: t('createNote.noTemplate') }, ...newNoteTemplates.map(tpl => ({ value: tpl.id, label: tpl.title }))]}
+                    className="w-full" />
+                </div>
+              )}
+
               {newNoteTags.length > 0 && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
@@ -1188,7 +1227,7 @@ const AppContent: React.FC = () => {
 
             <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
               <button
-                onClick={() => { setIsNewNoteOpen(false); setNewNoteTags([]); }}
+                onClick={() => { setIsNewNoteOpen(false); setNewNoteTags([]); setNewNoteTemplateId(''); }}
                 className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition active:scale-95"
               >
                 {t('common.cancel')}

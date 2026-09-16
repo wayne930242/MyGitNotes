@@ -41,6 +41,10 @@
     "./note-filters": {
       "types": "./dist/note-filters.d.ts",
       "import": "./dist/note-filters.js"
+    },
+    "./r2-references": {
+      "types": "./dist/r2-references.d.ts",
+      "import": "./dist/r2-references.js"
     }
   },
   "scripts": {
@@ -48,6 +52,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "aws4fetch": "^1.0.20",
     "marked": "14.1.4",
     "picomatch": "^4.0.3",
     "tar-stream": "^3.2.1",

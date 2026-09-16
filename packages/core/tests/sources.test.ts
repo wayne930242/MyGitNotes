@@ -95,6 +95,27 @@ describe('folder and provider parity', () => {
       expect(resolveNoteStatuses(remoteConfig.notebooks[0])).toEqual(['capture', 'review', 'published']);
     } finally { fixture['notes/.github-notes.yaml'] = original; }
   });
+  it('renders a configured notebook template and excludes it from notes through both source adapters', async () => {
+    const original = fixture['notes/.github-notes.yaml'];
+    try {
+      fixture['notes/.github-notes.yaml'] = original + '    templates:\n      - id: reading\n        title: Reading\n        file: .templates/reading.md\n';
+      fixture['notes/example/.templates/reading.md'] = '---\ntitle: "{{title}}"\nstatus: unread\n---\n\n# {{title}}\n';
+      fs.writeFileSync(path.join(root, 'notes/.github-notes.yaml'), fixture['notes/.github-notes.yaml']);
+      fs.mkdirSync(path.join(root, 'notes/example/.templates'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'notes/example/.templates/reading.md'), fixture['notes/example/.templates/reading.md']);
+      const remote = new GitHubSource('owner/repo', 'main', undefined, githubMock() as typeof fetch);
+      const rendered = await remote.renderTemplate('example', 'reading', 'Grounding');
+      expect(rendered.metadata.title).toBe('Grounding');
+      expect(rendered.metadata.status).toBe('unread');
+      expect(rendered.content).toContain('# Grounding');
+      const notes = await remote.notes();
+      expect(notes.some(n => n.path.includes('.templates'))).toBe(false);
+      expect(scanNotebookNotes(root, loadWorkspaceConfig(root)!.notebooks[0]).some(n => n.path.includes('.templates'))).toBe(false);
+    } finally {
+      delete fixture['notes/example/.templates/reading.md'];
+      fixture['notes/.github-notes.yaml'] = original;
+    }
+  });
   it('denies unauthenticated private reads and anonymous writes', async () => {
     const privateReader = new GitHubSource('owner/repo','main',undefined,githubMock(true) as typeof fetch);
     await expect(privateReader.notes()).rejects.toThrow(/Sign in/);
