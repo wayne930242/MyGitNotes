@@ -68,6 +68,8 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
   const fitted = useRef(false), interacted = useRef(false);
   const [gesture, setGesture] = useState<{ kind: 'box' | 'link'; start: { x: number; y: number }; end: { x: number; y: number }; source?: string } | null>(null);
   const rows = screen?.page.rows || [];
+  const graphNotebook = filters?.value.notebookId;
+  const laneRows = graphNotebook && graphNotebook !== 'all' ? rows.filter(row => row.notebookId === graphNotebook) : rows;
   const latest = useRef({ screen, layout }); latest.current = { screen, layout };
   useLayoutEffect(() => {
     setLayout(activeLane?.graph || { nodes: [] }); setSelected([]); setOnly(null); setMaximized(null);
@@ -79,6 +81,11 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
     const measure = () => setSize({ width: host.clientWidth || 800, height: host.clientHeight || 600 });
     measure(); const observer = new ResizeObserver(measure); observer.observe(host); return () => observer.disconnect();
   }, []);
+  // A lane belongs to one notebook, so the graph showing it follows that notebook.
+  useEffect(() => {
+    if (lane || !activeLane || !filters || graphNotebook === activeLane.notebookId) return;
+    const next = new URLSearchParams(params); next.set('notebook', activeLane.notebookId); setParams(next, { replace: true });
+  }, [lane, activeLane?.notebookId, graphNotebook]);
   const { registerBeforeNavigate } = useWorkspaceLinks();
   useEffect(() => registerBeforeNavigate(async () => { try { await editing?.store.flushAll(); return true; } catch (error) { setNotice((error as Error).message); return false; } }), [editing?.store, registerBeforeNavigate]);
   const effective = useMemo(() => notes.map(note => editing?.store.get(note).draft || note), [notes, editing?.version]);
@@ -95,7 +102,7 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
   const laneMembers = useMemo(() => new Set(rows.filter(row => laneIds.includes(row.id)).flatMap(row => screenRowNotePaths(row, effective))), [rows, laneKey, effective]);
   const expanded = useMemo(() => new Set(layout.nodes.filter(node => node.expanded).map(node => node.path)), [layout]);
   const graphData = useMemo(() => {
-    const eligible = effective.filter(note => filters?.value.showHidden || !isNoteHidden({ ...note.metadata, status: note.status }));
+    const eligible = effective.filter(note => (!activeLane || note.notebookId === activeLane.notebookId) && (filters?.value.showHidden || !isNoteHidden({ ...note.metadata, status: note.status })));
     const full = buildNoteGraph(eligible, { includeHidden: true });
     const graph = selectFilteredGraph(full, new Set(matching.map(note => note.path)), filters?.neighbors || false);
     const connected = new Set(graph.links.flatMap(link => [link.source, link.target]));
@@ -108,7 +115,7 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
       const position = initialized.get(node.id)!;
       return { ...node, x: position.x, y: position.y, fx: position.x, fy: position.y };
     }) };
-  }, [effective, matching, layout, showOrphans, filters?.neighbors, filters?.value.showHidden]);
+  }, [effective, matching, layout, showOrphans, filters?.neighbors, filters?.value.showHidden, activeLane?.notebookId]);
   const colors = useMemo(() => graphColorGroups(graphData.nodes, notebooks, appearance), [graphData, notebooks, appearance]);
   const nodeColor = useCallback((node: NoteGraphNode) => colors.find(group => group.key === graphColorGroup(node, notebooks, appearance.mode).key)?.color || '#94a3b8', [colors, notebooks, appearance]);
   const changeAppearance = (value: GraphAppearance) => { setAppearance(value); try { localStorage.setItem(GRAPH_APPEARANCE_KEY, JSON.stringify(value)); setAppearanceError(false); } catch { setAppearanceError(true); } };
@@ -261,18 +268,20 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
       : activeLane.items.filter(item => item.kind !== 'note' || !selectedSet.has(item.path));
     screen.change({ ...screen.page, rows: screen.page.rows.map(row => row.id === activeLane.id ? { ...activeLane, items } : row) });
   };
-  const openFullGraph = async () => { try { await editing?.store.flushAll(); navigate(`/graph?notebook=all&lanes=${encodeURIComponent(lane!.id)}`); } catch (error) { setNotice((error as Error).message); } };
+  const openFullGraph = async () => { try { await editing?.store.flushAll(); navigate(`/graph?notebook=${encodeURIComponent(lane!.notebookId)}&lanes=${encodeURIComponent(lane!.id)}`); } catch (error) { setNotice((error as Error).message); } };
   const hoveredNode = graphData.nodes.find(node => node.id === hover && !expanded.has(node.id) && !closing.has(node.id));
+  const selectedNotebooks = new Set(visibleSelected.map(path => notes.find(n => n.path === path)?.notebookId));
+  const saveNotebook = selectedNotebooks.size === 1 ? [...selectedNotebooks][0] : undefined;
   const saveLane = () => {
-    if (!screen?.writable || !name.trim() || !visibleSelected.length) return;
+    if (!screen?.writable || !name.trim() || !saveNotebook) return;
     const id = crypto.randomUUID(), current = currentLayout();
-    const row: ScreenRow = { id, kind: 'custom', name: name.trim(), view: 'graph', items: visibleSelected.map(path => ({ id: crypto.randomUUID(), kind: 'note', notebookId: notes.find(n => n.path === path)!.notebookId, path })), graph: { nodes: current.nodes.filter(n => visibleSelected.includes(n.path)) } };
+    const row: ScreenRow = { id, kind: 'custom', name: name.trim(), view: 'graph', notebookId: saveNotebook, items: visibleSelected.map(path => ({ id: crypto.randomUUID(), kind: 'note', notebookId: saveNotebook, path })), graph: { nodes: current.nodes.filter(n => visibleSelected.includes(n.path)) } };
     const next = ScreenPageSchema.safeParse({ ...screen.page, rows: [...screen.page.rows, row] });
     if (!next.success) { setNotice(t('screen.limit')); return; }
     screen.change(next.data); setSaveOpen(false); setNotice(t('graph.laneCreated'));
   };
   const filtersElement = filters ? <GraphFilters {...filters} count={matching.length} showOrphans={showOrphans} onToggleOrphans={() => setShowOrphans(v => !v)} extraCount={laneIds.length}>
-    <fieldset><legend>{t('graph.lanes')}</legend>{[...new Set([...rows.map(row => row.id), ...laneIds])].map(id => <label className="filter-check" key={id}><input type="checkbox" checked={laneIds.includes(id)} onChange={() => { const next = new URLSearchParams(params); next.delete('lanes'); (laneIds.includes(id) ? laneIds.filter(v => v !== id) : [...laneIds, id]).forEach(value => next.append('lanes', value)); setParams(next); }} />{rows.find(row => row.id === id)?.name || t('screen.laneMissing')}</label>)}</fieldset>
+    <fieldset><legend>{t('graph.lanes')}</legend>{[...new Set([...laneRows.map(row => row.id), ...laneIds])].map(id => <label className="filter-check" key={id}><input type="checkbox" checked={laneIds.includes(id)} onChange={() => { const next = new URLSearchParams(params); next.delete('lanes'); (laneIds.includes(id) ? laneIds.filter(v => v !== id) : [...laneIds, id]).forEach(value => next.append('lanes', value)); setParams(next); }} />{rows.find(row => row.id === id)?.name || t('screen.laneMissing')}</label>)}</fieldset>
   </GraphFilters> : null;
 
   return <div ref={container} style={lane ? { height: laneViewport.height } : undefined} data-selected-count={visibleSelected.length} tabIndex={0} aria-label={t('graph.canvasHelp')} className={`graph-page-container graph-editing-surface ${lane ? 'graph-in-lane' : ''}`} onDoubleClickCapture={event => {
@@ -292,7 +301,7 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
       <GraphTool label={t('graph.expand')} disabled={!visibleSelected.length} onClick={() => setExpanded(visibleSelected, true)}><PanelTopOpen size={18} /></GraphTool>
       <GraphTool label={t('graph.collapse')} disabled={!visibleSelected.length} onClick={() => setExpanded(visibleSelected, false)}><PanelTopClose size={18} /></GraphTool>
       <GraphTool label={t(only ? 'graph.showAll' : 'graph.onlySelected')} pressed={Boolean(only)} disabled={!visibleSelected.length && !only} onClick={() => setOnly(only ? null : visibleSelected)}><Focus size={18} /></GraphTool>
-      <GraphTool label={t('graph.saveLane')} disabled={!visibleSelected.length || !screen?.writable} onClick={() => { setName(''); setSaveOpen(true); }}><Save size={18} /></GraphTool>
+      <GraphTool label={t('graph.saveLane')} disabled={!saveNotebook || !screen?.writable} onClick={() => { setName(''); setSaveOpen(true); }}><Save size={18} /></GraphTool>
       <GraphTool label={t('graph.arrange')} onClick={() => {
         freeze();
         const arranged = reflow(currentLayout(), true); persistLayout(arranged); requestAnimationFrame(() => fitView(arranged));
@@ -303,7 +312,7 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
     {lane && <div className="graph-fullscreen-tool"><GraphTool label={t('graph.openLaneGraph')} onClick={() => void openFullGraph()}><Maximize2 size={18} /></GraphTool></div>}
     {!lane && lanePanel && <section className="graph-lane-panel" aria-label={t('graph.chooseLane')}>
       <header><strong>{activeLane?.name || t('graph.lanes')}</strong><button aria-label={t(activeLane ? 'graph.minimizeLane' : 'common.close')} title={t(activeLane ? 'graph.minimizeLane' : 'common.close')} onClick={() => setLanePanel(false)}>{activeLane ? <Minus size={16} /> : <X size={16} />}</button></header>
-      <select aria-label={t('graph.chooseLane')} value={activeLane?.id || ''} onChange={event => selectLane(event.target.value)}><option value="">{t('graph.allLanes')}</option>{rows.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select>
+      <select aria-label={t('graph.chooseLane')} value={activeLane?.id || ''} onChange={event => selectLane(event.target.value)}><option value="">{t('graph.allLanes')}</option>{laneRows.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select>
       {activeLane && <><label><input type="checkbox" checked={showOutside} onChange={event => { const next = new URLSearchParams(params); event.target.checked ? next.set('laneScope', 'all') : next.delete('laneScope'); setParams(next); }} />{t('graph.showOutsideLane')}</label>
         {showOutside && <p>{t('graph.outsideLaneHint')}</p>}
         <button className="ui-button" disabled={!screen?.writable} title={t('screen.editRow')} onClick={() => setEditLane(true)}><Pencil size={14} />{t('screen.editRow')}</button>

@@ -65,12 +65,9 @@ export function deduplicatedStudyRatings(progression: StudyProgression, status: 
     }));
 }
 
-/** Use only notebooks represented by the lane; preserve their configured order. */
+/** A lane uses the statuses of the notebook it belongs to. */
 export function studyLaneStatuses(lane: ScreenRow, notebooks: Pick<NotebookConfig, 'id' | 'statuses'>[]): string[] {
-  const ids = lane.kind === 'dynamic' ? lane.source.notebookId ? [lane.source.notebookId] : undefined
-    : lane.items.filter(item => item.kind === 'note' || item.kind === 'folder').map(item => item.notebookId);
-  const included = ids?.length ? notebooks.filter(notebook => ids.includes(notebook.id)) : notebooks;
-  return [...new Set(included.flatMap(notebook => resolveNoteStatuses(notebook)))];
+  return [...new Set(notebooks.filter(notebook => notebook.id === lane.notebookId).flatMap(notebook => resolveNoteStatuses(notebook)))];
 }
 
 /** Defaults are editable starting intervals, with no implicit archival transition. */

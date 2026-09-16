@@ -25,7 +25,7 @@ export function screenRowItems(row: ScreenRow, notes: NoteItem[], assets: (Asset
   const within = (file: string) => file.startsWith(`${source.kind === 'folder' ? source.path : ''}/`)
     && (source.kind !== 'folder' || source.recursive || !file.slice(source.path.length + 1).includes('/'));
   const selectedNotes = screenRowNotes({ ...row, study: undefined }, notes);
-  const selectedAssets = source.kind === 'folder' ? assets.filter(asset => asset.notebookId === source.notebookId && within(asset.path)) : [];
+  const selectedAssets = source.kind === 'folder' ? assets.filter(asset => asset.notebookId === row.notebookId && within(asset.path)) : [];
   if (row.sort) {
     const entries = [
       ...selectedNotes.map(note => ({ note, kind: 'note' as const })),
@@ -41,7 +41,7 @@ export function screenRowItems(row: ScreenRow, notes: NoteItem[], assets: (Asset
       items.set(id, {id, kind, notebookId: note.notebookId, path: note.path});
       return {...note, id};
     });
-    const applicable = notebooks.filter(notebook => !source.notebookId || notebook.id === source.notebookId);
+    const applicable = notebooks.filter(notebook => notebook.id === row.notebookId);
     const statuses = [...new Set((applicable.length ? applicable.flatMap(notebook => resolveNoteStatuses(notebook)) : resolveNoteStatuses())
       .map(status => status.trim().toLowerCase()))];
     return sortNotes(sortable, row.sort.field, row.sort.order, statuses).map(note => items.get(note.id)!);

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { parse, stringify } from 'yaml';
 import { emptyStudyWorkspace, StudyWorkspaceSchema, STUDY_FILE, STUDY_MAX_BYTES, createRemoteSource, SourceError, type SourceConfig } from '@mygitnotes/core';
-import { defaultStudyProgression, studyLaneStatuses, StudyLaneActionSchema, loadWorkspaceConfig, resolveSafePath, isNotebookContent, readNoteFile, parseNoteContent, replaceNoteStatus, ScreenPageSchema, SCREEN_PAGE_FILE, createStudyNote, findStudyNote, reconcileStudyNote, applyStageAction, undoStudyAction } from '@mygitnotes/core';
+import { defaultStudyProgression, studyLaneStatuses, StudyLaneActionSchema, loadWorkspaceConfig, resolveSafePath, isNotebookContent, readNoteFile, parseNoteContent, replaceNoteStatus, readScreenPage, SCREEN_PAGE_FILE, createStudyNote, findStudyNote, reconcileStudyNote, applyStageAction, undoStudyAction } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
@@ -73,9 +73,10 @@ export function createStudyRouter(base: string, source: SourceConfig): Router {
           if (!event?.transition || event.id !== body.eventId || event.transition.laneId !== body.laneId || !note || note.path !== body.path || note.notebookId !== body.notebookId || currentNote.status !== event.transition.toStatus) throw new SourceError('This review can no longer be undone.', 409);
           nextStudy = undoStudyAction(currentStudy); status = event.transition.fromStatus;
         } else {
-          const screen = ScreenPageSchema.parse(parse(await read(SCREEN_PAGE_FILE), { maxAliasCount: 20 }));
+          const screen = readScreenPage(parse(await read(SCREEN_PAGE_FILE), { maxAliasCount: 20 }), config!);
           const lane = screen.rows.find(row => row.id === body.laneId);
           if (!lane) throw new SourceError('This lane no longer exists. Reload before reviewing.', 409);
+          if (lane.notebookId !== body.notebookId) throw new SourceError('This note is not in the lane notebook.', 403);
           const progression = lane.progression || defaultStudyProgression(studyLaneStatuses(lane, config!.notebooks));
           if (!progression) throw new SourceError('Configure learning stages for this lane before reviewing.', 400);
           const stored = findStudyNote(currentStudy, currentNote), resolved = stored ? reconcileStudyNote(stored, currentNote) : createStudyNote(currentNote);

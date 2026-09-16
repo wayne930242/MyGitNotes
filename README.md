@@ -199,7 +199,7 @@ See [GitLab OAuth](https://docs.gitlab.com/api/oauth2/) and [commit actions](htt
 - **High-density note UI:** List, Card, and Kanban views; full-text search; tags and statuses; nested folders; folder index cards; Markdown editing with live preview; asset management; responsive desktop and mobile layouts.
 - **Six themes:** choose from three light and three dark palettes, including paper tones, forest greens, and GitHub Dark. Your selection is saved in the browser.
 - **Flashcard learning:** turn Markdown notes into question-and-answer cards for vocabulary or any subject. Reveal multi-page answers, rate recall, and review by due date. Configure status stages and intervals per lane; switch to free reading, postpone a card, or undo the latest action.
-- **Screen:** arrange notes, folders, images, and YouTube videos into reading lanes across notebooks. Pin and reorder content, or build dynamic lanes from tags and folders with independent sorting and card sizes.
+- **Screen:** arrange a notebook's notes, folders, images, and YouTube videos into reading lanes. Pin and reorder content, or build dynamic lanes from tags and folders with independent sorting and card sizes.
 - **Knowledge graph:** explore links between notes on an interactive graph. Zoom, pan, drag nodes, inspect connected notes, and open a note from the graph; color nodes by folder, notebook, or status.
 - **Pure Markdown:** notes remain ordinary `.md` files with optional YAML frontmatter. Existing Markdown and unknown metadata survive round trips.
 - **Git-native workflow:** local edits save to disk; selected changes are committed explicitly. Remote writes use revision checks and non-forced commits to reject stale updates.
@@ -218,9 +218,9 @@ Reveal the answer, then choose **Again**, **Hard**, **Good**, or **Easy**. Lane 
 
 ![Flashcard learning with a revealed vocabulary answer](docs/assets/feature-study.png)
 
-### Screen: a reading desk across notebooks
+### Screen: a reading desk for each notebook
 
-Keep related notes and resources side by side. Custom lanes hold pinned content; dynamic lanes gather content by tag or folder. Choose thumbnail, small, or medium cards, sort each lane independently, and enter its dedicated learning page. Images keep their proportions, and YouTube cards load the embedded player on demand.
+Keep related notes and resources side by side. Each notebook has its own lanes, and a lane shows only that notebook's content. Custom lanes hold pinned content; dynamic lanes gather content by tag or folder. Choose thumbnail, small, or medium cards, sort each lane independently, and enter its dedicated learning page. Images keep their proportions, and YouTube cards load the embedded player on demand.
 
 ![Screen with reading and learning lanes](docs/assets/feature-screen.png)
 

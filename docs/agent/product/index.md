@@ -62,6 +62,8 @@ Browser QA scripts (`node scripts/qa-*.mjs`) drive the built `apps/local-server/
 
 工作區根目錄 `.github-notes-screen.yaml` 是使用者資料。Core 不得追蹤真實配置，工作區更新必須保留此檔案；測試配置只建立於隔離暫存工作區。
 
+配置 `version: 2` 的每條泳道記錄 `notebookId`，自訂項目與動態來源必須屬於該筆記本。`readScreenPage` 讀取 `version: 1` 時依來源歸屬泳道、拆分混合筆記本的自訂泳道，無法判斷時歸預設筆記本；下次儲存寫回 `version: 2`。
+
 ### 學習資料所有權
 
 工作區根目錄 `.github-notes-study.yaml` 保存使用者的卡片對應、排程與事件。Core 維護及更新保留此檔案；示範正文位於 `examples/study/`，測試學習紀錄建立於隔離工作區。使用方式見 [學習指南](../study.md)。

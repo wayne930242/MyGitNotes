@@ -36,7 +36,8 @@ export function ScreenLaneNavigation({ page, reorder = false, disabled, notebook
   const [editing, setEditing] = useState<string>();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const close = () => setEditing(undefined);
-  const editingRow = page.rows.find(row => row.id === editing);
+  const rows = page.rows.filter(row => row.notebookId === selectedNotebookId);
+  const editingRow = rows.find(row => row.id === editing);
   return <>
     <nav aria-label={t('screen.lanes')} className="screen-sidebar-lanes">
       <h4>{t('screen.lanes')}</h4>
@@ -44,8 +45,8 @@ export function ScreenLaneNavigation({ page, reorder = false, disabled, notebook
         if (disabled || !reorder || !over || active.id === over.id) return;
         const index = page.rows.findIndex(row => row.id === over.id);
         if (index >= 0) onChange(moveScreenRow(page, String(active.id), index));
-      }}><SortableContext items={page.rows.map(row => row.id)} strategy={verticalListSortingStrategy}>
-        {page.rows.map(row => <LaneLink reorder={reorder} key={row.id} row={row} disabled={disabled} onSelect={() => onSelect(row.id)} onEdit={() => setEditing(row.id)} />)}
+      }}><SortableContext items={rows.map(row => row.id)} strategy={verticalListSortingStrategy}>
+        {rows.map(row => <LaneLink reorder={reorder} key={row.id} row={row} disabled={disabled} onSelect={() => onSelect(row.id)} onEdit={() => setEditing(row.id)} />)}
       </SortableContext></DndContext>
     </nav>
     {editingRow && <ScreenEditRow row={editingRow} disabled={disabled} notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onClose={close}

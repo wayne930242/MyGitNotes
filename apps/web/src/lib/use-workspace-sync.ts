@@ -64,7 +64,8 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
       void fetchGitStatus().then((result) => setGitStatus(result.status));
     },
     remote,
-    Boolean(config && sourceId)
+    Boolean(config && sourceId),
+    config
   );
 
   const screenPending = remote && canWrite && screen.dirty;

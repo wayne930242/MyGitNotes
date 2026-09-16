@@ -2,7 +2,7 @@ import path from 'node:path';
 import YAML from 'yaml';
 import { z } from 'zod';
 import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js';
-import { SCREEN_PAGE_FILE, ScreenPageSchema } from './screen-page.js';
+import { SCREEN_PAGE_FILE, ScreenPageFileSchema } from './screen-page.js';
 import type { NotebookConfig, FolderItem } from './types.js';
 
 const relative = z.string().max(512).refine(value => !value || !/[\\\0]/.test(value) && value.split('/').every(part => part && part !== '.' && part !== '..'));
@@ -79,7 +79,7 @@ export function planFolderChange(snapshot: FolderSnapshot, input: unknown) {
   }
   if (source && source !== destination && files.has(SCREEN_PAGE_FILE)) {
     const raw = files.get(SCREEN_PAGE_FILE)!;
-    const page = ScreenPageSchema.parse(YAML.parse(raw, { maxAliasCount: 20 }));
+    const page = ScreenPageFileSchema.parse(YAML.parse(raw, { maxAliasCount: 20 }));
     let changed = false;
     const update = (item: { notebookId: string; path: string }) => {
       if (item.notebookId !== notebook.id) return;

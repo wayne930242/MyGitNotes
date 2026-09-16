@@ -97,7 +97,8 @@ try {
  console.log('PASS save selected membership, restore layout, collapse independently');
  await page.goto(base+'/screen',{waitUntil:'networkidle0'});await page.waitForSelector('#screen-lane-'+saved.id+' .graph-page-container');
  await page.click('#screen-lane-dynamic button[aria-label="Graph"]');await page.waitForSelector('#screen-lane-dynamic .graph-page-container');
- assert.equal(await page.$eval('#screen-lane-dynamic [data-graph-nodes]',el=>el.dataset.graphNodes),'4');
+ // The version 1 all-notebook tag lane migrates into default notebook a.
+ assert.equal(await page.$eval('#screen-lane-dynamic [data-graph-nodes]',el=>el.dataset.graphNodes),'2');
  await page.click('#screen-lane-mixed button[aria-label="Graph"]');await page.waitForSelector('#screen-lane-mixed [data-graph-nodes="1"]');
  console.log('PASS embedded custom/dynamic lane graphs and non-note exclusion');
  await go('/graph?notebook=all&lanes='+saved.id);await page.setViewport({width:390,height:844});await pause(300);assert(await page.$('.graph-selection-toolbar'));
@@ -134,15 +135,16 @@ try {
  assert(await page.$eval('.graph-save-hint',el=>el.textContent.includes('positions')&&el.textContent.includes('expanded')));
  console.log('PASS minimized swimlane name, primary active tool, explicit layout save');
  await page.click('.graph-lane-panel input[type="checkbox"]');
- await page.waitForFunction(()=>document.querySelector('[data-graph-nodes]')?.dataset.graphNodes==='4');
+ // An active lane scopes the graph to its notebook, so outside notes and picker choices come only from notebook a.
+ await page.waitForFunction(()=>new URLSearchParams(location.search).get('notebook')==='a'&&document.querySelector('[data-graph-nodes]')?.dataset.graphNodes==='2');
  await click('Select notes (0)');
- const labels=await page.$$('.graph-note-selector label');for(const label of labels)if(await label.evaluate(el=>el.textContent.includes('中文案例')))await label.click();
- await click('Select notes (1)');await click('Expand notes');await pause(300);
- assert(await page.$eval('.graph-card-position.is-outside-lane',el=>Number(getComputedStyle(el).opacity)<1));
- await click('Choose or edit a swimlane');await click('Add selection to swimlane');
+ assert.deepEqual(await page.$$eval('.graph-note-selector label',labels=>labels.map(label=>label.textContent.trim()).sort()),['Alpha','Beta']);
+ const labels=await page.$$('.graph-note-selector label');for(const label of labels)if(await label.evaluate(el=>el.textContent.includes('Beta')))await label.click();
+ await click('Select notes (1)');
  const savedRow=()=>parse(fs.readFileSync(path.join(root,'.github-notes-screen.yaml'),'utf8')).rows.find(row=>row.id===saved.id);
- for(let i=0;i<60&&savedRow().items.length!==3;i++)await pause(100);assert.equal(savedRow().items.length,3);
- await click('Remove selection from swimlane');for(let i=0;i<60&&savedRow().items.length!==2;i++)await pause(100);assert.equal(savedRow().items.length,2);assert(fs.existsSync(path.join(root,'notes/b/c.md')));
+ await click('Choose or edit a swimlane');await click('Remove selection from swimlane');for(let i=0;i<60&&savedRow().items.length!==1;i++)await pause(100);assert.equal(savedRow().items.length,1);assert(fs.existsSync(path.join(root,'notes/a/b.md')));
+ await page.waitForSelector('.graph-card-position.is-outside-lane');assert(await page.$eval('.graph-card-position.is-outside-lane',el=>Number(getComputedStyle(el).opacity)<1));
+ await click('Add selection to swimlane');for(let i=0;i<60&&savedRow().items.length!==2;i++)await pause(100);assert.equal(savedRow().items.length,2);
  await page.select('.graph-lane-panel select','dynamic');await pause(100);assert.equal(await page.$$eval('.graph-lane-membership',els=>els.length),0);
  await click('Edit swimlane','.graph-lane-panel');await page.waitForSelector('dialog[open]');await page.keyboard.press('Escape');
  console.log('PASS compact card controls, colored borders, swimlane selection and membership edits');

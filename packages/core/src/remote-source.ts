@@ -7,7 +7,7 @@ import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js'
 import { WorkspaceConfig, NotebookConfig, NoteItem, FolderItem, NoteMetadata } from './types.js';
 import { SourceError } from './github-api.js';
 import { workspaceAgentKind } from './workspace-agent.js';
-import { SCREEN_PAGE_FILE, ScreenPageSchema } from './screen-page.js';
+import { SCREEN_PAGE_FILE, ScreenPageFileSchema, ScreenPageSchema, emptyScreenPage, readScreenPage } from './screen-page.js';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 export { SourceError } from './github-api.js';
@@ -178,7 +178,7 @@ export abstract class RemoteSource {
       const page = ScreenPageSchema.safeParse(screen.page), base = ScreenPageSchema.safeParse(screen.base);
       if (!page.success || !base.success) throw new SourceError('Invalid Screen configuration.');
       const entry = snapshot.entries.find(entry => entry.path === SCREEN_PAGE_FILE);
-      const current = entry ? ScreenPageSchema.parse(parseYaml((await this.readFile(SCREEN_PAGE_FILE)).toString('utf8'), { maxAliasCount: 20 })) : { version: 1, rows: [] };
+      const current = entry ? readScreenPage(parseYaml((await this.readFile(SCREEN_PAGE_FILE)).toString('utf8'), { maxAliasCount: 20 }), await this.config()) : emptyScreenPage();
       if (JSON.stringify(current) !== JSON.stringify(base.data)) throw new SourceError('Screen configuration changed. Reload and review your draft.', 409);
       changes.push({ path: SCREEN_PAGE_FILE, content: stringifyYaml(page.data, { lineWidth: 0 }) });
     }
@@ -227,7 +227,7 @@ export abstract class RemoteSource {
       }
       if (screenFile) {
         if (typeof change.content !== 'string' || Buffer.byteLength(change.content) > 512 * 1024) throw new SourceError('Screen Page YAML is required.');
-        try { ScreenPageSchema.parse(parseYaml(change.content, { maxAliasCount: 20 })); }
+        try { ScreenPageFileSchema.parse(parseYaml(change.content, { maxAliasCount: 20 })); }
         catch { throw new SourceError('Invalid Screen Page YAML.'); }
       }
       if (snapshot.entries.some(e => (e.path === file || file.startsWith(e.path + '/')) && (e.mode === '120000' || (e.path !== file && e.type !== 'tree')))) throw new SourceError('Path crosses a non-directory or symlink.', 403);
