@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   getImmediateSubfolders,
   getImmediateNotes,
   getBreadcrumbs,
+  resolveFolderClick,
 } from './folder-tree.js';
 import { NoteItem, FolderItem } from './types.js';
 
@@ -97,5 +98,27 @@ describe('folder-tree', () => {
       { name: 'Projects', path: 'projects' },
       { name: 'Web App Dev', path: 'projects/web' },
     ]);
+  });
+
+  it('resolves a plain click to the single-select callback', () => {
+    const onSelect = vi.fn();
+    const onFilterFolder = vi.fn();
+    resolveFolderClick({ shiftKey: false }, onSelect, onFilterFolder)('projects');
+    expect(onSelect).toHaveBeenCalledWith('projects');
+    expect(onFilterFolder).not.toHaveBeenCalled();
+  });
+
+  it('resolves a shift+click to the multi-select toggle callback', () => {
+    const onSelect = vi.fn();
+    const onFilterFolder = vi.fn();
+    resolveFolderClick({ shiftKey: true }, onSelect, onFilterFolder)('projects');
+    expect(onFilterFolder).toHaveBeenCalledWith('projects');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the single-select callback when no multi-select handler is given', () => {
+    const onSelect = vi.fn();
+    resolveFolderClick({ shiftKey: true }, onSelect)('projects');
+    expect(onSelect).toHaveBeenCalledWith('projects');
   });
 });

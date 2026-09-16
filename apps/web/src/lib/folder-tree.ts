@@ -15,6 +15,18 @@ export interface BreadcrumbSegment {
 }
 
 /**
+ * Chooses the folder-click callback: a plain click switches to a single folder,
+ * shift+click toggles a folder into or out of a multi-selection.
+ */
+export function resolveFolderClick(
+  event: { shiftKey: boolean },
+  onSelect: (folder: string | null) => void,
+  onFilterFolder?: (folder: string | null) => void
+): (folder: string | null) => void {
+  return event.shiftKey && onFilterFolder ? onFilterFolder : onSelect;
+}
+
+/**
  * Extracts immediate subfolders under `currentFolder` for a specific notebook.
  * Discovers subfolders from both explicit FolderItem records and existing note paths.
  */

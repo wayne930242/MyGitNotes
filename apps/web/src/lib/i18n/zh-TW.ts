@@ -392,6 +392,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'folder.index': '索引',
   'folder.up': '上一層',
   'folder.goUpTooltip': '回到上一層資料夾',
+  'folder.multiSelectHint': '按住 Shift 點擊可加入或移出多選',
   'folder.noteCount': '{count} 則筆記',
   'folder.notesCount': '{count} 則筆記',
   'folder.subfolderCount': '{count} 個資料夾',
