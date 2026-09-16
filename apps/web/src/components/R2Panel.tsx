@@ -52,14 +52,14 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
   const [selected, setSelected] = useState(''), [operation, setOperation] = useState<Operation>();
   const [name, setName] = useState(''), [destination, setDestination] = useState(''), [references, setReferences] = useState<R2References>();
   const [copied, setCopied] = useState(false);
-  const operationForm = useRef<HTMLFormElement>(null);
+  const operationForm = useRef<HTMLFormElement>(null), pendingSelection = useRef('');
   const { root, folders } = r2Folders(listing, showHidden);
   const visible = (key: string) => showHidden || !key.slice(root.length + 1).split('/').some(part => part.startsWith('.'));
   const selectedObject = listing.objects.find(object => object.key === selected);
   const target = selectedObject ? selected : directory, directoryTarget = !selectedObject;
   const childFolders = folders.filter(folder => parentOf(folder) === directory);
   const files = listing.objects.filter(object => parentOf(object.key) === directory && visible(object.key)).sort((a, b) => a.key.localeCompare(b.key));
-  useEffect(() => { setSelected(''); setOperation(undefined); }, [directory]);
+  useEffect(() => { setSelected(pendingSelection.current); pendingSelection.current = ''; setOperation(undefined); }, [directory]);
   useEffect(() => { if (operation) operationForm.current?.scrollIntoView({ block: 'nearest' }); }, [operation]);
   const open = (kind: Operation) => void run(async () => {
     setOperation(kind); setReferences(undefined);
@@ -69,7 +69,7 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
   const finish = async (next: string, select = '') => {
     setOperation(undefined);
     await onRefresh();
-    onNavigate(next); setSelected(select);
+    if (next === directory) setSelected(select); else { pendingSelection.current = select; onNavigate(next); }
   };
   const submit = () => void run(async () => {
     if (operation === 'mkdir') { const folder = `${directory}/${name.trim()}`; await createR2Folder(notebookId, folder); await finish(folder); }

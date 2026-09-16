@@ -44,7 +44,7 @@
 .file-detail>.file-actions:empty{display:none}
 
 .file-manager-toolbar .file-breadcrumbs{margin:0;padding:0;font-size:12px;line-height:1.35}
-.file-manager-toolbar .file-breadcrumbs button{min-height:0;padding:0;border:0;line-height:inherit}
+.file-manager-toolbar .file-breadcrumbs button{min-height:0;min-width:0;padding:0;border:0;line-height:inherit}
 .file-edit-metadata{margin-top:12px}.file-metadata-panel .file-operation{padding:12px}
 @media(max-width:700px){
   .file-manager-toolbar{padding:6px 10px;row-gap:3px;grid-template-rows:auto auto;align-content:start}
@@ -54,3 +54,4 @@
 @media(min-width:701px){.file-navigation-row{display:none}}
 .file-tree .file-tree-r2{margin-top:8px;border-top:1px solid var(--color-border);border-radius:0 0 6px 6px;padding-top:10px}
 .workspace-dialog.file-manager-dialog[open]{gap:0}
+@media(min-width:701px){.file-manager-toolbar>.file-hidden-toggle{margin-left:auto}}
