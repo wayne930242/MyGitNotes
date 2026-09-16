@@ -21,12 +21,37 @@ export interface BreadcrumbSegment {
  * until `touchMultiSelect` is cleared (see Sidebar's exit-when-empty effect).
  */
 export function resolveFolderClick(
-  event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean },
+  event: {
+    shiftKey: boolean;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    pointerType?: string;
+    nativeEvent?: { pointerType?: string };
+  },
   onSelect: (folder: string | null) => void,
   onFilterFolder?: (folder: string | null) => void,
   touchMultiSelect = false
 ): (folder: string | null) => void {
-  return (event.shiftKey || event.ctrlKey || event.metaKey || touchMultiSelect) && onFilterFolder ? onFilterFolder : onSelect;
+  const isMouse = event.pointerType === 'mouse' || event.nativeEvent?.pointerType === 'mouse';
+  const hasModifier = Boolean(event.shiftKey || event.ctrlKey || event.metaKey);
+  const shouldToggle = hasModifier || (touchMultiSelect && !isMouse);
+  return shouldToggle && onFilterFolder ? onFilterFolder : onSelect;
+}
+
+/**
+ * Resolves the updated folder selection when entering touch multi-select mode.
+ * Guarantees that the targeted folder becomes selected and is not removed even if
+ * it was already part of the current selection.
+ */
+export function resolveEnterTouchMultiSelect(
+  currentFolders: string[],
+  notebookRoot: string | undefined,
+  folder: string
+): string[] {
+  if (!notebookRoot || !folder) return currentFolders;
+  const root = notebookRoot.replace(/\/$/, '');
+  const path = `${root}/${folder}`;
+  return currentFolders.includes(path) ? currentFolders : [...currentFolders, path];
 }
 
 /**

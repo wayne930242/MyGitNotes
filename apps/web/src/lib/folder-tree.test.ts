@@ -5,6 +5,7 @@ import {
   getBreadcrumbs,
   resolveFolderClick,
   resolveAllNotebooksFolderSelect,
+  resolveEnterTouchMultiSelect,
 } from './folder-tree.js';
 import { NoteItem, FolderItem } from './types.js';
 
@@ -165,5 +166,32 @@ describe('folder-tree', () => {
 
   it('clears the filter when switching to "All folders" in the "all notebooks" view', () => {
     expect(resolveAllNotebooksFolderSelect('all', 'notes/nb1', null)).toEqual([]);
+  });
+
+  it('keeps an already-selected folder selected when entering touch multi-select', () => {
+    // 3.1: Long-pressing an already-selected folder must not deselect it
+    expect(resolveEnterTouchMultiSelect(['notes/nb1/projects'], 'notes/nb1', 'projects')).toEqual(['notes/nb1/projects']);
+    expect(resolveEnterTouchMultiSelect([], 'notes/nb1', 'projects')).toEqual(['notes/nb1/projects']);
+    expect(resolveEnterTouchMultiSelect(['notes/nb1/personal'], 'notes/nb1', 'projects')).toEqual([
+      'notes/nb1/personal',
+      'notes/nb1/projects',
+    ]);
+  });
+
+  it('resolves a plain mouse click to single-select even when touch multi-select is active on hybrid devices', () => {
+    // 3.5: Hybrid mouse+touch devices should keep plain mouse clicks as folder switch
+    const onSelect = vi.fn();
+    const onFilterFolder = vi.fn();
+    resolveFolderClick({ shiftKey: false, pointerType: 'mouse' }, onSelect, onFilterFolder, true)('projects');
+    expect(onSelect).toHaveBeenCalledWith('projects');
+    expect(onFilterFolder).not.toHaveBeenCalled();
+  });
+
+  it('resolves a modified mouse click to multi-select toggle on hybrid devices', () => {
+    const onSelect = vi.fn();
+    const onFilterFolder = vi.fn();
+    resolveFolderClick({ shiftKey: true, pointerType: 'mouse' }, onSelect, onFilterFolder, true)('projects');
+    expect(onFilterFolder).toHaveBeenCalledWith('projects');
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });
