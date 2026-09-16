@@ -55,6 +55,8 @@ pnpm test          # Run test suite across all packages
 pnpm build         # Verify build succeeds cleanly
 ```
 
+Browser QA scripts (`node scripts/qa-*.mjs`) drive the built `apps/local-server/dist` and `apps/web/dist` output; set `PUPPETEER_EXECUTABLE_PATH` to a local Chrome binary outside Linux.
+
 
 ### Screen 配置所有權
 
