@@ -1,44 +1,83 @@
 import { ReorderToggle } from './ReorderToggle.js';
 import { useEffect, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
-import { Folder, FolderPlus, GripVertical, MoreHorizontal } from 'lucide-react';
+import { Folder, FolderPlus, GripVertical, MoreHorizontal, Check } from 'lucide-react';
 import type { FolderCommand } from '@mygitnotes/core';
 import type { FolderItem } from '../lib/types.js';
 import { folderDropCommand } from '../lib/folder-drag.js';
 import { resolveFolderClick } from '../lib/folder-tree.js';
+import { useLongPress } from '../lib/use-long-press.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
 function DropZone({ path, position, disabled, children }: { path: string; position: 'before' | 'after' | 'inside'; disabled: boolean; children?: React.ReactNode }) {
   const drop = useDroppable({ id: `${position}:${path}`, disabled, data: { path, position } });
   return <div ref={drop.setNodeRef} data-folder-drop={`${position}:${path}`} className={`${position === 'inside' ? 'folder-drop-body' : 'folder-drop-line'} ${drop.isOver ? 'is-over' : ''}`}>{children}</div>;
 }
-function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage, multiSelectable }: { folder: FolderItem; reorder: boolean; disabled: boolean; selected: boolean; onSelect: (event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void; onManage: () => void; multiSelectable: boolean }) {
+function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage, multiSelectable, touchMultiSelect, onLongPress }: {
+  folder: FolderItem;
+  reorder: boolean;
+  disabled: boolean;
+  selected: boolean;
+  onSelect: (event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean }) => void;
+  onManage: () => void;
+  multiSelectable: boolean;
+  touchMultiSelect?: boolean;
+  onLongPress?: () => void;
+}) {
   const { t } = useTranslation();
   const drag = useDraggable({ id: folder.path, disabled: disabled || !reorder });
-  const title = `${folder.description || folder.path}${multiSelectable ? ` (${t('folder.multiSelectHint')})` : ''}`;
+  const longPress = useLongPress(() => onLongPress?.(), multiSelectable && Boolean(onLongPress));
+  const title = `${folder.description || folder.path}${
+    touchMultiSelect
+      ? ` (${t('folder.touchMultiSelectInstruction')})`
+      : multiSelectable
+      ? ` (${t('folder.multiSelectHint')})`
+      : ''
+  }`;
   return <div ref={drag.setNodeRef} className={`folder-tree-item ${selected ? 'is-selected' : ''}`} style={{ marginLeft: (folder.path.split('/').length - 1) * 14, opacity: drag.isDragging ? .35 : undefined }}>
     <DropZone path={folder.path} position="before" disabled={disabled || !reorder} />
     <DropZone path={folder.path} position="inside" disabled={disabled || !reorder}>
       {!disabled && reorder && <button type="button" className="folder-grip" ref={drag.setActivatorNodeRef} {...drag.listeners} {...drag.attributes} aria-label={`${t('folder.move')}: ${folder.title}`}><GripVertical size={12} /></button>}
-      <button type="button" className="folder-tree-select" aria-pressed={selected} title={title} onClick={onSelect}><Folder size={16} /><span>{folder.title}</span></button>
+      <button
+        type="button"
+        className={`folder-tree-select ${longPress.isPressing ? 'is-pressing' : ''}`}
+        aria-pressed={selected}
+        title={title}
+        onClick={longPress.onClick(onSelect)}
+        onContextMenu={longPress.onContextMenu}
+        onTouchStart={longPress.onTouchStart}
+        onTouchMove={longPress.onTouchMove}
+        onTouchEnd={longPress.onTouchEnd}
+        onTouchCancel={longPress.onTouchCancel}
+      >
+        {touchMultiSelect && (
+          <span className={`folder-check ${selected ? 'is-checked' : ''}`} aria-hidden="true">
+            {selected && <Check size={11} strokeWidth={3} />}
+          </span>
+        )}
+        <Folder size={16} />
+        <span>{folder.title}</span>
+      </button>
       {!disabled && <button type="button" className="folder-manage" aria-label={`${t('folder.manage')}: ${folder.title}`} onClick={onManage}><MoreHorizontal size={15} /></button>}
     </DropZone>
     <DropZone path={folder.path} position="after" disabled={disabled || !reorder} />
   </div>;
 }
-export function FolderTree({ onManageFiles, reorder = false, onToggleReorder, selectedPaths, allFoldersSelected, onFilterFolder, folders, notebookId, selected, onSelect, writable, beforeChange, onChanged }: {
+export function FolderTree({ onManageFiles, reorder = false, onToggleReorder, selectedPaths, allFoldersSelected, onFilterFolder, touchMultiSelect = false, onLongPressFolder, folders, notebookId, selected, onSelect, writable, beforeChange, onChanged }: {
   onManageFiles: (path: string) => void;
   reorder?: boolean;
   onToggleReorder?: () => void;
   selectedPaths?: string[];
   allFoldersSelected?: boolean;
   onFilterFolder?: (folder: string | null) => void;
+  touchMultiSelect?: boolean;
+  onLongPressFolder?: (folder: string) => void;
   folders: FolderItem[]; notebookId: string; selected: string | null; onSelect: (folder: string | null) => void;
   writable: boolean; beforeChange?: () => void; onChanged?: () => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [revision, setRevision] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [dragging, setDragging] = useState<string>();
-  const selectFolder = (folder: string | null, event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean }) => resolveFolderClick(event, onSelect, onFilterFolder)(folder);
+  const selectFolder = (folder: string | null, event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean }) => resolveFolderClick(event, onSelect, onFilterFolder, touchMultiSelect)(folder);
   const isSelected = (path: string | null) => selectedPaths ? path === null ? (allFoldersSelected ?? selectedPaths.length === 0) : selectedPaths.includes(path) : selected === path;
   const list = folders.filter(folder => folder.notebookId === notebookId);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -76,7 +115,7 @@ export function FolderTree({ onManageFiles, reorder = false, onToggleReorder, se
       if (command) void mutate(command);
     }}>
       <DropZone path="" position="inside" disabled={disabled || !reorder}><button type="button" className={`folder-tree-root ${isSelected(null) ? 'is-selected' : ''}`} aria-pressed={isSelected(null)} title={t('folder.allFolders')}onClick={event => selectFolder(null, event)}>{t('folder.allFolders')}</button></DropZone>
-      {list.map(folder => <TreeItem reorder={reorder} key={folder.path} folder={folder} disabled={disabled} selected={isSelected(folder.path)} onSelect={event => selectFolder(folder.path, event)} onManage={() => onManageFiles(folder.path)} multiSelectable={Boolean(onFilterFolder)} />)}
+      {list.map(folder => <TreeItem reorder={reorder} key={folder.path} folder={folder} disabled={disabled} selected={isSelected(folder.path)} onSelect={event => selectFolder(folder.path, event)} onManage={() => onManageFiles(folder.path)} multiSelectable={Boolean(onFilterFolder)} touchMultiSelect={touchMultiSelect} onLongPress={onLongPressFolder && (() => onLongPressFolder(folder.path))} />)}
       <DragOverlay>{dragging && <div className="screen-drag-overlay"><Folder size={16} />{list.find(folder => folder.path === dragging)?.title}</div>}</DragOverlay>
     </DndContext>
   </section>;

@@ -2,13 +2,13 @@ import './sidebar-filters.css';
 import type { FilterControls } from '../lib/filter-controls.js';
 import { FolderTree } from './FolderTree.js';
 import React, { useEffect, useState } from 'react';
-import { Tag, Filter, GitBranch, CheckCircle2, Eye, EyeOff, Search, X } from 'lucide-react';
+import { Tag, Filter, GitBranch, CheckCircle2, Eye, EyeOff, Search, X, CheckSquare } from 'lucide-react';
 import { NoteItem, GitStatus, FolderItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { WorkspaceSidebar } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
 import { filterAndSortTags, getSavedTagSort, saveTagSort, TagSort } from '../lib/tag-list.js';
-import { resolveAllNotebooksFolderSelect } from '../lib/folder-tree.js';
+import { resolveAllNotebooksFolderSelect, resolveEnterTouchMultiSelect } from '../lib/folder-tree.js';
 
 const selectedItemStyle: React.CSSProperties = {
   backgroundColor: 'color-mix(in srgb, var(--color-text) 8%, transparent)',
@@ -59,10 +59,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // A plain click's single-select target is meaningless against the global selectedNotebookId
   // while every notebook's tree is shown at once ("all notebooks" view); scope it explicitly.
   const selectSingleFolder = (notebookId: string, folder: string | null) => {
+    setTouchMultiSelect(false);
     const root = filters.notebooks.find(nb => nb.id === notebookId)?.root.replace(/\/$/, '');
     const scoped = resolveAllNotebooksFolderSelect(selectedNotebookId, root, folder);
     if (scoped) { onChange({ folders: scoped }); return; }
     onSelectFolder?.(folder);
+  };
+  // A touch long-press enters multi-select mode (see FolderTree/use-long-press); it exits
+  // automatically once every folder has been tapped back out of the selection.
+  const [touchMultiSelect, setTouchMultiSelect] = useState(false);
+  useEffect(() => { if (touchMultiSelect && value.folders.length === 0) setTouchMultiSelect(false); }, [touchMultiSelect, value.folders.length]);
+  const enterTouchMultiSelect = (notebookId: string, folder: string) => {
+    setTouchMultiSelect(true);
+    const root = filters.notebooks.find(nb => nb.id === notebookId)?.root;
+    const nextFolders = resolveEnterTouchMultiSelect(value.folders, root, folder);
+    if (nextFolders !== value.folders) {
+      onChange({ folders: nextFolders });
+    }
   };
   const [tagQuery, setTagQuery] = useState('');
   const [tagSort, setTagSort] = useState<TagSort>(getSavedTagSort);
@@ -156,6 +169,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             return path === `${root}/${folder.path}`;
           })).map(path => <button type="button" className="sidebar-missing-filter" key={path} aria-label={t('filters.remove', { value: path })} onClick={() => onChange({ folders: value.folders.filter(item => item !== path) })}>{path}<X size={12} /></button>)}
         </section>
+        {touchMultiSelect && (
+          <div role="status" className="folder-multiselect-banner">
+            <div className="folder-multiselect-badge">
+              <CheckSquare size={13} />
+              <span>{t('folder.touchMultiSelectMode')}</span>
+            </div>
+            <p className="folder-multiselect-text">{t('folder.touchMultiSelectInstruction')}</p>
+          </div>
+        )}
         {onSelectFolder && filters.notebooks.filter(nb => selectedNotebookId === 'all' || nb.id === selectedNotebookId).map(nb => {
           const root = nb.root.replace(/\/$/, '');
           return <section className="sidebar-folder-section" key={nb.id}>
@@ -164,6 +186,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               allFoldersSelected={value.folders.length === 0}
               selectedPaths={value.folders.filter(path => path.startsWith(root + '/')).map(path => path.slice(root.length + 1))}
               onFilterFolder={folder => toggleFolder(nb.id, folder)}
+              touchMultiSelect={touchMultiSelect}
+              onLongPressFolder={folder => enterTouchMultiSelect(nb.id, folder)}
               writable={foldersWritable} beforeChange={beforeFolderChange} onChanged={onFoldersChanged} />
           </section>;
         })}
