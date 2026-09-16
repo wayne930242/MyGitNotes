@@ -75,12 +75,12 @@ describe('loadNoteTemplate + renderNoteTemplate', () => {
     id: 'academic',
     title: 'Academic',
     root: 'notes/academic',
-    templates: [{ id: 'reading', title: 'Literature Note', file: '.templates/reading.md' }],
+    templates: [{ id: 'reading', title: 'Literature Note', file: 'templates/reading.md' }],
   };
 
   beforeEach(() => {
     repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gh-notes-templates-'));
-    const templateDir = path.join(repoRoot, 'notes/academic/.templates');
+    const templateDir = path.join(repoRoot, 'notes/academic/templates');
     fs.mkdirSync(templateDir, { recursive: true });
     fs.writeFileSync(
       path.join(templateDir, 'reading.md'),
@@ -106,6 +106,13 @@ describe('loadNoteTemplate + renderNoteTemplate', () => {
 
   it('formats today as an ISO date', () => {
     expect(formatTemplateDate(new Date('2026-09-16T12:00:00Z'))).toBe('2026-09-16');
+  });
+
+  it('treats the title as a literal value, not a String.replace pattern', () => {
+    const template = loadNoteTemplate(repoRoot, notebook, 'reading');
+    const rendered = renderNoteTemplate(template, { title: 'Budget $$ $& $1 report', date: '2026-09-16' });
+    expect(rendered.metadata.title).toBe('Budget $$ $& $1 report');
+    expect(rendered.content).toContain('# Budget $$ $& $1 report');
   });
 
   it('excludes configured template files from notebook note scanning', () => {

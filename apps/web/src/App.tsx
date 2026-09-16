@@ -15,6 +15,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { notebookRoute, noteRoute, noteReturnRoute, parseWorkspaceRoute, WorkspaceTab } from './lib/routes.js';
 import { readWorkingNotes, updateWorkingNote, clearCommittedNotes, overlayWorkingNotes, workingDiff, type WorkingNotes } from './lib/working-notes.js';
 import { mergeNote, sameValue } from './lib/merge-note.js';
+import { buildNewNoteDraft } from './lib/new-note.js';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   fetchWorkspace,
@@ -585,16 +586,13 @@ const AppContent: React.FC = () => {
       if (notes.some(n => n.path === notePath)) throw new Error('A note with this filename already exists in this folder. Choose another title.');
 
       const status = statusOverride || newNoteStatus;
-      let initialContent = `# ${title}\n\nWrite your note here.\n`;
-      let baseMetadata: Record<string, unknown> = { id: slug, title, tags: newNoteTags };
-      let finalStatus = status;
-      if (newNoteTemplateId) {
-        const rendered = await renderNoteTemplate({ notebookId: currentNotebook!.id, templateId: newNoteTemplateId, title });
-        initialContent = rendered.content;
-        baseMetadata = { id: slug, ...rendered.metadata, tags: rendered.metadata.tags ?? newNoteTags };
-        finalStatus = typeof rendered.metadata.status === 'string' ? rendered.metadata.status : status;
-      }
-      const initialMetadata = withNoteStatus(baseMetadata, finalStatus);
+      const template = newNoteTemplateId
+        ? await renderNoteTemplate({ notebookId: currentNotebook!.id, templateId: newNoteTemplateId, title })
+        : undefined;
+      const draft = buildNewNoteDraft({ slug, title, tags: newNoteTags, status, template });
+      const initialContent = draft.content;
+      const finalStatus = draft.status;
+      const initialMetadata = withNoteStatus(draft.metadata, finalStatus);
 
       const res = remote ? { note: stageWorkingNote({
         id: slug, path: notePath, notebookId: currentNotebook!.id, title,

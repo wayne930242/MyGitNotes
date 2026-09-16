@@ -641,7 +641,7 @@ const webDist = path.join(repoRoot, 'apps/web/dist');
 if (fs.existsSync(webDist)) {
   app.use(express.static(webDist, { redirect: false }));
   app.get('*', (req: Request, res: Response, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/raw-assets')) {
+    if (req.path.startsWith('/api') || req.path.startsWith('/raw-assets') || req.path.startsWith('/r2-assets')) {
       return next();
     }
     res.sendFile(path.join(webDist, 'index.html'));

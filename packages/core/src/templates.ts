@@ -28,7 +28,7 @@ export function formatTemplateDate(now: Date = new Date()): string {
 
 function substitute(value: unknown, vars: TemplateVariables): unknown {
   if (typeof value === 'string') {
-    return value.replace(/\{\{\s*title\s*\}\}/g, vars.title).replace(/\{\{\s*date\s*\}\}/g, vars.date);
+    return value.replace(/\{\{\s*title\s*\}\}/g, () => vars.title).replace(/\{\{\s*date\s*\}\}/g, () => vars.date);
   }
   if (Array.isArray(value)) {
     return value.map(item => substitute(item, vars));
