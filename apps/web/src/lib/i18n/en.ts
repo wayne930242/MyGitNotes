@@ -391,6 +391,7 @@ export const en = {
   'folder.index': 'Index',
   'folder.up': 'Up',
   'folder.goUpTooltip': 'Go up one folder',
+  'folder.multiSelectHint': 'Shift+click to add or remove from selection',
   'folder.noteCount': '{count} note',
   'folder.notesCount': '{count} notes',
   'folder.subfolderCount': '{count} folder',
