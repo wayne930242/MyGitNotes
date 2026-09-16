@@ -51,7 +51,7 @@ import { KanbanView } from './components/KanbanView.js';
 import { EditorModal } from './components/EditorModal.js';
 import { RightPanel } from './components/RightPanel.js';
 import { FileManager, FileManagerDialog, type FileManagerHandle } from './components/FileManager.js';
-import type { FileResult } from './lib/files-api.js';
+import { mutateFile, type FileResult } from './lib/files-api.js';
 import { AgentSystemView, type AgentSystemHandle } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { CommitModal } from './components/CommitModal.js';
@@ -431,9 +431,22 @@ const AppContent: React.FC = () => {
     return handleSaveNote({ ...params, baseNote: pending?.base || params.baseNote });
   });
 
+  // Remote delete: no working tree to trash into, so commit the removal immediately.
+  const handleRemoteDeleteNote = async (note: NoteItem) => {
+    if (!canWrite) return;
+    try {
+      await mutateFile({ kind: 'delete', notebookId: note.notebookId, path: note.path }, note.revision || revision);
+    } catch (error) { setActionError((error as Error).message); throw error; }
+    setNotes((prev) => prev.filter((n) => n.path !== note.path));
+    if (editingNote?.path === note.path) setEditingNote(null);
+    const statusRes = await fetchGitStatus();
+    setGitStatus(statusRes.status);
+  };
+
   // Trash action: delete without immediate commit, allowing restore (Requirement 2)
   const handleDeleteNote = async (note: NoteItem) => {
-    if (remote || !canWrite) return;
+    if (!canWrite) return;
+    if (remote) return handleRemoteDeleteNote(note);
     // 1. Remove from active notes immediately
     setNotes((prev) => prev.filter((n) => n.path !== note.path));
     // 2. Push to deletedNotes buffer
@@ -883,7 +896,7 @@ const AppContent: React.FC = () => {
                   showMobileSort={false}
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
-                  canDelete={!remote && canWrite}
+                  canDelete={canWrite}
                   notes={displayedNotes}
                   hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
                   onOpenNote={handleOpenNote}
@@ -900,7 +913,7 @@ const AppContent: React.FC = () => {
                 <CardView
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
-                  canDelete={!remote && canWrite}
+                  canDelete={canWrite}
                   notes={displayedNotes}
                   hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
                   onOpenNote={handleOpenNote}
@@ -914,7 +927,7 @@ const AppContent: React.FC = () => {
                 <KanbanView
                   statuses={notebookStatuses}
                   readOnly={!canWrite}
-                  canDelete={!remote && canWrite}
+                  canDelete={canWrite}
                   notes={notesBelowFolders}
                   onOpenNote={handleOpenNote}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
