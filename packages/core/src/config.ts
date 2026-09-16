@@ -1,7 +1,7 @@
 import YAML from 'yaml';
 import path from 'node:path';
 import fs from 'node:fs';
-import { WorkspaceConfig, NotebookConfig } from './types.js';
+import { WorkspaceConfig, NotebookConfig, NoteTemplate } from './types.js';
 
 export const WORKSPACE_CONFIG_FILENAME = '.github-notes.yaml';
 
@@ -105,6 +105,46 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
       }
     }
 
+    let validatedTemplates: NoteTemplate[] | undefined;
+    if (item.templates !== undefined) {
+      if (!Array.isArray(item.templates)) {
+        throw new ConfigValidationError(`Notebook '${item.id}' templates must be an array`);
+      }
+      const templateIds = new Set<string>();
+      validatedTemplates = item.templates.map((raw) => {
+        if (!raw || typeof raw !== 'object') {
+          throw new ConfigValidationError(`Notebook '${item.id}' has an invalid template entry`);
+        }
+        const tpl = raw as Record<string, unknown>;
+        if (typeof tpl.id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(tpl.id)) {
+          throw new ConfigValidationError(
+            `Notebook '${item.id}' template ID '${tpl.id}' must be an alphanumeric/slug string without special characters`
+          );
+        }
+        if (templateIds.has(tpl.id)) {
+          throw new ConfigValidationError(`Notebook '${item.id}' has a duplicate template ID: '${tpl.id}'`);
+        }
+        templateIds.add(tpl.id);
+        if (typeof tpl.title !== 'string' || !tpl.title.trim()) {
+          throw new ConfigValidationError(`Notebook '${item.id}' template '${tpl.id}' must have a title`);
+        }
+        if (typeof tpl.file !== 'string' || !tpl.file.trim()) {
+          throw new ConfigValidationError(`Notebook '${item.id}' template '${tpl.id}' must have a file`);
+        }
+        const file = tpl.file.replace(/\\/g, '/');
+        if (
+          path.isAbsolute(file) ||
+          file.split('/').some(p => p === '..' || p === '' || p === '.') ||
+          !/\.(md|markdown)$/i.test(file)
+        ) {
+          throw new ConfigValidationError(
+            `Notebook '${item.id}' template '${tpl.id}' file must be a relative Markdown path inside the notebook: '${tpl.file}'`
+          );
+        }
+        return { id: tpl.id, title: tpl.title, file };
+      });
+    }
+
     validatedNotebooks.push({
       id: item.id,
       title: item.title,
@@ -112,6 +152,7 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
       assets: assetPath,
       default_view: (item.default_view as 'list' | 'card' | 'kanban' | 'flat') || 'list',
       ...(item.statuses !== undefined ? { statuses: [...item.statuses as string[]] } : {}),
+      ...(validatedTemplates !== undefined ? { templates: validatedTemplates } : {}),
     });
   }
 

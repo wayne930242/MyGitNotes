@@ -1,5 +1,11 @@
 export type ViewMode = 'list' | 'card' | 'kanban' | 'flat' | 'graph';
 
+export interface NoteTemplate {
+  id: string;
+  title: string;
+  file: string;
+}
+
 export interface NotebookConfig {
   id: string;
   title: string;
@@ -7,6 +13,7 @@ export interface NotebookConfig {
   assets?: string;
   default_view?: ViewMode;
   statuses?: string[];
+  templates?: NoteTemplate[];
 }
 
 export interface WorkspaceConfig {

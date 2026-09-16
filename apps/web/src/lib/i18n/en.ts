@@ -411,6 +411,8 @@ export const en = {
   'createNote.folder': 'Folder path',
   'createNote.folderPlaceholder': 'Notebook root',
   'createNote.invalidFolder': 'Choose an existing folder from this notebook.',
+  'createNote.template': 'Template',
+  'createNote.noTemplate': 'No template',
   'createNote.initialStatus': 'Initial Status',
   'createNote.submit': 'Create Note',
 

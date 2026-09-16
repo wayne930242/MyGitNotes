@@ -23,6 +23,7 @@ import {
   readNote,
   readNotes,
   saveNote,
+  renderNoteTemplate,
   deleteNote,
   restoreNote,
   fetchAssets,
@@ -262,7 +263,9 @@ const AppContent: React.FC = () => {
   const [newNoteFolder, setNewNoteFolder] = useState<string>('');
   const [shortcutMode, setShortcutMode] = useState<ShortcutSurfaceMode | null>(null);
   const [newNoteTags, setNewNoteTags] = useState<string[]>([]);
+  const [newNoteTemplateId, setNewNoteTemplateId] = useState<string>('');
   const newNoteFolders = useMemo(() => folders.filter(folder => folder.notebookId === selectedNotebookId).map(folder => folder.path).sort(), [folders, selectedNotebookId]);
+  const newNoteTemplates = useMemo(() => config?.notebooks.find(n => n.id === selectedNotebookId)?.templates || [], [config, selectedNotebookId]);
   const openNewNote = (options?: string | { status?: string; folder?: string; tag?: string; tags?: string[]; notebookId?: string }) => {
     const opts = typeof options === 'string' ? { status: options } : { ...options };
     if (selectedNotebookId === 'all' && !opts.notebookId) opts.notebookId = config?.workspace.default_notebook || config?.notebooks[0]?.id;
@@ -272,6 +275,7 @@ const AppContent: React.FC = () => {
     setNewNoteStatus(opts.status || notebookStatuses[0]);
     setNewNoteFolder(opts.folder || '');
     setNewNoteTags(opts.tags || (opts.tag ? [opts.tag] : []));
+    setNewNoteTemplateId('');
     setCreateError('');
     setIsNewNoteOpen(true);
   };
@@ -558,17 +562,20 @@ const AppContent: React.FC = () => {
       if (notes.some(n => n.path === notePath)) throw new Error('A note with this filename already exists in this folder. Choose another title.');
 
       const status = statusOverride || newNoteStatus;
-      const initialContent = `# ${title}\n\nWrite your note here.\n`;
-      const initialMetadata = withNoteStatus({
-        id: slug,
-        title,
-        status: status || undefined,
-        tags: newNoteTags,
-      }, status);
+      let initialContent = `# ${title}\n\nWrite your note here.\n`;
+      let baseMetadata: Record<string, unknown> = { id: slug, title, tags: newNoteTags };
+      let finalStatus = status;
+      if (newNoteTemplateId) {
+        const rendered = await renderNoteTemplate({ notebookId: currentNotebook!.id, templateId: newNoteTemplateId, title });
+        initialContent = rendered.content;
+        baseMetadata = { id: slug, ...rendered.metadata, tags: rendered.metadata.tags ?? newNoteTags };
+        finalStatus = typeof rendered.metadata.status === 'string' ? rendered.metadata.status : status;
+      }
+      const initialMetadata = withNoteStatus(baseMetadata, finalStatus);
 
       const res = remote ? { note: stageWorkingNote({
         id: slug, path: notePath, notebookId: currentNotebook!.id, title,
-        content: initialContent, metadata: initialMetadata, status, tags: newNoteTags, revision,
+        content: initialContent, metadata: initialMetadata, status: finalStatus, tags: Array.isArray(initialMetadata.tags) ? initialMetadata.tags.map(String) : [], revision,
       }, null) } : await saveNote({
         path: notePath,
         notebookId: currentNotebook?.id,
@@ -585,6 +592,7 @@ const AppContent: React.FC = () => {
       setNewNoteTitle('');
       setNewNoteFolder('');
       setNewNoteTags([]);
+      setNewNoteTemplateId('');
       setNewNoteStatus(notebookStatuses[0]);
       const statusRes = await fetchGitStatus();
       setGitStatus(statusRes.status);
@@ -1089,6 +1097,17 @@ const AppContent: React.FC = () => {
                   className="ui-control" autoComplete="off" />
                 <datalist id="create-note-folders">{newNoteFolders.map(folder => <option key={folder} value={folder} />)}</datalist>
               </div>
+
+              {newNoteTemplates.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                    {t('createNote.template')}
+                  </label>
+                  <Select aria-label={t('createNote.template')} value={newNoteTemplateId} onValueChange={setNewNoteTemplateId}
+                    options={[{ value: '', label: t('createNote.noTemplate') }, ...newNoteTemplates.map(tpl => ({ value: tpl.id, label: tpl.title }))]}
+                    className="w-full" />
+                </div>
+              )}
 
               {newNoteTags.length > 0 && (
                 <div>

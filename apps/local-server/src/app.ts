@@ -66,6 +66,12 @@ export function createApp(base: string): express.Express {
     });
     app.get('/api/notes', async (req, res) => { try { res.json({ notes: await (res.locals.reader as RemoteSource).notes(req.query.notebookId as string) }); } catch (error) { fail(res, error); } });
     app.get('/api/folders', async (req, res) => { try { res.json({ folders: await (res.locals.reader as RemoteSource).folders() }); } catch (error) { fail(res, error); } });
+    app.get('/api/templates/render', async (req, res) => {
+      try {
+        const { notebookId, templateId, title } = req.query;
+        res.json(await (res.locals.reader as RemoteSource).renderTemplate(String(notebookId || ''), String(templateId || ''), String(title || '')));
+      } catch (error) { fail(res, error); }
+    });
     app.get('/api/notes/read', async (req, res) => { try { res.json({ note: await (res.locals.reader as RemoteSource).note(String(req.query.path || '')) }); } catch (error) { fail(res, error); } });
     app.post('/api/notes/read-batch', async (req, res) => {
       try { res.json({ notes: await (res.locals.reader as RemoteSource).readNotes(req.body.paths, req.body.revision) }); }

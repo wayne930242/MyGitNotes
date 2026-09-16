@@ -412,6 +412,8 @@ export const zhTW: Record<TranslationKey, string> = {
   'createNote.folder': '資料夾路徑',
   'createNote.folderPlaceholder': '筆記本根目錄',
   'createNote.invalidFolder': '請選擇這個筆記本中既有的資料夾。',
+  'createNote.template': '範本',
+  'createNote.noTemplate': '不使用範本',
   'createNote.initialStatus': '初始狀態',
   'createNote.submit': '建立筆記',
 
