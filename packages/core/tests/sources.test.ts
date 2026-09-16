@@ -251,4 +251,25 @@ describe('GitHub study workspace writes', () => {
     await expect(new GitHubSource('owner/repo', 'main', 'test-token', request as typeof fetch).saveStudyWorkspace(yaml, 'commit1')).rejects.toMatchObject({ status: 403 });
     expect(request.mock.calls.some(([, init]) => init?.method)).toBe(false);
   });
+  it('invalidates cached snapshot on subsequent fresh snapshot requests', async () => {
+    let currentCommit = 'commit1';
+    const request = vi.fn(async (input: string) => {
+      const url = input.replace('https://api.github.com/repos/owner/repo', '');
+      if (!url) return new Response(JSON.stringify({ private: false, permissions: { push: true } }), { status: 200 });
+      if (url.startsWith('/commits/')) return new Response(JSON.stringify({ sha: currentCommit, commit: { tree: { sha: 'tree1' } } }), { status: 200 });
+      if (url === '/git/trees/tree1?recursive=1') return new Response(JSON.stringify({ tree: tree(), truncated: false }), { status: 200 });
+      return new Response('{}', { status: 404 });
+    });
+    const reader = new GitHubSource('owner/repo', 'main', 'test-token', request as typeof fetch);
+    const first = await reader.getSnapshot(true);
+    expect(first.sha).toBe('commit1');
+    currentCommit = 'commit2';
+    // Without fresh=true, returns cached snapshot
+    const cached = await reader.getSnapshot(false);
+    expect(cached.sha).toBe('commit1');
+    // With fresh=true, must return the newly fetched snapshot with commit2
+    const fresh = await reader.getSnapshot(true);
+    expect(fresh.sha).toBe('commit2');
+  });
 });
+
