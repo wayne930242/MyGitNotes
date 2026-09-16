@@ -15,13 +15,12 @@ const selectedItemStyle: React.CSSProperties = {
 };
 
 interface SidebarProps {
+  onManageFiles: (notebookId: string, path: string) => void;
   folders?: FolderItem[];
   foldersWritable?: boolean;
   reorder: boolean;
   onToggleReorder: () => void;
   filters: FilterControls;
-  indexFolders: string[];
-  onOpenFolderIndex: (folder: string, revision?: string) => Promise<void>;
   beforeFolderChange?: () => void;
   onFoldersChanged?: () => Promise<void>;
   selectedFolder?: string | null;
@@ -34,7 +33,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({
   folders = [],
-  indexFolders, onOpenFolderIndex,
+  onManageFiles,
   foldersWritable = false, beforeFolderChange, onFoldersChanged,
   selectedFolder = null,
   onSelectFolder,
@@ -152,11 +151,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           const root = nb.root.replace(/\/$/, '');
           return <section className="sidebar-folder-section" key={nb.id}>
             {selectedNotebookId === 'all' && <p className="sidebar-section-label">{nb.title}</p>}
-            <FolderTree reorder={reorder} onToggleReorder={onToggleReorder} folders={folders} notebookId={nb.id} selected={selectedFolder} onSelect={onSelectFolder}
+            <FolderTree onManageFiles={path => onManageFiles(nb.id, path)} reorder={reorder} onToggleReorder={onToggleReorder} folders={folders} notebookId={nb.id} selected={selectedFolder} onSelect={onSelectFolder}
               allFoldersSelected={value.folders.length === 0}
               selectedPaths={value.folders.filter(path => path.startsWith(root + '/')).map(path => path.slice(root.length + 1))}
               onFilterFolder={folder => toggleFolder(nb.id, folder)}
-              indexFolders={indexFolders} onOpenIndex={onOpenFolderIndex} writable={foldersWritable} beforeChange={beforeFolderChange} onChanged={onFoldersChanged} />
+              writable={foldersWritable} beforeChange={beforeFolderChange} onChanged={onFoldersChanged} />
           </section>;
         })}
         <label className="sidebar-descendants"><input type="checkbox" checked={value.descendants} onChange={event => onChange({ descendants: event.target.checked })} />{t('filters.descendants')}</label>

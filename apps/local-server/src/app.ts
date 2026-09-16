@@ -10,6 +10,7 @@ import { createStudyRouter } from './study.js';
 import { createScreenPageRouter } from './screen-page.js';
 import { createFolderManagerRouter } from './folder-manager.js';
 import { createR2AssetHandler } from './r2-assets.js';
+import { createFileManagerRouter } from './file-manager.js';
 
 export function applicationRoot() {
   let dir = path.dirname(fileURLToPath(import.meta.url));
@@ -40,6 +41,7 @@ export function createApp(base: string): express.Express {
   });
   app.use(express.json({ limit: '8mb' }));
   app.use('/api/auth', createAuth(base));
+  if (source) app.use(createFileManagerRouter(base, source));
   if (source) app.use('/api/study', createStudyRouter(base, source));
   if (source) app.use('/api/screen-page', createScreenPageRouter(base, source));
   if (source) app.use('/api/folder-manager', createFolderManagerRouter(base, source));
