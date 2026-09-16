@@ -94,7 +94,7 @@ docker compose logs -f mygitnotes
 
 Compose starts both MyGitNotes and Redis, waits for Redis health, and connects over an internal network using `REDIS_URL=redis://redis:6379`. Redis uses append-only persistence on the `redis-data` volume and has no published host port. This deployment needs no Upstash account.
 
-Open [http://localhost:4321](http://localhost:4321). For public access, route your HTTPS reverse proxy to `127.0.0.1:4321`, preserve the public Host header, and set `APP_URL=https://notes.example.com`. Register `${APP_URL}/api/auth/github/callback` with your GitHub OAuth App, or use the [GitLab settings](#gitlab-deployment) below. Forward all paths, including `/api/*`, `/mcp/*`, and `/raw-assets/*`, and allow streamed MCP responses. A proxy running in another container should share the application network and forward to `mygitnotes:4321`.
+Open [http://localhost:4321](http://localhost:4321). For public access, route your HTTPS reverse proxy to `127.0.0.1:4321`, preserve the public Host header, and set `APP_URL=https://notes.example.com`. Register `${APP_URL}/api/auth/github/callback` with your GitHub OAuth App, or use the [GitLab settings](#gitlab-deployment) below. Forward all paths, including `/api/*`, `/mcp/*`, `/raw-assets/*`, and `/r2-assets/*`, and allow streamed MCP responses. A proxy running in another container should share the application network and forward to `mygitnotes:4321`.
 
 Compose publishes the port on localhost. Set `MYGITNOTES_PORT` to change the host port and update `APP_URL` to the URL used by your browser. Set `MYGITNOTES_ENV_FILE` to use a different environment file. Sign in and create a connection under **Settings → MCP Access Control** to use `${APP_URL}/mcp/<token>`.
 
@@ -142,9 +142,22 @@ After updating the product checkout, run `docker compose up -d --build`. `docker
 
 See the [Compose files](compose.yaml), [local configuration](compose.local.yaml), [environment template](docker.env.example), and [Docker Compose reference](https://docs.docker.com/reference/compose-file/services/).
 
+## Private R2 assets (optional)
+
+Keep large attachments such as PDFs out of the repository by storing them in a private Cloudflare R2 bucket and referencing the object key from a note:
+
+```markdown
+![Core rules](<r2:trpg/Tales from the old west/Core_Rules.pdf>)
+[Download the map](r2:maps/region.webp)
+```
+
+An image reference to a PDF, image, video, or audio file previews inline; other files and plain links open in a new tab. Wrap keys containing spaces in `<...>` or percent-encode them.
+
+Set `MYGITNOTES_R2_ACCOUNT_ID`, `MYGITNOTES_R2_ACCESS_KEY_ID`, `MYGITNOTES_R2_SECRET_ACCESS_KEY`, and `MYGITNOTES_R2_BUCKET` in the deployment environment (Vercel, Docker, or the local server's shell) with a read-only R2 token scoped to the bucket. `/r2-assets/<key>?note=<note path>` reads that note with the requester's workspace permission and confirms it references the key; it then redirects to a presigned URL valid for 5 minutes, so the browser downloads the object directly from R2 without the serverless response size limit. Anyone who cannot read the note, or requests a key the note does not reference, receives 404. Upload objects with `wrangler r2 object put` or the Cloudflare dashboard.
+
 ## Vercel deployment (optional)
 
-Deploy the `main` branch to your own Vercel project. The included [`vercel.json`](vercel.json) builds the web app and routes `/api/*`, `/mcp/*`, and `/raw-assets/*` to the serverless API.
+Deploy the `main` branch to your own Vercel project. The included [`vercel.json`](vercel.json) builds the web app and routes `/api/*`, `/mcp/*`, `/raw-assets/*`, and `/r2-assets/*` to the serverless API.
 
 You need:
 

@@ -2,13 +2,14 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { loadSourceConfig, sourceIdentity, RemoteSource, createRemoteSource, SourceError, workspaceAgentKind, workspaceAgentResource, type WorkspaceAgentResource } from '@mygitnotes/core';
+import { loadSourceConfig, loadWorkspaceConfig, classifyResource, resolveSafePath, sourceIdentity, RemoteSource, createRemoteSource, SourceError, workspaceAgentKind, workspaceAgentResource, type WorkspaceAgentResource } from '@mygitnotes/core';
 import { createRemoteMCP } from './mcp.js';
 import { createLocalApp } from './local-app.js';
 import { createAuth, authToken } from './auth.js';
 import { createStudyRouter } from './study.js';
 import { createScreenPageRouter } from './screen-page.js';
 import { createFolderManagerRouter } from './folder-manager.js';
+import { createR2AssetHandler } from './r2-assets.js';
 
 export function applicationRoot() {
   let dir = path.dirname(fileURLToPath(import.meta.url));
@@ -27,7 +28,7 @@ export function createApp(base: string): express.Express {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('X-Frame-Options', 'DENY');
-    if (req.path.startsWith('/api') || req.path.startsWith('/raw-assets') || (req.path === '/mcp' || req.path.startsWith('/mcp/'))) res.setHeader('Cache-Control', 'private, no-store');
+    if (req.path.startsWith('/api') || req.path.startsWith('/raw-assets') || req.path.startsWith('/r2-assets') || (req.path === '/mcp' || req.path.startsWith('/mcp/'))) res.setHeader('Cache-Control', 'private, no-store');
     if (source?.type === 'local') {
       const hostname = req.hostname;
       if (!['localhost', '127.0.0.1', '[::1]'].includes(hostname)) return res.status(403).json({ error: 'Local workspace access requires a loopback host.' });
@@ -43,9 +44,15 @@ export function createApp(base: string): express.Express {
   if (source) app.use('/api/screen-page', createScreenPageRouter(base, source));
   if (source) app.use('/api/folder-manager', createFolderManagerRouter(base, source));
   app.use('/mcp', createRemoteMCP(base, source));
-  if (source?.type === 'local') app.use(createLocalApp(source.path));
-  else {
-    app.use(['/api', '/raw-assets'], async (req, res, next) => {
+  if (source?.type === 'local') {
+    const root = source.path;
+    app.get('/r2-assets/*', createR2AssetHandler(async (_res, notePath) => {
+      if (classifyResource(notePath, loadWorkspaceConfig(root)).type !== 'note') throw new Error('Path is not a configured note.');
+      return fs.readFileSync(resolveSafePath(root, notePath), 'utf8');
+    }));
+    app.use(createLocalApp(root));
+  } else {
+    app.use(['/api', '/raw-assets', '/r2-assets'], async (req, res, next) => {
       if (!source) return res.status(503).json({ error: setupError, setupRequired: true });
       try {
         const token = await authToken(req, base);
@@ -86,6 +93,7 @@ export function createApp(base: string): express.Express {
         } catch (error) { fail(res, error); }
       });
     }
+    app.get('/r2-assets/*', createR2AssetHandler(async (res, notePath) => (await (res.locals.reader as RemoteSource).note(notePath)).content));
     app.get('/raw-assets/by-hash/:hash', async (req, res) => {
       try {
         if (!/^[a-f0-9]{40}$/.test(req.params.hash)) throw new SourceError('Invalid asset hash.');
@@ -162,7 +170,7 @@ export function createApp(base: string): express.Express {
   const web = path.join(base, 'apps/web/dist');
   app.use(express.static(web, { redirect: false }));
   app.get('*', (req, res) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/raw-assets')) return res.status(404).end();
+    if (req.path.startsWith('/api') || req.path.startsWith('/raw-assets') || req.path.startsWith('/r2-assets')) return res.status(404).end();
     res.sendFile(path.join(web, 'index.html'));
   });
   return app;

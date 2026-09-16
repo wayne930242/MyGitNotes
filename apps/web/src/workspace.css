@@ -135,6 +135,11 @@
 .screen-youtube-poster img { width: 100%; height: 100%; object-fit: cover; opacity: .8; }
 .screen-youtube-poster span { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; gap: 9px; color: white; text-shadow: 0 1px 4px #0008; font-size: 12px; }
 .screen-card-content iframe { height: 100%; width: 100%; border: 0; border-radius: 6px; }
+.note-r2-asset { margin: 16px 0; }
+.note-r2-asset figcaption { margin-top: 6px; font-size: 0.85em; }
+.note-r2-pdf iframe { display: block; width: 100%; height: min(80vh, 900px); border: 1px solid var(--color-border); border-radius: 8px; background: #fff; }
+.note-r2-image img, .note-r2-video video { display: block; max-width: 100%; border-radius: 8px; }
+.note-r2-audio audio { width: 100%; max-width: 640px; }
 .note-youtube-embed { width: 100%; max-width: 640px; margin: 16px 0; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: #0f1416; position: relative; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
 .note-youtube-poster { width: 100%; height: 100%; border: 0; padding: 0; margin: 0; background: transparent; cursor: pointer; display: block; position: relative; overflow: hidden; }
 .note-youtube-poster img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.88; transition: opacity 150ms ease, transform 150ms ease; }

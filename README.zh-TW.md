@@ -94,7 +94,7 @@ docker compose logs -f mygitnotes
 
 Compose 會一併啟動 MyGitNotes 與 Redis，等待 Redis 健康檢查通過後，透過內部網路以 `REDIS_URL=redis://redis:6379` 連線。Redis 使用 append-only 持久化，資料保存在 `redis-data` volume，並且只供容器內部連線。此部署不需要 Upstash 帳號。
 
-開啟 [http://localhost:4321](http://localhost:4321)。公開部署時，讓 HTTPS 反向代理轉送到 `127.0.0.1:4321`、保留公開 Host header，並設定 `APP_URL=https://notes.example.com`。GitHub OAuth App 的 callback 設為 `${APP_URL}/api/auth/github/callback`；GitLab 使用[下方設定](#gitlab-部署)。代理需轉送所有路徑，包括 `/api/*`、`/mcp/*`、`/raw-assets/*`，並允許 MCP 串流回應。若代理也在容器內，讓它加入應用程式網路並轉送到 `mygitnotes:4321`。
+開啟 [http://localhost:4321](http://localhost:4321)。公開部署時，讓 HTTPS 反向代理轉送到 `127.0.0.1:4321`、保留公開 Host header，並設定 `APP_URL=https://notes.example.com`。GitHub OAuth App 的 callback 設為 `${APP_URL}/api/auth/github/callback`；GitLab 使用[下方設定](#gitlab-部署)。代理需轉送所有路徑，包括 `/api/*`、`/mcp/*`、`/raw-assets/*`、`/r2-assets/*`，並允許 MCP 串流回應。若代理也在容器內，讓它加入應用程式網路並轉送到 `mygitnotes:4321`。
 
 Compose 預設只在 localhost 發布 port。以 `MYGITNOTES_PORT` 調整主機 port，並將 `APP_URL` 設為瀏覽器實際使用的網址；`MYGITNOTES_ENV_FILE` 可指定另一份環境檔。登入後，在「設定 → MCP 存取控制」建立連線，使用 `${APP_URL}/mcp/<token>`。
 
@@ -142,9 +142,22 @@ Compose 的自架 Redis 保存加密 session、平台憑證與 MCP 授權。更�
 
 參考：[Compose 設定](compose.yaml)、[本地設定](compose.local.yaml)、[環境變數範本](docker.env.example)、[Docker Compose 官方說明](https://docs.docker.com/reference/compose-file/services/)。
 
+## 私有 R2 附件（選用）
+
+PDF 等大型附件可以放在私有的 Cloudflare R2 bucket，筆記只引用 object key，不必進 repository：
+
+```markdown
+![核心規則書](<r2:trpg/Tales from the old west/Core_Rules.pdf>)
+[下載地圖](r2:maps/region.webp)
+```
+
+圖片語法引用 PDF、圖片、影片或音訊時會在筆記內預覽；其他檔案與一般連結則在新分頁開啟。Key 含空白時用 `<...>` 包住，或改用百分比編碼。
+
+在部署環境（Vercel、Docker 或本機伺服器的 shell）設定 `MYGITNOTES_R2_ACCOUNT_ID`、`MYGITNOTES_R2_ACCESS_KEY_ID`、`MYGITNOTES_R2_SECRET_ACCESS_KEY` 與 `MYGITNOTES_R2_BUCKET`，token 只給該 bucket 的唯讀權限。`/r2-assets/<key>?note=<筆記路徑>` 會用請求者自己的 workspace 權限讀取該筆記，確認筆記確實引用這個 key，再轉址到 5 分鐘有效的 presigned URL，由瀏覽器直接向 R2 下載，因此不受 serverless 回應大小限制。讀不到該筆記，或筆記沒有引用該 key 時，一律回傳 404。上傳物件可用 `wrangler r2 object put` 或 Cloudflare dashboard。
+
 ## Vercel 部署（選用）
 
-將 `main` 分支部署到你自己的 Vercel 專案。隨附的 [`vercel.json`](vercel.json) 會建置網頁介面，並將 `/api/*`、`/mcp/*` 與 `/raw-assets/*` 導向 serverless API。
+將 `main` 分支部署到你自己的 Vercel 專案。隨附的 [`vercel.json`](vercel.json) 會建置網頁介面，並將 `/api/*`、`/mcp/*`、`/raw-assets/*` 與 `/r2-assets/*` 導向 serverless API。
 
 你需要：
 

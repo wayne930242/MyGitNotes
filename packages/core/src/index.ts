@@ -24,3 +24,5 @@ export * from './study-stages.js';
 export { RemoteSource, type RemoteEntry, type RemoteSnapshot, type RemoteChange } from './remote-source.js';
 export { GitLabSource } from './gitlab-source.js';
 export { createRemoteSource } from './remote-factory.js';
+export * from './r2-references.js';
+export * from './r2-storage.js';

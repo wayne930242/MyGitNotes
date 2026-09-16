@@ -223,3 +223,25 @@ describe('renderNote YouTube embeds', () => {
     expect(html).toContain('href="https://example.com/some-page"');
   });
 });
+
+describe('renderNote R2 assets', () => {
+  it('previews an r2 PDF inline through the note-scoped asset route', () => {
+    const html = renderNote('<p><img src="r2:trpg/Core%20Rules.pdf" alt="Rules"></p>', 'notes/demo/rules.md');
+    expect(html).toContain('class="note-r2-asset note-r2-pdf"');
+    expect(html).toContain('<iframe src="/r2-assets/trpg/Core%20Rules.pdf?note=notes%2Fdemo%2Frules.md"');
+    expect(html).not.toContain('data-workspace-link');
+  });
+
+  it('renders r2 video, audio and image references with native media elements', () => {
+    const html = renderNote('<p><img src="r2:a/clip.mp4" alt=""><img src="r2:a/voice.mp3" alt=""><img src="r2:a/map.webp" alt="Map"></p>', 'notes/demo/n.md');
+    expect(html).toContain('<video src="/r2-assets/a/clip.mp4?note=notes%2Fdemo%2Fn.md" controls="" preload="metadata"');
+    expect(html).toContain('<audio src="/r2-assets/a/voice.mp3?note=notes%2Fdemo%2Fn.md"');
+    expect(html).toContain('<img src="/r2-assets/a/map.webp?note=notes%2Fdemo%2Fn.md" alt="Map"');
+  });
+
+  it('turns an r2 link into a new-tab asset link', () => {
+    const html = renderNote('<p>See <a href="r2:docs/sheet.xlsx">sheet</a></p>', 'notes/demo/n.md');
+    expect(html).toContain('href="/r2-assets/docs/sheet.xlsx?note=notes%2Fdemo%2Fn.md"');
+    expect(html).toContain('target="_blank"');
+  });
+});
