@@ -55,10 +55,14 @@ pnpm test          # Run test suite across all packages
 pnpm build         # Verify build succeeds cleanly
 ```
 
+Browser QA scripts (`node scripts/qa-*.mjs`) drive the built `apps/local-server/dist` and `apps/web/dist` output; set `PUPPETEER_EXECUTABLE_PATH` to a local Chrome binary outside Linux.
+
 
 ### Screen 配置所有權
 
 工作區根目錄 `.github-notes-screen.yaml` 是使用者資料。Core 不得追蹤真實配置，工作區更新必須保留此檔案；測試配置只建立於隔離暫存工作區。
+
+配置 `version: 2` 的每條泳道記錄 `notebookId`，自訂項目與動態來源必須屬於該筆記本。`readScreenPage` 讀取 `version: 1` 時依來源歸屬泳道、拆分混合筆記本的自訂泳道，無法判斷時歸預設筆記本；下次儲存寫回 `version: 2`。
 
 ### 學習資料所有權
 

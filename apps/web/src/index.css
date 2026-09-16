@@ -596,6 +596,11 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 .changes-deleted-item .ui-icon-button { flex: none; width: 24px; height: 24px; min-height: 0; }
 .changes-deleted-item .ui-icon-button svg { width: 13px; height: 13px; }
 .changes-commit-button { justify-content: center; margin-top: 4px; }
+.git-sync { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--color-border); }
+.git-sync .changes-help { padding: 0; }
+.git-sync-status { color: var(--color-text); font-size: 12px; }
+.git-sync-button { justify-content: center; }
+.git-sync-conflict ul { margin: 6px 0; }
 .note-editor-leader { position: absolute; z-index: 70; left: 50%; top: 50%; display: grid; grid-template-columns: 1fr 1fr; width: min(340px, calc(100% - 24px)); padding: 8px; transform: translate(-50%, -50%); border: 1px solid var(--color-border); border-radius: var(--radius-panel); background: var(--color-surface); box-shadow: 0 18px 55px #0004; }
 .note-editor-leader > div { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 6px 8px 10px; }
 .note-editor-leader strong { font-size: 13px; }

@@ -4,13 +4,14 @@ import { callNoteShell, replaceNoteLines, matchNoteGlob } from '../src/note-shel
 
 vi.setConfig({ testTimeout: 30000 }); // Real GitHub write pacing applies to multi-commit scenarios too.
 
-function fixture() {
+function fixture(extra:Record<string,string>={}) {
   const raw:Record<string,string>={
     '.github-notes.yaml':'schema_version: 1\nworkspace:\n  title: Shell QA\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n',
     'notes/ex/a.md':'---\ncustom: retained\n---\n# Alpha\nhello world\n',
     'notes/ex/work/_dir.yml':'title: Work\n',
     'notes/ex/work/b.md':'# Beta\nhello again\n',
     'notes/ex/assets/private.txt':'not a note',
+    ...extra,
   };
   const objects=new Map<string,string>();let files=new Map<string,string>();let counter=0;let head='head0';let treeId='tree0';
   for(const [file,text] of Object.entries(raw)){const id='blob'+counter++;objects.set(id,text);files.set(file,id);}
@@ -35,8 +36,8 @@ function fixture() {
 describe('shell-shaped note operations',()=>{
   it('commits Screen and selected notes together, while rejecting a stale Screen base', async () => {
     const f = fixture();
-    const base = { version: 1, rows: [] };
-    const page = { version: 1, rows: [{ id: 'reading', kind: 'custom', name: 'Reading', view: 'small', items: [] }] };
+    const base = { version: 2, rows: [] };
+    const page = { version: 2, rows: [{ id: 'reading', kind: 'custom', name: 'Reading', view: 'small', notebookId: 'ex', items: [] }] };
     await f.reader().commitNotes([{ path: 'notes/ex/a.md', content: '# Updated', metadata: {} }], f.head(), 'Update reading workspace', { page, base });
     expect(f.text('.github-notes-screen.yaml')).toContain('name: Reading');
     expect(f.text('notes/ex/a.md')).toContain('# Updated');
@@ -46,6 +47,15 @@ describe('shell-shaped note operations',()=>{
     await f.reader().commitNotes([], f.head(), 'Clear screen', { page: base, base: page });
     expect(f.text('.github-notes-screen.yaml')).toContain('rows: []');
     expect(f.calls.filter(call => call.endpoint === '/git/commits')).toHaveLength(2);
+    const foreign = { version: 2, rows: [{ ...page.rows[0], items: [{ id: 'x', kind: 'note', notebookId: 'other', path: 'notes/other/x.md' }] }] };
+    await expect(f.reader().commitNotes([], f.head(), 'Foreign item', { page: foreign, base })).rejects.toThrow('Invalid Screen configuration.');
+  });
+  it('compares a Screen draft against the migrated version 1 file', async () => {
+    const f = fixture({ '.github-notes-screen.yaml': 'version: 1\nrows:\n  - id: reading\n    name: Reading\n    view: small\n    kind: custom\n    items: []\n' });
+    const base = { version: 2, rows: [{ id: 'reading', kind: 'custom', name: 'Reading', view: 'small', notebookId: 'ex', items: [] }] };
+    await f.reader().commitNotes([], f.head(), 'Rename lane', { page: { version: 2, rows: [{ ...base.rows[0], name: 'Later' }] }, base });
+    expect(f.text('.github-notes-screen.yaml')).toContain('version: 2');
+    expect(f.text('.github-notes-screen.yaml')).toContain('notebookId: ex');
   });
   it('commits selected browser notes atomically and rejects invalid batches before writing', async () => {
     const f = fixture(); const baseline = f.head();

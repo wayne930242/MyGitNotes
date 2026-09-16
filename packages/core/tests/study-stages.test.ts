@@ -67,11 +67,10 @@ describe('Default learning strategies', () => {
   });
   it('scopes defaults to the lane notebooks and preserves YAML ordering', () => {
     const notebooks = [{ id: 'a', statuses: ['new', 'known'] }, { id: 'b', statuses: ['todo', 'review', 'done'] }];
-    const row = { id: 'lane', name: 'Lane', view: 'small' as const, kind: 'dynamic' as const, source: { kind: 'folder' as const, notebookId: 'b', path: 'notes/b', recursive: true } };
+    const row = { id: 'lane', name: 'Lane', view: 'small' as const, notebookId: 'b', kind: 'dynamic' as const, source: { kind: 'folder' as const, notebookId: 'b', path: 'notes/b', recursive: true } };
     expect(studyLaneStatuses(row, notebooks)).toEqual(['todo', 'review', 'done']);
-    expect(studyLaneStatuses({ ...row, source: { kind: 'tag', tag: 'review', notebookId: 'a' } }, notebooks)).toEqual(['new', 'known']);
-    expect(studyLaneStatuses({ ...row, kind: 'custom', items: [{ id: 'note', kind: 'note', notebookId: 'a', path: 'notes/a/test.md' }] }, notebooks)).toEqual(['new', 'known']);
-    expect(studyLaneStatuses({ ...row, source: { kind: 'tag', tag: 'review' } }, notebooks)).toEqual(['new', 'known', 'todo', 'review', 'done']);
+    expect(studyLaneStatuses({ ...row, notebookId: 'a', source: { kind: 'tag', tag: 'review', notebookId: 'a' } }, notebooks)).toEqual(['new', 'known']);
+    expect(studyLaneStatuses({ ...row, notebookId: 'a', kind: 'custom', items: [] }, notebooks)).toEqual(['new', 'known']);
   });
 });
 

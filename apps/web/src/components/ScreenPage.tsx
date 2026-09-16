@@ -88,7 +88,7 @@ function Lane({ row, graph, reorder, disabled, study, onStudy, onStudyChange, on
   const query = row.study || { filter: 'all' as const, dueFirst: false };
   const filtered = Boolean(query.status);
   const drop = useDroppable({ id: `lane:${row.id}`, disabled: disabled || !reorder || filtered || row.kind !== 'custom', data: { rowId: row.id, empty: row.kind === 'custom' && !row.items.length } });
-  const statuses = [...new Set(content.notebooks.flatMap(notebook => resolveNoteStatuses(notebook, content.notes.filter(note => note.notebookId === notebook.id).map(note => note.status))))];
+  const statuses = [...new Set(content.notebooks.filter(notebook => notebook.id === row.notebookId).flatMap(notebook => resolveNoteStatuses(notebook, content.notes.filter(note => note.notebookId === notebook.id).map(note => note.status))))];
   useAltWheelHorizontalScroll(host, strip);
   const scroll = (direction: number) => strip.current?.scrollBy({ left: direction * strip.current.clientWidth * .8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   const source = row.kind === 'dynamic' ? row.source.kind === 'tag' ? `#${row.source.tag}` : row.source.path : '';
@@ -160,7 +160,15 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
   const [assetAttempt, setAssetAttempt] = useState(0), [assetsLoading, setAssetsLoading] = useState(false);
   const [studyToolbar, setStudyToolbar] = useState<HTMLDivElement | null>(null);
   const [editing, setEditing] = useState<string>();
-  const focusedRow = screen.page.rows.find(row => row.id === focusedLaneId);
+  const rows = screen.page.rows.filter(row => row.notebookId === selectedNotebookId);
+  const focusedRow = rows.find(row => row.id === focusedLaneId);
+  const laneNotebookId = screen.page.rows.find(row => row.id === focusedLaneId)?.notebookId;
+  const switchingLane = Boolean(laneNotebookId && laneNotebookId !== selectedNotebookId && notebooks.some(notebook => notebook.id === laneNotebookId));
+  useEffect(() => {
+    if (!switchingLane || !laneNotebookId) return;
+    const query = new URLSearchParams(location.search); query.set('notebook', laneNotebookId);
+    navigate(`${location.pathname}?${query}${location.hash}`, { replace: true });
+  }, [switchingLane, laneNotebookId, location.pathname, location.search, location.hash, navigate]);
   const editingRow = screen.page.rows.find(row => row.id === editing);
   const returnToScreen = () => { const query = new URLSearchParams(location.search); query.delete('mode'); query.delete('studyFilter'); navigate(`/screen${query.size ? '?' + query.toString() : ''}#screen-lane-${focusedLaneId}`); };
   const reviewRow = focusedRow && { ...focusedRow, progression: focusedRow.progression || defaultStudyProgression(studyLaneStatuses(focusedRow, notebooks)), study: { ...(focusedRow.study || {}), filter: focusedRow.study?.filter || 'all', dueFirst: true } };
@@ -191,13 +199,14 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
   }, [focusedLaneId, sidebar.setOpen]);
   useEffect(() => {
     let active = true; setAssetsLoading(true);
-    void Promise.allSettled(notebooks.map(async nb => (await fetchAssets(nb.id)).map(asset => ({ ...asset, notebookId: nb.id })))).then(results => {
+    const scoped = notebooks.filter(nb => nb.id === selectedNotebookId);
+    void Promise.allSettled(scoped.map(async nb => (await fetchAssets(nb.id)).map(asset => ({ ...asset, notebookId: nb.id })))).then(results => {
       if (!active) return;
-      setAssets(previous => results.flatMap((result,index) => result.status === 'fulfilled' ? result.value : previous.filter(asset => asset.notebookId === notebooks[index].id)));
+      setAssets(previous => results.flatMap((result,index) => result.status === 'fulfilled' ? result.value : previous.filter(asset => asset.notebookId === scoped[index].id)));
       setAssetError(results.some(result => result.status === 'rejected')); setAssetsLoading(false);
     });
     return () => { active = false; };
-  }, [notebooks, notes, assetAttempt]);
+  }, [notebooks, notes, selectedNotebookId, assetAttempt]);
   const disabled = !screen.writable || screen.loading;
   const content: ScreenContentProps = { notebooks, notes, assets, onOpen: item => {
     if (item.kind === 'youtube') { window.open(`https://www.youtube.com/watch?v=${item.videoId}&t=${item.start}`, '_blank', 'noopener,noreferrer'); return; }
@@ -223,7 +232,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
           <Button className="screen-sidebar-action" disabled={disabled || screen.page.rows.length >= 40} onClick={() => { sidebar.setOpen(false); setDialog('add'); }}><Plus size={16} /><span>{t('screen.addRow')}</span></Button>
           {screen.writable && <ReorderToggle active={reorder} disabled={disabled} onToggle={() => setReorder(value => !value)} />}
         </div>
-        {screen.page.rows.length > 0 && <ScreenLaneNavigation reorder={reorder} page={screen.page} disabled={disabled} notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onChange={screen.change} onSelect={id => { document.getElementById(`screen-lane-${id}`)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); sidebar.setOpen(false); }} />}
+        {rows.length > 0 && <ScreenLaneNavigation reorder={reorder} page={screen.page} disabled={disabled} notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onChange={screen.change} onSelect={id => { document.getElementById(`screen-lane-${id}`)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); sidebar.setOpen(false); }} />}
       </WorkspaceSidebar>
     </WorkspaceSidebarDrawer>
     <WorkspaceSidebarToggle label={t('screen.controls')} open={sidebar.open} onClick={() => sidebar.setOpen(open => !open)} />
@@ -244,8 +253,8 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
       </div>}
       {screen.loading ? <p role="status">{t('screen.loading')}</p> : <>
         {!screen.writable && <p className="screen-dialog-hint">{t('screen.readOnly')}</p>}
-        {focusedLaneId && !focusedRow && <div className="screen-board-empty" role="status"><p>{t('screen.laneMissing')}</p></div>}
-        {!focusedLaneId && !screen.page.rows.length && <div className="screen-board-empty"><ScreenIcon size={36} /><h3>{t('screen.startTitle')}</h3><p>{t('screen.startHint')}</p>
+        {focusedLaneId && !focusedRow && !switchingLane && <div className="screen-board-empty" role="status"><p>{t('screen.laneMissing')}</p></div>}
+        {!focusedLaneId && !rows.length && <div className="screen-board-empty"><ScreenIcon size={36} /><h3>{t('screen.startTitle')}</h3><p>{t('screen.startHint')}</p>
           <Button variant="primary" disabled={disabled} onClick={() => setDialog('add')}><Plus size={16} />{t('screen.addRow')}</Button></div>}
         {focusedLaneId ? reviewRow && <section id={`screen-lane-${reviewRow.id}`} className="screen-study-session" aria-label={reviewRow.name}>
           <StudyLane toolbar={studyToolbar} key={reviewRow.id} row={reviewRow} notes={reviewNotes} allNotes={notes} controller={study} disabled={disabled || screen.dirty || screen.saving} onOpen={onOpenNote} />
@@ -256,7 +265,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
             if (target?.study?.status) return;
             if (target?.kind === 'custom') screen.change(moveScreenItem(screen.page, String(active.id), target.id, over.id === `lane:${target.id}` ? target.items.length : target.items.findIndex(item => item.id === over.id)));
           }}>
-          {screen.page.rows.map(row => <Lane reorder={reorder} key={row.id} row={row} {...content} disabled={disabled} study={study}
+          {rows.map(row => <Lane reorder={reorder} key={row.id} row={row} {...content} disabled={disabled} study={study}
             graph={row.view === 'graph' ? <GraphPage notebooks={notebooks} notes={notes} lane={row} screen={screen} editing={graphEditing} onOpenNote={onOpenNote} /> : undefined}
             onCreateNote={onCreateNote}
             onStudy={() => navigate(screenLaneRoute(row.id) + location.search)}
@@ -277,7 +286,7 @@ export function ScreenPage({ notebooks, notes, folders, selectedNotebookId, scre
       onRemove={() => { screen.change({ ...screen.page, rows: screen.page.rows.filter(row => row.id !== editingRow.id) }); if (focusedLaneId === editingRow.id) navigate('/screen' + location.search); }} />}
     {dialog === 'add' && <ScreenAddRow notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onClose={() => setDialog(null)} onAdd={row => screen.change({ ...screen.page, rows: [...screen.page.rows, row] })} />}
     {dialog === 'reload' && <WorkspaceDialog title={t('screen.reload')} onClose={() => setDialog(null)}><p>{t('screen.reloadHint')}</p><div className="workspace-dialog-actions"><Button  onClick={() => setDialog(null)}>{t('common.cancel')}</Button><Button  onClick={() => { setDialog(null); void screen.reload(); }}>{t('screen.reload')}</Button></div></WorkspaceDialog>}
-    {row?.kind === 'custom' && <ScreenAddItem {...content} folders={folders} rowName={row.name} selectedNotebookId={selectedNotebookId} onClose={() => setAddTo(null)} onAdd={item => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id && value.kind === 'custom' ? { ...value, items: [...value.items, item] } : value) })} />}
+    {row?.kind === 'custom' && <ScreenAddItem {...content} folders={folders} rowName={row.name} notebookId={row.notebookId} onClose={() => setAddTo(null)} onAdd={item => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id && value.kind === 'custom' ? { ...value, items: [...value.items, item] } : value) })} />}
     {preview && <WorkspaceDialog title={preview.name} onClose={() => setPreview(undefined)} className="asset-preview-dialog"><div className="workspace-asset-preview">{/\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(preview.name) ? <img src={preview.rawUrl} alt={preview.name} /> : <a href={preview.rawUrl} target="_blank" rel="noopener noreferrer">{preview.name}</a>}</div><div className="workspace-dialog-actions"><Button  onClick={() => navigate(`/assets?notebook=${encodeURIComponent(preview.notebookId)}&asset=${encodeURIComponent(preview.path)}`)}>{t('links.locateAsset')}</Button></div></WorkspaceDialog>}
   </div>;
 }

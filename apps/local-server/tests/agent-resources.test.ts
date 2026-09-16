@@ -85,10 +85,10 @@ it.each([
 
 it('saves Screen YAML as one remote file with authentication and revision protection', async () => {
   const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
-  const page = { version: 1, rows: [{ id: 'lane', name: 'Reading', view: 'small', kind: 'custom', items: [
+  const page = { version: 2, rows: [{ id: 'lane', name: 'Reading', view: 'small', notebookId: 'ex', kind: 'custom', items: [
     { id: 'pin', kind: 'note', notebookId: 'ex', path: 'notes/ex/read.md' },
   ] }] };
-  expect(await fetch(`${base}/api/screen-page`).then(r => r.json())).toMatchObject({ writable: false, page: { version: 1, rows: [] } });
+  expect(await fetch(`${base}/api/screen-page`).then(r => r.json())).toMatchObject({ writable: false, page: { version: 2, rows: [] } });
   expect(await fetch(`${base}/api/screen-page`, { headers }).then(r => r.json())).toMatchObject({ writable: true, revision: 'before' });
   const put = (revision: string, authenticated = true) => fetch(`${base}/api/screen-page`, { method: 'PUT', headers: authenticated ? headers : { 'Content-Type': 'application/json' }, body: JSON.stringify({ page, revision }) });
   expect((await put('before', false)).status).toBe(403);

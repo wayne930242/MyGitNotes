@@ -6,6 +6,7 @@ import { useTranslation } from '../lib/i18n/index.js';
 import { Button } from './Button.js';
 import { DiffPreview } from './DiffPreview.js';
 import { EditorNotice } from './EditorNotice.js';
+import { GitSyncSection } from './GitSyncSection.js';
 
 interface ChangesToolProps {
   gitStatus: GitStatus | null;
@@ -15,9 +16,10 @@ interface ChangesToolProps {
   remoteChanges?: FileChange[];
   getPreview?: (file: string) => string;
   writable: boolean;
+  onSynced?: () => void;
 }
 
-export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable }: ChangesToolProps) {
+export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced }: ChangesToolProps) {
   const { t } = useTranslation();
   const [localFiles, setFiles] = useState<FileChange[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -79,5 +81,6 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
       </div>
     </>}
     {deletedNotes.length > 0 && <section className="todo-group"><h4>{t('panel.changesDeleted')}</h4><ul>{deletedNotes.map(note => <li key={note.path} className="changes-deleted-item"><span>{note.title}</span><Button size="icon" aria-label={t('footer.restore')} disabled={!writable} onClick={() => onRestoreNote(note)}><RotateCcw aria-hidden="true" /></Button></li>)}</ul></section>}
+    {onSynced && <GitSyncSection gitStatus={gitStatus} onSynced={onSynced} />}
   </div>;
 }

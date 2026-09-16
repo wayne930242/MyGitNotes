@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { parse, stringify } from 'yaml';
-import { emptyScreenPage, ScreenPageSchema, SCREEN_PAGE_FILE, createRemoteSource, SourceError, type SourceConfig } from '@mygitnotes/core';
+import { emptyScreenPage, readScreenPage, loadWorkspaceConfig, ScreenPageSchema, SCREEN_PAGE_FILE, createRemoteSource, SourceError, type ScreenNotebookConfig, type SourceConfig } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
@@ -18,8 +18,8 @@ async function readLocal(root: string) {
     return await fs.readFile(file, 'utf8');
   } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
 }
-function decode(raw: string | null) {
-  try { return raw === null ? emptyScreenPage() : ScreenPageSchema.parse(parse(raw, { maxAliasCount: 20 })); }
+function decode(raw: string | null, config: ScreenNotebookConfig | null) {
+  try { return raw === null ? emptyScreenPage() : readScreenPage(parse(raw, { maxAliasCount: 20 }), config); }
   catch { throw new SourceError('Invalid Screen Page YAML. Fix the file before saving.', 422); }
 }
 function fail(res: import('express').Response, error: unknown) {
@@ -32,14 +32,14 @@ export function createScreenPageRouter(base: string, source: SourceConfig): Rout
     try {
       if (source.type === 'local') {
         const raw = await readLocal(source.path);
-        return res.json({ page: decode(raw), revision: revisionOf(raw), path: SCREEN_PAGE_FILE, writable: await getCurrentBranch(source.path) === 'main' });
+        return res.json({ page: decode(raw, loadWorkspaceConfig(source.path)), revision: revisionOf(raw), path: SCREEN_PAGE_FILE, writable: await getCurrentBranch(source.path) === 'main' });
       }
       const token = await authToken(req, base);
       const reader = createRemoteSource(source, token);
       const snapshot = await reader.getSnapshot();
       const exists = snapshot.entries.some(entry => entry.path === SCREEN_PAGE_FILE);
       const raw = exists ? (await reader.readFile(SCREEN_PAGE_FILE)).toString('utf8') : null;
-      res.json({ page: decode(raw), revision: snapshot.sha, path: SCREEN_PAGE_FILE, writable: Boolean(token && snapshot.info.permissions?.push && source.branch === 'main') });
+      res.json({ page: decode(raw, await reader.config()), revision: snapshot.sha, path: SCREEN_PAGE_FILE, writable: Boolean(token && snapshot.info.permissions?.push && source.branch === 'main') });
     } catch (error) { fail(res, error); }
   });
   router.put('/', async (req, res) => {

@@ -22,10 +22,16 @@ export class GitExecutionError extends Error {
  */
 export async function runGit(
   args: string[],
-  cwd: string
+  cwd: string,
+  options: { env?: Record<string, string>; timeout?: number } = {}
 ): Promise<{ stdout: string; stderr: string }> {
   try {
-    const result = await execFileAsync('git', args, { cwd, maxBuffer: 10 * 1024 * 1024 });
+    const result = await execFileAsync('git', args, {
+      cwd,
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: options.timeout,
+      env: options.env && { ...process.env, ...options.env },
+    });
     return {
       stdout: result.stdout.replace(/[\r\n]+$/, ''),
       stderr: result.stderr.trim(),
@@ -90,7 +96,20 @@ export async function getGitStatus(repoRoot: string): Promise<GitStatusResult> {
     staged,
     modified,
     untracked,
+    ...(await getUpstreamStatus(repoRoot)),
   };
+}
+
+/**
+ * Compares HEAD with its upstream as of the last fetch.
+ */
+export async function getUpstreamStatus(repoRoot: string): Promise<{ upstream: string | null; ahead: number; behind: number }> {
+  const upstream = await runGit(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], repoRoot)
+    .then(result => result.stdout.trim(), () => null);
+  if (!upstream) return { upstream: null, ahead: 0, behind: 0 };
+  const { stdout } = await runGit(['rev-list', '--left-right', '--count', '@{u}...HEAD'], repoRoot);
+  const [behind, ahead] = stdout.trim().split(/\s+/).map(Number);
+  return { upstream, ahead, behind };
 }
 
 /**

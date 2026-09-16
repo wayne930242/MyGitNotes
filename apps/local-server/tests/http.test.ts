@@ -68,6 +68,38 @@ describe('real HTTP local boundaries',()=>{
     expect(fs.existsSync(path.join(root, other))).toBe(false);
     expect(fs.readFileSync(path.join(root, '.env'), 'utf8')).toBe('SECRET=hidden');
   });
+  it('syncs main with its upstream and reports conflicts with their files', async () => {
+    const request = (body: unknown = {}) => fetch(`${base}/api/git/sync`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    expect(await request().then(async r => [r.status, (await r.json()).code])).toEqual([409, 'NO_UPSTREAM']);
+    const remote = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-http-remote-'));
+    try {
+      execFileSync('git', ['init', '--bare', '-b', 'main', remote], { stdio: 'pipe' });
+      git('remote', 'add', 'origin', remote); git('push', '-u', 'origin', 'main');
+      fs.writeFileSync(path.join(root, 'notes/example/projects/deep/note.md'), '# Local');
+      git('commit', '-am', 'local edit');
+      expect((await fetch(`${base}/api/git/status`).then(r => r.json())).status).toMatchObject({ upstream: 'origin/main', ahead: 1, behind: 0 });
+      const synced = await request(); expect(synced.status).toBe(200);
+      expect((await synced.json()).result).toMatchObject({ upstream: 'origin/main', pulled: 0, pushed: 1 });
+      const other = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-http-other-'));
+      try {
+        execFileSync('git', ['clone', remote, other], { stdio: 'pipe' });
+        const run = (...args: string[]) => execFileSync('git', args, { cwd: other, stdio: 'pipe' });
+        run('config', 'user.name', 'Other'); run('config', 'user.email', 'other@example.com');
+        fs.writeFileSync(path.join(other, 'notes/example/projects/deep/note.md'), '# Remote'); run('commit', '-am', 'remote edit'); run('push');
+      } finally { fs.rmSync(other, { recursive: true, force: true }); }
+      fs.writeFileSync(path.join(root, 'notes/example/projects/deep/note.md'), '# Conflict');
+      expect(await request().then(async r => [r.status, (await r.json()).code])).toEqual([409, 'DIRTY']);
+      git('commit', '-am', 'conflicting edit');
+      const conflict = await request();
+      expect(conflict.status).toBe(409);
+      expect(await conflict.json()).toMatchObject({ code: 'CONFLICT', files: ['notes/example/projects/deep/note.md'] });
+      expect((await request({ strategy: 'sideways' })).status).toBe(400);
+      expect((await request({ strategy: 'local' })).status).toBe(200);
+      expect(execFileSync('git', ['show', 'main:notes/example/projects/deep/note.md'], { cwd: remote }).toString()).toBe('# Conflict');
+      git('checkout', '-b', 'core');
+      expect((await request()).status).toBe(403);
+    } finally { fs.rmSync(remote, { recursive: true, force: true }); }
+  });
   it('lists, edits, commits and restores workspace Agent documents while protecting secrets and product paths', async () => {
     const settings = ['AGENTS.md', '.agents/skills/custom/SKILL.md', '.codex/agents/reviewer.toml'];
     for (const file of settings) {

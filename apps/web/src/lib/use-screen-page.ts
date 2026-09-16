@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { stringify } from 'yaml';
-import { ScreenPageSchema, emptyScreenPage, SCREEN_PAGE_FILE, type ScreenPage } from '@mygitnotes/core/screen-page';
+import { ScreenPageSchema, emptyScreenPage, readScreenPage, SCREEN_PAGE_FILE, type ScreenNotebookConfig, type ScreenPage } from '@mygitnotes/core/screen-page';
 import { useTranslation } from './i18n/index.js';
 import { createUnifiedDiff } from './unified-diff.js';
 
 interface Snapshot { page: ScreenPage; revision: string; writable: boolean; path: string }
 interface Draft { page: ScreenPage; base: ScreenPage; revision: string; legacy?: boolean }
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-export function useScreenPage(scope: string, onSaved: () => void, remote = false, enabled = true) {
+export function useScreenPage(scope: string, onSaved: () => void, remote = false, enabled = true, config: ScreenNotebookConfig | null = null) {
   const { t } = useTranslation();
   const [page, setPage] = useState<ScreenPage>(emptyScreenPage);
   const [snapshot, setSnapshot] = useState<Snapshot>();
@@ -15,13 +15,15 @@ export function useScreenPage(scope: string, onSaved: () => void, remote = false
   const [dirty, setDirty] = useState(false);
   const revision = useRef(''), base = useRef<ScreenPage>(emptyScreenPage()), current = useRef(page);
   const saved = useRef(onSaved); saved.current = onSaved;
+  const notebooks = useRef(config); notebooks.current = config;
   const key = `github-notes:screen-draft:${scope}`;
   const currentKey = useRef(key); currentKey.current = key;
   const readDraft = useCallback((): Draft | undefined => {
     const raw = localStorage.getItem(key);
     if (!raw) return;
     const value = JSON.parse(raw);
-    return { page: ScreenPageSchema.parse(value.page), base: value.base ? ScreenPageSchema.parse(value.base) : base.current, revision: String(value.revision), legacy: !value.base };
+    // Drafts saved before notebook-owned lanes migrate the same way as the stored file.
+    return { page: readScreenPage(value.page, notebooks.current), base: value.base ? readScreenPage(value.base, notebooks.current) : base.current, revision: String(value.revision), legacy: !value.base };
   }, [key]);
   const load = useCallback(async (discard = false) => {
     if (!enabled) return;

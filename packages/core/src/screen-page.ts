@@ -7,7 +7,8 @@ export const SCREEN_PAGE_FILE = '.github-notes-screen.yaml';
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
 const repoPath = z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value)
   && value.split('/').every(part => part !== '' && part !== '.' && part !== '..'), 'Invalid workspace path');
-const reference = { id, notebookId: z.string().min(1).max(128), path: repoPath };
+const notebookId = z.string().min(1).max(128);
+const reference = { id, notebookId, path: repoPath };
 export const ScreenItemSchema = z.discriminatedUnion('kind', [
   z.object({ ...reference, kind: z.literal('note') }).strict(),
   z.object({ ...reference, kind: z.literal('folder') }).strict(),
@@ -21,17 +22,19 @@ export const GraphLayoutSchema = z.object({ nodes: z.array(z.object({
 }).strict()).max(5000) }).strict();
 export type GraphLayout = z.infer<typeof GraphLayoutSchema>;
 const row = { id, name: z.string().trim().min(1).max(100), view: z.enum(['thumbnail', 'small', 'medium', 'graph', 'reading', 'study']).transform(value => value === 'reading' || value === 'study' ? 'small' as const : value), graph: GraphLayoutSchema.optional(), progression: StudyProgressionSchema.optional(), study: z.object({ filter: z.enum(['all', 'due', 'future', 'paused']), dueFirst: z.boolean(), status: z.string().max(200).optional() }).strict().optional() };
+const sort = z.object({
+  field: z.enum(['updated', 'created', 'title', 'status']),
+  order: z.enum(['asc', 'desc']),
+}).strict().optional();
+const tagSource = z.object({ kind: z.literal('tag'), tag: z.string().min(1).max(200), notebookId }).strict();
+const folderSource = z.object({ kind: z.literal('folder'), notebookId, path: repoPath, recursive: z.boolean().default(true) }).strict();
+const items = z.array(ScreenItemSchema).max(100);
+/** Every lane belongs to one notebook; its pinned items and dynamic source stay inside it. */
 export const ScreenRowSchema = z.discriminatedUnion('kind', [
-  z.object({ ...row, kind: z.literal('custom'), items: z.array(ScreenItemSchema).max(100) }).strict(),
-  z.object({ ...row, kind: z.literal('dynamic'), sort: z.object({
-    field: z.enum(['updated', 'created', 'title', 'status']),
-    order: z.enum(['asc', 'desc']),
-  }).strict().optional(), source: z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('tag'), tag: z.string().min(1).max(200), notebookId: z.string().min(1).max(128).optional() }).strict(),
-    z.object({ kind: z.literal('folder'), notebookId: z.string().min(1).max(128), path: repoPath, recursive: z.boolean().default(true) }).strict(),
-  ]) }).strict(),
+  z.object({ ...row, notebookId, kind: z.literal('custom'), items }).strict(),
+  z.object({ ...row, notebookId, kind: z.literal('dynamic'), sort, source: z.discriminatedUnion('kind', [tagSource, folderSource]) }).strict(),
 ]);
-export const ScreenPageSchema = z.object({ version: z.literal(1), rows: z.array(ScreenRowSchema).max(40) }).strict()
+export const ScreenPageSchema = z.object({ version: z.literal(2), rows: z.array(ScreenRowSchema).max(40) }).strict()
   .superRefine((page, context) => {
     const ids = new Set<string>(); let items = 0;
     for (const row of page.rows) {
@@ -41,21 +44,61 @@ export const ScreenPageSchema = z.object({ version: z.literal(1), rows: z.array(
         if (ids.has(id)) context.addIssue({ code: 'custom', message: 'Duplicate Screen Page identity' });
         ids.add(id);
       }
+      const contents = row.kind === 'custom' ? row.items.flatMap(item => item.kind === 'youtube' ? [] : [item.notebookId]) : [row.source.notebookId];
+      if (contents.some(value => value !== row.notebookId)) context.addIssue({ code: 'custom', message: 'Screen lane content must belong to the lane notebook' });
     }
     if (items > 500) context.addIssue({ code: 'custom', message: 'Screen Page has too many pinned items' });
   });
+/** Version 1 lanes had no owner notebook and could mix notebooks. */
+const LegacyScreenPageSchema = z.object({ version: z.literal(1), rows: z.array(z.discriminatedUnion('kind', [
+  z.object({ ...row, kind: z.literal('custom'), items }).strict(),
+  z.object({ ...row, kind: z.literal('dynamic'), sort, source: z.discriminatedUnion('kind', [tagSource.extend({ notebookId: notebookId.optional() }), folderSource]) }).strict(),
+])).max(40) }).strict();
+/** Validates a stored file of either version without migrating it. */
+export const ScreenPageFileSchema = z.union([ScreenPageSchema, LegacyScreenPageSchema]);
 export type ScreenItem = z.infer<typeof ScreenItemSchema>;
 export type ScreenRow = z.infer<typeof ScreenRowSchema>;
 export type ScreenPage = z.infer<typeof ScreenPageSchema>;
-export const emptyScreenPage = (): ScreenPage => ({ version: 1, rows: [] });
+export interface ScreenNotebookConfig { workspace: { default_notebook: string }; notebooks: { id: string }[] }
+export const emptyScreenPage = (): ScreenPage => ({ version: 2, rows: [] });
+
+/** Parse a stored Screen Page, migrating version 1 lanes into their notebooks. */
+export function readScreenPage(value: unknown, config: ScreenNotebookConfig | null): ScreenPage {
+  const page = ScreenPageFileSchema.parse(value);
+  if (page.version === 2) return page;
+  const fallback = config?.workspace.default_notebook || config?.notebooks[0]?.id;
+  const used = new Set(page.rows.flatMap(row => [row.id, ...(row.kind === 'custom' ? row.items.map(item => item.id) : [])]));
+  const unique = (base: string) => {
+    const clean = base.replace(/[^a-zA-Z0-9_-]/g, '-');
+    let candidate = clean.slice(0, 64);
+    for (let suffix = 2; used.has(candidate); suffix++) candidate = `${clean.slice(0, 63 - String(suffix).length)}-${suffix}`;
+    used.add(candidate);
+    return candidate;
+  };
+  const rows = page.rows.flatMap<unknown>(row => {
+    if (row.kind === 'dynamic') {
+      const owner = row.source.notebookId || fallback;
+      return [{ ...row, notebookId: owner, source: { ...row.source, notebookId: owner } }];
+    }
+    const groups = new Map<string, ScreenItem[]>();
+    for (const item of row.items) if (item.kind !== 'youtube') groups.set(item.notebookId, [...(groups.get(item.notebookId) || []), item]);
+    const [first = fallback, ...rest] = groups.keys();
+    return [
+      { ...row, notebookId: first, items: row.items.filter(item => item.kind === 'youtube' || item.notebookId === first) },
+      ...rest.map(owner => ({ ...row, id: unique(`${row.id}-${owner}`), notebookId: owner, items: groups.get(owner)! })),
+    ];
+  });
+  return ScreenPageSchema.parse({ version: 2, rows });
+}
 
 /** Membership is shared by lane cards and graph views; folder shortcuts stay shortcuts. */
 export function screenRowNotes(row: ScreenRow, notes: NoteItem[]): NoteItem[] {
   return notes.filter(note => {
     if (row.study?.status && note.status !== row.study.status) return false;
+    if (note.notebookId !== row.notebookId) return false;
     if (row.kind === 'custom') return row.items.some(item => item.kind === 'note' && item.path === note.path && item.notebookId === note.notebookId);
     const source = row.source;
-    if (isNoteHidden({ ...note.metadata, status: note.status }) || source.notebookId && source.notebookId !== note.notebookId) return false;
+    if (isNoteHidden({ ...note.metadata, status: note.status })) return false;
     if (source.kind === 'tag') return note.tags.includes(source.tag);
     return note.path.startsWith(source.path + '/') && (source.recursive || !note.path.slice(source.path.length + 1).includes('/'));
   });
@@ -74,6 +117,7 @@ export function moveScreenItem(page: ScreenPage, itemId: string, targetRowId: st
   const source = page.rows.find(row => row.kind === 'custom' && row.items.some(item => item.id === itemId));
   const target = page.rows.find(row => row.id === targetRowId);
   if (source?.kind !== 'custom' || target?.kind !== 'custom') throw new Error('Only custom swimlanes accept moved items');
+  if (source.notebookId !== target.notebookId) throw new Error('Items stay inside their notebook');
   const item = source.items.find(item => item.id === itemId)!;
   const rows = page.rows.map(row => {
     if (row.kind !== 'custom') return row;

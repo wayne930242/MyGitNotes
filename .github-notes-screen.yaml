@@ -1,7 +1,8 @@
-version: 1
+version: 2
 rows:
   - id: example-graph
     name: Graph Playground
+    notebookId: example
     kind: dynamic
     view: graph
     source:
@@ -33,6 +34,7 @@ rows:
           y: 260
   - id: example-media
     name: Images and Music
+    notebookId: example
     kind: custom
     view: medium
     items:
@@ -58,6 +60,7 @@ rows:
         path: notes/example/projects
   - id: example-planning
     name: Tasks and Weekly Review
+    notebookId: example
     kind: custom
     view: small
     items:
@@ -71,6 +74,7 @@ rows:
         path: notes/example/projects/weekly-review.md
   - id: example-projects
     name: Projects (Dynamic Folder)
+    notebookId: example
     kind: dynamic
     view: thumbnail
     source:
@@ -80,6 +84,7 @@ rows:
       recursive: true
   - id: explore
     name: 學習：一次一張卡片
+    notebookId: learning
     kind: dynamic
     view: small
     source: &a2
@@ -103,6 +108,7 @@ rows:
       status: working
   - id: reading
     name: 隨選閱讀
+    notebookId: learning
     kind: dynamic
     view: medium
     source:
@@ -112,6 +118,7 @@ rows:
     progression: *a1
   - id: review-stage
     name: 進階複習 · 7 天
+    notebookId: learning
     kind: dynamic
     view: small
     source: *a2
@@ -121,6 +128,7 @@ rows:
       status: review
   - id: done-stage
     name: 熟悉 · 30 天
+    notebookId: learning
     kind: dynamic
     view: thumbnail
     source: *a2
@@ -130,6 +138,7 @@ rows:
       status: done
   - id: later
     name: 延後再看
+    notebookId: learning
     kind: dynamic
     view: small
     source: *a2

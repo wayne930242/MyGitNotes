@@ -109,6 +109,19 @@ it('rejects stage actions on Core and note symlinks', async () => {
   expect((await act(request)).status).toBe(403);
 });
 
+it('rejects reviewing a note from outside the lane notebook', async () => {
+  const raw = await stageFixture();
+  await writeFile(path.join(root, '.github-notes.yaml'), stringify({ schema_version: 1, workspace: { title: 'Test', default_notebook: 'a' }, notebooks: [
+    { id: 'a', title: 'A', root: 'notes/a' }, { id: 'b', title: 'B', root: 'notes/b' },
+  ] }));
+  await writeFile(path.join(root, '.github-notes-screen.yaml'), stringify({ version: 2, rows: [{ id: 'lane', name: 'Other', kind: 'dynamic', view: 'small', notebookId: 'b',
+    source: { kind: 'folder', notebookId: 'b', path: 'notes/b', recursive: true },
+    progression: { stages: [{ status: 'new', intervalDays: 1 }, { status: 'known', intervalDays: 3 }], easy: 'two' },
+  }] }));
+  expect((await act(await stageRequest())).status).toBe(403);
+  expect(await readFile(path.join(root, source.path), 'utf8')).toBe(raw);
+  expect((await fetch(url).then(response => response.json())).study.events).toEqual([]);
+});
 it('uses only the lane notebook statuses when its progression is omitted', async () => {
   await stageFixture();
   await writeFile(path.join(root, '.github-notes.yaml'), stringify({ schema_version: 1, workspace: { title: 'Test', default_notebook: 'a' }, notebooks: [

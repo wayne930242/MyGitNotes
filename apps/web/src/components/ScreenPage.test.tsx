@@ -18,6 +18,7 @@ describe('createLaneNoteContext', () => {
       id: 'r1',
       name: 'Clues',
       view: 'small',
+      notebookId: 'nb-1',
       kind: 'dynamic',
       source: { kind: 'tag', tag: 'clue', notebookId: 'nb-1' },
     };
@@ -27,25 +28,12 @@ describe('createLaneNoteContext', () => {
     });
   });
 
-  it('extracts tag context for cross-notebook tag dynamic lanes', () => {
-    const row: ScreenRow = {
-      id: 'r2',
-      name: 'All Clues',
-      view: 'small',
-      kind: 'dynamic',
-      source: { kind: 'tag', tag: 'clue' },
-    };
-    expect(createLaneNoteContext(row, notebooks)).toEqual({
-      tag: 'clue',
-      notebookId: undefined,
-    });
-  });
-
   it('extracts relative folder context for nested folder dynamic lanes', () => {
     const row: ScreenRow = {
       id: 'r3',
       name: 'Deep Folder',
       view: 'medium',
+      notebookId: 'nb-1',
       kind: 'dynamic',
       source: { kind: 'folder', notebookId: 'nb-1', path: 'notes/main/campaign/sessions', recursive: true },
     };
@@ -60,6 +48,7 @@ describe('createLaneNoteContext', () => {
       id: 'r4',
       name: 'Root Folder',
       view: 'thumbnail',
+      notebookId: 'nb-2',
       kind: 'dynamic',
       source: { kind: 'folder', notebookId: 'nb-2', path: 'notes/secondary', recursive: false },
     };
@@ -74,6 +63,7 @@ describe('createLaneNoteContext', () => {
       id: 'r5',
       name: 'Pinned',
       view: 'small',
+      notebookId: 'nb-1',
       kind: 'custom',
       items: [],
     };
