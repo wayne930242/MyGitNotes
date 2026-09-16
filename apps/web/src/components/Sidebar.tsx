@@ -64,6 +64,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (scoped) { onChange({ folders: scoped }); return; }
     onSelectFolder?.(folder);
   };
+  // A touch long-press enters multi-select mode (see FolderTree/use-long-press); it exits
+  // automatically once every folder has been tapped back out of the selection.
+  const [touchMultiSelect, setTouchMultiSelect] = useState(false);
+  useEffect(() => { if (touchMultiSelect && value.folders.length === 0) setTouchMultiSelect(false); }, [touchMultiSelect, value.folders.length]);
+  const enterTouchMultiSelect = (notebookId: string, folder: string) => {
+    setTouchMultiSelect(true);
+    toggleFolder(notebookId, folder);
+  };
   const [tagQuery, setTagQuery] = useState('');
   const [tagSort, setTagSort] = useState<TagSort>(getSavedTagSort);
   useEffect(() => { setTagQuery(''); }, [selectedNotebookId]);
@@ -164,6 +172,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               allFoldersSelected={value.folders.length === 0}
               selectedPaths={value.folders.filter(path => path.startsWith(root + '/')).map(path => path.slice(root.length + 1))}
               onFilterFolder={folder => toggleFolder(nb.id, folder)}
+              touchMultiSelect={touchMultiSelect}
+              onLongPressFolder={folder => enterTouchMultiSelect(nb.id, folder)}
               writable={foldersWritable} beforeChange={beforeFolderChange} onChanged={onFoldersChanged} />
           </section>;
         })}

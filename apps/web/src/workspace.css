@@ -69,6 +69,7 @@
 .screen-sidebar-controls .screen-sidebar-action { flex: 1; min-width: 0; }
 .folder-tree-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
 .folder-tree-heading h4 { margin-bottom: 0; }
+.folder-multiselect-hint { font-size: 11px; color: var(--color-primary); margin: -2px 0 6px; }
 .folder-tree-root { width: 100%; text-align: left; padding: 9px 10px; font-size: 13px; border-radius: 7px; user-select: none; }
 .folder-tree-root.is-selected, .folder-tree-item.is-selected .folder-drop-body { background: var(--workspace-selection); font-weight: 600; }
 .folder-drop-body { display: flex; align-items: center; min-width: 0; border-radius: 7px; }

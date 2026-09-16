@@ -17,13 +17,16 @@ export interface BreadcrumbSegment {
 /**
  * Chooses the folder-click callback: a plain click switches to a single folder,
  * shift+click (or ctrl/cmd+click) toggles a folder into or out of a multi-selection.
+ * A touch long-press enters the same multi-select toggling for every following tap
+ * until `touchMultiSelect` is cleared (see Sidebar's exit-when-empty effect).
  */
 export function resolveFolderClick(
   event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean },
   onSelect: (folder: string | null) => void,
-  onFilterFolder?: (folder: string | null) => void
+  onFilterFolder?: (folder: string | null) => void,
+  touchMultiSelect = false
 ): (folder: string | null) => void {
-  return (event.shiftKey || event.ctrlKey || event.metaKey) && onFilterFolder ? onFilterFolder : onSelect;
+  return (event.shiftKey || event.ctrlKey || event.metaKey || touchMultiSelect) && onFilterFolder ? onFilterFolder : onSelect;
 }
 
 /**

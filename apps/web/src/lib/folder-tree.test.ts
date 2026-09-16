@@ -117,6 +117,22 @@ describe('folder-tree', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it('resolves a plain tap to the multi-select toggle callback while touch multi-select is active', () => {
+    const onSelect = vi.fn();
+    const onFilterFolder = vi.fn();
+    resolveFolderClick({ shiftKey: false }, onSelect, onFilterFolder, true)('projects');
+    expect(onFilterFolder).toHaveBeenCalledWith('projects');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('resolves a plain tap to the single-select callback when touch multi-select is not active', () => {
+    const onSelect = vi.fn();
+    const onFilterFolder = vi.fn();
+    resolveFolderClick({ shiftKey: false }, onSelect, onFilterFolder, false)('projects');
+    expect(onSelect).toHaveBeenCalledWith('projects');
+    expect(onFilterFolder).not.toHaveBeenCalled();
+  });
+
   it('falls back to the single-select callback when no multi-select handler is given', () => {
     const onSelect = vi.fn();
     resolveFolderClick({ shiftKey: true }, onSelect)('projects');

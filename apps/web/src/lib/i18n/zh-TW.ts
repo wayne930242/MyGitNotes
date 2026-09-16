@@ -403,6 +403,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'folder.up': '上一層',
   'folder.goUpTooltip': '回到上一層資料夾',
   'folder.multiSelectHint': '按住 Shift 點擊可加入或移出多選',
+  'folder.touchMultiSelectActive': '多選模式 — 點擊資料夾可加入或移出選取，全部取消選取即可離開。',
   'folder.noteCount': '{count} 則筆記',
   'folder.notesCount': '{count} 則筆記',
   'folder.subfolderCount': '{count} 個資料夾',

@@ -402,6 +402,7 @@ export const en = {
   'folder.up': 'Up',
   'folder.goUpTooltip': 'Go up one folder',
   'folder.multiSelectHint': 'Shift+click to add or remove from selection',
+  'folder.touchMultiSelectActive': 'Multi-select mode — tap to add or remove a folder, deselect all to exit.',
   'folder.noteCount': '{count} note',
   'folder.notesCount': '{count} notes',
   'folder.subfolderCount': '{count} folder',
