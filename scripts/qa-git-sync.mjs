@@ -1,0 +1,95 @@
+import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { createServer } from 'node:http';
+const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(`${product}/apps/web/package.json`);
+const puppeteer = require('puppeteer-core');
+const base = fs.mkdtempSync(path.join(os.tmpdir(), 'notes-sync-ui-'));
+const remote = path.join(base, 'remote.git'), root = path.join(base, 'workspace'), other = path.join(base, 'other');
+const run = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim();
+const write = (dir, file, text) => { fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true }); fs.writeFileSync(path.join(dir, file), text); };
+const note = 'notes/example/a.md';
+run(base, 'init', '--bare', '-b', 'main', remote);
+fs.mkdirSync(root);
+write(root, '.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Sync QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
+write(root, note, '# A\n\nfirst\nsecond\nthird\n');
+run(root, 'init', '-b', 'main'); run(root, 'config', 'user.name', 'QA'); run(root, 'config', 'user.email', 'qa@example.com');
+run(root, 'add', '.'); run(root, 'commit', '-m', 'fixture'); run(root, 'remote', 'add', 'origin', remote); run(root, 'push', '-u', 'origin', 'main');
+run(base, 'clone', remote, other); run(other, 'config', 'user.name', 'Other'); run(other, 'config', 'user.email', 'other@example.com');
+const commitIn = (dir, text, message) => { write(dir, note, text); run(dir, 'commit', '-am', message); };
+process.env.MYGITNOTES_SOURCE = 'local'; process.env.MYGITNOTES_LOCAL_PATH = root; delete process.env.VERCEL; delete process.env.APP_URL;
+const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
+const server = createServer(createApp(product)); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+const url = `http://127.0.0.1:${server.address().port}`;
+const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || path.join(os.homedir(), '.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const page = await browser.newPage(); await page.setViewport({ width: 1440, height: 1000 });
+const errors = []; page.on('pageerror', error => errors.push(error.message));
+const assert = (condition, message) => { if (!condition) throw Error(message); };
+const text = selector => page.$eval(selector, node => node.textContent.trim()).catch(() => '');
+const clickText = async label => {
+  await page.waitForFunction(value => [...document.querySelectorAll('.git-sync button')].some(button => button.textContent.trim() === value && !button.disabled), {}, label);
+  await page.$$eval('.git-sync button', (buttons, value) => buttons.find(button => button.textContent.trim() === value).click(), label);
+};
+const openChanges = async () => {
+  await page.goto(url, { waitUntil: 'networkidle0' });
+  if (!await page.$('.changes-tool')) await page.click('.right-panel-rail button[aria-label="Changes"]');
+  await page.waitForSelector('.git-sync');
+};
+try {
+  commitIn(root, '# A\n\nfirst\nlocal one\nthird\n', 'local edit');
+  await openChanges();
+  assert(await text('.git-sync-status') === 'origin/main · 1 to push · 0 to pull', `Unexpected upstream status: ${await text('.git-sync-status')}`);
+  await clickText('Pull and push');
+  await page.waitForFunction(() => document.querySelector('.git-sync [role="status"]')?.textContent === 'Pulled 0 and pushed 1 commits.');
+  await page.waitForFunction(() => document.querySelector('.git-sync-status')?.textContent === 'origin/main · 0 to push · 0 to pull');
+  assert(run(remote, 'show', `main:${note}`).includes('local one'), 'Push did not reach the remote');
+  console.log('PASS ahead count, pull --rebase and push from the Changes tool');
+
+  run(other, 'pull'); commitIn(other, '# A\n\nfirst\nremote two\nthird\n', 'remote edit'); run(other, 'push');
+  commitIn(root, '# A\n\nfirst\nlocal two\nthird\n', 'conflicting local edit');
+  const head = run(root, 'rev-parse', 'HEAD');
+  await openChanges();
+  await clickText('Pull and push');
+  await page.waitForSelector('.git-sync-conflict');
+  assert((await page.$$eval('.git-sync-conflict li', items => items.map(item => item.textContent))).join() === note, 'Conflict files were not listed');
+  assert(JSON.stringify(await page.$$eval('.git-sync-conflict button', buttons => buttons.map(button => button.textContent.trim()))) === JSON.stringify(['Use remote', 'Use local (discard remote)', 'Resolve myself']), 'Conflict actions are incomplete');
+  assert(run(root, 'rev-parse', 'HEAD') === head && run(root, 'branch', '--show-current') === 'main' && run(root, 'status', '--porcelain') === '', 'Conflict left the repository changed');
+  await page.waitForFunction(() => document.querySelector('.git-sync-status')?.textContent === 'origin/main · 1 to push · 1 to pull');
+  fs.mkdirSync(`${product}/artifacts/qa`, { recursive: true });
+  await page.screenshot({ path: `${product}/artifacts/qa/git-sync-conflict.png` });
+  await clickText('Resolve myself');
+  await page.waitForFunction(() => !document.querySelector('.git-sync-conflict') && document.querySelector('.git-sync [role="status"]')?.textContent.includes('git pull --rebase'));
+  await clickText('Pull and push');
+  await page.waitForSelector('.git-sync-conflict');
+  await clickText('Use local (discard remote)');
+  await page.waitForFunction(() => /^Pulled 1 and pushed 1 commits\. The previous state is saved at refs\/github-notes\/sync-backups\//.test(document.querySelector('.git-sync [role="status"]')?.textContent || ''));
+  assert(run(remote, 'show', `main:${note}`).includes('local two') && run(root, 'rev-parse', 'HEAD') === run(remote, 'rev-parse', 'main'), 'Local side was not pushed');
+  console.log('PASS conflict aborts, lists files, offers three actions and keeps local content on request');
+
+  run(other, 'pull'); commitIn(other, '# A\n\nfirst\nremote three\nthird\n', 'remote edit'); run(other, 'push');
+  commitIn(root, '# A\n\nfirst\nlocal three\nthird\n', 'conflicting local edit');
+  await openChanges();
+  await clickText('Pull and push');
+  await page.waitForSelector('.git-sync-conflict');
+  await clickText('Use remote');
+  await page.waitForFunction(() => document.querySelector('.git-sync [role="status"]')?.textContent.startsWith('Pulled 1 and pushed 0 commits.'));
+  assert(fs.readFileSync(path.join(root, note), 'utf8').includes('remote three') && run(root, 'status', '--porcelain') === '', 'Remote side was not applied');
+  console.log('PASS use remote keeps the remote side');
+
+  write(root, note, '# A\n\nuncommitted\n');
+  await openChanges();
+  await page.waitForFunction(() => document.querySelector('.git-sync-button')?.disabled && document.querySelector('.git-sync')?.textContent.includes('Commit or restore changes before syncing.'));
+  run(root, 'checkout', '--', note);
+  run(root, 'branch', '--unset-upstream');
+  await openChanges();
+  await page.waitForFunction(() => document.querySelector('.git-sync-button')?.disabled && document.querySelector('.git-sync')?.textContent.includes('git push -u origin main'));
+  console.log('PASS dirty tree and missing upstream disable sync with guidance');
+  assert(!errors.length, errors.join('; '));
+} catch (error) {
+  console.log(await page.evaluate(() => ({ sync: document.querySelector('.git-sync')?.innerText, alerts: [...document.querySelectorAll('[role="alert"]')].map(node => node.textContent) })).catch(() => ({})));
+  throw error;
+} finally { await browser.close(); await new Promise(resolve => server.close(resolve)); fs.rmSync(base, { recursive: true, force: true }); }

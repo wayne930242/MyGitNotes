@@ -281,6 +281,21 @@ export async function createCommit(files: string[], message: string): Promise<{ 
   return res.json();
 }
 
+export class GitSyncError extends Error {
+  constructor(message: string, public code: string, public files: string[]) { super(message); }
+}
+
+export async function syncGitWorkspace(strategy?: 'remote' | 'local'): Promise<{ upstream: string; pulled: number; pushed: number; backup?: string }> {
+  const res = await fetch(`${API_BASE}/git/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(strategy ? { strategy } : {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new GitSyncError(data.error || 'Sync failed', data.code || 'FAILED', data.files || []);
+  return data.result;
+}
+
 export async function runCoreUpdate(autoPush = false): Promise<{ result: { success: boolean; message: string } }> {
   const res = await fetch(`${API_BASE}/core/update`, {
     method: 'POST',

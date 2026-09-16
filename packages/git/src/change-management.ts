@@ -14,7 +14,7 @@ export interface FileChange {
   available?: boolean;
 }
 const queues = new Map<string, Promise<unknown>>();
-function exclusive<T>(root: string, action: () => Promise<T>): Promise<T> {
+export function exclusive<T>(root: string, action: () => Promise<T>): Promise<T> {
   const key = fs.realpathSync(root);
   const next = (queues.get(key) || Promise.resolve()).catch(() => {}).then(action);
   queues.set(key, next);

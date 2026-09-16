@@ -957,6 +957,7 @@ const AppContent: React.FC = () => {
           writable={canWrite}
           remoteChanges={panelRemoteChanges}
           getPreview={panelGetPreview}
+          onSynced={remote ? undefined : async () => { await refreshWorkspace(); await screen.refresh(); }}
         />
       </div>
 

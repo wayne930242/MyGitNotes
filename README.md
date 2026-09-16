@@ -132,7 +132,7 @@ docker run -d --name mygitnotes-local --init --restart unless-stopped \
   mygitnotes:local
 ```
 
-Open `http://localhost:4321`. Local mode is an anonymous desktop workflow restricted to loopback hosts; for an internet-facing site, select GitHub or GitLab with OAuth. Local edits and Screen/Study YAML files persist in the mounted checkout. Commit and sync through the existing Git workflow; configure remote Git credentials separately when needed.
+Open `http://localhost:4321`. Local mode is an anonymous desktop workflow restricted to loopback hosts; for an internet-facing site, select GitHub or GitLab with OAuth. Local edits and Screen/Study YAML files persist in the mounted checkout. Commit and sync (pull with rebase, then push) from the Changes panel; configure remote Git credentials separately when needed.
 
 ### Persistence and updates
 

@@ -132,7 +132,7 @@ docker run -d --name mygitnotes-local --init --restart unless-stopped \
   mygitnotes:local
 ```
 
-開啟 `http://localhost:4321`。本地模式提供免登入的桌面工作流程，限 loopback host 存取；公開網站請選用 GitHub 或 GitLab 來源及 OAuth。編輯結果、屏幕與學習 YAML 保存在掛載的 checkout，使用既有 Git 工作流程提交與同步；需要遠端 Git 操作時，另行設定其憑證。
+開啟 `http://localhost:4321`。本地模式提供免登入的桌面工作流程，限 loopback host 存取；公開網站請選用 GitHub 或 GitLab 來源及 OAuth。編輯結果、屏幕與學習 YAML 保存在掛載的 checkout，在變更面板提交與同步（pull --rebase 後 push）；需要遠端 Git 操作時，另行設定其憑證。
 
 ### 持久化與更新
 

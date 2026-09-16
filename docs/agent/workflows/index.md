@@ -32,14 +32,26 @@ When an update is released to the canonical product branch `core`:
 ## 3. Git Save and Semantic Commits
 
 Local UI edits auto-save to the working tree. The Changes manager reviews each file, stages or unstages its snapshot, and commits the reviewed index. Later working edits remain uncommitted. Single-file restore resets that file to HEAD; discarded local working content is copied into the Git directory for recovery. Other selected-file save/commit operations preserve unrelated pre-staged files.
-Local MCP saves create a Git commit. Remote UI edits persist as browser working drafts; the Commit footer publishes selected notes together with a revision check. MCP mutations create a commit immediately.
+Local MCP saves create a Git commit. Remote UI edits persist as browser working drafts; the Changes panel publishes selected notes together with a revision check. MCP mutations create a commit immediately.
 - A remote save advances the branch without force; concurrent changes return a conflict.
 - Semantic commit messages are generated:
   - If `GEMINI_API_KEY` is provided, requests a concise conventional commit message from Gemini Flash-Lite.
   - If no API key is available or the request fails, falls back gracefully to deterministic messages (e.g. `minor-mod` or `docs(notes): update <title>`).
   - Editing and Save always succeed even without network or API keys.
 
-## 4. Public Demo CI/CD
+## 4. Local Git Sync
+
+The Changes panel syncs a local workspace's `main` with its upstream through `POST /api/git/sync` (`packages/git/src/sync.ts`).
+Sync requires `main`, a configured upstream and no uncommitted tracked changes; it never auto-stashes or force-pushes.
+It fetches, rebases with `--rebase-merges` so Core update merges keep their merged commits, then pushes `HEAD` to the upstream branch.
+A conflicting rebase is aborted and returns the conflicting files.
+The user may retry with `-X ours` (remote side wins), `-X theirs` (local side wins), or resolve the rebase in a terminal.
+A strategy retry first saves the previous `HEAD` under `refs/github-notes/sync-backups/`.
+Conflicts Git cannot resolve with a strategy, such as delete conflicts, are aborted again.
+Network commands run without credential prompts and time out after 60 seconds.
+Remote sources have no sync step because each remote commit updates the branch directly.
+
+## 5. Public Demo CI/CD
 
 `.github/workflows/release-main.yml` runs on Core pushes and manual dispatch. It installs dependencies, tests and builds the product, then merges the tested Core revision into main while preserving workspace Agent settings. The release script synchronizes the public demo from `examples/demo-workspace` and uses a non-forced push. Conflicts or concurrent remote note saves stop publication. Ordinary workspace bootstrap continues to preserve existing user content.
 

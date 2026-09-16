@@ -39,6 +39,9 @@ export interface GitStatus {
   staged: string[];
   modified: string[];
   untracked: string[];
+  upstream?: string | null;
+  ahead?: number;
+  behind?: number;
 }
 
 export interface FileChange {
