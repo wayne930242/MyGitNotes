@@ -16,6 +16,10 @@ export default defineConfig({
         target: apiTarget,
         changeOrigin: true,
       },
+      '/r2-assets': {
+        target: apiTarget,
+        changeOrigin: true,
+      },
     },
   },
 });

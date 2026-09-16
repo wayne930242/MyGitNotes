@@ -106,6 +106,7 @@ export function scanNotebookNotes(
     return [];
   }
 
+  const templateFiles = new Set((notebook.templates || []).map(t => t.file));
   const notes: NoteItem[] = [];
 
   function walk(currentDir: string) {
@@ -115,7 +116,7 @@ export function scanNotebookNotes(
       const relToRepo = path.relative(repoRoot, fullPath).replace(/\\/g, '/');
 
       const relToNb = path.relative(safeRoot, fullPath).replace(/\\/g, '/');
-      if (!isNotebookContent(relToNb, notebook)) continue;
+      if (!isNotebookContent(relToNb, notebook) || templateFiles.has(relToNb)) continue;
 
       if (entry.isDirectory()) {
         walk(fullPath);

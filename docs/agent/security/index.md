@@ -25,6 +25,7 @@ All file paths received by the MCP server or local API bridge are validated thro
 - Credential-bearing MCP URLs and Bearer headers resolve the same grant. Grant lists contain record digests and metadata; token values are shown only at creation.
 - Public remote reads use anonymous requests. Private reads use the authenticated user's provider authorization. Responses containing workspace data are private/no-store.
 - Browser Markdown is sanitized before rendering. Raw assets are restricted to workspace asset paths and served with a restrictive content security policy.
+- R2 assets (`r2:<key>` references) are served by `/r2-assets/<key>?note=<path>`: the requester must be able to read that configured note with their own workspace permission, and the note must reference the key; only then does the server redirect to a 5-minute presigned URL. R2 credentials come from deployment environment variables and never reach the browser.
 - `.vercelignore` excludes local notes, secrets, session files and local source settings from uploads.
 
 GitLab site URLs are deployment settings. OAuth state, credentials and account keys are bound to the configured site and OAuth application. GitLab API and OAuth calls reject redirects. Refresh-token rotation is serialized across hosted instances through Redis; local development serializes refresh in process. GitLab commits use per-file last_commit_id checks and preserve unrelated concurrent history.
