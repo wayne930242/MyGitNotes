@@ -61,10 +61,29 @@ export function useLongPress(onLongPress: () => void, enabled: boolean) {
     timer.current = setTimeout(() => {
       suppressClick.current = true;
       setIsPressing(false);
-      if (suppressTimer.current) clearTimeout(suppressTimer.current);
-      suppressTimer.current = setTimeout(() => {
+
+      const swallowSyntheticClick = (e: globalThis.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        cleanupSwallow();
+      };
+      const cleanupSwallow = () => {
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('click', swallowSyntheticClick, true);
+        }
         suppressClick.current = false;
-      }, 400);
+        if (suppressTimer.current) {
+          clearTimeout(suppressTimer.current);
+          suppressTimer.current = undefined;
+        }
+      };
+
+      if (typeof window !== 'undefined') {
+        window.addEventListener('click', swallowSyntheticClick, true);
+      }
+      if (suppressTimer.current) clearTimeout(suppressTimer.current);
+      suppressTimer.current = setTimeout(cleanupSwallow, 400);
+
       onLongPress();
     }, LONG_PRESS_MS);
   };
