@@ -217,6 +217,29 @@ describe('R2 management on a hosted workspace', () => {
     expect([...bucket.objects.keys()].sort()).toEqual(['ex/keep.pdf', 'ex/old/Core Rules.pdf', 'ex/old/map.webp']);
   });
 
+  it('scans a large notebook for references without fanning out concurrent GitHub reads', async () => {
+    canPush = true;
+    await startRemote('writer-token');
+    for (let index = 0; index < 200; index++) files.set(`notes/ex/note-${index}.md`, Buffer.from(`# Note ${index}\n\n[map](r2:ex/old/map.webp) ${index}\n`));
+    const prototype = GitHubSource.prototype as any, read = prototype.readBlob;
+    let active = 0, peak = 0;
+    read.mockImplementation(async (sha: unknown) => {
+      peak = Math.max(peak, ++active); await new Promise(resolve => setTimeout(resolve, 1)); active--;
+      return [...files.values()].find(bytes => assetHash(bytes) === sha)!;
+    });
+    const prefetch = vi.spyOn(prototype, 'prefetchFiles').mockResolvedValue(undefined);
+    const response = await call('GET', '/api/r2/references?notebookId=ex&key=ex/old&directory=1');
+    expect(response.status).toBe(200);
+    expect((await response.json()).notes).toHaveLength(201);
+    expect(prefetch).toHaveBeenCalledWith(expect.arrayContaining(['notes/ex/rules.md', 'notes/ex/note-199.md']));
+    expect(peak).toBe(1);
+    read.mockRejectedValue(new SourceError('GitHub API is temporarily rate limited. Retry in 7 seconds.', 429, 7));
+    const limited = await call('GET', '/api/r2/references?notebookId=ex&key=ex/old&directory=1');
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('Retry-After')).toBe('7');
+    expect((await limited.json()).retryAfter).toBe(7);
+  });
+
   it('denies anonymous and read-only requesters', async () => {
     canPush = false;
     await startRemote('reader-token');

@@ -53,7 +53,11 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
       notebooks: config.notebooks,
       notes: async () => {
         const files = snapshot.entries.filter(entry => entry.type === 'blob' && entry.mode !== '120000' && markdown(entry.path) && managedNotebook(entry.path, config.notebooks)).map(entry => entry.path);
-        return new Map(await Promise.all(files.map(async file => [file, (await reader.readFile(file)).toString('utf8')] as [string, string])));
+        // One archive download warms the blob cache; sequential reads keep any misses within GitHub's request queue.
+        await reader.prefetchFiles(files);
+        const notes = new Map<string, string>();
+        for (const file of files) notes.set(file, (await reader.readFile(file)).toString('utf8'));
+        return notes;
       },
       commit: async changes => { await reader.commitChanges([...changes].map(([path, content]) => ({ path, content })), snapshot.sha, 'move', 'files'); },
     };
@@ -81,7 +85,11 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
     [...notes].filter(([, content]) => r2ReferenceKeys(content).some(key => keys.includes(key))).map(([file]) => file).sort();
   const handle = (action: (req: Request, res: Response) => Promise<unknown>) => async (req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'private, no-store');
-    try { await action(req, res); } catch (error) { res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'R2 operation failed.' }); }
+    try { await action(req, res); } catch (error) {
+      const retryAfter = error instanceof SourceError ? error.retryAfter : undefined;
+      if (retryAfter) res.setHeader('Retry-After', String(retryAfter));
+      res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'R2 operation failed.', ...(retryAfter ? { retryAfter } : {}) });
+    }
   };
 
   router.get('/api/r2', handle(async (req, res) => {
