@@ -8,6 +8,7 @@ import { useTranslation } from '../lib/i18n/index.js';
 import { WorkspaceSidebar } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
 import { filterAndSortTags, getSavedTagSort, saveTagSort, TagSort } from '../lib/tag-list.js';
+import { resolveAllNotebooksFolderSelect } from '../lib/folder-tree.js';
 
 const selectedItemStyle: React.CSSProperties = {
   backgroundColor: 'color-mix(in srgb, var(--color-text) 8%, transparent)',
@@ -54,6 +55,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (!root) return;
     const path = `${root}/${folder}`;
     onChange({ folders: value.folders.includes(path) ? value.folders.filter(item => item !== path) : [...value.folders, path] });
+  };
+  // A plain click's single-select target is meaningless against the global selectedNotebookId
+  // while every notebook's tree is shown at once ("all notebooks" view); scope it explicitly.
+  const selectSingleFolder = (notebookId: string, folder: string | null) => {
+    const root = filters.notebooks.find(nb => nb.id === notebookId)?.root.replace(/\/$/, '');
+    const scoped = resolveAllNotebooksFolderSelect(selectedNotebookId, root, folder);
+    if (scoped) { onChange({ folders: scoped }); return; }
+    onSelectFolder?.(folder);
   };
   const [tagQuery, setTagQuery] = useState('');
   const [tagSort, setTagSort] = useState<TagSort>(getSavedTagSort);
@@ -151,7 +160,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           const root = nb.root.replace(/\/$/, '');
           return <section className="sidebar-folder-section" key={nb.id}>
             {selectedNotebookId === 'all' && <p className="sidebar-section-label">{nb.title}</p>}
-            <FolderTree onManageFiles={path => onManageFiles(nb.id, path)} reorder={reorder} onToggleReorder={onToggleReorder} folders={folders} notebookId={nb.id} selected={selectedFolder} onSelect={onSelectFolder}
+            <FolderTree onManageFiles={path => onManageFiles(nb.id, path)} reorder={reorder} onToggleReorder={onToggleReorder} folders={folders} notebookId={nb.id} selected={selectedFolder} onSelect={folder => selectSingleFolder(nb.id, folder)}
               allFoldersSelected={value.folders.length === 0}
               selectedPaths={value.folders.filter(path => path.startsWith(root + '/')).map(path => path.slice(root.length + 1))}
               onFilterFolder={folder => toggleFolder(nb.id, folder)}
