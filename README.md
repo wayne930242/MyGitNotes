@@ -49,6 +49,14 @@ The same workspace can stay fully local, travel through Git, or be accessed from
 
 This separation lets the application evolve without taking ownership of your content.
 
+## Files
+
+The **Files** page and file manager dialog manage directories, Markdown notes, UTF-8 text files, and attachments within the selected notebook. Create empty text files, edit source with syntax highlighting, upload and preview attachments, or rename, move, and delete files. Hidden files are off by default. Folder information and the `index.md` entry point share this interface.
+
+Notes have a **Move** action in list, card, kanban, and editor views. **Insert image** opens the same browser in read-only selection mode. Moves update Markdown links and Screen / Study references while retaining attachment hashes and study identities.
+
+Local changes remain in the working tree until you use Commit. GitHub and GitLab operations create revision-checked atomic commits. Uploads support 3 MiB; file reads and changed content support 5 MiB, with up to 200 changed files per operation. Operations load at most 32 MiB of affected files and reference documents; browsing does not load every file's contents.
+
 ## Quick start
 
 Requires Node.js 22+, pnpm 9+, and Git. (On pnpm 10+, dependency build scripts are configured via `allowBuilds` in `pnpm-workspace.yaml` or `pnpm approve-builds`).

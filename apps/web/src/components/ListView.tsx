@@ -1,3 +1,4 @@
+import { NoteMoveButton } from './NoteMoveButton.js';
 import { Button } from './Button.js';
 import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import {
@@ -24,6 +25,7 @@ interface ListViewProps {
   canDelete?: boolean;
   onOpenNote: (note: NoteItem) => void;
   onDeleteNote: (note: NoteItem) => void;
+  onMoveNote?: (note: NoteItem) => void;
   onUpdateNoteStatus: (note: NoteItem, newStatus: string) => void;
   onNewNote: () => void;
   sortField?: SortField;
@@ -35,6 +37,7 @@ interface ListViewProps {
 interface NoteRowActions {
   open: (note: NoteItem) => void;
   remove: (note: NoteItem) => void;
+  move: (note: NoteItem) => void;
   status: (note: NoteItem, status: string) => void;
 }
 
@@ -106,6 +109,7 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
           className="flex items-center justify-end opacity-40 hover:opacity-100 group-hover:opacity-100 transition"
           onClick={(e) => e.stopPropagation()}
         >
+          {!readOnly && <NoteMoveButton onClick={() => actions.move(note)} />}
           {!readOnly && canDelete && (
             <button
               type="button"
@@ -130,6 +134,7 @@ export const ListView: React.FC<ListViewProps> = ({
   canDelete = true,
   onOpenNote,
   onDeleteNote,
+  onMoveNote,
   onUpdateNoteStatus,
   onNewNote,
   sortField = 'updated',
@@ -139,11 +144,12 @@ export const ListView: React.FC<ListViewProps> = ({
 }) => {
   const { t, language } = useTranslation();
   // Rows retain stable actions while invoking the latest committed callbacks.
-  const handlers = useRef({ onOpenNote, onDeleteNote, onUpdateNoteStatus });
-  useLayoutEffect(() => { handlers.current = { onOpenNote, onDeleteNote, onUpdateNoteStatus }; });
+  const handlers = useRef({ onOpenNote, onDeleteNote, onUpdateNoteStatus, onMoveNote });
+  useLayoutEffect(() => { handlers.current = { onOpenNote, onDeleteNote, onUpdateNoteStatus, onMoveNote }; });
   const actions = useMemo<NoteRowActions>(() => ({
     open: note => handlers.current.onOpenNote(note),
     remove: note => handlers.current.onDeleteNote(note),
+    move: note => handlers.current.onMoveNote?.(note),
     status: (note, status) => handlers.current.onUpdateNoteStatus(note, status),
   }), []);
   const dates = useMemo(() => ({

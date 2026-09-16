@@ -1,3 +1,4 @@
+import { NoteMoveButton } from './NoteMoveButton.js';
 import { Button } from './Button.js';
 import React from 'react';
 import { FileText, Tag, Clock, Trash2, Plus } from 'lucide-react';
@@ -13,6 +14,7 @@ interface CardViewProps {
   canDelete?: boolean;
   onOpenNote: (note: NoteItem) => void;
   onDeleteNote: (note: NoteItem) => void;
+  onMoveNote?: (note: NoteItem) => void;
   onNewNote: () => void;
   onUpdateNoteStatus: (note: NoteItem, status: string) => void;
 }
@@ -25,6 +27,7 @@ export const CardView: React.FC<CardViewProps> = ({
   canDelete = true,
   onOpenNote,
   onDeleteNote,
+  onMoveNote,
   onNewNote,
   onUpdateNoteStatus,
 }) => {
@@ -138,9 +141,10 @@ export const CardView: React.FC<CardViewProps> = ({
                   {formattedDate}
                 </span>
                 <div
-                  className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition"
+                  className="flex items-center gap-1"
                   onClick={(e) => e.stopPropagation()}
                 >
+                  {!readOnly && onMoveNote && <NoteMoveButton onClick={() => onMoveNote(note)} />}
                   {!readOnly && canDelete && (
                     <button
                       type="button"

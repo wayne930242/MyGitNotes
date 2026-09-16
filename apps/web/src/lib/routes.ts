@@ -3,6 +3,7 @@ import { matchPath } from 'react-router-dom';
 export type WorkspaceTab = 'notes' | 'assets' | 'agent' | 'screen' | 'graph' | 'settings';
 export function parseWorkspaceRoute(pathname: string, search: string) {
   pathname = pathname.replace(/\/+$/, '') || '/';
+  if (pathname === '/files') pathname = '/assets';
   if (pathname === '/index.html' || pathname === '/index' || pathname === '/notebooks') pathname = '/notes';
   const query = new URLSearchParams(search);
   let lane: string | null = null;

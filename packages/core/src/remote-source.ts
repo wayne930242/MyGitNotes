@@ -1,4 +1,5 @@
 import { STUDY_FILE, STUDY_MAX_BYTES, StudyWorkspaceSchema } from './study.js';
+import { managedNotebook } from './file-manager.js';
 import path from 'node:path';
 import { assetInfo, assetRoot, assetPath, isAssetPath, decodeAsset } from './assets.js';
 import { parseWorkspaceConfig } from './config.js';
@@ -204,7 +205,7 @@ export abstract class RemoteSource {
     return this.commitChanges([{ path: SCREEN_PAGE_FILE, content }], expected, 'save', 'screen');
   }
 
-  async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null }[], expected: string, operation: string, scope: 'notes' | 'assets' | 'agents' | 'screen' | 'folders' | 'study' | 'study-transition' = 'notes', requestedMessage?: string) {
+  async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null }[], expected: string, operation: string, scope: 'notes' | 'assets' | 'agents' | 'screen' | 'folders' | 'study' | 'study-transition' | 'files' = 'notes', requestedMessage?: string) {
     const snapshot = await this.getSnapshot(true);
     if (!this.token || !snapshot.info.permissions?.push || this.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
     if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
@@ -215,9 +216,9 @@ export abstract class RemoteSource {
     for (const change of changes) {
       const file = change.path;
       const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
-      const screenFile = (scope === 'screen' || scope === 'folders') && file === SCREEN_PAGE_FILE;
-      const studyFile = ['study', 'study-transition'].includes(scope) && file === STUDY_FILE;
-      const allowed = scope === 'study-transition' ? studyFile || nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && /\.(md|markdown|txt)$/i.test(file) : scope === 'study' ? studyFile : scope === 'screen' ? screenFile : screenFile || (scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb &&
+      const screenFile = ['screen', 'folders', 'files'].includes(scope) && file === SCREEN_PAGE_FILE;
+      const studyFile = ['study', 'study-transition', 'files'].includes(scope) && file === STUDY_FILE;
+      const allowed = scope === 'files' ? screenFile || studyFile || Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? studyFile || nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && /\.(md|markdown|txt)$/i.test(file) : scope === 'study' ? studyFile : scope === 'screen' ? screenFile : screenFile || (scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb &&
         (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (/\.(md|markdown|txt)$/i.test(file) || path.posix.basename(file) === '_dir.yml')));
       if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
       if (studyFile) {
@@ -235,7 +236,7 @@ export abstract class RemoteSource {
       if (existing && existing.type !== 'blob') throw new SourceError('A directory occupies the target path.', 409);
       if (change.sha === null && !existing) throw new SourceError('File to remove does not exist.', 404);
       if (change.base64 !== undefined) {
-        if (scope !== 'assets') throw new SourceError('Binary content requires an asset path.');
+        if (scope !== 'assets' && scope !== 'files') throw new SourceError('Binary content requires an asset path.');
         bytes += decodeAsset(change.base64).length;
       } else if (change.content !== undefined) {
         bytes += Buffer.byteLength(change.content);
