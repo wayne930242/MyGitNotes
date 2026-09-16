@@ -17,9 +17,20 @@ const inside = (file: string, dir: string) => file === dir || file.startsWith(di
 const parentOf = (file: string) => path.posix.dirname(file) === '.' ? '' : path.posix.dirname(file);
 
 /** Resolve links against the original document, then express them from its new location. */
-function relocateLinks(raw: string, oldFile: string, newFile: string, relocate: (file: string) => string): string {
+export function relocateLinks(raw: string, oldFile: string, newFile: string, relocate: (file: string) => string): string {
   const rewrite = (href: string) => {
     if (!href || /^(?:[a-z][a-z\d+.-]*:|#|\/\/)/i.test(href)) return href;
+    if (href.startsWith('/raw-assets/') && !href.startsWith('/raw-assets/by-hash/')) {
+      const match = /^([^?#]*)(.*)$/.exec(href.slice('/raw-assets/'.length))!;
+      try { return '/raw-assets/' + relocate(decodeURIComponent(match[1])).split('/').map(encodeURIComponent).join('/') + match[2]; }
+      catch { return href; }
+    }
+    if (href.startsWith('/api/files/raw?')) {
+      const url = new URL(href, 'https://workspace.invalid');
+      const file = url.searchParams.get('path');
+      if (file) url.searchParams.set('path', relocate(file));
+      return url.pathname + url.search + url.hash;
+    }
     const match = /^([^?#]*)(.*)$/.exec(href)!;
     let decoded: string;
     try { decoded = decodeURIComponent(match[1]); } catch { return href; }

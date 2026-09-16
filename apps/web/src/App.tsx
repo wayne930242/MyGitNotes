@@ -50,7 +50,8 @@ import { CardView } from './components/CardView.js';
 import { KanbanView } from './components/KanbanView.js';
 import { EditorModal } from './components/EditorModal.js';
 import { RightPanel } from './components/RightPanel.js';
-import { AssetBrowser } from './components/AssetBrowser.js';
+import { FileManager, FileManagerDialog, type FileManagerHandle } from './components/FileManager.js';
+import type { FileResult } from './lib/files-api.js';
 import { AgentSystemView, type AgentSystemHandle } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { CommitModal } from './components/CommitModal.js';
@@ -120,6 +121,9 @@ const AppContent: React.FC = () => {
   };
 
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
+  const [fileEditorRevision, setFileEditorRevision] = useState(0);
+  const [fileDialog, setFileDialog] = useState<{ notebookId: string; path?: string; movePath?: string }>();
+  const fileManagerRef = useRef<FileManagerHandle>(null);
 
   // The URL owns page, notebook, folder and filter selection.
   const navigate = useNavigate();
@@ -217,12 +221,13 @@ const AppContent: React.FC = () => {
     setNotebookSwitchBusy(true);
     try {
       if (activeTab === 'agent' && !await agentSystemRef.current?.prepareLeave()) return;
+      if (activeTab === 'assets' && !await fileManagerRef.current?.prepareLeave()) return;
       const scope = selectedNotebookId === 'all' && tab !== 'notes' && tab !== 'graph' ? config?.workspace.default_notebook || 'example' : selectedNotebookId;
       if (tab === 'notes' || tab === 'graph') {
         const query = currentFilterSearch({ view: viewMode === 'graph' ? 'flat' : viewMode });
         query.set('notebook', scope);
         await navigateFiltered(tab === 'notes' ? notebookRoute(scope) : '/graph', query);
-      } else navigate(`/${tab}?notebook=${encodeURIComponent(scope)}`);
+      } else navigate(`/${tab === 'assets' ? 'files' : tab}?notebook=${encodeURIComponent(scope)}`);
     } finally { setNotebookSwitchBusy(false); }
   };
   const agentSystemRef = useRef<AgentSystemHandle>(null);
@@ -233,6 +238,7 @@ const AppContent: React.FC = () => {
     setNotebookSwitchBusy(true);
     try {
       if (activeTab === 'agent' && !await agentSystemRef.current?.prepareNotebookChange(id)) return;
+      if (activeTab === 'assets' && !await fileManagerRef.current?.prepareLeave()) return;
       const query = currentFilterSearch({ folders: [] });
       query.set('notebook', id);
       await navigateFiltered(activeTab === 'notes' ? notebookRoute(id) : `/${activeTab}`, query);
@@ -691,6 +697,52 @@ const AppContent: React.FC = () => {
     return result;
   };
 
+  const beforeFileChange = async () => {
+    await graphEditing.store.flushAll();
+    if (Object.keys(readWorkingNotes(workingScope)).length || listLocalDrafts(workingScope).length || screen.dirty) throw new Error(t('folder.draftsHint'));
+  };
+  const openFileManager = (notebookId: string, relativePath = '') => {
+    const notebook = config?.notebooks.find(nb => nb.id === notebookId);
+    if (notebook) setFileDialog({ notebookId, path: notebook.root + (relativePath ? '/' + relativePath : '') });
+  };
+  const handleMoveNote = async (note: NoteItem) => {
+    try { await beforeFileChange(); setFileDialog({ notebookId: note.notebookId, path: note.path, movePath: note.path }); }
+    catch (error) { setActionError((error as Error).message); throw error; }
+  };
+  const moveNoteAction = (note: NoteItem) => { void handleMoveNote(note).catch(() => {}); };
+  const onFilesChanged = async (result: FileResult) => {
+    await refreshWorkspace(); await screen.refresh();
+    if (editorRoute.note) {
+      const nb = config?.notebooks.find(nb => nb.id === editorNotebookId);
+      const previous = nb ? nb.root + '/' + editorRoute.note : '';
+      if (nb && result.pathMap[previous]) {
+        setEditingNote(null);
+        navigate(noteRoute(nb.id, result.pathMap[previous].slice(nb.root.length + 1)) + location.search, { replace: true });
+        setFileDialog(undefined);
+      } else if (nb) {
+        try {
+          if (result.deletedPaths.includes(previous)) { setEditingNote(null); navigate(returnTo, { replace: true }); }
+          else { setEditingNote(await readNote(previous, nb.id)); setFileEditorRevision(value => value + 1); }
+        }
+        catch (error) {
+          if ((error as { status?: number }).status !== 404) throw error;
+          setEditingNote(null);
+          navigate(returnTo, { replace: true });
+        }
+      }
+    }
+    if (selectedFolder && folderRoot && result.pathMap[folderRoot + '/' + selectedFolder]) {
+      const moved = result.pathMap[folderRoot + '/' + selectedFolder];
+      changeFilters({ folders: [moved] });
+    }
+  };
+  const openFileIndex = async (path: string) => {
+    const nb = config?.notebooks.find(nb => nb.id === selectedNotebookId);
+    if (!nb) return;
+    await handleOpenFolderIndex(path === nb.root ? '' : path.slice(nb.root.length + 1));
+    setFileDialog(undefined);
+  };
+
   const routedPath = editorRoute.note ? `${config?.notebooks.find(nb => nb.id === editorNotebookId)?.root}/${editorRoute.note}` : null;
   const routedNote = routedPath ? (editingNote?.path === routedPath ? editingNote : notes.find(note => note.path === routedPath) || null) : null;
   const noteEditorOpen = Boolean(routedNote) && !routeError;
@@ -784,17 +836,13 @@ const AppContent: React.FC = () => {
             <Sidebar
               selectedNotebookId={selectedNotebookId}
               folders={folders}
+              onManageFiles={openFileManager}
               foldersWritable={canWrite && selectedNotebookId !== 'all'}
               reorder={folderReorder}
               onToggleReorder={() => setFolderReorder(value => !value)}
               filters={filterProps}
               notes={visibleNotes}
               hiddenNoteCount={notes.filter(note => (selectedNotebookId === 'all' || note.notebookId === selectedNotebookId) && isNoteHidden({ ...note.metadata, status: note.status })).length}
-              indexFolders={notes.filter(note => note.notebookId === selectedNotebookId && note.path.endsWith('/index.md')).map(note => {
-                const root = config?.notebooks.find(notebook => notebook.id === selectedNotebookId)?.root.replace(/\/$/, '') || '';
-                return note.path.slice(root.length + 1, -'/index.md'.length);
-              })}
-              onOpenFolderIndex={handleOpenFolderIndex}
               beforeFolderChange={() => {
                 if (Object.keys(activeWorkingNotes).length || listLocalDrafts(workingScope).length || screen.dirty) throw new Error(t('folder.draftsHint'));
               }}
@@ -809,7 +857,7 @@ const AppContent: React.FC = () => {
             <main className="workspace-main notes-main">
               <PageToolbar>
                 {indexInToolbar && folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
-                <NoteToolbar sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite || selectedNotebookId === 'all'} viewMode={viewMode} setViewMode={setViewMode}
+                <NoteToolbar onManageFiles={selectedNotebookId === 'all' ? undefined : () => openFileManager(selectedNotebookId, selectedFolder || '')} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite || selectedNotebookId === 'all'} viewMode={viewMode} setViewMode={setViewMode}
                   onOpenNewNoteModal={() => openNewNote()} filtersOpen={filtersOpen}
                   onToggleFilters={() => setFiltersOpen(open => !open)} />
               </PageToolbar>
@@ -840,6 +888,7 @@ const AppContent: React.FC = () => {
                   hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
                   onOpenNote={handleOpenNote}
                   onDeleteNote={handleDeleteNote}
+                  onMoveNote={moveNoteAction}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
                   onNewNote={() => openNewNote()}
                   sortField={sortField}
@@ -856,6 +905,7 @@ const AppContent: React.FC = () => {
                   hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
                   onOpenNote={handleOpenNote}
                   onDeleteNote={handleDeleteNote}
+                  onMoveNote={moveNoteAction}
                   onNewNote={() => openNewNote()}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
                 />
@@ -869,6 +919,7 @@ const AppContent: React.FC = () => {
                   onOpenNote={handleOpenNote}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
                   onDeleteNote={handleDeleteNote}
+                  onMoveNote={moveNoteAction}
                   onNewNoteWithStatus={(status) => {
                     openNewNote(status);
                   }}
@@ -899,14 +950,11 @@ const AppContent: React.FC = () => {
 
         {activeTab === 'assets' && (
           <main className="workspace-route assets-main has-sidebar-drawer">
-            <AssetBrowser
-              assets={assets}
-              selectedNotebookId={selectedNotebookId}
-              onBusyChange={setResourceNavigationBusy}
-              onUploadAsset={!canWrite ? undefined : handleUploadAsset}
-              onDeleteAsset={!canWrite ? undefined : handleDeleteAsset}
-              onMoveAsset={!canWrite ? undefined : handleMoveAsset}
-            />
+            <FileManager key={`${sourceId}:${selectedNotebookId}`} ref={fileManagerRef}
+              notebookId={selectedNotebookId} writable={canWrite}
+              initialPath={new URLSearchParams(location.search).get('asset') || (new URLSearchParams(location.search).has('directory') ? `${folderRoot}/${config?.notebooks.find(nb => nb.id === selectedNotebookId)?.assets || 'assets'}${new URLSearchParams(location.search).get('directory') ? '/' + new URLSearchParams(location.search).get('directory') : ''}` : undefined)}
+              onBusyChange={setResourceNavigationBusy} beforeChange={beforeFileChange}
+              onChanged={onFilesChanged} onOpenIndex={openFileIndex} />
           </main>
         )}
 
@@ -986,8 +1034,12 @@ const AppContent: React.FC = () => {
         </div>
       )}
 
+      {fileDialog && <FileManagerDialog notebookId={fileDialog.notebookId} writable={canWrite}
+        initialPath={fileDialog.path} movePath={fileDialog.movePath} beforeChange={beforeFileChange}
+        onChanged={onFilesChanged} onOpenIndex={openFileIndex} onClose={() => setFileDialog(undefined)} />}
       {/* Note Editor Modal */}
       <EditorModal
+        key={fileEditorRevision}
         statuses={resolveNoteStatuses(
           config?.notebooks.find(nb => nb.id === routedNote?.notebookId),
           notes.filter(note => note.notebookId === routedNote?.notebookId).map(note => note.status),
@@ -1000,6 +1052,7 @@ const AppContent: React.FC = () => {
           navigate(returnTo, { replace: true });
         }}
         onSave={handleSaveNote}
+        onMoveNote={handleMoveNote}
         onRestoreFile={handleRestoreNoteFile}
         isDirty={Boolean(routedNote && gitStatus && [ ...gitStatus.modified, ...gitStatus.staged, ...gitStatus.untracked ].includes(routedNote.path))}
         availableTags={availableTags}

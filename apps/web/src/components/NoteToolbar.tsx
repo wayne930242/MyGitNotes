@@ -1,5 +1,5 @@
 import { Button } from './Button.js';
-import { LayoutList, LayoutGrid, Kanban, ListTree, Plus } from 'lucide-react';
+import { LayoutList, LayoutGrid, Kanban, ListTree, Plus, FolderOpen } from 'lucide-react';
 import { WorkspaceSidebarToggle } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
 import type { SortField, SortOrder } from '../lib/note-sort.js';
@@ -7,6 +7,7 @@ import { ViewMode } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
 interface NoteToolbarProps {
+  onManageFiles?: () => void;
   sortField: SortField;
   sortOrder: SortOrder;
   onSortChange: (field: SortField, order: SortOrder) => void;
@@ -18,7 +19,7 @@ interface NoteToolbarProps {
   onToggleFilters: () => void;
 }
 
-export function NoteToolbar({ sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, filtersOpen, onToggleFilters }: NoteToolbarProps) {
+export function NoteToolbar({ onManageFiles, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, filtersOpen, onToggleFilters }: NoteToolbarProps) {
   const { t } = useTranslation();
   return (
             <div className="header-note-actions flex items-center gap-2.5 flex-1 min-w-0 justify-end">
@@ -69,6 +70,7 @@ export function NoteToolbar({ sortField, sortOrder, onSortChange, readOnly, view
                   </button>)}
               </div>
 
+              {onManageFiles && <button type="button" className="ui-button" aria-label={t('files.manage')} onClick={onManageFiles}><FolderOpen size={16} /><span className="hidden sm:inline">{t('files.titleLabel')}</span></button>}
               {/* New Note Button */}
               {!readOnly && (
                 <Button variant="primary"

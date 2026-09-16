@@ -23,7 +23,8 @@ import {
 import { mergeNote, sameValue, NoteDraft } from '../lib/merge-note.js';
 import { ApiError } from '../lib/api.js';
 import { MarkdownEditor, MarkdownEditorHandle, MarkdownEditorMode, MarkdownEditorModeSwitch } from './MarkdownEditor.js';
-import { AssetLibrary } from './AssetLibrary.js';
+import { FileManagerDialog } from './FileManager.js';
+import { NoteMoveButton } from './NoteMoveButton.js';
 import { NoteItem, AssetItem } from '../lib/types.js';
 import { saveLocalDraft, getLocalDraft, clearLocalDraft } from '../lib/storage.js';
 import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
@@ -50,6 +51,7 @@ interface EditorModalProps {
   onMarkConflict?: (reason: string, draft: NoteItem, base: NoteItem) => void;
   isOpen: boolean;
   onClose: () => void;
+  onMoveNote?: (note: NoteItem) => Promise<void>;
   onSave: (params: {
     path: string;
     content: string;
@@ -82,15 +84,12 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   conflictReason,
   onMarkConflict,
   onClose,
+  onMoveNote,
   onSave,
   onReadRemote,
   onRestoreFile,
   isDirty: propIsDirty = false,
   availableTags = [],
-  assets = [],
-  onUploadAsset,
-  onDeleteAsset,
-  onMoveAsset,
   branch,
   draftScope,
 }) => {
@@ -436,7 +435,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   };
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (document.querySelector('[role="listbox"]')) return;
+      if (document.querySelector('dialog[open], [role="listbox"]')) return;
       if (shortcutAction.current(event)) {
         event.preventDefault(); event.stopPropagation(); return;
       }
@@ -600,6 +599,20 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
               aria-pressed={Boolean(notePanel)} onClick={() => notePanel ? setNotePanel(null) : isMarkdown ? openOutline() : openFind()}
               className="editor-action editor-secondary-action editor-panel-action"><PanelRight className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('editor.documentPanel')}</span></button>
 
+            {!readOnly && onMoveNote && <NoteMoveButton disabled={locked || isSaving} onClick={() => void (async () => {
+              if (operation.current || closing.current) return;
+              closing.current = true; setIsSaving(true); setSaveError('');
+              try {
+                const draft = current.current;
+                let saved = note;
+                if (draft.content !== note.content || !sameIgnoringTimestamps(draft.metadata, note.metadata)) {
+                  saved = await onSave({ path: note.path, content: draft.content, metadata: draft.metadata, baseNote: draft.baseNote });
+                  clearLocalDraft(draftScope || branch, note.path);
+                }
+                await onMoveNote(saved);
+              } catch (error) { setSaveError((error as Error).message); }
+              finally { closing.current = false; setIsSaving(false); }
+            })()} />}
             {/* Close Button */}
             <button
               aria-label={t('editor.closeNote')}
@@ -757,9 +770,8 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
             </div>
           </fieldset></div>}
 
-            {isAssetPickerOpen && <div className="note-panel-assets note-panel-scroll">
-              <AssetLibrary assets={assets} onUploadAsset={locked ? undefined : onUploadAsset} onDeleteAsset={locked ? undefined : onDeleteAsset} onMoveAsset={locked ? undefined : onMoveAsset} onInsert={locked ? undefined : asset => handleInsertAssetRef(asset.markdownRef)} />
-            </div>}
+            {isAssetPickerOpen && <FileManagerDialog notebookId={note.notebookId} writable={false} mode="pick-image"
+              onClose={() => setNotePanel(null)} onInsert={locked ? undefined : handleInsertAssetRef} />}
 
             {isGitPanelOpen && <div className="note-git-panel note-panel-scroll">
               <dl>

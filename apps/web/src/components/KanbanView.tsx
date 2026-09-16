@@ -1,3 +1,4 @@
+import { NoteMoveButton } from './NoteMoveButton.js';
 import React, { useRef, useState } from 'react';
 import {
   Plus,
@@ -23,6 +24,7 @@ interface KanbanViewProps {
   onOpenNote: (note: NoteItem) => void;
   onUpdateNoteStatus: (note: NoteItem, newStatus: string) => void;
   onDeleteNote: (note: NoteItem) => void;
+  onMoveNote?: (note: NoteItem) => void;
   onNewNoteWithStatus: (status: string) => void;
   sortField?: SortField;
   sortOrder?: SortOrder;
@@ -37,6 +39,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
   onOpenNote,
   onUpdateNoteStatus,
   onDeleteNote,
+  onMoveNote,
   onNewNoteWithStatus,
   sortField = 'updated',
   sortOrder = 'desc',
@@ -327,6 +330,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                           </div>
 
                           <div className="flex items-center gap-1">
+                            {!readOnly && onMoveNote && <NoteMoveButton onClick={() => onMoveNote(note)} />}
                             {!readOnly && index > 0 && (
                               <button
                                 type="button"
@@ -413,6 +417,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                   <div className="font-medium text-slate-900 dark:text-slate-100 text-sm mb-1 line-clamp-2">
                     {note.title}
                   </div>
+                  {!readOnly && onMoveNote && <div className="flex justify-end" onClick={event => event.stopPropagation()}><NoteMoveButton onClick={() => onMoveNote(note)} /></div>}
                 </div>
               ))}
             </div>
