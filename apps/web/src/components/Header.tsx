@@ -44,7 +44,7 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
           <h1>{workspaceTitle || 'MyGitNotes'}</h1>
           <p>{sourceLabel || t('header.gitWorkspace')}</p>
         </div>
-        <span id="workspace-sidebar-toggle-slot" />
+        <span id="workspace-sidebar-toggle-slot" className="sidebar-toggle-slot" />
       </div>
       <nav aria-label="Main navigation" className="header-nav">
         {items.map(({id, label, icon: Icon, ...item}, index) => <React.Fragment key={id}>
@@ -61,6 +61,7 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
       </nav>
       <div className="header-account">
         <div className="header-notebook">
+          <span id="workspace-sidebar-toggle-slot-mobile" className="sidebar-toggle-slot" />
           {notebooks.length > 0 && <>
           <BookOpen aria-hidden="true" />
           <Select aria-label={t('sidebar.notebooks')} value={selectedNotebookId}
