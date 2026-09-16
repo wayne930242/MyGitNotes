@@ -63,6 +63,13 @@ export async function fetchNotes(notebookId?: string): Promise<NoteItem[]> {
   return data.notes || [];
 }
 
+export async function renderNoteTemplate(params: { notebookId: string; templateId: string; title: string }): Promise<{ content: string; metadata: Record<string, unknown> }> {
+  const url = `${API_BASE}/templates/render?notebookId=${encodeURIComponent(params.notebookId)}&templateId=${encodeURIComponent(params.templateId)}&title=${encodeURIComponent(params.title)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw await responseError(res, 'Failed to render template');
+  return res.json();
+}
+
 export async function readNote(path: string, notebookId?: string): Promise<NoteItem> {
   const url = `${API_BASE}/notes/read?path=${encodeURIComponent(path)}${
     notebookId ? `&notebookId=${encodeURIComponent(notebookId)}` : ''

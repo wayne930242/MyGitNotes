@@ -4,6 +4,7 @@ import path from 'node:path';
 import { assetInfo, assetRoot, assetPath, isAssetPath, decodeAsset } from './assets.js';
 import { parseWorkspaceConfig } from './config.js';
 import { parseNoteContent, serializeNoteContent } from './frontmatter.js';
+import { formatTemplateDate, renderNoteTemplate } from './templates.js';
 import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js';
 import { WorkspaceConfig, NotebookConfig, NoteItem, FolderItem, NoteMetadata } from './types.js';
 import { SourceError } from './github-api.js';
@@ -68,13 +69,25 @@ export abstract class RemoteSource {
       size: Buffer.byteLength(raw), revision: (await this.getSnapshot()).sha };
   }
 
+  async renderTemplate(notebookId: string, templateId: string, title: string): Promise<{ metadata: NoteMetadata; content: string }> {
+    const config = await this.config();
+    const nb = config.notebooks.find(n => n.id === notebookId);
+    const entry = nb?.templates?.find(t => t.id === templateId);
+    if (!nb || !entry) throw new SourceError('Template is not configured for this notebook.', 404);
+    const raw = (await this.readFile(`${nb.root}/${entry.file}`)).toString('utf8');
+    const { metadata, content } = parseNoteContent(raw, path.posix.basename(entry.file));
+    return renderNoteTemplate({ metadata, content }, { title, date: formatTemplateDate() });
+  }
+
   async notes(notebookId?: string): Promise<NoteItem[]> {
     const config = await this.config();
     const { entries } = await this.getSnapshot();
     const output: NoteItem[] = [];
     for (const nb of config.notebooks.filter(n => !notebookId || n.id === notebookId)) {
+      const templateFiles = new Set((nb.templates || []).map(t => t.file));
       const files = entries.filter(e => e.type === 'blob' && e.mode !== '120000' && e.path.startsWith(`${nb.root}/`) &&
-        isNotebookContent(e.path.slice(nb.root.length + 1), nb) && /\.(md|markdown|txt)$/i.test(e.path));
+        isNotebookContent(e.path.slice(nb.root.length + 1), nb) && !templateFiles.has(e.path.slice(nb.root.length + 1)) &&
+        /\.(md|markdown|txt)$/i.test(e.path));
       await this.prefetchFiles(files.map(file => file.path));
       // The shared transport coalesces cache misses and serializes upstream requests.
       for (let i = 0; i < files.length; i += 6) output.push(...await Promise.all(files.slice(i, i + 6).map(f => this.note(f.path))));

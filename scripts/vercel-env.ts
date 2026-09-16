@@ -9,7 +9,8 @@ const environment = process.argv[2] || 'production';
 if (!['production', 'preview', 'development'].includes(environment)) throw new Error('Use production, preview or development.');
 const names = ['MYGITNOTES_SOURCE', 'MYGITNOTES_REPOSITORY', 'MYGITNOTES_BRANCH', 'MYGITNOTES_GITLAB_URL', 'GITLAB_CLIENT_ID', 'GITLAB_CLIENT_SECRET', 'GITHUB_CLIENT_ID',
   'GITHUB_CLIENT_SECRET', 'GITHUB_APP_TYPE', 'APP_URL', 'SESSION_SECRET', 'MYGITNOTES_SESSION_NAMESPACE', 'UPSTASH_REDIS_REST_URL',
-  'UPSTASH_REDIS_REST_TOKEN', 'GEMINI_API_KEY'];
+  'UPSTASH_REDIS_REST_TOKEN', 'GEMINI_API_KEY', 'MYGITNOTES_R2_ACCOUNT_ID', 'MYGITNOTES_R2_ACCESS_KEY_ID', 'MYGITNOTES_R2_SECRET_ACCESS_KEY',
+  'MYGITNOTES_R2_BUCKET'];
 if (loadSourceConfig(process.cwd()).type === 'local') throw new Error('Configure a GitHub or GitLab source in .env before importing a Vercel deployment.');
 if (environment === 'production' && (!process.env.APP_URL || !process.env.APP_URL.startsWith('https://'))) throw new Error('Set APP_URL (e.g. https://your-project.vercel.app) before importing production environment.');
 for (const name of names) {

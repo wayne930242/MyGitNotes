@@ -28,6 +28,18 @@ beforeEach(async () => {
 afterEach(async()=>{ await new Promise<void>(resolve=>server.close(()=>resolve())); fs.rmSync(root,{recursive:true,force:true}); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe('real HTTP local boundaries',()=>{
+  it('renders a notebook template and excludes it from note listings', async () => {
+    fs.writeFileSync(path.join(root,'notes/.github-notes.yaml'),'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n    templates:\n      - id: reading\n        title: Reading\n        file: .templates/reading.md\n');
+    fs.mkdirSync(path.join(root,'notes/example/.templates'),{recursive:true});
+    fs.writeFileSync(path.join(root,'notes/example/.templates/reading.md'),'---\ntitle: "{{title}}"\nstatus: unread\n---\n\n# {{title}}\n');
+    const rendered = await fetch(`${base}/api/templates/render?notebookId=example&templateId=reading&title=${encodeURIComponent('My Note')}`).then(r=>r.json());
+    expect(rendered.metadata.title).toBe('My Note');
+    expect(rendered.metadata.status).toBe('unread');
+    expect(rendered.content).toContain('# My Note');
+    const notes = await fetch(`${base}/api/notes?notebookId=example`).then(r=>r.json());
+    expect(notes.notes.some((n:any)=>n.path.includes('.templates'))).toBe(false);
+    expect((await fetch(`${base}/api/templates/render?notebookId=example&templateId=missing&title=x`)).status).toBe(400);
+  });
   it('commits a reviewed selection without including other staged files', async () => {
     const file = 'notes/example/projects/deep/note.md', other = 'notes/example/other.md';
     fs.writeFileSync(path.join(root, file), '# Selected');
