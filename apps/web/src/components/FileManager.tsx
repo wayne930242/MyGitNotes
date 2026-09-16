@@ -2,11 +2,14 @@ import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { Button } from './Button.js';
 import { forwardRef, lazy, Suspense, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Folder, File, FolderPlus, FilePlus, Upload, CornerLeftUp, FolderInput, Pencil, Trash2, RefreshCw, Eye, Code2, Download, X, EyeOff } from 'lucide-react';
+import { Folder, File, FolderPlus, FilePlus, Upload, CornerLeftUp, FolderInput, Pencil, Trash2, RefreshCw, Eye, Code2, Download, X, EyeOff, Cloud } from 'lucide-react';
 import type { FileCommand } from '@mygitnotes/core';
 import { fetchFiles, readFile, mutateFile, rawFileUrl, type FileEntry, type FileListing, type FileRead, type FileResult } from '../lib/files-api.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
+import { Preview } from './FilePreview.js';
+import { R2Panel, r2Folders } from './R2Panel.js';
+import { fetchR2, type R2Listing } from '../lib/r2-api.js';
 import './file-manager.css';
 const FileSourceEditor = lazy(() => import('./FileSourceEditor.js').then(module => ({ default: module.FileSourceEditor })));
 
@@ -29,17 +32,6 @@ type Operation = 'create' | 'mkdir' | 'move' | 'delete' | 'remove-directory' | '
 const parentOf = (path: string) => path.slice(0, path.lastIndexOf('/'));
 const basename = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
-function Preview({ entry, url }: { entry: FileEntry; url: string }) {
-  const { t } = useTranslation();
-  const [failed, setFailed] = useState(false);
-  if (failed) return <p role="status">{t('files.previewFailed')}</p>;
-  if (entry.presentation === 'image') return <img className="file-preview-image" src={url} alt={entry.name} onError={() => setFailed(true)} />;
-  if (entry.presentation === 'pdf') return <object className="file-preview-pdf" data={url} type="application/pdf"><p>{t('files.previewFailed')}</p></object>;
-  if (entry.presentation === 'audio') return <audio controls src={url} onError={() => setFailed(true)} />;
-  if (entry.presentation === 'video') return <video controls src={url} onError={() => setFailed(true)} />;
-  return <p className="file-empty">{t('files.binaryHint')}</p>;
-}
-
 export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(function FileManager({ notebookId, writable, initialPath, movePath, mode = 'manage', beforeChange, onChanged, onOpenIndex, onInsert, onBusyChange, onSelectionChange, metadataContainer }, ref) {
   const { t } = useTranslation();
   const [listing, setListing] = useState<FileListing>();
@@ -50,6 +42,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
   const [operation, setOperation] = useState<Operation>(), [name, setName] = useState(''), [destination, setDestination] = useState('');
   const [title, setTitle] = useState(''), [description, setDescription] = useState(''), [order, setOrder] = useState(0);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [r2, setR2] = useState<R2Listing>(), [r2Directory, setR2Directory] = useState<string>();
   const operationForm = useRef<HTMLFormElement>(null);
   const leaveResolver = useRef<(value: boolean) => void>();
   const readSequence = useRef(0), running = useRef(false);
@@ -57,14 +50,15 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
   const dirty = typeof detail?.content === 'string' && content !== detail.content;
   const selectedEntry = listing?.entries.find(entry => entry.path === selected);
   useEffect(() => {
-    onSelectionChange?.(selectedEntry || (listing && directory ? listing.entries.find(entry => entry.path === directory) || { path: directory, name: basename(directory), directory: true, size: 0, hidden: false, presentation: 'file' } : undefined));
+    onSelectionChange?.(r2Directory !== undefined ? undefined : selectedEntry || (listing && directory ? listing.entries.find(entry => entry.path === directory) || { path: directory, name: basename(directory), directory: true, size: 0, hidden: false, presentation: 'file' } : undefined));
     return () => onSelectionChange?.(undefined);
-  }, [selectedEntry, listing, directory, onSelectionChange]);
+  }, [selectedEntry, listing, directory, onSelectionChange, r2Directory]);
   const entries = listing?.entries.filter(entry => showHidden || !entry.hidden) || [];
   const dirs = entries.filter(entry => entry.directory);
   const current = entries.filter(entry => parentOf(entry.path) === directory).sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
   useEffect(() => { if (operation) operationForm.current?.scrollIntoView({ block: 'nearest' }); }, [operation]);
   const refresh = async () => { const next = await fetchFiles(notebookId); setListing(next); return next; };
+  const refreshR2 = async () => { const next = movePath ? undefined : await fetchR2(notebookId).catch(() => undefined); setR2(next); if (!next) setR2Directory(undefined); return next; };
   const loadDetail = async (file: string) => {
     const sequence = ++readSequence.current;
     setSelected(file); setDetail(undefined); setReading(true); setSourceView(false); setOperation(undefined);
@@ -77,7 +71,8 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
   };
   useEffect(() => {
     let active = true;
-    setListing(undefined); setError('');
+    setListing(undefined); setError(''); setR2(undefined); setR2Directory(undefined);
+    if (!movePath) void fetchR2(notebookId).then(next => { if (active) setR2(next); }).catch(() => undefined);
     void fetchFiles(notebookId).then(next => {
       if (!active) return;
       setListing(next);
@@ -131,10 +126,15 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
   const finishLeave = (value: boolean) => { const resolve = leaveResolver.current; leaveResolver.current = undefined; setConfirmLeave(false); resolve?.(value); };
   const navigate = async (path: string, select = false) => {
     if (!await prepareLeave()) return;
-    setError('');
+    setError(''); setR2Directory(undefined);
     if (select) await loadDetail(path);
     else { setDirectory(path); setSelected(''); setDetail(undefined); setOperation(undefined); setReading(false); readSequence.current++; }
     setTreeOpen(false);
+  };
+  const navigateR2 = async (path: string) => {
+    if (!await prepareLeave()) return;
+    setError(''); setSelected(''); setDetail(undefined); setOperation(undefined); setReading(false); readSequence.current++;
+    setR2Directory(path); setTreeOpen(false);
   };
   const openOperation = async (kind: Operation) => {
     if (!await prepareLeave()) return;
@@ -175,18 +175,28 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
   return <div className="file-manager" data-mode={mode} aria-busy={busy || reading || !listing}>
     <header className="file-manager-toolbar">
       <button type="button" className="ui-button file-tree-toggle" aria-expanded={treeOpen} onClick={() => setTreeOpen(!treeOpen)}><Folder size={16} />{t('folder.folders')}</button>
-      {directory !== listing?.root && <nav aria-label={t('files.location')} className="file-breadcrumbs">
+      {r2Directory === undefined && directory !== listing?.root && <nav aria-label={t('files.location')} className="file-breadcrumbs">
         {listing && <>{directory.slice(listing.root.length + 1).split('/').filter(Boolean).map((part, index, parts) => <span key={index}> / <button type="button" disabled={busy} onClick={() => void navigate(listing.root + '/' + parts.slice(0, index + 1).join('/'))}>{part}</button></span>)}</>}
       </nav>}
+      {r2 && r2Directory !== undefined && r2Directory !== r2.prefix.slice(0, -1) && <nav aria-label={t('files.location')} className="file-breadcrumbs">
+        <button type="button" disabled={busy} onClick={() => setR2Directory(r2.prefix.slice(0, -1))}>R2</button>{r2Directory.slice(r2.prefix.length).split('/').map((part, index, parts) => <span key={index}> / <button type="button" disabled={busy} onClick={() => setR2Directory(r2.prefix + parts.slice(0, index + 1).join('/'))}>{part}</button></span>)}
+      </nav>}
       <button type="button" className="ui-icon-button file-hidden-toggle" aria-label={t('files.showHidden')} title={t('files.showHidden')} aria-pressed={showHidden} disabled={busy || !listing} onClick={() => { const next = !showHidden; void (async () => { if (await prepareLeave()) { setShowHidden(next); if (!next && (selectedEntry?.hidden || directory.slice((listing?.root.length || 0) + 1).split('/').some(p => p.startsWith('.')))) { setDirectory(listing!.root); setSelected(''); setDetail(undefined); setOperation(undefined); readSequence.current++; } } })(); }}>{showHidden ? <Eye size={18} /> : <EyeOff size={18} />}</button>
-      <button type="button" className="ui-icon-button" aria-label={t('folder.reload')} disabled={busy} onClick={() => void (async () => { if (await prepareLeave()) await run(async () => { const next = await refresh(); if (selected && next.entries.some(e => e.path === selected)) await loadDetail(selected); else { setDirectory(next.root); setSelected(''); setDetail(undefined); setOperation(undefined); readSequence.current++; } }); })()}><RefreshCw size={16} /></button>
+      <button type="button" className="ui-icon-button" aria-label={t('folder.reload')} disabled={busy} onClick={() => void (async () => { if (await prepareLeave()) await run(async () => { await refreshR2(); const next = await refresh(); if (selected && next.entries.some(e => e.path === selected)) await loadDetail(selected); else { setDirectory(next.root); setSelected(''); setDetail(undefined); setOperation(undefined); readSequence.current++; } }); })()}><RefreshCw size={16} /></button>
     </header>
     {error && <p role="alert" className="file-error">{error}</p>}
     {!listing ? <p role="status">{error ? t('files.unavailable') : t('files.loading')}</p> : <>
     <div className="file-manager-body">
       <nav className={`file-tree ${treeOpen ? 'is-open' : ''}`} aria-label={t('folder.folders')}>
-        {[...(directory !== listing.root ? [{ path: listing.root, name: '<note>' }] : []), ...dirs].map(entry => <button type="button" key={entry.path} disabled={busy} aria-current={directory === entry.path ? 'location' : undefined} style={{ paddingInlineStart: 10 + Math.max(0, entry.path.slice(listing.root.length + 1).split('/').length - 1) * 12 }} onClick={() => void navigate(entry.path)}><Folder size={15} /><span>{entry.name}</span></button>)}
+        {[...(directory !== listing.root || r2Directory !== undefined ? [{ path: listing.root, name: '<note>' }] : []), ...dirs].map(entry => <button type="button" key={entry.path} disabled={busy} aria-current={r2Directory === undefined && directory === entry.path ? 'location' : undefined} style={{ paddingInlineStart: 10 + Math.max(0, entry.path.slice(listing.root.length + 1).split('/').length - 1) * 12 }} onClick={() => void navigate(entry.path)}><Folder size={15} /><span>{entry.name}</span></button>)}
+        {r2 && (() => { const { root, folders } = r2Folders(r2, showHidden); return <>
+          <button type="button" className="file-tree-r2" disabled={busy} aria-current={r2Directory === root ? 'location' : undefined} onClick={() => void navigateR2(root)}><Cloud size={15} /><span>R2</span></button>
+          {folders.map(folder => <button type="button" key={folder} disabled={busy} aria-current={r2Directory === folder ? 'location' : undefined} style={{ paddingInlineStart: 10 + (folder.split('/').length - 1) * 12 }} onClick={() => void navigateR2(folder)}><Folder size={15} /><span>{folder.slice(folder.lastIndexOf('/') + 1)}</span></button>)}
+        </>; })()}
       </nav>
+      {r2 && r2Directory !== undefined ? <R2Panel notebookId={notebookId} listing={r2} directory={r2Directory} mutable={mode === 'manage' && writable} showHidden={showHidden} busy={busy}
+        run={run} onNavigate={path => setR2Directory(path)} onRefresh={refreshR2} beforeChange={beforeChange}
+        onNotesChanged={async () => { const next = await refresh(); await onChanged?.({ revision: next.revision, selectedPath: '', pathMap: {}, deletedPaths: [] }); }} onInsert={mode === 'pick-image' ? onInsert : undefined} /> :
       <section className={`file-content ${selectedEntry ? 'has-selection' : ''}`}>
         <div className="file-actions">
           {mutable && <>
@@ -246,7 +256,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
           </>}
           <div className="file-actions"><button type="button" className="ui-button" disabled={busy} onClick={() => setOperation(undefined)}>{t('common.cancel')}</button><Button type="submit" variant="primary" disabled={busy || operation === 'move' && destination + '/' + name.trim() === selected}>{operation === 'delete' || operation === 'remove-directory' ? t('files.confirmDelete') : t('common.save')}</Button></div>
         </form>)}
-      </section>
+      </section>}
     </div>
     </>}
     {confirmLeave && <WorkspaceDialog title={t('files.unsaved')} onClose={() => finishLeave(false)}><p>{t('files.leaveHint')}</p><div className="workspace-dialog-actions"><button type="button" className="ui-button" disabled={busy} onClick={() => finishLeave(false)}>{t('files.keepEditing')}</button><button type="button" className="ui-button" disabled={busy} onClick={() => { setContent(detail?.content || ''); finishLeave(true); }}>{t('files.discard')}</button><Button type="button" variant="primary" disabled={busy} onClick={() => void save().then(ok => { if (ok) finishLeave(true); })}>{t('common.save')}</Button></div></WorkspaceDialog>}

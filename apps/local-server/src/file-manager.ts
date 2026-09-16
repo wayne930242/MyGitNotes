@@ -24,7 +24,7 @@ function regularPath(root: string, file: string) {
 }
 interface CatalogFile { size: number; stamp: string; hash?: string; mtime?: number }
 interface FileCatalog { notebooks: FileSnapshot['notebooks']; directories: string[]; protectedPaths: string[]; files: Map<string, CatalogFile> }
-function localFileCatalog(root: string): FileCatalog {
+export function localFileCatalog(root: string): FileCatalog {
   const config = loadWorkspaceConfig(root);
   if (!config) throw new SourceError('Workspace configuration is missing.', 400);
   const catalog: FileCatalog = { notebooks: config.notebooks, directories: [], protectedPaths: [], files: new Map() };

@@ -152,7 +152,7 @@ See the [Compose files](compose.yaml), [local configuration](compose.local.yaml)
 
 ## Private R2 assets (optional)
 
-Keep large attachments such as PDFs out of the repository by storing them in a private Cloudflare R2 bucket and referencing the object key from a note:
+R2 is optional. Recommend it only when a workspace has large files, such as scanned PDFs, recordings, or videos, that would bloat the repository or push a hosted repository archive past its size limit; ordinary images and attachments belong in the notebook. Store those large files in a private Cloudflare R2 bucket and reference the object key from a note:
 
 ```markdown
 ![Core rules](<r2:trpg/Tales from the old west/Core_Rules.pdf>)
@@ -161,7 +161,17 @@ Keep large attachments such as PDFs out of the repository by storing them in a p
 
 An image reference to a PDF, image, video, or audio file previews inline; other files and plain links open in a new tab. Wrap keys containing spaces in `<...>` or percent-encode them.
 
-Set `MYGITNOTES_R2_ACCOUNT_ID`, `MYGITNOTES_R2_ACCESS_KEY_ID`, `MYGITNOTES_R2_SECRET_ACCESS_KEY`, and `MYGITNOTES_R2_BUCKET` in the deployment environment (Vercel, Docker, or the local server's shell) with a read-only R2 token scoped to the bucket. `/r2-assets/<key>?note=<note path>` reads that note with the requester's workspace permission and confirms it references the key; it then redirects to a presigned URL valid for 5 minutes, so the browser downloads the object directly from R2 without the serverless response size limit. Anyone who cannot read the note, or requests a key the note does not reference, receives 404. Upload objects with `wrangler r2 object put` or the Cloudflare dashboard.
+Set `MYGITNOTES_R2_ACCOUNT_ID`, `MYGITNOTES_R2_ACCESS_KEY_ID`, `MYGITNOTES_R2_SECRET_ACCESS_KEY`, and `MYGITNOTES_R2_BUCKET` in the deployment environment (Vercel, Docker, or the local server's shell) with an R2 token scoped to the bucket. A read-only token only previews referenced objects; managing objects from the Files page requires Object Read & Write. `/r2-assets/<key>?note=<note path>` reads that note with the requester's workspace permission and confirms it references the key; it then redirects to a presigned URL valid for 5 minutes, so the browser downloads the object directly from R2 without the serverless response size limit. Anyone who cannot read the note, or requests a key the note does not reference, receives 404. Set `MYGITNOTES_R2_ENDPOINT` only to point at an S3-compatible stand-in such as a local MinIO during development.
+
+Users with workspace write access manage R2 from the Files page: the **R2** section below the notebook folders lists objects under `<notebook id>/` in the bucket. Upload sends the file from the browser to R2 through a 15-minute presigned PUT URL, so large files never pass through the server. New folder, Move / rename, and Delete work like repository files; Move / rename rewrites every `r2:` reference in workspace notes in the same operation, and Delete lists the notes that still reference the object. In the note editor, **Insert image → R2** inserts `![name](<r2:key>)` for previewable media and `[name](<r2:key>)` for other files. Listing, preview from the Files page, upload, and every change require the same write permission as file changes; read-only sessions and MCP grants cannot reach them. The tutorial note `getting-started/large-files-r2.md` in the demo workspace walks through the flow.
+
+Browser uploads need a bucket CORS rule that allows `PUT` (plus `GET` and `HEAD`) from the application origin with any request header, for example:
+
+```json
+[{ "AllowedOrigins": ["https://notes.example.com"], "AllowedMethods": ["GET", "HEAD", "PUT"], "AllowedHeaders": ["*"], "ExposeHeaders": ["ETag"], "MaxAgeSeconds": 3600 }]
+```
+
+You can still upload objects with `wrangler r2 object put` or the Cloudflare dashboard.
 
 ## Vercel deployment (optional)
 

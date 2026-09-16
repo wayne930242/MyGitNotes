@@ -2,7 +2,7 @@
 .workspace-dialog.file-manager-dialog{width:min(1480px,96vw);max-width:96vw;height:min(850px,92dvh);max-height:92dvh;padding:0;gap:0;overflow:hidden;display:flex;flex-direction:column}
 .file-manager-dialog>.workspace-dialog-heading{padding:16px 20px;margin:0;border-bottom:1px solid var(--color-border)}
 .file-manager-dialog>.file-manager{flex:1}
-.file-manager-toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid var(--color-border)}
+.file-manager-toolbar{display:flex;gap:4px 12px;align-items:center;flex-wrap:wrap;padding:4px 12px;border-bottom:1px solid var(--color-border)}
 .file-breadcrumbs{flex:1;min-width:0;overflow-wrap:anywhere}.file-breadcrumbs button{white-space:normal;text-align:left;overflow-wrap:anywhere}.file-breadcrumbs button:hover{text-decoration:underline}
 .file-hidden-toggle{flex-shrink:0;color:var(--color-muted)}.file-hidden-toggle[aria-pressed=true]{color:var(--color-primary);background:color-mix(in srgb,var(--color-primary) 12%,transparent)}
 .file-manager-body{display:flex;min-height:0;flex:1}.file-tree{width:210px;flex-shrink:0;overflow:auto;border-right:1px solid var(--color-border);padding:12px 8px;background:var(--color-bg)}
@@ -44,7 +44,7 @@
 .file-detail>.file-actions:empty{display:none}
 
 .file-manager-toolbar .file-breadcrumbs{margin:0;padding:0;font-size:12px;line-height:1.35}
-.file-manager-toolbar .file-breadcrumbs button{min-height:0;padding:0;border:0;line-height:inherit}
+.file-manager-toolbar .file-breadcrumbs button{min-height:0;min-width:0;padding:0;border:0;line-height:inherit}
 .file-edit-metadata{margin-top:12px}.file-metadata-panel .file-operation{padding:12px}
 @media(max-width:700px){
   .file-manager-toolbar{padding:6px 10px;row-gap:3px;grid-template-rows:auto auto;align-content:start}
@@ -52,3 +52,6 @@
 }
 
 @media(min-width:701px){.file-navigation-row{display:none}}
+.file-tree .file-tree-r2{margin-top:8px;border-top:1px solid var(--color-border);border-radius:0 0 6px 6px;padding-top:10px}
+.workspace-dialog.file-manager-dialog[open]{gap:0}
+@media(min-width:701px){.file-manager-toolbar>.file-hidden-toggle{margin-left:auto}}

@@ -34,7 +34,7 @@ const HTML_ATTRIBUTE = /(?:src|href)\s*=\s*(?:"(r2:[^"\n]+)"|'(r2:[^'\n]+)')/gi;
  */
 export function r2ReferenceKeys(markdown: string): string[] {
   const keys = new Set<string>();
-  for (const pattern of [INLINE_REFERENCE, REFERENCE_DEFINITION, HTML_ATTRIBUTE]) {
+  for (const pattern of PATTERNS()) {
     for (const match of markdown.matchAll(pattern)) {
       for (const group of match.slice(1)) {
         if (!group) continue;
@@ -44,6 +44,39 @@ export function r2ReferenceKeys(markdown: string): string[] {
     }
   }
   return [...keys];
+}
+
+const PATTERNS = () => [INLINE_REFERENCE, REFERENCE_DEFINITION, HTML_ATTRIBUTE];
+
+/** Bucket prefix that holds a notebook's managed R2 objects. */
+export function r2NotebookPrefix(notebookId: string): string {
+  return `${notebookId}/`;
+}
+
+/** True when `key` is a safe object key inside the notebook's managed prefix. */
+export function isNotebookR2Key(key: string, notebookId: string): boolean {
+  return isValidR2Key(key) && key.startsWith(r2NotebookPrefix(notebookId)) && key.length > r2NotebookPrefix(notebookId).length;
+}
+
+/**
+ * Rewrites `r2:` references whose key appears in `moves` to the mapped key, covering the same
+ * forms as `r2ReferenceKeys`. Angle-bracket and HTML forms keep raw keys; bare forms stay percent-encoded.
+ */
+export function rewriteR2References(markdown: string, moves: Record<string, string>): string {
+  let next = markdown;
+  for (const pattern of PATTERNS()) {
+    next = next.replace(pattern, (all: string, ...groups: unknown[]) => {
+      const [first, second] = groups as (string | undefined)[];
+      const reference = first ?? second;
+      const key = reference ? parseR2Reference(reference) : null;
+      if (!reference || key === null || !(key in moves)) return all;
+      const bare = pattern !== HTML_ATTRIBUTE && first === undefined;
+      const target = bare ? moves[key].split('/').map(part => encodeURIComponent(part).replace(/[()]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase())).join('/')
+        : moves[key].replace(/[<>"']/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+      return all.replace(reference, `r2:${target}`);
+    });
+  }
+  return next;
 }
 
 export function r2PreviewType(key: string): { kind: R2PreviewKind; contentType: string } {

@@ -152,7 +152,7 @@ Compose 的自架 Redis 保存加密 session、平台憑證與 MCP 授權。更�
 
 ## 私有 R2 附件（選用）
 
-PDF 等大型附件可以放在私有的 Cloudflare R2 bucket，筆記只引用 object key，不必進 repository：
+R2 不是必要功能。只有當 workspace 有大檔案，例如掃描 PDF、錄音或影片，放進 repository 會讓它膨脹、或讓託管端的 repository archive 超過大小上限時才推薦使用；一般圖片與附件放在筆記本內即可。這類大檔可以放在私有的 Cloudflare R2 bucket，筆記只引用 object key：
 
 ```markdown
 ![核心規則書](<r2:trpg/Tales from the old west/Core_Rules.pdf>)
@@ -161,7 +161,17 @@ PDF 等大型附件可以放在私有的 Cloudflare R2 bucket，筆記只引用 
 
 圖片語法引用 PDF、圖片、影片或音訊時會在筆記內預覽；其他檔案與一般連結則在新分頁開啟。Key 含空白時用 `<...>` 包住，或改用百分比編碼。
 
-在部署環境（Vercel、Docker 或本機伺服器的 shell）設定 `MYGITNOTES_R2_ACCOUNT_ID`、`MYGITNOTES_R2_ACCESS_KEY_ID`、`MYGITNOTES_R2_SECRET_ACCESS_KEY` 與 `MYGITNOTES_R2_BUCKET`，token 只給該 bucket 的唯讀權限。`/r2-assets/<key>?note=<筆記路徑>` 會用請求者自己的 workspace 權限讀取該筆記，確認筆記確實引用這個 key，再轉址到 5 分鐘有效的 presigned URL，由瀏覽器直接向 R2 下載，因此不受 serverless 回應大小限制。讀不到該筆記，或筆記沒有引用該 key 時，一律回傳 404。上傳物件可用 `wrangler r2 object put` 或 Cloudflare dashboard。
+在部署環境（Vercel、Docker 或本機伺服器的 shell）設定 `MYGITNOTES_R2_ACCOUNT_ID`、`MYGITNOTES_R2_ACCESS_KEY_ID`、`MYGITNOTES_R2_SECRET_ACCESS_KEY` 與 `MYGITNOTES_R2_BUCKET`，token 只授權該 bucket。唯讀 token 只能預覽筆記引用的物件；要從「檔案」頁管理物件，需要 Object Read & Write 權限。`/r2-assets/<key>?note=<筆記路徑>` 會用請求者自己的 workspace 權限讀取該筆記，確認筆記確實引用這個 key，再轉址到 5 分鐘有效的 presigned URL，由瀏覽器直接向 R2 下載，因此不受 serverless 回應大小限制。讀不到該筆記，或筆記沒有引用該 key 時，一律回傳 404。`MYGITNOTES_R2_ENDPOINT` 只在開發時指向本機 MinIO 等 S3 相容替身才需要設定。
+
+有 workspace 寫入權限的使用者可以在「檔案」頁管理 R2：筆記本目錄下方的 **R2** 區塊列出 bucket 中 `<notebook id>/` 底下的物件。上傳時瀏覽器透過 15 分鐘有效的 presigned PUT URL 直接把檔案送到 R2，大檔不經過伺服器。新增目錄、移動／重新命名與刪除的操作方式和 repository 檔案一致；移動／重新命名會在同一次操作改寫 workspace 筆記中所有 `r2:` 引用，刪除前則會列出仍引用該物件的筆記。在筆記編輯器按 **插入圖片 → R2**，可預覽的媒體會插入 `![name](<r2:key>)`，其他檔案插入 `[name](<r2:key>)`。列出物件、在檔案頁預覽、上傳與所有變更都需要和檔案變更相同的寫入權限，唯讀 session 與 MCP grant 無法使用。範例 workspace 的教學筆記 `getting-started/large-files-r2.md` 有完整操作說明。
+
+瀏覽器上傳需要 bucket 的 CORS 規則允許應用程式網域以 `PUT`（以及 `GET`、`HEAD`）並帶任意 request header，例如：
+
+```json
+[{ "AllowedOrigins": ["https://notes.example.com"], "AllowedMethods": ["GET", "HEAD", "PUT"], "AllowedHeaders": ["*"], "ExposeHeaders": ["ETag"], "MaxAgeSeconds": 3600 }]
+```
+
+仍可用 `wrangler r2 object put` 或 Cloudflare dashboard 上傳物件。
 
 ## Vercel 部署（選用）
 
