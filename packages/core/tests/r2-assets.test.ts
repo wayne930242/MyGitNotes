@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseR2Reference, presignR2Object, r2ReferenceKeys, r2SettingsFromEnv } from '../src/index.js';
+import { isNotebookR2Key, parseR2Reference, presignR2Object, presignR2Upload, r2NotebookPrefix, r2ReferenceKeys, r2SettingsFromEnv, rewriteR2References } from '../src/index.js';
 
 describe('R2 references', () => {
   it('extracts keys from Markdown images and links, including angle-bracket and encoded keys', () => {
@@ -43,5 +43,30 @@ describe('R2 references', () => {
   it("percent-encodes a single quote in the RFC 5987 filename", async () => {
     const url = new URL(await presignR2Object({ accountId: 'acc', accessKeyId: 'AK', secretAccessKey: 'SK', bucket: 'private' }, "User's Guide.pdf"));
     expect(url.searchParams.get('response-content-disposition')).toContain("filename*=UTF-8''User%27s%20Guide.pdf");
+  });
+});
+
+describe('R2 management helpers', () => {
+  it('scopes keys to a notebook prefix and rejects keys outside it', () => {
+    expect(r2NotebookPrefix('ex')).toBe('ex/');
+    expect(isNotebookR2Key('ex/a/b.pdf', 'ex')).toBe(true);
+    expect(isNotebookR2Key('other/b.pdf', 'ex')).toBe(false);
+    expect(isNotebookR2Key('ex/../other/b.pdf', 'ex')).toBe(false);
+    expect(isNotebookR2Key('ex', 'ex')).toBe(false);
+  });
+
+  it('rewrites every reference form the scanner detects and leaves other keys untouched', () => {
+    const markdown = '![Rules](<r2:ex/old/Core Rules.pdf>)\n[clip](r2:ex/old/a%20b.mp4) [keep](r2:ex/keep.pdf)\n\n[map]: r2:ex/old/map.webp\n\n<img src="r2:ex/old/d.png">';
+    const next = rewriteR2References(markdown, { 'ex/old/Core Rules.pdf': 'ex/new/Core Rules.pdf', 'ex/old/a b.mp4': 'ex/new/a b.mp4', 'ex/old/map.webp': 'ex/new/map.webp', 'ex/old/d.png': 'ex/new/d.png' });
+    expect(next).toBe('![Rules](<r2:ex/new/Core Rules.pdf>)\n[clip](r2:ex/new/a%20b.mp4) [keep](r2:ex/keep.pdf)\n\n[map]: r2:ex/new/map.webp\n\n<img src="r2:ex/new/d.png">');
+    expect(r2ReferenceKeys(next).sort()).toEqual(['ex/keep.pdf', 'ex/new/Core Rules.pdf', 'ex/new/a b.mp4', 'ex/new/d.png', 'ex/new/map.webp']);
+    expect(rewriteR2References('no refs', { a: 'b' })).toBe('no refs');
+  });
+
+  it('uses a configured endpoint for presigned uploads', async () => {
+    const url = new URL(await presignR2Upload({ accountId: 'acc', accessKeyId: 'AK', secretAccessKey: 'SK', bucket: 'private', endpoint: 'http://127.0.0.1:9000' }, 'ex/a b.pdf'));
+    expect(url.origin + url.pathname).toBe('http://127.0.0.1:9000/private/ex/a%20b.pdf');
+    expect(url.searchParams.get('X-Amz-Signature')).toMatch(/^[a-f0-9]{64}$/);
+    expect(r2SettingsFromEnv({ MYGITNOTES_R2_ACCOUNT_ID: 'a', MYGITNOTES_R2_ACCESS_KEY_ID: 'b', MYGITNOTES_R2_SECRET_ACCESS_KEY: 'c', MYGITNOTES_R2_BUCKET: 'd', MYGITNOTES_R2_ENDPOINT: 'http://127.0.0.1:9000/' })?.endpoint).toBe('http://127.0.0.1:9000');
   });
 });
