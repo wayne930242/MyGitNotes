@@ -52,7 +52,7 @@ function validateWorkspacePath(
   const screenAccess = reqPath.startsWith('/api/git/') && (candidate === SCREEN_PAGE_FILE || candidate === STUDY_FILE || resource.type === 'workspace_config');
   const fileAccess = reqPath.startsWith('/api/git/') && config && managedNotebook(candidate, config.notebooks);
   if (agentAccess) resolveWorkspaceAgentPath(repoRoot, candidate);
-  if (!agentAccess && !screenAccess && !fileAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !candidate.startsWith('notes/'))) {
+  if (!agentAccess && !screenAccess && !fileAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !resource.notebookId)) {
     const err = new Error('Path is outside configured workspace resources.') as Error & { status?: number };
     err.status = 403;
     throw err;

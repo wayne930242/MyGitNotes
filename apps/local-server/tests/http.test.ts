@@ -168,11 +168,27 @@ describe('real HTTP local boundaries',()=>{
     expect((await fetch(`${base}/api/notes`,request)).status).toBe(409);
     expect(fs.readFileSync(path.join(root,'notes/example/projects/deep/new.md'),'utf8')).toBe('# New');
   });
+  it('reads and saves notes whose notebook root lives outside the notes/ prefix (multi-repo root workspace)', async () => {
+    fs.writeFileSync(path.join(root,'notes/.github-notes.yaml'),'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: life\n    title: Life\n    root: my-notes/notes/life\n');
+    fs.mkdirSync(path.join(root,'my-notes/notes/life'),{recursive:true});
+    fs.writeFileSync(path.join(root,'my-notes/notes/life/note.md'),'# Life Note');
+    git('add','.'); git('commit','-m','add life notebook');
+    const read = await fetch(`${base}/api/notes/read?path=my-notes/notes/life/note.md&notebookId=life`).then(r=>r.json());
+    expect(read.note.content).toBe('# Life Note');
+    const saved = await fetch(`${base}/api/notes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:'my-notes/notes/life/note.md',content:'# Updated Life Note',notebookId:'life',noCommit:true})});
+    expect(saved.status).toBe(200);
+    expect(fs.readFileSync(path.join(root,'my-notes/notes/life/note.md'),'utf8')).toBe('# Updated Life Note');
+  });
   it('blocks raw secret reads, product-file writes, foreign origins and core branch writes',async()=>{
     expect((await fetch(`${base}/raw-assets/.env`)).status).toBe(403);
     expect((await fetch(`${base}/api/notes/read?path=.env`)).status).toBe(403);
     expect((await fetch(`${base}/api/notes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:'README.md',content:'bad'})})).status).toBe(403);
     expect((await fetch(`${base}/api/workspace`,{headers:{Origin:'https://evil.example'}})).status).toBe(403);
+    expect((await fetch(`${base}/api/workspace`,{headers:{Origin:'http://localhost:5173'}})).status).toBe(200);
+    expect((await fetch(`${base}/api/workspace`,{headers:{Origin:'http://localhost:5174'}})).status).toBe(403);
+    fs.writeFileSync(path.join(root,'.mygitnotes-dev-ports.json'),JSON.stringify({webPort:5174}));
+    expect((await fetch(`${base}/api/workspace`,{headers:{Origin:'http://localhost:5174'}})).status).toBe(200);
+    expect((await fetch(`${base}/api/workspace`,{headers:{Origin:'http://localhost:5173'}})).status).toBe(403);
     git('checkout','-b','core');
     expect((await fetch(`${base}/api/notes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:'notes/example/new.md',content:'bad'})})).status).toBe(403);
   });
