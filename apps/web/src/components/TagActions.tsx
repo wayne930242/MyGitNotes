@@ -176,7 +176,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, allTags, onPreviewU
             onChange={event => {
               setTargetName(event.target.value);
               setSuggestionsOpen(true);
-              setHighlight(0);
+              setHighlight(-1);
             }}
             placeholder={mode === 'rename' ? t('sidebar.tagNewNamePlaceholder') : t('sidebar.tagMergeTargetPlaceholder')}
             onKeyDown={event => {

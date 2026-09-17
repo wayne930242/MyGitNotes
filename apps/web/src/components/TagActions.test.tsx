@@ -174,8 +174,21 @@ describe('TagActions merge target autocomplete', () => {
     expect(input).toHaveValue('bet');
     fireEvent.keyDown(input, { key: 'Enter' });
 
-    expect(input).toHaveValue('betting');
+    expect(input).toHaveValue('beta');
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('submits on Enter without hijacking it when no suggestion has been arrow-selected yet', async () => {
+    const onMerge = vi.fn().mockResolvedValue(undefined);
+    renderTagActions({ onPreviewUsage: vi.fn().mockResolvedValue(5), onMerge, allTags: ['beta', 'betting'] });
+    await openMenu();
+    await act(async () => { fireEvent.click(screen.getByText('Merge into…')); });
+
+    const input = screen.getByPlaceholderText('Target tag');
+    fireEvent.change(input, { target: { value: 'betting' } });
+    await act(async () => { fireEvent.keyDown(input, { key: 'Enter' }); });
+
+    expect(onMerge).toHaveBeenCalledWith('alpha', 'betting');
   });
 
   it('selects a suggestion by click (touch tap)', async () => {
