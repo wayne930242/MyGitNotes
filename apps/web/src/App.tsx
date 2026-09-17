@@ -1092,6 +1092,7 @@ const AppContent: React.FC = () => {
           config?.notebooks.find(nb => nb.id === routedNote?.notebookId),
           notes.filter(note => note.notebookId === routedNote?.notebookId).map(note => note.status),
         )}
+        metadataFields={config?.notebooks.find(nb => nb.id === routedNote?.notebookId)?.metadata}
         note={routedNote}
         isOpen={Boolean(routedNote) && !routeError}
         onClose={() => {

@@ -1,7 +1,7 @@
 import YAML from 'yaml';
 import path from 'node:path';
 import fs from 'node:fs';
-import { WorkspaceConfig, NotebookConfig, NoteTemplate } from './types.js';
+import { WorkspaceConfig, NotebookConfig, NoteTemplate, NotebookMetadataField } from './types.js';
 
 export const WORKSPACE_CONFIG_FILENAME = '.github-notes.yaml';
 
@@ -145,6 +145,62 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
       });
     }
 
+    let validatedMetadata: NotebookMetadataField[] | undefined;
+    if (item.metadata !== undefined) {
+      if (!Array.isArray(item.metadata)) {
+        throw new ConfigValidationError(`Notebook '${item.id}' metadata must be an array`);
+      }
+      const fieldKeys = new Set<string>();
+      validatedMetadata = item.metadata.map((raw) => {
+        if (typeof raw === 'string') {
+          const key = raw.trim();
+          if (!key || !/^[a-zA-Z0-9_-]+$/.test(key)) {
+            throw new ConfigValidationError(`Notebook '${item.id}' metadata key '${raw}' must be an alphanumeric/slug string`);
+          }
+          if (fieldKeys.has(key)) {
+            throw new ConfigValidationError(`Notebook '${item.id}' has duplicate metadata field '${key}'`);
+          }
+          fieldKeys.add(key);
+          return { key };
+        }
+        if (!raw || typeof raw !== 'object') {
+          throw new ConfigValidationError(`Notebook '${item.id}' has an invalid metadata field entry`);
+        }
+        const field = raw as Record<string, unknown>;
+        if (typeof field.key !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(field.key)) {
+          throw new ConfigValidationError(`Notebook '${item.id}' metadata field key must be an alphanumeric/slug string`);
+        }
+        if (fieldKeys.has(field.key)) {
+          throw new ConfigValidationError(`Notebook '${item.id}' has duplicate metadata field '${field.key}'`);
+        }
+        fieldKeys.add(field.key);
+        if (field.type !== undefined && !['string', 'boolean', 'number'].includes(field.type as string)) {
+          throw new ConfigValidationError(`Notebook '${item.id}' metadata field '${field.key}' has invalid type: ${field.type}`);
+        }
+        if (field.label !== undefined && (typeof field.label !== 'string' || !field.label.trim())) {
+          throw new ConfigValidationError(`Notebook '${item.id}' metadata field '${field.key}' has invalid label`);
+        }
+        return {
+          key: field.key,
+          ...(field.type ? { type: field.type as 'string' | 'boolean' | 'number' } : {}),
+          ...(field.label ? { label: field.label as string } : {}),
+        };
+      });
+    }
+
+    let validatedPathAliases: Record<string, string> | undefined;
+    const rawAliases = (item.pathAliases || item.path_aliases || item.paths) as Record<string, unknown> | undefined;
+    if (rawAliases && typeof rawAliases === 'object') {
+      validatedPathAliases = {};
+      for (const [k, v] of Object.entries(rawAliases)) {
+        if (typeof k === 'string' && typeof v === 'string') {
+          validatedPathAliases[k] = v;
+        } else if (typeof k === 'string' && Array.isArray(v) && typeof v[0] === 'string') {
+          validatedPathAliases[k] = v[0];
+        }
+      }
+    }
+
     validatedNotebooks.push({
       id: item.id,
       title: item.title,
@@ -153,6 +209,8 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
       default_view: (item.default_view as 'list' | 'card' | 'kanban' | 'flat') || 'list',
       ...(item.statuses !== undefined ? { statuses: [...item.statuses as string[]] } : {}),
       ...(validatedTemplates !== undefined ? { templates: validatedTemplates } : {}),
+      ...(validatedMetadata !== undefined ? { metadata: validatedMetadata } : {}),
+      ...(validatedPathAliases !== undefined ? { pathAliases: validatedPathAliases } : {}),
     });
   }
 
@@ -194,6 +252,69 @@ export function serializeWorkspaceConfig(config: WorkspaceConfig): string {
 }
 
 /**
+ * Searches for tsconfig.json or jsconfig.json starting from notebook directory upwards to repository root,
+ * and extracts compilerOptions.paths converted to repository-relative paths.
+ */
+export function discoverTsconfigPaths(repoRoot: string, notebookRoot: string): Record<string, string> {
+  const aliases: Record<string, string> = {};
+  if (!repoRoot || !notebookRoot) return aliases;
+  try {
+    const resolvedRepoRoot = path.resolve(repoRoot);
+    let currentDir = path.resolve(repoRoot, notebookRoot);
+
+    while (currentDir === resolvedRepoRoot || currentDir.startsWith(resolvedRepoRoot + path.sep)) {
+      for (const configFile of ['tsconfig.json', 'jsconfig.json']) {
+        const configPath = path.join(currentDir, configFile);
+        if (fs.existsSync(configPath)) {
+          try {
+            const raw = fs.readFileSync(configPath, 'utf-8');
+            const cleaned = raw
+              .replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1')
+              .replace(/,\s*([}\]])/g, '$1');
+            const parsed = JSON.parse(cleaned);
+            const compilerOptions = parsed?.compilerOptions;
+            if (compilerOptions && typeof compilerOptions.paths === 'object') {
+              const baseUrl = typeof compilerOptions.baseUrl === 'string' ? compilerOptions.baseUrl : '.';
+              const relProjectDir = path.relative(resolvedRepoRoot, currentDir).replace(/\\/g, '/');
+              for (const [pattern, targetList] of Object.entries(compilerOptions.paths)) {
+                if (Array.isArray(targetList) && typeof targetList[0] === 'string') {
+                  const targetFirst = targetList[0];
+                  const resolvedTarget = path.posix.normalize(
+                    path.posix.join(relProjectDir, baseUrl, targetFirst)
+                  );
+                  aliases[pattern] = resolvedTarget;
+                }
+              }
+            }
+          } catch {
+            // Ignore syntax errors in tsconfig
+          }
+          if (Object.keys(aliases).length > 0) return aliases;
+        }
+      }
+      const parent = path.dirname(currentDir);
+      if (parent === currentDir) break;
+      currentDir = parent;
+    }
+  } catch {
+    // Graceful fallback
+  }
+  return aliases;
+}
+
+function attachTsconfigPaths(parsed: WorkspaceConfig, repoRoot: string): WorkspaceConfig {
+  parsed.notebooks = parsed.notebooks.map((nb) => {
+    const discovered = discoverTsconfigPaths(repoRoot, nb.root);
+    const pathAliases = { ...discovered, ...(nb.pathAliases || {}) };
+    return {
+      ...nb,
+      ...(Object.keys(pathAliases).length > 0 ? { pathAliases } : {}),
+    };
+  });
+  return parsed;
+}
+
+/**
  * Loads and validates .github-notes.yaml from a repository notes root or root directory.
  */
 export function loadWorkspaceConfig(repoRoot: string): WorkspaceConfig | null {
@@ -212,14 +333,14 @@ export function loadWorkspaceConfig(repoRoot: string): WorkspaceConfig | null {
       }
       return { ...nb, root };
     });
-    return parsed;
+    return attachTsconfigPaths(parsed, repoRoot);
   }
 
   // 2. Secondary: Look in repository root (.github-notes.yaml)
   const rootConfigPath = path.join(repoRoot, WORKSPACE_CONFIG_FILENAME);
   if (fs.existsSync(rootConfigPath)) {
     const content = fs.readFileSync(rootConfigPath, 'utf-8');
-    return parseWorkspaceConfig(content);
+    return attachTsconfigPaths(parseWorkspaceConfig(content), repoRoot);
   }
 
   // 3. Fallback: Legacy example path if present
@@ -231,7 +352,7 @@ export function loadWorkspaceConfig(repoRoot: string): WorkspaceConfig | null {
       ...nb,
       root: path.posix.join('examples/workspace', nb.root),
     }));
-    return parsed;
+    return attachTsconfigPaths(parsed, repoRoot);
   }
 
   return null;

@@ -5,6 +5,7 @@ import { EditorNotice } from './EditorNotice.js';
 import { EditorFooter } from './EditorFooter.js';
 import { Select } from './Select.js';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import YAML from 'yaml';
 import {
   X,
   Settings2,
@@ -19,13 +20,15 @@ import {
   ChevronDown,
   GitBranch,
   PanelRight,
+  Code,
 } from 'lucide-react';
 import { mergeNote, sameValue, NoteDraft } from '../lib/merge-note.js';
 import { ApiError } from '../lib/api.js';
 import { MarkdownEditor, MarkdownEditorHandle, MarkdownEditorMode, MarkdownEditorModeSwitch } from './MarkdownEditor.js';
 import { FileManagerDialog } from './FileManager.js';
+import { FileSourceEditor } from './FileSourceEditor.js';
 import { NoteMoveButton } from './NoteMoveButton.js';
-import { NoteItem, AssetItem } from '../lib/types.js';
+import { NoteItem, AssetItem, NotebookMetadataField } from '../lib/types.js';
 import { saveLocalDraft, getLocalDraft, clearLocalDraft } from '../lib/storage.js';
 import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -43,6 +46,7 @@ function sameIgnoringTimestamps(a: Record<string, unknown>, b: Record<string, un
 interface EditorModalProps {
   note: NoteItem | null;
   statuses: string[];
+  metadataFields?: NotebookMetadataField[];
   readOnly?: boolean;
   autoSave?: boolean;
   draftMode?: boolean;
@@ -77,6 +81,7 @@ export const EditorModal: React.FC<EditorModalProps> = (props) => props.isOpen &
 const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   note,
   statuses,
+  metadataFields,
   readOnly = false,
   autoSave = true,
   draftMode = false,
@@ -102,6 +107,47 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   // Editor states
   const [content, setContent] = useState(note.content);
   const [metadata, setMetadata] = useState<Record<string, unknown>>(note.metadata || {});
+  const [newFieldKey, setNewFieldKey] = useState('');
+  const [frontmatterViewMode, setFrontmatterViewMode] = useState<'form' | 'yaml'>('form');
+  const [yamlText, setYamlText] = useState(() => YAML.stringify(note.metadata || {}));
+  const [yamlError, setYamlError] = useState('');
+
+  const customFields = useMemo(() => {
+    const RESERVED_METADATA_KEYS = new Set(['title', 'status', 'hiden', 'tags', 'created', 'updated']);
+    const fields: { key: string; type: 'string' | 'boolean' | 'number'; label: string; isConfigured: boolean }[] = [];
+    const seen = new Set<string>();
+
+    if (metadataFields) {
+      for (const f of metadataFields) {
+        if (!RESERVED_METADATA_KEYS.has(f.key)) {
+          fields.push({
+            key: f.key,
+            type: f.type || (typeof metadata[f.key] === 'boolean' ? 'boolean' : typeof metadata[f.key] === 'number' ? 'number' : 'string'),
+            label: f.label || f.key,
+            isConfigured: true,
+          });
+          seen.add(f.key);
+        }
+      }
+    }
+
+    for (const key of Object.keys(metadata)) {
+      if (!RESERVED_METADATA_KEYS.has(key) && !seen.has(key)) {
+        const val = metadata[key];
+        const inferredType: 'string' | 'boolean' | 'number' =
+          typeof val === 'boolean' ? 'boolean' : typeof val === 'number' ? 'number' : 'string';
+        fields.push({
+          key,
+          type: inferredType,
+          label: key,
+          isConfigured: false,
+        });
+        seen.add(key);
+      }
+    }
+    return fields;
+  }, [metadataFields, metadata]);
+
   const [editorMode, setEditorMode] = useState<MarkdownEditorMode>('live');
   const [notePanel, setNotePanel] = useState<NotePanelMode | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -662,8 +708,46 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
               </nav> : <p>{t('editor.outlineEmpty')}</p>}
             </section>}
 
-            {showFrontmatter && <div className="note-panel-scroll">
-          <fieldset disabled={locked} className="note-metadata min-w-0 text-xs animate-fadeIn">
+            {showFrontmatter && (
+              <div className="note-panel-scroll flex flex-col h-full">
+                {/* Frontmatter Mode Switch */}
+                <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
+                  <span className="font-semibold text-xs text-slate-700 dark:text-slate-200">
+                    {t('editor.frontmatter')}
+                  </span>
+                  <div className="inline-flex rounded-md p-0.5 bg-slate-100 dark:bg-slate-800 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setFrontmatterViewMode('form')}
+                      className={`px-2 py-0.5 rounded font-medium transition-colors ${
+                        frontmatterViewMode === 'form'
+                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      {t('editor.formMode')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setYamlText(YAML.stringify(metadata));
+                        setYamlError('');
+                        setFrontmatterViewMode('yaml');
+                      }}
+                      className={`px-2 py-0.5 rounded font-medium flex items-center gap-1 transition-colors ${
+                        frontmatterViewMode === 'yaml'
+                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <Code className="w-3 h-3" />
+                      {t('editor.yamlMode')}
+                    </button>
+                  </div>
+                </div>
+
+                {frontmatterViewMode === 'form' ? (
+                  <fieldset disabled={locked} className="note-metadata min-w-0 text-xs animate-fadeIn space-y-3">
             <div>
               <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">{t('editor.title')}</label>
               <input
@@ -768,7 +852,149 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
                 </div>
               )}
             </div>
-          </fieldset></div>}
+
+            {/* Custom / Notebook Metadata fields */}
+            {customFields.length > 0 && (
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-3">
+                <span className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">
+                  {t('editor.metadata') || 'Metadata'}
+                </span>
+                {customFields.map((field) => {
+                  if (field.type === 'boolean') {
+                    return (
+                      <label key={field.key} className="flex items-center gap-2 min-h-8 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          aria-label={field.label}
+                          checked={Boolean(metadata[field.key])}
+                          onChange={(e) => setMetadata({ ...metadata, [field.key]: e.target.checked })}
+                          className="w-4 h-4 accent-indigo-600 rounded"
+                        />
+                        <span className="text-slate-700 dark:text-slate-300 font-medium">{field.label}</span>
+                      </label>
+                    );
+                  }
+
+                  return (
+                    <div key={field.key}>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-slate-500 dark:text-slate-400 font-semibold">{field.label}</label>
+                        {!field.isConfigured && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = { ...metadata };
+                              delete next[field.key];
+                              setMetadata(next);
+                            }}
+                            className="text-[10px] text-slate-400 hover:text-rose-500"
+                            title="Remove field"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type={field.type === 'number' ? 'number' : 'text'}
+                        value={
+                          metadata[field.key] === undefined || metadata[field.key] === null
+                            ? ''
+                            : typeof metadata[field.key] === 'object'
+                              ? JSON.stringify(metadata[field.key])
+                              : String(metadata[field.key])
+                        }
+                        onChange={(e) => {
+                          let val: unknown = e.target.value;
+                          if (field.type === 'number') {
+                            const num = Number(e.target.value);
+                            val = isNaN(num) ? e.target.value : num;
+                          }
+                          setMetadata({ ...metadata, [field.key]: val });
+                        }}
+                        className="ui-control w-full text-xs"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Add Custom Field */}
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex gap-1.5 items-center">
+                <input
+                  type="text"
+                  placeholder="New field name..."
+                  value={newFieldKey}
+                  onChange={(e) => setNewFieldKey(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newFieldKey.trim()) {
+                      e.preventDefault();
+                      const key = newFieldKey.trim();
+                      if (!metadata[key]) {
+                        setMetadata({ ...metadata, [key]: '' });
+                      }
+                      setNewFieldKey('');
+                    }
+                  }}
+                  className="ui-control flex-1 text-xs py-1"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const key = newFieldKey.trim();
+                    if (key && !metadata[key]) {
+                      setMetadata({ ...metadata, [key]: '' });
+                    }
+                    setNewFieldKey('');
+                  }}
+                  disabled={!newFieldKey.trim()}
+                  className="px-2 py-1 text-xs bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded disabled:opacity-50 text-slate-800 dark:text-slate-200"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </fieldset>
+        ) : (
+                  <div className="flex-1 flex flex-col min-h-0 text-xs space-y-2">
+                    {yamlError && (
+                      <div className="p-2 rounded bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 font-mono text-[11px] break-all">
+                        {yamlError}
+                      </div>
+                    )}
+                    <div className="flex-1 border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden min-h-[340px]">
+                      <FileSourceEditor
+                        path="metadata.yaml"
+                        content={yamlText}
+                        readOnly={locked}
+                        label="YAML Metadata"
+                        onChange={(newYaml) => {
+                          setYamlText(newYaml);
+                          try {
+                            const parsed = YAML.parse(newYaml);
+                            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                              setMetadata(parsed as Record<string, unknown>);
+                              setYamlError('');
+                            } else if (newYaml.trim() === '') {
+                              setMetadata({});
+                              setYamlError('');
+                            } else {
+                              setYamlError(`${t('editor.yamlError')}: Root must be a mapping`);
+                            }
+                          } catch (err) {
+                            setYamlError(err instanceof Error ? err.message : t('editor.yamlError'));
+                          }
+                        }}
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-tight">
+                      {t('editor.yamlHint')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {isAssetPickerOpen && <FileManagerDialog notebookId={note.notebookId} writable={false} mode="pick-image"
               onClose={() => setNotePanel(null)} onInsert={locked ? undefined : handleInsertAssetRef} />}

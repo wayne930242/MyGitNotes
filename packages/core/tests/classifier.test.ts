@@ -44,6 +44,25 @@ describe('Resource Classifier', () => {
     expect(classifyResource('notes/example/assets/doc.pdf', sampleConfig).type).toBe('asset');
   });
 
+  it('classifies assets under notebook pathAliases target directories', () => {
+    const aliasedConfig: WorkspaceConfig = {
+      ...sampleConfig,
+      notebooks: [
+        {
+          id: 'blog',
+          title: 'Blog',
+          root: 'blog/src/content/posts',
+          pathAliases: {
+            '@/*': 'blog/src/*',
+          },
+        },
+      ],
+    };
+    const res = classifyResource('blog/src/assets/images/two-params-weibull/fix-beta.png', aliasedConfig);
+    expect(res.type).toBe('asset');
+    expect(res.notebookId).toBe('blog');
+  });
+
   it('classifies product source files', () => {
     expect(classifyResource('packages/core/src/index.ts', sampleConfig).type).toBe('product_source');
     expect(classifyResource('apps/web/src/App.tsx', sampleConfig).type).toBe('product_source');
