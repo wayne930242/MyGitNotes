@@ -43,7 +43,17 @@ export function localFileCatalog(root: string): FileCatalog {
       else add(file);
     }
   };
-  for (const nb of config.notebooks) if (fs.existsSync(regularPath(root, nb.root))) visit(nb.root);
+  for (const nb of config.notebooks) {
+    if (fs.existsSync(regularPath(root, nb.root))) visit(nb.root);
+    if (nb.pathAliases) {
+      for (const target of Object.values(nb.pathAliases)) {
+        const targetDir = target.replace(/\*$/, '').replace(/\/$/, '');
+        if (targetDir && fs.existsSync(regularPath(root, targetDir))) {
+          visit(targetDir);
+        }
+      }
+    }
+  }
   for (const file of auxiliary) if (fs.existsSync(regularPath(root, file))) add(file);
   return catalog;
 }

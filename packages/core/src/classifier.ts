@@ -91,6 +91,22 @@ export function classifyResource(
 
         return { path: normalized, type: 'note', notebookId: nb.id };
       }
+
+      // Check if file is an asset under a notebook's pathAliases target (e.g. blog/src/assets/**)
+      if (nb.pathAliases) {
+        for (const target of Object.values(nb.pathAliases)) {
+          const targetDir = target.replace(/\*$/, '').replace(/\/$/, '');
+          if (targetDir && (normalized === targetDir || normalized.startsWith(`${targetDir}/`))) {
+            const ext = path.posix.extname(normalized).toLowerCase();
+            if (
+              ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.avif', '.ico', '.pdf', '.mp4', '.webm', '.m4a', '.mp3', '.ogg'].includes(ext) ||
+              normalized.includes('/assets/')
+            ) {
+              return { path: normalized, type: 'asset', notebookId: nb.id };
+            }
+          }
+        }
+      }
     }
   } else {
     // If no config provided, check notes/ prefix convention

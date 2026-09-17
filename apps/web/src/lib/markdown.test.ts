@@ -5,6 +5,7 @@ vi.mock('dompurify', () => ({
 }));
 
 import { renderNote } from './markdown.js';
+import { setWorkspaceNotebooks } from './workspace-links.js';
 
 class MockElement {
   tagName: string;
@@ -243,5 +244,22 @@ describe('renderNote R2 assets', () => {
     const html = renderNote('<p>See <a href="r2:docs/sheet.xlsx">sheet</a></p>', 'notes/demo/n.md');
     expect(html).toContain('href="/r2-assets/docs/sheet.xlsx?note=notes%2Fdemo%2Fn.md"');
     expect(html).toContain('target="_blank"');
+  });
+
+  it('renders images using @/ alias without removing them', () => {
+    const notebooks = [
+      {
+        id: 'blog',
+        title: 'Blog',
+        root: 'blog/src/content/posts',
+        pathAliases: {
+          '@/*': 'blog/src/*',
+        },
+      },
+    ];
+    setWorkspaceNotebooks(notebooks);
+    const html = renderNote('<p><img src="@/assets/images/diag.png" alt="Diagram"></p>', 'blog/src/content/posts/tech/note.md');
+    expect(html).toContain('src="/raw-assets/blog/src/assets/images/diag.png"');
+    expect(html).toContain('alt="Diagram"');
   });
 });

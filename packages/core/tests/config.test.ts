@@ -94,4 +94,67 @@ notebooks:
 `;
     expect(() => parseWorkspaceConfig(yaml)).toThrow(ConfigValidationError);
   });
+
+  it('parses notebook metadata field definitions', () => {
+    const yaml = `
+schema_version: 1
+workspace:
+  title: "With Metadata"
+  default_notebook: nb1
+notebooks:
+  - id: nb1
+    title: "NB 1"
+    root: notes/nb1
+    metadata:
+      - draft
+      - key: private
+        type: boolean
+        label: "私密文章"
+      - key: order
+        type: number
+`;
+    const config = parseWorkspaceConfig(yaml);
+    expect(config.notebooks[0].metadata).toEqual([
+      { key: 'draft' },
+      { key: 'private', type: 'boolean', label: '私密文章' },
+      { key: 'order', type: 'number' },
+    ]);
+  });
+
+  it('rejects duplicate metadata field keys', () => {
+    const yaml = `
+schema_version: 1
+workspace:
+  title: "Dupes"
+  default_notebook: nb1
+notebooks:
+  - id: nb1
+    title: "NB 1"
+    root: notes/nb1
+    metadata:
+      - draft
+      - key: draft
+        type: boolean
+`;
+    expect(() => parseWorkspaceConfig(yaml)).toThrow(ConfigValidationError);
+  });
+
+  it('parses notebook pathAliases when specified', () => {
+    const yaml = `
+schema_version: 1
+workspace:
+  title: "With Aliases"
+  default_notebook: nb1
+notebooks:
+  - id: nb1
+    title: "NB 1"
+    root: notes/nb1
+    path_aliases:
+      "@/*": "src/*"
+`;
+    const config = parseWorkspaceConfig(yaml);
+    expect(config.notebooks[0].pathAliases).toEqual({
+      '@/*': 'src/*',
+    });
+  });
 });

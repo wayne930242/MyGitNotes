@@ -6,6 +6,14 @@ export interface NoteTemplate {
   file: string;
 }
 
+export type NotebookMetadataFieldType = 'string' | 'boolean' | 'number';
+
+export interface NotebookMetadataField {
+  key: string;
+  type?: NotebookMetadataFieldType;
+  label?: string;
+}
+
 export interface NotebookConfig {
   id: string;
   title: string;
@@ -14,6 +22,8 @@ export interface NotebookConfig {
   default_view?: ViewMode;
   statuses?: string[];
   templates?: NoteTemplate[];
+  metadata?: NotebookMetadataField[];
+  pathAliases?: Record<string, string>;
 }
 
 export interface WorkspaceConfig {

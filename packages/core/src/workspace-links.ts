@@ -25,7 +25,23 @@ export function headingSlug(text: string): string {
     .replace(/\s+/g, '-');
 }
 
-export function resolveWorkspaceHref(value: string, sourcePath: string): WorkspaceLink | null {
+import type { NotebookConfig } from './types.js';
+
+let workspaceNotebooksRegistry: NotebookConfig[] = [];
+
+export function setWorkspaceNotebooks(notebooks: NotebookConfig[]): void {
+  workspaceNotebooksRegistry = notebooks;
+}
+
+export function getWorkspaceNotebooks(): NotebookConfig[] {
+  return workspaceNotebooksRegistry;
+}
+
+export function resolveWorkspaceHref(
+  value: string,
+  sourcePath: string,
+  aliasesOrNotebooks?: Record<string, string> | NotebookConfig[]
+): WorkspaceLink | null {
   const href = value.trim();
   if (!href || /[\\\x00-\x1f\x7f]/.test(href)) return null;
   try {
@@ -42,8 +58,48 @@ export function resolveWorkspaceHref(value: string, sourcePath: string): Workspa
     const hashed = href.match(/^\/raw-assets\/by-hash\/([a-f0-9]{40})$/);
     if (hashed) return { kind: 'asset-hash', hash: hashed[1] };
     const [withoutHash, hash = ''] = href.split('#', 2);
-    const raw = withoutHash.split('?', 1)[0].replace(/^\/raw-assets\//, '/');
-    const absolute = raw.startsWith('/') || raw.startsWith('notes/');
+    let raw = withoutHash.split('?', 1)[0].replace(/^\/raw-assets\//, '/');
+
+    // Path alias resolution (e.g. from tsconfig compilerOptions.paths)
+    let isAliased = false;
+    let aliases: Record<string, string> | undefined;
+    if (aliasesOrNotebooks && !Array.isArray(aliasesOrNotebooks)) {
+      aliases = aliasesOrNotebooks;
+    } else {
+      const nbs = Array.isArray(aliasesOrNotebooks) ? aliasesOrNotebooks : workspaceNotebooksRegistry;
+      const matchedNb = [...nbs].sort((a, b) => b.root.length - a.root.length).find(nb => sourcePath === nb.root || sourcePath.startsWith(`${nb.root}/`));
+      aliases = matchedNb?.pathAliases;
+    }
+
+    if (aliases) {
+      for (const [pattern, target] of Object.entries(aliases)) {
+        if (pattern.endsWith('/*') && target.endsWith('/*')) {
+          const prefix = pattern.slice(0, -2);
+          if (raw.startsWith(prefix + '/')) {
+            const suffix = raw.slice(prefix.length + 1);
+            const targetPrefix = target.slice(0, -2);
+            raw = targetPrefix ? `${targetPrefix}/${suffix}` : suffix;
+            isAliased = true;
+            break;
+          }
+        } else if (pattern.endsWith('/*')) {
+          const prefix = pattern.slice(0, -2);
+          if (raw.startsWith(prefix + '/')) {
+            const suffix = raw.slice(prefix.length + 1);
+            const targetPrefix = target.replace(/\/$/, '');
+            raw = targetPrefix ? `${targetPrefix}/${suffix}` : suffix;
+            isAliased = true;
+            break;
+          }
+        } else if (raw === pattern) {
+          raw = target;
+          isAliased = true;
+          break;
+        }
+      }
+    }
+
+    const absolute = isAliased || raw.startsWith('/') || raw.startsWith('notes/');
     const stack = absolute ? [] : sourcePath.split('/').slice(0, -1);
     for (const encoded of raw.replace(/^\//, '').split('/')) {
       const part = decodeURIComponent(encoded);

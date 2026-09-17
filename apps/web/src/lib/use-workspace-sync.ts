@@ -24,6 +24,7 @@ import {
 } from './working-notes.js';
 import { sameValue } from './merge-note.js';
 import { mergeNoteSnapshot } from './note-snapshot.js';
+import { setWorkspaceNotebooks } from './workspace-links.js';
 
 export interface UseWorkspaceSyncOptions {
   routeNotebook?: string;
@@ -48,6 +49,9 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const [repoRoot, setRepoRoot] = useState<string>('');
   const [branch, setBranch] = useState<string>('core');
   const [config, setConfig] = useState<WorkspaceConfig | null>(null);
+  useEffect(() => {
+    setWorkspaceNotebooks(config?.notebooks || []);
+  }, [config]);
   const [serverGitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [sourceNotes, setNotes] = useState<NoteItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
