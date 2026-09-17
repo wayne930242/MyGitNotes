@@ -24,7 +24,7 @@ for (const path of listed) {
 const deployed = file => listed.some(entry => file === entry || file.startsWith(`${entry}/`));
 const trackedFiles = git('ls-files', '-z').split('\0').filter(Boolean);
 for (const file of trackedFiles.filter(file => deployed(file) && /\.(?:[cm]?[jt]sx?)$/.test(file))) {
-  for (const [, specifier] of fs.readFileSync(file, 'utf8').matchAll(/(?:from|import\s*\(|require\s*\()\s*['"](\.{1,2}\/[^'"]+)['"]/g)) {
+  for (const [, specifier] of fs.readFileSync(file, 'utf8').matchAll(/(?:from|import\s*\(?|require\s*\()\s*['"](\.{1,2}\/[^'"]+)['"]/g)) {
     const target = path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier));
     if (!deployed(target) && trackedFiles.some(tracked => tracked === target || tracked.startsWith(`${target}/`) || tracked.startsWith(`${target}.`))) errors.push(`${file} imports '${specifier}', outside ${listFile}.`);
   }

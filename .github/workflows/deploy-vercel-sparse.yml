@@ -57,7 +57,7 @@ jobs:
           node-version: '22'
       - name: Install tooling
         if: steps.settings.outputs.enabled == 'true'
-        run: npm install --global pnpm@9.15.9 vercel@latest
+        run: npm install --global pnpm@9.15.9 vercel@59
       - name: Build
         if: steps.settings.outputs.enabled == 'true'
         run: |
