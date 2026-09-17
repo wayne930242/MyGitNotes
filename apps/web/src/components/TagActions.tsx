@@ -128,6 +128,30 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
     requestDelete(tag);
   };
 
+  const focusItem = (index: number) => {
+    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
+    if (!items?.length) return;
+    items[(index + items.length) % items.length].focus();
+  };
+
+  const closeMenu = (restoreFocus: boolean) => {
+    setMenuOpen(false);
+    if (!deleteArmed) setCount(null);
+    setError(null);
+    if (restoreFocus) triggerRef.current?.focus();
+  };
+
+  const handleMenuKeyDown = (event: React.KeyboardEvent) => {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === 'ArrowDown') { event.preventDefault(); focusItem(current + 1); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); focusItem(current - 1); }
+    else if (event.key === 'Home') { event.preventDefault(); focusItem(0); }
+    else if (event.key === 'End') { event.preventDefault(); focusItem(-1); }
+    else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMenu(true); }
+    else if (event.key === 'Tab') closeMenu(false);
+  };
+
   if (mode !== 'closed') {
     return (
       <div className="sidebar-tag-action-form" ref={formRef} onClick={stop} role="group" aria-label={mode === 'rename' ? t('sidebar.tagRenameTitle', { tag }) : t('sidebar.tagMergeTitle', { tag })}>
@@ -161,30 +185,6 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
     );
   }
 
-  const focusItem = (index: number) => {
-    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
-    if (!items?.length) return;
-    items[(index + items.length) % items.length].focus();
-  };
-
-  const closeMenu = (restoreFocus: boolean) => {
-    setMenuOpen(false);
-    setCount(null);
-    setError(null);
-    if (restoreFocus) triggerRef.current?.focus();
-  };
-
-  const handleMenuKeyDown = (event: React.KeyboardEvent) => {
-    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
-    const current = items.indexOf(document.activeElement as HTMLButtonElement);
-    if (event.key === 'ArrowDown') { event.preventDefault(); focusItem(current + 1); }
-    else if (event.key === 'ArrowUp') { event.preventDefault(); focusItem(current - 1); }
-    else if (event.key === 'Home') { event.preventDefault(); focusItem(0); }
-    else if (event.key === 'End') { event.preventDefault(); focusItem(-1); }
-    else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMenu(true); }
-    else if (event.key === 'Tab') closeMenu(false);
-  };
-
   return (
     <div className="sidebar-tag-actions-trigger" onClick={stop} data-open={menuOpen || undefined} ref={containerRef}>
       <button
@@ -209,16 +209,16 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
       </button>
       {menuOpen && (
         <div className="sidebar-tag-menu" role="menu" id={menuId} ref={menuRef} aria-label={t('sidebar.tagManage', { tag })} onKeyDown={handleMenuKeyDown}>
-          <button type="button" role="menuitem" disabled={busy} onClick={() => { setMenuOpen(false); void openForm('rename'); }}>{t('sidebar.tagRename')}</button>
-          <button type="button" role="menuitem" disabled={busy} onClick={() => { setMenuOpen(false); void openForm('merge'); }}>{t('sidebar.tagMergeInto')}</button>
+          <button type="button" role="menuitem" aria-disabled={busy} onClick={() => { if (busy) return; setMenuOpen(false); void openForm('rename'); }}>{t('sidebar.tagRename')}</button>
+          <button type="button" role="menuitem" aria-disabled={busy} onClick={() => { if (busy) return; setMenuOpen(false); void openForm('merge'); }}>{t('sidebar.tagMergeInto')}</button>
           <button
             type="button"
             role="menuitem"
             className="sidebar-tag-menu-danger"
             data-armed={deleteArmed || undefined}
             aria-describedby={deleteArmed || count === 0 ? `${menuId}-status` : undefined}
-            disabled={busy}
-            onClick={event => void handleDeleteClick(event)}
+            aria-disabled={busy}
+            onClick={event => { if (!busy) void handleDeleteClick(event); }}
           >
             {deleteArmed && count !== null && count > 0 ? t('sidebar.tagConfirmDelete', { count }) : t('sidebar.tagDelete')}
           </button>
