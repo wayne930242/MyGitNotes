@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import './directives.css';
+
 :root {
   --font-body: 'Noto Sans TC', 'Source Han Sans TW', sans-serif;
   --font-heading: 'Noto Serif TC', 'Source Han Serif TW', serif;

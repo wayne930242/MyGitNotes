@@ -7,6 +7,7 @@ import { useWorkspaceLinks } from './WorkspaceLinks.js';
 import { noteCandidates, noteCompletionAt } from '../lib/note-completion.js';
 import { noteLinkHref, noteMarkdownLink } from '@mygitnotes/core/workspace-links';
 import type { NoteItem } from '../lib/types.js';
+import { DIRECTIVE_TEMPLATES } from '../lib/directives.js';
 import './note-completion.css';
 
 const LiveMarkdownEditor = React.lazy(() => import('./LiveMarkdownEditor.js').then(module => ({ default: module.LiveMarkdownEditor })));
@@ -90,6 +91,16 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
     setPicker(false);
   };
 
+  const insertDirective = (type = 'info') => {
+    const tpl = DIRECTIVE_TEMPLATES.find(t => t.type === type) ?? DIRECTIVE_TEMPLATES[0];
+    const text = `\n\n${tpl.defaultSnippet}\n`;
+    if (mode === 'live') live.current?.insert(text);
+    else {
+      const position = source.current?.selectionStart ?? content.length;
+      onChange(content.slice(0, position) + text + content.slice(position));
+    }
+  };
+
   useImperativeHandle(ref, () => ({
     insert(text) {
       if (readOnly) return;
@@ -143,6 +154,32 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
             onChange(content.slice(0, position) + text + content.slice(position));
           }
         }}>{t('table.insert')}</button>
+        <div className="directive-insert-group inline-flex items-center gap-1 ml-1 pl-1 border-l border-slate-200 dark:border-slate-700">
+          <button
+            type="button"
+            title="插入 Directive 區塊（預設 Info）"
+            onClick={() => insertDirective('info')}
+          >
+            插入區塊
+          </button>
+          <select
+            className="directive-insert-select bg-transparent text-[11px] border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 outline-none text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+            aria-label="選擇區塊格式"
+            title="選擇區塊格式"
+            value=""
+            onChange={event => {
+              if (event.target.value) {
+                insertDirective(event.target.value);
+                event.target.value = '';
+              }
+            }}
+          >
+            <option value="" disabled>格式挑選…</option>
+            {DIRECTIVE_TEMPLATES.map(tpl => (
+              <option key={tpl.type} value={tpl.type}>{tpl.label}</option>
+            ))}
+          </select>
+        </div>
       </div>}
       {picker && <div className="note-link-picker"><input autoFocus type="search" aria-label={t('graph.findNote')} placeholder={t('graph.findNote')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setPicker(false); }} />
         {noteCandidates(notes, query, path).map(note => <button type="button" key={note.path} onClick={() => insertPicked(note)}>{note.title}<small>{note.notebookId} · {note.path}</small></button>)}

@@ -1,0 +1,760 @@
+/* ==========================================================================
+   MyGitNotes Directives & MDX Styling
+   Standard editorial directives, character sheets, player handouts,
+   bilingual quotes, source cards, and presentation grids.
+   Designed to seamlessly adapt to all themes and light/dark modes.
+   ========================================================================== */
+
+/* ===== 1. General Directive Containers ===== */
+.prose-custom .custom-directive,
+.prose-custom .comment-directive {
+  margin: 1.5rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  padding: 1rem 1.25rem;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.prose-custom .custom-directive > .directive-body,
+.prose-custom .comment-directive > .directive-body {
+  padding-top: 0.6rem;
+}
+
+.prose-custom .directive-body > *:first-child {
+  margin-top: 0;
+}
+
+.prose-custom .directive-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.prose-custom .directive-body hr {
+  margin: 0.75rem 0;
+  border-color: var(--color-border);
+}
+
+.prose-custom :is(.directive-title, .comment-title, .optional-summary) {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.prose-custom :is(.directive-title, .comment-title, .optional-summary).directive-title-default {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.prose-custom :is(.directive-title, .comment-title, .optional-summary).directive-title-custom {
+  font-size: 0.95rem;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+/* --- INFO DIRECTIVE --- */
+.prose-custom .info-directive {
+  background: color-mix(in srgb, var(--color-text) 3.5%, var(--color-surface));
+  border-left: 3.5px solid var(--color-muted);
+}
+
+.prose-custom .info-directive > .directive-title-default {
+  color: var(--color-muted);
+}
+
+/* --- SIDEBAR / IMPORTANT DIRECTIVE --- */
+.prose-custom .sidebar-directive {
+  border-top: 3.5px solid var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-border));
+  border-top-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface));
+}
+
+.prose-custom .sidebar-directive > .directive-title-default {
+  color: var(--color-primary);
+}
+
+/* --- COMMENT DIRECTIVE --- */
+.prose-custom aside.comment-directive {
+  border-width: 0 0 0 3.5px;
+  border-left-color: color-mix(in srgb, var(--color-primary) 70%, var(--color-text));
+  background: color-mix(in srgb, var(--color-text) 3.5%, var(--color-surface));
+  border-radius: 0 8px 8px 0;
+  padding: 0.9rem 1.25rem;
+  font-style: normal;
+}
+
+.prose-custom .comment-directive > .comment-title.directive-title-default {
+  color: var(--color-primary);
+}
+
+/* --- OPTIONAL / DISCLOSURE DIRECTIVE --- */
+.prose-custom details.optional-directive {
+  background: color-mix(in srgb, var(--color-text) 2.5%, var(--color-surface));
+}
+
+.prose-custom details.optional-directive > summary.optional-summary {
+  display: flex;
+  cursor: pointer;
+  list-style: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  user-select: none;
+}
+
+.prose-custom details.optional-directive > summary.optional-summary::-webkit-details-marker {
+  display: none;
+}
+
+.prose-custom details.optional-directive > summary.optional-summary::after {
+  content: "+";
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1.1rem;
+  line-height: 1;
+  font-weight: 400;
+  color: var(--color-muted);
+  transition: transform 0.15s ease;
+}
+
+.prose-custom details.optional-directive[open] > summary.optional-summary::after {
+  content: "−";
+}
+
+/* ===== 2. Call of Cthulhu Stat Blocks ===== */
+.prose-custom .coc-stat-block {
+  margin: 2rem 0;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-text) 2.5%, var(--color-surface));
+}
+
+.prose-custom .coc-stat-header {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  background: var(--color-text);
+  color: var(--color-surface);
+}
+
+.prose-custom .coc-stat-kicker {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.65rem;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  opacity: 0.75;
+  color: var(--color-surface) !important;
+}
+
+.prose-custom .coc-stat-name {
+  margin: 0.5rem 0 0;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-surface) !important;
+}
+
+.prose-custom .coc-stat-role {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  opacity: 0.85;
+  color: var(--color-surface) !important;
+}
+
+.prose-custom .coc-stat-characteristics,
+.prose-custom .coc-stat-derived {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 5.5rem), 1fr));
+  border-top: 1px solid var(--color-border);
+}
+
+.prose-custom .coc-stat-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border-inline-end: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.prose-custom .coc-stat-label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.prose-custom .coc-stat-label-name {
+  font-size: 0.68rem;
+  line-height: 1;
+  color: var(--color-muted);
+}
+
+.prose-custom .coc-stat-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.7rem;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.prose-custom .coc-stat-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1.15rem;
+  line-height: 1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.prose-custom .coc-stat-body {
+  padding: 1.25rem;
+}
+
+.prose-custom .coc-stat-body > *:first-child {
+  margin-top: 0;
+}
+
+.prose-custom .coc-stat-body > *:last-child {
+  margin-bottom: 0;
+}
+
+/* ===== 3. Player Handouts ===== */
+.prose-custom .handout-block {
+  --handout-paper: #f7f3e8;
+  --handout-paper-deep: #ede4d1;
+  --handout-ink: #221e1a;
+  --handout-muted: #6e6456;
+  --handout-accent: #8b3028;
+  margin: 2rem 0;
+  display: block;
+}
+
+.dark .prose-custom .handout-block {
+  --handout-paper: #1c1a17;
+  --handout-paper-deep: #292621;
+  --handout-ink: #ede3d1;
+  --handout-muted: #9e9382;
+  --handout-accent: #d97757;
+}
+
+.prose-custom .handout-keeper-note {
+  margin-bottom: 0.75rem;
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) 1fr;
+  gap: 0.5rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  padding: 0.75rem 1rem;
+}
+
+.prose-custom .handout-keeper-kicker {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--color-primary);
+}
+
+.prose-custom .handout-keeper-text {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+.prose-custom .handout-reference {
+  margin-bottom: 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--handout-muted);
+}
+
+.prose-custom .handout-code,
+.prose-custom .handout-variant-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.prose-custom .handout-code {
+  color: var(--handout-accent);
+}
+
+.prose-custom .handout-document {
+  color: var(--handout-ink);
+  background: var(--handout-paper);
+  border: 1px solid color-mix(in srgb, var(--handout-ink) 25%, transparent);
+  border-radius: 6px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+}
+
+.prose-custom .handout-document-header {
+  padding: 1.5rem 1.75rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--handout-ink) 20%, transparent);
+}
+
+.prose-custom .handout-title {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.25;
+  font-weight: 750;
+  color: var(--handout-ink);
+}
+
+.prose-custom .handout-body {
+  padding: 1.5rem 1.75rem;
+  color: var(--handout-ink);
+}
+
+.prose-custom .handout-body > *:first-child {
+  margin-top: 0;
+}
+
+.prose-custom .handout-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.prose-custom .handout-body p {
+  color: var(--handout-ink);
+}
+
+/* Handout variant cues */
+.prose-custom .handout-variant-report .handout-document {
+  border-top: 4px solid var(--handout-accent);
+}
+
+.prose-custom .handout-variant-newspaper .handout-document {
+  border: 2px solid color-mix(in srgb, var(--handout-ink) 40%, transparent);
+}
+
+.prose-custom .handout-variant-newspaper .handout-title {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.prose-custom .handout-variant-letter .handout-document {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--handout-paper) 98%, white);
+}
+
+.prose-custom .handout-variant-letter .handout-body > p + p {
+  text-indent: 2em;
+}
+
+.prose-custom .handout-variant-journal .handout-document {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 1.75rem,
+    color-mix(in srgb, var(--handout-muted) 15%, transparent) 1.75rem,
+    color-mix(in srgb, var(--handout-muted) 15%, transparent) calc(1.75rem + 1px)
+  ), var(--handout-paper);
+}
+
+.prose-custom .handout-variant-note .handout-document {
+  border-style: dashed;
+  max-width: 38rem;
+  margin-inline: auto;
+}
+
+.prose-custom .handout-variant-scripture .handout-document {
+  border: 4px double color-mix(in srgb, var(--handout-ink) 45%, transparent);
+}
+
+.prose-custom .handout-variant-scripture .handout-document-header {
+  text-align: center;
+}
+
+/* ===== 4. Parallel Quotations ===== */
+.prose-custom blockquote.parallel-quote {
+  position: relative;
+  margin: 1.5rem 0;
+  border-left: 3.5px solid color-mix(in srgb, var(--color-primary) 60%, var(--color-border));
+  background: color-mix(in srgb, var(--color-text) 2.5%, var(--color-surface));
+  padding: 1.25rem 1.5rem;
+  border-radius: 0 8px 8px 0;
+  font-style: normal;
+}
+
+.prose-custom details.parallel-quote-disclosure {
+  display: block;
+}
+
+.prose-custom .parallel-quote-toggle {
+  float: right;
+  cursor: pointer;
+  list-style: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.prose-custom .parallel-quote-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.prose-custom .parallel-quote-disclosure[open] > .parallel-quote-toggle::after {
+  content: "收合原文 −";
+}
+
+.prose-custom .parallel-quote-disclosure:not([open]) > .parallel-quote-toggle::after {
+  content: "展開原文 +";
+}
+
+.prose-custom .parallel-quote-disclosure:not([open]) > .parallel-quote-original {
+  display: none;
+}
+
+.prose-custom .parallel-quote-text::before {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--color-muted);
+}
+
+.prose-custom .parallel-quote-original::before {
+  content: "ORIGINAL / 原文";
+}
+
+.prose-custom .parallel-quote-translation {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.prose-custom .parallel-quote-translation::before {
+  content: "TRANSLATION / 譯文";
+}
+
+.prose-custom .parallel-quote-attribution {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.prose-custom .parallel-quote-attribution > *::before {
+  content: attr(data-label) ": ";
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  color: var(--color-muted);
+}
+
+/* ===== 5. Embedded Source Cards ===== */
+.prose-custom .embedded-card {
+  margin: 1.25rem 0;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.prose-custom .embedded-card:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 50%, var(--color-border));
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.prose-custom .embedded-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-text) 2.5%, var(--color-surface));
+}
+
+.prose-custom .embedded-card-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+}
+
+.prose-custom .embedded-card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.prose-custom .embedded-card-link:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.prose-custom .embedded-card-body {
+  padding: 0.85rem 1rem;
+  font-size: 0.88rem;
+  color: var(--color-muted);
+}
+
+/* ===== 6. Slide & Presentation Directives ===== */
+.prose-custom .slide-grid {
+  margin: 1.5rem 0;
+  width: 100%;
+}
+
+.prose-custom .slide-cell {
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-text) 2%, var(--color-surface));
+}
+
+.prose-custom .slide-flow {
+  margin: 1.5rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.prose-custom .slide-flow.flow-vertical {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.prose-custom .slide-step {
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+}
+
+.prose-custom .slide-summary {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  font-size: 0.85rem;
+}
+
+.prose-custom hr.vertical-slide-break {
+  margin: 2.5rem 0;
+  border: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
+}
+
+/* ===== 7. Inline Directives ===== */
+.prose-custom .lucide-icon.inline-icon {
+  color: var(--color-muted);
+  margin-inline: 0.2em;
+}
+
+.prose-custom .qrcode-container {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-text) 3%, var(--color-surface));
+  font-size: 0.8rem;
+}
+
+.prose-custom .qrcode-link {
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+/* ===== 8. MDX Layer 2 Components ===== */
+.prose-custom .mdx-protected-content {
+  margin: 1.5rem 0;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-primary) 4%, var(--color-surface));
+  overflow: hidden;
+}
+
+.prose-custom .mdx-protected-header {
+  padding: 0.6rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 20%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  color: var(--color-primary);
+}
+
+.prose-custom .mdx-protected-body {
+  padding: 1rem;
+}
+
+.prose-custom .mdx-card {
+  margin: 1.25rem 0;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.prose-custom .mdx-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-text) 2.5%, var(--color-surface));
+}
+
+.prose-custom .mdx-card-body {
+  padding: 1rem;
+}
+
+.prose-custom .mdx-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  margin-inline: 0.2rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  color: var(--color-primary);
+}
+
+.prose-custom .mdx-component-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  margin-inline: 0.2rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-text) 4%, var(--color-surface));
+  font-size: 0.78rem;
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+.prose-custom .mdx-component-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.prose-custom .mdx-component-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 600;
+}
+
+.prose-custom .mdx-component-attrs {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.7rem;
+  color: var(--color-muted);
+}
+
+/* ===== 9. Live Editor Directive Toolbar & Interactivity ===== */
+.live-md-directive {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.live-directive-toolbar {
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 10;
+}
+
+.live-md-directive:hover .live-directive-toolbar,
+.live-md-directive:focus-within .live-directive-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.live-directive-toolbar select,
+.live-directive-toolbar button {
+  height: 24px;
+  padding: 1px 6px;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 11px;
+  outline: none;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.live-directive-toolbar select {
+  color-scheme: light;
+  background-color: var(--color-surface);
+  cursor: pointer;
+}
+
+.dark .live-directive-toolbar select {
+  color-scheme: dark;
+}
+
+.live-directive-toolbar option {
+  color: var(--color-text);
+  background-color: var(--color-surface);
+}
+
+.live-directive-toolbar button:hover,
+.live-directive-toolbar select:hover {
+  background-color: color-mix(in srgb, var(--color-text) 5%, var(--color-surface));
+  border-color: var(--color-muted);
+}
+
+.live-directive-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
