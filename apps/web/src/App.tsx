@@ -1153,11 +1153,12 @@ const AppContent: React.FC = () => {
           record unconditionally restores its recorded prior tags on every note it touched; it
           does not detect or warn about a later edit to the same note's tags in the meantime. */}
       {tagOperations.history.length > 0 && (
-        <div className="fixed top-20 right-6 z-50 flex flex-col gap-2 items-end" aria-label={t('sidebar.recentTagChanges')}>
+        <section className="fixed top-28 sm:top-auto sm:bottom-6 right-4 sm:right-16 left-4 sm:left-auto z-50 flex flex-col gap-2 items-end" aria-label={t('sidebar.recentTagChanges')}>
           {tagOperations.history.map(record => (
             <div key={record.id} className="bg-slate-900/95 dark:bg-slate-800/95 text-white backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-slate-700/80 flex items-center gap-3 text-xs max-w-sm">
               <span>{record.label}</span>
               <button
+                autoFocus
                 onClick={() => void handleUndoTagOperation(record.id)}
                 className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-semibold rounded-md transition shrink-0"
               >
@@ -1172,7 +1173,7 @@ const AppContent: React.FC = () => {
               </button>
             </div>
           ))}
-        </div>
+        </section>
       )}
 
       {fileDialog && <FileManagerDialog notebookId={fileDialog.notebookId} writable={canWrite}

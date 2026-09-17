@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pencil, Merge, Trash2 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
@@ -22,6 +22,9 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
   const [count, setCount] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const returnFocusTo = useRef<'rename' | 'merge' | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (mode !== 'closed') formRef.current?.scrollIntoView({ block: 'nearest' }); }, [mode]);
 
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(true, async () => {
     setBusy(true);
@@ -55,6 +58,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
   };
 
   const close = () => {
+    returnFocusTo.current = mode === 'closed' ? null : mode;
     setMode('closed');
     setError(null);
     setCount(null);
@@ -103,7 +107,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
 
   if (mode !== 'closed') {
     return (
-      <div className="sidebar-tag-action-form" onClick={stop} role="group" aria-label={mode === 'rename' ? t('sidebar.tagRenameTitle', { tag }) : t('sidebar.tagMergeTitle', { tag })}>
+      <div className="sidebar-tag-action-form" ref={formRef} onClick={stop} role="group" aria-label={mode === 'rename' ? t('sidebar.tagRenameTitle', { tag }) : t('sidebar.tagMergeTitle', { tag })}>
         <input
           type="text"
           autoFocus
@@ -111,7 +115,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
           onChange={event => setTargetName(event.target.value)}
           placeholder={mode === 'rename' ? t('sidebar.tagNewNamePlaceholder') : t('sidebar.tagMergeTargetPlaceholder')}
           onKeyDown={event => {
-            if (event.key === 'Escape') close();
+            if (event.key === 'Escape') { event.stopPropagation(); close(); }
             if (event.key === 'Enter') void submit();
           }}
         />
@@ -135,23 +139,33 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
   }
 
   return (
-    <div className="sidebar-tag-actions-trigger" onClick={stop}>
-      <button type="button" className="ui-icon-button" aria-label={t('sidebar.tagManage', { tag: `${t('sidebar.tagRename')} ${tag}` })} title={t('sidebar.tagRename')} disabled={busy} onClick={() => void openForm('rename')}>
-        <Pencil size={12} />
-      </button>
-      <button type="button" className="ui-icon-button" aria-label={t('sidebar.tagManage', { tag: `${t('sidebar.tagMergeInto')} ${tag}` })} title={t('sidebar.tagMergeInto')} disabled={busy} onClick={() => void openForm('merge')}>
-        <Merge size={12} />
-      </button>
-      <button
-        type="button"
-        className={deleteArmed ? 'p-1 text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition' : 'ui-icon-button'}
-        aria-label={deleteArmed ? t('sidebar.tagConfirmDeleteAgain') : t('sidebar.tagManage', { tag: `${t('sidebar.tagDelete')} ${tag}` })}
-        title={deleteArmed ? t('sidebar.tagConfirmDeleteAgain') : t('sidebar.tagDelete')}
-        disabled={busy}
-        onClick={event => void handleDeleteClick(event)}
-      >
-        <Trash2 size={12} />
-      </button>
+    <div className="sidebar-tag-actions-trigger" onClick={stop} ref={node => {
+      if (node && returnFocusTo.current) {
+        node.querySelector<HTMLButtonElement>(`[data-tag-action="${returnFocusTo.current}"]`)?.focus();
+        returnFocusTo.current = null;
+      }
+    }}>
+      <span className="sidebar-tag-action-icons">
+        <button type="button" data-tag-action="rename" className="ui-icon-button" aria-label={t('sidebar.tagManage', { tag: `${t('sidebar.tagRename')} ${tag}` })} title={t('sidebar.tagRename')} disabled={busy} onClick={() => void openForm('rename')}>
+          <Pencil size={12} />
+        </button>
+        <button type="button" data-tag-action="merge" className="ui-icon-button" aria-label={t('sidebar.tagManage', { tag: `${t('sidebar.tagMergeInto')} ${tag}` })} title={t('sidebar.tagMergeInto')} disabled={busy} onClick={() => void openForm('merge')}>
+          <Merge size={12} />
+        </button>
+        <button
+          type="button"
+          className={deleteArmed ? 'p-1 text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition' : 'ui-icon-button'}
+          aria-label={deleteArmed ? t('sidebar.tagConfirmDeleteAgain') : t('sidebar.tagManage', { tag: `${t('sidebar.tagDelete')} ${tag}` })}
+          title={deleteArmed ? t('sidebar.tagConfirmDeleteAgain') : t('sidebar.tagDelete')}
+          disabled={busy}
+          onClick={event => void handleDeleteClick(event)}
+        >
+          <Trash2 size={12} />
+        </button>
+      </span>
+      {deleteArmed && count !== null && count > 0 && (
+        <p role="status" className="sidebar-tag-action-error">{t('sidebar.tagConfirmDelete', { count })} · {t('sidebar.tagConfirmDeleteAgain')}</p>
+      )}
       {count === 0 && <p role="status" className="sidebar-tag-action-error">{t('sidebar.tagNoNotesAffected')}</p>}
       {error && <p role="alert" className="sidebar-tag-action-error">{t('sidebar.tagOperationFailed', { error })}</p>}
     </div>
