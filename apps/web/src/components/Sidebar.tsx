@@ -452,34 +452,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="sidebar-tags flex flex-wrap gap-1.5 px-1">
               {visibleTags.map((tag) => {
                 const isSelected = selectedTags.includes(tag);
+                const tagChip = (
+                        <button
+                          type="button"
+                          data-tag-filter={tag}
+                          onClick={() => onSelectTag(tag)}
+                          aria-pressed={isSelected}
+                          style={isSelected ? selectedItemStyle : undefined}
+                          className={`max-w-full inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition border ${
+                            isSelected
+                              ? 'font-semibold border-black/10 dark:border-white/15 hover:opacity-90'
+                              : 'text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-200'
+                          }`}
+                        >
+                          <Tag className="w-3 h-3 shrink-0" />
+                          <span className="min-w-0 break-words text-left">{tag}</span>
+                          <span
+                            className={`text-[10px] ml-0.5 ${
+                              isSelected ? 'opacity-70' : 'text-slate-400'
+                            }`}
+                          >
+                            {tagCounts[tag]}
+                          </span>
+                        </button>
+                );
                 return (
                   <div key={tag} className="inline-flex flex-col items-start gap-1 max-w-full">
                     <div className="sidebar-tag-row inline-flex items-center gap-1 max-w-full">
-                      <button
-                        type="button"
-                        data-tag-filter={tag}
-                        onClick={() => onSelectTag(tag)}
-                        aria-pressed={isSelected}
-                        style={isSelected ? selectedItemStyle : undefined}
-                        className={`max-w-full inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition border ${
-                          isSelected
-                            ? 'font-semibold border-black/10 dark:border-white/15 hover:opacity-90'
-                            : 'text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-200'
-                        }`}
-                      >
-                        <Tag className="w-3 h-3 shrink-0" />
-                        <span className="min-w-0 break-words text-left">{tag}</span>
-                        <span
-                          className={`text-[10px] ml-0.5 ${
-                            isSelected ? 'opacity-70' : 'text-slate-400'
-                          }`}
-                        >
-                          {tagCounts[tag]}
-                        </span>
-                      </button>
-                      {canManageTags && onPreviewTagUsage && onRenameTag && onMergeTag && onDeleteTag && (
-                        <TagActions tag={tag} onPreviewUsage={onPreviewTagUsage} onRename={onRenameTag} onMerge={onMergeTag} onDelete={onDeleteTag} />
-                      )}
+                      {canManageTags && onPreviewTagUsage && onRenameTag && onMergeTag && onDeleteTag ? (
+                        <TagActions tag={tag} onPreviewUsage={onPreviewTagUsage} onRename={onRenameTag} onMerge={onMergeTag} onDelete={onDeleteTag}>
+                          {tagChip}
+                        </TagActions>
+                      ) : tagChip}
                     </div>
                   </div>
                 );

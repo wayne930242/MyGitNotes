@@ -1,7 +1,9 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { MoreHorizontal } from 'lucide-react';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
+import { useLongPress } from '../lib/use-long-press.js';
 import { Button } from './Button.js';
 
 type Mode = 'closed' | 'rename' | 'merge';
@@ -12,10 +14,12 @@ interface TagActionsProps {
   onRename: (from: string, to: string) => Promise<void>;
   onMerge: (from: string, into: string) => Promise<void>;
   onDelete: (tag: string) => Promise<void>;
+  /** The tag's filter chip; long-pressing it on touch opens the menu. */
+  children: React.ReactNode;
 }
 
 /** Rename/merge/delete controls for one tag, shown next to its chip in the Sidebar's Tags Cloud. */
-export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onRename, onMerge, onDelete }) => {
+export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onRename, onMerge, onDelete, children }) => {
   const { t } = useTranslation();
   const [mode, setMode] = useState<Mode>('closed');
   const [targetName, setTargetName] = useState('');
@@ -23,31 +27,20 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [focusFirst, setFocusFirst] = useState<boolean | 'last'>(false);
   const [returnFocus, setReturnFocus] = useState(false);
+  const [portal, setPortal] = useState<HTMLElement>();
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const menuId = useId();
+  const openingFormRef = useRef(false);
+  const openedByLongPressRef = useRef(false);
+  const chipRef = useRef<HTMLSpanElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { setPortal(triggerRef.current?.closest('dialog') || undefined); }, [mode]);
   useEffect(() => { if (mode !== 'closed') formRef.current?.scrollIntoView({ block: 'nearest' }); }, [mode]);
   useEffect(() => {
     if (mode === 'closed' && returnFocus) { triggerRef.current?.focus(); setReturnFocus(false); }
   }, [mode, returnFocus]);
-  useEffect(() => {
-    if (!menuOpen || !focusFirst) return;
-    menuRef.current?.scrollIntoView({ block: 'nearest' });
-    focusItem(focusFirst === 'last' ? -1 : 0);
-    setFocusFirst(false);
-  }, [menuOpen, focusFirst]);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) closeMenu(false);
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [menuOpen]);
+  const menuId = useId();
+  const { onTouchStart, onTouchMove, onTouchEnd, onTouchCancel, onContextMenu } = useLongPress(() => { openedByLongPressRef.current = true; setMenuOpen(true); }, true);
 
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(true, async () => {
     setBusy(true);
@@ -106,8 +99,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
     }
   };
 
-  const handleDeleteClick = async (event: React.MouseEvent) => {
-    stop(event);
+  const handleDeleteClick = async () => {
     if (!deleteArmed) {
       setBusy(true);
       setError(null);
@@ -128,32 +120,23 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
     requestDelete(tag);
   };
 
-  const focusItem = (index: number) => {
-    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
-    if (!items?.length) return;
-    items[(index + items.length) % items.length].focus();
-  };
-
-  const closeMenu = (restoreFocus: boolean) => {
-    setMenuOpen(false);
+  const handleOpenChange = (open: boolean) => {
+    setMenuOpen(open);
+    if (open) return;
     if (!deleteArmed) setCount(null);
     setError(null);
-    if (restoreFocus) triggerRef.current?.focus();
   };
 
-  const handleMenuKeyDown = (event: React.KeyboardEvent) => {
-    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
-    const current = items.indexOf(document.activeElement as HTMLButtonElement);
-    if (event.key === 'ArrowDown') { event.preventDefault(); focusItem(current + 1); }
-    else if (event.key === 'ArrowUp') { event.preventDefault(); focusItem(current - 1); }
-    else if (event.key === 'Home') { event.preventDefault(); focusItem(0); }
-    else if (event.key === 'End') { event.preventDefault(); focusItem(-1); }
-    else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMenu(true); }
-    else if (event.key === 'Tab') closeMenu(false);
+  const selectForm = (event: Event, next: 'rename' | 'merge') => {
+    if (busy) { event.preventDefault(); return; }
+    openingFormRef.current = true;
+    void openForm(next);
   };
 
   if (mode !== 'closed') {
     return (
+      <>
+      {children}
       <div className="sidebar-tag-action-form" ref={formRef} onClick={stop} role="group" aria-label={mode === 'rename' ? t('sidebar.tagRenameTitle', { tag }) : t('sidebar.tagMergeTitle', { tag })}>
         <input
           type="text"
@@ -182,53 +165,57 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
           </Button>
         </div>
       </div>
+      </>
     );
   }
 
   return (
-    <div className="sidebar-tag-actions-trigger" onClick={stop} data-open={menuOpen || undefined} ref={containerRef}>
-      <button
-        type="button"
-        ref={triggerRef}
-        className="ui-icon-button"
-        aria-haspopup="menu"
-        aria-expanded={menuOpen}
-        aria-controls={menuOpen ? menuId : undefined}
-        aria-label={t('sidebar.tagManage', { tag })}
-        title={t('sidebar.tagManage', { tag })}
-        onClick={() => { if (menuOpen) closeMenu(false); else { setMenuOpen(true); setFocusFirst(true); } }}
-        onKeyDown={event => {
-          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-            event.preventDefault();
-            setMenuOpen(true);
-            setFocusFirst(event.key === 'ArrowDown' ? true : 'last');
-          }
-        }}
-      >
-        <MoreHorizontal size={12} />
-      </button>
-      {menuOpen && (
-        <div className="sidebar-tag-menu" role="menu" id={menuId} ref={menuRef} aria-label={t('sidebar.tagManage', { tag })} onKeyDown={handleMenuKeyDown}>
-          <button type="button" role="menuitem" aria-disabled={busy} onClick={() => { if (busy) return; setMenuOpen(false); void openForm('rename'); }}>{t('sidebar.tagRename')}</button>
-          <button type="button" role="menuitem" aria-disabled={busy} onClick={() => { if (busy) return; setMenuOpen(false); void openForm('merge'); }}>{t('sidebar.tagMergeInto')}</button>
-          <button
-            type="button"
-            role="menuitem"
+    <DropdownMenu.Root open={menuOpen} onOpenChange={handleOpenChange}>
+      <span className="sidebar-tag-chip" ref={chipRef} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchCancel} onContextMenu={onContextMenu}>{children}</span>
+      <span className="sidebar-tag-actions-trigger" onClick={stop} data-open={menuOpen || undefined}>
+        <DropdownMenu.Trigger
+          ref={triggerRef}
+          className="ui-icon-button"
+          aria-label={t('sidebar.tagManage', { tag })}
+          title={t('sidebar.tagManage', { tag })}
+        >
+          <MoreHorizontal size={12} />
+        </DropdownMenu.Trigger>
+      </span>
+      <DropdownMenu.Portal container={portal}>
+        <DropdownMenu.Content
+          className="sidebar-tag-menu"
+          align="end"
+          sideOffset={4}
+          collisionPadding={8}
+          aria-label={t('sidebar.tagManage', { tag })}
+          onClick={stop}
+          onEscapeKeyDown={event => event.stopPropagation()}
+          onCloseAutoFocus={event => {
+            const longPressed = openedByLongPressRef.current;
+            openedByLongPressRef.current = false;
+            if (openingFormRef.current) { event.preventDefault(); openingFormRef.current = false; }
+            else if (longPressed) { event.preventDefault(); chipRef.current?.querySelector('button')?.focus(); }
+          }}
+        >
+          <DropdownMenu.Item aria-disabled={busy} onSelect={event => selectForm(event, 'rename')}>{t('sidebar.tagRename')}</DropdownMenu.Item>
+          <DropdownMenu.Item aria-disabled={busy} onSelect={event => selectForm(event, 'merge')}>{t('sidebar.tagMergeInto')}</DropdownMenu.Item>
+          <DropdownMenu.Item
             className="sidebar-tag-menu-danger"
             data-armed={deleteArmed || undefined}
             aria-describedby={deleteArmed || count === 0 ? `${menuId}-status` : undefined}
             aria-disabled={busy}
-            onClick={event => { if (!busy) void handleDeleteClick(event); }}
+            onSelect={event => { event.preventDefault(); if (!busy) void handleDeleteClick(); }}
           >
             {deleteArmed && count !== null && count > 0 ? t('sidebar.tagConfirmDelete', { count }) : t('sidebar.tagDelete')}
-          </button>
+          </DropdownMenu.Item>
           {deleteArmed && count !== null && count > 0 && (
             <p id={`${menuId}-status`} role="status" className="sidebar-tag-action-error">{t('sidebar.tagConfirmDeleteAgain')}</p>
           )}
           {count === 0 && <p id={`${menuId}-status`} role="status" className="sidebar-tag-action-error">{t('sidebar.tagNoNotesAffected')}</p>}
           {error && <p role="alert" className="sidebar-tag-action-error">{t('sidebar.tagOperationFailed', { error })}</p>}
-        </div>
-      )}
-    </div>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 };
