@@ -58,8 +58,13 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
         <div className="flex items-center gap-2.5">
           <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
           <div>
-            <div className="font-medium text-slate-900 dark:text-slate-100 transition">
-              {note.title}
+            <div className="font-medium text-slate-900 dark:text-slate-100 transition flex items-center gap-1.5">
+              <span>{note.title}</span>
+              {note.path.endsWith('.mdx') && (
+                <span className="text-[10px] font-semibold font-mono px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700/60 leading-none">
+                  MDX
+                </span>
+              )}
             </div>
             <div className="text-xs text-slate-400 dark:text-slate-500 font-mono">
               {note.path}

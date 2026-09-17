@@ -27,6 +27,7 @@ describe('shared note filters', () => {
     expect(paths({ tags: ['red', 'blue'], tagMode: 'all' })).toEqual([notes[0].path]);
     expect(paths({ tags: ['red', 'blue'], folders: ['notes/a/research'], q: 'needle', status: 'inbox' })).toEqual([notes[0].path]);
     expect(paths({ q: 'green' })).toEqual([notes[3].path]);
+    expect(paths({ q: 'nested' })).toEqual([notes[1].path]);
     expect(paths({ q: 'archived' })).toEqual([notes[6].path]);
     expect(paths({ showHidden: true, q: 'archived' })).toEqual([notes[5].path, notes[6].path]);
   });
