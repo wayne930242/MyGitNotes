@@ -6,6 +6,8 @@ import {
   resolveFolderClick,
   resolveAllNotebooksFolderSelect,
   resolveEnterTouchMultiSelect,
+  buildFolderTree,
+  expandedPathsForFolder,
 } from './folder-tree.js';
 import { NoteItem, FolderItem } from './types.js';
 
@@ -193,5 +195,30 @@ describe('folder-tree', () => {
     resolveFolderClick({ shiftKey: true, pointerType: 'mouse' }, onSelect, onFilterFolder, true)('projects');
     expect(onFilterFolder).toHaveBeenCalledWith('projects');
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('builds a nested tree with accurate depth and synthesized parent nodes', () => {
+    const rawFolders: FolderItem[] = [
+      { notebookId: 'nb1', path: 'tech/web/react', title: 'React', order: 1 },
+      { notebookId: 'nb1', path: 'tech', title: 'Technology', order: 0 },
+      { notebookId: 'nb2', path: 'other', title: 'Other Notebook', order: 0 },
+    ];
+    const tree = buildFolderTree(rawFolders, 'nb1');
+    expect(tree).toHaveLength(1);
+    expect(tree[0].path).toBe('tech');
+    expect(tree[0].depth).toBe(0);
+    expect(tree[0].children).toHaveLength(1);
+    const webNode = tree[0].children[0];
+    expect(webNode.path).toBe('tech/web');
+    expect(webNode.depth).toBe(1);
+    expect(webNode.children).toHaveLength(1);
+    expect(webNode.children[0].path).toBe('tech/web/react');
+    expect(webNode.children[0].depth).toBe(2);
+  });
+
+  it('computes expanded ancestors for a folder path', () => {
+    expect(expandedPathsForFolder('a/b/c')).toEqual(['a', 'a/b']);
+    expect(expandedPathsForFolder('root')).toEqual([]);
+    expect(expandedPathsForFolder(null)).toEqual([]);
   });
 });

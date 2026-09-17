@@ -109,6 +109,116 @@
   -webkit-touch-callout: none;
   touch-action: pan-y;
 }
+/* Shared NavTree Layout */
+.nav-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.nav-tree-node {
+  display: flex;
+  flex-direction: column;
+}
+.nav-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  border-radius: 7px;
+  padding: 1px 2px;
+  transition: background-color 0.12s ease;
+}
+.nav-tree-row:hover {
+  background: var(--workspace-selection);
+}
+.nav-tree-row.is-selected {
+  background: var(--workspace-selection);
+  font-weight: 600;
+}
+.nav-tree-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 28px;
+  flex: none;
+  color: var(--color-muted);
+  border-radius: 4px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+.nav-tree-chevron:hover {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+}
+.nav-tree-chevron:disabled {
+  visibility: hidden;
+}
+.nav-tree-chevron-spacer {
+  width: 20px;
+  height: 28px;
+  flex: none;
+}
+.nav-tree-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 5px 6px;
+  font-size: 13px;
+  text-align: left;
+  min-height: 30px;
+  border-radius: 6px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  user-select: none;
+  color: inherit;
+  transition: transform 0.12s ease, background-color 0.12s ease;
+}
+.nav-tree-entry.is-pressing {
+  transform: scale(0.97);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border-radius: 5px;
+}
+.nav-tree-entry svg {
+  color: var(--color-muted);
+  flex-shrink: 0;
+}
+.nav-tree-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.nav-tree-children {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-left: 10px;
+  padding-left: 9px;
+  border-left: 1px solid color-mix(in srgb, var(--workspace-divider) 80%, transparent);
+}
+.nav-tree-children .nav-tree-entry {
+  font-size: 12.5px;
+  color: color-mix(in srgb, var(--color-text) 90%, transparent);
+}
+.nav-tree-children .nav-tree-children .nav-tree-entry {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--color-text) 82%, transparent);
+}
+.nav-tree-marker {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  margin-inline-start: auto;
+}
 .folder-tree-root.is-selected, .folder-tree-item.is-selected .folder-drop-body { background: var(--workspace-selection); font-weight: 600; }
 .folder-drop-body { display: flex; align-items: center; min-width: 0; border-radius: 7px; }
 .folder-drop-body.is-over { background: color-mix(in srgb, var(--color-primary) 14%, transparent); outline: 1px solid var(--color-primary); }

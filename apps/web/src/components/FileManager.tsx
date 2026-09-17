@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { Button } from './Button.js';
 import { forwardRef, lazy, Suspense, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Folder, File, FolderPlus, FilePlus, Upload, CornerLeftUp, FolderInput, Pencil, Trash2, RefreshCw, Eye, Code2, Download, X, EyeOff, Cloud, FileText, FileX, ChevronRight, ChevronDown } from 'lucide-react';
+import { Folder, File, FolderPlus, FilePlus, Upload, CornerLeftUp, FolderInput, Pencil, Trash2, RefreshCw, Eye, Code2, Download, X, EyeOff, Cloud, FileText, FileX } from 'lucide-react';
 import type { FileCommand } from '@mygitnotes/core';
 import { fetchFiles, readFile, mutateFile, rawFileUrl, type FileEntry, type FileListing, type FileRead, type FileResult } from '../lib/files-api.js';
 import { buildFileTree, expandedPathsFor, isMarkdownFile, type FileTreeNode } from '../lib/file-tree.js';
@@ -11,6 +11,7 @@ import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { Preview } from './FilePreview.js';
 import { R2Panel, r2Folders } from './R2Panel.js';
 import { fetchR2, type R2Listing } from '../lib/r2-api.js';
+import { NavTree, NavTreeRow, NavTreeChildren } from './NavTree.js';
 import './file-manager.css';
 const FileSourceEditor = lazy(() => import('./FileSourceEditor.js').then(module => ({ default: module.FileSourceEditor })));
 
@@ -187,18 +188,30 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
   const renderTreeNode = (node: FileTreeNode): ReactNode => {
     const isExpanded = expanded.has(node.path), hasChildren = node.children.length > 0;
     const label = markerLabel(node.name, node.hasNonDocument);
-    return <div key={node.path} className="file-tree-node">
-      <div className="file-tree-row" style={{ paddingInlineStart: 10 + node.depth * 12 }}>
-        <button type="button" className="file-tree-chevron" disabled={busy || !hasChildren} tabIndex={hasChildren ? 0 : -1} aria-label={isExpanded ? t('folder.collapse') : t('folder.expand')} aria-expanded={hasChildren ? isExpanded : undefined} onClick={() => toggleExpand(node.path)}>
-          {hasChildren && (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}
-        </button>
-        <button type="button" className="file-tree-entry" disabled={busy} aria-current={r2Directory === undefined && directory === node.path ? 'location' : undefined} aria-label={label} title={label} onClick={() => void navigate(node.path)}>
-          <Folder size={15} /><span>{node.name}</span>
-          {node.hasNonDocument && <span className="file-tree-marker" aria-hidden="true" />}
-        </button>
+    return (
+      <div key={node.path} className="nav-tree-node">
+        <NavTreeRow
+          hasChildren={hasChildren}
+          isExpanded={isExpanded}
+          onToggleExpand={() => toggleExpand(node.path)}
+          expandAriaLabel={isExpanded ? t('folder.collapse') : t('folder.expand')}
+          title={node.name}
+          selected={r2Directory === undefined && directory === node.path}
+          onSelect={() => void navigate(node.path)}
+          suffix={node.hasNonDocument ? <span className="nav-tree-marker" aria-hidden="true" /> : undefined}
+          disabled={busy}
+          buttonProps={{
+            title: label,
+            'aria-label': label,
+          }}
+        />
+        {hasChildren && isExpanded && (
+          <NavTreeChildren>
+            {node.children.map(renderTreeNode)}
+          </NavTreeChildren>
+        )}
       </div>
-      {hasChildren && isExpanded && <div className="file-tree-children">{node.children.map(renderTreeNode)}</div>}
-    </div>;
+    );
   };
   return <div className="file-manager" data-mode={mode} data-layout={layout} aria-busy={busy || reading || !listing}>
     {layout === 'panel' && <div className="file-panel-sources" role="group" aria-label={t('files.location')}>
@@ -221,14 +234,43 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
     {error && <p role="alert" className="file-error">{error}</p>}
     {!listing ? <p role="status">{error ? t('files.unavailable') : t('files.loading')}</p> : <>
     <div className="file-manager-body">
-      <nav className={`file-tree ${treeOpen ? 'is-open' : ''}`} aria-label={t('folder.folders')}>
-        {(directory !== listing.root || r2Directory !== undefined) && <button type="button" disabled={busy} aria-current={r2Directory === undefined && directory === listing.root ? 'location' : undefined} style={{ paddingInlineStart: 10 }} aria-label={markerLabel('<note>', rootHasNonDocument)} title={markerLabel('<note>', rootHasNonDocument)} onClick={() => void navigate(listing.root)}><Folder size={15} /><span>{'<note>'}</span>{rootHasNonDocument && <span className="file-tree-marker" aria-hidden="true" />}</button>}
+      <NavTree className={`file-tree ${treeOpen ? 'is-open' : ''}`} aria-label={t('folder.folders')}>
+        {(directory !== listing.root || r2Directory !== undefined) && (
+          <NavTreeRow
+            hasChildren={false}
+            title={'<note>'}
+            selected={r2Directory === undefined && directory === listing.root}
+            onSelect={() => void navigate(listing.root)}
+            suffix={rootHasNonDocument ? <span className="nav-tree-marker" aria-hidden="true" /> : undefined}
+            disabled={busy}
+            buttonProps={{
+              title: markerLabel('<note>', rootHasNonDocument),
+              'aria-label': markerLabel('<note>', rootHasNonDocument),
+            }}
+          />
+        )}
         {tree.map(renderTreeNode)}
         {r2 && (() => { const { root, folders } = r2Folders(r2, showHidden); return <>
-          <button type="button" className="file-tree-r2" disabled={busy} aria-current={r2Directory === root ? 'location' : undefined} onClick={() => void navigateR2(root)}><Cloud size={15} /><span>R2</span></button>
-          {folders.map(folder => <button type="button" key={folder} disabled={busy} aria-current={r2Directory === folder ? 'location' : undefined} style={{ paddingInlineStart: 10 + (folder.split('/').length - 1) * 12 }} onClick={() => void navigateR2(folder)}><Folder size={15} /><span>{folder.slice(folder.lastIndexOf('/') + 1)}</span></button>)}
+          <NavTreeRow
+            hasChildren={false}
+            icon={<Cloud size={15} />}
+            title="R2"
+            selected={r2Directory === root}
+            onSelect={() => void navigateR2(root)}
+            disabled={busy}
+          />
+          {folders.map(folder => (
+            <NavTreeRow
+              key={folder}
+              hasChildren={false}
+              title={folder.slice(folder.lastIndexOf('/') + 1)}
+              selected={r2Directory === folder}
+              onSelect={() => void navigateR2(folder)}
+              disabled={busy}
+            />
+          ))}
         </>; })()}
-      </nav>
+      </NavTree>
       {r2 && r2Directory !== undefined ? <R2Panel notebookId={notebookId} listing={r2} directory={r2Directory} mutable={mode === 'manage' && writable} showHidden={showHidden} busy={busy}
         run={run} onNavigate={path => setR2Directory(path)} onRefresh={refreshR2} beforeChange={beforeChange}
         onNotesChanged={async () => { const next = await refresh(); await onChanged?.({ revision: next.revision, selectedPath: '', pathMap: {}, deletedPaths: [] }); }} onInsert={mode === 'pick-image' ? onInsert : undefined} /> :

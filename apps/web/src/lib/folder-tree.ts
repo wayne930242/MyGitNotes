@@ -212,3 +212,92 @@ export function getBreadcrumbs(
 
   return segments;
 }
+
+export interface FolderTreeNode {
+  folder: FolderItem;
+  path: string;
+  name: string;
+  title: string;
+  depth: number;
+  children: FolderTreeNode[];
+}
+
+export function buildFolderTree(folders: FolderItem[], notebookId: string): FolderTreeNode[] {
+  const scopedFolders = folders.filter(f => f.notebookId === notebookId);
+  const nodeMap = new Map<string, FolderTreeNode>();
+
+  for (const f of scopedFolders) {
+    const name = f.path.includes('/') ? f.path.slice(f.path.lastIndexOf('/') + 1) : f.path;
+    nodeMap.set(f.path, {
+      folder: f,
+      path: f.path,
+      name,
+      title: f.title || name,
+      depth: 0,
+      children: [],
+    });
+  }
+
+  for (const f of scopedFolders) {
+    const parts = f.path.split('/');
+    for (let i = 1; i < parts.length; i++) {
+      const ancestorPath = parts.slice(0, i).join('/');
+      if (!nodeMap.has(ancestorPath)) {
+        const ancestorName = parts[i - 1];
+        nodeMap.set(ancestorPath, {
+          folder: {
+            notebookId,
+            path: ancestorPath,
+            title: ancestorName,
+            order: 0,
+          },
+          path: ancestorPath,
+          name: ancestorName,
+          title: ancestorName,
+          depth: 0,
+          children: [],
+        });
+      }
+    }
+  }
+
+  const roots: FolderTreeNode[] = [];
+  for (const node of nodeMap.values()) {
+    const lastSlash = node.path.lastIndexOf('/');
+    if (lastSlash === -1) {
+      roots.push(node);
+    } else {
+      const parentPath = node.path.slice(0, lastSlash);
+      const parent = nodeMap.get(parentPath);
+      if (parent) {
+        parent.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+  }
+
+  function sortBranch(nodes: FolderTreeNode[], depth: number) {
+    nodes.sort((a, b) => (a.folder.order - b.folder.order) || a.title.localeCompare(b.title));
+    for (const node of nodes) {
+      node.depth = depth;
+      if (node.children.length > 0) {
+        sortBranch(node.children, depth + 1);
+      }
+    }
+  }
+
+  sortBranch(roots, 0);
+  return roots;
+}
+
+export function expandedPathsForFolder(path: string | null): string[] {
+  if (!path) return [];
+  const parts = path.split('/');
+  const result: string[] = [];
+  for (let i = 1; i < parts.length; i++) {
+    result.push(parts.slice(0, i).join('/'));
+  }
+  return result;
+}
+
