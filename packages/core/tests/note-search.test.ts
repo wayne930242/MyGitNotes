@@ -73,3 +73,17 @@ describe('searchTerms', () => {
     ]);
   });
 });
+
+describe('searchNotes match counts and regex input', () => {
+  it('counts title matches for query words but not Han bigrams', () => {
+    const [match] = searchNotes([note('a/x.md', 'Hello', 'body')], { query: 'hello' }).matches;
+    expect(match.matchCount).toBe(1);
+    const [han] = searchNotes([note('a/y.md', 't', '中文字')], { query: '中文字' }).matches;
+    expect(han.matchCount).toBe(1);
+  });
+
+  it('keeps leading whitespace in a regular expression', () => {
+    const items = [note('a/x.md', 't', 'foo'), note('a/y.md', 't', 'a foo')];
+    expect(searchNotes(items, { query: ' foo', isRegex: true }).matches.map((m) => m.path)).toEqual(['a/y.md']);
+  });
+});

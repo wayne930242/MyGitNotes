@@ -78,7 +78,7 @@ function snippetFor(content: string, needles: string[], lower: boolean) {
 export function searchNotes(notes: NoteItem[], options: NoteSearchOptions) {
   const limit = options.limit ?? 20;
   if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new SourceError('limit must be an integer from 1 to 200.');
-  const query = options.query?.trim() || '';
+  const query = options.query && options.query.trim() ? options.query : '';
   const wantedTags = (options.tags || []).map((t) => t.toLowerCase());
   if (!query && !options.status && !wantedTags.length && !options.pattern && !options.notebookId) {
     throw new SourceError('Provide query or at least one filter (notebookId, status, tags, pattern).');
@@ -101,15 +101,16 @@ export function searchNotes(notes: NoteItem[], options: NoteSearchOptions) {
   } else if (options.isRegex) {
     let regex: RegExp;
     try { regex = new RegExp(query, sensitive ? 'g' : 'gi'); } catch (err) { throw new SourceError(`Invalid regular expression: ${(err as Error).message}`); }
+    const lineRegex = new RegExp(query, sensitive ? '' : 'i');
     for (const note of candidates) {
       const hits = [...(note.content.match(regex) || []), ...(note.title.match(regex) || [])];
       if (!hits.length) continue;
-      const line = note.content.split('\n').find((l) => new RegExp(query, sensitive ? '' : 'i').test(l)) || '';
+      const line = note.content.split('\n').find((l) => lineRegex.test(l)) || '';
       scored.push({ ...base(note), matchCount: hits.length, score: hits.length, matchedTerms: [...new Set(hits)].slice(0, 10), snippet: line.trim().slice(0, 240) });
     }
     scored.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
   } else {
-    const phrase = fold(query);
+    const phrase = fold(query.trim());
     const terms = searchTerms(query, sensitive);
     const docs = candidates.map((note) => ({
       note,
@@ -128,7 +129,7 @@ export function searchNotes(notes: NoteItem[], options: NoteSearchOptions) {
         let tf = 0;
         for (const field of Object.keys(WEIGHT) as (keyof typeof WEIGHT)[]) {
           const n = count(fields[field], term);
-          if (field === 'content') matchCount += n;
+          if (weight === 1 && (field === 'content' || field === 'title')) matchCount += n;
           tf += WEIGHT[field] * n;
         }
         if (!tf) continue;
