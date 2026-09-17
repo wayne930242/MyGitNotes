@@ -1,6 +1,16 @@
 import { TranslationKey } from './en.js';
 
 export const zhTW: Record<TranslationKey, string> = {
+  'lightbox.title': '圖片預覽',
+  'lightbox.close': '關閉圖片預覽（Esc）',
+  'lightbox.zoomIn': '放大（+）',
+  'lightbox.zoomOut': '縮小（−）',
+  'lightbox.fit': '適配視窗（0）',
+  'lightbox.actual': '原始尺寸（1）',
+  'lightbox.original': '開啟原始圖片',
+  'lightbox.help': '滾輪縮放 · 拖曳移動 · 按兩下放大',
+  'lightbox.loading': '正在載入圖片…',
+  'lightbox.error': '無法載入這張圖片。',
 
   'files.titleLabel': '檔案',
   'files.location': '目前位置',

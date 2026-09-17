@@ -63,7 +63,9 @@ function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage, mul
     <DropZone path={folder.path} position="after" disabled={disabled || !reorder} />
   </div>;
 }
-export function FolderTree({ onManageFiles, reorder = false, onToggleReorder, selectedPaths, allFoldersSelected, onFilterFolder, touchMultiSelect = false, onLongPressFolder, folders, notebookId, selected, onSelect, writable, beforeChange, onChanged }: {
+export function FolderTree({ showHeading = true, showRoot = true, onManageFiles, reorder = false, onToggleReorder, selectedPaths, allFoldersSelected, onFilterFolder, touchMultiSelect = false, onLongPressFolder, folders, notebookId, selected, onSelect, writable, beforeChange, onChanged }: {
+  showHeading?: boolean;
+  showRoot?: boolean;
   onManageFiles: (path: string) => void;
   reorder?: boolean;
   onToggleReorder?: () => void;
@@ -106,7 +108,7 @@ export function FolderTree({ onManageFiles, reorder = false, onToggleReorder, se
   const disabled = !writable || busy || !revision;
   const errorMessage = error && <div role="alert" className="folder-error">{error}<button type="button" className="ui-button" onClick={() => { void refresh().then(() => { setError(''); return onChanged?.(); }).catch(error => setError(error.message)); }}>{t('folder.reload')}</button></div>;
   return <section aria-label={t('folder.folders')}>
-    <div className="folder-tree-heading"><h4>{t('folder.folders')}</h4>{writable && <div className="folder-heading-actions">{onToggleReorder && <ReorderToggle active={reorder} onToggle={onToggleReorder} disabled={busy} />}<button type="button" className="ui-icon-button" disabled={busy} aria-label={t('folder.create')} onClick={() => onManageFiles(selected || '')}><FolderPlus size={16} /></button></div>}</div>
+    {showHeading && <div className="folder-tree-heading"><h4>{t('folder.folders')}</h4>{writable && <div className="folder-heading-actions">{onToggleReorder && <ReorderToggle active={reorder} onToggle={onToggleReorder} disabled={busy} />}<button type="button" className="ui-icon-button" disabled={busy} aria-label={t('folder.create')} onClick={() => onManageFiles(selected || '')}><FolderPlus size={16} /></button></div>}</div>}
     {errorMessage}
     <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={({ active }) => setDragging(String(active.id))} onDragCancel={() => setDragging(undefined)} onDragEnd={({ active, over }) => {
       setDragging(undefined); if (!over || disabled || !reorder) return;
@@ -114,7 +116,7 @@ export function FolderTree({ onManageFiles, reorder = false, onToggleReorder, se
       const command = folderDropCommand(notebookId, String(active.id), data?.path || '', data?.position || 'inside', list);
       if (command) void mutate(command);
     }}>
-      <DropZone path="" position="inside" disabled={disabled || !reorder}><button type="button" className={`folder-tree-root ${isSelected(null) ? 'is-selected' : ''}`} aria-pressed={isSelected(null)} title={t('folder.allFolders')}onClick={event => selectFolder(null, event)}>{t('folder.allFolders')}</button></DropZone>
+      {showRoot && <DropZone path="" position="inside" disabled={disabled || !reorder}><button type="button" className={`folder-tree-root ${isSelected(null) ? 'is-selected' : ''}`} aria-pressed={isSelected(null)} title={t('folder.allFolders')}onClick={event => selectFolder(null, event)}>{t('folder.allFolders')}</button></DropZone>}
       {list.map(folder => <TreeItem reorder={reorder} key={folder.path} folder={folder} disabled={disabled} selected={isSelected(folder.path)} onSelect={event => selectFolder(folder.path, event)} onManage={() => onManageFiles(folder.path)} multiSelectable={Boolean(onFilterFolder)} touchMultiSelect={touchMultiSelect} onLongPress={onLongPressFolder && (() => onLongPressFolder(folder.path))} />)}
       <DragOverlay>{dragging && <div className="screen-drag-overlay"><Folder size={16} />{list.find(folder => folder.path === dragging)?.title}</div>}</DragOverlay>
     </DndContext>

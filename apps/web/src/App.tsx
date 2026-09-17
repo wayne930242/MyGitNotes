@@ -9,6 +9,7 @@ import { listLocalDrafts } from './lib/storage.js';
 import { useWorkspaceSync } from './lib/use-workspace-sync.js';
 import { SCREEN_PAGE_FILE } from '@mygitnotes/core/screen-page';
 import { WorkspaceLinks } from './components/WorkspaceLinks.js';
+import { ImageLightbox } from './components/ImageLightbox.js';
 import { resolveNoteStatuses, isNoteHidden, withNoteStatus } from '@mygitnotes/core/note-status';
 import { Select } from './components/Select.js';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -884,7 +885,6 @@ const AppContent: React.FC = () => {
               onToggleReorder={() => setFolderReorder(value => !value)}
               filters={filterProps}
               notes={visibleNotes}
-              hiddenNoteCount={notes.filter(note => (selectedNotebookId === 'all' || note.notebookId === selectedNotebookId) && isNoteHidden({ ...note.metadata, status: note.status })).length}
               beforeFolderChange={() => {
                 if (Object.keys(activeWorkingNotes).length || listLocalDrafts(workingScope).length || screen.dirty) throw new Error(t('folder.draftsHint'));
               }}
@@ -900,6 +900,10 @@ const AppContent: React.FC = () => {
               <PageToolbar>
                 {indexInToolbar && folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
                 <NoteToolbar onManageFiles={selectedNotebookId === 'all' ? undefined : () => openFileManager(selectedNotebookId, selectedFolder || '')} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite || selectedNotebookId === 'all'} viewMode={viewMode} setViewMode={setViewMode}
+                  hiddenNoteCount={notes.filter(note => (selectedNotebookId === 'all' || note.notebookId === selectedNotebookId) && isNoteHidden({ ...note.metadata, status: note.status })).length}
+                  showHidden={showHidden} descendants={route.descendants}
+                  onShowHiddenChange={value => changeFilters({ showHidden: value })}
+                  onDescendantsChange={value => changeFilters({ descendants: value })}
                   onOpenNewNoteModal={() => openNewNote()} filtersOpen={filtersOpen}
                   onToggleFilters={() => setFiltersOpen(open => !open)} />
               </PageToolbar>
@@ -1243,6 +1247,7 @@ const AppContent: React.FC = () => {
         </div>
       )}
     </div>
+    <ImageLightbox />
     </WorkspaceLinks>
   );
 };

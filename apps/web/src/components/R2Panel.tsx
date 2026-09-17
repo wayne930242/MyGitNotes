@@ -115,6 +115,7 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
     </div>
     {selectedObject && <section className="file-detail" aria-label={t('files.details')}>
       <div className="file-detail-heading"><div className="file-detail-title"><strong>{basename(selectedObject.key)}</strong><div className="file-detail-icons">
+        {onInsert && <Button type="button" variant="primary" disabled={busy} onClick={() => onInsert(r2Reference(selectedObject.key))}>{t('files.r2Insert')}</Button>}
         <a className="ui-icon-button" href={rawUrl + '&download=1'} aria-label={t('files.download')} title={t('files.download')}><Download size={18} /></a>
         <button type="button" className="ui-icon-button" aria-label={t('files.close')} title={t('files.close')} disabled={busy} onClick={() => { setSelected(''); setOperation(undefined); }}><X size={18} /></button>
       </div></div><code>{`r2:${selectedObject.key}`}</code></div>
@@ -124,7 +125,6 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
           <button type="button" className="ui-button" disabled={busy} onClick={() => open('move')}><FolderInput size={15} />{t('files.move')}</button>
           <button type="button" className="ui-button ui-button-danger" disabled={busy} onClick={() => open('delete')}><Trash2 size={15} />{t('common.delete')}</button>
         </>}
-        {onInsert && <Button type="button" variant="primary" disabled={busy} onClick={() => onInsert(r2Reference(selectedObject.key))}>{t('files.r2Insert')}</Button>}
       </div>
       <Preview key={selectedObject.key} entry={{ path: selectedObject.key, name: basename(selectedObject.key), directory: false, size: selectedObject.size, hidden: false, presentation }} url={rawUrl} />
     </section>}
