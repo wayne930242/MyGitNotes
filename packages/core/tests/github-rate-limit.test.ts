@@ -113,6 +113,14 @@ describe('GitHub request budgets', () => {
     expect(f.calls.some(call => call.url.includes('/tarball/') || call.url.startsWith('https://codeload.github.com/'))).toBe(false);
     expect(f.calls.filter(call => call.url.includes('/git/blobs/'))).toHaveLength(2); // The manifest and bytes that fail SHA verification load individually.
   });
+  it('falls back to individual blob reads when a GraphQL batch fails and stops on GraphQL rate limits', async () => {
+    const f = await fixture(10);
+    const failing = vi.fn(async (input: any, init?: RequestInit) => String(input).endsWith('/graphql') ? new Response('{}', { status: 502 }) : f.request(input, init)) as typeof fetch;
+    expect(await new GitHubSource('owner/repo', 'main', 'fallback', failing).notes()).toHaveLength(10);
+    const limited = vi.fn(async (input: any, init?: RequestInit) => String(input).endsWith('/graphql')
+      ? new Response(JSON.stringify({ data: null, errors: [{ type: 'RATE_LIMITED' }] })) : f.request(input, init)) as typeof fetch;
+    await expect(new GitHubSource('owner/repo', 'main', 'limited', limited).notes()).rejects.toMatchObject({ status: 429 });
+  });
   it('lists .mdx notes like the local source', async () => {
     const f = await fixture(1);
     const request = vi.fn(async (input: any, init: RequestInit = {}) => {

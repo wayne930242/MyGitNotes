@@ -73,7 +73,13 @@ export class GitHubSource extends RemoteSource {
   private async prefetchBlobBatches(entries: RemoteEntry[]) {
     const pending = entries.filter(entry => !this.client.hasBlob(entry.sha));
     for (let i = 0; i < pending.length; i += 100) {
-      const texts = await this.client.blobTexts(pending.slice(i, i + 100).map(entry => entry.sha));
+      let texts: Map<string, string>;
+      try { texts = await this.client.blobTexts(pending.slice(i, i + 100).map(entry => entry.sha)); }
+      catch (error) {
+        // Unloaded notes fall back to individual blob reads. Never fall back through a cooldown or lost access.
+        if (!(error instanceof SourceError) || [401, 403, 404, 429].includes(error.status)) throw error;
+        return;
+      }
       for (const [sha, text] of texts) {
         const bytes = Buffer.from(text, 'utf8');
         if (createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex') === sha) this.client.putBlob(sha, bytes);
