@@ -16,6 +16,7 @@ import {
   resolveSafePath,
   sanitizeFilename,
   WORKSPACE_CONFIG_FILENAME,
+  resolveWorkspaceConfigPath,
   extractFirstH1,
   parseNoteContent,
   workspaceAgentKind, workspaceAgentResource, listWorkspaceAgentFiles, resolveWorkspaceAgentPath,
@@ -145,12 +146,8 @@ app.put('/api/workspace/config', async (req: Request, res: Response) => {
   try {
     const { configYaml } = req.body;
     const validated = parseWorkspaceConfig(configYaml);
-    let configRel = path.posix.join('notes', WORKSPACE_CONFIG_FILENAME);
-    let configPath = path.join(repoRoot, configRel);
-    if (!fs.existsSync(configPath) && fs.existsSync(path.join(repoRoot, WORKSPACE_CONFIG_FILENAME))) {
-      configRel = WORKSPACE_CONFIG_FILENAME;
-      configPath = path.join(repoRoot, WORKSPACE_CONFIG_FILENAME);
-    }
+    const configRel = resolveWorkspaceConfigPath(repoRoot) ?? path.posix.join('notes', WORKSPACE_CONFIG_FILENAME);
+    const configPath = path.join(repoRoot, configRel);
     const configDir = path.dirname(configPath);
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true });

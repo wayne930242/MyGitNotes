@@ -4,7 +4,7 @@ MyGitNotes is structured as a TypeScript monorepo using pnpm workspaces.
 
 ## Monorepo Layout
 
-- `packages/core`: Core domain models, `.github-notes.yaml` schema & parsing, Markdown & YAML frontmatter parsing with exact round-trip preservation, resource classification, and path traversal guards.
+- `packages/core`: Core domain models, `.mygitnotes.yaml` (or the compatible `.github-notes.yaml`) schema & parsing, Markdown & YAML frontmatter parsing with exact round-trip preservation, resource classification, and path traversal guards.
 - `packages/git`: Guarded Git service operations, Core update engine, and semantic commit message generation (with Gemini Flash-Lite and deterministic fallback).
 - `packages/mcp-server`: Stdio Model Context Protocol (MCP) server providing safe note, asset, git, and workspace operations to coding agents.
 - `apps/local-server`: Lightweight local HTTP bridge serving workspace APIs and static assets to the frontend web application.

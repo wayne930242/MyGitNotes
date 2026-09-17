@@ -30,4 +30,4 @@ source:
 
 You can also configure sources using `.env` variables (`MYGITNOTES_SOURCE`, `MYGITNOTES_REPOSITORY`, `MYGITNOTES_BRANCH`). Environment variables take precedence over YAML. Keep access tokens in local `.env` or deployment secrets.
 
-The `.github-notes.yaml` file in the source repository defines notebooks. New workspaces use the root config; legacy `notes/.github-notes.yaml` maintains backward compatibility. Each notebook's `root` is a path relative to the repository root.
+The `.mygitnotes.yaml` file (or the legacy `.github-notes.yaml` name) in the source repository defines notebooks. New workspaces use the root config; the legacy `notes/` location maintains backward compatibility. Each notebook's `root` is a path relative to the repository root.

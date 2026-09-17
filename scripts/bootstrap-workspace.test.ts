@@ -27,12 +27,12 @@ describe('canonical starter workspace CLI', () => {
     bootstrap();
     expect(git('branch', '--show-current')).toBe('main');
     expect(git('rev-list', '--count', 'HEAD')).toBe('2');
-    expect(git('ls-tree', '-r', '--name-only', 'core', '--', 'notes', '.github-notes.yaml')).toBe('');
+    expect(git('ls-tree', '-r', '--name-only', 'core', '--', 'notes', '.mygitnotes.yaml')).toBe('');
     expect(git('ls-tree', '-r', '--name-only', 'core', '--', 'AGENTS.md', '.agents', '.codex')).toBe('');
     expect(git('ls-files', '--', 'AGENTS.md', '.agents')).toContain('AGENTS.md');
     expect(git('ls-files', '--', '.agents')).toContain('.agents/skills/workspace/SKILL.md');
     const template = path.join(root, 'examples/demo-workspace');
-    expect(fs.readFileSync(path.join(root, '.github-notes.yaml'), 'utf8')).toBe(fs.readFileSync(path.join(template, '.github-notes.yaml'), 'utf8'));
+    expect(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8')).toBe(fs.readFileSync(path.join(template, '.mygitnotes.yaml'), 'utf8'));
     for (const source of files(path.join(template, 'notes'))) expect(fs.readFileSync(path.join(root, path.relative(template, source)))).toEqual(fs.readFileSync(source));
     const head = git('rev-parse', 'HEAD');
     write('notes/example/welcome.md', '# My own welcome\n');
@@ -43,14 +43,14 @@ describe('canonical starter workspace CLI', () => {
     expect(fs.readFileSync(path.join(root, '.agents/skills/workspace/SKILL.md'), 'utf8')).toBe('# 自訂技能\n');
     expect(fs.readFileSync(path.join(root, 'notes/example/welcome.md'), 'utf8')).toBe('# My own welcome\n');
     expect(git('rev-parse', 'HEAD')).toBe(head);
-    expect(fs.existsSync(path.join(root, 'notes/.github-notes.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'notes/.mygitnotes.yaml'))).toBe(false);
   });
 
   it('initializes an empty workspace without examples when --no-examples is passed', () => {
     bootstrap('--no-examples');
     expect(git('branch', '--show-current')).toBe('main');
     expect(git('rev-list', '--count', 'HEAD')).toBe('2');
-    const config = parseWorkspaceConfig(fs.readFileSync(path.join(root, '.github-notes.yaml'), 'utf8'));
+    const config = parseWorkspaceConfig(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8'));
     expect(config.notebooks.map(notebook => notebook.id)).toEqual(['personal']);
     expect(config.workspace.default_notebook).toBe('personal');
     expect(fs.existsSync(path.join(root, 'notes/example'))).toBe(false);
@@ -61,10 +61,21 @@ describe('canonical starter workspace CLI', () => {
 
   it('respects an existing root manifest and does not add an unconfigured notebook', () => {
     const manifest = 'schema_version: 1\nworkspace:\n  title: Personal\n  default_notebook: personal\nnotebooks:\n  - id: personal\n    title: Personal\n    root: notes/personal\n';
+    write('.mygitnotes.yaml', manifest); write('notes/personal/mine.md', '# Mine');
+    bootstrap();
+    expect(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8')).toBe(manifest);
+    expect(fs.existsSync(path.join(root, 'notes/.mygitnotes.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'notes/example'))).toBe(false);
+    expect(fs.readFileSync(path.join(root, 'notes/personal/mine.md'), 'utf8')).toBe('# Mine');
+  });
+
+  it('respects an existing legacy-named root manifest and does not create a second manifest', () => {
+    const manifest = 'schema_version: 1\nworkspace:\n  title: Legacy\n  default_notebook: personal\nnotebooks:\n  - id: personal\n    title: Personal\n    root: notes/personal\n';
     write('.github-notes.yaml', manifest); write('notes/personal/mine.md', '# Mine');
     bootstrap();
     expect(fs.readFileSync(path.join(root, '.github-notes.yaml'), 'utf8')).toBe(manifest);
-    expect(fs.existsSync(path.join(root, 'notes/.github-notes.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(root, '.mygitnotes.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'notes/.mygitnotes.yaml'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'notes/example'))).toBe(false);
     expect(fs.readFileSync(path.join(root, 'notes/personal/mine.md'), 'utf8')).toBe('# Mine');
   });
@@ -80,7 +91,7 @@ describe('canonical starter workspace CLI', () => {
 
   it('uses exactly the default statuses and valid relative tutorial links', () => {
     const template = path.join(root, 'examples/demo-workspace');
-    const config = parseWorkspaceConfig(fs.readFileSync(path.join(template, '.github-notes.yaml'), 'utf8'));
+    const config = parseWorkspaceConfig(fs.readFileSync(path.join(template, '.mygitnotes.yaml'), 'utf8'));
     expect(config.notebooks[0].statuses).toBeUndefined();
     const seen = new Set<string>();
     for (const file of files(path.join(template, 'notes')).filter(file => file.endsWith('.md'))) {

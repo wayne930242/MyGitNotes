@@ -2,7 +2,7 @@ import { STUDY_FILE, STUDY_MAX_BYTES, StudyWorkspaceSchema } from './study.js';
 import { managedNotebook } from './file-manager.js';
 import path from 'node:path';
 import { assetInfo, assetRoot, assetPath, isAssetPath, decodeAsset } from './assets.js';
-import { parseWorkspaceConfig } from './config.js';
+import { parseWorkspaceConfig, WORKSPACE_CONFIG_FILENAME, LEGACY_WORKSPACE_CONFIG_FILENAME } from './config.js';
 import { parseNoteContent, serializeNoteContent } from './frontmatter.js';
 import { formatTemplateDate, renderNoteTemplate } from './templates.js';
 import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js';
@@ -48,7 +48,10 @@ export abstract class RemoteSource {
   async config(): Promise<WorkspaceConfig> {
     this.manifest ??= (async () => {
       const { entries } = await this.getSnapshot();
-      const location = ['notes/.github-notes.yaml', '.github-notes.yaml'].find(p => entries.some(e => e.path === p && e.type === 'blob'));
+      const location = [
+        `notes/${WORKSPACE_CONFIG_FILENAME}`, `notes/${LEGACY_WORKSPACE_CONFIG_FILENAME}`,
+        WORKSPACE_CONFIG_FILENAME, LEGACY_WORKSPACE_CONFIG_FILENAME,
+      ].find(p => entries.some(e => e.path === p && e.type === 'blob'));
       if (!location) throw new SourceError('Workspace manifest missing. Run pnpm bootstrap-workspace in the note repository and push its workspace branch.', 422);
       const config = parseWorkspaceConfig((await this.readFile(location)).toString('utf8'));
       if (location.startsWith('notes/')) config.notebooks = config.notebooks.map(nb => ({ ...nb,

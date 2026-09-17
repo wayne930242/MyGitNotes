@@ -37,6 +37,7 @@ describe('Resource Classifier', () => {
   });
 
   it('classifies workspace config', () => {
+    expect(classifyResource('.mygitnotes.yaml', sampleConfig).type).toBe('workspace_config');
     expect(classifyResource('.github-notes.yaml', sampleConfig).type).toBe('workspace_config');
   });
 

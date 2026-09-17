@@ -18,6 +18,8 @@ describe('Core Repository & Invariant Guardrails', () => {
     expect(fs.existsSync(path.join(template, WORKSPACE_CONFIG_FILENAME))).toBe(true);
     expect(fs.existsSync(path.join(template, 'notes/example/welcome.md'))).toBe(true);
     expect(classifyResource('examples/demo-workspace/notes/example/welcome.md').type).toBe('product_source');
+    expect(classifyResource('.mygitnotes.yaml').type).toBe('workspace_config');
+    expect(classifyResource('notes/.mygitnotes.yaml').type).toBe('workspace_config');
     expect(classifyResource('.github-notes.yaml').type).toBe('workspace_config');
     expect(classifyResource('notes/.github-notes.yaml').type).toBe('workspace_config');
     expect(classifyResource('notes/AGENTS.md').type).toBe('agent_instruction');

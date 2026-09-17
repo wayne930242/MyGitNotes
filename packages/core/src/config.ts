@@ -3,7 +3,15 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { WorkspaceConfig, NotebookConfig, NoteTemplate, NotebookMetadataField } from './types.js';
 
-export const WORKSPACE_CONFIG_FILENAME = '.github-notes.yaml';
+export const WORKSPACE_CONFIG_FILENAME = '.mygitnotes.yaml';
+export const LEGACY_WORKSPACE_CONFIG_FILENAME = '.github-notes.yaml';
+
+/** Returns whichever manifest filename exists in `dir` (new name preferred), or null if neither does. */
+function existingConfigFilename(dir: string): string | null {
+  if (fs.existsSync(path.join(dir, WORKSPACE_CONFIG_FILENAME))) return WORKSPACE_CONFIG_FILENAME;
+  if (fs.existsSync(path.join(dir, LEGACY_WORKSPACE_CONFIG_FILENAME))) return LEGACY_WORKSPACE_CONFIG_FILENAME;
+  return null;
+}
 
 export class ConfigValidationError extends Error {
   constructor(message: string) {
@@ -315,12 +323,15 @@ function attachTsconfigPaths(parsed: WorkspaceConfig, repoRoot: string): Workspa
 }
 
 /**
- * Loads and validates .github-notes.yaml from a repository notes root or root directory.
+ * Loads and validates the workspace manifest from a repository notes root or root directory.
+ * Accepts the standard `.mygitnotes.yaml` name and falls back to the legacy `.github-notes.yaml` name.
  */
 export function loadWorkspaceConfig(repoRoot: string): WorkspaceConfig | null {
-  // 1. Primary: Look in notes/ root directly (e.g. notes/.github-notes.yaml)
-  const notesConfigPath = path.join(repoRoot, 'notes', WORKSPACE_CONFIG_FILENAME);
-  if (fs.existsSync(notesConfigPath)) {
+  // 1. Primary: Look in notes/ root directly (e.g. notes/.mygitnotes.yaml)
+  const notesDir = path.join(repoRoot, 'notes');
+  const notesFilename = existingConfigFilename(notesDir);
+  if (notesFilename) {
+    const notesConfigPath = path.join(notesDir, notesFilename);
     const content = fs.readFileSync(notesConfigPath, 'utf-8');
     const parsed = parseWorkspaceConfig(content);
     // Normalize notebook roots to repository-relative paths
@@ -336,16 +347,19 @@ export function loadWorkspaceConfig(repoRoot: string): WorkspaceConfig | null {
     return attachTsconfigPaths(parsed, repoRoot);
   }
 
-  // 2. Secondary: Look in repository root (.github-notes.yaml)
-  const rootConfigPath = path.join(repoRoot, WORKSPACE_CONFIG_FILENAME);
-  if (fs.existsSync(rootConfigPath)) {
+  // 2. Secondary: Look in repository root (.mygitnotes.yaml)
+  const rootFilename = existingConfigFilename(repoRoot);
+  if (rootFilename) {
+    const rootConfigPath = path.join(repoRoot, rootFilename);
     const content = fs.readFileSync(rootConfigPath, 'utf-8');
     return attachTsconfigPaths(parseWorkspaceConfig(content), repoRoot);
   }
 
   // 3. Fallback: Legacy example path if present
-  const exampleConfig = path.join(repoRoot, 'examples/workspace', WORKSPACE_CONFIG_FILENAME);
-  if (fs.existsSync(exampleConfig)) {
+  const exampleDir = path.join(repoRoot, 'examples/workspace');
+  const exampleFilename = existingConfigFilename(exampleDir);
+  if (exampleFilename) {
+    const exampleConfig = path.join(exampleDir, exampleFilename);
     const content = fs.readFileSync(exampleConfig, 'utf-8');
     const parsed = parseWorkspaceConfig(content);
     parsed.notebooks = parsed.notebooks.map((nb) => ({
@@ -355,5 +369,18 @@ export function loadWorkspaceConfig(repoRoot: string): WorkspaceConfig | null {
     return attachTsconfigPaths(parsed, repoRoot);
   }
 
+  return null;
+}
+
+/**
+ * Resolves the repository-relative path of the manifest that `loadWorkspaceConfig` would load
+ * from the notes/ or root tier (the two tiers a workspace can be edited in), or null if neither
+ * tier has a manifest yet. Used to write updates back to the file that was actually loaded.
+ */
+export function resolveWorkspaceConfigPath(repoRoot: string): string | null {
+  const notesFilename = existingConfigFilename(path.join(repoRoot, 'notes'));
+  if (notesFilename) return path.posix.join('notes', notesFilename);
+  const rootFilename = existingConfigFilename(repoRoot);
+  if (rootFilename) return rootFilename;
   return null;
 }

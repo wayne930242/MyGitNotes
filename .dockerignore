@@ -13,6 +13,7 @@ artifacts
 scratch
 .vercel
 .github-notes.yaml
+.mygitnotes.yaml
 .github-notes-screen.yaml
 .github-notes-study.yaml
 mygitnotes.server.yaml

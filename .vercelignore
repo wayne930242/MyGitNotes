@@ -3,6 +3,7 @@
 !.env.example
 notes
 .github-notes.yaml
+.mygitnotes.yaml
 github-notes.server.yaml
 .github-notes-sessions
 node_modules
