@@ -212,6 +212,20 @@ describe('TagActions merge target autocomplete', () => {
     expect(screen.getByText('"brandnew" is not an existing tag yet.')).toBeInTheDocument();
   });
 
+  it('hides the new-tag hint while the suggestion list is open to avoid overlapping it', async () => {
+    renderTagActions({ onPreviewUsage: vi.fn().mockResolvedValue(0), allTags: ['alphabet'] });
+    await openMenu();
+    await act(async () => { fireEvent.click(screen.getByText('Merge into…')); });
+
+    fireEvent.change(screen.getByPlaceholderText('Target tag'), { target: { value: 'al' } });
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+    expect(screen.queryByText('"al" is not an existing tag yet.')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByPlaceholderText('Target tag'), { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.getByText('"al" is not an existing tag yet.')).toBeInTheDocument();
+  });
+
   it('closes suggestions on Escape without closing the form', async () => {
     renderTagActions({ onPreviewUsage: vi.fn().mockResolvedValue(0), allTags: ['beta'] });
     await openMenu();
