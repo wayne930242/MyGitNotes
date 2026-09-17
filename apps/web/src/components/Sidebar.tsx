@@ -2,13 +2,15 @@ import './sidebar-filters.css';
 import type { FilterControls } from '../lib/filter-controls.js';
 import { FolderTree } from './FolderTree.js';
 import React, { useEffect, useState } from 'react';
-import { Tag, Filter, GitBranch, CheckCircle2, Search, X, CheckSquare, BookOpen, Library, ChevronRight } from 'lucide-react';
+import { Tag, Filter, GitBranch, CheckCircle2, Search, X, CheckSquare, BookOpen, Library, FolderPlus } from 'lucide-react';
 import { NoteItem, GitStatus, FolderItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { WorkspaceSidebar } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
 import { filterAndSortTags, getSavedTagSort, saveTagSort, TagSort } from '../lib/tag-list.js';
 import { resolveAllNotebooksFolderSelect, resolveEnterTouchMultiSelect } from '../lib/folder-tree.js';
+import { NavTree, NavTreeRow } from './NavTree.js';
+import { ReorderToggle } from './ReorderToggle.js';
 
 const selectedItemStyle: React.CSSProperties = {
   backgroundColor: 'color-mix(in srgb, var(--color-text) 8%, transparent)',
@@ -46,7 +48,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { value, statuses, onChange } = filters;
   const { status: selectedStatus, tags: selectedTags } = value;
   const allNotebooks = selectedNotebookId === 'all';
-  const [expandedNotebooks, setExpandedNotebooks] = useState<Set<string>>(() => new Set());
+  const [expandedNotebooks, setExpandedNotebooks] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    if (selectedNotebookId && selectedNotebookId !== 'all') {
+      initial.add(selectedNotebookId);
+    }
+    return initial;
+  });
+  useEffect(() => {
+    if (selectedNotebookId && selectedNotebookId !== 'all') {
+      setExpandedNotebooks(previous => new Set([...previous, selectedNotebookId]));
+    }
+  }, [selectedNotebookId]);
   useEffect(() => {
     const selected = filters.notebooks.filter(nb => value.folders.some(path => path.startsWith(nb.root.replace(/\/$/, '') + '/')));
     if (selected.length) setExpandedNotebooks(previous => new Set([...previous, ...selected.map(nb => nb.id)]));
@@ -182,50 +195,115 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <p className="folder-multiselect-text">{t('folder.touchMultiSelectInstruction')}</p>
           </div>
         )}
-        {onSelectFolder && <section className="sidebar-notebooks" aria-label={t('sidebar.notebooks')}>
-          {allNotebooks && <button type="button" className="sidebar-all-notebooks"
-            aria-pressed={value.folders.length === 0} onClick={() => selectSingleFolder('all', null)}>
-            <Library size={16} aria-hidden="true" /><span>{t('graph.allNotebooks')}</span>
-            <span className="sidebar-notebook-count">{notes.length}</span>
-          </button>}
-          {filters.notebooks.filter(nb => allNotebooks || nb.id === selectedNotebookId).map(nb => {
-            const root = nb.root.replace(/\/$/, '');
-            const selectedPaths = value.folders.filter(path => path.startsWith(root + '/')).map(path => path.slice(root.length + 1));
-            const expanded = !allNotebooks || expandedNotebooks.has(nb.id);
-            const count = notes.filter(note => note.notebookId === nb.id).length;
-            return <section className="sidebar-notebook-group" key={nb.id} data-selected={value.folders.includes(root) || selectedPaths.length > 0}>
-              {allNotebooks && <h3 className="sidebar-notebook-heading">
-                <button type="button" aria-pressed={value.folders.includes(root)} aria-expanded={expanded} aria-controls={`notebook-folders-${nb.id}`}
-                  onClick={event => {
-                    if (event.metaKey || event.ctrlKey || event.shiftKey) {
-                      onChange({ folders: value.folders.includes(root) ? value.folders.filter(path => path !== root) : [...value.folders, root] });
-                      return;
+        {onSelectFolder && (
+          <section className="sidebar-notebooks" aria-label={t('sidebar.notebooks')}>
+            <NavTree aria-label={t('sidebar.notebooks')}>
+              {filters.notebooks.length > 1 && (
+                <NavTreeRow
+                  icon={<Library size={16} />}
+                  title={t('graph.allNotebooks')}
+                  selected={allNotebooks && value.folders.length === 0}
+                  onSelect={() => {
+                    if (allNotebooks) {
+                      selectSingleFolder('all', null);
+                    } else {
+                      filters.onNotebookChange('all');
                     }
-                    setExpandedNotebooks(previous => {
-                    const next = new Set(previous);
-                    if (next.has(nb.id)) next.delete(nb.id); else next.add(nb.id);
-                    return next;
-                  }); }}>
-                  <ChevronRight size={14} className="sidebar-notebook-chevron" aria-hidden="true" />
-                  <BookOpen size={16} aria-hidden="true" />
-                  <span className="sidebar-notebook-name">{nb.title}</span>
-                  <span className="sidebar-notebook-count" title={t('folder.noteCount', { count })}>{count}</span>
-                </button>
-              </h3>}
-              <div id={`notebook-folders-${nb.id}`} hidden={!expanded} className={allNotebooks ? 'sidebar-notebook-folders' : undefined}>
-                <FolderTree onManageFiles={path => onManageFiles(nb.id, path)} reorder={reorder} onToggleReorder={onToggleReorder} folders={folders} notebookId={nb.id} selected={selectedFolder} onSelect={folder => selectSingleFolder(nb.id, folder)}
-                  showHeading={!allNotebooks} showRoot={!allNotebooks}
-                  allFoldersSelected={value.folders.length === 0}
-                  selectedPaths={selectedPaths}
-                  onFilterFolder={folder => toggleFolder(nb.id, folder)}
-                  touchMultiSelect={touchMultiSelect}
-                  onLongPressFolder={folder => enterTouchMultiSelect(nb.id, folder)}
-                  writable={foldersWritable} beforeChange={beforeFolderChange} onChanged={onFoldersChanged} />
-                {allNotebooks && !folders.some(folder => folder.notebookId === nb.id) && <p className="sidebar-notebook-empty">{t('folder.subfolderCount', { count: 0 })}</p>}
-              </div>
-            </section>;
-          })}
-        </section>}
+                  }}
+                  suffix={<span className="sidebar-notebook-count">{notes.length}</span>}
+                  className="sidebar-all-notebooks-row"
+                />
+              )}
+              {filters.notebooks.map(nb => {
+                const root = nb.root.replace(/\/$/, '');
+                const selectedPaths = value.folders.filter(path => path.startsWith(root + '/')).map(path => path.slice(root.length + 1));
+                const expanded = expandedNotebooks.has(nb.id);
+                const count = notes.filter(note => note.notebookId === nb.id).length;
+                const nbFolders = folders.filter(f => f.notebookId === nb.id);
+                const hasFolders = nbFolders.length > 0;
+                const isCurrentNotebook = nb.id === selectedNotebookId;
+                const isSelected = allNotebooks
+                  ? value.folders.includes(root)
+                  : isCurrentNotebook && selectedFolder === null && value.folders.length === 0;
+
+                return (
+                  <section className="sidebar-notebook-group" key={nb.id} data-selected={isSelected || selectedPaths.length > 0}>
+                    <NavTreeRow
+                      hasChildren={hasFolders}
+                      isExpanded={expanded}
+                      onToggleExpand={() => {
+                        setExpandedNotebooks(previous => {
+                          const next = new Set(previous);
+                          if (next.has(nb.id)) next.delete(nb.id);
+                          else next.add(nb.id);
+                          return next;
+                        });
+                      }}
+                      icon={<BookOpen size={16} />}
+                      title={nb.title}
+                      selected={isSelected}
+                      onSelect={event => {
+                        if (allNotebooks) {
+                          if (event.metaKey || event.ctrlKey || event.shiftKey) {
+                            onChange({ folders: value.folders.includes(root) ? value.folders.filter(path => path !== root) : [...value.folders, root] });
+                          } else {
+                            onChange({ folders: [root] });
+                            if (!expanded) {
+                              setExpandedNotebooks(previous => new Set([...previous, nb.id]));
+                            }
+                          }
+                        } else if (isCurrentNotebook) {
+                          selectSingleFolder(nb.id, null);
+                        } else {
+                          filters.onNotebookChange(nb.id);
+                        }
+                      }}
+                      suffix={<span className="sidebar-notebook-count" title={t('folder.noteCount', { count })}>{count}</span>}
+                      actions={
+                        foldersWritable && isCurrentNotebook ? (
+                          <div className="folder-heading-actions">
+                            {onToggleReorder && <ReorderToggle active={reorder} onToggle={onToggleReorder} />}
+                            <button
+                              type="button"
+                              className="ui-icon-button"
+                              aria-label={t('folder.create')}
+                              onClick={() => onManageFiles(nb.id, selectedFolder || '')}
+                            >
+                              <FolderPlus size={15} />
+                            </button>
+                          </div>
+                        ) : undefined
+                      }
+                    />
+                    <div id={`notebook-folders-${nb.id}`} hidden={!expanded} className="sidebar-notebook-folders">
+                      {hasFolders ? (
+                        <FolderTree
+                          onManageFiles={path => onManageFiles(nb.id, path)}
+                          reorder={reorder}
+                          onToggleReorder={onToggleReorder}
+                          folders={folders}
+                          notebookId={nb.id}
+                          selected={isCurrentNotebook ? selectedFolder : null}
+                          onSelect={folder => selectSingleFolder(nb.id, folder)}
+                          allFoldersSelected={value.folders.length === 0}
+                          selectedPaths={selectedPaths}
+                          onFilterFolder={folder => toggleFolder(nb.id, folder)}
+                          touchMultiSelect={touchMultiSelect}
+                          onLongPressFolder={folder => enterTouchMultiSelect(nb.id, folder)}
+                          writable={foldersWritable && isCurrentNotebook}
+                          beforeChange={beforeFolderChange}
+                          onChanged={onFoldersChanged}
+                        />
+                      ) : (
+                        <p className="sidebar-notebook-empty">{t('folder.subfolderCount', { count: 0 })}</p>
+                      )}
+                    </div>
+                  </section>
+                );
+              })}
+            </NavTree>
+          </section>
+        )}
 
         {/* Status Filters */}
         <details key={`status-${selectedNotebookId}-${Boolean(selectedStatus)}`} open={!allNotebooks || Boolean(selectedStatus)} className="sidebar-filter-section">
