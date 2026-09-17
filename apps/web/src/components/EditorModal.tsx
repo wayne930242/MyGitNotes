@@ -32,8 +32,10 @@ import { NoteItem, AssetItem, NotebookMetadataField } from '../lib/types.js';
 import { saveLocalDraft, getLocalDraft, clearLocalDraft } from '../lib/storage.js';
 import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
 import { useTranslation } from '../lib/i18n/index.js';
-import { findOutlineIndexForLine, findTextMatches, parseMarkdownOutline } from '../lib/note-navigation.js';
+import { chooseOutlineHeading, findOutlineIndexForLine, findTextMatches, isEditableTarget, parseMarkdownOutline } from '../lib/note-navigation.js';
 import { usePanelContext } from '../lib/panel-context.js';
+
+
 
 type NotePanelMode = 'find' | 'outline' | 'frontmatter' | 'assets' | 'git';
 
@@ -462,10 +464,12 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     setOutlineIndex(findOutlineIndexForLine(outline, currentLine));
     setNotePanel('outline');
   };
-  const chooseOutline = (index: number, closeAfter = true) => {
-    const heading = outline[index]; if (!heading) return;
-    editorRef.current?.goToLine(heading.line, { focus: closeAfter, smooth: true });
-    if (closeAfter) setNotePanel(null);
+  const chooseOutline = (index: number, closeAfter = false) => {
+    const target = chooseOutlineHeading(outline, index, { closeAfter });
+    if (!target) return;
+    setOutlineIndex(index);
+    editorRef.current?.goToLine(target.line, { focus: target.focusEditor, smooth: true });
+    if (target.shouldClosePanel) setNotePanel(null);
   };
   const moveOutline = (delta: number) => {
     if (outline.length === 0) return;
@@ -484,13 +488,14 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
       if (slashKey) { openOutline(); return true; }
     }
     if (isOutlineOpen && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      if (isEditableTarget(event.target)) return false;
       if (event.key.toLowerCase() === 'j' || event.key === 'ArrowDown') {
         moveOutline(1); return true;
       }
       if (event.key.toLowerCase() === 'k' || event.key === 'ArrowUp') {
         moveOutline(-1); return true;
       }
-      if (event.key === 'Enter') { chooseOutline(outlineIndex); return true; }
+      if (event.key === 'Enter') { chooseOutline(outlineIndex, false); return true; }
     }
     return false;
   };
@@ -512,6 +517,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
     if (!isOutlineOpen || outline.length === 0) return;
     const index = Math.min(outlineIndex, outline.length - 1);
     if (index !== outlineIndex) { setOutlineIndex(index); return; }
+    if (isEditableTarget(document.activeElement)) return;
     requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-outline-index="${index}"]`)?.focus());
   }, [isOutlineOpen, outline, outlineIndex]);
 
