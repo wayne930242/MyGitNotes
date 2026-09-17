@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, Search, X } from 'lucide-react';
 import type { WorkspaceTab } from '../lib/routes.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { isEditableTarget } from '../lib/note-navigation.js';
 
 export type ShortcutSurfaceMode = 'palette' | 'help';
 
@@ -23,10 +24,6 @@ interface ShortcutCommand {
   label: string;
   disabled: boolean;
   run: () => void;
-}
-
-function isEditableTarget(target: EventTarget | null) {
-  return target instanceof Element && Boolean(target.closest('input, textarea, select, [role="combobox"], [contenteditable="true"], .cm-content'));
 }
 
 export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activeTab, canCreateNote, onNavigate, onCreateNote, onFocusSearch }: KeyboardShortcutsProps) {

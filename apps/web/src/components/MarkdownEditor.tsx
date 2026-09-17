@@ -64,6 +64,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   const [dismissed, setDismissed] = useState(false);
   const [choice, setChoice] = useState(0);
   const [picker, setPicker] = useState(false), [query, setQuery] = useState('');
+  const [directiveType, setDirectiveType] = useState('info');
+
+
   const live = useRef<LiveMarkdownHandle>(null);
   const source = useRef<HTMLTextAreaElement>(null);
   const sourceLineNumbers = useRef<HTMLDivElement>(null);
@@ -155,30 +158,24 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
           }
         }}>{t('table.insert')}</button>
         <div className="directive-insert-group inline-flex items-center gap-1 ml-1 pl-1 border-l border-slate-200 dark:border-slate-700">
-          <button
-            type="button"
-            title="插入 Directive 區塊（預設 Info）"
-            onClick={() => insertDirective('info')}
-          >
-            插入區塊
-          </button>
           <select
-            className="directive-insert-select bg-transparent text-[11px] border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 outline-none text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+            className="directive-insert-select bg-transparent text-[11px] border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 outline-none text-slate-600 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-500 cursor-pointer"
             aria-label="選擇區塊格式"
-            title="選擇區塊格式"
-            value=""
-            onChange={event => {
-              if (event.target.value) {
-                insertDirective(event.target.value);
-                event.target.value = '';
-              }
-            }}
+            title="選擇要插入的區塊格式"
+            value={directiveType}
+            onChange={event => setDirectiveType(event.target.value)}
           >
-            <option value="" disabled>格式挑選…</option>
             {DIRECTIVE_TEMPLATES.map(tpl => (
               <option key={tpl.type} value={tpl.type}>{tpl.label}</option>
             ))}
           </select>
+          <button
+            type="button"
+            title="插入所選格式的區塊"
+            onClick={() => insertDirective(directiveType)}
+          >
+            插入區塊
+          </button>
         </div>
       </div>}
       {picker && <div className="note-link-picker"><input autoFocus type="search" aria-label={t('graph.findNote')} placeholder={t('graph.findNote')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setPicker(false); }} />

@@ -10,15 +10,17 @@
 .prose-custom .comment-directive {
   margin: 1.5rem 0;
   border-radius: 8px;
-  border: 1px solid var(--color-border);
-  padding: 1rem 1.25rem;
+  border: 1.5px solid color-mix(in srgb, var(--color-text) 18%, var(--color-border));
+  padding: 1.1rem 1.35rem;
   box-sizing: border-box;
   width: 100%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .prose-custom .custom-directive > .directive-body,
 .prose-custom .comment-directive > .directive-body {
-  padding-top: 0.6rem;
+  padding-top: 0.65rem;
 }
 
 .prose-custom .directive-body > *:first-child {
@@ -31,13 +33,13 @@
 
 .prose-custom .directive-body hr {
   margin: 0.75rem 0;
-  border-color: var(--color-border);
+  border-color: color-mix(in srgb, var(--color-text) 14%, var(--color-border));
 }
 
 .prose-custom :is(.directive-title, .comment-title, .optional-summary) {
   margin: 0;
   color: var(--color-text);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .prose-custom :is(.directive-title, .comment-title, .optional-summary).directive-title-default {
@@ -50,27 +52,39 @@
 }
 
 .prose-custom :is(.directive-title, .comment-title, .optional-summary).directive-title-custom {
-  font-size: 0.95rem;
+  font-size: 1rem;
   line-height: 1.35;
   letter-spacing: -0.01em;
 }
 
 /* --- INFO DIRECTIVE --- */
 .prose-custom .info-directive {
-  background: color-mix(in srgb, var(--color-text) 3.5%, var(--color-surface));
-  border-left: 3.5px solid var(--color-muted);
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface));
+  border: 1.5px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  border-left: 5px solid var(--color-primary);
+}
+
+.dark .prose-custom .info-directive {
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+  border-left-color: var(--color-primary);
 }
 
 .prose-custom .info-directive > .directive-title-default {
-  color: var(--color-muted);
+  color: var(--color-primary);
 }
 
 /* --- SIDEBAR / IMPORTANT DIRECTIVE --- */
 .prose-custom .sidebar-directive {
-  border-top: 3.5px solid var(--color-primary);
-  border-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-border));
+  border: 1.5px solid color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+  border-top: 5px solid var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+}
+
+.dark .prose-custom .sidebar-directive {
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-primary) 50%, var(--color-border));
   border-top-color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface));
 }
 
 .prose-custom .sidebar-directive > .directive-title-default {
@@ -79,21 +93,39 @@
 
 /* --- COMMENT DIRECTIVE --- */
 .prose-custom aside.comment-directive {
-  border-width: 0 0 0 3.5px;
-  border-left-color: color-mix(in srgb, var(--color-primary) 70%, var(--color-text));
-  background: color-mix(in srgb, var(--color-text) 3.5%, var(--color-surface));
+  border: 1.5px solid color-mix(in srgb, #d97706 40%, var(--color-border));
+  border-left: 5px solid #d97706;
+  background: color-mix(in srgb, #d97706 7%, var(--color-surface));
   border-radius: 0 8px 8px 0;
-  padding: 0.9rem 1.25rem;
+  padding: 1rem 1.25rem;
   font-style: normal;
 }
 
+.dark .prose-custom aside.comment-directive {
+  border-color: color-mix(in srgb, #f59e0b 45%, var(--color-border));
+  border-left-color: #f59e0b;
+  background: color-mix(in srgb, #f59e0b 12%, var(--color-surface));
+}
+
 .prose-custom .comment-directive > .comment-title.directive-title-default {
-  color: var(--color-primary);
+  color: #d97706;
+}
+
+.dark .prose-custom .comment-directive > .comment-title.directive-title-default {
+  color: #f59e0b;
 }
 
 /* --- OPTIONAL / DISCLOSURE DIRECTIVE --- */
 .prose-custom details.optional-directive {
-  background: color-mix(in srgb, var(--color-text) 2.5%, var(--color-surface));
+  border: 1.5px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border));
+  background: color-mix(in srgb, var(--color-text) 4%, var(--color-surface));
+  padding: 0;
+  overflow: hidden;
+}
+
+.dark .prose-custom details.optional-directive {
+  border-color: color-mix(in srgb, var(--color-text) 28%, var(--color-border));
+  background: color-mix(in srgb, var(--color-text) 8%, var(--color-surface));
 }
 
 .prose-custom details.optional-directive > summary.optional-summary {
@@ -104,6 +136,13 @@
   justify-content: space-between;
   gap: 1rem;
   user-select: none;
+  padding: 0.85rem 1.2rem;
+  background: color-mix(in srgb, var(--color-text) 4%, var(--color-surface));
+  transition: background-color 150ms ease;
+}
+
+.prose-custom details.optional-directive > summary.optional-summary:hover {
+  background: color-mix(in srgb, var(--color-text) 8%, var(--color-surface));
 }
 
 .prose-custom details.optional-directive > summary.optional-summary::-webkit-details-marker {
@@ -113,15 +152,23 @@
 .prose-custom details.optional-directive > summary.optional-summary::after {
   content: "+";
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   line-height: 1;
-  font-weight: 400;
-  color: var(--color-muted);
+  font-weight: 600;
+  color: var(--color-primary);
   transition: transform 0.15s ease;
+}
+
+.prose-custom details.optional-directive[open] > summary.optional-summary {
+  border-bottom: 1.5px solid color-mix(in srgb, var(--color-text) 16%, var(--color-border));
 }
 
 .prose-custom details.optional-directive[open] > summary.optional-summary::after {
   content: "−";
+}
+
+.prose-custom details.optional-directive > .directive-body {
+  padding: 1rem 1.25rem;
 }
 
 /* ===== 2. Call of Cthulhu Stat Blocks ===== */
@@ -686,75 +733,403 @@
   color: var(--color-muted);
 }
 
-/* ===== 9. Live Editor Directive Toolbar & Interactivity ===== */
+/* ===== 9. Live Editor Directive Toolbar & Inline Editing ===== */
 .live-md-directive {
   position: relative;
   display: block;
   width: 100%;
+  margin: 1.5rem 0;
 }
 
+.live-md-directive.live-directive-editing {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+  border-radius: 9px;
+}
+
+/* Toolbar */
 .live-directive-toolbar {
   position: absolute;
-  top: 6px;
-  right: 12px;
+  top: -14px;
+  right: 14px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 6px;
-  border: 1px solid var(--color-border);
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--color-text) 18%, var(--color-border));
   border-radius: 6px;
   background: var(--color-surface);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 120ms ease;
-  z-index: 10;
+  transition: opacity 120ms ease, top 120ms ease;
+  z-index: 20;
 }
 
 .live-md-directive:hover .live-directive-toolbar,
 .live-md-directive:focus-within .live-directive-toolbar {
   opacity: 1;
   pointer-events: auto;
+  top: -18px;
 }
 
 .live-directive-toolbar select,
+.live-directive-toolbar input,
 .live-directive-toolbar button {
-  height: 24px;
-  padding: 1px 6px;
+  height: 26px;
+  padding: 2px 8px;
   color: var(--color-text);
-  background: transparent;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: 11px;
   outline: none;
-  transition: background-color 120ms ease, border-color 120ms ease;
+  transition: all 120ms ease;
 }
 
 .live-directive-toolbar select {
-  color-scheme: light;
-  background-color: var(--color-surface);
   cursor: pointer;
+  color-scheme: light;
 }
 
 .dark .live-directive-toolbar select {
   color-scheme: dark;
 }
 
-.live-directive-toolbar option {
-  color: var(--color-text);
-  background-color: var(--color-surface);
+.live-directive-toolbar input.live-directive-title-input {
+  width: 130px;
+  font-weight: 500;
 }
 
-.live-directive-toolbar button:hover,
-.live-directive-toolbar select:hover {
-  background-color: color-mix(in srgb, var(--color-text) 5%, var(--color-surface));
+.live-directive-toolbar input.live-directive-title-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+  width: 170px;
+}
+
+.live-directive-toolbar button.live-directive-edit-btn {
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 10px;
+}
+
+.live-directive-toolbar button.live-directive-edit-btn:hover {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.live-directive-toolbar select:hover,
+.live-directive-toolbar input:hover {
   border-color: var(--color-muted);
 }
 
-.live-directive-toolbar button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
+/* Inline Edit Form Panel */
+.live-directive-editor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 2px solid var(--color-primary);
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  box-sizing: border-box;
+  width: 100%;
 }
+
+.live-directive-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 8px;
+}
+
+.live-directive-editor-badge {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+
+.live-directive-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.live-directive-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 140px;
+}
+
+.live-directive-form-field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+  user-select: none;
+}
+
+.live-directive-form-field input,
+.live-directive-form-field select {
+  height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+  outline: none;
+}
+
+.live-directive-form-field input:focus,
+.live-directive-form-field select:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.live-directive-body-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+  user-select: none;
+}
+
+.live-directive-body-editor {
+  width: 100%;
+  min-height: 110px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.live-directive-body-editor:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.live-directive-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.live-directive-editor-hint {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
+.live-directive-editor-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.live-directive-editor-actions button {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.live-directive-btn-save {
+  background: var(--color-primary);
+  color: #ffffff;
+  border: 1px solid var(--color-primary);
+}
+
+.live-directive-btn-save:hover {
+  background: var(--color-primary-hover, #4338ca);
+}
+
+.live-directive-btn-cancel {
+  background: transparent;
+  color: var(--color-muted);
+  border: 1px solid var(--color-border);
+}
+
+.live-directive-btn-cancel:hover {
+  background: color-mix(in srgb, var(--color-text) 6%, var(--color-surface));
+  color: var(--color-text);
+}
+
+/* ===== 10. Mobile & Touch Responsive Adaptations ===== */
+@media (max-width: 640px), (pointer: coarse) {
+  /* Directive container adjustments */
+  .live-md-directive {
+    margin: 1rem 0;
+  }
+
+  /* Live Directive Toolbar: dock as a persistent, wrapping bar above the card on mobile */
+  .live-directive-toolbar {
+    position: relative !important;
+    top: auto !important;
+    right: auto !important;
+    left: auto !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    width: 100% !important;
+    box-sizing: border-box;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--color-text) 4%, var(--color-surface));
+    box-shadow: none;
+  }
+
+  .live-directive-toolbar select,
+  .live-directive-toolbar input,
+  .live-directive-toolbar button {
+    height: 32px;
+    font-size: 13px;
+  }
+
+  .live-directive-toolbar select.live-directive-type-select {
+    flex: 1 1 110px;
+    min-width: 90px;
+  }
+
+  .live-directive-toolbar select.live-directive-variant-select {
+    flex: 1 1 100px;
+    min-width: 80px;
+  }
+
+  .live-directive-toolbar input.live-directive-title-input {
+    flex: 2 1 130px;
+    width: auto;
+    min-width: 0;
+  }
+
+  .live-directive-toolbar input.live-directive-title-input:focus {
+    width: auto;
+  }
+
+  .live-directive-toolbar button.live-directive-edit-btn {
+    flex: 0 0 auto;
+    height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+    border-radius: 5px;
+  }
+
+  /* Inline Edit Form Panel on Mobile */
+  .live-directive-editor-panel {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .live-directive-form-row {
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .live-directive-form-field {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .live-directive-form-field label {
+    font-size: 12px;
+  }
+
+  .live-directive-form-field input,
+  .live-directive-form-field select {
+    height: 36px;
+    font-size: 14px; /* Prevents auto-zoom in iOS Safari */
+    padding: 6px 10px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .live-directive-body-editor {
+    min-height: 120px;
+    font-size: 14px;
+    padding: 10px;
+    line-height: 1.5;
+  }
+
+  .live-directive-editor-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .live-directive-editor-actions {
+    display: flex;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .live-directive-editor-actions button {
+    flex: 1;
+    height: 36px;
+    font-size: 13px;
+  }
+
+  .live-directive-editor-hint {
+    text-align: center;
+    font-size: 11px;
+  }
+
+  /* Prose Cards adaptations on Mobile */
+  .prose-custom .custom-directive {
+    margin: 1.25rem 0;
+    padding: 0.75rem 0.85rem;
+  }
+
+  .prose-custom .handout-card {
+    padding: 0.75rem 0.85rem;
+  }
+
+  .prose-custom .handout-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .prose-custom .coc-stat-characteristics,
+  .prose-custom .coc-stat-derived {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .prose-custom .coc-stat-cell {
+    padding: 0.5rem 0.6rem;
+  }
+
+  .prose-custom .coc-stat-name {
+    font-size: 1.25rem;
+  }
+
+  .prose-custom .parallel-quote-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem;
+  }
+}
+
 

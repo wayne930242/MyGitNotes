@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { findOutlineIndexForLine, findTextMatches, parseMarkdownOutline } from './note-navigation.js';
+import {
+  chooseOutlineHeading,
+  findOutlineIndexForLine,
+  findTextMatches,
+  isEditableTarget,
+  parseMarkdownOutline,
+} from './note-navigation.js';
 
 describe('note editor navigation', () => {
   it('finds every case-insensitive, non-overlapping text match', () => {
@@ -46,4 +52,63 @@ describe('note editor navigation', () => {
     expect(findOutlineIndexForLine(outline, 99)).toBe(2);
     expect(findOutlineIndexForLine([], 20)).toBe(0);
   });
+
+  describe('chooseOutlineHeading', () => {
+    const outline = [
+      { depth: 1, label: 'Section 1', line: 5, from: 10 },
+      { depth: 2, label: 'Section 2', line: 25, from: 100 },
+    ];
+
+    it('keeps the tool panel open by default when selecting an outline item', () => {
+      const result = chooseOutlineHeading(outline, 1);
+      expect(result).toEqual({
+        heading: outline[1],
+        line: 25,
+        shouldClosePanel: false,
+        focusEditor: false,
+      });
+    });
+
+    it('allows closing panel only when explicitly specified', () => {
+      const result = chooseOutlineHeading(outline, 0, { closeAfter: true });
+      expect(result).toEqual({
+        heading: outline[0],
+        line: 5,
+        shouldClosePanel: true,
+        focusEditor: false,
+      });
+    });
+
+    it('returns null when index is out of bounds', () => {
+      expect(chooseOutlineHeading(outline, -1)).toBeNull();
+      expect(chooseOutlineHeading(outline, 5)).toBeNull();
+    });
+  });
+
+  describe('isEditableTarget', () => {
+    it('returns false for null or non-Element targets', () => {
+      expect(isEditableTarget(null)).toBe(false);
+      expect(isEditableTarget({} as unknown as EventTarget)).toBe(false);
+    });
+
+    it('identifies inputs, textareas, contenteditable and codemirror content elements', () => {
+      class MockElement {
+        constructor(private matchesSelector: boolean) {}
+        closest(_selector: string) {
+          return this.matchesSelector ? {} : null;
+        }
+      }
+      const originalElement = globalThis.Element;
+      try {
+        globalThis.Element = MockElement as unknown as typeof Element;
+        const matchingEl = new MockElement(true) as unknown as EventTarget;
+        const nonMatchingEl = new MockElement(false) as unknown as EventTarget;
+        expect(isEditableTarget(matchingEl)).toBe(true);
+        expect(isEditableTarget(nonMatchingEl)).toBe(false);
+      } finally {
+        globalThis.Element = originalElement;
+      }
+    });
+  });
 });
+

@@ -80,3 +80,32 @@ export function parseMarkdownOutline(content: string): OutlineHeading[] {
   }
   return headings;
 }
+
+export interface OutlineSelectionResult {
+  heading: OutlineHeading;
+  line: number;
+  shouldClosePanel: boolean;
+  focusEditor: boolean;
+}
+
+export function chooseOutlineHeading(
+  outline: OutlineHeading[],
+  index: number,
+  options: { closeAfter?: boolean; focusEditor?: boolean } = {},
+): OutlineSelectionResult | null {
+  const heading = outline[index];
+  if (!heading) return null;
+  return {
+    heading,
+    line: heading.line,
+    shouldClosePanel: options.closeAfter ?? false,
+    focusEditor: options.focusEditor ?? false,
+  };
+}
+
+export function isEditableTarget(target: EventTarget | null): boolean {
+  return typeof Element !== 'undefined'
+    && target instanceof Element
+    && Boolean(target.closest('input, textarea, select, [role="combobox"], [contenteditable="true"], .cm-content'));
+}
+
