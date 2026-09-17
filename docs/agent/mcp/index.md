@@ -23,7 +23,7 @@ Default transport is **stdio** for local agent integration (e.g. Claude Desktop,
 13. `update_core`: Performs the guarded Core update workflow, or inspects available updates if `checkOnly: true`.
 14. `list_folders`: Returns notebook-relative folder paths and `_dir.yml` display metadata, or inspects a specific folder if `path` is provided.
 15. `mkdir`: Creates a notebook folder or updates display metadata (`title`, `order`, `description`, and custom fields) in `_dir.yml` (supports `overwrite: true`), creating an atomic Git commit.
-16. `search_notes`: Searches note files using plain text or regular expressions (regex).
+16. `search_notes`: Searches note files using plain text or regular expressions (regex). Hosted sources rank results; see below.
 17. `replace_notes`: Searches and replaces plain text or regular expressions across note files and creates an atomic Git commit.
 18. `get_statuses`: Returns configured, observed, and available valid note statuses for a notebook or workspace to ensure accurate status tagging.
 
@@ -48,7 +48,12 @@ Legacy session-bound grants retain their original expiry.
 Hosted tools include `ls`, `glob`, `read`, `find`, `write`, `append`, `edit`,
 `mkdir`, `cp`, `mv`, and `rm`, plus the existing remote note and folder tools. Shell reads
 and line edits include frontmatter; lines are one-based. `find` performs literal
-text search over glob-selected notes. Listing and reading return a revision.
+text search over glob-selected notes. Hosted `search_notes` ranks notes for topic
+lookups: space-separated words match independently across title, path,
+frontmatter and body, Chinese phrases also match through bigrams, and
+`notebookId`, `status`, `tags` and `pattern` filter before ranking (filters alone
+list notes). Each match carries status, tags, matched terms and a snippet;
+`limit` defaults to 20. Listing and reading return a revision.
 All writes require that revision, push permission and the `main` branch. Each
 successful mutation creates one program-named commit and updates the remote
 branch without force. Multi-file changes share one commit; GitLab uses batch actions with per-file version checks. Stale
