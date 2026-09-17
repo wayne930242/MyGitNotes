@@ -27,7 +27,7 @@
 .dark .ui-button-danger { --button-text: #fb7185; }
 .ui-button:not(:disabled):not([aria-disabled="true"]):hover,
 .ui-icon-button:not(:disabled):not([aria-disabled="true"]):hover { background: var(--button-hover-bg); color: var(--button-hover-text); }
-.ui-button:focus-visible, .ui-button:focus-within, .ui-icon-button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.ui-button:focus-visible, .ui-button:focus-within, .ui-icon-button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; position: relative; z-index: 1; }
 .ui-button:disabled, .ui-button[aria-disabled="true"], .ui-icon-button:disabled, .ui-icon-button[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
 /* Fade the primary surface, not its label, so disabled actions remain readable. */
 .ui-button.ui-button-primary:disabled,
