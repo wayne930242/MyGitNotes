@@ -32,6 +32,7 @@ github-notes.server.yaml
 artifacts/
 
 mygitnotes.server.yaml
+.mygitnotes-dev-ports.json
 
 # Specs
 docs/specs/
