@@ -100,8 +100,13 @@ export const CardView: React.FC<CardViewProps> = ({
           >
             <div>
               <div className="flex items-start justify-between gap-2 mb-2">
-                <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base line-clamp-1 transition">
-                  {note.title}
+                <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base line-clamp-1 transition flex items-center gap-1.5">
+                  <span className="truncate">{note.title}</span>
+                  {note.path.endsWith('.mdx') && (
+                    <span className="shrink-0 text-[10px] font-semibold font-mono px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700/60 leading-none">
+                      MDX
+                    </span>
+                  )}
                 </h3>
                 <NoteStatusSelect
                   statuses={statuses}

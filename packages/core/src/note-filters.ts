@@ -31,7 +31,7 @@ export function filterNotes(notes: NoteItem[], filters: NoteFilters): NoteItem[]
     if (filters.tags.length && !(filters.tagMode === 'all'
       ? filters.tags.every(tag => note.tags.includes(tag))
       : filters.tags.some(tag => note.tags.includes(tag)))) return false;
-    return !q.trim() || [note.title, note.content, note.status || '', ...note.tags]
+    return !q.trim() || [note.title, note.path, note.content, note.status || '', ...note.tags]
       .some(text => text.toLowerCase().includes(q));
   });
 }
