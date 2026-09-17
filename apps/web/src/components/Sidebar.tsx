@@ -11,6 +11,7 @@ import { filterAndSortTags, getSavedTagSort, saveTagSort, TagSort } from '../lib
 import { resolveAllNotebooksFolderSelect, resolveEnterTouchMultiSelect } from '../lib/folder-tree.js';
 import { NavTree, NavTreeRow } from './NavTree.js';
 import { ReorderToggle } from './ReorderToggle.js';
+import { TagActions } from './TagActions.js';
 
 const selectedItemStyle: React.CSSProperties = {
   backgroundColor: 'color-mix(in srgb, var(--color-text) 8%, transparent)',
@@ -31,6 +32,11 @@ interface SidebarProps {
   selectedNotebookId: string;
   notes: NoteItem[];
   gitStatus: GitStatus | null;
+  canManageTags?: boolean;
+  onPreviewTagUsage?: (tag: string) => Promise<number>;
+  onRenameTag?: (from: string, to: string) => Promise<void>;
+  onMergeTag?: (from: string, into: string) => Promise<void>;
+  onDeleteTag?: (tag: string) => Promise<void>;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -43,6 +49,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   notes,
   filters, reorder, onToggleReorder,
   gitStatus,
+  canManageTags = false,
+  onPreviewTagUsage,
+  onRenameTag,
+  onMergeTag,
+  onDeleteTag,
 }) => {
   const { t, language } = useTranslation();
   const { value, statuses, onChange } = filters;
@@ -442,29 +453,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {visibleTags.map((tag) => {
                 const isSelected = selectedTags.includes(tag);
                 return (
-                  <button
-                    type="button"
-                    key={tag}
-                    data-tag-filter={tag}
-                    onClick={() => onSelectTag(tag)}
-                    aria-pressed={isSelected}
-                    style={isSelected ? selectedItemStyle : undefined}
-                    className={`max-w-full inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition border ${
-                      isSelected
-                        ? 'font-semibold border-black/10 dark:border-white/15 hover:opacity-90'
-                        : 'text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    <Tag className="w-3 h-3 shrink-0" />
-                    <span className="min-w-0 break-words text-left">{tag}</span>
-                    <span
-                      className={`text-[10px] ml-0.5 ${
-                        isSelected ? 'opacity-70' : 'text-slate-400'
-                      }`}
-                    >
-                      {tagCounts[tag]}
-                    </span>
-                  </button>
+                  <div key={tag} className="inline-flex flex-col items-start gap-1 max-w-full">
+                    <div className="inline-flex items-center gap-1 max-w-full">
+                      <button
+                        type="button"
+                        data-tag-filter={tag}
+                        onClick={() => onSelectTag(tag)}
+                        aria-pressed={isSelected}
+                        style={isSelected ? selectedItemStyle : undefined}
+                        className={`max-w-full inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition border ${
+                          isSelected
+                            ? 'font-semibold border-black/10 dark:border-white/15 hover:opacity-90'
+                            : 'text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        <Tag className="w-3 h-3 shrink-0" />
+                        <span className="min-w-0 break-words text-left">{tag}</span>
+                        <span
+                          className={`text-[10px] ml-0.5 ${
+                            isSelected ? 'opacity-70' : 'text-slate-400'
+                          }`}
+                        >
+                          {tagCounts[tag]}
+                        </span>
+                      </button>
+                      {canManageTags && onPreviewTagUsage && onRenameTag && onMergeTag && onDeleteTag && (
+                        <TagActions tag={tag} onPreviewUsage={onPreviewTagUsage} onRename={onRenameTag} onMerge={onMergeTag} onDelete={onDeleteTag} />
+                      )}
+                    </div>
+                  </div>
                 );
               })}
             </div>

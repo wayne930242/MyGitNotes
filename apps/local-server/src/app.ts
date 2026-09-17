@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { loadSourceConfig, loadWorkspaceConfig, classifyResource, resolveSafePath, sourceIdentity, RemoteSource, createRemoteSource, SourceError, workspaceAgentKind, workspaceAgentResource, type WorkspaceAgentResource } from '@mygitnotes/core';
+import { loadSourceConfig, loadWorkspaceConfig, classifyResource, resolveSafePath, sourceIdentity, RemoteSource, createRemoteSource, SourceError, workspaceAgentKind, workspaceAgentResource, replaceNoteTags, type WorkspaceAgentResource } from '@mygitnotes/core';
 import { createRemoteMCP } from './mcp.js';
 import { createLocalApp } from './local-app.js';
 import { createAuth, authToken } from './auth.js';
@@ -145,6 +145,33 @@ export function createApp(base: string): express.Express {
         const { path: file, content, metadata, revision, createOnly } = req.body;
         if (typeof file !== 'string' || typeof content !== 'string') throw new SourceError('path and content are required.');
         res.json(await (res.locals.reader as RemoteSource).save(file, content, metadata, revision, createOnly));
+      } catch (error) { fail(res, error); }
+    });
+    // Apply an explicit tags array to each of the given notes and create one remote commit
+    // for the whole batch. Used for tag rename/merge/delete and for undoing any of them (the
+    // caller computes the target `tags` per note; this endpoint only writes and commits).
+    app.post('/api/tags/apply', async (req, res) => {
+      try {
+        if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit notes.', 403);
+        const entries = req.body?.entries;
+        if (!Array.isArray(entries) || entries.length === 0 || entries.length > 500) throw new SourceError('entries must be an array of 1 to 500 items.');
+        for (const entry of entries) {
+          if (typeof entry?.path !== 'string' || !Array.isArray(entry.tags) || entry.tags.some((tag: unknown) => typeof tag !== 'string')) throw new SourceError('Each entry requires a path and a tags array of strings.');
+        }
+        const reader = res.locals.reader as RemoteSource;
+        const changes: { path: string; content: string }[] = [];
+        for (const entry of entries) {
+          const raw = (await reader.readFile(String(entry.path))).toString('utf8');
+          const patched = replaceNoteTags(raw, entry.tags as string[]);
+          if (patched === raw) continue;
+          changes.push({ path: String(entry.path), content: patched });
+        }
+        if (changes.length === 0) return res.json({ success: true, changedPaths: [] });
+        const message = typeof req.body.message === 'string' && req.body.message.trim()
+          ? req.body.message.trim()
+          : `docs(notes): update tags in ${changes.length} note${changes.length === 1 ? '' : 's'}`;
+        const receipt = await reader.commitChanges(changes, String(req.body.revision || ''), 'tags', 'notes', message);
+        res.json(receipt);
       } catch (error) { fail(res, error); }
     });
     app.get('/api/git/status', (req, res) => res.json({ status: { branch: source?.branch || '', isClean: true, staged: [], modified: [], untracked: [] }, commits: [] }));

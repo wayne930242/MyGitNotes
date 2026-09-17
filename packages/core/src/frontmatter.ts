@@ -163,6 +163,39 @@ export function replaceNoteStatus(raw: string, status: string | null): string {
 }
 
 /**
+ * Patch only the `tags` array; keep every other frontmatter field, the field's own flow/block
+ * style, and the Markdown body byte-identical. The note is expected to already have a `tags`
+ * key (callers only invoke this on notes already known to carry the tag being changed).
+ */
+export function replaceNoteTags(raw: string, tags: string[]): string {
+  const match = raw.match(FRONTMATTER_REGEX);
+  if (!match || !parseNoteContent(raw).hasFrontmatter) return raw;
+  const yamlText = match[1];
+  const document = YAML.parseDocument(yamlText);
+  if (!YAML.isMap(document.contents)) return raw;
+  const map = document.contents;
+  const pair = map.items.find(item => YAML.isScalar(item.key) && item.key.value === 'tags');
+  if (!pair || !YAML.isNode(pair.value) || !pair.value.range || !pair.key.range) return raw;
+
+  const flow = YAML.isSeq(pair.value) ? pair.value.flow === true : false;
+  const newDocument = new YAML.Document({ tags });
+  if (flow && tags.length > 0) {
+    const seqNode = newDocument.get('tags', true);
+    if (YAML.isSeq(seqNode)) seqNode.flow = true;
+  }
+  const rendered = newDocument.toString({ lineWidth: 0, flowCollectionPadding: false });
+  const withoutKey = rendered.slice('tags'.length);
+  const hadTrailingNewline = yamlText.slice(pair.value.range[0], pair.value.range[1]).endsWith('\n');
+  let replacement = !hadTrailingNewline && withoutKey.endsWith('\n') ? withoutKey.slice(0, -1) : withoutKey;
+  if (match[0].includes('\r\n')) replacement = replacement.replace(/\n/g, '\r\n');
+
+  const offset = raw.indexOf('\n') + 1;
+  const start = offset + pair.key.range[1];
+  const end = offset + pair.value.range[1];
+  return raw.slice(0, start) + replacement + raw.slice(end);
+}
+
+/**
  * Fills `created`/`updated` only where missing, from the given fallbacks.
  * Never overwrites an existing value or touches any other frontmatter key
  * or the Markdown body. Used by the one-time backfill command.
