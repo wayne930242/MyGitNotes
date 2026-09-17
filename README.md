@@ -188,15 +188,17 @@ Until the settings below exist, the workflow skips with a notice and never fails
 1. Run `vercel link` and read `orgId` and `projectId` from `.vercel/project.json`.
 2. Disconnect the project's Git integration in Vercel (**Settings → Git**) so pushes do not also trigger a full-clone deployment.
 3. Set the runtime environment variables below, for example with `pnpm env:vercel production`.
-4. Configure the GitHub repository:
+4. Create `VERCEL_TOKEN` in the Vercel dashboard (**Account Settings → Tokens**) with **Scope** set to the team that owns the project. The Vercel CLI login cannot create tokens through the API.
+5. Configure the GitHub workspace repository. A workspace with an `upstream` remote can make `gh` target MyGitNotes, so set the default repository first:
 
 ```bash
+gh repo set-default <owner>/<workspace-repo>
 gh variable set VERCEL_ORG_ID --body <orgId>
 gh variable set VERCEL_PROJECT_ID --body <projectId>
-gh secret set VERCEL_TOKEN   # a token from https://vercel.com/account/tokens
+gh secret set VERCEL_TOKEN   # paste the token at the prompt
 ```
 
-Run a deployment manually with `gh workflow run deploy-vercel-sparse.yml`.
+6. Deploy and verify: run `gh workflow run deploy-vercel-sparse.yml`, wait with `gh run watch`, then confirm `vercel ls --prod` shows the new deployment as Ready and your domain serves it.
 
 ### Opt out: Vercel Git integration
 

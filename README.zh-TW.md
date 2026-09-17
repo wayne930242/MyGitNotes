@@ -188,15 +188,17 @@ R2 不是必要功能。只有當 workspace 有大檔案，例如掃描 PDF、�
 1. 執行 `vercel link`，從 `.vercel/project.json` 取得 `orgId` 與 `projectId`。
 2. 在 Vercel 中斷專案的 Git integration（**Settings → Git**），避免推送時又觸發一次完整 clone 的部署。
 3. 設定下方的執行期環境變數，例如使用 `pnpm env:vercel production`。
-4. 設定 GitHub 儲存庫：
+4. 在 Vercel dashboard（**Account Settings → Tokens**）建立 `VERCEL_TOKEN`，**Scope** 選擁有該專案的 team。Vercel CLI 的登入身分無法透過 API 建立 token。
+5. 設定 GitHub 工作區儲存庫。工作區有 `upstream` remote 時，`gh` 可能指向 MyGitNotes，先設定預設儲存庫：
 
 ```bash
+gh repo set-default <owner>/<workspace-repo>
 gh variable set VERCEL_ORG_ID --body <orgId>
 gh variable set VERCEL_PROJECT_ID --body <projectId>
-gh secret set VERCEL_TOKEN   # 從 https://vercel.com/account/tokens 建立的 token
+gh secret set VERCEL_TOKEN   # 在提示時貼上 token
 ```
 
-手動部署：`gh workflow run deploy-vercel-sparse.yml`。
+6. 部署並驗證：執行 `gh workflow run deploy-vercel-sparse.yml`，用 `gh run watch` 等待完成，再以 `vercel ls --prod` 確認新部署為 Ready，且網域已提供該部署。
 
 ### 改用：Vercel Git integration
 
