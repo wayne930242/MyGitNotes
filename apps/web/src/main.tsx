@@ -7,6 +7,7 @@ import { PanelProvider } from './lib/panel-context.js';
 import './index.css';
 import './workspace.css';
 import './ui-buttons.css';
+import './directives.css';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
