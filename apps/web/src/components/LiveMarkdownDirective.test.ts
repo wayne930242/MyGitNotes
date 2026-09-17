@@ -18,7 +18,22 @@ class MockDomNode {
   value = '';
   title = '';
   selected = false;
+  style: Record<string, string> = {};
   listeners: Record<string, ((e: any) => void)[]> = {};
+
+  classList = {
+    add: (c: string) => {
+      const set = new Set(this.className.split(' ').filter(Boolean));
+      set.add(c);
+      this.className = [...set].join(' ');
+    },
+    remove: (c: string) => {
+      const set = new Set(this.className.split(' ').filter(Boolean));
+      set.delete(c);
+      this.className = [...set].join(' ');
+    },
+    contains: (c: string) => this.className.split(' ').includes(c),
+  };
 
   constructor(tag: string) {
     this.tagName = tag.toUpperCase();
@@ -39,6 +54,8 @@ class MockDomNode {
   prepend(...nodes: MockDomNode[]) {
     this.children.unshift(...nodes);
   }
+  focus() {}
+  blur() {}
   addEventListener(event: string, fn: (e: any) => void) {
     if (!this.listeners[event]) this.listeners[event] = [];
     this.listeners[event].push(fn);
@@ -143,10 +160,70 @@ describe('LiveMarkdownDirective widget', () => {
 
     expect(mockView.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        changes: { from: 5, to: 5 + text.length, insert: ':::sidebar\n內容文字\n:::' },
+        changes: expect.objectContaining({
+          from: 5,
+          to: 5 + text.length,
+          insert: expect.stringContaining(':::sidebar'),
+        }),
         userEvent: 'input.directive',
       })
     );
+  });
+
+  it('supports title field editing from toolbar input', () => {
+    const text = ':::info\n內容文字\n:::';
+    const directive = new LiveMarkdownDirective(text, 'note.md', 0, false, 'info');
+
+    const mockView = {
+      dispatch: vi.fn(),
+      requestMeasure: vi.fn(),
+      focus: vi.fn(),
+    } as unknown as EditorView;
+
+    const dom = directive.toDOM(mockView);
+    const titleInput = dom.querySelector<HTMLInputElement>('.live-directive-title-input')!;
+    expect(titleInput).not.toBeNull();
+    titleInput.value = '新標題';
+    titleInput.dispatchEvent(new Event('blur'));
+
+    expect(mockView.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changes: expect.objectContaining({
+          from: 0,
+          to: text.length,
+          insert: expect.stringContaining(':::info[新標題]'),
+        }),
+        userEvent: 'input.directive',
+      })
+    );
+  });
+
+  it('switches to inline edit form when clicking edit button', () => {
+    const text = ':::info[原標題]\n原有內文\n:::';
+    const directive = new LiveMarkdownDirective(text, 'note.md', 0, false, 'info');
+
+    const mockView = {
+      dispatch: vi.fn(),
+      requestMeasure: vi.fn(),
+      focus: vi.fn(),
+    } as unknown as EditorView;
+
+    const dom = directive.toDOM(mockView);
+    const editBtn = dom.querySelector<HTMLButtonElement>('.live-directive-edit-btn')!;
+    expect(editBtn).not.toBeNull();
+    expect(editBtn.textContent).toBe('編輯內文');
+
+    editBtn.dispatchEvent(new Event('click'));
+
+    const panel = dom.querySelector('.live-directive-editor-panel');
+    expect(panel).not.toBeNull();
+
+    const bodyEditor = dom.querySelector<HTMLTextAreaElement>('.live-directive-body-editor');
+    expect(bodyEditor).not.toBeNull();
+    expect(bodyEditor?.value).toBe('原有內文');
+
+    const saveBtn = dom.querySelector<HTMLButtonElement>('.live-directive-btn-save');
+    expect(saveBtn).not.toBeNull();
   });
 
   it('omits toolbar in readOnly mode', () => {
@@ -159,3 +236,4 @@ describe('LiveMarkdownDirective widget', () => {
     expect(dom.querySelector('.live-directive-toolbar')).toBeNull();
   });
 });
+

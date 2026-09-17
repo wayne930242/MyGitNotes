@@ -626,3 +626,83 @@ export function updateDirectiveVariant(rawText: string, newVariant: string): str
   return lines.join('\n');
 }
 
+export interface DirectiveModel {
+  fenceLength: number;
+  type: string;
+  title: string;
+  attrs: Record<string, string>;
+  body: string;
+}
+
+export function parseDirectiveModel(rawText: string): DirectiveModel {
+  const lines = rawText.split('\n');
+  const header = lines[0] || '';
+  const match = /^(\s*)(:{3,})([a-zA-Z0-9_-]+)(?:\[([^\]]*)\])?(?:\{([^}]*)\})?\s*$/.exec(header);
+
+  const fenceLength = match ? match[2].length : 3;
+  const type = match ? match[3] : 'info';
+  const label = match ? match[4] || '' : '';
+  const rawAttrs = match ? match[5] : '';
+  const attrs = parseDirectiveAttributes(rawAttrs);
+
+  let bodyLines = lines.slice(1);
+  if (bodyLines.length > 0 && /^(\s*)(:{3,})\s*$/.test(bodyLines[bodyLines.length - 1])) {
+    bodyLines = bodyLines.slice(0, -1);
+  }
+  const body = bodyLines.join('\n');
+
+  const title = attrs.title || label || attrs.name || '';
+
+  return {
+    fenceLength,
+    type,
+    title,
+    attrs,
+    body,
+  };
+}
+
+export function serializeDirectiveModel(model: DirectiveModel): string {
+  const colons = ':'.repeat(Math.max(3, model.fenceLength || 3));
+  const type = (model.type || 'info').toLowerCase();
+  const trimmedTitle = (model.title || '').trim();
+  const attrs = { ...model.attrs };
+
+  let header = `${colons}${type}`;
+
+  if (type === 'handout') {
+    if (!attrs.id) attrs.id = 'H-01';
+    if (!attrs.variant) attrs.variant = 'report';
+    if (trimmedTitle) attrs.title = trimmedTitle;
+    const attrParts: string[] = [];
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v) attrParts.push(`${k}="${v.replace(/"/g, '\\"')}"`);
+    }
+    header += `{${attrParts.join(' ')}}`;
+  } else if (type === 'coc-stat') {
+    if (trimmedTitle) attrs.name = trimmedTitle;
+    else if (!attrs.name) attrs.name = '角色數值';
+    const attrParts: string[] = [];
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v !== undefined && v !== '') {
+        attrParts.push(/^[0-9]+$/.test(v) ? `${k}=${v}` : `${k}="${v.replace(/"/g, '\\"')}"`);
+      }
+    }
+    header += `{${attrParts.join(' ')}}`;
+  } else {
+    if (trimmedTitle) {
+      header += `[${trimmedTitle}]`;
+    }
+    const extraAttrs: string[] = [];
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k !== 'title' && v) {
+        extraAttrs.push(`${k}="${v.replace(/"/g, '\\"')}"`);
+      }
+    }
+    if (extraAttrs.length > 0) {
+      header += `{${extraAttrs.join(' ')}}`;
+    }
+  }
+
+  return `${header}\n${model.body}\n${colons}\n`;
+}
