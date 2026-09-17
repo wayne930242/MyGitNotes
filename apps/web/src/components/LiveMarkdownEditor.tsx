@@ -1,6 +1,6 @@
 import { LiveMarkdownTable, tableUIState } from './LiveMarkdownTable.js';
 import { LiveMarkdownDirective } from './LiveMarkdownDirective.js';
-import { findDirectiveBlocks } from '../lib/directives.js';
+import { findDirectiveBlocks, escapeHtml } from '../lib/directives.js';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { Compartment, EditorState, StateEffect, StateField, Transaction, type Range } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType, keymap, drawSelection, highlightActiveLineGutter, lineNumbers, type DecorationSet } from '@codemirror/view';
@@ -157,6 +157,24 @@ class DueDateAdder extends WidgetType {
     button.addEventListener('mousedown', event => event.preventDefault());
     button.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); view.dispatch({ effects: chipEditChanged.of({ pos: this.posKey, editing: true }) }); });
     return button;
+  }
+}
+class MdxImportWidget extends WidgetType {
+  constructor(readonly rawText: string, readonly from: number) { super(); }
+  eq(other: MdxImportWidget) { return this.rawText === other.rawText && this.from === other.from; }
+  toDOM(view: EditorView) {
+    const span = document.createElement('span');
+    span.className = 'live-md-mdx-import-chip';
+    span.title = `${this.rawText} (點擊編輯)`;
+    const match = /import\s+([\w{},\s*]+)\s+from\s+['"]([^'"]+)['"]/.exec(this.rawText);
+    const identifier = match ? match[1].trim() : 'component';
+    const source = match ? match[2].split('/').pop()?.replace(/\.\w+$/, '') || match[2] : '';
+    span.innerHTML = `<span class="mdx-chip-badge">MDX</span><span class="mdx-chip-name">${escapeHtml(identifier)}</span>${source ? `<span class="mdx-chip-from">from ${escapeHtml(source)}</span>` : ''}`;
+    span.addEventListener('click', () => {
+      view.dispatch({ selection: { anchor: this.from } });
+      view.focus();
+    });
+    return span;
   }
 }
 function atCompletionSource(context: CompletionContext): CompletionResult | null {
@@ -354,6 +372,13 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
     if (collapsedDirectives.some(b => line.from >= b.from && line.to <= b.to)) {
       continue;
     }
+    // MDX import statement: low-key display when not active/editing
+    if (/^[ \t]*import\s+.*?(?:from\s+['"][^'"]+['"]|['"][^'"]+['"]);?[ \t]*$/.test(line.text)) {
+      if (!active(line.from, line.to)) {
+        marks.push(Decoration.replace({ widget: new MdxImportWidget(line.text.trim(), line.from) }).range(line.from, line.to));
+      }
+      continue;
+    }
     for (const [emoji, withTime] of TOKENS) {
       const token = findToken(line.text, emoji, withTime);
       if (!token) continue;
@@ -385,7 +410,12 @@ const theme = EditorView.theme({
   '.live-md-link, .live-md-link span, .live-md-url':{color:'var(--color-link)',textDecoration:'underline'},
   '.live-md-code':{fontFamily:'monospace',backgroundColor:'var(--color-sidebar)',borderRadius:'4px'},
   '.live-md-codeblock':{fontFamily:'monospace',backgroundColor:'var(--color-sidebar)',paddingLeft:'14px'},
-  '.live-md-quote':{borderLeft:'3px solid var(--color-primary)',paddingLeft:'14px',color:'var(--color-muted)'},
+  '.live-md-quote':{borderLeft:'2px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border))',paddingLeft:'12px',color:'var(--color-muted)'},
+  '.live-md-mdx-import-chip':{display:'inline-flex',alignItems:'center',gap:'5px',padding:'1px 8px',borderRadius:'4px',fontSize:'0.78em',fontFamily:'monospace',cursor:'pointer',backgroundColor:'color-mix(in srgb, var(--color-text) 4%, var(--color-surface))',color:'var(--color-muted)',border:'1px solid color-mix(in srgb, var(--color-text) 12%, var(--color-border))',opacity:'0.65',transition:'opacity 120ms ease'},
+  '.live-md-mdx-import-chip:hover':{opacity:'1'},
+  '.live-md-mdx-import-chip .mdx-chip-badge':{fontSize:'9px',fontWeight:'700',textTransform:'uppercase',color:'var(--color-muted)'},
+  '.live-md-mdx-import-chip .mdx-chip-name':{color:'var(--color-text)',fontWeight:'600'},
+  '.live-md-mdx-import-chip .mdx-chip-from':{opacity:'0.75'},
   '.live-md-image-line':{lineHeight:'0',paddingTop:'4px',paddingBottom:'4px'},
   '.live-md-rendered':{display:'inline-block',maxWidth:'100%',cursor:'text'},
   '.live-md-rendered p':{margin:'0'},'.live-md-rendered img':{maxWidth:'100%',maxHeight:'480px',borderRadius:'8px',margin:'0',cursor:'zoom-in',display:'block'},
