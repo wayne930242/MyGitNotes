@@ -7,7 +7,7 @@
 .sidebar-clear-filters { text-decoration: underline; }
 .sidebar-missing-filter { display: flex; gap: .4rem; align-items: center; padding: .35rem; font-size: .75rem; text-align: left; overflow-wrap: anywhere; }
 .sidebar-missing-filter svg { flex: none; margin-left: auto; }
-.folder-heading-actions { display: flex; align-items: center; gap: .25rem; }
+.folder-heading-actions { display: flex; align-items: center; gap: .25rem; flex: none; }
 .sidebar-filter-section > summary { cursor: pointer; font-size: .75rem; font-weight: 600; color: var(--color-muted); padding: .4rem .5rem; margin-bottom: .5rem; }
 .sidebar-tag-mode { display: flex; gap: .3rem; margin: .5rem 0; }
 .sidebar-tag-mode button { flex: 1; padding: .3rem .2rem; border: 1px solid var(--color-border); border-radius: .35rem; color: var(--color-muted); font-size: .7rem; }
@@ -64,9 +64,9 @@
 .sidebar-notebook-group[data-selected="true"] > .nav-tree-row .nav-tree-entry { color: var(--color-primary); }
 .sidebar-notebook-group[data-selected="true"] .sidebar-notebook-heading .sidebar-notebook-count,
 .sidebar-notebook-group[data-selected="true"] > .nav-tree-row .sidebar-notebook-count { color: var(--color-primary); }
-.folder-heading-actions { display: flex; align-items: center; gap: 2px; margin-right: 4px; }
-.folder-heading-actions .ui-icon-button { width: 22px; height: 22px; padding: 3px; border-radius: 4px; }
-.folder-heading-actions .ui-icon-button svg { width: 14px; height: 14px; }
+.folder-heading-actions { display: flex; align-items: center; gap: 2px; margin-right: 4px; flex: none; }
+.folder-heading-actions .ui-icon-button { width: 22px; height: 22px; padding: 3px; border-radius: 4px; flex: none; }
+.folder-heading-actions .ui-icon-button svg { width: 14px; height: 14px; flex: none; }
 .sidebar-notebook-folders { margin: 2px 0 6px 10px; padding-left: 9px; border-left: 1px solid color-mix(in srgb, var(--workspace-divider) 80%, transparent); }
 .sidebar-notebook-folders .folder-drop-line { height: 1px; }
 .sidebar-notebook-empty { padding: 6px 8px; color: var(--color-muted); font-size: 12px; }
