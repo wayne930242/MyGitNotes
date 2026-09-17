@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { GitHubApi, SourceError } from './github-api.js';
 import { readGitHubArchive } from './github-archive.js';
 import { RemoteSource, type RemoteEntry, type RemoteSnapshot, type RemoteChange, type RepositoryInfo } from './remote-source.js';
@@ -54,16 +55,30 @@ export class GitHubSource extends RemoteSource {
     if (missing.length <= 6) return;
     await this.client.once(`archive:${snapshot.sha}`, async () => {
       if (missing.every(entry => this.client.hasBlob(entry.sha))) return;
+      // Authenticated reads never download repository archives inside the server function.
+      if (this.token) return this.prefetchBlobBatches(missing);
       try {
         const archive = await this.client.archive(snapshot.sha);
         const contents = await readGitHubArchive(archive, snapshot.entries.filter(entry => entry.type === 'blob' && entry.mode !== '120000' &&
-          /\.(md|markdown|txt|ya?ml)$/i.test(entry.path)));
+          /\.(md|markdown|mdx|txt|ya?ml)$/i.test(entry.path)));
         for (const [sha, bytes] of contents) this.client.putBlob(sha, bytes);
       } catch (error) {
         // A missing archive may still have individually readable blobs. Never fall back through a cooldown.
         if (!(error instanceof SourceError) || ![404, 413].includes(error.status)) throw error;
       }
     });
+  }
+
+  /** Loads only the requested files, 100 blobs per GraphQL request, verified against their Git SHA. */
+  private async prefetchBlobBatches(entries: RemoteEntry[]) {
+    const pending = entries.filter(entry => !this.client.hasBlob(entry.sha));
+    for (let i = 0; i < pending.length; i += 100) {
+      const texts = await this.client.blobTexts(pending.slice(i, i + 100).map(entry => entry.sha));
+      for (const [sha, text] of texts) {
+        const bytes = Buffer.from(text, 'utf8');
+        if (createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex') === sha) this.client.putBlob(sha, bytes);
+      }
+    }
   }
 
   protected async publishChanges(changes: RemoteChange[], snapshot: RemoteSnapshot, message: string): Promise<string> {

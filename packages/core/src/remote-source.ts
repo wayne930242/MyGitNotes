@@ -13,6 +13,7 @@ import { SCREEN_PAGE_FILE, ScreenPageFileSchema, ScreenPageSchema, emptyScreenPa
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 export { SourceError } from './github-api.js';
+const NOTE_FILE = /\.(md|markdown|mdx|txt)$/i;
 export interface RemoteEntry { path: string; type: string; mode: string; sha: string; size?: number }
 export interface RepositoryInfo { private: boolean; permissions?: { push?: boolean }; default_branch: string }
 export interface RemoteSnapshot { sha: string; treeSha: string; entries: RemoteEntry[]; info: RepositoryInfo }
@@ -64,7 +65,7 @@ export abstract class RemoteSource {
   async note(file: string): Promise<NoteItem> {
     const config = await this.config();
     const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`) && isNotebookContent(file.slice(n.root.length + 1), n));
-    if (!nb || !/\.(md|markdown|txt)$/i.test(file)) throw new SourceError('Path is not a configured note.', 403);
+    if (!nb || !NOTE_FILE.test(file)) throw new SourceError('Path is not a configured note.', 403);
     const raw = (await this.readFile(file)).toString('utf8');
     const { metadata, content, title } = parseNoteContent(raw, path.posix.basename(file));
     return { id: typeof metadata.id === 'string' ? metadata.id : file, path: file, notebookId: nb.id, title, metadata, content,
@@ -90,7 +91,7 @@ export abstract class RemoteSource {
       const templateFiles = new Set((nb.templates || []).map(t => t.file));
       const files = entries.filter(e => e.type === 'blob' && e.mode !== '120000' && e.path.startsWith(`${nb.root}/`) &&
         isNotebookContent(e.path.slice(nb.root.length + 1), nb) && !templateFiles.has(e.path.slice(nb.root.length + 1)) &&
-        /\.(md|markdown|txt)$/i.test(e.path));
+        NOTE_FILE.test(e.path));
       await this.prefetchFiles(files.map(file => file.path));
       // The shared transport coalesces cache misses and serializes upstream requests.
       for (let i = 0; i < files.length; i += 6) output.push(...await Promise.all(files.slice(i, i + 6).map(f => this.note(f.path))));
@@ -166,7 +167,7 @@ export abstract class RemoteSource {
     if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
     const config = await this.config();
     const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
-    if (!nb || !isNotebookContent(file.slice(nb.root.length + 1), nb) || !/\.(md|markdown|txt)$/i.test(file) || file.includes('\\') || file.split('/').some(p => p === '..' || p === '.' || !p)) throw new SourceError('Path is not a configured note.', 403);
+    if (!nb || !isNotebookContent(file.slice(nb.root.length + 1), nb) || !NOTE_FILE.test(file) || file.includes('\\') || file.split('/').some(p => p === '..' || p === '.' || !p)) throw new SourceError('Path is not a configured note.', 403);
     if (createOnly && snapshot.entries.some(e => e.path === file)) throw new SourceError('A note already exists at this path.', 409);
     const existing = snapshot.entries.find(e => e.path === file);
     if (existing && (existing.type !== 'blob' || existing.mode === '120000')) throw new SourceError('Path is not a regular note file.', 403);
@@ -186,7 +187,7 @@ export abstract class RemoteSource {
     if (typeof message !== 'string' || !message.trim() || message.length > 4000) throw new SourceError('A commit message of at most 4000 characters is required.');
     const snapshot = await this.getSnapshot(true);
     const changes = notes.map(note => {
-      if (!note || typeof note.path !== 'string' || !/\.(md|markdown|txt)$/i.test(note.path) || typeof note.content !== 'string' || !note.metadata || typeof note.metadata !== 'object' || Array.isArray(note.metadata)) throw new SourceError('Invalid note change.');
+      if (!note || typeof note.path !== 'string' || !NOTE_FILE.test(note.path) || typeof note.content !== 'string' || !note.metadata || typeof note.metadata !== 'object' || Array.isArray(note.metadata)) throw new SourceError('Invalid note change.');
       if (note.createOnly && snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`A note already exists at ${note.path}.`, 409);
       if (!note.createOnly && !snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`Note moved or deleted: ${note.path}.`, 409);
       return { path: note.path, content: serializeNoteContent(note.metadata, note.content, Boolean(note.createOnly)) };
@@ -234,8 +235,8 @@ export abstract class RemoteSource {
       const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
       const screenFile = ['screen', 'folders', 'files'].includes(scope) && file === SCREEN_PAGE_FILE;
       const studyFile = ['study', 'study-transition', 'files'].includes(scope) && file === STUDY_FILE;
-      const allowed = scope === 'files' ? screenFile || studyFile || Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? studyFile || nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && /\.(md|markdown|txt)$/i.test(file) : scope === 'study' ? studyFile : scope === 'screen' ? screenFile : screenFile || (scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb &&
-        (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (/\.(md|markdown|txt)$/i.test(file) || path.posix.basename(file) === '_dir.yml')));
+      const allowed = scope === 'files' ? screenFile || studyFile || Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? studyFile || nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_FILE.test(file) : scope === 'study' ? studyFile : scope === 'screen' ? screenFile : screenFile || (scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb &&
+        (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (NOTE_FILE.test(file) || path.posix.basename(file) === '_dir.yml')));
       if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
       if (studyFile) {
         if (typeof change.content !== 'string' || Buffer.byteLength(change.content) > STUDY_MAX_BYTES) throw new SourceError('Study YAML is required.');
