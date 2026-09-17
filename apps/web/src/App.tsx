@@ -33,7 +33,11 @@ import {
   deleteAsset,
   moveAsset,
   fetchGitStatus,
+  fetchNotes,
+  applyTagChange,
 } from './lib/api.js';
+import { planTagRename, planTagMerge, planTagDelete, invertTagOperationPlan } from '@mygitnotes/core/tag-ops';
+import { useTagOperations, applyTagEntriesToNotes, type TagOperationKind } from './lib/use-tag-operations.js';
 import type {
   NoteItem,
   AssetItem,
@@ -171,6 +175,59 @@ const AppContent: React.FC = () => {
   // Deletion and Undo Buffer State (Requirement 2)
   const [deletedNotes, setDeletedNotes] = useState<NoteItem[]>([]);
   const [undoToast, setUndoToast] = useState<{ note: NoteItem; timerId: any } | null>(null);
+
+  // Tag management: rename/merge/delete across the whole workspace, each a single commit
+  // with a session-lifetime undo (kept in `tagOperations.history` until page reload).
+  const tagOperations = useTagOperations();
+  const previewTagUsage = async (tag: string): Promise<number> => {
+    const allNotes = await fetchNotes();
+    return allNotes.filter(note => note.tags.includes(tag)).length;
+  };
+  const runTagOperation = async (kind: TagOperationKind, plan: ReturnType<typeof planTagDelete>, label: string) => {
+    if (plan.affected.length === 0) throw new Error(t('sidebar.tagNoNotesAffected'));
+    const entries = plan.affected.map(({ path, notebookId, nextTags }) => ({ path, notebookId, tags: nextTags }));
+    const result = await applyTagChange(entries, revision, label);
+    if (remote) setRevision(result.revision || revision);
+    setNotes(previous => applyTagEntriesToNotes(previous, entries));
+    tagOperations.record(kind, label, plan);
+  };
+  const handleRenameTag = async (from: string, to: string) => {
+    if (!canWrite) throw new Error(t('folder.readOnly'));
+    const allNotes = await fetchNotes();
+    const plan = planTagRename(allNotes, from, to);
+    await runTagOperation('rename', plan, t('sidebar.tagRenamedLabel', { from, to, count: plan.affected.length }));
+  };
+  const handleMergeTag = async (from: string, into: string) => {
+    if (!canWrite) throw new Error(t('folder.readOnly'));
+    const allNotes = await fetchNotes();
+    const plan = planTagMerge(allNotes, from, into);
+    await runTagOperation('merge', plan, t('sidebar.tagMergedLabel', { from, to: into, count: plan.affected.length }));
+  };
+  const handleDeleteTag = async (tag: string) => {
+    if (!canWrite) throw new Error(t('folder.readOnly'));
+    const allNotes = await fetchNotes();
+    const plan = planTagDelete(allNotes, tag);
+    await runTagOperation('delete', plan, t('sidebar.tagDeletedLabel', { tag, count: plan.affected.length }));
+  };
+  const handleUndoTagOperation = async (id: string) => {
+    const record = tagOperations.history.find(entry => entry.id === id);
+    if (!record) return;
+    try {
+      const inverted = invertTagOperationPlan(record.plan);
+      const allNotes = await fetchNotes();
+      const validEntries = inverted.affected.filter(entry => allNotes.some(note => note.path === entry.path && note.notebookId === entry.notebookId));
+      if (validEntries.length === 0) { tagOperations.dismiss(id); return; }
+      const entries = validEntries.map(({ path, notebookId, nextTags }) => ({ path, notebookId, tags: nextTags }));
+      const result = await applyTagChange(entries, revision, `${t('common.undo')}: ${record.label}`);
+      if (remote) setRevision(result.revision || revision);
+      setNotes(previous => applyTagEntriesToNotes(previous, entries));
+      tagOperations.dismiss(id);
+    } catch (error) {
+      // Keep the record so the user can retry; a silently vanished undo with no feedback
+      // would leave them unable to tell whether the undo happened.
+      setActionError((error as Error).message);
+    }
+  };
 
   const editorNotebookId = editorRoute.notebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
   const returnTo = noteReturnRoute(location.search, editorNotebookId, editorRoute.folder);
@@ -892,6 +949,11 @@ const AppContent: React.FC = () => {
               selectedFolder={selectedFolder}
               onSelectFolder={setSelectedFolder}
               gitStatus={gitStatus}
+              canManageTags={canWrite}
+              onPreviewTagUsage={previewTagUsage}
+              onRenameTag={handleRenameTag}
+              onMergeTag={handleMergeTag}
+              onDeleteTag={handleDeleteTag}
             />
             </div>
 
@@ -1083,6 +1145,33 @@ const AppContent: React.FC = () => {
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Recent tag operations: session-lifetime, each independently undoable (the list itself
+          is not cleared by navigation or further mutations, only by page reload). Undoing a
+          record unconditionally restores its recorded prior tags on every note it touched; it
+          does not detect or warn about a later edit to the same note's tags in the meantime. */}
+      {tagOperations.history.length > 0 && (
+        <div className="fixed top-20 right-6 z-50 flex flex-col gap-2 items-end" aria-label={t('sidebar.recentTagChanges')}>
+          {tagOperations.history.map(record => (
+            <div key={record.id} className="bg-slate-900/95 dark:bg-slate-800/95 text-white backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-slate-700/80 flex items-center gap-3 text-xs max-w-sm">
+              <span>{record.label}</span>
+              <button
+                onClick={() => void handleUndoTagOperation(record.id)}
+                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-semibold rounded-md transition shrink-0"
+              >
+                {t('common.undo')}
+              </button>
+              <button
+                aria-label={t('sidebar.dismissTagOperation')}
+                onClick={() => tagOperations.dismiss(record.id)}
+                className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/10 transition ml-1 shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

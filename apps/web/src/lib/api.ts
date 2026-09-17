@@ -122,6 +122,26 @@ export async function deleteNote(
   return res.json();
 }
 
+/**
+ * Sets each listed note's `tags` array exactly, in one commit. Used for tag rename/merge/
+ * delete and for undoing any of them — the caller computes the target `tags` per note
+ * (see `@mygitnotes/core`'s `planTagRename`/`planTagMerge`/`planTagDelete`/
+ * `invertTagOperationPlan`); this endpoint only writes and commits.
+ */
+export async function applyTagChange(
+  entries: { path: string; notebookId: string; tags: string[] }[],
+  revision: string,
+  message?: string
+): Promise<{ success: boolean; changedPaths: string[]; commit?: { commitHash: string }; revision?: string }> {
+  const res = await fetch(`${API_BASE}/tags/apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ entries, revision, message }),
+  });
+  if (!res.ok) throw await responseError(res, 'Failed to update tags');
+  return res.json();
+}
+
 export async function restoreNote(params: {
   path: string;
   content?: string;

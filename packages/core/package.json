@@ -45,6 +45,10 @@
     "./r2-references": {
       "types": "./dist/r2-references.d.ts",
       "import": "./dist/r2-references.js"
+    },
+    "./tag-ops": {
+      "types": "./dist/tag-ops.d.ts",
+      "import": "./dist/tag-ops.js"
     }
   },
   "scripts": {
