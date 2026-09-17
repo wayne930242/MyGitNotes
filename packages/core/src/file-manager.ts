@@ -32,11 +32,27 @@ export const withinPath = (file: string, dir: string) => file === dir || file.st
 /** File browsing includes assets and dotfiles; note discovery keeps its own narrower rule. */
 export function managedNotebook(file: string, notebooks: NotebookConfig[]): NotebookConfig | undefined {
   if (!filePath.safeParse(file).success) return;
-  const nb = [...notebooks].sort((a, b) => b.root.length - a.root.length).find(nb => withinPath(file, nb.root));
-  if (!nb) return;
-  const relative = file.slice(nb.root.length + 1);
-  if (relative.split('/').some(part => ['.git', '.claude', '.codex', '.agents', '.agent', 'node_modules', 'dist', 'build', 'agents.md', 'claude.md', 'gemini.md', '.github-notes.yaml'].includes(part.toLowerCase())) || /(^|\/)docs\/agent(\/|$)/.test(relative)) return;
-  return nb;
+  let nb = [...notebooks].sort((a, b) => b.root.length - a.root.length).find(nb => withinPath(file, nb.root));
+  if (nb) {
+    const relative = file.slice(nb.root.length + 1);
+    if (relative.split('/').some(part => ['.git', '.claude', '.codex', '.agents', '.agent', 'node_modules', 'dist', 'build', 'agents.md', 'claude.md', 'gemini.md', '.github-notes.yaml'].includes(part.toLowerCase())) || /(^|\/)docs\/agent(\/|$)/.test(relative)) return;
+    return nb;
+  }
+
+  // Also check if file is within a pathAliases target (e.g. blog/src/assets/**)
+  nb = notebooks.find(n => {
+    if (!n.pathAliases) return false;
+    return Object.values(n.pathAliases).some(target => {
+      const targetDir = target.replace(/\*$/, '').replace(/\/$/, '');
+      return targetDir && withinPath(file, targetDir);
+    });
+  });
+  if (nb) {
+    if (file.split('/').some(part => ['.git', '.claude', '.codex', '.agents', '.agent', 'node_modules', 'dist', 'build', 'agents.md', 'claude.md', 'gemini.md', '.github-notes.yaml'].includes(part.toLowerCase())) || /(^|\/)docs\/agent(\/|$)/.test(file)) return;
+    return nb;
+  }
+
+  return undefined;
 }
 
 export function decodeTextFile(bytes: Uint8Array): string | undefined {

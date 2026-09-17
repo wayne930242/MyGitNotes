@@ -15,3 +15,22 @@ it('keeps safe external links and rejects unsafe protocols and escaping paths', 
     expect(resolveWorkspaceHref(href, 'notes/a/a.md')).toBeNull();
   }
 });
+
+it('resolves alias paths from notebook pathAliases', () => {
+  const notebooks = [
+    {
+      id: 'blog',
+      title: 'Blog',
+      root: 'blog/src/content/posts',
+      pathAliases: {
+        '@/*': 'blog/src/*',
+      },
+    },
+  ];
+  const source = 'blog/src/content/posts/tech/note.md';
+  expect(resolveWorkspaceHref('@/assets/images/pic.png', source, notebooks)).toEqual({
+    kind: 'path',
+    path: 'blog/src/assets/images/pic.png',
+    anchor: '',
+  });
+});

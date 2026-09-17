@@ -69,4 +69,17 @@ describe('file planning', () => {
     expect(editableFile('file.txt', Buffer.from([255, 254, 0, 4]))).toBeUndefined();
     expect(editableFile('file.pdf', Buffer.from('%PDF text'))).toBeUndefined();
   });
+  it('recognizes files under pathAliases target paths in managedNotebook', () => {
+    const notebooks = [
+      {
+        id: 'blog',
+        title: 'Blog',
+        root: 'blog/src/content/posts',
+        pathAliases: {
+          '@/*': 'blog/src/*',
+        },
+      },
+    ];
+    expect(managedNotebook('blog/src/assets/images/photo.png', notebooks)?.id).toBe('blog');
+  });
 });
