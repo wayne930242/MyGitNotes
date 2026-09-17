@@ -1,5 +1,5 @@
 import { Button } from './Button.js';
-import { WorkspaceSidebar, WorkspaceSidebarDrawer, WorkspaceSidebarToggle, useWorkspaceSidebarDrawer } from './WorkspaceChrome.js';
+import { WorkspaceSidebar, WorkspaceSidebarPortal, WorkspaceSidebarToggle, useWorkspaceSidebarDrawer } from './WorkspaceChrome.js';
 import React, { useState, useEffect } from 'react';
 import {
   Save,
@@ -98,19 +98,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <>
-      <WorkspaceSidebarDrawer open={sidebar.open} onClose={() => sidebar.setOpen(false)} closeLabel={t('common.close')}><WorkspaceSidebar label={t('settings.title')} className="settings-sidebar">
-        <div className="sidebar-section-label">{t('nav.settings')}</div>
-        {([
-          ['language', t('settings.language'), Globe],
-          ['theme', t('settings.theme'), Palette],
-          ['access', t('layout.access'), Shield],
-          ['updates', t('settings.coreUpdates'), RefreshCw],
-          ['manifest', t('layout.manifest'), Save],
-        ] as const).map(([id, label, Icon]) => <a key={String(id)} href={`#settings-${id}`} className="sidebar-link"
-          onClick={event => { event.preventDefault(); sidebar.setOpen(false); document.getElementById(`settings-${id}`)?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); }}>
-          <Icon aria-hidden="true" className="w-4 h-4" /><span>{String(label)}</span>
-        </a>)}
-      </WorkspaceSidebar></WorkspaceSidebarDrawer>
+      <WorkspaceSidebarPortal>
+        <WorkspaceSidebar label={t('settings.title')} className="settings-sidebar">
+          <div className="sidebar-section-label">{t('nav.settings')}</div>
+          {([
+            ['language', t('settings.language'), Globe],
+            ['theme', t('settings.theme'), Palette],
+            ['access', t('layout.access'), Shield],
+            ['updates', t('settings.coreUpdates'), RefreshCw],
+            ['manifest', t('layout.manifest'), Save],
+          ] as const).map(([id, label, Icon]) => <a key={String(id)} href={`#settings-${id}`} className="sidebar-link"
+            onClick={event => { event.preventDefault(); sidebar.setOpen(false); document.getElementById(`settings-${id}`)?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); }}>
+            <Icon aria-hidden="true" className="w-4 h-4" /><span>{String(label)}</span>
+          </a>)}
+        </WorkspaceSidebar>
+      </WorkspaceSidebarPortal>
       <WorkspaceSidebarToggle label={t('settings.title')} open={sidebar.open} onClick={() => sidebar.setOpen(open => !open)} />
       <div className="workspace-content">
         <div className="workspace-scroll">
