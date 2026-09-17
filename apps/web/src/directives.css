@@ -38,43 +38,37 @@
 }
 
 /* 內文段落與清單 Typography 校準（防止 list 行高超大）
-   使用高 specificity 確保覆蓋全域 .prose-custom 規則 */
-.prose-custom .custom-directive .directive-body p,
-.prose-custom .comment-directive .directive-body p {
+   使用 :is() 統一覆蓋所有 directive body 容器，高 specificity 確保覆蓋全域 .prose-custom 規則 */
+.prose-custom :is(.directive-body, .handout-body, .coc-stat-body, .embedded-card-body) p {
   margin-top: 0.25rem;
   margin-bottom: 0.3rem !important;
   line-height: 1.55;
 }
 
-.prose-custom .custom-directive .directive-body ul,
-.prose-custom .comment-directive .directive-body ul,
-.prose-custom .custom-directive .directive-body ol,
-.prose-custom .comment-directive .directive-body ol {
+.prose-custom :is(.directive-body, .handout-body, .coc-stat-body, .embedded-card-body) ul,
+.prose-custom :is(.directive-body, .handout-body, .coc-stat-body, .embedded-card-body) ol {
   margin-top: 0.2rem;
   margin-bottom: 0.25rem !important;
   padding-left: 1.35rem;
 }
 
-.prose-custom .custom-directive .directive-body li,
-.prose-custom .comment-directive .directive-body li {
+.prose-custom :is(.directive-body, .handout-body, .coc-stat-body, .embedded-card-body) li {
   margin-top: 0.05rem;
   margin-bottom: 0.1rem !important;
   line-height: 1.5;
 }
 
-.prose-custom .custom-directive .directive-body li > p,
-.prose-custom .comment-directive .directive-body li > p {
+.prose-custom :is(.directive-body, .handout-body, .coc-stat-body, .embedded-card-body) li > p {
   margin: 0 !important;
   display: inline;
 }
 
-.prose-custom .directive-body hr {
+.prose-custom :is(.directive-body, .handout-body, .coc-stat-body, .embedded-card-body) hr {
   margin: 0.65rem 0;
   border-color: color-mix(in srgb, var(--color-text) 12%, var(--color-border));
 }
 
-.prose-custom .custom-directive .directive-body blockquote,
-.prose-custom .comment-directive .directive-body blockquote {
+.prose-custom :is(.directive-body, .handout-body, .coc-stat-body, .embedded-card-body) blockquote {
   margin: 0.35rem 0 !important;
   padding: 0.25rem 0.65rem;
   border-left: 2px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border)) !important;
@@ -412,7 +406,7 @@
 }
 
 .prose-custom .handout-body {
-  padding: 1.5rem 1.75rem;
+  padding: 0.85rem 1.1rem;
   color: var(--handout-ink);
 }
 
@@ -784,10 +778,13 @@
   margin: 0.35rem 0;
 }
 
-/* 消除 live editor preview 內 renderNote 輸出的容器自帶 margin，
-   避免 .live-md-directive margin 和 .custom-directive margin 疊加 */
+/* 消除 live editor preview 內 renderNote 輸出的容器自帶 margin/padding，
+   避免 .live-md-directive margin 和內部容器 margin 疊加 */
 .live-md-directive .live-directive-preview-content > .custom-directive,
-.live-md-directive .live-directive-preview-content > .comment-directive {
+.live-md-directive .live-directive-preview-content > .comment-directive,
+.live-md-directive .live-directive-preview-content > .handout-block,
+.live-md-directive .live-directive-preview-content > .coc-stat-block,
+.live-md-directive .live-directive-preview-content > .embedded-card {
   margin: 0;
 }
 
