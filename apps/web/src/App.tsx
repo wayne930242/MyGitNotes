@@ -9,6 +9,7 @@ import { listLocalDrafts } from './lib/storage.js';
 import { useWorkspaceSync } from './lib/use-workspace-sync.js';
 import { SCREEN_PAGE_FILE } from '@mygitnotes/core/screen-page';
 import { WorkspaceLinks } from './components/WorkspaceLinks.js';
+import { ImageLightbox } from './components/ImageLightbox.js';
 import { resolveNoteStatuses, isNoteHidden, withNoteStatus } from '@mygitnotes/core/note-status';
 import { Select } from './components/Select.js';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -1244,6 +1245,7 @@ const AppContent: React.FC = () => {
         </div>
       )}
     </div>
+    <ImageLightbox />
     </WorkspaceLinks>
   );
 };

@@ -343,7 +343,13 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   height: auto;
   border-radius: var(--radius-panel);
   border: 1px solid #e2e8f0;
-  margin: 1rem 0;
+  margin: 0.375rem 0;
+  cursor: zoom-in;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.prose-custom img:hover {
+  opacity: 0.96;
 }
 
 .prose-custom a {
