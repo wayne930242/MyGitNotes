@@ -13,26 +13,26 @@
 .sidebar-tag-mode button { flex: 1; padding: .3rem .2rem; border: 1px solid var(--color-border); border-radius: .35rem; color: var(--color-muted); font-size: .7rem; }
 .sidebar-tag-mode button[aria-pressed=true] { color: var(--color-text); background: var(--color-surface); border-color: var(--color-primary); }
 
-.sidebar-tag-actions-trigger { display: contents; }
-.sidebar-tag-row { flex-wrap: nowrap; }
-.sidebar-tag-row:has(.sidebar-tag-action-form, .sidebar-tag-menu) { width: 100%; flex-wrap: wrap; }
-.sidebar-tags > div:has(.sidebar-tag-action-form, .sidebar-tag-menu) { width: 100%; }
-@media (hover: hover) and (pointer: fine) {
-  .sidebar-tag-row { position: relative; }
-  .sidebar-tag-actions-trigger:not([data-open]) > .ui-icon-button { position: absolute; top: 50%; right: 3px; transform: translateY(-50%); opacity: 0; background: var(--color-surface); transition: opacity .12s; }
-  .sidebar-tag-row:hover .sidebar-tag-actions-trigger > .ui-icon-button,
-  .sidebar-tag-actions-trigger > .ui-icon-button:focus { opacity: 1; }
+.sidebar-tag-chip { display: contents; }
+.sidebar-tag-row { position: relative; flex-wrap: nowrap; }
+.sidebar-tag-row:has(.sidebar-tag-action-form) { width: 100%; flex-wrap: wrap; }
+.sidebar-tags > div:has(.sidebar-tag-action-form) { width: 100%; }
+.sidebar-tag-actions-trigger .ui-icon-button { position: absolute; top: 50%; right: 3px; width: 20px; height: 20px; padding: 3px; border-radius: 4px; transform: translateY(-50%); opacity: 0; background: var(--color-surface); transition: opacity .12s; }
+.sidebar-tag-actions-trigger .ui-icon-button svg { width: 12px; height: 12px; }
+.sidebar-tag-row:hover .sidebar-tag-actions-trigger .ui-icon-button,
+.sidebar-tag-actions-trigger .ui-icon-button:focus-visible,
+.sidebar-tag-actions-trigger[data-open] .ui-icon-button { opacity: 1; }
+@media (hover: none), (pointer: coarse) {
+  .sidebar-tag-actions-trigger .ui-icon-button { opacity: 0 !important; pointer-events: none; }
+  .sidebar-tag-chip > button { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 }
-.sidebar-tag-menu { flex-basis: 100%; display: grid; padding: .25rem; border: 1px solid var(--color-border); border-radius: .5rem; background: var(--color-surface); box-shadow: 0 4px 12px rgb(0 0 0 / .08); }
-.sidebar-tag-menu [role="menuitem"] { text-align: left; padding: .35rem .5rem; border-radius: .35rem; font-size: .8rem; color: var(--color-text); }
-.sidebar-tag-menu [role="menuitem"]:hover, .sidebar-tag-menu [role="menuitem"]:focus-visible { background: var(--color-surface-hover, rgb(127 127 127 / .12)); outline: none; }
-.sidebar-tag-menu [role="menuitem"][aria-disabled="true"] { opacity: .6; cursor: default; }
+.sidebar-tag-menu { z-index: 100; display: grid; min-width: 10rem; max-width: calc(100vw - 16px); padding: .25rem; border: 1px solid var(--color-border); border-radius: .5rem; background: var(--color-surface); color: var(--color-text); box-shadow: 0 4px 16px #0002; }
+.sidebar-tag-menu [role="menuitem"] { text-align: left; padding: .35rem .5rem; border-radius: .35rem; font-size: .8rem; color: var(--color-text); cursor: default; outline: none; }
+.sidebar-tag-menu [role="menuitem"][data-highlighted] { background: var(--color-surface-hover, rgb(127 127 127 / .12)); }
+.sidebar-tag-menu [role="menuitem"][aria-disabled="true"] { opacity: .6; }
 .sidebar-tag-menu .sidebar-tag-menu-danger { color: var(--color-danger, #dc2626); }
 .sidebar-tag-menu .sidebar-tag-menu-danger[data-armed] { background: #e11d48; color: #fff; font-weight: 600; }
-.sidebar-tag-menu > p { padding: .15rem .5rem .25rem; }
-.sidebar-tag-actions-trigger .ui-icon-button { width: 20px; height: 20px; padding: 3px; border-radius: 4px; }
-.sidebar-tag-actions-trigger .ui-icon-button svg { width: 12px; height: 12px; }
-@media (pointer: coarse) { .sidebar-tag-actions-trigger .ui-icon-button { width: 28px; height: 28px; padding: 7px; } }
+.sidebar-tag-menu > p { padding: .15rem .5rem .25rem; max-width: 14rem; }
 .sidebar-tag-action-form { display: grid; gap: .35rem; width: 100%; padding: .5rem; border: 1px solid var(--color-border); border-radius: .5rem; background: var(--color-surface); }
 .sidebar-tag-action-form input { width: 100%; padding: .3rem .5rem; border: 1px solid var(--color-border); border-radius: .35rem; background: transparent; color: var(--color-text); font-size: .8rem; }
 @media (max-width: 639px) { .sidebar-tag-action-form { scroll-margin-bottom: 9rem; } }
