@@ -28,6 +28,7 @@ jobs:
       - name: Verify Core
         run: |
           pnpm check:core-ownership --core
+          pnpm check:vercel-sparse-paths --core
           pnpm build
           pnpm test
       - name: Merge Core and synchronize examples

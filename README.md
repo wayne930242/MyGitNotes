@@ -66,9 +66,11 @@ git clone <repository-url> mygitnotes
 cd mygitnotes
 pnpm install
 pnpm build              # Compiles @mygitnotes packages required by local-server
-pnpm bootstrap-workspace  # Add --no-examples for an empty workspace
+pnpm bootstrap-workspace  # Add --no-examples for an empty workspace; prints Vercel deploy steps
 pnpm dev
 ```
+
+To deploy the workspace to Vercel, follow the steps bootstrap prints or [Vercel deployment](#vercel-deployment-optional).
 
 Open [http://localhost:5173](http://localhost:5173). The development commands use the local repository and do not require GitHub sign-in.
 
@@ -176,6 +178,35 @@ You can still upload objects with `wrangler r2 object put` or the Cloudflare das
 ## Vercel deployment (optional)
 
 Deploy the `main` branch to your own Vercel project. The included [`vercel.json`](vercel.json) builds the web app and routes `/api/*`, `/mcp/*`, `/raw-assets/*`, and `/r2-assets/*` to the serverless API.
+
+### Default: GitHub Actions with sparse checkout
+
+[`deploy-vercel-sparse.yml`](.github/workflows/deploy-vercel-sparse.yml) checks out only the product paths in [`.github/vercel-sparse-paths.txt`](.github/vercel-sparse-paths.txt), builds with the Vercel CLI, and deploys production. Notes, images, and fonts are never downloaded, so deploy time does not grow with the workspace. Pushes to `main` that change product paths deploy; note-only pushes do not. `pnpm update-core` keeps the path list current, and `pnpm check:vercel-sparse-paths --core` fails when Core adds a build or runtime path the list misses.
+
+Until the settings below exist, the workflow skips with a notice and never fails. `pnpm bootstrap-workspace` prints the same steps.
+
+1. Run `vercel link` and read `orgId` and `projectId` from `.vercel/project.json`.
+2. Disconnect the project's Git integration in Vercel (**Settings → Git**) so pushes do not also trigger a full-clone deployment.
+3. Set the runtime environment variables below, for example with `pnpm env:vercel production`.
+4. Configure the GitHub repository:
+
+```bash
+gh variable set VERCEL_ORG_ID --body <orgId>
+gh variable set VERCEL_PROJECT_ID --body <projectId>
+gh secret set VERCEL_TOKEN   # a token from https://vercel.com/account/tokens
+```
+
+Run a deployment manually with `gh workflow run deploy-vercel-sparse.yml`.
+
+### Opt out: Vercel Git integration
+
+Keep the Git integration connected and run `gh variable set MYGITNOTES_VERCEL_DEPLOY --body git-integration`; the workflow then skips. Vercel clones the whole repository on every deploy, so choose this for small workspaces. Trade-offs of the default Actions mode:
+
+- **Actions minutes:** each deploy installs and builds on a GitHub runner and uses your Actions quota; Git integration builds on Vercel.
+- **No automatic preview deployments:** only `main` deploys to production; branches and pull requests get no preview URLs.
+- **Token handling:** `VERCEL_TOKEN` grants access to your Vercel account. Store it only as a repository secret, scope it to the team that owns the project, set an expiry, and rotate it if it leaks. Git integration needs no token.
+
+### Runtime settings
 
 You need:
 

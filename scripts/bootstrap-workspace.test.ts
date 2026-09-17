@@ -24,7 +24,9 @@ afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
 describe('canonical starter workspace CLI', () => {
   it('initializes main from Core examples in one commit and preserves edits on rerun', () => {
-    bootstrap();
+    const output = bootstrap().toString();
+    for (const step of ['deploy-vercel-sparse.yml', 'Git integration', 'gh variable set VERCEL_ORG_ID', 'gh variable set VERCEL_PROJECT_ID', 'gh secret set VERCEL_TOKEN', 'MYGITNOTES_VERCEL_DEPLOY --body git-integration']) expect(output).toContain(step);
+    expect(output).not.toMatch(/gh secret set VERCEL_TOKEN --body/);
     expect(git('branch', '--show-current')).toBe('main');
     expect(git('rev-list', '--count', 'HEAD')).toBe('2');
     expect(git('ls-tree', '-r', '--name-only', 'core', '--', 'notes', '.mygitnotes.yaml')).toBe('');

@@ -66,9 +66,11 @@ git clone <repository-url> mygitnotes
 cd mygitnotes
 pnpm install
 pnpm build              # 編譯 local-server 所需的 @mygitnotes 核心套件產物
-pnpm bootstrap-workspace  # 加上 --no-examples 建立不含範例的空工作區
+pnpm bootstrap-workspace  # 加上 --no-examples 建立不含範例的空工作區；會印出 Vercel 部署步驟
 pnpm dev
 ```
+
+要部署到 Vercel，依 bootstrap 印出的步驟或 [Vercel 部署](#vercel-部署選用) 設定。
 
 開啟 [http://localhost:5173](http://localhost:5173)。開發指令直接使用本機儲存庫，不需要平台登入。
 
@@ -176,6 +178,35 @@ R2 不是必要功能。只有當 workspace 有大檔案，例如掃描 PDF、�
 ## Vercel 部署（選用）
 
 將 `main` 分支部署到你自己的 Vercel 專案。隨附的 [`vercel.json`](vercel.json) 會建置網頁介面，並將 `/api/*`、`/mcp/*`、`/raw-assets/*` 與 `/r2-assets/*` 導向 serverless API。
+
+### 預設：GitHub Actions 搭配 sparse checkout
+
+[`deploy-vercel-sparse.yml`](.github/workflows/deploy-vercel-sparse.yml) 只 checkout [`.github/vercel-sparse-paths.txt`](.github/vercel-sparse-paths.txt) 列出的產品路徑，用 Vercel CLI 建置並部署 production。筆記、圖片與字型不會被下載，部署時間不隨工作區內容成長。推送到 `main` 且變更產品路徑時才部署，只改筆記的推送不會觸發。`pnpm update-core` 會一併更新路徑清單；Core 新增建置或執行期需要的路徑卻沒列入清單時，`pnpm check:vercel-sparse-paths --core` 會失敗。
+
+下列設定完成前，workflow 會顯示 notice 並略過，不會失敗。`pnpm bootstrap-workspace` 也會印出相同步驟。
+
+1. 執行 `vercel link`，從 `.vercel/project.json` 取得 `orgId` 與 `projectId`。
+2. 在 Vercel 中斷專案的 Git integration（**Settings → Git**），避免推送時又觸發一次完整 clone 的部署。
+3. 設定下方的執行期環境變數，例如使用 `pnpm env:vercel production`。
+4. 設定 GitHub 儲存庫：
+
+```bash
+gh variable set VERCEL_ORG_ID --body <orgId>
+gh variable set VERCEL_PROJECT_ID --body <projectId>
+gh secret set VERCEL_TOKEN   # 從 https://vercel.com/account/tokens 建立的 token
+```
+
+手動部署：`gh workflow run deploy-vercel-sparse.yml`。
+
+### 改用：Vercel Git integration
+
+保留 Git integration，並執行 `gh variable set MYGITNOTES_VERCEL_DEPLOY --body git-integration`，workflow 便會略過。Vercel 每次部署都會 clone 整個儲存庫，適合小型工作區。預設 Actions 模式的取捨：
+
+- **Actions 分鐘數：** 每次部署在 GitHub runner 上安裝與建置，消耗 Actions 額度；Git integration 則在 Vercel 建置。
+- **沒有自動 preview 部署：** 只有 `main` 部署到 production，分支與 pull request 不會產生 preview URL。
+- **Token 管理：** `VERCEL_TOKEN` 可存取你的 Vercel 帳號。只存為儲存庫 secret，限定在擁有該專案的 team，設定到期日，外洩時立即輪替。Git integration 不需要 token。
+
+### 執行期設定
 
 你需要：
 

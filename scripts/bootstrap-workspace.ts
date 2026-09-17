@@ -17,6 +17,21 @@ files:
   hide_dotfiles: true
 `;
 
+// Deployment settings live in GitHub and Vercel, so bootstrap prints the commands and never handles tokens.
+const VERCEL_DEPLOY_STEPS = `
+   Deploy to Vercel (optional; .github/workflows/deploy-vercel-sparse.yml skips until configured):
+  1. Create or link the Vercel project: vercel link
+     Read orgId and projectId from .vercel/project.json.
+  2. Disconnect the project's Git integration in Vercel (Settings -> Git).
+  3. Import runtime settings: pnpm env:vercel production
+  4. Configure the GitHub repository:
+     gh variable set VERCEL_ORG_ID --body <orgId>
+     gh variable set VERCEL_PROJECT_ID --body <projectId>
+     gh secret set VERCEL_TOKEN   # paste a token from https://vercel.com/account/tokens
+  5. Push 'main'. Pushes that change product paths deploy production;
+     note-only pushes do not. Run it manually with: gh workflow run deploy-vercel-sparse.yml
+   To let Vercel Git integration deploy instead: gh variable set MYGITNOTES_VERCEL_DEPLOY --body git-integration`;
+
 async function bootstrapWorkspace() {
   const repoRoot = process.cwd();
   const withExamples = !process.argv.includes('--no-examples');
@@ -118,6 +133,7 @@ async function bootstrapWorkspace() {
   console.log(`   - Config: ${WORKSPACE_CONFIG_FILENAME}`);
   console.log(`   - Default Notebook: ${config.workspace.default_notebook}`);
   console.log(`   - Next steps: Run 'pnpm dev' to launch the application.`);
+  console.log(VERCEL_DEPLOY_STEPS);
   console.log(`======================================================\n`);
 }
 
