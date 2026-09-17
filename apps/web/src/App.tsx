@@ -17,7 +17,7 @@ import { notebookRoute, noteRoute, noteReturnRoute, parseWorkspaceRoute, Workspa
 import { readWorkingNotes, updateWorkingNote, clearCommittedNotes, overlayWorkingNotes, workingDiff, type WorkingNotes } from './lib/working-notes.js';
 import { mergeNote, sameValue } from './lib/merge-note.js';
 import { buildNewNoteDraft } from './lib/new-note.js';
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   fetchWorkspace,
   commitRemoteNotes,
@@ -251,10 +251,17 @@ const AppContent: React.FC = () => {
   const showHidden = route.showHidden;
   const visibleNotes = useMemo(() => notes.filter(note => showHidden || !isNoteHidden({ ...note.metadata, status: note.status })), [notes, showHidden]);
   const selectedTags = useMemo(() => [...new Set(route.tags)], [route.tags]);
-  const noteTagActions = canWrite ? {
-    allTags: Array.from(new Set(visibleNotes.flatMap(note => note.tags))),
-    onPreviewUsage: previewTagUsage, onRename: handleRenameTag, onMerge: handleMergeTag, onDelete: handleDeleteTag,
-  } : undefined;
+  // Stable across renders so memoized note rows skip re-rendering; calls reach the latest handlers.
+  const tagHandlers = useRef({ previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag });
+  useLayoutEffect(() => { tagHandlers.current = { previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag }; });
+  const workspaceTagNames = useMemo(() => Array.from(new Set(visibleNotes.flatMap(note => note.tags))), [visibleNotes]);
+  const noteTagActions = useMemo(() => canWrite ? {
+    allTags: workspaceTagNames,
+    onPreviewUsage: (tag: string) => tagHandlers.current.previewTagUsage(tag),
+    onRename: (from: string, to: string) => tagHandlers.current.handleRenameTag(from, to),
+    onMerge: (from: string, into: string) => tagHandlers.current.handleMergeTag(from, into),
+    onDelete: (tag: string) => tagHandlers.current.handleDeleteTag(tag),
+  } : undefined, [canWrite, workspaceTagNames]);
   const searchQuery = route.q;
   const viewMode = route.view;
   const indexInToolbar = viewMode === 'flat' || viewMode === 'kanban';
