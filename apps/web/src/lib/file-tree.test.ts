@@ -26,7 +26,7 @@ describe('buildFileTree', () => {
       entry(`${root}/tech/frontend`, true),
       entry(`${root}/health`, true),
     ];
-    const tree = buildFileTree(entries, root);
+    const { roots: tree } = buildFileTree(entries, root);
     expect(tree.map(node => node.path)).toEqual([`${root}/tech`, `${root}/health`]);
     expect(tree[0].children.map(node => node.path)).toEqual([`${root}/tech/frontend`]);
     expect(tree[0].depth).toBe(0);
@@ -40,7 +40,7 @@ describe('buildFileTree', () => {
       entry(`${root}/tech/_dir.yml`, false),
       entry(`${root}/tech/diagram.png`, false),
     ];
-    const tree = buildFileTree(entries, root);
+    const { roots: tree } = buildFileTree(entries, root);
     expect(tree[0].hasNonDocument).toBe(true);
   });
 
@@ -50,7 +50,7 @@ describe('buildFileTree', () => {
       entry(`${root}/tech/notes.md`, false),
       entry(`${root}/tech/_dir.yml`, false),
     ];
-    const tree = buildFileTree(entries, root);
+    const { roots: tree } = buildFileTree(entries, root);
     expect(tree[0].hasNonDocument).toBe(false);
   });
 
@@ -60,9 +60,36 @@ describe('buildFileTree', () => {
       entry(`${root}/tech/frontend`, true),
       entry(`${root}/tech/frontend/screenshot.png`, false),
     ];
-    const tree = buildFileTree(entries, root);
+    const { roots: tree } = buildFileTree(entries, root);
     expect(tree[0].hasNonDocument).toBe(true);
     expect(tree[0].children[0].hasNonDocument).toBe(true);
+  });
+
+  it('marks the notebook root when a non-document file sits directly at the root', () => {
+    const entries = [
+      entry(`${root}/index.md`, false),
+      entry(`${root}/photo.png`, false),
+    ];
+    const { rootHasNonDocument } = buildFileTree(entries, root);
+    expect(rootHasNonDocument).toBe(true);
+  });
+
+  it('marks the notebook root when a non-document file sits in a descendant folder', () => {
+    const entries = [
+      entry(`${root}/tech`, true),
+      entry(`${root}/tech/diagram.png`, false),
+    ];
+    const { rootHasNonDocument } = buildFileTree(entries, root);
+    expect(rootHasNonDocument).toBe(true);
+  });
+
+  it('leaves the notebook root unmarked when only documents and _dir.yml sit at the root', () => {
+    const entries = [
+      entry(`${root}/index.md`, false),
+      entry(`${root}/_dir.yml`, false),
+    ];
+    const { rootHasNonDocument } = buildFileTree(entries, root);
+    expect(rootHasNonDocument).toBe(false);
   });
 });
 

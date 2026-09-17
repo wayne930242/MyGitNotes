@@ -8,6 +8,12 @@ export interface FileTreeNode {
   children: FileTreeNode[];
 }
 
+export interface FileTree {
+  roots: FileTreeNode[];
+  /** Whether the notebook root itself holds a non-document file, directly or in a descendant — the server excludes the root from `entries`, so no tree node represents it. */
+  rootHasNonDocument: boolean;
+}
+
 export const isMarkdownFile = (name: string) => /\.(md|markdown)$/i.test(name);
 
 /** `_dir.yml` carries folder metadata rather than user content, so it never counts as a document or an attachment. */
@@ -19,7 +25,7 @@ const isStructuralFile = (name: string) => name === '_dir.yml';
  * structural — the signal the Files page folder view needs to flag "has attachments"
  * without requiring the user to expand every branch.
  */
-export function buildFileTree(entries: FileEntry[], root: string): FileTreeNode[] {
+export function buildFileTree(entries: FileEntry[], root: string): FileTree {
   const dirs = entries.filter(entry => entry.directory);
   const files = entries.filter(entry => !entry.directory);
   const nodeByPath = new Map<string, FileTreeNode>();
@@ -32,15 +38,18 @@ export function buildFileTree(entries: FileEntry[], root: string): FileTreeNode[
     const parent = nodeByPath.get(dir.path.slice(0, dir.path.lastIndexOf('/')));
     if (parent) parent.children.push(node); else roots.push(node);
   }
+  let rootHasNonDocument = false;
   for (const file of files) {
     if (isMarkdownFile(file.name) || isStructuralFile(file.name)) continue;
-    const parent = nodeByPath.get(file.path.slice(0, file.path.lastIndexOf('/')));
+    const parentPath = file.path.slice(0, file.path.lastIndexOf('/'));
+    const parent = nodeByPath.get(parentPath);
     if (parent) parent.hasNonDocument = true;
+    else if (parentPath === root) rootHasNonDocument = true;
   }
   const propagate = (nodes: FileTreeNode[]): boolean =>
     nodes.reduce((any, node) => { const fromChildren = propagate(node.children); node.hasNonDocument = node.hasNonDocument || fromChildren; return any || node.hasNonDocument; }, false);
-  propagate(roots);
-  return roots;
+  rootHasNonDocument = propagate(roots) || rootHasNonDocument;
+  return { roots, rootHasNonDocument };
 }
 
 /** Ancestor paths plus `path` itself, nearest root first — used to auto-expand the tree down to the active directory. */
