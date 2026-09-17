@@ -486,7 +486,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'notes.delete': '刪除筆記',
   'notes.confirmDelete': '再次點擊以確認刪除',
   'notes.noContent': '無內容',
-  'notes.noStatus': '（無狀態）',
+  'notes.noStatus': '無狀態',
 
   // Common actions & labels
   'common.cancel': '取消',
@@ -571,7 +571,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'editor.title': '標題',
   'editor.titlePlaceholder': '筆記標題',
   'editor.status': '狀態',
-  'editor.noStatus': '（無狀態）',
+  'editor.noStatus': '無狀態',
   'editor.hideNote': '隱藏筆記',
   'editor.tags': '標籤（輸入以自動補全）',
   'editor.addTagPlaceholder': '新增標籤（例如：專案）...',

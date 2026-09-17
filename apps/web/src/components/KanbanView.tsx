@@ -400,7 +400,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
             <div className="flex items-center justify-between mb-3 px-1">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
-                <h3 className="font-semibold text-slate-800 dark:text-slate-200 text-sm">
+                <h3 className="font-medium text-sm" style={{ color: 'var(--color-muted)' }}>
                   {t('kanban.noStatus')}
                 </h3>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400 font-medium">

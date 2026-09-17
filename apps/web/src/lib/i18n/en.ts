@@ -400,7 +400,7 @@ export const en = {
   'kanban.createdNewest': 'Created (Newest)',
   'kanban.columns': '{count} columns',
   'kanban.notes': '{count} notes',
-  'kanban.noStatus': 'No Status',
+  'kanban.noStatus': 'No status',
   'kanban.addNoteTo': 'Add note to {title}',
   'kanban.dropNoteInto': 'Drop note into {title}',
   'kanban.noNotes': 'No notes',
@@ -486,7 +486,7 @@ export const en = {
   'notes.delete': 'Delete note',
   'notes.confirmDelete': 'Click again to confirm deletion',
   'notes.noContent': 'No content',
-  'notes.noStatus': '(No status)',
+  'notes.noStatus': 'No status',
 
   // Common actions & labels
   'common.cancel': 'Cancel',
@@ -571,7 +571,7 @@ export const en = {
   'editor.title': 'Title',
   'editor.titlePlaceholder': 'Note Title',
   'editor.status': 'Status',
-  'editor.noStatus': '(No status)',
+  'editor.noStatus': 'No status',
   'editor.hideNote': 'Hide note',
   'editor.tags': 'Tags (Type to Autocomplete)',
   'editor.addTagPlaceholder': 'Add tag (e.g. project)...',

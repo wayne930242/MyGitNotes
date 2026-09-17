@@ -784,7 +784,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
             </div>
             <div>
               <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">{t('editor.status')}</label>
-              <Select aria-label={t('editor.status')} disabled={locked} value={String(metadata.status || '')} onValueChange={value => setMetadata(withNoteStatus(metadata, value))} options={Array.from(new Set(['', ...statuses, String(metadata.status || '')])).map(value => ({value,label:value || t('editor.noStatus')}))} className="w-full" />
+              <Select aria-label={t('editor.status')} disabled={locked} value={String(metadata.status || '')} onValueChange={value => setMetadata(withNoteStatus(metadata, value))} options={Array.from(new Set(['', ...statuses, String(metadata.status || '')])).map(value => ({value,label:value || t('editor.noStatus')}))} className={`w-full ${metadata.status ? '' : 'status-empty'}`} />
               <label className="flex items-center gap-2 min-h-11 cursor-pointer">
                 <input type="checkbox" aria-label={t('editor.hideNote')} checked={isNoteHidden(metadata)}
                   onChange={event => setMetadata({ ...metadata, hiden: event.target.checked })}
