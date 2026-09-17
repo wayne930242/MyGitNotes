@@ -99,7 +99,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   draftScope,
 }) => {
 
-  const isMarkdown = note.path.endsWith('.md') || note.path.endsWith('.markdown');
+  const isMarkdown = /\.(md|markdown|mdx)$/i.test(note.path);
   const { t } = useTranslation();
   const panel = usePanelContext();
   useEffect(() => { panel.setHasOpenNote(true); return () => panel.setHasOpenNote(false); }, []);

@@ -122,7 +122,7 @@ export function scanNotebookNotes(
         walk(fullPath);
       } else if (entry.isFile()) {
         const ext = path.extname(entry.name).toLowerCase();
-        if (['.md', '.markdown', '.txt'].includes(ext)) {
+        if (['.md', '.markdown', '.mdx', '.txt'].includes(ext)) {
           notes.push(readNoteFile(repoRoot, relToRepo, notebook.id));
         }
       }

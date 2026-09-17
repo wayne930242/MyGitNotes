@@ -21,6 +21,7 @@ describe('Resource Classifier', () => {
 
   it('classifies notes properly', () => {
     expect(classifyResource('notes/example/intro.md', sampleConfig).type).toBe('note');
+    expect(classifyResource('notes/example/guide.mdx', sampleConfig).type).toBe('note');
     expect(classifyResource('notes/example/subfolder/idea.txt', sampleConfig).type).toBe('note');
   });
 

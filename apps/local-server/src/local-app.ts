@@ -333,7 +333,7 @@ function extractResourceTitle(fullPath: string, relPath: string): string {
     if (h1) return h1;
   } catch {}
 
-  const base = path.basename(relPath, '.md');
+  const base = path.basename(relPath).replace(/\.(md|markdown|mdx|txt)$/i, '');
   if (base.toLowerCase() === 'index' || base.toLowerCase() === 'skill') {
     const dir = path.basename(path.dirname(relPath));
     return dir.charAt(0).toUpperCase() + dir.slice(1).replace(/-/g, ' ');

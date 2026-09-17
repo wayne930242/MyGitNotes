@@ -80,7 +80,7 @@ export function classifyResource(
 
         // Regular notes inside notebook
         const ext = path.posix.extname(normalized).toLowerCase();
-        if (['.md', '.markdown', '.txt'].includes(ext)) {
+        if (['.md', '.markdown', '.mdx', '.txt'].includes(ext)) {
           return { path: normalized, type: 'note', notebookId: nb.id };
         }
 

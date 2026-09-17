@@ -10,6 +10,8 @@ describe('isMarkdownFile', () => {
   it('matches .md and .markdown case-insensitively', () => {
     expect(isMarkdownFile('index.md')).toBe(true);
     expect(isMarkdownFile('README.MARKDOWN')).toBe(true);
+    expect(isMarkdownFile('post.mdx')).toBe(true);
+    expect(isMarkdownFile('DOC.MDX')).toBe(true);
   });
   it('rejects other extensions', () => {
     expect(isMarkdownFile('photo.png')).toBe(false);
