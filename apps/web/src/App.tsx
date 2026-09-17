@@ -251,6 +251,10 @@ const AppContent: React.FC = () => {
   const showHidden = route.showHidden;
   const visibleNotes = useMemo(() => notes.filter(note => showHidden || !isNoteHidden({ ...note.metadata, status: note.status })), [notes, showHidden]);
   const selectedTags = useMemo(() => [...new Set(route.tags)], [route.tags]);
+  const noteTagActions = canWrite ? {
+    allTags: Array.from(new Set(visibleNotes.flatMap(note => note.tags))),
+    onPreviewUsage: previewTagUsage, onRename: handleRenameTag, onMerge: handleMergeTag, onDelete: handleDeleteTag,
+  } : undefined;
   const searchQuery = route.q;
   const viewMode = route.view;
   const indexInToolbar = viewMode === 'flat' || viewMode === 'kanban';
@@ -1003,6 +1007,7 @@ const AppContent: React.FC = () => {
                   sortField={sortField}
                   sortOrder={sortOrder}
                   onSortChange={handleSortChange}
+                  tagActions={noteTagActions}
                 />
               )}
               {viewMode === 'card' && (
@@ -1018,6 +1023,7 @@ const AppContent: React.FC = () => {
                   onMoveNote={moveNoteAction}
                   onNewNote={() => openNewNote()}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
+                  tagActions={noteTagActions}
                 />
               )}
               {viewMode === 'kanban' && (

@@ -3,7 +3,6 @@ import { Button } from './Button.js';
 import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import {
   FileText,
-  Tag,
   Clock,
   Trash2,
   Plus,
@@ -11,6 +10,7 @@ import {
   ArrowDown,
   ArrowUpDown,
 } from 'lucide-react';
+import { NoteTags, NoteTagActions } from './NoteTags.js';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import { Select } from './Select.js';
 import { NoteItem } from '../lib/types.js';
@@ -34,6 +34,7 @@ interface ListViewProps {
   sortOrder?: SortOrder;
   onSortChange?: (field: SortField, order?: SortOrder) => void;
   showMobileSort?: boolean;
+  tagActions?: NoteTagActions;
 }
 
 interface NoteRowActions {
@@ -43,8 +44,8 @@ interface NoteRowActions {
   status: (note: NoteItem, status: string) => void;
 }
 
-const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelete, isPendingDelete, actions, dates }: {
-  note: NoteItem; statuses: string[]; readOnly: boolean; canDelete: boolean; isPendingDelete: boolean;
+const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelete, isPendingDelete, actions, dates, tagActions }: {
+  note: NoteItem; tagActions?: NoteTagActions; statuses: string[]; readOnly: boolean; canDelete: boolean; isPendingDelete: boolean;
   actions: NoteRowActions; dates: { short: Intl.DateTimeFormat; full: Intl.DateTimeFormat };
 }) {
   const { t } = useTranslation();
@@ -85,21 +86,11 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
       </td>
 
       <td className="py-3 px-4">
-        <div className="flex flex-wrap gap-1">
-          {note.tags.length > 0 ? (
-            note.tags.map((tTag) => (
-              <span
-                key={tTag}
-                className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded text-xs"
-              >
-                <Tag className="w-2.5 h-2.5 text-slate-400" />
-                {tTag}
-              </span>
-            ))
-          ) : (
-            <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
-          )}
-        </div>
+        {note.tags.length > 0 ? (
+          <NoteTags tags={note.tags} chipClassName="px-2 py-0.5 text-xs" tagActions={tagActions} />
+        ) : (
+          <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
+        )}
       </td>
 
       <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap tabular-nums">
@@ -151,6 +142,7 @@ export const ListView: React.FC<ListViewProps> = ({
   sortOrder = 'desc',
   onSortChange,
   showMobileSort = false,
+  tagActions,
 }) => {
   const { t, language } = useTranslation();
   // Rows retain stable actions while invoking the latest committed callbacks.
@@ -271,7 +263,7 @@ export const ListView: React.FC<ListViewProps> = ({
           <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
             {/* Notes row rendering */}
             {notes.map(note => <NoteRow key={note.path} note={note} statuses={statuses}
-              readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} />)}
+              readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} tagActions={tagActions} />)}
           </tbody>
         </table>
       </div>

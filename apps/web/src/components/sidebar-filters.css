@@ -71,3 +71,11 @@
 .sidebar-notebook-folders .folder-drop-line { height: 1px; }
 .sidebar-notebook-empty { padding: 6px 8px; color: var(--color-muted); font-size: 12px; }
 .sidebar-notebook-heading > button:focus-visible, .sidebar-all-notebooks:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.note-tags .sidebar-tag-row .sidebar-tag-chip > span { padding-right: 1.4rem; }
+.note-tags .sidebar-tag-row:has(.sidebar-tag-action-form) { width: 100%; min-width: min(16rem, 100%); }
+.note-tags:has(.sidebar-tag-action-form) { width: 100%; }
+.note-card-footer:has(.sidebar-tag-action-form) { flex-wrap: wrap; }
+.note-card-footer .note-card-tags:has(.sidebar-tag-action-form) { max-width: none; }
+@media (hover: none), (pointer: coarse) {
+  .note-tags .sidebar-tag-row .sidebar-tag-chip > span { padding-right: .5rem; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+}
