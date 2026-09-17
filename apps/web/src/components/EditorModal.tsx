@@ -698,7 +698,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
               event.preventDefault();
               tabs[(target + tabs.length) % tabs.length].focus();
             }}>
-              <Button type="button" role="tab" aria-selected={isFindOpen} tabIndex={isFindOpen || !notePanel ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}><span>{t('editor.find')}</span></Button>
+              <Button type="button" role="tab" aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isAssetPickerOpen || isGitPanelOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}><span>{t('editor.find')}</span></Button>
               {isMarkdown && <Button type="button" role="tab" aria-selected={isOutlineOpen} tabIndex={isOutlineOpen ? 0 : -1} aria-label={t('editor.outline')} title={t('editor.outline')} onClick={() => isOutlineOpen ? setNotePanel(null) : openOutline()}><span>{t('editor.outline')}</span></Button>}
               <Button type="button" role="tab" aria-selected={showFrontmatter} tabIndex={showFrontmatter ? 0 : -1} aria-label={t('editor.frontmatter')} title={t('editor.frontmatter')} onClick={() => setNotePanel(showFrontmatter ? null : 'frontmatter')}><span>{t('editor.frontmatter')}</span></Button>
               <Button type="button" role="tab" aria-selected={isAssetPickerOpen} tabIndex={isAssetPickerOpen ? 0 : -1} aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onClick={() => setNotePanel(isAssetPickerOpen ? null : 'assets')}><span>{t('editor.asset')}</span></Button>
