@@ -52,6 +52,7 @@ class RenderedMarkdown extends WidgetType {
     dom.addEventListener('mousedown', event => {
       if ((event.target as HTMLElement).closest('a, [data-workspace-link]')) return;
       if ((event.target as HTMLElement).matches('.markdown-table-scroll')) return;
+      if ((event.target as HTMLElement).tagName.toLowerCase() === 'img') return;
       event.preventDefault(); view.dispatch({selection:{anchor:this.from}}); view.focus();
     });
     for (const image of dom.querySelectorAll('img')) image.addEventListener('load', () => view.requestMeasure());
@@ -347,7 +348,7 @@ const theme = EditorView.theme({
   '.live-md-codeblock':{fontFamily:'monospace',backgroundColor:'var(--color-sidebar)',paddingLeft:'14px'},
   '.live-md-quote':{borderLeft:'3px solid var(--color-primary)',paddingLeft:'14px',color:'var(--color-muted)'},
   '.live-md-rendered':{display:'inline-block',maxWidth:'100%',cursor:'text'},
-  '.live-md-rendered p':{margin:'0'},'.live-md-rendered img':{maxWidth:'100%',maxHeight:'360px',borderRadius:'8px'},
+  '.live-md-rendered p':{margin:'0'},'.live-md-rendered img':{maxWidth:'100%',maxHeight:'420px',borderRadius:'8px',margin:'6px 0',cursor:'zoom-in',display:'block'},
   '.cm-content input[type=checkbox]':{accentColor:'var(--color-primary)',verticalAlign:'middle',marginRight:'4px'},
   '.live-md-token-chip':{display:'inline-flex',alignItems:'center',padding:'0 6px',borderRadius:'999px',fontSize:'0.85em',cursor:'pointer',backgroundColor:'var(--color-sidebar)',color:'var(--color-muted)',border:'1px solid var(--color-border)'},
   '.live-md-token-editor':{display:'inline-flex',alignItems:'center',gap:'4px'},
