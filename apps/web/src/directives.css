@@ -973,4 +973,163 @@
   color: var(--color-text);
 }
 
+/* ===== 10. Mobile & Touch Responsive Adaptations ===== */
+@media (max-width: 640px), (pointer: coarse) {
+  /* Directive container adjustments */
+  .live-md-directive {
+    margin: 1rem 0;
+  }
+
+  /* Live Directive Toolbar: dock as a persistent, wrapping bar above the card on mobile */
+  .live-directive-toolbar {
+    position: relative !important;
+    top: auto !important;
+    right: auto !important;
+    left: auto !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    width: 100% !important;
+    box-sizing: border-box;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--color-text) 4%, var(--color-surface));
+    box-shadow: none;
+  }
+
+  .live-directive-toolbar select,
+  .live-directive-toolbar input,
+  .live-directive-toolbar button {
+    height: 32px;
+    font-size: 13px;
+  }
+
+  .live-directive-toolbar select.live-directive-type-select {
+    flex: 1 1 110px;
+    min-width: 90px;
+  }
+
+  .live-directive-toolbar select.live-directive-variant-select {
+    flex: 1 1 100px;
+    min-width: 80px;
+  }
+
+  .live-directive-toolbar input.live-directive-title-input {
+    flex: 2 1 130px;
+    width: auto;
+    min-width: 0;
+  }
+
+  .live-directive-toolbar input.live-directive-title-input:focus {
+    width: auto;
+  }
+
+  .live-directive-toolbar button.live-directive-edit-btn {
+    flex: 0 0 auto;
+    height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+    border-radius: 5px;
+  }
+
+  /* Inline Edit Form Panel on Mobile */
+  .live-directive-editor-panel {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .live-directive-form-row {
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .live-directive-form-field {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .live-directive-form-field label {
+    font-size: 12px;
+  }
+
+  .live-directive-form-field input,
+  .live-directive-form-field select {
+    height: 36px;
+    font-size: 14px; /* Prevents auto-zoom in iOS Safari */
+    padding: 6px 10px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .live-directive-body-editor {
+    min-height: 120px;
+    font-size: 14px;
+    padding: 10px;
+    line-height: 1.5;
+  }
+
+  .live-directive-editor-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .live-directive-editor-actions {
+    display: flex;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .live-directive-editor-actions button {
+    flex: 1;
+    height: 36px;
+    font-size: 13px;
+  }
+
+  .live-directive-editor-hint {
+    text-align: center;
+    font-size: 11px;
+  }
+
+  /* Prose Cards adaptations on Mobile */
+  .prose-custom .custom-directive {
+    margin: 1.25rem 0;
+    padding: 0.75rem 0.85rem;
+  }
+
+  .prose-custom .handout-card {
+    padding: 0.75rem 0.85rem;
+  }
+
+  .prose-custom .handout-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .prose-custom .coc-stat-characteristics,
+  .prose-custom .coc-stat-derived {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .prose-custom .coc-stat-cell {
+    padding: 0.5rem 0.6rem;
+  }
+
+  .prose-custom .coc-stat-name {
+    font-size: 1.25rem;
+  }
+
+  .prose-custom .parallel-quote-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem;
+  }
+}
+
 
