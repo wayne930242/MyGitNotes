@@ -12,6 +12,7 @@ import { createFolderManagerRouter } from './folder-manager.js';
 import { createR2AssetHandler } from './r2-assets.js';
 import { createR2ManagerRouter } from './r2-manager.js';
 import { createFileManagerRouter } from './file-manager.js';
+import { readDevPorts } from './dev-ports.js';
 
 export function applicationRoot() {
   let dir = path.dirname(fileURLToPath(import.meta.url));
@@ -37,7 +38,9 @@ export function createApp(base: string): express.Express {
     }
     const origin = req.headers.origin;
     const allowed = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
-    if (origin && origin !== allowed && !(source?.type === 'local' && /^http:\/\/(localhost|127\.0\.0\.1):(5173|4321)$/.test(origin))) return res.status(403).json({ error: 'Origin is not allowed.' });
+    const devWebPort = source?.type === 'local' ? readDevPorts(base).webPort ?? 5173 : undefined;
+    const isLocalDevOrigin = devWebPort !== undefined && origin !== undefined && new RegExp(`^http://(localhost|127\\.0\\.0\\.1):${devWebPort}$`).test(origin);
+    if (origin && origin !== allowed && !isLocalDevOrigin) return res.status(403).json({ error: 'Origin is not allowed.' });
     next();
   });
   app.use(express.json({ limit: '8mb' }));
