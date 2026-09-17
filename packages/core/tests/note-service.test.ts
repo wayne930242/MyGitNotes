@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { writeNoteFile } from '../src/note-service.js';
+import { scanNotebookNotes, writeNoteFile } from '../src/note-service.js';
 
 describe('writeNoteFile timestamp stamping', () => {
   let repoRoot: string;
@@ -37,5 +37,13 @@ describe('writeNoteFile timestamp stamping', () => {
     const createdAt = first.metadata.created;
     const second = writeNoteFile(repoRoot, 'notes/note.md', 'v2', first.metadata, 'example');
     expect(second.metadata.created).toBe(createdAt);
+  });
+
+  it('scans .mdx notes alongside .md notes in notebook', () => {
+    fs.mkdirSync(path.join(repoRoot, 'notes/example'), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, 'notes/example/regular.md'), '---\ntitle: Regular\n---\nBody');
+    fs.writeFileSync(path.join(repoRoot, 'notes/example/interactive.mdx'), '---\ntitle: Interactive MDX\n---\n<Component />');
+    const notes = scanNotebookNotes(repoRoot, { id: 'example', title: 'Example', root: 'notes/example' });
+    expect(notes.map(n => n.title).sort()).toEqual(['Interactive MDX', 'Regular']);
   });
 });

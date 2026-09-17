@@ -67,7 +67,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   const source = useRef<HTMLTextAreaElement>(null);
   const sourceLineNumbers = useRef<HTMLDivElement>(null);
   const [activeSourceLine, setActiveSourceLine] = useState(1);
-  const isMarkdown = /\.(md|markdown)$/i.test(path);
+  const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
   const sourceLineCount = content.split('\n').length;
 
   useEffect(() => setActiveSourceLine(1), [path, mode]);

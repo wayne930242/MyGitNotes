@@ -11,7 +11,7 @@ import { html } from '@codemirror/lang-html';
 import { yaml } from '@codemirror/lang-yaml';
 
 function language(path: string) {
-  if (/\.(md|markdown)$/i.test(path)) return markdown();
+  if (/\.(md|markdown|mdx)$/i.test(path)) return markdown();
   if (/\.[cm]?[jt]sx?$/i.test(path)) return javascript({ typescript: /\.[cm]?tsx?$/i.test(path), jsx: /x$/i.test(path) });
   if (/\.json$/i.test(path)) return json();
   if (/\.css$/i.test(path)) return css();

@@ -14,7 +14,7 @@ export interface FileTree {
   rootHasNonDocument: boolean;
 }
 
-export const isMarkdownFile = (name: string) => /\.(md|markdown)$/i.test(name);
+export const isMarkdownFile = (name: string) => /\.(md|markdown|mdx)$/i.test(name);
 
 /** `_dir.yml` carries folder metadata rather than user content, so it never counts as a document or an attachment. */
 const isStructuralFile = (name: string) => name === '_dir.yml';
