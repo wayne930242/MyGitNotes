@@ -48,7 +48,7 @@ import { AuthControls, ConnectionState, AgentAccessSettings } from './components
 import { Header } from './components/Header.js';
 import { KeyboardShortcuts, type ShortcutSurfaceMode } from './components/KeyboardShortcuts.js';
 import { NoteToolbar } from './components/NoteToolbar.js';
-import { PageToolbar } from './components/WorkspaceChrome.js';
+import { PageToolbar, SidebarProvider, WorkspaceSidebarPortal, WorkspaceSplitLayout } from './components/WorkspaceChrome.js';
 import { useVisualViewport } from './lib/use-visual-viewport.js';
 import { useSidebarSwipe } from './lib/use-sidebar-swipe.js';
 import { Sidebar } from './components/Sidebar.js';
@@ -938,38 +938,42 @@ const AppContent: React.FC = () => {
         </div>
       )}
       {/* Main Workspace Layout */}
-      <div ref={sidebarGestureRef} className="workspace-body relative flex-1 min-h-0 min-w-0 flex overflow-hidden">
-        {activeTab === 'notes' && (
-          <>
-            {/* Sidebar for Notebooks, Filters & Branch Info at bottom */}
-            {filtersOpen && <button className="notebook-backdrop mobile-only absolute inset-0 z-20 bg-slate-950/40" aria-label={t('sidebar.closeFilters')} onClick={() => setFiltersOpen(false)} />}
-            <div id="notebook-panel" className={`notebook-panel ${filtersOpen ? 'is-open' : ''}`}>
-            <Sidebar
-              selectedNotebookId={selectedNotebookId}
-              folders={folders}
-              onManageFiles={openFileManager}
-              foldersWritable={canWrite && selectedNotebookId !== 'all'}
-              reorder={folderReorder}
-              onToggleReorder={() => setFolderReorder(value => !value)}
-              filters={filterProps}
-              notes={visibleNotes}
-              beforeFolderChange={() => {
-                if (Object.keys(activeWorkingNotes).length || listLocalDrafts(workingScope).length || screen.dirty) throw new Error(t('folder.draftsHint'));
-              }}
-              onFoldersChanged={async () => { await refreshWorkspace(); await screen.refresh(); }}
-              selectedFolder={selectedFolder}
-              onSelectFolder={setSelectedFolder}
-              gitStatus={gitStatus}
-              canManageTags={canWrite}
-              onPreviewTagUsage={previewTagUsage}
-              onRenameTag={handleRenameTag}
-              onMergeTag={handleMergeTag}
-              onDeleteTag={handleDeleteTag}
-            />
-            </div>
+      <SidebarProvider open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <div ref={sidebarGestureRef} className="workspace-body relative flex-1 min-h-0 min-w-0 flex overflow-hidden">
+          <WorkspaceSplitLayout
+            hasSidebar={activeTab !== 'graph' && activeTab !== 'screen'}
+            sidebarDomId="notebook-panel"
+            closeLabel={t('sidebar.closeFilters')}
+          >
+            {activeTab === 'notes' && (
+              <>
+                <WorkspaceSidebarPortal>
+                  <Sidebar
+                    selectedNotebookId={selectedNotebookId}
+                    folders={folders}
+                    onManageFiles={openFileManager}
+                    foldersWritable={canWrite && selectedNotebookId !== 'all'}
+                    reorder={folderReorder}
+                    onToggleReorder={() => setFolderReorder(value => !value)}
+                    filters={filterProps}
+                    notes={visibleNotes}
+                    beforeFolderChange={() => {
+                      if (Object.keys(activeWorkingNotes).length || listLocalDrafts(workingScope).length || screen.dirty) throw new Error(t('folder.draftsHint'));
+                    }}
+                    onFoldersChanged={async () => { await refreshWorkspace(); await screen.refresh(); }}
+                    selectedFolder={selectedFolder}
+                    onSelectFolder={setSelectedFolder}
+                    gitStatus={gitStatus}
+                    canManageTags={canWrite}
+                    onPreviewTagUsage={previewTagUsage}
+                    onRenameTag={handleRenameTag}
+                    onMergeTag={handleMergeTag}
+                    onDeleteTag={handleDeleteTag}
+                  />
+                </WorkspaceSidebarPortal>
 
-            {/* Main Content Area */}
-            <main className="workspace-main notes-main">
+                {/* Main Content Area */}
+                <main className="workspace-main notes-main">
               <PageToolbar>
                 {indexInToolbar && folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
                 <NoteToolbar onManageFiles={selectedNotebookId === 'all' ? undefined : () => openFileManager(selectedNotebookId, selectedFolder || '')} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite || selectedNotebookId === 'all'} viewMode={viewMode} setViewMode={setViewMode}
@@ -1116,25 +1120,28 @@ const AppContent: React.FC = () => {
           </main>
         )}
 
-        <RightPanel
-          fileMode={activeTab === 'assets'}
-          fileMetadata={selectedFileEntry ? <FileMetadata entry={selectedFileEntry} onEdit={canWrite && !resourceNavigationBusy ? () => void fileManagerRef.current?.editMetadata() : undefined} /> : undefined}
-          onFileMetadataContainer={setFileMetadataContainer}
-          notes={notes}
-          notebooks={config?.notebooks || []}
-          selectedNotebookId={selectedNotebookId}
-          onOpenNote={handleOpenNote}
-          onSaveNote={handleSaveNote}
-          gitStatus={gitStatus}
-          deletedNotes={deletedNotes}
-          onRestoreNote={handleRestoreNote}
-          onOpenCommitModal={openCommitModal}
-          writable={canWrite}
-          remoteChanges={panelRemoteChanges}
-          getPreview={panelGetPreview}
-          onSynced={remote ? undefined : async () => { await refreshWorkspace(); await screen.refresh(); }}
-        />
-      </div>
+          </WorkspaceSplitLayout>
+
+          <RightPanel
+            fileMode={activeTab === 'assets'}
+            fileMetadata={selectedFileEntry ? <FileMetadata entry={selectedFileEntry} onEdit={canWrite && !resourceNavigationBusy ? () => void fileManagerRef.current?.editMetadata() : undefined} /> : undefined}
+            onFileMetadataContainer={setFileMetadataContainer}
+            notes={notes}
+            notebooks={config?.notebooks || []}
+            selectedNotebookId={selectedNotebookId}
+            onOpenNote={handleOpenNote}
+            onSaveNote={handleSaveNote}
+            gitStatus={gitStatus}
+            deletedNotes={deletedNotes}
+            onRestoreNote={handleRestoreNote}
+            onOpenCommitModal={openCommitModal}
+            writable={canWrite}
+            remoteChanges={panelRemoteChanges}
+            getPreview={panelGetPreview}
+            onSynced={remote ? undefined : async () => { await refreshWorkspace(); await screen.refresh(); }}
+          />
+        </div>
+      </SidebarProvider>
 
       {activeTab !== 'screen' && screen.dirty && screen.error && <div role="alert" className="workspace-link-error">{screen.error}<button className="ui-button" onClick={() => navigate('/screen')}>{t('nav.screen')}</button></div>}
 

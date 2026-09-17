@@ -2,7 +2,7 @@ import { Button } from './Button.js';
 import { useWorkspaceLinks } from './WorkspaceLinks.js';
 import { AgentFileTree } from './AgentFileTree.js';
 import { groupAgentResources } from '../lib/agent-tree.js';
-import { WorkspaceSidebar, WorkspaceSidebarDrawer, WorkspaceSidebarToggle, useWorkspaceSidebarDrawer } from './WorkspaceChrome.js';
+import { WorkspaceSidebar, WorkspaceSidebarPortal, WorkspaceSidebarToggle, useWorkspaceSidebarDrawer } from './WorkspaceChrome.js';
 import { EditorNotice } from './EditorNotice.js';
 import { EditorFooter } from './EditorFooter.js';
 import { Select } from './Select.js';
@@ -268,48 +268,49 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
         borderColor: 'var(--color-border)',
       }}
     >
-      {/* Left Navigation: Notes & System Agent Files */}
-      <WorkspaceSidebarDrawer open={sidebar.open} onClose={() => sidebar.setOpen(false)} closeLabel={t('common.close')}><WorkspaceSidebar label={t('agent.title')} className="agent-sidebar">
-        <section aria-label={t('agent.workspaceSkills')}>
-          <div className="sidebar-section-label">{t('agent.workspaceSkills')}</div>
-          <AgentFileTree resources={groups.skills} {...drawerTreeNavigation} />
-          {!groups.skills.length && <p className="agent-empty-scope">{t('agent.noWorkspaceSkills')}</p>}
-        </section>
-        <section aria-label={t('agent.sharedDocuments')}>
-          <div className="sidebar-section-label">{t('agent.sharedDocuments')}</div>
-          <AgentFileTree resources={groups.shared} {...drawerTreeNavigation} />
-          {!readOnly && !instructions.some(resource => resource.path === 'AGENTS.md') && (
-            <button disabled={isCreating || switching || restoring} onClick={() => void handleCreateWorkspaceGuidelines()}
-              className="sidebar-link"><Plus aria-hidden="true" /><span>{t('agent.createWorkspaceGuidelines')}</span></button>
-          )}
-        </section>
-        <section aria-label={t('agent.notebookDocuments')}>
-          <div className="sidebar-section-label">{t('agent.notebookDocuments')}</div>
-          <AgentFileTree resources={groups.notebook} {...drawerTreeNavigation} />
-          {!groups.notebook.length && <p className="agent-empty-scope">{t('agent.noNotebookDocuments')}</p>}
-        </section>
-        {groups.product.length > 0 && <section aria-label={t('agent.systemGuidelines')}>
-          <div className="sidebar-section-label">{t('agent.systemGuidelines')}<span>{t('agent.readOnly')}</span></div>
-          <AgentFileTree resources={groups.product} {...drawerTreeNavigation} />
-        </section>}
-
-        {/* Informational Callout */}
-        <div
-          className="agent-sidebar-help text-xs leading-relaxed"
-          style={{
-            backgroundColor: 'var(--color-primary-light)',
-            borderColor: 'var(--color-border)',
-            color: 'var(--color-text)',
-          }}
-        >
-          <strong className="block mb-1 font-semibold" style={{ color: 'var(--color-primary)' }}>
-            {t('agent.guidelinesTitle')}
-          </strong>
-          <p className="mb-2">{t('agent.scopeDescription')}</p>
-          {t(readOnly ? 'agent.guidelinesReadOnlyDescription' : remote ? 'agent.remoteGuidelinesDescription' : 'agent.guidelinesDescription')}
-        </div>
-      </WorkspaceSidebar></WorkspaceSidebarDrawer>
       <WorkspaceSidebarToggle label={t('agent.title')} open={sidebar.open} onClick={() => sidebar.setOpen(open => !open)} />
+      <WorkspaceSidebarPortal>
+        <WorkspaceSidebar label={t('agent.title')} className="agent-sidebar">
+          <section aria-label={t('agent.workspaceSkills')}>
+            <div className="sidebar-section-label">{t('agent.workspaceSkills')}</div>
+            <AgentFileTree resources={groups.skills} {...drawerTreeNavigation} />
+            {!groups.skills.length && <p className="agent-empty-scope">{t('agent.noWorkspaceSkills')}</p>}
+          </section>
+          <section aria-label={t('agent.sharedDocuments')}>
+            <div className="sidebar-section-label">{t('agent.sharedDocuments')}</div>
+            <AgentFileTree resources={groups.shared} {...drawerTreeNavigation} />
+            {!readOnly && !instructions.some(resource => resource.path === 'AGENTS.md') && (
+              <button disabled={isCreating || switching || restoring} onClick={() => void handleCreateWorkspaceGuidelines()}
+                className="sidebar-link"><Plus aria-hidden="true" /><span>{t('agent.createWorkspaceGuidelines')}</span></button>
+            )}
+          </section>
+          <section aria-label={t('agent.notebookDocuments')}>
+            <div className="sidebar-section-label">{t('agent.notebookDocuments')}</div>
+            <AgentFileTree resources={groups.notebook} {...drawerTreeNavigation} />
+            {!groups.notebook.length && <p className="agent-empty-scope">{t('agent.noNotebookDocuments')}</p>}
+          </section>
+          {groups.product.length > 0 && <section aria-label={t('agent.systemGuidelines')}>
+            <div className="sidebar-section-label">{t('agent.systemGuidelines')}<span>{t('agent.readOnly')}</span></div>
+            <AgentFileTree resources={groups.product} {...drawerTreeNavigation} />
+          </section>}
+
+          {/* Informational Callout */}
+          <div
+            className="agent-sidebar-help text-xs leading-relaxed"
+            style={{
+              backgroundColor: 'var(--color-primary-light)',
+              borderColor: 'var(--color-border)',
+              color: 'var(--color-text)',
+            }}
+          >
+            <strong className="block mb-1 font-semibold" style={{ color: 'var(--color-primary)' }}>
+              {t('agent.guidelinesTitle')}
+            </strong>
+            <p className="mb-2">{t('agent.scopeDescription')}</p>
+            {t(readOnly ? 'agent.guidelinesReadOnlyDescription' : remote ? 'agent.remoteGuidelinesDescription' : 'agent.guidelinesDescription')}
+          </div>
+        </WorkspaceSidebar>
+      </WorkspaceSidebarPortal>
 
       {/* Right Content Viewer / Editor */}
       <div className="workspace-content agent-content">
@@ -429,7 +430,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
           state={loading ? 'loading' : isSaving ? 'saving' : hasUnsavedChanges ? 'pending' : 'saved'}
           status={t(loading ? 'agent.loading' : isSaving ? 'editor.saving' : hasUnsavedChanges ? 'editor.unsavedChanges' : editable ? 'agent.saved' : 'editor.readOnly')}
         />}
-      </div>
+        </div>
     </div>
   );
 });
