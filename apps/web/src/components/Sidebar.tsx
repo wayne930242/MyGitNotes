@@ -129,6 +129,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   for (const tag of selectedTags) tagCounts[tag] ??= 0;
   const allTags = Object.keys(tagCounts);
   const visibleTags = filterAndSortTags(tagCounts, tagQuery, tagSort, language);
+  const workspaceTagNames = Array.from(new Set(notes.flatMap((note) => note.tags)));
 
   const modifiedCount = gitStatus?.modified.length || 0;
   const untrackedCount = gitStatus?.untracked.length || 0;
@@ -480,7 +481,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <div key={tag} className="inline-flex flex-col items-start gap-1 max-w-full">
                     <div className="sidebar-tag-row inline-flex items-center gap-1 max-w-full">
                       {canManageTags && onPreviewTagUsage && onRenameTag && onMergeTag && onDeleteTag ? (
-                        <TagActions tag={tag} onPreviewUsage={onPreviewTagUsage} onRename={onRenameTag} onMerge={onMergeTag} onDelete={onDeleteTag}>
+                        <TagActions tag={tag} allTags={workspaceTagNames} onPreviewUsage={onPreviewTagUsage} onRename={onRenameTag} onMerge={onMergeTag} onDelete={onDeleteTag}>
                           {tagChip}
                         </TagActions>
                       ) : tagChip}

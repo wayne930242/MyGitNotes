@@ -461,6 +461,8 @@ export const en = {
   'sidebar.tagSameNameError': 'Choose a different tag name.',
   'sidebar.tagNoNotesAffected': 'No notes across the workspace have this tag.',
   'sidebar.tagOperationFailed': 'Tag update failed: {error}',
+  'sidebar.tagMergeNewTarget': '"{tag}" is not an existing tag yet.',
+  'sidebar.tagSuggestions': 'Matching tags',
   'sidebar.recentTagChanges': 'Recent tag changes',
   'sidebar.dismissTagOperation': 'Dismiss',
   'sidebar.tagRenamedLabel': 'Renamed #{from} to #{to} in {count} notes',

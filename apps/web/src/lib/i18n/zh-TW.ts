@@ -461,6 +461,8 @@ export const zhTW: Record<TranslationKey, string> = {
   'sidebar.tagSameNameError': '請選擇不同的標籤名稱。',
   'sidebar.tagNoNotesAffected': '工作區內沒有筆記使用這個標籤。',
   'sidebar.tagOperationFailed': '標籤更新失敗：{error}',
+  'sidebar.tagMergeNewTarget': '「{tag}」還不是現有的標籤。',
+  'sidebar.tagSuggestions': '符合的標籤',
   'sidebar.recentTagChanges': '近期標籤變更',
   'sidebar.dismissTagOperation': '關閉',
   'sidebar.tagRenamedLabel': '已將 #{from} 重新命名為 #{to}，共 {count} 篇筆記',
