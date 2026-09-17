@@ -17,12 +17,14 @@ export function useDeleteConfirm(requireConfirm: boolean, onConfirmed: (path: st
   }, [pendingPath]);
   const latest = useRef({ requireConfirm, onConfirmed });
   useLayoutEffect(() => { latest.current = { requireConfirm, onConfirmed }; });
+  const pendingRef = useRef<string | null>(null);
+  useLayoutEffect(() => { pendingRef.current = pendingPath; }, [pendingPath]);
+  // The delete fires outside the state updater: StrictMode double-invokes updaters, which would delete twice.
   const requestDeleteRef = useRef((path: string) => {
-    setPendingPath(current => {
-      const next = nextDeleteConfirmState(current, path, latest.current.requireConfirm);
-      if (next.shouldDelete) latest.current.onConfirmed(path);
-      return next.pendingPath;
-    });
+    const next = nextDeleteConfirmState(pendingRef.current, path, latest.current.requireConfirm);
+    pendingRef.current = next.pendingPath;
+    setPendingPath(next.pendingPath);
+    if (next.shouldDelete) latest.current.onConfirmed(path);
   });
   return { pendingDeletePath: pendingPath, requestDelete: requestDeleteRef.current };
 }

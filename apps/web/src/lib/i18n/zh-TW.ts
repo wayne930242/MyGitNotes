@@ -453,7 +453,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'sidebar.tagMergeTitle': '將 #{tag} 合併到…',
   'sidebar.tagNewNamePlaceholder': '新標籤名稱',
   'sidebar.tagMergeTargetPlaceholder': '目標標籤',
-  'sidebar.tagAffectedCount': '影響 {count} 篇筆記',
+  'sidebar.tagAffectedCount': '整個工作區共影響 {count} 篇筆記',
   'sidebar.tagConfirmRename': '重新命名 {count} 篇筆記',
   'sidebar.tagConfirmMerge': '合併 {count} 篇筆記',
   'sidebar.tagConfirmDelete': '從 {count} 篇筆記刪除',

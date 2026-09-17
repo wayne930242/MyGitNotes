@@ -453,7 +453,7 @@ export const en = {
   'sidebar.tagMergeTitle': 'Merge #{tag} into…',
   'sidebar.tagNewNamePlaceholder': 'New tag name',
   'sidebar.tagMergeTargetPlaceholder': 'Target tag',
-  'sidebar.tagAffectedCount': '{count} notes affected',
+  'sidebar.tagAffectedCount': '{count} notes affected across the workspace',
   'sidebar.tagConfirmRename': 'Rename in {count} notes',
   'sidebar.tagConfirmMerge': 'Merge in {count} notes',
   'sidebar.tagConfirmDelete': 'Delete from {count} notes',

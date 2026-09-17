@@ -454,7 +454,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 const isSelected = selectedTags.includes(tag);
                 return (
                   <div key={tag} className="inline-flex flex-col items-start gap-1 max-w-full">
-                    <div className="inline-flex items-center gap-1 max-w-full">
+                    <div className="sidebar-tag-row inline-flex items-center gap-1 max-w-full">
                       <button
                         type="button"
                         data-tag-filter={tag}
