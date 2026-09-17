@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Pencil, Merge, Trash2 } from 'lucide-react';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { MoreHorizontal } from 'lucide-react';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 import { Button } from './Button.js';
@@ -22,9 +22,32 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
   const [count, setCount] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const returnFocusTo = useRef<'rename' | 'merge' | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [focusFirst, setFocusFirst] = useState<boolean | 'last'>(false);
+  const [returnFocus, setReturnFocus] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
   const formRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (mode !== 'closed') formRef.current?.scrollIntoView({ block: 'nearest' }); }, [mode]);
+  useEffect(() => {
+    if (mode === 'closed' && returnFocus) { triggerRef.current?.focus(); setReturnFocus(false); }
+  }, [mode, returnFocus]);
+  useEffect(() => {
+    if (!menuOpen || !focusFirst) return;
+    menuRef.current?.scrollIntoView({ block: 'nearest' });
+    focusItem(focusFirst === 'last' ? -1 : 0);
+    setFocusFirst(false);
+  }, [menuOpen, focusFirst]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) closeMenu(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [menuOpen]);
 
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(true, async () => {
     setBusy(true);
@@ -58,7 +81,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
   };
 
   const close = (restoreFocus = false) => {
-    returnFocusTo.current = restoreFocus && mode !== 'closed' ? mode : null;
+    setReturnFocus(restoreFocus);
     setMode('closed');
     setError(null);
     setCount(null);
@@ -105,6 +128,30 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
     requestDelete(tag);
   };
 
+  const focusItem = (index: number) => {
+    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
+    if (!items?.length) return;
+    items[(index + items.length) % items.length].focus();
+  };
+
+  const closeMenu = (restoreFocus: boolean) => {
+    setMenuOpen(false);
+    if (!deleteArmed) setCount(null);
+    setError(null);
+    if (restoreFocus) triggerRef.current?.focus();
+  };
+
+  const handleMenuKeyDown = (event: React.KeyboardEvent) => {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === 'ArrowDown') { event.preventDefault(); focusItem(current + 1); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); focusItem(current - 1); }
+    else if (event.key === 'Home') { event.preventDefault(); focusItem(0); }
+    else if (event.key === 'End') { event.preventDefault(); focusItem(-1); }
+    else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMenu(true); }
+    else if (event.key === 'Tab') closeMenu(false);
+  };
+
   if (mode !== 'closed') {
     return (
       <div className="sidebar-tag-action-form" ref={formRef} onClick={stop} role="group" aria-label={mode === 'rename' ? t('sidebar.tagRenameTitle', { tag }) : t('sidebar.tagMergeTitle', { tag })}>
@@ -139,35 +186,49 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
   }
 
   return (
-    <div className="sidebar-tag-actions-trigger" onClick={stop} ref={node => {
-      if (node && returnFocusTo.current) {
-        node.querySelector<HTMLButtonElement>(`[data-tag-action="${returnFocusTo.current}"]`)?.focus();
-        returnFocusTo.current = null;
-      }
-    }}>
-      <span className="sidebar-tag-action-icons">
-        <button type="button" data-tag-action="rename" className="ui-icon-button" aria-label={t('sidebar.tagManage', { tag: `${t('sidebar.tagRename')} ${tag}` })} title={t('sidebar.tagRename')} disabled={busy} onClick={() => void openForm('rename')}>
-          <Pencil size={12} />
-        </button>
-        <button type="button" data-tag-action="merge" className="ui-icon-button" aria-label={t('sidebar.tagManage', { tag: `${t('sidebar.tagMergeInto')} ${tag}` })} title={t('sidebar.tagMergeInto')} disabled={busy} onClick={() => void openForm('merge')}>
-          <Merge size={12} />
-        </button>
-        <button
-          type="button"
-          className={deleteArmed ? 'p-1 text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition' : 'ui-icon-button'}
-          aria-label={deleteArmed ? t('sidebar.tagConfirmDeleteAgain') : t('sidebar.tagManage', { tag: `${t('sidebar.tagDelete')} ${tag}` })}
-          title={deleteArmed ? t('sidebar.tagConfirmDeleteAgain') : t('sidebar.tagDelete')}
-          disabled={busy}
-          onClick={event => void handleDeleteClick(event)}
-        >
-          <Trash2 size={12} />
-        </button>
-      </span>
-      {deleteArmed && count !== null && count > 0 && (
-        <p role="status" className="sidebar-tag-action-error">{t('sidebar.tagConfirmDelete', { count })} · {t('sidebar.tagConfirmDeleteAgain')}</p>
+    <div className="sidebar-tag-actions-trigger" onClick={stop} data-open={menuOpen || undefined} ref={containerRef}>
+      <button
+        type="button"
+        ref={triggerRef}
+        className="ui-icon-button"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-controls={menuOpen ? menuId : undefined}
+        aria-label={t('sidebar.tagManage', { tag })}
+        title={t('sidebar.tagManage', { tag })}
+        onClick={() => { if (menuOpen) closeMenu(false); else { setMenuOpen(true); setFocusFirst(true); } }}
+        onKeyDown={event => {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            setMenuOpen(true);
+            setFocusFirst(event.key === 'ArrowDown' ? true : 'last');
+          }
+        }}
+      >
+        <MoreHorizontal size={12} />
+      </button>
+      {menuOpen && (
+        <div className="sidebar-tag-menu" role="menu" id={menuId} ref={menuRef} aria-label={t('sidebar.tagManage', { tag })} onKeyDown={handleMenuKeyDown}>
+          <button type="button" role="menuitem" aria-disabled={busy} onClick={() => { if (busy) return; setMenuOpen(false); void openForm('rename'); }}>{t('sidebar.tagRename')}</button>
+          <button type="button" role="menuitem" aria-disabled={busy} onClick={() => { if (busy) return; setMenuOpen(false); void openForm('merge'); }}>{t('sidebar.tagMergeInto')}</button>
+          <button
+            type="button"
+            role="menuitem"
+            className="sidebar-tag-menu-danger"
+            data-armed={deleteArmed || undefined}
+            aria-describedby={deleteArmed || count === 0 ? `${menuId}-status` : undefined}
+            aria-disabled={busy}
+            onClick={event => { if (!busy) void handleDeleteClick(event); }}
+          >
+            {deleteArmed && count !== null && count > 0 ? t('sidebar.tagConfirmDelete', { count }) : t('sidebar.tagDelete')}
+          </button>
+          {deleteArmed && count !== null && count > 0 && (
+            <p id={`${menuId}-status`} role="status" className="sidebar-tag-action-error">{t('sidebar.tagConfirmDeleteAgain')}</p>
+          )}
+          {count === 0 && <p id={`${menuId}-status`} role="status" className="sidebar-tag-action-error">{t('sidebar.tagNoNotesAffected')}</p>}
+          {error && <p role="alert" className="sidebar-tag-action-error">{t('sidebar.tagOperationFailed', { error })}</p>}
+        </div>
       )}
-      {count === 0 && <p role="status" className="sidebar-tag-action-error">{t('sidebar.tagNoNotesAffected')}</p>}
-      {error && <p role="alert" className="sidebar-tag-action-error">{t('sidebar.tagOperationFailed', { error })}</p>}
     </div>
   );
 };
