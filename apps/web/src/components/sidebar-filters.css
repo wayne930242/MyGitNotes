@@ -47,11 +47,11 @@
 .sidebar-tag-action-buttons { display: flex; justify-content: flex-end; gap: .4rem; }
 @media (max-width: 1100px) { .sidebar-note-search input { font-size: 16px; } }
 
-.sidebar-notebooks { display: grid; gap: 2px; }
+.sidebar-notebooks { display: grid; gap: 2px; min-width: 0; width: 100%; }
 .sidebar-all-notebooks { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 10px; border-radius: 7px; font-size: 13px; text-align: left; }
 .sidebar-all-notebooks[aria-pressed="true"] { background: var(--workspace-selection); color: var(--color-text); font-weight: 600; }
 .sidebar-all-notebooks-row .nav-tree-entry svg { color: var(--color-muted); }
-.sidebar-notebook-group { display: flex; flex-direction: column; gap: 1px; }
+.sidebar-notebook-group { display: flex; flex-direction: column; gap: 1px; min-width: 0; width: 100%; }
 .sidebar-notebook-heading { margin: 0; font-family: inherit; }
 .sidebar-notebook-heading > button { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 40px; padding: 8px 6px; border-radius: 7px; color: var(--color-text); text-align: left; font-size: 13px; font-weight: 600; }
 .sidebar-notebook-heading > button:hover, .sidebar-all-notebooks:hover { background: var(--workspace-selection); }
@@ -67,7 +67,7 @@
 .folder-heading-actions { display: flex; align-items: center; gap: 2px; margin-right: 4px; flex: none; }
 .folder-heading-actions .ui-icon-button { width: 22px; height: 22px; padding: 3px; border-radius: 4px; flex: none; }
 .folder-heading-actions .ui-icon-button svg { width: 14px; height: 14px; flex: none; }
-.sidebar-notebook-folders { margin: 2px 0 6px 10px; padding-left: 9px; border-left: 1px solid color-mix(in srgb, var(--workspace-divider) 80%, transparent); }
+.sidebar-notebook-folders { margin: 2px 0 6px 10px; padding-left: 9px; border-left: 1px solid color-mix(in srgb, var(--workspace-divider) 80%, transparent); min-width: 0; }
 .sidebar-notebook-folders .folder-drop-line { height: 1px; }
 .sidebar-notebook-empty { padding: 6px 8px; color: var(--color-muted); font-size: 12px; }
 .sidebar-notebook-heading > button:focus-visible, .sidebar-all-notebooks:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
