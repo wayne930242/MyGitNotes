@@ -364,8 +364,8 @@ export function transformDirectives(
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // Check opening container fence: :::name[label]{attr="val"}
-    const openMatch = /^(\s*)(:{3,})([a-zA-Z0-9_-]+)(?:\[([^\]]*)\])?(?:\{([^}]*)\})?\s*$/.exec(line);
+    // Check opening container fence: :::name[label]{attr="val"} (allows > blockquote prefixes)
+    const openMatch = /^(\s*(?:>\s*)*)(:{3,})([a-zA-Z0-9_-]+)(?:\[([^\]]*)\])?(?:\{([^}]*)\})?\s*$/.exec(line);
     if (openMatch) {
       const fenceLength = openMatch[2].length;
       const name = openMatch[3];
@@ -383,11 +383,24 @@ export function transformDirectives(
       continue;
     }
 
-    // Check closing container fence: ::: (matches top of stack)
-    const closeMatch = /^(\s*)(:{3,})\s*$/.exec(line);
-    if (closeMatch && stack.length > 0) {
-      const fenceLength = closeMatch[2].length;
-      if (stack[stack.length - 1].fenceLength === fenceLength) {
+    // Check closing container fence: ::: or > ::: or inline trailing :::
+    if (stack.length > 0) {
+      const targetFenceLength = stack[stack.length - 1].fenceLength;
+      let matchedClosing = false;
+      const pureClose = /^(\s*(?:>\s*)*)(:{3,})\s*$/.exec(line);
+      if (pureClose && pureClose[2].length === targetFenceLength) {
+        matchedClosing = true;
+      } else {
+        const inlineClose = /^(.*?)(?<!:)(:{3,})\s*$/.exec(line);
+        if (inlineClose && inlineClose[2].length === targetFenceLength) {
+          matchedClosing = true;
+          if (inlineClose[1].trim()) {
+            stack[stack.length - 1].lines.push(inlineClose[1].trimEnd());
+          }
+        }
+      }
+
+      if (matchedClosing) {
         const item = stack.pop()!;
         const innerBody = item.lines.join('\n');
         // Recursively transform directives within this container
@@ -532,8 +545,8 @@ export function findDirectiveBlocks(text: string): ParsedDirectiveBlock[] {
     const lineEnd = currentOffset + line.length;
     currentOffset = lineEnd + 1; // Account for \n
 
-    // Opening fence: :::name[label]{attrs}
-    const openMatch = /^(\s*)(:{3,})([a-zA-Z0-9_-]+)(?:\[([^\]]*)\])?(?:\{([^}]*)\})?\s*$/.exec(line);
+    // Opening fence: :::name[label]{attrs} (allows > blockquote prefixes)
+    const openMatch = /^(\s*(?:>\s*)*)(:{3,})([a-zA-Z0-9_-]+)(?:\[([^\]]*)\])?(?:\{([^}]*)\})?\s*$/.exec(line);
     if (openMatch) {
       const fenceLength = openMatch[2].length;
       const type = openMatch[3];
@@ -553,11 +566,24 @@ export function findDirectiveBlocks(text: string): ParsedDirectiveBlock[] {
       continue;
     }
 
-    // Closing fence: :::
-    const closeMatch = /^(\s*)(:{3,})\s*$/.exec(line);
-    if (closeMatch && stack.length > 0) {
-      const fenceLength = closeMatch[2].length;
-      if (stack[stack.length - 1].fenceLength === fenceLength) {
+    // Closing fence: ::: or > ::: or inline trailing :::
+    if (stack.length > 0) {
+      const targetFenceLength = stack[stack.length - 1].fenceLength;
+      let matchedClosing = false;
+      const pureClose = /^(\s*(?:>\s*)*)(:{3,})\s*$/.exec(line);
+      if (pureClose && pureClose[2].length === targetFenceLength) {
+        matchedClosing = true;
+      } else {
+        const inlineClose = /^(.*?)(?<!:)(:{3,})\s*$/.exec(line);
+        if (inlineClose && inlineClose[2].length === targetFenceLength) {
+          matchedClosing = true;
+          if (inlineClose[1].trim()) {
+            stack[stack.length - 1].bodyLines.push(inlineClose[1].trimEnd());
+          }
+        }
+      }
+
+      if (matchedClosing) {
         const item = stack.pop()!;
         if (stack.length === 0) {
           const rawText = text.slice(item.from, lineEnd);
@@ -637,7 +663,7 @@ export interface DirectiveModel {
 export function parseDirectiveModel(rawText: string): DirectiveModel {
   const lines = rawText.split('\n');
   const header = lines[0] || '';
-  const match = /^(\s*)(:{3,})([a-zA-Z0-9_-]+)(?:\[([^\]]*)\])?(?:\{([^}]*)\})?\s*$/.exec(header);
+  const match = /^(\s*(?:>\s*)*)(:{3,})([a-zA-Z0-9_-]+)(?:\[([^\]]*)\])?(?:\{([^}]*)\})?\s*$/.exec(header);
 
   const fenceLength = match ? match[2].length : 3;
   const type = match ? match[3] : 'info';
@@ -646,8 +672,20 @@ export function parseDirectiveModel(rawText: string): DirectiveModel {
   const attrs = parseDirectiveAttributes(rawAttrs);
 
   let bodyLines = lines.slice(1);
-  if (bodyLines.length > 0 && /^(\s*)(:{3,})\s*$/.test(bodyLines[bodyLines.length - 1])) {
-    bodyLines = bodyLines.slice(0, -1);
+  if (bodyLines.length > 0) {
+    const lastLine = bodyLines[bodyLines.length - 1];
+    if (/^(\s*(?:>\s*)*)(:{3,})\s*$/.test(lastLine)) {
+      bodyLines = bodyLines.slice(0, -1);
+    } else {
+      const inlineClose = /^(.*?)(?<!:)(:{3,})\s*$/.exec(lastLine);
+      if (inlineClose && inlineClose[2].length >= fenceLength) {
+        if (inlineClose[1].trim()) {
+          bodyLines[bodyLines.length - 1] = inlineClose[1].trimEnd();
+        } else {
+          bodyLines = bodyLines.slice(0, -1);
+        }
+      }
+    }
   }
   const body = bodyLines.join('\n');
 

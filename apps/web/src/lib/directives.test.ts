@@ -3,6 +3,7 @@ import {
   DIRECTIVE_TEMPLATES,
   findDirectiveBlocks,
   parseDirectiveAttributes,
+  parseDirectiveModel,
   parseDirectiveTitle,
   stripMdxImports,
   transformDirectives,
@@ -175,6 +176,32 @@ describe('directives and MDX Layer 2 preprocessor', () => {
       const raw = `:::handout{id="H-01" variant="report"}\n內文\n:::`;
       const updated = updateDirectiveVariant(raw, 'newspaper');
       expect(updated).toContain('variant="newspaper"');
+    });
+
+    it('supports blockquote > prefixes for closing and opening fences', () => {
+      const text = `:::sidebar{title="導入"}\n嗨，調查員\n> 註：相關說明\n> :::\n\n後續內容`;
+      const blocks = findDirectiveBlocks(text);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].type).toBe('sidebar');
+      expect(blocks[0].attrs.title).toBe('導入');
+      expect(blocks[0].rawBody).toContain('> 註：相關說明');
+
+      const model = parseDirectiveModel(blocks[0].rawText);
+      expect(model.type).toBe('sidebar');
+      expect(model.title).toBe('導入');
+      expect(model.body).toBe('嗨，調查員\n> 註：相關說明');
+
+      const html = transformDirectives(text, md => md);
+      expect(html).toContain('sidebar-directive');
+      expect(html).toContain('導入');
+    });
+
+    it('supports inline trailing closing fence without a standalone line', () => {
+      const text = `:::info{title="提示"}\n內容文字 > :::\n\n正常文字`;
+      const blocks = findDirectiveBlocks(text);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].type).toBe('info');
+      expect(blocks[0].rawBody).toBe('內容文字 >');
     });
 
     it('has default template presets with info as default', () => {

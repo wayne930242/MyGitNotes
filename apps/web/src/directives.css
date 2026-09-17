@@ -8,32 +8,69 @@
 /* ===== 1. General Directive Containers ===== */
 .prose-custom .custom-directive,
 .prose-custom .comment-directive {
-  margin: 1.5rem 0;
-  border-radius: 8px;
-  border: 1.5px solid color-mix(in srgb, var(--color-text) 18%, var(--color-border));
-  padding: 1.1rem 1.35rem;
+  margin: 0.95rem 0;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-text) 14%, var(--color-border));
+  padding: 0.65rem 0.95rem;
   box-sizing: border-box;
   width: 100%;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   transition: border-color 150ms ease, box-shadow 150ms ease;
+  background: color-mix(in srgb, var(--color-text) 2.5%, var(--color-surface));
 }
 
 .prose-custom .custom-directive > .directive-body,
 .prose-custom .comment-directive > .directive-body {
-  padding-top: 0.65rem;
+  padding-top: 0.4rem;
+  font-size: 0.935rem;
+  line-height: 1.6;
 }
 
-.prose-custom .directive-body > *:first-child {
-  margin-top: 0;
+/* 消除前後多餘留白：首尾子元素外距清零 */
+.prose-custom .custom-directive > :first-child:not(.directive-title):not(.comment-title),
+.prose-custom .directive-body > :first-child {
+  margin-top: 0 !important;
 }
 
-.prose-custom .directive-body > *:last-child {
-  margin-bottom: 0;
+.prose-custom .custom-directive > :last-child,
+.prose-custom .directive-body > :last-child {
+  margin-bottom: 0 !important;
+}
+
+/* 內文段落與清單 Typography 校準（防止 list 行高超大） */
+.prose-custom .directive-body p {
+  margin: 0.4rem 0;
+  line-height: 1.6;
+}
+
+.prose-custom .directive-body ul,
+.prose-custom .directive-body ol {
+  margin: 0.35rem 0;
+  padding-left: 1.35rem;
+}
+
+.prose-custom .directive-body li {
+  margin: 0.15rem 0;
+  line-height: 1.5;
+}
+
+.prose-custom .directive-body li > p {
+  margin: 0 !important;
+  display: inline;
 }
 
 .prose-custom .directive-body hr {
-  margin: 0.75rem 0;
-  border-color: color-mix(in srgb, var(--color-text) 14%, var(--color-border));
+  margin: 0.65rem 0;
+  border-color: color-mix(in srgb, var(--color-text) 12%, var(--color-border));
+}
+
+.prose-custom .directive-body blockquote {
+  margin: 0.5rem 0;
+  padding: 0.35rem 0.75rem;
+  border-left: 2px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border)) !important;
+  background: color-mix(in srgb, var(--color-text) 2.5%, transparent) !important;
+  border-radius: 0 4px 4px 0;
+  font-style: normal;
 }
 
 .prose-custom :is(.directive-title, .comment-title, .optional-summary) {
@@ -46,69 +83,63 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.72rem;
   line-height: 1;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--color-muted);
 }
 
 .prose-custom :is(.directive-title, .comment-title, .optional-summary).directive-title-custom {
-  font-size: 1rem;
+  font-size: 0.975rem;
   line-height: 1.35;
   letter-spacing: -0.01em;
 }
 
-/* --- INFO DIRECTIVE --- */
+/* --- INFO DIRECTIVE --- (沉穩冷灰紙質感，全包覆微細框，徹底移除厚重 left-border) */
 .prose-custom .info-directive {
-  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface));
-  border: 1.5px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
-  border-left: 5px solid var(--color-primary);
+  background: color-mix(in srgb, var(--color-text) 2.8%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-text) 14%, var(--color-border));
 }
 
 .dark .prose-custom .info-directive {
-  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
-  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
-  border-left-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-text) 5%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-text) 18%, var(--color-border));
 }
 
 .prose-custom .info-directive > .directive-title-default {
-  color: var(--color-primary);
+  color: var(--color-muted);
 }
 
-/* --- SIDEBAR / IMPORTANT DIRECTIVE --- */
+/* --- SIDEBAR / IMPORTANT DIRECTIVE --- (經典專欄風格，全包覆微細框，去除頂部/左側厚邊條) */
 .prose-custom .sidebar-directive {
-  border: 1.5px solid color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
-  border-top: 5px solid var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-primary) 3.5%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, var(--color-border));
 }
 
 .dark .prose-custom .sidebar-directive {
-  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface));
-  border-color: color-mix(in srgb, var(--color-primary) 50%, var(--color-border));
-  border-top-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 7.5%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-primary) 28%, var(--color-border));
 }
 
 .prose-custom .sidebar-directive > .directive-title-default {
-  color: var(--color-primary);
+  color: color-mix(in srgb, var(--color-primary) 85%, var(--color-text));
 }
 
-/* --- COMMENT DIRECTIVE --- */
+/* --- COMMENT DIRECTIVE --- (溫潤羊皮紙色調，微細全框，移除厚左條) */
 .prose-custom aside.comment-directive {
-  border: 1.5px solid color-mix(in srgb, #d97706 40%, var(--color-border));
-  border-left: 5px solid #d97706;
-  background: color-mix(in srgb, #d97706 7%, var(--color-surface));
-  border-radius: 0 8px 8px 0;
-  padding: 1rem 1.25rem;
+  background: color-mix(in srgb, #b45309 3.5%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, #b45309 18%, var(--color-border));
+  border-radius: 6px;
+  padding: 0.65rem 0.95rem;
   font-style: normal;
 }
 
 .dark .prose-custom aside.comment-directive {
-  border-color: color-mix(in srgb, #f59e0b 45%, var(--color-border));
-  border-left-color: #f59e0b;
-  background: color-mix(in srgb, #f59e0b 12%, var(--color-surface));
+  background: color-mix(in srgb, #f59e0b 6.5%, var(--color-surface));
+  border-color: color-mix(in srgb, #f59e0b 24%, var(--color-border));
 }
 
 .prose-custom .comment-directive > .comment-title.directive-title-default {
-  color: #d97706;
+  color: #b45309;
 }
 
 .dark .prose-custom .comment-directive > .comment-title.directive-title-default {
@@ -117,15 +148,16 @@
 
 /* --- OPTIONAL / DISCLOSURE DIRECTIVE --- */
 .prose-custom details.optional-directive {
-  border: 1.5px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border));
-  background: color-mix(in srgb, var(--color-text) 4%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-text) 14%, var(--color-border));
+  background: color-mix(in srgb, var(--color-text) 2.5%, var(--color-surface));
+  border-radius: 6px;
   padding: 0;
   overflow: hidden;
 }
 
 .dark .prose-custom details.optional-directive {
-  border-color: color-mix(in srgb, var(--color-text) 28%, var(--color-border));
-  background: color-mix(in srgb, var(--color-text) 8%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-text) 18%, var(--color-border));
+  background: color-mix(in srgb, var(--color-text) 5%, var(--color-surface));
 }
 
 .prose-custom details.optional-directive > summary.optional-summary {
@@ -136,8 +168,8 @@
   justify-content: space-between;
   gap: 1rem;
   user-select: none;
-  padding: 0.85rem 1.2rem;
-  background: color-mix(in srgb, var(--color-text) 4%, var(--color-surface));
+  padding: 0.6rem 0.95rem;
+  background: color-mix(in srgb, var(--color-text) 2.5%, var(--color-surface));
   transition: background-color 150ms ease;
 }
 
@@ -436,11 +468,11 @@
 /* ===== 4. Parallel Quotations ===== */
 .prose-custom blockquote.parallel-quote {
   position: relative;
-  margin: 1.5rem 0;
-  border-left: 3.5px solid color-mix(in srgb, var(--color-primary) 60%, var(--color-border));
-  background: color-mix(in srgb, var(--color-text) 2.5%, var(--color-surface));
-  padding: 1.25rem 1.5rem;
-  border-radius: 0 8px 8px 0;
+  margin: 1rem 0;
+  border-left: 2.5px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border));
+  background: color-mix(in srgb, var(--color-text) 2%, var(--color-surface));
+  padding: 0.85rem 1.15rem;
+  border-radius: 0 6px 6px 0;
   font-style: normal;
 }
 
@@ -612,10 +644,11 @@
 }
 
 .prose-custom .slide-summary {
-  margin: 1rem 0;
-  padding: 0.75rem 1rem;
-  border-left: 3px solid var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  margin: 0.85rem 0;
+  padding: 0.65rem 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--color-text) 14%, var(--color-border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-text) 3%, var(--color-surface));
   font-size: 0.85rem;
 }
 

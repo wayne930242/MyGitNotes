@@ -221,15 +221,14 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 }
 
 .prose-custom blockquote {
-  border-left: 4px solid var(--color-primary);
-  padding-left: 1rem;
-  font-style: italic;
-  color: #475569;
-  margin-bottom: 0.85rem;
-  background-color: #f8fafc;
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem;
-  border-radius: 0 0.375rem 0.375rem 0;
+  border-left: 2.5px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border));
+  padding: 0.35rem 0.85rem;
+  font-style: normal;
+  color: color-mix(in srgb, var(--color-text) 80%, transparent);
+  margin-top: 0.65rem;
+  margin-bottom: 0.65rem;
+  background-color: color-mix(in srgb, var(--color-text) 2.5%, transparent);
+  border-radius: 0 4px 4px 0;
 }
 
 .prose-custom pre {
@@ -473,9 +472,9 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 }
 
 .dark .prose-custom blockquote {
-  background-color: #1e293b;
-  color: #94a3b8;
-  border-left-color: var(--color-primary);
+  background-color: color-mix(in srgb, var(--color-text) 4%, transparent);
+  color: color-mix(in srgb, var(--color-text) 75%, transparent);
+  border-left-color: color-mix(in srgb, var(--color-text) 25%, var(--color-border));
 }
 
 .dark .prose-custom pre {
