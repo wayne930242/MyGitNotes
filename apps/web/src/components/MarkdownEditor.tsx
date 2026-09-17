@@ -3,10 +3,9 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import { Code2, Eye } from 'lucide-react';
 import type { LiveMarkdownHandle } from './LiveMarkdownEditor.js';
 import { useTranslation } from '../lib/i18n/index.js';
-import { useWorkspaceLinks } from './WorkspaceLinks.js';
-import { noteCandidates, noteCompletionAt } from '../lib/note-completion.js';
+import { useNoteCandidates, noteCompletionAt } from '../lib/note-completion.js';
 import { noteLinkHref, noteMarkdownLink } from '@mygitnotes/core/workspace-links';
-import type { NoteItem } from '../lib/types.js';
+import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { DIRECTIVE_TEMPLATES } from '../lib/directives.js';
 import './note-completion.css';
 
@@ -59,7 +58,6 @@ export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEdi
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, mode, readOnly, onChange, onCaret, compact = false, ariaLabel = 'Document content' }, ref) => {
   const { t } = useTranslation();
-  const { notes } = useWorkspaceLinks();
   const [caret, setCaret] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [choice, setChoice] = useState(0);
@@ -80,14 +78,15 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
     setCaret(target.selectionStart); onCaret?.(target.selectionStart);
   };
   const match = !readOnly && mode === 'raw' && !dismissed && caret !== null ? noteCompletionAt(content, caret) : null;
-  const suggestions = match ? noteCandidates(notes, match.query, path) : [];
-  const accept = (note: NoteItem) => {
+  const suggestions = useNoteCandidates(match ? match.query : null, path);
+  const pickerCandidates = useNoteCandidates(picker ? query : null, path);
+  const accept = (note: NoteListItem) => {
     if (!match) return;
     const insert = noteLinkHref(path, note.path) + (content[match.to] === ')' ? '' : ')');
     onChange(content.slice(0, match.from) + insert + content.slice(match.to)); setDismissed(true);
     requestAnimationFrame(() => { const pos = match.from + insert.length; source.current?.focus(); source.current?.setSelectionRange(pos, pos); });
   };
-  const insertPicked = (note: NoteItem) => {
+  const insertPicked = (note: NoteListItem) => {
     const text = noteMarkdownLink(path, note.path, note.title);
     if (mode === 'live') live.current?.insert(text);
     else { const position = source.current?.selectionStart ?? content.length; onChange(content.slice(0, position) + text + content.slice(position)); }
@@ -179,11 +178,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
         </div>
       </div>}
       {picker && <div className="note-link-picker"><input autoFocus type="search" aria-label={t('graph.findNote')} placeholder={t('graph.findNote')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setPicker(false); }} />
-        {noteCandidates(notes, query, path).map(note => <button type="button" key={note.path} onClick={() => insertPicked(note)}>{note.title}<small>{note.notebookId} · {note.path}</small></button>)}
+        {pickerCandidates.map(note => <button type="button" key={note.path} onClick={() => insertPicked(note)}>{note.title}<small>{note.notebookId} · {note.path}</small></button>)}
       </div>}
       {mode === 'live' && isMarkdown ? (
         <React.Suspense fallback={<p className="p-6 text-sm text-slate-400">{t('editor.loadingEditor')}</p>}>
-          <LiveMarkdownEditor key={path} ref={live} content={content} notePath={path} readOnly={readOnly} onChange={onChange} onCaret={onCaret} noteOptions={notes} ariaLabel={ariaLabel} />
+          <LiveMarkdownEditor key={path} ref={live} content={content} notePath={path} readOnly={readOnly} onChange={onChange} onCaret={onCaret} ariaLabel={ariaLabel} />
         </React.Suspense>
       ) : (
         <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900">

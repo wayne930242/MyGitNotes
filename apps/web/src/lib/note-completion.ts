@@ -1,5 +1,12 @@
-import type { NoteItem } from './types.js';
-import { isNoteHidden } from '@mygitnotes/core/note-status';
+import type { QueryClient } from '@tanstack/react-query';
+import type { NoteListItem } from '@mygitnotes/core/note-query';
+import { notePageOptions, useNoteList, type NoteQueryScope } from './use-note-queries.js';
+import { overlayDraftRows } from './draft-overlay.js';
+import { noteQueryInput } from './use-note-queries.js';
+import { useDebounced } from './use-debounced.js';
+
+/** How many link candidates the editors offer. */
+export const NOTE_COMPLETION_LIMIT = 12;
 
 export function noteCompletionAt(text: string, position: number) {
   const before = text.slice(0, position), lines = before.split('\n');
@@ -13,7 +20,22 @@ export function noteCompletionAt(text: string, position: number) {
   if ((prefix.match(/`/g) || []).length % 2) return null;
   return { from: before.length - match[2].length, to: before.length, query: match[2] };
 }
-export function noteCandidates(notes: NoteItem[], query: string, source: string) {
-  const needle = query.trim().toLocaleLowerCase();
-  return notes.filter(note => note.path !== source && !isNoteHidden({ ...note.metadata, status: note.status }) && `${note.title} ${note.path} ${note.notebookId}`.toLocaleLowerCase().includes(needle)).slice(0, 12);
+const candidateQuery = (query: string, source: string) => ({
+  notebookId: 'all', q: query, match: 'title' as const, showHidden: false, exclude: [source],
+});
+
+/** Link candidates for an editor that completes outside React rendering (CodeMirror). */
+export async function fetchNoteCandidates(client: QueryClient, scope: NoteQueryScope, query: string, source: string): Promise<NoteListItem[]> {
+  const input = noteQueryInput(candidateQuery(query, source));
+  const page = await client.fetchQuery(notePageOptions(scope, input, { limit: NOTE_COMPLETION_LIMIT }));
+  const overlay = overlayDraftRows(page.notes, input, scope.drafts);
+  return [...overlay.uncommitted, ...overlay.notes].slice(0, NOTE_COMPLETION_LIMIT);
+}
+
+/** Link candidates for `query`, matched by the server against title, path and notebook. */
+export function useNoteCandidates(query: string | null, source: string): NoteListItem[] {
+  const settled = useDebounced(query ?? '');
+  const result = useNoteList(query === null ? null : candidateQuery(settled, source), { limit: NOTE_COMPLETION_LIMIT });
+  // A note staged but not committed is still a link target.
+  return [...result.uncommitted, ...result.notes].slice(0, NOTE_COMPLETION_LIMIT);
 }

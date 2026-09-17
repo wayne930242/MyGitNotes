@@ -4,27 +4,30 @@ import React from 'react';
 import { FileText, Clock, Trash2, Plus } from 'lucide-react';
 import { NoteTags, NoteTagActions } from './NoteTags.js';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
-import { NoteItem } from '../lib/types.js';
+import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 
 interface CardViewProps {
-  notes: NoteItem[];
+  notes: NoteListItem[];
+  /** Staged drafts the server cannot return yet; shown above the committed cards. */
+  uncommitted?: NoteListItem[];
   hasFolderEntries?: boolean;
   statuses: string[];
   readOnly?: boolean;
   canDelete?: boolean;
   confirmDelete?: boolean;
-  onOpenNote: (note: NoteItem) => void;
-  onDeleteNote: (note: NoteItem) => void;
-  onMoveNote?: (note: NoteItem) => void;
+  onOpenNote: (note: NoteListItem) => void;
+  onDeleteNote: (note: NoteListItem) => void;
+  onMoveNote?: (note: NoteListItem) => void;
   onNewNote: () => void;
-  onUpdateNoteStatus: (note: NoteItem, status: string) => void;
+  onUpdateNoteStatus: (note: NoteListItem, status: string) => void;
   tagActions?: NoteTagActions;
 }
 
 export const CardView: React.FC<CardViewProps> = ({
   notes,
+  uncommitted = [],
   hasFolderEntries = false,
   statuses,
   readOnly = false,
@@ -39,11 +42,11 @@ export const CardView: React.FC<CardViewProps> = ({
 }) => {
   const { t } = useTranslation();
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(confirmDelete, path => {
-    const note = notes.find(n => n.path === path);
+    const note = [...uncommitted, ...notes].find(n => n.path === path);
     if (note) onDeleteNote(note);
   });
 
-  const isEmpty = notes.length === 0 && !hasFolderEntries;
+  const isEmpty = notes.length === 0 && uncommitted.length === 0 && !hasFolderEntries;
 
   if (isEmpty) {
     return (
@@ -79,11 +82,7 @@ export const CardView: React.FC<CardViewProps> = ({
     return clean.slice(0, 140) + (clean.length > 140 ? '...' : '');
   };
 
-  return (
-    <>
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      {/* Note Cards */}
-      {notes.map((note) => {
+  const renderCard = (note: NoteListItem) => {
         const formattedDate = note.mtime
           ? new Date(note.mtime).toLocaleDateString(undefined, {
               month: 'short',
@@ -121,7 +120,7 @@ export const CardView: React.FC<CardViewProps> = ({
               </div>
 
               <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 mb-4 leading-relaxed">
-                {getExcerpt(note.content) || (
+                {getExcerpt(note.content || '') || (
                   <span className="italic text-slate-300 dark:text-slate-600">
                     {t('notes.noContent')}
                   </span>
@@ -168,7 +167,17 @@ export const CardView: React.FC<CardViewProps> = ({
             </div>
           </div>
         );
-      })}
+  };
+
+  return (
+    <>
+    {uncommitted.length > 0 && <section className="note-card-uncommitted mb-4">
+      <h3 className="mb-2 text-xs uppercase font-semibold text-amber-600 dark:text-amber-400">{t('notes.uncommitted')}</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">{uncommitted.map(renderCard)}</div>
+    </section>}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      {/* Note Cards */}
+      {notes.map(renderCard)}
     </div>
     </>
   );

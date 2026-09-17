@@ -487,6 +487,17 @@ export const zhTW: Record<TranslationKey, string> = {
   'notes.confirmDelete': '再次點擊以確認刪除',
   'notes.noContent': '無內容',
   'notes.noStatus': '無狀態',
+  'notes.loading': '正在載入筆記…',
+  'notes.loadingMore': '正在載入更多筆記…',
+  'notes.moreAvailable': '往下捲動載入更多筆記',
+  'notes.loadFailed': '無法載入筆記：{message}',
+  'notes.countsLoading': '正在載入筆記計數…',
+  'notes.countsFailed': '無法載入筆記計數：{message}',
+  'notes.retryPage': '重試',
+  'notes.uncommitted': '未提交',
+  'notes.loadingNote': '正在載入筆記…',
+  'notes.readFailed': '無法讀取完整筆記（{path}），未變更任何內容。',
+  'notes.unavailable': '此工作區沒有這篇筆記。',
 
   // Common actions & labels
   'common.cancel': '取消',

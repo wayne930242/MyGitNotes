@@ -16,9 +16,10 @@ import { headingSlug, resolveWorkspaceHref } from '../lib/workspace-links.js';
 import { useLocation } from 'react-router-dom';
 import { useTranslation, type I18nContextValue } from '../lib/i18n/index.js';
 import { getAtCompletionItems } from '../lib/at-completion.js';
-import { noteCompletionAt, noteCandidates } from '../lib/note-completion.js';
+import { useQueryClient } from '@tanstack/react-query';
+import { noteCompletionAt, fetchNoteCandidates } from '../lib/note-completion.js';
+import { useNoteQueryScope } from '../lib/use-note-queries.js';
 import { noteLinkHref } from '@mygitnotes/core/workspace-links';
-import type { NoteItem } from '../lib/types.js';
 import { formatDateYMD } from '../lib/date-utils.js';
 import { DONE_EMOJI, DUE_EMOJI, TIMESTAMP_EMOJI, findToken, isTaskLine, setTaskChecked, setTokenValue } from '../lib/task-tokens.js';
 
@@ -28,7 +29,7 @@ export interface LiveMarkdownHandle {
   goToLine: (line: number, options?: { focus?: boolean; smooth?: boolean }) => void;
   getCurrentLine: () => number;
 }
-interface Props { content: string; notePath: string; readOnly: boolean; ariaLabel?: string; onChange: (content: string) => void; noteOptions?: NoteItem[]; onCaret?: (position: number) => void }
+interface Props { content: string; notePath: string; readOnly: boolean; ariaLabel?: string; onChange: (content: string) => void; onCaret?: (position: number) => void }
 const focusChanged = StateEffect.define<boolean>();
 function externalLinkIcon(href: string, label: string, sourcePath: string): HTMLAnchorElement {
   const anchor = document.createElement('a');
@@ -477,13 +478,14 @@ const theme = EditorView.theme({
   '.live-md-token-clear':{cursor:'pointer',color:'var(--color-muted)',fontWeight:'700',lineHeight:'1',border:'none',background:'none',padding:'0 2px'},
   '.live-md-due-adder':{display:'inline-flex',alignItems:'center',marginLeft:'6px',padding:'0 6px',borderRadius:'999px',fontSize:'0.8em',cursor:'pointer',color:'var(--color-muted)',border:'1px dashed var(--color-border)',background:'none'},
 });
-export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content,notePath,readOnly,onChange,noteOptions = [],onCaret,ariaLabel = 'Note content'},ref) => {
+export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content,notePath,readOnly,onChange,onCaret,ariaLabel = 'Note content'},ref) => {
   const { t } = useTranslation(); const linkLabel = t('links.open');
   const tableLabel = t('preview.scrollableTable'), pageLabel = t('editor.page');
   const location = useLocation();
   const host = useRef<HTMLDivElement>(null); const editor = useRef<EditorView>();
   const callback = useRef(onChange); callback.current = onChange;
-  const completionNotes = useRef(noteOptions); completionNotes.current = noteOptions;
+  const queryClient = useQueryClient(); const scope = useNoteQueryScope();
+  const completionSource = useRef({ queryClient, scope }); completionSource.current = { queryClient, scope };
   const caretCallback = useRef(onCaret); caretCallback.current = onCaret;
   const permission = useRef(new Compartment());
   useImperativeHandle(ref, () => ({
@@ -522,10 +524,16 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
     const view = new EditorView({parent:host.current!,state:EditorState.create({doc:content,extensions:[
       markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),lineNumbers(),highlightActiveLineGutter(),EditorView.lineWrapping,
       syntaxHighlighting(defaultHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'},{tag:tags.contentSeparator,class:'live-md-hr'}])),theme,tableUIState,chipEditState,field,
-      autocompletion({ override: [atCompletionSource, context => {
+      autocompletion({ override: [atCompletionSource, async context => {
         const text = context.state.doc.toString(), match = noteCompletionAt(text, context.pos);
         if (!match || context.state.readOnly) return null;
-        return { from: match.from, to: match.to, filter: false, options: noteCandidates(completionNotes.current, match.query, notePath).map(note => ({
+        // Typing must not send one query per character; a superseded completion is dropped.
+        await new Promise(resolve => setTimeout(resolve, 150));
+        if (context.aborted) return null;
+        const { queryClient: client, scope: current } = completionSource.current;
+        const notes = await fetchNoteCandidates(client, current, match.query, notePath);
+        if (context.aborted) return null;
+        return { from: match.from, to: match.to, filter: false, options: notes.map(note => ({
           label: note.title, detail: `${note.notebookId} · ${note.path}`,
           apply: noteLinkHref(notePath, note.path) + (text[context.pos] === ')' ? '' : ')'),
         })) };

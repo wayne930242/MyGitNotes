@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearCommittedNotes, overlayWorkingNotes, readWorkingNotes, updateWorkingNote, workingDiff } from './working-notes.js';
+import { clearCommittedNotes, readWorkingNotes, updateWorkingNote, workingDiff } from './working-notes.js';
 import type { NoteItem } from './types.js';
 
 const base: NoteItem = { id: 'a', path: 'notes/ex/a.md', notebookId: 'ex', title: 'A', content: '# A\n', metadata: { custom: 'keep' }, tags: [], revision: 'one' };
@@ -45,7 +45,6 @@ describe('browser working notes', () => {
     updateWorkingNote('repo:main', base.path, draft);
     expect(readWorkingNotes('repo:main')[base.path]).toEqual(draft);
     expect(readWorkingNotes('other:main')).toEqual({});
-    expect(overlayWorkingNotes([base], readWorkingNotes('repo:main'))[0].content).toBe('# Edited\n');
   });
   it('clears only the committed version and retains edits made during a request', () => {
     const sent = { base, note: { ...base, content: '# First\n' } };

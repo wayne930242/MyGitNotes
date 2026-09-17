@@ -29,3 +29,8 @@ export { GitLabSource } from './gitlab-source.js';
 export { createRemoteSource } from './remote-factory.js';
 export * from './r2-references.js';
 export * from './r2-storage.js';
+export * from './note-sort.js';
+export * from './note-agenda.js';
+export * from './note-query.js';
+export * from './remote-cache.js';
+export * from './note-catalog.js';

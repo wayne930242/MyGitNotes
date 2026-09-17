@@ -10,7 +10,8 @@ import { useTranslation } from '../lib/i18n/index.js';
 interface NoteToolbarProps {
   showHidden: boolean;
   descendants: boolean;
-  hiddenNoteCount: number;
+  /** Hidden notes in scope, or null while the counts are still being answered. */
+  hiddenNoteCount: number | null;
   onShowHiddenChange: (value: boolean) => void;
   onDescendantsChange: (value: boolean) => void;
   onManageFiles?: () => void;
@@ -71,7 +72,7 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
                   aria-pressed={showHidden} aria-describedby="hidden-notes-tooltip"
                   onClick={() => onShowHiddenChange(!showHidden)}>
                   {showHidden ? <Eye size={16} aria-hidden="true" /> : <EyeOff size={16} aria-hidden="true" />}
-                  <span id="hidden-notes-tooltip" role="tooltip" className="note-display-tooltip">{t('filters.hidden')} ({hiddenNoteCount})</span>
+                  <span id="hidden-notes-tooltip" role="tooltip" className="note-display-tooltip">{t('filters.hidden')} ({hiddenNoteCount ?? '—'})</span>
                 </button>
                 <button type="button" className="note-display-toggle" aria-label={t('filters.descendants')}
                   aria-pressed={descendants} aria-describedby="descendants-tooltip"

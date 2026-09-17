@@ -43,6 +43,8 @@ function sameIgnoringTimestamps(a: Record<string, unknown>, b: Record<string, un
 
 interface EditorModalProps {
   note: NoteItem | null;
+  /** The note's body is still being read; the editor waits instead of opening an empty document. */
+  loading?: boolean;
   statuses: string[];
   metadataFields?: NotebookMetadataField[];
   readOnly?: boolean;
@@ -73,8 +75,21 @@ interface EditorModalProps {
   draftScope?: string;
 }
 
-export const EditorModal: React.FC<EditorModalProps> = (props) => props.isOpen && props.note
-  ? <EditorModalContent key={`${props.draftScope}:${props.note.path}`} {...props} note={props.note} /> : null;
+export const EditorModal: React.FC<EditorModalProps> = (props) => {
+  if (!props.isOpen) return null;
+  if (!props.note) return props.loading ? <EditorModalLoading /> : null;
+  return <EditorModalContent key={`${props.draftScope}:${props.note.path}`} {...props} note={props.note} />;
+};
+
+/** Shown while a note's body is read; the editor never starts from a missing body. */
+const EditorModalLoading: React.FC = () => {
+  const { t } = useTranslation();
+  return <div className="viewport-overlay fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <p role="status" className="px-6 py-4 rounded-xl text-sm" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}>
+      {t('notes.loadingNote')}
+    </p>
+  </div>;
+};
 
 const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   note,

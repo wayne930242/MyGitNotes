@@ -33,12 +33,6 @@ export function clearCommittedNotes(scope: string, sent: WorkingNotes): WorkingN
   return entries;
 }
 
-export function overlayWorkingNotes(notes: NoteItem[], entries: WorkingNotes): NoteItem[] {
-  const byPath = new Map(notes.map(note => [note.path, note]));
-  for (const entry of Object.values(entries)) byPath.set(entry.note.path, entry.note);
-  return [...byPath.values()];
-}
-
 export function workingDiff(entries: WorkingNotes): string {
   const raw = (note: NoteItem) => `---\n${YAML.stringify(note.metadata)}---\n${note.content}`;
   return Object.values(entries).map(({ note, base }) =>

@@ -6,8 +6,10 @@ import type { ScreenRow } from '@mygitnotes/core/screen-page';
 import { findStudyNote, createStudyNote, reconcileStudyNote, rebindStudyNote } from '@mygitnotes/core/study';
 import { deduplicatedStudyRatings, type StudyProgression, type Familiarity } from '@mygitnotes/core/study-stages';
 import { splitNotePages } from '@mygitnotes/core/note-pages';
+import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { NoteItem } from '../lib/types.js';
 import type { StudyController } from '../lib/use-study-workspace.js';
+import { useNoteLookup } from '../lib/use-note-queries.js';
 import { renderNote } from '../lib/markdown.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { Select } from './Select.js';
@@ -29,8 +31,8 @@ export function StudyLaneSettings({ progression, disabled, onChange }: { progres
   </fieldset>;
 }
 
-export function StudyLane({ row, notes, allNotes, controller, disabled, onOpen, toolbar }: {
-  toolbar: HTMLElement | null; row: ScreenRow; notes: NoteItem[]; allNotes: NoteItem[]; controller: StudyController; disabled: boolean; onOpen: (note: NoteItem) => void;
+export function StudyLane({ row, notes, controller, disabled, onOpen, toolbar }: {
+  toolbar: HTMLElement | null; row: ScreenRow; notes: NoteListItem[]; controller: StudyController; disabled: boolean; onOpen: (note: NoteListItem) => void;
 }) {
   const { t } = useTranslation();
   const [skipped, setSkipped] = useState<string[]>([]), [selected, setSelected] = useState<string>();
@@ -39,7 +41,10 @@ export function StudyLane({ row, notes, allNotes, controller, disabled, onOpen, 
   const current = notes.find(note => note.path === selected) || queue[0];
   const last = controller.study.events.at(-1);
   const lastNote = last?.transition?.laneId === row.id ? controller.study.notes.find(note => note.id === last.noteId) : undefined;
-  const undoNote = lastNote && allNotes.find(note => note.path === lastNote.path && note.notebookId === lastNote.notebookId);
+  // The study workspace records the note a move applies to; undo needs no more than that.
+  const undoNote: NoteListItem | undefined = lastNote
+    ? { id: lastNote.path, path: lastNote.path, notebookId: lastNote.notebookId, title: lastNote.title, tags: [], metadata: {} }
+    : undefined;
   const busy = disabled || controller.loading || controller.saving || !controller.writable;
   const currentIndex = notes.findIndex(note => note === current);
   const previous = !busy && currentIndex > 0, next = !busy && currentIndex >= 0 && currentIndex < notes.length - 1;
@@ -62,7 +67,7 @@ export function StudyLane({ row, notes, allNotes, controller, disabled, onOpen, 
         <p>{queue.length} {t('study.remaining')}</p>
         <label>{t('study.pickCard')}<Select className="study-pick-card" aria-label={t('study.pickCard')} value={current?.path || ''} disabled={busy || !notes.length}
           onValueChange={value => { setSelected(value); setActionsOpen(false); }} options={[{ value: '', label: t('study.queueComplete') }, ...notes.map(note => ({ value: note.path, label: note.title }))]} /></label>
-        {current && <StudyPostpone key={`${current.notebookId}:${current.path}`} note={current} row={row} controller={controller} disabled={busy} onDone={() => { advance(); setActionsOpen(false); }} />}
+        {current && <StudyPostpone key={`${current.notebookId}:${current.path}`} note={{ ...current, content: current.content ?? '' }} row={row} controller={controller} disabled={busy} onDone={() => { advance(); setActionsOpen(false); }} />}
         {controller.error && <p role="alert">{controller.error}</p>}
       </div>
     </WorkspaceDialog>}
@@ -83,11 +88,16 @@ function StudyPostpone({ note, row, controller, disabled, onDone }: {
   }}><label>{t('study.custom')}<input className="ui-control" type="datetime-local" aria-label={t('study.custom')} value={date} required onChange={event => setDate(event.target.value)} /></label><Button type="submit" disabled={disabled || !resolved}>{t('study.delay')}</Button></form>;
 }
 
-function StudyLaneCard({ note, row, controller, disabled, onDone, onOpen, previous, next, onMove, more, remaining }: {
-  note: NoteItem; row: ScreenRow; controller: StudyController; disabled: boolean; onDone: () => void; onOpen: () => void;
+/** A study card shows the note's pages, so the current card is the one note read in full. */
+function StudyLaneCard({ note: listed, row, controller, disabled, onDone, onOpen, previous, next, onMove, more, remaining }: {
+  note: NoteListItem; row: ScreenRow; controller: StudyController; disabled: boolean; onDone: () => void; onOpen: () => void;
   previous: boolean; next: boolean; onMove: (direction: number) => void; more: ReactNode; remaining: number;
 }) {
   const { t } = useTranslation();
+  const lookup = useNoteLookup([listed.path], true);
+  const found = lookup.notes[0];
+  const note = (typeof found?.content === 'string' ? found : { ...listed, content: '' }) as NoteItem;
+  const reading = typeof found?.content !== 'string';
   const [page, setPage] = useState(0), [revealed, setRevealed] = useState(false);
   const pointer = useRef<{ x: number; y: number; id: number }>();
   const pageBody = useRef<HTMLDivElement>(null);
@@ -117,6 +127,8 @@ function StudyLaneCard({ note, row, controller, disabled, onDone, onOpen, previo
     ? `${'★'.repeat(currentStar)}${'☆'.repeat(totalStages - currentStar)}`
     : `★${currentStar}/${totalStages}`;
 
+  if (lookup.error) return <div className="study-alert" role="alert">{lookup.error}</div>;
+  if (reading) return <p role="status" className="study-lane-empty">{t('notes.loadingNote')}</p>;
   return <>
     <article className="study-lane-card" data-study-note={note.path}>
       <header>

@@ -8,7 +8,7 @@ import { useTranslation } from '../lib/i18n/index.js';
 import { ScreenIcon } from './ScreenIcon.js';
 import { ScreenEditRow } from './ScreenDialogs.js';
 import type { ScreenAsset } from './ScreenCard.js';
-import type { FolderItem, NoteItem, NotebookConfig } from '../lib/types.js';
+import type { FolderItem, NotebookConfig } from '../lib/types.js';
 
 function LaneLink({ row, reorder, disabled, onSelect, onEdit }: { row: ScreenRow; reorder: boolean; disabled: boolean; onSelect: () => void; onEdit: () => void }) {
   const { t } = useTranslation();
@@ -20,12 +20,11 @@ function LaneLink({ row, reorder, disabled, onSelect, onEdit }: { row: ScreenRow
   </div>;
 }
 
-export function ScreenLaneNavigation({ page, reorder = false, disabled, notebooks, notes, assets, folders, selectedNotebookId, onChange, onSelect }: {
+export function ScreenLaneNavigation({ page, reorder = false, disabled, notebooks, assets, folders, selectedNotebookId, onChange, onSelect }: {
   page: ScreenPage;
   reorder?: boolean;
   disabled: boolean;
   notebooks: NotebookConfig[];
-  notes: NoteItem[];
   assets: ScreenAsset[];
   folders: FolderItem[];
   selectedNotebookId: string;
@@ -49,7 +48,7 @@ export function ScreenLaneNavigation({ page, reorder = false, disabled, notebook
         {rows.map(row => <LaneLink reorder={reorder} key={row.id} row={row} disabled={disabled} onSelect={() => onSelect(row.id)} onEdit={() => setEditing(row.id)} />)}
       </SortableContext></DndContext>
     </nav>
-    {editingRow && <ScreenEditRow row={editingRow} disabled={disabled} notebooks={notebooks} notes={notes} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onClose={close}
+    {editingRow && <ScreenEditRow row={editingRow} disabled={disabled} notebooks={notebooks} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onClose={close}
       onApply={next => { if (!disabled) onChange({ ...page, rows: page.rows.map(row => row.id === next.id ? next : row) }); }}
       onRemove={() => { if (!disabled) onChange({ ...page, rows: page.rows.filter(row => row.id !== editingRow.id) }); }} />}
   </>;

@@ -13,22 +13,24 @@ import {
 import { NoteTags, NoteTagActions } from './NoteTags.js';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import { Select } from './Select.js';
-import { NoteItem } from '../lib/types.js';
+import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { SortField, SortOrder } from '../lib/note-sort.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 
 interface ListViewProps {
-  notes: NoteItem[];
+  notes: NoteListItem[];
+  /** Staged drafts the server cannot return yet; listed above the committed rows. */
+  uncommitted?: NoteListItem[];
   hasFolderEntries?: boolean;
   statuses: string[];
   readOnly?: boolean;
   canDelete?: boolean;
   confirmDelete?: boolean;
-  onOpenNote: (note: NoteItem) => void;
-  onDeleteNote: (note: NoteItem) => void;
-  onMoveNote?: (note: NoteItem) => void;
-  onUpdateNoteStatus: (note: NoteItem, newStatus: string) => void;
+  onOpenNote: (note: NoteListItem) => void;
+  onDeleteNote: (note: NoteListItem) => void;
+  onMoveNote?: (note: NoteListItem) => void;
+  onUpdateNoteStatus: (note: NoteListItem, newStatus: string) => void;
   onNewNote: () => void;
   sortField?: SortField;
   sortOrder?: SortOrder;
@@ -38,14 +40,14 @@ interface ListViewProps {
 }
 
 interface NoteRowActions {
-  open: (note: NoteItem) => void;
-  remove: (note: NoteItem) => void;
-  move: (note: NoteItem) => void;
-  status: (note: NoteItem, status: string) => void;
+  open: (note: NoteListItem) => void;
+  remove: (note: NoteListItem) => void;
+  move: (note: NoteListItem) => void;
+  status: (note: NoteListItem, status: string) => void;
 }
 
 const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelete, isPendingDelete, actions, dates, tagActions }: {
-  note: NoteItem; tagActions?: NoteTagActions; statuses: string[]; readOnly: boolean; canDelete: boolean; isPendingDelete: boolean;
+  note: NoteListItem; tagActions?: NoteTagActions; statuses: string[]; readOnly: boolean; canDelete: boolean; isPendingDelete: boolean;
   actions: NoteRowActions; dates: { short: Intl.DateTimeFormat; full: Intl.DateTimeFormat };
 }) {
   const { t } = useTranslation();
@@ -128,6 +130,7 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
 
 export const ListView: React.FC<ListViewProps> = ({
   notes,
+  uncommitted = [],
   hasFolderEntries = false,
   statuses,
   readOnly = false,
@@ -149,7 +152,7 @@ export const ListView: React.FC<ListViewProps> = ({
   const handlers = useRef({ onOpenNote, onDeleteNote, onUpdateNoteStatus, onMoveNote });
   useLayoutEffect(() => { handlers.current = { onOpenNote, onDeleteNote, onUpdateNoteStatus, onMoveNote }; });
   const notesRef = useRef(notes);
-  useLayoutEffect(() => { notesRef.current = notes; });
+  useLayoutEffect(() => { notesRef.current = [...uncommitted, ...notes]; });
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(confirmDelete, path => {
     const note = notesRef.current.find(n => n.path === path);
     if (note) handlers.current.onDeleteNote(note);
@@ -165,7 +168,7 @@ export const ListView: React.FC<ListViewProps> = ({
     full: new Intl.DateTimeFormat(language, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }),
   }), [language]);
 
-  const isEmpty = notes.length === 0 && !hasFolderEntries;
+  const isEmpty = notes.length === 0 && uncommitted.length === 0 && !hasFolderEntries;
 
   if (isEmpty) {
     return (
@@ -242,7 +245,7 @@ export const ListView: React.FC<ListViewProps> = ({
         ]}
       />
     </div>}
-    {notes.length > 0 && <div
+    {(notes.length > 0 || uncommitted.length > 0) && <div
       className="note-list rounded-xl border shadow-xs overflow-hidden transition-colors"
       style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
     >
@@ -260,6 +263,11 @@ export const ListView: React.FC<ListViewProps> = ({
               <th className="py-3 px-4 w-16 text-right">{t('notes.actions')}</th>
             </tr>
           </thead>
+          {uncommitted.length > 0 && <tbody className="divide-y note-list-uncommitted" style={{ borderColor: 'var(--color-border)' }}>
+            <tr><th colSpan={5} scope="colgroup" className="py-2 px-4 text-left text-xs uppercase font-semibold text-amber-600 dark:text-amber-400">{t('notes.uncommitted')}</th></tr>
+            {uncommitted.map(note => <NoteRow key={note.path} note={note} statuses={statuses}
+              readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} tagActions={tagActions} />)}
+          </tbody>}
           <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
             {/* Notes row rendering */}
             {notes.map(note => <NoteRow key={note.path} note={note} statuses={statuses}

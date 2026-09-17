@@ -1,5 +1,4 @@
-import { FolderItem, NoteItem } from './types.js';
-import { noteFolder } from './note-paths.js';
+import { FolderItem } from './types.js';
 
 export interface SubfolderInfo {
   path: string;
@@ -73,16 +72,19 @@ export function resolveAllNotebooksFolderSelect(
 
 /**
  * Extracts immediate subfolders under `currentFolder` for a specific notebook.
- * Discovers subfolders from both explicit FolderItem records and existing note paths.
+ * Discovers subfolders from both explicit FolderItem records and the notebook's directory
+ * counts (`NotebookFacets.directories`: repo-relative directory to direct note count).
  */
 export function getImmediateSubfolders(
-  notes: NoteItem[],
+  directories: Record<string, number>,
   folders: FolderItem[],
   notebookId: string,
   notebookRoot: string,
   currentFolder: string | null
 ): SubfolderInfo[] {
-  const notebookNotes = notes.filter((n) => n.notebookId === notebookId);
+  const rootPrefixPath = notebookRoot.replace(/\/$/, '') + '/';
+  const notebookDirectories = Object.entries(directories).flatMap(([directory, count]) =>
+    directory.startsWith(rootPrefixPath) ? [[directory.slice(rootPrefixPath.length), count] as const] : []);
   const notebookFolders = folders.filter((f) => f.notebookId === notebookId);
 
   // Normalize current folder prefix
@@ -115,14 +117,9 @@ export function getImmediateSubfolders(
     }
   }
 
-  // 2. Discover from note paths (in case folders are not in manifest)
-  const rootPrefix = notebookRoot.replace(/\/$/, '') + '/';
-  for (const n of notebookNotes) {
-    if (!n.path.startsWith(rootPrefix)) continue;
-    const rel = n.path.slice(rootPrefix.length);
-    if (!rel.includes('/')) continue; // Note at root of notebook
-
-    const noteDir = rel.slice(0, rel.lastIndexOf('/'));
+  // 2. Discover from note directories (in case folders are not in manifest)
+  for (const [noteDir] of notebookDirectories) {
+    if (!noteDir) continue; // Notes at the root of the notebook
     if (currentFolder === null) {
       const firstSegment = noteDir.split('/')[0];
       if (!folderMap.has(firstSegment)) {
@@ -153,11 +150,9 @@ export function getImmediateSubfolders(
   // 3. Compute recursive note counts for each immediate subfolder
   for (const subfolder of folderMap.values()) {
     const subPrefix = `${subfolder.path}/`;
-    const count = notebookNotes.filter((n) => {
-      const f = noteFolder(n.path, notebookRoot);
-      return f === subfolder.path || f.startsWith(subPrefix);
-    }).length;
-    subfolder.noteCount = count;
+    subfolder.noteCount = notebookDirectories
+      .filter(([directory]) => directory === subfolder.path || directory.startsWith(subPrefix))
+      .reduce((total, [, count]) => total + count, 0);
   }
 
   const orders = new Map(notebookFolders.map(folder => [folder.path, folder.order]));
@@ -165,18 +160,6 @@ export function getImmediateSubfolders(
     (orders.get(a.path) || 0) - (orders.get(b.path) || 0) ||
     a.title.localeCompare(b.title) || a.path.localeCompare(b.path)
   );
-}
-
-/**
- * Returns notes located directly inside `currentFolder` (not in deeper subfolders).
- */
-export function getImmediateNotes(
-  notes: NoteItem[],
-  notebookRoot: string,
-  currentFolder: string | null
-): NoteItem[] {
-  const targetFolder = currentFolder || '';
-  return notes.filter((n) => noteFolder(n.path, notebookRoot) === targetFolder);
 }
 
 /**

@@ -1,18 +1,20 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { ExternalLink, FileText, Folder, Image as ImageIcon, Play, Youtube } from 'lucide-react';
 import type { ScreenItem, ScreenRow } from '@mygitnotes/core/screen-page';
-import type { AssetItem, NoteItem, NotebookConfig } from '../lib/types.js';
+import type { NoteListItem } from '@mygitnotes/core/note-query';
+import type { AssetItem, NotebookConfig } from '../lib/types.js';
 import { noteSummary } from '../lib/screen-content.js';
 import { renderNote } from '../lib/markdown.js';
 import { useTranslation } from '../lib/i18n/index.js';
-import { isNoteHidden } from '@mygitnotes/core/note-status';
+import { useNoteList } from '../lib/use-note-queries.js';
+import { NoteListSentinel } from './NoteListSentinel.js';
 
 export type ScreenAsset = AssetItem & { notebookId: string };
 export interface ScreenContentProps {
-  notebooks: NotebookConfig[]; notes: NoteItem[]; assets: ScreenAsset[];
-  onOpen: (item: ScreenItem) => void;
+  notebooks: NotebookConfig[]; notes: NoteListItem[]; assets: ScreenAsset[];
+  onOpen: (item: ScreenItem, note?: NoteListItem) => void;
 }
-export function screenItemTitle(item: ScreenItem, notes: NoteItem[], assets: ScreenAsset[]): string {
+export function screenItemTitle(item: ScreenItem, notes: NoteListItem[], assets: ScreenAsset[]): string {
   if (item.kind === 'youtube') return item.title || 'YouTube';
   return notes.find(note => note.path === item.path && note.notebookId === item.notebookId)?.title
     || assets.find(asset => asset.path === item.path && asset.notebookId === item.notebookId)?.name
@@ -28,24 +30,30 @@ export function ScreenCard({ item, view, controls, ...content }: ScreenContentPr
   const notebook = item.kind !== 'youtube' ? content.notebooks.find(nb => nb.id === item.notebookId) : undefined;
   const title = screenItemTitle(item, content.notes, content.assets);
   const tableLabel = t('preview.scrollableTable');
-  const html = useMemo(() => note && view !== 'thumbnail' ? renderNote(note.content, note.path, tableLabel) : '', [note?.content, note?.path, view, tableLabel]);
+  const html = useMemo(() => note?.content && view !== 'thumbnail' ? renderNote(note.content, note.path, tableLabel) : '', [note?.content, note?.path, view, tableLabel]);
   const icon = item.kind === 'note' ? <FileText /> : item.kind === 'folder' ? <Folder /> : item.kind === 'asset' ? <ImageIcon /> : <Youtube />;
-  const members = item.kind === 'folder' ? content.notes.filter(note => note.notebookId === item.notebookId && note.path.startsWith(`${item.path}/`) && !isNoteHidden({ ...note.metadata, status: note.status })) : [];
+  // A pinned folder lists its visible notes straight from the server, a page at a time.
+  const folderNotes = useNoteList(item.kind === 'folder' ? { notebookId: item.notebookId, folders: [item.path], descendants: true, sort: 'title', order: 'asc' } : null, { limit: 200 });
+  const members = item.kind === 'folder' ? [...folderNotes.uncommitted, ...folderNotes.notes] : [];
   const memberAssets = item.kind === 'folder' ? content.assets.filter(asset => asset.notebookId === item.notebookId && asset.path.startsWith(`${item.path}/`)) : [];
   return <article className={`screen-card screen-item-${item.kind}`} data-screen-item={item.id} onClick={event => {
-    if (note && !(event.target as HTMLElement).closest('a,button,input,select,textarea,summary,[role="button"]') && !window.getSelection()?.toString()) content.onOpen(item);
+    if (note && !(event.target as HTMLElement).closest('a,button,input,select,textarea,summary,[role="button"]') && !window.getSelection()?.toString()) content.onOpen(item, note);
   }}>
-    <header className="screen-card-header">{controls}{icon}<button type="button" className="screen-card-title" title={title} onClick={() => content.onOpen(item)}>{title}</button>
-      {item.kind !== 'note' && <button type="button" className="screen-open ui-icon-button" aria-label={`${t('links.open')}: ${title}`} onClick={() => content.onOpen(item)}><ExternalLink size={13} /></button>}
+    <header className="screen-card-header">{controls}{icon}<button type="button" className="screen-card-title" title={title} onClick={() => content.onOpen(item, note)}>{title}</button>
+      {item.kind !== 'note' && <button type="button" className="screen-open ui-icon-button" aria-label={`${t('links.open')}: ${title}`} onClick={() => content.onOpen(item, note)}><ExternalLink size={13} /></button>}
     </header>
     <div className="screen-card-content" tabIndex={0} aria-label={title}>
-      {note ? view === 'thumbnail' ? <p className="screen-summary">{noteSummary(note.content)}</p>
+      {note ? typeof note.content !== 'string' ? <p className="screen-summary" role="status">{t('notes.loading')}</p>
+        : view === 'thumbnail' ? <p className="screen-summary">{noteSummary(note.content)}</p>
         : <div className="prose-custom screen-markdown" data-markdown-view dangerouslySetInnerHTML={{ __html: html }} />
         : item.kind === 'folder' ? <div className="screen-folder-list">
-          {members.length ? members.map(note => <button key={note.path} type="button" onClick={() => content.onOpen({ id: item.id, kind: 'note', notebookId: note.notebookId, path: note.path })}>
+          {folderNotes.error && <p role="alert" className="screen-missing">{folderNotes.error}</p>}
+          {folderNotes.loading && <p role="status" className="screen-summary">{t('notes.loading')}</p>}
+          {members.length ? members.map(note => <button key={note.path} type="button" onClick={() => content.onOpen({ id: item.id, kind: 'note', notebookId: note.notebookId, path: note.path }, note)}>
             <FileText size={14} /><span>{note.title}</span>
-          </button>) : !memberAssets.length && <p className="screen-summary">{t('screen.emptyFolder')}</p>}
+          </button>) : !memberAssets.length && !folderNotes.loading && !folderNotes.error && <p className="screen-summary">{t('screen.emptyFolder')}</p>}
           {memberAssets.map(asset => <button key={asset.path} type="button" onClick={() => content.onOpen({ id: item.id, kind: 'asset', notebookId: asset.notebookId, path: asset.path })}><ImageIcon size={14} /><span>{asset.name}</span></button>)}
+          <NoteListSentinel hasMore={folderNotes.hasMore} loading={folderNotes.loadingMore} error={folderNotes.error} onLoadMore={folderNotes.loadMore} />
         </div>
         : item.kind === 'asset' && asset ? /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(asset.name)
           ? <button type="button" className="screen-image-button" onClick={() => content.onOpen(item)} aria-label={`${t('screen.preview')}: ${title}`}><img src={asset.rawUrl} alt={asset.name} loading="lazy" /></button>

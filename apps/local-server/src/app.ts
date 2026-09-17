@@ -2,7 +2,9 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { loadSourceConfig, loadWorkspaceConfig, classifyResource, resolveSafePath, sourceIdentity, RemoteSource, createRemoteSource, SourceError, workspaceAgentKind, workspaceAgentResource, replaceNoteTags, type WorkspaceAgentResource } from '@mygitnotes/core';
+import { loadSourceConfig, loadWorkspaceConfig, classifyResource, resolveSafePath, sourceIdentity, RemoteSource, createRemoteSource, SourceError, workspaceAgentKind, workspaceAgentResource, replaceNoteTags, type WorkspaceAgentResource,
+  parseNoteQuery, parseRevision, queryNotes, queryNotePaths, noteFacets, lookupNotes, noteAgenda, noteGraph } from '@mygitnotes/core';
+import { createRemoteCache } from './remote-cache-store.js';
 import { createRemoteMCP } from './mcp.js';
 import { createLocalApp } from './local-app.js';
 import { createAuth, authToken } from './auth.js';
@@ -58,7 +60,8 @@ export function createApp(base: string): express.Express {
   if (source) app.use('/api/study', createStudyRouter(base, source));
   if (source) app.use('/api/screen-page', createScreenPageRouter(base, source));
   if (source) app.use('/api/folder-manager', createFolderManagerRouter(base, source));
-  app.use('/mcp', createRemoteMCP(base, source));
+  const cache = source && source.type !== 'local' ? createRemoteCache() : undefined;
+  app.use('/mcp', createRemoteMCP(base, source, cache));
   if (source?.type === 'local') {
     const root = source.path;
     app.get('/r2-assets/*', createR2AssetHandler(async (_res, notePath) => {
@@ -71,7 +74,7 @@ export function createApp(base: string): express.Express {
       if (!source) return res.status(503).json({ error: setupError, setupRequired: true });
       try {
         const token = await authToken(req, base);
-        res.locals.reader = createRemoteSource(source, token);
+        res.locals.reader = createRemoteSource(source, token, fetch, cache);
         res.locals.authenticated = Boolean(token);
         next();
       } catch (error) { res.status(401).json({ error: 'Session unavailable. Sign in again.' }); }
@@ -87,6 +90,30 @@ export function createApp(base: string): express.Express {
       } catch (error) { fail(res, error); }
     });
     app.get('/api/notes', async (req, res) => { try { res.json({ notes: await (res.locals.reader as RemoteSource).notes(req.query.notebookId as string) }); } catch (error) { fail(res, error); } });
+    /** `revision` is the snapshot the browser is working from; reads always answer from the branch head. */
+    const catalog = async (res: express.Response, revision: unknown) => {
+      const reader: RemoteSource = res.locals.reader;
+      const expected = parseRevision(revision);
+      const snapshot = await reader.getSnapshot();
+      if (expected && expected !== snapshot.sha) throw new SourceError('The repository changed. Reload to continue from the latest revision.', 409);
+      return reader.catalog();
+    };
+    app.get('/api/notes/query', async (req, res) => {
+      try {
+        const { query, options } = parseNoteQuery(req.query);
+        const notes = await catalog(res, req.query.revision);
+        res.json(options.select ? await queryNotePaths(notes, query) : await queryNotes(notes, query, options));
+      } catch (error) { fail(res, error); }
+    });
+    app.get('/api/notes/facets', async (req, res) => { try { res.json(await noteFacets(await catalog(res, req.query.revision), req.query.showHidden === '1')); } catch (error) { fail(res, error); } });
+    app.post('/api/notes/lookup', async (req, res) => { try { res.json(await lookupNotes(await catalog(res, req.body?.revision), req.body?.paths, req.body?.content === true)); } catch (error) { fail(res, error); } });
+    app.get('/api/notes/agenda', async (req, res) => {
+      try {
+        if (typeof req.query.notebookId !== 'string' || !req.query.notebookId) throw new SourceError('notebookId is required.');
+        res.json(await noteAgenda(await catalog(res, req.query.revision), req.query.notebookId, req.query.showHidden === '1'));
+      } catch (error) { fail(res, error); }
+    });
+    app.get('/api/notes/graph', async (req, res) => { try { res.json(await noteGraph(await catalog(res, req.query.revision))); } catch (error) { fail(res, error); } });
     app.get('/api/folders', async (req, res) => { try { res.json({ folders: await (res.locals.reader as RemoteSource).folders() }); } catch (error) { fail(res, error); } });
     app.get('/api/templates/render', async (req, res) => {
       try {

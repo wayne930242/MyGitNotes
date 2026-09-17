@@ -1,20 +1,26 @@
 import { Button } from './Button.js';
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, FileText, ListTodo } from 'lucide-react';
-import type { NoteItem, NotebookConfig } from '../lib/types.js';
+import type { NoteListItem } from '@mygitnotes/core/note-query';
+import type { NotebookConfig } from '../lib/types.js';
 import { useTranslation, type TranslationKey } from '../lib/i18n/index.js';
 import { Select } from './Select.js';
 import { buildMonthGrid } from '../lib/calendar-grid.js';
 import { formatDateYMD, getLocaleWeekStartDay } from '../lib/date-utils.js';
-import { extractTodoTasks } from '../lib/todo-list.js';
+import type { TodoTask } from '../lib/todo-list.js';
 import { buildDayCounts, notesForDay, notesForMonth, tasksForDay, tasksForMonth } from '../lib/note-day-index.js';
+import { useNoteAgenda } from '../lib/use-note-queries.js';
 
 interface CalendarToolProps {
-  notes: NoteItem[];
   notebooks: NotebookConfig[];
   selectedNotebookId: string;
-  onOpenNote: (note: NoteItem) => void;
+  onOpenNote: (note: NoteListItem) => void;
 }
+
+/** A todo row identifies its note; opening it needs no more than that. */
+const taskNote = (task: TodoTask): NoteListItem => ({
+  id: task.notePath, path: task.notePath, notebookId: task.notebookId, title: task.noteTitle, tags: [], metadata: {},
+});
 
 const MONTH_LABEL_KEYS: TranslationKey[] = [
   'panel.monthJanuary', 'panel.monthFebruary', 'panel.monthMarch', 'panel.monthApril', 'panel.monthMay', 'panel.monthJune',
@@ -22,7 +28,7 @@ const MONTH_LABEL_KEYS: TranslationKey[] = [
 ];
 const YEAR_RANGE = 6;
 
-export function CalendarTool({ notes, notebooks, selectedNotebookId, onOpenNote }: CalendarToolProps) {
+export function CalendarTool({ notebooks, selectedNotebookId, onOpenNote }: CalendarToolProps) {
   const { t, language } = useTranslation();
   const locale = language === 'zh-TW' ? 'zh-TW' : 'en-US';
   const [scope, setScope] = useState<'current' | 'all'>('current');
@@ -30,11 +36,9 @@ export function CalendarTool({ notes, notebooks, selectedNotebookId, onOpenNote 
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [dayField, setDayField] = useState<'created' | 'updated'>('created');
 
-  const scopedNotes = useMemo(
-    () => (scope === 'all' || notebooks.length <= 1 ? notes : notes.filter(note => note.notebookId === selectedNotebookId)),
-    [notes, notebooks.length, scope, selectedNotebookId]
-  );
-  const tasks = useMemo(() => extractTodoTasks(scopedNotes), [scopedNotes]);
+  const agenda = useNoteAgenda(scope === 'all' || notebooks.length <= 1 ? 'all' : selectedNotebookId);
+  const scopedNotes = useMemo(() => agenda.agenda?.dated ?? [], [agenda.agenda]);
+  const tasks = useMemo(() => agenda.agenda?.tasks ?? [], [agenda.agenda]);
   const dayCounts = useMemo(() => buildDayCounts(scopedNotes, tasks), [scopedNotes, tasks]);
   const weekStartDay = useMemo(() => getLocaleWeekStartDay(locale), [locale]);
   const grid = useMemo(() => buildMonthGrid(cursor.getFullYear(), cursor.getMonth(), weekStartDay), [cursor, weekStartDay]);
@@ -66,6 +70,9 @@ export function CalendarTool({ notes, notebooks, selectedNotebookId, onOpenNote 
             options={[{ value: 'current', label: t('panel.scopeCurrentNotebook') }, { value: 'all', label: t('panel.scopeAllNotebooks') }]} />
         )}
       </div>}
+
+      {agenda.error && <p role="alert" className="calendar-day-empty">{agenda.error}</p>}
+      {agenda.loading && <p role="status" className="calendar-day-empty">{t('notes.loading')}</p>}
 
       <div className="calendar-month-nav">
         <Button type="button" size="icon" aria-label={t('panel.previousMonth')} onClick={() => { setCursor(value => new Date(value.getFullYear(), value.getMonth() - 1, 1)); setSelectedDay(null); }}><ChevronLeft aria-hidden="true" /></Button>
@@ -118,7 +125,7 @@ export function CalendarTool({ notes, notebooks, selectedNotebookId, onOpenNote 
           {day.tasks.length > 0 && <ul className="calendar-day-tasks">
             {day.tasks.map(task => (
               <li key={task.id} data-checked={task.checked}>
-                <Button className="panel-note-row" onClick={() => onOpenNote(scopedNotes.find(note => note.path === task.notePath)!)}><ListTodo aria-hidden="true" /><span>{task.lineText.replace(/^\s*[-*+]\s\[[ xX]\]\s?/, '')}<small>{task.noteTitle} · {task.due}</small></span></Button>
+                <Button className="panel-note-row" onClick={() => onOpenNote(scopedNotes.find(note => note.path === task.notePath) || taskNote(task))}><ListTodo aria-hidden="true" /><span>{task.lineText.replace(/^\s*[-*+]\s\[[ xX]\]\s?/, '')}<small>{task.noteTitle} · {task.due}</small></span></Button>
               </li>
             ))}
           </ul>}

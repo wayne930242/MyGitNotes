@@ -487,6 +487,17 @@ export const en = {
   'notes.confirmDelete': 'Click again to confirm deletion',
   'notes.noContent': 'No content',
   'notes.noStatus': 'No status',
+  'notes.loading': 'Loading notes…',
+  'notes.loadingMore': 'Loading more notes…',
+  'notes.moreAvailable': 'Scroll for more notes',
+  'notes.loadFailed': 'Notes could not be loaded: {message}',
+  'notes.countsLoading': 'Loading note counts…',
+  'notes.countsFailed': 'Note counts could not be loaded: {message}',
+  'notes.retryPage': 'Retry',
+  'notes.uncommitted': 'Uncommitted',
+  'notes.loadingNote': 'Loading note…',
+  'notes.readFailed': 'The full note could not be read ({path}); nothing was changed.',
+  'notes.unavailable': 'This note is unavailable in this workspace.',
 
   // Common actions & labels
   'common.cancel': 'Cancel',

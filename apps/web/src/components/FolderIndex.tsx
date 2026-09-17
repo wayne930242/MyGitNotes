@@ -1,10 +1,10 @@
 import { FileText, ChevronRight } from 'lucide-react';
-import type { NoteItem } from '../lib/types.js';
+import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { useTranslation } from '../lib/i18n/index.js';
 
 export function FolderIndex({ note, onOpenNote }: {
-  note: NoteItem;
-  onOpenNote: (note: NoteItem) => void;
+  note: NoteListItem;
+  onOpenNote: (note: NoteListItem) => void;
 }) {
   const { t } = useTranslation();
   return <button type="button" className="folder-link folder-index" data-folder-index

@@ -1,13 +1,14 @@
 import { RemoteSource, type RemoteSnapshot, type RemoteEntry, type RemoteChange } from './remote-source.js';
 import { SourceError } from './github-api.js';
 import { normalizeGitLabUrl } from './source-config.js';
+import type { RemoteCache } from './remote-cache.js';
 
 /** GitLab API v4 adapter. Reads remain pinned to immutable Git objects. */
 export class GitLabSource extends RemoteSource {
   readonly url: string;
   private blobs = new Map<string, Promise<Buffer>>();
-  constructor(url: string, repository: string, branch: string, token?: string, private request: typeof fetch = fetch) {
-    super(repository, branch, token);
+  constructor(url: string, repository: string, branch: string, token?: string, private request: typeof fetch = fetch, cache?: RemoteCache) {
+    super(repository, branch, token, cache);
     this.url = normalizeGitLabUrl(url);
   }
   private async response(endpoint: string, init: RequestInit = {}): Promise<Response> {

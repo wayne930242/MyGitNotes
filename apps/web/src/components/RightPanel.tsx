@@ -1,6 +1,7 @@
 import { Button } from './Button.js';
 import { useEffect, useState, type ReactNode } from 'react';
 import { CalendarDays, ListTodo, GitBranch, Info } from 'lucide-react';
+import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { ChangeRequest, FileChange, GitStatus, NoteItem, NotebookConfig } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { usePanelContext, WORKSPACE_TOOL_IDS, type WorkspaceToolId } from '../lib/panel-context.js';
@@ -12,11 +13,12 @@ interface RightPanelProps {
   onFileMetadataContainer?: (element: HTMLDivElement | null) => void;
   fileMode?: boolean;
   fileMetadata?: ReactNode;
-  notes: NoteItem[];
   notebooks: NotebookConfig[];
   selectedNotebookId: string;
-  onOpenNote: (note: NoteItem) => void;
+  onOpenNote: (note: NoteListItem) => void;
   onSaveNote: (params: { path: string; content: string; metadata?: Record<string, unknown>; notebookId?: string }) => Promise<NoteItem>;
+  /** Reads a note in full before a panel action rewrites it. */
+  onReadNote: (path: string) => Promise<NoteItem>;
   gitStatus: GitStatus | null;
   deletedNotes: NoteItem[];
   onRestoreNote: (note: NoteItem) => void;
@@ -40,7 +42,7 @@ const WORKSPACE_TOOL_LABELS: Record<WorkspaceToolId, 'panel.calendar' | 'panel.t
 };
 
 /** The workspace-level Calendar/Todo/Changes panel. Hidden while a note is open — the editor has its own document panel. */
-export function RightPanel({ notes, notebooks, selectedNotebookId, onOpenNote, onSaveNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, fileMode = false, fileMetadata, onFileMetadataContainer }: RightPanelProps) {
+export function RightPanel({ notebooks, selectedNotebookId, onOpenNote, onSaveNote, onReadNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, fileMode = false, fileMetadata, onFileMetadataContainer }: RightPanelProps) {
   const { t } = useTranslation();
   const panel = usePanelContext();
   const visible = !panel.hasOpenNote;
@@ -68,8 +70,8 @@ export function RightPanel({ notes, notebooks, selectedNotebookId, onOpenNote, o
       {isOpen && (
         <div className="right-panel-content">
           {showingMetadata && <section className="file-metadata-panel"><h2>{t('files.metadataLabel')}</h2>{fileMetadata}<div ref={onFileMetadataContainer} /></section>}
-          {showingWorkspaceTool && panel.activeTool === 'calendar' && <CalendarTool notes={notes} notebooks={notebooks} selectedNotebookId={selectedNotebookId} onOpenNote={onOpenNote} />}
-          {showingWorkspaceTool && panel.activeTool === 'todo' && <TodoTool notes={notes} notebooks={notebooks} selectedNotebookId={selectedNotebookId} onOpenNote={onOpenNote} onSaveNote={onSaveNote} />}
+          {showingWorkspaceTool && panel.activeTool === 'calendar' && <CalendarTool notebooks={notebooks} selectedNotebookId={selectedNotebookId} onOpenNote={onOpenNote} />}
+          {showingWorkspaceTool && panel.activeTool === 'todo' && <TodoTool notebooks={notebooks} selectedNotebookId={selectedNotebookId} onOpenNote={onOpenNote} onSaveNote={onSaveNote} onReadNote={onReadNote} />}
           {showingWorkspaceTool && panel.activeTool === 'changes' && <ChangesTool writable={writable} remoteChanges={remoteChanges} getPreview={getPreview} gitStatus={gitStatus} deletedNotes={deletedNotes} onRestoreNote={onRestoreNote} onOpenCommitModal={onOpenCommitModal} onSynced={onSynced} />}
         </div>
       )}

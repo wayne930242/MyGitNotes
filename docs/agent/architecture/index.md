@@ -31,6 +31,10 @@ See the [deployment guide](../../../README.md).
 
 The [Dockerfile](../../../Dockerfile) builds the web application and runs the compiled Express server as the `node` user. `HOST` defaults to loopback for direct startup and is set to `0.0.0.0` inside the image. The local-source Host and Origin checks remain active; `compose.local.yaml` binds an existing workspace checkout at `/workspace` and publishes only a loopback port.
 
+Note pages come from query routes shared by both sources: `/api/notes/query` (notebook, folder, tag, status, visibility, text and sort filters, cursor pages, optional content, or a full path list), `/api/notes/facets`, `/api/notes/lookup`, `/api/notes/agenda` and `/api/notes/graph`. `NoteCatalog` is the read model behind them; `parseNoteQuery` and the query functions live in `packages/core/src/note-catalog.ts`, and filtering, sorting and serialization are shared with the browser through `note-query.ts`. Read routes accept the `revision` the browser is working from and answer 409 when the branch head has moved, so a screen never mixes two commits and a request cannot steer reads at arbitrary history.
+
+Remote readers cache notes and their per-notebook indexes in the session Redis, keyed by repository and Git object id with a 30 day lifetime, falling back to a process-local cache when Redis is absent. Cache failures end the request rather than silently reloading from the platform.
+
 `compose.yaml` runs the remote-source application with its own Redis service on an internal network. Redis persists AOF data in `redis-data`; only the application HTTP port is published. `SessionStore` chooses native Redis via `REDIS_URL`, then the existing Redis REST configuration, then a local encrypted session directory outside Vercel. Native Redis reuses connections, bounds connection/command waits, and propagates errors; a later request reconnects after a failure. Session/grant keys, encryption, TTLs, indexes, and credential refresh locks use the same operations across both Redis transports.
 
 See the [deployment guide](../../../README.md#docker-and-docker-compose-deployment) for volumes, OAuth callbacks, reverse proxies, and updates.

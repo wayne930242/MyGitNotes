@@ -1,38 +1,7 @@
-import type { NoteItem } from './types.js';
-import { classifyDueDate, DUE_EMOJI, getTokenValue, isTaskChecked, isTaskLine, type TodoGroup } from './task-tokens.js';
+import type { TodoTask } from '@mygitnotes/core/note-agenda';
+import { classifyDueDate, type TodoGroup } from './task-tokens.js';
 
-export interface TodoTask {
-  id: string;
-  notePath: string;
-  notebookId: string;
-  noteTitle: string;
-  lineIndex: number;
-  lineText: string;
-  checked: boolean;
-  due?: string;
-}
-
-/** Extracts every GFM task line from a set of notes as flat TodoTask records. */
-export function extractTodoTasks(notes: NoteItem[]): TodoTask[] {
-  const tasks: TodoTask[] = [];
-  for (const note of notes) {
-    const lines = note.content.split('\n');
-    lines.forEach((lineText, lineIndex) => {
-      if (!isTaskLine(lineText)) return;
-      tasks.push({
-        id: `${note.path}#${lineIndex}`,
-        notePath: note.path,
-        notebookId: note.notebookId,
-        noteTitle: note.title,
-        lineIndex,
-        lineText,
-        checked: isTaskChecked(lineText) ?? false,
-        due: getTokenValue(lineText, DUE_EMOJI),
-      });
-    });
-  }
-  return tasks;
-}
+export { extractTodoTasks, type TodoTask } from '@mygitnotes/core/note-agenda';
 
 export interface TodoGroups {
   overdue: TodoTask[];

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { SCREEN_PAGE_FILE } from '@mygitnotes/core/screen-page';
 import { useScreenPage } from './use-screen-page.js';
 import {
@@ -11,7 +12,6 @@ import {
 import {
   fetchWorkspace,
   fetchFolders,
-  fetchNotes,
   fetchAssets,
   fetchGitStatus,
 } from './api.js';
@@ -19,11 +19,10 @@ import {
   readWorkingNotes,
   updateWorkingNote,
   clearCommittedNotes,
-  overlayWorkingNotes,
   WorkingNotes,
 } from './working-notes.js';
 import { sameValue } from './merge-note.js';
-import { mergeNoteSnapshot } from './note-snapshot.js';
+import { invalidateNoteQueries } from './use-note-queries.js';
 import { setWorkspaceNotebooks } from './workspace-links.js';
 
 export interface UseWorkspaceSyncOptions {
@@ -33,11 +32,11 @@ export interface UseWorkspaceSyncOptions {
 
 export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const { routeNotebook, onStageNote } = options;
+  const queryClient = useQueryClient();
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [sourceId, setSourceId] = useState('');
   const [remote, setRemote] = useState(false);
-  const loadedRemote = useRef(false);
   const loadedWorkspace = useRef('');
   const refreshRequest = useRef(0);
   const [canWrite, setCanWrite] = useState(false);
@@ -53,7 +52,6 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     setWorkspaceNotebooks(config?.notebooks || []);
   }, [config]);
   const [serverGitStatus, setGitStatus] = useState<GitStatus | null>(null);
-  const [sourceNotes, setNotes] = useState<NoteItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [workingNotes, setWorkingNotes] = useState<WorkingNotes>({});
 
@@ -73,12 +71,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   );
 
   const screenPending = remote && canWrite && screen.dirty;
-  const activeWorkingNotes = remote && canWrite ? workingNotes : {};
-
-  const notes = useMemo(
-    () => (remote && canWrite ? overlayWorkingNotes(sourceNotes, workingNotes) : sourceNotes),
-    [remote, canWrite, sourceNotes, workingNotes]
-  );
+  const activeWorkingNotes = useMemo(() => (remote && canWrite ? workingNotes : {}), [remote, canWrite, workingNotes]);
 
   const gitStatus = useMemo<GitStatus | null>(() => {
     if (remote) {
@@ -110,25 +103,22 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return () => window.removeEventListener('storage', refresh);
   }, [workingScope]);
 
-  const refreshWorkspace = async (notebookId?: string) => {
+  // The workspace answer is applied before folders arrive, so the note queries keyed by source
+  // and revision start in parallel with `/api/folders` instead of waiting behind it.
+  const refreshWorkspace = async () => {
     const request = ++refreshRequest.current;
     try {
       const ws = await fetchWorkspace();
       if (request !== refreshRequest.current) return;
+      const folderRequest = fetchFolders();
       const workspace = JSON.stringify([
         ws.source.identity,
         ws.branch,
         ws.config?.notebooks.map((nb) => [nb.id, nb.root]),
       ]);
-      const sameWorkspace = loadedWorkspace.current === workspace;
-      const scope =
-        ws.capabilities.local && sameWorkspace && ws.config?.notebooks.some((nb) => nb.id === notebookId)
-          ? notebookId
-          : undefined;
-      const [folderList, noteList] = await Promise.all([fetchFolders(), fetchNotes(scope)]);
-      if (request !== refreshRequest.current) return;
+      // A local workspace keeps one empty revision, so its cached answers are refetched by hand.
+      if (ws.capabilities.local && loadedWorkspace.current) void invalidateNoteQueries(queryClient);
       loadedWorkspace.current = workspace;
-      loadedRemote.current = !ws.capabilities.local;
       setSourceId(ws.source.identity);
       setRemote(!ws.capabilities.local);
       setCanWrite(ws.capabilities.write);
@@ -140,13 +130,12 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
       setWorkingNotes(ws.capabilities.local ? {} : readWorkingNotes(`${ws.source.identity}:${ws.branch}`));
       setGitStatus(ws.gitStatus);
 
+      const folderList = await folderRequest;
+      if (request !== refreshRequest.current) return;
       setFolders((previous) => (sameValue(previous, folderList) ? previous : folderList));
-      setNotes((previous) => mergeNoteSnapshot(sameWorkspace ? previous : [], noteList, scope));
     } catch (err) {
       if (request !== refreshRequest.current) return;
       loadedWorkspace.current = '';
-      loadedRemote.current = false;
-      setNotes([]);
       setFolders([]);
       setAssets([]);
       setConfig(null);
@@ -157,13 +146,11 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   };
 
   useEffect(() => {
-    if (!loadedRemote.current) {
-      void refreshWorkspace(loadedWorkspace.current ? selectedNotebookId : undefined);
-    }
+    void refreshWorkspace();
     return () => {
       refreshRequest.current++;
     };
-  }, [selectedNotebookId]);
+  }, []);
 
   useEffect(() => {
     if (!sourceId || !config || selectedNotebookId === 'all') return;
@@ -201,21 +188,8 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     setWorkingNotes(updateWorkingNote(workingScope, path, null));
   };
 
-  const clearCommittedWorkingNotes = (sent: WorkingNotes, resultRevision?: string) => {
+  const clearCommittedWorkingNotes = (sent: WorkingNotes) => {
     setWorkingNotes(clearCommittedNotes(workingScope, sent));
-    if (resultRevision) {
-      setNotes((previous) =>
-        overlayWorkingNotes(
-          previous,
-          Object.fromEntries(
-            Object.entries(sent).map(([path, entry]) => [
-              path,
-              { ...entry, note: { ...entry.note, revision: resultRevision } },
-            ])
-          )
-        )
-      );
-    }
   };
 
   return {
@@ -239,9 +213,6 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     serverGitStatus,
     gitStatus,
     setGitStatus,
-    sourceNotes,
-    setNotes,
-    notes,
     assets,
     setAssets,
     workingNotes,

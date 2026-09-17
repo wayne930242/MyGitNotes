@@ -9,13 +9,15 @@ import type { ScreenContentProps } from './ScreenCard.js';
 import type { FolderItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { screenFolderOptions } from '../lib/screen-content.js';
+import { useNoteFacets, useNoteList } from '../lib/use-note-queries.js';
+import { useDebounced } from '../lib/use-debounced.js';
 
-type RowDialogContent = Pick<ScreenContentProps, 'notebooks' | 'notes' | 'assets'> & {
+type RowDialogContent = Pick<ScreenContentProps, 'notebooks' | 'assets'> & {
   folders: FolderItem[];
   selectedNotebookId: string;
 };
 
-function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId, row, disabled, onApply, onClose, onRemove }: RowDialogContent & {
+function ScreenRowDialog({ notebooks, assets, folders, selectedNotebookId, row, disabled, onApply, onClose, onRemove }: RowDialogContent & {
   row?: ScreenRow;
   disabled?: boolean;
   onApply: (row: ScreenRow) => void;
@@ -39,7 +41,8 @@ function ScreenRowDialog({ notebooks, notes, assets, folders, selectedNotebookId
   const draftRow: ScreenRow = kind === 'custom' ? { id: row?.id || 'draft', name: name || 'draft', view, notebookId, kind: 'custom', items: row?.kind === 'custom' ? row.items : [] }
     : { id: row?.id || 'draft', name: name || 'draft', view, notebookId, kind: 'dynamic', source: kind === 'tag' ? { kind: 'tag', tag, notebookId } : { kind: 'folder', notebookId, path: folder || nb?.root || '', recursive } };
   const progression = customProgression || defaultStudyProgression(studyLaneStatuses(draftRow, notebooks)) || { stages: [], easy: 'two' as const };
-  const tags = [...new Set(notes.filter(note => note.notebookId === notebookId).flatMap(note => note.tags))].sort();
+  const facets = useNoteFacets(true);
+  const tags = Object.keys(facets.facets?.[notebookId]?.tags || {}).sort();
   const options = !row ? [{ value: 'custom', label: t('screen.custom') }, { value: 'tag', label: t('screen.tagRow') }, { value: 'folder', label: t('screen.folderRow') }]
     : row.kind === 'dynamic' ? [{ value: 'tag', label: t('screen.tagRow') }, { value: 'folder', label: t('screen.folderRow') }]
     : [{ value: 'custom', label: t('screen.custom') }];
@@ -95,13 +98,16 @@ export function ScreenEditRow(props: RowDialogContent & { row: ScreenRow; disabl
   return <ScreenRowDialog {...props} />;
 }
 
-export function ScreenAddItem({ rowName, notebookId, notebooks, notes, assets, folders, onAdd, onClose }: Omit<ScreenContentProps, 'onOpen'> & {
+export function ScreenAddItem({ rowName, notebookId, notebooks, assets, folders, onAdd, onClose }: Omit<ScreenContentProps, 'onOpen' | 'notes'> & {
   rowName: string; notebookId: string; folders: FolderItem[]; onAdd: (item: ScreenItem) => void; onClose: () => void;
 }) {
   const { t } = useTranslation(); const [kind, setKind] = useState('note');
   const [query, setQuery] = useState(''), [youtube, setYoutube] = useState(''), [title, setTitle] = useState('');
   const nb = notebooks.find(nb => nb.id === notebookId);
-  const options = kind === 'note' ? notes.filter(note => note.notebookId === notebookId).map(note => ({ path: note.path, title: note.title }))
+  // Notes are searched on the server; assets and folders are already loaded with the page.
+  const settledQuery = useDebounced(query);
+  const noteMatches = useNoteList(kind === 'note' ? { notebookId, q: settledQuery, match: 'title', showHidden: true, sort: 'title', order: 'asc' } : null);
+  const options = kind === 'note' ? noteMatches.notes.map(note => ({ path: note.path, title: note.title }))
     : kind === 'asset' ? assets.filter(asset => asset.notebookId === notebookId).map(asset => ({ path: asset.path, title: asset.name }))
     : screenFolderOptions(nb, folders, assets);
   const video = parseYouTubeUrl(youtube);
@@ -113,7 +119,9 @@ export function ScreenAddItem({ rowName, notebookId, notebooks, notes, assets, f
         {youtube && !video && <p className="screen-form-error">{t('screen.invalidVideo')}</p>}
         <div className="workspace-dialog-actions"><Button variant="primary" disabled={!video} onClick={() => { if (video) { onAdd({ id: crypto.randomUUID(), kind: 'youtube', ...video, title: title.trim() || 'YouTube' }); onClose(); } }}>{t('screen.pin')}</Button></div>
       </> : <><input className="ui-control" type="search" aria-label={t('screen.findItem')} placeholder={t('screen.findItem')} value={query} onChange={e => setQuery(e.target.value)} />
-        <div className="screen-item-options">{options.filter(option => `${option.title} ${option.path}`.toLowerCase().includes(query.toLowerCase())).map(option => <Button className="screen-item-option" key={option.path} onClick={() => {
+        {noteMatches.error && <p role="alert" className="screen-form-error">{noteMatches.error}</p>}
+        {noteMatches.loading && <p role="status">{t('notes.loading')}</p>}
+        <div className="screen-item-options">{options.filter(option => kind === 'note' || `${option.title} ${option.path}`.toLowerCase().includes(query.toLowerCase())).map(option => <Button className="screen-item-option" key={option.path} onClick={() => {
           onAdd({ id: crypto.randomUUID(), kind: kind as 'note' | 'asset' | 'folder', notebookId, path: option.path }); onClose();
         }}><span>{option.title}</span><small>{option.path}</small></Button>)}</div></>}
     </div>

@@ -362,6 +362,9 @@
 .screen-file { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; justify-content: center; height: 100%; color: var(--color-muted); }
 .screen-file p { overflow-wrap: anywhere; }.screen-file small { font-size: 10px; }
 .screen-missing { color: var(--color-muted); font-size: 12px; }
+.note-list-sentinel { display: flex; justify-content: center; padding: 14px 0; font-size: 12px; color: var(--color-muted); }
+.note-list-sentinel-error { color: var(--color-danger, #e11d48); }
+.screen-lane-sentinel { padding: 0 8px; align-self: center; white-space: nowrap; }
 .screen-lane-empty { border: 1px dashed var(--color-border); border-radius: 10px; min-height: 120px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 20px; font-size: 12px; color: var(--color-muted); flex-wrap: wrap; }
 .screen-drop-target { outline: 2px solid var(--color-primary); border-radius: 10px; }
 .screen-drag-overlay { padding: 14px 20px; border-radius: 9px; display: flex; align-items: center; gap: 10px; background: var(--color-surface); color: var(--color-text); box-shadow: 0 12px 30px #0003; border: 1px solid var(--color-primary); max-width: 340px; font-size: 13px; }

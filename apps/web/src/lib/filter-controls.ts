@@ -8,7 +8,8 @@ export interface FilterControls {
   folders: FolderItem[];
   tags: string[];
   statuses: string[];
-  count: number;
+  /** Matching notes, or null while the count is still being answered. */
+  count: number | null;
   onChange: (patch: Partial<NoteFilters> & { neighbors?: boolean }) => void;
   onNotebookChange: (id: string) => void;
   onClear: () => void;

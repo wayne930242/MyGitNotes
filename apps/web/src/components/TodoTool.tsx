@@ -1,20 +1,27 @@
 import { Button } from './Button.js';
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { NoteItem, NotebookConfig } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { Select } from './Select.js';
 import { formatDateYMD } from '../lib/date-utils.js';
 import { setTaskChecked } from '../lib/task-tokens.js';
-import { extractTodoTasks, groupTodoTasks, type TodoTask } from '../lib/todo-list.js';
+import { groupTodoTasks, type TodoTask } from '../lib/todo-list.js';
+import { useNoteAgenda } from '../lib/use-note-queries.js';
 
 interface TodoToolProps {
-  notes: NoteItem[];
   notebooks: NotebookConfig[];
   selectedNotebookId: string;
-  onOpenNote: (note: NoteItem) => void;
+  onOpenNote: (note: NoteListItem) => void;
   onSaveNote: (params: { path: string; content: string; metadata?: Record<string, unknown>; notebookId?: string }) => Promise<NoteItem>;
+  onReadNote: (path: string) => Promise<NoteItem>;
 }
+
+/** A todo row identifies its note; opening it needs no more than that. */
+const taskNote = (task: TodoTask): NoteListItem => ({
+  id: task.notePath, path: task.notePath, notebookId: task.notebookId, title: task.noteTitle, tags: [], metadata: {},
+});
 
 const GROUP_ORDER: { key: 'overdue' | 'today' | 'upcoming' | 'noDate'; labelKey: 'panel.todoOverdue' | 'panel.todoToday' | 'panel.todoUpcoming' | 'panel.todoNoDate' }[] = [
   { key: 'overdue', labelKey: 'panel.todoOverdue' },
@@ -23,7 +30,7 @@ const GROUP_ORDER: { key: 'overdue' | 'today' | 'upcoming' | 'noDate'; labelKey:
   { key: 'noDate', labelKey: 'panel.todoNoDate' },
 ];
 
-export function TodoTool({ notes, notebooks, selectedNotebookId, onOpenNote, onSaveNote }: TodoToolProps) {
+export function TodoTool({ notebooks, selectedNotebookId, onOpenNote, onSaveNote, onReadNote }: TodoToolProps) {
   const { t } = useTranslation();
   const [scope, setScope] = useState<'current' | 'all'>('current');
   const [groupMode, setGroupMode] = useState<'date' | 'note'>('date');
@@ -32,11 +39,8 @@ export function TodoTool({ notes, notebooks, selectedNotebookId, onOpenNote, onS
   const [staleIds, setStaleIds] = useState<Set<string>>(new Set());
   const [saveErrors, setSaveErrors] = useState<Map<string, string>>(new Map());
 
-  const scopedNotes = useMemo(
-    () => (scope === 'all' || notebooks.length <= 1 ? notes : notes.filter(note => note.notebookId === selectedNotebookId)),
-    [notes, notebooks.length, scope, selectedNotebookId]
-  );
-  const tasks = useMemo(() => extractTodoTasks(scopedNotes), [scopedNotes]);
+  const agenda = useNoteAgenda(scope === 'all' || notebooks.length <= 1 ? 'all' : selectedNotebookId);
+  const tasks = useMemo(() => agenda.agenda?.tasks ?? [], [agenda.agenda]);
   const groups = useMemo(() => groupTodoTasks(tasks, formatDateYMD(new Date())), [tasks]);
   const totalOpen = groups.overdue.length + groups.today.length + groups.upcoming.length + groups.noDate.length;
   const noteGroups = useMemo(() => {
@@ -50,17 +54,17 @@ export function TodoTool({ notes, notebooks, selectedNotebookId, onOpenNote, onS
   }, [tasks]);
 
   const toggleTask = async (task: TodoTask) => {
-    const note = notes.find(n => n.path === task.notePath);
-    if (!note) return;
-    const lines = note.content.split('\n');
-    if (lines[task.lineIndex] !== task.lineText) {
-      setStaleIds(prev => new Set(prev).add(task.id));
-      return;
-    }
-    setStaleIds(prev => { if (!prev.has(task.id)) return prev; const next = new Set(prev); next.delete(task.id); return next; });
-    setSaveErrors(prev => { if (!prev.has(task.id)) return prev; const next = new Map(prev); next.delete(task.id); return next; });
     setPendingIds(prev => new Set(prev).add(task.id));
     try {
+      // The agenda carries todo lines, not bodies: read the note before rewriting its line.
+      const note = await onReadNote(task.notePath);
+      const lines = note.content.split('\n');
+      if (lines[task.lineIndex] !== task.lineText) {
+        setStaleIds(prev => new Set(prev).add(task.id));
+        return;
+      }
+      setStaleIds(prev => { if (!prev.has(task.id)) return prev; const next = new Set(prev); next.delete(task.id); return next; });
+      setSaveErrors(prev => { if (!prev.has(task.id)) return prev; const next = new Map(prev); next.delete(task.id); return next; });
       lines[task.lineIndex] = setTaskChecked(task.lineText, !task.checked, formatDateYMD(new Date()));
       await onSaveNote({ path: note.path, content: lines.join('\n'), metadata: note.metadata, notebookId: note.notebookId });
     } catch (error) {
@@ -90,7 +94,9 @@ export function TodoTool({ notes, notebooks, selectedNotebookId, onOpenNote, onS
         )}
       </div>}
 
-      {totalOpen === 0 && groups.completed.length === 0 && <p className="todo-empty">{t('panel.todoEmpty')}</p>}
+      {agenda.error && <p role="alert" className="todo-task-stale">{agenda.error}</p>}
+      {agenda.loading && <p role="status" className="todo-empty">{t('notes.loading')}</p>}
+      {!agenda.loading && totalOpen === 0 && groups.completed.length === 0 && <p className="todo-empty">{t('panel.todoEmpty')}</p>}
 
       {(totalOpen > 0 || groups.completed.length > 0) && (
         <div className="todo-group-mode-toggle" role="group">
@@ -121,7 +127,7 @@ export function TodoTool({ notes, notebooks, selectedNotebookId, onOpenNote, onS
       {groupMode === 'note' && noteGroups.map(([path, { title, tasks: noteTasks }]) => (
         <section key={path} className="todo-group">
           <h4>
-            <Button type="button" className="todo-group-note-link" title={t('panel.todoOpenNote')} onClick={() => onOpenNote(notes.find(n => n.path === path)!)}>{title}</Button>
+            <Button type="button" className="todo-group-note-link" title={t('panel.todoOpenNote')} onClick={() => onOpenNote(taskNote(noteTasks[0]))}>{title}</Button>
             <span className="todo-group-count">{noteTasks.length}</span>
           </h4>
           <ul>{noteTasks.map(task => renderTask(task))}</ul>

@@ -65,6 +65,25 @@ describe('GitLab HTTP and MCP integration',()=>{
     expect(await fetch(`${base}/api/study`,{headers:{Cookie:cookie}}).then(r=>r.json())).toMatchObject({writable:true});
     expect((await fetch(`${base}/api/agent-resources`,{headers:{Cookie:cookie}}).then(r=>r.json())).instructions[0].path).toBe('AGENTS.md');
   });
+  it('answers note queries, facets and lookups over the remote source',async()=>{
+    await login();
+    const headers={Cookie:cookie};
+    const page=await fetch(`${base}/api/notes/query?notebookId=ex&limit=1&sort=title&order=asc`,{headers}).then(r=>r.json());
+    expect(page.total).toBe(2);
+    expect(page.notes.map((note:any)=>note.path)).toEqual(['notes/ex/a.md']);
+    expect(page.notes[0].content).toBeUndefined();
+    expect(page.revision).toBe(fixture.head);
+    const next=await fetch(`${base}/api/notes/query?notebookId=ex&limit=1&sort=title&order=asc&cursor=${encodeURIComponent(page.nextCursor)}`,{headers}).then(r=>r.json());
+    expect(next.notes.map((note:any)=>note.path)).toEqual(['notes/ex/folder/b.md']);
+    const facets=await fetch(`${base}/api/notes/facets`,{headers}).then(r=>r.json());
+    expect(facets.notebooks.ex).toMatchObject({total:2,hidden:0,tags:{work:1}});
+    const lookup=await fetch(`${base}/api/notes/lookup`,post({paths:['notes/ex/a.md','notes/ex/missing.md'],content:true})).then(r=>r.json());
+    expect(lookup.notes.map((note:any)=>note.path)).toEqual(['notes/ex/a.md']);
+    expect(lookup.notes[0].content).toContain('# Alpha');
+    expect((await fetch(`${base}/api/notes/query?notebookId=ex&revision=zz`,{headers})).status).toBe(400);
+    expect((await fetch(`${base}/api/notes/query?notebookId=ex&revision=${fixture.head}`,{headers})).status).toBe(200);
+    expect((await fetch(`${base}/api/notes/query?notebookId=ex&revision=${'c'.repeat(40)}`,{headers})).status).toBe(409);
+  });
   it('refreshes one shared credential for concurrent browser/MCP calls and preserves grants after logout until revocation',async()=>{
     await login();const store=new SessionStore(root),session=await store.get(cookie.split('=')[1]);
     const grant=await fetch(`${base}/api/auth/agent-token`,post({name:'reader',write:false})).then(r=>r.json());
