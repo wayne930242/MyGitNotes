@@ -170,7 +170,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, allTags, onPreviewU
             autoFocus
             value={targetName}
             role={mode === 'merge' ? 'combobox' : undefined}
-            aria-expanded={mode === 'merge' ? suggestionsOpen && suggestions.length > 0 : undefined}
+            aria-expanded={mode === 'merge' ? showSuggestions : undefined}
             aria-controls={mode === 'merge' ? suggestionsId : undefined}
             aria-autocomplete={mode === 'merge' ? 'list' : undefined}
             aria-activedescendant={mode === 'merge' && highlight >= 0 ? `${suggestionsId}-${highlight}` : undefined}
@@ -183,11 +183,11 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, allTags, onPreviewU
             onKeyDown={event => {
               if (event.key === 'Escape') {
                 event.stopPropagation();
-                if (mode === 'merge' && suggestionsOpen && suggestions.length > 0) { setSuggestionsOpen(false); setHighlight(-1); return; }
+                if (showSuggestions) { setSuggestionsOpen(false); setHighlight(-1); return; }
                 close(true);
                 return;
               }
-              if (mode === 'merge' && suggestionsOpen && suggestions.length > 0) {
+              if (showSuggestions) {
                 if (event.key === 'ArrowDown') { event.preventDefault(); setHighlight(prev => (prev + 1) % suggestions.length); return; }
                 if (event.key === 'ArrowUp') { event.preventDefault(); setHighlight(prev => (prev - 1 + suggestions.length) % suggestions.length); return; }
                 if (event.key === 'Enter' && highlight >= 0) { event.preventDefault(); selectSuggestion(suggestions[highlight]); return; }
@@ -195,7 +195,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, allTags, onPreviewU
               if (event.key === 'Enter') void submit();
             }}
           />
-          {mode === 'merge' && suggestionsOpen && suggestions.length > 0 && (
+          {showSuggestions && (
             <ul className="sidebar-tag-action-suggestions" role="listbox" id={suggestionsId} aria-label={t('sidebar.tagSuggestions')}>
               {suggestions.map((candidate, index) => (
                 <li
