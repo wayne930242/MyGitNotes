@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { GitHubApi, SourceError } from './github-api.js';
 import { readGitHubArchive } from './github-archive.js';
 import { RemoteSource, type RemoteEntry, type RemoteSnapshot, type RemoteChange, type RepositoryInfo } from './remote-source.js';
+import { hashJson, type RemoteCache } from './remote-cache.js';
 export { SourceError } from './github-api.js';
 export type { RepositoryInfo } from './remote-source.js';
 export type GitHubEntry = RemoteEntry;
@@ -9,8 +10,8 @@ export type GitHubEntry = RemoteEntry;
 /** GitHub transport with its existing authorization-scoped cache. */
 export class GitHubSource extends RemoteSource {
   private client: GitHubApi;
-  constructor(repository: string, branch: string, token?: string, request: typeof fetch = fetch) {
-    super(repository, branch, token);
+  constructor(repository: string, branch: string, token?: string, request: typeof fetch = fetch, cache?: RemoteCache) {
+    super(repository, branch, token, cache);
     this.client = new GitHubApi(repository, token, request);
   }
   async api(endpoint: string, init: RequestInit = {}): Promise<any> {
@@ -50,10 +51,11 @@ export class GitHubSource extends RemoteSource {
   async prefetchFiles(files: string[]) {
     const snapshot = await this.getSnapshot();
     const wanted = new Set(files);
-    const missing = snapshot.entries.filter(entry => wanted.has(entry.path) && entry.type === 'blob' && entry.mode !== '120000' &&
-      (entry.size || 0) <= 5 * 1024 * 1024 && !this.client.hasBlob(entry.sha));
+    const candidates = snapshot.entries.filter(entry => wanted.has(entry.path) && entry.type === 'blob' && entry.mode !== '120000' && (entry.size || 0) <= 5 * 1024 * 1024);
+    const missing = (await this.loadCached(candidates)).filter(entry => !this.client.hasBlob(entry.sha));
     if (missing.length <= 6) return;
-    await this.client.once(`archive:${snapshot.sha}`, async () => {
+    // Concurrent requests for different file sets each complete their own prefetch.
+    await this.client.once(`archive:${snapshot.sha}:${hashJson(missing.map(entry => entry.sha).sort())}`, async () => {
       if (missing.every(entry => this.client.hasBlob(entry.sha))) return;
       // Authenticated reads never download repository archives inside the server function.
       if (this.token) return this.prefetchBlobBatches(missing);
@@ -80,10 +82,16 @@ export class GitHubSource extends RemoteSource {
         if (!(error instanceof SourceError) || [401, 403, 404, 429].includes(error.status)) throw error;
         return;
       }
-      for (const [sha, text] of texts) {
+      const verified: [RemoteEntry, Buffer][] = [];
+      for (const entry of pending.slice(i, i + 100)) {
+        const text = texts.get(entry.sha);
+        if (text === undefined) continue;
         const bytes = Buffer.from(text, 'utf8');
-        if (createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex') === sha) this.client.putBlob(sha, bytes);
+        if (createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex') !== entry.sha) continue;
+        this.client.putBlob(entry.sha, bytes);
+        verified.push([entry, bytes]);
       }
+      if (verified.some(([entry]) => this.cacheable(entry))) await this.storeCached(verified);
     }
   }
 

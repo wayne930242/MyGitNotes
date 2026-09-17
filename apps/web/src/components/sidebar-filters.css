@@ -3,6 +3,7 @@
 .sidebar-note-search svg { flex: none; color: var(--color-muted); }
 .sidebar-note-search input { width: 100%; min-width: 0; background: transparent; color: var(--color-text); font-size: .8rem; outline: none; }
 .sidebar-note-search:focus-within { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.sidebar-facets-status { width: 100%; color: var(--color-muted); }
 .sidebar-filter-summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .4rem; color: var(--color-muted); font-size: .7rem; }
 .sidebar-clear-filters { text-decoration: underline; }
 .sidebar-missing-filter { display: flex; gap: .4rem; align-items: center; padding: .35rem; font-size: .75rem; text-align: left; overflow-wrap: anywhere; }

@@ -49,6 +49,22 @@
     "./tag-ops": {
       "types": "./dist/tag-ops.d.ts",
       "import": "./dist/tag-ops.js"
+    },
+    "./task-tokens": {
+      "types": "./dist/task-tokens.d.ts",
+      "import": "./dist/task-tokens.js"
+    },
+    "./note-sort": {
+      "types": "./dist/note-sort.d.ts",
+      "import": "./dist/note-sort.js"
+    },
+    "./note-agenda": {
+      "types": "./dist/note-agenda.d.ts",
+      "import": "./dist/note-agenda.js"
+    },
+    "./note-query": {
+      "types": "./dist/note-query.d.ts",
+      "import": "./dist/note-query.js"
     }
   },
   "scripts": {

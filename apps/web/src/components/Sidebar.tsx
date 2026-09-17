@@ -3,7 +3,9 @@ import type { FilterControls } from '../lib/filter-controls.js';
 import { FolderTree } from './FolderTree.js';
 import React, { useEffect, useState } from 'react';
 import { Tag, Filter, GitBranch, CheckCircle2, Search, X, CheckSquare, BookOpen, Library, FolderPlus } from 'lucide-react';
-import { NoteItem, GitStatus, FolderItem } from '../lib/types.js';
+import type { NotebookFacets } from '@mygitnotes/core/note-query';
+import { GitStatus, FolderItem } from '../lib/types.js';
+import { mergeNotebookFacets } from '../lib/note-facets.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { WorkspaceSidebar } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
@@ -30,7 +32,11 @@ interface SidebarProps {
   selectedFolder?: string | null;
   onSelectFolder?: (folder: string | null) => void;
   selectedNotebookId: string;
-  notes: NoteItem[];
+  /** Per-notebook counts from `/api/notes/facets`, with staged drafts already applied. */
+  facets?: Record<string, NotebookFacets>;
+  facetsLoading?: boolean;
+  facetsError?: string;
+  workspaceTagNames: string[];
   gitStatus: GitStatus | null;
   canManageTags?: boolean;
   onPreviewTagUsage?: (tag: string) => Promise<number>;
@@ -46,7 +52,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   selectedFolder = null,
   onSelectFolder,
   selectedNotebookId,
-  notes,
+  facets,
+  facetsLoading = false,
+  facetsError = '',
+  workspaceTagNames,
   filters, reorder, onToggleReorder,
   gitStatus,
   canManageTags = false,
@@ -109,27 +118,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [tagSort, setTagSort] = useState<TagSort>(getSavedTagSort);
   useEffect(() => { setTagQuery(''); }, [selectedNotebookId]);
 
-  const notebookNotes = notes.filter((note) => selectedNotebookId === 'all' || note.notebookId === selectedNotebookId);
-
-  // Extract all distinct statuses and their counts
-  const statusCounts = notebookNotes.reduce<Record<string, number>>((acc, n) => {
-    const s = n.status || '';
-    acc[s] = (acc[s] || 0) + 1;
-    return acc;
-  }, Object.create(null));
-
-  // Extract all distinct tags and their counts
-  const tagCounts = notebookNotes.reduce<Record<string, number>>((acc, n) => {
-    for (const item of n.tags) {
-      acc[item] = (acc[item] || 0) + 1;
-    }
-    return acc;
-  }, Object.create(null));
-
+  const notebookFacets = mergeNotebookFacets(Object.entries(facets || {})
+    .filter(([id]) => selectedNotebookId === 'all' || id === selectedNotebookId).map(([, value]) => value));
+  const statusCounts = notebookFacets.statuses;
+  const tagCounts: Record<string, number> = { ...notebookFacets.tags };
   for (const tag of selectedTags) tagCounts[tag] ??= 0;
   const allTags = Object.keys(tagCounts);
   const visibleTags = filterAndSortTags(tagCounts, tagQuery, tagSort, language);
-  const workspaceTagNames = Array.from(new Set(notes.flatMap((note) => note.tags)));
+  const workspaceNoteCount = Object.values(facets || {}).reduce((total, value) => total + value.total, 0);
 
   const modifiedCount = gitStatus?.modified.length || 0;
   const untrackedCount = gitStatus?.untracked.length || 0;
@@ -190,7 +186,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <label className="sidebar-note-search header-search"><Search size={15} aria-hidden="true" />
             <input type="search" aria-label={t('header.searchPlaceholder')} placeholder={t('header.searchPlaceholder')} value={value.q} onChange={event => onChange({ q: event.target.value })} />
           </label>
-          <div className="sidebar-filter-summary"><span role="status" data-filter-results={filters.count}>{t('filters.results', { count: filters.count })}</span>
+          <div className="sidebar-filter-summary"><span role="status" data-filter-results={filters.count ?? ''}>
+              {filters.count === null ? t('notes.countsLoading') : t('filters.results', { count: filters.count })}</span>
+            {facetsLoading && <span role="status" className="sidebar-facets-status">{t('notes.countsLoading')}</span>}
+            {facetsError && <span role="alert" className="sidebar-facets-status">{t('notes.countsFailed', { message: facetsError })}</span>}
             <button type="button" className="sidebar-clear-filters" onClick={filters.onClear}>{t('filters.clear')}</button>
           </div>
           {value.folders.filter(path => !filters.notebooks.some(nb => path === nb.root.replace(/\/$/, '')) && !folders.some(folder => {
@@ -222,7 +221,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       filters.onNotebookChange('all');
                     }
                   }}
-                  suffix={<span className="sidebar-notebook-count">{notes.length}</span>}
+                  suffix={<span className="sidebar-notebook-count">{facets ? workspaceNoteCount : '—'}</span>}
                   className="sidebar-all-notebooks-row"
                 />
               )}
@@ -230,7 +229,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 const root = nb.root.replace(/\/$/, '');
                 const selectedPaths = value.folders.filter(path => path.startsWith(root + '/')).map(path => path.slice(root.length + 1));
                 const expanded = expandedNotebooks.has(nb.id);
-                const count = notes.filter(note => note.notebookId === nb.id).length;
+                const count = facets ? facets[nb.id]?.total ?? 0 : null;
                 const nbFolders = folders.filter(f => f.notebookId === nb.id);
                 const hasFolders = nbFolders.length > 0;
                 const isCurrentNotebook = nb.id === selectedNotebookId;
@@ -270,7 +269,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           filters.onNotebookChange(nb.id);
                         }
                       }}
-                      suffix={<span className="sidebar-notebook-count" title={t('folder.noteCount', { count })}>{count}</span>}
+                      suffix={<span className="sidebar-notebook-count" title={count === null ? t('notes.countsLoading') : t('folder.noteCount', { count })}>{count ?? '—'}</span>}
                       actions={
                         foldersWritable && isCurrentNotebook ? (
                           <div className="folder-heading-actions">
@@ -349,11 +348,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <Filter className="w-3.5 h-3.5 text-slate-400" />
                 <span>{t('sidebar.allStatuses')}</span>
               </div>
-              <span className="text-xs text-slate-400">{notebookNotes.length}</span>
+              <span className="text-xs text-slate-400">{facets ? notebookFacets.total : '—'}</span>
             </button>
 
             {statuses.map((status) => {
-              const count = statusCounts[status] || 0;
+              const count = facets ? statusCounts[status] || 0 : null;
               const isSelected = selectedStatus === status;
 
               return (
@@ -384,7 +383,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     />
                     <span className="truncate">{status}</span>
                   </div>
-                  <span className="text-xs text-slate-400">{count}</span>
+                  <span className="text-xs text-slate-400">{count ?? '—'}</span>
                 </button>
               );
             })}

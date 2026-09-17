@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
 import type { TagOperationPlan } from '@mygitnotes/core/tag-ops';
-import { NoteItem } from './types.js';
 
 export type TagOperationKind = 'rename' | 'merge' | 'delete';
 
@@ -16,17 +15,6 @@ let nextRecordId = 0;
 /** Prepend a record built from a just-applied plan. Pure, so it is easy to test without React. */
 export function pushTagOperationRecord(history: TagOperationRecord[], kind: TagOperationKind, label: string, plan: TagOperationPlan): TagOperationRecord[] {
   return [{ id: `tag-op-${++nextRecordId}`, kind, label, plan }, ...history];
-}
-
-/** Sets each matching note's `tags` (and mirrored `metadata.tags`) from `entries`; leaves other notes untouched. */
-export function applyTagEntriesToNotes(notes: NoteItem[], entries: { path: string; notebookId: string; tags: string[] }[]): NoteItem[] {
-  if (entries.length === 0) return notes;
-  const byKey = new Map(entries.map(entry => [`${entry.notebookId}:${entry.path}`, entry.tags]));
-  return notes.map(note => {
-    const tags = byKey.get(`${note.notebookId}:${note.path}`);
-    if (!tags) return note;
-    return { ...note, tags, metadata: { ...note.metadata, tags } };
-  });
 }
 
 /**

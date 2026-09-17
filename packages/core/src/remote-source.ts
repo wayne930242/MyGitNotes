@@ -11,9 +11,16 @@ import { SourceError } from './github-api.js';
 import { workspaceAgentKind } from './workspace-agent.js';
 import { SCREEN_PAGE_FILE, ScreenPageFileSchema, ScreenPageSchema, emptyScreenPage, readScreenPage } from './screen-page.js';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { REMOTE_CACHE_BATCH_BYTES, REMOTE_CACHE_MAX_VALUE, REMOTE_CACHE_TTL, gitBlobId, hashJson, type RemoteCache } from './remote-cache.js';
+import type { NoteCatalog } from './note-catalog.js';
+import type { NoteListItem } from './note-query.js';
 
 export { SourceError } from './github-api.js';
 const NOTE_FILE = /\.(md|markdown|mdx|txt)$/i;
+const CACHEABLE_FILE = /\.(md|markdown|mdx|txt|ya?ml)$/i;
+const INDEX_VERSION = 'v1';
+/** Blobs kept in memory for one request. */
+const LOADED_MAX_BYTES = 64 * 1024 * 1024;
 export interface RemoteEntry { path: string; type: string; mode: string; sha: string; size?: number }
 export interface RepositoryInfo { private: boolean; permissions?: { push?: boolean }; default_branch: string }
 export interface RemoteSnapshot { sha: string; treeSha: string; entries: RemoteEntry[]; info: RepositoryInfo }
@@ -24,12 +31,72 @@ export abstract class RemoteSource {
   private snapshot?: Promise<RemoteSnapshot>;
   private manifest?: Promise<WorkspaceConfig>;
   protected fresh = false;
-  constructor(public repository: string, public branch: string, protected token?: string) {}
+  /** Blobs loaded from the shared cache or verified platform reads, by sha. */
+  private loaded = new Map<string, Buffer>();
+  private loadedBytes = 0;
+  private cacheChecked = new Set<string>();
+  constructor(public repository: string, public branch: string, protected token?: string, protected cache?: RemoteCache) {}
   protected abstract loadSnapshot(): Promise<RemoteSnapshot>;
   protected abstract readBlob(sha: string): Promise<Buffer>;
   protected abstract publishChanges(changes: RemoteChange[], snapshot: RemoteSnapshot, message: string): Promise<string>;
   protected invalidate() {}
-  async prefetchFiles(_files: string[]): Promise<void> {}
+  /** Loads cached blobs for the given files; providers extend this with batched platform reads. */
+  async prefetchFiles(files: string[]): Promise<void> {
+    const { entries } = await this.getSnapshot();
+    const wanted = new Set(files);
+    await this.loadCached(entries.filter(entry => wanted.has(entry.path) && entry.type === 'blob' && entry.mode !== '120000'));
+  }
+
+  private blobKey(sha: string) { return `mgn:blob:v1:${this.repository.toLowerCase()}:${sha}`; }
+  protected cacheable(entry: RemoteEntry) {
+    return Boolean(this.cache) && CACHEABLE_FILE.test(entry.path) && (entry.size === undefined || entry.size * 4 / 3 <= REMOTE_CACHE_MAX_VALUE);
+  }
+
+  /** Keeps this request's blobs available while bounding its memory. */
+  private remember(sha: string, bytes: Buffer) {
+    this.loaded.set(sha, bytes);
+    this.loadedBytes += bytes.length;
+    while (this.loadedBytes > LOADED_MAX_BYTES && this.loaded.size > 1) {
+      const oldest = this.loaded.keys().next().value!;
+      if (oldest === sha) break;
+      this.loadedBytes -= this.loaded.get(oldest)!.length;
+      this.loaded.delete(oldest);
+    }
+  }
+
+  /** Fills loaded blobs from the shared cache. Only entries of this reader's authorized tree are looked up. Returns entries still missing. */
+  protected async loadCached(entries: RemoteEntry[]): Promise<RemoteEntry[]> {
+    const pending = [...new Map(entries.filter(entry => !this.loaded.has(entry.sha) && this.cacheable(entry) && !this.cacheChecked.has(entry.sha)).map(entry => [entry.sha, entry])).values()];
+    let batch: RemoteEntry[] = [], bytes = 0;
+    const flush = async () => {
+      if (!batch.length) return;
+      const hits = await this.cache!.get(batch.map(entry => this.blobKey(entry.sha)));
+      batch.forEach((entry, i) => {
+        this.cacheChecked.add(entry.sha);
+        if (hits[i] === null) return;
+        // Content addressing is the authorization rule for this cache, so a value is only trusted when it hashes to its key.
+        const bytes = Buffer.from(hits[i]!, 'base64');
+        if (gitBlobId(bytes, entry.sha.length) === entry.sha) this.remember(entry.sha, bytes);
+      });
+      batch = []; bytes = 0;
+    };
+    for (const entry of pending) {
+      const size = (entry.size ?? 64 * 1024) * 4 / 3;
+      if (batch.length && bytes + size > REMOTE_CACHE_BATCH_BYTES) await flush();
+      batch.push(entry); bytes += size;
+    }
+    await flush();
+    return entries.filter(entry => !this.loaded.has(entry.sha));
+  }
+
+  /** Stores verified platform reads in the shared cache. */
+  protected async storeCached(blobs: [RemoteEntry, Buffer][]) {
+    const verified = blobs.filter(([entry, bytes]) => gitBlobId(bytes, entry.sha.length) === entry.sha);
+    for (const [entry, bytes] of verified) this.remember(entry.sha, bytes);
+    const values = verified.filter(([entry]) => this.cacheable(entry)).map(([entry, bytes]) => [this.blobKey(entry.sha), bytes.toString('base64')] as [string, string])
+      .filter(([, value]) => Buffer.byteLength(value) <= REMOTE_CACHE_MAX_VALUE);
+    if (values.length) await this.cache!.set(values, REMOTE_CACHE_TTL);
+  }
   async getSnapshot(fresh = false): Promise<RemoteSnapshot> {
     if (fresh) { this.snapshot = undefined; this.manifest = undefined; this.fresh = true; }
     this.snapshot ??= this.loadSnapshot();
@@ -41,8 +108,12 @@ export abstract class RemoteSource {
     const entry = entries.find(e => e.path === file && e.type === 'blob' && e.mode !== '120000');
     if (!entry) throw new SourceError('File unavailable.', 404);
     if ((entry.size || 0) > 5 * 1024 * 1024) throw new SourceError('File exceeds the 5 MiB read limit.', 413);
+    if (!this.loaded.has(entry.sha)) await this.loadCached([entry]);
+    const loaded = this.loaded.get(entry.sha);
+    if (loaded) return loaded;
     const buffer = await this.readBlob(entry.sha);
     if (buffer.length > 5 * 1024 * 1024) throw new SourceError('File exceeds the 5 MiB read limit.', 413);
+    if (this.cacheable(entry)) await this.storeCached([[entry, buffer]]);
     return buffer;
   }
 
@@ -73,6 +144,83 @@ export abstract class RemoteSource {
       size: Buffer.byteLength(raw), revision: (await this.getSnapshot()).sha };
   }
 
+  private notebookFiles(nb: NotebookConfig, entries: RemoteEntry[]) {
+    const templateFiles = new Set((nb.templates || []).map(t => t.file));
+    return entries.filter(e => e.type === 'blob' && e.mode !== '120000' && e.path.startsWith(`${nb.root}/`) &&
+      isNotebookContent(e.path.slice(nb.root.length + 1), nb) && !templateFiles.has(e.path.slice(nb.root.length + 1)) &&
+      NOTE_FILE.test(e.path));
+  }
+
+  private notebookKey(kind: string, notebooks: NotebookConfig[], entries: RemoteEntry[]) {
+    return `mgn:${kind}:${INDEX_VERSION}:${this.repository.toLowerCase()}:${hashJson(notebooks.map(nb => [nb.id, nb.root, nb.assets || 'assets', (nb.templates || []).map(t => t.file),
+      entries.find(entry => entry.type === 'tree' && entry.path === nb.root)?.sha || null]))}`;
+  }
+
+  /** Query read model over this reader's snapshot. Notebook indexes and derived results are cached by notebook content. */
+  catalog(): NoteCatalog {
+    const local = new Map<string, Promise<NoteListItem[]>>();
+    return {
+      revision: async () => (await this.getSnapshot()).sha,
+      config: () => this.config(),
+      index: nb => {
+        let pending = local.get(nb.id);
+        if (!pending) { pending = this.notebookIndex(nb); local.set(nb.id, pending); }
+        return pending;
+      },
+      contents: async notes => {
+        await this.prefetchFiles(notes.map(note => note.path));
+        const result = new Map<string, string>();
+        for (let i = 0; i < notes.length; i += 6) {
+          await Promise.all(notes.slice(i, i + 6).map(async note => {
+            result.set(note.path, parseNoteContent((await this.readFile(note.path)).toString('utf8'), path.posix.basename(note.path)).content);
+          }));
+        }
+        return result;
+      },
+      memo: async <T>(kind: string, notebooks: NotebookConfig[], compute: () => Promise<T>): Promise<T> => {
+        const { entries } = await this.getSnapshot();
+        if (!this.cache || notebooks.some(nb => !entries.some(entry => entry.type === 'tree' && entry.path === nb.root))) return compute();
+        const key = this.notebookKey(kind, notebooks, entries);
+        const [hit] = await this.cache.get([key]);
+        if (hit !== null) {
+          try { return JSON.parse(hit) as T; } catch { /* A damaged value is recomputed. */ }
+        }
+        const value = await compute();
+        const text = JSON.stringify(value);
+        if (Buffer.byteLength(text) <= REMOTE_CACHE_MAX_VALUE) await this.cache.set([[key, text]], REMOTE_CACHE_TTL);
+        return value;
+      },
+    };
+  }
+
+  private async notebookIndex(nb: NotebookConfig): Promise<NoteListItem[]> {
+    const { sha, entries } = await this.getSnapshot();
+    if (!entries.some(entry => entry.type === 'tree' && entry.path === nb.root)) return [];
+    const key = this.cache ? this.notebookKey('index', [nb], entries) : '';
+    const hit = this.cache ? (await this.cache.get([key]))[0] : null;
+    let items: NoteListItem[] | undefined;
+    if (hit !== null) { try { items = JSON.parse(hit) as NoteListItem[]; } catch { /* A damaged value is rebuilt. */ } }
+    if (!Array.isArray(items) || items.some(item => typeof item?.path !== 'string' || typeof item?.title !== 'string' ||
+      item?.notebookId !== nb.id || !Array.isArray(item?.tags) || typeof item?.metadata !== 'object' || item?.metadata === null)) items = undefined;
+    if (!items) {
+      const files = this.notebookFiles(nb, entries);
+      await this.prefetchFiles(files.map(file => file.path));
+      items = [];
+      for (let i = 0; i < files.length; i += 6) {
+        items.push(...await Promise.all(files.slice(i, i + 6).map(async file => {
+          const raw = (await this.readFile(file.path)).toString('utf8');
+          const { metadata, title } = parseNoteContent(raw, path.posix.basename(file.path));
+          return { id: typeof metadata.id === 'string' ? metadata.id : file.path, path: file.path, notebookId: nb.id, title, metadata,
+            tags: Array.isArray(metadata.tags) ? metadata.tags.map(String) : [], status: typeof metadata.status === 'string' ? metadata.status : undefined,
+            size: Buffer.byteLength(raw) } satisfies NoteListItem;
+        })));
+      }
+      const text = JSON.stringify(items);
+      if (this.cache && Buffer.byteLength(text) <= REMOTE_CACHE_MAX_VALUE) await this.cache.set([[key, text]], REMOTE_CACHE_TTL);
+    }
+    return items.map(item => ({ ...item, revision: sha }));
+  }
+
   async renderTemplate(notebookId: string, templateId: string, title: string): Promise<{ metadata: NoteMetadata; content: string }> {
     const config = await this.config();
     const nb = config.notebooks.find(n => n.id === notebookId);
@@ -88,10 +236,7 @@ export abstract class RemoteSource {
     const { entries } = await this.getSnapshot();
     const output: NoteItem[] = [];
     for (const nb of config.notebooks.filter(n => !notebookId || n.id === notebookId)) {
-      const templateFiles = new Set((nb.templates || []).map(t => t.file));
-      const files = entries.filter(e => e.type === 'blob' && e.mode !== '120000' && e.path.startsWith(`${nb.root}/`) &&
-        isNotebookContent(e.path.slice(nb.root.length + 1), nb) && !templateFiles.has(e.path.slice(nb.root.length + 1)) &&
-        NOTE_FILE.test(e.path));
+      const files = this.notebookFiles(nb, entries);
       await this.prefetchFiles(files.map(file => file.path));
       // The shared transport coalesces cache misses and serializes upstream requests.
       for (let i = 0; i < files.length; i += 6) output.push(...await Promise.all(files.slice(i, i + 6).map(f => this.note(f.path))));

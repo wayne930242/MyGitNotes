@@ -1,8 +1,11 @@
 import { Button } from './Button.js';
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { AssetItem, NoteItem, NotebookConfig, FolderItem } from '../lib/types.js';
+import { useQueryClient } from '@tanstack/react-query';
+import type { NoteListItem } from '@mygitnotes/core/note-query';
+import type { AssetItem, NotebookConfig, FolderItem } from '../lib/types.js';
 import { fetchAssets } from '../lib/api.js';
+import { noteLookupOptions, notePathsOptions, useNoteQueryScope } from '../lib/use-note-queries.js';
 import { noteRoute, notebookRoute } from '../lib/routes.js';
 import { headingSlug, resolveWorkspaceHref } from '../lib/workspace-links.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
@@ -11,14 +14,15 @@ import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scr
 import { useNoteYouTubeEmbed } from '../lib/use-note-youtube-embed.js';
 
 type BeforeNavigate = () => Promise<boolean>;
-const Context = createContext({ notes: [] as NoteItem[], registerBeforeNavigate: (_handler: BeforeNavigate): (() => void) => () => {} });
+const Context = createContext({ registerBeforeNavigate: (_handler: BeforeNavigate): (() => void) => () => {} });
 export const useWorkspaceLinks = () => useContext(Context);
 
-export function WorkspaceLinks({ notebooks, notes, folders, children, onOpenNote }: {
-  notebooks: NotebookConfig[]; notes: NoteItem[]; folders: FolderItem[]; children: ReactNode;
-  onOpenNote: (note: NoteItem, anchor?: string) => void;
+export function WorkspaceLinks({ notebooks, folders, children, onOpenNote }: {
+  notebooks: NotebookConfig[]; folders: FolderItem[]; children: ReactNode;
+  onOpenNote: (note: NoteListItem, anchor?: string) => void;
 }) {
   const { t } = useTranslation(); const navigate = useNavigate();
+  const queryClient = useQueryClient(); const scope = useNoteQueryScope();
   const before = useRef(new Set<BeforeNavigate>());
   const surfaceRef = useRef<HTMLDivElement>(null);
   useAltWheelHorizontalScroll(surfaceRef, surfaceRef, '.markdown-table-scroll');
@@ -50,7 +54,12 @@ export function WorkspaceLinks({ notebooks, notes, folders, children, onOpenNote
       else if (await ready()) navigate(link.url);
       return;
     }
-    const note = link.kind === 'path' ? notes.find(note => note.path === link.path) : undefined;
+    // A link target is read by path instead of being looked up in a client-side note list.
+    let note: NoteListItem | undefined;
+    if (link.kind === 'path') {
+      try { note = (await queryClient.fetchQuery(noteLookupOptions(scope, [link.path], false))).notes[0]; }
+      catch (error) { setError((error as Error).message); return; }
+    }
     const notebook = link.kind === 'path' ? [...notebooks].sort((a,b) => b.root.length - a.root.length)
       .find(nb => link.path === nb.root || link.path.startsWith(`${nb.root}/`)) : undefined;
     if (note && notebook && link.kind === 'path') {
@@ -66,7 +75,14 @@ export function WorkspaceLinks({ notebooks, notes, folders, children, onOpenNote
         return;
       }
     }
-    if (link.kind === 'path' && notebook && (link.path === notebook.root || folders.some(folder => folder.notebookId === notebook.id && `${notebook.root}/${folder.path}` === link.path) || notes.some(note => note.notebookId === notebook.id && note.path.startsWith(`${link.path}/`)))) {
+    const folderHasNotes = async () => {
+      if (link.kind !== 'path' || !notebook) return false;
+      try {
+        const result = await queryClient.fetchQuery(notePathsOptions(scope, { notebookId: notebook.id, folders: [link.path], descendants: true, showHidden: true }));
+        return result.paths.length > 0;
+      } catch (error) { setError((error as Error).message); return false; }
+    };
+    if (link.kind === 'path' && notebook && (link.path === notebook.root || folders.some(folder => folder.notebookId === notebook.id && `${notebook.root}/${folder.path}` === link.path) || await folderHasNotes())) {
       const route = notebookRoute(notebook.id, link.path.slice(notebook.root.length + 1) || null);
       if (newTab) window.open(route, '_blank', 'noopener,noreferrer'); else if (await ready()) navigate(route);
       return;
@@ -82,7 +98,7 @@ export function WorkspaceLinks({ notebooks, notes, folders, children, onOpenNote
     } catch { setError(t('links.loadFailed')); }
   };
   const clickedLink = (target: EventTarget) => target instanceof Element ? target.closest<HTMLElement>('[data-workspace-link]') : null;
-  return <Context.Provider value={{ notes, registerBeforeNavigate }}>
+  return <Context.Provider value={{ registerBeforeNavigate }}>
     <div ref={surfaceRef} className="workspace-link-surface" onMouseDownCapture={event => {
       if (event.button === 0 && clickedLink(event.target)) { event.preventDefault(); event.stopPropagation(); }
     }} onClickCapture={event => {

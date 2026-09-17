@@ -1,4 +1,4 @@
-import { NoteItem } from './types.js';
+import type { NoteItem, NotebookConfig } from './types.js';
 import { resolveWorkspaceHref, noteMarkdownLink } from './workspace-links.js';
 import { marked } from 'marked';
 
@@ -28,9 +28,11 @@ export interface NoteGraphOptions {
   includeHidden?: boolean;
   notebookId?: string | null;
   tag?: string | null;
+  /** Notebooks for path alias resolution; the browser registry is used when omitted. */
+  notebooks?: NotebookConfig[];
 }
 
-export function extractNoteLinks(content: string, sourcePath: string, validNotePaths: Set<string>): string[] {
+export function extractNoteLinks(content: string, sourcePath: string, validNotePaths: Set<string>, notebooks?: NotebookConfig[]): string[] {
   if (!content) return [];
   const targets = new Set<string>();
 
@@ -39,7 +41,7 @@ export function extractNoteLinks(content: string, sourcePath: string, validNoteP
     if (token.type !== 'link') return;
     const rawHref = token.href?.trim();
     if (!rawHref) return;
-    const resolved = resolveWorkspaceHref(rawHref, sourcePath);
+    const resolved = resolveWorkspaceHref(rawHref, sourcePath, notebooks);
     if (resolved && resolved.kind === 'path') {
       const targetPath = resolved.path;
       if (validNotePaths.has(targetPath)) {
@@ -102,7 +104,7 @@ export function buildNoteGraph(notes: NoteItem[], options?: NoteGraphOptions): N
   }
 
   for (const note of filteredNotes) {
-    const targets = extractNoteLinks(note.content, note.path, validPaths);
+    const targets = extractNoteLinks(note.content, note.path, validPaths, options?.notebooks);
     outDegreeMap.set(note.path, targets.length);
     for (const target of targets) {
       links.push({ source: note.path, target });

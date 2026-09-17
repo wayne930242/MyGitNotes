@@ -53,16 +53,6 @@ export async function updateWorkspaceConfig(configYaml: string): Promise<{ succe
   return res.json();
 }
 
-export async function fetchNotes(notebookId?: string): Promise<NoteItem[]> {
-  const url = notebookId
-    ? `${API_BASE}/notes?notebookId=${encodeURIComponent(notebookId)}`
-    : `${API_BASE}/notes`;
-  const res = await fetch(url);
-  if (!res.ok) throw await responseError(res, 'Failed to fetch notes');
-  const data = await res.json();
-  return data.notes || [];
-}
-
 export async function renderNoteTemplate(params: { notebookId: string; templateId: string; title: string }): Promise<{ content: string; metadata: Record<string, unknown> }> {
   const url = `${API_BASE}/templates/render?notebookId=${encodeURIComponent(params.notebookId)}&templateId=${encodeURIComponent(params.templateId)}&title=${encodeURIComponent(params.title)}`;
   const res = await fetch(url);

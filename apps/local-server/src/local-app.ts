@@ -25,6 +25,8 @@ import {
   loadNoteTemplate,
   renderNoteTemplate,
   formatTemplateDate,
+  SourceError, parseNoteQuery, queryNotes, queryNotePaths, noteFacets, lookupNotes, noteAgenda, noteGraph,
+  type NoteCatalog, type NoteItem,
 } from '@mygitnotes/core';
 import {
   getGitStatus,
@@ -163,6 +165,54 @@ app.put('/api/workspace/config', async (req: Request, res: Response) => {
 });
 
 // 2. Notes API
+/** Per-request read model over the working tree; local reads are not cached. */
+function localCatalog(): NoteCatalog {
+  const scans = new Map<string, NoteItem[]>();
+  const scan = (notebook: Parameters<typeof scanNotebookNotes>[1]) => {
+    let notes = scans.get(notebook.id);
+    if (!notes) { notes = scanNotebookNotes(repoRoot, notebook); scans.set(notebook.id, notes); }
+    return notes;
+  };
+  return {
+    revision: async () => '',
+    config: async () => {
+      const config = loadWorkspaceConfig(repoRoot);
+      if (!config) throw new SourceError('Workspace manifest missing.', 422);
+      return config;
+    },
+    index: async notebook => scan(notebook).map(({ content: _content, ...note }) => note),
+    contents: async notes => new Map(notes.map(note => [note.path, scans.get(note.notebookId)?.find(item => item.path === note.path)?.content ?? ''])),
+    memo: (_kind, _notebooks, compute) => compute(),
+  };
+}
+
+function queryError(res: Response, error: unknown) {
+  res.status(error instanceof SourceError ? error.status : 500).json({ error: error instanceof Error ? error.message : String(error) });
+}
+
+app.get('/api/notes/query', async (req: Request, res: Response) => {
+  try {
+    const { query, options } = parseNoteQuery(req.query);
+    const catalog = localCatalog();
+    res.json(options.select ? await queryNotePaths(catalog, query) : await queryNotes(catalog, query, options));
+  } catch (error) { queryError(res, error); }
+});
+app.get('/api/notes/facets', async (req: Request, res: Response) => {
+  try { res.json(await noteFacets(localCatalog(), req.query.showHidden === '1')); } catch (error) { queryError(res, error); }
+});
+app.post('/api/notes/lookup', async (req: Request, res: Response) => {
+  try { res.json(await lookupNotes(localCatalog(), req.body?.paths, req.body?.content === true)); } catch (error) { queryError(res, error); }
+});
+app.get('/api/notes/agenda', async (req: Request, res: Response) => {
+  try {
+    if (typeof req.query.notebookId !== 'string' || !req.query.notebookId) throw new SourceError('notebookId is required.');
+    res.json(await noteAgenda(localCatalog(), req.query.notebookId, req.query.showHidden === '1'));
+  } catch (error) { queryError(res, error); }
+});
+app.get('/api/notes/graph', async (_req: Request, res: Response) => {
+  try { res.json(await noteGraph(localCatalog())); } catch (error) { queryError(res, error); }
+});
+
 app.get('/api/notes', (req: Request, res: Response) => {
   try {
     const config = loadWorkspaceConfig(repoRoot);

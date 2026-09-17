@@ -12,7 +12,7 @@ const MAX_BYTES = 64 * 1024 * 1024;
 const IMMUTABLE_TTL = 60 * 60 * 1000;
 const FRESH_TTL = 60 * 1000;
 
-/** Process-local optimization. Authorization scopes never share cached repository data. */
+/** Process-local optimization. Authorization scopes never share this cache; shared content-addressed reads use RemoteCache. */
 export class GitHubApi {
   private runtime: Runtime;
   private scope: string;

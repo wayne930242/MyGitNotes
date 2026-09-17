@@ -1,4 +1,4 @@
-import type { NoteItem } from './types.js';
+import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { formatDateYMD } from './date-utils.js';
 import type { TodoTask } from './todo-list.js';
 
@@ -17,7 +17,7 @@ export function dayKeyFromISO(value: unknown): string | undefined {
 }
 
 /** Per-day counts of notes created, notes updated, and todos due, for the calendar month grid. */
-export function buildDayCounts(notes: NoteItem[], tasks: TodoTask[]): Map<string, DayCounts> {
+export function buildDayCounts(notes: NoteListItem[], tasks: TodoTask[]): Map<string, DayCounts> {
   const index = new Map<string, DayCounts>();
   const bump = (key: string | undefined, field: keyof DayCounts) => {
     if (!key) return;
@@ -35,7 +35,7 @@ export function buildDayCounts(notes: NoteItem[], tasks: TodoTask[]): Map<string
   return index;
 }
 
-export function notesForDay(notes: NoteItem[], day: string, field: 'created' | 'updated'): NoteItem[] {
+export function notesForDay(notes: NoteListItem[], day: string, field: 'created' | 'updated'): NoteListItem[] {
   return notes.filter(note => dayKeyFromISO(note.metadata[field]) === day);
 }
 
@@ -47,7 +47,7 @@ function monthPrefix(year: number, month: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
-export function notesForMonth(notes: NoteItem[], year: number, month: number, field: 'created' | 'updated'): NoteItem[] {
+export function notesForMonth(notes: NoteListItem[], year: number, month: number, field: 'created' | 'updated'): NoteListItem[] {
   const prefix = monthPrefix(year, month);
   return notes.filter(note => dayKeyFromISO(note.metadata[field])?.startsWith(prefix));
 }

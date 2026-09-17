@@ -2,11 +2,14 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Scan, ListChecks, PanelTopOpen, PanelTopClose, Focus, Save, LayoutGrid, Maximize2, PanelsTopLeft, Pencil, Plus, Minus, X } from 'lucide-react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { buildNoteGraph, insertNoteLink, type NoteGraphNode } from '@mygitnotes/core/note-graph';
-import { filterNotes, selectFilteredGraph } from '@mygitnotes/core/note-filters';
-import { isNoteHidden } from '@mygitnotes/core/note-status';
-import { ScreenPageSchema, screenRowNotePaths, type ScreenRow, type GraphLayout } from '@mygitnotes/core/screen-page';
+import { insertNoteLink, type NoteGraphNode } from '@mygitnotes/core/note-graph';
+import { selectFilteredGraph } from '@mygitnotes/core/note-filters';
+import { ScreenPageSchema, type ScreenRow, type GraphLayout } from '@mygitnotes/core/screen-page';
+import type { NoteListItem, NoteQuery } from '@mygitnotes/core/note-query';
 import type { NoteItem, NotebookConfig, FolderItem } from '../lib/types.js';
+import { useNoteGraph, useNoteLookup, useNotePaths } from '../lib/use-note-queries.js';
+import { overlayGraphDrafts } from '../lib/draft-overlay.js';
+import { useLanePaths } from '../lib/screen-queries.js';
 import type { FilterControls } from '../lib/filter-controls.js';
 import type { ScreenController } from '../lib/use-screen-page.js';
 import type { GraphEditing } from '../lib/use-graph-editing.js';
@@ -28,12 +31,12 @@ import './graph/graph-editing.css';
 type LayoutNode = GraphLayout['nodes'][number];
 type Node = NoteGraphNode & { x?: number; y?: number; fx?: number; fy?: number };
 export interface GraphPageProps {
-  notebooks: NotebookConfig[]; notes: NoteItem[]; filters?: FilterControls;
-  onOpenNote: (note: NoteItem) => void; screen?: ScreenController; lane?: ScreenRow; editing?: GraphEditing;
+  notebooks: NotebookConfig[]; filters?: FilterControls;
+  onOpenNote: (note: NoteListItem) => void; screen?: ScreenController; lane?: ScreenRow; editing?: GraphEditing;
   folders?: FolderItem[];
 }
 
-export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane, editing, folders = [] }: GraphPageProps) {
+export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editing, folders = [] }: GraphPageProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -88,34 +91,56 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
   }, [lane, activeLane?.notebookId, graphNotebook]);
   const { registerBeforeNavigate } = useWorkspaceLinks();
   useEffect(() => registerBeforeNavigate(async () => { try { await editing?.store.flushAll(); return true; } catch (error) { setNotice((error as Error).message); return false; } }), [editing?.store, registerBeforeNavigate]);
-  const effective = useMemo(() => notes.map(note => editing?.store.get(note).draft || note), [notes, editing?.version]);
+  // Nodes and links come from the server; the filter, the visible set and lane membership are
+  // path queries, and unsaved drafts are laid over the answer.
+  const graphSource = useNoteGraph();
+  const scopeNotebook = activeLane?.notebookId || filters?.value.notebookId || 'all';
+  const filterQuery = useMemo<Partial<NoteQuery>>(() => (filters ? {
+    notebookId: scopeNotebook, folders: filters.value.folders, descendants: filters.value.descendants,
+    tags: filters.value.tags, tagMode: filters.value.tagMode, status: filters.value.status,
+    showHidden: filters.value.showHidden, q: filters.value.q,
+  } : { notebookId: scopeNotebook, showHidden: false }), [filters?.value, scopeNotebook]);
+  const matchingPaths = useNotePaths(filterQuery);
+  const visiblePaths = useNotePaths(filters?.value.showHidden ? null : { notebookId: scopeNotebook, showHidden: false });
+  const shownLanes = useMemo(() => [...rows.filter(row => laneIds.includes(row.id)), ...(lane ? [lane] : [])], [rows, laneKey, lane]);
+  const lanePaths = useLanePaths(shownLanes);
+  const editingDrafts = useMemo(() => (editing ? [...editing.store.entries.values()].filter(entry => entry.dirty).map(entry => ({
+    path: entry.draft.path, notebookId: entry.draft.notebookId, title: entry.draft.title,
+    status: entry.draft.status, tags: entry.draft.tags, content: entry.draft.content,
+  })) : []), [editing?.version]);
+  const graph = useMemo(
+    () => (graphSource.graph ? overlayGraphDrafts(graphSource.graph, editingDrafts) : { nodes: [], links: [] }),
+    [graphSource.graph, editingDrafts],
+  );
   const matching = useMemo(() => {
-    let matches = filters ? filterNotes(effective, filters.value) : effective.filter(note => !isNoteHidden({ ...note.metadata, status: note.status }));
+    let matches = matchingPaths.paths;
     if (laneIds.length && !showOutside) {
-      const included = new Set(rows.filter(row => laneIds.includes(row.id)).flatMap(row => screenRowNotePaths(row, effective)));
-      if (lane) for (const path of screenRowNotePaths(lane, effective)) included.add(path);
-      matches = matches.filter(note => included.has(note.path));
+      const included = new Set(shownLanes.flatMap(row => lanePaths.paths.get(row.id) || []));
+      matches = matches.filter(path => included.has(path));
     }
-    if (only) matches = matches.filter(note => only.includes(note.path));
+    if (only) matches = matches.filter(path => only.includes(path));
     return matches;
-  }, [effective, filters?.value, laneKey, rows, lane, only, showOutside]);
-  const laneMembers = useMemo(() => new Set(rows.filter(row => laneIds.includes(row.id)).flatMap(row => screenRowNotePaths(row, effective))), [rows, laneKey, effective]);
+  }, [matchingPaths.paths, laneKey, shownLanes, only, showOutside, lanePaths.paths]);
+  const laneMembers = useMemo(() => new Set(rows.filter(row => laneIds.includes(row.id)).flatMap(row => lanePaths.paths.get(row.id) || [])), [rows, laneKey, lanePaths.paths]);
   const expanded = useMemo(() => new Set(layout.nodes.filter(node => node.expanded).map(node => node.path)), [layout]);
   const graphData = useMemo(() => {
-    const eligible = effective.filter(note => (!activeLane || note.notebookId === activeLane.notebookId) && (filters?.value.showHidden || !isNoteHidden({ ...note.metadata, status: note.status })));
-    const full = buildNoteGraph(eligible, { includeHidden: true });
-    const graph = selectFilteredGraph(full, new Set(matching.map(note => note.path)), filters?.neighbors || false);
-    const connected = new Set(graph.links.flatMap(link => [link.source, link.target]));
-    const visible = graph.nodes.filter(node => showOrphans || connected.has(node.id));
+    const eligible = new Set(filters?.value.showHidden ? graph.nodes.map(node => node.id) : visiblePaths.paths);
+    const nodes = graph.nodes.filter(node => eligible.has(node.id) && (!activeLane || node.notebookId === activeLane.notebookId));
+    const ids = new Set(nodes.map(node => node.id));
+    const full = { nodes, links: graph.links.filter(link => ids.has(link.source) && ids.has(link.target)) };
+    const graphResult = selectFilteredGraph(full, new Set(matching), filters?.neighbors || false);
+    const graph2 = graphResult;
+    const connected = new Set(graph2.links.flatMap(link => [link.source, link.target]));
+    const visible = graph2.nodes.filter(node => showOrphans || connected.has(node.id));
     const saved = new Map([...positions.current, ...layout.nodes.map(node => [node.path, node] as const)]);
-    const initial = initializeGraphLayout({ nodes: visible, links: graph.links }, { nodes: [...saved.values()] });
+    const initial = initializeGraphLayout({ nodes: visible, links: graph2.links }, { nodes: [...saved.values()] });
     const initialized = new Map(initial.nodes.map(node => [node.path, node]));
     for (const node of initial.nodes) positions.current.set(node.path, node);
-    return { links: graph.links, nodes: visible.map(node => {
+    return { links: graph2.links, nodes: visible.map(node => {
       const position = initialized.get(node.id)!;
       return { ...node, x: position.x, y: position.y, fx: position.x, fy: position.y };
     }) };
-  }, [effective, matching, layout, showOrphans, filters?.neighbors, filters?.value.showHidden, activeLane?.notebookId]);
+  }, [graph, matching, visiblePaths.paths, layout, showOrphans, filters?.neighbors, filters?.value.showHidden, activeLane?.notebookId]);
   const colors = useMemo(() => graphColorGroups(graphData.nodes, notebooks, appearance), [graphData, notebooks, appearance]);
   const nodeColor = useCallback((node: NoteGraphNode) => colors.find(group => group.key === graphColorGroup(node, notebooks, appearance.mode).key)?.color || '#94a3b8', [colors, notebooks, appearance]);
   const changeAppearance = (value: GraphAppearance) => { setAppearance(value); try { localStorage.setItem(GRAPH_APPEARANCE_KEY, JSON.stringify(value)); setAppearanceError(false); } catch { setAppearanceError(true); } };
@@ -222,8 +247,8 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
     if (frameSignature.current !== signature) { frameSignature.current = signature; setTransform({ ...origin, k }); redraw(v => v + 1); }
   };
   const point = (event: { clientX: number; clientY: number }) => { const box = container.current!.getBoundingClientRect(); return { x: event.clientX - box.left, y: event.clientY - box.top }; };
-  const link = (source: string, target: NoteItem) => {
-    const note = notes.find(note => note.path === source); if (!note || !editing?.writable) return;
+  const link = (source: string, target: { path: string; title: string }) => {
+    const note = cardNotes.get(source); if (!note || !editing?.writable) return;
     const draft = editing.store.get(note); if (draft.blocked) return;
     const result = insertNoteLink(draft.draft.content, source, target.path, target.title, carets.current.get(source));
     if (result.content === draft.draft.content) { setNotice(t('graph.linkExists')); return; }
@@ -254,23 +279,28 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
       const element = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-graph-note]');
       let target = element?.getAttribute('data-graph-note');
       if (!target) { const p = point(e); const nearest = (graphData.nodes as Node[]).find(n => n.x !== undefined && Math.hypot(n.x * transform.k + transform.x - p.x, n.y! * transform.k + transform.y - p.y) < 18); target = nearest?.id; }
-      const note = notes.find(n => n.path === target); if (note) link(source, note);
+      const node = graphData.nodes.find(n => n.id === target); if (node) link(source, { path: node.id, title: node.title });
     };
     const cancel = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', finish); window.removeEventListener('pointercancel', cancel); setGesture(null); };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', finish); window.addEventListener('pointercancel', cancel);
   };
+  // Only an expanded card shows a body, so only those notes are read in full.
+  const cardPaths = useMemo(() => graphData.nodes.filter(node => expanded.has(node.id) || closing.has(node.id)).map(node => node.id), [graphData, expanded, closing]);
+  const cardLookup = useNoteLookup(cardPaths, true);
+  const cardNotes = useMemo(() => new Map(cardLookup.notes.flatMap(note => typeof note.content === 'string' ? [[note.path, note as NoteItem] as const] : [])), [cardLookup.notes]);
+  const graphLoading = graphSource.loading || matchingPaths.loading || visiblePaths.loading || lanePaths.loading;
   const visibleSelected = selected.filter(path => graphData.nodes.some(node => node.id === path));
   const selectLane = (id: string) => { const next = new URLSearchParams(params); next.delete('lanes'); next.delete('laneScope'); if (id) next.set('lanes', id); setParams(next); };
   const changeMembership = (add: boolean) => {
     if (!screen?.writable || activeLane?.kind !== 'custom') return;
     const selectedSet = new Set(visibleSelected);
-    const items = add ? [...activeLane.items, ...notes.filter(note => selectedSet.has(note.path) && !activeLane.items.some(item => item.kind === 'note' && item.path === note.path && item.notebookId === note.notebookId)).map(note => ({ id: crypto.randomUUID(), kind: 'note' as const, path: note.path, notebookId: note.notebookId }))]
+    const items = add ? [...activeLane.items, ...graphData.nodes.filter(node => selectedSet.has(node.id) && !activeLane.items.some(item => item.kind === 'note' && item.path === node.id && item.notebookId === node.notebookId)).map(node => ({ id: crypto.randomUUID(), kind: 'note' as const, path: node.id, notebookId: node.notebookId }))]
       : activeLane.items.filter(item => item.kind !== 'note' || !selectedSet.has(item.path));
     screen.change({ ...screen.page, rows: screen.page.rows.map(row => row.id === activeLane.id ? { ...activeLane, items } : row) });
   };
   const openFullGraph = async () => { try { await editing?.store.flushAll(); navigate(`/graph?notebook=${encodeURIComponent(lane!.notebookId)}&lanes=${encodeURIComponent(lane!.id)}`); } catch (error) { setNotice((error as Error).message); } };
   const hoveredNode = graphData.nodes.find(node => node.id === hover && !expanded.has(node.id) && !closing.has(node.id));
-  const selectedNotebooks = new Set(visibleSelected.map(path => notes.find(n => n.path === path)?.notebookId));
+  const selectedNotebooks = new Set(visibleSelected.map(path => graphData.nodes.find(node => node.id === path)?.notebookId));
   const saveNotebook = selectedNotebooks.size === 1 ? [...selectedNotebooks][0] : undefined;
   const saveLane = () => {
     if (!screen?.writable || !name.trim() || !saveNotebook) return;
@@ -323,7 +353,7 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
       {screen?.error && <p role="alert">{screen.error}</p>}
     </section>}
     {!lane && !lanePanel && activeLane && <button type="button" className="graph-lane-label" aria-expanded={false} title={t('graph.chooseLane')} onClick={() => { setLanePanel(true); setPickerOpen(false); }}>{activeLane.name}</button>}
-    {editLane && activeLane && screen && <ScreenEditRow row={activeLane} notebooks={notebooks} notes={notes} assets={[]} folders={folders} selectedNotebookId={filters?.value.notebookId === 'all' ? notebooks[0]?.id || '' : filters?.value.notebookId || notebooks[0]?.id || ''} disabled={!screen.writable} onClose={() => setEditLane(false)} onApply={row => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id ? row : value) })} onRemove={() => { screen.change({ ...screen.page, rows: screen.page.rows.filter(row => row.id !== activeLane.id) }); selectLane(''); }} />}
+    {editLane && activeLane && screen && <ScreenEditRow row={activeLane} notebooks={notebooks} assets={[]} folders={folders} selectedNotebookId={filters?.value.notebookId === 'all' ? notebooks[0]?.id || '' : filters?.value.notebookId || notebooks[0]?.id || ''} disabled={!screen.writable} onClose={() => setEditLane(false)} onApply={row => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id ? row : value) })} onRemove={() => { screen.change({ ...screen.page, rows: screen.page.rows.filter(row => row.id !== activeLane.id) }); selectLane(''); }} />}
     {pickerOpen && <div className="graph-note-selector" style={activeLane ? { top: 124 } : undefined}>{graphData.nodes.map(node => <label key={node.id}><input type="checkbox" checked={selected.includes(node.id)} onChange={() => select(node.id, { shiftKey: true })} />{node.title}</label>)}</div>}
     {notice && <div role="status" className="graph-notice" onClick={() => setNotice('')}>{notice}</div>}
     <ForceGraph2D ref={fg} width={size.width} height={size.height} graphData={graphData} nodeId="id" cooldownTicks={1}
@@ -349,12 +379,13 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
         ctx.beginPath(); ctx.moveTo(stop.x,stop.y); ctx.lineTo(stop.x-Math.cos(angle-.45)*8/scale,stop.y-Math.sin(angle-.45)*8/scale); ctx.moveTo(stop.x,stop.y); ctx.lineTo(stop.x-Math.cos(angle+.45)*8/scale,stop.y-Math.sin(angle+.45)*8/scale); ctx.stroke();
       }} />
     {graphData.nodes.filter(node => expanded.has(node.id) || closing.has(node.id)).map(node => {
-      const card = layout.nodes.find(n => n.path === node.id)!, note = notes.find(n => n.path === node.id)!;
+      const card = layout.nodes.find(n => n.path === node.id)!;
+      const note = cardNotes.get(node.id);
       const large = maximized === node.id, w = card.width || 360, h = card.height || 300;
       return <div key={node.id} onAnimationEnd={event => {
         if (event.animationName === 'graph-note-exit' && closing.has(node.id) && (event.target as HTMLElement).classList.contains('graph-note-card')) finishClosing(node.id);
       }} className={`graph-card-position ${closing.has(node.id) ? 'is-closing' : ''} ${large ? 'is-maximized' : ''} ${showOutside && laneIds.length && !laneMembers.has(node.id) ? 'is-outside-lane' : ''}`} style={large ? { inset: 8, zIndex: 80 } : { left: (node.x || 0)*transform.k+transform.x-w*transform.k/2, top: (node.y || 0)*transform.k+transform.y-h*transform.k/2, width:w, height:h, transform:`scale(${transform.k})`, zIndex:selected.includes(node.id) ? 24 : 20 }}>
-        <GraphNoteCard note={note} notes={notes} color={nodeColor(node)} editing={editing} selected={selected.includes(node.id)} maximized={large} onSelect={event => select(node.id,event)} onCaret={position => carets.current.set(node.id,position)}
+        <GraphNoteCard note={note} node={node} color={nodeColor(node)} editing={editing} selected={selected.includes(node.id)} maximized={large} onSelect={event => select(node.id,event)} onCaret={position => carets.current.set(node.id,position)}
           onMove={event => drag(event,node.id,'move')} onResize={event => drag(event,node.id,'resize')} onConnect={event => startLink(event,node.id)} onLink={target => link(node.id,target)} onCollapse={() => setExpanded([node.id],false)} onMaximize={() => setMaximized(large ? null : node.id)} />
       </div>;
     })}
@@ -368,7 +399,9 @@ export function GraphPage({ notebooks, notes, filters, onOpenNote, screen, lane,
         setSelected(event.shiftKey ? [...new Set([...selected,...paths])] : paths); setGesture(null); setBoxMode(false);
       }} />}
     {gesture && <svg className="graph-gesture" width={size.width} height={size.height}>{gesture.kind === 'box' ? <rect x={Math.min(gesture.start.x,gesture.end.x)} y={Math.min(gesture.start.y,gesture.end.y)} width={Math.abs(gesture.end.x-gesture.start.x)} height={Math.abs(gesture.end.y-gesture.start.y)} fill="#818cf833" stroke="#818cf8" /> : <line x1={gesture.start.x} y1={gesture.start.y} x2={gesture.end.x} y2={gesture.end.y} stroke="#818cf8" strokeWidth="2" />}</svg>}
-    {!graphData.nodes.length && <p className="graph-empty" role="status">{t('filters.graphEmpty')}</p>}
+    {(graphSource.error || matchingPaths.error || visiblePaths.error || lanePaths.error || cardLookup.error) && <div role="alert" className="graph-notice">{graphSource.error || matchingPaths.error || visiblePaths.error || lanePaths.error || cardLookup.error}</div>}
+    {graphLoading && <p className="graph-empty" role="status">{t('notes.loading')}</p>}
+    {!graphLoading && !graphData.nodes.length && <p className="graph-empty" role="status">{t('filters.graphEmpty')}</p>}
     <div className="graph-minimap-panel"><div className="graph-stats" role="status" data-filter-results={matching.length} data-graph-nodes={graphData.nodes.length} data-graph-links={graphData.links.length}>
       <button className="ui-icon-button" aria-label={t('graph.resetZoom')} title={t('graph.resetZoom')} onClick={resetView}>↺</button><span>{graphData.nodes.length} ●</span><span>{graphData.links.length} ↗</span></div>{minimap}</div>
     {editing && [...editing.store.entries.values()].some(entry => entry.dirty && !graphData.nodes.some(node => node.id === entry.draft.path && expanded.has(node.id))) && <div className="graph-pending-notes">{[...editing.store.entries.values()].filter(entry => entry.dirty && !graphData.nodes.some(node => node.id === entry.draft.path && expanded.has(node.id))).map(entry => <button key={entry.draft.path} onClick={async () => { try { await editing.store.flushAll(); onOpenNote(entry.draft); } catch(error) { setNotice((error as Error).message); } }}>{entry.draft.title} · {t('graph.pending')}</button>)}</div>}
