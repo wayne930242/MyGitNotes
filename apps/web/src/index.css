@@ -487,10 +487,11 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 }
 .note-editor-body { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
 .note-document-panel { display: flex; flex: 0 0 320px; width: 320px; min-width: 0; min-height: 0; flex-direction: column; border-left: 1px solid var(--color-border); background: var(--color-surface); }
-.note-panel-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); flex: none; align-items: stretch; min-height: 48px; padding: 4px; border-bottom: 1px solid var(--color-border); }
-.note-panel-tabs > button[role="tab"] { display: flex; min-width: 0; min-height: 40px; align-items: center; justify-content: center; gap: 5px; padding: 5px 6px; border-radius: var(--radius-control); color: var(--color-muted); font-size: 10px; font-weight: 500; }
-.note-panel-tabs > button[role="tab"]:hover, .note-panel-tabs > button[role="tab"][aria-selected="true"] { background: var(--color-sidebar); color: var(--color-text); }
-.note-panel-tabs > button[role="tab"][aria-selected="true"] { color: var(--color-primary); }
+.note-panel-tabs { display: flex; gap: 4px; flex: none; align-items: stretch; min-height: 48px; padding: 4px; border-bottom: 1px solid var(--color-border); }
+.note-panel-tabs > button[role="tab"] { position: relative; flex: 1 1 0; display: flex; min-width: 0; min-height: 40px; align-items: center; justify-content: center; gap: 5px; padding: 5px 6px; border-radius: var(--radius-control); color: var(--color-muted); font-size: 10px; font-weight: 500; }
+.note-panel-tabs > button[role="tab"]:hover { background: var(--color-sidebar); color: var(--color-text); z-index: 1; }
+.note-panel-tabs > button[role="tab"][aria-selected="true"] { background: var(--color-sidebar); color: var(--color-primary); z-index: 1; }
+.note-panel-tabs > button[role="tab"]:focus-visible, .note-panel-tabs > button[role="tab"]:focus-within { z-index: 2; }
 .note-panel-tabs svg { flex: none; width: 15px; height: 15px; }
 .note-panel-tabs span { display: none; }
 .note-panel-scroll { min-height: 0; overflow-y: auto; }
