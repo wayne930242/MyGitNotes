@@ -57,8 +57,8 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
     }
   };
 
-  const close = () => {
-    returnFocusTo.current = mode === 'closed' ? null : mode;
+  const close = (restoreFocus = false) => {
+    returnFocusTo.current = restoreFocus && mode !== 'closed' ? mode : null;
     setMode('closed');
     setError(null);
     setCount(null);
@@ -115,7 +115,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
           onChange={event => setTargetName(event.target.value)}
           placeholder={mode === 'rename' ? t('sidebar.tagNewNamePlaceholder') : t('sidebar.tagMergeTargetPlaceholder')}
           onKeyDown={event => {
-            if (event.key === 'Escape') { event.stopPropagation(); close(); }
+            if (event.key === 'Escape') { event.stopPropagation(); close(true); }
             if (event.key === 'Enter') void submit();
           }}
         />
@@ -125,7 +125,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
         {sameName && <p role="alert" className="sidebar-tag-action-error">{t('sidebar.tagSameNameError')}</p>}
         {error && <p role="alert" className="sidebar-tag-action-error">{t('sidebar.tagOperationFailed', { error })}</p>}
         <div className="sidebar-tag-action-buttons">
-          <button type="button" className="ui-button" disabled={busy} onClick={close}>{t('common.cancel')}</button>
+          <button type="button" className="ui-button" disabled={busy} onClick={() => close(true)}>{t('common.cancel')}</button>
           <Button
             variant="primary"
             disabled={busy || !trimmedTarget || sameName || count === 0}
