@@ -3,9 +3,78 @@ import DOMPurify from 'dompurify';
 import { parseYouTubeUrl } from '@mygitnotes/core/screen-page';
 import { parseR2Reference, r2AssetUrl, r2PreviewType } from '@mygitnotes/core/r2-references';
 import { headingSlug, resolveWorkspaceHref } from './workspace-links.js';
+import { stripMdxImports, transformDirectives, transformMdxComponents } from './directives.js';
+
+export const DOMPURIFY_DIRECTIVE_CONFIG = {
+  ADD_TAGS: [
+    'iframe',
+    'details',
+    'summary',
+    'aside',
+    'section',
+    'article',
+    'header',
+    'footer',
+    'figure',
+    'figcaption',
+    'abbr',
+    'svg',
+    'path',
+    'circle',
+    'cite'
+  ],
+  ADD_ATTR: [
+    'allow',
+    'allowfullscreen',
+    'loading',
+    'data-video-id',
+    'data-start',
+    'controls',
+    'preload',
+    'data-type',
+    'data-variant',
+    'data-stat',
+    'data-cols',
+    'data-col-span',
+    'data-direction',
+    'data-arrow',
+    'data-icon',
+    'data-qrcode',
+    'data-size',
+    'data-component-name',
+    'data-lucide',
+    'data-slide-index',
+    'data-vertical',
+    'data-label',
+    'data-card-type',
+    'open',
+    'aria-label',
+    'aria-hidden',
+    'style',
+    'viewBox',
+    'fill',
+    'stroke',
+    'stroke-width',
+    'stroke-linecap',
+    'stroke-linejoin'
+  ]
+};
 
 export function renderNote(content: string, notePath: string, tableLabel = 'Horizontally scrollable table (Alt + wheel)'): string {
-  const parsed = new DOMParser().parseFromString(DOMPurify.sanitize(marked.parse(content, { gfm: true, breaks: true }) as string), 'text/html');
+  const isMdx = /\.mdx$/i.test(notePath);
+  let preprocessed = content;
+  if (isMdx) {
+    preprocessed = stripMdxImports(preprocessed);
+  }
+
+  preprocessed = transformDirectives(preprocessed, md => marked.parse(md, { gfm: true, breaks: true }) as string);
+
+  if (isMdx || /<(?:YouTubeEmbed|YouTube|ProtectedContent|Card|Tag|Badge|[A-Z][a-zA-Z0-9_-]*)\b/.test(preprocessed)) {
+    preprocessed = transformMdxComponents(preprocessed);
+  }
+
+  const rawHtml = marked.parse(preprocessed, { gfm: true, breaks: true }) as string;
+  const parsed = new DOMParser().parseFromString(DOMPurify.sanitize(rawHtml, DOMPURIFY_DIRECTIVE_CONFIG), 'text/html');
   for (const table of parsed.querySelectorAll('table')) {
     const scroller = parsed.createElement('div');
     scroller.className = 'markdown-table-scroll';
@@ -57,10 +126,7 @@ export function renderNote(content: string, notePath: string, tableLabel = 'Hori
     link.setAttribute('rel', 'noopener noreferrer');
     if (target.kind === 'external') link.setAttribute('target', '_blank');
   }
-  return DOMPurify.sanitize(parsed.body.innerHTML, {
-    ADD_TAGS: ['iframe'],
-    ADD_ATTR: ['allow', 'allowfullscreen', 'loading', 'data-video-id', 'data-start', 'controls', 'preload']
-  });
+  return DOMPurify.sanitize(parsed.body.innerHTML, DOMPURIFY_DIRECTIVE_CONFIG);
 }
 
 function r2Preview(doc: Document, key: string, notePath: string, label: string): HTMLElement {

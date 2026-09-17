@@ -1,4 +1,6 @@
 import { LiveMarkdownTable, tableUIState } from './LiveMarkdownTable.js';
+import { LiveMarkdownDirective } from './LiveMarkdownDirective.js';
+import { findDirectiveBlocks } from '../lib/directives.js';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { Compartment, EditorState, StateEffect, StateField, Transaction, type Range } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType, keymap, drawSelection, highlightActiveLineGutter, lineNumbers, type DecorationSet } from '@codemirror/view';
@@ -246,8 +248,16 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
     marks.push(Decoration.mark({attributes:{'data-workspace-link':href,'data-source-path':notePath,role:'link',tabindex:'0',title:linkLabel}}).range(from,to));
     marks.push(Decoration.widget({widget:new ExternalLink(href,linkLabel,notePath),side:1}).range(to));
   };
+  const docText = state.doc.toString();
+  const directiveBlocks = findDirectiveBlocks(docText);
+  const collapsedDirectives = directiveBlocks.filter(b => !active(b.from, b.to));
+
   syntaxTree(state).iterate({ enter(node) {
-    const {from,to,name} = node; const editing = active(from,to);
+    const {from,to,name} = node;
+    if (collapsedDirectives.some(b => from >= b.from && to <= b.to)) {
+      return false;
+    }
+    const editing = active(from,to);
     if (/^(ATXHeading|SetextHeading)[1-6]$/.test(name)) marks.push(Decoration.line({class:`live-md-heading live-md-h${name.at(-1)}`,attributes:{'data-heading-slug':headingSlug(state.sliceDoc(from,to).split('\n')[0])}}).range(state.doc.lineAt(from).from));
     if (name === 'Blockquote') for(let line = state.doc.lineAt(from); line.from < to; line = state.doc.line(line.number+1)) {
       marks.push(Decoration.line({class:'live-md-quote'}).range(line.from)); if(line.number === state.doc.lines)break;
@@ -319,10 +329,31 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
       hide(from,end);
     }
   }});
+
+  for (const block of collapsedDirectives) {
+    marks.push(
+      Decoration.replace({
+        widget: new LiveMarkdownDirective(
+          block.rawText,
+          notePath,
+          block.from,
+          state.readOnly,
+          block.type,
+          block.attrs.variant,
+          t
+        ),
+        block: true,
+      }).range(block.from, block.to)
+    );
+  }
+
   const editingChips = state.field(chipEditState);
   const TOKENS: [string, boolean][] = [[DUE_EMOJI, false], [DONE_EMOJI, false], [TIMESTAMP_EMOJI, true]];
   for (let lineNumber = 1; lineNumber <= state.doc.lines; lineNumber++) {
     const line = state.doc.line(lineNumber);
+    if (collapsedDirectives.some(b => line.from >= b.from && line.to <= b.to)) {
+      continue;
+    }
     for (const [emoji, withTime] of TOKENS) {
       const token = findToken(line.text, emoji, withTime);
       if (!token) continue;

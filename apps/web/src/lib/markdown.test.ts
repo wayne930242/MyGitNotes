@@ -263,3 +263,27 @@ describe('renderNote R2 assets', () => {
     expect(html).toContain('alt="Diagram"');
   });
 });
+
+describe('renderNote generic directives and MDX Layer 2', () => {
+  it('renders generic directives in standard notes', () => {
+    const markdown = `:::info[系統通知]\n這是系統重要訊息\n:::\n\n:::optional[點擊展開]\n細節說明\n:::`;
+    const html = renderNote(markdown, 'notes/demo/note.md');
+    expect(html).toContain('class="custom-directive info-directive"');
+    expect(html).toContain('data-type="info"');
+    expect(html).toContain('系統通知');
+    expect(html).toContain('<details class="custom-directive optional-directive"');
+    expect(html).toContain('點擊展開');
+  });
+
+  it('renders MDX files with stripped imports and converted JSX components', () => {
+    const mdx = `import YouTubeEmbed from "@/components/YouTubeEmbed.astro";\nimport { Card } from "@/components/ui";\n\n# 標題\n\n<YouTubeEmbed id="abc12345678" />\n\n<ProtectedContent title="密件">機密內容</ProtectedContent>`;
+    const html = renderNote(mdx, 'blog/src/content/posts/article.mdx');
+    expect(html).not.toContain('import YouTubeEmbed');
+    expect(html).toContain('class="note-youtube-embed"');
+    expect(html).toContain('data-video-id="abc12345678"');
+    expect(html).toContain('class="mdx-protected-content"');
+    expect(html).toContain('密件');
+    expect(html).toContain('機密內容');
+  });
+});
+
