@@ -58,7 +58,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
   }, [selectedEntry, listing, directory, onSelectionChange, r2Directory]);
   const entries = listing?.entries.filter(entry => showHidden || !entry.hidden) || [];
   const dirs = entries.filter(entry => entry.directory);
-  const tree = listing ? buildFileTree(entries, listing.root) : [];
+  const { roots: tree, rootHasNonDocument } = listing ? buildFileTree(entries, listing.root) : { roots: [] as FileTreeNode[], rootHasNonDocument: false };
   const current = entries.filter(entry => parentOf(entry.path) === directory && (showMarkdown || entry.directory || !isMarkdownFile(entry.name))).sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
   const toggleExpand = (path: string) => setExpanded(previous => { const next = new Set(previous); if (next.has(path)) next.delete(path); else next.add(path); return next; });
   useEffect(() => {
@@ -183,15 +183,16 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
   const relative = (path: string) => path === listing?.root ? t('files.root') : path.slice((listing?.root.length || 0) + 1);
   const renderOperation = (form: ReactNode) => operation === 'metadata' && metadataContainer ? createPortal(form, metadataContainer) : form;
   const rawUrl = selected ? rawFileUrl(notebookId, selected) : '';
+  const markerLabel = (name: string, hasNonDocument: boolean) => hasNonDocument ? `${name} (${t('folder.hasNonDocument')})` : name;
   const renderTreeNode = (node: FileTreeNode): ReactNode => {
     const isExpanded = expanded.has(node.path), hasChildren = node.children.length > 0;
-    const label = node.hasNonDocument ? `${node.name} (${t('folder.hasNonDocument')})` : node.name;
+    const label = markerLabel(node.name, node.hasNonDocument);
     return <div key={node.path} className="file-tree-node">
-      <div className="file-tree-row" style={{ paddingInlineStart: node.depth * 12 }}>
+      <div className="file-tree-row" style={{ paddingInlineStart: 10 + node.depth * 12 }}>
         <button type="button" className="file-tree-chevron" disabled={busy || !hasChildren} tabIndex={hasChildren ? 0 : -1} aria-label={isExpanded ? t('folder.collapse') : t('folder.expand')} aria-expanded={hasChildren ? isExpanded : undefined} onClick={() => toggleExpand(node.path)}>
           {hasChildren && (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}
         </button>
-        <button type="button" className="file-tree-entry" disabled={busy} aria-current={r2Directory === undefined && directory === node.path ? 'location' : undefined} title={label} onClick={() => void navigate(node.path)}>
+        <button type="button" className="file-tree-entry" disabled={busy} aria-current={r2Directory === undefined && directory === node.path ? 'location' : undefined} aria-label={label} title={label} onClick={() => void navigate(node.path)}>
           <Folder size={15} /><span>{node.name}</span>
           {node.hasNonDocument && <span className="file-tree-marker" aria-hidden="true" />}
         </button>
@@ -221,7 +222,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
     {!listing ? <p role="status">{error ? t('files.unavailable') : t('files.loading')}</p> : <>
     <div className="file-manager-body">
       <nav className={`file-tree ${treeOpen ? 'is-open' : ''}`} aria-label={t('folder.folders')}>
-        {(directory !== listing.root || r2Directory !== undefined) && <button type="button" disabled={busy} aria-current={r2Directory === undefined && directory === listing.root ? 'location' : undefined} onClick={() => void navigate(listing.root)}><Folder size={15} /><span>{'<note>'}</span></button>}
+        {(directory !== listing.root || r2Directory !== undefined) && <button type="button" disabled={busy} aria-current={r2Directory === undefined && directory === listing.root ? 'location' : undefined} style={{ paddingInlineStart: 10 }} aria-label={markerLabel('<note>', rootHasNonDocument)} title={markerLabel('<note>', rootHasNonDocument)} onClick={() => void navigate(listing.root)}><Folder size={15} /><span>{'<note>'}</span>{rootHasNonDocument && <span className="file-tree-marker" aria-hidden="true" />}</button>}
         {tree.map(renderTreeNode)}
         {r2 && (() => { const { root, folders } = r2Folders(r2, showHidden); return <>
           <button type="button" className="file-tree-r2" disabled={busy} aria-current={r2Directory === root ? 'location' : undefined} onClick={() => void navigateR2(root)}><Cloud size={15} /><span>R2</span></button>
