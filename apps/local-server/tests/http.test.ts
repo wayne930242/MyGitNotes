@@ -185,10 +185,12 @@ describe('real HTTP local boundaries',()=>{
     expect((await fetch(`${base}/api/notes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:'README.md',content:'bad'})})).status).toBe(403);
     expect((await fetch(`${base}/api/workspace`,{headers:{Origin:'https://evil.example'}})).status).toBe(403);
     expect((await fetch(`${base}/api/workspace`,{headers:{Origin:'http://localhost:5173'}})).status).toBe(200);
-    expect((await fetch(`${base}/api/workspace`,{headers:{Origin:'http://localhost:5174'}})).status).toBe(403);
+    expect((await fetch(`${base}/api/workspace`,{headers:{Origin:'http://localhost:5174'}})).status).toBe(200);
+    expect((await fetch(`${base}/api/workspace`,{headers:{Origin:'http://127.0.0.1:5199'}})).status).toBe(200);
+    expect((await fetch(`${base}/api/workspace`,{headers:{Origin:'https://localhost:5173'}})).status).toBe(403);
     fs.writeFileSync(path.join(root,'.mygitnotes-dev-ports.json'),JSON.stringify({webPort:5174}));
     expect((await fetch(`${base}/api/workspace`,{headers:{Origin:'http://localhost:5174'}})).status).toBe(200);
-    expect((await fetch(`${base}/api/workspace`,{headers:{Origin:'http://localhost:5173'}})).status).toBe(403);
+    expect((await fetch(`${base}/api/workspace`,{headers:{Origin:'http://localhost:5173'}})).status).toBe(200);
     git('checkout','-b','core');
     expect((await fetch(`${base}/api/notes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:'notes/example/new.md',content:'bad'})})).status).toBe(403);
   });
