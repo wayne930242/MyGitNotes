@@ -4,12 +4,14 @@ import { MoreHorizontal } from 'lucide-react';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 import { useLongPress } from '../lib/use-long-press.js';
+import { filterTagCandidates } from '../lib/tag-list.js';
 import { Button } from './Button.js';
 
 type Mode = 'closed' | 'rename' | 'merge';
 
 interface TagActionsProps {
   tag: string;
+  allTags: string[];
   onPreviewUsage: (tag: string) => Promise<number>;
   onRename: (from: string, to: string) => Promise<void>;
   onMerge: (from: string, into: string) => Promise<void>;
@@ -19,21 +21,26 @@ interface TagActionsProps {
 }
 
 /** Rename/merge/delete controls for one tag, shown next to its chip in the Sidebar's Tags Cloud. */
-export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onRename, onMerge, onDelete, children }) => {
-  const { t } = useTranslation();
+export const TagActions: React.FC<TagActionsProps> = ({ tag, allTags, onPreviewUsage, onRename, onMerge, onDelete, children }) => {
+  const { t, language } = useTranslation();
   const [mode, setMode] = useState<Mode>('closed');
   const [targetName, setTargetName] = useState('');
   const [count, setCount] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const previewRequestRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [returnFocus, setReturnFocus] = useState(false);
   const [portal, setPortal] = useState<HTMLElement>();
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [highlight, setHighlight] = useState(-1);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const openingFormRef = useRef(false);
   const openedByLongPressRef = useRef(false);
   const chipRef = useRef<HTMLSpanElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
+  const suggestionsId = useId();
   useEffect(() => { setPortal(triggerRef.current?.closest('dialog') || undefined); }, [mode]);
   useEffect(() => { if (mode !== 'closed') formRef.current?.scrollIntoView({ block: 'nearest' }); }, [mode]);
   useEffect(() => {
@@ -59,30 +66,47 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
   const stop = (event: React.SyntheticEvent) => event.stopPropagation();
 
   const openForm = async (next: 'rename' | 'merge') => {
+    const requestId = ++previewRequestRef.current;
     setMode(next);
     setTargetName('');
     setError(null);
     setCount(null);
-    setBusy(true);
+    setPreviewLoading(true);
     try {
-      setCount(await onPreviewUsage(tag));
+      const usage = await onPreviewUsage(tag);
+      if (previewRequestRef.current !== requestId) return;
+      setCount(usage);
     } catch (err) {
+      if (previewRequestRef.current !== requestId) return;
       setError((err as Error).message);
     } finally {
-      setBusy(false);
+      if (previewRequestRef.current === requestId) setPreviewLoading(false);
     }
   };
 
   const close = (restoreFocus = false) => {
+    previewRequestRef.current += 1;
     setReturnFocus(restoreFocus);
     setMode('closed');
     setError(null);
     setCount(null);
     setTargetName('');
+    setPreviewLoading(false);
+    setSuggestionsOpen(false);
+    setHighlight(-1);
   };
 
   const trimmedTarget = targetName.trim();
   const sameName = trimmedTarget.length > 0 && trimmedTarget === tag;
+  const suggestions = mode === 'merge' ? filterTagCandidates(allTags, tag, targetName, language) : [];
+  const isNewTarget = mode === 'merge' && trimmedTarget.length > 0 && !sameName
+    && !allTags.some(candidate => candidate.toLocaleLowerCase(language) === trimmedTarget.toLocaleLowerCase(language));
+
+  const selectSuggestion = (value: string) => {
+    setTargetName(value);
+    setSuggestionsOpen(false);
+    setHighlight(-1);
+  };
 
   const submit = async () => {
     if (!trimmedTarget || sameName) return;
@@ -135,37 +159,77 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, onPreviewUsage, onR
 
   if (mode !== 'closed') {
     return (
-      <>
-      {children}
       <div className="sidebar-tag-action-form" ref={formRef} onClick={stop} role="group" aria-label={mode === 'rename' ? t('sidebar.tagRenameTitle', { tag }) : t('sidebar.tagMergeTitle', { tag })}>
-        <input
-          type="text"
-          autoFocus
-          value={targetName}
-          onChange={event => setTargetName(event.target.value)}
-          placeholder={mode === 'rename' ? t('sidebar.tagNewNamePlaceholder') : t('sidebar.tagMergeTargetPlaceholder')}
-          onKeyDown={event => {
-            if (event.key === 'Escape') { event.stopPropagation(); close(true); }
-            if (event.key === 'Enter') void submit();
-          }}
-        />
-        <span className="sidebar-tag-action-count" role="status">
-          {count === null ? '…' : t('sidebar.tagAffectedCount', { count })}
+        <span className="sidebar-tag-action-target">
+          {mode === 'rename' ? t('sidebar.tagRenameTitle', { tag }) : t('sidebar.tagMergeTitle', { tag })}
         </span>
+        <div className="sidebar-tag-action-combobox">
+          <input
+            type="text"
+            autoFocus
+            value={targetName}
+            role={mode === 'merge' ? 'combobox' : undefined}
+            aria-expanded={mode === 'merge' ? suggestionsOpen && suggestions.length > 0 : undefined}
+            aria-controls={mode === 'merge' ? suggestionsId : undefined}
+            aria-autocomplete={mode === 'merge' ? 'list' : undefined}
+            aria-activedescendant={mode === 'merge' && highlight >= 0 ? `${suggestionsId}-${highlight}` : undefined}
+            onChange={event => {
+              setTargetName(event.target.value);
+              setSuggestionsOpen(true);
+              setHighlight(0);
+            }}
+            placeholder={mode === 'rename' ? t('sidebar.tagNewNamePlaceholder') : t('sidebar.tagMergeTargetPlaceholder')}
+            onKeyDown={event => {
+              if (event.key === 'Escape') {
+                event.stopPropagation();
+                if (mode === 'merge' && suggestionsOpen && suggestions.length > 0) { setSuggestionsOpen(false); setHighlight(-1); return; }
+                close(true);
+                return;
+              }
+              if (mode === 'merge' && suggestionsOpen && suggestions.length > 0) {
+                if (event.key === 'ArrowDown') { event.preventDefault(); setHighlight(prev => (prev + 1) % suggestions.length); return; }
+                if (event.key === 'ArrowUp') { event.preventDefault(); setHighlight(prev => (prev - 1 + suggestions.length) % suggestions.length); return; }
+                if (event.key === 'Enter' && highlight >= 0) { event.preventDefault(); selectSuggestion(suggestions[highlight]); return; }
+              }
+              if (event.key === 'Enter') void submit();
+            }}
+          />
+          {mode === 'merge' && suggestionsOpen && suggestions.length > 0 && (
+            <ul className="sidebar-tag-action-suggestions" role="listbox" id={suggestionsId} aria-label={t('sidebar.tagSuggestions')}>
+              {suggestions.map((candidate, index) => (
+                <li
+                  key={candidate}
+                  id={`${suggestionsId}-${index}`}
+                  role="option"
+                  aria-selected={index === highlight}
+                  data-highlighted={index === highlight || undefined}
+                  onMouseDown={event => event.preventDefault()}
+                  onClick={() => selectSuggestion(candidate)}
+                  onTouchEnd={() => selectSuggestion(candidate)}
+                >
+                  {candidate}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <span className="sidebar-tag-action-count" role="status">
+          {previewLoading || count === null ? '…' : t('sidebar.tagAffectedCount', { count })}
+        </span>
+        {isNewTarget && <p role="status" className="sidebar-tag-action-hint">{t('sidebar.tagMergeNewTarget', { tag: trimmedTarget })}</p>}
         {sameName && <p role="alert" className="sidebar-tag-action-error">{t('sidebar.tagSameNameError')}</p>}
         {error && <p role="alert" className="sidebar-tag-action-error">{t('sidebar.tagOperationFailed', { error })}</p>}
         <div className="sidebar-tag-action-buttons">
           <button type="button" className="ui-button" disabled={busy} onClick={() => close(true)}>{t('common.cancel')}</button>
           <Button
             variant="primary"
-            disabled={busy || !trimmedTarget || sameName || count === 0}
+            disabled={busy || previewLoading || !trimmedTarget || sameName || count === null || count === 0}
             onClick={() => void submit()}
           >
             {mode === 'rename' ? t('sidebar.tagConfirmRename', { count: count ?? 0 }) : t('sidebar.tagConfirmMerge', { count: count ?? 0 })}
           </Button>
         </div>
       </div>
-      </>
     );
   }
 

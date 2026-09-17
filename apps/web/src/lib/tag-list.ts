@@ -14,6 +14,15 @@ export function filterAndSortTags(counts: Record<string, number>, query: string,
     });
 }
 
+export function filterTagCandidates(allTags: string[], excludeTag: string, query: string, locale = 'en'): string[] {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+  const search = trimmed.toLocaleLowerCase(locale);
+  return allTags
+    .filter(t => t !== excludeTag && t.toLocaleLowerCase(locale).includes(search))
+    .sort((a, b) => a.localeCompare(b, locale));
+}
+
 export function getSavedTagSort(): TagSort {
   try {
     const saved = typeof window !== 'undefined' ? window.localStorage.getItem(TAG_SORT_STORAGE_KEY) : null;
