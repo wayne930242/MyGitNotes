@@ -101,6 +101,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, allTags, onPreviewU
   const suggestions = mode === 'merge' ? filterTagCandidates(allTags, tag, targetName, language) : [];
   const isNewTarget = mode === 'merge' && trimmedTarget.length > 0 && !sameName
     && !allTags.some(candidate => candidate.toLocaleLowerCase(language) === trimmedTarget.toLocaleLowerCase(language));
+  const showSuggestions = mode === 'merge' && suggestionsOpen && suggestions.length > 0;
 
   const selectSuggestion = (value: string) => {
     setTargetName(value);
@@ -216,7 +217,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, allTags, onPreviewU
         <span className="sidebar-tag-action-count" role="status">
           {previewLoading || count === null ? '…' : t('sidebar.tagAffectedCount', { count })}
         </span>
-        {isNewTarget && <p role="status" className="sidebar-tag-action-hint">{t('sidebar.tagMergeNewTarget', { tag: trimmedTarget })}</p>}
+        {isNewTarget && !showSuggestions && <p role="status" className="sidebar-tag-action-hint">{t('sidebar.tagMergeNewTarget', { tag: trimmedTarget })}</p>}
         {sameName && <p role="alert" className="sidebar-tag-action-error">{t('sidebar.tagSameNameError')}</p>}
         {error && <p role="alert" className="sidebar-tag-action-error">{t('sidebar.tagOperationFailed', { error })}</p>}
         <div className="sidebar-tag-action-buttons">
