@@ -2,9 +2,10 @@ import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { Button } from './Button.js';
 import { forwardRef, lazy, Suspense, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Folder, File, FolderPlus, FilePlus, Upload, CornerLeftUp, FolderInput, Pencil, Trash2, RefreshCw, Eye, Code2, Download, X, EyeOff, Cloud } from 'lucide-react';
+import { Folder, File, FolderPlus, FilePlus, Upload, CornerLeftUp, FolderInput, Pencil, Trash2, RefreshCw, Eye, Code2, Download, X, EyeOff, Cloud, FileText, FileX, ChevronRight, ChevronDown } from 'lucide-react';
 import type { FileCommand } from '@mygitnotes/core';
 import { fetchFiles, readFile, mutateFile, rawFileUrl, type FileEntry, type FileListing, type FileRead, type FileResult } from '../lib/files-api.js';
+import { buildFileTree, expandedPathsFor, isMarkdownFile, type FileTreeNode } from '../lib/file-tree.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { Preview } from './FilePreview.js';
@@ -38,6 +39,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
   const [listing, setListing] = useState<FileListing>();
   const [directory, setDirectory] = useState(''), [selected, setSelected] = useState('');
   const [showHidden, setShowHidden] = useState(false), [treeOpen, setTreeOpen] = useState(false);
+  const [showMarkdown, setShowMarkdown] = useState(false), [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<FileRead>(), [content, setContent] = useState('');
   const [sourceView, setSourceView] = useState(false), [busy, setBusy] = useState(false), [reading, setReading] = useState(false), [error, setError] = useState('');
   const [operation, setOperation] = useState<Operation>(), [name, setName] = useState(''), [destination, setDestination] = useState('');
@@ -56,7 +58,13 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
   }, [selectedEntry, listing, directory, onSelectionChange, r2Directory]);
   const entries = listing?.entries.filter(entry => showHidden || !entry.hidden) || [];
   const dirs = entries.filter(entry => entry.directory);
-  const current = entries.filter(entry => parentOf(entry.path) === directory).sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
+  const tree = listing ? buildFileTree(entries, listing.root) : [];
+  const current = entries.filter(entry => parentOf(entry.path) === directory && (showMarkdown || entry.directory || !isMarkdownFile(entry.name))).sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
+  const toggleExpand = (path: string) => setExpanded(previous => { const next = new Set(previous); if (next.has(path)) next.delete(path); else next.add(path); return next; });
+  useEffect(() => {
+    if (!listing) return;
+    setExpanded(previous => { const next = new Set(previous); for (const path of expandedPathsFor(directory, listing.root)) next.add(path); return next; });
+  }, [directory, listing?.root]);
   useEffect(() => { if (operation) operationForm.current?.scrollIntoView({ block: 'nearest' }); }, [operation]);
   const refresh = async () => { const next = await fetchFiles(notebookId); setListing(next); return next; };
   const refreshR2 = async () => { const next = movePath ? undefined : await fetchR2(notebookId).catch(() => undefined); setR2(next); if (!next) setR2Directory(undefined); return next; };
@@ -82,6 +90,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
       setDirectory(entry?.directory && !movePath ? entry.path : entry ? parentOf(entry.path) : next.root);
       if (entry) {
         if (entry.hidden) setShowHidden(true);
+        if (!entry.directory && isMarkdownFile(entry.name)) setShowMarkdown(true);
         if (movePath) { setSelected(entry.path); setOperation('move'); setName(entry.name); setDestination(parentOf(entry.path)); }
         else void loadDetail(entry.path);
       }
@@ -111,6 +120,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
     const next = await refresh();
     const entry = next.entries.find(entry => entry.path === result.selectedPath);
     if (entry?.hidden) setShowHidden(true);
+    if (entry && !entry.directory && isMarkdownFile(entry.name)) setShowMarkdown(true);
     if (entry && !entry.directory) { setDirectory(parentOf(entry.path)); await loadDetail(entry.path); }
     else { setDirectory(entry?.path || next.root); setSelected(''); setDetail(undefined); readSequence.current++; }
     await onChanged?.(result);
@@ -173,6 +183,22 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
   const relative = (path: string) => path === listing?.root ? t('files.root') : path.slice((listing?.root.length || 0) + 1);
   const renderOperation = (form: ReactNode) => operation === 'metadata' && metadataContainer ? createPortal(form, metadataContainer) : form;
   const rawUrl = selected ? rawFileUrl(notebookId, selected) : '';
+  const renderTreeNode = (node: FileTreeNode): ReactNode => {
+    const isExpanded = expanded.has(node.path), hasChildren = node.children.length > 0;
+    const label = node.hasNonDocument ? `${node.name} (${t('folder.hasNonDocument')})` : node.name;
+    return <div key={node.path} className="file-tree-node">
+      <div className="file-tree-row" style={{ paddingInlineStart: node.depth * 12 }}>
+        <button type="button" className="file-tree-chevron" disabled={busy || !hasChildren} tabIndex={hasChildren ? 0 : -1} aria-label={isExpanded ? t('folder.collapse') : t('folder.expand')} aria-expanded={hasChildren ? isExpanded : undefined} onClick={() => toggleExpand(node.path)}>
+          {hasChildren && (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}
+        </button>
+        <button type="button" className="file-tree-entry" disabled={busy} aria-current={r2Directory === undefined && directory === node.path ? 'location' : undefined} title={label} onClick={() => void navigate(node.path)}>
+          <Folder size={15} /><span>{node.name}</span>
+          {node.hasNonDocument && <span className="file-tree-marker" aria-hidden="true" />}
+        </button>
+      </div>
+      {hasChildren && isExpanded && <div className="file-tree-children">{node.children.map(renderTreeNode)}</div>}
+    </div>;
+  };
   return <div className="file-manager" data-mode={mode} data-layout={layout} aria-busy={busy || reading || !listing}>
     {layout === 'panel' && <div className="file-panel-sources" role="group" aria-label={t('files.location')}>
       <button type="button" aria-pressed={r2Directory === undefined} disabled={busy || !listing} onClick={() => listing && void navigate(listing.root)}><Folder size={14} />{t('files.titleLabel')}</button>
@@ -188,13 +214,15 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
         <button type="button" disabled={busy} onClick={() => setR2Directory(r2.prefix.slice(0, -1))}>R2</button>{r2Directory.slice(r2.prefix.length).split('/').map((part, index, parts) => <span key={index}> / <button type="button" disabled={busy} onClick={() => setR2Directory(r2.prefix + parts.slice(0, index + 1).join('/'))}>{part}</button></span>)}
       </nav>}
       <button type="button" className="ui-icon-button file-hidden-toggle" aria-label={t('files.showHidden')} title={t('files.showHidden')} aria-pressed={showHidden} disabled={busy || !listing} onClick={() => { const next = !showHidden; void (async () => { if (await prepareLeave()) { setShowHidden(next); if (!next && (selectedEntry?.hidden || directory.slice((listing?.root.length || 0) + 1).split('/').some(p => p.startsWith('.')))) { setDirectory(listing!.root); setSelected(''); setDetail(undefined); setOperation(undefined); readSequence.current++; } } })(); }}>{showHidden ? <Eye size={18} /> : <EyeOff size={18} />}</button>
+      <button type="button" className="ui-icon-button file-markdown-toggle" aria-label={t('files.showMarkdown')} title={t('files.showMarkdown')} aria-pressed={showMarkdown} disabled={busy || !listing} onClick={() => { const next = !showMarkdown; void (async () => { if (await prepareLeave()) { setShowMarkdown(next); if (!next && selectedEntry && !selectedEntry.directory && isMarkdownFile(selectedEntry.name)) { setSelected(''); setDetail(undefined); setOperation(undefined); readSequence.current++; } } })(); }}>{showMarkdown ? <FileText size={18} /> : <FileX size={18} />}</button>
       <button type="button" className="ui-icon-button" aria-label={t('folder.reload')} title={t('folder.reload')} disabled={busy} onClick={() => void (async () => { if (await prepareLeave()) await run(async () => { await refreshR2(); const next = await refresh(); if (selected && next.entries.some(e => e.path === selected)) await loadDetail(selected); else { setDirectory(next.root); setSelected(''); setDetail(undefined); setOperation(undefined); readSequence.current++; } }); })()}><RefreshCw size={16} /></button>
     </header>
     {error && <p role="alert" className="file-error">{error}</p>}
     {!listing ? <p role="status">{error ? t('files.unavailable') : t('files.loading')}</p> : <>
     <div className="file-manager-body">
       <nav className={`file-tree ${treeOpen ? 'is-open' : ''}`} aria-label={t('folder.folders')}>
-        {[...(directory !== listing.root || r2Directory !== undefined ? [{ path: listing.root, name: '<note>' }] : []), ...dirs].map(entry => <button type="button" key={entry.path} disabled={busy} aria-current={r2Directory === undefined && directory === entry.path ? 'location' : undefined} style={{ paddingInlineStart: 10 + Math.max(0, entry.path.slice(listing.root.length + 1).split('/').length - 1) * 12 }} onClick={() => void navigate(entry.path)}><Folder size={15} /><span>{entry.name}</span></button>)}
+        {(directory !== listing.root || r2Directory !== undefined) && <button type="button" disabled={busy} aria-current={r2Directory === undefined && directory === listing.root ? 'location' : undefined} onClick={() => void navigate(listing.root)}><Folder size={15} /><span>{'<note>'}</span></button>}
+        {tree.map(renderTreeNode)}
         {r2 && (() => { const { root, folders } = r2Folders(r2, showHidden); return <>
           <button type="button" className="file-tree-r2" disabled={busy} aria-current={r2Directory === root ? 'location' : undefined} onClick={() => void navigateR2(root)}><Cloud size={15} /><span>R2</span></button>
           {folders.map(folder => <button type="button" key={folder} disabled={busy} aria-current={r2Directory === folder ? 'location' : undefined} style={{ paddingInlineStart: 10 + (folder.split('/').length - 1) * 12 }} onClick={() => void navigateR2(folder)}><Folder size={15} /><span>{folder.slice(folder.lastIndexOf('/') + 1)}</span></button>)}
