@@ -7,6 +7,7 @@ import { relocateLinks } from './folder-plan.js';
 import { SCREEN_PAGE_FILE, readScreenPage } from './screen-page.js';
 import { STUDY_FILE, StudyWorkspaceSchema } from './study.js';
 import { decodeAsset } from './assets.js';
+import { WORKSPACE_CONFIG_FILENAME, LEGACY_WORKSPACE_CONFIG_FILENAME } from './config.js';
 
 const filePath = z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value) && value.split('/').every(p => p && p !== '.' && p !== '..'), 'Use a relative workspace path.');
 const target = { notebookId: z.string().min(1), path: filePath };
@@ -35,7 +36,7 @@ export function managedNotebook(file: string, notebooks: NotebookConfig[]): Note
   let nb = [...notebooks].sort((a, b) => b.root.length - a.root.length).find(nb => withinPath(file, nb.root));
   if (nb) {
     const relative = file.slice(nb.root.length + 1);
-    if (relative.split('/').some(part => ['.git', '.claude', '.codex', '.agents', '.agent', 'node_modules', 'dist', 'build', 'agents.md', 'claude.md', 'gemini.md', '.github-notes.yaml'].includes(part.toLowerCase())) || /(^|\/)docs\/agent(\/|$)/.test(relative)) return;
+    if (relative.split('/').some(part => ['.git', '.claude', '.codex', '.agents', '.agent', 'node_modules', 'dist', 'build', 'agents.md', 'claude.md', 'gemini.md', WORKSPACE_CONFIG_FILENAME, LEGACY_WORKSPACE_CONFIG_FILENAME].includes(part.toLowerCase())) || /(^|\/)docs\/agent(\/|$)/.test(relative)) return;
     return nb;
   }
 
@@ -48,7 +49,7 @@ export function managedNotebook(file: string, notebooks: NotebookConfig[]): Note
     });
   });
   if (nb) {
-    if (file.split('/').some(part => ['.git', '.claude', '.codex', '.agents', '.agent', 'node_modules', 'dist', 'build', 'agents.md', 'claude.md', 'gemini.md', '.github-notes.yaml'].includes(part.toLowerCase())) || /(^|\/)docs\/agent(\/|$)/.test(file)) return;
+    if (file.split('/').some(part => ['.git', '.claude', '.codex', '.agents', '.agent', 'node_modules', 'dist', 'build', 'agents.md', 'claude.md', 'gemini.md', WORKSPACE_CONFIG_FILENAME, LEGACY_WORKSPACE_CONFIG_FILENAME].includes(part.toLowerCase())) || /(^|\/)docs\/agent(\/|$)/.test(file)) return;
     return nb;
   }
 

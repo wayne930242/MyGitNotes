@@ -10,14 +10,14 @@ Follow this workflow when creating or updating workspace manifests, notebooks, n
 ## Workspace Hierarchy
 
 ```text
-Workspace (/.github-notes.yaml)
+Workspace (/.mygitnotes.yaml)
 └─ Notebooks (e.g. notes/example/)
    └─ Notes (*.md) & Assets (assets/)
 ```
 
 ## Invariants
 
-1. **Manifest Location**: `/.github-notes.yaml` exists only on user workspace branches (e.g. `main`), never on `core`.
+1. **Manifest Location**: `/.mygitnotes.yaml` (or legacy `/.github-notes.yaml`) exists only on user workspace branches (e.g. `main`), never on `core`.
 2. **Notebook Slugs**: Notebook IDs must be unique URL/filesystem-safe slugs.
 3. **Roots**: Notebook roots must be relative to repository root and must not overlap.
 4. **Frontmatter**: Preserve unknown frontmatter keys. A note without frontmatter is valid.

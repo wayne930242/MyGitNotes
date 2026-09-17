@@ -45,7 +45,7 @@ MyGitNotes 把一個 Git 儲存庫變成集中處理筆記、文件、素材與 
 ## 儲存庫模型
 
 - **`core`**：產品原始碼、套件、測試、指令稿與說明文件，不包含個人筆記。
-- **`main`**：你的工作區分支，包含 `.github-notes.yaml`、`notes/**`、素材與工作區 Agent 設定。
+- **`main`**：你的工作區分支，包含 `.mygitnotes.yaml`、`notes/**`、素材與工作區 Agent 設定。
 
 這個分離讓產品可以持續更新，卻不取得你內容的所有權。
 
@@ -122,7 +122,7 @@ docker run -d --name mygitnotes --init --restart unless-stopped \
 
 ### 在容器中開啟本地 checkout
 
-準備位於 `main` 分支、包含 `.github-notes.yaml` 與筆記的既有工作區 checkout。容器以 UID/GID `1000:1000` 執行；Linux 上需讓該使用者可讀寫掛載目錄，並在工作區設定 Git 提交者（`git config user.name`、`git config user.email`）。
+準備位於 `main` 分支、包含 `.mygitnotes.yaml` 與筆記的既有工作區 checkout。容器以 UID/GID `1000:1000` 執行；Linux 上需讓該使用者可讀寫掛載目錄，並在工作區設定 Git 提交者（`git config user.name`、`git config user.email`）。
 
 ```bash
 WORKSPACE_PATH=/absolute/path/to/workspace \
@@ -221,7 +221,7 @@ GITLAB_CLIENT_SECRET=your_application_secret
 
 登入帳號需有 `main` 的 push 權限才能寫入。GitLab 將多檔修改批次提交為一個 commit，並以各既有檔案的最後提交 ID 檢查並行修改。公開儲存庫支援匿名讀取。內網 GitLab 須搭配能連入該網路的部署環境。
 
-產品已更名為 **MyGitNotes**。既有 `.github-notes.yaml`、Screen／Study 側錄檔、`@mygitnotes/*` 套件、GitHub OAuth callback 及 MCP 授權保持相容。新的 `MYGITNOTES_*` 來源設定優先於對應的 `GITHUB_NOTES_*`。伺服器設定新名稱為 `mygitnotes.server.yaml`，同時支援 `github-notes.server.yaml`。正式儲存庫為 `wayne930242/MyGitNotes`，部署網址維持不變。Repo 更名後直接更新來源的儲存庫路徑；綁定舊路徑的 MCP 授權需要重新建立。
+產品已更名為 **MyGitNotes**。既有 `.github-notes.yaml`、Screen／Study 側錄檔、`@mygitnotes/*` 套件、GitHub OAuth callback 及 MCP 授權保持相容。新的 `MYGITNOTES_*` 來源設定優先於對應的 `GITHUB_NOTES_*`。工作區清單新名稱為 `.mygitnotes.yaml`，同時支援 `.github-notes.yaml`。伺服器設定新名稱為 `mygitnotes.server.yaml`，同時支援 `github-notes.server.yaml`。正式儲存庫為 `wayne930242/MyGitNotes`，部署網址維持不變。Repo 更名後直接更新來源的儲存庫路徑；綁定舊路徑的 MCP 授權需要重新建立。
 
 參考：[GitLab OAuth](https://docs.gitlab.com/api/oauth2/)、[批次提交](https://docs.gitlab.com/api/commits/)。
 

@@ -21,7 +21,7 @@ export async function handleGetWorkspaceConfig(ctx: ToolContext) {
   const config = loadWorkspaceConfig(ctx.repoRoot);
   if (!config) {
     return {
-      error: 'No .github-notes.yaml configuration file found in workspace.',
+      error: 'No .mygitnotes.yaml (or legacy .github-notes.yaml) configuration file found in workspace.',
     };
   }
   return { config };

@@ -199,6 +199,25 @@ describe('real HTTP local boundaries',()=>{
     expect((await fetch(`${base}/api/auth/agent-token`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status).toBe(401);
     expect((await fetch(`${base}/mcp`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status).toBe(503);
   });
+  it('saves workspace config back to the legacy-named manifest that was loaded, without creating a duplicate',async()=>{
+    fs.rmSync(path.join(root,'notes/.github-notes.yaml'));
+    fs.writeFileSync(path.join(root,'.github-notes.yaml'),'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
+    git('add','.'); git('commit','-m','legacy root manifest');
+    const updated='schema_version: 1\nworkspace:\n  title: Renamed\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n';
+    const response=await fetch(`${base}/api/workspace/config`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({configYaml:updated})});
+    expect(response.status).toBe(200);
+    expect(fs.readFileSync(path.join(root,'.github-notes.yaml'),'utf8')).toContain('Renamed');
+    expect(fs.existsSync(path.join(root,'.mygitnotes.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(root,'notes/.mygitnotes.yaml'))).toBe(false);
+  });
+  it('creates a new manifest under the standard filename when the workspace has none yet',async()=>{
+    fs.rmSync(path.join(root,'notes/.github-notes.yaml'));
+    git('add','.'); git('commit','-m','remove manifest');
+    const configYaml='schema_version: 1\nworkspace:\n  title: Fresh\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n';
+    const response=await fetch(`${base}/api/workspace/config`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({configYaml})});
+    expect(response.status).toBe(200);
+    expect(fs.readFileSync(path.join(root,'notes/.mygitnotes.yaml'),'utf8')).toContain('Fresh');
+  });
 });
 describe('server-held session records',()=>{
   it('encrypts upstream tokens and detects tampering',async()=>{

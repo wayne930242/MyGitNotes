@@ -1,0 +1,20 @@
+schema_version: 1
+workspace:
+  title: MyGitNotes Example Workspace
+  default_notebook: example
+notebooks:
+  - id: example
+    title: Examples
+    root: notes/example
+    assets: assets
+    default_view: list
+  - id: learning
+    title: 學習示範
+    root: notes/learning
+    statuses:
+      - inbox
+      - working
+      - review
+      - done
+files:
+  hide_dotfiles: true

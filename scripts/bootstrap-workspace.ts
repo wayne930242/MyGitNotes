@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { runGit, getCurrentBranch, stageAndCommit } from '../packages/git/src/index.js';
-import { WORKSPACE_CONFIG_FILENAME, loadWorkspaceConfig, resolveSafePath } from '../packages/core/src/index.js';
+import { WORKSPACE_CONFIG_FILENAME, loadWorkspaceConfig, resolveSafePath, resolveWorkspaceConfigPath } from '../packages/core/src/index.js';
 
 const EMPTY_WORKSPACE_CONFIG = `schema_version: 1
 workspace:
@@ -58,9 +58,8 @@ async function bootstrapWorkspace() {
     filesToStage.push(relative);
     needsCommit = true;
   };
-  const notesConfig = resolveSafePath(repoRoot, `notes/${WORKSPACE_CONFIG_FILENAME}`);
   const rootConfig = resolveSafePath(repoRoot, WORKSPACE_CONFIG_FILENAME);
-  if (!fs.existsSync(notesConfig) && !fs.existsSync(rootConfig)) {
+  if (!resolveWorkspaceConfigPath(repoRoot)) {
     if (withExamples) copyMissing(path.join(template, WORKSPACE_CONFIG_FILENAME), WORKSPACE_CONFIG_FILENAME);
     else {
       fs.writeFileSync(rootConfig, EMPTY_WORKSPACE_CONFIG, { flag: 'wx' });

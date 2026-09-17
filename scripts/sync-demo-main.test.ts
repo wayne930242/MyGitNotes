@@ -14,9 +14,9 @@ beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-release-')); remote = path.join(root, 'origin.git'); checkout = path.join(root, 'checkout'); fs.mkdirSync(checkout);
   execFileSync('git', ['init', '--bare', remote], { stdio: 'pipe' });
   git('init', '-b', 'core'); git('config', 'user.name', 'Test'); git('config', 'user.email', 'test@example.com'); git('remote', 'add', 'origin', remote);
-  write('product.txt', 'baseline\n'); write('examples/demo-workspace/.github-notes.yaml', 'fixture\n'); write('examples/demo-workspace/notes/example/welcome.md', '# Baseline\n');
+  write('product.txt', 'baseline\n'); write('examples/demo-workspace/.mygitnotes.yaml', 'fixture\n'); write('examples/demo-workspace/notes/example/welcome.md', '# Baseline\n');
   git('add', '.'); git('commit', '-m', 'core baseline'); git('push', 'origin', 'core');
-  git('checkout', '-b', 'main'); write('.github-notes.yaml', 'fixture\n'); write('notes/example/welcome.md', '# Baseline\n'); write('notes/personal.md', '# Keep personal note\n');
+  git('checkout', '-b', 'main'); write('.mygitnotes.yaml', 'fixture\n'); write('notes/example/welcome.md', '# Baseline\n'); write('notes/personal.md', '# Keep personal note\n');
   git('add', '.'); git('commit', '-m', 'workspace'); git('push', 'origin', 'main');
   git('checkout', 'core'); write('product.txt', 'new core\n'); write('examples/demo-workspace/notes/example/welcome.md', '# Updated tutorial\n');
   git('add', '.'); git('commit', '-m', 'core update'); git('push', 'origin', 'core');

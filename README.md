@@ -45,7 +45,7 @@ The same workspace can stay fully local, travel through Git, or be accessed from
 ## Repository model
 
 - **`core`** — product source, packages, tests, scripts, and documentation. It contains no personal notes.
-- **`main`** — your workspace branch containing `.github-notes.yaml`, `notes/**`, assets, and workspace Agent configuration.
+- **`main`** — your workspace branch containing `.mygitnotes.yaml`, `notes/**`, assets, and workspace Agent configuration.
 
 This separation lets the application evolve without taking ownership of your content.
 
@@ -122,7 +122,7 @@ docker run -d --name mygitnotes --init --restart unless-stopped \
 
 ### Local checkout in a container
 
-Use an existing workspace checkout on `main`, with `.github-notes.yaml` and your notes. The container runs as UID/GID `1000:1000`; give that user read/write access to the mounted checkout on Linux and configure a Git author in the workspace for commits (`git config user.name` and `git config user.email`).
+Use an existing workspace checkout on `main`, with `.mygitnotes.yaml` and your notes. The container runs as UID/GID `1000:1000`; give that user read/write access to the mounted checkout on Linux and configure a Git author in the workspace for commits (`git config user.name` and `git config user.email`).
 
 ```bash
 WORKSPACE_PATH=/absolute/path/to/workspace \
@@ -221,7 +221,7 @@ For self-managed GitLab, set `MYGITNOTES_GITLAB_URL` to its HTTPS base URL, incl
 
 Authenticated writes require push permission on `main`. GitLab batches all changed files into one commit and supplies each existing file's last commit ID to detect concurrent edits. Public repositories support anonymous reads. GitLab instances with private network access require a deployment with network access to that instance.
 
-The product is now **MyGitNotes**. Existing `.github-notes.yaml`, Screen/Study sidecars, `@mygitnotes/*` packages, GitHub OAuth callbacks and MCP grants remain compatible. New `MYGITNOTES_*` source settings take precedence over corresponding `GITHUB_NOTES_*` settings. `mygitnotes.server.yaml` is the new server configuration filename; `github-notes.server.yaml` remains supported. The canonical repository is `wayne930242/MyGitNotes`; deployment URLs are unchanged. Update configured repository paths directly after a rename. MCP grants bound to a previous repository path require a new grant.
+The product is now **MyGitNotes**. Existing `.github-notes.yaml`, Screen/Study sidecars, `@mygitnotes/*` packages, GitHub OAuth callbacks and MCP grants remain compatible. New `MYGITNOTES_*` source settings take precedence over corresponding `GITHUB_NOTES_*` settings. `.mygitnotes.yaml` is the new workspace manifest filename; `.github-notes.yaml` remains supported. `mygitnotes.server.yaml` is the new server configuration filename; `github-notes.server.yaml` remains supported. The canonical repository is `wayne930242/MyGitNotes`; deployment URLs are unchanged. Update configured repository paths directly after a rename. MCP grants bound to a previous repository path require a new grant.
 
 See [GitLab OAuth](https://docs.gitlab.com/api/oauth2/) and [commit actions](https://docs.gitlab.com/api/commits/).
 

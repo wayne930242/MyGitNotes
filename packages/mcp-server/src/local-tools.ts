@@ -16,7 +16,7 @@ export const localTools: Tool[] = [
   },
   {
     name: 'get_workspace_config',
-    description: 'Reads and validates the root .github-notes.yaml workspace manifest.',
+    description: 'Reads and validates the root .mygitnotes.yaml workspace manifest (or legacy .github-notes.yaml).',
     inputSchema: { type: 'object', properties: {} },
   },
   {

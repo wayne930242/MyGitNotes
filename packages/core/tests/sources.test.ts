@@ -95,6 +95,34 @@ describe('folder and provider parity', () => {
       expect(resolveNoteStatuses(remoteConfig.notebooks[0])).toEqual(['capture', 'review', 'published']);
     } finally { fixture['notes/.github-notes.yaml'] = original; }
   });
+  it('accepts the standard workspace manifest filename when the legacy name is absent', async () => {
+    const original = fixture['notes/.github-notes.yaml'];
+    delete fixture['notes/.github-notes.yaml'];
+    fixture['notes/.mygitnotes.yaml'] = original;
+    fs.rmSync(path.join(root, 'notes/.github-notes.yaml'));
+    fs.writeFileSync(path.join(root, 'notes/.mygitnotes.yaml'), original);
+    try {
+      const remote = new GitHubSource('owner/repo', 'main', undefined, githubMock() as typeof fetch);
+      expect((await remote.config()).notebooks[0].id).toBe('example');
+      expect(loadWorkspaceConfig(root)?.notebooks[0].id).toBe('example');
+    } finally {
+      delete fixture['notes/.mygitnotes.yaml'];
+      fixture['notes/.github-notes.yaml'] = original;
+      fs.rmSync(path.join(root, 'notes/.mygitnotes.yaml'));
+      fs.writeFileSync(path.join(root, 'notes/.github-notes.yaml'), original);
+    }
+  });
+  it('prefers the standard workspace manifest filename over the legacy name when both exist remotely', async () => {
+    fixture['notes/.mygitnotes.yaml'] = manifest.replace('title: Test', 'title: Preferred');
+    fs.writeFileSync(path.join(root, 'notes/.mygitnotes.yaml'), fixture['notes/.mygitnotes.yaml']);
+    try {
+      const remote = new GitHubSource('owner/repo', 'main', undefined, githubMock() as typeof fetch);
+      expect((await remote.config()).workspace.title).toBe('Preferred');
+    } finally {
+      delete fixture['notes/.mygitnotes.yaml'];
+      fs.rmSync(path.join(root, 'notes/.mygitnotes.yaml'));
+    }
+  });
   it('renders a configured notebook template and excludes it from notes through both source adapters', async () => {
     const original = fixture['notes/.github-notes.yaml'];
     try {

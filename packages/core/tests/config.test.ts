@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { parseWorkspaceConfig, ConfigValidationError } from '../src/config.js';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { parseWorkspaceConfig, ConfigValidationError, loadWorkspaceConfig, resolveWorkspaceConfigPath, WORKSPACE_CONFIG_FILENAME, LEGACY_WORKSPACE_CONFIG_FILENAME } from '../src/config.js';
 
 describe('Workspace Config Parser', () => {
   it('parses a valid multi-notebook configuration', () => {
@@ -156,5 +159,44 @@ notebooks:
     expect(config.notebooks[0].pathAliases).toEqual({
       '@/*': 'src/*',
     });
+  });
+});
+
+describe('Workspace manifest filename resolution', () => {
+  let root: string;
+  const manifest = (title: string) => `schema_version: 1\nworkspace:\n  title: ${title}\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n`;
+  beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-config-')); });
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  it('loads the standard filename from the repository root', () => {
+    fs.writeFileSync(path.join(root, WORKSPACE_CONFIG_FILENAME), manifest('Standard'));
+    expect(loadWorkspaceConfig(root)?.workspace.title).toBe('Standard');
+    expect(resolveWorkspaceConfigPath(root)).toBe(WORKSPACE_CONFIG_FILENAME);
+  });
+
+  it('falls back to the legacy filename when only it exists', () => {
+    fs.writeFileSync(path.join(root, LEGACY_WORKSPACE_CONFIG_FILENAME), manifest('Legacy'));
+    expect(loadWorkspaceConfig(root)?.workspace.title).toBe('Legacy');
+    expect(resolveWorkspaceConfigPath(root)).toBe(LEGACY_WORKSPACE_CONFIG_FILENAME);
+  });
+
+  it('prefers the standard filename over the legacy filename in the same directory', () => {
+    fs.writeFileSync(path.join(root, WORKSPACE_CONFIG_FILENAME), manifest('Standard'));
+    fs.writeFileSync(path.join(root, LEGACY_WORKSPACE_CONFIG_FILENAME), manifest('Legacy'));
+    expect(loadWorkspaceConfig(root)?.workspace.title).toBe('Standard');
+    expect(resolveWorkspaceConfigPath(root)).toBe(WORKSPACE_CONFIG_FILENAME);
+  });
+
+  it('accepts either filename at the legacy notes/ location, preferring the notes/ tier over root', () => {
+    fs.mkdirSync(path.join(root, 'notes'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'notes', LEGACY_WORKSPACE_CONFIG_FILENAME), manifest('NotesLegacy'));
+    fs.writeFileSync(path.join(root, WORKSPACE_CONFIG_FILENAME), manifest('Root'));
+    expect(loadWorkspaceConfig(root)?.workspace.title).toBe('NotesLegacy');
+    expect(resolveWorkspaceConfigPath(root)).toBe(path.posix.join('notes', LEGACY_WORKSPACE_CONFIG_FILENAME));
+  });
+
+  it('returns null when neither filename exists', () => {
+    expect(loadWorkspaceConfig(root)).toBeNull();
+    expect(resolveWorkspaceConfigPath(root)).toBeNull();
   });
 });

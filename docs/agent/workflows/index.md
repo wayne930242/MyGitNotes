@@ -10,7 +10,7 @@ When a user clones the repository:
 3. The script:
    - Verifies the repository root.
    - Checks out or creates branch `main`.
-   - Copies the canonical `examples/demo-workspace/.github-notes.yaml` to the workspace root when neither root nor notes-level configuration exists.
+   - Copies the canonical `examples/demo-workspace/.mygitnotes.yaml` to the workspace root when neither root nor notes-level configuration (standard or legacy name) exists.
    - Initializes the default notebook directory (e.g. `notes/example`).
    - Copies missing canonical example notes/tutorials when the example notebook is configured, preserving existing files. Creates missing workspace agent instructions.
    - Commits the user initialization to `main`.

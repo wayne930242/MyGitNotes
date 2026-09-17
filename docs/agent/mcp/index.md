@@ -8,7 +8,7 @@ Default transport is **stdio** for local agent integration (e.g. Claude Desktop,
 
 ## Exposed Tools
 
-1. `get_workspace_config`: Returns parsed `.github-notes.yaml` workspace manifest.
+1. `get_workspace_config`: Returns parsed `.mygitnotes.yaml` (or legacy `.github-notes.yaml`) workspace manifest.
 2. `list_notebooks`: Lists all configured notebooks and their root directories.
 3. `list_notes`: Lists all notes within a notebook, returning metadata and file paths.
 4. `read_note`: Reads a note file and parses its frontmatter and raw Markdown body (supports `metadataOnly: true` to return metadata without the markdown body).
