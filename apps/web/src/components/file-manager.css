@@ -55,3 +55,39 @@
 .file-tree .file-tree-r2{margin-top:8px;border-top:1px solid var(--color-border);border-radius:0 0 6px 6px;padding-top:10px}
 .workspace-dialog.file-manager-dialog[open]{gap:0}
 @media(min-width:701px){.file-manager-toolbar>.file-hidden-toggle{margin-left:auto}}
+
+/* The note panel uses a single-column browser at any viewport width. */
+.note-document-panel > .file-manager[data-layout="panel"] { flex: 1; min-height: 0; height: auto; overflow: hidden; }
+.file-manager[data-layout="panel"] .file-panel-sources { display: flex; gap: 4px; padding: 10px 12px 4px; flex: none; }
+.file-panel-sources button { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 9px; border-radius: 6px; font-size: 12px; color: var(--color-muted); }
+.file-panel-sources button[aria-pressed="true"] { color: var(--color-text); background: var(--workspace-selection); font-weight: 600; }
+.file-manager[data-layout="panel"] .file-manager-toolbar { display: flex; flex: none; flex-wrap: nowrap; gap: 4px; padding: 6px 8px; }
+.file-manager[data-layout="panel"] .file-tree-toggle { display: inline-flex !important; flex: none; width: 32px; height: 32px; padding: 6px; }
+.file-manager[data-layout="panel"] .file-breadcrumbs { font-size: 11px; white-space: nowrap; overflow-x: auto; scrollbar-width: thin; }
+.file-manager[data-layout="panel"] .file-breadcrumbs button { white-space: nowrap; }
+.file-manager[data-layout="panel"] .file-manager-body { flex-direction: column; overflow: hidden; }
+.file-manager[data-layout="panel"] .file-tree { display: none; width: 100%; flex: 0 1 auto; max-height: 180px; padding: 6px; border-right: 0; border-bottom: 1px solid var(--color-border); }
+.file-manager[data-layout="panel"] .file-tree.is-open { display: block; }
+.file-manager[data-layout="panel"] .file-tree button { padding: 6px; font-size: 12px; }
+.file-manager[data-layout="panel"] .file-content { display: block; padding: 8px; min-height: 0; overflow-y: auto; }
+.file-manager[data-layout="panel"] .file-storage-hint { margin: 4px 4px 10px; font-size: 11px; line-height: 1.5; }
+.file-manager[data-layout="panel"] .file-list { border: 0; border-radius: 0; max-height: none; }
+.file-manager[data-layout="panel"] .file-row { border-bottom: 0; border-radius: 6px; padding: 0; }
+.file-manager[data-layout="panel"] .file-row-name { gap: 7px; padding: 8px 6px; min-height: 36px; font-size: 12px; }
+.file-manager[data-layout="panel"] .file-row-name svg { flex: none; width: 15px; height: 15px; }
+.file-manager[data-layout="panel"] .file-row-name span { white-space: nowrap; }
+.file-manager[data-layout="panel"] .file-row-name small { font-size: 10px; }
+.file-manager[data-layout="panel"] .file-content.has-selection > .file-list,
+.file-manager[data-layout="panel"] .file-content.has-selection > .file-storage-hint { display: none; }
+.file-manager[data-layout="panel"] .file-detail { border: 0; padding: 2px; margin: 0; overflow: visible; }
+.file-manager[data-layout="panel"] .file-detail-title { gap: 6px; }
+.file-manager[data-layout="panel"] .file-detail-title strong { font-size: 12px; }
+.file-manager[data-layout="panel"] .file-actions { gap: 6px; }
+.file-manager[data-layout="panel"] .file-preview-image { max-height: 240px; margin: 12px auto; }
+.file-manager[data-layout="panel"] .file-preview-pdf { height: 300px; }
+.file-manager[data-layout="panel"] .file-source-editor { height: 260px; }
+.file-manager[data-layout="panel"] .file-empty { padding: 20px 8px; font-size: 12px; }
+@media (max-width: 767px) {
+  .note-document-panel[data-panel="assets"] { height: min(50dvh, 400px); }
+  .file-manager[data-layout="panel"] .file-tree-toggle, .file-manager[data-layout="panel"] .file-row-name { min-height: 44px; }
+}

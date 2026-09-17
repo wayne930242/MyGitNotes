@@ -1,4 +1,15 @@
 export const en = {
+  'lightbox.title': 'Image preview',
+  'lightbox.close': 'Close image preview (Esc)',
+  'lightbox.zoomIn': 'Zoom in (+)',
+  'lightbox.zoomOut': 'Zoom out (-)',
+  'lightbox.fit': 'Fit to window (0)',
+  'lightbox.actual': 'Original size (1)',
+  'lightbox.original': 'Open original image',
+  'lightbox.help': 'Scroll to zoom · Drag to pan · Double-click to zoom',
+  'lightbox.loading': 'Loading image…',
+  'lightbox.error': 'This image could not be loaded.',
+
 
   'files.titleLabel': 'Files',
   'files.location': 'Location',

@@ -1,5 +1,6 @@
+import './note-toolbar.css';
 import { Button } from './Button.js';
-import { LayoutList, LayoutGrid, Kanban, ListTree, Plus, FolderOpen } from 'lucide-react';
+import { LayoutList, LayoutGrid, Kanban, ListTree, Plus, FolderOpen, FolderTree, Eye, EyeOff } from 'lucide-react';
 import { WorkspaceSidebarToggle } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
 import type { SortField, SortOrder } from '../lib/note-sort.js';
@@ -7,6 +8,11 @@ import { ViewMode } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
 interface NoteToolbarProps {
+  showHidden: boolean;
+  descendants: boolean;
+  hiddenNoteCount: number;
+  onShowHiddenChange: (value: boolean) => void;
+  onDescendantsChange: (value: boolean) => void;
   onManageFiles?: () => void;
   sortField: SortField;
   sortOrder: SortOrder;
@@ -19,7 +25,7 @@ interface NoteToolbarProps {
   onToggleFilters: () => void;
 }
 
-export function NoteToolbar({ onManageFiles, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, filtersOpen, onToggleFilters }: NoteToolbarProps) {
+export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, onManageFiles, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, filtersOpen, onToggleFilters }: NoteToolbarProps) {
   const { t } = useTranslation();
   return (
             <div className="header-note-actions flex items-center gap-2.5 flex-1 min-w-0 justify-end">
@@ -59,6 +65,21 @@ export function NoteToolbar({ onManageFiles, sortField, sortOrder, onSortChange,
         ]}
       />
               )}
+
+              <div className="note-display-options" role="group" aria-label={t('filters.title')}>
+                <button type="button" className="note-display-toggle" aria-label={t('filters.hidden')}
+                  aria-pressed={showHidden} aria-describedby="hidden-notes-tooltip"
+                  onClick={() => onShowHiddenChange(!showHidden)}>
+                  {showHidden ? <Eye size={16} aria-hidden="true" /> : <EyeOff size={16} aria-hidden="true" />}
+                  <span id="hidden-notes-tooltip" role="tooltip" className="note-display-tooltip">{t('filters.hidden')} ({hiddenNoteCount})</span>
+                </button>
+                <button type="button" className="note-display-toggle" aria-label={t('filters.descendants')}
+                  aria-pressed={descendants} aria-describedby="descendants-tooltip"
+                  onClick={() => onDescendantsChange(!descendants)}>
+                  <FolderTree size={16} aria-hidden="true" />
+                  <span id="descendants-tooltip" role="tooltip" className="note-display-tooltip">{t('filters.descendants')}</span>
+                </button>
+              </div>
 
               {/* View Switcher Desktop */}
               <div className="desktop-views flex items-center bg-black/5 dark:bg-white/5 p-1 rounded-lg gap-1 shrink-0">

@@ -45,7 +45,9 @@ class RenderedMarkdown extends WidgetType {
   constructor(readonly text: string, readonly path: string, readonly from: number, readonly block: boolean, readonly linkLabel: string, readonly tableLabel: string) { super(); }
   eq(other: RenderedMarkdown) { return this.text === other.text && this.path === other.path && this.from === other.from && this.linkLabel === other.linkLabel && this.tableLabel === other.tableLabel; }
   toDOM(view: EditorView) {
-    const dom = document.createElement(this.block ? 'div' : 'span'); dom.className = 'live-md-rendered prose-custom';
+    const isImageOnly = /^\s*!\[.*?\]\(.*?\)\s*$/.test(this.text);
+    const dom = document.createElement(this.block ? 'div' : 'span');
+    dom.className = 'live-md-rendered prose-custom' + (isImageOnly ? ' live-md-image-rendered' : '');
     if (this.block) { dom.style.display = 'block'; dom.style.width = '100%'; }
     dom.innerHTML = renderNote(this.text, this.path, this.tableLabel);
     dom.setAttribute('aria-label', 'Rendered Markdown; click to edit');
@@ -278,6 +280,12 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
       return false;
     }
     if (!editing && (name === 'Image' || name === 'Table' || name === 'HorizontalRule')) {
+      if (name === 'Image') {
+        const line = state.doc.lineAt(from);
+        if (line.text.trim() === state.sliceDoc(from, to).trim()) {
+          marks.push(Decoration.line({ class: 'live-md-image-line' }).range(line.from));
+        }
+      }
       marks.push(Decoration.replace({widget:new RenderedMarkdown(state.sliceDoc(from,to),notePath,from,name !== 'Image',linkLabel,tableLabel),block:name !== 'Image'}).range(from,to)); return false;
     }
     if (!editing && name === 'TaskMarker') { marks.push(Decoration.replace({widget:new TaskCheckbox(state.sliceDoc(from,to).toLowerCase()==='[x]',from,state.readOnly)}).range(from,to)); return false; }
@@ -347,8 +355,11 @@ const theme = EditorView.theme({
   '.live-md-code':{fontFamily:'monospace',backgroundColor:'var(--color-sidebar)',borderRadius:'4px'},
   '.live-md-codeblock':{fontFamily:'monospace',backgroundColor:'var(--color-sidebar)',paddingLeft:'14px'},
   '.live-md-quote':{borderLeft:'3px solid var(--color-primary)',paddingLeft:'14px',color:'var(--color-muted)'},
+  '.live-md-image-line':{lineHeight:'0',paddingTop:'4px',paddingBottom:'4px'},
   '.live-md-rendered':{display:'inline-block',maxWidth:'100%',cursor:'text'},
-  '.live-md-rendered p':{margin:'0'},'.live-md-rendered img':{maxWidth:'100%',maxHeight:'420px',borderRadius:'8px',margin:'6px 0',cursor:'zoom-in',display:'block'},
+  '.live-md-rendered p':{margin:'0'},'.live-md-rendered img':{maxWidth:'100%',maxHeight:'480px',borderRadius:'8px',margin:'0',cursor:'zoom-in',display:'block'},
+  '.live-md-image-rendered':{display:'inline-block',verticalAlign:'top',lineHeight:'0',whiteSpace:'normal'},
+  '.live-md-image-rendered p':{margin:'0',padding:'0',lineHeight:'0'},
   '.cm-content input[type=checkbox]':{accentColor:'var(--color-primary)',verticalAlign:'middle',marginRight:'4px'},
   '.live-md-token-chip':{display:'inline-flex',alignItems:'center',padding:'0 6px',borderRadius:'999px',fontSize:'0.85em',cursor:'pointer',backgroundColor:'var(--color-sidebar)',color:'var(--color-muted)',border:'1px solid var(--color-border)'},
   '.live-md-token-editor':{display:'inline-flex',alignItems:'center',gap:'4px'},

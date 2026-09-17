@@ -25,7 +25,7 @@ import {
 import { mergeNote, sameValue, NoteDraft } from '../lib/merge-note.js';
 import { ApiError } from '../lib/api.js';
 import { MarkdownEditor, MarkdownEditorHandle, MarkdownEditorMode, MarkdownEditorModeSwitch } from './MarkdownEditor.js';
-import { FileManagerDialog } from './FileManager.js';
+import { FileManager } from './FileManager.js';
 import { FileSourceEditor } from './FileSourceEditor.js';
 import { NoteMoveButton } from './NoteMoveButton.js';
 import { NoteItem, AssetItem, NotebookMetadataField } from '../lib/types.js';
@@ -149,7 +149,22 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
   }, [metadataFields, metadata]);
 
   const [editorMode, setEditorMode] = useState<MarkdownEditorMode>('live');
-  const [notePanel, setNotePanel] = useState<NotePanelMode | null>(null);
+  const [notePanel, updateNotePanel] = useState<NotePanelMode | null>(null);
+  const lastNotePanel = useRef<NotePanelMode>((() => {
+    try {
+      const saved = localStorage.getItem('mygitnotes.documentPanel');
+      if (['find', 'outline', 'frontmatter', 'assets', 'git'].includes(saved || '')) return saved as NotePanelMode;
+    } catch { /* Use the default panel when storage is unavailable. */ }
+    return isMarkdown ? 'outline' : 'find';
+  })());
+  const setNotePanel = (next: NotePanelMode | null) => {
+    if (next) {
+      lastNotePanel.current = next;
+      try { localStorage.setItem('mygitnotes.documentPanel', next); }
+      catch { /* The in-memory preference remains available. */ }
+    }
+    updateNotePanel(next);
+  };
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [saveError, setSaveError] = useState(conflictReason || '');
@@ -642,7 +657,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
             {!autoSave && !readOnly && <Button variant="primary" aria-label={t('editor.saveToGitHub')} title={t('editor.saveToGitHub')} disabled={locked || !hasUnsavedChanges} onClick={handleExplicitSave} className="note-save editor-action" ><Save className="editor-mobile-icon w-5 h-5" /><span>{isSaving ? t('editor.saving') : t('editor.saveToGitHub')}</span></Button>}
             {isMarkdown && <MarkdownEditorModeSwitch mode={editorMode} onChange={setEditorMode} />}
             <button type="button" aria-label={t('editor.documentPanel')} title={t('editor.documentPanel')}
-              aria-pressed={Boolean(notePanel)} onClick={() => notePanel ? setNotePanel(null) : isMarkdown ? openOutline() : openFind()}
+              aria-pressed={Boolean(notePanel)} onClick={() => { if (notePanel) setNotePanel(null); else if (lastNotePanel.current === 'outline') { if (isMarkdown) openOutline(); else openFind(); } else if (lastNotePanel.current === 'find') openFind(); else setNotePanel(lastNotePanel.current); }}
               className="editor-action editor-secondary-action editor-panel-action"><PanelRight className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('editor.documentPanel')}</span></button>
 
             {!readOnly && onMoveNote && <NoteMoveButton disabled={locked || isSaving} onClick={() => void (async () => {
@@ -996,8 +1011,8 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
               </div>
             )}
 
-            {isAssetPickerOpen && <FileManagerDialog notebookId={note.notebookId} writable={false} mode="pick-image"
-              onClose={() => setNotePanel(null)} onInsert={locked ? undefined : handleInsertAssetRef} />}
+            {isAssetPickerOpen && <FileManager notebookId={note.notebookId} writable={false} mode="pick-image" layout="panel"
+              onInsert={locked ? undefined : handleInsertAssetRef} />}
 
             {isGitPanelOpen && <div className="note-git-panel note-panel-scroll">
               <dl>
