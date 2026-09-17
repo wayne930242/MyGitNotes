@@ -1,7 +1,8 @@
 import { NoteMoveButton } from './NoteMoveButton.js';
 import { Button } from './Button.js';
 import React from 'react';
-import { FileText, Tag, Clock, Trash2, Plus } from 'lucide-react';
+import { FileText, Clock, Trash2, Plus } from 'lucide-react';
+import { NoteTags, NoteTagActions } from './NoteTags.js';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import { NoteItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -19,6 +20,7 @@ interface CardViewProps {
   onMoveNote?: (note: NoteItem) => void;
   onNewNote: () => void;
   onUpdateNoteStatus: (note: NoteItem, status: string) => void;
+  tagActions?: NoteTagActions;
 }
 
 export const CardView: React.FC<CardViewProps> = ({
@@ -33,6 +35,7 @@ export const CardView: React.FC<CardViewProps> = ({
   onMoveNote,
   onNewNote,
   onUpdateNoteStatus,
+  tagActions,
 }) => {
   const { t } = useTranslation();
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(confirmDelete, path => {
@@ -127,25 +130,16 @@ export const CardView: React.FC<CardViewProps> = ({
             </div>
 
             <div
-              className="pt-3 border-t flex items-center justify-between text-xs text-slate-400"
+              className="note-card-footer pt-3 border-t flex items-center justify-between gap-2 text-xs text-slate-400"
               style={{ borderColor: 'var(--color-border)' }}
             >
-              <div className="flex flex-wrap gap-1 max-w-[65%] truncate">
-                {note.tags.slice(0, 2).map((tTag) => (
-                  <span
-                    key={tTag}
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded text-[11px]"
-                  >
-                    <Tag className="w-2.5 h-2.5 text-slate-400" />
-                    {tTag}
-                  </span>
-                ))}
+              <NoteTags tags={note.tags.slice(0, 2)} chipClassName="px-1.5 py-0.5 text-[11px]" tagActions={tagActions} className="note-card-tags max-w-[65%] min-w-0">
                 {note.tags.length > 2 && (
                   <span className="text-[10px] text-slate-400 self-center">
                     +{note.tags.length - 2}
                   </span>
                 )}
-              </div>
+              </NoteTags>
 
               <div className="flex items-center gap-2">
                 <span className="flex items-center gap-1 text-[11px]">
