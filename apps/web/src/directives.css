@@ -8,7 +8,7 @@
 /* ===== 1. General Directive Containers ===== */
 .prose-custom .custom-directive,
 .prose-custom .comment-directive {
-  margin: 0.95rem 0;
+  margin: 0.6rem 0;
   border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--color-text) 14%, var(--color-border));
   padding: 0.65rem 0.95rem;
@@ -37,24 +37,33 @@
   margin-bottom: 0 !important;
 }
 
-/* 內文段落與清單 Typography 校準（防止 list 行高超大） */
-.prose-custom .directive-body p {
-  margin: 0.4rem 0;
-  line-height: 1.6;
+/* 內文段落與清單 Typography 校準（防止 list 行高超大）
+   使用高 specificity 確保覆蓋全域 .prose-custom 規則 */
+.prose-custom .custom-directive .directive-body p,
+.prose-custom .comment-directive .directive-body p {
+  margin-top: 0.25rem;
+  margin-bottom: 0.3rem !important;
+  line-height: 1.55;
 }
 
-.prose-custom .directive-body ul,
-.prose-custom .directive-body ol {
-  margin: 0.35rem 0;
+.prose-custom .custom-directive .directive-body ul,
+.prose-custom .comment-directive .directive-body ul,
+.prose-custom .custom-directive .directive-body ol,
+.prose-custom .comment-directive .directive-body ol {
+  margin-top: 0.2rem;
+  margin-bottom: 0.25rem !important;
   padding-left: 1.35rem;
 }
 
-.prose-custom .directive-body li {
-  margin: 0.15rem 0;
+.prose-custom .custom-directive .directive-body li,
+.prose-custom .comment-directive .directive-body li {
+  margin-top: 0.05rem;
+  margin-bottom: 0.1rem !important;
   line-height: 1.5;
 }
 
-.prose-custom .directive-body li > p {
+.prose-custom .custom-directive .directive-body li > p,
+.prose-custom .comment-directive .directive-body li > p {
   margin: 0 !important;
   display: inline;
 }
@@ -64,9 +73,10 @@
   border-color: color-mix(in srgb, var(--color-text) 12%, var(--color-border));
 }
 
-.prose-custom .directive-body blockquote {
-  margin: 0.5rem 0;
-  padding: 0.35rem 0.75rem;
+.prose-custom .custom-directive .directive-body blockquote,
+.prose-custom .comment-directive .directive-body blockquote {
+  margin: 0.35rem 0 !important;
+  padding: 0.25rem 0.65rem;
   border-left: 2px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border)) !important;
   background: color-mix(in srgb, var(--color-text) 2.5%, transparent) !important;
   border-radius: 0 4px 4px 0;
@@ -771,7 +781,14 @@
   position: relative;
   display: block;
   width: 100%;
-  margin: 1.5rem 0;
+  margin: 0.35rem 0;
+}
+
+/* 消除 live editor preview 內 renderNote 輸出的容器自帶 margin，
+   避免 .live-md-directive margin 和 .custom-directive margin 疊加 */
+.live-md-directive .live-directive-preview-content > .custom-directive,
+.live-md-directive .live-directive-preview-content > .comment-directive {
+  margin: 0;
 }
 
 .live-md-directive.live-directive-editing {
