@@ -769,6 +769,12 @@
   margin: 0.35rem 0;
 }
 
+/* CodeMirror uses break-spaces for source text. Rendered HTML needs normal whitespace,
+   otherwise newlines between list-item tags become visible blank lines. */
+.live-md-directive .live-directive-preview-content {
+  white-space: normal;
+}
+
 /* 消除 live editor preview 內 renderNote 輸出的容器自帶 margin/padding，
    避免 .live-md-directive margin 和內部容器 margin 疊加 */
 .live-md-directive .live-directive-preview-content > .custom-directive,
