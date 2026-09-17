@@ -12,8 +12,15 @@ interface DevPorts {
   webPort?: number;
 }
 
+function toPort(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value < 65536 ? value : undefined;
+}
+
 function readDevPorts(): DevPorts {
-  try { return JSON.parse(fs.readFileSync(devPortsFile, 'utf-8')); } catch { return {}; }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(devPortsFile, 'utf-8'));
+    return { serverPort: toPort(parsed.serverPort), webPort: toPort(parsed.webPort) };
+  } catch { return {}; }
 }
 
 function writeDevPort(key: keyof DevPorts, port: number): void {
