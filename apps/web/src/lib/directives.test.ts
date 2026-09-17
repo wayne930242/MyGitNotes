@@ -12,6 +12,16 @@ import {
   updateDirectiveVariant,
 } from './directives.js';
 
+describe('directive templates', () => {
+  it('uses domain-neutral labels and starter content in the notes editor', () => {
+    const visibleCopy = DIRECTIVE_TEMPLATES.map(template => `${template.label}\n${template.defaultSnippet}`).join('\n');
+
+    expect(visibleCopy).toContain('文件卡片 (Document)');
+    expect(visibleCopy).toContain('屬性資料卡 (Stats)');
+    expect(visibleCopy).not.toMatch(/TRPG|CoC|調查員|守密人|道具/);
+  });
+});
+
 describe('directives and MDX Layer 2 preprocessor', () => {
   describe('stripMdxImports', () => {
     it('strips ESM import statements', () => {
@@ -142,7 +152,8 @@ describe('directives and MDX Layer 2 preprocessor', () => {
       expect(output).toContain('H-02');
       expect(output).toContain('古老日記');
       expect(output).toContain('日誌');
-      expect(output).toContain('守密人發放提示');
+      expect(output).toContain('編輯備註');
+      expect(output).not.toContain('守密人');
     });
 
     it('handles nested container directives like ::::grid wrapping :::cell', () => {
