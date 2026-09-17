@@ -5,6 +5,8 @@ import {
   noteShellWrites,
   withNoteStatus,
   serializeNoteContent,
+  searchNotes,
+  type NoteSearchOptions,
 } from '@mygitnotes/core';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
@@ -87,7 +89,7 @@ export const remoteTools: Tool[] = [
   tool('add_asset', 'Upload an asset file (base64 encoded) to a notebook assets directory, with optional subfolder path.', { notebookId: str('Notebook identifier, e.g. default'), filename: str('Asset filename, e.g. screenshot.png'), base64Content: str('Base64-encoded binary content of the asset file'), directory: str('Optional subdirectory path within assets/ folder'), revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['notebookId', 'filename', 'base64Content'], object({ success: { const: true }, filename: str('Asset filename'), path: pathField, markdownRef: str('Markdown reference for embedding the asset'), commit: object({ commitHash: str('Commit SHA'), message: str('Commit message') }, undefined, true) })),
   tool('delete_asset', 'Delete an asset file from a notebook assets directory, creating an atomic commit.', { path: pathField, revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['path'], object({ success: { const: true }, path: pathField, commit: object({ commitHash: str('Commit SHA'), message: str('Commit message') }, undefined, true) })),
   tool('get_statuses', 'Get all valid note statuses including default, configured, and observed statuses across notes.', { notebookId: str('Optional notebook identifier') }, [], object({ notebookId: str('Notebook identifier'), defaultStatuses: array(str('Status name')), configuredStatuses: array(str('Status name')), observedStatuses: array(str('Status name')), allStatuses: array(str('Status name')) })),
-  tool('search_notes', 'Search note files using plain text or regular expressions.', { query: str('Search query or regular expression pattern'), notebookId: str('Optional notebook identifier to search within'), isRegex: bool('Whether query is a regular expression; default false'), caseSensitive: bool('Whether search is case-sensitive; default false') }, ['query'], object({ query: str('Search query'), isRegex: bool('Whether query was treated as regex'), matches: array(object({ path: pathField, title: str('Note title'), notebookId: str('Notebook identifier'), matchCount: int('Number of matches', 0, 1000000) })), totalMatches: int('Total match count', 0, 1000000) })),
+  tool('search_notes', 'Ranked note search for finding notes by topic, phrase, citation key, slug, tag or status. Space-separated words match independently across title, path, frontmatter and body; notes covering more words rank first, and the exact phrase ranks highest. Chinese phrases also match partially. Filters narrow before ranking; filters alone list matching notes. Returns snippets and metadata so read is needed only for chosen notes. Try synonyms or English and Chinese variants when results are weak.', { query: str('Words or phrase; optional when a filter is given. With isRegex, a regular expression over title and body.', { maxLength: 1000 }), notebookId: str('Optional notebook identifier to search within'), status: str('Optional exact frontmatter status, e.g. reading'), tags: array(str('Tag that must be present (case-insensitive)')), pattern: patternField, isRegex: bool('Whether query is a regular expression; default false'), caseSensitive: bool('Whether search is case-sensitive; default false'), limit: int('Maximum ranked notes returned; default 20.', 1, 200) }, [], object({ query: str('Search query'), isRegex: bool('Whether query was treated as regex'), matches: array(object({ path: pathField, title: str('Note title'), notebookId: str('Notebook identifier'), status: { type: ['string', 'null'], description: 'Note status' }, tags: array(str('Tag')), matchCount: int('Number of title and body matches for query words', 0, Number.MAX_SAFE_INTEGER), score: { type: 'number', description: 'Relevance score; higher is better' }, matchedTerms: array(str('Matched query term')), snippet: str('Best matching body line, at most 240 characters') })), total: int('Notes matching before the limit', 0, 1000000), truncated: bool('More matching notes exist beyond limit'), totalMatches: int('Total title and body match count across returned notes', 0, Number.MAX_SAFE_INTEGER) })),
   tool('replace_notes', 'Search and replace text or regular expressions across note files with atomic commit support.', { search: str('Search text or regular expression to match'), replace: str('Replacement text (supports $1, $2 capture groups for regex)'), notebookId: str('Optional notebook identifier to limit replacement scope'), isRegex: bool('Whether search is a regular expression; default false'), caseSensitive: bool('Whether search is case-sensitive; default false'), dryRun: bool('If true, previews matches without saving or committing; default false'), revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['search', 'replace'], object({ success: bool('Success status'), dryRun: bool('Dry run flag'), search: str('Search pattern'), replace: str('Replacement text'), matchedFiles: array(pathField), totalFiles: int('Count of matched files', 0, 100000), commit: object({ commitHash: str('Commit SHA'), message: str('Commit message') }, undefined, true) }, ['success', 'dryRun', 'search', 'replace', 'matchedFiles', 'totalFiles'])),
 ];
 
@@ -283,35 +285,12 @@ export async function callRemoteTool(
     }
     case 'search_notes': {
       const notes = await reader.notes(args.notebookId as string | undefined);
-      const query = String(args.query);
-      const isRegex = Boolean(args.isRegex);
-      const caseSensitive = Boolean(args.caseSensitive);
-      let regex: RegExp;
-      if (isRegex) {
-        regex = new RegExp(query, caseSensitive ? 'g' : 'gi');
-      } else {
-        const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        regex = new RegExp(escaped, caseSensitive ? 'g' : 'gi');
-      }
-      const matches = [];
-      for (const note of notes) {
-        const contentMatches = note.content.match(regex);
-        const titleMatches = note.title.match(regex);
-        const count = (contentMatches?.length || 0) + (titleMatches?.length || 0);
-        if (count > 0) {
-          matches.push({
-            path: note.path,
-            title: note.title,
-            notebookId: note.notebookId,
-            matchCount: count,
-          });
-        }
-      }
+      const result = searchNotes(notes, args as NoteSearchOptions);
       return {
-        query,
-        isRegex,
-        matches,
-        totalMatches: matches.reduce((acc, m) => acc + m.matchCount, 0),
+        query: String(args.query ?? ''),
+        isRegex: Boolean(args.isRegex),
+        ...result,
+        totalMatches: result.matches.reduce((acc, m) => acc + m.matchCount, 0),
       };
     }
     case 'replace_notes': {

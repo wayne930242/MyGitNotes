@@ -8,17 +8,13 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import YAML from 'yaml';
 import {
   X,
-  Settings2,
   Save,
-  Image as ImageIcon,
   FileText,
   RotateCcw,
   AlertTriangle,
   Search,
-  ListTree,
   ChevronUp,
   ChevronDown,
-  GitBranch,
   PanelRight,
   Code,
 } from 'lucide-react';
@@ -488,7 +484,7 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
       if (slashKey) { openOutline(); return true; }
     }
     if (isOutlineOpen && !event.ctrlKey && !event.metaKey && !event.altKey) {
-      if (isEditableTarget(event.target)) return false;
+      if (isEditableTarget(event.target) || (event.target instanceof Element && event.target.closest('[role="tablist"]'))) return false;
       if (event.key.toLowerCase() === 'j' || event.key === 'ArrowDown') {
         moveOutline(1); return true;
       }
@@ -694,12 +690,19 @@ const EditorModalContent: React.FC<EditorModalProps & { note: NoteItem }> = ({
         <div className="note-editor-body">
           <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} ariaLabel="Note content" />
           <aside className="note-document-panel" data-open={Boolean(notePanel)} data-panel={notePanel || undefined} aria-label={t('editor.documentPanel')}>
-            <div className="note-panel-tabs" role="tablist" aria-label={t('editor.documentPanel')}>
-              <Button type="button" role="tab" aria-selected={isFindOpen} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}><Search aria-hidden="true" /><span>{t('editor.find')}</span></Button>
-              {isMarkdown && <Button type="button" role="tab" aria-selected={isOutlineOpen} aria-label={t('editor.outline')} title={t('editor.outline')} onClick={() => isOutlineOpen ? setNotePanel(null) : openOutline()}><ListTree aria-hidden="true" /><span>{t('editor.outline')}</span></Button>}
-              <Button type="button" role="tab" aria-selected={showFrontmatter} aria-label={t('editor.frontmatter')} title={t('editor.frontmatter')} onClick={() => setNotePanel(showFrontmatter ? null : 'frontmatter')}><Settings2 aria-hidden="true" /><span>{t('editor.frontmatter')}</span></Button>
-              <Button type="button" role="tab" aria-selected={isAssetPickerOpen} aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onClick={() => setNotePanel(isAssetPickerOpen ? null : 'assets')}><ImageIcon aria-hidden="true" /><span>{t('editor.asset')}</span></Button>
-              <Button type="button" role="tab" aria-selected={isGitPanelOpen} aria-label={t('editor.fileGitStatus')} title={t('editor.fileGitStatus')} onClick={() => setNotePanel(isGitPanelOpen ? null : 'git')}><GitBranch aria-hidden="true" /><span>{t('editor.git')}</span></Button>
+            <div className="note-panel-tabs" role="tablist" aria-label={t('editor.documentPanel')} onKeyDown={event => {
+              const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+              const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
+              const target = { ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: tabs.length - 1 }[event.key];
+              if (index < 0 || target === undefined) return;
+              event.preventDefault();
+              tabs[(target + tabs.length) % tabs.length].focus();
+            }}>
+              <Button type="button" role="tab" aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isAssetPickerOpen || isGitPanelOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}><span>{t('editor.find')}</span></Button>
+              {isMarkdown && <Button type="button" role="tab" aria-selected={isOutlineOpen} tabIndex={isOutlineOpen ? 0 : -1} aria-label={t('editor.outline')} title={t('editor.outline')} onClick={() => isOutlineOpen ? setNotePanel(null) : openOutline()}><span>{t('editor.outline')}</span></Button>}
+              <Button type="button" role="tab" aria-selected={showFrontmatter} tabIndex={showFrontmatter ? 0 : -1} aria-label={t('editor.frontmatter')} title={t('editor.frontmatter')} onClick={() => setNotePanel(showFrontmatter ? null : 'frontmatter')}><span>{t('editor.frontmatter')}</span></Button>
+              <Button type="button" role="tab" aria-selected={isAssetPickerOpen} tabIndex={isAssetPickerOpen ? 0 : -1} aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onClick={() => setNotePanel(isAssetPickerOpen ? null : 'assets')}><span>{t('editor.asset')}</span></Button>
+              <Button type="button" role="tab" aria-selected={isGitPanelOpen} tabIndex={isGitPanelOpen ? 0 : -1} aria-label={t('editor.fileGitStatus')} title={t('editor.fileGitStatus')} onClick={() => setNotePanel(isGitPanelOpen ? null : 'git')}><span>{t('editor.git')}</span></Button>
             </div>
 
             {isFindOpen && <form className="note-find-panel" role="search" aria-label={t('editor.findInNote')}
