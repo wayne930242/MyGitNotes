@@ -93,12 +93,12 @@ export class LiveMarkdownDirective extends WidgetType {
       });
       toolbar.append(typeSelect);
 
-      // Handout Variant Select (if handout)
+      // Document style select (the handout type name remains for syntax compatibility)
       if (model.type === 'handout') {
         const variantSelect = document.createElement('select');
         variantSelect.className = 'live-directive-variant-select';
-        variantSelect.title = '更換道具樣式';
-        variantSelect.setAttribute('aria-label', '更換道具樣式');
+        variantSelect.title = '更換文件樣式';
+        variantSelect.setAttribute('aria-label', '更換文件樣式');
         for (const [vKey, vLabel] of Object.entries(HANDOUT_VARIANTS)) {
           const option = document.createElement('option');
           option.value = vKey;
@@ -119,7 +119,7 @@ export class LiveMarkdownDirective extends WidgetType {
       const titleInput = document.createElement('input');
       titleInput.type = 'text';
       titleInput.className = 'live-directive-title-input';
-      titleInput.placeholder = model.type === 'coc-stat' ? '角色名稱...' : '自訂標題...';
+      titleInput.placeholder = model.type === 'coc-stat' ? '人物名稱...' : '自訂標題...';
       titleInput.title = '自訂標題';
       titleInput.value = model.title;
       titleInput.setAttribute('aria-label', '自訂標題');
@@ -214,7 +214,7 @@ export class LiveMarkdownDirective extends WidgetType {
       const titleField = document.createElement('div');
       titleField.className = 'live-directive-form-field';
       const titleLabel = document.createElement('label');
-      titleLabel.textContent = model.type === 'coc-stat' ? '角色名稱 (Name)' : '區塊標題 (Title)';
+      titleLabel.textContent = model.type === 'coc-stat' ? '人物名稱 (Name)' : '區塊標題 (Title)';
       const formTitleInput = document.createElement('input');
       formTitleInput.type = 'text';
       formTitleInput.value = model.title;
@@ -223,7 +223,7 @@ export class LiveMarkdownDirective extends WidgetType {
 
       row1.append(typeField, titleField);
 
-      // Form Row 2 (Handout / CoC special fields)
+      // Form Row 2 (document / stats compatibility fields)
       let row2: HTMLDivElement | null = null;
       let handoutIdInput: HTMLInputElement | null = null;
       let handoutKeeperInput: HTMLInputElement | null = null;
@@ -240,13 +240,13 @@ export class LiveMarkdownDirective extends WidgetType {
         idLabel.textContent = '文件編號 (ID)';
         handoutIdInput = document.createElement('input');
         handoutIdInput.type = 'text';
-        handoutIdInput.value = model.attrs.id || 'H-01';
+        handoutIdInput.value = model.attrs.id || 'DOC-01';
         idField.append(idLabel, handoutIdInput);
 
         const variantField = document.createElement('div');
         variantField.className = 'live-directive-form-field';
         const variantLabel = document.createElement('label');
-        variantLabel.textContent = '道具樣式 (Variant)';
+        variantLabel.textContent = '文件樣式 (Variant)';
         handoutVariantSelect = document.createElement('select');
         for (const [k, v] of Object.entries(HANDOUT_VARIANTS)) {
           const opt = document.createElement('option');
@@ -261,11 +261,11 @@ export class LiveMarkdownDirective extends WidgetType {
         const keeperField = document.createElement('div');
         keeperField.className = 'live-directive-form-field';
         const keeperLabel = document.createElement('label');
-        keeperLabel.textContent = '守密人發放提示 (Keeper Note)';
+        keeperLabel.textContent = '編輯備註 (Editor Note)';
         handoutKeeperInput = document.createElement('input');
         handoutKeeperInput.type = 'text';
         handoutKeeperInput.value = model.attrs.keeper || '';
-        handoutKeeperInput.placeholder = '例如：調查書桌時獲得...';
+        handoutKeeperInput.placeholder = '例如：來源、使用時機或編輯說明...';
         keeperField.append(keeperLabel, handoutKeeperInput);
 
         row2.append(idField, variantField, keeperField);
@@ -276,11 +276,11 @@ export class LiveMarkdownDirective extends WidgetType {
         const roleField = document.createElement('div');
         roleField.className = 'live-directive-form-field';
         const roleLabel = document.createElement('label');
-        roleLabel.textContent = '職業／身分 (Role)';
+        roleLabel.textContent = '身分／類別 (Role)';
         cocRoleInput = document.createElement('input');
         cocRoleInput.type = 'text';
         cocRoleInput.value = model.attrs.role || '';
-        cocRoleInput.placeholder = '例如：私家偵探、考古學家...';
+        cocRoleInput.placeholder = '例如：研究者、講者、專案負責人...';
         roleField.append(roleLabel, cocRoleInput);
 
         row2.append(roleField);

@@ -200,28 +200,28 @@ export function renderContainerDirective(
     const title = parseDirectiveTitle(attrs, label, 'INFO');
     const bodyHtml = renderMarkdown(bodyMarkdown);
     const titleClass = title.isDefault ? 'directive-title-default' : 'directive-title-custom';
-    return `<div class="custom-directive info-directive" data-type="info" aria-label="${escapeHtml(title.label)}"><p class="directive-title ${titleClass}">${escapeHtml(title.label)}</p><div class="directive-body">${bodyHtml}</div></div>`;
+    return `<div class="custom-directive info-directive" data-type="info" aria-label="${escapeHtml(title.label)}"><p class="directive-title ${titleClass}">${escapeHtml(title.label)}</p><div class="directive-body directive-content">${bodyHtml}</div></div>`;
   }
 
   if (normName === 'sidebar') {
     const title = parseDirectiveTitle(attrs, label, 'IMPORTANT');
     const bodyHtml = renderMarkdown(bodyMarkdown);
     const titleClass = title.isDefault ? 'directive-title-default' : 'directive-title-custom';
-    return `<div class="custom-directive sidebar-directive" data-type="sidebar" aria-label="${escapeHtml(title.label)}"><p class="directive-title ${titleClass}">${escapeHtml(title.label)}</p><div class="directive-body">${bodyHtml}</div></div>`;
+    return `<div class="custom-directive sidebar-directive" data-type="sidebar" aria-label="${escapeHtml(title.label)}"><p class="directive-title ${titleClass}">${escapeHtml(title.label)}</p><div class="directive-body directive-content">${bodyHtml}</div></div>`;
   }
 
   if (normName === 'optional') {
     const title = parseDirectiveTitle(attrs, label, 'DETAILS');
     const bodyHtml = renderMarkdown(bodyMarkdown);
     const titleClass = title.isDefault ? 'directive-title-default' : 'directive-title-custom';
-    return `<details class="custom-directive optional-directive" data-type="optional" aria-label="${escapeHtml(title.label)}"><summary class="optional-summary ${titleClass}">${escapeHtml(title.label)}</summary><div class="directive-body">${bodyHtml}</div></details>`;
+    return `<details class="custom-directive optional-directive" data-type="optional" aria-label="${escapeHtml(title.label)}"><summary class="optional-summary ${titleClass}">${escapeHtml(title.label)}</summary><div class="directive-body directive-content">${bodyHtml}</div></details>`;
   }
 
   if (normName === 'comment') {
     const title = parseDirectiveTitle(attrs, label, 'COMMENT');
     const bodyHtml = renderMarkdown(bodyMarkdown);
     const titleClass = title.isDefault ? 'directive-title-default' : 'directive-title-custom';
-    return `<aside class="comment-directive" data-type="comment" aria-label="${escapeHtml(title.label)}"><p class="comment-title ${titleClass}">${escapeHtml(title.label)}</p><div class="directive-body">${bodyHtml}</div></aside>`;
+    return `<aside class="comment-directive" data-type="comment" aria-label="${escapeHtml(title.label)}"><p class="comment-title ${titleClass}">${escapeHtml(title.label)}</p><div class="directive-body directive-content">${bodyHtml}</div></aside>`;
   }
 
   if (normName === 'summary') {
@@ -264,7 +264,7 @@ export function renderContainerDirective(
   }
 
   if (normName === 'coc-stat') {
-    const nameVal = attrs.name || label || '角色數值';
+    const nameVal = attrs.name || label || '人物資料';
     const roleVal = attrs.role || '';
     const bodyHtml = renderMarkdown(bodyMarkdown);
 
@@ -280,22 +280,22 @@ export function renderContainerDirective(
       return `<div class="coc-stat-cell" data-stat="${key}"><span class="coc-stat-label"><span class="coc-stat-label-name">${derLabel}</span><abbr class="coc-stat-code" title="${derLabel}">${code}</abbr></span><strong class="coc-stat-value">${escapeHtml(val)}</strong></div>`;
     }).join('');
 
-    return `<section class="coc-stat-block" data-type="coc-stat" aria-label="${escapeHtml(nameVal)}的 CoC 數值"><header class="coc-stat-header"><p class="coc-stat-kicker">COC 7E｜人物數值</p><h3 class="coc-stat-name">${escapeHtml(nameVal)}</h3>${roleVal ? `<p class="coc-stat-role">${escapeHtml(roleVal)}</p>` : ''}</header>${charCells ? `<div class="coc-stat-characteristics" role="group" aria-label="屬性與狀態">${charCells}</div>` : ''}${derivedCells ? `<div class="coc-stat-derived" role="group" aria-label="衍生數值">${derivedCells}</div>` : ''}${bodyHtml ? `<div class="coc-stat-body">${bodyHtml}</div>` : ''}</section>`;
+    return `<section class="coc-stat-block" data-type="coc-stat" aria-label="${escapeHtml(nameVal)}的 CoC 數值"><header class="coc-stat-header"><p class="coc-stat-kicker">COC 7E｜人物數值</p><h3 class="coc-stat-name">${escapeHtml(nameVal)}</h3>${roleVal ? `<p class="coc-stat-role">${escapeHtml(roleVal)}</p>` : ''}</header>${charCells ? `<div class="coc-stat-characteristics" role="group" aria-label="屬性與狀態">${charCells}</div>` : ''}${derivedCells ? `<div class="coc-stat-derived" role="group" aria-label="衍生數值">${derivedCells}</div>` : ''}${bodyHtml ? `<div class="coc-stat-body directive-content">${bodyHtml}</div>` : ''}</section>`;
   }
 
   if (normName === 'handout') {
-    const id = attrs.id || 'H-01';
-    const title = attrs.title || label || '手冊文件';
+    const id = attrs.id || 'DOC-01';
+    const title = attrs.title || label || '文件標題';
     const variant = attrs.variant || 'report';
     const keeper = attrs.keeper || '';
     const variantLabel = HANDOUT_VARIANTS[variant] || '文件';
     const bodyHtml = renderMarkdown(bodyMarkdown);
 
     const keeperNote = keeper
-      ? `<aside class="handout-keeper-note"><p class="handout-keeper-kicker">守密人發放提示</p><p class="handout-keeper-text">${escapeHtml(keeper)}</p></aside>`
+      ? `<aside class="handout-keeper-note"><p class="handout-keeper-kicker">編輯備註</p><p class="handout-keeper-text">${escapeHtml(keeper)}</p></aside>`
       : '';
 
-    return `<section class="handout-block handout-variant-${escapeHtml(variant)}" id="${escapeHtml(id)}" data-type="handout" data-variant="${escapeHtml(variant)}" aria-label="文件 ${escapeHtml(id)}：${escapeHtml(title)}">${keeperNote}<div class="handout-reference"><span class="handout-code">${escapeHtml(id)}</span><span class="handout-variant-label">${escapeHtml(variantLabel)}</span></div><article class="handout-document"><header class="handout-document-header"><h4 class="handout-title">${escapeHtml(title)}</h4></header><div class="handout-body">${bodyHtml}</div></article></section>`;
+    return `<section class="handout-block handout-variant-${escapeHtml(variant)}" id="${escapeHtml(id)}" data-type="handout" data-variant="${escapeHtml(variant)}" aria-label="文件 ${escapeHtml(id)}：${escapeHtml(title)}">${keeperNote}<div class="handout-reference"><span class="handout-code">${escapeHtml(id)}</span><span class="handout-variant-label">${escapeHtml(variantLabel)}</span></div><article class="handout-document"><header class="handout-document-header"><h4 class="handout-title">${escapeHtml(title)}</h4></header><div class="handout-body directive-content">${bodyHtml}</div></article></section>`;
   }
 
   if (normName === 'parallel-quote') {
@@ -332,13 +332,13 @@ export function renderContainerDirective(
       'embed-card': 'Embed',
     };
     const badge = badges[normName] || normName;
-    return `<article class="embedded-card embedded-card-${normName}" data-card-type="${normName}"><header class="embedded-card-header"><span class="embedded-card-badge">${escapeHtml(badge)}</span>${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="embedded-card-link"><span class="embedded-card-title">${escapeHtml(cardTitle)}</span> ↗</a>` : `<span class="embedded-card-title">${escapeHtml(cardTitle)}</span>`}</header>${bodyHtml ? `<div class="embedded-card-body">${bodyHtml}</div>` : ''}</article>`;
+    return `<article class="embedded-card embedded-card-${normName}" data-card-type="${normName}"><header class="embedded-card-header"><span class="embedded-card-badge">${escapeHtml(badge)}</span>${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="embedded-card-link"><span class="embedded-card-title">${escapeHtml(cardTitle)}</span> ↗</a>` : `<span class="embedded-card-title">${escapeHtml(cardTitle)}</span>`}</header>${bodyHtml ? `<div class="embedded-card-body directive-content">${bodyHtml}</div>` : ''}</article>`;
   }
 
   // Fallback generic container directive
   const title = parseDirectiveTitle(attrs, label, normName.toUpperCase());
   const bodyHtml = renderMarkdown(bodyMarkdown);
-  return `<div class="custom-directive generic-directive" data-type="${escapeHtml(normName)}"><p class="directive-title directive-title-custom">${escapeHtml(title.label)}</p><div class="directive-body">${bodyHtml}</div></div>`;
+  return `<div class="custom-directive generic-directive" data-type="${escapeHtml(normName)}"><p class="directive-title directive-title-custom">${escapeHtml(title.label)}</p><div class="directive-body directive-content">${bodyHtml}</div></div>`;
 }
 
 interface DirectiveStackItem {
@@ -461,7 +461,7 @@ export const DIRECTIVE_TEMPLATES: DirectiveTemplate[] = [
   },
   {
     type: 'sidebar',
-    label: '重點側欄 (Sidebar)',
+    label: '重點區塊 (Sidebar)',
     defaultSnippet: ':::sidebar[重要提示]\n在此輸入重點內容\n:::\n'
   },
   {
@@ -471,18 +471,18 @@ export const DIRECTIVE_TEMPLATES: DirectiveTemplate[] = [
   },
   {
     type: 'comment',
-    label: '作者眉批 (Comment)',
-    defaultSnippet: ':::comment\n筆者個人註記與評論\n:::\n'
+    label: '旁註 (Comment)',
+    defaultSnippet: ':::comment\n在此輸入補充註記\n:::\n'
   },
   {
     type: 'handout',
-    label: '調查員文件 (Handout)',
-    defaultSnippet: ':::handout{id="H-01" title="秘密文件" variant="report" keeper="探索書房時發現"}\n這是一份泛黃的調查報告。\n:::\n'
+    label: '文件卡片 (Document)',
+    defaultSnippet: ':::handout{id="DOC-01" title="文件標題" variant="report" keeper="編輯備註"}\n在此輸入文件內容。\n:::\n'
   },
   {
     type: 'coc-stat',
-    label: '角色數值 (CoC 7E)',
-    defaultSnippet: ':::coc-stat{name="調查員" str=50 con=60 siz=65 dex=70 int=75 app=50 pow=60 edu=80 san=60 hp=12 db="0" build=0 move=8}\n經歷與特徵備註\n:::\n'
+    label: '屬性資料卡 (Stats)',
+    defaultSnippet: ':::coc-stat{name="人物名稱" str=50 con=60 siz=65 dex=70 int=75 app=50 pow=60 edu=80 san=60 hp=12 db="0" build=0 move=8}\n在此輸入人物備註。\n:::\n'
   },
   {
     type: 'parallel-quote',
@@ -625,7 +625,7 @@ export function updateDirectiveType(rawText: string, newType: string): string {
   let rest = headerMatch[4];
 
   if (newType === 'handout' && !/variant=/i.test(rest)) {
-    rest = rest ? `${rest}{id="H-01" variant="report"}` : '{id="H-01" variant="report"}';
+    rest = rest ? `${rest}{id="DOC-01" variant="report"}` : '{id="DOC-01" variant="report"}';
   }
 
   lines[0] = `${prefix}${colons}${newType}${rest}`;
@@ -709,7 +709,7 @@ export function serializeDirectiveModel(model: DirectiveModel): string {
   let header = `${colons}${type}`;
 
   if (type === 'handout') {
-    if (!attrs.id) attrs.id = 'H-01';
+    if (!attrs.id) attrs.id = 'DOC-01';
     if (!attrs.variant) attrs.variant = 'report';
     if (trimmedTitle) attrs.title = trimmedTitle;
     const attrParts: string[] = [];
@@ -719,7 +719,7 @@ export function serializeDirectiveModel(model: DirectiveModel): string {
     header += `{${attrParts.join(' ')}}`;
   } else if (type === 'coc-stat') {
     if (trimmedTitle) attrs.name = trimmedTitle;
-    else if (!attrs.name) attrs.name = '角色數值';
+    else if (!attrs.name) attrs.name = '人物資料';
     const attrParts: string[] = [];
     for (const [k, v] of Object.entries(attrs)) {
       if (v !== undefined && v !== '') {

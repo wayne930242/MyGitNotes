@@ -37,38 +37,38 @@
   margin-bottom: 0 !important;
 }
 
-/* 內文段落與清單 Typography 校準（防止 list 行高超大）
-   使用 :is() 統一覆蓋所有 directive body 容器，高 specificity 確保覆蓋全域 .prose-custom 規則 */
-.prose-custom :is(.directive-body, .handout-body, .coc-stat-body, .embedded-card-body) p {
+/* 內文段落與清單 Typography 校準。所有 directive renderer 都掛上同一個內容 class，
+   新增 directive 類型時不需要擴充領域專用 selector。 */
+.prose-custom .directive-content p {
   margin-top: 0.25rem;
   margin-bottom: 0.3rem !important;
   line-height: 1.55;
 }
 
-.prose-custom :is(.directive-body, .handout-body, .coc-stat-body, .embedded-card-body) ul,
-.prose-custom :is(.directive-body, .handout-body, .coc-stat-body, .embedded-card-body) ol {
+.prose-custom .directive-content ul,
+.prose-custom .directive-content ol {
   margin-top: 0.2rem;
   margin-bottom: 0.25rem !important;
   padding-left: 1.35rem;
 }
 
-.prose-custom :is(.directive-body, .handout-body, .coc-stat-body, .embedded-card-body) li {
+.prose-custom .directive-content li {
   margin-top: 0.05rem;
   margin-bottom: 0.1rem !important;
   line-height: 1.5;
 }
 
-.prose-custom :is(.directive-body, .handout-body, .coc-stat-body, .embedded-card-body) li > p {
+.prose-custom .directive-content li > p {
   margin: 0 !important;
   display: inline;
 }
 
-.prose-custom :is(.directive-body, .handout-body, .coc-stat-body, .embedded-card-body) hr {
+.prose-custom .directive-content hr {
   margin: 0.65rem 0;
   border-color: color-mix(in srgb, var(--color-text) 12%, var(--color-border));
 }
 
-.prose-custom :is(.directive-body, .handout-body, .coc-stat-body, .embedded-card-body) blockquote {
+.prose-custom .directive-content blockquote {
   margin: 0.35rem 0 !important;
   padding: 0.25rem 0.65rem;
   border-left: 2px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border)) !important;
@@ -207,7 +207,7 @@
   padding: 1rem 1.25rem;
 }
 
-/* ===== 2. Call of Cthulhu Stat Blocks ===== */
+/* ===== 2. Structured stat cards ===== */
 .prose-custom .coc-stat-block {
   margin: 2rem 0;
   display: block;
@@ -315,23 +315,14 @@
   margin-bottom: 0;
 }
 
-/* ===== 3. Player Handouts ===== */
+/* ===== 3. Document cards ===== */
 .prose-custom .handout-block {
-  --handout-paper: #f7f3e8;
-  --handout-paper-deep: #ede4d1;
-  --handout-ink: #221e1a;
-  --handout-muted: #6e6456;
-  --handout-accent: #8b3028;
+  --document-surface: var(--color-surface);
+  --document-ink: var(--color-text);
+  --document-muted: var(--color-muted);
+  --document-accent: var(--color-primary);
   margin: 2rem 0;
   display: block;
-}
-
-.dark .prose-custom .handout-block {
-  --handout-paper: #1c1a17;
-  --handout-paper-deep: #292621;
-  --handout-ink: #ede3d1;
-  --handout-muted: #9e9382;
-  --handout-accent: #d97757;
 }
 
 .prose-custom .handout-keeper-note {
@@ -368,7 +359,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  color: var(--handout-muted);
+  color: var(--document-muted);
 }
 
 .prose-custom .handout-code,
@@ -381,20 +372,20 @@
 }
 
 .prose-custom .handout-code {
-  color: var(--handout-accent);
+  color: var(--document-accent);
 }
 
 .prose-custom .handout-document {
-  color: var(--handout-ink);
-  background: var(--handout-paper);
-  border: 1px solid color-mix(in srgb, var(--handout-ink) 25%, transparent);
-  border-radius: 6px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+  color: var(--document-ink);
+  background: var(--document-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--color-text) 8%, transparent);
 }
 
 .prose-custom .handout-document-header {
   padding: 1.5rem 1.75rem 1rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--handout-ink) 20%, transparent);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .prose-custom .handout-title {
@@ -402,12 +393,12 @@
   font-size: 1.5rem;
   line-height: 1.25;
   font-weight: 750;
-  color: var(--handout-ink);
+  color: var(--document-ink);
 }
 
 .prose-custom .handout-body {
   padding: 0.85rem 1.1rem;
-  color: var(--handout-ink);
+  color: var(--document-ink);
 }
 
 .prose-custom .handout-body > *:first-child {
@@ -419,16 +410,16 @@
 }
 
 .prose-custom .handout-body p {
-  color: var(--handout-ink);
+  color: var(--document-ink);
 }
 
 /* Handout variant cues */
 .prose-custom .handout-variant-report .handout-document {
-  border-top: 4px solid var(--handout-accent);
+  border-top: 3px solid var(--document-accent);
 }
 
 .prose-custom .handout-variant-newspaper .handout-document {
-  border: 2px solid color-mix(in srgb, var(--handout-ink) 40%, transparent);
+  border: 2px solid color-mix(in srgb, var(--document-ink) 32%, var(--color-border));
 }
 
 .prose-custom .handout-variant-newspaper .handout-title {
@@ -438,7 +429,7 @@
 
 .prose-custom .handout-variant-letter .handout-document {
   border-radius: 2px;
-  background: color-mix(in srgb, var(--handout-paper) 98%, white);
+  background: color-mix(in srgb, var(--document-surface) 96%, var(--document-accent));
 }
 
 .prose-custom .handout-variant-letter .handout-body > p + p {
@@ -450,9 +441,9 @@
     0deg,
     transparent 0,
     transparent 1.75rem,
-    color-mix(in srgb, var(--handout-muted) 15%, transparent) 1.75rem,
-    color-mix(in srgb, var(--handout-muted) 15%, transparent) calc(1.75rem + 1px)
-  ), var(--handout-paper);
+    color-mix(in srgb, var(--document-muted) 15%, transparent) 1.75rem,
+    color-mix(in srgb, var(--document-muted) 15%, transparent) calc(1.75rem + 1px)
+  ), var(--document-surface);
 }
 
 .prose-custom .handout-variant-note .handout-document {
@@ -462,7 +453,7 @@
 }
 
 .prose-custom .handout-variant-scripture .handout-document {
-  border: 4px double color-mix(in srgb, var(--handout-ink) 45%, transparent);
+  border: 4px double color-mix(in srgb, var(--document-ink) 38%, var(--color-border));
 }
 
 .prose-custom .handout-variant-scripture .handout-document-header {
@@ -1178,5 +1169,3 @@
     gap: 0.75rem;
   }
 }
-
-
