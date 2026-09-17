@@ -159,6 +159,11 @@ export function createApp(base: string): express.Express {
           if (typeof entry?.path !== 'string' || !Array.isArray(entry.tags) || entry.tags.some((tag: unknown) => typeof tag !== 'string')) throw new SourceError('Each entry requires a path and a tags array of strings.');
         }
         const reader = res.locals.reader as RemoteSource;
+        // Confirm write access before reading any blob content, matching commitChanges' own
+        // gate, so a session without push permission can't use this route to probe arbitrary
+        // repository paths ahead of the write-scope check that would otherwise reject them.
+        const snapshot = await reader.getSnapshot();
+        if (!snapshot.info.permissions?.push || reader.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
         const changes: { path: string; content: string }[] = [];
         for (const entry of entries) {
           const raw = (await reader.readFile(String(entry.path))).toString('utf8');

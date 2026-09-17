@@ -132,6 +132,21 @@ describe('local /api/tags/apply', () => {
     expect((await post({ entries: [{ path: '.env', notebookId: 'blog', tags: [] }] })).status).toBe(403);
     expect((await post({ entries: [{ path: 'notes/blog/missing.md', notebookId: 'blog', tags: [] }] })).status).toBe(403);
   });
+
+  it('leaves every note untouched on disk when a later entry in the same batch fails validation', async () => {
+    const before = fs.readFileSync(path.join(root, 'notes/blog/a.md'), 'utf8');
+    const commitsBefore = git('rev-list', '--count', 'HEAD').toString().trim();
+    const res = await post({
+      entries: [
+        { path: 'notes/blog/a.md', notebookId: 'blog', tags: ['doing', 'x'] },
+        { path: 'notes/blog/missing.md', notebookId: 'blog', tags: [] },
+      ],
+    });
+    expect(res.status).toBe(403);
+    expect(fs.readFileSync(path.join(root, 'notes/blog/a.md'), 'utf8')).toBe(before);
+    expect(git('rev-list', '--count', 'HEAD').toString().trim()).toBe(commitsBefore);
+    expect(git('status', '--porcelain').toString().trim()).toBe('');
+  });
 });
 
 describe.each(['github', 'gitlab'])('remote /api/tags/apply (%s)', provider => {
@@ -189,8 +204,11 @@ describe.each(['github', 'gitlab'])('remote /api/tags/apply (%s)', provider => {
       expect(files.get('notes/thesis/c.md')!.toString()).toContain('  - doing');
 
       canPush = false;
+      const readsBefore = (prototype.readBlob as any).mock.calls.length;
       const forbidden = await post({ entries: [{ path: 'notes/blog/a.md', notebookId: 'blog', tags: ['x'] }], revision, message: 'x' });
       expect(forbidden.status).toBe(403);
+      // A caller without push permission must not have its entries' blobs read at all.
+      expect((prototype.readBlob as any).mock.calls.length).toBe(readsBefore);
     } finally {
       await new Promise<void>(resolve => server.close(() => resolve()));
       vi.restoreAllMocks();

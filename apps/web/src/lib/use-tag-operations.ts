@@ -4,25 +4,18 @@ import { NoteItem } from './types.js';
 
 export type TagOperationKind = 'rename' | 'merge' | 'delete';
 
-export interface TagOperationSnapshotEntry {
-  path: string;
-  notebookId: string;
-  previousTags: string[];
-}
-
 export interface TagOperationRecord {
   id: string;
   kind: TagOperationKind;
   label: string;
-  entries: TagOperationSnapshotEntry[];
+  plan: TagOperationPlan;
 }
 
 let nextRecordId = 0;
 
 /** Prepend a record built from a just-applied plan. Pure, so it is easy to test without React. */
 export function pushTagOperationRecord(history: TagOperationRecord[], kind: TagOperationKind, label: string, plan: TagOperationPlan): TagOperationRecord[] {
-  const entries = plan.affected.map(({ path, notebookId, previousTags }) => ({ path, notebookId, previousTags }));
-  return [{ id: `tag-op-${++nextRecordId}`, kind, label, entries }, ...history];
+  return [{ id: `tag-op-${++nextRecordId}`, kind, label, plan }, ...history];
 }
 
 /** Sets each matching note's `tags` (and mirrored `metadata.tags`) from `entries`; leaves other notes untouched. */
@@ -36,7 +29,11 @@ export function applyTagEntriesToNotes(notes: NoteItem[], entries: { path: strin
   });
 }
 
-/** Session-lifetime history of tag operations, each independently undoable until page reload. */
+/**
+ * Session-lifetime history of tag operations, each independently undoable until page reload.
+ * A record is only dismissed once its undo has actually been applied (see App.tsx's
+ * handleUndoTagOperation) — a failed undo attempt keeps the record so the user can retry.
+ */
 export function useTagOperations() {
   const [history, setHistory] = useState<TagOperationRecord[]>([]);
 

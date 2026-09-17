@@ -7,12 +7,11 @@ function note(path: string, tags: string[], notebookId = 'nb'): NoteItem {
 }
 
 describe('pushTagOperationRecord', () => {
-  it('prepends a record with only the snapshot fields, dropping nextTags', () => {
+  it('prepends a record carrying the full plan, so undo can invert it later', () => {
     const plan = { affected: [{ path: 'a.md', notebookId: 'nb', previousTags: ['x'], nextTags: ['y'] }] };
     const history = pushTagOperationRecord([], 'rename', 'x -> y', plan);
     expect(history).toHaveLength(1);
-    expect(history[0]).toMatchObject({ kind: 'rename', label: 'x -> y', entries: [{ path: 'a.md', notebookId: 'nb', previousTags: ['x'] }] });
-    expect((history[0].entries[0] as any).nextTags).toBeUndefined();
+    expect(history[0]).toMatchObject({ kind: 'rename', label: 'x -> y', plan });
   });
 
   it('gives each record a distinct id and keeps newest first', () => {

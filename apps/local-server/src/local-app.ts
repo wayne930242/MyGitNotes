@@ -334,7 +334,9 @@ app.post('/api/tags/apply', async (req: Request, res: Response) => {
     if (!config) return res.status(400).json({ error: 'Workspace not configured.' });
 
     const result = await serializeWorkspaceMutation(repoRoot, async () => {
-      const changedPaths: string[] = [];
+      // Validate and compute every entry's patched content before writing any of them, so a
+      // later entry failing validation cannot leave an earlier one written but uncommitted.
+      const planned: { path: string; safePath: string; patched: string }[] = [];
       for (const entry of entries) {
         let safePath: string;
         try {
@@ -346,10 +348,11 @@ app.post('/api/tags/apply', async (req: Request, res: Response) => {
         const raw = fs.readFileSync(safePath, 'utf-8');
         const patched = replaceNoteTags(raw, entry.tags);
         if (patched === raw) continue;
-        fs.writeFileSync(safePath, patched, 'utf-8');
-        changedPaths.push(entry.path);
+        planned.push({ path: entry.path, safePath, patched });
       }
-      if (changedPaths.length === 0) return { success: true, changedPaths: [] as string[] };
+      if (planned.length === 0) return { success: true, changedPaths: [] as string[] };
+      for (const entry of planned) fs.writeFileSync(entry.safePath, entry.patched, 'utf-8');
+      const changedPaths = planned.map(entry => entry.path);
       const message = typeof req.body.message === 'string' && req.body.message.trim()
         ? req.body.message.trim()
         : `docs(notes): update tags in ${changedPaths.length} note${changedPaths.length === 1 ? '' : 's'}`;

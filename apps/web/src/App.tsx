@@ -36,7 +36,7 @@ import {
   fetchNotes,
   applyTagChange,
 } from './lib/api.js';
-import { planTagRename, planTagMerge, planTagDelete } from '@mygitnotes/core/tag-ops';
+import { planTagRename, planTagMerge, planTagDelete, invertTagOperationPlan } from '@mygitnotes/core/tag-ops';
 import { useTagOperations, applyTagEntriesToNotes, type TagOperationKind } from './lib/use-tag-operations.js';
 import type {
   NoteItem,
@@ -211,15 +211,22 @@ const AppContent: React.FC = () => {
   };
   const handleUndoTagOperation = async (id: string) => {
     const record = tagOperations.history.find(entry => entry.id === id);
-    tagOperations.dismiss(id);
     if (!record) return;
-    const allNotes = await fetchNotes();
-    const validEntries = record.entries.filter(entry => allNotes.some(note => note.path === entry.path && note.notebookId === entry.notebookId));
-    if (validEntries.length === 0) return;
-    const entries = validEntries.map(({ path, notebookId, previousTags }) => ({ path, notebookId, tags: previousTags }));
-    const result = await applyTagChange(entries, revision, `${t('common.undo')}: ${record.label}`);
-    if (remote) setRevision(result.revision || revision);
-    setNotes(previous => applyTagEntriesToNotes(previous, entries));
+    try {
+      const inverted = invertTagOperationPlan(record.plan);
+      const allNotes = await fetchNotes();
+      const validEntries = inverted.affected.filter(entry => allNotes.some(note => note.path === entry.path && note.notebookId === entry.notebookId));
+      if (validEntries.length === 0) { tagOperations.dismiss(id); return; }
+      const entries = validEntries.map(({ path, notebookId, nextTags }) => ({ path, notebookId, tags: nextTags }));
+      const result = await applyTagChange(entries, revision, `${t('common.undo')}: ${record.label}`);
+      if (remote) setRevision(result.revision || revision);
+      setNotes(previous => applyTagEntriesToNotes(previous, entries));
+      tagOperations.dismiss(id);
+    } catch (error) {
+      // Keep the record so the user can retry; a silently vanished undo with no feedback
+      // would leave them unable to tell whether the undo happened.
+      setActionError((error as Error).message);
+    }
   };
 
   const editorNotebookId = editorRoute.notebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
@@ -1141,8 +1148,10 @@ const AppContent: React.FC = () => {
         </div>
       )}
 
-      {/* Recent tag operations: session-lifetime, each independently undoable (survives
-          navigation and further mutations; cleared only on page reload). */}
+      {/* Recent tag operations: session-lifetime, each independently undoable (the list itself
+          is not cleared by navigation or further mutations, only by page reload). Undoing a
+          record unconditionally restores its recorded prior tags on every note it touched; it
+          does not detect or warn about a later edit to the same note's tags in the meantime. */}
       {tagOperations.history.length > 0 && (
         <div className="fixed top-20 right-6 z-50 flex flex-col gap-2 items-end" aria-label={t('sidebar.recentTagChanges')}>
           {tagOperations.history.map(record => (
