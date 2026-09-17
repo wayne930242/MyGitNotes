@@ -12,6 +12,7 @@ import { Preview } from './FilePreview.js';
 import { R2Panel, r2Folders } from './R2Panel.js';
 import { fetchR2, type R2Listing } from '../lib/r2-api.js';
 import { NavTree, NavTreeRow, NavTreeChildren } from './NavTree.js';
+import { WorkspaceSidebar, WorkspaceSidebarPortal, WorkspaceSidebarToggle, useWorkspaceSidebarDrawer } from './WorkspaceChrome.js';
 import './file-manager.css';
 const FileSourceEditor = lazy(() => import('./FileSourceEditor.js').then(module => ({ default: module.FileSourceEditor })));
 
@@ -22,7 +23,7 @@ export interface FileManagerProps {
   initialPath?: string;
   movePath?: string;
   mode?: 'manage' | 'pick-image';
-  layout?: 'page' | 'panel';
+  layout?: 'page' | 'panel' | 'dialog';
   beforeChange?: () => Promise<void>;
   onChanged?: (result: FileResult) => Promise<void>;
   onOpenIndex?: (path: string) => Promise<void>;
@@ -37,6 +38,7 @@ const basename = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
 export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(function FileManager({ notebookId, writable, initialPath, movePath, mode = 'manage', layout = 'page', beforeChange, onChanged, onOpenIndex, onInsert, onBusyChange, onSelectionChange, metadataContainer }, ref) {
   const { t } = useTranslation();
+  const sidebar = useWorkspaceSidebarDrawer();
   const [listing, setListing] = useState<FileListing>();
   const [directory, setDirectory] = useState(''), [selected, setSelected] = useState('');
   const [showHidden, setShowHidden] = useState(false), [treeOpen, setTreeOpen] = useState(false);
@@ -197,7 +199,10 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
           expandAriaLabel={isExpanded ? t('folder.collapse') : t('folder.expand')}
           title={node.name}
           selected={r2Directory === undefined && directory === node.path}
-          onSelect={() => void navigate(node.path)}
+          onSelect={() => {
+            if (layout === 'page') sidebar.setOpen(false);
+            void navigate(node.path);
+          }}
           suffix={node.hasNonDocument ? <span className="nav-tree-marker" aria-hidden="true" /> : undefined}
           disabled={busy}
           buttonProps={{
@@ -213,13 +218,74 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
       </div>
     );
   };
+
+  const renderFoldersTree = () => (
+    <NavTree className={`file-tree ${layout === 'page' ? 'assets-sidebar-tree' : treeOpen ? 'is-open' : ''}`} aria-label={t('folder.folders')}>
+      {(directory !== listing?.root || r2Directory !== undefined) && listing && (
+        <NavTreeRow
+          hasChildren={false}
+          title={'<note>'}
+          selected={r2Directory === undefined && directory === listing.root}
+          onSelect={() => {
+            if (layout === 'page') sidebar.setOpen(false);
+            void navigate(listing.root);
+          }}
+          suffix={rootHasNonDocument ? <span className="nav-tree-marker" aria-hidden="true" /> : undefined}
+          disabled={busy}
+          buttonProps={{
+            title: markerLabel('<note>', rootHasNonDocument),
+            'aria-label': markerLabel('<note>', rootHasNonDocument),
+          }}
+        />
+      )}
+      {tree.map(renderTreeNode)}
+      {r2 && (() => { const { root, folders } = r2Folders(r2, showHidden); return <>
+        <NavTreeRow
+          hasChildren={false}
+          icon={<Cloud size={15} />}
+          title="R2"
+          selected={r2Directory === root}
+          onSelect={() => {
+            if (layout === 'page') sidebar.setOpen(false);
+            void navigateR2(root);
+          }}
+          disabled={busy}
+        />
+        {folders.map(folder => (
+          <NavTreeRow
+            key={folder}
+            hasChildren={false}
+            title={folder.slice(folder.lastIndexOf('/') + 1)}
+            selected={r2Directory === folder}
+            onSelect={() => {
+              if (layout === 'page') sidebar.setOpen(false);
+              void navigateR2(folder);
+            }}
+            disabled={busy}
+          />
+        ))}
+      </>; })()}
+    </NavTree>
+  );
+
   return <div className="file-manager" data-mode={mode} data-layout={layout} aria-busy={busy || reading || !listing}>
+    {layout === 'page' && listing && (
+      <>
+        <WorkspaceSidebarToggle label={t('folder.folders')} open={sidebar.open} onClick={() => sidebar.setOpen(open => !open)} />
+        <WorkspaceSidebarPortal>
+          <WorkspaceSidebar label={t('folder.folders')} className="assets-sidebar">
+            <div className="sidebar-section-label">{t('folder.folders')}</div>
+            {renderFoldersTree()}
+          </WorkspaceSidebar>
+        </WorkspaceSidebarPortal>
+      </>
+    )}
     {layout === 'panel' && <div className="file-panel-sources" role="group" aria-label={t('files.location')}>
       <button type="button" aria-pressed={r2Directory === undefined} disabled={busy || !listing} onClick={() => listing && void navigate(listing.root)}><Folder size={14} />{t('files.titleLabel')}</button>
       {r2 && <button type="button" aria-pressed={r2Directory !== undefined} disabled={busy} onClick={() => void navigateR2(r2.prefix.slice(0, -1))}><Cloud size={14} />R2</button>}
     </div>}
     <header className="file-manager-toolbar">
-      <button type="button" className="ui-button file-tree-toggle" aria-label={t('folder.folders')} title={t('folder.folders')} aria-expanded={treeOpen} onClick={() => setTreeOpen(!treeOpen)}><Folder size={16} />{layout !== 'panel' && t('folder.folders')}</button>
+      {layout !== 'page' && <button type="button" className="ui-button file-tree-toggle" aria-label={t('folder.folders')} title={t('folder.folders')} aria-expanded={treeOpen} onClick={() => setTreeOpen(!treeOpen)}><Folder size={16} />{layout !== 'panel' && t('folder.folders')}</button>}
       {r2Directory === undefined && (layout === 'panel' || directory !== listing?.root) && <nav aria-label={t('files.location')} className="file-breadcrumbs">
         {layout === 'panel' && listing && <button type="button" disabled={busy} onClick={() => void navigate(listing.root)}>{t('files.root')}</button>}
         {listing && <>{directory.slice(listing.root.length + 1).split('/').filter(Boolean).map((part, index, parts) => <span key={index}> / <button type="button" disabled={busy} onClick={() => void navigate(listing.root + '/' + parts.slice(0, index + 1).join('/'))}>{part}</button></span>)}</>}
@@ -234,43 +300,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
     {error && <p role="alert" className="file-error">{error}</p>}
     {!listing ? <p role="status">{error ? t('files.unavailable') : t('files.loading')}</p> : <>
     <div className="file-manager-body">
-      <NavTree className={`file-tree ${treeOpen ? 'is-open' : ''}`} aria-label={t('folder.folders')}>
-        {(directory !== listing.root || r2Directory !== undefined) && (
-          <NavTreeRow
-            hasChildren={false}
-            title={'<note>'}
-            selected={r2Directory === undefined && directory === listing.root}
-            onSelect={() => void navigate(listing.root)}
-            suffix={rootHasNonDocument ? <span className="nav-tree-marker" aria-hidden="true" /> : undefined}
-            disabled={busy}
-            buttonProps={{
-              title: markerLabel('<note>', rootHasNonDocument),
-              'aria-label': markerLabel('<note>', rootHasNonDocument),
-            }}
-          />
-        )}
-        {tree.map(renderTreeNode)}
-        {r2 && (() => { const { root, folders } = r2Folders(r2, showHidden); return <>
-          <NavTreeRow
-            hasChildren={false}
-            icon={<Cloud size={15} />}
-            title="R2"
-            selected={r2Directory === root}
-            onSelect={() => void navigateR2(root)}
-            disabled={busy}
-          />
-          {folders.map(folder => (
-            <NavTreeRow
-              key={folder}
-              hasChildren={false}
-              title={folder.slice(folder.lastIndexOf('/') + 1)}
-              selected={r2Directory === folder}
-              onSelect={() => void navigateR2(folder)}
-              disabled={busy}
-            />
-          ))}
-        </>; })()}
-      </NavTree>
+      {layout !== 'page' && renderFoldersTree()}
       {r2 && r2Directory !== undefined ? <R2Panel notebookId={notebookId} listing={r2} directory={r2Directory} mutable={mode === 'manage' && writable} showHidden={showHidden} busy={busy}
         run={run} onNavigate={path => setR2Directory(path)} onRefresh={refreshR2} beforeChange={beforeChange}
         onNotesChanged={async () => { const next = await refresh(); await onChanged?.({ revision: next.revision, selectedPath: '', pathMap: {}, deletedPaths: [] }); }} onInsert={mode === 'pick-image' ? onInsert : undefined} /> :
@@ -342,7 +372,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
 
 export function FileManagerDialog({ onClose, ...props }: FileManagerProps & { onClose: () => void }) {
   const { t } = useTranslation(), manager = useRef<FileManagerHandle>(null);
-  return <WorkspaceDialog title={t(props.mode === 'pick-image' ? 'files.chooseImage' : 'files.titleLabel')} className="file-manager-dialog" onClose={() => void manager.current?.prepareLeave().then(ok => { if (ok) onClose(); })}><FileManager ref={manager} {...props} /></WorkspaceDialog>;
+  return <WorkspaceDialog title={t(props.mode === 'pick-image' ? 'files.chooseImage' : 'files.titleLabel')} className="file-manager-dialog" onClose={() => void manager.current?.prepareLeave().then(ok => { if (ok) onClose(); })}><FileManager ref={manager} layout={props.layout || 'dialog'} {...props} /></WorkspaceDialog>;
 }
 
 export function FileMetadata({ entry, onEdit }: { entry: FileEntry; onEdit?: () => void }) {

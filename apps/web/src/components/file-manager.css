@@ -93,3 +93,17 @@
   .note-document-panel[data-panel="assets"] { height: min(50dvh, 400px); }
   .file-manager[data-layout="panel"] .file-tree-toggle, .file-manager[data-layout="panel"] .file-row-name { min-height: 44px; }
 }
+
+/* Assets sidebar styles when rendered via WorkspaceSidebarPortal */
+.assets-sidebar .file-tree {
+  width: 100%;
+  flex: 1 1 auto;
+  border-right: none;
+  background: transparent;
+  padding: 0 4px;
+  overflow: visible;
+}
+.assets-sidebar .nav-tree-row {
+  width: 100%;
+}
+
