@@ -942,7 +942,7 @@ const AppContent: React.FC = () => {
         <div ref={sidebarGestureRef} className="workspace-body relative flex-1 min-h-0 min-w-0 flex overflow-hidden">
           <WorkspaceSplitLayout
             hasSidebar={activeTab !== 'graph' && activeTab !== 'screen'}
-            sidebarDomId="notebook-panel"
+            sidebarDomId={activeTab === 'notes' ? 'notebook-panel' : activeTab === 'agent' ? 'agent-sidebar-panel' : activeTab === 'assets' ? 'assets-sidebar-panel' : activeTab === 'settings' ? 'settings-sidebar-panel' : undefined}
             closeLabel={t('sidebar.closeFilters')}
           >
             {activeTab === 'notes' && (

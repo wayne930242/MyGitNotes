@@ -65,15 +65,54 @@ class RenderedMarkdown extends WidgetType {
   get estimatedHeight() { return this.block ? 100 : 160; }
 }
 class PageBreak extends WidgetType {
-  constructor(readonly from: number, readonly label: string) { super(); }
-  eq(other: PageBreak) { return this.from === other.from && this.label === other.label; }
+  constructor(readonly from: number, readonly label: string, readonly pageNumber: number) { super(); }
+  eq(other: PageBreak) { return this.from === other.from && this.label === other.label && this.pageNumber === other.pageNumber; }
   toDOM(view: EditorView) {
-    const dom = document.createElement('div'); dom.className = 'live-md-page-break';
-    dom.dataset.pageBreak = ''; dom.textContent = this.label;
-    dom.addEventListener('mousedown', event => { event.preventDefault(); view.dispatch({ selection: { anchor: this.from } }); view.focus(); });
+    const dom = document.createElement('div');
+    dom.className = 'live-md-page-break';
+    dom.dataset.pageBreak = String(this.pageNumber);
+
+    const shelf = document.createElement('div');
+    shelf.className = 'live-md-page-break-shelf';
+    const tag = document.createElement('span');
+    tag.className = 'live-md-page-break-tag';
+    tag.textContent = this.label;
+    shelf.appendChild(tag);
+
+    const gap = document.createElement('div');
+    gap.className = 'live-md-page-break-gap';
+
+    dom.appendChild(shelf);
+    dom.appendChild(gap);
+
+    dom.addEventListener('mousedown', event => {
+      event.preventDefault();
+      view.dispatch({ selection: { anchor: this.from } });
+      view.focus();
+    });
     return dom;
   }
-  get estimatedHeight() { return 64; }
+  get estimatedHeight() { return 48; }
+}
+class PageFooter extends WidgetType {
+  constructor(readonly pageNumber: number, readonly label: string) { super(); }
+  eq(other: PageFooter) { return this.pageNumber === other.pageNumber && this.label === other.label; }
+  toDOM() {
+    const dom = document.createElement('div');
+    dom.className = 'live-md-page-footer';
+    dom.dataset.pageFooter = String(this.pageNumber);
+
+    const shelf = document.createElement('div');
+    shelf.className = 'live-md-page-break-shelf';
+    const tag = document.createElement('span');
+    tag.className = 'live-md-page-break-tag';
+    tag.textContent = this.label;
+    shelf.appendChild(tag);
+
+    dom.appendChild(shelf);
+    return dom;
+  }
+  get estimatedHeight() { return 24; }
 }
 class TaskCheckbox extends WidgetType {
   constructor(readonly checked: boolean, readonly from: number, readonly readonly: boolean) { super(); }
@@ -286,9 +325,11 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
     const styles: Record<string,string> = {StrongEmphasis:'live-md-strong',Emphasis:'live-md-emphasis',Strikethrough:'live-md-strike',InlineCode:'live-md-code',Link:'live-md-link'};
     if (styles[name] && from < to) marks.push(Decoration.mark({class:styles[name]}).range(from,to));
     if (name === 'HorizontalRule' && node.node.parent?.name === 'Document' && state.sliceDoc(from, to).trim() === '---') {
+      const currentPage = pageNumber;
       pageNumber++;
-      if (editing) marks.push(Decoration.line({ class: 'live-md-page-divider', attributes: { 'data-page-break': '' } }).range(state.doc.lineAt(from).from));
-      else marks.push(Decoration.replace({ widget: new PageBreak(from, `${pageLabel} ${pageNumber}`), block: true }).range(from, to));
+      const label = `${pageLabel} ${currentPage}`;
+      if (editing) marks.push(Decoration.line({ class: 'live-md-page-divider', attributes: { 'data-page-break': String(currentPage), 'data-page-label': label } }).range(state.doc.lineAt(from).from));
+      else marks.push(Decoration.replace({ widget: new PageBreak(from, label, currentPage), block: true }).range(from, to));
       return false;
     }
     if (name === 'Paragraph' && node.node.parent?.name !== 'ListItem') {
@@ -391,12 +432,18 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
       else marks.push(Decoration.widget({ widget: new DueDateAdder(line.to), side: 2 }).range(line.to));
     }
   }
+  const lastPageLabel = `${pageLabel} ${pageNumber}`;
+  marks.push(Decoration.widget({
+    widget: new PageFooter(pageNumber, lastPageLabel),
+    side: 1,
+    block: true,
+  }).range(state.doc.length));
   return Decoration.set(marks,true);
 }
 const theme = EditorView.theme({
-  '&':{height:'100%',color:'var(--color-text)',backgroundColor:'transparent'},
-  '&.cm-focused':{outline:'none'}, '.cm-scroller':{overflow:'auto',fontFamily:'inherit',lineHeight:'1.8'},
-  '.cm-content':{padding:'28px 36px',maxWidth:'900px',margin:'0 auto',minHeight:'100%',width:'100%',caretColor:'var(--color-primary)'},
+  '&':{height:'100%',color:'var(--color-text)',backgroundColor:'var(--color-bg)'},
+  '&.cm-focused':{outline:'none'}, '.cm-scroller':{overflow:'auto',fontFamily:'inherit',lineHeight:'1.8',backgroundColor:'var(--color-bg)',padding:'24px 16px'},
+  '.cm-content':{padding:'32px 40px',maxWidth:'880px',margin:'0 auto',minHeight:'calc(100% - 48px)',width:'100%',backgroundColor:'var(--color-surface)',borderRadius:'4px',boxShadow:'0 1px 4px 0 rgba(0,0,0,0.08), 0 0 0 1px var(--workspace-divider)',caretColor:'var(--color-primary)'},
   '.cm-line':{padding:'0 2px'}, '.cm-cursor':{borderLeftColor:'var(--color-primary)'},
   '.cm-gutters':{backgroundColor:'transparent',borderRight:'1px solid var(--color-border)'},
   '.cm-lineNumbers':{color:'var(--color-muted)',fontFamily:'monospace',fontSize:'11px',opacity:'0.55'},
