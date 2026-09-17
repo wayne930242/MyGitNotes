@@ -22,6 +22,7 @@ export async function readGitHubArchive(response: Response, files: { path: strin
   extract.on('entry', (header, stream, next) => {
     const parts = header.name.split('/'); const file = selected.get(parts.slice(1).join('/'));
     const safe = parts.length > 1 && parts.every(part => part !== '..' && part !== '.' && !part.includes('\\') && !part.includes('\0'));
+    stream.on('error', error => extract.destroy(error));
     if (!safe || header.type !== 'file' || !file || (header.size || 0) > 5 * 1024 * 1024) {
       stream.resume(); stream.on('end', next); return;
     }
@@ -32,7 +33,6 @@ export async function readGitHubArchive(response: Response, files: { path: strin
       if (retained > 24 * 1024 * 1024) { extract.destroy(new SourceError('Notebook contents exceed the archive memory limit.', 413)); return; }
       chunks.push(chunk);
     });
-    stream.on('error', error => extract.destroy(error));
     stream.on('end', () => {
       const content = Buffer.concat(chunks);
       const sha = createHash('sha1').update(`blob ${content.length}\0`).update(content).digest('hex');

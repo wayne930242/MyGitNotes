@@ -39,7 +39,7 @@ function inNotebook(file: string, notebooks: NotebookConfig[]) {
   return notebooks.find(nb => file.startsWith(nb.root + '/') && isNotebookContent(file.slice(nb.root.length + 1), nb));
 }
 function noteFile(file: string, notebooks: NotebookConfig[]) {
-  return Boolean(inNotebook(file, notebooks) && (/\.(md|markdown|txt)$/i.test(file) || path.posix.basename(file) === '_dir.yml'));
+  return Boolean(inNotebook(file, notebooks) && (/\.(md|markdown|mdx|txt)$/i.test(file) || path.posix.basename(file) === '_dir.yml'));
 }
 
 /** Shell-shaped operations over the configured note tree, pinned to one commit. */

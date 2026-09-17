@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import tar from 'tar-stream';
 import { readGitHubArchive } from '../src/github-archive.js';
@@ -28,4 +28,17 @@ it('accepts only canonical regular-file bytes from the pinned tree', async () =>
 });
 it('rejects malformed compressed archives instead of returning partial data', async () => {
   await expect(readGitHubArchive(new Response('not a gzip'), [])).rejects.toThrow();
+});
+it('rejects an oversized archive with 413 instead of emitting an unhandled stream error', async () => {
+  const pack = tar.pack(); const parts: Buffer[] = [];
+  const done = new Promise<void>(resolve => { pack.on('data', part => parts.push(part)); pack.on('end', () => resolve()); });
+  for (let i = 0; i < 9; i++) pack.entry({name:`root/assets/${i}.bin`}, randomBytes(4 * 1024 * 1024));
+  pack.finalize(); await done;
+  const body = gzipSync(Buffer.concat(parts), {level: 0}); let offset = 0;
+  const response = new Response(new ReadableStream({ async pull(controller) {
+    await new Promise(resolve => setImmediate(resolve));
+    if (offset >= body.length) { controller.close(); return; }
+    controller.enqueue(body.subarray(offset, offset += 64 * 1024));
+  } }));
+  await expect(readGitHubArchive(response, [{path:'notes/large.bin',sha:'0'}])).rejects.toMatchObject({status: 413});
 });

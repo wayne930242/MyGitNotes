@@ -136,6 +136,28 @@ export class GitHubApi {
     return structuredClone(result);
   }
 
+  /** Batched GraphQL blob reads. GitHub GraphQL requires a token. */
+  async blobTexts(shas: string[]): Promise<Map<string, string>> {
+    const [owner, name] = this.repository.split('/');
+    const fields = shas.map((sha, i) => `b${i}: object(oid: "${sha}") { ... on Blob { isBinary isTruncated text } }`).join('\n');
+    const response = await this.send('https://api.github.com/graphql', { method: 'POST', redirect: 'error',
+      body: JSON.stringify({ query: `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields} } }`, variables: { owner, name } }) });
+    if (!response.ok) {
+      if ([401, 403, 404].includes(response.status)) this.invalidate();
+      throw this.error(response.status);
+    }
+    const result = await response.json() as { data?: { repository?: Record<string, { isBinary?: boolean; isTruncated?: boolean; text?: string | null } | null> }; errors?: { type?: string }[] };
+    if (result.errors?.some(error => error.type === 'RATE_LIMITED')) {
+      this.lane.blockedUntil = Math.max(this.lane.blockedUntil, Date.now() + 60_000);
+      this.cooldown();
+    }
+    const repository = result.data?.repository;
+    if (!repository) throw new SourceError('GitHub GraphQL blob request failed.', 502);
+    const output = new Map<string, string>();
+    shas.forEach((sha, i) => { const blob = repository[`b${i}`]; if (blob && !blob.isBinary && !blob.isTruncated && typeof blob.text === 'string') output.set(sha, blob.text); });
+    return output;
+  }
+
   async archive(sha: string): Promise<Response> {
     const response = await this.send(`https://api.github.com/repos/${this.repository}/tarball/${encodeURIComponent(sha)}`, { redirect: 'manual' });
     if (response.status !== 302) {

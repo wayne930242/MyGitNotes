@@ -17,7 +17,7 @@ async function fixture(count = 100) {
   for (const [file, text] of Object.entries(files)) pack.entry({ name: `repo-head/${file}` }, text);
   pack.finalize(); const archive = await finished;
   const calls: { url: string; init: RequestInit }[] = [];
-  let head = 'a'.repeat(40); let permitted = true;
+  let head = 'a'.repeat(40); let permitted = true; const altered = new Map<string, string>();
   const request = vi.fn(async (input: any, init: RequestInit = {}) => {
     const url = String(input); calls.push({ url, init });
     const headers = new Headers(init.headers);
@@ -25,6 +25,12 @@ async function fixture(count = 100) {
       ? new Response(null, { status: 304 }) : new Response(JSON.stringify(data), { headers: etag ? { etag } : {} });
     if (headers.get('Authorization') === 'Bearer denied' || !permitted) return new Response('{}', { status: 404 });
     if (url.startsWith('https://codeload.github.com/')) return new Response(archive);
+    if (url === 'https://api.github.com/graphql') {
+      const texts = new Map(Object.values(files).map(text => [blobSha(text), text]));
+      const repository = Object.fromEntries([...JSON.parse(String(init.body)).query.matchAll(/(b\d+): object\(oid: "([a-f0-9]+)"\)/g)]
+        .map(([, alias, sha]: string[]) => [alias, { isBinary: false, isTruncated: false, text: altered.get(sha) ?? texts.get(sha) }]));
+      return new Response(JSON.stringify({ data: { repository } }));
+    }
     const endpoint = url.replace('https://api.github.com/repos/owner/repo', '');
     if (init.method && init.method !== 'GET') return json({ sha: 'b'.repeat(40) });
     if (!endpoint) return json({ private: false, permissions: { push: true } }, '"repo"');
@@ -38,7 +44,7 @@ async function fixture(count = 100) {
     throw new Error(`Unexpected fixture endpoint: ${endpoint}`);
   }) as typeof fetch;
   return { calls, request, reader: (token?: string) => new GitHubSource('owner/repo', 'main', token, request),
-    revoke: () => { permitted = false; }, advance: () => { head = 'd'.repeat(40); } };
+    revoke: () => { permitted = false; }, alter: (sha: string, text: string) => altered.set(sha, text), advance: () => { head = 'd'.repeat(40); } };
 }
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
@@ -81,14 +87,14 @@ describe('GitHub request budgets', () => {
     await f.reader('allowed').readNotes(notes.map(note => note.path), 'a'.repeat(40));
     await f.reader('allowed').commitNotes(notes, 'a'.repeat(40), 'docs(notes): update');
     expect(f.calls.length - before).toBe(9); // Includes the browser's fresh workspace and batch review.
-    const writes = f.calls.filter(c => c.init.method && c.init.method !== 'GET');
+    const writes = f.calls.filter(c => c.init.method && c.init.method !== 'GET' && !c.url.endsWith('/graphql'));
     expect(writes).toHaveLength(3);
     const body = JSON.parse(String(writes[0].init.body));
     expect(body.tree).toHaveLength(100); expect(body.tree[0].content).toContain('# Changed');
     expect(body.tree[0]).not.toHaveProperty('sha');
     f.advance();
     await expect(f.reader('allowed').commitNotes(notes, 'a'.repeat(40), 'stale')).rejects.toMatchObject({ status: 409 });
-    expect(f.calls.filter(c => c.init.method && c.init.method !== 'GET')).toHaveLength(3);
+    expect(f.calls.filter(c => c.init.method && c.init.method !== 'GET' && !c.url.endsWith('/graphql'))).toHaveLength(3);
   });
   it('reads selected notes against one fresh revision and rejects a changed branch', async () => {
     const f = await fixture();
@@ -98,16 +104,46 @@ describe('GitHub request budgets', () => {
     f.advance();
     await expect(f.reader('allowed').readNotes(['notes/ex/n0.md'], 'a'.repeat(40))).rejects.toMatchObject({status:409});
   });
-  it('does not forward credentials to archive download URLs', async () => {
-    const f = await fixture(); await f.reader('allowed').notes();
-    const download = f.calls.find(call => call.url.startsWith('https://codeload.github.com/'))!;
-    expect(new Headers(download.init.headers).has('Authorization')).toBe(false);
+  it('loads authenticated notes through batched GraphQL blob reads without downloading an archive', async () => {
+    const f = await fixture(250); f.alter(blobSha('# Note 7\n'), 'altered');
+    const notes = await f.reader('large').notes();
+    expect(notes).toHaveLength(250);
+    expect(notes.find(note => note.path === 'notes/ex/n7.md')!.title).toBe('Note 7');
+    expect(f.calls.filter(call => call.url === 'https://api.github.com/graphql')).toHaveLength(3);
+    expect(f.calls.some(call => call.url.includes('/tarball/') || call.url.startsWith('https://codeload.github.com/'))).toBe(false);
+    expect(f.calls.filter(call => call.url.includes('/git/blobs/'))).toHaveLength(2); // The manifest and bytes that fail SHA verification load individually.
+  });
+  it('falls back to individual blob reads when a GraphQL batch fails and stops on GraphQL rate limits', async () => {
+    const f = await fixture(10);
+    const failing = vi.fn(async (input: any, init?: RequestInit) => String(input).endsWith('/graphql') ? new Response('{}', { status: 502 }) : f.request(input, init)) as typeof fetch;
+    expect(await new GitHubSource('owner/repo', 'main', 'fallback', failing).notes()).toHaveLength(10);
+    const limited = vi.fn(async (input: any, init?: RequestInit) => String(input).endsWith('/graphql')
+      ? new Response(JSON.stringify({ data: null, errors: [{ type: 'RATE_LIMITED' }] })) : f.request(input, init)) as typeof fetch;
+    await expect(new GitHubSource('owner/repo', 'main', 'limited', limited).notes()).rejects.toMatchObject({ status: 429 });
+  });
+  it('lists .mdx notes like the local source', async () => {
+    const f = await fixture(1);
+    const request = vi.fn(async (input: any, init: RequestInit = {}) => {
+      const url = String(input);
+      if (url.endsWith('/git/trees/' + 'c'.repeat(40) + '?recursive=1')) {
+        const tree = await (await f.request(input, init)).json();
+        const content = '# Component\n';
+        files.push(content);
+        tree.tree.push({ path: 'notes/ex/post.mdx', type: 'blob', mode: '100644', sha: blobSha(content), size: content.length });
+        return new Response(JSON.stringify(tree));
+      }
+      if (url.endsWith('/git/blobs/' + blobSha('# Component\n'))) return new Response(JSON.stringify({ encoding: 'base64', content: Buffer.from('# Component\n').toString('base64') }));
+      return f.request(input, init);
+    }) as typeof fetch;
+    const files: string[] = [];
+    const notes = await new GitHubSource('owner/repo', 'main', 'mdx', request).notes();
+    expect(notes.map(note => note.path).sort()).toEqual(['notes/ex/n0.md', 'notes/ex/post.mdx']);
   });
   it('does not follow a foreign archive redirect or continue with individual requests', async () => {
     const f = await fixture();
     const request = vi.fn(async (input: any, init?: RequestInit) => String(input).includes('/tarball/')
       ? new Response(null, { status: 302, headers: { location: 'https://example.com/steal' } }) : f.request(input, init));
-    await expect(new GitHubSource('owner/repo', 'main', 'allowed', request).notes()).rejects.toMatchObject({status:502});
+    await expect(new GitHubSource('owner/repo', 'main', undefined, request).notes()).rejects.toMatchObject({status:502});
     expect(request.mock.calls.some(([url]) => String(url).startsWith('https://example.com/'))).toBe(false);
   });
   it('uses the primary reset deadline, resumes afterwards, and keeps other credentials independent', async () => {
