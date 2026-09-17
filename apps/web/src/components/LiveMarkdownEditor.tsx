@@ -50,7 +50,8 @@ class RenderedMarkdown extends WidgetType {
     const isImageOnly = /^\s*!\[.*?\]\(.*?\)\s*$/.test(this.text);
     const dom = document.createElement(this.block ? 'div' : 'span');
     dom.className = 'live-md-rendered prose-custom' + (isImageOnly ? ' live-md-image-rendered' : '');
-    if (this.block) { dom.style.display = 'block'; dom.style.width = '100%'; }
+    // flow-root keeps rendered child margins inside the widget, where CodeMirror measures block heights.
+    if (this.block) { dom.style.display = 'flow-root'; dom.style.width = '100%'; }
     dom.innerHTML = renderNote(this.text, this.path, this.tableLabel);
     dom.setAttribute('aria-label', 'Rendered Markdown; click to edit');
     dom.addEventListener('mousedown', event => {
@@ -443,7 +444,7 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
 const theme = EditorView.theme({
   '&':{height:'100%',color:'var(--color-text)',backgroundColor:'var(--color-bg)'},
   '&.cm-focused':{outline:'none'}, '.cm-scroller':{overflow:'auto',fontFamily:'inherit',lineHeight:'1.8',backgroundColor:'var(--color-bg)',padding:'24px 16px'},
-  '.cm-content':{padding:'32px 40px',maxWidth:'880px',margin:'0 auto',minHeight:'calc(100% - 48px)',width:'100%',backgroundColor:'var(--color-surface)',borderRadius:'4px',boxShadow:'0 1px 4px 0 rgba(0,0,0,0.08), 0 0 0 1px var(--workspace-divider)',caretColor:'var(--color-primary)'},
+  '.cm-content':{padding:'32px 40px 0',maxWidth:'880px',margin:'0 auto',minHeight:'calc(100% - 48px)',width:'100%',backgroundColor:'var(--color-surface)',borderRadius:'4px',boxShadow:'0 1px 4px 0 rgba(0,0,0,0.08), 0 0 0 1px var(--workspace-divider)',caretColor:'var(--color-primary)'},
   '.cm-line':{padding:'0 2px'}, '.cm-cursor':{borderLeftColor:'var(--color-primary)'},
   '.cm-gutters':{backgroundColor:'transparent',borderRight:'1px solid var(--color-border)'},
   '.cm-lineNumbers':{color:'var(--color-muted)',fontFamily:'monospace',fontSize:'11px',opacity:'0.55'},
@@ -455,6 +456,7 @@ const theme = EditorView.theme({
   '.live-md-h1':{fontSize:'1.85em'},'.live-md-h2':{fontSize:'1.5em'},'.live-md-h3':{fontSize:'1.25em'},
   '.live-md-strong':{fontWeight:'700'},'.live-md-emphasis':{fontStyle:'italic'},'.live-md-strike':{textDecoration:'line-through'},
   '.live-md-link, .live-md-link span, .live-md-url':{color:'var(--color-link)',textDecoration:'underline'},
+  '.live-md-hr':{color:'var(--color-text)'},
   '.live-md-code':{fontFamily:'monospace',backgroundColor:'var(--color-sidebar)',borderRadius:'4px'},
   '.live-md-codeblock':{fontFamily:'monospace',backgroundColor:'var(--color-sidebar)',paddingLeft:'14px'},
   '.live-md-quote':{borderLeft:'2px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border))',paddingLeft:'12px',color:'var(--color-muted)'},
@@ -519,7 +521,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
     });
     const view = new EditorView({parent:host.current!,state:EditorState.create({doc:content,extensions:[
       markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),lineNumbers(),highlightActiveLineGutter(),EditorView.lineWrapping,
-      syntaxHighlighting(defaultHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'}])),theme,tableUIState,chipEditState,field,
+      syntaxHighlighting(defaultHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'},{tag:tags.contentSeparator,class:'live-md-hr'}])),theme,tableUIState,chipEditState,field,
       autocompletion({ override: [atCompletionSource, context => {
         const text = context.state.doc.toString(), match = noteCompletionAt(text, context.pos);
         if (!match || context.state.readOnly) return null;

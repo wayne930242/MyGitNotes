@@ -699,8 +699,8 @@
   width: calc(100% + 80px);
   margin-left: -40px;
   margin-right: -40px;
-  margin-top: 20px;
-  margin-bottom: 28px;
+  padding-top: 20px;
+  padding-bottom: 28px;
   user-select: none;
   cursor: pointer;
 }
@@ -744,14 +744,20 @@
 }
 .live-md-page-divider {
   position: relative;
+  isolation: isolate;
   width: calc(100% + 80px) !important;
   margin-left: -40px !important;
   margin-right: -40px !important;
-  margin-block: 20px !important;
-  padding: 10px 40px !important;
-  background: var(--color-bg) !important;
-  border-top: 1px dashed var(--color-primary) !important;
-  border-bottom: 1px dashed var(--color-primary) !important;
+  padding: 31px 40px !important;
+}
+.live-md-page-divider::before {
+  content: '';
+  position: absolute;
+  inset: 20px 0;
+  z-index: -1;
+  background: var(--color-bg);
+  border-top: 1px dashed var(--color-primary);
+  border-bottom: 1px dashed var(--color-primary);
 }
 .live-md-page-divider::after {
   content: attr(data-page-label);
@@ -774,8 +780,7 @@
   width: calc(100% + 80px);
   margin-left: -40px;
   margin-right: -40px;
-  margin-top: 36px;
-  margin-bottom: 8px;
+  padding-top: 36px;
   user-select: none;
 }
 .live-md-page-footer .live-md-page-break-tag {
@@ -792,6 +797,9 @@
     box-shadow: none !important;
     min-height: 100% !important;
   }
+  [data-live-markdown] .cm-content {
+    padding-bottom: 0 !important;
+  }
   .live-md-page-break {
     width: calc(100% + 32px);
     margin-left: -16px;
@@ -804,13 +812,13 @@
     width: calc(100% + 32px);
     margin-left: -16px;
     margin-right: -16px;
-    margin-top: 24px;
+    padding-top: 24px;
   }
   .live-md-page-divider {
     width: calc(100% + 32px) !important;
     margin-left: -16px !important;
     margin-right: -16px !important;
-    padding: 10px 16px !important;
+    padding: 31px 16px !important;
   }
   .live-md-page-divider::after {
     right: 16px;
