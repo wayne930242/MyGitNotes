@@ -25,7 +25,8 @@ import { DONE_EMOJI, DUE_EMOJI, START_EMOJI, TIMESTAMP_EMOJI, findToken, isTaskL
 import { TASK_TOKEN_ICON_SVG } from '../lib/task-icons.js';
 
 export interface LiveMarkdownHandle {
-  insert: (text: string) => void;
+  /** Inserts `text` at `at`, or in place of the selection. */
+  insert: (text: string, at?: number) => void;
   revealRange: (from: number, to: number, focus?: boolean) => void;
   goToLine: (line: number, options?: { focus?: boolean; smooth?: boolean }) => void;
   getCurrentLine: () => number;
@@ -512,7 +513,11 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
   const caretCallback = useRef(onCaret); caretCallback.current = onCaret;
   const permission = useRef(new Compartment());
   useImperativeHandle(ref, () => ({
-    insert(text) {const view=editor.current;if(!view||view.state.readOnly)return;view.dispatch(view.state.replaceSelection(text),{scrollIntoView:true,userEvent:'input'});view.focus();},
+    insert(text, at) {
+      const view=editor.current;if(!view||view.state.readOnly)return;
+      const from=at===undefined?undefined:Math.max(0,Math.min(at,view.state.doc.length));
+      view.dispatch(from===undefined?view.state.replaceSelection(text):{changes:{from,insert:text},selection:{anchor:from+text.length}},{scrollIntoView:true,userEvent:'input'});view.focus();
+    },
     revealRange(from, to, focus = false) {
       const view = editor.current; if (!view) return;
       const start = Math.max(0, Math.min(from, view.state.doc.length));

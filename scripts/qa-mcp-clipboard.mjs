@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import os from 'node:os';
-import path from 'node:path';
+import { resolveQaChromePath } from './qa-chrome.mjs';
+import { startViteDevServer } from './qa-vite-dev.mjs';
 
 const require = createRequire(new URL('../apps/web/package.json', import.meta.url));
 const puppeteer = require('puppeteer-core');
-const base = process.env.CLIPBOARD_QA_URL || 'http://127.0.0.1:5173';
+const externalBase = process.env.CLIPBOARD_QA_URL;
+const vite = externalBase ? null : await startViteDevServer();
+const base = externalBase || vite.base;
 const url = `${base}/mcp/clipboard-test-token`;
 const browser = await puppeteer.launch({
-  executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || path.join(os.homedir(), '.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'),
+  executablePath: resolveQaChromePath(),
   headless: true,
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
@@ -62,7 +64,7 @@ try {
     await page.waitForSelector('button[title="Copied"]', { timeout: 3000 });
     await page.click('#paste');
     await page.keyboard.down('Control');
-    await page.keyboard.press('KeyV');
+    await page.keyboard.press('KeyV', { commands: ['paste'] });
     await page.keyboard.up('Control');
     assert.equal(await page.$eval('#paste', el => el.value), url, `${mode}: pasted URL`);
     console.log(`PASS ${mode}: copied indicator and pasted MCP URL`);
@@ -70,4 +72,5 @@ try {
   }
 } finally {
   await browser.close();
+  if (vite) await vite.close();
 }

@@ -18,6 +18,9 @@ it('rejects tracked Agent settings on Core while allowing main to track them nor
     fs.writeFileSync(path.join(root,'.github-notes-study.yaml'),'version: 1\nnotes: []\nevents: []\n'); git('add','.');
     expect(() => check()).toThrow();
     git('rm','-f','--','.github-notes-study.yaml');
+    fs.writeFileSync(path.join(root,'.github-notes-focus.yaml'),'version: 1\nfocuses: []\n'); git('add','.');
+    expect(() => check()).toThrow();
+    git('rm','-f','--','.github-notes-focus.yaml');
     fs.mkdirSync(path.join(root,'.agents/skills/custom'),{recursive:true});
     fs.writeFileSync(path.join(root,'.agents/skills/custom/SKILL.md'),'# Skill');
     fs.writeFileSync(path.join(root,'AGENTS.md'),'# Workspace rules'); git('add','.');

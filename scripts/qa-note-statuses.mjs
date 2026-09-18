@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
+import { resolveQaChromePath } from './qa-chrome.mjs';
 const product=path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require=createRequire(`${product}/apps/web/package.json`);
 const puppeteer=require('puppeteer-core');
@@ -28,12 +29,15 @@ write('notes/example/visible-archive.md','---\nstatus: archived\nhiden: false\n-
 git('init','-b','main');git('config','user.name','Browser QA');git('config','user.email','qa@example.com');git('add','.');git('commit','-m','fixture');
 process.env.MYGITNOTES_SOURCE='local';process.env.MYGITNOTES_LOCAL_PATH=root;delete process.env.VERCEL;delete process.env.APP_URL;
 const {createApp}=await import(`${product}/apps/local-server/dist/app.js`);
+const {parseNoteQuery,queryNotes,queryNotePaths,noteFacets,lookupNotes}=await import(`${product}/packages/core/dist/index.js`);
 const server=createServer(createApp(product));await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${server.address().port}`;
-const browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH || path.join(os.homedir(),'.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+const browser=await puppeteer.launch({executablePath:resolveQaChromePath(),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
 const page=await browser.newPage();await page.setViewport({width:1440,height:1000});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
 const click=async text=>{await page.waitForFunction(text=>Array.from(document.querySelectorAll('button')).some(b=>b.textContent.trim()===text&&!b.disabled),{},text);await page.evaluate(text=>Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()===text&&!b.disabled).click(),text);};
+// Pending changes are committed from the right-panel Changes tool.
+const commit=async()=>{if(!await page.$('.changes-tool'))await page.click('button[aria-label="Changes"]');await click('Manage changes');const committed=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/notes/commit');await click('Commit to remote repository');await committed;await page.click('button[aria-label="Changes"]');await page.waitForFunction(()=>!document.querySelector('.changes-tool'));};
 const assert=(condition,message)=>{if(!condition)throw Error(message);};
 const selector=title=>`button[role="combobox"][aria-label="Status for ${title}"]`;
 const options=async selector=>{
@@ -52,8 +56,9 @@ const columns=()=>page.$$eval('[data-status-column]',items=>items.map(item=>item
 const equal=(actual,expected,message)=>assert(JSON.stringify(actual)===JSON.stringify(expected),`${message}: ${JSON.stringify(actual)}`);
 const waitDisk=async(file,text)=>{for(let i=0;i<100;i++){if(fs.existsSync(path.join(root,file))&&fs.readFileSync(path.join(root,file),'utf8').includes(text))return;await new Promise(r=>setTimeout(r,50));}throw Error(`Missing saved text: ${text}`);};
 const manifest='schema_version: 1\nworkspace:\n  title: Status QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: research\n    title: Research\n    root: notes/research\n    statuses: [capture, published]\n';
-const replace=async(selector,text)=>{await page.focus(selector);await page.keyboard.down('Control');await page.keyboard.press('KeyA');await page.keyboard.up('Control');await page.keyboard.type(text);};
-const showFrontmatter=async()=>{if(!await page.$('[aria-label="Status"]')){await page.click('button[aria-label="Document tools"]');await page.click('.note-panel-tabs [role="tab"][aria-label="Frontmatter"]');}await page.waitForSelector('[aria-label="Status"]');};
+const replace=async(selector,text)=>{await page.focus(selector);await page.$eval(selector,e=>e.select());await page.keyboard.type(text);};
+// Document tools reopens on the last used tool, so select Frontmatter only when it is not already shown.
+const showFrontmatter=async()=>{if(!await page.$('[aria-label="Status"]')){await page.click('button[aria-label="Document tools"]');const tab=await page.waitForSelector('.note-panel-tabs [role="tab"][aria-label="Frontmatter"]');if(await tab.evaluate(e=>e.getAttribute('aria-selected')!=='true'))await tab.click();}await page.waitForSelector('[aria-label="Status"]');};
 try {
  await page.goto(base+'/settings',{waitUntil:'networkidle0'});
  await replace('#settings-manifest textarea',manifest);
@@ -91,13 +96,14 @@ try {
  await showFrontmatter();
  assert(await page.$eval('[aria-label="Hide note"]',e=>e.checked),'Legacy archive not marked hidden');
  await chooseSelect(page,'[aria-label="Status"]','working');await waitDisk('notes/example/archived.md','hiden: false');
- await page.click('[aria-label="Close note"]');await page.waitForSelector(selector('Archived Note'));
+ // Close flushes the draft before the zoomed editor unmounts; wait for it to leave the list clickable.
+ await page.click('[aria-label="Close note"]');await page.waitForFunction(()=>!document.querySelector('[aria-label="Close note"]'));await page.waitForSelector(selector('Archived Note'));
  await chooseSelect(page,selector('Root Note'),'archived');await waitDisk('notes/example/root.md','hiden: true');
  await page.waitForFunction(()=>!document.querySelector('button[aria-label="Status for Root Note"]'));
  await page.click('[aria-label="Show hidden notes"]');await page.waitForSelector(selector('Root Note'));
  assert(page.url().includes('showHidden=true'),'Visibility missing from URL');
  await page.reload({waitUntil:'networkidle0'});
- assert(await page.$eval('[aria-label="Show hidden notes"]',e=>e.checked),'Visibility preference lost on reload');
+ assert(await page.$eval('[aria-label="Show hidden notes"]',e=>e.getAttribute('aria-pressed')==='true'),'Visibility preference lost on reload');
  await chooseSelect(page,selector('Root Note'),'working');await waitDisk('notes/example/root.md','hiden: false');
  await page.click('[aria-label="Show hidden notes"]');await page.waitForFunction(()=>!document.querySelector('button[aria-label="Status for Hidden Note"]'));
  assert(await page.$(selector('Root Note')),'Unarchived note stayed hidden');
@@ -157,14 +163,20 @@ try {
  let remoteNote={id:'remote',path:'notes/research/remote.md',notebookId:'research',title:'Remote Note',content:'# Remote Note\n',metadata:{status:'external',custom:'remote'},status:'external',tags:[],revision:'one'};
  let saved;
  await page.setRequestInterception(true);
- page.on('request',request=>{
+ const hostedConfig={schema_version:1,workspace:{title:'Hosted',default_notebook:'research'},notebooks:[{id:'research',title:'Research',root:'notes/research',statuses:['capture','published','archived']}]};
+ const hostedCatalog={revision:async()=>remoteNote.revision,config:async()=>hostedConfig,index:async notebook=>[remoteNote].filter(note=>note.notebookId===notebook.id),contents:async notes=>new Map(notes.map(note=>[note.path,note.content])),memo:(kind,notebooks,compute)=>compute()};
+ page.on('request',async request=>{
   const url=new URL(request.url());let body;
-  if(url.pathname==='/api/workspace')body={config:{schema_version:1,workspace:{title:'Hosted',default_notebook:'research'},notebooks:[{id:'research',title:'Research',root:'notes/research',statuses:['capture','published','archived']}]},branch:'main',repoRoot:'',gitStatus:{branch:'main',isClean:true,staged:[],modified:[],untracked:[]},source:{type:'github',identity:'github:fixture/repo@main'},capabilities:{write:true,local:false},revision:remoteNote.revision};
+  if(url.pathname==='/api/workspace')body={config:hostedConfig,branch:'main',repoRoot:'',gitStatus:{branch:'main',isClean:true,staged:[],modified:[],untracked:[]},source:{type:'github',identity:'github:fixture/repo@main'},capabilities:{write:true,local:false},revision:remoteNote.revision};
   if(url.pathname==='/api/notes/commit'){const payload=JSON.parse(request.postData());saved={...payload.notes[0],revision:payload.revision};remoteNote={...remoteNote,...saved,status:saved.metadata.status,revision:'two'};body={revision:'two',commit:{commitHash:'two'}};}
   if(url.pathname==='/api/notes'){
    if(request.method()==='POST'){saved=JSON.parse(request.postData());remoteNote={...remoteNote,...saved,status:saved.metadata.status,revision:'two'};body={note:remoteNote,commit:{commitHash:'two'}};}
    else body={notes:[remoteNote]};
   }
+  // Lists and counts come from server queries; answer them with the core catalog rules.
+  if(url.pathname==='/api/notes/query'){const {query,options}=parseNoteQuery(Object.fromEntries(url.searchParams));body=options.select?await queryNotePaths(hostedCatalog,query):await queryNotes(hostedCatalog,query,options);}
+  if(url.pathname==='/api/notes/lookup'){const lookup=JSON.parse(request.postData());body=await lookupNotes(hostedCatalog,lookup.paths,lookup.content===true);}
+  if(url.pathname==='/api/notes/facets')body=await noteFacets(hostedCatalog,url.searchParams.get('showHidden')==='1');
   if(url.pathname==='/api/notes/read')body={note:remoteNote};
   if(url.pathname==='/api/notes/read-batch')body={notes:[remoteNote]};
   if(url.pathname==='/api/auth/session')body={authenticated:true,user:{login:'fixture'}};
@@ -178,20 +190,19 @@ try {
  await chooseSelect(page,selector('Remote Note'),'published');
  await page.waitForFunction(()=>document.querySelector('button[aria-label="Status for Remote Note"]').value==='published');
  assert(!saved,'Inline status committed immediately');
- await click('Commit');await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
+ await commit();
  assert(saved.revision==='one'&&saved.metadata.custom==='remote'&&saved.metadata.status==='published','Hosted save lost revision or metadata');
  fs.mkdirSync(`${product}/artifacts/qa`,{recursive:true});await page.screenshot({path:`${product}/artifacts/qa/mobile-note-statuses.png`,fullPage:true});
  await chooseSelect(page,selector('Remote Note'),'archived');
  await page.waitForFunction(()=>!document.querySelector('button[aria-label="Status for Remote Note"]'));
  assert(saved.metadata.status==='published','Archive committed immediately');
- await page.click('[aria-label="Notebooks and filters"]');await page.waitForFunction(()=>document.querySelector('#notebook-panel.is-open')?.getBoundingClientRect().x>=-1);
+ // The hidden-notes toggle lives in the note toolbar, not the Sidebar drawer.
  await page.click('[aria-label="Show hidden notes"]');await page.waitForSelector(selector('Remote Note'));
- await page.waitForFunction(()=>document.querySelector('#notebook-panel').getBoundingClientRect().right<=1);
  await chooseSelect(page,selector('Remote Note'),'capture');
  await page.waitForFunction(()=>document.querySelector('button[aria-label="Status for Remote Note"]').value==='capture');
- await click('Commit');await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
+ await commit();
  assert(saved.metadata.hiden===false&&saved.revision==='two','Hosted unarchive did not persist visibility on Commit');
- console.log('PASS hosted mobile choices, Sidebar visibility, archive/unarchive and revision-aware status save');
+ console.log('PASS hosted mobile choices, toolbar visibility, archive/unarchive and revision-aware status save');
  assert(!errors.length,errors.join('; '));console.log('PASS no browser runtime errors');
 } catch(error) {
  await page.screenshot({path:'/tmp/status-qa-failure.png',fullPage:true});

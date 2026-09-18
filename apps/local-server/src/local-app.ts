@@ -1,4 +1,4 @@
-import { STUDY_FILE, STUDY_MAX_BYTES, managedNotebook } from '@mygitnotes/core';
+import { WORKSPACE_DOCUMENTS, managedNotebook, workspaceDocument } from '@mygitnotes/core';
 import express, { Request, Response } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -41,7 +41,6 @@ import {
 } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 
-import { SCREEN_PAGE_FILE } from '@mygitnotes/core';
 
 function validateWorkspacePath(
   repoRoot: string,
@@ -53,7 +52,7 @@ function validateWorkspacePath(
   resolveSafePath(repoRoot, candidate);
   const resource = classifyResource(candidate, config);
   const agentAccess = (reqPath.startsWith('/api/agent-resources') || reqPath.startsWith('/api/git/')) && workspaceAgentKind(candidate);
-  const screenAccess = reqPath.startsWith('/api/git/') && (candidate === SCREEN_PAGE_FILE || candidate === STUDY_FILE || resource.type === 'workspace_config');
+  const screenAccess = reqPath.startsWith('/api/git/') && (Boolean(workspaceDocument(candidate)) || resource.type === 'workspace_config');
   const fileAccess = reqPath.startsWith('/api/git/') && config && managedNotebook(candidate, config.notebooks);
   if (agentAccess) resolveWorkspaceAgentPath(repoRoot, candidate);
   if (!agentAccess && !screenAccess && !fileAccess && (!['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !resource.notebookId)) {
@@ -621,7 +620,7 @@ const canManageChange = (file: string) => {
     if (workspaceAgentKind(file)) { resolveWorkspaceAgentPath(repoRoot, file); return true; }
     const config = loadWorkspaceConfig(repoRoot);
     const resource = classifyResource(file, config);
-    return Boolean(config && managedNotebook(file, config.notebooks)) || file === STUDY_FILE || file === SCREEN_PAGE_FILE || resource.type === 'workspace_config' || file.startsWith('notes/') && ['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type);
+    return Boolean(config && managedNotebook(file, config.notebooks)) || Boolean(workspaceDocument(file)) || resource.type === 'workspace_config' || file.startsWith('notes/') && ['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type);
   } catch { return false; }
 };
 app.get('/api/git/changes', async (_req, res) => {
@@ -666,21 +665,16 @@ app.get('/api/git/diff', async (req: Request, res: Response) => {
   try {
     const filePath = req.query.path as string | undefined;
     let diff = await getDiff(repoRoot, filePath);
-    // The new Screen YAML has no Git diff until tracked; still make it reviewable.
-    if ((!filePath || filePath === SCREEN_PAGE_FILE) && (await getGitStatus(repoRoot)).untracked.includes(SCREEN_PAGE_FILE)) {
-      const file = resolveSafePath(repoRoot, SCREEN_PAGE_FILE);
+    // New workspace documents have no Git diff until tracked; still make them reviewable.
+    const documents = WORKSPACE_DOCUMENTS.filter(document => !filePath || filePath === document.file);
+    const untracked = documents.length ? (await getGitStatus(repoRoot)).untracked : [];
+    for (const { file: name, maxBytes } of documents) {
+      if (!untracked.includes(name)) continue;
+      const file = resolveSafePath(repoRoot, name);
       const stat = fs.lstatSync(file);
-      if (stat.isFile() && !stat.isSymbolicLink() && stat.size <= 512 * 1024) {
+      if (stat.isFile() && !stat.isSymbolicLink() && stat.size <= maxBytes) {
         const lines = fs.readFileSync(file, 'utf8').split('\n');
-        diff += `\n--- /dev/null\n+++ ${SCREEN_PAGE_FILE}\n@@ -0,0 +1,${lines.length} @@\n${lines.map(line => '+' + line).join('\n')}`;
-      }
-    }
-    if ((!filePath || filePath === STUDY_FILE) && (await getGitStatus(repoRoot)).untracked.includes(STUDY_FILE)) {
-      const file = resolveSafePath(repoRoot, STUDY_FILE);
-      const stat = fs.lstatSync(file);
-      if (stat.isFile() && !stat.isSymbolicLink() && stat.size <= STUDY_MAX_BYTES) {
-        const lines = fs.readFileSync(file, 'utf8').split('\n');
-        diff += `\n--- /dev/null\n+++ ${STUDY_FILE}\n@@ -0,0 +1,${lines.length} @@\n${lines.map(line => '+' + line).join('\n')}`;
+        diff += `\n--- /dev/null\n+++ ${name}\n@@ -0,0 +1,${lines.length} @@\n${lines.map(line => '+' + line).join('\n')}`;
       }
     }
     res.json({ diff });

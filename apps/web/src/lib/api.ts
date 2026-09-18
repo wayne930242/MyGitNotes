@@ -9,8 +9,8 @@ import {
 } from './types.js';
 
 const API_BASE = '/api';
-export async function commitRemoteNotes(notes: { path: string; content: string; metadata: Record<string, unknown>; createOnly?: boolean }[], revision: string, message: string, screen?: { page: unknown; base: unknown }): Promise<{ revision: string; commit: { commitHash: string } }> {
-  const res = await fetch(`${API_BASE}/notes/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes, revision, message, screen }) });
+export async function commitRemoteNotes(notes: { path: string; content: string; metadata: Record<string, unknown>; createOnly?: boolean }[], revision: string, message: string, documents: { path: string; page: unknown; base: unknown }[] = []): Promise<{ revision: string; commit: { commitHash: string } }> {
+  const res = await fetch(`${API_BASE}/notes/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes, revision, message, documents }) });
   const data = await res.json();
   if (!res.ok) throw new ApiError(data.error || 'Failed to commit notes', res.status);
   return data;

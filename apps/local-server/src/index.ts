@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import { createApp, applicationRoot } from './app.js';
-import { writeDevPort } from './dev-ports.js';
+import { writeDevPorts } from './dev-ports.js';
 
 try { process.loadEnvFile(`${applicationRoot()}/.env`); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
 const desiredPort = Number(process.env.PORT || 4321);
@@ -28,6 +28,7 @@ function listen(port: number, attemptsLeft: number): Promise<AddressInfo> {
 const { port } = await listen(desiredPort, MAX_PORT_ATTEMPTS);
 if (isLocal) {
   process.env.APP_URL = `http://localhost:${port}`;
-  writeDevPort(repoRoot, 'serverPort', port);
+  // One write, so a reader never pairs this port with a previous run's pid.
+  writeDevPorts(repoRoot, { serverPort: port, serverPid: process.pid });
 }
 console.log(`[local-server] http://${host}:${port}`);

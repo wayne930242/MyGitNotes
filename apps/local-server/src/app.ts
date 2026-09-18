@@ -3,13 +3,13 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { loadSourceConfig, loadWorkspaceConfig, classifyResource, resolveSafePath, sourceIdentity, RemoteSource, createRemoteSource, SourceError, workspaceAgentKind, workspaceAgentResource, replaceNoteTags, type WorkspaceAgentResource,
-  parseNoteQuery, parseRevision, queryNotes, queryNotePaths, noteFacets, lookupNotes, noteAgenda, noteGraph } from '@mygitnotes/core';
+  parseNoteQuery, parseRevision, queryNotes, queryNotePaths, noteFacets, lookupNotes, noteAgenda, noteGraph, SCREEN_DOCUMENT, FOCUS_DOCUMENT } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRemoteMCP } from './mcp.js';
 import { createLocalApp } from './local-app.js';
 import { createAuth, authToken } from './auth.js';
 import { createStudyRouter } from './study.js';
-import { createScreenPageRouter } from './screen-page.js';
+import { createWorkspaceDocumentRouter } from './workspace-document.js';
 import { createFolderManagerRouter } from './folder-manager.js';
 import { createR2AssetHandler } from './r2-assets.js';
 import { createR2ManagerRouter } from './r2-manager.js';
@@ -58,7 +58,8 @@ export function createApp(base: string): express.Express {
   if (source) app.use(createFileManagerRouter(base, source));
   if (source) app.use(createR2ManagerRouter(base, source));
   if (source) app.use('/api/study', createStudyRouter(base, source));
-  if (source) app.use('/api/screen-page', createScreenPageRouter(base, source));
+  if (source) app.use('/api/screen-page', createWorkspaceDocumentRouter(base, source, SCREEN_DOCUMENT));
+  if (source) app.use('/api/focus-page', createWorkspaceDocumentRouter(base, source, FOCUS_DOCUMENT));
   if (source) app.use('/api/folder-manager', createFolderManagerRouter(base, source));
   const cache = source && source.type !== 'local' ? createRemoteCache() : undefined;
   app.use('/mcp', createRemoteMCP(base, source, cache));
@@ -162,8 +163,8 @@ export function createApp(base: string): express.Express {
     app.post('/api/notes/commit', async (req, res) => {
       try {
         if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to commit notes.', 403);
-        const { notes, revision, message, screen } = req.body;
-        res.json(await (res.locals.reader as RemoteSource).commitNotes(notes, revision, message, screen));
+        const { notes, revision, message, documents } = req.body;
+        res.json(await (res.locals.reader as RemoteSource).commitNotes(notes, revision, message, documents));
       } catch (error) { fail(res, error); }
     });
     app.post('/api/notes', async (req, res) => {

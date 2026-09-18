@@ -3,12 +3,26 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import {createRequire} from 'node:module';
+import { createServer } from 'node:http';
+import { resolveQaChromePath } from './qa-chrome.mjs';
 const product=path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require=createRequire(product+'/apps/web/package.json');
 const puppeteer=require('puppeteer-core');
-const base=process.argv[2];
-const browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH || path.join(os.homedir(),'.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+let base=process.argv[2];
+let root, server;
+if (!base) {
+ // No deployed URL given: smoke-test a local server over the committed demo workspace instead.
+ root=fs.mkdtempSync(path.join(os.tmpdir(),'github-notes-release-'));
+ fs.cpSync(path.join(product,'examples/demo-workspace'),root,{recursive:true});
+ for (const args of [['init','-b','main'],['config','user.name','Browser QA'],['config','user.email','qa@example.com'],['add','.'],['commit','-m','fixture']]) execFileSync('git',args,{cwd:root,stdio:'pipe'});
+ process.env.MYGITNOTES_SOURCE='local';process.env.MYGITNOTES_LOCAL_PATH=root;delete process.env.VERCEL;delete process.env.APP_URL;
+ const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
+ server=createServer(createApp(product));await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ base=`http://127.0.0.1:${server.address().port}`;
+}
+const browser=await puppeteer.launch({executablePath:resolveQaChromePath(),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
 const page=await browser.newPage();const errors=[];const statuses={};let workspace;let noteCount;
 page.on('pageerror',e=>errors.push(e.message));
 page.on('response',async response=>{const path=new URL(response.url()).pathname;if(path.startsWith('/api/'))statuses[path]=response.status();try{if(path==='/api/workspace')workspace=await response.json();if(path==='/api/notes')noteCount=(await response.json()).notes?.length;}catch{}});
@@ -41,7 +55,7 @@ try{
  await page.setViewport({width:320,height:700,isMobile:true,hasTouch:true});await page.waitForSelector('input[aria-label="MCP client name"]');
  await page.waitForFunction(()=>document.querySelector('nav').getBoundingClientRect().width<=320);
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
- assert.equal(await page.$$eval('nav button',buttons=>buttons.length),4);
+ assert.equal(await page.$$eval('nav button:not(.mobile-nav-create)',buttons=>buttons.length),4);
  const screenshot=product+'/artifacts/qa/'+(workspace.capabilities.local?'local':'production')+'-status-settings.png';
  fs.mkdirSync(path.dirname(screenshot),{recursive:true});await page.screenshot({path:screenshot,fullPage:true});console.log('PASS mobile Settings, persistent grant information and four-way navigation');
  if(!workspace.capabilities.local){
@@ -52,4 +66,4 @@ try{
   console.log('PASS production OAuth redirect and credential-bearing MCP route rejects invalid grants (401)');
  }
  assert.deepEqual(errors,[]);console.log('PASS no browser runtime errors');
-}catch(error){console.log(await page.evaluate(()=>({url:location.href,text:document.body.innerText.slice(0,1500)})));throw error;}finally{await browser.close();}
+}catch(error){console.log(await page.evaluate(()=>({url:location.href,text:document.body.innerText.slice(0,1500)})));throw error;}finally{await browser.close();server?.close();if(root)fs.rmSync(root,{recursive:true,force:true});}

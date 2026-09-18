@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { chooseSelect } from './browser-select.mjs';
+import { resolveQaChromePath } from './qa-chrome.mjs';
 
 const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(`${product}/apps/web/package.json`);
@@ -36,7 +37,7 @@ const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
 const server = createServer(createApp(product));
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
-const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || path.join(os.homedir(), '.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const page = await browser.newPage();
 const errors = []; page.on('pageerror', error => errors.push(error.message));
 const visit = route => page.goto(base + route, { waitUntil: 'networkidle0' });
@@ -50,9 +51,12 @@ try {
   await page.setViewport({ width: 1440, height: 1000 });
   await visit('/notebooks/example');
   assert(await page.$('.desktop-views > button:first-child[aria-label="Expand"][aria-pressed="true"]'), 'Expand must be the default and first view');
-  const indexSelector = view => ['flat', 'kanban'].includes(view)
-    ? '.workspace-page-actions > button[data-folder-index]'
-    : '.folder-links > button[data-folder-index]:first-child';
+  // Flat lists the index as the first note row; Kanban puts it at the start of the board's header row.
+  const indexSelector = view => view === 'flat'
+    ? '.note-list tbody:not(.note-list-uncommitted) > tr:first-child.note-list-leading button[data-folder-index]'
+    : view === 'kanban'
+      ? '.kanban-leading > button[data-folder-index]:first-child'
+      : '.folder-links > button[data-folder-index]:first-child';
   fs.mkdirSync(`${product}/artifacts/qa`, { recursive: true });
   await page.evaluate(() => localStorage.setItem('github-notes:language', 'zh-TW'));
   for (const width of [1440, 768, 390, 320]) {
@@ -60,19 +64,17 @@ try {
     for (const view of ['flat', 'kanban']) {
       await visit(`/notebooks/example?view=${view}`);
       assert(!await page.$('.workspace-breadcrumbs, .folder-links'), `Folder selectors remain in ${view}`);
-      assert(await page.$(indexSelector(view)), `Toolbar index missing in ${view}`);
+      assert(await page.$(indexSelector(view)), `Index missing in ${view}`);
       assert(await page.evaluate(() => document.querySelector('.workspace-scroll').textContent.includes('No Index')), 'Descendant notes must remain visible');
-      assert(!await page.$('[data-notepath="notes/example/index.md"], [aria-label="Status for Notebook introduction"]'), 'Toolbar index must not duplicate the current index in results');
+      assert(!await page.$('[data-notepath="notes/example/index.md"], [aria-label="Status for Notebook introduction"]'), 'Index must not duplicate the current index in results');
       const layout = await page.evaluate(() => {
         const box = selector => {
           const { x, y, width, height } = document.querySelector(selector).getBoundingClientRect();
           return { x, y, width, height };
         };
-        return { index: box('[data-folder-index]'), actions: box('.header-note-actions'), newNote: box('.header-new-note'), search: box('.header-search'), overflow: document.documentElement.scrollWidth > innerWidth };
+        return { newNote: box('.header-new-note'), search: box('.header-search'), overflow: document.documentElement.scrollWidth > innerWidth };
       });
-      if (width >= 768) assert.equal(layout.index.y + layout.index.height / 2, layout.newNote.y + layout.newNote.height / 2, 'Index and New note must share a toolbar row');
-      else assert.equal(layout.newNote.width, 0, 'Mobile toolbar still shows the duplicate New note action');
-      assert(layout.index.x + layout.index.width <= layout.actions.x, 'Toolbar index overlaps other controls');
+      if (width < 768) assert.equal(layout.newNote.width, 0, 'Mobile toolbar still shows the duplicate New note action');
       assert(layout.search.width >= 40, `Search field collapsed at ${width}px in ${view}: ${JSON.stringify(layout)}`);
       assert(!layout.overflow, `Horizontal overflow at ${width}px in ${view}`);
       if (view === 'kanban') {
@@ -108,7 +110,7 @@ try {
           await chooseSelect(page, '.note-toolbar-sort[aria-label="排序"]', `title:${order}`);
           const paths = (await (await answered).json()).notes.map(note => note.path).filter(path => path !== 'notes/example/index.md');
           await page.waitForFunction(paths => {
-            const cells = [...document.querySelectorAll('.note-list tbody tr td:first-child')].map(cell => cell.textContent);
+            const cells = [...document.querySelectorAll('.note-list tbody tr:not(.note-list-leading) td:first-child')].map(cell => cell.textContent);
             return cells.length === paths.length && cells.every((text, index) => text.endsWith(paths[index]));
           }, {}, paths);
           return paths;

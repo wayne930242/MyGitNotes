@@ -5,6 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
+import { resolveQaChromePath } from './qa-chrome.mjs';
 const product=path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require=createRequire(`${product}/apps/web/package.json`);
 const puppeteer=require('puppeteer-core');
@@ -22,7 +23,7 @@ process.env.MYGITNOTES_SOURCE='local';process.env.MYGITNOTES_LOCAL_PATH=root;del
 const {createApp}=await import(`${product}/apps/local-server/dist/app.js`);
 const server=createServer(createApp(product));await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${server.address().port}`;
-const browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH || path.join(os.homedir(),'.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+const browser=await puppeteer.launch({executablePath:resolveQaChromePath(),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
 const page=await browser.newPage();await page.setViewport({width:1440,height:1000});
 const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE ERROR',e.message);});
 page.setDefaultTimeout(8000);
@@ -112,7 +113,7 @@ try {
  for(let attempt=0;attempt<50;attempt++){if(fs.readFileSync(path.join(root,'notes/example/root.md'),'utf8').split('\n').find(line=>line.startsWith('|'))?.split('|').length===mobileColumns+2)break;await new Promise(resolve=>setTimeout(resolve,100));}
  await page.setViewport({width:1440,height:1000});await page.waitForSelector(tableRoot);
  await hoverEdge('column',1);await page.screenshot({path:product+'/artifacts/qa/table-inline-desktop.png',fullPage:true});
- await click('Insert table');
+ await page.click('[aria-label="Insert table"]');
  await page.waitForFunction(()=>document.querySelectorAll('.live-md-table').length===2);
  await page.click(`${tableRoot} th`);await page.click(toolbar('Delete column'));
  await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows[0].cells.length===1);

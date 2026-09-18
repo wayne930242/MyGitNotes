@@ -5,6 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
+import { resolveQaChromePath } from './qa-chrome.mjs';
 const product=path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require=createRequire(`${product}/apps/web/package.json`);
 const puppeteer=require('puppeteer-core');
@@ -22,9 +23,11 @@ process.env.MYGITNOTES_SOURCE='local';process.env.MYGITNOTES_LOCAL_PATH=root;del
 const {createApp}=await import(`${product}/apps/local-server/dist/app.js`);
 const server=createServer(createApp(product));await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${server.address().port}`;
-const browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH || path.join(os.homedir(),'.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+const browser=await puppeteer.launch({executablePath:resolveQaChromePath(),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
 const page=await browser.newPage();await page.setViewport({width:1440,height:1000});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
+// CodeMirror binds Undo to Mod-z, which is Command on macOS.
+const undoKey=process.platform==='darwin'?'Meta':'Control';
 const click=async text=>{const ok=await page.evaluate(text=>{const b=Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()===text);b?.click();return !!b;},text);if(!ok)throw Error(`Missing button: ${text}`);};
 try {
  await page.goto(base+'/notebooks/example/notes/root.md',{waitUntil:'networkidle0'});
@@ -60,11 +63,11 @@ try {
  await page.waitForFunction(()=>document.querySelector('.cm-line')?.textContent.startsWith('# Root'));
  await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.press('Enter');
  await page.keyboard.type('繁體中文 live edit');
- await page.keyboard.down('Control');await page.keyboard.press('KeyZ');await page.keyboard.up('Control');
+ await page.keyboard.down(undoKey);await page.keyboard.press('KeyZ');await page.keyboard.up(undoKey);
  await click('Source');if(await page.$eval('textarea[aria-label="Note content"]',e=>e.value.includes('繁體中文 live edit')))throw Error('Undo failed');
  await click('Live Preview');await page.focus('.cm-content');await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.type('繁體中文 live edit');
- await page.click('button[aria-label="Document tools"]');await page.click('.note-panel-tabs [role="tab"][aria-label="Notebook Assets"]');await page.waitForSelector('button[aria-label="Select pixel.png"]');await page.click('button[aria-label="Select pixel.png"]');await click('Insert');
- await page.waitForFunction(()=>!document.querySelector('.note-document-panel'));
+ await page.click('button[aria-label="Document tools"]');await page.click('.note-panel-tabs [role="tab"][aria-label="Insert image"]');await page.waitForSelector('button[aria-label="Open folder: assets"]');await page.click('button[aria-label="Open folder: assets"]');await page.waitForSelector('button[aria-label="Select file: pixel.png"]');await page.click('button[aria-label="Select file: pixel.png"]');await page.waitForSelector('.file-detail button.ui-button:not([disabled])');await click('Insert image');
+ await page.waitForFunction(()=>!document.querySelector('.note-document-panel[data-open="true"]'));
  await click('Source');const text=await page.$eval('textarea[aria-label="Note content"]',e=>e.value);
  if(!text.includes('繁體中文 live edit')||!text.includes('/raw-assets/by-hash/'))throw Error('Live insertion lost content');
  await click('Live Preview');await page.waitForSelector('.live-md-rendered img');

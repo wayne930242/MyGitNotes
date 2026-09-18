@@ -19,7 +19,8 @@ export const useWorkspaceLinks = () => useContext(Context);
 
 export function WorkspaceLinks({ notebooks, folders, children, onOpenNote }: {
   notebooks: NotebookConfig[]; folders: FolderItem[]; children: ReactNode;
-  onOpenNote: (note: NoteListItem, anchor?: string) => void;
+  /** `source` is the clicked link, so the caller can tell which Focus pane it came from. */
+  onOpenNote: (note: NoteListItem, anchor?: string, source?: HTMLElement) => void;
 }) {
   const { t } = useTranslation(); const navigate = useNavigate();
   const queryClient = useQueryClient(); const scope = useNoteQueryScope();
@@ -64,7 +65,7 @@ export function WorkspaceLinks({ notebooks, folders, children, onOpenNote }: {
       .find(nb => link.path === nb.root || link.path.startsWith(`${nb.root}/`)) : undefined;
     if (note && notebook && link.kind === 'path') {
       if (newTab) window.open(`${noteRoute(notebook.id, note.path.slice(notebook.root.length + 1))}${link.anchor ? `#${encodeURIComponent(link.anchor)}` : ''}`, '_blank', 'noopener,noreferrer');
-      else if (await ready()) onOpenNote(note, link.anchor);
+      else if (await ready()) onOpenNote(note, link.anchor, element);
       return;
     }
     if (link.kind === 'path' && notebook) {

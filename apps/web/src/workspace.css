@@ -435,8 +435,8 @@
 }
 .workspace-splitter:hover::after,
 .workspace-splitter:focus-visible::after,
-.workspace-splitter[data-separator-state="hover"]::after,
-.workspace-splitter[data-separator-state="drag"]::after {
+.workspace-splitter[data-separator="hover"]::after,
+.workspace-splitter[data-separator="active"]::after {
   background: var(--color-primary);
   width: 2px;
   left: 3px;
@@ -692,7 +692,9 @@
   .app-shell[data-workspace-tab="agent"] .workspace-header .header-brand { display: flex; width: auto; padding: 0; }
   .app-shell[data-workspace-tab="agent"] .workspace-header .header-brand .workspace-brand-icon,
   .app-shell[data-workspace-tab="agent"] .workspace-header .header-brand .min-w-0 { display: none; }
+  .app-shell[data-workspace-tab="agent"] .workspace-header .header-layout { grid-template-columns: auto minmax(0, 1fr) auto; }
   .app-shell[data-workspace-tab="agent"] .workspace-header .header-notebook { grid-column: 2; grid-row: 1; }
+  .app-shell[data-workspace-tab="agent"] .header-utilities { grid-column: 3; }
 }
 @media (prefers-reduced-motion: reduce) {
   .workspace-sidebar, .workspace-header, .workspace-sidebar *, .workspace-responsive-sidebar { transition: none; }
@@ -700,14 +702,17 @@
 .folder-link.folder-index { background: #fff; color: #172033; box-shadow: inset 0 0 0 1px var(--workspace-divider); }
 .folder-link.folder-index > svg { color: #64748b; }
 .folder-link.folder-index:hover { background: #f8fafc; }
-.workspace-page-actions > .folder-index { flex: none; margin-right: auto; padding: 8px 10px; gap: 6px; min-height: 32px; }
-.workspace-page-actions > .folder-index > svg { width: 16px; height: 16px; }
+.workspace-page-actions > .browse-dock-toggle { flex: none; margin-right: auto; }
+/* The folder index as the first row of the flat note list. */
+.note-list-leading .folder-link.folder-index { width: 100%; padding: 0; gap: 10px; background: none; box-shadow: none; color: inherit; }
+.note-list-leading .folder-link.folder-index > svg { width: 16px; height: 16px; }
+.note-list-leading .folder-link-title { font-size: 14px; }
+/* The folder index at the start of the Kanban header row. */
+.kanban-leading > .folder-index { flex: none; padding: 5px 10px; gap: 6px; }
+.kanban-leading > .folder-index > svg { width: 14px; height: 14px; }
+.kanban-leading .folder-link-title { font-size: 12px; }
 @media (max-width: 767px) {
-  .workspace-page-actions > .folder-index { min-height: 44px; padding: 8px; }
-}
-@media (max-width: 359px) {
-  .workspace-page-actions > .folder-index { min-width: 44px; }
-  .workspace-page-actions > .folder-index > svg { display: none; }
+  .kanban-leading > .folder-index { min-height: 44px; }
 }
 
 /* Word-style pagination & canvas background */

@@ -61,3 +61,28 @@ export function listLocalDrafts(branch: string): LocalDraft[] {
   }
   return drafts;
 }
+
+/** Moves drafts the retired graph editing store kept under `graph-draft:` into the drafts the editor recovers. */
+export function adoptGraphDrafts(scope: string): void {
+  try {
+    const prefix = `graph-draft:${scope}:`;
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) keys.push(key);
+    }
+    for (const key of keys) {
+      const path = key.slice(prefix.length);
+      try {
+        const record = JSON.parse(localStorage.getItem(key) || '') as { base?: { path?: string }; draft?: { content?: unknown; metadata?: unknown } };
+        const metadata = record.draft?.metadata;
+        if (record.base?.path === path && typeof record.draft?.content === 'string' && !getLocalDraft(scope, path)) {
+          saveLocalDraft(scope, path, record.draft.content, metadata && typeof metadata === 'object' ? metadata as Record<string, unknown> : {});
+        }
+      } catch { /* A record that cannot be read has nothing to adopt. */ }
+      localStorage.removeItem(key);
+    }
+  } catch (err) {
+    console.error('Failed to adopt graph drafts:', err);
+  }
+}

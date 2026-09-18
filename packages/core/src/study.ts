@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createEmptyCard, fsrs, type Card, type Grade } from 'ts-fsrs';
 import { nextStudyStage, type StudyProgression, type Familiarity } from './study-stages.js';
 import { splitNotePages } from './note-pages.js';
+import type { WorkspaceDocument } from './workspace-documents.js';
 
 export const STUDY_FILE = '.github-notes-study.yaml';
 export const STUDY_MAX_BYTES = 4 * 1024 * 1024;
@@ -92,6 +93,17 @@ export type StudyPolicy = z.infer<typeof StudyPolicySchema>;
 export type StudyEvent = z.infer<typeof EventSchema>;
 export interface StudySource { notebookId: string; path: string; title: string; content: string; metadata: { id?: unknown } }
 export const emptyStudyWorkspace = (): StudyWorkspace => ({ version: 1, notes: [], events: [] });
+export const STUDY_DOCUMENT: WorkspaceDocument<StudyWorkspace> = {
+  file: STUDY_FILE, label: 'study', maxBytes: STUDY_MAX_BYTES, scopes: ['study', 'study-transition', 'folders', 'files'],
+  schema: StudyWorkspaceSchema, fileSchema: StudyWorkspaceSchema, empty: emptyStudyWorkspace,
+  // Relocation rewrites the stored object so unrelated fields keep their stored form.
+  read: value => { StudyWorkspaceSchema.parse(value); return value as StudyWorkspace; },
+  relocate(study, notebookId, move) {
+    let changed = false;
+    for (const note of study.notes) if (note.notebookId === notebookId) { const next = move(note.path); if (next !== note.path) { note.path = next; changed = true; } }
+    return changed;
+  },
+};
 const newId = () => globalThis.crypto.randomUUID();
 const serializedCard = ({ last_review, ...card }: Card) => SchedulerSchema.parse({ ...card, due: card.due.toISOString(), ...(last_review ? { last_review: last_review.toISOString() } : {}) });
 

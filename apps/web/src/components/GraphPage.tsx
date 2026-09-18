@@ -5,19 +5,19 @@ import ForceGraph2D from 'react-force-graph-2d';
 import { insertNoteLink, type NoteGraphNode } from '@mygitnotes/core/note-graph';
 import { selectFilteredGraph } from '@mygitnotes/core/note-filters';
 import { ScreenPageSchema, type ScreenRow, type GraphLayout } from '@mygitnotes/core/screen-page';
-import type { NoteListItem, NoteQuery } from '@mygitnotes/core/note-query';
-import type { NoteItem, NotebookConfig, FolderItem } from '../lib/types.js';
-import { useNoteGraph, useNoteLookup, useNotePaths } from '../lib/use-note-queries.js';
+import type { NoteQuery } from '@mygitnotes/core/note-query';
+import type { NotebookConfig, FolderItem } from '../lib/types.js';
+import { useNoteGraph, useNotePaths } from '../lib/use-note-queries.js';
 import { overlayGraphDrafts } from '../lib/draft-overlay.js';
 import { useLanePaths } from '../lib/screen-queries.js';
 import type { FilterControls } from '../lib/filter-controls.js';
 import type { ScreenController } from '../lib/use-screen-page.js';
-import type { GraphEditing } from '../lib/use-graph-editing.js';
+import { useNoteEditing } from '../lib/note-editing.js';
 import { arrangeGraphLayout, graphLaneViewport } from '../lib/graph-layout.js';
 import { optimizeGraphLayout } from '../lib/graph-topology-layout.js';
 import { initializeGraphLayout } from '../lib/graph-initial-layout.js';
-import { useWorkspaceLinks } from './WorkspaceLinks.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import type { NoteEditorHandle, NoteEditorSession } from './NoteEditor.js';
 import { GRAPH_APPEARANCE_KEY, graphColorGroup, graphColorGroups, readGraphAppearance, type GraphAppearance } from '../lib/graph-colors.js';
 import { GraphControls } from './graph/GraphControls.js';
 import { GraphFilters } from './GraphFilters.js';
@@ -32,11 +32,11 @@ type LayoutNode = GraphLayout['nodes'][number];
 type Node = NoteGraphNode & { x?: number; y?: number; fx?: number; fy?: number };
 export interface GraphPageProps {
   notebooks: NotebookConfig[]; filters?: FilterControls;
-  onOpenNote: (note: NoteListItem) => void; screen?: ScreenController; lane?: ScreenRow; editing?: GraphEditing;
+  screen?: ScreenController; lane?: ScreenRow;
   folders?: FolderItem[];
 }
 
-export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editing, folders = [] }: GraphPageProps) {
+export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: GraphPageProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -95,8 +95,18 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
     if (lane || !activeLane || !filters || graphNotebook === activeLane.notebookId) return;
     const next = new URLSearchParams(params); next.set('notebook', activeLane.notebookId); setParams(next, { replace: true });
   }, [lane, activeLane?.notebookId, graphNotebook]);
-  const { registerBeforeNavigate } = useWorkspaceLinks();
-  useEffect(() => registerBeforeNavigate(async () => { try { await editing?.store.flushAll(); return true; } catch (error) { setNotice((error as Error).message); return false; } }), [editing?.store, registerBeforeNavigate]);
+  // Expanded cards host the notes' editors; their sessions drive the pending edges and link insertion.
+  const editing = useNoteEditing();
+  const [sessions, setSessions] = useState(() => new Map<string, NoteEditorSession>());
+  const updateSession = (path: string, session: NoteEditorSession | null) => setSessions(previous => {
+    const next = new Map(previous); if (session) next.set(path, session); else next.delete(path); return next;
+  });
+  const handles = useRef(new Map<string, NoteEditorHandle>()), editorRefs = useRef(new Map<string, (handle: NoteEditorHandle | null) => void>());
+  const editorRef = (path: string) => {
+    let ref = editorRefs.current.get(path);
+    if (!ref) { ref = handle => { if (handle) handles.current.set(path, handle); else handles.current.delete(path); }; editorRefs.current.set(path, ref); }
+    return ref;
+  };
   // Nodes and links come from the server; the filter, the visible set and lane membership are
   // path queries, and unsaved drafts are laid over the answer.
   const graphSource = useNoteGraph();
@@ -110,10 +120,10 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
   const visiblePaths = useNotePaths(filters?.value.showHidden ? null : { notebookId: scopeNotebook, showHidden: false });
   const shownLanes = useMemo(() => [...rows.filter(row => laneIds.includes(row.id)), ...(lane ? [lane] : [])], [rows, laneKey, lane]);
   const lanePaths = useLanePaths(shownLanes);
-  const editingDrafts = useMemo(() => (editing ? [...editing.store.entries.values()].filter(entry => entry.dirty).map(entry => ({
-    path: entry.draft.path, notebookId: entry.draft.notebookId, title: entry.draft.title,
-    status: entry.draft.status, tags: entry.draft.tags, content: entry.draft.content,
-  })) : []), [editing?.version]);
+  const editingDrafts = useMemo(() => [...sessions].flatMap(([path, session]) => {
+    const node = graphSource.graph?.nodes.find(node => node.id === path);
+    return session.dirty && node ? [{ path, notebookId: node.notebookId, title: session.title || node.title, status: node.status, tags: node.tags, content: session.content }] : [];
+  }), [sessions, graphSource.graph]);
   const graph = useMemo(
     () => (graphSource.graph ? overlayGraphDrafts(graphSource.graph, editingDrafts) : { nodes: [], links: [] }),
     [graphSource.graph, editingDrafts],
@@ -179,7 +189,9 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
     setClosing(previous => { const next = new Set(previous); next.delete(path); return next; });
     setMaximized(previous => previous === path ? null : previous);
   };
-  const setExpanded = (paths: string[], value: boolean) => {
+  // Collapsing unmounts the card's editor, so its pending edits are saved first and a failed save keeps the card open.
+  const setExpanded = async (paths: string[], value: boolean) => {
+    if (!value && !await editing.flushEditors(paths)) return;
     freeze(); const next = currentLayout();
     for (const path of paths) {
       clearTimeout(closeTimers.current.get(path)); closeTimers.current.delete(path);
@@ -269,11 +281,11 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', finish); window.addEventListener('pointercancel', cancel);
   };
   const link = (source: string, target: { path: string; title: string }) => {
-    const note = cardNotes.get(source); if (!note || !editing?.writable) return;
-    const draft = editing.store.get(note); if (draft.blocked) return;
-    const result = insertNoteLink(draft.draft.content, source, target.path, target.title, carets.current.get(source));
-    if (result.content === draft.draft.content) { setNotice(t('graph.linkExists')); return; }
-    editing.store.edit(note, result.content); carets.current.set(source, result.position); setNotice(t('graph.linkAdded'));
+    const session = sessions.get(source), handle = handles.current.get(source); if (!session || session.locked || !handle) return;
+    const result = insertNoteLink(session.content, source, target.path, target.title, carets.current.get(source));
+    if (result.content === session.content) { setNotice(t('graph.linkExists')); return; }
+    const at = result.position - (result.content.length - session.content.length);
+    handle.insert(result.content.slice(at, result.position), at); carets.current.set(source, result.position); setNotice(t('graph.linkAdded'));
   };
   const drag = (event: React.PointerEvent, path: string, kind: 'move' | 'resize') => {
     if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || maximized) return;
@@ -290,7 +302,7 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);
   };
   const startLink = (event: React.PointerEvent, source: string) => {
-    if (!editing?.writable || event.button !== 0) return;
+    if (sessions.get(source)?.locked !== false || event.button !== 0) return;
     event.stopPropagation(); const start = point(event); freeze();
     setGesture({ kind: 'link', start, end: start, source });
     const move = (e: PointerEvent) => setGesture({ kind: 'link', start, end: point(e), source });
@@ -305,10 +317,6 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
     const cancel = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', finish); window.removeEventListener('pointercancel', cancel); setGesture(null); };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', finish); window.addEventListener('pointercancel', cancel);
   };
-  // Only an expanded card shows a body, so only those notes are read in full.
-  const cardPaths = useMemo(() => graphData.nodes.filter(node => expanded.has(node.id) || closing.has(node.id)).map(node => node.id), [graphData, expanded, closing]);
-  const cardLookup = useNoteLookup(cardPaths, true);
-  const cardNotes = useMemo(() => new Map(cardLookup.notes.flatMap(note => typeof note.content === 'string' ? [[note.path, note as NoteItem] as const] : [])), [cardLookup.notes]);
   const graphLoading = graphSource.loading || matchingPaths.loading || visiblePaths.loading || lanePaths.loading;
   const visibleSelected = selected.filter(path => graphData.nodes.some(node => node.id === path));
   const selectLane = (id: string) => { const next = new URLSearchParams(params); next.delete('lanes'); next.delete('laneScope'); if (id) next.set('lanes', id); setParams(next); };
@@ -319,7 +327,7 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
       : activeLane.items.filter(item => item.kind !== 'note' || !selectedSet.has(item.path));
     screen.change({ ...screen.page, rows: screen.page.rows.map(row => row.id === activeLane.id ? { ...activeLane, items } : row) });
   };
-  const openFullGraph = async () => { try { await editing?.store.flushAll(); navigate(`/graph?notebook=${encodeURIComponent(lane!.notebookId)}&lanes=${encodeURIComponent(lane!.id)}`); } catch (error) { setNotice((error as Error).message); } };
+  const openFullGraph = async () => { if (await editing.flushEditors()) navigate(`/graph?notebook=${encodeURIComponent(lane!.notebookId)}&lanes=${encodeURIComponent(lane!.id)}`); };
   const hoveredNode = graphData.nodes.find(node => node.id === hover && !expanded.has(node.id) && !closing.has(node.id));
   const selectedNotebooks = new Set(visibleSelected.map(path => graphData.nodes.find(node => node.id === path)?.notebookId));
   const saveNotebook = selectedNotebooks.size === 1 ? [...selectedNotebooks][0] : undefined;
@@ -394,20 +402,19 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
         const a = edge.source as Node, b = edge.target as Node; if (a.x === undefined || b.x === undefined) return;
         const end = (from: Node, to: Node) => { const card = layout.nodes.find(n => n.path === from.id && n.expanded); const dx = to.x! - from.x!, dy = to.y! - from.y!; const factor = card ? Math.min((card.width || 360) / 2 / (Math.abs(dx) || 1e-9), (card.height || 300) / 2 / (Math.abs(dy) || 1e-9)) : 8 / Math.max(1, Math.hypot(dx, dy)); return { x: from.x! + dx * Math.min(.49, factor), y: from.y! + dy * Math.min(.49, factor) }; };
         const start = end(a,b), stop = end(b,a), angle = Math.atan2(stop.y-start.y, stop.x-start.x);
-        const pending = editing?.store.entries.get(a.id)?.dirty;
+        const pending = sessions.get(a.id)?.dirty;
         ctx.strokeStyle = isDark ? '#64748b' : '#94a3b8'; ctx.lineWidth = (hover === a.id || hover === b.id ? 2 : 1) / scale; ctx.setLineDash(pending ? [5/scale,4/scale] : []);
         ctx.beginPath(); ctx.moveTo(start.x,start.y); ctx.lineTo(stop.x,stop.y); ctx.stroke(); ctx.setLineDash([]);
         ctx.beginPath(); ctx.moveTo(stop.x,stop.y); ctx.lineTo(stop.x-Math.cos(angle-.45)*8/scale,stop.y-Math.sin(angle-.45)*8/scale); ctx.moveTo(stop.x,stop.y); ctx.lineTo(stop.x-Math.cos(angle+.45)*8/scale,stop.y-Math.sin(angle+.45)*8/scale); ctx.stroke();
       }} />
     {graphData.nodes.filter(node => expanded.has(node.id) || closing.has(node.id)).map(node => {
       const card = layout.nodes.find(n => n.path === node.id)!;
-      const note = cardNotes.get(node.id);
       const large = maximized === node.id, w = card.width || 360, h = card.height || 300;
       return <div key={node.id} onAnimationEnd={event => {
         if (event.animationName === 'graph-note-exit' && closing.has(node.id) && (event.target as HTMLElement).classList.contains('graph-note-card')) finishClosing(node.id);
       }} className={`graph-card-position ${closing.has(node.id) ? 'is-closing' : ''} ${large ? 'is-maximized' : ''} ${showOutside && laneIds.length && !laneMembers.has(node.id) ? 'is-outside-lane' : ''}`} style={large ? { inset: 8, zIndex: 80 } : { left: (node.x || 0)*transform.k+transform.x-w*transform.k/2, top: (node.y || 0)*transform.k+transform.y-h*transform.k/2, width:w, height:h, transform:`scale(${transform.k})`, zIndex:selected.includes(node.id) ? 24 : 20 }}>
-        <GraphNoteCard note={note} node={node} color={nodeColor(node)} editing={editing} selected={selected.includes(node.id)} maximized={large} onSelect={event => select(node.id,event)} onCaret={position => carets.current.set(node.id,position)}
-          onMove={event => drag(event,node.id,'move')} onResize={event => drag(event,node.id,'resize')} onConnect={event => startLink(event,node.id)} onLink={target => link(node.id,target)} onCollapse={() => setExpanded([node.id],false)} onMaximize={() => setMaximized(large ? null : node.id)} />
+        <GraphNoteCard node={node} color={nodeColor(node)} session={sessions.get(node.id)} editorRef={editorRef(node.id)} onSession={session => updateSession(node.id, session)} selected={selected.includes(node.id)} maximized={large} onSelect={event => select(node.id,event)} onCaret={position => carets.current.set(node.id,position)}
+          onMove={event => drag(event,node.id,'move')} onResize={event => drag(event,node.id,'resize')} onConnect={event => startLink(event,node.id)} onLink={target => link(node.id,target)} onCollapse={() => void setExpanded([node.id],false)} onMaximize={() => setMaximized(large ? null : node.id)} />
       </div>;
     })}
     {hoveredNode && <button className="ui-button graph-hover-expand" style={{ left: (hoveredNode.x || 0) * transform.k + transform.x + 14, top: (hoveredNode.y || 0) * transform.k + transform.y - 14 }} title={t('graph.expandEnter')} aria-label={`${t('graph.expand')}: ${hoveredNode.title}`} onMouseEnter={() => clearTimeout(hoverTimer.current)} onMouseLeave={() => setHover(null)} onClick={() => { setExpanded([hoveredNode.id], true); setHover(null); }}><PanelTopOpen size={16} /></button>}
@@ -418,12 +425,11 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
         selectBox(gesture.start, point(event), additive(event)); setGesture(null); setBoxMode(false);
       }} />}
     {gesture && <svg className="graph-gesture" width={size.width} height={size.height}>{gesture.kind === 'box' ? <rect x={Math.min(gesture.start.x,gesture.end.x)} y={Math.min(gesture.start.y,gesture.end.y)} width={Math.abs(gesture.end.x-gesture.start.x)} height={Math.abs(gesture.end.y-gesture.start.y)} fill="#818cf833" stroke="#818cf8" /> : <line x1={gesture.start.x} y1={gesture.start.y} x2={gesture.end.x} y2={gesture.end.y} stroke="#818cf8" strokeWidth="2" />}</svg>}
-    {(graphSource.error || matchingPaths.error || visiblePaths.error || lanePaths.error || cardLookup.error) && <div role="alert" className="graph-notice">{graphSource.error || matchingPaths.error || visiblePaths.error || lanePaths.error || cardLookup.error}</div>}
+    {(graphSource.error || matchingPaths.error || visiblePaths.error || lanePaths.error) && <div role="alert" className="graph-notice">{graphSource.error || matchingPaths.error || visiblePaths.error || lanePaths.error}</div>}
     {graphLoading && <p className="graph-empty" role="status">{t('notes.loading')}</p>}
     {!graphLoading && !graphData.nodes.length && <p className="graph-empty" role="status">{t('filters.graphEmpty')}</p>}
     <div className="graph-minimap-panel"><div className="graph-stats" role="status" data-filter-results={matching.length} data-graph-nodes={graphData.nodes.length} data-graph-links={graphData.links.length}>
       <button className="ui-icon-button" aria-label={t('graph.resetZoom')} title={t('graph.resetZoom')} onClick={resetView}>↺</button><span>{graphData.nodes.length} ●</span><span>{graphData.links.length} ↗</span></div>{minimap}</div>
-    {editing && [...editing.store.entries.values()].some(entry => entry.dirty && !graphData.nodes.some(node => node.id === entry.draft.path && expanded.has(node.id))) && <div className="graph-pending-notes">{[...editing.store.entries.values()].filter(entry => entry.dirty && !graphData.nodes.some(node => node.id === entry.draft.path && expanded.has(node.id))).map(entry => <button key={entry.draft.path} onClick={async () => { try { await editing.store.flushAll(); onOpenNote(entry.draft); } catch(error) { setNotice((error as Error).message); } }}>{entry.draft.title} · {t('graph.pending')}</button>)}</div>}
     {saveOpen && <WorkspaceDialog title={t('graph.saveLane')} onClose={() => setSaveOpen(false)}><input className="ui-control" autoFocus aria-label={t('screen.rowName')} value={name} onChange={event=>setName(event.target.value)} maxLength={100} /><div className="workspace-dialog-actions"><button className="ui-button" disabled={!name.trim()} onClick={saveLane}>{t('graph.saveLane')}</button></div></WorkspaceDialog>}
   </div>;
 }

@@ -1,0 +1,133 @@
+/* BrowseDock: docks the browse region (list/card/kanban) beside or above a Focus, resizable and collapsible. */
+
+.browse-dock {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  position: relative;
+}
+
+.browse-dock-group {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The library's own Panel content div defaults to `overflow: auto`; our own nested
+   .browse-dock-scroll (or the Focus area's own layout) handles scrolling instead. */
+.browse-dock-panel,
+.browse-dock-focus-panel {
+  height: 100%;
+  overflow: hidden;
+}
+
+.browse-dock-panel-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+}
+
+/* One icon for both states: its arrow (the last path) turns 180° to point where the next click moves the browse region. */
+.browse-dock-toggle svg > path:last-child {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 320ms cubic-bezier(.4, 0, .2, 1);
+}
+.browse-dock-toggle[data-collapsed] svg > path:last-child { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .browse-dock-toggle svg > path:last-child { transition: none; }
+}
+
+.browse-dock-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.browse-dock-focus {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.browse-dock-splitter { flex: none; }
+
+/* .workspace-splitter is drawn for a vertical (col-resize) divider; rotate it for the top dock. */
+.browse-dock[data-placement="top"] .browse-dock-splitter {
+  width: auto;
+  height: 9px;
+  margin-left: 0;
+  margin-right: 0;
+  margin-top: -4px;
+  margin-bottom: -4px;
+  cursor: row-resize;
+}
+.browse-dock[data-placement="top"] .browse-dock-splitter::after {
+  top: 4px;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 1px;
+}
+.browse-dock[data-placement="top"] .browse-dock-splitter:hover::after,
+.browse-dock[data-placement="top"] .browse-dock-splitter:focus-visible::after,
+.browse-dock[data-placement="top"] .browse-dock-splitter[data-separator="hover"]::after,
+.browse-dock[data-placement="top"] .browse-dock-splitter[data-separator="active"]::after {
+  width: auto;
+  height: 2px;
+  left: 0;
+  right: 0;
+  top: 3px;
+  bottom: auto;
+}
+
+.browse-dock[data-narrow="true"] {
+  flex-direction: column;
+}
+.browse-dock[data-narrow="true"] .browse-dock-scroll,
+.browse-dock[data-narrow="true"] .browse-dock-focus {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Top dock + Kanban: columns sit side by side and each scrolls its own cards;
+   the dock must not also add an outer vertical scrollbar around the whole board. */
+.browse-dock[data-placement="top"] .browse-dock-scroll:has([data-kanban-columns]) {
+  display: flex;
+  flex-direction: column;
+  overflow-y: hidden;
+}
+.browse-dock[data-placement="top"] .browse-dock-scroll:has([data-kanban-columns]) > * {
+  flex: 1;
+  min-height: 0;
+}
+.browse-dock[data-placement="top"] [data-kanban-columns] {
+  align-items: stretch;
+}
+.browse-dock[data-placement="top"] [data-status-column] {
+  height: 100%;
+}
+
+/* Card strip: single horizontally scrolling row instead of the grid, for a short top dock. */
+.note-card-strip {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.note-card-strip-item {
+  flex: 0 0 280px;
+  width: 280px;
+}
+
+/* A top dock is short: trim the browse padding so the Kanban columns fit instead of clipping. */
+.browse-dock[data-placement="top"] .browse-dock-scroll { padding-top: 0; padding-bottom: 8px; }
+.browse-dock[data-placement="top"] [data-kanban-columns] { padding-bottom: 4px; }
+.browse-dock[data-placement="top"] [data-status-column] > .overflow-y-auto { min-height: 0; }

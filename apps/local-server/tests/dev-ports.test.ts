@@ -1,8 +1,8 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readDevPorts, writeDevPort } from '../src/dev-ports.js';
+import { readDevPorts, writeDevPorts } from '../src/dev-ports.js';
 
 let root: string | undefined;
 afterEach(() => {
@@ -24,8 +24,18 @@ it('rejects a port outside the valid 1-65535 range', () => {
   expect(readDevPorts(root)).toEqual({ serverPort: undefined, webPort: undefined });
 });
 
-it('still round-trips a valid port written by writeDevPort', () => {
+it('still round-trips a valid port written by writeDevPorts', () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'dev-ports-'));
-  writeDevPort(root, 'serverPort', 4321);
+  writeDevPorts(root, { serverPort: 4321 });
   expect(readDevPorts(root)).toEqual({ serverPort: 4321, webPort: undefined });
+});
+
+it('writes the server port and pid together and keeps the web port', () => {
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'dev-ports-'));
+  fs.writeFileSync(path.join(root, '.mygitnotes-dev-ports.json'), JSON.stringify({ serverPort: 4000, serverPid: 1, webPort: 5173 }));
+  const write = vi.spyOn(fs, 'writeFileSync');
+  writeDevPorts(root, { serverPort: 4321, serverPid: process.pid });
+  expect(write).toHaveBeenCalledTimes(1);
+  write.mockRestore();
+  expect(readDevPorts(root)).toEqual({ serverPort: 4321, serverPid: process.pid, webPort: 5173 });
 });

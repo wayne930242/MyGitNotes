@@ -18,6 +18,10 @@
       "types": "./dist/screen-page.d.ts",
       "import": "./dist/screen-page.js"
     },
+    "./focus-page": {
+      "types": "./dist/focus-page.d.ts",
+      "import": "./dist/focus-page.js"
+    },
     "./note-graph": {
       "types": "./dist/note-graph.d.ts",
       "import": "./dist/note-graph.js"

@@ -4,8 +4,7 @@ import { z } from 'zod';
 import type { NotebookConfig } from './types.js';
 import { parseFolderConfig } from './folders.js';
 import { relocateLinks } from './folder-plan.js';
-import { SCREEN_PAGE_FILE, readScreenPage } from './screen-page.js';
-import { STUDY_FILE, StudyWorkspaceSchema } from './study.js';
+import { relocateWorkspaceDocuments } from './workspace-documents.js';
 import { decodeAsset } from './assets.js';
 import { WORKSPACE_CONFIG_FILENAME, LEGACY_WORKSPACE_CONFIG_FILENAME } from './config.js';
 
@@ -138,30 +137,8 @@ export function planFileChange(snapshot: FileSnapshot, input: unknown) {
       files.set(next, raw === undefined ? bytes : Buffer.from(relocateLinks(raw, file, next, relocate)));
     }
     pathMap[command.path] = destination;
-    const screenBytes = files.get(SCREEN_PAGE_FILE);
-    if (screenBytes) {
-      const screen = readScreenPage(YAML.parse(screenBytes.toString('utf8'), { maxAliasCount: 20 }), { notebooks: snapshot.notebooks, workspace: { default_notebook: snapshot.notebooks[0]?.id } });
-      let changed = false;
-      const update = (item: { path: string; notebookId: string }) => {
-        if (item.notebookId === nb!.id) { const next = relocate(item.path); if (next !== item.path) { item.path = next; changed = true; } }
-      };
-      for (const row of screen.rows) {
-        if (row.kind === 'custom') for (const item of row.items) { if (item.kind !== 'youtube') update(item); }
-        else if (row.source.kind === 'folder') update(row.source);
-        if (row.notebookId === nb!.id) for (const node of row.graph?.nodes || []) {
-          const next = relocate(node.path); if (next !== node.path) { node.path = next; changed = true; }
-        }
-      }
-      if (changed) files.set(SCREEN_PAGE_FILE, Buffer.from(YAML.stringify(screen, { lineWidth: 0 })));
-    }
-    const studyBytes = files.get(STUDY_FILE);
-    if (studyBytes) {
-      const study = YAML.parse(studyBytes.toString('utf8'), { maxAliasCount: 20 });
-      StudyWorkspaceSchema.parse(study);
-      let changed = false;
-      for (const note of study.notes) if (note.notebookId === nb!.id) { const next = relocate(note.path); if (next !== note.path) { note.path = next; changed = true; } }
-      if (changed) files.set(STUDY_FILE, Buffer.from(YAML.stringify(study, { lineWidth: 0 })));
-    }
+    relocateWorkspaceDocuments({ get: file => files.get(file)?.toString('utf8'), set: (file, text) => files.set(file, Buffer.from(text)) },
+      { notebooks: snapshot.notebooks, workspace: { default_notebook: snapshot.notebooks[0]?.id } }, nb!.id, relocate);
     selectedPath = destination;
   }
   for (const [file, bytes] of files) if (path.posix.basename(file) === '_dir.yml' && bytes !== snapshot.files.get(file)) parseFolderConfig(bytes.toString('utf8'), path.posix.basename(path.posix.dirname(file)), file);

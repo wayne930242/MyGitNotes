@@ -55,6 +55,23 @@ it('opens a dedicated lane and preserves it as the editor return route', () => {
   for (const invalid of ['/screen/lanes/a/b', '/screen/lanes/%00', '/screen/lanes/' + 'a'.repeat(65)]) expect(parseWorkspaceRoute(invalid, '').valid).toBe(false);
 });
 
+describe('focus parameter', () => {
+  it('accepts current or a valid id, otherwise reads as null without invalidating the route', () => {
+    expect(parseWorkspaceRoute('/notebooks/work', '?focus=current')).toMatchObject({ valid: true, focus: 'current' });
+    expect(parseWorkspaceRoute('/notebooks/work', '?focus=focus-1')).toMatchObject({ valid: true, focus: 'focus-1' });
+    expect(parseWorkspaceRoute('/notebooks/work', '')).toMatchObject({ focus: null });
+    for (const bad of ['', 'has space', 'a/b', 'a'.repeat(65)]) {
+      expect(parseWorkspaceRoute('/notebooks/work', '?focus=' + encodeURIComponent(bad))).toMatchObject({ valid: true, focus: null });
+    }
+  });
+  it('round-trips through noteReturnRoute alongside the rest of the query', () => {
+    for (const origin of ['/notebooks/example/folders/projects?focus=current', '/notebooks/example?focus=focus-1&view=list']) {
+      const search = '?' + new URLSearchParams({ returnTo: origin });
+      expect(noteReturnRoute(search, 'other')).toBe(origin);
+    }
+  });
+});
+
 describe('all-notebooks scope', () => {
   it('reads the toggle from the URL', () => {
     expect(parseWorkspaceRoute('/notebooks/work', '?allNotebooks=true')).toMatchObject({ notebook: 'work', allNotebooks: true, legacyAllNotebooks: false });

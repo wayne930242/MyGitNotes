@@ -1,4 +1,4 @@
-import { STUDY_FILE, STUDY_MAX_BYTES, StudyWorkspaceSchema } from './study.js';
+import { STUDY_FILE } from './study.js';
 import { managedNotebook } from './file-manager.js';
 import path from 'node:path';
 import { assetInfo, assetRoot, assetPath, isAssetPath, decodeAsset } from './assets.js';
@@ -9,8 +9,7 @@ import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js'
 import { WorkspaceConfig, NotebookConfig, NoteItem, FolderItem, NoteMetadata } from './types.js';
 import { SourceError } from './github-api.js';
 import { workspaceAgentKind } from './workspace-agent.js';
-import { SCREEN_PAGE_FILE, ScreenPageFileSchema, ScreenPageSchema, emptyScreenPage, readScreenPage } from './screen-page.js';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { readWorkspaceDocument, serializeWorkspaceDocument, validateWorkspaceDocument, workspaceDocument, type CommitScope, type WorkspaceDocument } from './workspace-documents.js';
 import { REMOTE_CACHE_BATCH_BYTES, REMOTE_CACHE_MAX_VALUE, REMOTE_CACHE_TTL, gitBlobId, hashJson, type RemoteCache } from './remote-cache.js';
 import type { NoteCatalog } from './note-catalog.js';
 import type { NoteListItem } from './note-query.js';
@@ -327,8 +326,8 @@ export abstract class RemoteSource {
   }
 
   /** Publish selected browser working notes as one commit after validation. */
-  async commitNotes(notes: { path: string; content: string; metadata: NoteMetadata; createOnly?: boolean }[], expected: string, message: string, screen?: { page: unknown; base: unknown }) {
-    if (!Array.isArray(notes) || !notes.length && !screen || notes.length + (screen ? 1 : 0) > 200) throw new SourceError('Select between 1 and 200 files.');
+  async commitNotes(notes: { path: string; content: string; metadata: NoteMetadata; createOnly?: boolean }[], expected: string, message: string, documents: { path: string; page: unknown; base: unknown }[] = []) {
+    if (!Array.isArray(notes) || !Array.isArray(documents) || !notes.length && !documents.length || notes.length + documents.length > 200) throw new SourceError('Select between 1 and 200 files.');
     if (typeof message !== 'string' || !message.trim() || message.length > 4000) throw new SourceError('A commit message of at most 4000 characters is required.');
     const snapshot = await this.getSnapshot(true);
     const changes = notes.map(note => {
@@ -337,15 +336,17 @@ export abstract class RemoteSource {
       if (!note.createOnly && !snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`Note moved or deleted: ${note.path}.`, 409);
       return { path: note.path, content: serializeNoteContent(note.metadata, note.content, Boolean(note.createOnly)) };
     });
-    if (screen) {
-      const page = ScreenPageSchema.safeParse(screen.page), base = ScreenPageSchema.safeParse(screen.base);
-      if (!page.success || !base.success) throw new SourceError('Invalid Screen configuration.');
-      const entry = snapshot.entries.find(entry => entry.path === SCREEN_PAGE_FILE);
-      const current = entry ? readScreenPage(parseYaml((await this.readFile(SCREEN_PAGE_FILE)).toString('utf8'), { maxAliasCount: 20 }), await this.config()) : emptyScreenPage();
-      if (JSON.stringify(current) !== JSON.stringify(base.data)) throw new SourceError('Screen configuration changed. Reload and review your draft.', 409);
-      changes.push({ path: SCREEN_PAGE_FILE, content: stringifyYaml(page.data, { lineWidth: 0 }) });
+    const config = documents.length ? await this.config() : null;
+    for (const draft of documents) {
+      const document = workspaceDocument(draft?.path);
+      if (!document?.scopes.includes('folders')) throw new SourceError('Path is not an allowed workspace resource.', 403);
+      const page = document.schema.safeParse(draft.page), base = document.schema.safeParse(draft.base);
+      if (!page.success || !base.success) throw new SourceError(`Invalid ${document.label} configuration.`);
+      const current = readWorkspaceDocument(document, snapshot.entries.some(entry => entry.path === document.file) ? (await this.readFile(document.file)).toString('utf8') : null, config);
+      if (JSON.stringify(current) !== JSON.stringify(base.data)) throw new SourceError(`${document.label} configuration changed. Reload and review your draft.`, 409);
+      changes.push({ path: document.file, content: serializeWorkspaceDocument(page.data) });
     }
-    return this.commitChanges(changes, expected, 'update', screen ? 'folders' : 'notes', message.trim(), snapshot);
+    return this.commitChanges(changes, expected, 'update', documents.length ? 'folders' : 'notes', message.trim(), snapshot);
   }
 
   /** One Git tree, commit and non-force ref update for the entire mutation. */
@@ -363,11 +364,11 @@ export abstract class RemoteSource {
     return this.commitChanges([{ path: STUDY_FILE, content }], expected, 'save', 'study');
   }
 
-  async saveScreenPage(content: string, expected: string) {
-    return this.commitChanges([{ path: SCREEN_PAGE_FILE, content }], expected, 'save', 'screen');
+  async saveWorkspaceDocument(document: WorkspaceDocument, content: string, expected: string) {
+    return this.commitChanges([{ path: document.file, content }], expected, 'save', document.scopes[0]);
   }
 
-  async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null }[], expected: string, operation: string, scope: 'notes' | 'assets' | 'agents' | 'screen' | 'folders' | 'study' | 'study-transition' | 'files' = 'notes', requestedMessage?: string, knownSnapshot?: RemoteSnapshot) {
+  async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null }[], expected: string, operation: string, scope: CommitScope = 'notes', requestedMessage?: string, knownSnapshot?: RemoteSnapshot) {
     const snapshot = knownSnapshot || await this.getSnapshot(true);
     if (!this.token || !snapshot.info.permissions?.push || this.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
     if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
@@ -378,21 +379,12 @@ export abstract class RemoteSource {
     for (const change of changes) {
       const file = change.path;
       const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
-      const screenFile = ['screen', 'folders', 'files'].includes(scope) && file === SCREEN_PAGE_FILE;
-      const studyFile = ['study', 'study-transition', 'files'].includes(scope) && file === STUDY_FILE;
-      const allowed = scope === 'files' ? screenFile || studyFile || Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? studyFile || nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_FILE.test(file) : scope === 'study' ? studyFile : scope === 'screen' ? screenFile : screenFile || (scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb &&
+      const document = workspaceDocument(file);
+      const documentFile = Boolean(document?.scopes.includes(scope));
+      const allowed = documentFile || !['screen', 'study', 'focus'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_FILE.test(file) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb &&
         (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (NOTE_FILE.test(file) || path.posix.basename(file) === '_dir.yml')));
       if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
-      if (studyFile) {
-        if (typeof change.content !== 'string' || Buffer.byteLength(change.content) > STUDY_MAX_BYTES) throw new SourceError('Study YAML is required.');
-        try { StudyWorkspaceSchema.parse(parseYaml(change.content, { maxAliasCount: 20 })); }
-        catch { throw new SourceError('Invalid study YAML.'); }
-      }
-      if (screenFile) {
-        if (typeof change.content !== 'string' || Buffer.byteLength(change.content) > 512 * 1024) throw new SourceError('Screen Page YAML is required.');
-        try { ScreenPageFileSchema.parse(parseYaml(change.content, { maxAliasCount: 20 })); }
-        catch { throw new SourceError('Invalid Screen Page YAML.'); }
-      }
+      if (documentFile) validateWorkspaceDocument(document!, change.content);
       if (snapshot.entries.some(e => (e.path === file || file.startsWith(e.path + '/')) && (e.mode === '120000' || (e.path !== file && e.type !== 'tree')))) throw new SourceError('Path crosses a non-directory or symlink.', 403);
       const existing = snapshot.entries.find(e => e.path === file);
       if (existing && existing.type !== 'blob') throw new SourceError('A directory occupies the target path.', 409);

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
+import { resolveQaChromePath } from './qa-chrome.mjs';
 const product=path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require=createRequire(`${product}/apps/web/package.json`);
 const puppeteer=require('puppeteer-core');
@@ -28,9 +29,10 @@ write('notes/example/visible-archive.md','---\nstatus: archived\nhiden: false\n-
 git('init','-b','main');git('config','user.name','Browser QA');git('config','user.email','qa@example.com');git('add','.');git('commit','-m','fixture');
 process.env.MYGITNOTES_SOURCE='local';process.env.MYGITNOTES_LOCAL_PATH=root;delete process.env.VERCEL;delete process.env.APP_URL;
 const {createApp}=await import(`${product}/apps/local-server/dist/app.js`);
+const {parseNoteQuery,queryNotes,queryNotePaths,noteFacets,lookupNotes}=await import(`${product}/packages/core/dist/index.js`);
 const server=createServer(createApp(product));await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${server.address().port}`;
-const browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH || path.join(os.homedir(),'.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+const browser=await puppeteer.launch({executablePath:resolveQaChromePath(),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
 const page=await browser.newPage();await page.setViewport({width:1440,height:1000});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
 const click=async text=>{await page.waitForFunction(text=>Array.from(document.querySelectorAll('button')).some(b=>b.textContent.trim()===text&&!b.disabled),{},text);await page.evaluate(text=>Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()===text&&!b.disabled).click(),text);};
@@ -52,18 +54,24 @@ const columns=()=>page.$$eval('[data-status-column]',items=>items.map(item=>item
 const equal=(actual,expected,message)=>assert(JSON.stringify(actual)===JSON.stringify(expected),`${message}: ${JSON.stringify(actual)}`);
 const waitDisk=async(file,text)=>{for(let i=0;i<100;i++){if(fs.existsSync(path.join(root,file))&&fs.readFileSync(path.join(root,file),'utf8').includes(text))return;await new Promise(r=>setTimeout(r,50));}throw Error(`Missing saved text: ${text}`);};
 const manifest='schema_version: 1\nworkspace:\n  title: Status QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: research\n    title: Research\n    root: notes/research\n    statuses: [capture, published]\n';
-const replace=async(selector,text)=>{await page.focus(selector);await page.keyboard.down('Control');await page.keyboard.press('KeyA');await page.keyboard.up('Control');await page.keyboard.type(text);};
-let rev=1, commits=[], failCommit=false, reads=[];
+const replace=async(selector,text)=>{await page.focus(selector);await page.$eval(selector,e=>e.select());await page.keyboard.type(text);};
+let rev=1, commits=[], failCommit=false, reads=[], lookups=[];
 const makeNote=(name)=>({id:name,path:`notes/example/${name}.md`,notebookId:'example',title:name,content:`# ${name}\n\nFirst line\n\nLast line\n`,metadata:{status:'inbox',custom:'keep'},status:'inbox',tags:[],revision:String(rev)});
 let remoteNotes=[makeNote('welcome'),makeNote('second')];
 const bump=()=>{rev++;remoteNotes=remoteNotes.map(note=>({...note,revision:String(rev)}));};
 await page.setRequestInterception(true);
-page.on('request',request=>{
+const hostedConfig={schema_version:1,workspace:{title:'Working notes QA',default_notebook:'example'},notebooks:[{id:'example',title:'Example',root:'notes/example'}]};
+const hostedCatalog={revision:async()=>String(rev),config:async()=>hostedConfig,index:async notebook=>remoteNotes.filter(note=>note.notebookId===notebook.id),contents:async notes=>new Map(notes.map(note=>[note.path,note.content])),memo:(kind,notebooks,compute)=>compute()};
+page.on('request',async request=>{
  const url=new URL(request.url());let body,status=200;
- if(url.pathname==='/api/workspace')body={config:{schema_version:1,workspace:{title:'Working notes QA',default_notebook:'example'},notebooks:[{id:'example',title:'Example',root:'notes/example'}]},branch:'main',repoRoot:'',gitStatus:{branch:'main',isClean:true,staged:[],modified:[],untracked:[]},source:{type:'github',identity:'github:working/fixture@main'},capabilities:{write:true,local:false},revision:String(rev)};
+ if(url.pathname==='/api/workspace')body={config:hostedConfig,branch:'main',repoRoot:'',gitStatus:{branch:'main',isClean:true,staged:[],modified:[],untracked:[]},source:{type:'github',identity:'github:working/fixture@main'},capabilities:{write:true,local:false},revision:String(rev)};
  if(url.pathname==='/api/notes'){
   assert(request.method()==='GET','Edit used immediate remote save');body={notes:remoteNotes};
  }
+ // Lists, lookups and counts come from server queries; answer them with the core catalog rules.
+ if(url.pathname==='/api/notes/query'){const {query,options}=parseNoteQuery(Object.fromEntries(url.searchParams));body=options.select?await queryNotePaths(hostedCatalog,query):await queryNotes(hostedCatalog,query,options);}
+ if(url.pathname==='/api/notes/lookup'){const lookup=JSON.parse(request.postData());lookups.push(...lookup.paths);body=await lookupNotes(hostedCatalog,lookup.paths,lookup.content===true);}
+ if(url.pathname==='/api/notes/facets')body=await noteFacets(hostedCatalog,url.searchParams.get('showHidden')==='1');
  if(url.pathname==='/api/notes/read'){
   const file=url.searchParams.get('path');reads.push(file);const note=remoteNotes.find(n=>n.path===file);
   body=note?{note}:{error:'Missing'};status=note?200:404;
@@ -87,49 +95,56 @@ const pending=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('gh_notes_wo
 const open=async(name)=>{await page.goto(base+`/notebooks/example/notes/${name}.md`,{waitUntil:'networkidle0'});await page.waitForSelector('[aria-label="Close note"]');await click('Source');};
 const edit=async(text)=>{await replace('textarea[aria-label="Note content"]',text);await page.waitForFunction(()=>document.body.innerText.includes('Saved locally'));};
 const close=()=>page.click('[aria-label="Close note"]');
-const commit=async()=>{await click('Commit');await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));};
+// Pending changes are committed from the right-panel Changes tool.
+const changes=async()=>{const tab=await page.waitForSelector('.right-panel-rail button[aria-label="Changes"]');if(await tab.evaluate(e=>e.getAttribute('aria-selected')!=='true'))await tab.click();await page.waitForSelector('.changes-tool');};
+const openCommit=async()=>{await changes();await click('Manage changes');await page.waitForSelector('.changes-dialog');};
+const submit=()=>click('Commit to remote repository');
+const closed=()=>page.waitForFunction(()=>!document.querySelector('.changes-dialog'));
+const commit=async()=>{await openCommit();await submit();await closed();};
 try {
  await open('welcome');
- assert(reads.includes('notes/example/welcome.md'),'Read lost configured path');
+ assert(lookups.includes('notes/example/welcome.md'),'Read lost configured path');
  await edit('# welcome\n\nLocal first\n\nLast line\n');await close();
  assert(commits.length===0,'Editing committed');
  await open('welcome');
  assert((await page.$eval('textarea[aria-label="Note content"]',e=>e.value)).includes('Local first'),'Reload lost local save');await close();
  await open('second');await edit('# second\n\nOther local\n\nLast line\n');await close();
- await click('Commit');await page.click('[aria-label="Commit notes/example/second.md"]');await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
- assert(commits.length===1&&commits[0].notes.length===1,'Selection did not isolate one commit');
- assert(Object.keys(await pending()).join()==='notes/example/second.md','Unselected draft lost');
- failCommit=true;await click('Commit');await click('Commit to GitHub');await page.waitForSelector('[role="alert"]');
+ await changes();await page.click('[aria-label="Commit notes/example/second.md"]');await click('Commit selected (1)');await closed();
+ assert(commits.length===1&&commits[0].notes.map(note=>note.path).join()==='notes/example/second.md','Selection did not isolate one commit');
+ assert(Object.keys(await pending()).join()==='notes/example/welcome.md','Unselected draft lost');
+ failCommit=true;await openCommit();await submit();await page.waitForSelector('[role="alert"]');
  assert(Object.keys(await pending()).length===1,'Failed commit cleared drafts');
- failCommit=false;await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
+ failCommit=false;await submit();await closed();
  assert(commits.length===2&&Object.keys(await pending()).length===0,'Retry did not clear committed drafts');
  console.log('PASS exact read path, local save/reload, explicit partial commit and failed commit retention');
 
  await open('welcome');await edit('# welcome\n\nLocal second\n\nLast line\n');await close();
  remoteNotes=remoteNotes.map(n=>n.path.endsWith('/welcome.md')?{...n,content:n.content.replace('Last line','Remote last')}:n);bump();
- await click('Commit');await click('Commit to GitHub');await page.waitForFunction(()=>document.body.innerText.includes('Review the updated diff'));
+ await openCommit();await submit();await page.waitForFunction(()=>document.body.innerText.includes('Review the updated diff'));
  assert(commits.length===2,'Merge review committed immediately');
  const merged=(await pending())['notes/example/welcome.md'];assert(merged.note.content.includes('Local second')&&merged.note.content.includes('Remote last'),'Nonoverlap merge dropped text');
- await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
+ await submit();await closed();
  await open('welcome');await edit('# welcome\n\nConflict local\n\nRemote last\n');await close();
  remoteNotes=remoteNotes.map(n=>n.path.endsWith('/welcome.md')?{...n,content:n.content.replace('Local second','Conflict remote')}:n);bump();
- await click('Commit');await click('Commit to GitHub');await page.waitForFunction(()=>document.body.innerText.includes('Remote changes conflict'));
+ await openCommit();await submit();await page.waitForFunction(()=>document.body.innerText.includes('Remote changes conflict'));
  assert(commits.length===3&&(await pending())['notes/example/welcome.md'].blocked,'Conflict failed to block commit');
- await page.click('[aria-label="Close commit"]');await open('welcome');
+ await page.click('.changes-dialog .workspace-dialog-heading [aria-label="Close"]');await closed();await open('welcome');
  assert(await page.$eval('textarea[aria-label="Note content"]',e=>e.readOnly),'Conflict editor remained writable');
  await click('Refresh remote version');await page.waitForFunction(()=>!document.querySelector('textarea[aria-label="Note content"]').readOnly);
  assert((await page.$eval('textarea[aria-label="Note content"]',e=>e.value)).includes('Conflict remote'),'Refresh did not restore remote');
  assert(await page.evaluate(()=>Object.keys(localStorage).some(key=>key.includes(':conflict:')&&localStorage.getItem(key).includes('Conflict local'))),'Refresh lost conflict backup');await close();
  console.log('PASS nonoverlap merge review, conflict commit lock and explicit refresh');
 
+ // Close flushes the draft before the zoomed editor unmounts; the new note must not reuse that editor.
+ await page.waitForFunction(()=>!document.querySelector('[aria-label="Close note"]'));
  await click('New Note');await page.type('input[aria-describedby="create-note-error"]','New local');await click('Create Note');await page.waitForSelector('[aria-label="Close note"]');await click('Source');
  await edit('# New local\n\nCreated offline draft\n');await close();
  assert(commits.length===3&&!reads.includes('notes/example/new-local.md'),'New local note required remote persistence');
  await page.setViewport({width:320,height:700,isMobile:true,hasTouch:true});
- await page.goto(base+'/notebooks/example',{waitUntil:'networkidle0'});await click('Commit');
- const rect=await page.$eval('[aria-label="Commit Changes"]',e=>{const r=e.getBoundingClientRect();return {x:r.x,right:r.right,bottom:r.bottom};});
+ await page.goto(base+'/notebooks/example',{waitUntil:'networkidle0'});await openCommit();
+ const rect=await page.$eval('.changes-dialog',e=>{const r=e.getBoundingClientRect();return {x:r.x,right:r.right,bottom:r.bottom};});
  assert(rect.x>=0&&rect.right<=320&&rect.bottom<=700,'Mobile commit dialog overflow');
- await click('Commit to GitHub');await page.waitForFunction(()=>!document.querySelector('[aria-label="Commit Changes"]'));
+ await submit();await closed();
  assert(commits.length===4&&commits[3].notes[0].createOnly,'New note did not commit explicitly');
  console.log('PASS new-note local draft and mobile explicit Commit');
  await page.setViewport({width:1440,height:1000});await open('welcome');
