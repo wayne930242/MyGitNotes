@@ -43,6 +43,7 @@ remain supported. The URL is a credential scoped to the configured source and
 canonical audience. New grants have no application TTL and survive logout,
 session expiry and deployments; owners revoke individual grants in Settings.
 GitLab access tokens, and short-lived GitHub OAuth app tokens issued with a refresh token, refresh through the shared server credential. Revoked provider authorization requires signing in again.
+Rejected requests log a secret-free reason (`[mcp] unauthorized: …`, `[auth] credential rejected: …`, or a record sealed with another `SESSION_SECRET`).
 Legacy session-bound grants retain their original expiry.
 
 Hosted tools include `ls`, `glob`, `read`, `find`, `write`, `append`, `edit`,
