@@ -83,7 +83,7 @@ export class SessionStore {
     const secret = key();
     let record: any;
     // Another deployment sharing this keyspace, or a rotated secret, sealed the record; it stays with its writer.
-    try { record = unseal(raw, secret); } catch { return sealedElsewhere; }
+    try { record = unseal(raw, secret); } catch { console.warn(`[auth] record ${hash.slice(0, 8)} sealed with another SESSION_SECRET`); return sealedElsewhere; }
     if (record?.expires !== null && record?.expires <= Date.now()) { await this.deleteByDigest(hash); return null; }
     return record?.value;
   }
@@ -194,15 +194,18 @@ export async function credentialToken(base: string, id: string): Promise<string>
   const provider = providerFor(base), store = new SessionStore(base);
   // GitHub OAuth apps with short-lived tokens return a refresh token; long-lived GitHub tokens carry neither.
   const refreshable = (record: any) => (provider.type === 'gitlab' || Boolean(record?.refreshToken)) && record?.upstreamExpiresAt <= Date.now() + 60000;
+  const reject = (reason: string, message: string) => { console.warn(`[auth] credential rejected: ${reason}`); return new SourceError(message, 401); };
   const resolve = async (record: any) => {
-    if (!record || !['credential', 'session'].includes(record.kind) || !matchesProvider(record, provider) || typeof record.token !== 'string') throw new SourceError('Agent authorization unavailable. Sign in again.', 401);
+    const invalid = !record ? 'missing' : !['credential', 'session'].includes(record.kind) ? 'kind' : !matchesProvider(record, provider) ? 'realm' : typeof record.token !== 'string' ? 'token' : '';
+    if (invalid) throw reject(invalid, 'Agent authorization unavailable. Sign in again.');
     if (refreshable(record)) {
-      if (!record.refreshToken) throw new SourceError('GitLab authorization expired. Sign in again.', 401);
-      const data = await tokenRequest(provider, { grant_type: 'refresh_token', refresh_token: record.refreshToken, ...(provider.type === 'gitlab' ? { redirect_uri: `${process.env.APP_URL}/api/auth/gitlab/callback` } : {}) });
+      if (!record.refreshToken) throw reject('expired', 'GitLab authorization expired. Sign in again.');
+      const data = await tokenRequest(provider, { grant_type: 'refresh_token', refresh_token: record.refreshToken, ...(provider.type === 'gitlab' ? { redirect_uri: `${process.env.APP_URL}/api/auth/gitlab/callback` } : {}) })
+        .catch(error => { console.warn('[auth] credential rejected: refresh-failed'); throw error; });
       record = { ...record, token: data.access_token, refreshToken: data.refresh_token, upstreamExpiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined };
       await store.set(id, record, null);
     }
-    if (record.upstreamExpiresAt && record.upstreamExpiresAt <= Date.now()) throw new SourceError('Authorization expired. Sign in again to reconnect existing agent grants.', 401);
+    if (record.upstreamExpiresAt && record.upstreamExpiresAt <= Date.now()) throw reject('expired', 'Authorization expired. Sign in again to reconnect existing agent grants.');
     return record.token as string;
   };
   const record = await store.get(id);
