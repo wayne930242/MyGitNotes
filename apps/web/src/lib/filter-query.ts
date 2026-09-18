@@ -12,6 +12,7 @@ export const filterParsers = {
   status: parseAsString,
   showHidden: parseAsBoolean.withDefault(false),
   neighbors: parseAsBoolean.withDefault(false),
+  allNotebooks: parseAsBoolean.withDefault(false),
   view: parseAsStringLiteral(['flat', 'list', 'card', 'kanban', 'graph']).withDefault('flat'),
 };
 export const readFilterQuery = createLoader(filterParsers);

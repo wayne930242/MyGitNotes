@@ -26,7 +26,7 @@ export function createRemoteMCP(base: string, source: SourceConfig | undefined, 
       const server = new Server({ name: 'mygitnotes', version: '0.1.0' }, { capabilities: { tools: {} }, instructions: 'Operate on the configured note repository. Use ls or glob to locate paths, read or find to inspect complete files, then pass the returned revision to a write operation. Each successful mutation creates one atomic remote commit with a program-generated message. Respect read-only grants. Use Settings to revoke persistent connector URLs.' });
       server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: remoteTools.filter(t => grant.write || !isMutationTool(t.name)) }));
       server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
-        try { const result = await callRemoteTool(reader, params.name, params.arguments || {}, grant.write); return { structuredContent: result, content: [{ type: 'text', text: JSON.stringify(result) }] }; }
+        try { const result = await callRemoteTool(reader, params.name, params.arguments || {}, grant.write, process.env.APP_URL); return { structuredContent: result, content: [{ type: 'text', text: JSON.stringify(result) }] }; }
         catch (error) { return { isError: true, content: [{ type: 'text', text: JSON.stringify({ error: (error as Error).message }) }] }; }
       });
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });

@@ -6,6 +6,7 @@ import {
   withNoteStatus,
   serializeNoteContent,
   searchNotes,
+  noteWebPath,
   type NoteSearchOptions,
 } from '@mygitnotes/core';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
@@ -24,6 +25,8 @@ const metadata: Schema = { type: 'object', additionalProperties: true };
 const noteSchema = object({ id: str('Note identifier'), path: pathField, notebookId: str('Notebook ID'), title: str('Title'), content: str('Markdown body'), metadata, tags: array(str('Tag')), revision: str('Read commit SHA') }, ['path','title','content','metadata','revision'], true);
 const nullableInteger: Schema = { type: ['integer','null'] };
 const receiptSchema = object({ success: { const: true }, committed: { const: true }, pushed: { const: true }, repository: str('Repository project path'), branch: str('Updated branch'), revision: str('Resulting commit SHA'), changedPaths: array(pathField), commit: object({ commitHash: str('Resulting commit SHA'), message: str('Program-generated commit message') }) }, undefined, true);
+const noteReceiptSchema = object({ ...receiptSchema.properties, path: pathField, url: str('Web page of the note; present when the app URL is configured.') }, [...receiptSchema.required, 'path'], true);
+const noteWriteTools = new Set(['write', 'append', 'edit', 'save_note', 'update_note_metadata']);
 
 const mutatingTools = new Set([
   'save_note',
@@ -62,7 +65,7 @@ export const legacyRemoteTools: Tool[] = [
   tool('get_folder_metadata', 'Read display metadata for a notebook folder (_dir.yml).', { path: pathField }, ['path'], object({ path: pathField, notebookId: str('Notebook identifier'), title: str('Folder title'), order: int('Order', -1000000, 1000000), description: str('Folder description') })),
   tool('update_folder_metadata', 'Update display metadata for a notebook folder (_dir.yml) and create one remote commit.', { path: pathField, title: str('Optional display title for the folder.'), order: int('Optional sort order number.', -1000000, 1000000), description: str('Optional folder description.'), metadata, revision: revisionField }, ['path', 'revision'], receiptSchema),
   tool('get_note_metadata', 'Fast read for note frontmatter metadata and available statuses without loading the markdown body.', { path: pathField }, ['path'], object({ path: pathField, notebookId: str('Notebook identifier'), title: str('Note title'), status: { type: ['string', 'null'], description: 'Note status' }, tags: array(str('Tag name')), metadata, revision: str('Read commit SHA'), availableStatuses: array(str('Status name')) })),
-  tool('update_note_metadata', 'Fast update for note frontmatter metadata without re-sending markdown body.', { path: pathField, status: str('Optional status to update to'), tags: array(str('Tag name')), title: str('Optional title to update'), hidden: bool('Optional hidden boolean flag'), metadata: object({}, [], true), revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['path'], { ...receiptSchema, properties: { ...receiptSchema.properties, note: noteSchema }, required: [...receiptSchema.required, 'note'] }),
+  tool('update_note_metadata', 'Fast update for note frontmatter metadata without re-sending markdown body.', { path: pathField, status: str('Optional status to update to'), tags: array(str('Tag name')), title: str('Optional title to update'), hidden: bool('Optional hidden boolean flag'), metadata: object({}, [], true), revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['path'], { ...noteReceiptSchema, properties: { ...noteReceiptSchema.properties, note: noteSchema }, required: [...noteReceiptSchema.required, 'note'] }),
 ];
 
 export const remoteTools: Tool[] = [
@@ -70,9 +73,9 @@ export const remoteTools: Tool[] = [
   tool('glob', 'Find note paths using a Bash glob without reading each file. Use before read, find, cp, mv or rm.', { pattern: patternField, ...page }, [], object({ revision: revisionField, paths: array(pathField), total: int('Total matches', 0, 100000), nextOffset: nullableInteger })),
   tool('read', 'Read a file like sed -n, using one-based lines including YAML frontmatter. Defaults to 200 lines. Returns the revision and next line.', { path: pathField, startLine: int('First line, inclusive; default 1.', 1, 1000000), maxLines: int('Maximum lines; default 200.', 1, 500) }, ['path'], object({ path: pathField, revision: revisionField, startLine: int('First returned line', 1, 1000000), endLine: int('Last returned line', 0, 1000000), totalLines: int('Total file lines', 0, 1000000), content: str('Exact text of returned lines'), truncated: bool('More lines remain'), nextLine: nullableInteger })),
   tool('find', 'Search literal text like grep -n across note files matched by a glob. Returns paths, one-based line numbers and bounded excerpts. Refine the pattern when truncated.', { query: str('Literal text to find.', { minLength: 1, maxLength: 1000 }), pattern: patternField, caseSensitive: bool('Default false.'), maxResults: int('Maximum matches; default 100.', 1, 500), fileOffset: int('File offset from the previous page.', 0, 100000), maxFiles: int('Files to scan per call; default 25.', 1, 100) }, ['query'], object({ revision: revisionField, matches: array(object({ path: pathField, line: int('One-based line', 1, 1000000), text: str('Matching line, at most 2000 characters') })), scannedFiles: int('Files searched', 0, 100), truncated: bool('The search was bounded; refine query or continue with nextFileOffset'), nextFileOffset: nullableInteger })),
-  tool('write', 'Create or replace a complete UTF-8 note file. One successful call creates one program-named Git commit and updates the remote branch. Overwrites file content.', { path: pathField, content: contentField, revision: revisionField, createOnly: bool('Reject an existing target instead of replacing it.') }, ['path', 'content', 'revision'], receiptSchema),
-  tool('append', 'Append text to a note, creating it if absent. One successful call creates one commit and updates the remote branch.', { path: pathField, content: contentField, revision: revisionField }, ['path', 'content', 'revision'], receiptSchema),
-  tool('edit', 'Replace an inclusive line range in a previously read file. Use endLine = startLine - 1 for insertion, or empty content for deletion. Preserves surrounding text and commits once remotely.', { path: pathField, startLine: int('First replaced line, inclusive.', 1, 1000000), endLine: int('Last replaced line, inclusive; startLine - 1 inserts.', 0, 1000000), content: contentField, revision: revisionField }, ['path', 'startLine', 'endLine', 'content', 'revision'], receiptSchema),
+  tool('write', 'Create or replace a complete UTF-8 note file. One successful call creates one program-named Git commit and updates the remote branch. Overwrites file content.', { path: pathField, content: contentField, revision: revisionField, createOnly: bool('Reject an existing target instead of replacing it.') }, ['path', 'content', 'revision'], noteReceiptSchema),
+  tool('append', 'Append text to a note, creating it if absent. One successful call creates one commit and updates the remote branch.', { path: pathField, content: contentField, revision: revisionField }, ['path', 'content', 'revision'], noteReceiptSchema),
+  tool('edit', 'Replace an inclusive line range in a previously read file. Use endLine = startLine - 1 for insertion, or empty content for deletion. Preserves surrounding text and commits once remotely.', { path: pathField, startLine: int('First replaced line, inclusive.', 1, 1000000), endLine: int('Last replaced line, inclusive; startLine - 1 inserts.', 0, 1000000), content: contentField, revision: revisionField }, ['path', 'startLine', 'endLine', 'content', 'revision'], noteReceiptSchema),
   tool('mkdir', 'Create a notebook folder using a _dir.yml metadata file or update existing folder metadata. Parent directories are created as needed. Creates one remote commit.', { path: pathField, title: str('Folder display title; defaults to the basename.'), order: int('Sort order number; defaults to 0.', -1000000, 1000000), description: str('Optional folder description.'), metadata, overwrite: bool('Allow updating folder metadata if folder already exists; default false.'), revision: revisionField }, ['path', 'revision'], receiptSchema),
   tool('cp', 'Copy a note or, with recursive true, a note directory. Keeps the source. One atomic remote commit covers all destination files. overwrite true can replace existing notes.', transfer, ['source', 'destination', 'revision'], receiptSchema),
   tool('mv', 'Move or rename a note or note directory. Removes old paths and adds new paths in one atomic remote commit. Relative links keep their original file text.', transfer, ['source', 'destination', 'revision'], receiptSchema),
@@ -82,7 +85,7 @@ export const remoteTools: Tool[] = [
   tool('list_folders', 'List notebook folder display metadata, or inspect display metadata for a specific folder if path is provided.', { path: str('Optional relative path of a specific notebook folder to inspect.') }, [], object({ folders: array(metadata) })),
   tool('list_notes', 'Read parsed notes and their Markdown bodies. Prefer glob then read for bounded file inspection.', { notebookId: str('Optional notebook ID.') }, [], object({ notes: array(noteSchema), count: int('Number of notes', 0, 100000) })),
   tool('read_note', 'Read a parsed note, including metadata and the body without frontmatter (or metadata only if metadataOnly is true). Use read for line-based edits of the complete file.', { path: pathField, metadataOnly: bool('If true, returns note metadata and valid statuses without markdown body.') }, ['path'], object({ note: noteSchema })),
-  tool('save_note', 'Create or replace a parsed note body and optional frontmatter, or update metadata only if content is omitted. Commits once and updates the remote branch with a program-generated message.', { path: pathField, content: str('Markdown body without frontmatter; if omitted, preserves existing content and updates metadata only.'), status: str('Optional status shortcut'), tags: array(str('Tag name')), title: str('Optional note title'), revision: revisionField, metadata, createOnly: bool('Reject existing paths.') }, ['path', 'revision'], { ...receiptSchema, properties: { ...receiptSchema.properties, note: noteSchema }, required: [...receiptSchema.required, 'note'] }),
+  tool('save_note', 'Create or replace a parsed note body and optional frontmatter, or update metadata only if content is omitted. Commits once and updates the remote branch with a program-generated message.', { path: pathField, content: str('Markdown body without frontmatter; if omitted, preserves existing content and updates metadata only.'), status: str('Optional status shortcut'), tags: array(str('Tag name')), title: str('Optional note title'), revision: revisionField, metadata, createOnly: bool('Reject existing paths.') }, ['path', 'revision'], { ...noteReceiptSchema, properties: { ...noteReceiptSchema.properties, note: noteSchema }, required: [...noteReceiptSchema.required, 'note'] }),
   tool('render_template', 'Render a notebook\'s configured note template, substituting {{title}} and {{date}} in its frontmatter and body. Does not write any file; pass the result to save_note with createOnly true.', { notebookId: str('Notebook identifier'), templateId: str('Template ID from the notebook configuration'), title: str('Title to substitute for {{title}}') }, ['notebookId', 'templateId', 'title'], object({ metadata, content: str('Rendered Markdown body without frontmatter') })),
   tool('delete_note', 'Delete a note file by path, creating an atomic commit.', { path: pathField, revision: str('Optional commit SHA. Defaults to current HEAD.') }, ['path'], object({ success: { const: true }, path: pathField, commit: object({ commitHash: str('Commit SHA'), message: str('Commit message') }, undefined, true) })),
   tool('list_assets', 'List notebook assets and their URLs.', { notebookId: str('Optional notebook ID.') }, [], object({ assets: array(metadata) })),
@@ -115,7 +118,24 @@ function validate(value: unknown, schema: Schema, label: string) {
   }
 }
 
+/** A note write also reports where the note lives: its path and, when the app origin is known, its web page. */
 export async function callRemoteTool(
+  reader: RemoteSource,
+  name: string,
+  args: Record<string, unknown>,
+  write: boolean,
+  appUrl?: string
+): Promise<Record<string, unknown>> {
+  const result = await runRemoteTool(reader, name, args, write);
+  if (!noteWriteTools.has(name)) return result;
+  const file = (result.changedPaths as string[])[0];
+  const notebook = (await reader.config()).notebooks.find((nb) => file.startsWith(`${nb.root}/`));
+  const url = appUrl && notebook && path.posix.basename(file) !== '_dir.yml'
+    ? appUrl.replace(/\/$/, '') + noteWebPath(notebook.id, file.slice(notebook.root.length + 1)) : undefined;
+  return { ...result, path: file, ...(url ? { url } : {}) };
+}
+
+async function runRemoteTool(
   reader: RemoteSource,
   name: string,
   args: Record<string, unknown>,

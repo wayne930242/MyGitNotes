@@ -11,6 +11,11 @@ export function noteLinkHref(sourcePath: string, targetPath: string): string {
   return [...source.map(() => '..'), ...target.map(part => encodeURIComponent(part).replace(/[!'()*]/g, value => '%' + value.charCodeAt(0).toString(16).toUpperCase()))].join('/');
 }
 
+/** The web app route of a note, relative to the app origin. */
+export function noteWebPath(notebookId: string, relativePath: string): string {
+  return `/notebooks/${encodeURIComponent(notebookId)}/notes/${relativePath.split('/').map(encodeURIComponent).join('/')}`;
+}
+
 export function noteMarkdownLink(sourcePath: string, targetPath: string, title: string): string {
   return `[${title.replace(/[\\[\]]/g, '\\$&').replace(/[\r\n]+/g, ' ')}](${noteLinkHref(sourcePath, targetPath)})`;
 }

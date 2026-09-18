@@ -84,6 +84,12 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
     const measure = () => setSize({ width: host.clientWidth || 800, height: host.clientHeight || 600 });
     measure(); const observer = new ResizeObserver(measure); observer.observe(host); return () => observer.disconnect();
   }, []);
+  // The filter bar grows as it wraps or gains filter chips; the tools below it follow its height.
+  useEffect(() => {
+    const host = container.current, bar = controls.current; if (!host || !bar) return;
+    const measure = () => host.style.setProperty('--graph-controls-height', `${bar.offsetHeight}px`);
+    measure(); const observer = new ResizeObserver(measure); observer.observe(bar); return () => observer.disconnect();
+  }, [lane]);
   // A lane belongs to one notebook, so the graph showing it follows that notebook.
   useEffect(() => {
     if (lane || !activeLane || !filters || graphNotebook === activeLane.notebookId) return;
@@ -192,7 +198,8 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
     if (!value && maximized && paths.includes(maximized) && !closeTimers.current.has(maximized)) setMaximized(null);
     if (value && !lane) requestAnimationFrame(() => fitView(arranged));
   };
-  const select = (path: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => setSelected(previous => event.shiftKey || event.ctrlKey || event.metaKey ? previous.includes(path) ? previous.filter(id => id !== path) : [...previous, path] : [path]);
+  const additive = (event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => Boolean(event.shiftKey || event.ctrlKey || event.metaKey);
+  const select = (path: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => setSelected(previous => additive(event) ? previous.includes(path) ? previous.filter(id => id !== path) : [...previous, path] : [path]);
   const fitView = (next: GraphLayout) => {
     if (!fg.current) return;
     const visible = new Set(graphData.nodes.map(node => node.id));
@@ -247,6 +254,20 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
     if (frameSignature.current !== signature) { frameSignature.current = signature; setTransform({ ...origin, k }); redraw(v => v + 1); }
   };
   const point = (event: { clientX: number; clientY: number }) => { const box = container.current!.getBoundingClientRect(); return { x: event.clientX - box.left, y: event.clientY - box.top }; };
+  const selectBox = (start: { x: number; y: number }, end: { x: number; y: number }, add: boolean) => {
+    const paths = graphData.nodes.filter(node => { const x=(node.x||0)*transform.k+transform.x,y=(node.y||0)*transform.k+transform.y; return x>=Math.min(start.x,end.x)&&x<=Math.max(start.x,end.x)&&y>=Math.min(start.y,end.y)&&y<=Math.max(start.y,end.y); }).map(n=>n.id);
+    setSelected(previous => add ? [...new Set([...previous,...paths])] : paths);
+  };
+  // A modifier drag on empty canvas draws a box that adds the enclosed notes; on a node it still drags the node.
+  const startBox = (event: React.PointerEvent) => {
+    if (event.button !== 0 || !additive(event) || (event.target as Element).tagName !== 'CANVAS') return;
+    const start = point(event), cursor = fg.current?.screen2GraphCoords(start.x, start.y);
+    if (!cursor || (graphData.nodes as Node[]).some(node => !expanded.has(node.id) && node.x !== undefined && Math.hypot(node.x - cursor.x, node.y! - cursor.y) < 12)) return;
+    const move = (e: PointerEvent) => setGesture({ kind: 'box', start, end: point(e) });
+    const finish = (e: PointerEvent) => { cancel(); if (Math.hypot(e.clientX - event.clientX, e.clientY - event.clientY) >= 5) selectBox(start, point(e), true); };
+    const cancel = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', finish); window.removeEventListener('pointercancel', cancel); setGesture(null); };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', finish); window.addEventListener('pointercancel', cancel);
+  };
   const link = (source: string, target: { path: string; title: string }) => {
     const note = cardNotes.get(source); if (!note || !editing?.writable) return;
     const draft = editing.store.get(note); if (draft.blocked) return;
@@ -323,7 +344,7 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
   }} onKeyDown={event => {
     if (event.key !== 'Enter' || !visibleSelected.length || (event.target as Element).closest('button,input,textarea,select,[contenteditable="true"],[role="dialog"]')) return;
     event.preventDefault(); setExpanded(visibleSelected, !visibleSelected.every(path => expanded.has(path)));
-  }} onWheelCapture={() => { interacted.current = true; }} onPointerDownCapture={event => { if ((event.target as Element).tagName === 'CANVAS') { interacted.current = true; container.current?.focus({ preventScroll: true }); } }}>
+  }} onWheelCapture={() => { interacted.current = true; }} onPointerDownCapture={event => { if ((event.target as Element).tagName === 'CANVAS') { interacted.current = true; container.current?.focus({ preventScroll: true }); } startBox(event); }}>
     {!lane && <GraphControls controlsRef={controls} filterPanel={filtersElement} appearance={appearance} onAppearanceChange={changeAppearance} visibleColorGroups={colors} appearanceSaveError={appearanceError} />}
     {!lane && <div className="graph-selection-toolbar" role="toolbar" aria-label={t('graph.tools')}>
       <GraphTool label={t('graph.boxSelect')} pressed={boxMode} onClick={() => setBoxMode(v => !v)}><Scan size={18} /></GraphTool>
@@ -354,13 +375,13 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
     </section>}
     {!lane && !lanePanel && activeLane && <button type="button" className="graph-lane-label" aria-expanded={false} title={t('graph.chooseLane')} onClick={() => { setLanePanel(true); setPickerOpen(false); }}>{activeLane.name}</button>}
     {editLane && activeLane && screen && <ScreenEditRow row={activeLane} notebooks={notebooks} assets={[]} folders={folders} selectedNotebookId={filters?.value.notebookId === 'all' ? notebooks[0]?.id || '' : filters?.value.notebookId || notebooks[0]?.id || ''} disabled={!screen.writable} onClose={() => setEditLane(false)} onApply={row => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id ? row : value) })} onRemove={() => { screen.change({ ...screen.page, rows: screen.page.rows.filter(row => row.id !== activeLane.id) }); selectLane(''); }} />}
-    {pickerOpen && <div className="graph-note-selector" style={activeLane ? { top: 124 } : undefined}>{graphData.nodes.map(node => <label key={node.id}><input type="checkbox" checked={selected.includes(node.id)} onChange={() => select(node.id, { shiftKey: true })} />{node.title}</label>)}</div>}
+    {pickerOpen && <div className="graph-note-selector" style={activeLane ? { top: 'calc(var(--graph-tools-top) + 44px)' } : undefined}>{graphData.nodes.map(node => <label key={node.id}><input type="checkbox" checked={selected.includes(node.id)} onChange={() => select(node.id, { shiftKey: true })} />{node.title}</label>)}</div>}
     {notice && <div role="status" className="graph-notice" onClick={() => setNotice('')}>{notice}</div>}
     <ForceGraph2D ref={fg} width={size.width} height={size.height} graphData={graphData} nodeId="id" cooldownTicks={1}
       onRenderFramePost={frame} onEngineStop={() => { captureLaneGeometry(); if (graphData.nodes.length && !fitted.current && !interacted.current) { fitted.current = true; resetView(); } }}
       onNodeDragEnd={node => { freeze(); const next = currentLayout(); const saved = next.nodes.find(n => n.path === node.id); if (saved) saved.pinned = true; persistLayout(next); }}
       onNodeClick={(node, event) => select(node.id, event)} onNodeHover={node => { clearTimeout(hoverTimer.current); if (node) setHover(node.id); else hoverTimer.current = setTimeout(() => setHover(null), 250); }}
-      onBackgroundClick={() => setSelected([])}
+      onBackgroundClick={() => setSelected([])} enablePanInteraction={event => !additive(event)}
       nodeCanvasObject={(node: Node, ctx, scale) => {
         if (expanded.has(node.id) || closing.has(node.id)) return;
         const x = node.x || 0, y = node.y || 0, radius = selected.includes(node.id) ? 9 : 6;
@@ -394,9 +415,7 @@ export function GraphPage({ notebooks, filters, onOpenNote, screen, lane, editin
       onPointerMove={event => { if (gesture?.kind === 'box') setGesture({ ...gesture,end:point(event) }); }}
       onPointerCancel={() => setGesture(null)} onPointerUp={event => {
         if (gesture?.kind !== 'box') return;
-        const end = point(event), { start } = gesture;
-        const paths = graphData.nodes.filter(node => { const x=(node.x||0)*transform.k+transform.x,y=(node.y||0)*transform.k+transform.y; return x>=Math.min(start.x,end.x)&&x<=Math.max(start.x,end.x)&&y>=Math.min(start.y,end.y)&&y<=Math.max(start.y,end.y); }).map(n=>n.id);
-        setSelected(event.shiftKey ? [...new Set([...selected,...paths])] : paths); setGesture(null); setBoxMode(false);
+        selectBox(gesture.start, point(event), additive(event)); setGesture(null); setBoxMode(false);
       }} />}
     {gesture && <svg className="graph-gesture" width={size.width} height={size.height}>{gesture.kind === 'box' ? <rect x={Math.min(gesture.start.x,gesture.end.x)} y={Math.min(gesture.start.y,gesture.end.y)} width={Math.abs(gesture.end.x-gesture.start.x)} height={Math.abs(gesture.end.y-gesture.start.y)} fill="#818cf833" stroke="#818cf8" /> : <line x1={gesture.start.x} y1={gesture.start.y} x2={gesture.end.x} y2={gesture.end.y} stroke="#818cf8" strokeWidth="2" />}</svg>}
     {(graphSource.error || matchingPaths.error || visiblePaths.error || lanePaths.error || cardLookup.error) && <div role="alert" className="graph-notice">{graphSource.error || matchingPaths.error || visiblePaths.error || lanePaths.error || cardLookup.error}</div>}

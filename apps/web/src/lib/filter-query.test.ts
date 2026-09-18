@@ -18,5 +18,7 @@ describe('shared nuqs query contract', () => {
     expect(readFilterQuery('?tag=&tag=blue').tag).toEqual(['blue']);
     expect(readFilterQuery('?tagMode=broken&view=broken&folders=../secret&folders=notes/a/valid')).toMatchObject({ tagMode: 'any', view: 'flat', folders: ['notes/a/valid'] });
     expect(writeFilterQuery('?q=hi&tag=old&keep=yes', { q: '', tag: [], neighbors: false })).toBe('?keep=yes');
+    expect(readFilterQuery('?allNotebooks=true').allNotebooks).toBe(true);
+    expect(writeFilterQuery('?allNotebooks=true&keep=yes', { allNotebooks: false })).toBe('?keep=yes');
   });
 });

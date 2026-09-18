@@ -14,7 +14,7 @@ import { ImageLightbox } from './components/ImageLightbox.js';
 import { isNoteHidden, withNoteStatus } from '@mygitnotes/core/note-status';
 import { Select } from './components/Select.js';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { notebookRoute, noteRoute, noteReturnRoute, parseWorkspaceRoute, WorkspaceTab } from './lib/routes.js';
+import { legacyAllNotebooksRoute, notebookRoute, noteRoute, noteReturnRoute, parseWorkspaceRoute, WorkspaceTab } from './lib/routes.js';
 import { readWorkingNotes, updateWorkingNote, clearCommittedNotes, workingDiff, type WorkingNotes } from './lib/working-notes.js';
 import { mergeNote, sameValue } from './lib/merge-note.js';
 import { buildNewNoteDraft } from './lib/new-note.js';
@@ -85,7 +85,7 @@ import {
   getImmediateSubfolders,
   getBreadcrumbs,
 } from './lib/folder-tree.js';
-import { mergeNotebookFacets } from './lib/note-facets.js';
+import { mergeNotebookFacets, queryNotebookIds } from './lib/note-facets.js';
 import {
   getSavedSort,
   saveSort,
@@ -283,16 +283,27 @@ const AppContent: React.FC = () => {
   const folderRoot = config?.notebooks.find(nb => nb.id === selectedNotebookId)?.root.replace(/\/$/, '');
   const selectedFolder = selectedFolders.length === 1 && folderRoot && selectedFolders[0].startsWith(folderRoot + '/')
     ? selectedFolders[0].slice(folderRoot.length + 1) : route.folder;
+  // Notes and Graph query every notebook while the all-notebooks toggle is on; the current notebook stays selected.
+  const scopeNotebookId = route.allNotebooks ? 'all' : selectedNotebookId;
   const selectedStatus = route.status;
   const showHidden = route.showHidden;
   // Counts, status options, tag lists and subfolder counts all come from one facet answer.
   const facetsQuery = useNoteFacets(showHidden);
+  const facetNotebookIds = useMemo(
+    () => queryNotebookIds(config?.notebooks || [], scopeNotebookId, selectedFolders),
+    [config, scopeNotebookId, selectedFolders],
+  );
   const notebookFacets = useMemo(() => mergeNotebookFacets(
-    Object.entries(facetsQuery.facets || {}).filter(([id]) => selectedNotebookId === 'all' || id === selectedNotebookId).map(([, value]) => value),
-  ), [facetsQuery.facets, selectedNotebookId]);
+    facetNotebookIds.flatMap(id => facetsQuery.facets?.[id] || []),
+  ), [facetsQuery.facets, facetNotebookIds]);
   const notebookStatuses = useMemo(
-    () => noteQueryStatuses(config?.notebooks || [], selectedNotebookId, Object.keys(notebookFacets.statuses)),
-    [config, selectedNotebookId, notebookFacets],
+    () => noteQueryStatuses(config?.notebooks || [], facetNotebookIds.length === 1 ? facetNotebookIds[0] : 'all', Object.keys(notebookFacets.statuses)),
+    [config, facetNotebookIds, notebookFacets],
+  );
+  // A new note is created in the current notebook, so it offers that notebook's statuses even while every notebook is listed.
+  const newNoteStatuses = useMemo(
+    () => noteQueryStatuses(config?.notebooks || [], selectedNotebookId, Object.keys(facetsQuery.facets?.[selectedNotebookId]?.statuses || {})),
+    [config, selectedNotebookId, facetsQuery.facets],
   );
   const selectedTags = useMemo(() => [...new Set(route.tags)], [route.tags]);
   // Stable across renders so memoized note rows skip re-rendering; calls reach the latest handlers.
@@ -338,18 +349,29 @@ const AppContent: React.FC = () => {
     query.delete('lanes');
     void navigateFiltered(activeTab === 'graph' ? '/graph' : notebookRoute(selectedNotebookId), query);
   };
+  // Leaving the all-notebooks scope restores the folder filters chosen before it, within the current notebook.
+  const foldersBeforeAllNotebooks = useRef<string[] | null>(null);
+  const changeAllNotebooks = (value: boolean) => {
+    if (value) {
+      foldersBeforeAllNotebooks.current = selectedFolders;
+      void setFilterQuery({ allNotebooks: true });
+      return;
+    }
+    const restored = (foldersBeforeAllNotebooks.current ?? selectedFolders).filter(path => folderRoot && path.startsWith(folderRoot + '/'));
+    foldersBeforeAllNotebooks.current = null;
+    void setFilterQuery({ allNotebooks: false, folders: restored });
+  };
   const setActiveTab = async (tab: WorkspaceTab) => {
     if (resourceNavigationBusy || notebookSwitchBusy || activeTab === tab) return;
     setNotebookSwitchBusy(true);
     try {
       if (activeTab === 'agent' && !await agentSystemRef.current?.prepareLeave()) return;
       if (activeTab === 'assets' && !await fileManagerRef.current?.prepareLeave()) return;
-      const scope = selectedNotebookId === 'all' && tab !== 'notes' && tab !== 'graph' ? config?.workspace.default_notebook || 'example' : selectedNotebookId;
       if (tab === 'notes' || tab === 'graph') {
         const query = currentFilterSearch({ view: viewMode === 'graph' ? 'flat' : viewMode });
-        query.set('notebook', scope);
-        await navigateFiltered(tab === 'notes' ? notebookRoute(scope) : '/graph', query);
-      } else navigate(`/${tab === 'assets' ? 'files' : tab}?notebook=${encodeURIComponent(scope)}`);
+        query.set('notebook', selectedNotebookId);
+        await navigateFiltered(tab === 'notes' ? notebookRoute(selectedNotebookId) : '/graph', query);
+      } else navigate(`/${tab === 'assets' ? 'files' : tab}?notebook=${encodeURIComponent(selectedNotebookId)}`);
     } finally { setNotebookSwitchBusy(false); }
   };
   const agentSystemRef = useRef<AgentSystemHandle>(null);
@@ -371,6 +393,11 @@ const AppContent: React.FC = () => {
     void navigateFiltered(notebookRoute(selectedNotebookId), query);
   };
   const setViewMode = (mode: ViewMode) => { void setFilterQuery({ view: mode }); };
+  useEffect(() => {
+    if (!config) return;
+    const canonical = legacyAllNotebooksRoute(location.pathname, location.search, selectedNotebookId);
+    if (canonical) navigate(canonical + location.hash, { replace: true });
+  }, [config, location.pathname, location.search]);
   useEffect(() => {
     if (loading || !config || editorRoute.note || route.tab !== 'notes' || route.view !== 'graph') return;
     const query = currentFilterSearch({ view: 'flat' });
@@ -400,7 +427,7 @@ const AppContent: React.FC = () => {
     if (!currentNotebook) return;
     try {
       const rendered = await renderNoteTemplate({ notebookId: currentNotebook.id, templateId, title: newNoteTitle || 'Untitled' });
-      if (typeof rendered.metadata.status === 'string' && notebookStatuses.includes(rendered.metadata.status)) {
+      if (typeof rendered.metadata.status === 'string' && newNoteStatuses.includes(rendered.metadata.status)) {
         setNewNoteStatus(rendered.metadata.status);
       }
       if (Array.isArray(rendered.metadata.tags)) {
@@ -412,11 +439,10 @@ const AppContent: React.FC = () => {
   };
   const openNewNote = (options?: string | { status?: string; folder?: string; tag?: string; tags?: string[]; notebookId?: string }) => {
     const opts = typeof options === 'string' ? { status: options } : { ...options };
-    if (selectedNotebookId === 'all' && !opts.notebookId) opts.notebookId = config?.workspace.default_notebook || config?.notebooks[0]?.id;
     if (opts.notebookId && opts.notebookId !== selectedNotebookId && config?.notebooks.some(n => n.id === opts.notebookId)) {
       setSelectedNotebookId(opts.notebookId);
     }
-    setNewNoteStatus(opts.status || notebookStatuses[0]);
+    setNewNoteStatus(opts.status || newNoteStatuses[0]);
     setNewNoteFolder(opts.folder || '');
     setNewNoteTags(opts.tags || (opts.tag ? [opts.tag] : []));
     setNewNoteTemplateId('');
@@ -450,7 +476,6 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (loading || !config) return;
     if (!editorRoute.valid) { setRouteError('route.pageNotFound');  return; }
-    if (!routedNotebook && editorNotebookId === 'all' && !editorRoute.note) { setRouteError(''); setEditingNote(null); return; }
     if (!routedNotebook) { setRouteError('route.notebookNotFound');  return; }
     if (!editorRoute.note) { setRouteError(''); setEditingNote(null);  return; }
     if (routedLookup.error) { setRouteError(routedLookup.error); return; }
@@ -459,11 +484,11 @@ const AppContent: React.FC = () => {
   }, [editorRoute, config, loading, editorNotebookId, sourceId, routedNotebook, routedNote, routedLoading, routedLookup.error]);
 
   const noteFilters = useMemo<NoteFilters>(() => ({
-    notebookId: selectedNotebookId, folders: selectedFolders, tags: selectedTags,
+    notebookId: scopeNotebookId, folders: selectedFolders, tags: selectedTags,
     descendants: route.descendants, tagMode: route.tagMode, q: searchQuery,
     status: selectedStatus, showHidden,
-  }), [selectedNotebookId, selectedFolders, selectedTags, route.descendants, route.tagMode, searchQuery, selectedStatus, showHidden]);
-  const hasCollectionFilter = selectedFolders.length > 0 || selectedTags.length > 0 || selectedNotebookId === 'all';
+  }), [scopeNotebookId, selectedFolders, selectedTags, route.descendants, route.tagMode, searchQuery, selectedStatus, showHidden]);
+  const hasCollectionFilter = selectedFolders.length > 0 || selectedTags.length > 0 || scopeNotebookId === 'all';
   // Typing in the search box must not fire one server query per keystroke.
   const debouncedSearch = useDebounced(searchQuery);
   const filtered = Boolean(debouncedSearch.trim() || selectedStatus || hasCollectionFilter);
@@ -484,10 +509,10 @@ const AppContent: React.FC = () => {
   }, [indexLookup.notes, indexCandidates, showHidden]);
 
   const baseQuery = useMemo<Partial<NoteQuery>>(() => ({
-    notebookId: selectedNotebookId, folders: selectedFolders, descendants: route.descendants,
+    notebookId: scopeNotebookId, folders: selectedFolders, descendants: route.descendants,
     tags: selectedTags, tagMode: route.tagMode, status: selectedStatus, showHidden,
     q: debouncedSearch, sort: sortField, order: sortOrder,
-  }), [selectedNotebookId, selectedFolders, route.descendants, selectedTags, route.tagMode, selectedStatus, showHidden, debouncedSearch, sortField, sortOrder]);
+  }), [scopeNotebookId, selectedFolders, route.descendants, selectedTags, route.tagMode, selectedStatus, showHidden, debouncedSearch, sortField, sortOrder]);
   // Browsing a folder lists that one directory; searching or filtering lists the whole result.
   const listQuery = useMemo<Partial<NoteQuery>>(
     () => (filtered || viewMode === 'flat' || viewMode === 'kanban'
@@ -508,7 +533,8 @@ const AppContent: React.FC = () => {
     value: noteFilters, neighbors: route.neighbors, notebooks: config?.notebooks || [], folders,
     tags: Object.keys(notebookFacets.tags),
     statuses: notebookStatuses, count: filterCount,
-    onChange: changeFilters, onNotebookChange: id => void setSelectedNotebookId(id), onClear: clearFilters,
+    allNotebooks: route.allNotebooks, onAllNotebooksChange: changeAllNotebooks,
+    onChange: changeFilters, onClear: clearFilters,
   };
 
   // Hierarchical Subfolder Discovery for current folder
@@ -755,7 +781,7 @@ const AppContent: React.FC = () => {
       setNewNoteFolder('');
       setNewNoteTags([]);
       setNewNoteTemplateId('');
-      setNewNoteStatus(notebookStatuses[0]);
+      setNewNoteStatus(newNoteStatuses[0]);
       const statusRes = await fetchGitStatus();
       setGitStatus(statusRes.status);
       handleOpenNote(res.note);
@@ -969,7 +995,7 @@ const AppContent: React.FC = () => {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onCreateNote={() => openNewNote()}
-        createNoteDisabled={!canWrite || selectedNotebookId === 'all'}
+        createNoteDisabled={!canWrite}
         onOpenCommands={() => setShortcutMode('palette')}
         navigationDisabled={noteEditorOpen || isCommitOpen}
       />
@@ -1002,7 +1028,7 @@ const AppContent: React.FC = () => {
                     selectedNotebookId={selectedNotebookId}
                     folders={folders}
                     onManageFiles={openFileManager}
-                    foldersWritable={canWrite && selectedNotebookId !== 'all'}
+                    foldersWritable={canWrite}
                     reorder={folderReorder}
                     onToggleReorder={() => setFolderReorder(value => !value)}
                     filters={filterProps}
@@ -1029,7 +1055,8 @@ const AppContent: React.FC = () => {
                 <main className="workspace-main notes-main">
               <PageToolbar>
                 {indexInToolbar && folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
-                <NoteToolbar onManageFiles={selectedNotebookId === 'all' ? undefined : () => openFileManager(selectedNotebookId, selectedFolder || '')} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite || selectedNotebookId === 'all'} viewMode={viewMode} setViewMode={setViewMode}
+                <NoteToolbar onManageFiles={() => openFileManager(selectedNotebookId, selectedFolder || '')} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode}
+                  allNotebooks={route.allNotebooks} onAllNotebooksChange={(config?.notebooks.length || 0) > 1 ? changeAllNotebooks : undefined}
                   hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null}
                   showHidden={showHidden} descendants={route.descendants}
                   onShowHiddenChange={value => changeFilters({ showHidden: value })}
@@ -1400,7 +1427,7 @@ const AppContent: React.FC = () => {
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                   {t('createNote.initialStatus')}
                 </label>
-                <Select aria-label={t('createNote.initialStatus')} value={newNoteStatus} onValueChange={setNewNoteStatus} options={notebookStatuses.map(value => ({value,label:value}))} className="w-full" />
+                <Select aria-label={t('createNote.initialStatus')} value={newNoteStatus} onValueChange={setNewNoteStatus} options={newNoteStatuses.map(value => ({value,label:value}))} className="w-full" />
               </div>
             </div>
 

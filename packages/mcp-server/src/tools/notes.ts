@@ -110,6 +110,7 @@ export async function handleSaveNote(
 
   return {
     success: true,
+    path: args.path,
     note: saved,
     commit: commitResult,
   };

@@ -12,7 +12,7 @@ Default transport is **stdio** for local agent integration (e.g. Claude Desktop,
 2. `list_notebooks`: Lists all configured notebooks and their root directories.
 3. `list_notes`: Lists all notes within a notebook, returning metadata and file paths.
 4. `read_note`: Reads a note file and parses its frontmatter and raw Markdown body (supports `metadataOnly: true` to return metadata without the markdown body).
-5. `save_note`: Atomically creates or updates a note file with path traversal and branch checks, and commits to Git. If `content` is omitted, updates frontmatter metadata only.
+5. `save_note`: Atomically creates or updates a note file with path traversal and branch checks, and commits to Git. If `content` is omitted, updates frontmatter metadata only. Returns the note `path`.
 6. `delete_note`: Removes a note file and creates a corresponding deletion commit.
 7. `read_agent_resource`: Reads an agent instruction or doc file safely; lists available agent resources (`AGENTS.md`, `docs/agent/**`) if `path` is omitted.
 8. `list_assets`: Lists assets within a notebook's asset directory.
@@ -61,6 +61,8 @@ revisions reject the operation. Mutations allow at most 200 files and 5 MiB of
 new text. Directory operations require recursive consent; protected files and
 asset-containing directories reject the complete operation. Moves preserve file
 text, including relative links.
+Note writes (`write`, `append`, `edit`, `save_note`, `update_note_metadata`)
+also return the note `path` and, when `APP_URL` is configured, the note's web page `url`.
 
 Every hosted tool declares input and output schemas, structured content and
 readOnly/destructive/idempotent/openWorld annotations. Read-only grants omit all

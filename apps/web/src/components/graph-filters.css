@@ -11,7 +11,7 @@
 .filter-clear { font-size: .75rem; text-decoration: underline; padding: .25rem; }
 .filter-details { position: absolute; top: 100%; left: 1rem; width: min(29rem, calc(100% - 2rem)); padding: .85rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: .75rem; box-shadow: 0 10px 30px #0002; max-height: min(65dvh, 36rem); overflow-y: auto; overscroll-behavior: contain; }
 .filter-details-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: .6rem; font-size: .85rem; }
-.filter-fields { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; margin: .6rem 0; }
+.filter-fields { display: grid; gap: .7rem; margin: .6rem 0; }
 .filter-fields label, .filter-option-search { display: grid; gap: .3rem; font-size: .75rem; min-width: 0; }
 .graph-filters select { max-width: 100%; padding: .3rem; color: var(--color-text); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: .35rem; }
 .graph-filters fieldset { border: 1px solid var(--color-border); border-radius: .5rem; margin: .6rem 0; padding: .5rem; min-width: 0; }

@@ -49,18 +49,17 @@
 @media (max-width: 1100px) { .sidebar-note-search input { font-size: 16px; } }
 
 .sidebar-notebooks { display: grid; gap: 2px; min-width: 0; width: 100%; }
-.sidebar-all-notebooks { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 10px; border-radius: 7px; font-size: 13px; text-align: left; }
-.sidebar-all-notebooks[aria-pressed="true"] { background: var(--workspace-selection); color: var(--color-text); font-weight: 600; }
-.sidebar-all-notebooks-row .nav-tree-entry svg { color: var(--color-muted); }
 .sidebar-notebook-group { display: flex; flex-direction: column; gap: 1px; min-width: 0; width: 100%; }
 .sidebar-notebook-heading { margin: 0; font-family: inherit; }
 .sidebar-notebook-heading > button { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 40px; padding: 8px 6px; border-radius: 7px; color: var(--color-text); text-align: left; font-size: 13px; font-weight: 600; }
-.sidebar-notebook-heading > button:hover, .sidebar-all-notebooks:hover { background: var(--workspace-selection); }
-.sidebar-notebook-heading svg, .sidebar-all-notebooks > svg { flex: none; color: var(--color-muted); }
+.sidebar-notebook-heading > button:hover { background: var(--workspace-selection); }
+.sidebar-notebook-heading svg { flex: none; color: var(--color-muted); }
 .sidebar-notebook-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .sidebar-notebook-count { margin-left: auto; flex: none; color: var(--color-muted); font-size: 11px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .sidebar-notebook-chevron { transition: transform 150ms ease; }
 .sidebar-notebook-heading > button[aria-expanded="true"] .sidebar-notebook-chevron { transform: rotate(90deg); }
+/* While every notebook is shown, the other notebooks read lighter than the current one. */
+.sidebar-notebook-group[data-scope="included"]:not([data-selected="true"]) > .nav-tree-row .nav-tree-entry { color: var(--color-muted); }
 .sidebar-notebook-group[data-selected="true"] .sidebar-notebook-heading > button,
 .sidebar-notebook-group[data-selected="true"] > .nav-tree-row .nav-tree-entry { color: var(--color-primary); }
 .sidebar-notebook-group[data-selected="true"] .sidebar-notebook-heading .sidebar-notebook-count,
@@ -71,7 +70,7 @@
 .sidebar-notebook-folders { margin: 2px 0 6px 10px; padding-left: 9px; border-left: 1px solid color-mix(in srgb, var(--workspace-divider) 80%, transparent); min-width: 0; }
 .sidebar-notebook-folders .folder-drop-line { height: 1px; }
 .sidebar-notebook-empty { padding: 6px 8px; color: var(--color-muted); font-size: 12px; }
-.sidebar-notebook-heading > button:focus-visible, .sidebar-all-notebooks:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.sidebar-notebook-heading > button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .note-tags .sidebar-tag-row .sidebar-tag-chip > span { padding-right: 1.4rem; }
 .note-tags .sidebar-tag-row:has(.sidebar-tag-action-form) { width: 100%; min-width: min(16rem, 100%); }
 .note-tags:has(.sidebar-tag-action-form) { width: 100%; }

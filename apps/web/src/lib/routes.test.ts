@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { screenLaneRoute, noteRoute, notebookRoute, noteReturnRoute, parseWorkspaceRoute } from './routes.js';
+import { legacyAllNotebooksRoute, screenLaneRoute, noteRoute, notebookRoute, noteReturnRoute, parseWorkspaceRoute } from './routes.js';
 describe('workspace URLs', () => {
   it('returns editors to their original workspace and preserves filters', () => {
     for (const origin of ['/graph?notebook=example', '/screen?notebook=work', '/notebooks/example/folders/projects?view=graph&tag=demo&q=hello']) {
@@ -53,4 +53,22 @@ it('opens a dedicated lane and preserves it as the editor return route', () => {
   expect(noteReturnRoute('?' + new URLSearchParams({ returnTo: origin }), 'work')).toBe(origin);
   expect(parseWorkspaceRoute('/screen', '').lane).toBeNull();
   for (const invalid of ['/screen/lanes/a/b', '/screen/lanes/%00', '/screen/lanes/' + 'a'.repeat(65)]) expect(parseWorkspaceRoute(invalid, '').valid).toBe(false);
+});
+
+describe('all-notebooks scope', () => {
+  it('reads the toggle from the URL', () => {
+    expect(parseWorkspaceRoute('/notebooks/work', '?allNotebooks=true')).toMatchObject({ notebook: 'work', allNotebooks: true, legacyAllNotebooks: false });
+    expect(parseWorkspaceRoute('/graph', '?notebook=work')).toMatchObject({ notebook: 'work', allNotebooks: false });
+    expect(legacyAllNotebooksRoute('/graph', '?notebook=work&allNotebooks=true', 'rules')).toBeNull();
+  });
+  it('opens former all-notebooks URLs in the default notebook', () => {
+    expect(parseWorkspaceRoute('/notebooks/all', '')).toMatchObject({ valid: true, tab: 'notes', notebook: null, allNotebooks: true, legacyAllNotebooks: true });
+    expect(legacyAllNotebooksRoute('/notebooks/all', '?q=hello', 'rules')).toBe('/notebooks/rules?q=hello&notebook=rules&allNotebooks=true');
+    expect(legacyAllNotebooksRoute('/notebooks/work', '?notebook=all', 'rules')).toBe('/notebooks/rules?notebook=rules&allNotebooks=true');
+    expect(legacyAllNotebooksRoute('/graph', '?notebook=all&tag=demo', 'rules')).toBe('/graph?notebook=rules&tag=demo&allNotebooks=true');
+    for (const page of ['/screen', '/files', '/agent', '/settings']) {
+      expect(parseWorkspaceRoute(page, '?notebook=all').allNotebooks).toBe(false);
+      expect(legacyAllNotebooksRoute(page, '?notebook=all', 'rules')).toBe(`${page}?notebook=rules`);
+    }
+  });
 });

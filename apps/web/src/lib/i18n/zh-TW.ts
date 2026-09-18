@@ -133,6 +133,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "filters.hidden": "顯示隱藏筆記",
   "filters.neighbors": "顯示直接相連的範圍外筆記",
   "filters.descendants": "包含子資料夾",
+  "filters.allNotebooks": "顯示全部筆記本",
   "filters.findOptions": "尋找資料夾或標籤",
   "filters.noOptions": "沒有符合的選項",
   "filters.tags": "標籤",
@@ -354,7 +355,6 @@ export const zhTW: Record<TranslationKey, string> = {
   'graph.openEditor': '開啟完整編輯器',
   'graph.minimapHint': '拖曳視野框平移 · 點選框外定位 · Enter 重置視野',
   'graph.allTags': '全部標籤',
-  'graph.allNotebooks': '全部筆記本',
 
   // Views & Header
   'view.list': '清單檢視',

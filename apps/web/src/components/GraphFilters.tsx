@@ -5,7 +5,7 @@ import { useTranslation } from '../lib/i18n/index.js';
 import './graph-filters.css';
 
 
-export function GraphFilters({ value, neighbors, notebooks, folders, tags, statuses, onChange, onNotebookChange, onClear, showOrphans, onToggleOrphans, children, extraCount = 0 }: FilterControls & { showOrphans?: boolean; onToggleOrphans?: () => void; children?: ReactNode; extraCount?: number }) {
+export function GraphFilters({ value, neighbors, notebooks, folders, tags, statuses, onChange, allNotebooks, onAllNotebooksChange, onClear, showOrphans, onToggleOrphans, children, extraCount = 0 }: FilterControls & { showOrphans?: boolean; onToggleOrphans?: () => void; children?: ReactNode; extraCount?: number }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [optionSearch, setOptionSearch] = useState('');
@@ -51,10 +51,8 @@ export function GraphFilters({ value, neighbors, notebooks, folders, tags, statu
       <div className="filter-details-heading"><strong>{t('filters.title')}</strong><button type="button" className="ui-button" aria-label={t('filters.close')} onClick={close}><X size={14} /></button></div>
       {conditionChips}
       {children}
+      {notebooks.length > 1 && <label className="filter-check"><input type="checkbox" checked={allNotebooks} onChange={event => onAllNotebooksChange(event.target.checked)} />{t('filters.allNotebooks')}</label>}
       <div className="filter-fields">
-        <label>{t('filters.notebook')}<select value={value.notebookId} onChange={event => onNotebookChange(event.target.value)}>
-          <option value="all">{t('graph.allNotebooks')}</option>{notebooks.map(nb => <option key={nb.id} value={nb.id}>{nb.title}</option>)}
-        </select></label>
         <label>{t('sidebar.statusFilter')}<select value={value.status || ''} onChange={event => onChange({ status: event.target.value || null })}>
           <option value="">{t('sidebar.allStatuses')}</option>{[...new Set([...(value.status ? [value.status] : []), ...statuses])].map(status => <option key={status} value={status}>{status}</option>)}
         </select></label>

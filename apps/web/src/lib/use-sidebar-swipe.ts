@@ -6,23 +6,24 @@ export function useSidebarSwipe(enabled: boolean, open: boolean, onChange: (open
   useEffect(() => {
     const root = ref.current;
     if (!enabled || !root) return;
-    const panel = root.querySelector<HTMLElement>('#notebook-panel');
-    if (!panel) return;
-    let gesture: { x: number; y: number; dx: number; dragging: boolean } | null = null;
+    let gesture: { panel: HTMLElement; x: number; y: number; dx: number; dragging: boolean } | null = null;
     const reset = () => {
+      gesture?.panel.classList.remove('is-dragging');
+      gesture?.panel.style.removeProperty('--sidebar-drag');
       gesture = null;
-      panel.classList.remove('is-dragging');
-      panel.style.removeProperty('--sidebar-drag');
     };
     const start = (event: TouchEvent) => {
       // A fresh touch is an intentional interaction, not the drag's compatibility click.
       suppressClickUntil.current = 0;
       if (!window.matchMedia('(max-width: 1100px)').matches || event.touches.length !== 1) return;
       if ((event.target as Element).closest('input, textarea, select, [role="combobox"], [contenteditable="true"]')) return;
+      // The drawer mounts only in the narrow layout, so it is looked up when a gesture starts.
+      const panel = root.querySelector<HTMLElement>('[data-responsive-sidebar]');
+      if (!panel) return;
       const touch = event.touches[0];
       const bounds = root.getBoundingClientRect();
       if (!open && touch.clientX - bounds.left > bounds.width / 2) return;
-      gesture = { x: touch.clientX, y: touch.clientY, dx: 0, dragging: false };
+      gesture = { panel, x: touch.clientX, y: touch.clientY, dx: 0, dragging: false };
     };
     const move = (event: TouchEvent) => {
       if (!gesture) return;
@@ -35,13 +36,13 @@ export function useSidebarSwipe(enabled: boolean, open: boolean, onChange: (open
         if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
         if ((open && dx > 0) || (!open && dx < 0)) { reset(); return; }
         gesture.dragging = true;
-        panel.classList.add('is-dragging');
+        gesture.panel.classList.add('is-dragging');
       }
       event.preventDefault();
       gesture.dx = dx;
-      const width = panel.getBoundingClientRect().width;
+      const width = gesture.panel.getBoundingClientRect().width;
       const offset = Math.max(-width, Math.min(0, (open ? 0 : -width) + dx));
-      panel.style.setProperty('--sidebar-drag', `${offset}px`);
+      gesture.panel.style.setProperty('--sidebar-drag', `${offset}px`);
     };
     const end = () => {
       if (gesture?.dragging) {
