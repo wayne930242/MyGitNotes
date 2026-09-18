@@ -1,8 +1,10 @@
 export const DUE_EMOJI = '📅';
 export const DONE_EMOJI = '✅';
 export const TIMESTAMP_EMOJI = '🕒';
+export const START_EMOJI = '🛫';
 
 const TASK_MARKER_RE = /^(\s*[-*+]\s\[)([ xX])(\]\s?)/;
+const TASK_DATE_TOKENS: [string, boolean][] = [[DUE_EMOJI, false], [DONE_EMOJI, false], [START_EMOJI, false], [TIMESTAMP_EMOJI, true]];
 const DATE_VALUE = '\\d{4}-\\d{2}-\\d{2}';
 const DATE_TIME_VALUE = `${DATE_VALUE} \\d{2}:\\d{2}`;
 
@@ -47,6 +49,13 @@ export function setTokenValue(line: string, emoji: string, value: string | null,
 
 export function isTaskLine(line: string): boolean {
   return TASK_MARKER_RE.test(line);
+}
+
+/** Removes the checkbox marker and every recognized date token, leaving just the task's text. */
+export function stripTaskTokens(line: string): string {
+  let text = line.replace(TASK_MARKER_RE, '');
+  for (const [emoji, withTime] of TASK_DATE_TOKENS) text = setTokenValue(text, emoji, null, withTime);
+  return text.trim();
 }
 
 export function isTaskChecked(line: string): boolean | undefined {

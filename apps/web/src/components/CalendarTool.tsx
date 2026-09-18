@@ -7,6 +7,7 @@ import { useTranslation, type TranslationKey } from '../lib/i18n/index.js';
 import { Select } from './Select.js';
 import { buildMonthGrid } from '../lib/calendar-grid.js';
 import { formatDateYMD, getLocaleWeekStartDay } from '../lib/date-utils.js';
+import { stripTaskTokens } from '../lib/task-tokens.js';
 import type { TodoTask } from '../lib/todo-list.js';
 import { buildDayCounts, notesForDay, notesForMonth, tasksForDay, tasksForMonth } from '../lib/note-day-index.js';
 import { useNoteAgenda } from '../lib/use-note-queries.js';
@@ -125,7 +126,7 @@ export function CalendarTool({ notebooks, selectedNotebookId, onOpenNote }: Cale
           {day.tasks.length > 0 && <ul className="calendar-day-tasks">
             {day.tasks.map(task => (
               <li key={task.id} data-checked={task.checked}>
-                <Button className="panel-note-row" onClick={() => onOpenNote(scopedNotes.find(note => note.path === task.notePath) || taskNote(task))}><ListTodo aria-hidden="true" /><span>{task.lineText.replace(/^\s*[-*+]\s\[[ xX]\]\s?/, '')}<small>{task.noteTitle} · {task.due}</small></span></Button>
+                <Button className="panel-note-row" onClick={() => onOpenNote(scopedNotes.find(note => note.path === task.notePath) || taskNote(task))}><ListTodo aria-hidden="true" /><span>{stripTaskTokens(task.lineText)}<small>{task.noteTitle} · {task.due}</small></span></Button>
               </li>
             ))}
           </ul>}
