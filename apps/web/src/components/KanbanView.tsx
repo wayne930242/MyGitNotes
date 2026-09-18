@@ -9,6 +9,7 @@ import {
   GripVertical,
   Clock,
   Kanban as KanbanIcon,
+  Maximize2,
 } from 'lucide-react';
 import type { NoteListItem, NoteQuery } from '@mygitnotes/core/note-query';
 import { noteUpdatedTime, SortField, SortOrder } from '../lib/note-sort.js';
@@ -18,6 +19,7 @@ import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scr
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 import { useNoteList } from '../lib/use-note-queries.js';
 import { NoteListSentinel } from './NoteListSentinel.js';
+import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
 
 interface KanbanViewProps {
   /** The board's filter; each column adds its own status condition and pages on its own. */
@@ -36,6 +38,8 @@ interface KanbanViewProps {
   sortField?: SortField;
   sortOrder?: SortOrder;
   onSortChange?: (field: SortField, order?: SortOrder) => void;
+  /** Present while a Focus is displayed: cards get a zoom button and can be dragged into a pane. */
+  focusMode?: NoteBrowseFocusMode;
 }
 
 interface Column { id: string; title: string; color: string }
@@ -55,6 +59,7 @@ interface BoardContext {
   dragOverColumnId: string | null;
   setDragOverColumnId: (id: string | null) => void;
   onTotal: (columnId: string, total: number) => void;
+  focusMode?: NoteBrowseFocusMode;
 }
 
 function useColumnDrag(board: BoardContext, columnId: string) {
@@ -85,6 +90,7 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
   const { t } = useTranslation();
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(board.confirmDelete, () => board.onDeleteNote(note));
   const isBeingDragged = board.dragged?.path === note.path;
+  const canDragForFocus = !!board.focusMode?.canDrag(note);
   const updated = noteUpdatedTime(note);
   const formattedDate = updated
     ? new Date(updated).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -92,11 +98,12 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
   return (
     <div
       data-notepath={note.path}
-      draggable={!board.readOnly}
+      draggable={!board.readOnly || canDragForFocus}
       onDragStart={event => {
-        if (board.readOnly) return;
+        if (board.readOnly && !canDragForFocus) return;
         event.dataTransfer.setData('text/plain', note.path);
-        event.dataTransfer.effectAllowed = 'move';
+        if (board.focusMode) event.dataTransfer.setData(NOTE_DRAG_TYPE, note.path);
+        event.dataTransfer.effectAllowed = board.readOnly ? 'copy' : 'move';
         board.setDragged(note);
       }}
       onDragEnd={() => { board.setDragged(null); board.setDragOverColumnId(null); }}
@@ -146,6 +153,17 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
         </div>
 
         <div className="flex items-center gap-1">
+          {board.focusMode && (
+            <button
+              type="button"
+              onClick={() => board.focusMode?.onZoomNote(note)}
+              title={t('focus.zoomNote')}
+              aria-label={t('focus.zoomNote')}
+              className="ui-icon-button"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+          )}
           {!board.readOnly && board.onMoveNote && <NoteMoveButton onClick={() => board.onMoveNote?.(note)} />}
           {!board.readOnly && index > 0 && (
             <button
@@ -319,14 +337,17 @@ function KanbanUnassignedColumn({ board, query, hiddenNote, sort }: {
 
       <div className="overflow-y-auto space-y-2.5 flex-1 pr-0.5">
         {result.loading && <p role="status" className="text-xs text-slate-400">{t('notes.loading')}</p>}
-        {notes.map((note) => (
+        {notes.map((note) => {
+          const canDragForFocus = !!board.focusMode?.canDrag(note);
+          return (
           <div
             key={note.path}
-            draggable={!board.readOnly}
+            draggable={!board.readOnly || canDragForFocus}
             onDragStart={event => {
-              if (board.readOnly) return;
+              if (board.readOnly && !canDragForFocus) return;
               event.dataTransfer.setData('text/plain', note.path);
-              event.dataTransfer.effectAllowed = 'move';
+              if (board.focusMode) event.dataTransfer.setData(NOTE_DRAG_TYPE, note.path);
+              event.dataTransfer.effectAllowed = board.readOnly ? 'copy' : 'move';
               board.setDragged(note);
             }}
             onDragEnd={() => { board.setDragged(null); board.setDragOverColumnId(null); }}
@@ -335,9 +356,25 @@ function KanbanUnassignedColumn({ board, query, hiddenNote, sort }: {
             style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
           >
             <div className="font-medium text-slate-900 dark:text-slate-100 text-sm mb-1 line-clamp-2">{note.title}</div>
-            {!board.readOnly && board.onMoveNote && <div className="flex justify-end" onClick={event => event.stopPropagation()}><NoteMoveButton onClick={() => board.onMoveNote?.(note)} /></div>}
+            {(board.focusMode || (!board.readOnly && board.onMoveNote)) && (
+              <div className="flex justify-end items-center gap-1" onClick={event => event.stopPropagation()}>
+                {board.focusMode && (
+                  <button
+                    type="button"
+                    onClick={() => board.focusMode?.onZoomNote(note)}
+                    title={t('focus.zoomNote')}
+                    aria-label={t('focus.zoomNote')}
+                    className="ui-icon-button"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {!board.readOnly && board.onMoveNote && <NoteMoveButton onClick={() => board.onMoveNote?.(note)} />}
+              </div>
+            )}
           </div>
-        ))}
+          );
+        })}
         <NoteListSentinel hasMore={result.hasMore} loading={result.loadingMore} error={result.error} onLoadMore={result.loadMore} />
       </div>
     </div>
@@ -359,6 +396,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
   sortField = 'updated',
   sortOrder = 'desc',
   onSortChange,
+  focusMode,
 }) => {
   const { t } = useTranslation();
   const [dragged, setDragged] = useState<NoteListItem | null>(null);
@@ -398,7 +436,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
 
   const board: BoardContext = {
     columns, readOnly, canDelete, confirmDelete, onOpenNote, onUpdateNoteStatus, onDeleteNote, onMoveNote, onNewNoteWithStatus,
-    dragged, setDragged, dragOverColumnId, setDragOverColumnId,
+    dragged, setDragged, dragOverColumnId, setDragOverColumnId, focusMode,
     onTotal: (columnId, total) => setTotals(previous => (previous[columnId] === total ? previous : { ...previous, [columnId]: total })),
   };
   // Only the columns on the board count, so a status that disappeared leaves no stale total.

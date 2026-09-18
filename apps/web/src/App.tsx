@@ -1,14 +1,12 @@
 import { Button } from './components/Button.js';
 import type { ChangeRequest } from './lib/types.js';
 import { useQueryStates } from 'nuqs';
-import { useGraphEditing } from './lib/use-graph-editing.js';
 import { filterParsers, writeFilterQuery, type FilterQuery } from './lib/filter-query.js';
 import { legacyFolderPaths, type NoteFilters } from '@mygitnotes/core/note-filters';
 import { noteQueryStatuses, type NoteListItem, type NoteQuery } from '@mygitnotes/core/note-query';
 import type { FilterControls } from './lib/filter-controls.js';
-import { listLocalDrafts } from './lib/storage.js';
+import { adoptGraphDrafts, listLocalDrafts } from './lib/storage.js';
 import { useWorkspaceSync } from './lib/use-workspace-sync.js';
-import { SCREEN_PAGE_FILE } from '@mygitnotes/core/screen-page';
 import { WorkspaceLinks } from './components/WorkspaceLinks.js';
 import { ImageLightbox } from './components/ImageLightbox.js';
 import { isNoteHidden, withNoteStatus } from '@mygitnotes/core/note-status';
@@ -62,7 +60,7 @@ import type {
 import { ThemeDefinition, getSavedTheme, applyTheme } from './lib/themes.js';
 import { AuthControls, ConnectionState, AgentAccessSettings } from './components/AuthControls.js';
 import { Header } from './components/Header.js';
-import { KeyboardShortcuts, type ShortcutSurfaceMode } from './components/KeyboardShortcuts.js';
+import { KeyboardShortcuts, type PaletteCommand, type ShortcutSurfaceMode } from './components/KeyboardShortcuts.js';
 import { NoteToolbar } from './components/NoteToolbar.js';
 import { PageToolbar, RIGHT_PANEL_RAIL_WIDTH, SidebarProvider, WorkspaceSidebarPortal, WorkspaceSplitLayout } from './components/WorkspaceChrome.js';
 import { useVisualViewport } from './lib/use-visual-viewport.js';
@@ -72,7 +70,20 @@ import { ListView } from './components/ListView.js';
 import { CardView } from './components/CardView.js';
 import { KanbanView } from './components/KanbanView.js';
 import { EditorModal } from './components/EditorModal.js';
+import type { NoteEditorSharedProps } from './components/NoteEditor.js';
+import { NoteEditingProvider, useNoteEditorRegistry } from './lib/note-editing.js';
+import { FOCUS_DIVISIONS, focusTabKey, type FocusTab } from '@mygitnotes/core/focus-page';
+import { useNoteFocus } from './lib/use-note-focus.js';
+import { CURRENT_FOCUS, displayedPanes } from './lib/focus-view.js';
+import { FocusArea, usePaneCapacity } from './components/FocusArea.js';
+import { FocusControls } from './components/FocusControls.js';
+import { AddToFocusDialog } from './components/AddToFocusDialog.js';
+import { FocusLaneTab } from './components/FocusLaneTab.js';
+import { FocusList } from './components/FocusList.js';
+import { BrowseDock, CARD_TWO_ROW_HEIGHT } from './components/BrowseDock.js';
+import type { ScreenRow } from '@mygitnotes/core/screen-page';
 import { RightPanel } from './components/RightPanel.js';
+import { isDocumentTool, usePanelContext, type DocumentToolId } from './lib/panel-context.js';
 import { FileManager, FileManagerDialog, FileMetadata, type FileManagerHandle } from './components/FileManager.js';
 import { mutateFile, type FileResult, type FileEntry } from './lib/files-api.js';
 import { AgentSystemView, type AgentSystemHandle } from './components/AgentSystemView.js';
@@ -180,19 +191,25 @@ const AppContent: React.FC = () => {
     workingScope,
     activeWorkingNotes,
     screen,
-    screenPending,
+    focus: focusPage,
+    documents,
+    pendingDocuments,
     refreshWorkspace,
     stageWorkingNote,
   } = useWorkspaceSync({
     routeNotebook: editorRoute.notebook || undefined,
     onStageNote: note => setEditingNote(current => current?.path === note.path && !sameValue(current, note) ? note : current),
   });
+  const refreshDocuments = async () => { await Promise.all(documents.map(document => document.refresh())); };
+  const editorRegistry = useNoteEditorRegistry();
 
   // Every note query is answered for this source and revision; staged drafts are overlaid on top.
   const queryClient = useQueryClient();
   useLayoutEffect(() => { setNoteQueryScope({ sourceId, revision, drafts: activeWorkingNotes }); }, [sourceId, revision, activeWorkingNotes]);
   const queryScope = useNoteQueryScope();
   const invalidateNotes = () => { void invalidateNoteQueries(queryClient); };
+  // Staged drafts are overlaid on remote answers; only local saves change what the note queries return.
+  const refreshNotes = async () => { if (!remote) await invalidateNoteQueries(queryClient); };
   // The server answers from the branch head: a rejected revision or cursor means this client is
   // behind, so the workspace is refreshed and every list restarts from its first page.
   const [staleNotice, setStaleNotice] = useState('');
@@ -330,6 +347,55 @@ const AppContent: React.FC = () => {
   const searchQuery = route.q;
   const viewMode = route.view;
   const indexInToolbar = viewMode === 'flat' || viewMode === 'kanban';
+
+  // Focus: the URL names the displayed one; named Focus sync through their workspace document.
+  const focusCapacity = usePaneCapacity();
+  const notebookLanes = useMemo(
+    () => screen.loading || screen.error ? undefined : screen.page.rows.filter(row => row.notebookId === selectedNotebookId),
+    [screen.loading, screen.error, screen.page, selectedNotebookId],
+  );
+  const noteFocus = useNoteFocus({
+    page: focusPage, notebookId: selectedNotebookId, scope: remote ? sourceId : `local:${repoRoot}`,
+    focusKey: activeTab === 'notes' ? route.focus : null, writable: canWrite, lanes: notebookLanes, flushEditors: editorRegistry.flushEditors,
+  });
+  const focusDisplay = noteFocus.layout && noteFocus.entry ? displayedPanes(noteFocus.entry, noteFocus.layout, focusCapacity) : undefined;
+  /** On phones the browse region and the Focus take turns filling the screen. */
+  const [focusNarrowView, setFocusNarrowView] = useState<'focus' | 'browse'>('focus');
+  const [addingToFocus, setAddingToFocus] = useState<{ tab: FocusTab; label: string } | null>(null);
+  // The rail shows the active pane's document panel when that pane displays a note.
+  const panel = usePanelContext();
+  const [documentContainer, setDocumentContainer] = useState<HTMLDivElement | null>(null);
+  const activePaneNote = Boolean(noteFocus.entry && focusDisplay?.panes.find(pane => pane.panes.includes(noteFocus.entry!.activePane))?.key?.startsWith('note:'));
+  const focusDocumentPanel = {
+    target: documentContainer,
+    mode: panel.isOpen && isDocumentTool(panel.activeTool) ? panel.activeTool : null,
+    onChange: (mode: DocumentToolId | null) => {
+      if (!mode) panel.close();
+      else if (!panel.isOpen || panel.activeTool !== mode) panel.openTool(mode);
+    },
+  };
+  /** Shows a Focus (`current` or an id), or returns to normal browsing with null. */
+  const showFocus = async (key: string | null) => {
+    if (!await editorRegistry.flushEditors()) return;
+    if (!key) noteFocus.forget();
+    const query = new URLSearchParams(location.search);
+    if (key) query.set('focus', key); else query.delete('focus');
+    setFocusNarrowView('focus');
+    navigate({ pathname: location.pathname, search: query.toString() });
+  };
+  // Arriving at a notebook's Notes page shows the Focus it displayed last.
+  const focusArrival = useRef('');
+  useEffect(() => {
+    if (activeTab !== 'notes') { focusArrival.current = ''; return; }
+    if (loading || editorRoute.note) return;
+    const arrival = `${sourceId}:${selectedNotebookId}`;
+    if (focusArrival.current === arrival) return;
+    focusArrival.current = arrival;
+    if (route.focus || !noteFocus.view.last) return;
+    const query = new URLSearchParams(location.search);
+    query.set('focus', noteFocus.view.last);
+    navigate({ pathname: location.pathname, search: query.toString() }, { replace: true });
+  }, [activeTab, loading, editorRoute.note, sourceId, selectedNotebookId]);
   const [routeError, setRouteError] = useState('');
   const currentFilterSearch = (patch: Partial<FilterQuery> = {}) => {
     const query = new URLSearchParams(writeFilterQuery(location.search, { ...queryState, folders: selectedFolders, ...patch }));
@@ -372,8 +438,10 @@ const AppContent: React.FC = () => {
     try {
       if (activeTab === 'agent' && !await agentSystemRef.current?.prepareLeave()) return;
       if (activeTab === 'assets' && !await fileManagerRef.current?.prepareLeave()) return;
+      if (activeTab === 'notes' && !await editorRegistry.flushEditors()) return;
       if (tab === 'notes' || tab === 'graph') {
         const query = currentFilterSearch({ view: viewMode === 'graph' ? 'flat' : viewMode });
+        query.delete('focus');
         query.set('notebook', selectedNotebookId);
         await navigateFiltered(tab === 'notes' ? notebookRoute(selectedNotebookId) : '/graph', query);
       } else {
@@ -393,7 +461,9 @@ const AppContent: React.FC = () => {
     try {
       if (activeTab === 'agent' && !await agentSystemRef.current?.prepareNotebookChange(id)) return;
       if (activeTab === 'assets' && !await fileManagerRef.current?.prepareLeave()) return;
+      if (activeTab === 'notes' && !await editorRegistry.flushEditors()) return;
       const query = currentFilterSearch({ folders: [] });
+      query.delete('focus');
       query.set('notebook', id);
       await navigateFiltered(activeTab === 'notes' ? notebookRoute(id) : `/${activeTab}`, query);
     } finally { setNotebookSwitchBusy(false); }
@@ -411,6 +481,7 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (loading || !config || editorRoute.note || route.tab !== 'notes' || route.view !== 'graph') return;
     const query = currentFilterSearch({ view: 'flat' });
+    query.delete('focus');
     query.set('notebook', selectedNotebookId);
     void navigateFiltered('/graph', query, true);
   }, [loading, config, editorRoute.note, route.tab, route.view]);
@@ -560,8 +631,8 @@ const AppContent: React.FC = () => {
 
   // Note Handlers
   const handleOpenNote = async (note: NoteListItem, anchor = '') => {
-    try { await graphEditing.store.flushAll(); note = graphEditing.store.entries.get(note.path)?.draft || note; }
-    catch (error) { setActionError((error as Error).message); return; }
+    // Zoom is a Notes route: leaving another tab unmounts its graph cards, so their edits are saved first.
+    if (activeTab !== 'notes' && !await editorRegistry.flushEditors()) return;
     setEditingNote(note);
 
     const notebook = config?.notebooks.find(nb => nb.id === note.notebookId);
@@ -577,6 +648,21 @@ const AppContent: React.FC = () => {
       fetchAssets(targetNotebook).then(setAssets).catch(console.error);
     }
   };
+  /** In a displayed Focus a note of this notebook opens in a pane: the active one, or beside `source`; false leaves it to zoom. */
+  const openInFocus = async (note: NoteListItem, source?: number) => {
+    if (!noteFocus.shown || note.notebookId !== selectedNotebookId) return false;
+    const result = await noteFocus.openNote(note.path, source);
+    if (result === 'opened') setFocusNarrowView('focus');
+    return result === 'opened' || result === 'blocked';
+  };
+  const openFromBrowse = async (note: NoteListItem) => { if (!await openInFocus(note)) await handleOpenNote(note); };
+  const openLink = async (note: NoteListItem, anchor?: string, source?: HTMLElement) => {
+    const pane = source?.closest<HTMLElement>('[data-focus-pane]')?.dataset.focusPane;
+    if (pane === undefined || !await openInFocus(note, Number(pane))) await handleOpenNote(note, anchor);
+  };
+  const zoomFocusNote = (path: string) => { const note = noteFocus.notes.get(path); if (note) void handleOpenNote(note); };
+  const addToFocus = (note: NoteItem) => note.notebookId === selectedNotebookId
+    ? () => setAddingToFocus({ tab: { kind: 'note', path: note.path }, label: note.title }) : undefined;
 
   const handleSaveNote = async (params: {
     path: string;
@@ -615,11 +701,8 @@ const AppContent: React.FC = () => {
     return res.note;
   };
 
-  const graphEditing = useGraphEditing(`${sourceId}:${branch}`, canWrite, params => {
-    const pending = remote ? readWorkingNotes(workingScope)[params.path] : undefined;
-    if (pending?.blocked) return Promise.reject(new Error(pending.blocked));
-    return handleSaveNote({ ...params, baseNote: pending?.base || params.baseNote });
-  });
+  // Drafts the retired graph editing store left behind join the editor's own draft recovery.
+  useEffect(() => adoptGraphDrafts(`${sourceId}:${branch}`), [sourceId, branch]);
 
   // Remote delete: no working tree to trash into, so commit the removal immediately.
   const handleRemoteDeleteNote = async (note: NoteListItem) => {
@@ -800,9 +883,9 @@ const AppContent: React.FC = () => {
 
   const commitWorkingNotes = async (files: string[], message: string) => {
     const pending = readWorkingNotes(workingScope);
-    const sentScreen = files.includes(SCREEN_PAGE_FILE) ? screen.commitDraft() : undefined;
-    const selected = files.filter(file => file !== SCREEN_PAGE_FILE).map(file => pending[file]).filter(Boolean);
-    if (selected.length + (sentScreen ? 1 : 0) !== files.length) throw new Error('Pending files changed. Review the selection again.');
+    const sentDocuments = documents.filter(document => files.includes(document.file)).map(document => document.prepareCommit());
+    const selected = files.filter(file => !sentDocuments.some(document => document.path === file)).map(file => pending[file]).filter(Boolean);
+    if (selected.length + sentDocuments.length !== files.length) throw new Error('Pending files changed. Review the selection again.');
     const workspace = await fetchWorkspace(true);
     if (!workspace.capabilities.write || workspace.source.identity !== sourceId) throw new Error('Sign in with write access to this workspace before committing.');
     const expected = workspace.revision!;
@@ -844,10 +927,10 @@ const AppContent: React.FC = () => {
       if (persisted) sent[entry.note.path] = persisted;
     }
     if (reviewRequired) throw new Error('Remote changes merged into local drafts. Review the updated diff, then Commit again.');
-    if (!Object.keys(sent).length && !sentScreen) return;
+    if (!Object.keys(sent).length && !sentDocuments.length) return;
     const result = await commitRemoteNotes(Object.values(sent).map(entry => ({ path: entry.note.path,
-      content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base })), expected, message, sentScreen);
-    if (sentScreen) screen.committed(sentScreen, result.revision);
+      content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base })), expected, message, sentDocuments.map(({ path, page, base }) => ({ path, page, base })));
+    for (const document of sentDocuments) document.committed(result.revision);
     setWorkingNotes(clearCommittedNotes(workingScope, sent));
     setRevision(result.revision);
   };
@@ -897,8 +980,8 @@ const AppContent: React.FC = () => {
   };
 
   const beforeFileChange = async () => {
-    await graphEditing.store.flushAll();
-    if (Object.keys(readWorkingNotes(workingScope)).length || listLocalDrafts(workingScope).length || screen.dirty) throw new Error(t('folder.draftsHint'));
+    await editorRegistry.flushEditors();
+    if (Object.keys(readWorkingNotes(workingScope)).length || listLocalDrafts(workingScope).length || documents.some(document => document.dirty)) throw new Error(t('folder.draftsHint'));
   };
   const openFileManager = (notebookId: string, relativePath = '') => {
     const notebook = config?.notebooks.find(nb => nb.id === notebookId);
@@ -910,7 +993,7 @@ const AppContent: React.FC = () => {
   };
   const moveNoteAction = (note: NoteListItem) => { void handleMoveNote(note).catch(() => {}); };
   const onFilesChanged = async (result: FileResult) => {
-    await refreshWorkspace(); await screen.refresh();
+    await refreshWorkspace(); await refreshDocuments();
     if (editorRoute.note) {
       const nb = config?.notebooks.find(nb => nb.id === editorNotebookId);
       const previous = nb ? nb.root + '/' + editorRoute.note : '';
@@ -946,7 +1029,7 @@ const AppContent: React.FC = () => {
 
   const openCommitModal = (request?: ChangeRequest) => { void (async () => {
     if (activeTab === 'agent' && !await agentSystemRef.current?.prepareLeave()) return;
-    if (!remote && screen.dirty) await screen.save();
+    if (!remote) await Promise.all(documents.map(document => document.save()));
     setCommitRequest(request);
     setIsCommitOpen(true);
   })().catch(error => setActionError(error.message)); };
@@ -954,14 +1037,183 @@ const AppContent: React.FC = () => {
   const panelRemoteChanges = remote ? [
           ...Object.values(activeWorkingNotes).map(entry => ({ path: entry.note.path, kind: entry.blocked ? 'conflict' as const : entry.base ? 'modified' as const : 'added' as const,
             tracked: Boolean(entry.base), revision: JSON.stringify(entry), available: canWrite && !entry.blocked, staged: false, unstaged: true })),
-          ...(screenPending ? [{ path: SCREEN_PAGE_FILE, kind: 'modified' as const, tracked: true, revision: screen.diff, available: canWrite && !screen.error, staged: false, unstaged: true }] : []),
+          ...pendingDocuments.map(document => ({ path: document.file, kind: 'modified' as const, tracked: true, revision: document.diff, available: canWrite && !document.error, staged: false, unstaged: true })),
         ] : undefined;
-  const panelGetPreview = remote ? (file: string) => file === SCREEN_PAGE_FILE ? screen.diff : activeWorkingNotes[file] ? workingDiff({ [file]: activeWorkingNotes[file] }) : '' : undefined;
+  const panelGetPreview = remote ? (file: string) => documents.find(document => document.file === file)?.diff ?? (activeWorkingNotes[file] ? workingDiff({ [file]: activeWorkingNotes[file] }) : '') : undefined;
+
+  // Every editor of a note, in zoom or in a Focus pane, is wired to the same handlers and per-path state.
+  const editorProps = (note: NoteItem, committed?: NoteItem): NoteEditorSharedProps => ({
+    statuses: noteQueryStatuses(config?.notebooks || [], note.notebookId, Object.keys(facetsQuery.facets?.[note.notebookId]?.statuses || {})),
+    metadataFields: config?.notebooks.find(nb => nb.id === note.notebookId)?.metadata,
+    onSave: handleSaveNote,
+    onMoveNote: handleMoveNote,
+    onRestoreFile: handleRestoreNoteFile,
+    isDirty: Boolean(gitStatus && [ ...gitStatus.modified, ...gitStatus.staged, ...gitStatus.untracked ].includes(note.path)),
+    availableTags,
+    assets,
+    onUploadAsset: !canWrite ? undefined : handleUploadAsset,
+    onDeleteAsset: !canWrite ? undefined : handleDeleteAsset,
+    onMoveAsset: !canWrite ? undefined : handleMoveAsset,
+    readOnly: !canWrite,
+    autoSave: true,
+    draftMode: remote,
+    remoteBase: activeWorkingNotes[note.path]?.base || (committed && typeof committed.content === 'string' ? committed : undefined),
+    conflictReason: activeWorkingNotes[note.path]?.blocked,
+    onMarkConflict: remote ? (reason, draft, base) => { stageWorkingNote(draft, base, reason); } : undefined,
+    onReadRemote: remote && activeWorkingNotes[note.path]?.base !== null ? readNote : undefined,
+    branch,
+    draftScope: `${sourceId}:${branch}`,
+  });
+  const closeZoom = () => {
+    setEditingNote(null);
+    navigate(returnTo, { replace: true });
+  };
+
+  // Palette commands for the displayed Focus; they act on the active pane.
+  const activeFocusPane = noteFocus.entry ? focusDisplay?.panes.find(pane => pane.panes.includes(noteFocus.entry!.activePane)) : undefined;
+  const cycleFocusPane = (delta: number) => {
+    if (!focusDisplay || !activeFocusPane) return;
+    const panes = focusDisplay.panes, target = panes[(panes.indexOf(activeFocusPane) + delta + panes.length) % panes.length];
+    noteFocus.activate(target.pane);
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-focus-pane="${target.pane}"] [role="tab"][aria-selected="true"]`)?.focus());
+  };
+  const cycleFocusTab = (delta: number) => {
+    if (!noteFocus.layout || !activeFocusPane) return;
+    const tabs = activeFocusPane.panes.flatMap(pane => noteFocus.layout!.panes[pane].tabs.map(tab => ({ pane, key: focusTabKey(tab) })));
+    const index = tabs.findIndex(tab => tab.key === activeFocusPane.key);
+    const target = tabs[(index + delta + tabs.length) % tabs.length];
+    if (target) void noteFocus.show(target.pane, target.key);
+  };
+  const lastFocus = noteFocus.view.last && (noteFocus.view.last === CURRENT_FOCUS || noteFocus.focuses.some(item => item.id === noteFocus.view.last)) ? noteFocus.view.last : CURRENT_FOCUS;
+  const zoomablePath = activeFocusPane?.key?.startsWith('note:') ? activeFocusPane.key.slice('note:'.length) : null;
+  const focusCommands: PaletteCommand[] = [
+    { id: 'focus-toggle', label: t(noteFocus.shown ? 'focus.close' : 'focus.open'), disabled: activeTab !== 'notes', run: () => void showFocus(noteFocus.shown ? null : lastFocus) },
+    { id: 'focus-next-pane', label: t('focus.nextPane'), disabled: (focusDisplay?.panes.length ?? 0) < 2, run: () => cycleFocusPane(1) },
+    { id: 'focus-previous-pane', label: t('focus.previousPane'), disabled: (focusDisplay?.panes.length ?? 0) < 2, run: () => cycleFocusPane(-1) },
+    { id: 'focus-next-tab', label: t('focus.nextTab'), disabled: !activeFocusPane, run: () => cycleFocusTab(1) },
+    { id: 'focus-previous-tab', label: t('focus.previousTab'), disabled: !activeFocusPane, run: () => cycleFocusTab(-1) },
+    { id: 'focus-close-tab', label: t('focus.closeCurrentTab'), disabled: !noteFocus.editable || !activeFocusPane?.key, run: () => { if (activeFocusPane?.key) void noteFocus.close(activeFocusPane.key); } },
+    { id: 'focus-zoom-tab', label: t('focus.zoomCurrentTab'), disabled: !zoomablePath, run: () => { if (zoomablePath) zoomFocusNote(zoomablePath); } },
+    ...FOCUS_DIVISIONS.map(division => ({
+      id: `focus-division-${division}`, label: t('focus.divisionCommand', { name: t(`focus.division.${division}`) }),
+      disabled: !noteFocus.editable || !noteFocus.layout || noteFocus.layout.division === division, run: () => void noteFocus.setDivision(division),
+    })),
+  ];
+  // With a Focus displayed, the browse region docks beside it (list, flat) or below it (card, kanban).
+  const bottomDock = viewMode === 'card' || viewMode === 'kanban';
+  const browseFocusMode = noteFocus.layout ? {
+    onZoomNote: (note: NoteListItem) => void handleOpenNote(note),
+    canDrag: (note: NoteListItem) => noteFocus.editable && note.notebookId === selectedNotebookId,
+  } : undefined;
+  const browseRegion = (docked: boolean, dockHeight: number) => <>
+              {actionError && <p role="alert" className="mb-3 text-sm text-rose-600">{actionError}</p>}
+              {staleNotice && <p role="alert" className="mb-3 text-sm text-amber-600">{staleNotice}</p>}
+              {listResult.error && <p role="alert" className="mb-3 text-sm text-rose-600">{t('notes.loadFailed', { message: listResult.error })}</p>}
+              {facetsQuery.error && <p role="alert" className="mb-3 text-sm text-rose-600">{t('notes.countsFailed', { message: facetsQuery.error })}</p>}
+              {indexLookup.error && <p role="alert" className="mb-3 text-sm text-rose-600">{t('notes.loadFailed', { message: indexLookup.error })}</p>}
+              {listResult.loading && <p role="status" className="mb-3 text-sm text-slate-500">{t('notes.loading')}</p>}
+              {!indexInToolbar && <>
+                <Breadcrumbs
+                  segments={breadcrumbs}
+                  currentFolder={selectedFolder}
+                  onSelectFolder={setSelectedFolder}
+                  subfolderCount={immediateSubfolders.length}
+                  noteCount={listResult.total}
+                  sortField={sortField}
+                  sortOrder={sortOrder}
+                  onSortChange={handleSortChange}
+                />
+                <FolderLinks folders={immediateSubfolders} onSelect={setSelectedFolder}>
+                  {folderIndex && <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} />}
+                </FolderLinks>
+              </>}
+              {(viewMode === 'list' || viewMode === 'flat') && (<>
+                <ListView
+                  showMobileSort={false}
+                  compact={docked}
+                  focusMode={browseFocusMode}
+                  statuses={notebookStatuses}
+                  readOnly={!canWrite}
+                  canDelete={canWrite}
+                  confirmDelete={remote}
+                  notes={displayedNotes}
+                  uncommitted={listResult.uncommitted}
+                  hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
+                  onOpenNote={note => void openFromBrowse(note)}
+                  onDeleteNote={handleDeleteNote}
+                  onMoveNote={moveNoteAction}
+                  onUpdateNoteStatus={handleUpdateNoteStatus}
+                  onNewNote={() => openNewNote()}
+                  sortField={sortField}
+                  sortOrder={sortOrder}
+                  onSortChange={handleSortChange}
+                  tagActions={noteTagActions}
+                />
+                <NoteListSentinel hasMore={listResult.hasMore} loading={listResult.loadingMore} error={listResult.error} onLoadMore={listResult.loadMore} />
+              </>)}
+              {viewMode === 'card' && (<>
+                <CardView
+                  strip={docked && dockHeight < CARD_TWO_ROW_HEIGHT}
+                  focusMode={browseFocusMode}
+                  statuses={notebookStatuses}
+                  readOnly={!canWrite}
+                  canDelete={canWrite}
+                  confirmDelete={remote}
+                  notes={displayedNotes}
+                  uncommitted={listResult.uncommitted}
+                  hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
+                  onOpenNote={note => void openFromBrowse(note)}
+                  onDeleteNote={handleDeleteNote}
+                  onMoveNote={moveNoteAction}
+                  onNewNote={() => openNewNote()}
+                  onUpdateNoteStatus={handleUpdateNoteStatus}
+                  tagActions={noteTagActions}
+                />
+                <NoteListSentinel hasMore={listResult.hasMore} loading={listResult.loadingMore} error={listResult.error} onLoadMore={listResult.loadMore} />
+              </>)}
+              {viewMode === 'kanban' && (
+                <KanbanView
+                  focusMode={browseFocusMode}
+                  statuses={notebookStatuses}
+                  readOnly={!canWrite}
+                  canDelete={canWrite}
+                  confirmDelete={remote}
+                  query={baseQuery}
+                  hiddenNote={folderIndex}
+                  onOpenNote={note => void openFromBrowse(note)}
+                  onUpdateNoteStatus={handleUpdateNoteStatus}
+                  onDeleteNote={handleDeleteNote}
+                  onMoveNote={moveNoteAction}
+                  onNewNoteWithStatus={(status) => {
+                    openNewNote(status);
+                  }}
+                  sortField={sortField}
+                  sortOrder={sortOrder}
+                  onSortChange={handleSortChange}
+                />
+              )}
+  </>;
+  const renderFocusLane = (row: ScreenRow, pane: number) => <FocusLaneTab key={row.id} row={row} notebooks={config?.notebooks || []}
+    graph={row.view === 'graph' ? <React.Suspense fallback={<p role="status">{t('graph.title')}</p>}>
+      <GraphPage notebooks={config?.notebooks || []} lane={row} screen={screen} />
+    </React.Suspense> : undefined}
+    onOpenNote={note => void openInFocus(note, pane).then(opened => { if (!opened) void handleOpenNote(note); })}
+    onOpenFolder={item => {
+      // A folder of this notebook filters the browse region and keeps the Focus; others open as they do on Screen.
+      const notebook = config?.notebooks.find(nb => nb.id === item.notebookId);
+      if (item.notebookId !== selectedNotebookId || !notebook || !folderRoot) return false;
+      const assetRoot = `${folderRoot}/${notebook.assets || 'assets'}`;
+      if (item.path === assetRoot || item.path.startsWith(`${assetRoot}/`)) return false;
+      if (item.path !== folderRoot && !item.path.startsWith(`${folderRoot}/`)) return false;
+      setSelectedFolder(item.path === folderRoot ? null : item.path.slice(folderRoot.length + 1));
+      return true;
+    }} />;
 
   if (loading || loadError) return <ConnectionState loading={loading} error={loadError} onRetry={refreshWorkspace} />;
 
   return (
-    <WorkspaceLinks notebooks={config?.notebooks || []} folders={folders} onOpenNote={handleOpenNote}>
+    <WorkspaceLinks notebooks={config?.notebooks || []} folders={folders} onOpenNote={(note, anchor, source) => void openLink(note, anchor, source)}>
+    <NoteEditingProvider register={editorRegistry.register} editorProps={editorProps} flushEditors={editorRegistry.flushEditors} refreshNotes={refreshNotes} closeZoom={closeZoom} addToFocus={addToFocus}>
     <div
       className="app-shell h-dvh w-full overflow-hidden flex flex-col font-sans transition-colors duration-200"
       data-workspace-tab={activeTab}
@@ -1013,7 +1265,8 @@ const AppContent: React.FC = () => {
         suspended={noteEditorOpen || isCommitOpen}
         activeTab={activeTab} canCreateNote={canWrite}
         onNavigate={tab => void setActiveTab(tab)} onCreateNote={() => openNewNote()}
-        onFocusSearch={() => { if (activeTab === 'notes') setFiltersOpen(true); requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.header-search input')?.focus()); }} />
+        onFocusSearch={() => { if (activeTab === 'notes') setFiltersOpen(true); requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.header-search input')?.focus()); }}
+        pageCommands={focusCommands} />
 
       {routeError && (
         <div role="alert" className="px-6 py-3 text-sm text-rose-600">
@@ -1033,6 +1286,7 @@ const AppContent: React.FC = () => {
             rightPanelWidth={rightPanelWidth}
             rightPanel={
               <RightPanel
+                documentPanel={activeTab === 'notes' && noteFocus.layout ? { enabled: activePaneNote, onContainer: setDocumentContainer } : undefined}
                 fileMode={activeTab === 'assets'}
                 metadataOpen={fileMetadataOpen}
                 onMetadataOpenChange={setFileMetadataOpen}
@@ -1051,7 +1305,7 @@ const AppContent: React.FC = () => {
                 writable={canWrite}
                 remoteChanges={panelRemoteChanges}
                 getPreview={panelGetPreview}
-                onSynced={remote ? undefined : async () => { await refreshWorkspace(); await screen.refresh(); }}
+                onSynced={remote ? undefined : async () => { await refreshWorkspace(); await refreshDocuments(); }}
                 onWidthChange={setRightPanelWidth}
               />
             }
@@ -1072,9 +1326,9 @@ const AppContent: React.FC = () => {
                     facetsError={facetsQuery.error}
                     workspaceTagNames={workspaceTagNames}
                     beforeFolderChange={() => {
-                      if (Object.keys(activeWorkingNotes).length || listLocalDrafts(workingScope).length || screen.dirty) throw new Error(t('folder.draftsHint'));
+                      if (Object.keys(activeWorkingNotes).length || listLocalDrafts(workingScope).length || documents.some(document => document.dirty)) throw new Error(t('folder.draftsHint'));
                     }}
-                    onFoldersChanged={async () => { await refreshWorkspace(); await screen.refresh(); }}
+                    onFoldersChanged={async () => { await refreshWorkspace(); await refreshDocuments(); }}
                     selectedFolder={selectedFolder}
                     onSelectFolder={setSelectedFolder}
                     gitStatus={gitStatus}
@@ -1089,98 +1343,24 @@ const AppContent: React.FC = () => {
                 {/* Main Content Area */}
                 <main className="workspace-main notes-main">
               <PageToolbar>
-                {indexInToolbar && folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
+                {indexInToolbar && folderIndex && <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} />}
                 <NoteToolbar sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode}
                   hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null}
                   showHidden={showHidden} descendants={route.descendants}
                   onShowHiddenChange={value => changeFilters({ showHidden: value })}
                   onDescendantsChange={value => changeFilters({ descendants: value })}
                   onOpenNewNoteModal={() => openNewNote()} filtersOpen={filtersOpen}
-                  onToggleFilters={() => setFiltersOpen(open => !open)} />
+                  onToggleFilters={() => setFiltersOpen(open => !open)}
+                  focusControls={<FocusControls focus={noteFocus} onShow={key => void showFocus(key)} onReload={() => void focusPage.reload()}
+                    browseToggle={focusCapacity === 1 ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') } : undefined} />} />
               </PageToolbar>
-              <div className="workspace-scroll">
-              {actionError && <p role="alert" className="mb-3 text-sm text-rose-600">{actionError}</p>}
-              {staleNotice && <p role="alert" className="mb-3 text-sm text-amber-600">{staleNotice}</p>}
-              {listResult.error && <p role="alert" className="mb-3 text-sm text-rose-600">{t('notes.loadFailed', { message: listResult.error })}</p>}
-              {facetsQuery.error && <p role="alert" className="mb-3 text-sm text-rose-600">{t('notes.countsFailed', { message: facetsQuery.error })}</p>}
-              {indexLookup.error && <p role="alert" className="mb-3 text-sm text-rose-600">{t('notes.loadFailed', { message: indexLookup.error })}</p>}
-              {listResult.loading && <p role="status" className="mb-3 text-sm text-slate-500">{t('notes.loading')}</p>}
-              {!indexInToolbar && <>
-                <Breadcrumbs
-                  segments={breadcrumbs}
-                  currentFolder={selectedFolder}
-                  onSelectFolder={setSelectedFolder}
-                  subfolderCount={immediateSubfolders.length}
-                  noteCount={listResult.total}
-                  sortField={sortField}
-                  sortOrder={sortOrder}
-                  onSortChange={handleSortChange}
-                />
-                <FolderLinks folders={immediateSubfolders} onSelect={setSelectedFolder}>
-                  {folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
-                </FolderLinks>
-              </>}
-              {(viewMode === 'list' || viewMode === 'flat') && (<>
-                <ListView
-                  showMobileSort={false}
-                  statuses={notebookStatuses}
-                  readOnly={!canWrite}
-                  canDelete={canWrite}
-                  confirmDelete={remote}
-                  notes={displayedNotes}
-                  uncommitted={listResult.uncommitted}
-                  hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
-                  onOpenNote={handleOpenNote}
-                  onDeleteNote={handleDeleteNote}
-                  onMoveNote={moveNoteAction}
-                  onUpdateNoteStatus={handleUpdateNoteStatus}
-                  onNewNote={() => openNewNote()}
-                  sortField={sortField}
-                  sortOrder={sortOrder}
-                  onSortChange={handleSortChange}
-                  tagActions={noteTagActions}
-                />
-                <NoteListSentinel hasMore={listResult.hasMore} loading={listResult.loadingMore} error={listResult.error} onLoadMore={listResult.loadMore} />
-              </>)}
-              {viewMode === 'card' && (<>
-                <CardView
-                  statuses={notebookStatuses}
-                  readOnly={!canWrite}
-                  canDelete={canWrite}
-                  confirmDelete={remote}
-                  notes={displayedNotes}
-                  uncommitted={listResult.uncommitted}
-                  hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
-                  onOpenNote={handleOpenNote}
-                  onDeleteNote={handleDeleteNote}
-                  onMoveNote={moveNoteAction}
-                  onNewNote={() => openNewNote()}
-                  onUpdateNoteStatus={handleUpdateNoteStatus}
-                  tagActions={noteTagActions}
-                />
-                <NoteListSentinel hasMore={listResult.hasMore} loading={listResult.loadingMore} error={listResult.error} onLoadMore={listResult.loadMore} />
-              </>)}
-              {viewMode === 'kanban' && (
-                <KanbanView
-                  statuses={notebookStatuses}
-                  readOnly={!canWrite}
-                  canDelete={canWrite}
-                  confirmDelete={remote}
-                  query={baseQuery}
-                  hiddenNote={folderIndex}
-                  onOpenNote={handleOpenNote}
-                  onUpdateNoteStatus={handleUpdateNoteStatus}
-                  onDeleteNote={handleDeleteNote}
-                  onMoveNote={moveNoteAction}
-                  onNewNoteWithStatus={(status) => {
-                    openNewNote(status);
-                  }}
-                  sortField={sortField}
-                  sortOrder={sortOrder}
-                  onSortChange={handleSortChange}
-                />
-              )}
-              </div>
+              {noteFocus.layout ? <BrowseDock placement={bottomDock ? 'bottom' : 'left'} size={bottomDock ? noteFocus.view.dock.bottom : noteFocus.view.dock.left}
+                onSizeChange={size => noteFocus.setDock(bottomDock ? { bottom: size } : { left: size })}
+                collapsed={noteFocus.view.dock.collapsed} onCollapsedChange={collapsed => noteFocus.setDock({ collapsed })}
+                narrow={focusCapacity === 1} narrowView={focusNarrowView} browse={height => browseRegion(true, height)}>
+                <FocusArea focus={noteFocus} capacity={focusCapacity} lanes={notebookLanes ?? []} notebookRoot={folderRoot ?? ''}
+                  renderLane={renderFocusLane} onZoomNote={zoomFocusNote} documentPanel={focusDocumentPanel} />
+              </BrowseDock> : <div className="workspace-scroll">{browseRegion(false, 0)}</div>}
             </main>
           </>
         )}
@@ -1211,7 +1391,9 @@ const AppContent: React.FC = () => {
           </main>
         )}
 
-        {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} editing={graphEditing} focusedLaneId={route.lane} onStudySaved={() => { if (remote) void refreshWorkspace(); else invalidateNotes(); void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message)); }} notebooks={config?.notebooks || []} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} onCreateNote={openNewNote} /></React.Suspense>}
+        {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} focusedLaneId={route.lane} onStudySaved={() => { if (remote) void refreshWorkspace(); else invalidateNotes(); void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message)); }} notebooks={config?.notebooks || []} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} onCreateNote={openNewNote}
+          focusSection={<FocusList focus={noteFocus} onOpen={id => navigate(`${notebookRoute(selectedNotebookId)}?${new URLSearchParams({ focus: id })}`)} />}
+          onAddLaneToFocus={row => setAddingToFocus({ tab: { kind: 'lane', id: row.id }, label: row.name })} /></React.Suspense>}
 
         {activeTab === 'graph' && (
           <main className="workspace-route graph-main flex-1 w-full h-full relative min-h-0">
@@ -1222,8 +1404,6 @@ const AppContent: React.FC = () => {
                 filters={filterProps}
                 folders={folders}
                 screen={screen}
-                editing={graphEditing}
-                onOpenNote={handleOpenNote}
               />
             </React.Suspense>
           </main>
@@ -1307,39 +1487,12 @@ const AppContent: React.FC = () => {
       {/* Note Editor Modal */}
       <EditorModal
         key={fileEditorRevision}
-        statuses={noteQueryStatuses(
-          config?.notebooks || [],
-          routedNote?.notebookId || '',
-          Object.keys(facetsQuery.facets?.[routedNote?.notebookId || '']?.statuses || {}),
-        )}
-        metadataFields={config?.notebooks.find(nb => nb.id === routedNote?.notebookId)?.metadata}
         note={routedNote}
+        committed={routedCommitted && typeof routedCommitted.content === 'string' ? routedCommitted as NoteItem : undefined}
         loading={routedLoading}
         isOpen={noteEditorOpen}
-        onClose={() => {
-
-          setEditingNote(null);
-          navigate(returnTo, { replace: true });
-        }}
-        onSave={handleSaveNote}
-        onMoveNote={handleMoveNote}
-        onRestoreFile={handleRestoreNoteFile}
-        isDirty={Boolean(routedNote && gitStatus && [ ...gitStatus.modified, ...gitStatus.staged, ...gitStatus.untracked ].includes(routedNote.path))}
-        availableTags={availableTags}
-        assets={assets}
-        onUploadAsset={!canWrite ? undefined : handleUploadAsset}
-        onDeleteAsset={!canWrite ? undefined : handleDeleteAsset}
-        onMoveAsset={!canWrite ? undefined : handleMoveAsset}
-        readOnly={!canWrite}
-        autoSave={true}
-        draftMode={remote}
-        remoteBase={routedNote ? activeWorkingNotes[routedNote.path]?.base || (routedCommitted && typeof routedCommitted.content === 'string' ? routedCommitted as NoteItem : undefined) : undefined}
-        conflictReason={routedNote ? activeWorkingNotes[routedNote.path]?.blocked : undefined}
-        onMarkConflict={remote ? (reason, draft, base) => { stageWorkingNote(draft, base, reason); } : undefined}
-        onReadRemote={remote && routedNote && activeWorkingNotes[routedNote.path]?.base !== null ? readNote : undefined}
-        branch={branch}
-        draftScope={`${sourceId}:${branch}`}
       />
+      {addingToFocus && <AddToFocusDialog focus={noteFocus} tab={addingToFocus.tab} label={addingToFocus.label} onClose={() => setAddingToFocus(null)} />}
 
       {/* Commit Modal */}
       <CommitModal
@@ -1348,7 +1501,8 @@ const AppContent: React.FC = () => {
         getPreview={panelGetPreview}
         request={commitRequest}
         restoreFile={remote ? async file => {
-          if (file.path === SCREEN_PAGE_FILE) { if (file.revision !== screen.diff) throw new Error('Draft changed. Review it again.'); await screen.reload(); return; }
+          const pendingDocument = documents.find(document => document.file === file.path);
+          if (pendingDocument) { if (file.revision !== pendingDocument.diff) throw new Error('Draft changed. Review it again.'); await pendingDocument.reload(); return; }
           const entry = readWorkingNotes(workingScope)[file.path];
           if (!entry || JSON.stringify(entry) !== file.revision) throw new Error('Draft changed. Review it again.');
           const latest = entry.base ? await readNote(file.path) : null;
@@ -1362,11 +1516,11 @@ const AppContent: React.FC = () => {
         gitStatus={gitStatus}
         onChanged={async () => {
           await refreshWorkspace();
-          if (!remote) { await screen.refresh(); await agentSystemRef.current?.refresh(); }
+          if (!remote) { await refreshDocuments(); await agentSystemRef.current?.refresh(); }
         }}
         onCommitted={async () => {
           await refreshWorkspace();
-          if (!remote) { await screen.refresh(); await agentSystemRef.current?.refresh(); }
+          if (!remote) { await refreshDocuments(); await agentSystemRef.current?.refresh(); }
           setDeletedNotes([]);
           setUndoToast(null);
         }}
@@ -1466,6 +1620,7 @@ const AppContent: React.FC = () => {
       )}
     </div>
     <ImageLightbox />
+    </NoteEditingProvider>
     </WorkspaceLinks>
   );
 };

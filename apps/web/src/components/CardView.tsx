@@ -1,13 +1,14 @@
 import { NoteMoveButton } from './NoteMoveButton.js';
 import { Button } from './Button.js';
 import React from 'react';
-import { FileText, Clock, Trash2, Plus } from 'lucide-react';
+import { FileText, Clock, Trash2, Plus, Maximize2 } from 'lucide-react';
 import { NoteTags, NoteTagActions } from './NoteTags.js';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { useTranslation } from '../lib/i18n/index.js';
 import { noteUpdatedTime } from '../lib/note-sort.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
+import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
 
 interface CardViewProps {
   notes: NoteListItem[];
@@ -24,6 +25,10 @@ interface CardViewProps {
   onNewNote: () => void;
   onUpdateNoteStatus: (note: NoteListItem, status: string) => void;
   tagActions?: NoteTagActions;
+  /** Present while a Focus is displayed: cards get a zoom button and can be dragged into a pane. */
+  focusMode?: NoteBrowseFocusMode;
+  /** Single horizontally scrolling row, for a docked bottom panel too short for the grid. */
+  strip?: boolean;
 }
 
 export const CardView: React.FC<CardViewProps> = ({
@@ -40,6 +45,8 @@ export const CardView: React.FC<CardViewProps> = ({
   onNewNote,
   onUpdateNoteStatus,
   tagActions,
+  focusMode,
+  strip = false,
 }) => {
   const { t } = useTranslation();
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(confirmDelete, path => {
@@ -91,16 +98,23 @@ export const CardView: React.FC<CardViewProps> = ({
               day: 'numeric',
             })
           : '—';
+        const canDrag = !!focusMode?.canDrag(note);
 
         return (
           <div
             key={note.path}
             onClick={() => onOpenNote(note)}
+            draggable={canDrag}
+            onDragStart={canDrag ? (event) => {
+              event.dataTransfer.setData(NOTE_DRAG_TYPE, note.path);
+              event.dataTransfer.setData('text/plain', note.path);
+              event.dataTransfer.effectAllowed = 'copyMove';
+            } : undefined}
             style={{
               backgroundColor: 'var(--color-surface)',
               borderColor: 'var(--color-border)',
             }}
-            className="rounded-xl border hover:border-indigo-300 dark:hover:border-indigo-600/60 p-5 flex flex-col justify-between shadow-xs hover:shadow-md transition cursor-pointer group"
+            className={`rounded-xl border hover:border-indigo-300 dark:hover:border-indigo-600/60 p-5 flex flex-col justify-between shadow-xs hover:shadow-md transition cursor-pointer group${strip ? ' note-card-strip-item' : ''}`}
           >
             <div>
               <div className="flex items-start justify-between gap-2 mb-2">
@@ -151,6 +165,17 @@ export const CardView: React.FC<CardViewProps> = ({
                   className="flex items-center gap-1"
                   onClick={(e) => e.stopPropagation()}
                 >
+                  {focusMode && (
+                    <button
+                      type="button"
+                      onClick={() => focusMode.onZoomNote(note)}
+                      title={t('focus.zoomNote')}
+                      aria-label={t('focus.zoomNote')}
+                      className="ui-icon-button"
+                    >
+                      <Maximize2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   {!readOnly && onMoveNote && <NoteMoveButton onClick={() => onMoveNote(note)} />}
                   {!readOnly && canDelete && (
                     <button
@@ -171,13 +196,15 @@ export const CardView: React.FC<CardViewProps> = ({
         );
   };
 
+  const gridClassName = strip ? 'note-card-strip' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4';
+
   return (
     <>
     {uncommitted.length > 0 && <section className="note-card-uncommitted mb-4">
       <h3 className="mb-2 text-xs uppercase font-semibold text-amber-600 dark:text-amber-400">{t('notes.uncommitted')}</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">{uncommitted.map(renderCard)}</div>
+      <div className={gridClassName}>{uncommitted.map(renderCard)}</div>
     </section>}
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    <div className={gridClassName}>
       {/* Note Cards */}
       {notes.map(renderCard)}
     </div>

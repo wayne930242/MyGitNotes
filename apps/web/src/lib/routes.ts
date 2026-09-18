@@ -36,7 +36,10 @@ export function parseWorkspaceRoute(pathname: string, search: string) {
   if((note!==null&&!safeRelative(note))||(folder!==null&&!safeRelative(folder)))valid=false;
   const filters = readFilterQuery(query);
   const allNotebooks = filters.allNotebooks || (legacyAllNotebooks && (tab === 'notes' || tab === 'graph'));
-  return {valid,tab,lane,notebook,folder,note,...filters,allNotebooks,legacyAllNotebooks,tag:filters.tag[0] || null,tags:filters.tag};
+  // `focus` selects a Focus (or `current`); it is not a filter, so it is read separately from readFilterQuery.
+  const queryFocus = query.get('focus');
+  const focus = queryFocus && /^[a-zA-Z0-9_-]{1,64}$/.test(queryFocus) ? queryFocus : null;
+  return {valid,tab,lane,notebook,folder,note,...filters,allNotebooks,legacyAllNotebooks,tag:filters.tag[0] || null,tags:filters.tag,focus};
 }
 /** The canonical URL for a former all-notebooks URL, or null for any other URL. */
 export function legacyAllNotebooksRoute(pathname: string, search: string, defaultNotebook: string): string | null {

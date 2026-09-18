@@ -31,6 +31,13 @@ const openPalette = async () => {
 };
 const focusNav = async (label = 'Notes') => { const target = await page.$(`.header-nav button[aria-label="${label}"], [data-header-agent][aria-label="${label}"]`); await target?.focus(); };
 const assert = (value, message) => { if (!value) throw Error(message); };
+/** Types a command's name into the already-open palette and picks it, since typed text always
+ *  wins over any accelerator hint shown in the list - there is no direct-key shortcut anymore. */
+const chooseCommand = async (text) => {
+  await page.type(`${palette} input`, text);
+  await page.waitForFunction((sel, needle) => document.querySelector(sel)?.textContent.toLowerCase().includes(needle), {}, `${palette} .keyboard-shortcuts-list .is-active`, text.toLowerCase());
+  await page.keyboard.press('Enter');
+};
 
 try {
   await page.goto(`${base}/notes`, { waitUntil: 'networkidle0' });
@@ -50,17 +57,26 @@ try {
   await page.waitForFunction(selector => !document.querySelector(selector), {}, palette);
   await page.waitForFunction(() => location.pathname === '/agent');
 
-  for (const [key, route] of [['2', '/agent'], ['3', '/assets'], ['4', '/screen'], ['1', '/notebooks/example']]) {
+  for (const [text, route] of [['Agent System', '/agent'], ['Files', '/files'], ['Screen', '/screen'], ['Notes', '/notebooks/example']]) {
     await focusNav(route === '/agent' ? 'Agent System' : route === '/assets' ? 'Assets' : route === '/screen' ? 'Screen' : 'Notes');
-    await openPalette(); await page.keyboard.press(key); await page.waitForFunction(selector => !document.querySelector(selector), {}, palette); await page.waitForFunction(expected => location.pathname === expected, {}, route);
+    await openPalette();
+    await chooseCommand(text);
+    await page.waitForFunction(selector => !document.querySelector(selector), {}, palette);
+    await page.waitForFunction(expected => location.pathname === expected, {}, route);
   }
 
-  await focusNav(); await openPalette(); await chord('Shift', 'KeyN'); await page.waitForSelector('input[placeholder="e.g. Sprint Planning, Project Ideas..."]');
+  await focusNav(); await openPalette();
+  await page.type(`${palette} input`, 'N');
+  assert(await page.$(palette), 'Typing N filtered the query instead of firing the New Note accelerator');
+  await page.type(`${palette} input`, 'ew Note');
+  await page.waitForFunction(sel => document.querySelector(sel)?.textContent.toLowerCase().includes('new note'), {}, `${palette} .keyboard-shortcuts-list .is-active`);
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('input[placeholder="e.g. Sprint Planning, Project Ideas..."]');
   await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Cancel').click());
-  await focusNav(); await openPalette(); await page.keyboard.press('/');
+  await focusNav(); await openPalette(); await chooseCommand('Focus note search');
   await page.waitForFunction(() => document.querySelector('.header-search input') === document.activeElement);
 
-  await openPalette(); await page.keyboard.press(',');
+  await openPalette(); await chooseCommand('Settings');
   await page.waitForFunction(() => location.pathname === '/settings');
   await focusNav('Notes'); await chord('Control', 'Slash'); await page.waitForSelector(help);
   assert(await page.$eval(help, panel => panel.getAttribute('data-mode')) === 'help', 'Ctrl+/ did not open keyboard help');
@@ -73,8 +89,12 @@ try {
 
   await focusNav('Agent System'); await openPalette();
   assert(await page.$eval('[data-shortcut-key="/"]', item => item.getAttribute('aria-disabled')) === 'true', 'Search command is not disabled outside Notes');
-  await page.keyboard.press('/');
+  await page.type(`${palette} input`, 'Focus note search');
+  await page.waitForFunction(sel => document.querySelectorAll(`${sel} .keyboard-shortcuts-list [role="option"]`).length === 1, {}, palette);
+  assert(!(await page.$(`${palette} .is-active`)), 'A disabled command should not become the active selection');
+  await page.keyboard.press('Enter');
   assert(await page.$(palette) && new URL(page.url()).pathname === '/agent', 'Disabled command executed or dismissed the palette');
+  await page.click(`${palette} input`, { clickCount: 3 });
   await page.keyboard.type('no-such-command');
   assert(await page.$(`${palette} [role="status"]`), 'No-results state is missing');
   await page.keyboard.press('Escape');
@@ -118,7 +138,7 @@ try {
   assert(await page.$eval('.note-outline nav button[aria-current="true"] span', node => node.textContent) === 'Final Section', 'Outline did not focus the heading for the current viewport');
   await page.$$eval('.note-outline nav button', buttons => buttons.find(button => button.textContent.includes('Section Two')).click());
   assert(await page.$eval('textarea[aria-label="Note content"]', input => input.selectionStart === input.value.indexOf('## Section Two')), 'Source outline did not jump to its heading');
-  console.log('PASS Alt+/ searchable command palette, visible launcher, persistent lifetime, focus restoration, quick keys, arrow navigation, help, outside dismissal, contextual disablement, editor navigation suspension, leader find, J/K outline and Live/Source navigation');
+  console.log('PASS Alt+/ searchable command palette, visible launcher, persistent lifetime, focus restoration, typed selection, arrow navigation, help, outside dismissal, contextual disablement, editor navigation suspension, leader find, J/K outline and Live/Source navigation');
 } finally {
   await browser.close(); await new Promise(resolve => server.close(resolve)); fs.rmSync(root, { recursive: true, force: true });
 }

@@ -21,4 +21,10 @@ describe('shared nuqs query contract', () => {
     expect(readFilterQuery('?allNotebooks=true').allNotebooks).toBe(true);
     expect(writeFilterQuery('?allNotebooks=true&keep=yes', { allNotebooks: false })).toBe('?keep=yes');
   });
+  it('preserves the focus parameter, which is not a filter, across clears and changes', () => {
+    // Mirrors App.tsx's clearFilters reset.
+    expect(writeFilterQuery('?focus=current&q=hi&tag=old', { q: '', tag: [], folders: [], descendants: true, tagMode: 'any', status: null, showHidden: false, neighbors: false })).toBe('?focus=current');
+    expect(writeFilterQuery('?focus=focus-1', { q: 'hello' })).toBe('?focus=focus-1&q=hello');
+    expect(readFilterQuery('?focus=current&q=hi').q).toBe('hi');
+  });
 });

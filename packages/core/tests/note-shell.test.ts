@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { GitHubSource } from '../src/github-source.js';
 import { callNoteShell, replaceNoteLines, matchNoteGlob } from '../src/note-shell.js';
+import { SCREEN_PAGE_FILE } from '../src/screen-page.js';
+import { FOCUS_PAGE_FILE } from '../src/focus-page.js';
 
 vi.setConfig({ testTimeout: 30000 }); // Real GitHub write pacing applies to multi-commit scenarios too.
 
@@ -38,22 +40,33 @@ describe('shell-shaped note operations',()=>{
     const f = fixture();
     const base = { version: 2, rows: [] };
     const page = { version: 2, rows: [{ id: 'reading', kind: 'custom', name: 'Reading', view: 'small', notebookId: 'ex', items: [] }] };
-    await f.reader().commitNotes([{ path: 'notes/ex/a.md', content: '# Updated', metadata: {} }], f.head(), 'Update reading workspace', { page, base });
+    await f.reader().commitNotes([{ path: 'notes/ex/a.md', content: '# Updated', metadata: {} }], f.head(), 'Update reading workspace', [{ path: SCREEN_PAGE_FILE, page, base }]);
     expect(f.text('.github-notes-screen.yaml')).toContain('name: Reading');
     expect(f.text('notes/ex/a.md')).toContain('# Updated');
     expect(f.calls.filter(call => call.endpoint === '/git/commits')).toHaveLength(1);
-    await expect(f.reader().commitNotes([], f.head(), 'Stale screen', { page: base, base })).rejects.toMatchObject({ status: 409 });
+    await expect(f.reader().commitNotes([], f.head(), 'Stale screen', [{ path: SCREEN_PAGE_FILE, page: base, base }])).rejects.toMatchObject({ status: 409 });
     expect(f.calls.filter(call => call.endpoint === '/git/commits')).toHaveLength(1);
-    await f.reader().commitNotes([], f.head(), 'Clear screen', { page: base, base: page });
+    await f.reader().commitNotes([], f.head(), 'Clear screen', [{ path: SCREEN_PAGE_FILE, page: base, base: page }]);
     expect(f.text('.github-notes-screen.yaml')).toContain('rows: []');
     expect(f.calls.filter(call => call.endpoint === '/git/commits')).toHaveLength(2);
     const foreign = { version: 2, rows: [{ ...page.rows[0], items: [{ id: 'x', kind: 'note', notebookId: 'other', path: 'notes/other/x.md' }] }] };
-    await expect(f.reader().commitNotes([], f.head(), 'Foreign item', { page: foreign, base })).rejects.toThrow('Invalid Screen configuration.');
+    await expect(f.reader().commitNotes([], f.head(), 'Foreign item', [{ path: SCREEN_PAGE_FILE, page: foreign, base }])).rejects.toThrow('Invalid Screen configuration.');
+  });
+  it('commits Screen and Focus drafts in one commit and rejects a path outside the registry', async () => {
+    const f = fixture();
+    const screen = { version: 2, rows: [{ id: 'reading', kind: 'custom', name: 'Reading', view: 'small', notebookId: 'ex', items: [] }] };
+    const focus = { version: 1, focuses: [{ id: 'weekly', notebookId: 'ex', name: 'Weekly', division: 'columns-2', panes: [{ tabs: [{ kind: 'note', path: 'notes/ex/a.md' }] }, { tabs: [{ kind: 'lane', id: 'reading' }] }] }] };
+    await f.reader().commitNotes([], f.head(), 'Save layouts', [{ path: SCREEN_PAGE_FILE, page: screen, base: { version: 2, rows: [] } }, { path: FOCUS_PAGE_FILE, page: focus, base: { version: 1, focuses: [] } }]);
+    expect(f.text(FOCUS_PAGE_FILE)).toContain('name: Weekly');
+    expect(f.text(SCREEN_PAGE_FILE)).toContain('name: Reading');
+    expect(f.calls.filter(call => call.endpoint === '/git/commits')).toHaveLength(1);
+    await expect(f.reader().commitNotes([], f.head(), 'Stale focus', [{ path: FOCUS_PAGE_FILE, page: focus, base: { version: 1, focuses: [] } }])).rejects.toMatchObject({ status: 409 });
+    await expect(f.reader().commitNotes([], f.head(), 'Escape', [{ path: '.github-notes.yaml', page: {}, base: {} }])).rejects.toMatchObject({ status: 403 });
   });
   it('compares a Screen draft against the migrated version 1 file', async () => {
     const f = fixture({ '.github-notes-screen.yaml': 'version: 1\nrows:\n  - id: reading\n    name: Reading\n    view: small\n    kind: custom\n    items: []\n' });
     const base = { version: 2, rows: [{ id: 'reading', kind: 'custom', name: 'Reading', view: 'small', notebookId: 'ex', items: [] }] };
-    await f.reader().commitNotes([], f.head(), 'Rename lane', { page: { version: 2, rows: [{ ...base.rows[0], name: 'Later' }] }, base });
+    await f.reader().commitNotes([], f.head(), 'Rename lane', [{ path: SCREEN_PAGE_FILE, page: { version: 2, rows: [{ ...base.rows[0], name: 'Later' }] }, base }]);
     expect(f.text('.github-notes-screen.yaml')).toContain('version: 2');
     expect(f.text('.github-notes-screen.yaml')).toContain('notebookId: ex');
   });

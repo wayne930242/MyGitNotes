@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { StudyProgressionSchema } from './study-stages.js';
 import { isNoteHidden } from './note-status.js';
 import type { NoteItem } from './types.js';
+import type { WorkspaceDocument } from './workspace-documents.js';
 
 export const SCREEN_PAGE_FILE = '.github-notes-screen.yaml';
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
@@ -90,6 +91,21 @@ export function readScreenPage(value: unknown, config: ScreenNotebookConfig | nu
   });
   return ScreenPageSchema.parse({ version: 2, rows });
 }
+
+export const SCREEN_DOCUMENT: WorkspaceDocument<ScreenPage> = {
+  file: SCREEN_PAGE_FILE, label: 'Screen', maxBytes: 512 * 1024, scopes: ['screen', 'folders', 'files'],
+  schema: ScreenPageSchema, fileSchema: ScreenPageFileSchema, empty: emptyScreenPage, read: readScreenPage,
+  relocate(page, notebookId, move) {
+    let changed = false;
+    const update = (item: { path: string }) => { const next = move(item.path); if (next !== item.path) { item.path = next; changed = true; } };
+    for (const row of page.rows) {
+      if (row.kind === 'custom') for (const item of row.items) { if (item.kind !== 'youtube' && item.notebookId === notebookId) update(item); }
+      else if (row.source.kind === 'folder' && row.source.notebookId === notebookId) update(row.source);
+      if (row.notebookId === notebookId) for (const node of row.graph?.nodes || []) update(node);
+    }
+    return changed;
+  },
+};
 
 /** Membership is shared by lane cards and graph views; folder shortcuts stay shortcuts. */
 export function screenRowNotes(row: ScreenRow, notes: NoteItem[]): NoteItem[] {

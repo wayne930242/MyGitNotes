@@ -2,7 +2,7 @@ import path from 'node:path';
 import YAML from 'yaml';
 import { z } from 'zod';
 import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js';
-import { SCREEN_PAGE_FILE, ScreenPageFileSchema } from './screen-page.js';
+import { relocateWorkspaceDocuments } from './workspace-documents.js';
 import type { NotebookConfig, FolderItem } from './types.js';
 
 const relative = z.string().max(512).refine(value => !value || !/[\\\0]/.test(value) && value.split('/').every(part => part && part !== '.' && part !== '..'));
@@ -88,20 +88,7 @@ export function planFolderChange(snapshot: FolderSnapshot, input: unknown) {
     directories.add(destination);
     files.set(`${destination}/_dir.yml`, YAML.stringify({ title: command.title || command.name }));
   }
-  if (source && source !== destination && files.has(SCREEN_PAGE_FILE)) {
-    const raw = files.get(SCREEN_PAGE_FILE)!;
-    const page = ScreenPageFileSchema.parse(YAML.parse(raw, { maxAliasCount: 20 }));
-    let changed = false;
-    const update = (item: { notebookId: string; path: string }) => {
-      if (item.notebookId !== notebook.id) return;
-      const next = relocate(item.path); if (next !== item.path) { item.path = next; changed = true; }
-    };
-    for (const row of page.rows) {
-      if (row.kind === 'custom') for (const item of row.items) { if (item.kind !== 'youtube') update(item); }
-      else if (row.source.kind === 'folder') update(row.source);
-    }
-    if (changed) files.set(SCREEN_PAGE_FILE, YAML.stringify(page, { lineWidth: 0 }));
-  }
+  if (source && source !== destination) relocateWorkspaceDocuments(files, { notebooks: snapshot.notebooks, workspace: { default_notebook: snapshot.notebooks[0]?.id } }, notebook.id, relocate);
   const folders = (): FolderItem[] => sortFolders([...directories].filter(dir => dir.startsWith(root + '/') && isNotebookContent(dir.slice(root.length + 1), notebook)).map(dir => ({
     notebookId: notebook.id, path: dir.slice(root.length + 1), ...parseFolderConfig(files.get(`${dir}/_dir.yml`) || '', path.posix.basename(dir), dir),
   })));

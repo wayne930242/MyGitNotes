@@ -2,10 +2,12 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { loadWorkspaceConfig, resolveSafePath, isNotebookContent, planFolderChange, FolderCommandSchema, RemoteSource, createRemoteSource, SourceError, SCREEN_PAGE_FILE, type FolderSnapshot, type SourceConfig } from '@mygitnotes/core';
+import { loadWorkspaceConfig, resolveSafePath, isNotebookContent, planFolderChange, FolderCommandSchema, RemoteSource, createRemoteSource, SourceError, WORKSPACE_DOCUMENTS, type FolderSnapshot, type SourceConfig } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
+
+const documents = WORKSPACE_DOCUMENTS.map(document => document.file);
 
 const isText = (file: string) => /\.(md|markdown|txt)$/i.test(file) || path.posix.basename(file) === '_dir.yml';
 function regularPath(root: string, relative: string) {
@@ -45,7 +47,7 @@ export function localFolderSnapshot(root: string): FolderSnapshot {
     };
     visit(nb.root);
   }
-  if (fs.existsSync(path.join(root, SCREEN_PAGE_FILE))) read(SCREEN_PAGE_FILE);
+  for (const file of documents) if (fs.existsSync(path.join(root, file))) read(file);
   return snapshot;
 }
 function revision(snapshot: FolderSnapshot) {
@@ -95,9 +97,10 @@ async function remoteSnapshot(reader: RemoteSource): Promise<FolderSnapshot> {
   let bytes = 0;
   for (const entry of entries) {
     const nb = config.notebooks.find(nb => entry.path === nb.root || entry.path.startsWith(nb.root + '/'));
-    if (!nb && entry.path !== SCREEN_PAGE_FILE) continue;
-    const allowed = entry.path === SCREEN_PAGE_FILE || nb && (entry.path === nb.root || isNotebookContent(entry.path.slice(nb.root.length + 1), nb));
-    if (!allowed || entry.mode === '120000' || !['blob', 'tree'].includes(entry.type) || entry.type === 'blob' && entry.path !== SCREEN_PAGE_FILE && !isText(entry.path)) snapshot.protectedPaths.push(entry.path);
+    const isDocument = documents.includes(entry.path);
+    if (!nb && !isDocument) continue;
+    const allowed = isDocument || nb && (entry.path === nb.root || isNotebookContent(entry.path.slice(nb.root.length + 1), nb));
+    if (!allowed || entry.mode === '120000' || !['blob', 'tree'].includes(entry.type) || entry.type === 'blob' && !isDocument && !isText(entry.path)) snapshot.protectedPaths.push(entry.path);
     else if (entry.type === 'tree') snapshot.directories.push(entry.path);
     else { readable.push(entry.path); bytes += entry.size || 0; }
   }

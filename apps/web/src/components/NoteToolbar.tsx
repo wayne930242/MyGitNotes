@@ -1,4 +1,5 @@
 import './note-toolbar.css';
+import type { ReactNode } from 'react';
 import { Button } from './Button.js';
 import { LayoutList, LayoutGrid, Kanban, ListTree, Plus, FolderTree, Eye, EyeOff } from 'lucide-react';
 import { WorkspaceSidebarToggle } from './WorkspaceChrome.js';
@@ -23,9 +24,11 @@ interface NoteToolbarProps {
   onOpenNewNoteModal: () => void;
   filtersOpen: boolean;
   onToggleFilters: () => void;
+  /** The Focus switcher and division picker. */
+  focusControls?: ReactNode;
 }
 
-export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, filtersOpen, onToggleFilters }: NoteToolbarProps) {
+export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, filtersOpen, onToggleFilters, focusControls }: NoteToolbarProps) {
   const { t } = useTranslation();
   return (
             <div className="header-note-actions flex items-center gap-2.5 flex-1 min-w-0 justify-end">
@@ -80,6 +83,8 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
                   <span id="descendants-tooltip" role="tooltip" className="note-display-tooltip">{t('filters.descendants')}</span>
                 </button>
               </div>
+
+              {focusControls && <div className="note-focus-controls" role="group" aria-label={t('focus.title')}>{focusControls}</div>}
 
               {/* View Switcher Desktop */}
               <div className="desktop-views flex items-center bg-black/5 dark:bg-white/5 p-1 rounded-lg gap-1 shrink-0">

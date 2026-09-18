@@ -31,7 +31,12 @@ const cardA='[data-graph-note="notes/a/a.md"]', cardB='[data-graph-note="notes/a
 const setMode = async (card, mode) => { const toggle=await page.$(card+' [data-mode-toggle]');if(await toggle.evaluate(el=>el.dataset.modeToggle)!==mode)await toggle.click(); };
 const go = async route => {await page.goto(base+route,{waitUntil:'networkidle0'});await page.waitForSelector('.graph-page-container');};
 const pause = ms=>new Promise(resolve=>setTimeout(resolve,ms));
-const waitFile = async (file,text) => { for(let i=0;i<80;i++){if(fs.readFileSync(path.join(root,file),'utf8').includes(text))return;await pause(100);}throw Error(`Missing saved content ${file}: ${text}`); };
+const waitFile = async (file,text,present=true) => { for(let i=0;i<80;i++){if(fs.readFileSync(path.join(root,file),'utf8').includes(text)===present)return;await pause(100);}throw Error(`${present?'Missing':'Lingering'} saved content ${file}: ${text}`); };
+// The editor's own undo binds Mod-z, which is Command on macOS.
+const mod = process.platform==='darwin' ? 'Meta' : 'Control';
+const chord = async (keys, ...modifiers) => { for(const key of modifiers)await page.keyboard.down(key);await page.keyboard.press(keys);for(const key of [...modifiers].reverse())await page.keyboard.up(key); };
+const clickRow = async title => { const row=await page.evaluateHandle(title=>[...document.querySelectorAll('.workspace-scroll :is(.note-list tbody tr, [data-notepath], .cursor-pointer.rounded-xl)')].find(row=>row.textContent.includes(title)),title);assert(row.asElement(),`Browse row ${title} is missing`);const label=await row.evaluateHandle((row,title)=>[...row.querySelectorAll('*')].reverse().find(el=>el.textContent.trim()===title),title);await (label.asElement()??row.asElement()).click(); };
+const menuItem = async label => { const item=await page.waitForFunction(label=>[...document.querySelectorAll('.focus-menu [role^="menuitem"]')].find(item=>item.textContent.trim()===label),{},label);await item.asElement().click(); };
 try {
  await go('/graph?notebook=all');
  await page.waitForFunction(()=>document.querySelector('[data-graph-nodes]')?.dataset.graphNodes==='4');
@@ -52,18 +57,27 @@ try {
  await page.click(cardB+' textarea');await page.keyboard.down('Control');await page.keyboard.press('KeyA');await page.keyboard.up('Control');await page.keyboard.type('Beta edited.');
  await waitFile('notes/a/a.md','Alpha edited.');await waitFile('notes/a/b.md','Beta edited.');
  console.log('PASS independent saves to both notes');
+ // The card carries the editor's status: saved to disk, still uncommitted in the working tree, as zoom reports it.
+ await page.waitForFunction(card=>document.querySelector(card+' .note-compact-status')?.dataset.state==='pending',{},cardA);
+ assert.equal(await page.$eval(cardA+' .note-compact-status',el=>el.textContent),'Uncommitted Changes');
+ // A connection inserts through the card's editor, so the editor's own history undoes it.
+ await setMode(cardA,'live');await page.waitForSelector(cardA+' .cm-content');
  const connector=await page.$(cardA+' button[aria-label="Drag to connect, or click to choose a note"]'), target=await page.$(cardB+' .graph-note-title');
  const a=await connector.boundingBox(), b=await target.boundingBox();
  await page.mouse.move(a.x+a.width/2,a.y+a.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2,b.y+b.height/2,{steps:12});await page.mouse.up();
  await waitFile('notes/a/a.md','[Beta](b.md)');assert(!fs.readFileSync(path.join(root,'notes/a/b.md'),'utf8').includes('[Alpha]'));
  console.log('PASS pointer connection writes only its source');
- await page.focus(cardA+' textarea');await page.keyboard.down('Control');await page.keyboard.press('KeyZ');await page.keyboard.up('Control');
- assert(!await page.$eval(cardA+' textarea',el=>el.value.includes('[Beta](b.md)')));
- await page.keyboard.down('Control');await page.keyboard.down('Shift');await page.keyboard.press('KeyZ');await page.keyboard.up('Shift');await page.keyboard.up('Control');
- assert(await page.$eval(cardA+' textarea',el=>el.value.includes('[Beta](b.md)')));
+ // Undo and redo autosave like any edit; the redone link is read from disk because the live editor renders it as a chip once the caret leaves it.
+ await page.focus(cardA+' .cm-content');await chord('KeyZ',mod);
+ assert(!await page.$eval(cardA+' .cm-content',el=>el.textContent.includes('[Beta](b.md)')));
+ await waitFile('notes/a/a.md','[Beta](b.md)',false);
+ await chord('KeyZ',mod,'Shift');
+ await waitFile('notes/a/a.md','[Beta](b.md)');
  console.log('PASS connection undo and redo');
+ await setMode(cardA,'raw');await page.waitForSelector(cardA+' textarea');
  await page.click(cardA+' textarea');await page.keyboard.press('End');await page.keyboard.type('\n[example](中文');
- await page.waitForSelector(cardA+' .note-source-completions [role="option"]');
+ // Candidates are debounced; wait until the list reflects the typed query before accepting.
+ await page.waitForFunction(card=>document.querySelector(card+' .note-source-completions [role="option"]')?.textContent.startsWith('中文案例'),{},cardA);
  await page.keyboard.press('Enter');await waitFile('notes/a/a.md','[example](../b/c.md)');
  console.log('PASS source-mode Chinese note completion');
  await setMode(cardA,'live');
@@ -95,10 +109,40 @@ try {
  await page.click(cardA+' button[aria-label="Collapse notes"]');
  await page.waitForFunction(()=>document.querySelectorAll('[data-graph-note]').length===1);
  console.log('PASS save selected membership, restore layout, collapse independently');
+ // Items 36–37: a graph card, a Focus pane and zoom edit one note through one mounted editor and one draft.
+ // The lane keeps the saved layout, so Beta is the card still expanded inside the pane.
+ await page.goto(base+'/notebooks/a?view=list',{waitUntil:'networkidle0'});
+ await page.click('.focus-switcher');await menuItem('(current)');await page.waitForSelector('.focus-area');
+ await page.click('.focus-division-trigger');await menuItem('Left and right');await page.waitForFunction(()=>document.querySelectorAll('[data-focus-pane]').length===2);
+ await clickRow('Beta');await page.waitForSelector('[data-focus-pane="0"] .note-editor[data-frame="pane"]');
+ await page.click('[data-focus-pane="1"] [aria-label="Open a lane in this pane"]');await menuItem('Graph selection');
+ const laneCardB='[data-focus-pane="1"] '+cardB;
+ await page.waitForSelector(laneCardB+' .note-preview');
+ assert.equal(await page.$$eval('.note-editor',els=>els.length),1,'One editor for a note shown in a pane and a card');
+ // The card scales in while the lane camera settles on its fit; its controls are clickable once both stop moving.
+ await page.$eval(laneCardB,el=>Promise.all(el.getAnimations({subtree:true}).map(animation=>animation.finished)));
+ await page.waitForFunction(card=>{const r=document.querySelector(card).getBoundingClientRect(),key=[r.x,r.y,r.width].map(Math.round).join();const held=window.__cardRect===key;window.__cardRect=key;return held;},{polling:200},laneCardB);
+ await click('Edit here',laneCardB);
+ await page.waitForSelector(laneCardB+' .note-editor[data-frame="compact"]');
+ await page.waitForSelector('[data-focus-pane="0"] .note-preview');
+ assert.equal(await page.$$eval('.note-editor',els=>els.length),1,'Claiming moves the one editor into the card');
+ await setMode(laneCardB,'live');await page.waitForSelector(laneCardB+' .cm-content');
+ await page.click(laneCardB+' .cm-content');await chord('End','Control');await page.keyboard.type('\nShared draft.');
+ assert.equal(await page.$eval(laneCardB+' .note-compact-status',el=>el.dataset.state),'pending');
+ await page.click('[data-focus-pane="0"] .focus-pane-actions [aria-label="Open in zoom"]');
+ await page.waitForSelector('.note-editor[data-frame="zoom"]');
+ assert.equal(await page.$$eval('.note-editor',els=>els.length),1,'Zoom borrows the card editor instead of mounting another');
+ assert(await page.$eval('.note-editor[data-frame="zoom"] .cm-content',el=>el.textContent.includes('Shared draft.')),'Zoom shows the card draft');
+ await page.click('.note-editor[data-frame="zoom"] .cm-content');await chord('End','Control');await page.keyboard.type('\nZoom edit.');
+ await page.click('[aria-label="Close note"]');
+ await page.waitForSelector(laneCardB+' .note-editor[data-frame="compact"]');
+ assert(await page.$eval(laneCardB+' .cm-content',el=>el.textContent.includes('Zoom edit.')),'The card keeps the zoom edit');
+ await waitFile('notes/a/b.md','Shared draft.');await waitFile('notes/a/b.md','Zoom edit.');
+ console.log('PASS graph card, Focus pane and zoom share one editor and one draft');
  await page.goto(base+'/screen',{waitUntil:'networkidle0'});await page.waitForSelector('#screen-lane-'+saved.id+' .graph-page-container');
  await page.click('#screen-lane-dynamic button[aria-label="Graph"]');await page.waitForSelector('#screen-lane-dynamic .graph-page-container');
  // The version 1 all-notebook tag lane migrates into default notebook a.
- assert.equal(await page.$eval('#screen-lane-dynamic [data-graph-nodes]',el=>el.dataset.graphNodes),'2');
+ await page.waitForSelector('#screen-lane-dynamic [data-graph-nodes="2"]');
  await page.click('#screen-lane-mixed button[aria-label="Graph"]');await page.waitForSelector('#screen-lane-mixed [data-graph-nodes="1"]');
  console.log('PASS embedded custom/dynamic lane graphs and non-note exclusion');
  await go('/graph?notebook=all&lanes='+saved.id);await page.setViewport({width:390,height:844});await pause(300);assert(await page.$('.graph-selection-toolbar'));

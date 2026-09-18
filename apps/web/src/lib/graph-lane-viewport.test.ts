@@ -11,6 +11,12 @@ it('includes expanded height and spread independently of pan', () => {
 });
 it('fits width and resized card dimensions', () => {
  const nodes=[{path:'a',x:0,y:0,expanded:true,width:1000,height:800}];
- expect(graphLaneViewport({nodes},600)).toMatchObject({height:504,zoom:.48});
+ expect(graphLaneViewport({nodes},1120)).toMatchObject({height:920,zoom:1,x:0});
+ expect(graphLaneViewport({nodes},1000)).toMatchObject({height:824,zoom:.88,x:0});
  expect(graphLaneViewport({nodes},1200).height).toBe(920);
+});
+it('keeps a readable minimum scale and opens overflowing lanes at their left edge', () => {
+ const nodes=[{path:'a',x:0,y:0,expanded:true,width:1000,height:800}];
+ expect(graphLaneViewport({nodes},412)).toMatchObject({height:720,zoom:.75});
+ expect(graphLaneViewport({nodes},412).x).toBeCloseTo(-500+146/.75);
 });

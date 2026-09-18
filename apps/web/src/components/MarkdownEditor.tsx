@@ -2,7 +2,7 @@ import { Select } from './Select.js';
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Code2, Eye } from 'lucide-react';
 import type { LiveMarkdownHandle } from './LiveMarkdownEditor.js';
-import { useTranslation } from '../lib/i18n/index.js';
+import { useTranslation, type TranslationKey } from '../lib/i18n/index.js';
 import { useNoteCandidates, noteCompletionAt } from '../lib/note-completion.js';
 import { noteLinkHref, noteMarkdownLink } from '@mygitnotes/core/workspace-links';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
@@ -12,7 +12,8 @@ import './note-completion.css';
 const LiveMarkdownEditor = React.lazy(() => import('./LiveMarkdownEditor.js').then(module => ({ default: module.LiveMarkdownEditor })));
 export type MarkdownEditorMode = 'live' | 'raw';
 export interface MarkdownEditorHandle {
-  insert: (text: string) => void;
+  /** Inserts `text` at `at`, or in place of the selection. */
+  insert: (text: string, at?: number) => void;
   revealRange: (from: number, to: number, focus?: boolean) => void;
   goToLine: (line: number, options?: { focus?: boolean; smooth?: boolean }) => void;
   getCurrentLine: () => number;
@@ -104,11 +105,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   };
 
   useImperativeHandle(ref, () => ({
-    insert(text) {
+    insert(text, at) {
       if (readOnly) return;
-      if (mode === 'live' && isMarkdown) { live.current?.insert(text); return; }
-      const start = source.current?.selectionStart ?? content.length;
-      const end = source.current?.selectionEnd ?? content.length;
+      if (mode === 'live' && isMarkdown) { live.current?.insert(text, at); return; }
+      const start = at ?? source.current?.selectionStart ?? content.length;
+      const end = at ?? source.current?.selectionEnd ?? content.length;
       onChange(content.slice(0, start) + text + content.slice(end));
       requestAnimationFrame(() => { source.current?.focus(); source.current?.setSelectionRange(start + text.length, start + text.length); });
     },
@@ -159,21 +160,21 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
         <div className="directive-insert-group inline-flex items-center gap-1 ml-1 pl-1 border-l border-slate-200 dark:border-slate-700">
           <select
             className="directive-insert-select bg-transparent text-[11px] border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 outline-none text-slate-600 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-500 cursor-pointer"
-            aria-label="選擇區塊格式"
-            title="選擇要插入的區塊格式"
+            aria-label={t('directive.selectFormat')}
+            title={t('directive.selectFormat')}
             value={directiveType}
             onChange={event => setDirectiveType(event.target.value)}
           >
             {DIRECTIVE_TEMPLATES.map(tpl => (
-              <option key={tpl.type} value={tpl.type}>{tpl.label}</option>
+              <option key={tpl.type} value={tpl.type}>{t(`directive.${tpl.type}` as TranslationKey)}</option>
             ))}
           </select>
           <button
             type="button"
-            title="插入所選格式的區塊"
+            title={t('directive.insertTitle')}
             onClick={() => insertDirective(directiveType)}
           >
-            插入區塊
+            {t('directive.insert')}
           </button>
         </div>
       </div>}

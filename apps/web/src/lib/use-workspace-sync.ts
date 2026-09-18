@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { SCREEN_PAGE_FILE } from '@mygitnotes/core/screen-page';
 import { useScreenPage } from './use-screen-page.js';
+import { useFocusPage } from './use-focus-page.js';
 import {
   WorkspaceConfig,
   FolderItem,
@@ -70,24 +70,36 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     config
   );
 
-  const screenPending = remote && canWrite && screen.dirty;
+  const focus = useFocusPage(
+    remote ? sourceId : `local:${repoRoot}`,
+    () => {
+      void fetchGitStatus().then((result) => setGitStatus(result.status));
+    },
+    remote,
+    Boolean(config && sourceId),
+    config
+  );
+
+  const documents = [screen, focus];
+  // Remote drafts wait in Changes until committed; local ones autosave to the working tree.
+  const pendingDocuments = remote && canWrite ? documents.filter((document) => document.dirty) : [];
   const activeWorkingNotes = useMemo(() => (remote && canWrite ? workingNotes : {}), [remote, canWrite, workingNotes]);
 
   const gitStatus = useMemo<GitStatus | null>(() => {
     if (remote) {
       return {
         branch,
-        isClean: !screenPending && Object.keys(activeWorkingNotes).length === 0,
+        isClean: !pendingDocuments.length && Object.keys(activeWorkingNotes).length === 0,
         staged: [],
         modified: [
           ...Object.values(activeWorkingNotes).filter((entry) => entry.base).map((entry) => entry.note.path),
-          ...(screenPending ? [SCREEN_PAGE_FILE] : []),
+          ...pendingDocuments.map((document) => document.file),
         ],
         untracked: Object.values(activeWorkingNotes).filter((entry) => !entry.base).map((entry) => entry.note.path),
       };
     }
     return serverGitStatus;
-  }, [remote, branch, workingNotes, canWrite, serverGitStatus, screenPending, activeWorkingNotes]);
+  }, [remote, branch, workingNotes, canWrite, serverGitStatus, pendingDocuments.map((document) => document.file).join('\n'), activeWorkingNotes]);
 
   useEffect(() => {
     const refresh = (event: StorageEvent) => {
@@ -220,7 +232,9 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     workingScope,
     activeWorkingNotes,
     screen,
-    screenPending,
+    focus,
+    documents,
+    pendingDocuments,
     refreshWorkspace,
     stageWorkingNote,
     discardWorkingNote,

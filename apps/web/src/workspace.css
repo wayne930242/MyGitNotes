@@ -435,8 +435,8 @@
 }
 .workspace-splitter:hover::after,
 .workspace-splitter:focus-visible::after,
-.workspace-splitter[data-separator-state="hover"]::after,
-.workspace-splitter[data-separator-state="drag"]::after {
+.workspace-splitter[data-separator="hover"]::after,
+.workspace-splitter[data-separator="active"]::after {
   background: var(--color-primary);
   width: 2px;
   left: 3px;

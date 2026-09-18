@@ -6,6 +6,14 @@ import { isEditableTarget } from '../lib/note-navigation.js';
 
 export type ShortcutSurfaceMode = 'palette' | 'help';
 
+/** A palette-only command supplied by the page that owns it; it has no direct key. */
+export interface PaletteCommand {
+  id: string;
+  label: string;
+  disabled: boolean;
+  run: () => void;
+}
+
 interface KeyboardShortcutsProps {
   mode: ShortcutSurfaceMode | null;
   onModeChange: (mode: ShortcutSurfaceMode | null) => void;
@@ -15,23 +23,37 @@ interface KeyboardShortcutsProps {
   onNavigate: (tab: WorkspaceTab) => void | Promise<void>;
   onCreateNote: () => void;
   onFocusSearch: () => void;
+  pageCommands?: readonly PaletteCommand[];
 }
 
 interface ShortcutCommand {
   id: string;
-  accelerator: string;
+  accelerator?: string;
   dataKey?: string;
   label: string;
   disabled: boolean;
   run: () => void;
 }
 
-export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activeTab, canCreateNote, onNavigate, onCreateNote, onFocusSearch }: KeyboardShortcutsProps) {
+export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activeTab, canCreateNote, onNavigate, onCreateNote, onFocusSearch, pageCommands = [] }: KeyboardShortcutsProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
+  const modeRef = useRef<ShortcutSurfaceMode | null>(null);
+  modeRef.current = mode;
+  const syncedMode = useRef<ShortcutSurfaceMode | null>(null);
+  /** Resets query/selection synchronously during render, not in the `[mode]` effect below - that
+   *  effect only fires after the palette's first commit, so any external caller (e.g. a header
+   *  button click) that starts typing right after the panel appears can race ahead of the reset. */
+  if (syncedMode.current !== mode) {
+    syncedMode.current = mode;
+    if (mode === 'palette') {
+      setQuery('');
+      selectedIdRef.current = 'notes'; setSelectedId('notes');
+    }
+  }
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -40,10 +62,26 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
   const paletteShortcut = isMac ? '⌥+/' : 'Alt+/';
 
+  /** Updates `modeRef` in lockstep with the request, so a keydown listener whose closure hasn't
+   *  been re-registered yet still sees the mode we just asked for, not a stale render's value. */
+  const requestMode = useCallback((next: ShortcutSurfaceMode | null) => {
+    modeRef.current = next;
+    onModeChange(next);
+  }, [onModeChange]);
+
   const dismiss = useCallback((restore = true) => {
     restoreFocus.current = restore;
-    onModeChange(null);
-  }, [onModeChange]);
+    requestMode(null);
+  }, [requestMode]);
+
+  /** Opens the palette and resets its query/selection/focus immediately, instead of waiting on
+   *  the `[mode]` effect below - which a same-batch close+reopen can cause React to skip. */
+  const openPalette = useCallback(() => {
+    requestMode('palette');
+    setQuery('');
+    selectedIdRef.current = 'notes'; setSelectedId('notes');
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [requestMode]);
 
   const commands = useMemo<ShortcutCommand[]>(() => [
     { id: 'notes', accelerator: '1', label: t('nav.notes'), disabled: false, run: () => onNavigate('notes') },
@@ -54,8 +92,9 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
     { id: 'search', accelerator: '/', label: t('shortcuts.search'), disabled: activeTab !== 'notes', run: onFocusSearch },
     { id: 'settings', accelerator: ',', dataKey: 'comma', label: t('nav.settings'), disabled: false, run: () => onNavigate('settings') },
     { id: 'toggle-screen-sidebar', accelerator: '[', label: t('shortcuts.toggleScreenSidebar'), disabled: activeTab !== 'screen', run: () => window.dispatchEvent(new CustomEvent('toggle-screen-sidebar')) },
-    { id: 'help', accelerator: '?', label: t('shortcuts.help'), disabled: false, run: () => onModeChange('help') },
-  ], [activeTab, canCreateNote, onCreateNote, onFocusSearch, onModeChange, onNavigate, t]);
+    { id: 'help', accelerator: '?', label: t('shortcuts.help'), disabled: false, run: () => requestMode('help') },
+    ...pageCommands,
+  ], [activeTab, canCreateNote, onCreateNote, onFocusSearch, onNavigate, pageCommands, requestMode, t]);
 
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const visibleCommands = useMemo(() => normalizedQuery
@@ -121,12 +160,12 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
       const primary = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
       if (slashKey && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
         event.preventDefault(); event.stopPropagation();
-        if (mode === 'palette') dismiss(); else onModeChange('palette');
+        if (modeRef.current === 'palette') dismiss(); else openPalette();
         return;
       }
       if (slashKey && primary && !event.altKey && !event.shiftKey && !isEditableTarget(event.target)) {
         event.preventDefault(); event.stopPropagation();
-        if (mode === 'help') dismiss(); else onModeChange('help');
+        if (modeRef.current === 'help') dismiss(); else requestMode('help');
         return;
       }
       if (!mode) return;
@@ -150,20 +189,14 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
         executeCommand(enabledCommands.find(command => command.id === selectedIdRef.current) || enabledCommands[0]);
         return;
       }
-      if (query || event.ctrlKey || event.metaKey || event.altKey) return;
-      const directKey = event.key === 'N' ? 'N' : event.key;
-      const command = commands.find(item => item.accelerator === directKey);
-      if (!command) return;
-      event.preventDefault(); event.stopPropagation();
-      executeCommand(command);
     };
     document.addEventListener('keydown', keydown, true);
     return () => document.removeEventListener('keydown', keydown, true);
-  }, [commands, dismiss, enabledCommands, executeCommand, isMac, mode, onModeChange, query, selectedId, suspended]);
+  }, [dismiss, enabledCommands, executeCommand, isMac, mode, openPalette, requestMode, suspended]);
 
   if (!mode) return null;
   const palette = mode === 'palette';
-  const listedCommands = palette ? visibleCommands : commands;
+  const listedCommands = palette ? visibleCommands : commands.filter(command => command.accelerator);
   return <div ref={panelRef} role="dialog" aria-modal="false"
     aria-label={t(palette ? 'shortcuts.paletteTitle' : 'shortcuts.title')} data-mode={mode}
     className="keyboard-shortcuts-panel" tabIndex={-1}>
@@ -189,7 +222,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
         disabled={command.disabled} aria-disabled={command.disabled}
         onMouseEnter={() => { if (palette && !command.disabled) { selectedIdRef.current = command.id; setSelectedId(command.id); } }}
         onClick={() => executeCommand(command)}>
-        <kbd>{command.accelerator}</kbd><span>{command.label}</span>{command.disabled && <small>{t('shortcuts.unavailable')}</small>}
+        {command.accelerator ? <kbd>{command.accelerator}</kbd> : <i aria-hidden="true" />}<span>{command.label}</span>{command.disabled && <small>{t('shortcuts.unavailable')}</small>}
       </button>)}
       {palette && listedCommands.length === 0 && <p className="keyboard-shortcuts-empty" role="status">{t('shortcuts.noResults')}</p>}
     </div>

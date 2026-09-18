@@ -5,13 +5,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import { getCurrentBranch } from '@mygitnotes/git';
 import {
   loadWorkspaceConfig, resolveSafePath, managedNotebook, withinPath, editableFile, filePresentation, isNotebookContent,
-  planFileChange, FileCommandSchema, assetHash, assetInfo, assetRoot, parseFolderConfig, SCREEN_PAGE_FILE, STUDY_FILE,
+  planFileChange, FileCommandSchema, assetHash, assetInfo, assetRoot, parseFolderConfig, WORKSPACE_DOCUMENTS,
   createRemoteSource, SourceError, type FileSnapshot, type FileCommand, type SourceConfig, type RemoteSource, type RemoteChange,
 } from '@mygitnotes/core';
 import { authToken } from './auth.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 
-const auxiliary = [SCREEN_PAGE_FILE, STUDY_FILE];
+const auxiliary = WORKSPACE_DOCUMENTS.map(document => document.file);
 function regularPath(root: string, file: string) {
   const full = resolveSafePath(root, file);
   let cursor = root;

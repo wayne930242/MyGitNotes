@@ -55,7 +55,7 @@ pnpm test          # Run test suite across all packages
 pnpm build         # Verify build succeeds cleanly
 ```
 
-Browser QA scripts (`node scripts/qa-*.mjs`) drive the built `apps/local-server/dist` and `apps/web/dist` output; set `PUPPETEER_EXECUTABLE_PATH` to a local Chrome binary outside Linux.
+Browser QA scripts (`node scripts/qa-*.mjs`) drive the built `apps/local-server/dist` and `apps/web/dist` output; outside Linux, set `PUPPETEER_EXECUTABLE_PATH` (`GRAPH_QA_CHROME` for `qa-graph-*.mjs`) to a local Chrome binary.
 
 
 ### Screen 配置所有權
@@ -67,3 +67,14 @@ Browser QA scripts (`node scripts/qa-*.mjs`) drive the built `apps/local-server/
 ### 學習資料所有權
 
 工作區根目錄 `.github-notes-study.yaml` 保存使用者的卡片對應、排程與事件。Core 維護及更新保留此檔案；示範正文位於 `examples/study/`，測試學習紀錄建立於隔離工作區。使用方式見 [學習指南](../study.md)。
+
+### Focus 配置所有權
+
+工作區根目錄 `.github-notes-focus.yaml` 保存使用者具名 Focus 的名稱、劃分與各窗格的 tab。
+Core 不得追蹤真實配置，工作區更新必須保留此檔案；測試配置只建立於隔離暫存工作區。
+每個 Focus 記錄 `notebookId`，tab 只參照該筆記本的筆記或河道；(current) 與作用窗格等檢視狀態只存在瀏覽器。
+
+### 工作區文件
+
+Screen、學習資料與 Focus 配置登錄在 `packages/core/src/workspace-documents.ts`，登錄決定可提交的範圍、大小上限、格式驗證，以及搬移筆記或資料夾時如何更新參照。
+新增工作區根目錄的使用者檔案時，加入登錄與上述所有權清單（`scripts/lib/workspace-agent-merge.mjs`）。

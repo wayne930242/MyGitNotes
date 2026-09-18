@@ -520,6 +520,22 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 .dark .editor-notice { background: #451a03; color: #fde68a; border-color: #92400e; }
 .dark .editor-notice-error { background: #4c0519; color: #fecdd3; border-color: #881337; }
 .note-dialog { position: relative; }
+.note-editor, .note-editor-slot { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.note-editor-host { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+/* A host lending its editor to zoom keeps an empty slot; the placeholder beside it takes the space. */
+.note-editor-slot:empty { display: none; }
+.note-editor-placeholder { display: flex; flex: 1; align-items: center; justify-content: center; padding: 24px; color: var(--color-muted); font-size: 13px; text-align: center; }
+/* Compact frame: the body with a status bar, inside a graph card. */
+.note-compact-bar { display: flex; flex: none; align-items: center; gap: 8px; padding: 3px 20px 3px 6px; border-top: 1px solid var(--color-border); font-size: 11px; color: var(--color-muted); }
+.note-compact-bar .ui-icon-button { flex: none; width: 24px; height: 24px; min-height: 0; }
+.note-compact-path { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.note-compact-status { display: inline-flex; flex: none; align-items: center; gap: 6px; white-space: nowrap; }
+.note-compact-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; }
+.note-compact-status[data-state="pending"] .note-compact-dot, .note-compact-status[data-state="saving"] .note-compact-dot { background: #f59e0b; }
+/* Another host owns the note's editor: a read-only rendering with the control that moves editing here. */
+.note-preview { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.note-preview-bar { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--color-border); font-size: 12px; color: var(--color-muted); }
+.note-preview-body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; }
 .editor-secondary-action { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-surface); color: var(--color-text); font-size: 12px; line-height: 18px; font-weight: 500; white-space: nowrap; }
 .editor-secondary-action:hover, .editor-secondary-action[aria-pressed="true"] { background: var(--color-sidebar); }
 .editor-secondary-action[aria-pressed="true"] { color: var(--color-primary); border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border)); }
@@ -865,6 +881,29 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   .asset-library .grid { overflow: visible; }
   .asset-library label:has(input[type="file"]) { min-height: 44px; }
 }
+
+/* Compact ListView: a docked browse panel; the title takes the full width above its status and actions. */
+.note-list[data-compact="true"] table, .note-list[data-compact="true"] tbody { display: block; }
+.note-list[data-compact="true"] thead { display: none; }
+.note-list[data-compact="true"] tr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "title title" "status actions";
+  align-items: center;
+  padding: 8px 10px;
+  gap: 4px 6px;
+}
+.note-list[data-compact="true"] td:nth-child(2) { justify-self: start; }
+.note-list[data-compact="true"] td { padding: 0; min-width: 0; }
+.note-list[data-compact="true"] td:nth-child(1) { grid-area: title; overflow-wrap: anywhere; }
+.note-list[data-compact="true"] td:nth-child(2) { grid-area: status; }
+.note-list[data-compact="true"] td:nth-child(3),
+.note-list[data-compact="true"] td:nth-child(4),
+.note-list[data-compact="true"] .font-mono { display: none; }
+.note-list[data-compact="true"] td:nth-child(5) { grid-area: actions; }
+.note-list[data-compact="true"] td:first-child > div { gap: 6px; }
+.note-list[data-compact="true"] td:first-child > div > div { min-width: 0; }
+.note-list[data-compact="true"] td:first-child .font-medium { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 
 @media (max-width: 767px) {
   .note-find-field { height: 44px; }

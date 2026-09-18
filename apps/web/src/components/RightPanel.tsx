@@ -1,10 +1,10 @@
 import { Button } from './Button.js';
 import { useLayoutEffect, type ReactNode } from 'react';
-import { CalendarDays, ListTodo, GitBranch, Info } from 'lucide-react';
+import { Braces, CalendarDays, History, ImageIcon, ListTodo, ListTree, GitBranch, Info, Search } from 'lucide-react';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { ChangeRequest, FileChange, GitStatus, NoteItem, NotebookConfig } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
-import { usePanelContext, WORKSPACE_TOOL_IDS, type WorkspaceToolId } from '../lib/panel-context.js';
+import { DOCUMENT_TOOL_IDS, isDocumentTool, usePanelContext, WORKSPACE_TOOL_IDS, type DocumentToolId, type WorkspaceToolId } from '../lib/panel-context.js';
 import { getSavedRightPanelWidth, RIGHT_PANEL_RAIL_WIDTH } from './WorkspaceChrome.js';
 import { CalendarTool } from './CalendarTool.js';
 import { TodoTool } from './TodoTool.js';
@@ -36,6 +36,8 @@ interface RightPanelProps {
   onSynced?: () => void;
   /** Reports the panel's current desired width in pixels (0 while hidden) so the layout can size its splitter panel. */
   onWidthChange?: (width: number) => void;
+  /** While a Focus is displayed: the rail offers the active pane's document panel, which its editor renders into the container. */
+  documentPanel?: { enabled: boolean; onContainer: (element: HTMLDivElement | null) => void };
 }
 
 const WORKSPACE_TOOL_ICONS: Record<WorkspaceToolId, typeof CalendarDays> = {
@@ -48,15 +50,30 @@ const WORKSPACE_TOOL_LABELS: Record<WorkspaceToolId, 'panel.calendar' | 'panel.t
   todo: 'panel.todo',
   changes: 'panel.changes',
 };
+const DOCUMENT_TOOL_ICONS: Record<DocumentToolId, typeof CalendarDays> = {
+  outline: ListTree,
+  find: Search,
+  frontmatter: Braces,
+  assets: ImageIcon,
+  git: History,
+};
+const DOCUMENT_TOOL_LABELS: Record<DocumentToolId, 'editor.outline' | 'editor.findInNote' | 'editor.frontmatter' | 'editor.notebookAssets' | 'editor.fileGitStatus'> = {
+  outline: 'editor.outline',
+  find: 'editor.findInNote',
+  frontmatter: 'editor.frontmatter',
+  assets: 'editor.notebookAssets',
+  git: 'editor.fileGitStatus',
+};
 
 /** The workspace-level Calendar/Todo/Changes panel. Hidden while a note is open — the editor has its own document panel. */
-export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpenNote, onSaveNote, onReadNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, fileMode = false, fileMetadata, onFileMetadataContainer, metadataOpen = false, onMetadataOpenChange, onWidthChange }: RightPanelProps) {
+export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpenNote, onSaveNote, onReadNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, fileMode = false, fileMetadata, onFileMetadataContainer, metadataOpen = false, onMetadataOpenChange, onWidthChange, documentPanel }: RightPanelProps) {
   const { t } = useTranslation();
   const panel = usePanelContext();
   const visible = !panel.hasOpenNote;
   const showingMetadata = fileMode && metadataOpen && !!fileMetadata;
-  const showingWorkspaceTool = !showingMetadata && panel.isOpen && (!fileMode || panel.activeTool === 'changes');
-  const isOpen = showingMetadata || showingWorkspaceTool;
+  const showingWorkspaceTool = !showingMetadata && panel.isOpen && !isDocumentTool(panel.activeTool) && (!fileMode || panel.activeTool === 'changes');
+  const showingDocument = !showingMetadata && panel.isOpen && isDocumentTool(panel.activeTool) && Boolean(documentPanel?.enabled);
+  const isOpen = showingMetadata || showingWorkspaceTool || showingDocument;
 
   useLayoutEffect(() => {
     if (!visible) {
@@ -85,6 +102,7 @@ export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpe
           {showingWorkspaceTool && panel.activeTool === 'calendar' && <CalendarTool notebooks={notebooks} selectedNotebookId={selectedNotebookId} currentFolder={currentFolder} onOpenNote={onOpenNote} />}
           {showingWorkspaceTool && panel.activeTool === 'todo' && <TodoTool notebooks={notebooks} selectedNotebookId={selectedNotebookId} currentFolder={currentFolder} onOpenNote={onOpenNote} onSaveNote={onSaveNote} onReadNote={onReadNote} />}
           {showingWorkspaceTool && panel.activeTool === 'changes' && <ChangesTool writable={writable} remoteChanges={remoteChanges} getPreview={getPreview} gitStatus={gitStatus} deletedNotes={deletedNotes} onRestoreNote={onRestoreNote} onOpenCommitModal={onOpenCommitModal} onSynced={onSynced} />}
+          {showingDocument && <div ref={documentPanel?.onContainer} className="right-panel-document" />}
         </div>
       )}
       <div className="right-panel-rail" role="tablist" aria-label={t('panel.title')}>
@@ -100,6 +118,19 @@ export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpe
             </Button>
           );
         })}
+        {documentPanel && <>
+          <span className="right-panel-divider" aria-hidden="true" />
+          {DOCUMENT_TOOL_IDS.map(id => {
+            const Icon = DOCUMENT_TOOL_ICONS[id];
+            const label = t(DOCUMENT_TOOL_LABELS[id]);
+            return (
+              <Button key={id} type="button" role="tab" aria-selected={showingDocument && panel.activeTool === id} title={label} aria-label={label}
+                disabled={!documentPanel.enabled} onClick={() => panel.openTool(id)}>
+                <Icon aria-hidden="true" />
+              </Button>
+            );
+          })}
+        </>}
       </div>
     </aside>
   );

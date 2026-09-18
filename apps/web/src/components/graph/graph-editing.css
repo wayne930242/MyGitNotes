@@ -9,17 +9,12 @@
 .graph-note-card>header { display:flex; align-items:center; padding:8px; gap:8px; cursor:grab; border-bottom:1px solid var(--color-border); touch-action:none; }
 .graph-note-title { font-size:14px; font-weight:600; flex:1; min-width:0; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:grab; }
 .graph-note-actions { display:flex; align-items:center; justify-content:space-between; padding:4px 8px; gap:4px; font-size:12px; }
-.graph-note-card footer { display:flex; justify-content:space-between; gap:8px; padding:5px 20px 5px 8px; font-size:11px; border-top:1px solid var(--color-border); }
-.graph-note-card footer span:first-child { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .graph-card-resize { position:absolute; bottom:0; right:0; cursor:nwse-resize; touch-action:none; }
 .graph-box-layer { position:absolute; inset:0; z-index:30; cursor:crosshair; touch-action:none; }
 .graph-gesture { position:absolute; inset:0; z-index:50; pointer-events:none; }
 .graph-note-selector { position:absolute; left:68px; top:var(--graph-tools-top); z-index:46; max-height:65%; max-width:calc(100% - 80px); min-width:240px; overflow:auto; padding:10px; background:var(--color-surface); border:1px solid var(--color-border); }
 .graph-note-selector label { display:flex; gap:8px; padding:5px; }
 .graph-notice { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:49; background:var(--color-surface); padding:8px; border:1px solid var(--color-border); font-size:12px; }
-.graph-editor-error { padding:6px; color:#d97706; font-size:12px; }
-.graph-editor-error button { margin-left:8px; text-decoration:underline; }
-.graph-pending-notes { position:absolute; left:12px; bottom:12px; z-index:40; display:flex; gap:4px; background:var(--color-surface); }
 .graph-empty { position:absolute; left:15%; right:15%; top:50%; text-align:center; pointer-events:none; }
 .graph-note-card .cm-editor { font-size:14px; }
 .graph-note-card .editor-mode-select { display:block; min-height:24px; height:24px; padding:0 4px; font-size:10px; max-width:70px; }
@@ -39,13 +34,12 @@
 .graph-lane-panel label { display:flex; gap:6px; align-items:center; }
 .graph-lane-membership { display:flex; flex-direction:column; gap:6px; }
 .graph-connection-port { position:absolute; right:1px; top:50%; width:10px; height:18px; border-radius:6px; background:var(--graph-node-color); border:2px solid var(--color-surface); cursor:crosshair; z-index:2; }
-.graph-hover-expand { position:absolute; z-index:28; width:30px; height:30px; display:grid; place-items:center; padding:4px; background:var(--color-surface); }
+/* Outranks the focused .ui-button rule, which would drop the button into flow below the canvas mid-click. */
+.graph-editing-surface .ui-button.graph-hover-expand { position:absolute; z-index:28; width:30px; height:30px; display:grid; place-items:center; padding:4px; background:var(--color-surface); }
 .graph-note-card>header { padding:5px 7px; gap:5px; min-height:34px; }
 .graph-note-card .editor-mode-switch { flex:none; }
 .graph-in-lane:focus-visible { outline:1px solid var(--color-primary); outline-offset:-1px; }
 .graph-in-lane .graph-minimap-panel { display:none; }
-.graph-mode-toggle { width:24px; height:24px; flex:none; display:grid; place-items:center; border-radius:4px; }
-.graph-mode-toggle:hover { background:var(--color-border); }
 .graph-card-position.is-outside-lane { opacity:.4; }
 .graph-card-position.is-outside-lane:focus-within,.graph-card-position.is-outside-lane:hover { opacity:.75; }
 .graph-selection-toolbar .graph-tool[aria-pressed="true"] { color:var(--color-primary); background:color-mix(in srgb,var(--color-primary) 18%,var(--color-surface)); border-color:var(--color-primary); }
@@ -60,5 +54,3 @@
 .graph-card-position.is-closing { pointer-events:none; }
 .graph-card-position.is-closing .graph-note-card { animation:graph-note-exit 180ms ease-in forwards; }
 @media (prefers-reduced-motion:reduce) { .graph-note-card,.graph-card-position.is-closing .graph-note-card { animation:none; } }
-
-.graph-note-loading { margin: 0; padding: 18px; font-size: 12px; color: var(--color-muted); }

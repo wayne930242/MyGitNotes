@@ -9,6 +9,7 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  Maximize2,
 } from 'lucide-react';
 import { NoteTags, NoteTagActions } from './NoteTags.js';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
@@ -17,6 +18,7 @@ import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { noteUpdatedTime, SortField, SortOrder } from '../lib/note-sort.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
+import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
 
 interface ListViewProps {
   notes: NoteListItem[];
@@ -37,6 +39,10 @@ interface ListViewProps {
   onSortChange?: (field: SortField, order?: SortOrder) => void;
   showMobileSort?: boolean;
   tagActions?: NoteTagActions;
+  /** Present while a Focus is displayed: rows get a zoom button and can be dragged into a pane. */
+  focusMode?: NoteBrowseFocusMode;
+  /** Narrow layout for a docked browse panel: single-row layout, no header, other columns hidden. */
+  compact?: boolean;
 }
 
 interface NoteRowActions {
@@ -44,11 +50,13 @@ interface NoteRowActions {
   remove: (note: NoteListItem) => void;
   move: (note: NoteListItem) => void;
   status: (note: NoteListItem, status: string) => void;
+  zoom: (note: NoteListItem) => void;
 }
 
-const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelete, isPendingDelete, actions, dates, tagActions }: {
+const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelete, isPendingDelete, actions, dates, tagActions, showZoom, canDrag }: {
   note: NoteListItem; tagActions?: NoteTagActions; statuses: string[]; readOnly: boolean; canDelete: boolean; isPendingDelete: boolean;
   actions: NoteRowActions; dates: { short: Intl.DateTimeFormat; full: Intl.DateTimeFormat };
+  showZoom?: boolean; canDrag?: boolean;
 }) {
   const { t } = useTranslation();
   const updated = noteUpdatedTime(note);
@@ -56,6 +64,12 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
   return (
     <tr
       onClick={() => actions.open(note)}
+      draggable={canDrag}
+      onDragStart={canDrag ? (event) => {
+        event.dataTransfer.setData(NOTE_DRAG_TYPE, note.path);
+        event.dataTransfer.setData('text/plain', note.path);
+        event.dataTransfer.effectAllowed = 'copyMove';
+      } : undefined}
       className="hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer group"
     >
       <td className="py-3 px-4">
@@ -110,6 +124,17 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
           className="flex items-center justify-end opacity-40 hover:opacity-100 group-hover:opacity-100 transition"
           onClick={(e) => e.stopPropagation()}
         >
+          {showZoom && (
+            <button
+              type="button"
+              onClick={() => actions.zoom(note)}
+              title={t('focus.zoomNote')}
+              aria-label={t('focus.zoomNote')}
+              className="ui-icon-button"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+          )}
           {!readOnly && <NoteMoveButton onClick={() => actions.move(note)} />}
           {!readOnly && canDelete && (
             <button
@@ -147,11 +172,13 @@ export const ListView: React.FC<ListViewProps> = ({
   onSortChange,
   showMobileSort = false,
   tagActions,
+  focusMode,
+  compact = false,
 }) => {
   const { t, language } = useTranslation();
   // Rows retain stable actions while invoking the latest committed callbacks.
-  const handlers = useRef({ onOpenNote, onDeleteNote, onUpdateNoteStatus, onMoveNote });
-  useLayoutEffect(() => { handlers.current = { onOpenNote, onDeleteNote, onUpdateNoteStatus, onMoveNote }; });
+  const handlers = useRef({ onOpenNote, onDeleteNote, onUpdateNoteStatus, onMoveNote, focusMode });
+  useLayoutEffect(() => { handlers.current = { onOpenNote, onDeleteNote, onUpdateNoteStatus, onMoveNote, focusMode }; });
   const notesRef = useRef(notes);
   useLayoutEffect(() => { notesRef.current = [...uncommitted, ...notes]; });
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(confirmDelete, path => {
@@ -163,6 +190,7 @@ export const ListView: React.FC<ListViewProps> = ({
     remove: note => requestDelete(note.path),
     move: note => handlers.current.onMoveNote?.(note),
     status: (note, status) => handlers.current.onUpdateNoteStatus(note, status),
+    zoom: note => handlers.current.focusMode?.onZoomNote(note),
   }), [requestDelete]);
   const dates = useMemo(() => ({
     short: new Intl.DateTimeFormat(language, { month: '2-digit', day: '2-digit', hour12: false, hour: '2-digit', minute: '2-digit' }),
@@ -248,6 +276,7 @@ export const ListView: React.FC<ListViewProps> = ({
     </div>}
     {(notes.length > 0 || uncommitted.length > 0) && <div
       className="note-list rounded-xl border shadow-xs overflow-hidden transition-colors"
+      data-compact={compact ? 'true' : undefined}
       style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
     >
       <div className="overflow-x-auto">
@@ -267,12 +296,14 @@ export const ListView: React.FC<ListViewProps> = ({
           {uncommitted.length > 0 && <tbody className="divide-y note-list-uncommitted" style={{ borderColor: 'var(--color-border)' }}>
             <tr><th colSpan={5} scope="colgroup" className="py-2 px-4 text-left text-xs uppercase font-semibold text-amber-600 dark:text-amber-400">{t('notes.uncommitted')}</th></tr>
             {uncommitted.map(note => <NoteRow key={note.path} note={note} statuses={statuses}
-              readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} tagActions={tagActions} />)}
+              readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} tagActions={tagActions}
+              showZoom={!!focusMode} canDrag={!!focusMode?.canDrag(note)} />)}
           </tbody>}
           <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
             {/* Notes row rendering */}
             {notes.map(note => <NoteRow key={note.path} note={note} statuses={statuses}
-              readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} tagActions={tagActions} />)}
+              readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} tagActions={tagActions}
+              showZoom={!!focusMode} canDrag={!!focusMode?.canDrag(note)} />)}
           </tbody>
         </table>
       </div>
