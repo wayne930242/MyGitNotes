@@ -219,7 +219,8 @@ function KanbanColumn({ col, index, board, query, hiddenNote, sort, onSort }: {
 }) {
   const { t } = useTranslation();
   const hide = hiddenNote && (hiddenNote.status || '') === col.id ? hiddenNote.path : undefined;
-  const result = useNoteList({ ...query, status: col.id, sort: sort.field, order: sort.order }, { hide });
+  // A status filter keeps every column on the board but only its own column holds notes.
+  const result = useNoteList(query.status && query.status !== col.id ? null : { ...query, status: col.id, sort: sort.field, order: sort.order }, { hide });
   const drag = useColumnDrag(board, col.id);
   const isColumnDragOver = board.dragOverColumnId === col.id;
   const report = board.onTotal;
