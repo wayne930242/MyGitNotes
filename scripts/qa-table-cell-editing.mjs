@@ -28,6 +28,9 @@ const page=await browser.newPage();await page.setViewport({width:1440,height:100
 const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE ERROR',e.message);});
 page.setDefaultTimeout(8000);
 const click=async text=>{const ok=await page.evaluate(text=>{const b=Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()===text);b?.click();return !!b;},text);if(!ok)throw Error(`Missing button: ${text}`);};
+// Editing commands are explicit because macOS binds no Control+End or Control+A shortcut in textareas.
+const textEnd=()=>page.keyboard.press('End',{commands:['MoveToEndOfDocument']});
+const selectAll=()=>page.keyboard.press('KeyA',{commands:['SelectAll']});
 const tableRoot='.live-md-table';
 const cell='.live-md-table tbody tr:first-child td:nth-child(2)';
 const editor='.live-table-cell-editor';
@@ -45,7 +48,7 @@ const checkGeometry=async before=>{
 const checkAutoHeight=async()=>{
  const before=await rect(cell);
  const lineHeight=await page.$eval(editor,e=>parseFloat(getComputedStyle(e).lineHeight));
- await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');
+ await textEnd();
  for(let line=1;line<=3;line++){
    await page.keyboard.press('Enter');
    const grown=await rect(cell);
@@ -61,7 +64,7 @@ const checkAutoHeight=async()=>{
    await checkGeometry(shrunk);
  }
  // Replacing existing multiline content must shrink below the opening height.
- await page.keyboard.down('Control');await page.keyboard.press('KeyA');await page.keyboard.up('Control');await page.keyboard.type('Short');
+ await selectAll();await page.keyboard.type('Short');
  if((await rect(cell)).height>=before.height-2)throw Error('Replacing multiline text did not shrink the row');
  const short=await rect(cell);
  await page.keyboard.sendCharacter('\nPasted second line\nPasted third line');
@@ -91,7 +94,7 @@ try {
    await checkAutoHeight();
  }
  const before=await rect(cell);await page.click(cell,{count:2});await page.waitForSelector(editor);await checkGeometry(before);
- await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');
+ await textEnd();
  await page.keyboard.press('Enter');await page.keyboard.type('Third line with additional details.');
  if(!await page.$eval(editor,e=>e.value.endsWith('\nThird line with additional details.')))throw Error('Enter failed to insert a newline');
  await page.$eval(editor,e=>e.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,isComposing:true,bubbles:true})));
@@ -118,7 +121,8 @@ try {
  if(Math.abs((await rect(cell)).height-neighborHeight)>1)throw Error('Editing a short cell reduced the height needed by its neighbor');
  await page.keyboard.press('Escape');
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});await page.waitForSelector(tableRoot);
- const mobileBefore=await rect(cell);await page.tap(cell);await page.tap('button[aria-label="Edit cell"]');await page.waitForSelector(editor);await checkGeometry(mobileBefore);
+ // Selecting the cell may scroll the editor; the geometry contract starts once the cell is selected.
+ await page.tap(cell);const mobileBefore=await rect(cell);await page.tap('button[aria-label="Edit cell"]');await page.waitForSelector(editor);await checkGeometry(mobileBefore);
  await page.screenshot({path:product+'/artifacts/qa/table-mobile-textarea.png',fullPage:true});
  await checkAutoHeight();
  if(errors.length)throw Error(errors.join('; '));
