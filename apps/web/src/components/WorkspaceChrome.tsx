@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PanelLeft } from 'lucide-react';
 import { Group, Panel, Separator, usePanelRef, type PanelSize } from 'react-resizable-panels';
@@ -193,7 +193,7 @@ export function WorkspaceSplitLayout({
     document.documentElement.style.setProperty('--workspace-sidebar-width', `${initialWidth}px`);
   }, [initialWidth]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (rightPanelWidth === undefined) return;
     rightPanelRef.current?.resize(rightPanelWidth);
   }, [rightPanelWidth]);
@@ -208,7 +208,8 @@ export function WorkspaceSplitLayout({
     }
   };
 
-  const rightPanelExpanded = rightPanelWidth !== undefined && rightPanelWidth > RIGHT_PANEL_RAIL_WIDTH;
+  const rightPanelHidden = !rightPanelWidth;
+  const rightPanelExpanded = !rightPanelHidden && rightPanelWidth! > RIGHT_PANEL_RAIL_WIDTH;
 
   const handleRightPanelResize = (panelSize: PanelSize) => {
     if (panelSize?.inPixels) {
@@ -219,14 +220,20 @@ export function WorkspaceSplitLayout({
     }
   };
 
-  const rightPanelNode = rightPanel && rightPanelWidth ? (
+  // The Panel stays mounted (gated on `rightPanel` alone, not `rightPanelWidth`) so RightPanel
+  // never unmounts — it is the sole source of rightPanelWidth via onWidthChange, so if it were
+  // unmounted while hidden it could never report a width again and the panel would stay hidden forever.
+  const rightPanelNode = rightPanel ? (
     <React.Fragment key="right-panel">
-      <Separator className="workspace-splitter" disabled={!rightPanelExpanded} />
+      <Separator
+        className={`workspace-splitter${rightPanelHidden ? ' workspace-splitter-hidden' : ''}`}
+        disabled={!rightPanelExpanded}
+      />
       <Panel
         id={rightPanelId}
-        defaultSize={`${rightPanelWidth}px`}
-        minSize={`${rightPanelExpanded ? RIGHT_PANEL_RAIL_WIDTH + MIN_RIGHT_PANEL_WIDTH : RIGHT_PANEL_RAIL_WIDTH}px`}
-        maxSize={`${rightPanelExpanded ? RIGHT_PANEL_RAIL_WIDTH + MAX_RIGHT_PANEL_WIDTH : RIGHT_PANEL_RAIL_WIDTH}px`}
+        defaultSize={`${rightPanelWidth || RIGHT_PANEL_RAIL_WIDTH}px`}
+        minSize={`${rightPanelHidden ? 0 : rightPanelExpanded ? RIGHT_PANEL_RAIL_WIDTH + MIN_RIGHT_PANEL_WIDTH : RIGHT_PANEL_RAIL_WIDTH}px`}
+        maxSize={`${rightPanelHidden ? 0 : rightPanelExpanded ? RIGHT_PANEL_RAIL_WIDTH + MAX_RIGHT_PANEL_WIDTH : RIGHT_PANEL_RAIL_WIDTH}px`}
         groupResizeBehavior="preserve-pixel-size"
         onResize={handleRightPanelResize}
         panelRef={rightPanelRef}
@@ -297,14 +304,23 @@ export function WorkspaceSplitLayout({
             <Separator className="workspace-splitter" />
           </>
         )}
-        <Panel
-          id={mainId}
-          groupResizeBehavior="preserve-relative-size"
-          className={`workspace-split-main-panel flex-1 min-w-0 min-h-0 h-full ${mainClassName}`}
-        >
-          {children}
+        <Panel id={mainId} groupResizeBehavior="preserve-relative-size" className="flex-1 min-w-0 min-h-0 h-full">
+          {rightPanelNode ? (
+            <Group orientation="horizontal" className="workspace-split-inner-group flex-1 min-w-0 min-h-0 h-full flex">
+              <Panel
+                groupResizeBehavior="preserve-relative-size"
+                className={`workspace-split-main-panel flex-1 min-w-0 min-h-0 h-full ${mainClassName}`}
+              >
+                {children}
+              </Panel>
+              {rightPanelNode}
+            </Group>
+          ) : (
+            <div className={`workspace-split-main-panel flex-1 min-w-0 min-h-0 h-full ${mainClassName}`}>
+              {children}
+            </div>
+          )}
         </Panel>
-        {rightPanelNode}
       </Group>
     </div>
   );

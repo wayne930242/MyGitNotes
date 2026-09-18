@@ -64,7 +64,7 @@ import { AuthControls, ConnectionState, AgentAccessSettings } from './components
 import { Header } from './components/Header.js';
 import { KeyboardShortcuts, type ShortcutSurfaceMode } from './components/KeyboardShortcuts.js';
 import { NoteToolbar } from './components/NoteToolbar.js';
-import { PageToolbar, SidebarProvider, WorkspaceSidebarPortal, WorkspaceSplitLayout } from './components/WorkspaceChrome.js';
+import { PageToolbar, RIGHT_PANEL_RAIL_WIDTH, SidebarProvider, WorkspaceSidebarPortal, WorkspaceSplitLayout } from './components/WorkspaceChrome.js';
 import { useVisualViewport } from './lib/use-visual-viewport.js';
 import { useSidebarSwipe } from './lib/use-sidebar-swipe.js';
 import { Sidebar } from './components/Sidebar.js';
@@ -147,7 +147,9 @@ const AppContent: React.FC = () => {
   const [fileDialog, setFileDialog] = useState<{ notebookId: string; path?: string; movePath?: string }>();
   const [fileMetadataContainer, setFileMetadataContainer] = useState<HTMLDivElement | null>(null);
   const [fileMetadataOpen, setFileMetadataOpen] = useState(false);
-  const [rightPanelWidth, setRightPanelWidth] = useState(0);
+  // Seeded to the rail width (not 0) so the right panel mounts on first render and can report
+  // its real width via onWidthChange — a 0 seed would never let it mount in the first place.
+  const [rightPanelWidth, setRightPanelWidth] = useState(RIGHT_PANEL_RAIL_WIDTH);
   const [selectedFileEntry, setSelectedFileEntry] = useState<FileEntry>();
   const fileManagerRef = useRef<FileManagerHandle>(null);
 

@@ -422,6 +422,7 @@
   user-select: none;
   touch-action: none;
 }
+.workspace-splitter-hidden { display: none; }
 .workspace-splitter::after {
   content: '';
   position: absolute;

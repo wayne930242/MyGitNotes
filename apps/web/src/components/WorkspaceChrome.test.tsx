@@ -206,7 +206,7 @@ describe('WorkspaceSplitLayout and WorkspaceSidebarPortal', () => {
     expect(container.querySelector('.workspace-splitter')).toBeNull();
   });
 
-  it('does not render a right panel splitter while rightPanelWidth is 0 (hidden)', () => {
+  it('keeps the right panel mounted but visually collapsed while rightPanelWidth is 0 (hidden)', () => {
     const { container } = render(
       <SidebarProvider>
         <WorkspaceSplitLayout hasSidebar={false} rightPanelWidth={0} rightPanel={<div data-testid="right-content">Right</div>}>
@@ -215,8 +215,11 @@ describe('WorkspaceSplitLayout and WorkspaceSidebarPortal', () => {
       </SidebarProvider>
     );
 
-    expect(container.querySelector('.workspace-split-right-panel')).toBeNull();
-    expect(screen.queryByTestId('right-content')).toBeNull();
+    // Mounted (not unmounted) so it can keep reporting its own width via onWidthChange —
+    // an unmounted RightPanel could never report a width again and would stay hidden forever.
+    expect(screen.getByTestId('right-content')).toBeInTheDocument();
+    expect(container.querySelector('.workspace-split-right-panel')).toBeInTheDocument();
+    expect(container.querySelector('.workspace-splitter.workspace-splitter-hidden')).toBeInTheDocument();
   });
 
   it('renders the right panel inside a resizable splitter panel when rightPanelWidth > 0', () => {
