@@ -162,7 +162,7 @@ describe('Core Update Engine Rules', () => {
     expect(fs.existsSync(path.join(userRepo, '.agents/skills/new/SKILL.md'))).toBe(false);
     expect(fs.readFileSync(path.join(userRepo, 'feature.txt'), 'utf8')).toBe('Product update\n');
     expect((await runGit(['status', '--porcelain'], userRepo)).stdout).toBe('');
-  });
+  }, 15000); // Two full updateCore() runs each spawn many real git subprocesses; slower under full-suite load.
 
   it('preserves ordinary product conflicts and does not commit a failed update', async () => {
     await runGit(['checkout', '-b', 'main'], userRepo);
@@ -197,7 +197,7 @@ describe('Core Update Engine Rules', () => {
     const head = (await runGit(['rev-parse','HEAD'],userRepo)).stdout;
     expect((await updateCore({repoRoot:userRepo})).alreadyUpToDate).toBe(true);
     expect((await runGit(['rev-parse','HEAD'],userRepo)).stdout).toBe(head);
-  });
+  }, 15000); // Spawns a real node+tsx CLI process to run scripts/update-core.ts; slower under full-suite load.
 
   it('does not commit an update with an invalid workspace manifest', async () => {
     await runGit(['checkout','-b','main'],userRepo);
