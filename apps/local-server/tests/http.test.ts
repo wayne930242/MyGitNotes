@@ -111,7 +111,7 @@ describe('real HTTP local boundaries',()=>{
       git('checkout', '-b', 'core');
       expect((await request()).status).toBe(403);
     } finally { fs.rmSync(remote, { recursive: true, force: true }); }
-  });
+  }, 20000); // Real bare-repo push/clone/sync round trips spawn dozens of git subprocesses; slower under full-suite load.
   it('lists, edits, commits and restores workspace Agent documents while protecting secrets and product paths', async () => {
     const settings = ['AGENTS.md', '.agents/skills/custom/SKILL.md', '.codex/agents/reviewer.toml'];
     for (const file of settings) {
