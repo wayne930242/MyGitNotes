@@ -1003,6 +1003,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "focus.closeTab": "關閉 {name}",
   "focus.allTabs": "這個窗格的所有 tab",
   "focus.autoHideTabs": "自動隱藏 tab 列",
+  "focus.dismissError": "關閉",
   "focus.addLane": "新增河道",
   "focus.goAddLane": "前往新增河道",
   "focus.emptyPane": "從瀏覽區點選筆記，或把筆記拖曳到這裡。",

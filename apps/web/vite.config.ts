@@ -48,7 +48,7 @@ function writeDevPort(key: keyof DevPorts, port: number): void {
 /**
  * local-server binds first and may move off 4321; wait briefly for it to publish its actual port.
  * A prior run may have left its own port in the file after exiting, so only trust a port whose
- * recorded pid is still alive — that pid can only belong to the local-server run starting now.
+ * recorded pid is still alive; local-server writes the port and pid together, so a live pid means its port is live.
  */
 async function resolveApiPort(): Promise<number> {
   if (process.env.PORT) return Number(process.env.PORT);

@@ -31,9 +31,8 @@ export function readDevPorts(repoRoot: string): DevPorts {
   }
 }
 
-export function writeDevPort(repoRoot: string, key: keyof DevPorts, port: number): void {
-  const ports = readDevPorts(repoRoot);
-  ports[key] = port;
+export function writeDevPorts(repoRoot: string, values: DevPorts): void {
+  const ports = { ...readDevPorts(repoRoot), ...values };
   try {
     fs.writeFileSync(devPortsFile(repoRoot), JSON.stringify(ports));
   } catch {

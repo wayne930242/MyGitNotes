@@ -1003,6 +1003,7 @@ export const en = {
   "focus.closeTab": "Close {name}",
   "focus.allTabs": "All tabs in this pane",
   "focus.autoHideTabs": "Auto-hide tab bar",
+  "focus.dismissError": "Dismiss",
   "focus.addLane": "Add lane",
   "focus.goAddLane": "Go add a lane",
   "focus.emptyPane": "Click a note in the browse panel, or drag one here.",

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createElement, type ReactNode } from 'react';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FocusError, emptyFocusPage, FOCUS_MAX_TABS, type FocusLayout } from '@mygitnotes/core/focus-page';
@@ -58,3 +58,49 @@ describe('useNoteFocus place', () => {
     await waitFor(() => expect(result.current.layout?.panes[0]?.tabs).toHaveLength(1));
   });
 });
+
+describe('useNoteFocus mutationError', () => {
+  const fullLayout = (count: number): FocusLayout => ({ division: 'single', panes: [{ tabs: Array.from({ length: count }, (_, index) => ({ kind: 'lane', id: `lane-${index}` })) }] });
+  const lanesFor = (count: number) => Array.from({ length: count }, (_, index) => lane(`lane-${index}`));
+
+  it('records a failed change, and clears it on dismiss and when another Focus is shown', async () => {
+    localStorage.setItem(storageKey, JSON.stringify({ current: fullLayout(FOCUS_MAX_TABS), entries: {}, last: null }));
+    const lanes = lanesFor(FOCUS_MAX_TABS + 1);
+    const { result, rerender } = renderHook(({ focusKey }: { focusKey: string | null }) => useNoteFocus({
+      page: fakeController(), notebookId: NOTEBOOK, scope: SCOPE, focusKey, writable: true, lanes, flushEditors: async () => true,
+    }), { wrapper, initialProps: { focusKey: CURRENT_FOCUS as string | null } });
+    await waitFor(() => expect(result.current.layout).not.toBeNull());
+
+    const fail = () => result.current.place(CURRENT_FOCUS, { kind: 'lane', id: `lane-${FOCUS_MAX_TABS}` }, 0).catch(() => {});
+    await act(fail);
+    expect(result.current.mutationError).toMatchObject({ code: 'tab-limit' });
+    act(() => result.current.dismissMutationError());
+    expect(result.current.mutationError).toBeNull();
+
+    await act(fail);
+    expect(result.current.mutationError).not.toBeNull();
+    rerender({ focusKey: null });
+    await waitFor(() => expect(result.current.mutationError).toBeNull());
+  });
+
+  it('reports a note that no longer fits only as full, without a leftover error', async () => {
+    localStorage.setItem(storageKey, JSON.stringify({ current: fullLayout(FOCUS_MAX_TABS - 1), entries: {}, last: null }));
+    const lanes = lanesFor(FOCUS_MAX_TABS);
+    let raced = false;
+    const { result } = renderHook(() => useNoteFocus({
+      page: fakeController(), notebookId: NOTEBOOK, scope: SCOPE, focusKey: CURRENT_FOCUS, writable: true, lanes,
+      // While the editors flush, another tab takes the last free slot.
+      flushEditors: async () => {
+        if (!raced) { raced = true; await result.current.place(CURRENT_FOCUS, { kind: 'lane', id: `lane-${FOCUS_MAX_TABS - 1}` }, 0); }
+        return true;
+      },
+    }), { wrapper });
+    await waitFor(() => expect(result.current.layout).not.toBeNull());
+
+    let opened: string | undefined;
+    await act(async () => { opened = await result.current.openNote('notes/a.md'); });
+    expect(opened).toBe('full');
+    expect(result.current.mutationError).toBeNull();
+  });
+});
+

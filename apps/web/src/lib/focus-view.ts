@@ -63,7 +63,9 @@ export function readFocusView(raw: unknown): FocusViewState {
   const defaults = emptyFocusView().dock;
   const dockRaw = isRecord(raw.dock) ? raw.dock : {};
   const left = typeof dockRaw.left === 'number' && Number.isFinite(dockRaw.left) && dockRaw.left >= 0 ? dockRaw.left : defaults.left;
-  const top = typeof dockRaw.top === 'number' && Number.isFinite(dockRaw.top) && dockRaw.top >= 0 ? dockRaw.top : defaults.top;
+  // Views stored before the card dock moved to the top keep their height under `bottom`.
+  const topRaw = dockRaw.top ?? dockRaw.bottom;
+  const top = typeof topRaw === 'number' && Number.isFinite(topRaw) && topRaw >= 0 ? topRaw : defaults.top;
   const collapsed = typeof dockRaw.collapsed === 'boolean' ? dockRaw.collapsed : defaults.collapsed;
   return { current, entries, last, dock: { left, top, collapsed } };
 }

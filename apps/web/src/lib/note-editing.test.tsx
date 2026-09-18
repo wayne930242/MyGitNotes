@@ -50,6 +50,19 @@ describe('claimEditor', () => {
     expect(hosts.owner('notes/fail.md')).toBe('pane');
   });
 
+  it('resolves false and keeps the owner when refreshing the notes fails', async () => {
+    let captured: ReturnType<typeof useNoteEditing> | undefined;
+    const Probe = () => { captured = useNoteEditing(); return null; };
+    render(createElement(NoteEditingProvider, {
+      register: () => () => {}, editorProps: () => { throw new Error('unused'); }, flushEditors: async () => true,
+      refreshNotes: async () => { throw new Error('offline'); }, closeZoom: () => {}, addToFocus: () => undefined, children: createElement(Probe),
+    }));
+    const { hosts, claimEditor } = captured!;
+    hosts.register('notes/a.md', 'pane'); hosts.register('notes/a.md', 'card');
+    await expect(claimEditor('notes/a.md', 'card')).resolves.toBe(false);
+    expect(hosts.owner('notes/a.md')).toBe('pane');
+  });
+
   it('serializes concurrent claims for the same note so the most recent one wins', async () => {
     let captured: ReturnType<typeof useNoteEditing> | undefined;
     const Probe = () => { captured = useNoteEditing(); return null; };

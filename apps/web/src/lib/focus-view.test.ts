@@ -67,6 +67,11 @@ describe('readFocusView', () => {
     expect(readFocusView({ dock: { left: -10, top: 200, collapsed: true } }).dock).toEqual({ left: 320, top: 200, collapsed: true });
     expect(readFocusView({}).dock).toEqual(emptyFocusView().dock);
   });
+
+  it('keeps a dock height stored under the legacy bottom key, preferring top', () => {
+    expect(readFocusView({ dock: { left: 320, bottom: 400, collapsed: false } }).dock.top).toBe(400);
+    expect(readFocusView({ dock: { top: 200, bottom: 400 } }).dock.top).toBe(200);
+  });
 });
 
 describe('entryView', () => {

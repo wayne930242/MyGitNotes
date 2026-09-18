@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronDown, ListTree, PanelsTopLeft } from 'lucide-react';
+import { ChevronDown, ListTree, PanelsTopLeft, X } from 'lucide-react';
 import { FOCUS_DIVISIONS, FocusError, type FocusDivision } from '@mygitnotes/core/focus-page';
 import { CURRENT_FOCUS } from '../lib/focus-view.js';
 import type { NoteFocus } from '../lib/use-note-focus.js';
@@ -49,7 +49,6 @@ export const FocusControls: React.FC<{
           </DropdownMenu.RadioGroup>
           {focus.loading && <p role="status">{t('focus.loading')}</p>}
           {focus.error && <><p role="alert">{focus.error}</p><DropdownMenu.Item onSelect={onReload}>{t('focus.reload')}</DropdownMenu.Item></>}
-          {focus.mutationError && <p role="alert">{focusErrorMessage(t, focus.mutationError)}</p>}
           {focus.shown && <DropdownMenu.Separator />}
           {focus.shown === CURRENT_FOCUS && focus.canName && <DropdownMenu.Item onSelect={() => setDialog({ kind: 'name' })}>{t('focus.name')}</DropdownMenu.Item>}
           {named && focus.editableFocus(named.id) && <>
@@ -61,6 +60,10 @@ export const FocusControls: React.FC<{
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
     </div>
+    {focus.mutationError && <p role="alert" className="focus-mutation-error" title={focusErrorMessage(t, focus.mutationError)}>
+      <span>{focusErrorMessage(t, focus.mutationError)}</span>
+      <button type="button" className="ui-icon-button" aria-label={t('focus.dismissError')} title={t('focus.dismissError')} onClick={focus.dismissMutationError}><X aria-hidden="true" /></button>
+    </p>}
     {focus.layout && <DivisionPicker division={focus.layout.division} disabled={!focus.editable} onChange={division => void focus.setDivision(division).catch(() => {})} />}
     {focus.layout && browseToggle && <button type="button" className="ui-icon-button" aria-pressed={browseToggle.showing} onClick={browseToggle.onToggle}
       aria-label={t(browseToggle.showing ? 'focus.showFocus' : 'focus.showBrowse')} title={t(browseToggle.showing ? 'focus.showFocus' : 'focus.showBrowse')}>

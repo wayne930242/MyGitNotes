@@ -86,6 +86,8 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
     update(current => ({ ...current, entries: { ...current.entries, [target]: change(entryView(current, target, layout)) } }));
   };
   const [mutationError, setMutationError] = useState<FocusError | null>(null);
+  // An error belongs to the Focus it was raised on.
+  useEffect(() => setMutationError(null), [shown]);
   /** Applies a structural change; false when the target cannot be written to. Throws (and records) FocusError when the change itself is invalid. */
   const mutate = (target: string, change: (layout: FocusLayout) => FocusLayout): boolean => {
     if (!editable(target)) return false;
@@ -110,7 +112,7 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
     if (!found && focusTabCount(layout) >= FOCUS_MAX_TABS) return 'full';
     if (!await flushEditors(notePaths([entry.shown[pane]]))) return 'blocked';
     // The tab count is already checked above; a FocusError here means the layout changed since, so it counts as full too.
-    if (!found) { try { if (!mutate(shown, current => placeTab(current, tab, pane))) return 'full'; } catch { return 'full'; } }
+    if (!found) { try { if (!mutate(shown, current => placeTab(current, tab, pane))) return 'full'; } catch { setMutationError(null); return 'full'; } }
     setEntry(shown, current => showTab(current, pane, tabKey), layout);
     return 'opened';
   };
@@ -185,7 +187,7 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
   };
 
   return {
-    notebookId, focuses, error: page.error, loading: page.loading, view, shown, layout, entry, notes, mutationError,
+    notebookId, focuses, error: page.error, loading: page.loading, view, shown, layout, entry, notes, mutationError, dismissMutationError: () => setMutationError(null),
     editable: shown ? editable(shown) : false, canName, layoutOf, entryOf, editableFocus: editable,
     openNote, place, show, activate, close, setDivision, setRatios, setAutoHide, setDock, forget, name, rename, remove,
   };

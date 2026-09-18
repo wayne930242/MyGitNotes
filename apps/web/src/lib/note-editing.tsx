@@ -96,8 +96,11 @@ export function NoteEditingProvider({ register, children, ...value }: Omit<NoteE
   // the previous claim for that path has settled, so concurrent claims cannot land out of order.
   const claimEditor = useCallback((path: string, id: string) => {
     const queued = (claims.current.get(path) ?? Promise.resolve(true)).catch(() => false).then(async () => {
-      if (!await flushEditors([path])) return false;
-      await refreshNotes();
+      // A failed flush or refresh leaves the current owner in place.
+      try {
+        if (!await flushEditors([path])) return false;
+        await refreshNotes();
+      } catch { return false; }
       hosts.claim(path, id);
       return true;
     });
