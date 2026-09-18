@@ -35,7 +35,9 @@ const click=async text=>{
  await page.waitForFunction(text=>Array.from(document.querySelectorAll('button')).some(b=>b.textContent.trim()===text&&!b.disabled),{},text);await page.evaluate(text=>Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()===text&&!b.disabled).click(),text);
 };
 const agentText = 'textarea[aria-label="Agent document content"]';
-const append = async (selector, text) => { await page.focus(selector);await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.type(text); };
+// CodeMirror binds Mod-End (Command on macOS); the textarea needs the explicit editing command there.
+const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+const append = async (selector, text) => { await page.focus(selector);await page.keyboard.down(mod);await page.keyboard.press('End',{commands:['MoveToEndOfDocument']});await page.keyboard.up(mod);await page.keyboard.type(text); };
 let delayReads=false;let slowSave=false;let failSave=false;const savedRequests=[];
 await page.setRequestInterception(true);
 page.on('request',request=>{
@@ -103,7 +105,7 @@ try {
  await page.waitForSelector(`${agentText}:not([readonly])`);
  await append(agentText,'\nCommit this Agent file');
  await page.waitForFunction(()=>!document.querySelector('button[aria-label="Restore"]')?.disabled);
- await click('Commit'); await page.waitForSelector('.changes-dialog');
+ await page.click('.right-panel-rail [role="tab"][aria-label="Changes"]'); await page.waitForSelector('.changes-tool'); await click('Manage changes'); await page.waitForSelector('.changes-dialog');
  await page.waitForSelector('button[aria-label="Stage notes/AGENTS.md"]:not(:disabled)');
  await page.click('button[aria-label="Stage notes/AGENTS.md"]');
  await page.waitForSelector('[data-change-path="notes/AGENTS.md"][data-side="staged"]');

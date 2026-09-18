@@ -111,7 +111,8 @@ try {
   await page.keyboard.press('Enter');
   assert((await page.$eval('.note-find-count', node => node.textContent)) === '2 of 2', 'Enter did not advance note search');
   await page.keyboard.press('Escape');
-  await page.click('button[aria-label="Document tools"]'); await page.waitForSelector('.note-outline');
+  // Document tools reopens the last panel (Find here), so Outline is chosen by its tab.
+  await page.click('button[aria-label="Document tools"]'); await page.click('.note-panel-tabs [role="tab"][aria-label="Outline"]'); await page.waitForSelector('.note-outline');
   fs.mkdirSync(`${product}/artifacts/qa`, { recursive: true });
   await page.screenshot({ path: `${product}/artifacts/qa/note-document-panel-desktop.png` });
   assert(await page.$$eval('.note-outline nav button', buttons => buttons.map(button => button.querySelector('span').textContent).join('|')) === 'Example|Section Two|Final Section', 'Markdown outline is incomplete');
@@ -120,17 +121,24 @@ try {
   assert(await page.$eval('button[aria-label="Restore note"]', button => button.disabled), 'Clean file restore should be disabled');
   await page.screenshot({ path: `${product}/artifacts/qa/note-git-panel-desktop.png` });
   await page.click('.note-panel-tabs [role="tab"][aria-label="Outline"]');
+  // Focused panel tabs keep their own keys, so J/K run from the outline itself.
+  await page.waitForSelector('.note-outline nav button[aria-current="true"]'); await page.focus('.note-outline nav button[aria-current="true"]');
   await page.keyboard.press('j');
   assert((await page.$eval('.note-outline nav button[aria-current="true"] span', node => node.textContent)) === 'Section Two', 'J did not move outline focus');
   await page.keyboard.press('k');
   assert((await page.$eval('.note-outline nav button[aria-current="true"] span', node => node.textContent)) === 'Example', 'K did not move outline focus');
-  await page.keyboard.press('Enter'); await page.waitForFunction(() => !document.querySelector('.note-outline'));
+  // Choosing a heading keeps the outline open (dc3ba56).
+  await page.keyboard.press('Enter');
+  assert(await page.$('.note-outline'), 'Choosing an outline heading closed the panel');
   await page.$$eval('button', buttons => buttons.find(button => button.textContent.trim() === 'Source').click());
   await page.waitForSelector('textarea[aria-label="Note content"]');
-  await page.click('button[aria-label="Document tools"]'); await page.click('.note-panel-tabs [role="tab"][aria-label="Find in note"]'); await page.waitForFunction(() => document.activeElement?.matches('[role="search"][aria-label="Find in note"] input')); await new Promise(resolve => setTimeout(resolve, 30)); await chord('Control', 'a'); await page.keyboard.type('Second');
+  // A tab click keeps focus on the tab list, so the search field is focused directly.
+  await page.click('.note-panel-tabs [role="tab"][aria-label="Find in note"]'); await page.click('[role="search"][aria-label="Find in note"] input'); await page.waitForFunction(() => document.activeElement?.matches('[role="search"][aria-label="Find in note"] input')); await new Promise(resolve => setTimeout(resolve, 30)); await page.keyboard.press('KeyA', { commands: ['SelectAll'] }); await page.keyboard.type('Second');
   await page.waitForFunction(() => document.querySelector('.note-find-count')?.textContent === '1 of 1');
   await page.waitForFunction(() => { const input = document.querySelector('textarea[aria-label="Note content"]'); return input.selectionStart === input.value.indexOf('Second'); });
-  await page.keyboard.press('Escape');
+  // Document tools reopens the last panel, so Outline becomes the last one before the panel closes.
+  await page.click('.note-panel-tabs [role="tab"][aria-label="Outline"]'); await page.waitForSelector('.note-outline');
+  await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.note-outline'));
   await page.$eval('textarea[aria-label="Note content"]', input => { input.scrollTop = input.scrollHeight; input.dispatchEvent(new Event('scroll')); });
   const scrollBeforeOutline = await page.$eval('textarea[aria-label="Note content"]', input => input.scrollTop);
   await page.click('button[aria-label="Document tools"]');

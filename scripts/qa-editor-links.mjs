@@ -53,6 +53,8 @@ const clickText = async (text, modifier) => {
   try { await page.mouse.click(point.x, point.y); }
   finally { if (modifier) await page.keyboard.up(modifier); }
 };
+// macOS turns Control+click into a context-menu click, so new-tab clicks use Command there.
+const newTabKey = process.platform === 'darwin' ? 'Meta' : 'Control';
 const contrast = (a, b) => {
   const luminance = rgb => rgb.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => v / 255).map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
   const values = [luminance(a), luminance(b)].sort((x, y) => y - x);
@@ -94,21 +96,28 @@ try {
       const popup = await target.page();
       assert.equal(target.url(), destination);
       assert.equal(await popup.evaluate(() => window.opener === null), true);
-      await popup.close();
+      await popup.close(); await page.bringToFront();
       assert.equal(page.url(), `${base}/notebooks/example/notes/links.md`);
     };
-    await expectPopup('Named link', 'Control', 'https://example.com/named');
-    await clickText('Named link');
-    await page.waitForFunction(() => document.querySelector('.cm-content').textContent.includes('[Named link]'));
-    await expectPopup('Named link', 'Control', 'https://example.com/named');
+    await expectPopup('Named link', newTabKey, 'https://example.com/named');
+    // A plain link click navigates, so the caret reaches the link line from the heading instead.
+    await clickText('Link QA');
+    await page.waitForFunction(() => document.querySelector('.cm-content').textContent.startsWith('# Link QA'));
+    const namedLinkRevealed = () => page.evaluate(() => document.querySelector('.cm-content').textContent.includes('[Named link]'));
+    for (let step = 0; step < 4 && !await namedLinkRevealed(); step++) {
+      await page.keyboard.press('ArrowDown');
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    }
+    assert.ok(await namedLinkRevealed(), 'The active link line must show its Markdown source');
+    await expectPopup('Named link', newTabKey, 'https://example.com/named');
     await expectPopup('Named link', 'Meta', 'https://example.com/named');
-    await expectPopup('https://example.com/bare?x=1&y=2', 'Control', 'https://example.com/bare?x=1&y=2');
-    await expectPopup('https://example.com/angle', 'Control', 'https://example.com/angle');
-    await expectPopup('Bold link', 'Control', 'https://example.com/bold');
-    await expectPopup('Table link', 'Control', 'https://example.com/table');
+    await expectPopup('https://example.com/bare?x=1&y=2', newTabKey, 'https://example.com/bare?x=1&y=2');
+    await expectPopup('https://example.com/angle', newTabKey, 'https://example.com/angle');
+    await expectPopup('Bold link', newTabKey, 'https://example.com/bold');
+    await expectPopup('Table link', newTabKey, 'https://example.com/table');
     const targetsBefore = browser.targets().length;
-    await clickText('Unsafe', 'Control');
-    await clickText('https://example.com/code', 'Control');
+    await clickText('Unsafe', newTabKey);
+    await clickText('https://example.com/code', newTabKey);
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     assert.equal(browser.targets().length, targetsBefore, 'Unsafe links and code must not open tabs');
     assert.equal(fs.readFileSync(path.join(root, 'notes/example/links.md'), 'utf8'), content, 'Link clicks must not change the note');
@@ -118,21 +127,25 @@ try {
     await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
     await open('midnight-violet');
     const icons = await page.$$('.live-md-external-link');
-    assert.equal(icons.length, 5, 'Every safe link needs its own external-link button');
-    for (const suffix of ['named', 'bare?x=1&y=2', 'angle', 'bold', 'table']) {
+    assert.equal(icons.length, 4, 'Every safe inline link needs its own external-link button');
+    // Rendered table links open on a plain tap, so they carry no separate button.
+    const targets = [...['named', 'bare?x=1&y=2', 'angle', 'bold'].map(suffix => [suffix, true]), ['table', false]];
+    for (const [suffix, icon] of targets) {
       const destination = `https://example.com/${suffix}`;
-      const selector = `.live-md-external-link[href="${destination}"]`;
+      const selector = icon ? `.live-md-external-link[href="${destination}"]` : `.live-md-rendered a[href="${destination}"]`;
       const size = await page.$eval(selector, element => {
         const rect = element.getBoundingClientRect();
         return { width: rect.width, height: rect.height, label: element.getAttribute('aria-label'), target: element.target, rel: element.rel };
       });
-      assert.ok(size.width >= 28 && size.height >= 28, 'Mobile link icon needs a usable tap target');
-      assert.ok(size.label); assert.equal(size.target, '_blank'); assert.match(size.rel, /noopener/);
+      if (icon) {
+        assert.ok(size.width >= 28 && size.height >= 28, 'Mobile link icon needs a usable tap target');
+        assert.ok(size.label); assert.equal(size.target, '_blank'); assert.match(size.rel, /noopener/);
+      }
       const popupPromise = browser.waitForTarget(target => target.url() === destination, { timeout: 3000 });
       await page.tap(selector);
       const popup = await (await popupPromise).page();
       assert.equal(await popup.evaluate(() => window.opener === null), true);
-      await popup.close();
+      await popup.close(); await page.bringToFront();
       assert.equal(page.url(), `${base}/notebooks/example/notes/links.md`);
     }
     assert.equal(fs.readFileSync(path.join(root, 'notes/example/links.md'), 'utf8'), content);
