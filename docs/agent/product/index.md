@@ -55,7 +55,7 @@ pnpm test          # Run test suite across all packages
 pnpm build         # Verify build succeeds cleanly
 ```
 
-Browser QA scripts (`node scripts/qa-*.mjs`) drive the built `apps/local-server/dist` and `apps/web/dist` output; outside Linux, set `PUPPETEER_EXECUTABLE_PATH` (`GRAPH_QA_CHROME` for `qa-graph-*.mjs`) to a local Chrome binary.
+Browser QA scripts (`node scripts/qa-*.mjs`) drive the built `apps/local-server/dist` and `apps/web/dist` output and run without setup on macOS and Linux CI; set `PUPPETEER_EXECUTABLE_PATH` (`GRAPH_QA_CHROME` for `qa-graph-*.mjs`) only to point at a Chrome binary other than the platform default.
 
 
 ### Screen 配置所有權

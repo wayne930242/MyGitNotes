@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
+import { resolveQaChromePath } from './qa-chrome.mjs';
 
 const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(`${product}/apps/web/package.json`);
@@ -18,10 +19,11 @@ git('init', '-b', 'main'); git('config', 'user.name', 'QA'); git('config', 'user
 process.env.MYGITNOTES_SOURCE = 'local'; process.env.MYGITNOTES_LOCAL_PATH = root; delete process.env.VERCEL; delete process.env.APP_URL;
 const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
 const server = createServer(createApp(product)); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || path.join(os.homedir(), '.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const page = await browser.newPage(); await page.setViewport({ width: 1440, height: 1000 });
 const base = `http://127.0.0.1:${server.address().port}`;
 const chord = async (...keys) => { for (const key of keys.slice(0, -1)) await page.keyboard.down(key); await page.keyboard.press(keys.at(-1)); for (const key of keys.slice(0, -1).reverse()) await page.keyboard.up(key); };
+const primaryModifier = process.platform === 'darwin' ? 'Meta' : 'Control';
 const palette = '[aria-label="Commands"]';
 const help = '[aria-label="Keyboard shortcuts"]';
 const openPalette = async () => {
@@ -78,8 +80,8 @@ try {
 
   await openPalette(); await chooseCommand('Settings');
   await page.waitForFunction(() => location.pathname === '/settings');
-  await focusNav('Notes'); await chord('Control', 'Slash'); await page.waitForSelector(help);
-  assert(await page.$eval(help, panel => panel.getAttribute('data-mode')) === 'help', 'Ctrl+/ did not open keyboard help');
+  await focusNav('Notes'); await chord(primaryModifier, 'Slash'); await page.waitForSelector(help);
+  assert(await page.$eval(help, panel => panel.getAttribute('data-mode')) === 'help', `${primaryModifier}+/ did not open keyboard help`);
   await new Promise(resolve => setTimeout(resolve, 2800));
   assert(await page.$(help), 'Keyboard help closed on a timer');
   await page.keyboard.press('Escape');
