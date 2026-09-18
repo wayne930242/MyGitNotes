@@ -44,6 +44,8 @@ const choose = async name => { await page.waitForSelector(`[aria-label="Select f
 const folder = async name => { await page.waitForSelector(`[aria-label="Open folder: ${name}"]`); await page.click(`[aria-label="Open folder: ${name}"]`); };
 const formName = async value => { await page.waitForSelector('.file-operation input[required]'); await page.$eval('.file-operation input[required]', (input, value) => { const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })); }, value); };
 const submit = async () => { await page.click('.file-operation button[type=submit]'); await page.waitForFunction(() => !document.querySelector('.file-operation') && (!document.querySelector('.file-manager') || document.querySelector('.file-manager')?.getAttribute('aria-busy') === 'false')); };
+// Toggling the right panel animates the workspace padding; coordinate clicks wait until the layout stops moving.
+const settled = () => page.waitForFunction(() => document.getAnimations().every(animation => animation.playState !== 'running'));
 const source = async text => { await page.waitForSelector('.file-source-editor .cm-content[contenteditable=true]'); await page.click('.file-source-editor .cm-content'); await page.keyboard.down('Meta'); await page.keyboard.press('KeyA'); await page.keyboard.up('Meta'); await page.keyboard.type(text); };
 const shots = path.join(product, 'artifacts/file-manager'); fs.mkdirSync(shots, { recursive: true });
 try {
@@ -68,7 +70,7 @@ try {
   assert(read('notes/a/two/_dir.yml').includes('Updated metadata'));
   assert(read('notes/a/two/_dir.yml').includes('custom: keep'));
   await click('<note>', '.file-tree');
-  await page.click('.right-panel [aria-label="Metadata"]');
+  await page.click('.right-panel [aria-label="Metadata"]'); await settled();
   console.log('PASS current-folder metadata, create _dir.yml and edit preserving custom fields');
   await page.click('.file-hidden-toggle'); await choose('.hidden.txt');
   await page.waitForSelector('.file-source-editor'); assert((await page.$eval('.file-source-editor', e => e.textContent)).includes('Hidden content'));
@@ -83,7 +85,7 @@ try {
   await page.waitForSelector('.file-metadata-panel');
   assert((await page.$eval('.file-metadata-panel', e => e.textContent)).includes('notes/a/one/config.json'));
   await page.click('.right-panel [aria-label="Metadata"]');
-  await page.waitForFunction(() => !document.querySelector('.file-metadata-panel'));
+  await page.waitForFunction(() => !document.querySelector('.file-metadata-panel')); await settled();
   const desktopPanes = await page.evaluate(() => {
     const list = document.querySelector('.file-list').getBoundingClientRect();
     const detail = document.querySelector('.file-detail').getBoundingClientRect();
@@ -137,17 +139,19 @@ try {
   await page.select('dialog .file-operation select', 'notes/a/two'); await submit();
   await page.waitForFunction(() => location.pathname.endsWith('/notes/two/note.md'));
   assert(read('notes/a/two/note.md').includes('custom: preserve')); assert(!fs.existsSync(path.join(root, 'notes/a/one/note.md')));
-  await page.click('.note-controls [aria-label="Move note"]'); await page.waitForSelector('dialog .file-operation');
+  await page.waitForSelector('.note-controls [aria-label="Move note"]:not([disabled])'); await page.click('.note-controls [aria-label="Move note"]'); await page.waitForSelector('dialog .file-operation');
   await click('Cancel', '.file-operation'); await choose('note.md');
   await source(read('notes/a/two/note.md') + '\nEdited as source.\n'); await click('Save');
   await page.waitForFunction(() => document.querySelector('.file-manager')?.getAttribute('aria-busy') === 'false' && document.querySelector('.file-save-bar')?.textContent.includes('Saved'));
   await page.click('dialog .workspace-dialog-heading button');
   await page.waitForFunction(() => document.querySelector('.cm-editor')?.textContent.includes('Edited as source.'));
   await page.click('[aria-label="Document tools"]');
-  await page.click('[aria-label="Insert image"]'); await page.waitForSelector('dialog[aria-label="Choose an image"]');
-  assert(!await page.$('dialog input[type=file]')); assert(!await page.$('dialog .file-actions .ui-button-danger'));
-  await folder('two'); await choose('renamed.png'); await click('Insert image');
-  await page.waitForFunction(() => !document.querySelector('dialog[aria-label="Choose an image"]'));
+  // The image picker is a read-only file manager inside the document tools panel.
+  const picker = '.file-manager[data-mode="pick-image"]';
+  await page.click('[role="tab"][aria-label="Insert image"]'); await page.waitForSelector(picker);
+  assert(!await page.$(`${picker} input[type=file]`)); assert(!await page.$(`${picker} .file-actions .ui-button-danger`));
+  await folder('two'); await choose('renamed.png'); await click('Insert image', picker);
+  await page.waitForFunction(picker => !document.querySelector(picker), {}, picker);
   await page.waitForFunction(() => document.querySelector('.cm-editor img')?.complete || document.body.textContent.includes('renamed.png'));
   await page.click('[aria-label="Close note"]');
   await page.waitForFunction(() => !document.querySelector('[aria-label="Note editor"]'));

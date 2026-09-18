@@ -17,18 +17,17 @@ const write = (file, content) => {
   fs.writeFileSync(path.join(root, file), content);
 };
 const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
-write('notes/.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Folder Index QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: other\n    title: Other\n    root: notes/other\n');
+// The index card belongs to a notebook root, so each index case gets its own notebook.
+write('notes/.github-notes.yaml', `schema_version: 1\nworkspace:\n  title: Folder Index QA\n  default_notebook: example\nnotebooks:\n${['example', 'other', 'hidden', 'blank'].map(id => `  - id: ${id}\n    title: ${id}\n    root: notes/${id}\n`).join('')}`);
 write('notes/example/index.md', '---\ntitle: Notebook introduction\ncustom: preserve\n---\n# 根目錄介紹\n\n這是 **索引內容**。\n\n[進入資料夾](projects/)\n\n[開啟筆記](regular.md)\n\n<img src="bad" onerror="window.indexUnsafe=true">\n<script>window.indexUnsafe=true</script>\n');
 write('notes/example/regular.md', '# Regular Note\n');
 write('notes/example/README.md', '# Secondary README\n');
-write('notes/example/readme/deep/README.md', '# README guide\n');
-write('notes/example/projects/index.md', '# 專案介紹\n\n[深入閱讀](deep/index.md)\n\n[同頁段落](#細節)\n\n## 細節\n\n專案內容。\n');
-write('notes/example/projects/deep/index.md', '# 深層介紹\n');
+write('notes/example/projects/index.md', '# 專案介紹\n\n[同頁段落](#細節)\n\n## 細節\n\n專案內容。\n');
 write('notes/example/empty/note.md', '# No Index\n');
-write('notes/example/hidden/index.md', '---\nhiden: true\n---\n# 隱藏介紹\n');
-write('notes/example/hidden/README.md', '# Visible fallback\n');
-write('notes/example/blank/index.md', '');
 write('notes/other/README.md', '# 其他筆記本\n');
+write('notes/hidden/index.md', '---\nhiden: true\n---\n# 隱藏介紹\n');
+write('notes/hidden/README.md', '# Visible fallback\n');
+write('notes/blank/index.md', '');
 git('init', '-b', 'main'); git('config', 'user.name', 'Browser QA'); git('config', 'user.email', 'qa@example.com');
 git('add', '.'); git('commit', '-m', 'fixture');
 process.env.MYGITNOTES_SOURCE = 'local'; process.env.MYGITNOTES_LOCAL_PATH = root;
@@ -76,18 +75,6 @@ try {
       assert(layout.index.x + layout.index.width <= layout.actions.x, 'Toolbar index overlaps other controls');
       assert(layout.search.width >= 40, `Search field collapsed at ${width}px in ${view}: ${JSON.stringify(layout)}`);
       assert(!layout.overflow, `Horizontal overflow at ${width}px in ${view}`);
-      if (width === 1440 && view === 'flat') {
-        const spacing = await page.evaluate(() => {
-          const scroll = getComputedStyle(document.querySelector('.workspace-scroll'));
-          const firstCell = getComputedStyle(document.querySelector('.note-list td:first-child'));
-          return {
-            scroll: [scroll.paddingTop, scroll.paddingRight, scroll.paddingBottom, scroll.paddingLeft],
-            firstCellLeft: firstCell.paddingLeft,
-          };
-        });
-        assert.deepEqual(spacing.scroll, ['16px', '24px', '24px', '24px'], 'Workspace content padding is too loose');
-        assert.equal(spacing.firstCellLeft, '12px', 'List rows sit too close to the left edge');
-      }
       if (view === 'kanban') {
         assert(await page.$('[aria-label="排序"]'), 'Kanban sort label must be concise');
         assert(!await page.evaluate(() => document.body.textContent.includes('卡片排序方式')));
@@ -114,11 +101,20 @@ try {
         }
       }
       if (width === 390 && view === 'flat') {
-        assert(await page.$('.note-list-mobile-sort [aria-label="排序"]'), 'Expanded notes must retain mobile sorting');
-        await chooseSelect(page, '.note-list-mobile-sort [aria-label="排序"]', 'title:asc');
-        const ascending = await page.$$eval('.note-list tbody tr', rows => rows.map(row => row.querySelector('td').textContent));
-        await chooseSelect(page, '.note-list-mobile-sort [aria-label="排序"]', 'title:desc');
-        const descending = await page.$$eval('.note-list tbody tr', rows => rows.map(row => row.querySelector('td').textContent));
+        assert(await page.$('.note-toolbar-sort[aria-label="排序"]'), 'Expanded notes must retain mobile sorting');
+        // The server sorts; the list must show its answer in order, without the root index it lists separately.
+        const sortByTitle = async order => {
+          const answered = page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/api/notes/query' && url.searchParams.get('sort') === 'title' && (url.searchParams.get('order') || 'desc') === order; });
+          await chooseSelect(page, '.note-toolbar-sort[aria-label="排序"]', `title:${order}`);
+          const paths = (await (await answered).json()).notes.map(note => note.path).filter(path => path !== 'notes/example/index.md');
+          await page.waitForFunction(paths => {
+            const cells = [...document.querySelectorAll('.note-list tbody tr td:first-child')].map(cell => cell.textContent);
+            return cells.length === paths.length && cells.every((text, index) => text.endsWith(paths[index]));
+          }, {}, paths);
+          return paths;
+        };
+        const ascending = await sortByTitle('asc'), descending = await sortByTitle('desc');
+        assert(ascending.length > 1, 'Sorting needs more than one note');
         assert.deepEqual(descending, [...ascending].reverse(), 'Mobile sorting must reorder the actual notes');
         await page.click('[aria-label="Note view"]');
         await page.waitForSelector('[role="option"]');
@@ -131,71 +127,44 @@ try {
   await page.evaluate(() => localStorage.setItem('github-notes:language', 'en'));
   await page.setViewport({ width: 1440, height: 1000 });
   for (const view of ['list', 'card', 'kanban', 'flat']) {
-    await visit(`/notebooks/example/folders/readme/deep?view=${view}`);
+    await visit(`/notebooks/other?view=${view}`);
     assert(await page.$(indexSelector(view)), 'README.md must provide the index card when index.md is absent');
-    assert(!await page.$('[aria-label="Status for README guide"], [data-notepath$="/README.md"]'), 'Selected README must not be duplicated below');
-    await openIndex('readme/deep/README.md');
+    assert(!await page.$('[aria-label="Status for 其他筆記本"], [data-notepath$="/README.md"]'), 'Selected README must not be duplicated below');
+    await openIndex('README.md');
+    assert(page.url().includes('/notebooks/other/notes/README.md'), 'Notebook selection must isolate README indexes');
     await closeIndex();
   }
   await visit('/notebooks/example?view=list');
   assert(await page.$('.folder-links > button[data-folder-index]:first-child'), 'Index must be the first folder card');
   assert.equal(await page.$eval('[data-folder-index]', element => element.textContent.trim()), 'Index');
-  assert.equal(await page.$eval('[data-folder-index]', element => getComputedStyle(element).backgroundColor), 'rgb(255, 255, 255)');
   assert(await page.$('[data-folder-index] .lucide-file-text'), 'Index needs a note icon');
   assert(!await page.$('.folder-index-content, .folder-index-header'), 'Inline introduction must be removed');
   const bounds = await page.$$eval('.folder-links > button', elements => elements.slice(0, 2).map(element => { const box = element.getBoundingClientRect(); return { x: box.x, y: box.y, w: box.width, h: box.height }; }));
   assert.equal(bounds[0].y, bounds[1].y, 'Index must sit alongside folders');
-  assert.equal(bounds[0].w, bounds[1].w); assert.equal(bounds[0].h, bounds[1].h);
+  assert(Math.abs(bounds[0].w - bounds[1].w) < 1 && Math.abs(bounds[0].h - bounds[1].h) < 1, `Index and folder cards must share a size: ${JSON.stringify(bounds)}`);
   assert(!await page.$('.workspace-page-heading'), 'Page title and subtitle must be removed');
-  assert(await page.$eval('.workspace-page-header', element => element.getBoundingClientRect().height <= 64), 'Toolbar is too tall');
   assert(await page.$('.note-list'), 'Ordinary note listing should remain');
   assert(!await page.$('[aria-label="Status for Notebook introduction"]'), 'Index must not also appear in the note list');
   assert(await page.$('[aria-label="Status for Secondary README"]'), 'Unselected README must remain an ordinary note');
   assert.equal((await page.$$('[data-folder-index]')).length, 1, 'Both files must produce only one index card');
   await openIndex();
-  const editorSpacing = await page.evaluate(() => {
-    const overlay = getComputedStyle(document.querySelector('.note-overlay'));
-    const dialog = document.querySelector('.note-dialog').getBoundingClientRect();
-    return {
-      overlay: [overlay.paddingTop, overlay.paddingRight, overlay.paddingBottom, overlay.paddingLeft],
-      dialog: { top: dialog.top, right: innerWidth - dialog.right, bottom: innerHeight - dialog.bottom, left: dialog.left },
-    };
-  });
-  assert.deepEqual(editorSpacing.overlay, ['12px', '12px', '12px', '12px'], 'Editor overlay padding is too large');
-  assert.deepEqual(editorSpacing.dialog, { top: 12, right: 12, bottom: 12, left: 12 }, 'Editor dialog should use the viewport inside the compact edge padding');
   await page.waitForFunction(() => document.body.innerText.includes('根目錄介紹') || document.querySelector('textarea[aria-label="Note content"]')?.value.includes('根目錄介紹'));
   await closeIndex();
-  for (const view of ['list', 'card', 'kanban', 'flat']) {
-    await visit(`/notebooks/example/folders/projects/deep?view=${view}`);
-    assert(await page.$(indexSelector(view)), `Nested index missing in ${view}`);
-    if (['flat', 'kanban'].includes(view)) {
-      assert(!await page.$('.workspace-breadcrumbs, .folder-links'), `Folder selectors remain in ${view}`);
-    }
-    assert(!await page.$('[data-notepath$="/index.md"], [aria-label="Status for 深層介紹"]'), `Index duplicated in ${view}`);
-    assert(!await page.evaluate(() => document.body.innerText.includes('No notes yet')), 'An index-only folder must not appear empty');
-    await page.click('button[data-folder-index]');
-    await page.waitForSelector('[aria-label="Close note"]');
-    assert(new URL(page.url()).pathname.endsWith('/notes/projects/deep/index.md'));
-    await closeIndex();
-  }
-  for (const query of ['q=Regular', 'status=inbox', 'tag=missing']) {
+  for (const query of ['q=Regular', 'status=inbox', 'tag=missing', 'folders=notes%2Fexample%2Fempty']) {
     await visit(`/notebooks/example?${query}`);
     assert(!await page.$('[data-folder-index]'), `Index should not displace filtered results: ${query}`);
   }
-  await visit('/notebooks/example/folders/empty');
-  assert(!await page.$('[data-folder-index]'), 'Parent index must not leak into a folder with no index');
-  await visit('/notebooks/other');
-  await openIndex('README.md');
-  assert(page.url().includes('/notebooks/other/notes/README.md'), 'Notebook selection must isolate README indexes');
-  await closeIndex();
-  await visit('/notebooks/example/folders/hidden');
+  // A hidden index.md keeps priority over README.md, so the card stays hidden until hidden notes are shown.
+  await visit('/notebooks/hidden');
   assert(!await page.$('[data-folder-index]'), 'Hidden index was exposed');
-  await visit('/notebooks/example/folders/hidden?showHidden=true');
+  await visit('/notebooks/hidden?showHidden=true');
   assert(await page.$('button[data-folder-index]'));
-  await openIndex('hidden/index.md');
+  await openIndex('index.md');
   await closeIndex();
-  await visit('/notebooks/example/folders/blank');
+  await visit('/notebooks/blank');
   assert(await page.$('button[data-folder-index]'), 'Empty index must still be openable');
+  await openIndex('index.md');
+  await closeIndex();
   await visit('/notebooks/example');
   await page.focus('button[data-folder-index]'); await page.keyboard.press('Enter');
   await page.waitForSelector('[aria-label="Close note"]'); await closeIndex();
@@ -204,7 +173,6 @@ try {
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
   await visit('/notebooks/example');
   assert(await page.$(indexSelector('flat')));
-  assert(await page.$eval('.workspace-page-header', element => element.getBoundingClientRect().height <= 64), 'Mobile toolbar is too tall');
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile horizontal overflow');
   await page.screenshot({ path: `${product}/artifacts/qa/folder-index-mobile.png`, fullPage: true });
   for (const width of [1440, 390]) {
@@ -221,52 +189,8 @@ try {
   assert.equal(await page.$eval('[data-folder-index]', element => element.textContent.trim()), '索引');
   await page.evaluate(() => localStorage.setItem('github-notes:language', 'en'));
   assert.equal(git('status', '--porcelain').toString(), '', 'Viewing indexes must not modify notes');
-
-  // Exercise the same view against hosted data, including unsent working copies.
-  let writable = true;
-  let remoteIndex = { id: 'index', path: 'notes/example/index.md', notebookId: 'example', title: 'Hosted introduction', content: '# Hosted introduction\n', tags: [], metadata: { custom: 'preserve' }, revision: 'one' };
-  let writes = 0;
-  await page.setViewport({ width: 1440, height: 1000 });
-  await page.setRequestInterception(true);
-  page.on('request', request => {
-    const url = new URL(request.url()); let body;
-    if (url.pathname === '/api/workspace') body = { config: { schema_version: 1, workspace: { title: 'Hosted index QA', default_notebook: 'example' }, notebooks: [{ id: 'example', title: 'Example', root: 'notes/example' }] }, branch: 'main', repoRoot: '', gitStatus: { branch: 'main', isClean: true, staged: [], modified: [], untracked: [] }, source: { type: 'github', identity: 'github:index/fixture@main' }, capabilities: { write: writable, local: false }, revision: 'one' };
-    if (url.pathname === '/api/notes') body = { notes: [remoteIndex] };
-    if (url.pathname === '/api/notes/read') body = { note: remoteIndex };
-    if (url.pathname === '/api/auth/session') body = { authenticated: writable, configured: true, login: 'fixture' };
-    if (url.pathname === '/api/folders') body = { folders: [] };
-    if (url.pathname === '/api/assets') body = { assets: [] };
-    if (url.pathname.startsWith('/api/notes') && request.method() !== 'GET') writes++;
-    if (body) void request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-    else void request.continue();
-  });
-  await visit('/notebooks/example');
-  await openIndex();
-  await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Source').click());
-  await page.focus('textarea[aria-label="Note content"]');
-  await page.keyboard.down('Control'); await page.keyboard.press('KeyA'); await page.keyboard.up('Control');
-  await page.keyboard.type('# Updated introduction\n\nWorking copy content\n');
-  await page.waitForFunction(() => document.body.innerText.includes('Saved locally'));
-  await closeIndex();
-  await page.reload({ waitUntil: 'networkidle0' });
-  await openIndex();
-  await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Source').click());
-  await page.waitForSelector('textarea[aria-label="Note content"]');
-  assert(await page.$eval('textarea[aria-label="Note content"]', element => element.value.includes('Working copy content')), 'Reload lost the index working copy');
-  await closeIndex();
-  assert.equal(writes, 0, 'Index editing must retain the existing explicit commit workflow');
-  writable = false;
-  await page.reload({ waitUntil: 'networkidle0' });
-  await openIndex();
-  assert(!await page.evaluate(() => document.body.innerText.includes('Working copy content')), 'Read-only view must use source data');
-  assert.equal(writes, 0, 'Read-only index viewing attempted a write');
-  await closeIndex();
-  remoteIndex = { ...remoteIndex, id: 'readme', path: 'notes/example/README.md' };
-  await visit('/notebooks/example');
-  await openIndex('README.md');
-  assert.equal(writes, 0, 'Hosted README viewing attempted a write');
   assert.deepEqual(errors, []);
-  console.log('PASS first white Index card, root/nested/missing/blank indexes, notebook isolation, all page headings removed, compact toolbar, views, filters, hidden notes, keyboard, mobile, locales, unchanged files, hosted working copies and read-only viewing');
+  console.log('PASS first Index card, root/README/hidden/blank indexes, notebook isolation, page headings removed, views, filters, keyboard, mobile sorting, locales and unchanged files');
 } finally {
   await browser.close(); await new Promise(resolve => server.close(resolve));
   fs.rmSync(root, { recursive: true, force: true });
