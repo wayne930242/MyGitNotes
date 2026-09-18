@@ -46,7 +46,10 @@
 .sidebar-tag-action-error { font-size: .7rem; color: var(--color-danger, #dc2626); }
 .sidebar-tag-action-hint { font-size: .7rem; color: var(--color-muted); font-style: italic; }
 .sidebar-tag-action-buttons { display: flex; justify-content: flex-end; gap: .4rem; }
-@media (max-width: 1100px) { .sidebar-note-search input { font-size: 16px; } }
+@media (max-width: 1100px) {
+  .sidebar-note-search { height: 44px; padding-block: 0; }
+  .sidebar-search .sidebar-note-search input { height: 100%; font-size: 16px; }
+}
 
 .sidebar-notebooks { display: grid; gap: 2px; min-width: 0; width: 100%; }
 .sidebar-notebook-group { display: flex; flex-direction: column; gap: 1px; min-width: 0; width: 100%; }
@@ -67,6 +70,10 @@
 .folder-heading-actions { display: flex; align-items: center; gap: 2px; margin-right: 4px; flex: none; }
 .folder-heading-actions .ui-icon-button { width: 22px; height: 22px; padding: 3px; border-radius: 4px; flex: none; }
 .folder-heading-actions .ui-icon-button svg { width: 14px; height: 14px; flex: none; }
+.sidebar-search-row { display: flex; align-items: center; gap: 2px; }
+.sidebar-search-row .sidebar-note-search { flex: 1; }
+.sidebar-panel-actions { display: flex; flex: none; gap: 2px; }
+.sidebar-panel-actions .ui-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; }
 .sidebar-notebook-folders { margin: 2px 0 6px 10px; padding-left: 9px; border-left: 1px solid color-mix(in srgb, var(--workspace-divider) 80%, transparent); min-width: 0; }
 .sidebar-notebook-folders .folder-drop-line { height: 1px; }
 .sidebar-notebook-empty { padding: 6px 8px; color: var(--color-muted); font-size: 12px; }

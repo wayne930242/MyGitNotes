@@ -1,5 +1,5 @@
 import { Button } from './Button.js';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { CalendarDays, ListTodo, GitBranch, Info } from 'lucide-react';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { ChangeRequest, FileChange, GitStatus, NoteItem, NotebookConfig } from '../lib/types.js';
@@ -13,6 +13,9 @@ interface RightPanelProps {
   onFileMetadataContainer?: (element: HTMLDivElement | null) => void;
   fileMode?: boolean;
   fileMetadata?: ReactNode;
+  /** Whether the Files page shows its metadata tab; App owns it so the file toolbar can open it. */
+  metadataOpen?: boolean;
+  onMetadataOpenChange?: (open: boolean) => void;
   notebooks: NotebookConfig[];
   selectedNotebookId: string;
   onOpenNote: (note: NoteListItem) => void;
@@ -42,12 +45,10 @@ const WORKSPACE_TOOL_LABELS: Record<WorkspaceToolId, 'panel.calendar' | 'panel.t
 };
 
 /** The workspace-level Calendar/Todo/Changes panel. Hidden while a note is open — the editor has its own document panel. */
-export function RightPanel({ notebooks, selectedNotebookId, onOpenNote, onSaveNote, onReadNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, fileMode = false, fileMetadata, onFileMetadataContainer }: RightPanelProps) {
+export function RightPanel({ notebooks, selectedNotebookId, onOpenNote, onSaveNote, onReadNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, fileMode = false, fileMetadata, onFileMetadataContainer, metadataOpen = false, onMetadataOpenChange }: RightPanelProps) {
   const { t } = useTranslation();
   const panel = usePanelContext();
   const visible = !panel.hasOpenNote;
-  const [metadataOpen, setMetadataOpen] = useState(false);
-  useEffect(() => { setMetadataOpen(false); }, [fileMode]);
   const showingMetadata = fileMode && metadataOpen && !!fileMetadata;
   const showingWorkspaceTool = !showingMetadata && panel.isOpen && (!fileMode || panel.activeTool === 'changes');
   const isOpen = showingMetadata || showingWorkspaceTool;
@@ -76,13 +77,13 @@ export function RightPanel({ notebooks, selectedNotebookId, onOpenNote, onSaveNo
         </div>
       )}
       <div className="right-panel-rail" role="tablist" aria-label={t('panel.title')}>
-        {fileMode && <Button type="button" role="tab" aria-selected={showingMetadata} aria-label={t('files.metadataLabel')} title={t('files.metadataLabel')} disabled={!fileMetadata} onClick={() => { panel.close(); setMetadataOpen(!showingMetadata); }}><Info aria-hidden="true" /></Button>}
+        {fileMode && <Button type="button" role="tab" aria-selected={showingMetadata} aria-label={t('files.metadataLabel')} title={t('files.metadataLabel')} disabled={!fileMetadata} onClick={() => { panel.close(); onMetadataOpenChange?.(!showingMetadata); }}><Info aria-hidden="true" /></Button>}
         {WORKSPACE_TOOL_IDS.filter(id => !fileMode || id === 'changes').map(id => {
           const Icon = WORKSPACE_TOOL_ICONS[id];
           const label = t(WORKSPACE_TOOL_LABELS[id]);
           return (
             <Button key={id} type="button" role="tab" aria-selected={showingWorkspaceTool && panel.activeTool === id} title={label} aria-label={label}
-              onClick={() => { setMetadataOpen(false); panel.openTool(id); }}>
+              onClick={() => { onMetadataOpenChange?.(false); panel.openTool(id); }}>
               <Icon aria-hidden="true" />
               {id === 'changes' && changesCount > 0 && <span className="right-panel-badge" aria-hidden="true">{changesCount > 99 ? '99+' : changesCount}</span>}
             </Button>

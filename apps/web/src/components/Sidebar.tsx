@@ -2,7 +2,7 @@ import './sidebar-filters.css';
 import type { FilterControls } from '../lib/filter-controls.js';
 import { FolderTree } from './FolderTree.js';
 import React, { useEffect, useState } from 'react';
-import { Tag, Filter, GitBranch, CheckCircle2, Search, X, CheckSquare, BookOpen, FolderPlus } from 'lucide-react';
+import { Tag, Filter, GitBranch, CheckCircle2, Search, X, CheckSquare, BookOpen, MoreHorizontal, Library, ChevronsUpDown, ChevronsDownUp } from 'lucide-react';
 import type { NotebookFacets } from '@mygitnotes/core/note-query';
 import { GitStatus, FolderItem } from '../lib/types.js';
 import { mergeNotebookFacets, queryNotebookIds } from '../lib/note-facets.js';
@@ -78,6 +78,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const selected = filters.notebooks.filter(nb => value.folders.some(path => path.startsWith(nb.root.replace(/\/$/, '') + '/')));
     if (selected.length) setExpandedNotebooks(previous => new Set([...previous, ...selected.map(nb => nb.id)]));
   }, [value.folders, filters.notebooks]);
+  const [folderExpandCommand, setFolderExpandCommand] = useState<{ expanded: boolean }>();
+  // Collapse all folds every folder but keeps notebooks open, so their first-level folders stay visible.
+  const expandAll = (expanded: boolean) => {
+    if (expanded) setExpandedNotebooks(new Set(filters.notebooks.map(nb => nb.id)));
+    setFolderExpandCommand({ expanded });
+  };
   const onSelectStatus = (status: string | null) => onChange({ status });
   const onSelectTag = (tag: string | null) => onChange({ tags: tag === null ? [] : selectedTags.includes(tag) ? selectedTags.filter(item => item !== tag) : [...selectedTags, tag] });
   const toggleFolder = (notebookId: string, folder: string | null) => {
@@ -176,9 +182,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
     }>
         <section className="sidebar-search" aria-label={t('filters.title')}>
-          <label className="sidebar-note-search header-search"><Search size={15} aria-hidden="true" />
-            <input type="search" aria-label={t('header.searchPlaceholder')} placeholder={t('header.searchPlaceholder')} value={value.q} onChange={event => onChange({ q: event.target.value })} />
-          </label>
+          <div className="sidebar-search-row">
+            <label className="sidebar-note-search header-search"><Search size={15} aria-hidden="true" />
+              <input type="search" aria-label={t('header.searchPlaceholder')} placeholder={t('header.searchPlaceholder')} value={value.q} onChange={event => onChange({ q: event.target.value })} />
+            </label>
+            {onSelectFolder && (
+              <div className="sidebar-panel-actions" role="group" aria-label={t('sidebar.notebooks')}>
+                {filters.notebooks.length > 1 && (
+                  <button type="button" className="ui-icon-button all-notebooks-toggle" title={t('filters.allNotebooks')}
+                    aria-label={t('filters.allNotebooks')} aria-pressed={allNotebooks} onClick={() => filters.onAllNotebooksChange(!allNotebooks)}>
+                    <Library size={15} />
+                  </button>
+                )}
+                <button type="button" className="ui-icon-button" title={t('folder.expandAll')} aria-label={t('folder.expandAll')} onClick={() => expandAll(true)}>
+                  <ChevronsUpDown size={15} />
+                </button>
+                <button type="button" className="ui-icon-button" title={t('folder.collapseAll')} aria-label={t('folder.collapseAll')} onClick={() => expandAll(false)}>
+                  <ChevronsDownUp size={15} />
+                </button>
+              </div>
+            )}
+          </div>
           <div className="sidebar-filter-summary"><span role="status" data-filter-results={filters.count ?? ''}>
               {filters.count === null ? t('notes.countsLoading') : t('filters.results', { count: filters.count })}</span>
             {facetsLoading && <span role="status" className="sidebar-facets-status">{t('notes.countsLoading')}</span>}
@@ -252,11 +276,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             {onToggleReorder && <ReorderToggle active={reorder} onToggle={onToggleReorder} />}
                             <button
                               type="button"
-                              className="ui-icon-button"
-                              aria-label={t('folder.create')}
-                              onClick={() => onManageFiles(nb.id, selectedFolder || '')}
+                              className="folder-manage"
+                              aria-label={`${t('folder.manage')}: ${nb.title}`}
+                              title={t('folder.manage')}
+                              onClick={() => onManageFiles(nb.id, '')}
                             >
-                              <FolderPlus size={15} />
+                              <MoreHorizontal size={15} />
                             </button>
                           </div>
                         ) : undefined
@@ -280,6 +305,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           writable={foldersWritable && isCurrentNotebook}
                           beforeChange={beforeFolderChange}
                           onChanged={onFoldersChanged}
+                          expandCommand={folderExpandCommand}
                         />
                       ) : (
                         <p className="sidebar-notebook-empty">{t('folder.subfolderCount', { count: 0 })}</p>
