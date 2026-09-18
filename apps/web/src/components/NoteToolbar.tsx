@@ -1,6 +1,6 @@
 import './note-toolbar.css';
 import { Button } from './Button.js';
-import { LayoutList, LayoutGrid, Kanban, ListTree, Plus, FolderOpen, FolderTree, Eye, EyeOff, Library } from 'lucide-react';
+import { LayoutList, LayoutGrid, Kanban, ListTree, Plus, FolderTree, Eye, EyeOff } from 'lucide-react';
 import { WorkspaceSidebarToggle } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
 import type { SortField, SortOrder } from '../lib/note-sort.js';
@@ -14,10 +14,6 @@ interface NoteToolbarProps {
   hiddenNoteCount: number | null;
   onShowHiddenChange: (value: boolean) => void;
   onDescendantsChange: (value: boolean) => void;
-  allNotebooks: boolean;
-  /** Present only when the workspace has more than one notebook. */
-  onAllNotebooksChange?: (value: boolean) => void;
-  onManageFiles?: () => void;
   sortField: SortField;
   sortOrder: SortOrder;
   onSortChange: (field: SortField, order: SortOrder) => void;
@@ -29,7 +25,7 @@ interface NoteToolbarProps {
   onToggleFilters: () => void;
 }
 
-export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, allNotebooks, onAllNotebooksChange, onManageFiles, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, filtersOpen, onToggleFilters }: NoteToolbarProps) {
+export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, filtersOpen, onToggleFilters }: NoteToolbarProps) {
   const { t } = useTranslation();
   return (
             <div className="header-note-actions flex items-center gap-2.5 flex-1 min-w-0 justify-end">
@@ -83,12 +79,6 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
                   <FolderTree size={16} aria-hidden="true" />
                   <span id="descendants-tooltip" role="tooltip" className="note-display-tooltip">{t('filters.descendants')}</span>
                 </button>
-                {onAllNotebooksChange && <button type="button" className="note-display-toggle" aria-label={t('filters.allNotebooks')}
-                  aria-pressed={allNotebooks} aria-describedby="all-notebooks-tooltip"
-                  onClick={() => onAllNotebooksChange(!allNotebooks)}>
-                  <Library size={16} aria-hidden="true" />
-                  <span id="all-notebooks-tooltip" role="tooltip" className="note-display-tooltip">{t('filters.allNotebooks')}</span>
-                </button>}
               </div>
 
               {/* View Switcher Desktop */}
@@ -101,7 +91,6 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
                   </button>)}
               </div>
 
-              {onManageFiles && <button type="button" className="ui-button" aria-label={t('files.manage')} onClick={onManageFiles}><FolderOpen size={16} /><span className="hidden sm:inline">{t('files.titleLabel')}</span></button>}
               {/* New Note Button */}
               {!readOnly && (
                 <Button variant="primary"
