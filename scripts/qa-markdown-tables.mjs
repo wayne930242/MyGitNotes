@@ -112,7 +112,7 @@ try {
  for(let attempt=0;attempt<50;attempt++){if(fs.readFileSync(path.join(root,'notes/example/root.md'),'utf8').split('\n').find(line=>line.startsWith('|'))?.split('|').length===mobileColumns+2)break;await new Promise(resolve=>setTimeout(resolve,100));}
  await page.setViewport({width:1440,height:1000});await page.waitForSelector(tableRoot);
  await hoverEdge('column',1);await page.screenshot({path:product+'/artifacts/qa/table-inline-desktop.png',fullPage:true});
- await click('Insert table');
+ await page.click('[aria-label="Insert table"]');
  await page.waitForFunction(()=>document.querySelectorAll('.live-md-table').length===2);
  await page.click(`${tableRoot} th`);await page.click(toolbar('Delete column'));
  await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows[0].cells.length===1);

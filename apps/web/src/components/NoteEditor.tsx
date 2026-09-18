@@ -27,7 +27,6 @@ import { ApiError } from '../lib/api.js';
 import { MarkdownEditor, MarkdownEditorHandle, MarkdownEditorMode, MarkdownEditorModeSwitch } from './MarkdownEditor.js';
 import { FileManager } from './FileManager.js';
 import { FileSourceEditor } from './FileSourceEditor.js';
-import { NoteMoveButton } from './NoteMoveButton.js';
 import { NoteItem, AssetItem, NotebookMetadataField } from '../lib/types.js';
 import { saveLocalDraft, getLocalDraft, clearLocalDraft } from '../lib/storage.js';
 import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
@@ -57,7 +56,6 @@ export interface NoteEditorSharedProps {
   remoteBase?: NoteItem;
   conflictReason?: string;
   onMarkConflict?: (reason: string, draft: NoteItem, base: NoteItem) => void;
-  onMoveNote?: (note: NoteItem) => Promise<void>;
   onSave: (params: {
     path: string;
     content: string;
@@ -129,7 +127,6 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
   remoteBase,
   conflictReason,
   onMarkConflict,
-  onMoveNote,
   onSave,
   onReadRemote,
   onRestoreFile,
@@ -324,6 +321,8 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
   const [confirmRestore, setConfirmRestore] = useState(false);
   const restoreTimerRef = useRef<NodeJS.Timeout | null>(null);
   const editorRef = useRef<MarkdownEditorHandle>(null);
+  // The editor's insert actions render into the toolbar, at its far end (before zoom's close button).
+  const [insertSlot, setInsertSlot] = useState<HTMLDivElement | null>(null);
   const matches = useMemo(() => findTextMatches(content, findQuery), [content, findQuery]);
   const outline = useMemo(() => parseMarkdownOutline(content), [content]);
 
@@ -1099,22 +1098,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
               aria-pressed={Boolean(notePanel)} onClick={() => { if (notePanel) setNotePanel(null); else if (lastNotePanel.current === 'outline') { if (isMarkdown) openOutline(); else openFind(); } else if (lastNotePanel.current === 'find') openFind(); else setNotePanel(lastNotePanel.current); }}
               className="editor-action editor-secondary-action editor-panel-action"><PanelRight className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('editor.documentPanel')}</span></button>}
 
-            {!readOnly && onMoveNote && <NoteMoveButton disabled={locked || isSaving} onClick={() => void (async () => {
-              if (operation.current || closing.current) return;
-              closing.current = true; setIsSaving(true); setSaveError('');
-              try {
-                const draft = current.current;
-                let saved = note;
-                if (draft.content !== note.content || !sameIgnoringTimestamps(draft.metadata, note.metadata)) {
-                  saved = await onSave({ path: note.path, content: draft.content, metadata: draft.metadata, baseNote: draft.baseNote });
-                  clearLocalDraft(draftScope || branch, note.path);
-                }
-                await onMoveNote(saved);
-              } catch (error) { setSaveError((error as Error).message); }
-              finally { closing.current = false; setIsSaving(false); }
-            })()} />}
             {onAddToFocus && <button type="button" aria-label={t('focus.addTo')} title={t('focus.addTo')} onClick={onAddToFocus}
               className="editor-action editor-secondary-action"><LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('focus.addTo')}</span></button>}
+            <div ref={setInsertSlot} className="note-insert-actions" />
             {/* Close Button */}
             {onClose && <button
               aria-label={t('editor.closeNote')}
@@ -1127,7 +1113,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
         </div>
 
         <div className="note-editor-body">
-          <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} onCaret={onCaret} ariaLabel="Note content" />
+          <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} onCaret={onCaret} insertSlot={insertSlot} ariaLabel="Note content" />
           {frame === 'zoom' ? <aside className="note-document-panel" data-open={Boolean(notePanel)} data-panel={notePanel || undefined} aria-label={t('editor.documentPanel')}>
             {panelTabs}
             {panelSections}

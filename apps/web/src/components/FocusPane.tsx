@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronDown, FileText, GalleryHorizontalEnd, Maximize2, Plus, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ChevronDown, FileText, GalleryHorizontalEnd, Maximize2, PanelTopDashed, Plus, X } from 'lucide-react';
 import { findFocusTab, focusTabKey, type FocusTab } from '@mygitnotes/core/focus-page';
 import type { ScreenRow } from '@mygitnotes/core/screen-page';
 import type { NoteFocus } from '../lib/use-note-focus.js';
@@ -31,6 +32,7 @@ interface PaneTab { tab: FocusTab; key: string; pane: number; index: number; lab
 export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }> = ({ displayed, ...context }) => {
   const { focus, lanes, notebookRoot, renderLane, onZoomNote, documentPanel } = context;
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const layout = focus.layout!, entry = focus.entry!;
   const active = displayed.panes.includes(entry.activePane);
   const editable = focus.editable;
@@ -41,6 +43,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
   const shown = tabs.find(tab => tab.key === displayed.key);
   const lane = shown?.tab.kind === 'lane' ? lanes.find(row => shown.tab.kind === 'lane' && row.id === shown.tab.id) : undefined;
   const panelId = `focus-pane-${displayed.pane}`;
+  const autoHide = entry.autoHide[displayed.pane];
 
   const list = useRef<HTMLDivElement>(null);
   const [overflowing, setOverflowing] = useState(false);
@@ -74,7 +77,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
 
   return (
     <section className="focus-pane" data-focus-pane={displayed.pane} data-active={active || undefined} data-dropping={dropping || undefined}
-      aria-label={t('focus.paneNumber', { number: displayed.pane + 1 })}
+      data-autohide={autoHide || undefined} aria-label={t('focus.paneNumber', { number: displayed.pane + 1 })}
       onPointerDownCapture={() => focus.activate(displayed.pane)} onFocusCapture={() => focus.activate(displayed.pane)}
       onDragOver={event => { if (!accepts(event)) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropping(true); }}
       onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(false); }}
@@ -111,10 +114,14 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
         <div className="focus-pane-actions">
           {overflowing && <FocusMenu label={t('focus.allTabs')} icon={<ChevronDown aria-hidden="true" />}
             items={tabs.map(tab => ({ key: tab.key, label: tab.label, current: tab.key === displayed.key, onSelect: () => void focus.show(tab.pane, tab.key) }))} />}
-          {editable && lanes.length > 0 && <FocusMenu label={t('focus.openLane')} icon={<Plus aria-hidden="true" />}
-            items={lanes.map(row => ({ key: row.id, label: row.name, onSelect: () => { if (focus.shown) void focus.place(focus.shown, { kind: 'lane', id: row.id }, displayed.pane); } }))} />}
+          {editable && <FocusMenu label={t('focus.addLane')} showLabel icon={<Plus aria-hidden="true" />}
+            items={lanes.length > 0
+              ? lanes.map(row => ({ key: row.id, label: row.name, onSelect: () => { if (focus.shown) void focus.place(focus.shown, { kind: 'lane', id: row.id }, displayed.pane); } }))
+              : [{ key: 'screen', label: t('focus.goAddLane'), onSelect: () => navigate(`/screen?notebook=${encodeURIComponent(focus.notebookId)}`) }]} />}
           {shown?.tab.kind === 'note' && <button type="button" className="ui-icon-button" aria-label={t('focus.zoomNote')} title={t('focus.zoomNote')}
             onClick={() => shown.tab.kind === 'note' && onZoomNote(shown.tab.path)}><Maximize2 aria-hidden="true" /></button>}
+          <button type="button" className="ui-icon-button focus-pane-autohide" aria-pressed={autoHide} aria-label={t('focus.autoHideTabs')} title={t('focus.autoHideTabs')}
+            onClick={() => focus.setAutoHide(displayed.pane, !autoHide)}><PanelTopDashed aria-hidden="true" /></button>
         </div>
       </div>
       <div id={panelId} className="focus-pane-body" role="tabpanel" aria-label={shown?.label}>
@@ -139,9 +146,11 @@ function droppedTab(data: DataTransfer, notebookRoot: string): FocusTab | undefi
   return path.startsWith(`${notebookRoot}/`) && path.endsWith('.md') ? { kind: 'note', path } : undefined;
 }
 
-const FocusMenu: React.FC<{ label: string; icon: ReactNode; items: { key: string; label: string; current?: boolean; onSelect: () => void }[] }> = ({ label, icon, items }) => (
+const FocusMenu: React.FC<{ label: string; showLabel?: boolean; icon: ReactNode; items: { key: string; label: string; current?: boolean; onSelect: () => void }[] }> = ({ label, showLabel, icon, items }) => (
   <DropdownMenu.Root>
-    <DropdownMenu.Trigger className="ui-icon-button" aria-label={label} title={label}>{icon}</DropdownMenu.Trigger>
+    {showLabel
+      ? <DropdownMenu.Trigger className="ui-button focus-menu-trigger">{icon}<span>{label}</span></DropdownMenu.Trigger>
+      : <DropdownMenu.Trigger className="ui-icon-button" aria-label={label} title={label}>{icon}</DropdownMenu.Trigger>}
     <DropdownMenu.Portal>
       <DropdownMenu.Content className="focus-menu" align="end" sideOffset={4} collisionPadding={8} aria-label={label}
         onEscapeKeyDown={event => event.stopPropagation()}>

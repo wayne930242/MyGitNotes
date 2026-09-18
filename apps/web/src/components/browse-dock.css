@@ -1,4 +1,4 @@
-/* BrowseDock: docks the browse region (list/card/kanban) beside or below a Focus, resizable and collapsible. */
+/* BrowseDock: docks the browse region (list/card/kanban) beside or above a Focus, resizable and collapsible. */
 
 .browse-dock {
   display: flex;
@@ -31,10 +31,15 @@
   position: relative;
 }
 
-.browse-dock-collapse {
-  align-self: flex-end;
-  flex: none;
-  margin: 6px 6px 0 auto;
+/* One icon for both states: its arrow (the last path) turns 180° to point where the next click moves the browse region. */
+.browse-dock-toggle svg > path:last-child {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 320ms cubic-bezier(.4, 0, .2, 1);
+}
+.browse-dock-toggle[data-collapsed] svg > path:last-child { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .browse-dock-toggle svg > path:last-child { transition: none; }
 }
 
 .browse-dock-scroll {
@@ -53,8 +58,8 @@
 
 .browse-dock-splitter { flex: none; }
 
-/* .workspace-splitter is drawn for a vertical (col-resize) divider; rotate it for the bottom dock. */
-.browse-dock[data-placement="bottom"] .browse-dock-splitter {
+/* .workspace-splitter is drawn for a vertical (col-resize) divider; rotate it for the top dock. */
+.browse-dock[data-placement="top"] .browse-dock-splitter {
   width: auto;
   height: 9px;
   margin-left: 0;
@@ -63,7 +68,7 @@
   margin-bottom: -4px;
   cursor: row-resize;
 }
-.browse-dock[data-placement="bottom"] .browse-dock-splitter::after {
+.browse-dock[data-placement="top"] .browse-dock-splitter::after {
   top: 4px;
   bottom: auto;
   left: 0;
@@ -71,29 +76,16 @@
   width: auto;
   height: 1px;
 }
-.browse-dock[data-placement="bottom"] .browse-dock-splitter:hover::after,
-.browse-dock[data-placement="bottom"] .browse-dock-splitter:focus-visible::after,
-.browse-dock[data-placement="bottom"] .browse-dock-splitter[data-separator="hover"]::after,
-.browse-dock[data-placement="bottom"] .browse-dock-splitter[data-separator="active"]::after {
+.browse-dock[data-placement="top"] .browse-dock-splitter:hover::after,
+.browse-dock[data-placement="top"] .browse-dock-splitter:focus-visible::after,
+.browse-dock[data-placement="top"] .browse-dock-splitter[data-separator="hover"]::after,
+.browse-dock[data-placement="top"] .browse-dock-splitter[data-separator="active"]::after {
   width: auto;
   height: 2px;
   left: 0;
   right: 0;
   top: 3px;
   bottom: auto;
-}
-
-.browse-dock-expand {
-  position: absolute;
-  z-index: 5;
-}
-.browse-dock[data-placement="left"] .browse-dock-expand {
-  top: 8px;
-  left: 8px;
-}
-.browse-dock[data-placement="bottom"] .browse-dock-expand {
-  bottom: 8px;
-  left: 8px;
 }
 
 .browse-dock[data-narrow="true"] {
@@ -105,25 +97,25 @@
   min-height: 0;
 }
 
-/* Bottom dock + Kanban: columns sit side by side and each scrolls its own cards;
+/* Top dock + Kanban: columns sit side by side and each scrolls its own cards;
    the dock must not also add an outer vertical scrollbar around the whole board. */
-.browse-dock[data-placement="bottom"] .browse-dock-scroll:has([data-kanban-columns]) {
+.browse-dock[data-placement="top"] .browse-dock-scroll:has([data-kanban-columns]) {
   display: flex;
   flex-direction: column;
   overflow-y: hidden;
 }
-.browse-dock[data-placement="bottom"] .browse-dock-scroll:has([data-kanban-columns]) > * {
+.browse-dock[data-placement="top"] .browse-dock-scroll:has([data-kanban-columns]) > * {
   flex: 1;
   min-height: 0;
 }
-.browse-dock[data-placement="bottom"] [data-kanban-columns] {
+.browse-dock[data-placement="top"] [data-kanban-columns] {
   align-items: stretch;
 }
-.browse-dock[data-placement="bottom"] [data-status-column] {
+.browse-dock[data-placement="top"] [data-status-column] {
   height: 100%;
 }
 
-/* Card strip: single horizontally scrolling row instead of the grid, for a short bottom dock. */
+/* Card strip: single horizontally scrolling row instead of the grid, for a short top dock. */
 .note-card-strip {
   display: flex;
   gap: 16px;
@@ -135,8 +127,7 @@
   width: 280px;
 }
 
-/* A bottom dock is short: trim the browse padding so the Kanban columns fit instead of clipping. */
-.browse-dock[data-placement="bottom"] .browse-dock-collapse { margin-top: 2px; }
-.browse-dock[data-placement="bottom"] .browse-dock-scroll { padding-top: 0; padding-bottom: 8px; }
-.browse-dock[data-placement="bottom"] [data-kanban-columns] { padding-bottom: 4px; }
-.browse-dock[data-placement="bottom"] [data-status-column] > .overflow-y-auto { min-height: 0; }
+/* A top dock is short: trim the browse padding so the Kanban columns fit instead of clipping. */
+.browse-dock[data-placement="top"] .browse-dock-scroll { padding-top: 0; padding-bottom: 8px; }
+.browse-dock[data-placement="top"] [data-kanban-columns] { padding-bottom: 4px; }
+.browse-dock[data-placement="top"] [data-status-column] > .overflow-y-auto { min-height: 0; }

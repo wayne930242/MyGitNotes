@@ -11,6 +11,8 @@ export interface FocusEntryView {
   recent: number[];
   /** Split sizes (percentages) keyed by a group id chosen by the layout component. */
   ratios: Record<string, number[]>;
+  /** Per pane: its tab bar stays hidden until pointed at. */
+  autoHide: boolean[];
 }
 
 export interface FocusViewState {
@@ -19,8 +21,8 @@ export interface FocusViewState {
   entries: Record<string, FocusEntryView>;
   /** Focus key last displayed in this notebook; null means normal browsing. */
   last: string | null;
-  /** Browse region: left dock width (px), bottom dock height (px), collapsed flag. */
-  dock: { left: number; bottom: number; collapsed: boolean };
+  /** Browse region: left dock width (px), top dock height (px), collapsed flag. */
+  dock: { left: number; top: number; collapsed: boolean };
 }
 
 const FOCUS_KEY_RE = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -31,16 +33,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readEntry(raw: unknown): FocusEntryView | null {
   if (!isRecord(raw)) return null;
-  const { activePane, shown, recent, ratios } = raw;
+  const { activePane, shown, recent, ratios, autoHide } = raw;
   if (typeof activePane !== 'number') return null;
   if (!Array.isArray(shown) || !shown.every(value => value === null || typeof value === 'string')) return null;
   if (!Array.isArray(recent) || !recent.every(value => typeof value === 'number')) return null;
   if (!isRecord(ratios) || !Object.values(ratios).every(value => Array.isArray(value) && value.every(n => typeof n === 'number'))) return null;
-  return { activePane, shown: [...shown] as (string | null)[], recent: [...recent] as number[], ratios: ratios as Record<string, number[]> };
+  // Entries stored before auto-hide existed have no autoHide.
+  if (autoHide !== undefined && !(Array.isArray(autoHide) && autoHide.every(value => typeof value === 'boolean'))) return null;
+  return { activePane, shown: [...shown] as (string | null)[], recent: [...recent] as number[], ratios: ratios as Record<string, number[]>, autoHide: autoHide ? [...autoHide] as boolean[] : [] };
 }
 
 export function emptyFocusView(): FocusViewState {
-  return { current: emptyFocusLayout(), entries: {}, last: null, dock: { left: 320, bottom: 280, collapsed: false } };
+  return { current: emptyFocusLayout(), entries: {}, last: null, dock: { left: 320, top: 280, collapsed: false } };
 }
 
 /** Tolerant reader for whatever JSON was stored: never throws, drops or defaults whatever doesn't validate. */
@@ -59,12 +63,12 @@ export function readFocusView(raw: unknown): FocusViewState {
   const defaults = emptyFocusView().dock;
   const dockRaw = isRecord(raw.dock) ? raw.dock : {};
   const left = typeof dockRaw.left === 'number' && Number.isFinite(dockRaw.left) && dockRaw.left >= 0 ? dockRaw.left : defaults.left;
-  const bottom = typeof dockRaw.bottom === 'number' && Number.isFinite(dockRaw.bottom) && dockRaw.bottom >= 0 ? dockRaw.bottom : defaults.bottom;
+  const top = typeof dockRaw.top === 'number' && Number.isFinite(dockRaw.top) && dockRaw.top >= 0 ? dockRaw.top : defaults.top;
   const collapsed = typeof dockRaw.collapsed === 'boolean' ? dockRaw.collapsed : defaults.collapsed;
-  return { current, entries, last, dock: { left, bottom, collapsed } };
+  return { current, entries, last, dock: { left, top, collapsed } };
 }
 
-/** Normalizes a stored entry (if any) against `layout`: one shown slot per pane, a valid activePane, and recent covering every pane. */
+/** Normalizes a stored entry (if any) against `layout`: one shown slot and auto-hide flag per pane, a valid activePane, and recent covering every pane. */
 export function entryView(state: FocusViewState, key: string, layout: FocusLayout): FocusEntryView {
   const stored = state.entries[key];
   const paneCount = layout.panes.length;
@@ -80,7 +84,8 @@ export function entryView(state: FocusViewState, key: string, layout: FocusLayou
     if (Number.isInteger(pane) && pane >= 0 && pane < paneCount && !seen.has(pane)) { seen.add(pane); recent.push(pane); }
   }
   for (let pane = 0; pane < paneCount; pane++) if (!seen.has(pane)) { seen.add(pane); recent.push(pane); }
-  return { activePane, shown, recent, ratios: stored?.ratios || {} };
+  const autoHide = layout.panes.map((_, index) => stored?.autoHide[index] === true);
+  return { activePane, shown, recent, ratios: stored?.ratios || {}, autoHide };
 }
 
 export function activatePane(entry: FocusEntryView, pane: number): FocusEntryView {

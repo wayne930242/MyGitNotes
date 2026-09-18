@@ -26,6 +26,8 @@ interface KanbanViewProps {
   query: Partial<NoteQuery>;
   /** The folder index, which the board shows in the toolbar instead of as a card. */
   hiddenNote?: NoteListItem;
+  /** An entry at the start of the board's header row, such as the folder index. */
+  leading?: React.ReactNode;
   statuses: string[];
   readOnly?: boolean;
   canDelete?: boolean;
@@ -384,6 +386,7 @@ function KanbanUnassignedColumn({ board, query, hiddenNote, sort }: {
 export const KanbanView: React.FC<KanbanViewProps> = ({
   query,
   hiddenNote,
+  leading,
   statuses,
   readOnly = false,
   canDelete = true,
@@ -446,11 +449,14 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
     <div className="flex flex-col h-full select-none">
       {/* Kanban Top Toolbar */}
       <div className="flex items-center justify-between px-2 mb-3 flex-wrap gap-2 text-xs shrink-0">
-        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium">
-          <KanbanIcon className="w-4 h-4 text-indigo-500 shrink-0" />
-          <span>{t('kanban.columns', { count: columns.length })}</span>
-          <span>·</span>
-          <span>{t('kanban.notes', { count: boardTotal })}</span>
+        <div className="kanban-leading flex items-center gap-3 min-w-0">
+          {leading}
+          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium">
+            <KanbanIcon className="w-4 h-4 text-indigo-500 shrink-0" />
+            <span>{t('kanban.columns', { count: columns.length })}</span>
+            <span>·</span>
+            <span>{t('kanban.notes', { count: boardTotal })}</span>
+          </div>
         </div>
 
         {onSortChange && (

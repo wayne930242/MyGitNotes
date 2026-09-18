@@ -27,7 +27,7 @@ interface CardViewProps {
   tagActions?: NoteTagActions;
   /** Present while a Focus is displayed: cards get a zoom button and can be dragged into a pane. */
   focusMode?: NoteBrowseFocusMode;
-  /** Single horizontally scrolling row, for a docked bottom panel too short for the grid. */
+  /** Single horizontally scrolling row, for a docked top panel too short for the grid. */
   strip?: boolean;
 }
 

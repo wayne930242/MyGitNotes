@@ -136,16 +136,18 @@ try {
   await page.screenshot({ path: path.join(shots, 'desktop.png') });
   console.log('PASS files, hidden toggle, source save, dirty navigation, empty file, folder metadata/removal, image/PDF/audio/video previews, binary fallback, rename, upload and delete');
 
-  await visit('/notebooks/a/notes/one/note.md'); await page.waitForSelector('.note-controls [aria-label="Move note"]');
-  await page.click('.note-controls [aria-label="Move note"]'); await page.waitForSelector('dialog .file-operation select');
+  // Notes move from their browse rows; the note editor carries no move control.
+  await visit('/notebooks/a?view=list&q=Moving'); await page.waitForSelector('[aria-label="Move note"]');
+  await page.click('[aria-label="Move note"]'); await page.waitForSelector('dialog .file-operation select');
   await page.select('dialog .file-operation select', 'notes/a/two'); await submit();
-  await page.waitForFunction(() => location.pathname.endsWith('/notes/two/note.md'));
   assert(read('notes/a/two/note.md').includes('custom: preserve')); assert(!fs.existsSync(path.join(root, 'notes/a/one/note.md')));
-  await page.waitForSelector('.note-controls [aria-label="Move note"]:not([disabled])'); await page.click('.note-controls [aria-label="Move note"]'); await page.waitForSelector('dialog .file-operation');
+  await page.click('dialog .workspace-dialog-heading button'); await page.waitForFunction(() => !document.querySelector('dialog .file-manager'));
+  await page.click('[aria-label="Move note"]'); await page.waitForSelector('dialog .file-operation');
   await click('Cancel', '.file-operation'); await choose('note.md');
   await source(read('notes/a/two/note.md') + '\nEdited as source.\n'); await click('Save');
   await page.waitForFunction(() => document.querySelector('.file-manager')?.getAttribute('aria-busy') === 'false' && document.querySelector('.file-save-bar')?.textContent.includes('Saved'));
   await page.click('dialog .workspace-dialog-heading button');
+  await visit('/notebooks/a/notes/two/note.md'); assert(!await page.$('.note-controls [aria-label="Move note"]'));
   await page.waitForFunction(() => document.querySelector('.cm-editor')?.textContent.includes('Edited as source.'));
   await page.click('[aria-label="Document tools"]');
   // The image picker is a read-only file manager inside the document tools panel.
@@ -160,7 +162,7 @@ try {
   assert(read('notes/a/two/note.md').includes('/raw-assets/by-hash/'));
   assert(read('notes/a/two/note.md').includes('Edited as source.'));
   await visit('/notebooks/a/notes/two/note.md'); await page.waitForFunction(() => [...document.querySelectorAll('.cm-editor img')].some(image => image.complete && image.naturalWidth > 0));
-  console.log('PASS note move, updated route, preserved metadata, read-only image picker and rendered image after reload');
+  console.log('PASS note move from the list, no move control in the editor, preserved metadata, read-only image picker and rendered image after reload');
 
   await visit('/assets?notebook=a&asset=notes%2Fa%2Ftwo%2Frenamed.png');
   await page.waitForFunction(() => document.querySelector('.file-preview-image')?.naturalWidth > 0);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Folder, ChevronRight, ArrowLeft, ArrowUpDown } from 'lucide-react';
+import { ChevronRight, ArrowLeft, ArrowUpDown, ClockArrowDown, ClockArrowUp, CalendarArrowDown, CalendarArrowUp, ArrowDownAZ, ArrowDownZA, ListOrdered } from 'lucide-react';
 import { BreadcrumbSegment } from '../lib/folder-tree.js';
 import { SortField, SortOrder } from '../lib/note-sort.js';
 import { Select } from './Select.js';
@@ -14,6 +14,8 @@ interface BreadcrumbsProps {
   sortField?: SortField;
   sortOrder?: SortOrder;
   onSortChange?: (field: SortField, order: SortOrder) => void;
+  /** A narrow dock: the sort control shows the current order as an icon. */
+  compact?: boolean;
 }
 
 export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
@@ -25,18 +27,20 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
   sortField = 'updated',
   sortOrder = 'desc',
   onSortChange,
+  compact = false,
 }) => {
   const { t } = useTranslation();
 
   const sortOptions = [
-    { value: 'updated:desc', label: t('sort.updatedDesc') },
-    { value: 'updated:asc', label: t('sort.updatedAsc') },
-    { value: 'created:desc', label: t('sort.createdDesc') },
-    { value: 'created:asc', label: t('sort.createdAsc') },
-    { value: 'title:asc', label: t('sort.titleAsc') },
-    { value: 'title:desc', label: t('sort.titleDesc') },
-    { value: 'status:asc', label: t('sort.status') },
+    { value: 'updated:desc', label: t('sort.updatedDesc'), Icon: ClockArrowDown },
+    { value: 'updated:asc', label: t('sort.updatedAsc'), Icon: ClockArrowUp },
+    { value: 'created:desc', label: t('sort.createdDesc'), Icon: CalendarArrowDown },
+    { value: 'created:asc', label: t('sort.createdAsc'), Icon: CalendarArrowUp },
+    { value: 'title:asc', label: t('sort.titleAsc'), Icon: ArrowDownAZ },
+    { value: 'title:desc', label: t('sort.titleDesc'), Icon: ArrowDownZA },
+    { value: 'status:asc', label: t('sort.status'), Icon: ListOrdered },
   ];
+  const currentSort = sortOptions.find(option => option.value === `${sortField}:${sortOrder}`);
 
   const handleSortSelect = (val: string) => {
     const [field, order] = val.split(':') as [SortField, SortOrder];
@@ -70,19 +74,19 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
           </button>
         )}
 
+        {/* Folder cards and note rows already read as folders; the path lists only the folders below the root. */}
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-          {segments.map((seg, idx) => {
-            const isLast = idx === segments.length - 1;
+          {segments.filter(seg => seg.path !== null).map((seg, idx, shown) => {
+            const isLast = idx === shown.length - 1;
 
             return (
-              <React.Fragment key={seg.path ?? 'root'}>
+              <React.Fragment key={seg.path}>
                 {idx > 0 && (
                   <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0 mx-0.5" />
                 )}
 
                 {isLast ? (
                   <span className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-100 truncate px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10">
-                    <Folder className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--color-primary)' }} />
                     <span className="truncate max-w-[160px] md:max-w-xs">{seg.name}</span>
                   </span>
                 ) : (
@@ -91,7 +95,6 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
                     onClick={() => onSelectFolder(seg.path)}
                     className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition px-1.5 py-0.5 rounded hover:bg-black/5 dark:hover:bg-white/5 truncate"
                   >
-                    {idx === 0 && <Folder className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
                     <span className="truncate max-w-[120px] md:max-w-[200px]">{seg.name}</span>
                   </button>
                 )}
@@ -105,12 +108,14 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
       <div className="flex items-center gap-3 shrink-0 justify-between sm:justify-end w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-black/5 dark:border-white/5">
         {onSortChange && (
           <div className="flex items-center gap-1.5">
-            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            {!compact && <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
             <Select
-              aria-label={t('sort.select')}
+              aria-label={compact && currentSort ? `${t('sort.select')}: ${currentSort.label}` : t('sort.select')}
+              title={compact ? currentSort?.label : undefined}
               value={`${sortField}:${sortOrder}`}
               onValueChange={handleSortSelect}
               options={sortOptions}
+              icon={compact && currentSort ? <currentSort.Icon className="w-4 h-4" aria-hidden="true" /> : undefined}
               className="breadcrumb-sort-select"
             />
           </div>

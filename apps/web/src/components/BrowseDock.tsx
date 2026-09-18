@@ -1,18 +1,17 @@
 import React, { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Group, Panel, Separator, type PanelSize } from 'react-resizable-panels';
-import { PanelLeftClose, PanelLeftOpen, PanelBottomClose, PanelBottomOpen } from 'lucide-react';
+import { PanelLeftClose, PanelTopClose } from 'lucide-react';
 import { useTranslation } from '../lib/i18n/index.js';
 import './browse-dock.css';
 
-export type BrowseDockPlacement = 'left' | 'bottom';
+export type BrowseDockPlacement = 'left' | 'top';
 
 export interface BrowseDockProps {
   placement: BrowseDockPlacement;
-  /** Left dock width or bottom dock height, in px. */
+  /** Left dock width or top dock height, in px. */
   size: number;
   onSizeChange: (size: number) => void;
   collapsed: boolean;
-  onCollapsedChange: (collapsed: boolean) => void;
   /** ≤767px: only one of browse region / Focus is shown, full screen. */
   narrow: boolean;
   narrowView: 'browse' | 'focus';
@@ -34,8 +33,8 @@ export const CARD_TWO_ROW_HEIGHT = 396;
 
 const MIN_LEFT_WIDTH = 220;
 const MAX_LEFT_RATIO = 0.6;
-const MIN_BOTTOM_HEIGHT = 120;
-const MAX_BOTTOM_RATIO = 0.7;
+const MIN_TOP_HEIGHT = 120;
+const MAX_TOP_RATIO = 0.7;
 
 /** Measures the content box of the returned element with a ResizeObserver. */
 function useMeasuredHeight(): [React.RefObject<HTMLDivElement>, number] {
@@ -56,18 +55,29 @@ function useMeasuredHeight(): [React.RefObject<HTMLDivElement>, number] {
   return [ref, height];
 }
 
+/** Collapses and reopens the browse region from the Notes toolbar's left end. */
+export function BrowseDockToggle({ placement, collapsed, onCollapsedChange }: { placement: BrowseDockPlacement; collapsed: boolean; onCollapsedChange: (collapsed: boolean) => void }): JSX.Element {
+  const { t } = useTranslation();
+  // The browse region sits left of or above the Focus; browse-dock.css turns the icon's arrow as it collapses.
+  const Icon = placement === 'left' ? PanelLeftClose : PanelTopClose;
+  const label = t(collapsed ? 'focus.expandBrowse' : 'focus.collapseBrowse');
+  return (
+    <button type="button" className="ui-icon-button browse-dock-toggle" data-collapsed={collapsed || undefined} aria-label={label} title={label} onClick={() => onCollapsedChange(!collapsed)}>
+      <Icon size={16} />
+    </button>
+  );
+}
+
 export function BrowseDock({
   placement,
   size,
   onSizeChange,
   collapsed,
-  onCollapsedChange,
   narrow,
   narrowView,
   browse,
   children,
 }: BrowseDockProps): JSX.Element {
-  const { t } = useTranslation();
   const [scrollRef, height] = useMeasuredHeight();
   const browseContent = typeof browse === 'function' ? browse(height) : browse;
   // Reported continuously while dragging; onSizeChange only fires once the drag settles.
@@ -86,28 +96,17 @@ export function BrowseDock({
   }
 
   if (collapsed) {
-    const ExpandIcon = placement === 'left' ? PanelLeftOpen : PanelBottomOpen;
     return (
       <div className="browse-dock" data-placement={placement} data-collapsed="true">
-        <button
-          type="button"
-          className="ui-icon-button browse-dock-expand"
-          aria-label={t('focus.expandBrowse')}
-          title={t('focus.expandBrowse')}
-          onClick={() => onCollapsedChange(false)}
-        >
-          <ExpandIcon size={16} />
-        </button>
         <div className="browse-dock-focus">{children}</div>
       </div>
     );
   }
 
   const orientation = placement === 'left' ? 'horizontal' : 'vertical';
-  const minSize = placement === 'left' ? MIN_LEFT_WIDTH : MIN_BOTTOM_HEIGHT;
-  const maxRatio = placement === 'left' ? MAX_LEFT_RATIO : MAX_BOTTOM_RATIO;
-  const CollapseIcon = placement === 'left' ? PanelLeftClose : PanelBottomClose;
-  // Stable per placement, so switching placement (left <-> bottom) remounts the Group cleanly.
+  const minSize = placement === 'left' ? MIN_LEFT_WIDTH : MIN_TOP_HEIGHT;
+  const maxRatio = placement === 'left' ? MAX_LEFT_RATIO : MAX_TOP_RATIO;
+  // Stable per placement, so switching placement (left <-> top) remounts the Group cleanly.
   const groupId = `browse-dock-${placement}`;
 
   return (
@@ -133,15 +132,6 @@ export function BrowseDock({
           className="browse-dock-panel"
         >
           <div className="browse-dock-panel-content">
-            <button
-              type="button"
-              className="ui-icon-button browse-dock-collapse"
-              aria-label={t('focus.collapseBrowse')}
-              title={t('focus.collapseBrowse')}
-              onClick={() => onCollapsedChange(true)}
-            >
-              <CollapseIcon size={16} />
-            </button>
             <div ref={scrollRef} className="workspace-scroll browse-dock-scroll">{browseContent}</div>
           </div>
         </Panel>

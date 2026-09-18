@@ -43,6 +43,8 @@ interface ListViewProps {
   focusMode?: NoteBrowseFocusMode;
   /** Narrow layout for a docked browse panel: single-row layout, no header, other columns hidden. */
   compact?: boolean;
+  /** An entry listed as the first row, such as the folder index in the flat view. */
+  leading?: React.ReactNode;
 }
 
 interface NoteRowActions {
@@ -174,6 +176,7 @@ export const ListView: React.FC<ListViewProps> = ({
   tagActions,
   focusMode,
   compact = false,
+  leading,
 }) => {
   const { t, language } = useTranslation();
   // Rows retain stable actions while invoking the latest committed callbacks.
@@ -274,7 +277,7 @@ export const ListView: React.FC<ListViewProps> = ({
         ]}
       />
     </div>}
-    {(notes.length > 0 || uncommitted.length > 0) && <div
+    {(notes.length > 0 || uncommitted.length > 0 || leading) && <div
       className="note-list rounded-xl border shadow-xs overflow-hidden transition-colors"
       data-compact={compact ? 'true' : undefined}
       style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
@@ -300,6 +303,7 @@ export const ListView: React.FC<ListViewProps> = ({
               showZoom={!!focusMode} canDrag={!!focusMode?.canDrag(note)} />)}
           </tbody>}
           <tbody className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+            {leading && <tr className="note-list-leading hover:bg-black/5 dark:hover:bg-white/5 transition"><td colSpan={5} className="py-3 px-4">{leading}</td></tr>}
             {/* Notes row rendering */}
             {notes.map(note => <NoteRow key={note.path} note={note} statuses={statuses}
               readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} tagActions={tagActions}

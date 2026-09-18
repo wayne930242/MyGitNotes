@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { BrowseDock, CARD_TWO_ROW_HEIGHT } from './BrowseDock.js';
+import { BrowseDock, BrowseDockToggle, CARD_TWO_ROW_HEIGHT } from './BrowseDock.js';
 
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class {
@@ -20,7 +20,6 @@ const baseProps = {
   size: 280,
   onSizeChange: vi.fn(),
   collapsed: false,
-  onCollapsedChange: vi.fn(),
 };
 
 it('exports a positive card two-row height threshold', () => {
@@ -47,30 +46,36 @@ it('renders only the Focus content when narrow and narrowView is focus', () => {
   expect(screen.queryByText('browse-content')).not.toBeInTheDocument();
 });
 
-it('collapsed shows only the Focus area and an expand button', () => {
-  const onCollapsedChange = vi.fn();
+it('collapsed shows only the Focus area, with no control over it', () => {
   render(createElement(BrowseDock, {
-    ...baseProps, narrow: false, collapsed: true, onCollapsedChange, narrowView: 'browse',
+    ...baseProps, narrow: false, collapsed: true, narrowView: 'browse',
     browse: createElement('div', null, 'browse-content'),
     children: createElement('div', null, 'focus-content'),
   }));
   expect(screen.getByText('focus-content')).toBeInTheDocument();
   expect(screen.queryByText('browse-content')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByLabelText('Expand browse panel'));
-  expect(onCollapsedChange).toHaveBeenCalledWith(false);
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });
 
-it('renders both regions with a collapse button when docked and expanded', () => {
-  const onCollapsedChange = vi.fn();
+it('renders both regions, with no control over them, when docked and expanded', () => {
   render(createElement(BrowseDock, {
-    ...baseProps, narrow: false, collapsed: false, onCollapsedChange, narrowView: 'browse',
+    ...baseProps, narrow: false, collapsed: false, narrowView: 'browse',
     browse: createElement('div', null, 'browse-content'),
     children: createElement('div', null, 'focus-content'),
   }));
   expect(screen.getByText('browse-content')).toBeInTheDocument();
   expect(screen.getByText('focus-content')).toBeInTheDocument();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+});
+
+it('toggle collapses an expanded dock and reopens a collapsed one', () => {
+  const onCollapsedChange = vi.fn();
+  const { rerender } = render(createElement(BrowseDockToggle, { placement: 'left', collapsed: false, onCollapsedChange }));
   fireEvent.click(screen.getByLabelText('Collapse browse panel'));
-  expect(onCollapsedChange).toHaveBeenCalledWith(true);
+  expect(onCollapsedChange).toHaveBeenLastCalledWith(true);
+  rerender(createElement(BrowseDockToggle, { placement: 'left', collapsed: true, onCollapsedChange }));
+  fireEvent.click(screen.getByLabelText('Expand browse panel'));
+  expect(onCollapsedChange).toHaveBeenLastCalledWith(false);
 });
 
 it('passes the measured panel height to a function browse prop', () => {

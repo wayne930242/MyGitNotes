@@ -1,14 +1,16 @@
 import * as RadixSelect from '@radix-ui/react-select';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
-import { useEffect, useRef, useState, type ComponentPropsWithoutRef } from 'react';
+import { useEffect, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react';
 
 type Props = Omit<ComponentPropsWithoutRef<typeof RadixSelect.Trigger>, 'value' | 'onChange' | 'children'> & {
   value: string;
   onValueChange: (value: string) => void;
   options: { value: string; label: string; disabled?: boolean }[];
+  /** Shown in the trigger in place of the selected label. */
+  icon?: ReactNode;
 };
 
-export function Select({ value, onValueChange, options, disabled, className = '', onFocus, ...props }: Props) {
+export function Select({ value, onValueChange, options, icon, disabled, className = '', onFocus, ...props }: Props) {
   const trigger = useRef<HTMLButtonElement>(null);
   const [portal, setPortal] = useState<HTMLElement>();
   const [contentReady, setContentReady] = useState(false);
@@ -23,7 +25,7 @@ export function Select({ value, onValueChange, options, disabled, className = ''
     onOpenChange={open => { if (open) setContentReady(true); }} disabled={disabled}>
     <RadixSelect.Trigger ref={trigger} {...props} value={value} className={`ui-control select-trigger ${className}`}
       onFocus={event => { setContentReady(true); onFocus?.(event); }}>
-      <span className="select-value"><RadixSelect.Value placeholder="Select…">{options.find(option => option.value === value)?.label ?? value}</RadixSelect.Value></span>
+      <span className="select-value"><RadixSelect.Value placeholder="Select…">{icon ?? options.find(option => option.value === value)?.label ?? value}</RadixSelect.Value></span>
       <RadixSelect.Icon asChild><ChevronDown className="select-chevron w-3.5 h-3.5 shrink-0" /></RadixSelect.Icon>
     </RadixSelect.Trigger>
     {contentReady && <RadixSelect.Portal container={portal}>

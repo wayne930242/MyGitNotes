@@ -27,9 +27,15 @@ export const FocusControls: React.FC<{
   const taken = focus.focuses.map(item => item.name);
 
   return <>
+    {/* A split button: the main part opens the Scratch (or leaves the shown Focus), the chevron lists every Focus. */}
+    <div className="focus-switcher" data-shown={focus.shown ? true : undefined}>
+    <button type="button" className="ui-button focus-switcher-main"
+      title={t(focus.shown ? 'focus.close' : 'focus.openCurrent')} onClick={() => onShow(focus.shown ? null : CURRENT_FOCUS)}>
+      <PanelsTopLeft aria-hidden="true" /><span>{label}</span>
+    </button>
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger className="ui-button focus-switcher" data-shown={focus.shown ? true : undefined} aria-label={t('focus.switch')} title={t('focus.switch')}>
-        <PanelsTopLeft aria-hidden="true" /><span>{label}</span><ChevronDown aria-hidden="true" />
+      <DropdownMenu.Trigger className="ui-button focus-switcher-menu" aria-label={t('focus.switch')} title={t('focus.switch')}>
+        <ChevronDown aria-hidden="true" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="focus-menu" align="end" sideOffset={4} collisionPadding={8} aria-label={t('focus.switch')}
@@ -52,6 +58,7 @@ export const FocusControls: React.FC<{
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
+    </div>
     {focus.layout && <DivisionPicker division={focus.layout.division} disabled={!focus.editable} onChange={division => void focus.setDivision(division)} />}
     {focus.layout && browseToggle && <button type="button" className="ui-icon-button" aria-pressed={browseToggle.showing} onClick={browseToggle.onToggle}
       aria-label={t(browseToggle.showing ? 'focus.showFocus' : 'focus.showBrowse')} title={t(browseToggle.showing ? 'focus.showFocus' : 'focus.showBrowse')}>

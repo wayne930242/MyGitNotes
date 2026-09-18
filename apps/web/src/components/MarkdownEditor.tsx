@@ -1,6 +1,8 @@
 import { Select } from './Select.js';
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Code2, Eye } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { Code2, Eye, Link2, SquarePlus, Table2 } from 'lucide-react';
 import type { LiveMarkdownHandle } from './LiveMarkdownEditor.js';
 import { useTranslation, type TranslationKey } from '../lib/i18n/index.js';
 import { useNoteCandidates, noteCompletionAt } from '../lib/note-completion.js';
@@ -27,6 +29,8 @@ interface Props {
   ariaLabel?: string;
   onCaret?: (position: number) => void;
   compact?: boolean;
+  /** A toolbar element that hosts the insert actions; without one they sit in a row above the content. */
+  insertSlot?: HTMLElement | null;
 }
 
 export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEditorMode; onChange: (mode: MarkdownEditorMode) => void }) {
@@ -57,13 +61,14 @@ export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEdi
   );
 }
 
-export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, mode, readOnly, onChange, onCaret, compact = false, ariaLabel = 'Document content' }, ref) => {
+export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, mode, readOnly, onChange, onCaret, compact = false, insertSlot, ariaLabel = 'Document content' }, ref) => {
   const { t } = useTranslation();
   const [caret, setCaret] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [choice, setChoice] = useState(0);
   const [picker, setPicker] = useState(false), [query, setQuery] = useState('');
-  const [directiveType, setDirectiveType] = useState('info');
+  // A chosen block keeps the editor's focus instead of returning it to the menu trigger.
+  const directiveInserted = useRef(false);
 
 
   const live = useRef<LiveMarkdownHandle>(null);
@@ -103,6 +108,32 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
       onChange(content.slice(0, position) + text + content.slice(position));
     }
   };
+
+  const insertTable = () => {
+    const text = `\n\n| ${t('table.column')} 1 | ${t('table.column')} 2 |\n| --- | --- |\n|  |  |\n\n`;
+    if (mode === 'live') live.current?.insert(text);
+    else {
+      const position = source.current?.selectionStart ?? content.length;
+      onChange(content.slice(0, position) + text + content.slice(position));
+    }
+  };
+  const insertActions = isMarkdown && !readOnly && !compact ? <>
+    <button type="button" className="ui-icon-button" aria-label={t('graph.insertLink')} title={t('graph.insertLink')} aria-expanded={picker}
+      onMouseDown={event => event.preventDefault()} onClick={() => { setPicker(value => !value); setQuery(''); }}><Link2 size={16} aria-hidden="true" /></button>
+    <button type="button" className="ui-icon-button" aria-label={t('table.insert')} title={t('table.insert')} onClick={insertTable}><Table2 size={16} aria-hidden="true" /></button>
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger className="ui-icon-button" aria-label={t('directive.insert')} title={t('directive.insert')}><SquarePlus size={16} aria-hidden="true" /></DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content className="markdown-insert-menu" align="end" sideOffset={4} collisionPadding={8} aria-label={t('directive.selectFormat')}
+          onEscapeKeyDown={event => event.stopPropagation()}
+          onCloseAutoFocus={event => { if (directiveInserted.current) event.preventDefault(); directiveInserted.current = false; }}>
+          {DIRECTIVE_TEMPLATES.map(tpl => <DropdownMenu.Item key={tpl.type} onSelect={() => { directiveInserted.current = true; insertDirective(tpl.type); }}>
+            {t(`directive.${tpl.type}` as TranslationKey)}
+          </DropdownMenu.Item>)}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  </> : null;
 
   useImperativeHandle(ref, () => ({
     insert(text, at) {
@@ -147,37 +178,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden" data-markdown-editor>
-      {isMarkdown && !readOnly && !compact && <div className="markdown-insert-toolbar">
-        <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => { setPicker(value => !value); setQuery(''); }}>{t('graph.insertLink')}</button>
-        <button type="button" onClick={() => {
-          const text = `\n\n| ${t('table.column')} 1 | ${t('table.column')} 2 |\n| --- | --- |\n|  |  |\n\n`;
-          if (mode === 'live') live.current?.insert(text);
-          else {
-            const position = source.current?.selectionStart ?? content.length;
-            onChange(content.slice(0, position) + text + content.slice(position));
-          }
-        }}>{t('table.insert')}</button>
-        <div className="directive-insert-group inline-flex items-center gap-1 ml-1 pl-1 border-l border-slate-200 dark:border-slate-700">
-          <select
-            className="directive-insert-select bg-transparent text-[11px] border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 outline-none text-slate-600 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-500 cursor-pointer"
-            aria-label={t('directive.selectFormat')}
-            title={t('directive.selectFormat')}
-            value={directiveType}
-            onChange={event => setDirectiveType(event.target.value)}
-          >
-            {DIRECTIVE_TEMPLATES.map(tpl => (
-              <option key={tpl.type} value={tpl.type}>{t(`directive.${tpl.type}` as TranslationKey)}</option>
-            ))}
-          </select>
-          <button
-            type="button"
-            title={t('directive.insertTitle')}
-            onClick={() => insertDirective(directiveType)}
-          >
-            {t('directive.insert')}
-          </button>
-        </div>
-      </div>}
+      {insertActions && (insertSlot ? createPortal(insertActions, insertSlot) : <div className="markdown-insert-toolbar">{insertActions}</div>)}
       {picker && <div className="note-link-picker"><input autoFocus type="search" aria-label={t('graph.findNote')} placeholder={t('graph.findNote')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setPicker(false); }} />
         {pickerCandidates.map(note => <button type="button" key={note.path} onClick={() => insertPicked(note)}>{note.title}<small>{note.notebookId} · {note.path}</small></button>)}
       </div>}

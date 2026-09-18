@@ -80,7 +80,7 @@ import { FocusControls } from './components/FocusControls.js';
 import { AddToFocusDialog } from './components/AddToFocusDialog.js';
 import { FocusLaneTab } from './components/FocusLaneTab.js';
 import { FocusList } from './components/FocusList.js';
-import { BrowseDock, CARD_TWO_ROW_HEIGHT } from './components/BrowseDock.js';
+import { BrowseDock, BrowseDockToggle, CARD_TWO_ROW_HEIGHT } from './components/BrowseDock.js';
 import type { ScreenRow } from '@mygitnotes/core/screen-page';
 import { RightPanel } from './components/RightPanel.js';
 import { isDocumentTool, usePanelContext, type DocumentToolId } from './lib/panel-context.js';
@@ -346,7 +346,8 @@ const AppContent: React.FC = () => {
   } : undefined, [canWrite, workspaceTagNames]);
   const searchQuery = route.q;
   const viewMode = route.view;
-  const indexInToolbar = viewMode === 'flat' || viewMode === 'kanban';
+  // Flat and Kanban list the whole notebook, without folder navigation.
+  const folderless = viewMode === 'flat' || viewMode === 'kanban';
 
   // Focus: the URL names the displayed one; named Focus sync through their workspace document.
   const focusCapacity = usePaneCapacity();
@@ -620,9 +621,9 @@ const AppContent: React.FC = () => {
 
   // Hierarchical Subfolder Discovery for current folder
   const immediateSubfolders = useMemo(() => {
-    if (indexInToolbar || filtered) return [];
+    if (folderless || filtered) return [];
     return getImmediateSubfolders(notebookFacets.directories, folders, selectedNotebookId, notebookRoot, selectedFolder);
-  }, [notebookFacets, folders, selectedNotebookId, notebookRoot, selectedFolder, filtered, indexInToolbar]);
+  }, [notebookFacets, folders, selectedNotebookId, notebookRoot, selectedFolder, filtered, folderless]);
 
   // Breadcrumb Trail from Root to current folder
   const breadcrumbs = useMemo(() => {
@@ -1046,7 +1047,6 @@ const AppContent: React.FC = () => {
     statuses: noteQueryStatuses(config?.notebooks || [], note.notebookId, Object.keys(facetsQuery.facets?.[note.notebookId]?.statuses || {})),
     metadataFields: config?.notebooks.find(nb => nb.id === note.notebookId)?.metadata,
     onSave: handleSaveNote,
-    onMoveNote: handleMoveNote,
     onRestoreFile: handleRestoreNoteFile,
     isDirty: Boolean(gitStatus && [ ...gitStatus.modified, ...gitStatus.staged, ...gitStatus.untracked ].includes(note.path)),
     availableTags,
@@ -1099,12 +1099,15 @@ const AppContent: React.FC = () => {
       disabled: !noteFocus.editable || !noteFocus.layout || noteFocus.layout.division === division, run: () => void noteFocus.setDivision(division),
     })),
   ];
-  // With a Focus displayed, the browse region docks beside it (list, flat) or below it (card, kanban).
-  const bottomDock = viewMode === 'card' || viewMode === 'kanban';
+  // With a Focus displayed, the browse region docks beside it (list, flat) or above it (card, kanban).
+  const topDock = viewMode === 'card' || viewMode === 'kanban';
   const browseFocusMode = noteFocus.layout ? {
     onZoomNote: (note: NoteListItem) => void handleOpenNote(note),
     canDrag: (note: NoteListItem) => noteFocus.editable && note.notebookId === selectedNotebookId,
   } : undefined;
+  // Either dock collapses and reopens from the toolbar's left end.
+  const dockToggle = noteFocus.layout && focusCapacity > 1
+    ? <BrowseDockToggle placement={topDock ? 'top' : 'left'} collapsed={noteFocus.view.dock.collapsed} onCollapsedChange={collapsed => noteFocus.setDock({ collapsed })} /> : undefined;
   const browseRegion = (docked: boolean, dockHeight: number) => <>
               {actionError && <p role="alert" className="mb-3 text-sm text-rose-600">{actionError}</p>}
               {staleNotice && <p role="alert" className="mb-3 text-sm text-amber-600">{staleNotice}</p>}
@@ -1112,7 +1115,7 @@ const AppContent: React.FC = () => {
               {facetsQuery.error && <p role="alert" className="mb-3 text-sm text-rose-600">{t('notes.countsFailed', { message: facetsQuery.error })}</p>}
               {indexLookup.error && <p role="alert" className="mb-3 text-sm text-rose-600">{t('notes.loadFailed', { message: indexLookup.error })}</p>}
               {listResult.loading && <p role="status" className="mb-3 text-sm text-slate-500">{t('notes.loading')}</p>}
-              {!indexInToolbar && <>
+              {!folderless && <>
                 <Breadcrumbs
                   segments={breadcrumbs}
                   currentFolder={selectedFolder}
@@ -1122,6 +1125,7 @@ const AppContent: React.FC = () => {
                   sortField={sortField}
                   sortOrder={sortOrder}
                   onSortChange={handleSortChange}
+                  compact={docked && !topDock}
                 />
                 <FolderLinks folders={immediateSubfolders} onSelect={setSelectedFolder}>
                   {folderIndex && <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} />}
@@ -1148,6 +1152,7 @@ const AppContent: React.FC = () => {
                   sortOrder={sortOrder}
                   onSortChange={handleSortChange}
                   tagActions={noteTagActions}
+                  leading={viewMode === 'flat' && folderIndex ? <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} /> : undefined}
                 />
                 <NoteListSentinel hasMore={listResult.hasMore} loading={listResult.loadingMore} error={listResult.error} onLoadMore={listResult.loadMore} />
               </>)}
@@ -1180,6 +1185,7 @@ const AppContent: React.FC = () => {
                   confirmDelete={remote}
                   query={baseQuery}
                   hiddenNote={folderIndex}
+                  leading={folderIndex ? <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} /> : undefined}
                   onOpenNote={note => void openFromBrowse(note)}
                   onUpdateNoteStatus={handleUpdateNoteStatus}
                   onDeleteNote={handleDeleteNote}
@@ -1343,7 +1349,7 @@ const AppContent: React.FC = () => {
                 {/* Main Content Area */}
                 <main className="workspace-main notes-main">
               <PageToolbar>
-                {indexInToolbar && folderIndex && <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} />}
+                {dockToggle}
                 <NoteToolbar sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode}
                   hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null}
                   showHidden={showHidden} descendants={route.descendants}
@@ -1354,9 +1360,9 @@ const AppContent: React.FC = () => {
                   focusControls={<FocusControls focus={noteFocus} onShow={key => void showFocus(key)} onReload={() => void focusPage.reload()}
                     browseToggle={focusCapacity === 1 ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') } : undefined} />} />
               </PageToolbar>
-              {noteFocus.layout ? <BrowseDock placement={bottomDock ? 'bottom' : 'left'} size={bottomDock ? noteFocus.view.dock.bottom : noteFocus.view.dock.left}
-                onSizeChange={size => noteFocus.setDock(bottomDock ? { bottom: size } : { left: size })}
-                collapsed={noteFocus.view.dock.collapsed} onCollapsedChange={collapsed => noteFocus.setDock({ collapsed })}
+              {noteFocus.layout ? <BrowseDock placement={topDock ? 'top' : 'left'} size={topDock ? noteFocus.view.dock.top : noteFocus.view.dock.left}
+                onSizeChange={size => noteFocus.setDock(topDock ? { top: size } : { left: size })}
+                collapsed={noteFocus.view.dock.collapsed}
                 narrow={focusCapacity === 1} narrowView={focusNarrowView} browse={height => browseRegion(true, height)}>
                 <FocusArea focus={noteFocus} capacity={focusCapacity} lanes={notebookLanes ?? []} notebookRoot={folderRoot ?? ''}
                   renderLane={renderFocusLane} onZoomNote={zoomFocusNote} documentPanel={focusDocumentPanel} />

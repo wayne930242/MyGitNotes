@@ -19,11 +19,13 @@
 .focus-division-thumbnail small { color: var(--color-muted); font-size: 10px; font-weight: 500; }
 
 /* Toolbar controls and menus. */
-.focus-switcher { max-width: 14rem; gap: 6px; }
-.focus-switcher > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.focus-switcher > svg { width: 16px; height: 16px; flex: none; }
-.focus-switcher > svg:last-child { width: 14px; height: 14px; color: var(--color-muted); }
-.focus-switcher[data-shown] { background: var(--workspace-selection); }
+.focus-switcher { display: inline-flex; flex: none; align-items: stretch; max-width: 14rem; }
+.focus-switcher-main { min-width: 0; gap: 6px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.focus-switcher-main > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.focus-switcher-main > svg { width: 16px; height: 16px; flex: none; }
+.focus-switcher-menu { flex: none; margin-left: -1px; padding: 0 6px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.focus-switcher-menu > svg { width: 14px; height: 14px; color: var(--color-muted); }
+.focus-switcher[data-shown] > .ui-button { background: var(--workspace-selection); }
 .focus-division-trigger { color: var(--color-text); }
 .focus-menu { z-index: 100; display: grid; min-width: 12rem; max-width: min(20rem, calc(100vw - 16px)); max-height: min(70dvh, 28rem); overflow-y: auto; padding: .25rem; border: 1px solid var(--color-border); border-radius: .5rem; background: var(--color-surface); color: var(--color-text); box-shadow: 0 4px 16px #0002; }
 .focus-menu [role^="menuitem"] { display: flex; align-items: center; gap: .5rem; min-width: 0; padding: .4rem .5rem; border-radius: .35rem; font-size: .8rem; color: var(--color-text); cursor: default; outline: none; }
@@ -50,8 +52,9 @@
 .focus-splitter:hover::after, .focus-splitter:focus-visible::after, .focus-splitter[data-separator="hover"]::after, .focus-splitter[data-separator="active"]::after { background: var(--color-primary); }
 
 /* A pane: its tab bar and the displayed tab. */
-.focus-pane { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; background: var(--color-surface); }
-.focus-pane[data-dropping] { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-primary) 55%, transparent); }
+.focus-pane { position: relative; isolation: isolate; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; background: var(--color-surface); }
+/* Drawn above the tab bar and the displayed tab, so every edge of the drop target shows. */
+.focus-pane[data-dropping]::after { content: ''; position: absolute; inset: 0; z-index: 2; border: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent); pointer-events: none; }
 .focus-pane-bar { display: flex; flex: none; align-items: stretch; min-width: 0; height: 38px; border-bottom: 1px solid var(--color-border); background: color-mix(in srgb, var(--color-sidebar) 55%, var(--color-surface)); }
 .focus-pane[data-active] .focus-pane-bar { background: var(--color-sidebar); }
 .focus-tabs { display: flex; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
@@ -72,6 +75,19 @@
 .focus-pane-actions { display: flex; flex: none; align-items: center; gap: 2px; padding: 0 4px; }
 .focus-pane-actions .ui-icon-button { width: 30px; height: 30px; }
 .focus-pane-actions .ui-icon-button svg { width: 15px; height: 15px; }
+.focus-pane-actions .focus-menu-trigger { min-height: 28px; gap: 4px; padding: 4px 8px; }
+.focus-pane-actions .focus-menu-trigger svg { width: 14px; height: 14px; }
+.focus-pane-actions .focus-pane-autohide[aria-pressed="true"] { background: var(--workspace-selection); color: var(--color-text); }
+/* Auto-hide: the tab bar slides up out of the pane, leaving a strip to point at. Pointing, keyboard focus, an open menu, or a drag brings it back over the content. */
+@media (hover: hover) {
+  .focus-pane[data-autohide] { padding-top: 6px; overflow: hidden; }
+  .focus-pane[data-autohide] .focus-pane-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 1; transform: translateY(calc(6px - 100%)); transition: transform 150ms ease 250ms, box-shadow 150ms ease 250ms; }
+  .focus-pane[data-autohide] .focus-pane-bar:hover,
+  .focus-pane[data-autohide] .focus-pane-bar:has(:focus-visible, [data-state="open"]),
+  .focus-pane[data-autohide][data-dropping] .focus-pane-bar { transform: none; box-shadow: 0 4px 12px #0000001a; transition-delay: 0s; }
+}
+@media (hover: none) { .focus-pane-autohide { display: none; } }
+@media (prefers-reduced-motion: reduce) { .focus-pane[data-autohide] .focus-pane-bar { transition: none; } }
 .focus-pane-body { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .focus-pane-body > .focus-lane { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
 .focus-pane-empty { display: flex; flex: 1; align-items: center; justify-content: center; padding: 24px; color: var(--color-muted); font-size: 13px; text-align: center; }
@@ -109,7 +125,7 @@
 .note-focus-controls { display: flex; flex: none; align-items: center; gap: 4px; padding-right: 8px; border-right: 1px solid var(--color-border); }
 .note-focus-controls .ui-icon-button[aria-pressed="true"] { background: var(--workspace-selection); color: var(--color-text); }
 @media (max-width: 1100px) {
-  .note-focus-controls .ui-icon-button, .note-focus-controls .focus-switcher { min-height: 44px; }
+  .note-focus-controls .ui-icon-button, .note-focus-controls .focus-switcher > .ui-button { min-height: 44px; }
   .note-focus-controls .ui-icon-button { width: 44px; }
 }
 @media (max-width: 767px) {
@@ -118,6 +134,9 @@
 
 /* A pane frames the editor tighter than zoom: one-line chrome leaves the editor its height. */
 .note-editor[data-frame="pane"] .note-toolbar { padding: 6px 10px; }
+/* A pane has no heading, so its controls span the toolbar and the insert actions sit at its far end. */
+.note-editor[data-frame="pane"] .note-controls { flex: 1; min-width: 0; }
+.note-editor[data-frame="pane"] .note-insert-actions { margin-left: auto; }
 .note-editor[data-frame="pane"] .note-footer { gap: 12px; padding: 5px 12px; white-space: nowrap; }
 .note-editor[data-frame="pane"] .note-footer > div:first-child { min-width: 0; overflow: hidden; }
 .note-editor[data-frame="pane"] .note-footer > div:first-child > :last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -127,11 +146,6 @@
   .focus-tab { flex: none; max-width: 11rem; }
   .focus-tab:not([data-shown]) .focus-tab-close { display: none; }
   .focus-tab:not([data-shown]) > [role="tab"] { padding-right: 10px; }
-}
-/* A short pane keeps its editor usable by dropping the insert toolbar, which the editor's own commands also reach. */
-.focus-pane-body { container: focus-pane / size; }
-@container focus-pane (max-height: 360px) {
-  .note-editor[data-frame="pane"] .markdown-insert-toolbar { display: none; }
 }
 
 /* Tablet: the right rail overlays the main panel, so the main panel keeps the rail's width clear for toolbar and pane buttons. */

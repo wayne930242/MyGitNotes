@@ -153,6 +153,7 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
     }, changeDivision(layout, division));
   };
   const setRatios = (group: string, sizes: number[]) => { if (shown) setEntry(shown, current => ({ ...current, ratios: { ...current.ratios, [group]: sizes } })); };
+  const setAutoHide = (pane: number, on: boolean) => { if (shown) setEntry(shown, current => ({ ...current, autoHide: current.autoHide.map((value, index) => index === pane ? on : value) })); };
   const setDock = (dock: Partial<FocusViewState['dock']>) => update(current => ({ ...current, dock: { ...current.dock, ...dock } }));
   const forget = () => update(current => ({ ...current, last: null }));
 
@@ -177,9 +178,9 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
   };
 
   return {
-    focuses, error: page.error, loading: page.loading, view, shown, layout, entry, notes,
+    notebookId, focuses, error: page.error, loading: page.loading, view, shown, layout, entry, notes,
     editable: shown ? editable(shown) : false, canName, layoutOf, entryOf, editableFocus: editable,
-    openNote, place, show, activate, close, setDivision, setRatios, setDock, forget, name, rename, remove,
+    openNote, place, show, activate, close, setDivision, setRatios, setAutoHide, setDock, forget, name, rename, remove,
   };
 }
 export type NoteFocus = ReturnType<typeof useNoteFocus>;

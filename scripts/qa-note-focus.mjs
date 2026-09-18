@@ -126,8 +126,8 @@ try {
   console.log('PASS 1 normal browsing opens zoom and returns to the list');
 
   // 2. Show (current), dock the list left, use major-left, open three notes, drag one to the top-right pane.
-  await page.click('.focus-switcher');
-  await menuItem(page, '(current)');
+  await page.click('.focus-switcher-menu');
+  await menuItem(page, 'Scratch');
   await page.waitForSelector('.focus-area');
   assert.equal(search(page).get('focus'), 'current');
   assert.equal(await page.$eval('.browse-dock', dock => dock.dataset.placement), 'left');
@@ -144,14 +144,14 @@ try {
   await shot(page, '1440-major-left');
   console.log('PASS 2 Focus docks the list left, opens rows in the active pane and drops a row into another pane');
 
-  // 3. Kanban docks at the bottom; a card opens in the active pane.
+  // 3. Kanban docks above the Focus; a card opens in the active pane.
   await page.click('.desktop-views > button:nth-child(4)');
-  await page.waitForFunction(() => document.querySelector('.browse-dock')?.dataset.placement === 'bottom' && document.querySelector('[data-kanban-columns]'));
+  await page.waitForFunction(() => document.querySelector('.browse-dock')?.dataset.placement === 'top' && document.querySelector('[data-kanban-columns]'));
   await clickRow(page, 'Delta');
   await waitTabs(page, 1, ['Beta', 'Delta']);
   assert.equal(await shownTab(page, 1), 'Delta');
   await shot(page, '1440-kanban');
-  console.log('PASS 3 Kanban docks at the bottom and a card opens in the active pane');
+  console.log('PASS 3 Kanban docks above the Focus and a card opens in the active pane');
 
   // 4. A link in the bottom-right pane opens in the most recently used other pane; the source stays visible.
   await dragTo(page, await browseRow(page, 'Delta'), '[data-focus-pane="2"] .focus-pane-body');
@@ -164,7 +164,7 @@ try {
   assert.equal(await shownTab(page, 2), 'Delta');
   assert(await page.$('[data-focus-pane="2"] .note-editor[data-frame="pane"]'), 'The source note must stay visible');
   // A lane opens as a tab from the pane's + menu and closes again.
-  await page.click('[data-focus-pane="2"] [aria-label="Open a lane in this pane"]');
+  await page.click('[data-focus-pane="2"] .focus-menu-trigger');
   await menuItem(page, 'Pins');
   await waitTabs(page, 2, ['Delta', 'Pins']);
   await page.waitForFunction(() => document.querySelector('[data-focus-pane="2"] .focus-lane')?.textContent.includes('Gamma'));
@@ -173,7 +173,7 @@ try {
   console.log('PASS 4 a link opens in the most recently used other pane and lanes open as tabs');
 
   // 5. Name (current); another device (empty storage) opens it from Screen with its panes and tabs.
-  await page.click('.focus-switcher');
+  await page.click('.focus-switcher-menu');
   await menuItem(page, 'Name this Focus…');
   await page.waitForSelector('.screen-form input');
   await page.type('.screen-form input', '週報');
@@ -317,7 +317,7 @@ try {
   await device.click('.right-panel-rail [aria-label="Outline"]');
   await device.waitForFunction(() => document.querySelector('.right-panel-document .note-document-panel[data-frame="rail"]')?.textContent.includes('Delta'));
   await device.$eval('.right-panel', panel => Promise.all(panel.getAnimations({ subtree: true }).map(animation => animation.finished)));
-  await device.click('[data-focus-pane="2"] [aria-label="Open a lane in this pane"]');
+  await device.click('[data-focus-pane="2"] .focus-menu-trigger');
   await menuItem(device, 'Pins');
   await device.waitForFunction(() => document.querySelector('.right-panel-rail [aria-label="Outline"]').disabled && !document.querySelector('.right-panel-document'));
   await device.click('[data-focus-pane="2"] [aria-label="Close Pins"]');
@@ -371,14 +371,14 @@ try {
   console.log('PASS 8g palette commands move between panes and change the division without restoring tabs');
 
   // Rename and delete a named Focus; deleting keeps the notes.
-  await device.click('.focus-switcher');
+  await device.click('.focus-switcher-menu');
   await menuItem(device, 'Rename…');
   await device.waitForSelector('.screen-form input');
   await device.$eval('.screen-form input', input => input.select());
   await device.type('.screen-form input', '月報');
   await device.click('.screen-form button[type="submit"]');
   await saved('月報');
-  await device.click('.focus-switcher');
+  await device.click('.focus-switcher-menu');
   await menuItem(device, 'Delete…');
   const remove = await device.waitForFunction(() => [...document.querySelectorAll('.workspace-dialog-actions button')].find(button => button.textContent.trim() === 'Delete'));
   await remove.asElement().click();

@@ -112,10 +112,10 @@ try {
  // Items 36–37: a graph card, a Focus pane and zoom edit one note through one mounted editor and one draft.
  // The lane keeps the saved layout, so Beta is the card still expanded inside the pane.
  await page.goto(base+'/notebooks/a?view=list',{waitUntil:'networkidle0'});
- await page.click('.focus-switcher');await menuItem('(current)');await page.waitForSelector('.focus-area');
+ await page.click('.focus-switcher-main');await page.waitForSelector('.focus-area');
  await page.click('.focus-division-trigger');await menuItem('Left and right');await page.waitForFunction(()=>document.querySelectorAll('[data-focus-pane]').length===2);
  await clickRow('Beta');await page.waitForSelector('[data-focus-pane="0"] .note-editor[data-frame="pane"]');
- await page.click('[data-focus-pane="1"] [aria-label="Open a lane in this pane"]');await menuItem('Graph selection');
+ await page.click('[data-focus-pane="1"] .focus-menu-trigger');await menuItem('Graph selection');
  const laneCardB='[data-focus-pane="1"] '+cardB;
  await page.waitForSelector(laneCardB+' .note-preview');
  assert.equal(await page.$$eval('.note-editor',els=>els.length),1,'One editor for a note shown in a pane and a card');

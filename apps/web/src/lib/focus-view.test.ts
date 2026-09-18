@@ -9,14 +9,14 @@ const note = (path: string): FocusTab => ({ kind: 'note', path });
 const lane = (id: string): FocusTab => ({ kind: 'lane', id });
 const pane = (...tabs: FocusTab[]) => ({ tabs });
 const layout = (division: FocusLayout['division'], ...panes: ReturnType<typeof pane>[]): FocusLayout => ({ division, panes });
-const entry = (overrides: Partial<FocusEntryView> = {}): FocusEntryView => ({ activePane: 0, shown: [], recent: [], ratios: {}, ...overrides });
+const entry = (overrides: Partial<FocusEntryView> = {}): FocusEntryView => ({ activePane: 0, shown: [], recent: [], ratios: {}, autoHide: [], ...overrides });
 const state = (overrides: Partial<FocusViewState> = {}): FocusViewState => ({ ...emptyFocusView(), ...overrides });
 
 describe('emptyFocusView', () => {
   it('starts with a single empty pane and default dock sizes', () => {
     expect(emptyFocusView()).toEqual({
       current: { division: 'single', panes: [{ tabs: [] }] },
-      entries: {}, last: null, dock: { left: 320, bottom: 280, collapsed: false },
+      entries: {}, last: null, dock: { left: 320, top: 280, collapsed: false },
     });
   });
 });
@@ -43,9 +43,14 @@ describe('readFocusView', () => {
         badShown: { ...valid, shown: [1, 2] },
         badRecent: { ...valid, recent: ['x'] },
         badRatios: { ...valid, ratios: { g: ['x'] } },
+        badAutoHide: { ...valid, autoHide: ['yes'] },
       },
     };
     expect(readFocusView(raw).entries).toEqual({ good: valid });
+  });
+  it('reads an entry stored without autoHide as having none', () => {
+    const { autoHide: _autoHide, ...older } = entry({ shown: ['note:a.md'] });
+    expect(readFocusView({ entries: { f: older } }).entries.f).toEqual(entry({ shown: ['note:a.md'] }));
   });
   it('drops a non-object entries field entirely', () => {
     expect(readFocusView({ entries: 'nope' }).entries).toEqual({});
@@ -58,8 +63,8 @@ describe('readFocusView', () => {
     expect(readFocusView({}).last).toBeNull();
   });
   it('falls back to each dock default individually', () => {
-    expect(readFocusView({ dock: { left: 'x', bottom: 200, collapsed: 'true' } }).dock).toEqual({ left: 320, bottom: 200, collapsed: false });
-    expect(readFocusView({ dock: { left: -10, bottom: 200, collapsed: true } }).dock).toEqual({ left: 320, bottom: 200, collapsed: true });
+    expect(readFocusView({ dock: { left: 'x', top: 200, collapsed: 'true' } }).dock).toEqual({ left: 320, top: 200, collapsed: false });
+    expect(readFocusView({ dock: { left: -10, top: 200, collapsed: true } }).dock).toEqual({ left: 320, top: 200, collapsed: true });
     expect(readFocusView({}).dock).toEqual(emptyFocusView().dock);
   });
 });
@@ -68,7 +73,7 @@ describe('entryView', () => {
   const twoPane = layout('columns-2', pane(note('a.md'), note('b.md')), pane(lane('l1')));
   it('normalizes a fresh key against the layout', () => {
     expect(entryView(state(), 'missing', twoPane)).toEqual({
-      activePane: 0, shown: ['note:a.md', 'lane:l1'], recent: [0, 1], ratios: {},
+      activePane: 0, shown: ['note:a.md', 'lane:l1'], recent: [0, 1], ratios: {}, autoHide: [false, false],
     });
   });
   it('falls back to the first tab when the stored shown key is stale', () => {
@@ -88,6 +93,10 @@ describe('entryView', () => {
   it('drops invalid or duplicate recent entries and appends missing panes ascending', () => {
     const stored = entry({ recent: [1, 1, -1, 99, 1] });
     expect(entryView(state({ entries: { f: stored } }), 'f', twoPane).recent).toEqual([1, 0]);
+  });
+  it('keeps one auto-hide flag per pane', () => {
+    expect(entryView(state({ entries: { f: entry({ autoHide: [false, true, true] }) } }), 'f', twoPane).autoHide).toEqual([false, true]);
+    expect(entryView(state({ entries: { f: entry({ autoHide: [true] }) } }), 'f', twoPane).autoHide).toEqual([true, false]);
   });
   it('passes ratios through unchanged', () => {
     const stored = entry({ ratios: { g: [30, 70] } });
