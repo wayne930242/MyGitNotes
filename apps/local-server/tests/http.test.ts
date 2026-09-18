@@ -366,6 +366,78 @@ describe('GitHub login and shared agent authorization',()=>{
     await store.set(credential,{...issued,refreshToken:undefined,upstreamExpiresAt:undefined},null);
     expect(await credentialToken(root,credential)).toBe('short-lived-token');expect(refreshes).toBe(1);
   });
+
+  it('logs a secret-free reason for each rejected grant or credential',async()=>{
+    await new Promise<void>(resolve=>server.close(()=>resolve()));
+    vi.stubEnv('GITHUB_NOTES_SOURCE','github');vi.stubEnv('GITHUB_NOTES_REPOSITORY','owner/repo');vi.stubEnv('GITHUB_NOTES_BRANCH','main');
+    vi.stubEnv('GITHUB_CLIENT_ID','client');vi.stubEnv('GITHUB_CLIENT_SECRET','client-secret');
+    server=createServer(createApp(root));await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+    base=`http://127.0.0.1:${(server.address() as any).port}`;vi.stubEnv('APP_URL',base);
+    const nativeFetch=globalThis.fetch;
+    vi.spyOn(globalThis,'fetch').mockImplementation(async(input,init)=>{
+      const url=String(input);const json=(body:unknown)=>new Response(JSON.stringify(body),{headers:{'Content-Type':'application/json'}});
+      if(url==='https://github.com/login/oauth/access_token')return json({access_token:'long-lived-token'});
+      if(url==='https://api.github.com/user')return json({id:1,login:'owner'});
+      return nativeFetch(input,init);
+    });
+    const warn=vi.spyOn(console,'warn').mockImplementation(()=>{});const logged:string[]=[];
+    const start=await fetch(`${base}/api/auth/github`,{redirect:'manual'});const location=new URL(start.headers.get('location')!);
+    const callback=await fetch(`${base}/api/auth/github/callback?state=${location.searchParams.get('state')}&code=test`,{redirect:'manual',headers:{Cookie:start.headers.get('set-cookie')!.split(';')[0]}});
+    const cookie=callback.headers.getSetCookie().find(value=>value.startsWith('gh_notes_session='))!.split(';')[0];
+    const grant=await fetch(`${base}/api/auth/agent-token`,{method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({write:false})}).then(r=>r.json());
+    const store=new SessionStore(root);const {credential}=await store.get(grant.token);const issued=await store.get(credential);
+    const reasons=async(url:string)=>{
+      warn.mockClear();
+      const {status}=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json, text/event-stream',Connection:'close'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/list'})});
+      const messages=warn.mock.calls.map(call=>String(call[0]));logged.push(...messages);return [status,...messages];
+    };
+    expect(await reasons(`${base}/mcp`)).toEqual([401,'[mcp] unauthorized: no-token']);
+    expect(await reasons(`${base}/mcp/${'u'.repeat(43)}`)).toEqual([401,'[mcp] unauthorized: grant-missing']);
+    await store.delete(credential);
+    expect(await reasons(grant.url)).toEqual([401,'[auth] credential rejected: missing']);
+    await store.set(credential,{...issued,realm:'github:https://github.com:other-client'},null);
+    expect(await reasons(grant.url)).toEqual([401,'[auth] credential rejected: realm']);
+    await store.set(credential,{...issued,upstreamExpiresAt:Date.now()-1000},null);
+    expect(await reasons(grant.url)).toEqual([401,'[auth] credential rejected: expired']);
+    vi.stubEnv('SESSION_SECRET','t'.repeat(64));await store.set(credential,issued,null);vi.stubEnv('SESSION_SECRET','s'.repeat(64));
+    expect(await reasons(grant.url)).toEqual([401,expect.stringMatching(/^\[auth\] record [a-f0-9]{8} sealed with another SESSION_SECRET$/),'[auth] credential rejected: sealed-elsewhere']);
+    await store.set(credential,issued,null);
+    expect(await reasons(grant.url)).toEqual([200]);
+    for(const secret of [grant.token,credential,'long-lived-token','s'.repeat(64)]) expect(logged.join('\n')).not.toContain(secret);
+  });
+  it('keeps the last rejection of each grant for seven days on the grant list',async()=>{
+    await new Promise<void>(resolve=>server.close(()=>resolve()));
+    vi.stubEnv('GITHUB_NOTES_SOURCE','github');vi.stubEnv('GITHUB_NOTES_REPOSITORY','owner/repo');vi.stubEnv('GITHUB_NOTES_BRANCH','main');
+    vi.stubEnv('GITHUB_CLIENT_ID','client');vi.stubEnv('GITHUB_CLIENT_SECRET','client-secret');
+    server=createServer(createApp(root));await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+    base=`http://127.0.0.1:${(server.address() as any).port}`;vi.stubEnv('APP_URL',base);
+    const nativeFetch=globalThis.fetch;
+    vi.spyOn(globalThis,'fetch').mockImplementation(async(input,init)=>{
+      const url=String(input);const json=(body:unknown)=>new Response(JSON.stringify(body),{headers:{'Content-Type':'application/json'}});
+      if(url==='https://github.com/login/oauth/access_token')return json({access_token:'long-lived-token'});
+      if(url==='https://api.github.com/user')return json({id:1,login:'owner'});
+      return nativeFetch(input,init);
+    });
+    vi.spyOn(console,'warn').mockImplementation(()=>{});
+    const start=await fetch(`${base}/api/auth/github`,{redirect:'manual'});const location=new URL(start.headers.get('location')!);
+    const callback=await fetch(`${base}/api/auth/github/callback?state=${location.searchParams.get('state')}&code=test`,{redirect:'manual',headers:{Cookie:start.headers.get('set-cookie')!.split(';')[0]}});
+    const cookie=callback.headers.getSetCookie().find(value=>value.startsWith('gh_notes_session='))!.split(';')[0];
+    const grant=await fetch(`${base}/api/auth/agent-token`,{method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({write:false})}).then(r=>r.json());
+    const store=new SessionStore(root);const {credential}=await store.get(grant.token);const issued=await store.get(credential);
+    const call=(url:string)=>fetch(url,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json, text/event-stream',Connection:'close'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/list'})}).then(r=>r.status);
+    const last=async()=>(await fetch(`${base}/api/auth/agent-tokens`,{headers:{Cookie:cookie}}).then(r=>r.json())).grants[0].lastRejection;
+    expect(await last()).toBeNull();
+    const before=Date.now();
+    await store.delete(credential);expect(await call(grant.url)).toBe(401);
+    expect(await last()).toEqual({reason:'missing',at:expect.any(Number)});expect((await last()).at).toBeGreaterThanOrEqual(before);
+    vi.stubEnv('SESSION_SECRET','t'.repeat(64));await store.set(credential,issued,null);vi.stubEnv('SESSION_SECRET','s'.repeat(64));
+    expect(await call(grant.url)).toBe(401);expect((await last()).reason).toBe('sealed-elsewhere');
+    await store.set(credential,issued,null);vi.stubEnv('APP_URL','https://moved.example');
+    expect(await call(grant.url)).toBe(401);expect((await last()).reason).toBe('grant-audience');
+    vi.stubEnv('APP_URL',base);expect(await call(grant.url)).toBe(200);expect((await last()).reason).toBe('grant-audience');
+    const now=Date.now();vi.spyOn(Date,'now').mockReturnValue(now+7*24*60*60*1000+1000);
+    expect(await last()).toBeNull();
+  });
 });
 
 
