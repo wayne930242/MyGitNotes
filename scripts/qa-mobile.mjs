@@ -128,7 +128,7 @@ try {
  await click('Restore Draft');await waitDisk('notes/example/root.md','Recovered mobile draft');
  await page.waitForFunction(()=>!document.querySelector('.editor-notice-actions'));
  await tap('.note-panel-tabs [role="tab"][aria-label="File Git status"]');await page.waitForSelector('.note-document-panel[data-panel="git"]');
- await tap('button[aria-label="Restore note"]');await fits('button[aria-label="Confirm restore note"]');assert((await bounds('.note-document-panel')).width<=320,'Note restore confirmation overflows panel');
+ await tap('button[aria-label="Restore note"]:not(:disabled)');await fits('button[aria-label="Confirm restore note"]');assert((await bounds('.note-document-panel')).width<=320,'Note restore confirmation overflows panel');
  await tap('button[aria-label="Confirm restore note"]');await page.waitForFunction(()=>!document.querySelector('.cm-content')?.innerText.includes('Recovered mobile draft'));
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});await tap('[aria-label="Close note"]');await page.waitForFunction(()=>!document.querySelector('[aria-label="Note editor"]'));
  console.log('PASS bounded recovery, draft restore, note restore confirmation and select-only Escape');
