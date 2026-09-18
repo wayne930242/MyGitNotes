@@ -9,6 +9,9 @@ import {
   useWorkspaceSidebarDrawer,
   getSavedSidebarWidth,
   saveSidebarWidth,
+  getSavedRightPanelWidth,
+  saveRightPanelWidth,
+  RIGHT_PANEL_RAIL_WIDTH,
 } from './WorkspaceChrome.js';
 
 afterEach(cleanup);
@@ -57,6 +60,45 @@ describe('Sidebar width persistence', () => {
 
     saveSidebarWidth(999);
     expect(localStorage.getItem('mygitnotes:sidebar-width')).toBe('500');
+  });
+});
+
+describe('Right panel width persistence', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('returns default width (320) when localStorage is empty', () => {
+    expect(getSavedRightPanelWidth()).toBe(320);
+  });
+
+  it('reads valid persisted width from localStorage', () => {
+    localStorage.setItem('mygitnotes:right-panel-width', '400');
+    expect(getSavedRightPanelWidth()).toBe(400);
+  });
+
+  it('clamps width within minimum (260) and maximum (480)', () => {
+    localStorage.setItem('mygitnotes:right-panel-width', '100');
+    expect(getSavedRightPanelWidth()).toBe(260);
+
+    localStorage.setItem('mygitnotes:right-panel-width', '800');
+    expect(getSavedRightPanelWidth()).toBe(480);
+  });
+
+  it('returns default width when stored value is invalid', () => {
+    localStorage.setItem('mygitnotes:right-panel-width', 'invalid');
+    expect(getSavedRightPanelWidth()).toBe(320);
+  });
+
+  it('saves clamped width to localStorage', () => {
+    saveRightPanelWidth(350);
+    expect(localStorage.getItem('mygitnotes:right-panel-width')).toBe('350');
+
+    saveRightPanelWidth(50);
+    expect(localStorage.getItem('mygitnotes:right-panel-width')).toBe('260');
+
+    saveRightPanelWidth(999);
+    expect(localStorage.getItem('mygitnotes:right-panel-width')).toBe('480');
   });
 });
 
@@ -149,5 +191,70 @@ describe('WorkspaceSplitLayout and WorkspaceSidebarPortal', () => {
     expect(screen.getByTestId('sidebar-content')).toBeInTheDocument();
     expect(container.querySelector('#custom-sidebar-panel')).toBeInTheDocument();
     expect(container.querySelector('.workspace-splitter')).toBeInTheDocument();
+  });
+
+  it('does not render a right panel splitter when rightPanel is omitted', () => {
+    const { container } = render(
+      <SidebarProvider>
+        <WorkspaceSplitLayout hasSidebar={false}>
+          <div data-testid="main-content">Main Page Content</div>
+        </WorkspaceSplitLayout>
+      </SidebarProvider>
+    );
+
+    expect(container.querySelector('.workspace-split-right-panel')).toBeNull();
+    expect(container.querySelector('.workspace-splitter')).toBeNull();
+  });
+
+  it('does not render a right panel splitter while rightPanelWidth is 0 (hidden)', () => {
+    const { container } = render(
+      <SidebarProvider>
+        <WorkspaceSplitLayout hasSidebar={false} rightPanelWidth={0} rightPanel={<div data-testid="right-content">Right</div>}>
+          <div data-testid="main-content">Main Page Content</div>
+        </WorkspaceSplitLayout>
+      </SidebarProvider>
+    );
+
+    expect(container.querySelector('.workspace-split-right-panel')).toBeNull();
+    expect(screen.queryByTestId('right-content')).toBeNull();
+  });
+
+  it('renders the right panel inside a resizable splitter panel when rightPanelWidth > 0', () => {
+    const { container } = render(
+      <SidebarProvider>
+        <WorkspaceSplitLayout hasSidebar={false} rightPanelWidth={RIGHT_PANEL_RAIL_WIDTH + 320} rightPanel={<div data-testid="right-content">Right</div>}>
+          <div data-testid="main-content">Main Page Content</div>
+        </WorkspaceSplitLayout>
+      </SidebarProvider>
+    );
+
+    expect(screen.getByTestId('right-content')).toBeInTheDocument();
+    expect(container.querySelector('.workspace-split-right-panel')).toBeInTheDocument();
+    expect(container.querySelector('.workspace-splitter')).toBeInTheDocument();
+  });
+
+  it('renders the right panel as a plain sibling (no Group) below the desktop breakpoint', () => {
+    window.matchMedia = ((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+
+    const { container } = render(
+      <SidebarProvider>
+        <WorkspaceSplitLayout hasSidebar={false} rightPanelWidth={RIGHT_PANEL_RAIL_WIDTH + 320} rightPanel={<div data-testid="right-content">Right</div>}>
+          <div data-testid="main-content">Main Page Content</div>
+        </WorkspaceSplitLayout>
+      </SidebarProvider>
+    );
+
+    expect(screen.getByTestId('right-content')).toBeInTheDocument();
+    expect(container.querySelector('.workspace-split-right-panel')).toBeNull();
+    expect(container.querySelector('.workspace-splitter')).toBeNull();
   });
 });

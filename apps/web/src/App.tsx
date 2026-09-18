@@ -147,6 +147,7 @@ const AppContent: React.FC = () => {
   const [fileDialog, setFileDialog] = useState<{ notebookId: string; path?: string; movePath?: string }>();
   const [fileMetadataContainer, setFileMetadataContainer] = useState<HTMLDivElement | null>(null);
   const [fileMetadataOpen, setFileMetadataOpen] = useState(false);
+  const [rightPanelWidth, setRightPanelWidth] = useState(0);
   const [selectedFileEntry, setSelectedFileEntry] = useState<FileEntry>();
   const fileManagerRef = useRef<FileManagerHandle>(null);
 
@@ -1027,6 +1028,30 @@ const AppContent: React.FC = () => {
             hasSidebar={activeTab !== 'graph' && activeTab !== 'screen'}
             sidebarDomId={activeTab === 'notes' ? 'notebook-panel' : activeTab === 'agent' ? 'agent-sidebar-panel' : activeTab === 'assets' ? 'assets-sidebar-panel' : activeTab === 'settings' ? 'settings-sidebar-panel' : undefined}
             closeLabel={t('sidebar.closeFilters')}
+            rightPanelWidth={rightPanelWidth}
+            rightPanel={
+              <RightPanel
+                fileMode={activeTab === 'assets'}
+                metadataOpen={fileMetadataOpen}
+                onMetadataOpenChange={setFileMetadataOpen}
+                fileMetadata={selectedFileEntry ? <FileMetadata entry={selectedFileEntry} onEdit={canWrite && !resourceNavigationBusy ? () => void fileManagerRef.current?.editMetadata() : undefined} /> : undefined}
+                onFileMetadataContainer={setFileMetadataContainer}
+                notebooks={config?.notebooks || []}
+                selectedNotebookId={selectedNotebookId}
+                onOpenNote={handleOpenNote}
+                onSaveNote={handleSaveNote}
+                onReadNote={readNoteForChange}
+                gitStatus={gitStatus}
+                deletedNotes={deletedNotes}
+                onRestoreNote={handleRestoreNote}
+                onOpenCommitModal={openCommitModal}
+                writable={canWrite}
+                remoteChanges={panelRemoteChanges}
+                getPreview={panelGetPreview}
+                onSynced={remote ? undefined : async () => { await refreshWorkspace(); await screen.refresh(); }}
+                onWidthChange={setRightPanelWidth}
+              />
+            }
           >
             {activeTab === 'notes' && (
               <>
@@ -1217,27 +1242,6 @@ const AppContent: React.FC = () => {
         )}
 
           </WorkspaceSplitLayout>
-
-          <RightPanel
-            fileMode={activeTab === 'assets'}
-            metadataOpen={fileMetadataOpen}
-            onMetadataOpenChange={setFileMetadataOpen}
-            fileMetadata={selectedFileEntry ? <FileMetadata entry={selectedFileEntry} onEdit={canWrite && !resourceNavigationBusy ? () => void fileManagerRef.current?.editMetadata() : undefined} /> : undefined}
-            onFileMetadataContainer={setFileMetadataContainer}
-            notebooks={config?.notebooks || []}
-            selectedNotebookId={selectedNotebookId}
-            onOpenNote={handleOpenNote}
-            onSaveNote={handleSaveNote}
-            onReadNote={readNoteForChange}
-            gitStatus={gitStatus}
-            deletedNotes={deletedNotes}
-            onRestoreNote={handleRestoreNote}
-            onOpenCommitModal={openCommitModal}
-            writable={canWrite}
-            remoteChanges={panelRemoteChanges}
-            getPreview={panelGetPreview}
-            onSynced={remote ? undefined : async () => { await refreshWorkspace(); await screen.refresh(); }}
-          />
         </div>
       </SidebarProvider>
 

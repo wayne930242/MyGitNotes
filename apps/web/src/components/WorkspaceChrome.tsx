@@ -1,12 +1,44 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PanelLeft } from 'lucide-react';
-import { Group, Panel, Separator, type PanelSize } from 'react-resizable-panels';
+import { Group, Panel, Separator, usePanelRef, type PanelSize } from 'react-resizable-panels';
 
 export const SIDEBAR_WIDTH_STORAGE_KEY = 'mygitnotes:sidebar-width';
 export const DEFAULT_SIDEBAR_WIDTH = 256;
 export const MIN_SIDEBAR_WIDTH = 180;
 export const MAX_SIDEBAR_WIDTH = 500;
+
+export const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'mygitnotes:right-panel-width';
+export const DEFAULT_RIGHT_PANEL_WIDTH = 320;
+export const MIN_RIGHT_PANEL_WIDTH = 260;
+export const MAX_RIGHT_PANEL_WIDTH = 480;
+/** Width of the always-visible tool rail; must match `--right-panel-rail-width` in index.css. */
+export const RIGHT_PANEL_RAIL_WIDTH = 49;
+
+export function getSavedRightPanelWidth(): number {
+  if (typeof window === 'undefined') return DEFAULT_RIGHT_PANEL_WIDTH;
+  try {
+    const saved = localStorage.getItem(RIGHT_PANEL_WIDTH_STORAGE_KEY);
+    if (!saved) return DEFAULT_RIGHT_PANEL_WIDTH;
+    const parsed = parseInt(saved, 10);
+    if (Number.isFinite(parsed)) {
+      return Math.max(MIN_RIGHT_PANEL_WIDTH, Math.min(MAX_RIGHT_PANEL_WIDTH, parsed));
+    }
+  } catch {
+    // Ignore storage access errors
+  }
+  return DEFAULT_RIGHT_PANEL_WIDTH;
+}
+
+export function saveRightPanelWidth(width: number): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const clamped = Math.max(MIN_RIGHT_PANEL_WIDTH, Math.min(MAX_RIGHT_PANEL_WIDTH, Math.round(width)));
+    localStorage.setItem(RIGHT_PANEL_WIDTH_STORAGE_KEY, String(clamped));
+  } catch {
+    // Ignore storage access errors
+  }
+}
 
 export function getSavedSidebarWidth(): number {
   if (typeof window === 'undefined') return DEFAULT_SIDEBAR_WIDTH;
@@ -126,6 +158,11 @@ export interface WorkspaceSplitLayoutProps {
   sidebarDomId?: string;
   mainId?: string;
   mainClassName?: string;
+  /** Rendered as a resizable panel on desktop, using the same splitter as the sidebar; falls back to its own CSS overlay/drawer positioning below the desktop breakpoint. */
+  rightPanel?: React.ReactNode;
+  rightPanelId?: string;
+  /** Current desired width in pixels (rail-only, rail+content, or 0 to hide); reported by the right panel content itself. */
+  rightPanelWidth?: number;
 }
 
 export function WorkspaceSplitLayout({
@@ -140,6 +177,9 @@ export function WorkspaceSplitLayout({
   sidebarDomId,
   mainId = 'workspace-main-panel',
   mainClassName = '',
+  rightPanel,
+  rightPanelId = 'workspace-right-panel',
+  rightPanelWidth,
 }: WorkspaceSplitLayoutProps) {
   const isDesktop = useIsDesktop();
   const context = useContext(SidebarContext);
@@ -147,10 +187,16 @@ export function WorkspaceSplitLayout({
   const onCloseDrawer = propOnCloseDrawer || (() => context?.setOpen(false));
 
   const [initialWidth] = useState(getSavedSidebarWidth);
+  const rightPanelRef = usePanelRef();
 
   useEffect(() => {
     document.documentElement.style.setProperty('--workspace-sidebar-width', `${initialWidth}px`);
   }, [initialWidth]);
+
+  useEffect(() => {
+    if (rightPanelWidth === undefined) return;
+    rightPanelRef.current?.resize(rightPanelWidth);
+  }, [rightPanelWidth]);
 
   const handleResize = (panelSize: PanelSize) => {
     if (panelSize?.inPixels) {
@@ -162,17 +208,36 @@ export function WorkspaceSplitLayout({
     }
   };
 
-  if (!hasSidebar) {
-    return (
-      <div className={`workspace-split-layout flex-1 min-w-0 min-h-0 h-full flex overflow-hidden ${className}`}>
-        <div className={`workspace-split-main-panel flex-1 min-w-0 min-h-0 h-full ${mainClassName}`}>
-          {children}
-        </div>
-      </div>
-    );
-  }
+  const rightPanelExpanded = rightPanelWidth !== undefined && rightPanelWidth > RIGHT_PANEL_RAIL_WIDTH;
 
-  const slotNode = (
+  const handleRightPanelResize = (panelSize: PanelSize) => {
+    if (panelSize?.inPixels) {
+      const contentPx = Math.round(panelSize.inPixels) - RIGHT_PANEL_RAIL_WIDTH;
+      if (contentPx >= MIN_RIGHT_PANEL_WIDTH && contentPx <= MAX_RIGHT_PANEL_WIDTH) {
+        saveRightPanelWidth(contentPx);
+      }
+    }
+  };
+
+  const rightPanelNode = rightPanel && rightPanelWidth ? (
+    <React.Fragment key="right-panel">
+      <Separator className="workspace-splitter" disabled={!rightPanelExpanded} />
+      <Panel
+        id={rightPanelId}
+        defaultSize={`${rightPanelWidth}px`}
+        minSize={`${rightPanelExpanded ? RIGHT_PANEL_RAIL_WIDTH + MIN_RIGHT_PANEL_WIDTH : RIGHT_PANEL_RAIL_WIDTH}px`}
+        maxSize={`${rightPanelExpanded ? RIGHT_PANEL_RAIL_WIDTH + MAX_RIGHT_PANEL_WIDTH : RIGHT_PANEL_RAIL_WIDTH}px`}
+        groupResizeBehavior="preserve-pixel-size"
+        onResize={handleRightPanelResize}
+        panelRef={rightPanelRef}
+        className="workspace-split-right-panel"
+      >
+        {rightPanel}
+      </Panel>
+    </React.Fragment>
+  ) : null;
+
+  const slotNode = hasSidebar ? (
     <div
       ref={context ? (node) => context.setTarget(node) : undefined}
       id={sidebarDomId || 'workspace-sidebar-slot'}
@@ -180,21 +245,24 @@ export function WorkspaceSplitLayout({
     >
       {sidebar}
     </div>
-  );
+  ) : null;
 
   if (!isDesktop) {
     return (
       <div className={`workspace-split-layout flex-1 min-w-0 min-h-0 h-full flex overflow-hidden ${className}`}>
-        <WorkspaceSidebarDrawer
-          open={drawerOpen}
-          onClose={onCloseDrawer}
-          closeLabel={closeLabel}
-        >
-          {slotNode}
-        </WorkspaceSidebarDrawer>
+        {hasSidebar && (
+          <WorkspaceSidebarDrawer
+            open={drawerOpen}
+            onClose={onCloseDrawer}
+            closeLabel={closeLabel}
+          >
+            {slotNode}
+          </WorkspaceSidebarDrawer>
+        )}
         <div className={`workspace-split-main-panel flex-1 min-w-0 min-h-0 h-full ${mainClassName}`}>
           {children}
         </div>
+        {rightPanel}
       </div>
     );
   }
@@ -211,20 +279,24 @@ export function WorkspaceSplitLayout({
           }
         }}
       >
-        <Panel
-          id={sidebarId}
-          defaultSize={`${initialWidth}px`}
-          minSize={`${MIN_SIDEBAR_WIDTH}px`}
-          maxSize={`${MAX_SIDEBAR_WIDTH}px`}
-          groupResizeBehavior="preserve-pixel-size"
-          onResize={handleResize}
-          className="workspace-split-sidebar-panel h-full"
-        >
-          <div className="workspace-split-sidebar-content h-full">
-            {slotNode}
-          </div>
-        </Panel>
-        <Separator className="workspace-splitter" />
+        {hasSidebar && (
+          <>
+            <Panel
+              id={sidebarId}
+              defaultSize={`${initialWidth}px`}
+              minSize={`${MIN_SIDEBAR_WIDTH}px`}
+              maxSize={`${MAX_SIDEBAR_WIDTH}px`}
+              groupResizeBehavior="preserve-pixel-size"
+              onResize={handleResize}
+              className="workspace-split-sidebar-panel h-full"
+            >
+              <div className="workspace-split-sidebar-content h-full">
+                {slotNode}
+              </div>
+            </Panel>
+            <Separator className="workspace-splitter" />
+          </>
+        )}
         <Panel
           id={mainId}
           groupResizeBehavior="preserve-relative-size"
@@ -232,6 +304,7 @@ export function WorkspaceSplitLayout({
         >
           {children}
         </Panel>
+        {rightPanelNode}
       </Group>
     </div>
   );
