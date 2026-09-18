@@ -64,6 +64,17 @@ it('leaves out the no-status column when the server answers none', async () => {
   await waitFor(() => expect(screen.queryByText('No status')).not.toBeInTheDocument());
 });
 
+it('asks only the filtered status column when the board filters by status', async () => {
+  render(createElement(KanbanView, {
+    query: { notebookId: 'life', status: 'inbox' }, statuses: ['inbox', 'done'],
+    onOpenNote: () => {}, onUpdateNoteStatus: () => {}, onDeleteNote: () => {}, onNewNoteWithStatus: () => {},
+  }), { wrapper });
+  await waitFor(() => expect(screen.getByText('notes/life/a.md')).toBeInTheDocument());
+  expect(requests.some(url => url.includes('status=inbox'))).toBe(true);
+  expect(requests.some(url => url.includes('status=done'))).toBe(false);
+  expect(document.querySelector('[data-status-column="done"]')).toBeInTheDocument();
+});
+
 it('dates a card by its updated field when the source reports no mtime', async () => {
   const dated = { ...noteOf('notes/life/dated.md', 'inbox'), metadata: { updated: '2026-01-05T10:00:00Z' } };
   vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify(

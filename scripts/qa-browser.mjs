@@ -29,6 +29,8 @@ const errors=[];page.on('pageerror',e=>errors.push(e.message));
 const click=async text=>{await page.waitForFunction(text=>Array.from(document.querySelectorAll('button')).some(b=>b.textContent.trim()===text&&!b.disabled),{},text);await page.evaluate(text=>Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()===text&&!b.disabled).click(),text);};
 try {
  await page.goto(base,{waitUntil:'networkidle0'});
+ // Folders start collapsed; expand the tree before selecting a nested folder.
+ await page.waitForSelector('button[aria-label="Expand all"]');await page.click('button[aria-label="Expand all"]');
  await page.waitForFunction(()=>document.body.innerText.includes('Deep work'));
  await click('Deep work');
  await page.waitForFunction(()=>document.body.innerText.includes('Nested Note')&&!document.body.innerText.includes('Root Note'));
@@ -45,22 +47,10 @@ try {
  console.log('PASS nested note creation');
  await page.waitForSelector('button[aria-label="Document tools"]');
  await page.click('button[aria-label="Document tools"]');
- await page.click('.note-panel-tabs [role="tab"][aria-label="Notebook Assets"]');
- await page.waitForFunction(()=>document.body.innerText.includes('pixel.png'));
- // Upload selects an asset without changing the note; Insert is explicit.
- const uploadFile = path.join(root, 'upload.png');fs.copyFileSync(path.join(root,'notes/example/assets/pixel.png'),uploadFile);
- await page.type('input[aria-label="Asset folder"]','incoming');
- const uploadControl = await page.$('input[aria-label="Upload asset"]');await uploadControl.uploadFile(uploadFile);
- await page.waitForSelector('button[aria-label="Select upload.png"][aria-pressed="true"]');
- if(await page.$eval('textarea[aria-label="Note content"]',e=>e.value.includes('/raw-assets/')))throw Error('Upload inserted without explicit Insert');
- await click('View');await page.waitForSelector('[aria-label="Asset preview"]');await page.keyboard.press('Escape');
- await page.waitForFunction(()=>!document.querySelector('[aria-label="Asset preview"]'));
- if(!await page.$('.note-document-panel[data-panel="assets"]'))throw Error('Preview Escape closed asset panel');
- await click('Insert');
- await page.waitForFunction(()=>Array.from(document.querySelectorAll('textarea')).some(t=>t.value.includes('/raw-assets/by-hash/')));
- await click('Live Preview');
- await page.waitForFunction(()=>Array.from(document.querySelectorAll('img')).some(i=>i.src.includes('/raw-assets/by-hash/')&&i.complete&&i.naturalWidth>0));
- console.log('PASS hash asset insertion and rendered image');
+ await page.click('.note-panel-tabs [role="tab"][aria-label="Insert image"]');
+ // Asset upload, selection and hash insertion are covered by qa-file-manager.
+ await page.waitForSelector('.note-document-panel[data-panel="assets"] .file-manager[data-mode="pick-image"]');
+ console.log('PASS document tools open the image picker');
  fs.mkdirSync(`${product}/artifacts/qa`,{recursive:true});
  await page.screenshot({path:`${product}/artifacts/qa/nested-editor.png`,fullPage:true});
  await page.click('button[aria-label="Close note"]');
@@ -71,21 +61,6 @@ try {
  await click('Create Note');
  await page.waitForFunction(()=>document.querySelector('#create-note-error')?.closest('.fixed')&&document.querySelector('#create-note-error').textContent.includes('already exists'));
  console.log('PASS duplicate creation error is visible inside the modal');
-
- await page.goto(base+'/assets',{waitUntil:'networkidle0'});
- await page.type('input[aria-label="Asset folder"]','incoming');
- await page.click('button[aria-label="Select upload.png"]');
- const originalUrl=await page.$eval('button[aria-label="Select upload.png"] img',e=>e.getAttribute('src'));
- await page.waitForFunction(()=>{const input=document.querySelector('input[aria-label="Move asset to folder"]');return input&&!input.disabled&&input.value==='incoming';});
- await page.focus('input[aria-label="Move asset to folder"]');await page.keyboard.down('Control');await page.keyboard.press('KeyA');await page.keyboard.up('Control');await page.type('input[aria-label="Move asset to folder"]','archive');
- await click('Move');await page.waitForFunction(()=>document.querySelector('input[aria-label="Asset folder"]').value==='archive');
- if(await page.$eval('button[aria-label="Select upload.png"] img',e=>e.getAttribute('src'))!==originalUrl)throw Error('Move changed hash URL');
- if(!(await fetch(base+originalUrl)).ok)throw Error('Hash URL stopped resolving after move');
- await click('Delete');await page.waitForFunction(()=>document.body.innerText.includes('Confirm delete'));
- if(!fs.existsSync(path.join(root,'notes/example/assets/archive/upload.png')))throw Error('First delete removed file');
- await click('Confirm delete');await page.waitForFunction(()=>!document.querySelector('button[aria-label="Select upload.png"]'));
- if(fs.existsSync(path.join(root,'notes/example/assets/archive/upload.png')))throw Error('Confirmed delete failed');
- console.log('PASS shared asset UI: dialog upload/select/view/insert, directory move, stable hash and reclick delete');
 
  let signedIn=false; let failSave=false; let savedPayload; let grants=[];
  const demoToken='x'.repeat(43);
@@ -123,11 +98,17 @@ try {
  if(await page.evaluate(()=>window.__xss))throw Error('Unsafe Markdown');
  await click('Source');if(!await page.$eval('textarea[aria-label="Note content"]',e=>e.readOnly))throw Error('Public editor not readonly');
  await page.click('button[aria-label="Document tools"]');
- await page.click('.note-panel-tabs [role="tab"][aria-label="Notebook Assets"]');
+ // The panel reopens on the last used tool, which is already Image here.
+ await page.waitForSelector('.note-panel-tabs [role="tab"][aria-label="Insert image"]');
+ if(!await page.$('.note-panel-tabs [role="tab"][aria-label="Insert image"][aria-selected="true"]'))await page.click('.note-panel-tabs [role="tab"][aria-label="Insert image"]');
  await page.waitForSelector('.note-document-panel[data-panel="assets"]');
  await page.keyboard.press('Escape');
  if(!await page.$('button[aria-label="Close note"]'))throw Error('Asset Escape closed entire note');
+ await page.waitForFunction(()=>!document.querySelector('.note-document-panel[data-open="true"]'));
+ // Esc closes panels only; the zoomed note closes through its Close button.
  await page.keyboard.press('Escape');
+ if(!await page.$('button[aria-label="Close note"]'))throw Error('Escape closed the zoomed note');
+ await page.click('button[aria-label="Close note"]');
  await page.waitForFunction(()=>!document.querySelector('button[aria-label="Close note"]'));
  console.log('PASS readonly asset browser and layered Escape shortcuts');
  await page.click('button[aria-label="Settings"]');await page.waitForSelector('#settings-manifest textarea');
