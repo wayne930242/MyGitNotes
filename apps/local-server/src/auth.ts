@@ -8,6 +8,7 @@ import { nativeRedisCommand } from './redis-store.js';
 const lifetime = 30 * 24 * 60 * 60;
 const cookieName = 'gh_notes_session';
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
+const sealedElsewhere = Symbol('sealed with another SESSION_SECRET');
 const random = () => randomBytes(32).toString('base64url');
 
 function key() {
@@ -20,9 +21,9 @@ export function seal(value: unknown) {
   const cipher = createCipheriv('aes-256-gcm', key(), iv);
   return Buffer.concat([iv, cipher.update(JSON.stringify(value)), cipher.final(), cipher.getAuthTag()]).toString('base64url');
 }
-export function unseal(value: string): any {
+export function unseal(value: string, secret = key()): any {
   const data = Buffer.from(value, 'base64url');
-  const decipher = createDecipheriv('aes-256-gcm', key(), data.subarray(0, 12));
+  const decipher = createDecipheriv('aes-256-gcm', secret, data.subarray(0, 12));
   decipher.setAuthTag(data.subarray(-16));
   return JSON.parse(Buffer.concat([decipher.update(data.subarray(12, -16)), decipher.final()]).toString());
 }
@@ -67,6 +68,10 @@ export class SessionStore {
     return this.getByDigest(digest(id));
   }
   async getByDigest(hash: string) {
+    const value = await this.read(hash);
+    return value === sealedElsewhere ? null : value;
+  }
+  private async read(hash: string): Promise<any> {
     if (!/^[a-f0-9]{64}$/.test(hash)) return null;
     let raw: string | null;
     if (this.redis) raw = await this.command(['GET', `${this.prefix}:${hash}`]);
@@ -75,14 +80,10 @@ export class SessionStore {
       catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
     }
     if (!raw) return null;
+    const secret = key();
     let record: any;
-    try {
-      record = unseal(raw);
-    } catch {
-      // Key rotated or record corrupted; self-heal by pruning stale record
-      await this.deleteByDigest(hash);
-      return null;
-    }
+    // Another deployment sharing this keyspace, or a rotated secret, sealed the record; it stays with its writer.
+    try { record = unseal(raw, secret); } catch { return sealedElsewhere; }
     if (record?.expires !== null && record?.expires <= Date.now()) { await this.deleteByDigest(hash); return null; }
     return record?.value;
   }
@@ -131,7 +132,8 @@ export class SessionStore {
     }
     const results = [];
     for (const id of hashes) {
-      const grant = await this.getByDigest(id);
+      const grant = await this.read(id);
+      if (grant === sealedElsewhere) continue;
       if (grant?.kind === 'agent' && grant.ownerId === ownerId) results.push({ id, name: grant.name, write: grant.write, source: grant.source, createdAt: grant.createdAt, expiresAt: null });
       else if (!grant && this.redis) await this.command(['SREM', `${this.prefix}:grants:${ownerId}`, id]);
     }
