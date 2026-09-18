@@ -878,6 +878,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'panel.close': '關閉面板',
   'panel.calendar': '行事曆',
   'panel.todo': '待辦事項',
+  'panel.scopeCurrentFolder': '目前資料夾',
   'panel.scopeCurrentNotebook': '目前筆記本',
   'panel.scopeAllNotebooks': '所有筆記本',
   'panel.calendarCreated': '建立',

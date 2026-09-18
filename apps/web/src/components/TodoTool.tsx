@@ -9,8 +9,12 @@ import { Select } from './Select.js';
 import { formatDateYMD } from '../lib/date-utils.js';
 import { DONE_EMOJI, DUE_EMOJI, START_EMOJI, TIMESTAMP_EMOJI, getTokenValue, setTaskChecked, stripTaskTokens } from '../lib/task-tokens.js';
 import { TASK_TOKEN_ICON } from '../lib/task-icons.js';
+import { filterTasksByFolder } from '../lib/folder-filter.js';
 import { groupTodoTasks, type TodoTask } from '../lib/todo-list.js';
+import { getSavedPanelScope, savePanelScope, type PanelScope } from '../lib/panel-scope.js';
 import { useNoteAgenda } from '../lib/use-note-queries.js';
+
+const TODO_SCOPE_STORAGE_KEY = 'github-notes:todo-scope';
 
 /** The date/time tokens present on a task line, for icon-chip display. */
 function taskDateChips(task: TodoTask): { emoji: string; value: string }[] {
@@ -27,6 +31,8 @@ function taskDateChips(task: TodoTask): { emoji: string; value: string }[] {
 interface TodoToolProps {
   notebooks: NotebookConfig[];
   selectedNotebookId: string;
+  /** The folder currently browsed (repo-root-relative), or undefined at the notebook root. */
+  currentFolder?: string;
   onOpenNote: (note: NoteListItem) => void;
   onSaveNote: (params: { path: string; content: string; metadata?: Record<string, unknown>; notebookId?: string }) => Promise<NoteItem>;
   onReadNote: (path: string) => Promise<NoteItem>;
@@ -44,9 +50,10 @@ const GROUP_ORDER: { key: 'overdue' | 'today' | 'upcoming' | 'noDate'; labelKey:
   { key: 'noDate', labelKey: 'panel.todoNoDate' },
 ];
 
-export function TodoTool({ notebooks, selectedNotebookId, onOpenNote, onSaveNote, onReadNote }: TodoToolProps) {
+export function TodoTool({ notebooks, selectedNotebookId, currentFolder, onOpenNote, onSaveNote, onReadNote }: TodoToolProps) {
   const { t } = useTranslation();
-  const [scope, setScope] = useState<'current' | 'all'>('current');
+  const [scope, setScope] = useState<PanelScope>(() => getSavedPanelScope(TODO_SCOPE_STORAGE_KEY));
+  const changeScope = (next: PanelScope) => { setScope(next); savePanelScope(TODO_SCOPE_STORAGE_KEY, next); };
   const [groupMode, setGroupMode] = useState<'date' | 'note' | 'gantt'>('date');
   const [showCompleted, setShowCompleted] = useState(false);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
@@ -54,7 +61,10 @@ export function TodoTool({ notebooks, selectedNotebookId, onOpenNote, onSaveNote
   const [saveErrors, setSaveErrors] = useState<Map<string, string>>(new Map());
 
   const agenda = useNoteAgenda(scope === 'all' || notebooks.length <= 1 ? 'all' : selectedNotebookId);
-  const tasks = useMemo(() => agenda.agenda?.tasks ?? [], [agenda.agenda]);
+  const tasks = useMemo(() => {
+    const raw = agenda.agenda?.tasks ?? [];
+    return scope === 'folder' && currentFolder ? filterTasksByFolder(raw, currentFolder) : raw;
+  }, [agenda.agenda, scope, currentFolder]);
   const groups = useMemo(() => groupTodoTasks(tasks, formatDateYMD(new Date())), [tasks]);
   const totalOpen = groups.overdue.length + groups.today.length + groups.upcoming.length + groups.noDate.length;
   const noteGroups = useMemo(() => {
@@ -123,11 +133,13 @@ export function TodoTool({ notebooks, selectedNotebookId, onOpenNote, onSaveNote
 
   return (
     <div className="panel-tool todo-tool">
-      {notebooks.length > 1 && <div className="panel-tool-header">
-        {notebooks.length > 1 && (
-          <Select aria-label={t('filters.notebook')} value={scope} onValueChange={value => setScope(value as 'current' | 'all')}
-            options={[{ value: 'current', label: t('panel.scopeCurrentNotebook') }, { value: 'all', label: t('panel.scopeAllNotebooks') }]} />
-        )}
+      {(notebooks.length > 1 || currentFolder) && <div className="panel-tool-header">
+        <Select aria-label={t('filters.notebook')} value={scope} onValueChange={value => changeScope(value as PanelScope)}
+          options={[
+            { value: 'folder', label: t('panel.scopeCurrentFolder'), disabled: !currentFolder },
+            { value: 'current', label: t('panel.scopeCurrentNotebook') },
+            ...(notebooks.length > 1 ? [{ value: 'all', label: t('panel.scopeAllNotebooks') }] : []),
+          ]} />
       </div>}
 
       {agenda.error && <p role="alert" className="todo-task-stale">{agenda.error}</p>}

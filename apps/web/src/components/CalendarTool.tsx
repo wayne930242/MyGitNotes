@@ -10,11 +10,17 @@ import { formatDateYMD, getLocaleWeekStartDay } from '../lib/date-utils.js';
 import { stripTaskTokens } from '../lib/task-tokens.js';
 import type { TodoTask } from '../lib/todo-list.js';
 import { buildDayCounts, notesForDay, notesForMonth, tasksForDay, tasksForMonth } from '../lib/note-day-index.js';
+import { filterNotesByFolder, filterTasksByFolder } from '../lib/folder-filter.js';
+import { getSavedPanelScope, savePanelScope, type PanelScope } from '../lib/panel-scope.js';
 import { useNoteAgenda } from '../lib/use-note-queries.js';
+
+const CALENDAR_SCOPE_STORAGE_KEY = 'github-notes:calendar-scope';
 
 interface CalendarToolProps {
   notebooks: NotebookConfig[];
   selectedNotebookId: string;
+  /** The folder currently browsed (repo-root-relative), or undefined at the notebook root. */
+  currentFolder?: string;
   onOpenNote: (note: NoteListItem) => void;
 }
 
@@ -29,17 +35,25 @@ const MONTH_LABEL_KEYS: TranslationKey[] = [
 ];
 const YEAR_RANGE = 6;
 
-export function CalendarTool({ notebooks, selectedNotebookId, onOpenNote }: CalendarToolProps) {
+export function CalendarTool({ notebooks, selectedNotebookId, currentFolder, onOpenNote }: CalendarToolProps) {
   const { t, language } = useTranslation();
   const locale = language === 'zh-TW' ? 'zh-TW' : 'en-US';
-  const [scope, setScope] = useState<'current' | 'all'>('current');
+  const [scope, setScope] = useState<PanelScope>(() => getSavedPanelScope(CALENDAR_SCOPE_STORAGE_KEY));
+  const changeScope = (next: PanelScope) => { setScope(next); savePanelScope(CALENDAR_SCOPE_STORAGE_KEY, next); };
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [dayField, setDayField] = useState<'created' | 'updated'>('created');
 
   const agenda = useNoteAgenda(scope === 'all' || notebooks.length <= 1 ? 'all' : selectedNotebookId);
-  const scopedNotes = useMemo(() => agenda.agenda?.dated ?? [], [agenda.agenda]);
-  const tasks = useMemo(() => agenda.agenda?.tasks ?? [], [agenda.agenda]);
+  const folderScoped = scope === 'folder' && !!currentFolder;
+  const scopedNotes = useMemo(() => {
+    const raw = agenda.agenda?.dated ?? [];
+    return folderScoped && currentFolder ? filterNotesByFolder(raw, currentFolder) : raw;
+  }, [agenda.agenda, folderScoped, currentFolder]);
+  const tasks = useMemo(() => {
+    const raw = agenda.agenda?.tasks ?? [];
+    return folderScoped && currentFolder ? filterTasksByFolder(raw, currentFolder) : raw;
+  }, [agenda.agenda, folderScoped, currentFolder]);
   const dayCounts = useMemo(() => buildDayCounts(scopedNotes, tasks), [scopedNotes, tasks]);
   const weekStartDay = useMemo(() => getLocaleWeekStartDay(locale), [locale]);
   const grid = useMemo(() => buildMonthGrid(cursor.getFullYear(), cursor.getMonth(), weekStartDay), [cursor, weekStartDay]);
@@ -65,11 +79,13 @@ export function CalendarTool({ notebooks, selectedNotebookId, onOpenNote }: Cale
 
   return (
     <div className="panel-tool calendar-tool">
-      {notebooks.length > 1 && <div className="panel-tool-header">
-        {notebooks.length > 1 && (
-          <Select aria-label={t('filters.notebook')} value={scope} onValueChange={value => setScope(value as 'current' | 'all')}
-            options={[{ value: 'current', label: t('panel.scopeCurrentNotebook') }, { value: 'all', label: t('panel.scopeAllNotebooks') }]} />
-        )}
+      {(notebooks.length > 1 || currentFolder) && <div className="panel-tool-header">
+        <Select aria-label={t('filters.notebook')} value={scope} onValueChange={value => changeScope(value as PanelScope)}
+          options={[
+            { value: 'folder', label: t('panel.scopeCurrentFolder'), disabled: !currentFolder },
+            { value: 'current', label: t('panel.scopeCurrentNotebook') },
+            ...(notebooks.length > 1 ? [{ value: 'all', label: t('panel.scopeAllNotebooks') }] : []),
+          ]} />
       </div>}
 
       {agenda.error && <p role="alert" className="calendar-day-empty">{agenda.error}</p>}

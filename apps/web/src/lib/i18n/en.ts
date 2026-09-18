@@ -878,6 +878,7 @@ export const en = {
   'panel.close': 'Close panel',
   'panel.calendar': 'Calendar',
   'panel.todo': 'Todo',
+  'panel.scopeCurrentFolder': 'Current folder',
   'panel.scopeCurrentNotebook': 'This notebook',
   'panel.scopeAllNotebooks': 'All notebooks',
   'panel.calendarCreated': 'Created',
