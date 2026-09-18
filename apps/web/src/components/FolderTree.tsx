@@ -1,5 +1,5 @@
 import { ReorderToggle } from './ReorderToggle.js';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import { Folder, FolderPlus, GripVertical, MoreHorizontal, Check } from 'lucide-react';
 import type { FolderCommand } from '@mygitnotes/core';
@@ -93,6 +93,7 @@ function TreeItem({
                 type="button"
                 className="folder-manage"
                 aria-label={`${t('folder.manage')}: ${folder.title}`}
+                title={t('folder.manage')}
                 onClick={onManage}
               >
                 <MoreHorizontal size={15} />
@@ -201,6 +202,7 @@ export function FolderTree({
   writable,
   beforeChange,
   onChanged,
+  expandCommand,
 }: {
   showHeading?: boolean;
   showRoot?: boolean;
@@ -219,6 +221,8 @@ export function FolderTree({
   writable: boolean;
   beforeChange?: () => void;
   onChanged?: () => Promise<void>;
+  /** Each new object expands or collapses every folder once. */
+  expandCommand?: { expanded: boolean };
 }) {
   const { t } = useTranslation();
   const [revision, setRevision] = useState('');
@@ -253,6 +257,15 @@ export function FolderTree({
       return changed ? next : prev;
     });
   }, [selected, selectedPaths]);
+
+  // A tree mounted after the last command keeps its selection-based expansion.
+  const appliedExpandCommand = useRef(expandCommand);
+  useEffect(() => {
+    if (!expandCommand || expandCommand === appliedExpandCommand.current) return;
+    appliedExpandCommand.current = expandCommand;
+    const paths = (nodes: FolderTreeNode[]): string[] => nodes.flatMap(node => [node.path, ...paths(node.children)]);
+    setExpanded(expandCommand.expanded ? new Set(paths(tree)) : new Set());
+  }, [expandCommand]);
 
   const toggleExpand = (path: string, event: React.MouseEvent) => {
     event.stopPropagation();

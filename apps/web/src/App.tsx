@@ -146,6 +146,7 @@ const AppContent: React.FC = () => {
   const [fileEditorRevision, setFileEditorRevision] = useState(0);
   const [fileDialog, setFileDialog] = useState<{ notebookId: string; path?: string; movePath?: string }>();
   const [fileMetadataContainer, setFileMetadataContainer] = useState<HTMLDivElement | null>(null);
+  const [fileMetadataOpen, setFileMetadataOpen] = useState(false);
   const [selectedFileEntry, setSelectedFileEntry] = useState<FileEntry>();
   const fileManagerRef = useRef<FileManagerHandle>(null);
 
@@ -278,6 +279,7 @@ const AppContent: React.FC = () => {
   }, [editorRoute, returnTo, queryState]);
   const activeTab = route.tab;
   useEffect(() => { setFolderReorder(false); }, [activeTab, route.notebook]);
+  useEffect(() => { setFileMetadataOpen(false); }, [activeTab]);
   const sidebarGestureRef = useSidebarSwipe(activeTab === 'notes' && !loading && !loadError, filtersOpen, setFiltersOpen);
   const selectedFolders = useMemo(() => route.folders.length ? [...new Set(route.folders)] : legacyFolderPaths(config?.notebooks || [], selectedNotebookId, route.folder), [route.folders, route.folder, config, selectedNotebookId]);
   const folderRoot = config?.notebooks.find(nb => nb.id === selectedNotebookId)?.root.replace(/\/$/, '');
@@ -371,7 +373,12 @@ const AppContent: React.FC = () => {
         const query = currentFilterSearch({ view: viewMode === 'graph' ? 'flat' : viewMode });
         query.set('notebook', selectedNotebookId);
         await navigateFiltered(tab === 'notes' ? notebookRoute(selectedNotebookId) : '/graph', query);
-      } else navigate(`/${tab === 'assets' ? 'files' : tab}?notebook=${encodeURIComponent(selectedNotebookId)}`);
+      } else {
+        const query = new URLSearchParams({ notebook: selectedNotebookId });
+        // The Files page opens at the folder selected in Notes.
+        if (tab === 'assets' && selectedFolder && folderRoot) query.set('asset', `${folderRoot}/${selectedFolder}`);
+        navigate(`/${tab === 'assets' ? 'files' : tab}?${query.toString()}`);
+      }
     } finally { setNotebookSwitchBusy(false); }
   };
   const agentSystemRef = useRef<AgentSystemHandle>(null);
@@ -712,9 +719,9 @@ const AppContent: React.FC = () => {
     catch (error) { setActionError((error as Error).message); }
   };
 
-  const handleOpenFolderIndex = async (folder: string, folderRevision?: string) => {
+  const handleOpenFolderIndex = async (folder: string, folderRevision?: string, notebookId = selectedNotebookId) => {
     if (!canWrite) throw new Error(t('folder.readOnly'));
-    const notebook = config?.notebooks.find(item => item.id === selectedNotebookId);
+    const notebook = config?.notebooks.find(item => item.id === notebookId);
     if (!notebook) throw new Error(t('route.notebookNotFound'));
     const path = `${notebook.root.replace(/\/$/, '')}/${folder}/index.md`;
     const existing = (await queryClient.fetchQuery(noteLookupOptions(queryScope, [path], true))).notes.find(item => item.path === path);
@@ -925,10 +932,10 @@ const AppContent: React.FC = () => {
       changeFilters({ folders: [moved] });
     }
   };
-  const openFileIndex = async (path: string) => {
-    const nb = config?.notebooks.find(nb => nb.id === selectedNotebookId);
+  const openFileIndex = async (path: string, notebookId: string) => {
+    const nb = config?.notebooks.find(nb => nb.id === notebookId);
     if (!nb) return;
-    await handleOpenFolderIndex(path === nb.root ? '' : path.slice(nb.root.length + 1));
+    await handleOpenFolderIndex(path === nb.root ? '' : path.slice(nb.root.length + 1), undefined, nb.id);
     setFileDialog(undefined);
   };
 
@@ -1055,8 +1062,7 @@ const AppContent: React.FC = () => {
                 <main className="workspace-main notes-main">
               <PageToolbar>
                 {indexInToolbar && folderIndex && <FolderIndex note={folderIndex} onOpenNote={handleOpenNote} />}
-                <NoteToolbar onManageFiles={() => openFileManager(selectedNotebookId, selectedFolder || '')} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode}
-                  allNotebooks={route.allNotebooks} onAllNotebooksChange={(config?.notebooks.length || 0) > 1 ? changeAllNotebooks : undefined}
+                <NoteToolbar sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode}
                   hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null}
                   showHidden={showHidden} descendants={route.descendants}
                   onShowHiddenChange={value => changeFilters({ showHidden: value })}
@@ -1169,7 +1175,8 @@ const AppContent: React.FC = () => {
         {activeTab === 'assets' && (
           <main className="workspace-route assets-main has-sidebar-drawer">
             <FileManager key={`${sourceId}:${selectedNotebookId}`} ref={fileManagerRef}
-              notebookId={selectedNotebookId} writable={canWrite} onSelectionChange={setSelectedFileEntry} metadataContainer={fileMetadataContainer}
+              notebookId={selectedNotebookId} notebooks={config?.notebooks || []} onNotebookChange={id => void setSelectedNotebookId(id)}
+              writable={canWrite} onSelectionChange={setSelectedFileEntry} metadataContainer={fileMetadataContainer} onShowMetadata={() => setFileMetadataOpen(true)}
               initialPath={new URLSearchParams(location.search).get('asset') || (new URLSearchParams(location.search).has('directory') ? `${folderRoot}/${config?.notebooks.find(nb => nb.id === selectedNotebookId)?.assets || 'assets'}${new URLSearchParams(location.search).get('directory') ? '/' + new URLSearchParams(location.search).get('directory') : ''}` : undefined)}
               onBusyChange={setResourceNavigationBusy} beforeChange={beforeFileChange}
               onChanged={onFilesChanged} onOpenIndex={openFileIndex} />
@@ -1213,6 +1220,8 @@ const AppContent: React.FC = () => {
 
           <RightPanel
             fileMode={activeTab === 'assets'}
+            metadataOpen={fileMetadataOpen}
+            onMetadataOpenChange={setFileMetadataOpen}
             fileMetadata={selectedFileEntry ? <FileMetadata entry={selectedFileEntry} onEdit={canWrite && !resourceNavigationBusy ? () => void fileManagerRef.current?.editMetadata() : undefined} /> : undefined}
             onFileMetadataContainer={setFileMetadataContainer}
             notebooks={config?.notebooks || []}
@@ -1285,7 +1294,7 @@ const AppContent: React.FC = () => {
         </section>
       )}
 
-      {fileDialog && <FileManagerDialog notebookId={fileDialog.notebookId} writable={canWrite}
+      {fileDialog && <FileManagerDialog notebookId={fileDialog.notebookId} notebooks={config?.notebooks || []} writable={canWrite}
         initialPath={fileDialog.path} movePath={fileDialog.movePath} beforeChange={beforeFileChange}
         onChanged={onFilesChanged} onOpenIndex={openFileIndex} onClose={() => setFileDialog(undefined)} />}
       {/* Note Editor Modal */}

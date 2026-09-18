@@ -40,6 +40,8 @@ const page = await browser.newPage(); const errors = []; page.on('pageerror', er
 page.setDefaultTimeout(10000);
 const visit = route => page.goto(base + route, { waitUntil: 'networkidle0' });
 const click = async (label, scope = '.file-manager') => { const selector = `${scope} button`; await page.waitForFunction((selector, label) => [...document.querySelectorAll(selector)].some(b => b.textContent.trim() === label && !b.disabled), {}, selector, label); await page.evaluate((selector, label) => [...document.querySelectorAll(selector)].find(b => b.textContent.trim() === label && !b.disabled).click(), selector, label); };
+// File actions are icon buttons in the file toolbar.
+const tool = async label => { const selector = `.file-toolbar-actions [aria-label="${label}"]:not([disabled])`; await page.waitForSelector(selector); await page.$eval(selector, button => button.click()); };
 const choose = async name => { await page.waitForSelector(`[aria-label="Select file: ${name}"]`); await page.click(`[aria-label="Select file: ${name}"]`); };
 const folder = async name => { await page.waitForSelector(`[aria-label="Open folder: ${name}"]`); await page.click(`[aria-label="Open folder: ${name}"]`); };
 const formName = async value => { await page.waitForSelector('.file-operation input[required]'); await page.$eval('.file-operation input[required]', (input, value) => { const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })); }, value); };
@@ -69,7 +71,7 @@ try {
   await page.type('.file-metadata-panel textarea', 'Updated metadata'); await submit();
   assert(read('notes/a/two/_dir.yml').includes('Updated metadata'));
   assert(read('notes/a/two/_dir.yml').includes('custom: keep'));
-  await click('<note>', '.file-tree');
+  await click('Notebook A', '.file-tree');
   await page.click('.right-panel [aria-label="Metadata"]'); await settled();
   console.log('PASS current-folder metadata, create _dir.yml and edit preserving custom fields');
   await page.click('.file-hidden-toggle'); await choose('.hidden.txt');
@@ -105,16 +107,16 @@ try {
   await page.waitForFunction(() => !document.querySelector('.file-detail'));
   assert.equal(read('notes/a/one/config.json'), '{"after":true}\n');
   console.log('PASS desktop split panes and close file with saved and unsaved changes');
-  await click('New text file'); await formName('blank.txt'); await submit();
+  await tool('New text file'); await formName('blank.txt'); await submit();
   assert.equal(fs.statSync(path.join(root, 'notes/a/one/blank.txt')).size, 0);
-  await source('New file content\n'); await click('<note>', '.file-tree'); await click('Discard changes', 'dialog');
+  await source('New file content\n'); await click('Notebook A', '.file-tree'); await click('Discard changes', 'dialog');
   assert.equal(read('notes/a/one/blank.txt'), '');
-  await click('New folder'); await formName('created'); await submit();
+  await tool('New folder'); await formName('created'); await submit();
   assert(fs.existsSync(path.join(root, 'notes/a/created/_dir.yml')));
-  await click('Folder information'); await page.waitForSelector('.file-operation textarea:not([disabled])');
+  await tool('Folder information'); await page.waitForSelector('.right-panel .file-metadata-panel .file-operation textarea:not([disabled])');
   await page.type('.file-operation textarea', 'Folder description'); await submit(); assert(read('notes/a/created/_dir.yml').includes('Folder description'));
-  await click('New text file'); await formName('relocated.txt'); await submit();
-  await click('<note>', '.file-tree'); await page.click('[aria-label="Folder information: created"]');
+  await tool('New text file'); await formName('relocated.txt'); await submit();
+  await click('Notebook A', '.file-tree'); await settled(); await page.click('[aria-label="Folder information: created"]');
   await page.waitForFunction(() => document.querySelector('.file-manager')?.getAttribute('aria-busy') === 'false');
   await click('Delete'); await page.select('.file-operation select', 'notes/a/one'); await submit();
   assert(!fs.existsSync(path.join(root, 'notes/a/created'))); assert(fs.existsSync(path.join(root, 'notes/a/one/relocated.txt')));
@@ -169,8 +171,29 @@ try {
   }
   console.log('PASS legacy asset route and note move entry points in list, card and kanban');
 
-  await visit('/notebooks/a'); await page.waitForSelector('[aria-label="Manage files"]'); await page.click('[aria-label="Manage files"]'); await page.waitForSelector('dialog[aria-label="Files"]');
+  await visit('/notebooks/a?folders=notes%2Fa%2Ftwo'); await page.waitForSelector('.header-note-actions');
+  await click('Files', '.header-nav'); await page.waitForFunction(() => location.pathname === '/files' && new URLSearchParams(location.search).get('asset') === 'notes/a/two');
+  await page.waitForFunction(() => document.querySelector('.file-tree .nav-tree-row.is-selected')?.textContent.trim() === 'two');
+  assert(!(await page.$eval('.file-tree', e => e.textContent)).includes('<note>'), 'The folder tree names the notebook instead of <note>');
+  await click('Notebook B', '.file-tree'); await page.waitForFunction(() => new URLSearchParams(location.search).get('notebook') === 'b');
+  await page.waitForFunction(() => document.querySelector('.file-tree .nav-tree-row.is-selected')?.textContent.includes('Notebook B'));
+  console.log('PASS Files page opens at the selected folder and switches notebooks from its tree');
+
+  await visit('/notebooks/a'); await page.waitForSelector('.header-note-actions');
+  assert(!await page.$('.header-note-actions [aria-label="Manage files"], .header-note-actions [aria-label="Show all notebooks"]'), 'Notes toolbar keeps only view and display controls');
+  const allNotebooks = '#notebook-panel .sidebar-panel-actions [aria-label="Show all notebooks"]';
+  await page.click(allNotebooks); await page.waitForFunction(() => new URLSearchParams(location.search).get('allNotebooks') === 'true');
+  assert.equal(await page.$eval(allNotebooks, button => button.getAttribute('aria-pressed')), 'true');
+  await page.click(allNotebooks); await page.waitForFunction(() => !new URLSearchParams(location.search).has('allNotebooks'));
+  const manage = await page.$('#notebook-panel [aria-label="Manage folder: Notebook A"]');
+  await (await manage.evaluateHandle(button => button.closest('.nav-tree-row'))).hover(); await manage.click(); await page.waitForSelector('dialog[aria-label="Files"] .file-manager[aria-busy=false]');
   assert(await page.$eval('dialog[aria-label="Files"]', element => element.getBoundingClientRect().width > 1300), 'Desktop dialog should use the wider width');
+  await tool('Folder information'); await page.waitForSelector('dialog .file-info-panel .file-operation textarea:not([disabled])');
+  assert((await page.$eval('dialog .file-info-panel', e => e.textContent)).includes('notes/a'));
+  await page.click('dialog .file-info-panel [aria-label="Close"]'); await page.waitForFunction(() => !document.querySelector('dialog .file-info-panel'));
+  await click('Notebook B', 'dialog .file-tree'); await page.waitForFunction(() => document.querySelector('dialog .file-tree .nav-tree-row.is-selected')?.textContent.includes('Notebook B'));
+  await click('Notebook A', 'dialog .file-tree'); await page.waitForSelector('dialog [aria-label="Open folder: two"]');
+  console.log('PASS sidebar all-notebooks toggle, dialog folder information panel and dialog notebook switching');
   await folder('two'); await choose('renamed.png');
   await page.setViewport({ width: 390, height: 844 });
   assert(await page.$$eval('.file-navigation-row', rows => rows.length === 2 && rows.every(row => getComputedStyle(row).display !== 'none')), 'Mobile navigation rows remain visible');

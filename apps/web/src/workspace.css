@@ -279,6 +279,11 @@
 .folder-manage { width: 24px; }
 .folder-tree-item:hover .folder-drop-body { background: var(--workspace-selection); }
 .folder-grip:hover, .folder-manage:hover { color: var(--color-text); }
+/* A folder's manage action appears with the row it belongs to; touch screens keep it visible. */
+@media (hover: hover) {
+  .nav-tree-row .folder-manage { opacity: 0; }
+  .nav-tree-row:hover .folder-manage, .nav-tree-row:focus-within .folder-manage { opacity: 1; }
+}
 .folder-dialog-actions { display: flex; gap: 8px; flex-direction: column; }
 .folder-dialog-actions .ui-button { justify-content: flex-start; }
 .folder-error { color: #b45309; font-size: 12px; overflow-wrap: anywhere; display: flex; flex-direction: column; gap: 8px; }
@@ -598,7 +603,9 @@
   .workspace-header .header-brand { padding: 0; min-height: 40px; }
   .workspace-header .header-nav { grid-column: 1 / -1; grid-row: 2; padding: 0; }
   .workspace-header .header-nav button { flex: 1; justify-content: center; min-height: 40px; }
-  .workspace-header .header-account { grid-column: 2; grid-row: 1; }
+  .workspace-header .header-account { grid-column: 2; grid-row: 1; max-width: none; }
+  .workspace-header .header-utilities { flex-wrap: nowrap; }
+  .header-notebook .select-trigger { min-height: 44px; }
   .notes-main .workspace-page-actions { flex: 1 1 100%; }
   .workspace-page-actions .header-note-actions { max-width: none; }
   .workspace-page-actions .header-search { max-width: none; }
@@ -631,6 +638,7 @@
   .workspace-header .header-nav .mobile-nav-create svg { width: 24px; height: 24px; }
   .workspace-header .header-nav .mobile-nav-create span { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
   .workspace-page-actions .header-new-note { display: none; }
+  .workspace-page-actions .note-display-options { padding-right: 0; border-right: 0; }
   .workspace-scroll { padding: 12px var(--workspace-padding) 20px; }
   .workspace-page-actions .header-note-actions { gap: 6px; }
   .workspace-page-actions .header-search input { font-size: 16px; padding-left: 30px; }
@@ -830,11 +838,10 @@
   }
 }
 
-.reorder-toggle[aria-pressed="true"] { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface)); box-shadow: inset 0 0 0 1px var(--color-primary); }
+.reorder-toggle[aria-pressed="true"], .all-notebooks-toggle[aria-pressed="true"] { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface)); box-shadow: inset 0 0 0 1px var(--color-primary); }
 
 @media (max-width: 767px) {
   .workspace-header .header-layout { padding-inline: 16px; }
   .workspace-header .header-notebook { width: 100%; }
   .header-notebook > svg { display: none; }
-  .header-notebook .select-trigger { min-height: 44px; }
 }
