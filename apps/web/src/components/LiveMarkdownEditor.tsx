@@ -186,6 +186,8 @@ class TokenEditor extends WidgetType {
     const clear = document.createElement('button'); clear.type = 'button'; clear.className = 'live-md-token-clear'; clear.setAttribute('aria-label', 'Clear date'); clear.textContent = '×';
     clear.addEventListener('mousedown', event => event.preventDefault());
     clear.addEventListener('click', () => close(null));
+    // The icon names which date is being edited, so a start picker is not mistaken for a due picker.
+    wrap.insertAdjacentHTML('afterbegin', TASK_TOKEN_ICON_SVG[this.emoji] ?? '');
     wrap.appendChild(input); wrap.appendChild(clear);
     requestAnimationFrame(() => input.focus());
     return wrap;
@@ -225,11 +227,17 @@ function atCompletionSource(context: CompletionContext): CompletionResult | null
   const match = context.matchBefore(/@\w*/);
   if (!match || (match.from === match.to && !context.explicit)) return null;
   const onTaskLine = isTaskLine(context.state.doc.lineAt(match.from).text);
+  const query = match.text.slice(1).toLowerCase();
+  const allItems = getAtCompletionItems({ onTaskLine, now: new Date() });
+  const items = query ? allItems.filter(item => item.label.toLowerCase().split(' ').some(word => word.startsWith(query))) : allItems;
   return {
     from: match.from,
     to: match.to,
-    options: getAtCompletionItems({ onTaskLine, now: new Date() }).map(item => ({
+    filter: false,
+    options: items.map(item => ({
       label: item.label,
+      // The token emoji this item inserts or edits; `addToOptions` renders it as an icon, never as text.
+      type: item.pickTarget === 'start' ? START_EMOJI : item.pickTarget === 'due' ? DUE_EMOJI : item.insertText!.split(' ')[0],
       apply: item.insertText !== undefined ? item.insertText : (view: EditorView, _completion: unknown, from: number, to: number) => {
         const line = view.state.doc.lineAt(from);
         // Start's identity key is the line start (stable across the deletion below); due's is the line end, which shifts.
@@ -486,9 +494,11 @@ const theme = EditorView.theme({
   '.live-md-image-rendered p':{margin:'0',padding:'0',lineHeight:'0'},
   '.cm-content input[type=checkbox]':{accentColor:'var(--color-primary)',verticalAlign:'middle',marginRight:'4px'},
   '.live-md-token-chip':{display:'inline-flex',alignItems:'center',gap:'4px',padding:'0 6px',borderRadius:'999px',fontSize:'0.85em',cursor:'pointer',backgroundColor:'var(--color-sidebar)',color:'var(--color-muted)',border:'1px solid var(--color-border)'},
-  '.live-md-token-editor':{display:'inline-flex',alignItems:'center',gap:'4px'},
+  '.live-md-token-editor':{display:'inline-flex',alignItems:'center',gap:'4px',marginLeft:'4px',color:'var(--color-muted)'},
   '.live-md-token-editor input':{fontSize:'0.85em',padding:'1px 4px'},
   '.live-md-token-clear':{cursor:'pointer',color:'var(--color-muted)',fontWeight:'700',lineHeight:'1',border:'none',background:'none',padding:'0 2px'},
+  '.live-md-completion-icon':{display:'inline-flex',verticalAlign:'-2px',marginRight:'6px',color:'var(--color-muted)'},
+  '.cm-tooltip-autocomplete ul li[aria-selected] .live-md-completion-icon':{color:'inherit'},
   '.live-md-due-adder':{display:'inline-flex',alignItems:'center',gap:'2px',marginLeft:'6px',padding:'0 6px',borderRadius:'999px',fontSize:'0.8em',cursor:'pointer',color:'var(--color-muted)',border:'1px dashed var(--color-border)',background:'none'},
 });
 export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content,notePath,readOnly,onChange,onCaret,ariaLabel = 'Note content'},ref) => {
@@ -537,7 +547,12 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
     const view = new EditorView({parent:host.current!,state:EditorState.create({doc:content,extensions:[
       markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),lineNumbers(),highlightActiveLineGutter(),EditorView.lineWrapping,
       syntaxHighlighting(defaultHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'},{tag:tags.contentSeparator,class:'live-md-hr'}])),theme,tableUIState,chipEditState,field,
-      autocompletion({ override: [atCompletionSource, async context => {
+      autocompletion({ icons: false, addToOptions: [{ position: 20, render: completion => {
+        const icon = completion.type && TASK_TOKEN_ICON_SVG[completion.type];
+        if (!icon) return null;
+        const span = document.createElement('span'); span.className = 'live-md-completion-icon'; span.innerHTML = icon;
+        return span;
+      } }], override: [atCompletionSource, async context => {
         const text = context.state.doc.toString(), match = noteCompletionAt(text, context.pos);
         if (!match || context.state.readOnly) return null;
         // Typing must not send one query per character; a superseded completion is dropped.

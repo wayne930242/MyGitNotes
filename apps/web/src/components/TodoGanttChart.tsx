@@ -1,10 +1,12 @@
-import { useMemo } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from '../lib/i18n/index.js';
 import { stripTaskTokens } from '../lib/task-tokens.js';
 import { computeGanttRange, computeGanttRows, computeGanttTicks, type GanttRow } from '../lib/todo-gantt.js';
 import type { TodoTask } from '../lib/todo-list.js';
 
 const DAY_WIDTH = 28;
+/** Days of history kept visible left of today when the chart first opens. */
+const LEAD_DAYS = 2;
 
 interface TodoGanttChartProps {
   tasks: TodoTask[];
@@ -25,12 +27,18 @@ export function TodoGanttChart({ tasks, today, onOpenTask }: TodoGanttChartProps
   const rows = useMemo(() => computeGanttRows(tasks, range), [tasks, range]);
   const ticks = useMemo(() => computeGanttTicks(range), [range]);
   const trackWidth = range.days * DAY_WIDTH;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const hasRows = rows.length > 0;
+
+  useLayoutEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollLeft = Math.max(0, (range.todayOffset - LEAD_DAYS) * DAY_WIDTH);
+  }, [range.todayOffset, hasRows]);
 
   if (rows.length === 0) return <p className="todo-empty">{t('panel.todoGanttEmpty')}</p>;
 
   return (
     <div className="todo-gantt" role="group" aria-label={t('panel.todoGanttTimeline')}>
-      <div className="todo-gantt-scroll">
+      <div className="todo-gantt-scroll" ref={scrollRef}>
         <div className="todo-gantt-header todo-gantt-row">
           <div className="todo-gantt-label-cell" />
           <div className="todo-gantt-track" style={{ width: trackWidth }}>
@@ -51,7 +59,7 @@ export function TodoGanttChart({ tasks, today, onOpenTask }: TodoGanttChartProps
             <button
               type="button"
               className="todo-gantt-label-cell todo-gantt-label-button"
-              title={row.task.noteTitle}
+              title={`${stripTaskTokens(row.task.lineText)} · ${row.task.noteTitle}`}
               onClick={() => onOpenTask(row.task)}
             >
               {stripTaskTokens(row.task.lineText)}

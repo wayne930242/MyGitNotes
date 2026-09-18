@@ -659,7 +659,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 .todo-task label { display: flex; align-items: center; gap: 6px; }
 .todo-task-text { flex: 1; min-width: 0; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text); font-size: 12px; }
 .todo-task-note { align-self: flex-start; margin-left: 22px; max-width: calc(100% - 22px); white-space: normal; text-align: left; }
-.todo-task-dates { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 0 22px; padding: 0; list-style: none; }
+.todo-group .todo-task-dates { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px; margin: 2px 0 0 22px; padding: 0; list-style: none; }
 .todo-task-date-chip { display: inline-flex; align-items: center; gap: 3px; color: var(--color-muted); font-size: 10px; }
 .todo-task-date-chip svg { width: 11px; height: 11px; }
 
@@ -670,13 +670,13 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 .todo-gantt-scroll { overflow-x: auto; }
 .todo-gantt-row { display: flex; align-items: stretch; min-height: 26px; width: max-content; min-width: 100%; border-bottom: 1px solid var(--color-border); }
 .todo-gantt-header { min-height: 20px; border-bottom-color: var(--color-border); }
-.todo-gantt-label-cell { position: sticky; left: 0; z-index: 1; flex: 0 0 96px; width: 96px; display: flex; align-items: center; padding: 2px 6px 2px 0; background: var(--color-surface); font-size: 11px; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.todo-gantt-label-cell { position: sticky; left: 0; z-index: 1; flex: 0 0 96px; width: 96px; display: block; padding: 2px 6px 2px 0; line-height: 21px; border-right: 1px solid var(--color-border); background: var(--color-surface); font-size: 11px; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .todo-gantt-label-button { border: none; cursor: pointer; }
 .todo-gantt-label-button:hover { color: var(--color-primary); }
 .todo-gantt-track { position: relative; flex: none; }
 .todo-gantt-tick { position: absolute; top: 0; font-size: 9px; color: var(--color-muted); white-space: nowrap; }
 .todo-gantt-today-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--color-primary); opacity: 0.6; }
-.todo-gantt-bar { position: absolute; top: 4px; bottom: 4px; border-radius: 4px; background: var(--color-primary-light); border: 1px solid var(--color-primary); min-width: 6px; }
+.todo-gantt-bar { position: absolute; top: 50%; height: 16px; transform: translateY(-50%); border-radius: 4px; background: color-mix(in srgb, var(--color-primary) 30%, transparent); border: 1px solid var(--color-primary); min-width: 6px; }
 .todo-gantt-bar-dueOnly { border-radius: 999px; }
 .todo-gantt-bar-startOnly { background: var(--color-sidebar); border-style: dashed; }
 
