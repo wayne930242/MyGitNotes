@@ -23,7 +23,7 @@ MyGitNotes is structured as a TypeScript monorepo using pnpm workspaces.
 
 `RemoteSource` contains shared note, folder, asset, Screen and Study rules. `GitHubSource` and `GitLabSource` implement immutable reads and atomic commits. `createRemoteSource` selects the adapter for HTTP and remote MCP. GitLab supports an HTTPS base URL and nested project namespaces.
 
-OAuth follows the selected provider. Encrypted server records isolate site and account identity. GitLab refresh tokens are rotated under a credential lock and shared by browser sessions and persistent MCP grants. GitHub keeps its existing credential and grant identifiers.
+OAuth follows the selected provider. Encrypted server records isolate site and account identity. GitLab refresh tokens are rotated under a credential lock and shared by browser sessions and persistent MCP grants. GitHub keeps its existing credential and grant identifiers; short-lived GitHub OAuth app tokens rotate under the same credential lock for persistent MCP grants, while GitHub browser sessions end with their access token.
 
 See the [deployment guide](../../../README.md).
 
