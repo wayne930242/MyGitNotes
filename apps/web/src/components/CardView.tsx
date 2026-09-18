@@ -6,6 +6,7 @@ import { NoteTags, NoteTagActions } from './NoteTags.js';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { useTranslation } from '../lib/i18n/index.js';
+import { noteUpdatedTime } from '../lib/note-sort.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 
 interface CardViewProps {
@@ -83,8 +84,9 @@ export const CardView: React.FC<CardViewProps> = ({
   };
 
   const renderCard = (note: NoteListItem) => {
-        const formattedDate = note.mtime
-          ? new Date(note.mtime).toLocaleDateString(undefined, {
+        const updated = noteUpdatedTime(note);
+        const formattedDate = updated
+          ? new Date(updated).toLocaleDateString(undefined, {
               month: 'short',
               day: 'numeric',
             })

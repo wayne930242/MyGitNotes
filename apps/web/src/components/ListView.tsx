@@ -14,7 +14,7 @@ import { NoteTags, NoteTagActions } from './NoteTags.js';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import { Select } from './Select.js';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
-import { SortField, SortOrder } from '../lib/note-sort.js';
+import { noteUpdatedTime, SortField, SortOrder } from '../lib/note-sort.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 
@@ -51,7 +51,8 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
   actions: NoteRowActions; dates: { short: Intl.DateTimeFormat; full: Intl.DateTimeFormat };
 }) {
   const { t } = useTranslation();
-  const formattedDate = note.mtime ? dates.short.format(note.mtime) : '—';
+  const updated = noteUpdatedTime(note);
+  const formattedDate = updated ? dates.short.format(updated) : '—';
   return (
     <tr
       onClick={() => actions.open(note)}
@@ -98,8 +99,8 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
       <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap tabular-nums">
         <div className="flex items-center gap-1.5">
           <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          <time dateTime={note.mtime ? new Date(note.mtime).toISOString() : undefined}
-            title={note.mtime ? dates.full.format(note.mtime) : undefined}>{formattedDate}</time>
+          <time dateTime={updated ? new Date(updated).toISOString() : undefined}
+            title={updated ? dates.full.format(updated) : undefined}>{formattedDate}</time>
         </div>
       </td>
 
