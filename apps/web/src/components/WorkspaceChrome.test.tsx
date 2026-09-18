@@ -11,7 +11,14 @@ import {
   saveSidebarWidth,
   getSavedRightPanelWidth,
   saveRightPanelWidth,
+  persistWidthOnUserInteraction,
   RIGHT_PANEL_RAIL_WIDTH,
+  SIDEBAR_WIDTH_STORAGE_KEY,
+  MIN_SIDEBAR_WIDTH,
+  MAX_SIDEBAR_WIDTH,
+  RIGHT_PANEL_WIDTH_STORAGE_KEY,
+  MIN_RIGHT_PANEL_WIDTH,
+  MAX_RIGHT_PANEL_WIDTH,
 } from './WorkspaceChrome.js';
 
 afterEach(cleanup);
@@ -99,6 +106,46 @@ describe('Right panel width persistence', () => {
 
     saveRightPanelWidth(999);
     expect(localStorage.getItem('mygitnotes:right-panel-width')).toBe('480');
+  });
+});
+
+describe('persistWidthOnUserInteraction', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  function fakePanelRef(inPixels: number) {
+    return {
+      current: {
+        getSize: () => ({ inPixels, asPercentage: 0 }),
+        collapse: () => {},
+        expand: () => {},
+        isCollapsed: () => false,
+        resize: () => {},
+      },
+    };
+  }
+
+  it('does not persist a layout change that was not caused by direct user interaction', () => {
+    persistWidthOnUserInteraction({ isUserInteraction: false }, fakePanelRef(300), 0, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, saveSidebarWidth);
+    expect(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)).toBeNull();
+  });
+
+  it('persists a layout change caused by direct user interaction', () => {
+    persistWidthOnUserInteraction({ isUserInteraction: true }, fakePanelRef(300), 0, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, saveSidebarWidth);
+    expect(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)).toBe('300');
+  });
+
+  it('subtracts the rail offset before clamping and persisting a right-panel width', () => {
+    persistWidthOnUserInteraction(
+      { isUserInteraction: true },
+      fakePanelRef(RIGHT_PANEL_RAIL_WIDTH + 400),
+      RIGHT_PANEL_RAIL_WIDTH,
+      MIN_RIGHT_PANEL_WIDTH,
+      MAX_RIGHT_PANEL_WIDTH,
+      saveRightPanelWidth
+    );
+    expect(localStorage.getItem(RIGHT_PANEL_WIDTH_STORAGE_KEY)).toBe('400');
   });
 });
 

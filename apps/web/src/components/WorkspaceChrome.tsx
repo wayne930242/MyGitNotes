@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PanelLeft } from 'lucide-react';
-import { Group, Panel, Separator, usePanelRef, type PanelSize } from 'react-resizable-panels';
+import { Group, Panel, Separator, usePanelRef, type LayoutChangedMeta, type PanelImperativeHandle, type PanelSize } from 'react-resizable-panels';
 
 export const SIDEBAR_WIDTH_STORAGE_KEY = 'mygitnotes:sidebar-width';
 export const DEFAULT_SIDEBAR_WIDTH = 256;
@@ -15,54 +15,74 @@ export const MAX_RIGHT_PANEL_WIDTH = 480;
 /** Width of the always-visible tool rail; must match `--right-panel-rail-width` in index.css. */
 export const RIGHT_PANEL_RAIL_WIDTH = 49;
 
-export function getSavedRightPanelWidth(): number {
-  if (typeof window === 'undefined') return DEFAULT_RIGHT_PANEL_WIDTH;
+function readClampedWidth(key: string, min: number, max: number, fallback: number): number {
+  if (typeof window === 'undefined') return fallback;
   try {
-    const saved = localStorage.getItem(RIGHT_PANEL_WIDTH_STORAGE_KEY);
-    if (!saved) return DEFAULT_RIGHT_PANEL_WIDTH;
+    const saved = localStorage.getItem(key);
+    if (!saved) return fallback;
     const parsed = parseInt(saved, 10);
     if (Number.isFinite(parsed)) {
-      return Math.max(MIN_RIGHT_PANEL_WIDTH, Math.min(MAX_RIGHT_PANEL_WIDTH, parsed));
+      return Math.max(min, Math.min(max, parsed));
     }
   } catch {
     // Ignore storage access errors
   }
-  return DEFAULT_RIGHT_PANEL_WIDTH;
+  return fallback;
+}
+
+function writeClampedWidth(key: string, width: number, min: number, max: number): number | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const clamped = Math.max(min, Math.min(max, Math.round(width)));
+    localStorage.setItem(key, String(clamped));
+    return clamped;
+  } catch {
+    return null;
+  }
+}
+
+export function getSavedRightPanelWidth(): number {
+  return readClampedWidth(RIGHT_PANEL_WIDTH_STORAGE_KEY, MIN_RIGHT_PANEL_WIDTH, MAX_RIGHT_PANEL_WIDTH, DEFAULT_RIGHT_PANEL_WIDTH);
 }
 
 export function saveRightPanelWidth(width: number): void {
-  if (typeof window === 'undefined') return;
-  try {
-    const clamped = Math.max(MIN_RIGHT_PANEL_WIDTH, Math.min(MAX_RIGHT_PANEL_WIDTH, Math.round(width)));
-    localStorage.setItem(RIGHT_PANEL_WIDTH_STORAGE_KEY, String(clamped));
-  } catch {
-    // Ignore storage access errors
-  }
+  writeClampedWidth(RIGHT_PANEL_WIDTH_STORAGE_KEY, width, MIN_RIGHT_PANEL_WIDTH, MAX_RIGHT_PANEL_WIDTH);
 }
 
 export function getSavedSidebarWidth(): number {
-  if (typeof window === 'undefined') return DEFAULT_SIDEBAR_WIDTH;
-  try {
-    const saved = localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
-    if (!saved) return DEFAULT_SIDEBAR_WIDTH;
-    const parsed = parseInt(saved, 10);
-    if (Number.isFinite(parsed)) {
-      return Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parsed));
-    }
-  } catch {
-    // Ignore storage access errors
-  }
-  return DEFAULT_SIDEBAR_WIDTH;
+  return readClampedWidth(SIDEBAR_WIDTH_STORAGE_KEY, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH);
 }
 
 export function saveSidebarWidth(width: number): void {
-  if (typeof window === 'undefined') return;
+  const clamped = writeClampedWidth(SIDEBAR_WIDTH_STORAGE_KEY, width, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH);
+  if (clamped === null) return;
   try {
-    const clamped = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, Math.round(width)));
-    localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(clamped));
     document.documentElement.style.setProperty('--workspace-sidebar-width', `${clamped}px`);
   } catch {
-    // Ignore storage access errors
+    // Ignore style access errors
+  }
+}
+
+/**
+ * Persists a panel's current pixel width only when the layout change that triggered it was
+ * direct user input (drag/keyboard) — `Group.onLayoutChanged`'s `meta.isUserInteraction` is the
+ * only signal that distinguishes that from a group-driven resize (e.g. a viewport-width clamp),
+ * which `Panel.onResize` fires for too but carries no such flag.
+ */
+export function persistWidthOnUserInteraction(
+  meta: LayoutChangedMeta,
+  panelRef: React.RefObject<PanelImperativeHandle | null>,
+  offset: number,
+  min: number,
+  max: number,
+  save: (width: number) => void,
+): void {
+  if (!meta.isUserInteraction) return;
+  const size = panelRef.current?.getSize();
+  if (!size) return;
+  const px = Math.round(size.inPixels) - offset;
+  if (px >= min && px <= max) {
+    save(px);
   }
 }
 
@@ -187,6 +207,7 @@ export function WorkspaceSplitLayout({
   const onCloseDrawer = propOnCloseDrawer || (() => context?.setOpen(false));
 
   const [initialWidth] = useState(getSavedSidebarWidth);
+  const sidebarPanelRef = usePanelRef();
   const rightPanelRef = usePanelRef();
 
   useEffect(() => {
@@ -198,27 +219,19 @@ export function WorkspaceSplitLayout({
     rightPanelRef.current?.resize(rightPanelWidth);
   }, [rightPanelWidth]);
 
+  // Live visual feedback only, on every resize regardless of cause; persistence happens
+  // separately in the Group's onLayoutChanged, gated on user interaction.
   const handleResize = (panelSize: PanelSize) => {
     if (panelSize?.inPixels) {
       const px = Math.round(panelSize.inPixels);
       if (px >= MIN_SIDEBAR_WIDTH && px <= MAX_SIDEBAR_WIDTH) {
         document.documentElement.style.setProperty('--workspace-sidebar-width', `${px}px`);
-        saveSidebarWidth(px);
       }
     }
   };
 
   const rightPanelHidden = !rightPanelWidth;
   const rightPanelExpanded = !rightPanelHidden && rightPanelWidth! > RIGHT_PANEL_RAIL_WIDTH;
-
-  const handleRightPanelResize = (panelSize: PanelSize) => {
-    if (panelSize?.inPixels) {
-      const contentPx = Math.round(panelSize.inPixels) - RIGHT_PANEL_RAIL_WIDTH;
-      if (contentPx >= MIN_RIGHT_PANEL_WIDTH && contentPx <= MAX_RIGHT_PANEL_WIDTH) {
-        saveRightPanelWidth(contentPx);
-      }
-    }
-  };
 
   // The Panel stays mounted (gated on `rightPanel` alone, not `rightPanelWidth`) so RightPanel
   // never unmounts — it is the sole source of rightPanelWidth via onWidthChange, so if it were
@@ -235,7 +248,6 @@ export function WorkspaceSplitLayout({
         minSize={`${rightPanelHidden ? 0 : rightPanelExpanded ? RIGHT_PANEL_RAIL_WIDTH + MIN_RIGHT_PANEL_WIDTH : RIGHT_PANEL_RAIL_WIDTH}px`}
         maxSize={`${rightPanelHidden ? 0 : rightPanelExpanded ? RIGHT_PANEL_RAIL_WIDTH + MAX_RIGHT_PANEL_WIDTH : RIGHT_PANEL_RAIL_WIDTH}px`}
         groupResizeBehavior="preserve-pixel-size"
-        onResize={handleRightPanelResize}
         panelRef={rightPanelRef}
         className="workspace-split-right-panel"
       >
@@ -279,12 +291,9 @@ export function WorkspaceSplitLayout({
       <Group
         orientation="horizontal"
         className="workspace-split-group flex-1 min-w-0 min-h-0 h-full flex"
-        onLayoutChanged={() => {
-          const currentPx = parseInt(document.documentElement.style.getPropertyValue('--workspace-sidebar-width'), 10);
-          if (Number.isFinite(currentPx) && currentPx >= MIN_SIDEBAR_WIDTH && currentPx <= MAX_SIDEBAR_WIDTH) {
-            saveSidebarWidth(currentPx);
-          }
-        }}
+        onLayoutChanged={(_layout, meta) =>
+          persistWidthOnUserInteraction(meta, sidebarPanelRef, 0, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, saveSidebarWidth)
+        }
       >
         {hasSidebar && (
           <>
@@ -295,6 +304,7 @@ export function WorkspaceSplitLayout({
               maxSize={`${MAX_SIDEBAR_WIDTH}px`}
               groupResizeBehavior="preserve-pixel-size"
               onResize={handleResize}
+              panelRef={sidebarPanelRef}
               className="workspace-split-sidebar-panel h-full"
             >
               <div className="workspace-split-sidebar-content h-full">
@@ -306,7 +316,13 @@ export function WorkspaceSplitLayout({
         )}
         <Panel id={mainId} groupResizeBehavior="preserve-relative-size" className="flex-1 min-w-0 min-h-0 h-full">
           {rightPanelNode ? (
-            <Group orientation="horizontal" className="workspace-split-inner-group flex-1 min-w-0 min-h-0 h-full flex">
+            <Group
+              orientation="horizontal"
+              className="workspace-split-inner-group flex-1 min-w-0 min-h-0 h-full flex"
+              onLayoutChanged={(_layout, meta) =>
+                persistWidthOnUserInteraction(meta, rightPanelRef, RIGHT_PANEL_RAIL_WIDTH, MIN_RIGHT_PANEL_WIDTH, MAX_RIGHT_PANEL_WIDTH, saveRightPanelWidth)
+              }
+            >
               <Panel
                 groupResizeBehavior="preserve-relative-size"
                 className={`workspace-split-main-panel flex-1 min-w-0 min-h-0 h-full ${mainClassName}`}

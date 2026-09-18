@@ -58,11 +58,17 @@ export function RightPanel({ notebooks, selectedNotebookId, onOpenNote, onSaveNo
 
   useLayoutEffect(() => {
     if (!visible) {
+      document.documentElement.style.setProperty('--right-panel-width', '0px');
       onWidthChange?.(0);
       return;
     }
-    onWidthChange?.(isOpen ? RIGHT_PANEL_RAIL_WIDTH + getSavedRightPanelWidth() : RIGHT_PANEL_RAIL_WIDTH);
-    return () => onWidthChange?.(0);
+    const width = isOpen ? RIGHT_PANEL_RAIL_WIDTH + getSavedRightPanelWidth() : RIGHT_PANEL_RAIL_WIDTH;
+    document.documentElement.style.setProperty('--right-panel-width', `${width}px`);
+    onWidthChange?.(width);
+    return () => {
+      document.documentElement.style.setProperty('--right-panel-width', '0px');
+      onWidthChange?.(0);
+    };
   }, [isOpen, visible, onWidthChange]);
 
   if (!visible) return null;
