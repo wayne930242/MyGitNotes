@@ -1,10 +1,11 @@
 import { Button } from './Button.js';
-import { useEffect, type ReactNode } from 'react';
+import { useLayoutEffect, type ReactNode } from 'react';
 import { CalendarDays, ListTodo, GitBranch, Info } from 'lucide-react';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { ChangeRequest, FileChange, GitStatus, NoteItem, NotebookConfig } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { usePanelContext, WORKSPACE_TOOL_IDS, type WorkspaceToolId } from '../lib/panel-context.js';
+import { getSavedRightPanelWidth, RIGHT_PANEL_RAIL_WIDTH } from './WorkspaceChrome.js';
 import { CalendarTool } from './CalendarTool.js';
 import { TodoTool } from './TodoTool.js';
 import { ChangesTool } from './ChangesTool.js';
@@ -33,6 +34,8 @@ interface RightPanelProps {
   writable: boolean;
   /** Present only for a local workspace, which syncs with its Git upstream. */
   onSynced?: () => void;
+  /** Reports the panel's current desired width in pixels (0 while hidden) so the layout can size its splitter panel. */
+  onWidthChange?: (width: number) => void;
 }
 
 const WORKSPACE_TOOL_ICONS: Record<WorkspaceToolId, typeof CalendarDays> = {
@@ -47,7 +50,7 @@ const WORKSPACE_TOOL_LABELS: Record<WorkspaceToolId, 'panel.calendar' | 'panel.t
 };
 
 /** The workspace-level Calendar/Todo/Changes panel. Hidden while a note is open — the editor has its own document panel. */
-export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpenNote, onSaveNote, onReadNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, fileMode = false, fileMetadata, onFileMetadataContainer, metadataOpen = false, onMetadataOpenChange }: RightPanelProps) {
+export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpenNote, onSaveNote, onReadNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, fileMode = false, fileMetadata, onFileMetadataContainer, metadataOpen = false, onMetadataOpenChange, onWidthChange }: RightPanelProps) {
   const { t } = useTranslation();
   const panel = usePanelContext();
   const visible = !panel.hasOpenNote;
@@ -55,14 +58,20 @@ export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpe
   const showingWorkspaceTool = !showingMetadata && panel.isOpen && (!fileMode || panel.activeTool === 'changes');
   const isOpen = showingMetadata || showingWorkspaceTool;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!visible) {
       document.documentElement.style.setProperty('--right-panel-width', '0px');
+      onWidthChange?.(0);
       return;
     }
-    document.documentElement.style.setProperty('--right-panel-width', isOpen ? 'calc(320px + var(--right-panel-rail-width))' : 'var(--right-panel-rail-width)');
-    return () => document.documentElement.style.setProperty('--right-panel-width', '0px');
-  }, [isOpen, visible]);
+    const width = isOpen ? RIGHT_PANEL_RAIL_WIDTH + getSavedRightPanelWidth() : RIGHT_PANEL_RAIL_WIDTH;
+    document.documentElement.style.setProperty('--right-panel-width', `${width}px`);
+    onWidthChange?.(width);
+    return () => {
+      document.documentElement.style.setProperty('--right-panel-width', '0px');
+      onWidthChange?.(0);
+    };
+  }, [isOpen, visible, onWidthChange]);
 
   if (!visible) return null;
 
