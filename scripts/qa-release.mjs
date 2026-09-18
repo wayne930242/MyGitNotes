@@ -55,7 +55,7 @@ try{
  await page.setViewport({width:320,height:700,isMobile:true,hasTouch:true});await page.waitForSelector('input[aria-label="MCP client name"]');
  await page.waitForFunction(()=>document.querySelector('nav').getBoundingClientRect().width<=320);
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
- assert.equal(await page.$$eval('nav button',buttons=>buttons.length),4);
+ assert.equal(await page.$$eval('nav button:not(.mobile-nav-create)',buttons=>buttons.length),4);
  const screenshot=product+'/artifacts/qa/'+(workspace.capabilities.local?'local':'production')+'-status-settings.png';
  fs.mkdirSync(path.dirname(screenshot),{recursive:true});await page.screenshot({path:screenshot,fullPage:true});console.log('PASS mobile Settings, persistent grant information and four-way navigation');
  if(!workspace.capabilities.local){

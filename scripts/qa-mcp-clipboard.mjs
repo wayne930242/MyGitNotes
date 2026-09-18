@@ -64,7 +64,7 @@ try {
     await page.waitForSelector('button[title="Copied"]', { timeout: 3000 });
     await page.click('#paste');
     await page.keyboard.down('Control');
-    await page.keyboard.press('KeyV');
+    await page.keyboard.press('KeyV', { commands: ['paste'] });
     await page.keyboard.up('Control');
     assert.equal(await page.$eval('#paste', el => el.value), url, `${mode}: pasted URL`);
     console.log(`PASS ${mode}: copied indicator and pasted MCP URL`);

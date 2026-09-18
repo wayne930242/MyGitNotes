@@ -19,7 +19,7 @@ try {
   page.on('request', request => {
     const pathname = new URL(request.url()).pathname;
     if (pathname === '/api/workspace') void request.respond({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'Repository unavailable.' }) });
-    else if (pathname === '/api/auth/session') void request.respond({ contentType: 'application/json', body: '{"authenticated":false}' });
+    else if (pathname === '/api/auth/session') void request.respond({ contentType: 'application/json', body: '{"authenticated":false,"configured":true,"provider":"github"}' });
     else void request.continue();
   });
   for (const width of [1440, 390]) {

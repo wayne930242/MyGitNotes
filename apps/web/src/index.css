@@ -756,6 +756,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 }
 
 @media (max-width: 767px) {
+  .editor-notices { max-height: 25%; }
   .editor-notice { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px; font-size: 12px; line-height: 18px; }
   .editor-notice-actions { width: 100%; }
   .editor-notice-actions button { flex: 1; min-height: 44px; }
