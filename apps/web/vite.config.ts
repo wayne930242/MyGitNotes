@@ -9,6 +9,7 @@ const devPortsFile = process.env.MYGITNOTES_DEV_PORTS_FILE || path.join(repoRoot
 
 interface DevPorts {
   serverPort?: number;
+  serverPid?: number;
   webPort?: number;
 }
 
@@ -16,11 +17,24 @@ function toPort(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 && value < 65536 ? value : undefined;
 }
 
+function toPid(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 function readDevPorts(): DevPorts {
   try {
     const parsed = JSON.parse(fs.readFileSync(devPortsFile, 'utf-8'));
-    return { serverPort: toPort(parsed.serverPort), webPort: toPort(parsed.webPort) };
+    return { serverPort: toPort(parsed.serverPort), serverPid: toPid(parsed.serverPid), webPort: toPort(parsed.webPort) };
   } catch { return {}; }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
 }
 
 function writeDevPort(key: keyof DevPorts, port: number): void {
@@ -31,13 +45,17 @@ function writeDevPort(key: keyof DevPorts, port: number): void {
   }
 }
 
-/** local-server binds first and may move off 4321; wait briefly for it to publish its actual port. */
+/**
+ * local-server binds first and may move off 4321; wait briefly for it to publish its actual port.
+ * A prior run may have left its own port in the file after exiting, so only trust a port whose
+ * recorded pid is still alive — that pid can only belong to the local-server run starting now.
+ */
 async function resolveApiPort(): Promise<number> {
   if (process.env.PORT) return Number(process.env.PORT);
   const deadline = Date.now() + 3000;
   while (Date.now() < deadline) {
-    const port = readDevPorts().serverPort;
-    if (port) return port;
+    const { serverPort, serverPid } = readDevPorts();
+    if (serverPort && serverPid && isProcessAlive(serverPid)) return serverPort;
     await new Promise(resolve => setTimeout(resolve, 50));
   }
   return 4321;

@@ -29,5 +29,6 @@ const { port } = await listen(desiredPort, MAX_PORT_ATTEMPTS);
 if (isLocal) {
   process.env.APP_URL = `http://localhost:${port}`;
   writeDevPort(repoRoot, 'serverPort', port);
+  writeDevPort(repoRoot, 'serverPid', process.pid);
 }
 console.log(`[local-server] http://${host}:${port}`);

@@ -29,3 +29,10 @@ it('still round-trips a valid port written by writeDevPort', () => {
   writeDevPort(root, 'serverPort', 4321);
   expect(readDevPorts(root)).toEqual({ serverPort: 4321, webPort: undefined });
 });
+
+it('round-trips the serverPid written alongside the port', () => {
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'dev-ports-'));
+  writeDevPort(root, 'serverPort', 4321);
+  writeDevPort(root, 'serverPid', process.pid);
+  expect(readDevPorts(root)).toEqual({ serverPort: 4321, serverPid: process.pid, webPort: undefined });
+});
