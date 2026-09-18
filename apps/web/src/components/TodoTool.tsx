@@ -11,7 +11,7 @@ import { DONE_EMOJI, DUE_EMOJI, START_EMOJI, TIMESTAMP_EMOJI, getTokenValue, set
 import { TASK_TOKEN_ICON } from '../lib/task-icons.js';
 import { filterTasksByFolder } from '../lib/folder-filter.js';
 import { groupTodoTasks, type TodoTask } from '../lib/todo-list.js';
-import { getSavedPanelScope, savePanelScope, type PanelScope } from '../lib/panel-scope.js';
+import { effectivePanelScope, getSavedPanelScope, savePanelScope, type PanelScope } from '../lib/panel-scope.js';
 import { useNoteAgenda } from '../lib/use-note-queries.js';
 
 const TODO_SCOPE_STORAGE_KEY = 'github-notes:todo-scope';
@@ -54,17 +54,18 @@ export function TodoTool({ notebooks, selectedNotebookId, currentFolder, onOpenN
   const { t } = useTranslation();
   const [scope, setScope] = useState<PanelScope>(() => getSavedPanelScope(TODO_SCOPE_STORAGE_KEY));
   const changeScope = (next: PanelScope) => { setScope(next); savePanelScope(TODO_SCOPE_STORAGE_KEY, next); };
+  const effectiveScope = effectivePanelScope(scope, currentFolder);
   const [groupMode, setGroupMode] = useState<'date' | 'note' | 'gantt'>('date');
   const [showCompleted, setShowCompleted] = useState(false);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [staleIds, setStaleIds] = useState<Set<string>>(new Set());
   const [saveErrors, setSaveErrors] = useState<Map<string, string>>(new Map());
 
-  const agenda = useNoteAgenda(scope === 'all' || notebooks.length <= 1 ? 'all' : selectedNotebookId);
+  const agenda = useNoteAgenda(effectiveScope === 'all' || notebooks.length <= 1 ? 'all' : selectedNotebookId);
   const tasks = useMemo(() => {
     const raw = agenda.agenda?.tasks ?? [];
-    return scope === 'folder' && currentFolder ? filterTasksByFolder(raw, currentFolder) : raw;
-  }, [agenda.agenda, scope, currentFolder]);
+    return effectiveScope === 'folder' && currentFolder ? filterTasksByFolder(raw, currentFolder) : raw;
+  }, [agenda.agenda, effectiveScope, currentFolder]);
   const groups = useMemo(() => groupTodoTasks(tasks, formatDateYMD(new Date())), [tasks]);
   const totalOpen = groups.overdue.length + groups.today.length + groups.upcoming.length + groups.noDate.length;
   const noteGroups = useMemo(() => {
@@ -134,7 +135,7 @@ export function TodoTool({ notebooks, selectedNotebookId, currentFolder, onOpenN
   return (
     <div className="panel-tool todo-tool">
       {(notebooks.length > 1 || currentFolder) && <div className="panel-tool-header">
-        <Select aria-label={t('filters.notebook')} value={scope} onValueChange={value => changeScope(value as PanelScope)}
+        <Select aria-label={t('filters.notebook')} value={effectiveScope} onValueChange={value => changeScope(value as PanelScope)}
           options={[
             { value: 'folder', label: t('panel.scopeCurrentFolder'), disabled: !currentFolder },
             { value: 'current', label: t('panel.scopeCurrentNotebook') },

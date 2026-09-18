@@ -19,3 +19,12 @@ export function savePanelScope(storageKey: string, scope: PanelScope): void {
     // ignore quota / storage errors
   }
 }
+
+/**
+ * The scope actually shown and applied. `'folder'` falls back to `'current'`
+ * while no folder is being browsed, without touching the persisted preference
+ * — browsing into a folder again restores it.
+ */
+export function effectivePanelScope(scope: PanelScope, currentFolder: string | undefined): PanelScope {
+  return scope === 'folder' && !currentFolder ? 'current' : scope;
+}

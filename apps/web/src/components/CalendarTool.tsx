@@ -11,7 +11,7 @@ import { stripTaskTokens } from '../lib/task-tokens.js';
 import type { TodoTask } from '../lib/todo-list.js';
 import { buildDayCounts, notesForDay, notesForMonth, tasksForDay, tasksForMonth } from '../lib/note-day-index.js';
 import { filterNotesByFolder, filterTasksByFolder } from '../lib/folder-filter.js';
-import { getSavedPanelScope, savePanelScope, type PanelScope } from '../lib/panel-scope.js';
+import { effectivePanelScope, getSavedPanelScope, savePanelScope, type PanelScope } from '../lib/panel-scope.js';
 import { useNoteAgenda } from '../lib/use-note-queries.js';
 
 const CALENDAR_SCOPE_STORAGE_KEY = 'github-notes:calendar-scope';
@@ -40,12 +40,13 @@ export function CalendarTool({ notebooks, selectedNotebookId, currentFolder, onO
   const locale = language === 'zh-TW' ? 'zh-TW' : 'en-US';
   const [scope, setScope] = useState<PanelScope>(() => getSavedPanelScope(CALENDAR_SCOPE_STORAGE_KEY));
   const changeScope = (next: PanelScope) => { setScope(next); savePanelScope(CALENDAR_SCOPE_STORAGE_KEY, next); };
+  const effectiveScope = effectivePanelScope(scope, currentFolder);
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [dayField, setDayField] = useState<'created' | 'updated'>('created');
 
-  const agenda = useNoteAgenda(scope === 'all' || notebooks.length <= 1 ? 'all' : selectedNotebookId);
-  const folderScoped = scope === 'folder' && !!currentFolder;
+  const agenda = useNoteAgenda(effectiveScope === 'all' || notebooks.length <= 1 ? 'all' : selectedNotebookId);
+  const folderScoped = effectiveScope === 'folder' && !!currentFolder;
   const scopedNotes = useMemo(() => {
     const raw = agenda.agenda?.dated ?? [];
     return folderScoped && currentFolder ? filterNotesByFolder(raw, currentFolder) : raw;
@@ -80,7 +81,7 @@ export function CalendarTool({ notebooks, selectedNotebookId, currentFolder, onO
   return (
     <div className="panel-tool calendar-tool">
       {(notebooks.length > 1 || currentFolder) && <div className="panel-tool-header">
-        <Select aria-label={t('filters.notebook')} value={scope} onValueChange={value => changeScope(value as PanelScope)}
+        <Select aria-label={t('filters.notebook')} value={effectiveScope} onValueChange={value => changeScope(value as PanelScope)}
           options={[
             { value: 'folder', label: t('panel.scopeCurrentFolder'), disabled: !currentFolder },
             { value: 'current', label: t('panel.scopeCurrentNotebook') },

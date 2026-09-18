@@ -140,14 +140,14 @@ describe('computeGanttTicks', () => {
     const range = computeGanttRange([], today, 'week'); // 4-week minimum span => 28 days
     expect(range.days).toBe(28);
     const ticks = computeGanttTicks(range, 'week');
-    expect(ticks.map(tick => tick.offset)).toEqual([0, 7, 14, 21, 27]);
+    expect(ticks.map(tick => tick.offset)).toEqual([0, 7, 14, 21]);
   });
 
-  it('at month scale, one tick per calendar month plus the first/last column', () => {
+  it('at month scale, one tick per calendar month, with no trailing end-of-month tick', () => {
     const today = '2026-09-15';
     const range = computeGanttRange([], today, 'month'); // Sep 1 .. Nov 30 (3-month minimum)
     const ticks = computeGanttTicks(range, 'month');
-    expect(ticks.map(tick => tick.date)).toEqual(['2026-09-01', '2026-10-01', '2026-11-01', '2026-11-30']);
+    expect(ticks.map(tick => tick.date)).toEqual(['2026-09-01', '2026-10-01', '2026-11-01']);
   });
 });
 

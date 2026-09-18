@@ -189,7 +189,9 @@ export function computeGanttTicks(range: GanttRange, scale: GanttScale = 'day'):
   } else {
     for (let offset = 0; offset < range.days; offset += 7) offsets.add(offset);
   }
-  offsets.add(0);
-  offsets.add(range.days - 1);
+  if (scale === 'day') {
+    offsets.add(0);
+    offsets.add(range.days - 1);
+  }
   return [...offsets].sort((a, b) => a - b).map(offset => ({ offset, date: formatDayIndex(range.startDay + offset) }));
 }
