@@ -688,7 +688,6 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 .mobile-nav-label { display: none; }
 .editor-mode-select, .editor-mobile-icon { display: none; }
 .breadcrumb-sort-select { max-width: 180px; }
-.notebook-panel { flex-shrink: 0; height: 100%; }
 .agent-main { display: flex; flex-direction: column; }
 .agent-layout { flex: 1; }
 
@@ -724,21 +723,6 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   .desktop-views { display: none; }
   .header-new-note { justify-content: center; padding: 8px; }
   .header-new-note span { display: none; }
-  .notebook-panel {
-    display: block;
-    position: absolute;
-    inset: 0 auto 0 0;
-    z-index: 21;
-    max-width: calc(100% - 56px);
-    transform: translateX(-100%);
-    visibility: hidden;
-    pointer-events: none;
-    transition: transform 180ms ease, visibility 180ms;
-    box-shadow: 8px 0 24px #0002;
-  }
-  .notebook-panel.is-open { transform: translateX(0); visibility: visible; pointer-events: auto; }
-  .notebook-panel.is-dragging { transform: translateX(var(--sidebar-drag)); visibility: visible; pointer-events: auto; transition: none; }
-  .notebook-panel aside { max-width: 100%; }
   .workspace-main { padding-bottom: 96px; }
   .agent-main { padding-bottom: 12px; }
   .agent-sidebar { display: none; }
@@ -750,8 +734,6 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 }
 
 @media (max-width: 767px) {
-  .notebook-panel { width: 75%; max-width: 75%; }
-  .notebook-panel aside { width: 100%; }
   .editor-notice { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px; font-size: 12px; line-height: 18px; }
   .editor-notice-actions { width: 100%; }
   .editor-notice-actions button { flex: 1; min-height: 44px; }
@@ -879,10 +861,6 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   .select-option { min-height: 44px; }
   [contenteditable="true"] { font-size: 16px; }
   input[type="checkbox"] { width: 24px; height: 24px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .notebook-panel { transition: none; }
 }
 
 /* Workspace tools share Button, Select, and EditorNotice with the editor. */

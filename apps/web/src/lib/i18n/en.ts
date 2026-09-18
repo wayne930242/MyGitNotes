@@ -132,6 +132,7 @@ export const en = {
   "filters.hidden": "Show hidden notes",
   "filters.neighbors": "Show directly connected notes outside filters",
   "filters.descendants": "Include subfolders",
+  "filters.allNotebooks": "Show all notebooks",
   "filters.findOptions": "Find folders or tags",
   "filters.noOptions": "No matching options",
   "filters.tags": "Tags",
@@ -354,7 +355,6 @@ export const en = {
   'graph.openEditor': 'Open full editor',
   'graph.minimapHint': 'Drag the viewport to pan · Click outside it to navigate · Enter to reset',
   'graph.allTags': 'All tags',
-  'graph.allNotebooks': 'All notebooks',
 
   // Views & Header
   'view.list': 'List View',

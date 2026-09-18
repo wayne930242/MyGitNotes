@@ -153,7 +153,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   }, []);
 
   useEffect(() => {
-    if (!sourceId || !config || selectedNotebookId === 'all') return;
+    if (!sourceId || !config) return;
     let active = true;
     fetchAssets(selectedNotebookId)
       .then((items) => {

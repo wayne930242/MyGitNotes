@@ -2,10 +2,10 @@ import './sidebar-filters.css';
 import type { FilterControls } from '../lib/filter-controls.js';
 import { FolderTree } from './FolderTree.js';
 import React, { useEffect, useState } from 'react';
-import { Tag, Filter, GitBranch, CheckCircle2, Search, X, CheckSquare, BookOpen, Library, FolderPlus } from 'lucide-react';
+import { Tag, Filter, GitBranch, CheckCircle2, Search, X, CheckSquare, BookOpen, FolderPlus } from 'lucide-react';
 import type { NotebookFacets } from '@mygitnotes/core/note-query';
 import { GitStatus, FolderItem } from '../lib/types.js';
-import { mergeNotebookFacets } from '../lib/note-facets.js';
+import { mergeNotebookFacets, queryNotebookIds } from '../lib/note-facets.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { WorkspaceSidebar } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
@@ -67,16 +67,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { t, language } = useTranslation();
   const { value, statuses, onChange } = filters;
   const { status: selectedStatus, tags: selectedTags } = value;
-  const allNotebooks = selectedNotebookId === 'all';
-  const [expandedNotebooks, setExpandedNotebooks] = useState<Set<string>>(() => {
-    const initial = new Set<string>();
-    if (selectedNotebookId && selectedNotebookId !== 'all') {
-      initial.add(selectedNotebookId);
-    }
-    return initial;
-  });
+  const allNotebooks = filters.allNotebooks;
+  const [expandedNotebooks, setExpandedNotebooks] = useState<Set<string>>(() => new Set(selectedNotebookId ? [selectedNotebookId] : []));
   useEffect(() => {
-    if (selectedNotebookId && selectedNotebookId !== 'all') {
+    if (selectedNotebookId) {
       setExpandedNotebooks(previous => new Set([...previous, selectedNotebookId]));
     }
   }, [selectedNotebookId]);
@@ -98,7 +92,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const selectSingleFolder = (notebookId: string, folder: string | null) => {
     setTouchMultiSelect(false);
     const root = filters.notebooks.find(nb => nb.id === notebookId)?.root.replace(/\/$/, '');
-    const scoped = resolveAllNotebooksFolderSelect(selectedNotebookId, root, folder);
+    const scoped = resolveAllNotebooksFolderSelect(value.notebookId, root, folder);
     if (scoped) { onChange({ folders: scoped }); return; }
     onSelectFolder?.(folder);
   };
@@ -118,14 +112,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [tagSort, setTagSort] = useState<TagSort>(getSavedTagSort);
   useEffect(() => { setTagQuery(''); }, [selectedNotebookId]);
 
-  const notebookFacets = mergeNotebookFacets(Object.entries(facets || {})
-    .filter(([id]) => selectedNotebookId === 'all' || id === selectedNotebookId).map(([, value]) => value));
+  const notebookFacets = mergeNotebookFacets(queryNotebookIds(filters.notebooks, value.notebookId, value.folders)
+    .flatMap(id => facets?.[id] || []));
   const statusCounts = notebookFacets.statuses;
   const tagCounts: Record<string, number> = { ...notebookFacets.tags };
   for (const tag of selectedTags) tagCounts[tag] ??= 0;
   const allTags = Object.keys(tagCounts);
   const visibleTags = filterAndSortTags(tagCounts, tagQuery, tagSort, language);
-  const workspaceNoteCount = Object.values(facets || {}).reduce((total, value) => total + value.total, 0);
 
   const modifiedCount = gitStatus?.modified.length || 0;
   const untrackedCount = gitStatus?.untracked.length || 0;
@@ -209,23 +202,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {onSelectFolder && (
           <section className="sidebar-notebooks" aria-label={t('sidebar.notebooks')}>
             <NavTree aria-label={t('sidebar.notebooks')}>
-              {filters.notebooks.length > 1 && (
-                <NavTreeRow
-                  icon={<Library size={16} />}
-                  title={t('graph.allNotebooks')}
-                  selected={allNotebooks && value.folders.length === 0}
-                  onSelect={() => {
-                    if (allNotebooks) {
-                      selectSingleFolder('all', null);
-                    } else {
-                      filters.onNotebookChange('all');
-                    }
-                  }}
-                  suffix={<span className="sidebar-notebook-count">{facets ? workspaceNoteCount : '—'}</span>}
-                  className="sidebar-all-notebooks-row"
-                />
-              )}
-              {filters.notebooks.map(nb => {
+              {filters.notebooks.filter(nb => allNotebooks || nb.id === selectedNotebookId).map(nb => {
                 const root = nb.root.replace(/\/$/, '');
                 const selectedPaths = value.folders.filter(path => path.startsWith(root + '/')).map(path => path.slice(root.length + 1));
                 const expanded = expandedNotebooks.has(nb.id);
@@ -238,7 +215,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   : isCurrentNotebook && selectedFolder === null && value.folders.length === 0;
 
                 return (
-                  <section className="sidebar-notebook-group" key={nb.id} data-selected={isSelected || selectedPaths.length > 0}>
+                  <section className="sidebar-notebook-group" key={nb.id} data-selected={isSelected || selectedPaths.length > 0}
+                    data-scope={allNotebooks ? (isCurrentNotebook ? 'current' : 'included') : undefined}>
                     <NavTreeRow
                       hasChildren={hasFolders}
                       isExpanded={expanded}
@@ -263,10 +241,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               setExpandedNotebooks(previous => new Set([...previous, nb.id]));
                             }
                           }
-                        } else if (isCurrentNotebook) {
-                          selectSingleFolder(nb.id, null);
                         } else {
-                          filters.onNotebookChange(nb.id);
+                          selectSingleFolder(nb.id, null);
                         }
                       }}
                       suffix={<span className="sidebar-notebook-count" title={count === null ? t('notes.countsLoading') : t('folder.noteCount', { count })}>{count ?? '—'}</span>}

@@ -1,4 +1,5 @@
 import { readFilterQuery } from './filter-query.js';
+import { noteWebPath } from '@mygitnotes/core/workspace-links';
 import { matchPath } from 'react-router-dom';
 export type WorkspaceTab = 'notes' | 'assets' | 'agent' | 'screen' | 'graph' | 'settings';
 export function parseWorkspaceRoute(pathname: string, search: string) {
@@ -27,18 +28,31 @@ export function parseWorkspaceRoute(pathname: string, search: string) {
   }catch {valid=false;}
   const queryNotebook = query.get('notebook');
   if (queryNotebook) notebook = queryNotebook;
+  // `all` named the former all-notebooks scope; it now opens the default notebook.
+  const legacyAllNotebooks = notebook === 'all';
+  if (legacyAllNotebooks) notebook = null;
   const queryFolder = query.get('folder');
   if (queryFolder) folder = queryFolder;
   if((note!==null&&!safeRelative(note))||(folder!==null&&!safeRelative(folder)))valid=false;
   const filters = readFilterQuery(query);
-  return {valid,tab,lane,notebook,folder,note,...filters,tag:filters.tag[0] || null,tags:filters.tag};
+  const allNotebooks = filters.allNotebooks || (legacyAllNotebooks && (tab === 'notes' || tab === 'graph'));
+  return {valid,tab,lane,notebook,folder,note,...filters,allNotebooks,legacyAllNotebooks,tag:filters.tag[0] || null,tags:filters.tag};
+}
+/** The canonical URL for a former all-notebooks URL, or null for any other URL. */
+export function legacyAllNotebooksRoute(pathname: string, search: string, defaultNotebook: string): string | null {
+  const route = parseWorkspaceRoute(pathname, search);
+  if (!route.legacyAllNotebooks) return null;
+  const query = new URLSearchParams(search);
+  query.set('notebook', defaultNotebook);
+  if (route.allNotebooks) query.set('allNotebooks', 'true');
+  return (route.tab === 'notes' && !route.note ? notebookRoute(defaultNotebook) : pathname) + '?' + query.toString();
 }
 export function safeRelative(value: string) { return Boolean(value)&&!value.includes('\\')&&!value.includes('\0')&&value.split('/').every(part=>Boolean(part)&&part!=='.'&&part!=='..'); }
 const encodePath = (value: string) => value.split('/').map(encodeURIComponent).join('/');
 export function notebookRoute(notebook: string, folder: string | null = null) {
   return `/notebooks/${encodeURIComponent(notebook)}${folder ? '/folders/'+encodePath(folder) : ''}`;
 }
-export function noteRoute(notebook: string, relativePath: string) { return `/notebooks/${encodeURIComponent(notebook)}/notes/${encodePath(relativePath)}`; }
+export function noteRoute(notebook: string, relativePath: string) { return noteWebPath(notebook, relativePath); }
 
 // Editor URLs carry their workspace origin so closing and reloading preserve context.
 export function noteReturnRoute(search: string, notebook: string, folder: string | null = null): string {

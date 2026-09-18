@@ -15,7 +15,10 @@ const query = (values: Record<string, string>) => new URLSearchParams(values).to
 /** Returns the notebook's R2 objects, or undefined when R2 is unconfigured or the requester cannot write. */
 export async function fetchR2(notebookId: string): Promise<R2Listing | undefined> {
   const response = await fetch('/api/r2?' + query({ notebookId }));
-  return response.ok ? response.json() : undefined;
+  if (response.ok) return response.json();
+  // An unread body keeps the request open in the browser.
+  await response.body?.cancel();
+  return undefined;
 }
 export const r2RawUrl = (notebookId: string, key: string) => '/api/r2/raw?' + query({ notebookId, key });
 export const fetchR2References = (notebookId: string, key: string, directory: boolean) =>
