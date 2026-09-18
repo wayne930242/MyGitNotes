@@ -6,6 +6,7 @@ import path from 'node:path';
 import { nativeRedisCommand } from './redis-store.js';
 
 const lifetime = 30 * 24 * 60 * 60;
+const rejectionLifetime = 7 * 24 * 60 * 60;
 const cookieName = 'gh_notes_session';
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const sealedElsewhere = Symbol('sealed with another SESSION_SECRET');
@@ -64,8 +65,12 @@ export class SessionStore {
     await fs.writeFile(path.join(dir, digest(id)), record, { mode: 0o600 });
   }
   async get(id: string) {
-    if (!/^[A-Za-z0-9_-]{43}$/.test(id)) return null;
-    return this.getByDigest(digest(id));
+    const value = await this.readRecord(id);
+    return value === sealedElsewhere ? null : value;
+  }
+  /** Returns the stored value, null, or the sealedElsewhere marker. */
+  async readRecord(id: string) {
+    return /^[A-Za-z0-9_-]{43}$/.test(id) ? this.read(digest(id)) : null;
   }
   async getByDigest(hash: string) {
     const value = await this.read(hash);
@@ -120,6 +125,9 @@ export class SessionStore {
       } finally { release(); if (credentialLocks.get(lockKey) === tail) credentialLocks.delete(lockKey); }
     }
   }
+  async recordRejection(token: string, reason: string) {
+    await this.set(`rejection:${digest(token)}`, { reason, at: Date.now() }, rejectionLifetime);
+  }
   async indexGrant(token: string, ownerId: number | string) {
     if (this.redis) await this.command(['SADD', `${this.prefix}:grants:${ownerId}`, digest(token)]);
   }
@@ -134,7 +142,7 @@ export class SessionStore {
     for (const id of hashes) {
       const grant = await this.read(id);
       if (grant === sealedElsewhere) continue;
-      if (grant?.kind === 'agent' && grant.ownerId === ownerId) results.push({ id, name: grant.name, write: grant.write, source: grant.source, createdAt: grant.createdAt, expiresAt: null });
+      if (grant?.kind === 'agent' && grant.ownerId === ownerId) results.push({ id, name: grant.name, write: grant.write, source: grant.source, createdAt: grant.createdAt, expiresAt: null, lastRejection: await this.getByDigest(digest(`rejection:${id}`)) || null });
       else if (!grant && this.redis) await this.command(['SREM', `${this.prefix}:grants:${ownerId}`, id]);
     }
     return results.sort((a, b) => b.createdAt - a.createdAt);
@@ -146,6 +154,9 @@ export class SessionStore {
     if (this.redis) await this.command(['SREM', `${this.prefix}:grants:${ownerId}`, id]);
     return true;
   }
+}
+export class CredentialRejected extends SourceError {
+  constructor(public reason: string, message: string) { super(message, 401); }
 }
 type Provider = { type: 'github' | 'gitlab'; site: string; realm: string; clientId?: string; clientSecret?: string; authorize: string; token: string; user: string };
 const credentialLocks = new Map<string, Promise<void>>();
@@ -194,22 +205,22 @@ export async function credentialToken(base: string, id: string): Promise<string>
   const provider = providerFor(base), store = new SessionStore(base);
   // GitHub OAuth apps with short-lived tokens return a refresh token; long-lived GitHub tokens carry neither.
   const refreshable = (record: any) => (provider.type === 'gitlab' || Boolean(record?.refreshToken)) && record?.upstreamExpiresAt <= Date.now() + 60000;
-  const reject = (reason: string, message: string) => { console.warn(`[auth] credential rejected: ${reason}`); return new SourceError(message, 401); };
+  const reject = (reason: string, message: string) => { console.warn(`[auth] credential rejected: ${reason}`); return new CredentialRejected(reason, message); };
   const resolve = async (record: any) => {
-    const invalid = !record ? 'missing' : !['credential', 'session'].includes(record.kind) ? 'kind' : !matchesProvider(record, provider) ? 'realm' : typeof record.token !== 'string' ? 'token' : '';
+    const invalid = record === sealedElsewhere ? 'sealed-elsewhere' : !record ? 'missing' : !['credential', 'session'].includes(record.kind) ? 'kind' : !matchesProvider(record, provider) ? 'realm' : typeof record.token !== 'string' ? 'token' : '';
     if (invalid) throw reject(invalid, 'Agent authorization unavailable. Sign in again.');
     if (refreshable(record)) {
       if (!record.refreshToken) throw reject('expired', 'GitLab authorization expired. Sign in again.');
       const data = await tokenRequest(provider, { grant_type: 'refresh_token', refresh_token: record.refreshToken, ...(provider.type === 'gitlab' ? { redirect_uri: `${process.env.APP_URL}/api/auth/gitlab/callback` } : {}) })
-        .catch(error => { console.warn('[auth] credential rejected: refresh-failed'); throw error; });
+        .catch(error => { console.warn('[auth] credential rejected: refresh-failed'); throw error instanceof SourceError ? new CredentialRejected('refresh-failed', error.message) : error; });
       record = { ...record, token: data.access_token, refreshToken: data.refresh_token, upstreamExpiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined };
       await store.set(id, record, null);
     }
     if (record.upstreamExpiresAt && record.upstreamExpiresAt <= Date.now()) throw reject('expired', 'Authorization expired. Sign in again to reconnect existing agent grants.');
     return record.token as string;
   };
-  const record = await store.get(id);
-  if (provider.type === 'gitlab' || refreshable(record)) return store.withCredentialLock(id, async () => resolve(await store.get(id)));
+  const record = await store.readRecord(id);
+  if (provider.type === 'gitlab' || refreshable(record)) return store.withCredentialLock(id, async () => resolve(await store.readRecord(id)));
   return resolve(record);
 }
 export async function authToken(req: Request, base: string): Promise<string | undefined> {
