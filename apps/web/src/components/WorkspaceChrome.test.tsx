@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import {
   SidebarProvider,
@@ -12,6 +12,7 @@ import {
   getSavedRightPanelWidth,
   saveRightPanelWidth,
   persistWidthOnUserInteraction,
+  scheduleRightPanelResize,
   RIGHT_PANEL_RAIL_WIDTH,
   SIDEBAR_WIDTH_STORAGE_KEY,
   MIN_SIDEBAR_WIDTH,
@@ -146,6 +147,53 @@ describe('persistWidthOnUserInteraction', () => {
       saveRightPanelWidth
     );
     expect(localStorage.getItem(RIGHT_PANEL_WIDTH_STORAGE_KEY)).toBe('400');
+  });
+});
+
+describe('scheduleRightPanelResize', () => {
+  // react-resizable-panels registers a Panel's updated minSize/maxSize constraints
+  // asynchronously after the render that changes them. Calling resize() synchronously,
+  // in the same commit as the constraint change (e.g. reopening the panel right after it
+  // was collapsed to the rail), can still see the *previous* constraints and clamp the
+  // target size down to their minimum — reproduced live: reopening a panel persisted at a
+  // non-default width snapped to MIN_RIGHT_PANEL_WIDTH instead. Deferring the call by a
+  // frame lets those constraints land first.
+  it('does not call resize synchronously', () => {
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
+    const resize = vi.fn();
+
+    scheduleRightPanelResize(379, resize);
+
+    expect(resize).not.toHaveBeenCalled();
+    rafSpy.mockRestore();
+  });
+
+  it('calls resize with the target width once the deferred frame runs', () => {
+    let rafCallback: FrameRequestCallback | undefined;
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      rafCallback = cb;
+      return 1;
+    });
+    const resize = vi.fn();
+
+    scheduleRightPanelResize(379, resize);
+    rafCallback?.(0);
+
+    expect(resize).toHaveBeenCalledWith(379);
+    rafSpy.mockRestore();
+  });
+
+  it('cancels the pending frame when the returned cleanup runs', () => {
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
+    const cafSpy = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    const resize = vi.fn();
+
+    const cancel = scheduleRightPanelResize(379, resize);
+    cancel();
+
+    expect(cafSpy).toHaveBeenCalledWith(42);
+    rafSpy.mockRestore();
+    cafSpy.mockRestore();
   });
 });
 

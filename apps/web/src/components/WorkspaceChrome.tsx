@@ -64,6 +64,20 @@ export function saveSidebarWidth(width: number): void {
 }
 
 /**
+ * Defers an imperative `Panel.resize()` call to the next animation frame.
+ *
+ * react-resizable-panels registers a Panel's updated minSize/maxSize constraints
+ * asynchronously after the render that changes them, so calling `resize()` synchronously
+ * in the same commit (e.g. right after reopening from the collapsed rail width, in the
+ * same `useLayoutEffect` that changed the constraints) can still see the panel's
+ * *previous* constraints and clamp the target size down to their minimum.
+ */
+export function scheduleRightPanelResize(width: number, resize: (width: number) => void): () => void {
+  const raf = requestAnimationFrame(() => resize(width));
+  return () => cancelAnimationFrame(raf);
+}
+
+/**
  * Persists a panel's current pixel width only when the layout change that triggered it was
  * direct user input (drag/keyboard) — `Group.onLayoutChanged`'s `meta.isUserInteraction` is the
  * only signal that distinguishes that from a group-driven resize (e.g. a viewport-width clamp),
@@ -216,7 +230,7 @@ export function WorkspaceSplitLayout({
 
   useLayoutEffect(() => {
     if (rightPanelWidth === undefined) return;
-    rightPanelRef.current?.resize(rightPanelWidth);
+    return scheduleRightPanelResize(rightPanelWidth, (width) => rightPanelRef.current?.resize(width));
   }, [rightPanelWidth]);
 
   // Live visual feedback only, on every resize regardless of cause; persistence happens
