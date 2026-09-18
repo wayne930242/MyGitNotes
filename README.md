@@ -146,7 +146,7 @@ Open `http://localhost:4321`. Local mode is an anonymous desktop workflow restri
 
 ### Persistence and updates
 
-Compose stores encrypted sessions, provider credentials, and MCP grants in its own Redis. Back up the `redis-data` volume and retain the same `SESSION_SECRET` when replacing containers. The plain Docker example uses the `mygitnotes-sessions` volume instead; set `REDIS_URL=redis://...` or `rediss://...` to connect to your own Redis. Native Redis takes precedence over REST settings. Instances in one deployment share the store and secret; separate deployments use separate stores or unique Redis namespaces via `MYGITNOTES_SESSION_NAMESPACE`. Vercel uses Redis REST because its filesystem is ephemeral.
+Compose stores encrypted sessions, provider credentials, and MCP grants in its own Redis. Back up the `redis-data` volume and retain the same `SESSION_SECRET` when replacing containers. The plain Docker example uses the `mygitnotes-sessions` volume instead; set `REDIS_URL=redis://...` or `rediss://...` to connect to your own Redis. Native Redis takes precedence over REST settings. Instances in one deployment share the store and secret; separate deployments use separate stores or unique Redis namespaces via `MYGITNOTES_SESSION_NAMESPACE`, and at most one deployment on a shared store leaves it empty. Vercel uses Redis REST because its filesystem is ephemeral.
 
 After updating the product checkout, run `docker compose up -d --build`. `docker compose down` preserves the Redis volume; `docker compose down -v` deletes it and invalidates stored sessions and grants. For local mode, use `-f compose.local.yaml` for update and stop commands. The image healthcheck checks HTTP liveness; verify `/api/workspace` separately for source access.
 

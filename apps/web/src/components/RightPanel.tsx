@@ -19,6 +19,8 @@ interface RightPanelProps {
   onMetadataOpenChange?: (open: boolean) => void;
   notebooks: NotebookConfig[];
   selectedNotebookId: string;
+  /** The folder currently browsed (repo-root-relative), or undefined at the notebook root. */
+  currentFolder?: string;
   onOpenNote: (note: NoteListItem) => void;
   onSaveNote: (params: { path: string; content: string; metadata?: Record<string, unknown>; notebookId?: string }) => Promise<NoteItem>;
   /** Reads a note in full before a panel action rewrites it. */
@@ -48,7 +50,7 @@ const WORKSPACE_TOOL_LABELS: Record<WorkspaceToolId, 'panel.calendar' | 'panel.t
 };
 
 /** The workspace-level Calendar/Todo/Changes panel. Hidden while a note is open — the editor has its own document panel. */
-export function RightPanel({ notebooks, selectedNotebookId, onOpenNote, onSaveNote, onReadNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, fileMode = false, fileMetadata, onFileMetadataContainer, metadataOpen = false, onMetadataOpenChange, onWidthChange }: RightPanelProps) {
+export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpenNote, onSaveNote, onReadNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, fileMode = false, fileMetadata, onFileMetadataContainer, metadataOpen = false, onMetadataOpenChange, onWidthChange }: RightPanelProps) {
   const { t } = useTranslation();
   const panel = usePanelContext();
   const visible = !panel.hasOpenNote;
@@ -80,8 +82,8 @@ export function RightPanel({ notebooks, selectedNotebookId, onOpenNote, onSaveNo
       {isOpen && (
         <div className="right-panel-content">
           {showingMetadata && <section className="file-metadata-panel"><h2>{t('files.metadataLabel')}</h2>{fileMetadata}<div ref={onFileMetadataContainer} /></section>}
-          {showingWorkspaceTool && panel.activeTool === 'calendar' && <CalendarTool notebooks={notebooks} selectedNotebookId={selectedNotebookId} onOpenNote={onOpenNote} />}
-          {showingWorkspaceTool && panel.activeTool === 'todo' && <TodoTool notebooks={notebooks} selectedNotebookId={selectedNotebookId} onOpenNote={onOpenNote} onSaveNote={onSaveNote} onReadNote={onReadNote} />}
+          {showingWorkspaceTool && panel.activeTool === 'calendar' && <CalendarTool notebooks={notebooks} selectedNotebookId={selectedNotebookId} currentFolder={currentFolder} onOpenNote={onOpenNote} />}
+          {showingWorkspaceTool && panel.activeTool === 'todo' && <TodoTool notebooks={notebooks} selectedNotebookId={selectedNotebookId} currentFolder={currentFolder} onOpenNote={onOpenNote} onSaveNote={onSaveNote} onReadNote={onReadNote} />}
           {showingWorkspaceTool && panel.activeTool === 'changes' && <ChangesTool writable={writable} remoteChanges={remoteChanges} getPreview={getPreview} gitStatus={gitStatus} deletedNotes={deletedNotes} onRestoreNote={onRestoreNote} onOpenCommitModal={onOpenCommitModal} onSynced={onSynced} />}
         </div>
       )}

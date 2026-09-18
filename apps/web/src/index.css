@@ -684,7 +684,8 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 .todo-gantt-today-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--color-primary); opacity: 0.6; }
 .todo-gantt-bar { position: absolute; top: 50%; height: 16px; transform: translateY(-50%); border-radius: 4px; background: color-mix(in srgb, var(--color-primary) 30%, transparent); border: 1px solid var(--color-primary); min-width: 6px; }
 .todo-gantt-bar-dueOnly { border-radius: 999px; }
-.todo-gantt-bar-startOnly { background: var(--color-sidebar); border-style: dashed; }
+.todo-gantt-bar-startOnly { background: var(--color-sidebar); border-style: dashed; border-radius: 999px; }
+.todo-gantt-scale-toggle { display: flex; gap: 4px; margin-bottom: 4px; font-size: 11px; }
 
 .changes-file-list { display: flex; flex-direction: column; gap: 4px; }
 

@@ -1,12 +1,28 @@
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '../lib/i18n/index.js';
 import { stripTaskTokens } from '../lib/task-tokens.js';
-import { computeGanttRange, computeGanttRows, computeGanttTicks, type GanttRow } from '../lib/todo-gantt.js';
+import {
+  computeGanttRange,
+  computeGanttRows,
+  computeGanttTicks,
+  GANTT_SCALES,
+  ganttDayWidth,
+  getSavedGanttScale,
+  saveGanttScale,
+  type GanttRow,
+  type GanttScale,
+} from '../lib/todo-gantt.js';
 import type { TodoTask } from '../lib/todo-list.js';
+import { Button } from './Button.js';
 
-const DAY_WIDTH = 28;
-/** Days of history kept visible left of today when the chart first opens. */
+/** Days of history kept visible left of today when the chart first opens or the scale changes. */
 const LEAD_DAYS = 2;
+
+const SCALE_LABEL_KEY: Record<GanttScale, 'panel.todoGanttScaleDay' | 'panel.todoGanttScaleWeek' | 'panel.todoGanttScaleMonth'> = {
+  day: 'panel.todoGanttScaleDay',
+  week: 'panel.todoGanttScaleWeek',
+  month: 'panel.todoGanttScaleMonth',
+};
 
 interface TodoGanttChartProps {
   tasks: TodoTask[];
@@ -21,33 +37,63 @@ function barTitle(row: GanttRow): string {
   return `${text} · ${row.task.start}`;
 }
 
+/** `'day'`/`'week'` ticks show `MM-DD`; `'month'` ticks show a locale month/year (e.g. "Sep 2026" / "2026年9月"). */
+function tickLabel(date: string, scale: GanttScale, language: string): string {
+  if (scale !== 'month') return date.slice(5);
+  const [year, month] = date.split('-').map(Number);
+  return new Intl.DateTimeFormat(language, { year: 'numeric', month: 'short' }).format(Date.UTC(year, month - 1, 1));
+}
+
 export function TodoGanttChart({ tasks, today, onOpenTask }: TodoGanttChartProps) {
-  const { t } = useTranslation();
-  const range = useMemo(() => computeGanttRange(tasks, today), [tasks, today]);
+  const { t, language } = useTranslation();
+  const [scale, setScale] = useState<GanttScale>(getSavedGanttScale);
+  const dayWidth = ganttDayWidth(scale);
+  const range = useMemo(() => computeGanttRange(tasks, today, scale), [tasks, today, scale]);
   const rows = useMemo(() => computeGanttRows(tasks, range), [tasks, range]);
-  const ticks = useMemo(() => computeGanttTicks(range), [range]);
-  const trackWidth = range.days * DAY_WIDTH;
+  const ticks = useMemo(() => computeGanttTicks(range, scale), [range, scale]);
+  const trackWidth = range.days * dayWidth;
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasRows = rows.length > 0;
 
   useLayoutEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollLeft = Math.max(0, (range.todayOffset - LEAD_DAYS) * DAY_WIDTH);
-  }, [range.todayOffset, hasRows]);
+    if (scrollRef.current) scrollRef.current.scrollLeft = Math.max(0, (range.todayOffset - LEAD_DAYS) * dayWidth);
+  }, [range.todayOffset, dayWidth, hasRows]);
 
-  if (rows.length === 0) return <p className="todo-empty">{t('panel.todoGanttEmpty')}</p>;
+  const changeScale = (next: GanttScale) => {
+    setScale(next);
+    saveGanttScale(next);
+  };
+
+  const scaleToggle = (
+    <div className="todo-gantt-scale-toggle" role="group">
+      {GANTT_SCALES.map(option => (
+        <Button key={option} type="button" aria-pressed={scale === option} onClick={() => changeScale(option)}>
+          {t(SCALE_LABEL_KEY[option])}
+        </Button>
+      ))}
+    </div>
+  );
+
+  if (rows.length === 0) return (
+    <>
+      {scaleToggle}
+      <p className="todo-empty">{t('panel.todoGanttEmpty')}</p>
+    </>
+  );
 
   return (
     <div className="todo-gantt" role="group" aria-label={t('panel.todoGanttTimeline')}>
+      {scaleToggle}
       <div className="todo-gantt-scroll" ref={scrollRef}>
         <div className="todo-gantt-header todo-gantt-row">
           <div className="todo-gantt-label-cell" />
           <div className="todo-gantt-track" style={{ width: trackWidth }}>
             {ticks.map(tick => (
-              <span key={tick.offset} className="todo-gantt-tick" style={{ left: tick.offset * DAY_WIDTH }}>{tick.date.slice(5)}</span>
+              <span key={tick.offset} className="todo-gantt-tick" style={{ left: tick.offset * dayWidth }}>{tickLabel(tick.date, scale, language)}</span>
             ))}
             <span
               className="todo-gantt-today-line"
-              style={{ left: range.todayOffset * DAY_WIDTH }}
+              style={{ left: range.todayOffset * dayWidth }}
               title={t('panel.todoGanttToday')}
               aria-hidden="true"
             />
@@ -65,10 +111,10 @@ export function TodoGanttChart({ tasks, today, onOpenTask }: TodoGanttChartProps
               {stripTaskTokens(row.task.lineText)}
             </button>
             <div className="todo-gantt-track" style={{ width: trackWidth }}>
-              <span className="todo-gantt-today-line" style={{ left: range.todayOffset * DAY_WIDTH }} aria-hidden="true" />
+              <span className="todo-gantt-today-line" style={{ left: range.todayOffset * dayWidth }} aria-hidden="true" />
               <span
                 className={`todo-gantt-bar todo-gantt-bar-${row.kind}`}
-                style={{ left: row.offset * DAY_WIDTH, width: row.span * DAY_WIDTH }}
+                style={{ left: row.offset * dayWidth, width: row.span * dayWidth }}
                 title={barTitle(row)}
               />
             </div>

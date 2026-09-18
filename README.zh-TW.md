@@ -146,7 +146,7 @@ docker run -d --name mygitnotes-local --init --restart unless-stopped \
 
 ### 持久化與更新
 
-Compose 的自架 Redis 保存加密 session、平台憑證與 MCP 授權。更換容器時，保留 `redis-data` volume 與相同的 `SESSION_SECRET`，並一起備份。單獨使用 Docker 的範例改用 `mygitnotes-sessions` volume；也可設定 `REDIS_URL=redis://...` 或 `rediss://...` 連接自己的 Redis。原生 Redis 設定優先於 REST。同一部署的多個實例共用儲存與 secret；不同部署使用各自的儲存，或透過 `MYGITNOTES_SESSION_NAMESPACE` 區分 Redis key。Vercel 的檔案系統是暫存空間，因此使用 Redis REST。
+Compose 的自架 Redis 保存加密 session、平台憑證與 MCP 授權。更換容器時，保留 `redis-data` volume 與相同的 `SESSION_SECRET`，並一起備份。單獨使用 Docker 的範例改用 `mygitnotes-sessions` volume；也可設定 `REDIS_URL=redis://...` 或 `rediss://...` 連接自己的 Redis。原生 Redis 設定優先於 REST。同一部署的多個實例共用儲存與 secret；不同部署使用各自的儲存，或透過 `MYGITNOTES_SESSION_NAMESPACE` 區分 Redis key；共用同一個儲存時，最多只有一個部署可以留空。Vercel 的檔案系統是暫存空間，因此使用 Redis REST。
 
 更新產品 checkout 後執行 `docker compose up -d --build`。`docker compose down` 保留 Redis volume；`docker compose down -v` 會刪除它，使已存 session 與授權失效。本地模式的更新與停止指令使用 `-f compose.local.yaml`。映像的健康檢查確認 HTTP 服務存活；來源存取另以 `/api/workspace` 驗證。
 

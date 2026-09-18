@@ -1040,6 +1040,7 @@ const AppContent: React.FC = () => {
                 onFileMetadataContainer={setFileMetadataContainer}
                 notebooks={config?.notebooks || []}
                 selectedNotebookId={selectedNotebookId}
+                currentFolder={selectedFolder && notebookRoot ? `${notebookRoot}/${selectedFolder}` : undefined}
                 onOpenNote={handleOpenNote}
                 onSaveNote={handleSaveNote}
                 onReadNote={readNoteForChange}
