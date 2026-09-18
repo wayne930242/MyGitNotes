@@ -343,7 +343,7 @@ describe('durable Redis grant records',()=>{
     expect(await store.get(token)).toBeNull();expect(members.size).toBe(0);
     await store.set(token,{kind:'oauth'},600);expect(commands.filter(c=>c[0]==='SET').at(-1)?.slice(-2)).toEqual(['EX','600']);
   });
-  it('self-heals and prunes undecryptable records when session secret is rotated', async () => {
+  it('leaves records sealed by another deployment sharing the Redis keyspace untouched', async () => {
     vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://redis.test');
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'redis-token');
     const records = new Map<string, string>();
@@ -351,20 +351,52 @@ describe('durable Redis grant records',()=>{
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
       const c = JSON.parse(String(init?.body));
       let result: unknown = null;
+      if (c[0] === 'SET') { records.set(c[1], c[2]); result = 'OK'; }
       if (c[0] === 'GET') result = records.get(c[1]) || null;
       if (c[0] === 'DEL') { records.delete(c[1]); result = 1; }
+      if (c[0] === 'SADD') { members.add(c[2]); result = 1; }
       if (c[0] === 'SREM') { members.delete(c[2]); result = 1; }
       if (c[0] === 'SMEMBERS') result = [...members];
       return new Response(JSON.stringify({ result }));
     });
-    const hash = 'a'.repeat(64);
-    records.set(`gh-notes:${hash}`, 'invalid-ciphertext-or-old-key-data');
-    members.add(hash);
+    const token = 'o'.repeat(43), stale = 'b'.repeat(64);
+    vi.stubEnv('SESSION_SECRET', 'other'.repeat(8));
+    const other = new SessionStore(root);
+    await other.set(token, { kind: 'agent', ownerId: 1, name: 'Other connector', createdAt: Date.now() }, null);
+    await other.indexGrant(token, 1);
+    members.add(stale);
+    vi.stubEnv('SESSION_SECRET', 's'.repeat(64));
     const store = new SessionStore(root);
-    const grants = await store.listGrants(1);
-    expect(grants).toEqual([]);
-    expect(records.has(`gh-notes:${hash}`)).toBe(false);
-    expect(members.has(hash)).toBe(false);
+    expect(await store.listGrants(1)).toEqual([]);
+    expect(await store.get(token)).toBeNull();
+    expect(members.has(stale)).toBe(false);
+    vi.stubEnv('SESSION_SECRET', 'other'.repeat(8));
+    expect((await other.listGrants(1)).map(grant => grant.name)).toEqual(['Other connector']);
+  });
+  it('fails without SESSION_SECRET and leaves stored records in place', async () => {
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://redis.test');
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'redis-token');
+    const records = new Map<string, string>();
+    const members = new Set<string>();
+    const commands: string[][] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+      const c = JSON.parse(String(init?.body));
+      commands.push(c);
+      let result: unknown = null;
+      if (c[0] === 'SET') { records.set(c[1], c[2]); result = 'OK'; }
+      if (c[0] === 'GET') result = records.get(c[1]) || null;
+      if (c[0] === 'SADD') { members.add(c[2]); result = 1; }
+      if (c[0] === 'SMEMBERS') result = [...members];
+      return new Response(JSON.stringify({ result }));
+    });
+    const token = 'g'.repeat(43), store = new SessionStore(root);
+    await store.set(token, { kind: 'agent', ownerId: 1, name: 'Kept', createdAt: Date.now() }, null);
+    await store.indexGrant(token, 1);
+    vi.stubEnv('SESSION_SECRET', '');
+    await expect(store.get(token)).rejects.toThrow('SESSION_SECRET');
+    await expect(store.listGrants(1)).rejects.toThrow('SESSION_SECRET');
+    expect(commands.some(c => c[0] === 'DEL' || c[0] === 'SREM')).toBe(false);
+    expect(records.size).toBe(1);
   });
 });
 
