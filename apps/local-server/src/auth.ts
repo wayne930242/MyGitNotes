@@ -192,19 +192,21 @@ async function tokenRequest(provider: Provider, body: Record<string, unknown>) {
 }
 export async function credentialToken(base: string, id: string): Promise<string> {
   const provider = providerFor(base), store = new SessionStore(base);
+  // GitHub OAuth apps with short-lived tokens return a refresh token; long-lived GitHub tokens carry neither.
+  const refreshable = (record: any) => (provider.type === 'gitlab' || Boolean(record?.refreshToken)) && record?.upstreamExpiresAt <= Date.now() + 60000;
   const resolve = async (record: any) => {
     if (!record || !['credential', 'session'].includes(record.kind) || !matchesProvider(record, provider) || typeof record.token !== 'string') throw new SourceError('Agent authorization unavailable. Sign in again.', 401);
-    if (provider.type === 'gitlab' && record.upstreamExpiresAt <= Date.now() + 60000) {
+    if (refreshable(record)) {
       if (!record.refreshToken) throw new SourceError('GitLab authorization expired. Sign in again.', 401);
-      const data = await tokenRequest(provider, { grant_type: 'refresh_token', refresh_token: record.refreshToken, redirect_uri: `${process.env.APP_URL}/api/auth/gitlab/callback` });
-      record = { ...record, token: data.access_token, refreshToken: data.refresh_token, upstreamExpiresAt: Date.now() + data.expires_in! * 1000 };
+      const data = await tokenRequest(provider, { grant_type: 'refresh_token', refresh_token: record.refreshToken, ...(provider.type === 'gitlab' ? { redirect_uri: `${process.env.APP_URL}/api/auth/gitlab/callback` } : {}) });
+      record = { ...record, token: data.access_token, refreshToken: data.refresh_token, upstreamExpiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined };
       await store.set(id, record, null);
     }
     if (record.upstreamExpiresAt && record.upstreamExpiresAt <= Date.now()) throw new SourceError('Authorization expired. Sign in again to reconnect existing agent grants.', 401);
     return record.token as string;
   };
   const record = await store.get(id);
-  if (provider.type === 'gitlab') return store.withCredentialLock(id, async () => resolve(await store.get(id)));
+  if (provider.type === 'gitlab' || refreshable(record)) return store.withCredentialLock(id, async () => resolve(await store.get(id)));
   return resolve(record);
 }
 export async function authToken(req: Request, base: string): Promise<string | undefined> {

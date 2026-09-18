@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, Server } from 'node:http';
 import { createApp } from '../src/app.js';
-import { SessionStore, seal, unseal } from '../src/auth.js';
+import { SessionStore, credentialToken, seal, unseal } from '../src/auth.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
@@ -315,6 +315,56 @@ describe('GitHub login and shared agent authorization',()=>{
       expect((await fetch(`${base}/mcp/${grant.token}`,urlCall)).status).toBe(401);
       expect((await fetch(`${base}/api/auth/agent-tokens`,{headers:{Cookie:`gh_notes_session=${owner}`}}).then(r=>r.json())).grants).toEqual([]);
     } finally {mock.mockRestore();}
+  });
+
+  it('refreshes a short-lived GitHub credential once for concurrent grant calls and keeps long-lived credentials as issued',async()=>{
+    await new Promise<void>(resolve=>server.close(()=>resolve()));
+    vi.stubEnv('GITHUB_NOTES_SOURCE','github');vi.stubEnv('GITHUB_NOTES_REPOSITORY','owner/repo');vi.stubEnv('GITHUB_NOTES_BRANCH','main');
+    vi.stubEnv('GITHUB_CLIENT_ID','client');vi.stubEnv('GITHUB_CLIENT_SECRET','client-secret');
+    server=createServer(createApp(root));await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+    base=`http://127.0.0.1:${(server.address() as any).port}`;vi.stubEnv('APP_URL',base);
+    const nativeFetch=globalThis.fetch;let refreshes=0;const upstreamTokens=new Set<string>();
+    const manifest='schema_version: 1\nworkspace:\n  title: Private\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n';
+    vi.spyOn(globalThis,'fetch').mockImplementation(async(input,init)=>{
+      const url=String(input);const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
+      if(url==='https://github.com/login/oauth/access_token') {
+        const body=JSON.parse(String(init?.body));expect(body).toMatchObject({client_id:'client',client_secret:'client-secret'});
+        if(body.grant_type==='refresh_token') {
+          refreshes++;expect(body.refresh_token).toBe('github-refresh');expect(body.redirect_uri).toBeUndefined();
+          return json({access_token:'refreshed-github-token',refresh_token:'rotated-github-refresh',expires_in:28800,refresh_token_expires_in:15897600});
+        }
+        return json({access_token:'short-lived-token',refresh_token:'github-refresh',expires_in:28800,refresh_token_expires_in:15897600});
+      }
+      if(url==='https://api.github.com/user')return json({id:1,login:'owner'});
+      if(url.startsWith('https://api.github.com/repos/owner/repo')) {
+        const authorization=String((init?.headers as any)?.Authorization||'');upstreamTokens.add(authorization);
+        if(authorization!=='Bearer refreshed-github-token')return json({message:'Bad credentials'},401);
+        const endpoint=url.replace('https://api.github.com/repos/owner/repo','');
+        if(!endpoint)return json({private:true,permissions:{push:true}});
+        if(endpoint.startsWith('/commits/'))return json({sha:'head',commit:{tree:{sha:'tree'}}});
+        if(endpoint.startsWith('/git/trees/'))return json({truncated:false,tree:[{path:'notes/.github-notes.yaml',sha:'manifest',type:'blob',mode:'100644'},{path:'notes/ex/private.md',sha:'note',type:'blob',mode:'100644'}]});
+        if(endpoint.startsWith('/git/blobs/'))return json({encoding:'base64',content:Buffer.from(endpoint.endsWith('manifest')?manifest:'# Private Note').toString('base64')});
+      }
+      return nativeFetch(input,init);
+    });
+    const start=await fetch(`${base}/api/auth/github`,{redirect:'manual'});const location=new URL(start.headers.get('location')!);
+    const callback=await fetch(`${base}/api/auth/github/callback?state=${location.searchParams.get('state')}&code=test`,{redirect:'manual',headers:{Cookie:start.headers.get('set-cookie')!.split(';')[0]}});
+    const cookie=callback.headers.getSetCookie().find(value=>value.startsWith('gh_notes_session='))!.split(';')[0];
+    const grant=await fetch(`${base}/api/auth/agent-token`,{method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({write:false})}).then(r=>r.json());
+    const store=new SessionStore(root);const {credential}=await store.get(grant.token);const issued=await store.get(credential);
+    expect(issued).toMatchObject({token:'short-lived-token',refreshToken:'github-refresh'});
+    expect(await credentialToken(root,credential)).toBe('short-lived-token');expect(refreshes).toBe(0);
+    await store.set(credential,{...issued,upstreamExpiresAt:Date.now()-1000},null);
+    const read=(id:number)=>fetch(grant.url,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json, text/event-stream',Connection:'close'},body:JSON.stringify({jsonrpc:'2.0',id,method:'tools/call',params:{name:'read_note',arguments:{path:'notes/ex/private.md'}}})});
+    const results=await Promise.all([read(1),read(2)]);
+    expect(results.map(r=>r.status)).toEqual([200,200]);
+    for(const result of await Promise.all(results.map(r=>r.json()))){expect(result.result.isError).not.toBe(true);expect(result.result.content[0].text).toContain('Private Note');}
+    expect(refreshes).toBe(1);expect([...upstreamTokens]).toEqual(['Bearer refreshed-github-token']);
+    expect(await store.get(credential)).toMatchObject({token:'refreshed-github-token',refreshToken:'rotated-github-refresh'});
+    await store.set(credential,{...issued,refreshToken:undefined,upstreamExpiresAt:Date.now()-1000},null);
+    const expired=await read(3);expect(expired.status).toBe(401);expect((await expired.json()).error).toContain('Authorization expired');
+    await store.set(credential,{...issued,refreshToken:undefined,upstreamExpiresAt:undefined},null);
+    expect(await credentialToken(root,credential)).toBe('short-lived-token');expect(refreshes).toBe(1);
   });
 });
 
