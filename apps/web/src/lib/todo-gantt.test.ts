@@ -1,6 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TodoTask } from './todo-list.js';
-import { computeGanttRange, computeGanttRows, computeGanttTicks, formatDayIndex } from './todo-gantt.js';
+import {
+  computeGanttRange,
+  computeGanttRows,
+  computeGanttTicks,
+  formatDayIndex,
+  ganttDayWidth,
+  getSavedGanttScale,
+  saveGanttScale,
+} from './todo-gantt.js';
 
 function task(overrides: Partial<TodoTask>): TodoTask {
   return {
@@ -30,6 +38,28 @@ describe('computeGanttRange', () => {
     expect(firstDay <= '2026-09-10').toBe(true);
     expect(lastDay >= '2026-10-01').toBe(true);
     expect(lastDay < '2026-12-25').toBe(true);
+  });
+
+  it('at week scale, snaps to Monday..Sunday week boundaries and spans at least 4 weeks', () => {
+    const range = computeGanttRange([task({ due: '2026-09-16' })], today, 'week');
+    expect(range.days % 7).toBe(0);
+    expect(range.days).toBeGreaterThanOrEqual(28);
+    expect(new Date(range.startDay * 86_400_000).getUTCDay()).toBe(1); // Monday
+    const lastDay = range.startDay + range.days - 1;
+    expect(new Date(lastDay * 86_400_000).getUTCDay()).toBe(0); // Sunday
+  });
+
+  it('at month scale, snaps to the 1st..end-of-month and spans at least 3 months', () => {
+    const range = computeGanttRange([task({ due: '2026-09-16' })], today, 'month');
+    expect(formatDayIndex(range.startDay)).toBe('2026-09-01');
+    const lastDay = formatDayIndex(range.startDay + range.days - 1);
+    expect(lastDay).toBe('2026-11-30'); // Sep + Oct + Nov = 3 months
+  });
+
+  it('at month scale, a task date far in the future extends the span beyond the 3-month minimum', () => {
+    const range = computeGanttRange([task({ due: '2027-01-10' })], today, 'month');
+    expect(formatDayIndex(range.startDay)).toBe('2026-09-01');
+    expect(formatDayIndex(range.startDay + range.days - 1)).toBe('2027-01-31');
   });
 });
 
@@ -81,6 +111,19 @@ describe('computeGanttRows', () => {
     const rows = computeGanttRows(tasks, range);
     expect(rows.map(row => row.task.id)).toEqual(['t2', 't1']);
   });
+
+  it('positions a bar by exact day-precision offset even against a week/month-snapped range', () => {
+    const tasks = [task({ id: 't1', start: '2026-09-16', due: '2026-09-18' })];
+    const weekRange = computeGanttRange(tasks, today, 'week');
+    const weekRows = computeGanttRows(tasks, weekRange);
+    expect(formatDayIndex(weekRange.startDay + weekRows[0].offset)).toBe('2026-09-16');
+    expect(weekRows[0].span).toBe(3);
+
+    const monthRange = computeGanttRange(tasks, today, 'month');
+    const monthRows = computeGanttRows(tasks, monthRange);
+    expect(formatDayIndex(monthRange.startDay + monthRows[0].offset)).toBe('2026-09-16');
+    expect(monthRows[0].span).toBe(3);
+  });
 });
 
 describe('computeGanttTicks', () => {
@@ -90,5 +133,55 @@ describe('computeGanttTicks', () => {
     expect(ticks[0].offset).toBe(0);
     expect(ticks.at(-1)?.offset).toBe(9);
     expect(ticks.some(tick => tick.offset === 7)).toBe(true);
+  });
+
+  it('at week scale, ticks one per week (identical spacing to day scale, since the range is already week-aligned)', () => {
+    const today = '2026-09-15';
+    const range = computeGanttRange([], today, 'week'); // 4-week minimum span => 28 days
+    expect(range.days).toBe(28);
+    const ticks = computeGanttTicks(range, 'week');
+    expect(ticks.map(tick => tick.offset)).toEqual([0, 7, 14, 21]);
+  });
+
+  it('at month scale, one tick per calendar month, with no trailing end-of-month tick', () => {
+    const today = '2026-09-15';
+    const range = computeGanttRange([], today, 'month'); // Sep 1 .. Nov 30 (3-month minimum)
+    const ticks = computeGanttTicks(range, 'month');
+    expect(ticks.map(tick => tick.date)).toEqual(['2026-09-01', '2026-10-01', '2026-11-01']);
+  });
+});
+
+describe('ganttDayWidth', () => {
+  it('narrows as the scale zooms out from day to week to month', () => {
+    expect(ganttDayWidth('day')).toBeGreaterThan(ganttDayWidth('week'));
+    expect(ganttDayWidth('week')).toBeGreaterThan(ganttDayWidth('month'));
+  });
+});
+
+describe('gantt scale persistence', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubStorage(): Map<string, string> {
+    const storage = new Map<string, string>();
+    vi.stubGlobal('window', { localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) } });
+    return storage;
+  }
+
+  it('defaults to day when nothing is stored', () => {
+    stubStorage();
+    expect(getSavedGanttScale()).toBe('day');
+  });
+
+  it('round-trips a saved scale', () => {
+    stubStorage();
+    saveGanttScale('month');
+    expect(getSavedGanttScale()).toBe('month');
+  });
+
+  it('falls back to day when the stored value is no longer valid', () => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal('window', { localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) } });
+    storage.set('github-notes:todo-gantt-scale', 'quarter');
+    expect(getSavedGanttScale()).toBe('day');
   });
 });
