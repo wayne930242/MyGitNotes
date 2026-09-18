@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
+import { resolveQaChromePath } from './qa-chrome.mjs';
 const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(`${product}/apps/web/package.json`), puppeteer = require('puppeteer-core');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-file-browser-'));
@@ -35,7 +36,7 @@ process.env.MYGITNOTES_SOURCE = 'local'; process.env.MYGITNOTES_LOCAL_PATH = roo
 const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
 const server = createServer(createApp(product)); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
-const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, args: ['--no-sandbox'] });
+const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, args: ['--no-sandbox'] });
 const page = await browser.newPage(); const errors = []; page.on('pageerror', error => errors.push(error.message));
 page.setDefaultTimeout(10000);
 const visit = route => page.goto(base + route, { waitUntil: 'networkidle0' });

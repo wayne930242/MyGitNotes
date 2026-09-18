@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { execFileSync } from 'node:child_process';
+import { resolveQaChromePath } from './qa-chrome.mjs';
 
 const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(`${product}/apps/web/package.json`);
@@ -25,7 +26,7 @@ process.env.MYGITNOTES_SOURCE = 'local'; process.env.MYGITNOTES_LOCAL_PATH = roo
 const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
 const server = createServer(createApp(product)); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
-const browser = await puppeteer.launch({ executablePath: process.env.GRAPH_QA_CHROME || path.join(os.homedir(), '.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const browser = await puppeteer.launch({ executablePath: resolveQaChromePath('GRAPH_QA_CHROME'), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const page = await browser.newPage(), errors = [];
 page.on('pageerror', error => errors.push(error.message));
 await page.evaluateOnNewDocument(() => localStorage.setItem('github-notes:language', 'en'));

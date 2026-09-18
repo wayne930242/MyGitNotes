@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { chooseSelect } from './browser-select.mjs';
+import { resolveQaChromePath } from './qa-chrome.mjs';
 
 // The built local server runs against a temporary git workspace; no external requests.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -42,7 +43,7 @@ if (process.argv.includes('--serve')) {
 } else {
   const require = createRequire(`${root}/apps/web/package.json`);
   const browser = await require('puppeteer-core').launch({
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || path.join(os.homedir(), '.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'),
+    executablePath: resolveQaChromePath(),
     headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'],
   });
   try {

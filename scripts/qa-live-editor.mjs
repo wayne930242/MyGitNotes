@@ -5,6 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
+import { resolveQaChromePath } from './qa-chrome.mjs';
 const product=path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require=createRequire(`${product}/apps/web/package.json`);
 const puppeteer=require('puppeteer-core');
@@ -22,7 +23,7 @@ process.env.MYGITNOTES_SOURCE='local';process.env.MYGITNOTES_LOCAL_PATH=root;del
 const {createApp}=await import(`${product}/apps/local-server/dist/app.js`);
 const server=createServer(createApp(product));await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${server.address().port}`;
-const browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH || path.join(os.homedir(),'.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+const browser=await puppeteer.launch({executablePath:resolveQaChromePath(),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
 const page=await browser.newPage();await page.setViewport({width:1440,height:1000});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
 const click=async text=>{const ok=await page.evaluate(text=>{const b=Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()===text);b?.click();return !!b;},text);if(!ok)throw Error(`Missing button: ${text}`);};

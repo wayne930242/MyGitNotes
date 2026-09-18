@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { chooseSelect } from './browser-select.mjs';
+import { resolveQaChromePath } from './qa-chrome.mjs';
 
 const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(`${product}/apps/web/package.json`);
@@ -33,9 +34,7 @@ const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
 const server = createServer(createApp(product));
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
-const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH
-  || (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : path.join(os.homedir(), '.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome'));
-const browser = await puppeteer.launch({ executablePath, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const shots = path.join(product, 'artifacts/qa');
 fs.mkdirSync(shots, { recursive: true });
 
