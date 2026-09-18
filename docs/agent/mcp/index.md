@@ -42,7 +42,7 @@ once. ChatGPT uses that URL with No Authentication. Bearer headers at `/mcp`
 remain supported. The URL is a credential scoped to the configured source and
 canonical audience. New grants have no application TTL and survive logout,
 session expiry and deployments; owners revoke individual grants in Settings.
-GitLab access tokens refresh through the shared server credential. Revoked provider authorization requires signing in again.
+GitLab access tokens, and short-lived GitHub OAuth app tokens issued with a refresh token, refresh through the shared server credential. Revoked provider authorization requires signing in again.
 Legacy session-bound grants retain their original expiry.
 
 Hosted tools include `ls`, `glob`, `read`, `find`, `write`, `append`, `edit`,
