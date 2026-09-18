@@ -692,7 +692,9 @@
   .app-shell[data-workspace-tab="agent"] .workspace-header .header-brand { display: flex; width: auto; padding: 0; }
   .app-shell[data-workspace-tab="agent"] .workspace-header .header-brand .workspace-brand-icon,
   .app-shell[data-workspace-tab="agent"] .workspace-header .header-brand .min-w-0 { display: none; }
+  .app-shell[data-workspace-tab="agent"] .workspace-header .header-layout { grid-template-columns: auto minmax(0, 1fr) auto; }
   .app-shell[data-workspace-tab="agent"] .workspace-header .header-notebook { grid-column: 2; grid-row: 1; }
+  .app-shell[data-workspace-tab="agent"] .header-utilities { grid-column: 3; }
 }
 @media (prefers-reduced-motion: reduce) {
   .workspace-sidebar, .workspace-header, .workspace-sidebar *, .workspace-responsive-sidebar { transition: none; }
