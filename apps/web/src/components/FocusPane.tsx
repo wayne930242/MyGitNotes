@@ -72,7 +72,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
     const pane = before?.pane ?? displayed.pane;
     const found = findFocusTab(layout, focusTabKey(tab));
     const index = before && found && found.pane === before.pane && found.index < before.index ? before.index - 1 : before?.index;
-    void focus.place(focus.shown, tab, pane, index);
+    void focus.place(focus.shown, tab, pane, index).catch(() => {});
   };
 
   return (
@@ -102,12 +102,12 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
               <button type="button" role="tab" aria-selected={tab.key === displayed.key} aria-controls={panelId}
                 tabIndex={tab.key === displayed.key || (!displayed.key && tab === tabs[0]) ? 0 : -1} title={tab.label}
                 onClick={() => void focus.show(tab.pane, tab.key)}
-                onKeyDown={event => { if (editable && event.key === 'Delete') { event.preventDefault(); void focus.close(tab.key); } }}>
+                onKeyDown={event => { if (editable && event.key === 'Delete') { event.preventDefault(); void focus.close(tab.key).catch(() => {}); } }}>
                 {tab.tab.kind === 'note' ? <FileText aria-hidden="true" /> : <GalleryHorizontalEnd aria-hidden="true" />}
                 <span>{tab.label}</span>
               </button>
               {editable && <button type="button" className="focus-tab-close" tabIndex={-1} aria-label={t('focus.closeTab', { name: tab.label })}
-                title={t('focus.closeTab', { name: tab.label })} onClick={() => void focus.close(tab.key)}><X aria-hidden="true" /></button>}
+                title={t('focus.closeTab', { name: tab.label })} onClick={() => void focus.close(tab.key).catch(() => {})}><X aria-hidden="true" /></button>}
             </div>
           ))}
         </div>
@@ -116,7 +116,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
             items={tabs.map(tab => ({ key: tab.key, label: tab.label, current: tab.key === displayed.key, onSelect: () => void focus.show(tab.pane, tab.key) }))} />}
           {editable && <FocusMenu label={t('focus.addLane')} showLabel icon={<Plus aria-hidden="true" />}
             items={lanes.length > 0
-              ? lanes.map(row => ({ key: row.id, label: row.name, onSelect: () => { if (focus.shown) void focus.place(focus.shown, { kind: 'lane', id: row.id }, displayed.pane); } }))
+              ? lanes.map(row => ({ key: row.id, label: row.name, onSelect: () => { if (focus.shown) void focus.place(focus.shown, { kind: 'lane', id: row.id }, displayed.pane).catch(() => {}); } }))
               : [{ key: 'screen', label: t('focus.goAddLane'), onSelect: () => navigate(`/screen?notebook=${encodeURIComponent(focus.notebookId)}`) }]} />}
           {shown?.tab.kind === 'note' && <button type="button" className="ui-icon-button" aria-label={t('focus.zoomNote')} title={t('focus.zoomNote')}
             onClick={() => shown.tab.kind === 'note' && onZoomNote(shown.tab.path)}><Maximize2 aria-hidden="true" /></button>}

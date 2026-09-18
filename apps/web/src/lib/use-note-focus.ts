@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  FOCUS_MAX_FOCUSES, FOCUS_MAX_TABS, changeDivision, closeTab, emptyFocusLayout, findFocusTab, focusPaneCount, focusTabCount, focusTabKey,
+  FOCUS_MAX_FOCUSES, FOCUS_MAX_TABS, FocusError, changeDivision, closeTab, emptyFocusLayout, findFocusTab, focusPaneCount, focusTabCount, focusTabKey,
   nameFocus, notebookFocuses, placeTab, pruneFocus, removeFocus, renameFocus, updateFocus,
   type FocusDivision, type FocusLayout, type FocusTab,
 } from '@mygitnotes/core/focus-page';
@@ -85,14 +85,19 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
     if (!layout) return;
     update(current => ({ ...current, entries: { ...current.entries, [target]: change(entryView(current, target, layout)) } }));
   };
-  /** Applies a structural change; false when the layout would exceed its limits or cannot be written. */
+  const [mutationError, setMutationError] = useState<FocusError | null>(null);
+  /** Applies a structural change; false when the target cannot be written to. Throws (and records) FocusError when the change itself is invalid. */
   const mutate = (target: string, change: (layout: FocusLayout) => FocusLayout): boolean => {
     if (!editable(target)) return false;
     try {
       if (target === CURRENT_FOCUS) update(current => ({ ...current, current: change(pruneFocus(current.current, present)) }));
       else page.change(updateFocus(page.page, target, focus => ({ ...focus, ...change(pruneFocus(focus, present)) })));
+      setMutationError(null);
       return true;
-    } catch { return false; }
+    } catch (caught) {
+      if (caught instanceof FocusError) setMutationError(caught);
+      throw caught;
+    }
   };
 
   /** Opens a note from the browse region (into the active pane) or from inside pane `source` (into the most recently used other pane). */
@@ -104,11 +109,12 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
     if (!found && !editable(shown)) return 'readonly';
     if (!found && focusTabCount(layout) >= FOCUS_MAX_TABS) return 'full';
     if (!await flushEditors(notePaths([entry.shown[pane]]))) return 'blocked';
-    if (!found && !mutate(shown, current => placeTab(current, tab, pane))) return 'full';
+    // The tab count is already checked above; a FocusError here means the layout changed since, so it counts as full too.
+    if (!found) { try { if (!mutate(shown, current => placeTab(current, tab, pane))) return 'full'; } catch { return 'full'; } }
     setEntry(shown, current => showTab(current, pane, tabKey), layout);
     return 'opened';
   };
-  /** Places a tab in `pane` of any Focus (a drop or the Add to Focus picker) and shows it there; an existing tab moves. */
+  /** Places a tab in `pane` of any Focus (a drop or the Add to Focus picker) and shows it there; an existing tab moves. Throws FocusError. */
   const place = async (target: string, tab: FocusTab, pane: number, index?: number): Promise<boolean> => {
     const current = layoutOf(target), before = entryOf(target, current);
     if (!current || !before || !editable(target)) return false;
@@ -129,6 +135,7 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
     setEntry(shown, current => showTab(current, pane, tabKey));
   };
   const activate = (pane: number) => { if (shown && entry && entry.activePane !== pane) setEntry(shown, current => activatePane(current, pane)); };
+  /** Throws FocusError if the shown Focus was removed since it was read. */
   const close = async (tabKey: string) => {
     if (!shown || !layout || !entry) return;
     const found = findFocusTab(layout, tabKey);
@@ -139,7 +146,7 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
     if (!mutate(shown, current => closeTab(current, tabKey))) return;
     if (visible) setEntry(shown, current => ({ ...current, shown: current.shown.map((key, index) => index === found.pane ? next : key) }), layout);
   };
-  /** Folding panes keeps the active pane's tab on screen: it lands on the last remaining pane, which becomes active. */
+  /** Folding panes keeps the active pane's tab on screen: it lands on the last remaining pane, which becomes active. Throws FocusError if the shown Focus was removed since it was read. */
   const setDivision = async (division: FocusDivision) => {
     if (!shown || !layout || !entry || division === layout.division) return;
     const count = focusPaneCount(division);
@@ -178,7 +185,7 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
   };
 
   return {
-    notebookId, focuses, error: page.error, loading: page.loading, view, shown, layout, entry, notes,
+    notebookId, focuses, error: page.error, loading: page.loading, view, shown, layout, entry, notes, mutationError,
     editable: shown ? editable(shown) : false, canName, layoutOf, entryOf, editableFocus: editable,
     openNote, place, show, activate, close, setDivision, setRatios, setAutoHide, setDock, forget, name, rename, remove,
   };
