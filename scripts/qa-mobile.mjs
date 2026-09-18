@@ -237,6 +237,8 @@ try {
  assert((await bounds('.agent-toolbar')).height<=64,'Agent restore confirmation wraps toolbar');
  await tap('button[aria-label="Confirm Restore?"]');
  await page.waitForFunction(()=>document.querySelector('.cm-content')?.innerText.includes('Use Markdown notes.')&&!document.querySelector('.cm-content')?.innerText.includes('Mobile agent edit'));
+ // Restore swaps the content before its git status refresh ends; navigation waits for that.
+ await page.waitForSelector('button[aria-label="Agent document"]:not(:disabled)');
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
  await page.screenshot({path:product+'/artifacts/qa/mobile-agent.png'});
  await click('Files');await page.waitForSelector('.file-manager-toolbar');await fits('.file-manager-toolbar');
