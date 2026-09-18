@@ -1,9 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { nonDeployPaths } from './vercel-sparse-non-deploy-paths.mjs';
 
-// Tracked top-level Core paths that the Vercel build and runtime do not need.
-const nonDeployPaths = ['.dockerignore', '.env.example', '.github', '.gitignore', 'Dockerfile', 'README.md', 'README.zh-TW.md', 'compose.local.yaml', 'compose.yaml', 'docker.env.example', 'docs', 'examples', 'scripts'];
 const listFile = '.github/vercel-sparse-paths.txt';
 const workflowFile = '.github/workflows/deploy-vercel-sparse.yml';
 
