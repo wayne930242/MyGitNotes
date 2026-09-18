@@ -90,12 +90,20 @@ export function NoteEditingProvider({ register, children, ...value }: Omit<NoteE
   const [zoom, setZoom] = useState<ZoomState | null>(null);
   const [hosts] = useState(() => new NoteHosts());
   const { editorProps, flushEditors, refreshNotes, closeZoom, addToFocus } = value;
+  const claims = useRef(new Map<string, Promise<boolean>>());
   // The claiming host opens its editor from the notes it reads, so a save's refetch lands first.
-  const claimEditor = useCallback(async (path: string, id: string) => {
-    if (!await flushEditors([path])) return false;
-    await refreshNotes();
-    hosts.claim(path, id);
-    return true;
+  // Claims for the same path are chained: a claim never runs its own flush and refresh until
+  // the previous claim for that path has settled, so concurrent claims cannot land out of order.
+  const claimEditor = useCallback((path: string, id: string) => {
+    const queued = (claims.current.get(path) ?? Promise.resolve(true)).catch(() => false).then(async () => {
+      if (!await flushEditors([path])) return false;
+      await refreshNotes();
+      hosts.claim(path, id);
+      return true;
+    });
+    claims.current.set(path, queued);
+    queued.finally(() => { if (claims.current.get(path) === queued) claims.current.delete(path); });
+    return queued;
   }, [flushEditors, refreshNotes, hosts]);
   const context = useMemo(() => ({ editorProps, hosts, claimEditor, flushEditors, refreshNotes, closeZoom, addToFocus, zoom, setZoom }),
     [editorProps, hosts, claimEditor, flushEditors, refreshNotes, closeZoom, addToFocus, zoom]);

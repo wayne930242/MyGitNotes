@@ -4,6 +4,7 @@ import { ChevronDown, ListTree, PanelsTopLeft } from 'lucide-react';
 import { FOCUS_DIVISIONS, FocusError, type FocusDivision } from '@mygitnotes/core/focus-page';
 import { CURRENT_FOCUS } from '../lib/focus-view.js';
 import type { NoteFocus } from '../lib/use-note-focus.js';
+import { focusErrorMessage } from '../lib/focus-error-message.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { Button } from './Button.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
@@ -42,6 +43,7 @@ export const FocusControls: React.FC<{
           </DropdownMenu.RadioGroup>
           {focus.loading && <p role="status">{t('focus.loading')}</p>}
           {focus.error && <><p role="alert">{focus.error}</p><DropdownMenu.Item onSelect={onReload}>{t('focus.reload')}</DropdownMenu.Item></>}
+          {focus.mutationError && <p role="alert">{focusErrorMessage(t, focus.mutationError)}</p>}
           {focus.shown && <DropdownMenu.Separator />}
           {focus.shown === CURRENT_FOCUS && focus.canName && <DropdownMenu.Item onSelect={() => setDialog({ kind: 'name' })}>{t('focus.name')}</DropdownMenu.Item>}
           {named && focus.editableFocus(named.id) && <>
@@ -52,7 +54,7 @@ export const FocusControls: React.FC<{
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
-    {focus.layout && <DivisionPicker division={focus.layout.division} disabled={!focus.editable} onChange={division => void focus.setDivision(division)} />}
+    {focus.layout && <DivisionPicker division={focus.layout.division} disabled={!focus.editable} onChange={division => void focus.setDivision(division).catch(() => {})} />}
     {focus.layout && browseToggle && <button type="button" className="ui-icon-button" aria-pressed={browseToggle.showing} onClick={browseToggle.onToggle}
       aria-label={t(browseToggle.showing ? 'focus.showFocus' : 'focus.showBrowse')} title={t(browseToggle.showing ? 'focus.showFocus' : 'focus.showBrowse')}>
       {browseToggle.showing ? <PanelsTopLeft aria-hidden="true" /> : <ListTree aria-hidden="true" />}

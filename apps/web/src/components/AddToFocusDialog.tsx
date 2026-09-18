@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { FOCUS_MAX_TABS, findFocusTab, focusTabCount, focusTabKey, type FocusTab } from '@mygitnotes/core/focus-page';
 import { CURRENT_FOCUS } from '../lib/focus-view.js';
 import type { NoteFocus } from '../lib/use-note-focus.js';
+import { focusErrorMessage } from '../lib/focus-error-message.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { Button } from './Button.js';
 import { Select } from './Select.js';
@@ -45,7 +46,10 @@ export const AddToFocusDialog: React.FC<{ focus: NoteFocus; tab: FocusTab; label
     <form className="screen-form" onSubmit={async event => {
       event.preventDefault();
       if (!target || placed) return;
-      if (!await focus.place(target, tab, pane)) { setError(t('focus.addFailed')); return; }
+      let ok: boolean;
+      try { ok = await focus.place(target, tab, pane); }
+      catch (caught) { setError(focusErrorMessage(t, caught)); return; }
+      if (!ok) { setError(t('focus.addFailed')); return; }
       setPlaced(true);
       requestAnimationFrame(land);
     }}>

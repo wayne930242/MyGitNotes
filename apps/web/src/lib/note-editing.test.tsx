@@ -50,6 +50,36 @@ describe('claimEditor', () => {
     expect(hosts.owner('notes/fail.md')).toBe('pane');
   });
 
+  it('serializes concurrent claims for the same note so the most recent one wins', async () => {
+    let captured: ReturnType<typeof useNoteEditing> | undefined;
+    const Probe = () => { captured = useNoteEditing(); return null; };
+    const refreshResolvers: (() => void)[] = [];
+    const refreshNotes = vi.fn(() => new Promise<void>(resolve => { refreshResolvers.push(resolve); }));
+    render(createElement(NoteEditingProvider, {
+      register: () => () => {}, editorProps: () => { throw new Error('unused'); }, flushEditors: async () => true, refreshNotes,
+      closeZoom: () => {}, addToFocus: () => undefined, children: createElement(Probe),
+    }));
+    const { hosts, claimEditor } = captured!;
+    hosts.register('notes/a.md', 'pane'); hosts.register('notes/a.md', 'card');
+
+    // Two rapid claims for the same note, oldest first; the second's flush/refresh must not
+    // start until the first's has fully settled, so ownership always lands on the last click.
+    const first = claimEditor('notes/a.md', 'card');
+    await vi.waitFor(() => expect(refreshNotes).toHaveBeenCalledTimes(1));
+    const second = claimEditor('notes/a.md', 'pane');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(refreshNotes).toHaveBeenCalledTimes(1);
+
+    refreshResolvers[0]();
+    await expect(first).resolves.toBe(true);
+    expect(hosts.owner('notes/a.md')).toBe('card');
+    await vi.waitFor(() => expect(refreshNotes).toHaveBeenCalledTimes(2));
+
+    refreshResolvers[1]();
+    await expect(second).resolves.toBe(true);
+    expect(hosts.owner('notes/a.md')).toBe('pane');
+  });
+
   it('hands the note over only after the notes the claiming host reads are refreshed', async () => {
     let captured: ReturnType<typeof useNoteEditing> | undefined;
     const Probe = () => { captured = useNoteEditing(); return null; };
