@@ -11,7 +11,7 @@ import {
   Kanban as KanbanIcon,
 } from 'lucide-react';
 import type { NoteListItem, NoteQuery } from '@mygitnotes/core/note-query';
-import { SortField, SortOrder } from '../lib/note-sort.js';
+import { noteUpdatedTime, SortField, SortOrder } from '../lib/note-sort.js';
 import { Select } from './Select.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
@@ -85,8 +85,9 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
   const { t } = useTranslation();
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(board.confirmDelete, () => board.onDeleteNote(note));
   const isBeingDragged = board.dragged?.path === note.path;
-  const formattedDate = note.mtime
-    ? new Date(note.mtime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const updated = noteUpdatedTime(note);
+  const formattedDate = updated
+    ? new Date(updated).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
     : '—';
   return (
     <div

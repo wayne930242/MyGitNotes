@@ -17,6 +17,11 @@ function getTimestamp(value: unknown, fallback = 0): number {
   return fallback;
 }
 
+/** The time a note was last modified: its `updated` field, else its file mtime; 0 when neither is known. */
+export function noteUpdatedTime(note: Pick<SortableNote, 'metadata' | 'mtime'>): number {
+  return getTimestamp(note.metadata?.updated, note.mtime || 0);
+}
+
 const compareTitles = (a: SortableNote, b: SortableNote) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
 
 /**
@@ -43,8 +48,8 @@ export function sortNotes<T extends SortableNote>(notes: T[], field: SortField, 
       }
       case 'updated':
       default: {
-        const timeA = getTimestamp(a.metadata?.updated, a.mtime || 0);
-        const timeB = getTimestamp(b.metadata?.updated, b.mtime || 0);
+        const timeA = noteUpdatedTime(a);
+        const timeB = noteUpdatedTime(b);
         return timeA !== timeB ? factor * (timeA - timeB) : compareTitles(a, b);
       }
     }

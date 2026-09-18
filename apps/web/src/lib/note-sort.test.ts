@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sortNotes } from './note-sort.js';
+import { noteUpdatedTime, sortNotes } from './note-sort.js';
 import { NoteItem } from './types.js';
 
 describe('note-sort', () => {
@@ -63,6 +63,12 @@ describe('note-sort', () => {
 
     const asc = sortNotes(notes, 'updated', 'asc');
     expect(asc.map((n) => n.title)).toEqual(['Alpha Note', 'Beta Note', 'Gamma Note']);
+  });
+
+  it('reports the updated field as the modified time, falling back to mtime', () => {
+    expect(noteUpdatedTime({ metadata: { updated: '2026-01-05T10:00:00Z' } })).toBe(Date.parse('2026-01-05T10:00:00Z'));
+    expect(noteUpdatedTime({ metadata: {}, mtime: 500 })).toBe(500);
+    expect(noteUpdatedTime({ metadata: {} })).toBe(0);
   });
 
   it('sorts by created timestamp', () => {

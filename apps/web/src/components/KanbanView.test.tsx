@@ -62,3 +62,13 @@ it('leaves out the no-status column when the server answers none', async () => {
   await waitFor(() => expect(screen.getByText('notes/life/a.md')).toBeInTheDocument());
   await waitFor(() => expect(screen.queryByText('No status')).not.toBeInTheDocument());
 });
+
+it('dates a card by its updated field when the source reports no mtime', async () => {
+  const dated = { ...noteOf('notes/life/dated.md', 'inbox'), metadata: { updated: '2026-01-05T10:00:00Z' } };
+  vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify(
+    { revision: REVISION, total: 1, nextCursor: null, notes: [dated] },
+  ), { headers: { 'Content-Type': 'application/json' } }) as never);
+  render(board(), { wrapper });
+  const expected = new Date('2026-01-05T10:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  await waitFor(() => expect(screen.getAllByText(expected).length).toBeGreaterThan(0));
+});

@@ -111,16 +111,18 @@ it('holds no drafts for a view that asked for no notes', async () => {
 });
 
 it('restarts a rejected cursor and leaves a malformed first page alone', () => {
+  // Earlier tests report stale queries on the real clock; start after them so the throttle is clear.
+  const start = Date.now() + 60_000;
   vi.useFakeTimers({ toFake: ['Date'] });
   try {
-    vi.setSystemTime(new Date('2026-09-18T00:00:00Z'));
+    vi.setSystemTime(start);
     const stale = vi.fn();
     function Probe() { useStaleNoteQueries(stale); return null; }
     render(createElement(Probe), { wrapper });
     const queryKey = ['notes', 'github:me/notes', REVISION, 'query', {}];
     handleNoteQueryError(new ApiError('Invalid query option.', 400), { queryKey, state: { data: undefined } });
     expect(stale).not.toHaveBeenCalled();
-    vi.setSystemTime(new Date('2026-09-18T00:00:10Z'));
+    vi.setSystemTime(start + 10_000);
     handleNoteQueryError(new ApiError('Cursor does not match this query.', 400), { queryKey, state: { data: { pages: [{}] } } });
     expect(stale).toHaveBeenCalledWith('Cursor does not match this query.');
   } finally { vi.useRealTimers(); }
