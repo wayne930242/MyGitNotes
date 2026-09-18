@@ -21,7 +21,8 @@ import { noteCompletionAt, fetchNoteCandidates } from '../lib/note-completion.js
 import { useNoteQueryScope } from '../lib/use-note-queries.js';
 import { noteLinkHref } from '@mygitnotes/core/workspace-links';
 import { formatDateYMD } from '../lib/date-utils.js';
-import { DONE_EMOJI, DUE_EMOJI, TIMESTAMP_EMOJI, findToken, isTaskLine, setTaskChecked, setTokenValue } from '../lib/task-tokens.js';
+import { DONE_EMOJI, DUE_EMOJI, START_EMOJI, TIMESTAMP_EMOJI, findToken, isTaskLine, setTaskChecked, setTokenValue } from '../lib/task-tokens.js';
+import { TASK_TOKEN_ICON_SVG } from '../lib/task-icons.js';
 
 export interface LiveMarkdownHandle {
   insert: (text: string) => void;
@@ -146,7 +147,8 @@ class TokenChip extends WidgetType {
   constructor(readonly emoji: string, readonly value: string, readonly posKey: number, readonly readonly: boolean) { super(); }
   eq(other: TokenChip) { return this.emoji === other.emoji && this.value === other.value && this.posKey === other.posKey && this.readonly === other.readonly; }
   toDOM(view: EditorView) {
-    const span = document.createElement('span'); span.className = 'live-md-token-chip'; span.textContent = `${this.emoji} ${this.value}`;
+    const span = document.createElement('span'); span.className = 'live-md-token-chip';
+    span.innerHTML = `${TASK_TOKEN_ICON_SVG[this.emoji] ?? ''}<span class="live-md-token-chip-value">${this.value}</span>`;
     if (!this.readonly) {
       span.setAttribute('role', 'button'); span.tabIndex = 0; span.title = 'Click to change or clear this date';
       const open = (event: Event) => {
@@ -189,12 +191,13 @@ class TokenEditor extends WidgetType {
     return wrap;
   }
 }
-class DueDateAdder extends WidgetType {
-  constructor(readonly posKey: number) { super(); }
-  eq(other: DueDateAdder) { return this.posKey === other.posKey; }
+class DateAdder extends WidgetType {
+  constructor(readonly emoji: string, readonly posKey: number, readonly label: string) { super(); }
+  eq(other: DateAdder) { return this.emoji === other.emoji && this.posKey === other.posKey && this.label === other.label; }
   toDOM(view: EditorView) {
-    const button = document.createElement('button'); button.type = 'button'; button.className = 'live-md-due-adder'; button.textContent = `+${DUE_EMOJI}`;
-    button.title = 'Add a due date'; button.setAttribute('aria-label', 'Add a due date');
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'live-md-due-adder';
+    button.innerHTML = `<span aria-hidden="true">+</span>${TASK_TOKEN_ICON_SVG[this.emoji] ?? ''}`;
+    button.title = this.label; button.setAttribute('aria-label', this.label);
     button.addEventListener('mousedown', event => event.preventDefault());
     button.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); view.dispatch({ effects: chipEditChanged.of({ pos: this.posKey, editing: true }) }); });
     return button;
@@ -228,8 +231,10 @@ function atCompletionSource(context: CompletionContext): CompletionResult | null
     options: getAtCompletionItems({ onTaskLine, now: new Date() }).map(item => ({
       label: item.label,
       apply: item.insertText !== undefined ? item.insertText : (view: EditorView, _completion: unknown, from: number, to: number) => {
-        const newLineTo = view.state.doc.lineAt(from).to - (to - from);
-        view.dispatch({ changes: { from, to, insert: '' }, effects: chipEditChanged.of({ pos: newLineTo, editing: true }) });
+        const line = view.state.doc.lineAt(from);
+        // Start's identity key is the line start (stable across the deletion below); due's is the line end, which shifts.
+        const pos = item.pickTarget === 'start' ? line.from : line.to - (to - from);
+        view.dispatch({ changes: { from, to, insert: '' }, effects: chipEditChanged.of({ pos, editing: true }) });
       },
     })),
   };
@@ -409,7 +414,8 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
   }
 
   const editingChips = state.field(chipEditState);
-  const TOKENS: [string, boolean][] = [[DUE_EMOJI, false], [DONE_EMOJI, false], [TIMESTAMP_EMOJI, true]];
+  const addDueLabel = t('editor.addDueDate'), addStartLabel = t('editor.addStartDate');
+  const TOKENS: [string, boolean][] = [[DUE_EMOJI, false], [DONE_EMOJI, false], [TIMESTAMP_EMOJI, true], [START_EMOJI, false]];
   for (let lineNumber = 1; lineNumber <= state.doc.lines; lineNumber++) {
     const line = state.doc.line(lineNumber);
     if (collapsedDirectives.some(b => line.from >= b.from && line.to <= b.to)) {
@@ -429,9 +435,16 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
       if (editingChips.has(from)) marks.push(Decoration.replace({ widget: new TokenEditor(emoji, withTime, token.value, line.from, line.to, from), side: 1 }).range(from, to));
       else marks.push(Decoration.replace({ widget: new TokenChip(emoji, token.value, from, state.readOnly) }).range(from, to));
     }
-    if (!state.readOnly && isTaskLine(line.text) && !findToken(line.text, DUE_EMOJI)) {
-      if (editingChips.has(line.to)) marks.push(Decoration.widget({ widget: new TokenEditor(DUE_EMOJI, false, undefined, line.from, line.to, line.to), side: 2 }).range(line.to));
-      else marks.push(Decoration.widget({ widget: new DueDateAdder(line.to), side: 2 }).range(line.to));
+    if (!state.readOnly && isTaskLine(line.text)) {
+      if (!findToken(line.text, DUE_EMOJI)) {
+        if (editingChips.has(line.to)) marks.push(Decoration.widget({ widget: new TokenEditor(DUE_EMOJI, false, undefined, line.from, line.to, line.to), side: 2 }).range(line.to));
+        else marks.push(Decoration.widget({ widget: new DateAdder(DUE_EMOJI, line.to, addDueLabel), side: 2 }).range(line.to));
+      }
+      if (!findToken(line.text, START_EMOJI)) {
+        // Identity key is line.from (not the render position) so it stays distinct from the due-date adder's line.to key.
+        if (editingChips.has(line.from)) marks.push(Decoration.widget({ widget: new TokenEditor(START_EMOJI, false, undefined, line.from, line.to, line.from), side: 3 }).range(line.to));
+        else marks.push(Decoration.widget({ widget: new DateAdder(START_EMOJI, line.from, addStartLabel), side: 3 }).range(line.to));
+      }
     }
   }
   const lastPageLabel = `${pageLabel} ${pageNumber}`;
@@ -472,11 +485,11 @@ const theme = EditorView.theme({
   '.live-md-image-rendered':{display:'inline-block',verticalAlign:'top',lineHeight:'0',whiteSpace:'normal'},
   '.live-md-image-rendered p':{margin:'0',padding:'0',lineHeight:'0'},
   '.cm-content input[type=checkbox]':{accentColor:'var(--color-primary)',verticalAlign:'middle',marginRight:'4px'},
-  '.live-md-token-chip':{display:'inline-flex',alignItems:'center',padding:'0 6px',borderRadius:'999px',fontSize:'0.85em',cursor:'pointer',backgroundColor:'var(--color-sidebar)',color:'var(--color-muted)',border:'1px solid var(--color-border)'},
+  '.live-md-token-chip':{display:'inline-flex',alignItems:'center',gap:'4px',padding:'0 6px',borderRadius:'999px',fontSize:'0.85em',cursor:'pointer',backgroundColor:'var(--color-sidebar)',color:'var(--color-muted)',border:'1px solid var(--color-border)'},
   '.live-md-token-editor':{display:'inline-flex',alignItems:'center',gap:'4px'},
   '.live-md-token-editor input':{fontSize:'0.85em',padding:'1px 4px'},
   '.live-md-token-clear':{cursor:'pointer',color:'var(--color-muted)',fontWeight:'700',lineHeight:'1',border:'none',background:'none',padding:'0 2px'},
-  '.live-md-due-adder':{display:'inline-flex',alignItems:'center',marginLeft:'6px',padding:'0 6px',borderRadius:'999px',fontSize:'0.8em',cursor:'pointer',color:'var(--color-muted)',border:'1px dashed var(--color-border)',background:'none'},
+  '.live-md-due-adder':{display:'inline-flex',alignItems:'center',gap:'2px',marginLeft:'6px',padding:'0 6px',borderRadius:'999px',fontSize:'0.8em',cursor:'pointer',color:'var(--color-muted)',border:'1px dashed var(--color-border)',background:'none'},
 });
 export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content,notePath,readOnly,onChange,onCaret,ariaLabel = 'Note content'},ref) => {
   const { t } = useTranslation(); const linkLabel = t('links.open');

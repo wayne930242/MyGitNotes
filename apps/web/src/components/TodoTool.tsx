@@ -1,4 +1,5 @@
 import { Button } from './Button.js';
+import { TodoGanttChart } from './TodoGanttChart.js';
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
@@ -6,9 +7,22 @@ import type { NoteItem, NotebookConfig } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { Select } from './Select.js';
 import { formatDateYMD } from '../lib/date-utils.js';
-import { setTaskChecked } from '../lib/task-tokens.js';
+import { DONE_EMOJI, DUE_EMOJI, START_EMOJI, TIMESTAMP_EMOJI, getTokenValue, setTaskChecked, stripTaskTokens } from '../lib/task-tokens.js';
+import { TASK_TOKEN_ICON } from '../lib/task-icons.js';
 import { groupTodoTasks, type TodoTask } from '../lib/todo-list.js';
 import { useNoteAgenda } from '../lib/use-note-queries.js';
+
+/** The date/time tokens present on a task line, for icon-chip display. */
+function taskDateChips(task: TodoTask): { emoji: string; value: string }[] {
+  const chips: { emoji: string; value: string }[] = [];
+  if (task.start) chips.push({ emoji: START_EMOJI, value: task.start });
+  if (task.due) chips.push({ emoji: DUE_EMOJI, value: task.due });
+  const done = getTokenValue(task.lineText, DONE_EMOJI);
+  if (done) chips.push({ emoji: DONE_EMOJI, value: done });
+  const timestamp = getTokenValue(task.lineText, TIMESTAMP_EMOJI, true);
+  if (timestamp) chips.push({ emoji: TIMESTAMP_EMOJI, value: timestamp });
+  return chips;
+}
 
 interface TodoToolProps {
   notebooks: NotebookConfig[];
@@ -33,7 +47,7 @@ const GROUP_ORDER: { key: 'overdue' | 'today' | 'upcoming' | 'noDate'; labelKey:
 export function TodoTool({ notebooks, selectedNotebookId, onOpenNote, onSaveNote, onReadNote }: TodoToolProps) {
   const { t } = useTranslation();
   const [scope, setScope] = useState<'current' | 'all'>('current');
-  const [groupMode, setGroupMode] = useState<'date' | 'note'>('date');
+  const [groupMode, setGroupMode] = useState<'date' | 'note' | 'gantt'>('date');
   const [showCompleted, setShowCompleted] = useState(false);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [staleIds, setStaleIds] = useState<Set<string>>(new Set());
@@ -52,6 +66,7 @@ export function TodoTool({ notebooks, selectedNotebookId, onOpenNote, onSaveNote
     }
     return [...byPath.entries()].sort((a, b) => a[1].title.localeCompare(b[1].title));
   }, [tasks]);
+  const undatedOpenTasks = useMemo(() => tasks.filter(task => !task.checked && !task.start && !task.due), [tasks]);
 
   const toggleTask = async (task: TodoTask) => {
     setPendingIds(prev => new Set(prev).add(task.id));
@@ -74,15 +89,36 @@ export function TodoTool({ notebooks, selectedNotebookId, onOpenNote, onSaveNote
     }
   };
 
-  const renderTask = (task: TodoTask) => (
-    <li key={task.id} className="todo-task" data-checked={task.checked}>
-      <label>
-        <input type="checkbox" checked={task.checked} disabled={pendingIds.has(task.id)} onChange={() => void toggleTask(task)} />
-        <span className="todo-task-text">{task.lineText.replace(/^\s*[-*+]\s\[[ xX]\]\s?/, '')}</span>
-      </label>
-      {staleIds.has(task.id) && <p className="todo-task-stale" role="alert">{t('panel.todoStale')}</p>}
-      {saveErrors.has(task.id) && <p className="todo-task-stale" role="alert">{saveErrors.get(task.id)}</p>}
-    </li>
+  const renderTask = (task: TodoTask) => {
+    const chips = taskDateChips(task);
+    return (
+      <li key={task.id} className="todo-task" data-checked={task.checked}>
+        <label>
+          <input type="checkbox" checked={task.checked} disabled={pendingIds.has(task.id)} onChange={() => void toggleTask(task)} />
+          <span className="todo-task-text">{stripTaskTokens(task.lineText)}</span>
+        </label>
+        {chips.length > 0 && (
+          <ul className="todo-task-dates">
+            {chips.map(chip => {
+              const Icon = TASK_TOKEN_ICON[chip.emoji];
+              return <li key={chip.emoji} className="todo-task-date-chip"><Icon aria-hidden="true" />{chip.value}</li>;
+            })}
+          </ul>
+        )}
+        {staleIds.has(task.id) && <p className="todo-task-stale" role="alert">{t('panel.todoStale')}</p>}
+        {saveErrors.has(task.id) && <p className="todo-task-stale" role="alert">{saveErrors.get(task.id)}</p>}
+      </li>
+    );
+  };
+
+  const completedSection = groups.completed.length > 0 && (
+    <section className="todo-group todo-group-completed">
+      <Button type="button" className="todo-completed-toggle" aria-expanded={showCompleted} onClick={() => setShowCompleted(value => !value)}>
+        {showCompleted ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
+        <h4>{t('panel.todoCompleted')} <span className="todo-group-count">{groups.completed.length}</span></h4>
+      </Button>
+      {showCompleted && <ul>{groups.completed.map(task => renderTask(task))}</ul>}
+    </section>
   );
 
   return (
@@ -102,6 +138,7 @@ export function TodoTool({ notebooks, selectedNotebookId, onOpenNote, onSaveNote
         <div className="todo-group-mode-toggle" role="group">
           <Button type="button" aria-pressed={groupMode === 'date'} onClick={() => setGroupMode('date')}>{t('panel.todoGroupByDate')}</Button>
           <Button type="button" aria-pressed={groupMode === 'note'} onClick={() => setGroupMode('note')}>{t('panel.todoGroupByNote')}</Button>
+          <Button type="button" aria-pressed={groupMode === 'gantt'} onClick={() => setGroupMode('gantt')}>{t('panel.todoGroupByGantt')}</Button>
         </div>
       )}
 
@@ -112,16 +149,7 @@ export function TodoTool({ notebooks, selectedNotebookId, onOpenNote, onSaveNote
             <ul>{groups[key].map(task => renderTask(task))}</ul>
           </section>
         ))}
-
-        {groups.completed.length > 0 && (
-          <section className="todo-group todo-group-completed">
-            <Button type="button" className="todo-completed-toggle" aria-expanded={showCompleted} onClick={() => setShowCompleted(value => !value)}>
-              {showCompleted ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
-              <h4>{t('panel.todoCompleted')} <span className="todo-group-count">{groups.completed.length}</span></h4>
-            </Button>
-            {showCompleted && <ul>{groups.completed.map(task => renderTask(task))}</ul>}
-          </section>
-        )}
+        {completedSection}
       </>}
 
       {groupMode === 'note' && noteGroups.map(([path, { title, tasks: noteTasks }]) => (
@@ -133,6 +161,17 @@ export function TodoTool({ notebooks, selectedNotebookId, onOpenNote, onSaveNote
           <ul>{noteTasks.map(task => renderTask(task))}</ul>
         </section>
       ))}
+
+      {groupMode === 'gantt' && <>
+        <TodoGanttChart tasks={tasks} today={formatDateYMD(new Date())} onOpenTask={task => onOpenNote(taskNote(task))} />
+        {undatedOpenTasks.length > 0 && (
+          <section className="todo-group">
+            <h4>{t('panel.todoNoDate')} <span className="todo-group-count">{undatedOpenTasks.length}</span></h4>
+            <ul>{undatedOpenTasks.map(task => renderTask(task))}</ul>
+          </section>
+        )}
+        {completedSection}
+      </>}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { DUE_EMOJI, getTokenValue, isTaskChecked, isTaskLine } from './task-tokens.js';
+import { DUE_EMOJI, START_EMOJI, getTokenValue, isTaskChecked, isTaskLine } from './task-tokens.js';
 
 export interface TodoTask {
   id: string;
@@ -9,6 +9,7 @@ export interface TodoTask {
   lineText: string;
   checked: boolean;
   due?: string;
+  start?: string;
 }
 
 export interface AgendaSourceNote {
@@ -33,6 +34,7 @@ export function extractTodoTasks(notes: AgendaSourceNote[]): TodoTask[] {
         lineText,
         checked: isTaskChecked(lineText) ?? false,
         due: getTokenValue(lineText, DUE_EMOJI),
+        start: getTokenValue(lineText, START_EMOJI),
       });
     });
   }
