@@ -764,7 +764,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   }
   .note-toolbar { flex-direction: column; align-items: stretch; gap: 8px; padding: 8px 12px; }
   .note-heading { min-height: 44px; padding-right: 48px; }
-  .note-controls { flex-wrap: nowrap; gap: 6px; height: 44px; }
+  .note-controls { flex-wrap: nowrap; gap: 4px; height: 44px; }
   .note-controls > button { flex-shrink: 0; }
   .note-controls .toolbar-icon-button { width: 40px; min-width: 40px; height: 40px; min-height: 40px; }
   .note-controls .toolbar-icon-button > svg { width: 20px; height: 20px; }
