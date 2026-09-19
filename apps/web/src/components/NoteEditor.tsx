@@ -31,10 +31,11 @@ import { MarkdownEditor, MarkdownEditorHandle, MarkdownEditorMode, MarkdownEdito
 import { FileManager } from './FileManager.js';
 import { FileSourceEditor } from './FileSourceEditor.js';
 import { NoteItem, AssetItem, NotebookMetadataField } from '../lib/types.js';
-import { saveLocalDraft, getLocalDraft, clearLocalDraft } from '../lib/storage.js';
+import { saveLocalDraft, getLocalDraft, clearLocalDraft, dismissConflictDraftNotice, getDismissedConflictDraftNoticeAt } from '../lib/storage.js';
 import { copyToClipboard } from '../lib/clipboard.js';
 import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import type { TranslationKey } from '../lib/i18n/index.js';
 import { chooseOutlineHeading, findOutlineIndexForLine, findTextMatches, isEditableTarget, parseMarkdownOutline } from '../lib/note-navigation.js';
 import { usePanelContext } from '../lib/panel-context.js';
 import { useEditorRegistry } from '../lib/note-editing.js';
@@ -221,8 +222,15 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [baseNote, setBaseNote] = useState(remoteBase || note);
   const [blocked, setBlocked] = useState(Boolean(conflictReason));
-  const [remoteNotice, setRemoteNotice] = useState('');
+  const [remoteNotice, setRemoteNoticeState] = useState('');
+  // A new remote-notice event always starts undismissed; only dismiss() should set this true.
+  const [remoteNoticeDismissed, setRemoteNoticeDismissed] = useState(false);
+  const setRemoteNotice = (value: string) => { setRemoteNoticeState(value); setRemoteNoticeDismissed(false); };
   const [conflictDraft, setConflictDraft] = useState<NoteDraft | null>(() => getLocalDraft(`${draftScope || branch}:conflict`, note.path));
+  // Identifies which persisted conflict draft the "preserved draft" notice is for, so a dismissal
+  // survives reopening the note but a later, different conflict draft is shown again.
+  const [conflictDraftSavedAt, setConflictDraftSavedAt] = useState<number | null>(() => getLocalDraft(`${draftScope || branch}:conflict`, note.path)?.savedAt ?? null);
+  const [conflictNoticeDismissedAt, setConflictNoticeDismissedAt] = useState<number | null>(() => getDismissedConflictDraftNoticeAt(`${draftScope || branch}:conflict`, note.path));
   const operation = useRef(false);
   // Set only around the debounced disk autosave; kept separate from `operation` so a routine
   // background save never trips the navigate/close/persist guards that flag was written for.
@@ -237,9 +245,18 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
   current.current = { content, metadata, baseNote, blocked };
   const locked = readOnly || blocked || isRestoring || closing.current || (!autoSave && isSaving);
   const preserveConflict = () => {
+    const key = `${draftScope || branch}:conflict`;
     const draft = { content: current.current.content, metadata: current.current.metadata };
-    saveLocalDraft(`${draftScope || branch}:conflict`, note.path, draft.content, draft.metadata);
+    saveLocalDraft(key, note.path, draft.content, draft.metadata);
     setConflictDraft(draft);
+    setConflictDraftSavedAt(getLocalDraft(key, note.path)?.savedAt ?? null);
+  };
+  const dismissNotice = () => {
+    if (remoteNotice) setRemoteNoticeDismissed(true);
+    if (conflictDraftSavedAt != null) {
+      dismissConflictDraftNotice(`${draftScope || branch}:conflict`, note.path, conflictDraftSavedAt);
+      setConflictNoticeDismissedAt(conflictDraftSavedAt);
+    }
   };
   const applyRemote = (latest: NoteItem) => {
     const state = current.current;
@@ -251,13 +268,13 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
       preserveConflict();
       current.current.blocked = true;
       setBlocked(true);
-      const reason = 'Remote changes conflict with your draft. Refresh the remote version to continue editing. Your draft is preserved.';
+      const reason: TranslationKey = 'editor.remoteConflict';
       setSaveError(reason);
       onMarkConflict?.(reason, { ...note, content: state.content, metadata: state.metadata }, state.baseNote);
       return null;
     }
     if (hasLocalEdits && (latest.content !== state.baseNote.content || !sameValue(latest.metadata, state.baseNote.metadata))) {
-      setRemoteNotice('Remote changes merged into this draft. Review before saving.');
+      setRemoteNotice('editor.remoteChangesMerged');
     }
     current.current = { ...state, ...result.draft, baseNote: latest };
     setBaseNote(latest); setContent(result.draft.content); setMetadata(result.draft.metadata);
@@ -270,7 +287,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
     }
     if (error instanceof ApiError && error.status === 404) {
       preserveConflict(); current.current.blocked = true; setBlocked(true);
-      const reason = 'This note was moved or deleted remotely. Your draft is preserved. Refresh after the note is restored, or open its new location.';
+      const reason: TranslationKey = 'editor.remoteNoteMovedOrDeleted';
       setSaveError(reason);
       onMarkConflict?.(reason, { ...note, content: current.current.content, metadata: current.current.metadata }, current.current.baseNote);
     } else setSaveError((error as Error).message);
@@ -303,7 +320,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
       current.current = { ...latest, baseNote: latest, blocked: false };
       clearLocalDraft(draftScope || branch, note.path);
       setRecoveredDraft(null); setBlocked(false); setSaveError(''); setHasUnsavedChanges(false);
-      setRemoteNotice('Remote version refreshed. Your previous draft remains available to download.');
+      setRemoteNotice('editor.remoteVersionRefreshed');
     } catch (error) { handleRemoteFailure(error); }
     finally { operation.current = false; if (mounted.current) setIsSaving(false); }
   };
@@ -439,7 +456,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
           clearLocalDraft(draftScope || branch, note.path);
           absorbTimestamps(saved);
           setHasUnsavedChanges(false); setSaveError('');
-        }).catch(error => { if (mounted.current) setSaveError(`Local save failed: ${error.message}`); })
+        }).catch(error => { if (mounted.current) setSaveError(t('editor.localSaveFailed', { message: error.message })); })
           .finally(() => { if (mounted.current) setIsSaving(false); });
         return;
       }
@@ -508,7 +525,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
       if (error instanceof ApiError && error.status === 409 && onReadRemote) {
         try {
           const latest = await onReadRemote(note.path);
-          if (mounted.current && applyRemote(latest)) setSaveError('The remote changed during saving. Changes merged; review the draft and Save again.');
+          if (mounted.current && applyRemote(latest)) setSaveError('editor.remoteChangedDuringSave');
         } catch (readError) { handleRemoteFailure(readError); }
       } else handleRemoteFailure(error);
     } finally { operation.current = false; if (mounted.current) setIsSaving(false); }
@@ -552,9 +569,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
         await onSave({ path: note.path, content: current.current.content, metadata: current.current.metadata, baseNote: current.current.baseNote });
         clearLocalDraft(draftScope || branch, note.path);
       }
-      catch (error) { closing.current = false; setIsSaving(false); setSaveError(`Local save failed: ${(error as Error).message}`); return; }
+      catch (error) { closing.current = false; setIsSaving(false); setSaveError(t('editor.localSaveFailed', { message: (error as Error).message })); return; }
     }
-    if (!autoSave && !readOnly && hasUnsavedChanges && !window.confirm('Close with unsaved changes? Your local draft will be kept.')) return;
+    if (!autoSave && !readOnly && hasUnsavedChanges && !window.confirm(t('editor.confirmCloseUnsaved'))) return;
     closing.current = false; setIsSaving(false);
     onClose?.();
   };
@@ -1080,6 +1097,11 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
     <Button type="button" role="tab" aria-selected={isGitPanelOpen} tabIndex={isGitPanelOpen ? 0 : -1} aria-label={t('editor.fileGitStatus')} title={t('editor.fileGitStatus')} onClick={() => setNotePanel(isGitPanelOpen ? null : 'git')}><span>{t('editor.git')}</span></Button>
   </div>;
 
+  // A blocking state cannot be dismissed while it blocks, so it ignores dismissal entirely.
+  const conflictDraftDismissed = conflictDraftSavedAt != null && conflictNoticeDismissedAt === conflictDraftSavedAt;
+  const showRemoteNotice = Boolean(remoteNotice) && (blocked || !remoteNoticeDismissed);
+  const showConflictDraftNotice = Boolean(conflictDraft) && (blocked || !conflictDraftDismissed);
+
   return (
       <div className="note-editor" data-frame={frame}>
         <div className="editor-notices">
@@ -1097,12 +1119,13 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
           />
         )}
 
-        {saveError && <EditorNotice tone="error">{saveError}</EditorNotice>}
+        {saveError && <EditorNotice tone="error">{t(saveError as TranslationKey)}</EditorNotice>}
 
-        {(blocked || remoteNotice || conflictDraft) && <EditorNotice actions={<>
+        {(blocked || showRemoteNotice || showConflictDraftNotice) && <EditorNotice actions={<>
           {blocked && <button disabled={isSaving} onClick={refreshRemote} className="font-semibold underline hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed transition">{t('editor.refreshRemote')}</button>}
           {conflictDraft && <button onClick={downloadConflictDraft} className="underline hover:opacity-80 transition">{t('editor.downloadPreservedDraft')}</button>}
-        </>}>{remoteNotice || t('editor.localChangesPreserved')}</EditorNotice>}
+          {!blocked && <button type="button" aria-label={t('editor.dismissNotice')} title={t('editor.dismissNotice')} onClick={dismissNotice} className="ui-icon-button"><X aria-hidden="true" /></button>}
+        </>}>{showRemoteNotice ? t(remoteNotice as TranslationKey) : t('editor.localChangesPreserved')}</EditorNotice>}
         </div>
 
         {frame === 'compact' ? <>

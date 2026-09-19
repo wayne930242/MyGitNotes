@@ -198,3 +198,64 @@ it('adopts a remote-only change silently when there are no local edits (draft mo
   expect(onSave).not.toHaveBeenCalled();
   expect(screen.queryByText(/Remote changes merged/i)).toBeNull();
 });
+
+it('dismissing the merged notice hides it', async () => {
+  const start: NoteItem = { ...note, content: 'line1\nline2\nline3\n' };
+  let resolveRead: ((value: NoteItem) => void) | null = null;
+  const onReadRemote = vi.fn((): Promise<NoteItem> => new Promise(resolve => { resolveRead = resolve; }));
+  render(editor({ note: start, onReadRemote, autoSave: false }));
+  await act(async () => { resolveRead?.(start); await vi.advanceTimersByTimeAsync(0); });
+
+  await act(async () => { await vi.advanceTimersByTimeAsync(61000); });
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: 'LOCAL1\nline2\nline3\n' } });
+  window.dispatchEvent(new Event('focus'));
+  await act(async () => { resolveRead?.({ ...start, content: 'line1\nline2\nREMOTE3\n' }); await vi.advanceTimersByTimeAsync(0); });
+  expect(screen.getByText(/Remote changes merged/i)).toBeTruthy();
+
+  fireEvent.click(screen.getByLabelText('Dismiss notice'));
+  expect(screen.queryByText(/Remote changes merged/i)).toBeNull();
+});
+
+it('shows the merged notice again on a later, different merge, even though it was dismissed', async () => {
+  const start: NoteItem = { ...note, content: 'line1\nline2\nline3\n' };
+  let resolveRead: ((value: NoteItem) => void) | null = null;
+  const onReadRemote = vi.fn((): Promise<NoteItem> => new Promise(resolve => { resolveRead = resolve; }));
+  render(editor({ note: start, onReadRemote, autoSave: false }));
+  await act(async () => { resolveRead?.(start); await vi.advanceTimersByTimeAsync(0); });
+
+  await act(async () => { await vi.advanceTimersByTimeAsync(61000); });
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: 'LOCAL1\nline2\nline3\n' } });
+  window.dispatchEvent(new Event('focus'));
+  const afterFirstMerge: NoteItem = { ...start, content: 'line1\nline2\nREMOTE3\n' };
+  await act(async () => { resolveRead?.(afterFirstMerge); await vi.advanceTimersByTimeAsync(0); });
+  expect(screen.getByText(/Remote changes merged/i)).toBeTruthy();
+  fireEvent.click(screen.getByLabelText('Dismiss notice'));
+  expect(screen.queryByText(/Remote changes merged/i)).toBeNull();
+
+  // A recheck that finds nothing new leaves the dismissal in place.
+  await act(async () => { await vi.advanceTimersByTimeAsync(61000); });
+  await act(async () => { resolveRead?.(afterFirstMerge); await vi.advanceTimersByTimeAsync(0); });
+  expect(screen.queryByText(/Remote changes merged/i)).toBeNull();
+
+  // A fresh local edit merged with a new external change is a new, different event.
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: 'LOCAL1\nLOCAL2\nREMOTE3\n' } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(61000); });
+  await act(async () => { resolveRead?.({ ...afterFirstMerge, content: 'line1\nline2\nREMOTE3B\n' }); await vi.advanceTimersByTimeAsync(0); });
+  expect(screen.getByText(/Remote changes merged/i)).toBeTruthy();
+});
+
+it('does not offer a dismiss control while blocked on a conflict', async () => {
+  const start: NoteItem = { ...note, content: 'line1\nline2\nline3\n' };
+  let resolveRead: ((value: NoteItem) => void) | null = null;
+  const onReadRemote = vi.fn((): Promise<NoteItem> => new Promise(resolve => { resolveRead = resolve; }));
+  render(editor({ note: start, onReadRemote }));
+  await act(async () => { resolveRead?.(start); await vi.advanceTimersByTimeAsync(0); });
+
+  await act(async () => { await vi.advanceTimersByTimeAsync(61000); });
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: 'LOCAL1\nline2\nline3\n' } });
+  window.dispatchEvent(new Event('focus'));
+  await act(async () => { resolveRead?.({ ...start, content: 'REMOTE1\nline2\nline3\n' }); await vi.advanceTimersByTimeAsync(0); });
+
+  expect(screen.getByText(/conflict/i)).toBeTruthy();
+  expect(screen.queryByLabelText('Dismiss notice')).toBeNull();
+});

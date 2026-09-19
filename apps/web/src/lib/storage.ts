@@ -62,6 +62,31 @@ export function listLocalDrafts(branch: string): LocalDraft[] {
   return drafts;
 }
 
+const CONFLICT_DISMISS_PREFIX = 'gh_notes_conflict_dismissed';
+
+function makeConflictDismissKey(scope: string, notePath: string): string {
+  return `${CONFLICT_DISMISS_PREFIX}:${scope}:${notePath}`;
+}
+
+/** Records that the preserved-draft notice for the conflict draft saved at `savedAt` was dismissed. */
+export function dismissConflictDraftNotice(scope: string, notePath: string, savedAt: number): void {
+  try {
+    localStorage.setItem(makeConflictDismissKey(scope, notePath), String(savedAt));
+  } catch (err) {
+    console.error('Failed to dismiss conflict draft notice:', err);
+  }
+}
+
+/** The `savedAt` of the conflict draft whose notice was last dismissed, or null if none was. */
+export function getDismissedConflictDraftNoticeAt(scope: string, notePath: string): number | null {
+  try {
+    const raw = localStorage.getItem(makeConflictDismissKey(scope, notePath));
+    return raw === null ? null : Number(raw);
+  } catch {
+    return null;
+  }
+}
+
 /** Moves drafts the retired graph editing store kept under `graph-draft:` into the drafts the editor recovers. */
 export function adoptGraphDrafts(scope: string): void {
   try {

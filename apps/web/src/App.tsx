@@ -929,7 +929,7 @@ const AppContent: React.FC = () => {
       const persisted = readWorkingNotes(workingScope)[entry.note.path];
       if (persisted) sent[entry.note.path] = persisted;
     }
-    if (reviewRequired) throw new Error('Remote changes merged into local drafts. Review the updated diff, then Commit again.');
+    if (reviewRequired) throw new Error(t('changes.reviewRequired'));
     if (!Object.keys(sent).length && !sentDocuments.length) return;
     const result = await commitRemoteNotes(Object.values(sent).map(entry => ({ path: entry.note.path,
       content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base })), expected, message, sentDocuments.map(({ path, page, base }) => ({ path, page, base })));
