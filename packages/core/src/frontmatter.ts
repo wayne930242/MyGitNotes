@@ -130,22 +130,23 @@ function patchFrontmatterField(raw: string, key: string, value: unknown): string
   const isCollection = value !== null && typeof value === 'object';
 
   if (!pair) {
-    if (isCollection) {
-      const rendered = new YAML.Document({ [key]: value }).toString({ lineWidth: 0, flowCollectionPadding: false }).trimEnd();
-      if (map.flow) {
-        const end = yaml.lastIndexOf('}');
-        return patch(end, end, `${map.items.length ? ', ' : ''}${rendered}`);
-      }
-      return patch(yaml.length, yaml.length, `${newline}${rendered}`);
+    let insertedValue: unknown = value;
+    if (!isCollection) {
+      const node = new YAML.Scalar(value);
+      if (typeof value === 'string' && (key === 'created' || key === 'updated')) node.type = 'QUOTE_DOUBLE';
+      insertedValue = node;
     }
-    const node = new YAML.Scalar(value);
-    if (typeof value === 'string' && (key === 'created' || key === 'updated')) node.type = 'QUOTE_DOUBLE';
-    const rendered = new YAML.Document(node).toString({ lineWidth: 0 }).trimEnd();
+    const newDocument = new YAML.Document({ [key]: insertedValue });
+    if (isCollection && map.flow) {
+      const newNode = newDocument.get(key, true);
+      if (YAML.isSeq(newNode) || YAML.isMap(newNode)) newNode.flow = true;
+    }
+    const rendered = newDocument.toString({ lineWidth: 0, flowCollectionPadding: false }).trimEnd();
     if (map.flow) {
       const end = yaml.lastIndexOf('}');
-      return patch(end, end, `${map.items.length ? ', ' : ''}${key}: ${rendered}`);
+      return patch(end, end, `${map.items.length ? ', ' : ''}${rendered}`);
     }
-    return patch(yaml.length, yaml.length, `${newline}${key}: ${rendered}`);
+    return patch(yaml.length, yaml.length, `${newline}${rendered}`);
   }
 
   const oldValue = pair.value as YAML.Node;

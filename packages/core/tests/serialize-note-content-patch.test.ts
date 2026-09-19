@@ -60,6 +60,27 @@ describe('serializeNoteContent patches an existing frontmatter block in place', 
     expect(serialized).toBe('---\ntitle: Note\npriority: high\nupdated: "2026-01-01T00:00:00.000Z"\n---\n\nBody.\n');
   });
 
+  it('inserts a new array-valued key onto a flow-style root map without corrupting it', () => {
+    const raw = '---\n{title: Note, status: todo}\n---\n\nBody.\n';
+    const { metadata, content } = parseNoteContent(raw);
+    const serialized = serializeNoteContent({ ...metadata, tags: ['a', 'b'] }, content, false, new Date('2026-01-01T00:00:00.000Z'), raw);
+    const reparsed = parseNoteContent(serialized);
+    expect(reparsed.hasFrontmatter).toBe(true);
+    expect(reparsed.metadata).toEqual({ title: 'Note', status: 'todo', tags: ['a', 'b'], updated: '2026-01-01T00:00:00.000Z' });
+    expect(reparsed.content).toBe(content);
+    expect(serialized).not.toContain('\n  - a');
+  });
+
+  it('quotes a newly-inserted metadata key name that would otherwise break the YAML map', () => {
+    const raw = '---\ntitle: Note\n---\n\nBody.\n';
+    const { metadata, content } = parseNoteContent(raw);
+    const serialized = serializeNoteContent({ ...metadata, 'a: b': 'value' }, content, false, new Date('2026-01-01T00:00:00.000Z'), raw);
+    const reparsed = parseNoteContent(serialized);
+    expect(reparsed.hasFrontmatter).toBe(true);
+    expect(reparsed.metadata['a: b']).toBe('value');
+    expect(reparsed.content).toBe(content);
+  });
+
   it('removes a metadata key that is no longer present', () => {
     const raw = '---\ntitle: Note\narchived: true\ncreated: "2020-01-01T00:00:00.000Z"\nupdated: "2020-01-02T00:00:00.000Z"\n---\n\nBody.\n';
     const { metadata, content } = parseNoteContent(raw);

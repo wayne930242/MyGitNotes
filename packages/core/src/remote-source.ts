@@ -316,7 +316,7 @@ export abstract class RemoteSource {
     const existing = snapshot.entries.find(e => e.path === file);
     if (existing && (existing.type !== 'blob' || existing.mode === '120000')) throw new SourceError('Path is not a regular note file.', 403);
     if (file.includes('\0') || (metadata !== undefined && (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)))) throw new SourceError('Invalid note path or metadata.');
-    const existingRaw = existing ? (await this.readFile(file)).toString('utf8') : undefined;
+    const existingRaw = existing ? await this.readFile(file).then(b => b.toString('utf8')).catch(() => undefined) : undefined;
     const raw = metadata ? serializeNoteContent(metadata, content, !existing, new Date(), existingRaw) : content;
     if (Buffer.byteLength(raw) > 5 * 1024 * 1024) throw new SourceError('Note exceeds the 5 MiB limit.', 413);
     const receipt = await this.commitChanges([{ path: file, content: raw }], expected, existing ? 'write' : 'create');
@@ -335,7 +335,7 @@ export abstract class RemoteSource {
       if (!note || typeof note.path !== 'string' || !NOTE_FILE.test(note.path) || typeof note.content !== 'string' || !note.metadata || typeof note.metadata !== 'object' || Array.isArray(note.metadata)) throw new SourceError('Invalid note change.');
       if (note.createOnly && snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`A note already exists at ${note.path}.`, 409);
       if (!note.createOnly && !snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`Note moved or deleted: ${note.path}.`, 409);
-      const existingRaw = note.createOnly ? undefined : (await this.readFile(note.path)).toString('utf8');
+      const existingRaw = note.createOnly ? undefined : await this.readFile(note.path).then(b => b.toString('utf8')).catch(() => undefined);
       return { path: note.path, content: serializeNoteContent(note.metadata, note.content, Boolean(note.createOnly), new Date(), existingRaw) };
     }));
     const config = documents.length ? await this.config() : null;
