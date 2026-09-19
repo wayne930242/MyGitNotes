@@ -88,7 +88,7 @@
     "@types/node": "^22.5.4",
     "@types/picomatch": "^4.0.2",
     "@types/tar-stream": "^3.1.4",
-    "typescript": "^5.5.4",
+    "typescript": "7.0.2",
     "vitest": "^2.1.1"
   }
 }
