@@ -50,7 +50,7 @@ const click = async text => {
  }
  const buttons=await page.$$('button');
  for(const button of buttons) {
-  if(await button.evaluate((e,text)=>e.textContent.trim()===text&&e.getBoundingClientRect().width>0,text)) {
+  if(await button.evaluate((e,text)=>(e.textContent.trim()===text||e.getAttribute('aria-label')===text)&&e.getBoundingClientRect().width>0,text)) {
    await button.scrollIntoView();const r=await button.boundingBox();await page.touchscreen.tap(r.x+r.width/2,r.y+r.height/2);return;
   }
  }

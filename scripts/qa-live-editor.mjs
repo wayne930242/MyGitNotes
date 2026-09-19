@@ -29,7 +29,7 @@ const page=await browser.newPage();await page.setViewport({width:1440,height:100
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
 // CodeMirror binds Undo to Mod-z, which is Command on macOS.
 const undoKey=process.platform==='darwin'?'Meta':'Control';
-const click=async text=>{const ok=await page.evaluate(text=>{const b=Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()===text);b?.click();return !!b;},text);if(!ok)throw Error(`Missing button: ${text}`);};
+const click=async text=>{const ok=await page.evaluate(text=>{const b=Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()===text||b.getAttribute('aria-label')===text);b?.click();return !!b;},text);if(!ok)throw Error(`Missing button: ${text}`);};
 try {
  await page.goto(base+'/notebooks/example/notes/root.md',{waitUntil:'networkidle0'});
  await page.waitForSelector('.cm-content');
