@@ -17,6 +17,7 @@ const rules = [
   ['hex colour', /(?<![\w&/-])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])/g],
   ['colour function', /\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(/g],
   ['Tailwind palette class', new RegExp(`(?<![\\w-])(?:[\\w\\[\\]&:-]+:)?(?:text|bg|border(?:-[trblxy])?|ring(?:-offset)?|fill|stroke|from|to|via|outline|divide|shadow|decoration|placeholder|accent|caret)-(?:${hues})(?:-\\d{2,3})?(?:/[\\d.\\[\\]]+)?(?![\\w-])`, 'g')],
+  ['CodeMirror default highlight style (fixed colours)', /\bdefaultHighlightStyle\b/g],
   ['named colour', new RegExp(`(?:[:,(]\\s*|=\\s*["']|:\\s*["'])(?:${named})(?=\\s*(?:[;,)"'}!]|$))`, 'gim')],
 ];
 

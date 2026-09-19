@@ -1,0 +1,46 @@
+import { EditorView } from '@codemirror/view';
+import { HighlightStyle } from '@codemirror/language';
+import { tags } from '@lezer/highlight';
+
+const token = (name: string) => `var(--color-${name})`;
+
+/** Replaces the fixed colours in CodeMirror's base theme with theme tokens. */
+export const codeMirrorTokenTheme = EditorView.theme({
+  '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--color-primary) 6%, transparent)' },
+  '.cm-activeLineGutter': { backgroundColor: 'transparent' },
+  '.cm-gutters': { color: token('muted') },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: token('primary') },
+  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: `${token('selection')} !important` },
+  '.cm-searchMatch': { backgroundColor: 'color-mix(in srgb, var(--color-warning) 30%, transparent)' },
+  '.cm-selectionMatch': { backgroundColor: 'color-mix(in srgb, var(--color-primary) 14%, transparent)' },
+  '&.cm-focused .cm-matchingBracket': { backgroundColor: 'color-mix(in srgb, var(--color-success) 25%, transparent)' },
+  '&.cm-focused .cm-nonmatchingBracket': { backgroundColor: 'color-mix(in srgb, var(--color-danger) 25%, transparent)' },
+  '.cm-placeholder': { color: token('muted') },
+  '.cm-specialChar': { color: token('danger') },
+  '.cm-tooltip': { border: `1px solid ${token('border')}`, backgroundColor: token('surface'), color: token('text') },
+  '.cm-tooltip-autocomplete ul li[aria-selected]': { backgroundColor: token('primary-soft'), color: token('text') },
+  '.cm-panels': { backgroundColor: token('sidebar'), color: token('text') },
+});
+
+/** CodeMirror's default highlight style with every colour taken from theme tokens. */
+export const tokenHighlightStyle = HighlightStyle.define([
+  { tag: tags.meta, color: token('muted') },
+  { tag: tags.link, textDecoration: 'underline' },
+  { tag: tags.heading, textDecoration: 'underline', fontWeight: 'bold' },
+  { tag: tags.emphasis, fontStyle: 'italic' },
+  { tag: tags.strong, fontWeight: 'bold' },
+  { tag: tags.strikethrough, textDecoration: 'line-through' },
+  { tag: tags.keyword, color: token('primary') },
+  { tag: [tags.atom, tags.bool, tags.url, tags.contentSeparator, tags.labelName], color: token('info') },
+  { tag: [tags.literal, tags.inserted], color: token('success') },
+  { tag: [tags.string, tags.deleted], color: token('danger') },
+  { tag: [tags.regexp, tags.escape, tags.special(tags.string)], color: token('warning') },
+  { tag: tags.definition(tags.variableName), color: token('info') },
+  { tag: tags.local(tags.variableName), color: token('accent-5') },
+  { tag: [tags.typeName, tags.namespace], color: token('success') },
+  { tag: tags.className, color: token('accent-4') },
+  { tag: [tags.special(tags.variableName), tags.macroName], color: token('accent-2') },
+  { tag: tags.definition(tags.propertyName), color: token('primary') },
+  { tag: tags.comment, color: token('muted') },
+  { tag: tags.invalid, color: token('danger') },
+]);

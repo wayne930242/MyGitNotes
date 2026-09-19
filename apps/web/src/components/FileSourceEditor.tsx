@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { syntaxHighlighting } from '@codemirror/language';
+import { codeMirrorTokenTheme, tokenHighlightStyle } from '../lib/codemirror-theme.js';
 import { markdown } from '@codemirror/lang-markdown';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
@@ -27,7 +28,7 @@ export function FileSourceEditor({ path, content, readOnly, label, onChange }: {
   useEffect(() => {
     const editor = new EditorView({ parent: host.current!, state: EditorState.create({ doc: initial.current, extensions: [
       lineNumbers(), highlightActiveLine(), history(), keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-      language(path), syntaxHighlighting(defaultHighlightStyle), permissions.current.of([EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]),
+      language(path), syntaxHighlighting(tokenHighlightStyle), codeMirrorTokenTheme, permissions.current.of([EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]),
       EditorState.lineSeparator.of(initial.current.includes('\r\n') ? '\r\n' : '\n'),
       EditorView.contentAttributes.of({ 'aria-label': label }),
       EditorView.updateListener.of(update => { if (update.docChanged) change.current(update.state.sliceDoc()); }),

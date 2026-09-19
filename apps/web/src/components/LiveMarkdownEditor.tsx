@@ -7,7 +7,8 @@ import { Decoration, EditorView, WidgetType, keymap, drawSelection, highlightAct
 import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
-import { defaultHighlightStyle, HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
+import { HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
+import { codeMirrorTokenTheme, tokenHighlightStyle } from '../lib/codemirror-theme.js';
 import { tags } from '@lezer/highlight';
 import { marked } from 'marked';
 import { parseYouTubeUrl } from '@mygitnotes/core/screen-page';
@@ -512,12 +513,12 @@ const theme = EditorView.theme({
   '.live-md-strong':{fontWeight:'700'},'.live-md-emphasis':{fontStyle:'italic'},'.live-md-strike':{textDecoration:'line-through'},
   '.live-md-link, .live-md-link span, .live-md-url':{color:'var(--color-link)',textDecoration:'underline'},
   '.live-md-hr':{color:'var(--color-text)'},
-  '.live-md-code':{fontFamily:'monospace',backgroundColor:'color-mix(in srgb, var(--color-sidebar) 80%, transparent)',borderRadius:'4px'},
+  '.live-md-code':{fontFamily:'monospace',backgroundColor:'var(--color-code-bg)',borderRadius:'4px'},
   // Both sides are explicit (not just the extra indent) because .live-md-codeblock is a .cm-line
   // and would otherwise fall back to .cm-line's own padding for whichever side it doesn't set —
   // now that .cm-line carries the full 40px card inset (previously .cm-content did), leaving
   // paddingRight unset would collapse only the left side, jamming the block against the card edge.
-  '.live-md-codeblock':{fontFamily:'monospace',backgroundColor:'color-mix(in srgb, var(--color-sidebar) 80%, transparent)',paddingLeft:'54px',paddingRight:'42px'},
+  '.live-md-codeblock':{fontFamily:'monospace',backgroundColor:'var(--color-code-bg)',paddingLeft:'54px',paddingRight:'42px'},
   '.live-md-quote':{borderLeft:'2px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border))',paddingLeft:'12px',color:'var(--color-muted)'},
   '.live-md-mdx-import-chip':{display:'inline-flex',alignItems:'center',gap:'5px',padding:'1px 8px',borderRadius:'4px',fontSize:'0.78em',fontFamily:'monospace',cursor:'pointer',backgroundColor:'color-mix(in srgb, var(--color-text) 4%, var(--color-surface))',color:'var(--color-muted)',border:'1px solid color-mix(in srgb, var(--color-text) 12%, var(--color-border))',opacity:'0.65',transition:'opacity 120ms ease'},
   '.live-md-mdx-import-chip:hover':{opacity:'1'},
@@ -587,7 +588,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
     });
     const view = new EditorView({parent:host.current!,state:EditorState.create({doc:content,extensions:[
       markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),cardBackgroundLayer,lineNumbers(),highlightActiveLineGutter(),EditorView.lineWrapping,
-      syntaxHighlighting(defaultHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'},{tag:tags.contentSeparator,class:'live-md-hr'}])),theme,tableUIState,chipEditState,field,
+      syntaxHighlighting(tokenHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'},{tag:tags.contentSeparator,class:'live-md-hr'}])),codeMirrorTokenTheme,theme,tableUIState,chipEditState,field,
       autocompletion({ icons: false, addToOptions: [{ position: 20, render: completion => {
         const icon = completion.type && TASK_TOKEN_ICON_SVG[completion.type];
         if (!icon) return null;
