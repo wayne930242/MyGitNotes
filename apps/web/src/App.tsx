@@ -1,4 +1,3 @@
-import { Button } from './components/Button.js';
 import type { ChangeRequest } from './lib/types.js';
 import { useQueryStates } from 'nuqs';
 import { filterParsers, type FilterQuery, writeFilterQuery } from './lib/filter-query.js';
@@ -9,23 +8,24 @@ import { adoptGraphDrafts, listLocalDrafts } from './lib/storage.js';
 import { useWorkspaceSync } from './lib/use-workspace-sync.js';
 import { WorkspaceLinks } from './components/WorkspaceLinks.js';
 import { ImageLightbox } from './components/ImageLightbox.js';
-import { isNoteHidden, withNoteStatus } from '@mygitnotes/core/note-status';
-import { Select } from './components/Select.js';
+import { isNoteHidden } from '@mygitnotes/core/note-status';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { legacyAllNotebooksRoute, notebookRoute, noteReturnRoute, noteRoute, parseWorkspaceRoute, WorkspaceTab } from './lib/routes.js';
 import { clearCommittedNotes, readWorkingNotes, updateWorkingNote, workingDiff, type WorkingNotes } from './lib/working-notes.js';
 import { mergeNote, sameValue } from './lib/merge-note.js';
-import { buildNewNoteDraft } from './lib/new-note.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ApiError, applyTagChange, commitRemoteNotes, deleteAsset, deleteNote, fetchAssets, fetchGitStatus, fetchWorkspace, moveAsset, readNote, readNotes, renderNoteTemplate, restoreNote, saveNote, uploadAsset } from './lib/api.js';
+import { ApiError, commitRemoteNotes, deleteNote, fetchAssets, fetchGitStatus, fetchWorkspace, readNote, readNotes, restoreNote, saveNote } from './lib/api.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { invalidateNoteQueries, NOTE_QUERY_KEY, noteLookupOptions, notePathsOptions, setNoteQueryScope, useNoteFacets, useNoteList, useNoteLookup, useNoteQueryScope, useStaleNoteQueries } from './lib/use-note-queries.js';
+import { invalidateNoteQueries, NOTE_QUERY_KEY, noteLookupOptions, setNoteQueryScope, useNoteFacets, useNoteList, useNoteLookup, useNoteQueryScope, useStaleNoteQueries } from './lib/use-note-queries.js';
 import { useDebounced } from './lib/use-debounced.js';
 import { noteStatusChange } from './lib/note-mutations.js';
 import { NoteListSentinel } from './components/NoteListSentinel.js';
-import { invertTagOperationPlan, planTagDelete, planTagMerge, planTagRename } from '@mygitnotes/core/tag-ops';
-import { type TagOperationKind, useTagOperations } from './lib/use-tag-operations.js';
-import type { AssetItem, NoteItem, ViewMode } from './lib/types.js';
+import type { NoteItem, ViewMode } from './lib/types.js';
+import { useTagWorkspaceOperations } from './app/useTagWorkspaceOperations.js';
+import { useAssetOperations } from './app/useAssetOperations.js';
+import { useRoutedNote } from './app/useRoutedNote.js';
+import { useNewNoteDialog } from './app/useNewNoteDialog.js';
+import { NewNoteDialog } from './app/NewNoteDialog.js';
 import { applyTheme, getSavedTheme, ThemeChoice } from './lib/themes.js';
 import { AgentAccessSettings, AuthControls, ConnectionState } from './components/AuthControls.js';
 import { Header } from './components/Header.js';
@@ -65,7 +65,7 @@ import { getBreadcrumbs, getImmediateSubfolders } from './lib/folder-tree.js';
 import { mergeNotebookFacets, queryNotebookIds } from './lib/note-facets.js';
 import { getSavedSort, saveSort, SortField, SortOrder } from './lib/note-sort.js';
 import { I18nProvider, type TranslationKey, useTranslation } from './lib/i18n/index.js';
-import { AlertTriangle, FileText, X } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 
 const ScreenPage = React.lazy(() => import('./components/ScreenPage.js').then(module => ({ default: module.ScreenPage })));
 const GraphPage = React.lazy(() => import('./components/GraphPage.js').then(module => ({ default: module.GraphPage })));
@@ -107,7 +107,6 @@ const AppContent: React.FC = () => {
     document.addEventListener('keydown', close);
     return () => document.removeEventListener('keydown', close);
   }, [filtersOpen]);
-  const [createError, setCreateError] = useState('');
   // Theme State
   const [currentTheme, setCurrentTheme] = useState<ThemeChoice>(() => getSavedTheme());
 
@@ -180,68 +179,13 @@ const AppContent: React.FC = () => {
     const pending = remote ? readWorkingNotes(workingScope)[path] : undefined;
     return pending ? pending.note : readCommittedNote(path);
   };
-  const readNotePaths = async (query: Partial<NoteQuery>): Promise<string[]> => (await queryClient.fetchQuery(notePathsOptions(queryScope, query))).paths;
-
   // Deletion and Undo Buffer State (Requirement 2)
   const [deletedNotes, setDeletedNotes] = useState<NoteItem[]>([]);
   const [undoToast, setUndoToast] = useState<{ note: NoteItem; timerId: any; } | null>(null);
 
   // Tag management: rename/merge/delete across the whole workspace, each a single commit
   // with a session-lifetime undo (kept in `tagOperations.history` until page reload).
-  const tagOperations = useTagOperations();
-  /** Every note carrying `tag`, in every notebook, hidden ones included: the exact set the server will rewrite. */
-  const notesWithTag = async (tag: string) => {
-    const paths = await readNotePaths({ notebookId: 'all', tags: [tag], showHidden: true });
-    if (!paths.length) return [];
-    const result = await queryClient.fetchQuery(noteLookupOptions(queryScope, paths, false));
-    return result.notes;
-  };
-  const previewTagUsage = async (tag: string): Promise<number> => (await readNotePaths({ notebookId: 'all', tags: [tag], showHidden: true })).length;
-  const runTagOperation = async (kind: TagOperationKind, plan: ReturnType<typeof planTagDelete>, label: string) => {
-    if (plan.affected.length === 0) throw new Error(t('sidebar.tagNoNotesAffected'));
-    const entries = plan.affected.map(({ path, notebookId, nextTags }) => ({ path, notebookId, tags: nextTags }));
-    const result = await applyTagChange(entries, revision, label);
-    if (remote) setRevision(result.revision || revision);
-    else invalidateNotes();
-    tagOperations.record(kind, label, plan);
-  };
-  const handleRenameTag = async (from: string, to: string) => {
-    if (!canWrite) throw new Error(t('folder.readOnly'));
-    const plan = planTagRename(await notesWithTag(from), from, to);
-    await runTagOperation('rename', plan, t('sidebar.tagRenamedLabel', { from, to, count: plan.affected.length }));
-  };
-  const handleMergeTag = async (from: string, into: string) => {
-    if (!canWrite) throw new Error(t('folder.readOnly'));
-    const plan = planTagMerge(await notesWithTag(from), from, into);
-    await runTagOperation('merge', plan, t('sidebar.tagMergedLabel', { from, to: into, count: plan.affected.length }));
-  };
-  const handleDeleteTag = async (tag: string) => {
-    if (!canWrite) throw new Error(t('folder.readOnly'));
-    const plan = planTagDelete(await notesWithTag(tag), tag);
-    await runTagOperation('delete', plan, t('sidebar.tagDeletedLabel', { tag, count: plan.affected.length }));
-  };
-  const handleUndoTagOperation = async (id: string) => {
-    const record = tagOperations.history.find(entry => entry.id === id);
-    if (!record) return;
-    try {
-      const inverted = invertTagOperationPlan(record.plan);
-      const existing = (await queryClient.fetchQuery(noteLookupOptions(queryScope, inverted.affected.map(entry => entry.path), false))).notes;
-      const validEntries = inverted.affected.filter(entry => existing.some(note => note.path === entry.path && note.notebookId === entry.notebookId));
-      if (validEntries.length === 0) {
-        tagOperations.dismiss(id);
-        return;
-      }
-      const entries = validEntries.map(({ path, notebookId, nextTags }) => ({ path, notebookId, tags: nextTags }));
-      const result = await applyTagChange(entries, revision, `${t('common.undo')}: ${record.label}`);
-      if (remote) setRevision(result.revision || revision);
-      else invalidateNotes();
-      tagOperations.dismiss(id);
-    } catch (error) {
-      // Keep the record so the user can retry; a silently vanished undo with no feedback
-      // would leave them unable to tell whether the undo happened.
-      setActionError((error as Error).message);
-    }
-  };
+  const { tagOperations, previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag, handleUndoTagOperation } = useTagWorkspaceOperations({ queryClient, queryScope, revision, remote, canWrite, t, invalidateNotes, setRevision, setActionError });
 
   const editorNotebookId = editorRoute.notebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
   const returnTo = noteReturnRoute(location.search, editorNotebookId, editorRoute.folder);
@@ -339,7 +283,6 @@ const AppContent: React.FC = () => {
     navigate({ pathname: location.pathname, search: query.toString() }, { replace: true });
   }, [activeTab, loading, editorRoute.note, sourceId, selectedNotebookId]);
   /* eslint-enable react-hooks/exhaustive-deps */
-  const [routeError, setRouteError] = useState('');
   const currentFilterSearch = (patch: Partial<FilterQuery> = {}) => {
     const query = new URLSearchParams(writeFilterQuery(location.search, { ...queryState, folders: selectedFolders, ...patch }));
     query.delete('folder');
@@ -442,46 +385,7 @@ const AppContent: React.FC = () => {
   // Modal States
   const [commitRequest, setCommitRequest] = useState<ChangeRequest>();
   const [isCommitOpen, setIsCommitOpen] = useState<boolean>(false);
-  const [isNewNoteOpen, setIsNewNoteOpen] = useState<boolean>(false);
-
-  // New Note Form State
-  const [newNoteTitle, setNewNoteTitle] = useState<string>('');
-  const [newNoteStatus, setNewNoteStatus] = useState<string>('inbox');
-  const [newNoteFolder, setNewNoteFolder] = useState<string>('');
   const [shortcutMode, setShortcutMode] = useState<ShortcutSurfaceMode | null>(null);
-  const [newNoteTags, setNewNoteTags] = useState<string[]>([]);
-  const [newNoteTemplateId, setNewNoteTemplateId] = useState<string>('');
-  const newNoteFolders = useMemo(() => folders.filter(folder => folder.notebookId === selectedNotebookId).map(folder => folder.path).sort(), [folders, selectedNotebookId]);
-  const newNoteTemplates = useMemo(() => config?.notebooks.find(n => n.id === selectedNotebookId)?.templates || [], [config, selectedNotebookId]);
-  const handleTemplateChange = async (templateId: string) => {
-    setNewNoteTemplateId(templateId);
-    if (!templateId) return;
-    const currentNotebook = config?.notebooks.find((n) => n.id === selectedNotebookId) || config?.notebooks[0];
-    if (!currentNotebook) return;
-    try {
-      const rendered = await renderNoteTemplate({ notebookId: currentNotebook.id, templateId, title: newNoteTitle || 'Untitled' });
-      if (typeof rendered.metadata.status === 'string' && newNoteStatuses.includes(rendered.metadata.status)) {
-        setNewNoteStatus(rendered.metadata.status);
-      }
-      if (Array.isArray(rendered.metadata.tags)) {
-        setNewNoteTags(rendered.metadata.tags.map(String));
-      }
-    } catch {
-      // Ignore template preview error
-    }
-  };
-  const openNewNote = (options?: string | { status?: string; folder?: string; tag?: string; tags?: string[]; notebookId?: string; }) => {
-    const opts = typeof options === 'string' ? { status: options } : { ...options };
-    if (opts.notebookId && opts.notebookId !== selectedNotebookId && config?.notebooks.some(n => n.id === opts.notebookId)) {
-      setSelectedNotebookId(opts.notebookId);
-    }
-    setNewNoteStatus(opts.status || newNoteStatuses[0]);
-    setNewNoteFolder(opts.folder || '');
-    setNewNoteTags(opts.tags || (opts.tag ? [opts.tag] : []));
-    setNewNoteTemplateId('');
-    setCreateError('');
-    setIsNewNoteOpen(true);
-  };
 
   // Aggregated tags across the workspace for autocomplete
   const availableTags = useMemo(() => Array.from(new Set(workspaceTagNames.map(tag => tag.trim()))).filter(Boolean).sort(), [workspaceTagNames]);
@@ -491,49 +395,9 @@ const AppContent: React.FC = () => {
     setEditingNote(null);
     /* eslint-enable react/set-state-in-effect */
     setDeletedNotes([]);
-    setIsNewNoteOpen(false);
   }, [sourceId]);
 
-  const routedNotebook = config?.notebooks.find(nb => nb.id === editorNotebookId) || (!editorRoute.notebook ? config?.notebooks[0] : undefined);
-  const routedPath = editorRoute.note && routedNotebook ? `${routedNotebook.root}/${editorRoute.note}` : null;
-  // Opening a note reads that one note, with its body, instead of holding every note in memory.
-  const routedLookup = useNoteLookup(routedPath ? [routedPath] : [], true);
-  const routedCommitted = routedLookup.committed[0];
-  const routedNote = useMemo<NoteItem | null>(() => {
-    if (!routedPath) return null;
-    if (editingNote?.path === routedPath && typeof editingNote.content === 'string') return editingNote as NoteItem;
-    const found = routedLookup.notes[0];
-    return found && typeof found.content === 'string' ? found as NoteItem : null;
-  }, [routedPath, editingNote, routedLookup.notes]);
-  const routedLoading = Boolean(routedPath) && !routedNote && routedLookup.loading;
-
-  useEffect(() => {
-    if (loading || !config) return;
-    if (!editorRoute.valid) {
-      /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
-      setRouteError('route.pageNotFound');
-      /* eslint-enable react/set-state-in-effect */
-      return;
-    }
-    if (!routedNotebook) {
-      setRouteError('route.notebookNotFound');
-      return;
-    }
-    if (!editorRoute.note) {
-      setRouteError('');
-      setEditingNote(null);
-      return;
-    }
-    if (routedLookup.error) {
-      setRouteError(routedLookup.error);
-      return;
-    }
-    if (routedNote || routedLoading) {
-      setRouteError('');
-      return;
-    }
-    setRouteError('route.noteNotFound');
-  }, [editorRoute, config, loading, editorNotebookId, sourceId, routedNotebook, routedNote, routedLoading, routedLookup.error]);
+  const { routedNote, routedCommitted, routedLoading, routeError } = useRoutedNote({ config, editorRoute, editorNotebookId, editingNote, loading, sourceId, setEditingNote });
 
   const noteFilters = useMemo<NoteFilters>(() => ({ notebookId: scopeNotebookId, folders: selectedFolders, tags: selectedTags, descendants: route.descendants, tagMode: route.tagMode, q: searchQuery, status: selectedStatus, showHidden }), [scopeNotebookId, selectedFolders, selectedTags, route.descendants, route.tagMode, searchQuery, selectedStatus, showHidden]);
   const hasCollectionFilter = selectedFolders.length > 0 || selectedTags.length > 0 || scopeNotebookId === 'all';
@@ -769,44 +633,8 @@ const AppContent: React.FC = () => {
     if (!remote) void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError(error.message));
   };
 
-  const handleCreateNewNote = async (statusOverride?: string) => {
-    try {
-      setCreateError('');
-      if (!canWrite) throw new Error('This workspace is read-only.');
-      const title = newNoteTitle.trim() || 'Untitled Note';
-      const slug = title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'untitled';
-
-      const currentNotebook = config?.notebooks.find((n) => n.id === selectedNotebookId) || config?.notebooks[0];
-      const root = currentNotebook?.root || 'notes/example';
-      const folder = newNoteFolder.trim().replace(/^\/+|\/+$/g, '');
-      if (folder && !newNoteFolders.includes(folder)) throw new Error(t('createNote.invalidFolder'));
-      const notePath = [root, folder, `${slug}.md`].filter(Boolean).join('/');
-      const taken = Boolean(remote && readWorkingNotes(workingScope)[notePath]) || (await queryClient.fetchQuery(noteLookupOptions(queryScope, [notePath], false))).notes.length > 0;
-      if (taken) throw new Error('A note with this filename already exists in this folder. Choose another title.');
-
-      const status = statusOverride || newNoteStatus;
-      const template = newNoteTemplateId ? await renderNoteTemplate({ notebookId: currentNotebook!.id, templateId: newNoteTemplateId, title }) : undefined;
-      const draft = buildNewNoteDraft({ slug, title, tags: newNoteTags, status, template });
-      const initialContent = draft.content;
-      const finalStatus = draft.status;
-      const initialMetadata = withNoteStatus(draft.metadata, finalStatus);
-
-      const res = remote ? { note: stageWorkingNote({ id: slug, path: notePath, notebookId: currentNotebook!.id, title, content: initialContent, metadata: initialMetadata, status: finalStatus, tags: Array.isArray(initialMetadata.tags) ? initialMetadata.tags.map(String) : [], revision }, null) } : await saveNote({ path: notePath, notebookId: currentNotebook?.id, createOnly: true, content: initialContent, metadata: initialMetadata, noCommit: true });
-      if (!remote) invalidateNotes();
-
-      setIsNewNoteOpen(false);
-      setNewNoteTitle('');
-      setNewNoteFolder('');
-      setNewNoteTags([]);
-      setNewNoteTemplateId('');
-      setNewNoteStatus(newNoteStatuses[0]);
-      const statusRes = await fetchGitStatus();
-      setGitStatus(statusRes.status);
-      handleOpenNote(res.note);
-    } catch (error) {
-      setCreateError((error as Error).message);
-    }
-  };
+  // Create New Note dialog: its form state and the handlers that render or persist a new note draft.
+  const { createError, isNewNoteOpen, setIsNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteFolder, setNewNoteFolder, newNoteTags, setNewNoteTags, newNoteTemplateId, setNewNoteTemplateId, newNoteFolders, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote } = useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, workingScope, queryClient, queryScope, stageWorkingNote, revision, invalidateNotes, setGitStatus, sourceId, newNoteStatuses, t, onCreated: handleOpenNote });
 
   const commitWorkingNotes = async (files: string[], message: string) => {
     const pending = readWorkingNotes(workingScope);
@@ -860,51 +688,8 @@ const AppContent: React.FC = () => {
     setRevision(result.revision);
   };
 
-  const handleUploadAsset = async (file: File, directory = '') => {
-    return new Promise<AssetItem>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const base64 = reader.result as string;
-          const targetNotebookId = editingNote?.notebookId || selectedNotebookId;
-          const currentRevision = remote ? (await fetchWorkspace()).revision : undefined;
-          const uploaded = await uploadAsset(targetNotebookId, file.name, base64, { directory, revision: currentRevision });
-          const assetList = await fetchAssets(targetNotebookId);
-          setAssets(assetList);
-          const statusRes = await fetchGitStatus();
-          setGitStatus(statusRes.status);
-          const asset = assetList.find(a => a.path === uploaded.path);
-          if (!asset) throw new Error('Uploaded asset could not be found.');
-          resolve(asset);
-        } catch (err) {
-          console.error('Failed to upload asset:', err);
-          reject(err);
-        }
-      };
-      reader.onerror = (err) => reject(err);
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const refreshAssets = async () => {
-    const targetNotebookId = editingNote?.notebookId || selectedNotebookId;
-    const assetList = await fetchAssets(targetNotebookId);
-    setAssets(assetList);
-    const statusRes = await fetchGitStatus();
-    setGitStatus(statusRes.status);
-    return assetList;
-  };
-  const handleDeleteAsset = async (asset: AssetItem) => {
-    await deleteAsset(asset.path, { noCommit: !remote, revision: asset.revision });
-    await refreshAssets();
-  };
-  const handleMoveAsset = async (asset: AssetItem, directory: string) => {
-    const moved = await moveAsset({ path: asset.path, directory, revision: asset.revision });
-    const assetList = await refreshAssets();
-    const result = assetList.find(a => a.path === moved.path);
-    if (!result) throw new Error('Moved asset could not be found.');
-    return result;
-  };
+  // Assets are scoped to whichever notebook the open note (or the selected browse notebook) belongs to.
+  const { handleUploadAsset, handleDeleteAsset, handleMoveAsset } = useAssetOperations({ editingNote, selectedNotebookId, remote, setAssets, setGitStatus });
 
   const beforeFileChange = async () => {
     await editorRegistry.flushEditors();
@@ -1422,66 +1207,28 @@ const AppContent: React.FC = () => {
           />
           {/* Create New Note Modal */}
           {isNewNoteOpen && (
-            <div className='viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-4'>
-              <div className='rounded-2xl shadow-2xl border w-full max-w-md max-h-full overflow-y-auto p-4 md:p-6' style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-                <h3 className='font-semibold text-fg text-base mb-4 flex items-center gap-2'>
-                  <FileText className='w-5 h-5' style={{ color: 'var(--color-primary)' }} />
-                  {t('createNote.title')}
-                </h3>
-                {createError && <p id='create-note-error' role='alert' className='mb-3 text-sm text-danger'>{createError}</p>}
-                <div className='space-y-4'>
-                  <div>
-                    <label className='block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5'>{t('createNote.noteTitle')}</label>
-                    <input
-                      type='text'
-                      placeholder={t('createNote.placeholder')}
-                      aria-describedby='create-note-error'
-                      value={newNoteTitle}
-                      onChange={(e) => setNewNoteTitle(e.target.value)}
-                      className='w-full px-3 py-2 bg-fg/5 border border-line rounded-lg text-sm text-fg focus:outline-none'
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleCreateNewNote();
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className='block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5' htmlFor='create-note-folder'>{t('createNote.folder')}</label>
-                    <input id='create-note-folder' type='text' list='create-note-folders' aria-label={t('createNote.folder')} placeholder={t('createNote.folderPlaceholder')} value={newNoteFolder} onChange={event => setNewNoteFolder(event.target.value)} className='ui-control' autoComplete='off' />
-                    <datalist id='create-note-folders'>{newNoteFolders.map(folder => <option key={folder} value={folder} />)}</datalist>
-                  </div>
-                  {newNoteTemplates.length > 0 && (
-                    <div>
-                      <label className='block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5'>{t('createNote.template')}</label>
-                      <Select aria-label={t('createNote.template')} value={newNoteTemplateId} onValueChange={handleTemplateChange} options={[{ value: '', label: t('createNote.noTemplate') }, ...newNoteTemplates.map(tpl => ({ value: tpl.id, label: tpl.title }))]} className='w-full' />
-                    </div>
-                  )}
-                  {newNoteTags.length > 0 && (
-                    <div>
-                      <label className='block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5'>{t('notes.tags')}</label>
-                      <div className='flex flex-wrap gap-1.5 py-1'>{newNoteTags.map(tag => <span key={tag} className='inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20'>#{tag}</span>)}</div>
-                    </div>
-                  )}
-                  <div>
-                    <label className='block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5'>{t('createNote.initialStatus')}</label>
-                    <Select aria-label={t('createNote.initialStatus')} value={newNoteStatus} onValueChange={setNewNoteStatus} options={newNoteStatuses.map(value => ({ value, label: value }))} className='w-full' />
-                  </div>
-                </div>
-                <div className='flex items-center justify-end gap-2 mt-6 pt-4 border-t border-line'>
-                  <button
-                    onClick={() => {
-                      setIsNewNoteOpen(false);
-                      setNewNoteTags([]);
-                      setNewNoteTemplateId('');
-                    }}
-                    className='px-4 py-2 text-xs font-medium text-muted hover:bg-fg/5 rounded-lg transition active:scale-95'
-                  >
-                    {t('common.cancel')}
-                  </button>
-                  <Button variant='primary' onClick={() => handleCreateNewNote()} disabled={!newNoteTitle.trim()}>{t('createNote.submit')}</Button>
-                </div>
-              </div>
-            </div>
+            <NewNoteDialog
+              t={t}
+              createError={createError}
+              newNoteTitle={newNoteTitle}
+              onTitleChange={setNewNoteTitle}
+              onSubmit={() => handleCreateNewNote()}
+              newNoteFolder={newNoteFolder}
+              onFolderChange={setNewNoteFolder}
+              newNoteFolders={newNoteFolders}
+              newNoteTemplates={newNoteTemplates}
+              newNoteTemplateId={newNoteTemplateId}
+              onTemplateChange={handleTemplateChange}
+              newNoteTags={newNoteTags}
+              newNoteStatus={newNoteStatus}
+              onStatusChange={setNewNoteStatus}
+              newNoteStatuses={newNoteStatuses}
+              onCancel={() => {
+                setIsNewNoteOpen(false);
+                setNewNoteTags([]);
+                setNewNoteTemplateId('');
+              }}
+            />
           )}
         </div>
         <ImageLightbox />
