@@ -20,6 +20,12 @@ importers:
       dprint-plugin-malva:
         specifier: ^0.16.0
         version: 0.16.0
+      esbuild:
+        specifier: ^0.21.5
+        version: 0.21.5
+      oxc-parser:
+        specifier: ^0.150.0
+        version: 0.150.0
       oxlint:
         specifier: ^1.83.0
         version: 1.83.0

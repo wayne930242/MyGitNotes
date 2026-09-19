@@ -29,7 +29,9 @@
     "typeLiteral.preferSingleLine": true,
     "typeParameters.preferSingleLine": true,
     "unionAndIntersectionType.preferSingleLine": true,
-    "variableStatement.preferSingleLine": true
+    "variableStatement.preferSingleLine": true,
+    "module.sortImportDeclarations": "maintain",
+    "module.sortExportDeclarations": "maintain"
   },
   "malva": {
     "printWidth": 2147483647,
