@@ -46,6 +46,21 @@ describe('palette families', () => {
     }
   });
 
+  it('keeps body text at 4.5:1 on the selection tint over the surface', () => {
+    const over = (tint: string, ground: string) => {
+      const alpha = tint.length > 7 ? parseInt(tint.slice(7, 9), 16) / 255 : 1;
+      const [a, b] = [tint, ground].map(hex => hex.slice(1, 7).match(/.{2}/g)!.map(value => parseInt(value, 16)));
+      return `#${a.map((value, index) => Math.round(alpha * value + (1 - alpha) * b[index]).toString(16).padStart(2, '0')).join('')}`;
+    };
+    for (const family of PALETTE_FAMILIES) {
+      for (const [mode, variant] of Object.entries(family.variants)) {
+        const tint = over(variant.selection, variant.surface);
+        expect(tint, `${family.id}/${mode} selection is visible on the surface`).not.toBe(variant.surface);
+        expect(contrast(variant.text, tint), `${family.id}/${mode}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
   it('defines six accent tokens for every variant', () => {
     for (const family of PALETTE_FAMILIES) {
       for (const variant of Object.values(family.variants)) expect(Object.keys(themeTokens(variant)).filter(name => name.startsWith('--color-accent-'))).toHaveLength(6);

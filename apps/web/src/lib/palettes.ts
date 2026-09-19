@@ -1,7 +1,8 @@
 // Palette definitions are the only place literal colours live in apps/web.
 // Values come from each family's official light and dark variant. Roles listed
 // in `derived` were adjusted to a text-safe step of the same hue (4.5:1 on
-// background, surface and sidebar) or were derived by the research itself.
+// background, surface and sidebar; body text also on the selection tint), were
+// given a visible selection tint, or were derived by the research itself.
 
 export type PaletteMode = 'light' | 'dark';
 
@@ -135,7 +136,7 @@ export const PALETTE_FAMILIES: PaletteFamily[] = [
         muted: '#5f6276',
         primary: '#7f2bee',
         primaryHover: '#2c4bfc',
-        selection: '#acb0be',
+        selection: '#7c7f934d',
         codeBackground: '#ccd0da',
         danger: '#c60e36',
         warning: '#895712',
@@ -346,11 +347,11 @@ export const PALETTE_FAMILIES: PaletteFamily[] = [
         surface: '#eee8d5',
         sidebar: '#fdf6e3',
         border: '#839496',
-        text: '#586b72',
+        text: '#4d5d63',
         muted: '#5d6b6b',
         primary: '#1e6da5',
         primaryHover: '#5a5fbd',
-        selection: '#eee8d5',
+        selection: '#268bd233',
         codeBackground: '#eee8d5',
         danger: '#ca2522',
         warning: '#b64314',
@@ -364,11 +365,11 @@ export const PALETTE_FAMILIES: PaletteFamily[] = [
         surface: '#073642',
         sidebar: '#002b36',
         border: '#657b83',
-        text: '#8b9b9d',
+        text: '#a4b1b2',
         muted: '#859ca3',
         primary: '#48a0de',
         primaryHover: '#9094d3',
-        selection: '#073642',
+        selection: '#268bd233',
         codeBackground: '#073642',
         danger: '#e87775',
         warning: '#eb794a',
