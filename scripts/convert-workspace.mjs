@@ -21,9 +21,10 @@ try {
     catch { throw Error(`Could not fetch ${remote}/core. Add the MyGitNotes remote as upstream or pass --core <revision>.`); }
     coreRevision = `${remote}/core`;
   }
-  // The Core revision main last merged decides which shared-namespace files are unmodified product copies.
+  // The Core revision main last merged decides which shared-namespace files are unmodified product copies;
+  // the current Core names the product paths, so a main that stopped merging long ago still converts.
   const merged = git('merge-base', 'HEAD', coreRevision);
-  const { remove, kept } = planWorkspaceConversion(repoRoot, merged);
+  const { remove, kept } = planWorkspaceConversion(repoRoot, merged, coreRevision);
   for (let index = 0; index < remove.length; index += 500) git('rm', '-q', '--', ...remove.slice(index, index + 500));
   git('commit', '-q', '-m', `chore(workspace): keep only workspace content on main\n\nRemoves the product files merged from Core ${merged.slice(0, 7)}. The product now lives on 'core'.`);
   console.log(`[convert-workspace] Removed ${remove.length} product file(s) in ${git('rev-parse', '--short', 'HEAD')}.`);

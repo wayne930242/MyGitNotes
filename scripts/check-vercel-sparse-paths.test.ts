@@ -29,9 +29,8 @@ it('fails when the sparse path list or workflow filter misses a product path', (
     edit('.github/workflows/deploy-vercel-sparse.yml', "      - 'apps/**'\n", '');
     expect(() => check()).toThrow(/push paths/);
     edit('.github/workflows/deploy-vercel-sparse.yml', "      - 'api/**'\n", "      - 'api/**'\n      - 'apps/**'\n");
-    edit(listFile, 'scripts/lib\n', '');
-    edit('.github/workflows/deploy-vercel-sparse.yml', "      - 'scripts/lib/**'\n", '');
-    expect(() => check()).toThrow(/workspace-agent-merge\.mjs', outside/);
+    fs.appendFileSync(path.join(root, 'api/index.js'), "\nimport '../scripts/convert-workspace.mjs';\n");
+    expect(() => check()).toThrow(/convert-workspace\.mjs', outside/);
   } finally {
     execFileSync('git', ['worktree', 'remove', '--force', root], {stdio:'pipe'});
   }

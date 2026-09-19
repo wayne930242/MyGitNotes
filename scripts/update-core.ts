@@ -1,5 +1,4 @@
 import { execFileSync } from 'node:child_process';
-import fs from 'node:fs';
 import { getCurrentBranch, updateCore } from '../packages/git/src/index.js';
 import { resolveWorkspaceRoot } from './lib/workspace-root.js';
 
@@ -9,10 +8,10 @@ function migrateWithNewCore(workspaceRoot: string) {
 }
 
 async function main() {
-  // --workspace names a fork-model checkout to update; a Core checkout updates itself and migrates its configured workspace.
-  const repoRoot = process.argv.includes('--workspace') ? resolveWorkspaceRoot() : process.cwd();
+  // The Core checkout updates itself and migrates its configured workspace.
+  const repoRoot = process.cwd();
   let workspaceRoot: string | undefined;
-  if (fs.realpathSync(repoRoot) === fs.realpathSync(process.cwd()) && await getCurrentBranch(repoRoot).catch(() => '') === 'core') {
+  if (await getCurrentBranch(repoRoot).catch(() => '') === 'core') {
     try { workspaceRoot = resolveWorkspaceRoot(repoRoot); }
     catch (error) { console.log(`[update-core] Workspace migration skipped: ${error instanceof Error ? error.message : String(error)}`); }
   }
@@ -27,18 +26,6 @@ async function main() {
     if (result.alreadyUpToDate) {
       console.log(`\n✅ ${result.message}`);
       process.exit(0);
-    }
-
-    if (!result.success) {
-      console.error(`\n⚠️  ${result.message}`);
-      if (result.conflictedFiles && result.conflictedFiles.length > 0) {
-        console.error(`\nConflicted files requiring manual resolution:`);
-        for (const file of result.conflictedFiles) {
-          console.error(` - ${file}`);
-        }
-        console.error(`\nPlease resolve these merge conflicts and commit the resolution with 'git commit'.`);
-      }
-      process.exit(1);
     }
 
     console.log(`\n🎉 ${result.message}`);

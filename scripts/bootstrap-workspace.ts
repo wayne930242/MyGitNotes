@@ -28,7 +28,6 @@ const VERCEL_DEPLOY_STEPS = `
   4. Configure the GitHub repository:
      gh variable set VERCEL_ORG_ID --body <orgId>
      gh variable set VERCEL_PROJECT_ID --body <projectId>
-     gh variable set MYGITNOTES_DEPLOY_BRANCH --body core
      gh secret set VERCEL_TOKEN   # paste a token from https://vercel.com/account/tokens
   5. Push 'core' and 'main'. Pushes to 'core' deploy production; note pushes to 'main' do not.
      Run it manually with: gh workflow run deploy-vercel-sparse.yml --ref core

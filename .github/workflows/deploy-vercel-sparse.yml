@@ -1,8 +1,8 @@
 name: Deploy Vercel (sparse checkout)
 on:
   push:
-    # A fork-model workspace deploys from main; a converted one sets MYGITNOTES_DEPLOY_BRANCH=core.
-    branches: [main, core]
+    # Deploys from core; MYGITNOTES_DEPLOY_BRANCH overrides the branch.
+    branches: [core]
     paths:
       - '.github/vercel-sparse-paths.txt'
       - '.vercelignore'
@@ -13,7 +13,6 @@ on:
       - 'packages/**'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
-      - 'scripts/lib/**'
       - 'tsconfig.base.json'
       - 'vercel.json'
   workflow_dispatch:
@@ -35,7 +34,7 @@ jobs:
         id: settings
         env:
           DEPLOY_MODE: ${{ vars.MYGITNOTES_VERCEL_DEPLOY }}
-          DEPLOY_BRANCH: ${{ vars.MYGITNOTES_DEPLOY_BRANCH || 'main' }}
+          DEPLOY_BRANCH: ${{ vars.MYGITNOTES_DEPLOY_BRANCH || 'core' }}
         run: |
           if [ "$GITHUB_REF_NAME" != "$DEPLOY_BRANCH" ]; then
             echo "::notice title=Vercel deploy skipped::This repository deploys from '$DEPLOY_BRANCH' (MYGITNOTES_DEPLOY_BRANCH), not '$GITHUB_REF_NAME'."

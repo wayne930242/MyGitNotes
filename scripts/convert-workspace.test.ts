@@ -62,3 +62,18 @@ it('refuses a dirty tree or a branch other than main', () => {
   expect(() => convert(workspace)).toThrow(/branch 'main'/);
   expect(git('rev-parse', 'main')).toBe(head);
 }, 20000);
+
+it('converts a main whose last merged Core predates the product path list', () => {
+  const { workspace, git } = forkWorkspace();
+  // Rewrite the fixture so the merged Core lacks the list and only the current Core names the product paths.
+  git('checkout', '-q', 'main'); git('rm', '-q', '.github/vercel-sparse-paths.txt'); git('commit', '-qm', 'older merge without the list');
+  const upstream = git('remote', 'get-url', 'upstream');
+  const up = gitIn(upstream);
+  up('checkout', '-q', '-b', 'old', 'core~1'); up('rm', '-q', '.github/vercel-sparse-paths.txt'); up('commit', '-qm', 'old core without list');
+  const old = up('rev-parse', 'HEAD');
+  up('checkout', '-q', 'core'); up('merge', '-q', '-s', 'ours', '-m', 'adopt', old);
+  git('fetch', '-q', 'upstream'); git('merge', '-q', '-s', 'ours', '-m', 'merge old core', old);
+  convert(workspace);
+  expect(git('ls-files', '--', 'apps', 'package.json', 'pnpm-workspace.yaml')).toBe('');
+  expect(git('ls-files', '--', 'notes/a/n.md')).toBe('notes/a/n.md');
+}, 20000);

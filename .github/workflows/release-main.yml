@@ -30,14 +30,13 @@ jobs:
           pnpm install --frozen-lockfile
       - name: Verify Core
         run: |
-          pnpm check:core-ownership --core
           pnpm check:vercel-sparse-paths --core
           pnpm build
           pnpm test
       - name: Skip demo synchronization
         if: env.HAS_CORE_SYNC_KEY != 'true'
         run: echo "::notice title=Demo sync skipped::CORE_SYNC_SSH_KEY is not set; this repository does not publish the demo workspace."
-      - name: Merge Core and synchronize examples
+      - name: Synchronize examples
         if: env.HAS_CORE_SYNC_KEY == 'true'
         id: sync
         env:

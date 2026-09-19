@@ -18,15 +18,14 @@ When a user clones the repository:
 ## 2. Core Update Flow
 
 When an update is released to the canonical product branch `core`:
-1. The user on `main` runs `pnpm update-core`.
+1. The user runs `pnpm update-core` in the `core` worktree.
 2. The script:
    - Verifies working tree is clean.
    - Discovers whether Core remote is `upstream/core` or `origin/core`.
    - Fetches the Core branch.
    - Compares revisions.
-   - Performs a standard Git merge of Core into `main`.
-   - Executes workspace migrations if schema versions changed.
-   - Validates the workspace and reports status.
+   - Fast-forwards `core`; a `core` with local commits is refused.
+   - Runs `migrate-workspace` with the new Core on the workspace named by `MYGITNOTES_LOCAL_PATH`.
    - Never auto-stashes, never force-pushes, and never uses destructive reset.
 
 ## 3. Git Save and Semantic Commits

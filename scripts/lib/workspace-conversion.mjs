@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { workspaceOwnedRoots } from './workspace-agent-merge.mjs';
 
 const SPARSE_LIST = '.github/vercel-sparse-paths.txt';
+// Root paths a workspace owns even where a fork-model main shares a namespace with Core.
+const workspaceOwnedRoots = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md', '.agents', '.codex', '.claude', '.agent', '.github-notes-screen.yaml', '.github-notes-study.yaml', '.github-notes-focus.yaml'];
 
 /** Core's product paths at `coreRevision`: its sparse deploy list without .github. */
 export function coreProductPaths(git, coreRevision) {
@@ -13,17 +14,17 @@ export function coreProductPaths(git, coreRevision) {
 
 /**
  * Plans which tracked files leave a fork-model main when it becomes content-only.
- * Product paths (the sparse deploy list, except .github) leave whole.
+ * Product paths (the sparse deploy list of `listRevision`, except .github) leave whole.
  * In every other Core namespace only files byte-identical to the merged Core revision leave,
  * so workspace-owned files there (docs/specs, an edited docs/CONTEXT.md or .gitignore) stay.
  */
-export function planWorkspaceConversion(repoRoot, coreRevision) {
+export function planWorkspaceConversion(repoRoot, coreRevision, listRevision = coreRevision) {
   const git = (...args) => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
   const listTree = revision => new Map(git('ls-tree', '-r', '-z', '--full-tree', revision).split('\0').filter(Boolean)
     .map(line => { const [meta, file] = line.split('\t'); return [file, meta.split(' ')[2]]; }));
   const head = listTree('HEAD');
   const core = listTree(coreRevision);
-  const productPaths = coreProductPaths(git, coreRevision);
+  const productPaths = coreProductPaths(git, listRevision);
   const product = file => productPaths.some(entry => file === entry || file.startsWith(`${entry}/`));
   const coreRoots = new Set([...core.keys()].map(file => file.split('/')[0]));
   const owned = file => workspaceOwnedRoots.some(root => file === root || file.startsWith(`${root}/`));

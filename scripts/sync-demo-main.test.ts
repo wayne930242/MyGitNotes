@@ -16,44 +16,25 @@ beforeEach(() => {
   git('init', '-b', 'core'); git('config', 'user.name', 'Test'); git('config', 'user.email', 'test@example.com'); git('remote', 'add', 'origin', remote);
   write('product.txt', 'baseline\n'); write('.github/vercel-sparse-paths.txt', '# product\n.github/vercel-sparse-paths.txt\nproduct.txt\n'); write('examples/demo-workspace/.mygitnotes.yaml', 'fixture\n'); write('examples/demo-workspace/notes/example/welcome.md', '# Baseline\n');
   git('add', '.'); git('commit', '-m', 'core baseline'); git('push', 'origin', 'core');
-  git('checkout', '-b', 'main'); write('.mygitnotes.yaml', 'fixture\n'); write('notes/example/welcome.md', '# Baseline\n'); write('notes/personal.md', '# Keep personal note\n');
-  git('add', '.'); git('commit', '-m', 'workspace'); git('push', 'origin', 'main');
-  git('checkout', 'core'); write('product.txt', 'new core\n'); write('examples/demo-workspace/notes/example/welcome.md', '# Updated tutorial\n');
+  git('checkout', '-q', '--orphan', 'main'); git('rm', '-rq', '--cached', '.');
+  for (const file of ['product.txt', 'examples', '.github']) fs.rmSync(path.join(checkout, file), { recursive: true, force: true });
+  write('.mygitnotes.yaml', 'fixture\n'); write('notes/example/welcome.md', '# Baseline\n'); write('notes/personal.md', '# Keep personal note\n');
+  git('add', '.'); git('commit', '-m', 'content-only main'); git('push', 'origin', 'main');
+  git('checkout', '-qf', 'core'); git('clean', '-fdq'); write('product.txt', 'new core\n'); write('examples/demo-workspace/notes/example/welcome.md', '# Updated tutorial\n');
   git('add', '.'); git('commit', '-m', 'core update'); git('push', 'origin', 'core');
 });
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
 describe('release transaction', () => {
-  it('keeps main Agent settings when Core removes legacy settings', () => {
-    git('checkout', 'core'); write('AGENTS.md', '# Legacy\n'); write('.agents/skills/demo/SKILL.md', '# Skill\n');
-    git('add', '.'); git('commit', '-m', 'legacy settings'); git('push', 'origin', 'core');
-    git('checkout', 'main'); git('merge', 'core', '--no-edit');
-    write('AGENTS.md', '# Demo rules\n'); git('add', 'AGENTS.md'); git('commit', '-m', 'demo rules'); git('push', 'origin', 'main');
-    git('checkout', 'core'); git('rm', '-r', 'AGENTS.md', '.agents'); git('commit', '-m', 'workspace ownership'); git('push', 'origin', 'core');
-    expect(run()).toContain('synced=true');
-    expect(remoteGit('show', 'main:AGENTS.md')).toBe('# Demo rules');
-    expect(remoteGit('show', 'main:.agents/skills/demo/SKILL.md')).toBe('# Skill');
-  });
-  it('merges Core into main, copies canonical examples and retains other notes', () => {
-    write('examples/demo-workspace/.github-notes-screen.yaml', 'version: 1\n');
-    git('add', '.'); git('commit', '-m', 'screen fixture'); git('push', 'origin', 'core');
-    const core = git('rev-parse', 'core');
-    expect(run()).toContain('synced=true');
-    const main = remoteGit('rev-parse', 'main');
-    expect(remoteGit('merge-base', main, core)).toBe(core);
-    expect(remoteGit('show', 'main:notes/example/welcome.md')).toBe('# Updated tutorial');
-    expect(remoteGit('show', 'main:notes/personal.md')).toBe('# Keep personal note');
-    expect(remoteGit('show', 'main:.github-notes-screen.yaml')).toBe('version: 1');
-  });
   it('skips superseded Core runs before changing main', () => {
     const old = remoteGit('rev-parse', 'main');
     expect(run(git('rev-parse', 'core~1'))).toContain('synced=false');
     expect(remoteGit('rev-parse', 'main')).toBe(old);
   });
-  it('stops a merge conflict without changing the remote workspace', () => {
-    git('checkout', 'main'); write('product.txt', 'workspace customization\n'); git('add', 'product.txt'); git('commit', '-m', 'customize'); git('push', 'origin', 'main'); git('checkout', 'core');
+  it('refuses a main that still tracks Core product paths', () => {
+    git('checkout', '-q', 'main'); write('product.txt', 'product\n'); git('add', 'product.txt'); git('commit', '-qm', 'fork-model main'); git('push', '-q', 'origin', 'main'); git('checkout', '-q', 'core');
     const old = remoteGit('rev-parse', 'main');
-    expect(() => run()).toThrow();
+    expect(() => run()).toThrow(/pnpm convert-workspace/);
     expect(remoteGit('rev-parse', 'main')).toBe(old);
   });
   it('rejects publication when another commit advances main during push', () => {
@@ -71,21 +52,21 @@ describe('release transaction', () => {
     expect(() => run()).toThrow(/vercel-sparse-paths\.txt/);
     expect(remoteGit('rev-parse', 'main')).toBe(old);
   });
-  it('keeps a content-only main content-only, syncs examples and deploys the Core revision', () => {
-    git('checkout', '-q', '--orphan', 'content'); git('rm', '-rq', '--cached', '.');
-    for (const file of ['product.txt', 'examples', '.github']) fs.rmSync(path.join(checkout, file), { recursive: true, force: true });
-    write('.mygitnotes.yaml', 'fixture\n'); write('notes/example/welcome.md', '# Baseline\n'); write('notes/example/retired.md', '# Retired\n'); write('notes/personal.md', '# Keep personal note\n');
-    git('add', '.'); git('commit', '-qm', 'content-only main'); git('push', '-qf', 'origin', 'content:main');
+  it('keeps main content-only, syncs examples and deploys the Core revision', () => {
+    git('checkout', '-q', 'main'); write('notes/example/retired.md', '# Retired\n'); git('add', '.'); git('commit', '-qm', 'retired note'); git('push', '-q', 'origin', 'main');
     git('checkout', '-qf', 'core'); git('clean', '-fdq');
+    write('examples/demo-workspace/.github-notes-screen.yaml', 'version: 1\n');
     write('examples/demo-workspace/notes/example/retired.md', '# Retired\n');
     git('add', '.'); git('commit', '-qm', 'retired template'); git('push', '-q', 'origin', 'core');
     const first = run();
     expect(first).toContain(`deploy_sha=${git('rev-parse', 'core')}`);
     expect(remoteGit('log', '-1', '--format=%B', 'main')).toContain(`Core-Revision: ${git('rev-parse', 'core')}`);
-    git('rm', '-q', 'examples/demo-workspace/notes/example/retired.md'); git('commit', '-qm', 'drop template'); git('push', '-q', 'origin', 'core');
+    expect(remoteGit('show', 'main:.github-notes-screen.yaml')).toBe('version: 1');
+    git('rm', '-q', 'examples/demo-workspace/notes/example/retired.md', 'examples/demo-workspace/.github-notes-screen.yaml'); git('commit', '-qm', 'drop template'); git('push', '-q', 'origin', 'core');
     expect(run()).toContain('synced=true');
-    expect(remoteGit('ls-tree', '-r', '--name-only', 'main').split('\n').sort()).toEqual(['.mygitnotes.yaml', 'notes/example/welcome.md', 'notes/personal.md']);
+    expect(remoteGit('ls-tree', '-r', '--name-only', 'main').split('\n').sort()).toEqual(['.github-notes-screen.yaml', '.mygitnotes.yaml', 'notes/example/welcome.md', 'notes/personal.md']);
     expect(remoteGit('show', 'main:notes/example/welcome.md')).toBe('# Updated tutorial');
+    expect(remoteGit('show', 'main:notes/personal.md')).toBe('# Keep personal note');
     expect(() => remoteGit('merge-base', 'main', 'core')).toThrow();
     expect(git('status', '--porcelain')).toBe('');
     expect(git('worktree', 'list').split('\n')).toHaveLength(1);

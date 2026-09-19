@@ -51,7 +51,7 @@ One repository holds two unrelated branches, each checked out in its own worktre
 
 `pnpm dev` runs from the `core` worktree and edits the `main` worktree named by `MYGITNOTES_LOCAL_PATH` in `.env`. This separation lets the application evolve without taking ownership of your content.
 
-Workspaces created before this split keep the product on `main` and update with `pnpm update-core` until they convert; see [Converting a fork-model workspace](#converting-a-fork-model-workspace).
+A `main` created before this split that still carries the product converts once; see [Converting an older workspace](#converting-an-older-workspace).
 
 ## Files
 
@@ -93,18 +93,17 @@ pnpm install && pnpm build
 
 `pnpm migrate-workspace` runs the workspace schema migration on its own. The local server refuses to start when the workspace `schema_version` does not match the one this Core supports and names the command that fixes it.
 
-### Converting a fork-model workspace
+### Converting an older workspace
 
 A workspace whose `main` still carries the product converts once:
 
 ```bash
 # in the workspace checkout on a clean main
-pnpm update-core           # bring main to the latest Core first
 pnpm convert-workspace     # one commit that removes the product paths from main
 git worktree add --track -b core ../mygitnotes-core origin/core   # use upstream/core when you cloned your own fork
 ```
 
-`convert-workspace` removes the product paths and every file identical to the Core revision `main` last merged. Workspace Agent settings and workspace-owned files inside shared folders, such as `docs/specs/**` or an edited `.gitignore`, stay; the command lists them. History is not rewritten. Then set `MYGITNOTES_LOCAL_PATH` in the `core` worktree's `.env` to this checkout and run `pnpm install && pnpm dev` there. After conversion, `update-core` refuses to merge into `main`. Move a Vercel deployment to `core` as described in [Vercel deployment](#vercel-deployment-optional).
+`convert-workspace` fetches the current `core`, removes its product paths and every file identical to the Core revision `main` last merged. Workspace Agent settings and workspace-owned files inside shared folders, such as `docs/specs/**` or an edited `.gitignore`, stay; the command lists them. History is not rewritten. Then set `MYGITNOTES_LOCAL_PATH` in the `core` worktree's `.env` to this checkout and run `pnpm install && pnpm dev` there. `update-core` runs only on `core`. Move a Vercel deployment to `core` as described in [Vercel deployment](#vercel-deployment-optional).
 
 ## Docker and Docker Compose deployment
 
@@ -196,11 +195,11 @@ You can still upload objects with `wrangler r2 object put` or the Cloudflare das
 
 ## Vercel deployment (optional)
 
-Deploy the `core` branch to your own Vercel project; the deployment reads notes from `main` at runtime through the GitHub or GitLab source. A fork-model workspace deploys `main` until it converts. The included [`vercel.json`](vercel.json) builds the web app and routes `/api/*`, `/mcp/*`, `/raw-assets/*`, and `/r2-assets/*` to the serverless API.
+Deploy the `core` branch to your own Vercel project; the deployment reads notes from `main` at runtime through the GitHub or GitLab source. The included [`vercel.json`](vercel.json) builds the web app and routes `/api/*`, `/mcp/*`, `/raw-assets/*`, and `/r2-assets/*` to the serverless API.
 
 ### Default: GitHub Actions with sparse checkout
 
-[`deploy-vercel-sparse.yml`](.github/workflows/deploy-vercel-sparse.yml) checks out only the product paths in [`.github/vercel-sparse-paths.txt`](.github/vercel-sparse-paths.txt), builds with the Vercel CLI, and deploys production. Notes, images, and fonts are never downloaded, so deploy time does not grow with the workspace. The workflow runs on pushes to `main` and `core` and deploys only from the branch in the `MYGITNOTES_DEPLOY_BRANCH` repository variable (default `main`); set it to `core` for a content-only workspace. Pushes that change product paths deploy; note-only pushes do not. Updating Core keeps the path list current, and `pnpm check:vercel-sparse-paths --core` fails when Core adds a build or runtime path the list misses.
+[`deploy-vercel-sparse.yml`](.github/workflows/deploy-vercel-sparse.yml) checks out only the product paths in [`.github/vercel-sparse-paths.txt`](.github/vercel-sparse-paths.txt), builds with the Vercel CLI, and deploys production. Notes, images, and fonts are never downloaded, so deploy time does not grow with the workspace. The workflow runs on pushes to `core`; the optional `MYGITNOTES_DEPLOY_BRANCH` repository variable names a different deploy branch. Pushes that change product paths deploy; note-only pushes do not. Updating Core keeps the path list current, and `pnpm check:vercel-sparse-paths --core` fails when Core adds a build or runtime path the list misses.
 
 Until the settings below exist, the workflow skips with a notice and never fails. `pnpm bootstrap-workspace` prints the same steps.
 
@@ -217,9 +216,7 @@ gh variable set VERCEL_PROJECT_ID --body <projectId>
 gh secret set VERCEL_TOKEN   # paste the token at the prompt
 ```
 
-   For a content-only workspace also run `gh variable set MYGITNOTES_DEPLOY_BRANCH --body core`.
-
-6. Deploy and verify: run `gh workflow run deploy-vercel-sparse.yml --ref <deploy branch>`, wait with `gh run watch`, then confirm `vercel ls --prod` shows the new deployment as Ready and your domain serves it.
+6. Deploy and verify: run `gh workflow run deploy-vercel-sparse.yml --ref core`, wait with `gh run watch`, then confirm `vercel ls --prod` shows the new deployment as Ready and your domain serves it.
 
 ### Opt out: Vercel Git integration
 

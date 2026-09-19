@@ -10,11 +10,9 @@
 
 在 `core` worktree 執行 `pnpm update-core`：只從 `upstream`（或 `origin`）的 `core` fast-forward，接著對 `.env` 指定的工作區執行 `migrate-workspace`。`core` 有本機 commit 時拒絕更新。更新後執行 `pnpm install`、`pnpm build`。Core 的 Agent 範本更新不會同步覆寫已建立的設定。
 
-## fork 模型工作區
+## 轉換舊工作區
 
-分離前建立的工作區，`main` 仍帶著產品程式碼。轉換前在乾淨的 `main` 執行 `pnpm update-core`：先合併而不提交，再將工作區 Agent 路徑恢復成更新前的 Git 樹，包含檔案內容、模式與使用者刪除的狀態；其他產品衝突仍保留供處理。驗證成功後才建立合併提交。也可以在新版產品目錄執行 `pnpm update-core --workspace /absolute/path/to/workspace` 操作指定工作區的 `main`。
-
-`pnpm convert-workspace` 以一個 commit 將 `main` 轉成只放內容：移除 sparse 部署清單內的產品路徑，以及與上次合併的 Core 版本完全相同的檔案；Agent 設定與共用資料夾內屬於工作區的檔案保留並列出。之後 `update-core` 拒絕合併進 `main`。公開 demo 在轉換前沿用保護 Agent 設定的 merge 流程，轉換後 release 只同步範例，不再合併 Core。
+分離前建立、`main` 仍帶著產品程式碼的工作區，在乾淨的 `main` 執行一次 `pnpm convert-workspace`：取得目前的 `core`，以一個 commit 移除其 sparse 部署清單內的產品路徑，以及與 `main` 上次合併的 Core 版本完全相同的檔案；Agent 設定與共用資料夾內屬於工作區的檔案保留並列出。`update-core` 只在 `core` 執行，不會合併進 `main`。公開 demo 的 release 只同步範例到只放內容的 `main`。
 
 ## 介面支援
 
@@ -33,7 +31,3 @@ Agents 頁面優先顯示「工作區技能」，再呈現共用規則、筆記�
 技能保存原生路徑，不自動複製或轉換各工具的技能。[Codex](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills) 與新版 [Antigravity](https://antigravity.google/docs/skills) 使用 `.agents/skills/`；[Claude Code](https://code.claude.com/docs/en/skills) 使用 `.claude/skills/`。Antigravity 仍相容 `.agent/skills/`，其 [CLI](https://www.antigravity.google/docs/cli/plugins) 也提供單檔技能格式。
 
 Git 路徑所有權涵蓋完整 Agent 目錄，介面可存取範圍則限於上述文件。`.codex/auth.json`、`.codex/config.toml`、`.claude/settings*.json`、`CLAUDE.local.md`、憑證、執行紀錄、隱藏檔與腳本不會開放；文件不得透過符號連結讀寫其他檔案。憑證與執行紀錄應維持本機私有，不提交。
-
-## Core 檢查
-
-`pnpm check:core-ownership` 與 `pnpm test` 會在 core 檢查 Git index，拒絕重新追蹤上述工作區 Agent 路徑。此檢查與 `scripts/lib/workspace-agent-merge.mjs` 在所有 fork 模型工作區完成轉換前保留。CI 使用 `pnpm check:core-ownership --core`，支援 detached checkout；main 正常保留追蹤。

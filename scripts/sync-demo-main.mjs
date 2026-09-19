@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { mergeWorkspaceCore } from './lib/workspace-agent-merge.mjs';
 import { coreProductPaths } from './lib/workspace-conversion.mjs';
 
 const gitIn = cwd => (...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -68,37 +67,22 @@ try {
   const core = git('rev-parse', 'origin/core');
   const expected = process.env.CORE_REVISION || core;
   if (expected !== core) { output('synced', 'false'); console.log('A newer Core revision superseded this run.'); process.exit(0); }
-  // A main that tracks none of Core's product paths is content-only: it never merges Core again.
-  const contentOnly = !git('ls-tree', '-r', '--name-only', 'origin/main', '--', ...coreProductPaths(git, core));
-  let root = process.cwd();
-  let pending = false;
-  let previousCore;
-  if (contentOnly) {
-    previousCore = git('log', '-1', `--grep=^${TRAILER}: `, `--format=%(trailers:key=${TRAILER},valueonly)`, 'origin/main') || undefined;
-    try { previousCore ??= git('merge-base', 'origin/core', 'origin/main'); } catch {}
-    worktree = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'demo-main-'));
-    git('worktree', 'add', '-B', 'release-main', worktree, 'origin/main');
-    root = worktree;
-  } else {
-    previousCore = git('merge-base', 'origin/core', 'origin/main');
-    git('checkout', '-B', 'release-main', 'origin/main');
-    const merge = mergeWorkspaceCore(process.cwd(), core);
-    if (merge.conflictedFiles.length) throw Error(`Core merge conflicts: ${merge.conflictedFiles.join(', ')}`);
-    pending = merge.pending;
-  }
-  syncExamples(root, previousCore);
-  const workspace = gitIn(root);
-  if (contentOnly && workspace('diff', '--cached', '--name-only')) workspace('commit', '-m', `chore(workspace): sync canonical examples\n\n${TRAILER}: ${core}`);
-  else if (!contentOnly && (pending || workspace('diff', '--cached', '--name-only'))) workspace('commit', '-m', 'chore(workspace): merge Core and sync canonical examples');
+  // The demo main holds only workspace content; a main that still carries the product converts first.
+  if (git('ls-tree', '-r', '--name-only', 'origin/main', '--', ...coreProductPaths(git, core))) throw Error("origin/main still tracks Core product paths. Run `pnpm convert-workspace` on it first.");
+  let previousCore = git('log', '-1', `--grep=^${TRAILER}: `, `--format=%(trailers:key=${TRAILER},valueonly)`, 'origin/main') || undefined;
+  try { previousCore ??= git('merge-base', 'origin/core', 'origin/main'); } catch {}
+  worktree = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'demo-main-'));
+  git('worktree', 'add', '-B', 'release-main', worktree, 'origin/main');
+  syncExamples(worktree, previousCore);
+  const workspace = gitIn(worktree);
+  if (workspace('diff', '--cached', '--name-only')) workspace('commit', '-m', `chore(workspace): sync canonical examples\n\n${TRAILER}: ${core}`);
   const sha = workspace('rev-parse', 'HEAD');
-  if (!contentOnly) workspace('merge-base', '--is-ancestor', core, sha);
   // Confirm the tested Core is still current and preserve concurrent note commits.
   git('fetch', 'origin', 'core');
   if (git('rev-parse', 'origin/core') !== core) { output('synced', 'false'); console.log('Core advanced during synchronization.'); process.exit(0); }
   workspace('push', 'origin', 'HEAD:refs/heads/main');
-  output('main_sha', sha); output('deploy_sha', contentOnly ? core : sha); output('synced', 'true');
+  output('main_sha', sha); output('deploy_sha', core); output('synced', 'true');
 } catch (error) {
-  try { git('merge', '--abort'); } catch {}
   console.error(error.stderr?.toString() || error.message);
   process.exitCode = 1;
 } finally {

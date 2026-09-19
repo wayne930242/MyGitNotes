@@ -18,7 +18,7 @@ export interface GitCommitItem {
 }
 
 export interface CoreUpdateOptions {
-  /** The checkout to update: a `core` checkout, or a fork-model `main` that still tracks product files. */
+  /** The `core` checkout to update. */
   repoRoot: string;
   autoPush?: boolean;
 }
@@ -29,7 +29,5 @@ export interface CoreUpdateResult {
   coreRemoteHash: string;
   remoteUsed: 'upstream' | 'origin';
   message: string;
-  conflictedFiles?: string[];
   alreadyUpToDate?: boolean;
-  notesMissingTimestamps?: number;
 }

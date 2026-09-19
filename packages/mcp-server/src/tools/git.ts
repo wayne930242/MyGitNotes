@@ -2,7 +2,6 @@ import {
   getGitStatus,
   stageAndCommit,
   updateCore,
-  coreUpdateCheckout,
   runGit,
 } from '@mygitnotes/git';
 import { assertSafeRepoPath } from '../guards.js';
@@ -24,7 +23,7 @@ export async function handleGitCommit(
   return { success: true, commit: result };
 }
 
-const coreCheckout = (ctx: ToolContext) => coreUpdateCheckout(ctx.productRoot ?? ctx.repoRoot, ctx.repoRoot);
+const coreCheckout = (ctx: ToolContext) => ctx.productRoot ?? ctx.repoRoot;
 
 export async function handleCheckCoreUpdate(ctx: ToolContext) {
   const checkout = await coreCheckout(ctx);

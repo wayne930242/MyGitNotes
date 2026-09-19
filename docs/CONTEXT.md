@@ -12,7 +12,7 @@ MyGitNotes 是以 Git 保存的個人筆記與文件工作區。平台指 GitHub
 
 **工作區內容**：`main` 上的 `.mygitnotes.yaml`、筆記本根目錄、素材與工作區 Agent 設定。避免稱為：使用者分支。
 
-**fork 模型工作區**：`main` 仍帶著產品程式碼、以 `update-core` 合併 Core 的舊工作區。
+**fork 模型工作區**：分離前建立、`main` 仍帶著產品程式碼的舊工作區；以 `convert-workspace` 轉換一次。
 
 **轉換**：以一個 commit 移除 fork 模型 `main` 上的產品路徑，使它只放工作區內容；不改寫歷史，之後不再合併 Core。
 

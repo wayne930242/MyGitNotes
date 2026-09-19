@@ -50,7 +50,6 @@ Product development skills are maintained in `docs/agent/product/skills/`:
 
 Before concluding any work on the product source:
 ```bash
-pnpm check:core-ownership # Verify workspace paths are absent from the Core index
 pnpm test          # Run test suite across all packages
 pnpm build         # Verify build succeeds cleanly
 ```
@@ -77,4 +76,4 @@ Core 不得追蹤真實配置，工作區更新必須保留此檔案；測試配
 ### 工作區文件
 
 Screen、學習資料與 Focus 配置登錄在 `packages/core/src/workspace-documents.ts`，登錄決定可提交的範圍、大小上限、格式驗證，以及搬移筆記或資料夾時如何更新參照。
-新增工作區根目錄的使用者檔案時，加入登錄與上述所有權清單（`scripts/lib/workspace-agent-merge.mjs`）。
+新增工作區根目錄的使用者檔案時，加入登錄與上述所有權清單（`scripts/lib/workspace-conversion.mjs`）。
