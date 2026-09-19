@@ -29,7 +29,9 @@ const readScope = () => currentScope;
 export function setNoteQueryScope(next: NoteQueryScope): void {
   if (currentScope.sourceId === next.sourceId && currentScope.revision === next.revision && currentScope.drafts === next.drafts) return;
   currentScope = next;
+  /* eslint-disable unicorn/no-useless-spread -- Snapshot the collection because callbacks may mutate subscriptions or editors during iteration. */
   for (const listener of [...listeners]) listener();
+  /* eslint-enable unicorn/no-useless-spread */
 }
 
 export function useNoteQueryScope(): NoteQueryScope {
@@ -62,13 +64,17 @@ export function handleNoteQueryError(error: unknown, query: { queryKey: readonly
   if (Date.now() - lastStaleReport < 2000) return;
   lastStaleReport = Date.now();
   const message = error instanceof Error ? error.message : '';
+  /* eslint-disable unicorn/no-useless-spread -- Snapshot the collection because callbacks may mutate subscriptions or editors during iteration. */
   for (const listener of [...staleListeners]) listener(message);
+  /* eslint-enable unicorn/no-useless-spread */
 }
 
 /** Runs when a note query was answered for another repository state. */
 export function useStaleNoteQueries(handler: (message: string) => void): void {
   const latest = useRef(handler);
+  /* eslint-disable react/refs -- Stable query values and current event handlers use refs to preserve subscription identity. */
   latest.current = handler;
+  /* eslint-enable react/refs */
   useEffect(() => {
     const listener = (message: string) => latest.current(message);
     staleListeners.add(listener);
@@ -91,8 +97,12 @@ const revisionOf = (scope: NoteQueryScope) => scope.revision || undefined;
 /** Keeps a deeply equal value identical across renders, so inline query objects do not restart queries. */
 function useStable<T>(value: T): T {
   const held = useRef(value);
+  /* eslint-disable react/refs -- Stable query values and current event handlers use refs to preserve subscription identity. */
   if (!sameValue(held.current as unknown, value as unknown)) held.current = value;
+  /* eslint-enable react/refs */
+  /* eslint-disable react/refs -- Stable query values and current event handlers use refs to preserve subscription identity. */
   return held.current;
+  /* eslint-enable react/refs */
 }
 
 export function noteLookupOptions(scope: NoteQueryScope, paths: string[], content: boolean) {

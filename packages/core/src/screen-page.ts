@@ -6,7 +6,9 @@ import type { WorkspaceDocument } from './workspace-documents.js';
 
 export const SCREEN_PAGE_FILE = '.github-notes-screen.yaml';
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
+/* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
 const repoPath = z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value) && value.split('/').every(part => part !== '' && part !== '.' && part !== '..'), 'Invalid workspace path');
+/* eslint-enable no-control-regex */
 const notebookId = z.string().min(1).max(128);
 const reference = { id, notebookId, path: repoPath };
 export const ScreenItemSchema = z.discriminatedUnion('kind', [z.object({ ...reference, kind: z.literal('note') }).strict(), z.object({ ...reference, kind: z.literal('folder') }).strict(), z.object({ ...reference, kind: z.literal('asset') }).strict(), z.object({ id, kind: z.literal('youtube'), videoId: z.string().regex(/^[\w-]{11}$/), start: z.number().int().min(0).max(86400).default(0), title: z.string().max(160).optional() }).strict()]);

@@ -30,5 +30,7 @@ export function useDeleteConfirm(requireConfirm: boolean, onConfirmed: (path: st
     setPendingPath(next.pendingPath);
     if (next.shouldDelete) latest.current.onConfirmed(path);
   });
+  /* eslint-disable react/refs -- Expose the stable imperative delete callback retained by the confirmation hook. */
   return { pendingDeletePath: pendingPath, requestDelete: requestDeleteRef.current };
+  /* eslint-enable react/refs */
 }

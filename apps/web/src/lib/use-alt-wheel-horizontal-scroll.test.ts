@@ -21,7 +21,9 @@ function setup(nested = true) {
     },
     removeEventListener() {},
   };
+  /* eslint-disable react-hooks/rules-of-hooks -- This unit harness invokes mocked React hooks to exercise event registration without rendering. */
   useAltWheelHorizontalScroll({ current: host as unknown as HTMLElement }, { current: scroller as unknown as HTMLElement }, nested ? '.table-scroll' : undefined);
+  /* eslint-enable react-hooks/rules-of-hooks */
   const event = { target: new Child(), altKey: true, ctrlKey: false, defaultPrevented: false, deltaX: 0, deltaY: 40, deltaMode: 0, preventDefault: vi.fn(), stopPropagation: vi.fn() };
   return { scroller, event, dispatch: () => listener(event as unknown as WheelEvent) };
 }

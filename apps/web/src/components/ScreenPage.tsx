@@ -41,7 +41,9 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
   const sidebar = useWorkspaceSidebarDrawer();
   const [reorder, setReorder] = useState(false);
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Changing notebook or focused lane exits the transient reorder mode. */
     setReorder(false);
+    /* eslint-enable react/set-state-in-effect */
   }, [selectedNotebookId, focusedLaneId]);
   const study = useStudyWorkspace(onStudySaved);
   const { assets, error: assetError, loading: assetsLoading, retry: retryAssets } = useScreenAssets(notebooks, selectedNotebookId);
@@ -79,6 +81,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
   const draggedLane = screen.page.rows.find(row => row.kind === 'custom' && row.items.some(item => item.id === dragging?.id));
   const draggedNotes = useLaneNotes(dragging ? draggedLane : undefined);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: screenKeyboardCoordinates }));
+  /* eslint-disable react-hooks/exhaustive-deps -- The event subscription depends on the stable sidebar setter, not the surrounding sidebar object. */
   useEffect(() => {
     if (focusedLaneId) return;
     const onKey = (event: KeyboardEvent) => {
@@ -96,6 +99,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
       window.removeEventListener('toggle-screen-sidebar', onToggle);
     };
   }, [focusedLaneId, sidebar.setOpen]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   const disabled = !screen.writable || screen.loading;
   const itemOpen = useScreenItemOpen({ notebooks, assets, onOpenNote, onMissing: () => screen.setError(t('screen.missing')) });
   const content: Omit<ScreenContentProps, 'notes'> = { notebooks, assets, onOpen: itemOpen.open };

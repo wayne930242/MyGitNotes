@@ -95,7 +95,9 @@ const AppContent: React.FC = () => {
   const location = useLocation();
   const [queryState, setFilterQuery] = useQueryStates(filterParsers, { history: 'push', shallow: false });
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
     setFiltersOpen(false);
+    /* eslint-enable react/set-state-in-effect */
   }, [location.pathname]);
   useEffect(() => {
     if (!filtersOpen) return;
@@ -162,7 +164,9 @@ const AppContent: React.FC = () => {
     void refreshWorkspace().then(() => queryClient.resetQueries({ queryKey: NOTE_QUERY_KEY }));
   });
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
     setStaleNotice('');
+    /* eslint-enable react/set-state-in-effect */
   }, [revision]);
   /** The committed note behind a path, ignoring any staged draft, for use as a merge base. */
   const readCommittedNote = async (path: string): Promise<NoteItem> => {
@@ -248,10 +252,14 @@ const AppContent: React.FC = () => {
   }, [editorRoute, returnTo, queryState]);
   const activeTab = route.tab;
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
     setFolderReorder(false);
+    /* eslint-enable react/set-state-in-effect */
   }, [activeTab, route.notebook]);
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
     setFileMetadataOpen(false);
+    /* eslint-enable react/set-state-in-effect */
   }, [activeTab]);
   const sidebarGestureRef = useSidebarSwipe(activeTab === 'notes' && !loading && !loadError, filtersOpen, setFiltersOpen);
   const selectedFolders = useMemo(() => route.folders.length ? [...new Set(route.folders)] : legacyFolderPaths(config?.notebooks || [], selectedNotebookId, route.folder), [route.folders, route.folder, config, selectedNotebookId]);
@@ -315,6 +323,7 @@ const AppContent: React.FC = () => {
   };
   // Arriving at a notebook's Notes page shows the Focus it displayed last.
   const focusArrival = useRef('');
+  /* eslint-disable react-hooks/exhaustive-deps -- This effect responds to route arrival; current query and navigation helpers supply the transition snapshot. */
   useEffect(() => {
     if (activeTab !== 'notes') {
       focusArrival.current = '';
@@ -329,6 +338,7 @@ const AppContent: React.FC = () => {
     query.set('focus', noteFocus.view.last);
     navigate({ pathname: location.pathname, search: query.toString() }, { replace: true });
   }, [activeTab, loading, editorRoute.note, sourceId, selectedNotebookId]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   const [routeError, setRouteError] = useState('');
   const currentFilterSearch = (patch: Partial<FilterQuery> = {}) => {
     const query = new URLSearchParams(writeFilterQuery(location.search, { ...queryState, folders: selectedFolders, ...patch }));
@@ -412,11 +422,14 @@ const AppContent: React.FC = () => {
   const setViewMode = (mode: ViewMode) => {
     void setFilterQuery({ view: mode });
   };
+  /* eslint-disable react-hooks/exhaustive-deps -- This effect responds to route arrival; current query and navigation helpers supply the transition snapshot. */
   useEffect(() => {
     if (!config) return;
     const canonical = legacyAllNotebooksRoute(location.pathname, location.search, selectedNotebookId);
     if (canonical) navigate(canonical + location.hash, { replace: true });
   }, [config, location.pathname, location.search]);
+  /* eslint-enable react-hooks/exhaustive-deps */
+  /* eslint-disable react-hooks/exhaustive-deps -- This effect responds to route arrival; current query and navigation helpers supply the transition snapshot. */
   useEffect(() => {
     if (loading || !config || editorRoute.note || route.tab !== 'notes' || route.view !== 'graph') return;
     const query = currentFilterSearch({ view: 'flat' });
@@ -424,6 +437,7 @@ const AppContent: React.FC = () => {
     query.set('notebook', selectedNotebookId);
     void navigateFiltered('/graph', query, true);
   }, [loading, config, editorRoute.note, route.tab, route.view]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Modal States
   const [commitRequest, setCommitRequest] = useState<ChangeRequest>();
@@ -473,7 +487,9 @@ const AppContent: React.FC = () => {
   const availableTags = useMemo(() => Array.from(new Set(workspaceTagNames.map(tag => tag.trim()))).filter(Boolean).sort(), [workspaceTagNames]);
 
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
     setEditingNote(null);
+    /* eslint-enable react/set-state-in-effect */
     setDeletedNotes([]);
     setIsNewNoteOpen(false);
   }, [sourceId]);
@@ -494,7 +510,9 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (loading || !config) return;
     if (!editorRoute.valid) {
+      /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
       setRouteError('route.pageNotFound');
+      /* eslint-enable react/set-state-in-effect */
       return;
     }
     if (!routedNotebook) {

@@ -87,14 +87,18 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
       else next.add(path);
       return next;
     });
+  /* eslint-disable react-hooks/exhaustive-deps -- Notebook, requested path and listing keys drive initialization; current read helpers use sequence refs. */
   useEffect(() => {
     if (!listing) return;
+    /* eslint-disable react/set-state-in-effect -- Notebook and path transitions initialize the file browser and expand the loaded directory tree. */
     setExpanded(previous => {
       const next = new Set(previous);
       for (const path of expandedPathsFor(directory, listing.root)) next.add(path);
       return next;
     });
+    /* eslint-enable react/set-state-in-effect */
   }, [directory, listing?.root]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (operation) operationForm.current?.scrollIntoView({ block: 'nearest' });
   }, [operation]);
@@ -127,9 +131,12 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
       if (sequence === readSequence.current) setReading(false);
     }
   };
+  /* eslint-disable react-hooks/exhaustive-deps -- Cleanup intentionally reads the latest cancellation or resource ref, including work started after mounting. */
   useEffect(() => {
     let active = true;
+    /* eslint-disable react/set-state-in-effect -- Notebook and path transitions initialize the file browser and expand the loaded directory tree. */
     setListing(undefined);
+    /* eslint-enable react/set-state-in-effect */
     setError('');
     setR2(undefined);
     setR2Directory(undefined);
@@ -163,6 +170,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
       leaveResolver.current?.(false);
     };
   }, [notebookId, initialPath, movePath]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   useEffect(() => {
     onBusyChange?.(busy);
     return () => onBusyChange?.(false);
@@ -224,7 +232,9 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
       leaveResolver.current = resolve;
     });
   };
+  /* eslint-disable react/immutability -- The deferred effect or imperative callback runs after local initialization has completed. */
   useImperativeHandle(ref, () => ({ prepareLeave, editMetadata: () => openOperation('metadata') }));
+  /* eslint-enable react/immutability */
   const finishLeave = (value: boolean) => {
     const resolve = leaveResolver.current;
     leaveResolver.current = undefined;

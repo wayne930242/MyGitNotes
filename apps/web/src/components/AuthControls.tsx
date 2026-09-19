@@ -89,7 +89,9 @@ export function AgentAccessSettings({ local = false }: { local?: boolean; }) {
     setGrants(data.grants);
   };
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Load grants when management permission becomes available. */
     if (canManage) void refresh().catch((error: GrantRequestError) => setError(error.key));
+    /* eslint-enable react/set-state-in-effect */
   }, [canManage]);
   const handleCopyToken = async () => {
     setCopyError(false);

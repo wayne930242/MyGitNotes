@@ -40,13 +40,18 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
+  /* eslint-disable react/refs -- The palette synchronizes its mode and selection before immediate keyboard events can run. */
   selectedIdRef.current = selectedId;
+  /* eslint-enable react/refs */
   const modeRef = useRef<ShortcutSurfaceMode | null>(null);
+  /* eslint-disable react/refs -- The palette synchronizes its mode and selection before immediate keyboard events can run. */
   modeRef.current = mode;
+  /* eslint-enable react/refs */
   const syncedMode = useRef<ShortcutSurfaceMode | null>(null);
   /** Resets query/selection synchronously during render, not in the `[mode]` effect below - that
    *  effect only fires after the palette's first commit, so any external caller (e.g. a header
    *  button click) that starts typing right after the panel appears can race ahead of the reset. */
+  /* eslint-disable react/refs -- The palette synchronizes its mode and selection before immediate keyboard events can run. */
   if (syncedMode.current !== mode) {
     syncedMode.current = mode;
     if (mode === 'palette') {
@@ -55,6 +60,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
       setSelectedId('notes');
     }
   }
+  /* eslint-enable react/refs */
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -88,8 +94,12 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
   const commands = useMemo<ShortcutCommand[]>(() => [{ id: 'notes', accelerator: '1', label: t('nav.notes'), disabled: false, run: () => onNavigate('notes') }, { id: 'agent', accelerator: '2', label: t('nav.agent'), disabled: false, run: () => onNavigate('agent') }, { id: 'assets', accelerator: '3', label: t('nav.assets'), disabled: false, run: () => onNavigate('assets') }, { id: 'screen', accelerator: '4', label: t('nav.screen'), disabled: false, run: () => onNavigate('screen') }, { id: 'new-note', accelerator: 'N', label: t('header.newNote'), disabled: !canCreateNote, run: onCreateNote }, { id: 'search', accelerator: '/', label: t('shortcuts.search'), disabled: activeTab !== 'notes', run: onFocusSearch }, { id: 'settings', accelerator: ',', dataKey: 'comma', label: t('nav.settings'), disabled: false, run: () => onNavigate('settings') }, { id: 'toggle-screen-sidebar', accelerator: '[', label: t('shortcuts.toggleScreenSidebar'), disabled: activeTab !== 'screen', run: () => window.dispatchEvent(new CustomEvent('toggle-screen-sidebar')) }, { id: 'help', accelerator: '?', label: t('shortcuts.help'), disabled: false, run: () => requestMode('help') }, ...pageCommands], [activeTab, canCreateNote, onCreateNote, onFocusSearch, onNavigate, pageCommands, requestMode, t]);
 
   const normalizedQuery = query.trim().toLocaleLowerCase();
+  /* eslint-disable react/refs -- The palette synchronizes its mode and selection before immediate keyboard events can run. */
   const visibleCommands = useMemo(() => normalizedQuery ? commands.filter(command => `${command.label} ${command.id}`.toLocaleLowerCase().includes(normalizedQuery)) : commands, [commands, normalizedQuery]);
+  /* eslint-enable react/refs */
+  /* eslint-disable react/refs -- The palette synchronizes its mode and selection before immediate keyboard events can run. */
   const enabledCommands = useMemo(() => visibleCommands.filter(command => !command.disabled), [visibleCommands]);
+  /* eslint-enable react/refs */
 
   const executeCommand = useCallback((command: ShortcutCommand | undefined) => {
     if (!command || command.disabled) return false;
@@ -125,7 +135,9 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
     if (!enabledCommands.some(command => command.id === selectedId)) {
       const next = enabledCommands[0]?.id || null;
       selectedIdRef.current = next;
+      /* eslint-disable react/set-state-in-effect -- Refresh the selected command when filtering changes the enabled command list. */
       setSelectedId(next);
+      /* eslint-enable react/set-state-in-effect */
     }
   }, [enabledCommands, mode, selectedId]);
 
@@ -198,7 +210,10 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
 
   if (!mode) return null;
   const palette = mode === 'palette';
+  /* eslint-disable react/refs -- The palette synchronizes its mode and selection before immediate keyboard events can run. */
   const listedCommands = palette ? visibleCommands : commands.filter(command => command.accelerator);
+  /* eslint-enable react/refs */
+  /* eslint-disable react/refs -- The palette synchronizes its mode and selection before immediate keyboard events can run. */
   return (
     <div ref={panelRef} role='dialog' aria-modal='false' aria-label={t(palette ? 'shortcuts.paletteTitle' : 'shortcuts.title')} data-mode={mode} className='keyboard-shortcuts-panel' tabIndex={-1}>
       <div className='keyboard-shortcuts-heading'>
@@ -250,4 +265,5 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
       <p className='keyboard-shortcuts-footer'>{t(palette ? 'shortcuts.paletteFooter' : 'shortcuts.escape')}</p>
     </div>
   );
+  /* eslint-enable react/refs */
 }

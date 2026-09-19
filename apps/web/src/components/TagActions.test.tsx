@@ -28,7 +28,9 @@ function renderTagActions(overrides: Partial<{ onPreviewUsage: (tag: string) => 
   const onMerge = overrides.onMerge ?? vi.fn().mockResolvedValue(undefined);
   const onDelete = overrides.onDelete ?? vi.fn().mockResolvedValue(undefined);
   const allTags = overrides.allTags ?? [];
+  /* eslint-disable react/no-children-prop -- The component test passes children explicitly as part of the tested props contract. */
   const utils = render(createElement(TagActions, { tag: 'alpha', allTags, onPreviewUsage, onRename, onMerge, onDelete, children: createElement('button', {}, '#alpha') }));
+  /* eslint-enable react/no-children-prop */
   return { ...utils, onPreviewUsage, onRename, onMerge, onDelete };
 }
 

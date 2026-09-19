@@ -90,7 +90,7 @@ try {
   await clickText('Pull and push');
   await page.waitForSelector('.git-sync-conflict');
   await clickText('Use local (discard remote)');
-  await page.waitForFunction(() => /^Pulled 1 and pushed 1 commits\. The previous state is saved at refs\/github-notes\/sync-backups\//.test(document.querySelector('.git-sync [role="status"]')?.textContent || ''));
+  await page.waitForFunction(() => (document.querySelector('.git-sync [role="status"]')?.textContent || '').startsWith('Pulled 1 and pushed 1 commits. The previous state is saved at refs/github-notes/sync-backups/'));
   assert(run(remote, 'show', `main:${note}`).includes('local two') && run(root, 'rev-parse', 'HEAD') === run(remote, 'rev-parse', 'main'), 'Local side was not pushed');
   console.log('PASS conflict aborts, lists files, offers three actions and keeps local content on request');
 

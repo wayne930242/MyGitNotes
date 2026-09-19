@@ -94,10 +94,12 @@ export function useNoteEditorRegistry() {
   }, []);
   /** Saves the editors of `paths`, or all of them; false when one could not be saved. */
   const flushEditors = useCallback(async (paths?: readonly string[]) => {
+    /* eslint-disable unicorn/no-useless-spread -- Snapshot the collection because callbacks may mutate subscriptions or editors during iteration. */
     for (const entry of [...editors.current]) {
       if (paths && !paths.includes(entry.path)) continue;
       if (!await entry.flush()) return false;
     }
+    /* eslint-enable unicorn/no-useless-spread */
     return true;
   }, []);
   return { register, flushEditors };

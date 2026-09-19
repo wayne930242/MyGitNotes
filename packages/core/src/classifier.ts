@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { ClassifiedResource, ResourceType, WorkspaceConfig } from './types.js';
+import { ClassifiedResource, WorkspaceConfig } from './types.js';
 import { LEGACY_WORKSPACE_CONFIG_FILENAME, WORKSPACE_CONFIG_FILENAME } from './config.js';
 import { workspaceAgentKind } from './workspace-agent.js';
 

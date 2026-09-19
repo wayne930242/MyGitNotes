@@ -30,7 +30,9 @@ export function ScreenCard({ item, view, controls, ...content }: ScreenContentPr
   const notebook = item.kind !== 'youtube' ? content.notebooks.find(nb => nb.id === item.notebookId) : undefined;
   const title = screenItemTitle(item, content.notes, content.assets);
   const tableLabel = t('preview.scrollableTable');
+  /* eslint-disable react/preserve-manual-memoization -- Memoization follows the note content/path and display inputs used by the renderer. */
   const html = useMemo(() => note?.content && view !== 'thumbnail' ? renderNote(note.content, note.path, tableLabel, youtubeLabels(t)) : '', [note?.content, note?.path, view, tableLabel, t]);
+  /* eslint-enable react/preserve-manual-memoization */
   const icon = item.kind === 'note' ? <FileText /> : item.kind === 'folder' ? <Folder /> : item.kind === 'asset' ? <ImageIcon /> : <Youtube />;
   // A pinned folder lists its visible notes straight from the server, a page at a time.
   const folderNotes = useNoteList(item.kind === 'folder' ? { notebookId: item.notebookId, folders: [item.path], descendants: true, sort: 'title', order: 'asc' } : null, { limit: 200 });

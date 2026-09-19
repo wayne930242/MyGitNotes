@@ -56,7 +56,9 @@ export function useScreenAssets(notebooks: NotebookConfig[], notebookId: string)
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
+    /* eslint-disable react/set-state-in-effect -- Start the folder-note fetch when the pinned folder scope changes. */
     setLoading(true);
+    /* eslint-enable react/set-state-in-effect */
     const scoped = notebooks.filter(nb => nb.id === notebookId);
     void Promise.allSettled(scoped.map(async nb => (await fetchAssets(nb.id)).map(asset => ({ ...asset, notebookId: nb.id })))).then(results => {
       if (!active) return;

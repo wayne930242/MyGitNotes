@@ -50,7 +50,9 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, allTags, onPreviewU
   useEffect(() => {
     if (mode === 'closed' && returnFocus) {
       triggerRef.current?.focus();
+      /* eslint-disable react/set-state-in-effect -- Consume the return-focus request once the tag dialog has closed. */
       setReturnFocus(false);
+      /* eslint-enable react/set-state-in-effect */
     }
   }, [mode, returnFocus]);
   const menuId = useId();

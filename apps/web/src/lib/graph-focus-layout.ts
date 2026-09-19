@@ -9,7 +9,9 @@ export function expandGraphFocus(data: GraphData, focusId: string | undefined, n
   if (!focus || focus.x === undefined || focus.y === undefined) return data;
   const scale = Math.max(0.05, zoom);
   const related = (data.nodes as PositionedNode[]).filter((node): node is PositionedNode & { x: number; y: number; } => neighbors.has(node.id) && node.x !== undefined && node.y !== undefined).map(node => {
+    /* eslint-disable no-control-regex -- The byte-range comparison distinguishes wide title characters for graph label sizing. */
     const textWidth = Array.from(node.title).reduce((width, char) => width + (/[^\x00-\xff]/.test(char) ? 12 : 7), 0);
+    /* eslint-enable no-control-regex */
     return { id: node.id, x: node.x * scale, y: node.y * scale, ox: node.x * scale, oy: node.y * scale, width: Math.max(36, Math.min(168, textWidth) + 20), height: 32 + Math.ceil(textWidth / 168) * 17 };
   });
   for (let iteration = 0; iteration < 80; iteration++) {

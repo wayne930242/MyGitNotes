@@ -21,7 +21,9 @@ export function useStudyWorkspace(onSaved: (note?: NoteItem) => void) {
   const [saving, setSaving] = useState(false), [error, setError] = useState(''), [writable, setWritable] = useState(false);
   const snapshot = useRef<Snapshot>(), busy = useRef(false), alive = useRef(true);
   const saved = useRef(onSaved);
+  /* eslint-disable react/refs -- Keep the current callback in a ref for an imperative listener without recreating its subscription. */
   saved.current = onSaved;
+  /* eslint-enable react/refs */
   const read = useCallback(async (): Promise<Snapshot> => {
     const response = await fetch('/api/study');
     if (!response.ok) throw new Error(t('study.loadError'));
@@ -49,7 +51,9 @@ export function useStudyWorkspace(onSaved: (note?: NoteItem) => void) {
   }, [read]);
   useEffect(() => {
     alive.current = true;
+    /* eslint-disable react/set-state-in-effect -- Load the persisted study state when its source subscription starts. */
     void reload();
+    /* eslint-enable react/set-state-in-effect */
     return () => {
       alive.current = false;
     };

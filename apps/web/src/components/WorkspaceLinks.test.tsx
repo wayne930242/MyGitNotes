@@ -26,7 +26,9 @@ const wrapper = ({ children }: { children: ReactNode; }) => createElement(QueryC
 
 const link = (href: string) => createElement('span', { tabIndex: 0, 'data-testid': 'link', 'data-workspace-link': href, 'data-source-path': 'notes/a.md' }, 'Link');
 
+/* eslint-disable react/no-children-prop -- The component test passes children explicitly as part of the tested props contract. */
 const workspace = (href: string) => createElement(WorkspaceLinks, { notebooks: [], folders: [], onOpenNote: () => {}, children: link(href) });
+/* eslint-enable react/no-children-prop */
 
 it('routes a same-origin absolute URL through the router instead of opening a new window', async () => {
   const { getByTestId } = render(workspace(`${window.location.origin}/notebooks/nb1/notes/a.md`), { wrapper });

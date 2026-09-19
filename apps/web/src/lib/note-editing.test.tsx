@@ -35,10 +35,13 @@ describe('claimEditor', () => {
   it('saves the owner before handing the note over, and keeps the owner when saving fails', async () => {
     let captured: ReturnType<typeof useNoteEditing> | undefined;
     const Probe = () => {
+      /* eslint-disable react/globals -- The test probe captures its hook result for assertions after React commits. */
       captured = useNoteEditing();
+      /* eslint-enable react/globals */
       return null;
     };
     const flushEditors = vi.fn(async (paths?: readonly string[]) => paths?.[0] !== 'notes/fail.md');
+    /* eslint-disable react/no-children-prop -- The component test passes children explicitly as part of the tested props contract. */
     render(createElement(NoteEditingProvider, {
       register: () => () => {},
       editorProps: () => {
@@ -50,6 +53,7 @@ describe('claimEditor', () => {
       addToFocus: () => undefined,
       children: createElement(Probe),
     }));
+    /* eslint-enable react/no-children-prop */
     const { hosts, claimEditor } = captured!;
     hosts.register('notes/a.md', 'pane');
     hosts.register('notes/a.md', 'card');
@@ -65,9 +69,12 @@ describe('claimEditor', () => {
   it('resolves false and keeps the owner when refreshing the notes fails', async () => {
     let captured: ReturnType<typeof useNoteEditing> | undefined;
     const Probe = () => {
+      /* eslint-disable react/globals -- The test probe captures its hook result for assertions after React commits. */
       captured = useNoteEditing();
+      /* eslint-enable react/globals */
       return null;
     };
+    /* eslint-disable react/no-children-prop -- The component test passes children explicitly as part of the tested props contract. */
     render(createElement(NoteEditingProvider, {
       register: () => () => {},
       editorProps: () => {
@@ -81,6 +88,7 @@ describe('claimEditor', () => {
       addToFocus: () => undefined,
       children: createElement(Probe),
     }));
+    /* eslint-enable react/no-children-prop */
     const { hosts, claimEditor } = captured!;
     hosts.register('notes/a.md', 'pane');
     hosts.register('notes/a.md', 'card');
@@ -91,7 +99,9 @@ describe('claimEditor', () => {
   it('serializes concurrent claims for the same note so the most recent one wins', async () => {
     let captured: ReturnType<typeof useNoteEditing> | undefined;
     const Probe = () => {
+      /* eslint-disable react/globals -- The test probe captures its hook result for assertions after React commits. */
       captured = useNoteEditing();
+      /* eslint-enable react/globals */
       return null;
     };
     const refreshResolvers: (() => void)[] = [];
@@ -100,6 +110,7 @@ describe('claimEditor', () => {
         refreshResolvers.push(resolve);
       })
     );
+    /* eslint-disable react/no-children-prop -- The component test passes children explicitly as part of the tested props contract. */
     render(createElement(NoteEditingProvider, {
       register: () => () => {},
       editorProps: () => {
@@ -111,6 +122,7 @@ describe('claimEditor', () => {
       addToFocus: () => undefined,
       children: createElement(Probe),
     }));
+    /* eslint-enable react/no-children-prop */
     const { hosts, claimEditor } = captured!;
     hosts.register('notes/a.md', 'pane');
     hosts.register('notes/a.md', 'card');
@@ -136,7 +148,9 @@ describe('claimEditor', () => {
   it('hands the note over only after the notes the claiming host reads are refreshed', async () => {
     let captured: ReturnType<typeof useNoteEditing> | undefined;
     const Probe = () => {
+      /* eslint-disable react/globals -- The test probe captures its hook result for assertions after React commits. */
       captured = useNoteEditing();
+      /* eslint-enable react/globals */
       return null;
     };
     let refreshed!: () => void;
@@ -145,6 +159,7 @@ describe('claimEditor', () => {
         refreshed = resolve;
       })
     );
+    /* eslint-disable react/no-children-prop -- The component test passes children explicitly as part of the tested props contract. */
     render(createElement(NoteEditingProvider, {
       register: () => () => {},
       editorProps: () => {
@@ -156,6 +171,7 @@ describe('claimEditor', () => {
       addToFocus: () => undefined,
       children: createElement(Probe),
     }));
+    /* eslint-enable react/no-children-prop */
     const { hosts, claimEditor } = captured!;
     hosts.register('notes/a.md', 'pane');
     hosts.register('notes/a.md', 'card');

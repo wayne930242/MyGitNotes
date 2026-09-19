@@ -95,7 +95,7 @@ export function createApp(base: string): express.Express {
         res.locals.reader = createRemoteSource(source, token, fetch, cache);
         res.locals.authenticated = Boolean(token);
         next();
-      } catch (error) {
+      } catch {
         res.status(401).json({ error: 'Session unavailable. Sign in again.' });
       }
     });

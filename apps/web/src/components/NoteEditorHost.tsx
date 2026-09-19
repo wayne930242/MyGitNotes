@@ -45,8 +45,10 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ path, frame,
   // Like zoom, the editor keeps the note it opened and follows only its own saves.
   const [pinned, setPinned] = useState<NoteItem | null>(null);
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Keep the previous editor pinned during loading and release it when the route no longer shows an editor. */
     if (!showsEditor) setPinned(null);
     else if (!pinned && loaded) setPinned(loaded);
+    /* eslint-enable react/set-state-in-effect */
   }, [showsEditor, pinned, loaded]);
   const note = (showsEditor && pinned) || loaded;
 

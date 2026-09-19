@@ -1,4 +1,3 @@
-import { chooseSelect } from './browser-select.mjs';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -55,8 +54,8 @@ const click = async text => {
 const assert = (condition, message) => {
   if (!condition) throw Error(message);
 };
-const selector = title => `button[role="combobox"][aria-label="Status for ${title}"]`;
-const options = async selector => {
+const _selector = title => `button[role="combobox"][aria-label="Status for ${title}"]`;
+const _options = async selector => {
   const trigger = await page.waitForSelector(selector, { visible: true });
   await trigger.scrollIntoView();
   if (page.viewport()?.hasTouch) {
@@ -70,16 +69,16 @@ const options = async selector => {
   await page.keyboard.press('Escape');
   return result;
 };
-const columns = () => page.$$eval('[data-status-column]', items => items.map(item => item.getAttribute('data-status-column')));
-const equal = (actual, expected, message) => assert(JSON.stringify(actual) === JSON.stringify(expected), `${message}: ${JSON.stringify(actual)}`);
-const waitDisk = async (file, text) => {
+const _columns = () => page.$$eval('[data-status-column]', items => items.map(item => item.getAttribute('data-status-column')));
+const _equal = (actual, expected, message) => assert(JSON.stringify(actual) === JSON.stringify(expected), `${message}: ${JSON.stringify(actual)}`);
+const _waitDisk = async (file, text) => {
   for (let i = 0; i < 100; i++) {
     if (fs.existsSync(path.join(root, file)) && fs.readFileSync(path.join(root, file), 'utf8').includes(text)) return;
     await new Promise(r => setTimeout(r, 50));
   }
   throw Error(`Missing saved text: ${text}`);
 };
-const manifest = 'schema_version: 1\nworkspace:\n  title: Status QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: research\n    title: Research\n    root: notes/research\n    statuses: [capture, published]\n';
+const _manifest = 'schema_version: 1\nworkspace:\n  title: Status QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: research\n    title: Research\n    root: notes/research\n    statuses: [capture, published]\n';
 const replace = async (selector, text) => {
   await page.focus(selector);
   await page.$eval(selector, e => e.select());
@@ -173,7 +172,7 @@ const openCommit = async () => {
 };
 const submit = () => click('Commit to remote repository');
 const closed = () => page.waitForFunction(() => !document.querySelector('.changes-dialog'));
-const commit = async () => {
+const _commit = async () => {
   await openCommit();
   await submit();
   await closed();

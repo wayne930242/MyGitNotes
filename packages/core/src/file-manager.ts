@@ -8,7 +8,9 @@ import { relocateWorkspaceDocuments } from './workspace-documents.js';
 import { decodeAsset } from './assets.js';
 import { LEGACY_WORKSPACE_CONFIG_FILENAME, WORKSPACE_CONFIG_FILENAME } from './config.js';
 
+/* eslint-disable no-control-regex -- Control-character ranges validate paths and distinguish binary data from editable text. */
 const filePath = z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value) && value.split('/').every(p => p && p !== '.' && p !== '..'), 'Use a relative workspace path.');
+/* eslint-enable no-control-regex */
 const target = { notebookId: z.string().min(1), path: filePath };
 export const FileCommandSchema = z.discriminatedUnion('kind', [z.object({ ...target, kind: z.literal('create') }).strict(), z.object({ ...target, kind: z.literal('write'), content: z.string() }).strict(), z.object({ ...target, kind: z.literal('upload'), base64: z.string() }).strict(), z.object({ ...target, kind: z.literal('mkdir') }).strict(), z.object({ ...target, kind: z.literal('move'), destination: filePath }).strict(), z.object({ ...target, kind: z.literal('delete') }).strict(), z.object({ ...target, kind: z.literal('remove-directory'), destination: filePath }).strict(), z.object({ ...target, kind: z.literal('metadata'), title: z.string().trim().min(1).max(120), description: z.string().max(10000), order: z.number().finite() }).strict()]);
 export type FileCommand = z.infer<typeof FileCommandSchema>;
@@ -49,7 +51,9 @@ export function managedNotebook(file: string, notebooks: NotebookConfig[]): Note
 export function decodeTextFile(bytes: Uint8Array): string | undefined {
   try {
     const value = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+    /* eslint-disable no-control-regex -- Control-character ranges validate paths and distinguish binary data from editable text. */
     return /[\x00-\x08\x0b\x0e-\x1f]/.test(value) ? undefined : value;
+    /* eslint-enable no-control-regex */
   } catch {
     return;
   }

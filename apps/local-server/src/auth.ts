@@ -1,5 +1,5 @@
 import { loadSourceConfig, SourceError, sourceIdentity } from '@mygitnotes/core';
-import { Request, Response, Router } from 'express';
+import { Request, Router } from 'express';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';

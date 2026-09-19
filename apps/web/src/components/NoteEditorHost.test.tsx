@@ -12,10 +12,12 @@ const alpha = { id: 'a', path: 'notes/a.md', notebookId: 'a', title: 'Alpha', ta
 vi.mock('../lib/use-note-queries.js', () => ({ useNoteLookup: () => ({ notes: [{ id: 'a', path: 'notes/a.md', notebookId: 'a', title: 'Alpha', tags: [], metadata: {}, content: '# Alpha\n\nBody.' }], committed: [], loading: false, error: '' }) }));
 vi.mock('./NoteEditor.js', () => ({
   NoteEditor: forwardRef<unknown, NoteEditorProps>(({ frame, note, onSession }, _ref) => {
+    /* eslint-disable react-hooks/exhaustive-deps -- The editor double emits a mount/unmount session; draft updates are exercised separately. */
     useEffect(() => {
       onSession?.({ content: note.content, title: note.title, dirty: false, locked: false });
       return () => onSession?.(null);
     }, []);
+    /* eslint-enable react-hooks/exhaustive-deps */
     return createElement('div', { 'data-testid': 'editor', 'data-frame': frame }, note.content);
   }),
 }));
@@ -24,7 +26,9 @@ afterEach(cleanup);
 
 let editing: ReturnType<typeof useNoteEditing>;
 const Probe = () => {
+  /* eslint-disable react/globals -- The test probe captures its hook result for assertions after React commits. */
   editing = useNoteEditing();
+  /* eslint-enable react/globals */
   return null;
 };
 let flushEditors: ReturnType<typeof vi.fn<(paths?: readonly string[]) => Promise<boolean>>>;
@@ -32,7 +36,9 @@ beforeEach(() => {
   flushEditors = vi.fn(async () => true);
 });
 
+/* eslint-disable react/no-children-prop -- The component test passes children explicitly as part of the tested props contract. */
 const provide = (...children: ReactNode[]) => createElement(NoteEditingProvider, { register: () => () => {}, flushEditors, refreshNotes: async () => {}, closeZoom: () => {}, addToFocus: () => undefined, editorProps: () => ({ statuses: [], onSave: async () => alpha, onRestoreFile: async () => null, branch: 'main', draftScope: 'src:main' }), children: createElement(Fragment, null, createElement(Probe), ...children) });
+/* eslint-enable react/no-children-prop */
 
 const twoHosts = () => provide(createElement('section', { 'data-testid': 'pane' }, createElement(HostedNoteEditor, { path: 'notes/a.md', frame: 'pane', active: true })), createElement('section', { 'data-testid': 'card' }, createElement(HostedNoteEditor, { path: 'notes/a.md', frame: 'compact', active: false })));
 

@@ -31,7 +31,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
 
   useEffect(() => {
     if (config) {
+      /* eslint-disable react/set-state-in-effect -- Initialize the editable YAML buffer when workspace configuration arrives. */
       setYamlContent(YAML.stringify(config));
+      /* eslint-enable react/set-state-in-effect */
     }
   }, [config]);
 

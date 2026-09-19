@@ -12,7 +12,9 @@ import { NavTree, NavTreeChildren, NavTreeRow } from './NavTree.js';
 
 function DropZone({ path, position, disabled, children }: { path: string; position: 'before' | 'after' | 'inside'; disabled: boolean; children?: React.ReactNode; }) {
   const drop = useDroppable({ id: `${position}:${path}`, disabled, data: { path, position } });
+  /* eslint-disable react/refs -- dnd-kit returns callback refs and render state together; forwarding its callbacks is intentional. */
   return <div ref={drop.setNodeRef} data-folder-drop={`${position}:${path}`} className={`${position === 'inside' ? 'folder-drop-body' : 'folder-drop-line'} ${drop.isOver ? 'is-over' : ''}`}>{children}</div>;
+  /* eslint-enable react/refs */
 }
 
 function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage, multiSelectable, touchMultiSelect, onLongPress, hasChildren, isExpanded, onToggleExpand }: { folder: FolderItem; reorder: boolean; disabled: boolean; selected: boolean; onSelect: (event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean; }) => void; onManage: () => void; multiSelectable: boolean; touchMultiSelect?: boolean; onLongPress?: () => void; hasChildren: boolean; isExpanded: boolean; onToggleExpand: (event: React.MouseEvent) => void; }) {
@@ -21,6 +23,7 @@ function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage, mul
   const longPress = useLongPress(() => onLongPress?.(), multiSelectable && Boolean(onLongPress));
   const title = `${folder.description || folder.path}${touchMultiSelect ? ` (${t('folder.touchMultiSelectInstruction')})` : multiSelectable ? ` (${t('folder.multiSelectHint')})` : ''}`;
 
+  /* eslint-disable react/refs -- dnd-kit returns callback refs and render state together; forwarding its callbacks is intentional. */
   return (
     <div ref={drag.setNodeRef} className={`folder-tree-item ${selected ? 'is-selected' : ''}`} style={{ opacity: drag.isDragging ? 0.35 : undefined }}>
       <DropZone path={folder.path} position='before' disabled={disabled || !reorder} />
@@ -55,6 +58,7 @@ function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage, mul
       <DropZone path={folder.path} position='after' disabled={disabled || !reorder} />
     </div>
   );
+  /* eslint-enable react/refs */
 }
 
 function TreeBranch({ node, expanded, onToggleExpand, reorder, disabled, isSelected, selectFolder, onManageFiles, multiSelectable, touchMultiSelect, onLongPressFolder }: { node: FolderTreeNode; expanded: Set<string>; onToggleExpand: (path: string, event: React.MouseEvent) => void; reorder: boolean; disabled: boolean; isSelected: (path: string | null) => boolean; selectFolder: (folder: string | null, event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean; }) => void; onManageFiles: (path: string) => void; multiSelectable: boolean; touchMultiSelect?: boolean; onLongPressFolder?: (folder: string) => void; }) {
@@ -110,6 +114,7 @@ export function FolderTree({ showHeading = false, showRoot = false, onManageFile
   useEffect(() => {
     const targets = selected ? [selected] : selectedPaths || [];
     if (!targets.length) return;
+    /* eslint-disable react/set-state-in-effect -- Navigation and folder changes synchronize expansion and refresh server revision state. */
     setExpanded(prev => {
       const next = new Set(prev);
       let changed = false;
@@ -123,16 +128,19 @@ export function FolderTree({ showHeading = false, showRoot = false, onManageFile
       }
       return changed ? next : prev;
     });
+    /* eslint-enable react/set-state-in-effect */
   }, [selected, selectedPaths]);
 
   // A tree mounted after the last command keeps its selection-based expansion.
   const appliedExpandCommand = useRef(expandCommand);
+  /* eslint-disable react-hooks/exhaustive-deps -- Apply the navigation or folder-refresh command once per explicit key, preserving manual expansion. */
   useEffect(() => {
     if (!expandCommand || expandCommand === appliedExpandCommand.current) return;
     appliedExpandCommand.current = expandCommand;
     const paths = (nodes: FolderTreeNode[]): string[] => nodes.flatMap(node => [node.path, ...paths(node.children)]);
     setExpanded(expandCommand.expanded ? new Set(paths(tree)) : new Set());
   }, [expandCommand]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const toggleExpand = (path: string, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -159,11 +167,15 @@ export function FolderTree({ showHeading = false, showRoot = false, onManageFile
     return data.revision as string;
   };
 
+  /* eslint-disable react-hooks/exhaustive-deps -- Apply the navigation or folder-refresh command once per explicit key, preserving manual expansion. */
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Navigation and folder changes synchronize expansion and refresh server revision state. */
     setError('');
+    /* eslint-enable react/set-state-in-effect */
     setRevision('');
     if (writable) void refresh().catch(err => setError(err.message));
   }, [notebookId, folders, writable]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const mutate = async (command: FolderCommand) => {
     if (busy || !writable) return;

@@ -7,7 +7,9 @@ export function NoteListSentinel({ hasMore, loading, error, onLoadMore, classNam
   const { t } = useTranslation();
   const anchor = useRef<HTMLDivElement>(null);
   const load = useRef(onLoadMore);
+  /* eslint-disable react/refs -- Keep the current callback in a ref for an imperative listener without recreating its subscription. */
   load.current = onLoadMore;
+  /* eslint-enable react/refs */
   useEffect(() => {
     const element = anchor.current;
     // A failed page waits for the retry button: re-observing a visible sentinel would ask again

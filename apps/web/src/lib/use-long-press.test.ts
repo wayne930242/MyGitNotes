@@ -78,7 +78,9 @@ function setupHook(enabled = true, onLongPress = vi.fn()): HookRunner {
       },
     };
 
+    /* eslint-disable react-hooks/rules-of-hooks -- This unit harness invokes mocked React hooks to exercise event registration without rendering. */
     currentResult = useLongPress(onLongPress, enabled);
+    /* eslint-enable react-hooks/rules-of-hooks */
   }
 
   render();
@@ -89,7 +91,9 @@ function setupHook(enabled = true, onLongPress = vi.fn()): HookRunner {
     },
     onLongPress,
     dispatchScroll: () => {
+      /* eslint-disable unicorn/no-useless-spread -- Snapshot the collection because callbacks may mutate subscriptions or editors during iteration. */
       for (const listener of [...scrollListeners]) listener();
+      /* eslint-enable unicorn/no-useless-spread */
     },
     unmount: () => {
       for (const cleanup of cleanups) cleanup?.();

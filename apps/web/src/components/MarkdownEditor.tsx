@@ -84,7 +84,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   };
   useEffect(() => () => clearTimeout(lineCopyTimer.current), []);
 
+  /* eslint-disable react/set-state-in-effect -- Changing document or editor mode resets the displayed source line. */
   useEffect(() => setActiveSourceLine(1), [path, mode]);
+  /* eslint-enable react/set-state-in-effect */
   const updateActiveSourceLine = (target: HTMLTextAreaElement) => {
     setActiveSourceLine(target.value.slice(0, target.selectionStart).split('\n').length);
     setCaret(target.selectionStart);
@@ -331,10 +333,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
                     const start = sourceDragStart.current;
                     sourceDragStart.current = null;
                     setDraggedSourceRange(null);
+                    /* eslint-disable react/purity -- Read the event timestamp inside the pointer callback, after rendering. */
                     if (Number.isFinite(end) && start !== end) {
                       lastSourceGutterClick.current = null;
                       void copyLines(start, end);
                     } else lastSourceGutterClick.current = { line: start, at: performance.now() };
+                    /* eslint-enable react/purity */
                   }}
                   onPointerCancel={() => {
                     sourceDragStart.current = null;

@@ -36,6 +36,7 @@ export function createLaneNoteContext(row: ScreenRow, notebooks: NotebookConfig[
 export function MovableCard({ item, row, reorder, disabled, remove, ...content }: ScreenContentProps & { item: ScreenItem; row: ScreenRow; reorder: boolean; disabled: boolean; remove: () => void; }) {
   const { t } = useTranslation();
   const sort = useSortable({ id: item.id, disabled: disabled || !reorder, data: { rowId: row.id } });
+  /* eslint-disable react/refs -- dnd-kit sortable bindings are callback refs and render state, forwarded to the card and drag handle. */
   return (
     <div ref={sort.setNodeRef} className='screen-card-slot' style={{ transform: CSS.Transform.toString(sort.transform), transition: sort.transition, opacity: sort.isDragging ? .3 : undefined }}>
       <ScreenCard
@@ -57,6 +58,7 @@ export function MovableCard({ item, row, reorder, disabled, remove, ...content }
       />
     </div>
   );
+  /* eslint-enable react/refs */
 }
 
 export function ScreenLane({ row, graph, reorder, disabled, study, facets, notebooks, assets, onOpen, onStudy, onStudyChange, onView, onSort, onAdd, onRemove, onCreateNote, readOnly, onAddToFocus }: Omit<ScreenContentProps, 'notes'> & { graph?: ReactNode; facets?: Record<string, NotebookFacets>; row: ScreenRow; reorder: boolean; disabled: boolean; study: StudyController; readOnly?: boolean; onAddToFocus?: () => void; onStudy?: () => void; onView?: (view: ScreenRow['view']) => void; onAdd?: () => void; onRemove?: (id: string) => void; onSort?: (sort: SortConfig) => void; onStudyChange?: (study: NonNullable<ScreenRow['study']>) => void; onCreateNote?: (context?: { notebookId?: string; folder?: string; tag?: string; }) => void; }) {

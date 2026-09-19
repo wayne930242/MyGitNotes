@@ -255,7 +255,7 @@ try {
         const r = document.createRange();
         const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
         let n;
-        while (n = w.nextNode()) {
+        while ((n = w.nextNode())) {
           if (n.textContent.trim()) {
             r.setStart(n, 0);
             r.setEnd(n, 1);

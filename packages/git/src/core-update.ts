@@ -1,4 +1,3 @@
-import path from 'node:path';
 import fs from 'node:fs';
 import { getCurrentBranch, getGitStatus, runGit } from './git-service.js';
 import { CoreUpdateOptions, CoreUpdateResult } from './types.js';

@@ -60,7 +60,9 @@ describe('useNoteYouTubeEmbed hook', () => {
       removeEventListener: vi.fn(),
     };
 
+    /* eslint-disable react-hooks/rules-of-hooks -- This unit harness invokes mocked React hooks to exercise event registration without rendering. */
     useNoteYouTubeEmbed({ current: surface as unknown as HTMLElement });
+    /* eslint-enable react-hooks/rules-of-hooks */
 
     return {
       embed,

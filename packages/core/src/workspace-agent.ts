@@ -15,7 +15,9 @@ const agentDirectories = ['.agents', '.codex', '.claude', '.agent'];
 
 /** UI document allowlist, deliberately narrower than Git namespace ownership. */
 export function workspaceAgentKind(file: string): WorkspaceAgentKind | undefined {
+  /* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
   if (file.includes('\\') || /[\x00-\x1f\x7f]/.test(file) || file.split('/').some(p => !p || p === '.' || p === '..')) return;
+  /* eslint-enable no-control-regex */
   if (instructionFiles.includes(file)) return 'instructions';
   const parts = file.split('/');
   if (parts[0] === 'notes') {
@@ -75,7 +77,9 @@ export function workspaceAgentResource(file: string, editable: boolean): Workspa
 
 /** Product reference documents ship with Core under docs/agent and are read-only in every workspace. */
 export function isProductAgentDoc(file: string): boolean {
+  /* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
   if (file.includes('\\') || /[\x00-\x1f\x7f]/.test(file)) return false;
+  /* eslint-enable no-control-regex */
   const parts = file.split('/');
   return parts.length >= 3 && parts[0] === 'docs' && parts[1] === 'agent' && parts.every(p => p && !p.startsWith('.')) && /\.md$/i.test(file);
 }

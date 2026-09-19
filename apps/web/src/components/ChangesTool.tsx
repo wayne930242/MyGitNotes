@@ -33,7 +33,9 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
   useEffect(() => {
     if (remoteChanges) return;
     let cancelled = false;
+    /* eslint-disable react/set-state-in-effect -- Refresh change lists and reset stale preview state when the selection changes. */
     setError('');
+    /* eslint-enable react/set-state-in-effect */
     void fetchFileChanges().then(files => {
       if (!cancelled) setFiles(files);
     }).catch(error => {
@@ -46,7 +48,9 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
   const preview = active && getPreview ? getPreview(active.path) : undefined;
   useEffect(() => {
     let cancelled = false;
+    /* eslint-disable react/set-state-in-effect -- Refresh change lists and reset stale preview state when the selection changes. */
     setDiff('');
+    /* eslint-enable react/set-state-in-effect */
     setDiffError('');
     setLoading(false);
     if (!active?.available) return;

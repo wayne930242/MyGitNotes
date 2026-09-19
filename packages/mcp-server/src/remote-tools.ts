@@ -120,7 +120,7 @@ async function runRemoteTool(reader: RemoteSource, name: string, args: Record<st
         if (args.status !== undefined && args.status !== '' && !availableStatuses.includes(String(args.status))) {
           throw new Error(`Invalid status '${args.status}'. Available statuses: ${availableStatuses.join(', ')}`);
         }
-        let newMetadata: Record<string, unknown> = { ...note.metadata, ...(args.metadata as Record<string, unknown> || {}) };
+        let newMetadata: Record<string, unknown> = { ...note.metadata, ...args.metadata as Record<string, unknown> };
         if (args.status !== undefined) newMetadata = withNoteStatus(newMetadata, String(args.status));
         if (args.tags !== undefined) newMetadata.tags = args.tags;
         if (args.title !== undefined) newMetadata.title = args.title;
@@ -188,7 +188,7 @@ async function runRemoteTool(reader: RemoteSource, name: string, args: Record<st
       if (args.status !== undefined && args.status !== '' && !availableStatuses.includes(String(args.status))) {
         throw new Error(`Invalid status '${args.status}'. Available statuses: ${availableStatuses.join(', ')}`);
       }
-      let newMetadata: Record<string, unknown> = { ...note.metadata, ...(args.metadata as Record<string, unknown> || {}) };
+      let newMetadata: Record<string, unknown> = { ...note.metadata, ...args.metadata as Record<string, unknown> };
       if (args.status !== undefined) newMetadata = withNoteStatus(newMetadata, String(args.status));
       if (args.tags !== undefined) newMetadata.tags = args.tags;
       if (args.title !== undefined) newMetadata.title = args.title;

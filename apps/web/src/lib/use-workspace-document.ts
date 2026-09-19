@@ -36,12 +36,18 @@ export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, scop
   const [dirty, setDirty] = useState(false);
   const revision = useRef(''), base = useRef<T>(document.empty()), current = useRef(page);
   const saved = useRef(onSaved);
+  /* eslint-disable react/refs -- Document callbacks and the saved comparison baseline remain current without restarting loads. */
   saved.current = onSaved;
+  /* eslint-enable react/refs */
   const notebooks = useRef(config);
+  /* eslint-disable react/refs -- Document callbacks and the saved comparison baseline remain current without restarting loads. */
   notebooks.current = config;
+  /* eslint-enable react/refs */
   const key = `github-notes:${client.draftKey}:${scope}`;
   const currentKey = useRef(key);
+  /* eslint-disable react/refs -- Document callbacks and the saved comparison baseline remain current without restarting loads. */
   currentKey.current = key;
+  /* eslint-enable react/refs */
   const readDraft = useCallback((): WorkspaceDocumentDraft<T> | undefined => {
     const raw = localStorage.getItem(key);
     if (!raw) return;
@@ -76,7 +82,9 @@ export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, scop
     }
   }, [key, enabled, remote, readDraft, t, endpoint, messages, document]);
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Begin loading the selected persisted workspace document from an effect. */
     void load();
+    /* eslint-enable react/set-state-in-effect */
   }, [load]);
   useEffect(() => {
     const refresh = (event: StorageEvent) => {
@@ -159,7 +167,9 @@ export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, scop
       localStorage.setItem(key, JSON.stringify({ page: latest.page, base: sent.page, revision: nextRevision }));
     }
   };
+  /* eslint-disable react/refs -- Document callbacks and the saved comparison baseline remain current without restarting loads. */
   const diff = dirty ? createUnifiedDiff(document.file, document.file, stringify(base.current), stringify(page)) : '';
+  /* eslint-enable react/refs */
   return { file: document.file, page, change, save, reload: () => load(true), refresh: () => load(), loading, saving, dirty, error, writable: Boolean(snapshot?.writable), setError, prepareCommit, diff };
 }
 export type WorkspaceDocumentController<T> = ReturnType<typeof useWorkspaceDocument<T>>;

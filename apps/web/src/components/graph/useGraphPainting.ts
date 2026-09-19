@@ -7,6 +7,7 @@ type PositionedNode = NoteGraphNode & { x?: number; y?: number; };
 
 export function useGraphPainting({ nodes, hoverNode, focusNodeId, neighbors, isDark, nodeColor }: { nodes: NoteGraphNode[]; hoverNode: NoteGraphNode | null; focusNodeId?: string; neighbors: Set<string>; isDark: boolean; nodeColor: (node: NoteGraphNode) => string; }) {
   // Custom node rendering on Canvas
+  /* eslint-disable react-hooks/exhaustive-deps -- Theme changes invalidate canvas painting even when the chosen CSS colors are read indirectly. */
   const paintNode = useCallback((node: unknown, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const n = node as NoteGraphNode & { x?: number; y?: number; };
     if (n.x === undefined || n.y === undefined) return;
@@ -51,8 +52,10 @@ export function useGraphPainting({ nodes, hoverNode, focusNodeId, neighbors, isD
 
     ctx.restore();
   }, [hoverNode, focusNodeId, neighbors, isDark, nodeColor]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Lay labels out after the nodes, in screen-sized units, with priority for focus.
+  /* eslint-disable react-hooks/exhaustive-deps -- Theme changes invalidate canvas painting even when the chosen CSS colors are read indirectly. */
   const paintLabels = useCallback((ctx: CanvasRenderingContext2D, scale: number) => {
     const positionedNodes = (nodes as PositionedNode[]).filter((n): n is PositionedNode & { x: number; y: number; } => n.x !== undefined && n.y !== undefined);
     type Box = { x: number; y: number; w: number; h: number; };
@@ -112,6 +115,7 @@ export function useGraphPainting({ nodes, hoverNode, focusNodeId, neighbors, isD
     }
     ctx.restore();
   }, [nodes, hoverNode, neighbors, isDark]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   return { paintNode, paintLabels };
 }

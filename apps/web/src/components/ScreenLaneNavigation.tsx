@@ -13,6 +13,7 @@ import type { FolderItem, NotebookConfig } from '../lib/types.js';
 function LaneLink({ row, reorder, disabled, onSelect, onEdit }: { row: ScreenRow; reorder: boolean; disabled: boolean; onSelect: () => void; onEdit: () => void; }) {
   const { t } = useTranslation();
   const sort = useSortable({ id: row.id, disabled: disabled || !reorder });
+  /* eslint-disable react/refs -- dnd-kit sortable bindings are callback refs and render state, forwarded to the lane and drag handle. */
   return (
     <div ref={sort.setNodeRef} className='screen-sidebar-lane' style={{ transform: CSS.Transform.toString(sort.transform), transition: sort.transition, opacity: sort.isDragging ? .5 : undefined }}>
       {reorder && (
@@ -29,6 +30,7 @@ function LaneLink({ row, reorder, disabled, onSelect, onEdit }: { row: ScreenRow
       </button>
     </div>
   );
+  /* eslint-enable react/refs */
 }
 
 export function ScreenLaneNavigation({ page, reorder = false, disabled, notebooks, assets, folders, selectedNotebookId, onChange, onSelect }: { page: ScreenPage; reorder?: boolean; disabled: boolean; notebooks: NotebookConfig[]; assets: ScreenAsset[]; folders: FolderItem[]; selectedNotebookId: string; onChange: (page: ScreenPage) => void; onSelect: (id: string) => void; }) {

@@ -60,4 +60,6 @@ export function defaultStudyProgression(statuses: string[]): StudyProgression | 
   return { stages: values.map((status, index) => ({ status, intervalDays: [1, 3, 7, 14, 30][Math.min(index, 4)] })), easy: 'two' };
 }
 
+/* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
 export const StudyLaneActionSchema = z.object({ laneId: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), notebookId: z.string().min(1).max(128), path: z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value) && value.split('/').every(part => part && part !== '.' && part !== '..')), revision: z.string().min(1), expected: z.object({ content: z.string().max(5 * 1024 * 1024), metadata: z.record(z.unknown()) }).strict(), action: z.enum(['stage-review', 'stage-read', 'stage-postpone', 'undo']), rating: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(), due: z.string().datetime().optional(), eventId: z.string().optional() }).strict();
+/* eslint-enable no-control-regex */

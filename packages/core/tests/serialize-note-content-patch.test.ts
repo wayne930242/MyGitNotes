@@ -65,7 +65,7 @@ describe('serializeNoteContent patches an existing frontmatter block in place', 
   it('removes a metadata key that is no longer present', () => {
     const raw = '---\ntitle: Note\narchived: true\ncreated: "2020-01-01T00:00:00.000Z"\nupdated: "2020-01-02T00:00:00.000Z"\n---\n\nBody.\n';
     const { metadata, content } = parseNoteContent(raw);
-    const { archived, ...rest } = metadata;
+    const { archived: _archived, ...rest } = metadata;
     const serialized = serializeNoteContent(rest, content, false, new Date('2026-01-01T00:00:00.000Z'), raw);
     expect(serialized).toBe('---\ntitle: Note\ncreated: "2020-01-01T00:00:00.000Z"\nupdated: "2026-01-01T00:00:00.000Z"\n---\n\nBody.\n');
   });

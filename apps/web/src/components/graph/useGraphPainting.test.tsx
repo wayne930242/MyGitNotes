@@ -9,7 +9,9 @@ describe('focused graph painting', () => {
     const nodes = Array.from({ length: 8 }, (_, i) => ({ id: String(i), title: `Title ${i}`, notebookId: 'test', tags: [], inDegree: 0, outDegree: 0, val: 1, x: 0, y: 0 }));
     let paint: ReturnType<typeof useGraphPainting> | undefined;
     function Probe() {
+      /* eslint-disable react/globals -- The test probe captures its hook result for assertions after React commits. */
       paint = useGraphPainting({ nodes, hoverNode: nodes[0], focusNodeId: '0', neighbors: new Set(nodes.map(n => n.id)), isDark: false, nodeColor: () => '#7895b5' });
+      /* eslint-enable react/globals */
       return null;
     }
     renderToStaticMarkup(createElement(Probe));
@@ -23,7 +25,9 @@ describe('focused graph painting', () => {
     const node = { id: 'a', title: 'A', notebookId: 'test', tags: [], x: 0, y: 0, inDegree: 0, outDegree: 0, val: 1 };
     let paint: ReturnType<typeof useGraphPainting> | undefined;
     function Probe() {
+      /* eslint-disable react/globals -- The test probe captures its hook result for assertions after React commits. */
       paint = useGraphPainting({ nodes: [node], hoverNode: node, focusNodeId: 'a', neighbors: new Set(['a']), isDark: false, nodeColor: () => '#7895b5' });
+      /* eslint-enable react/globals */
       return null;
     }
     renderToStaticMarkup(createElement(Probe));

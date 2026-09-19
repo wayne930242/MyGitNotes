@@ -2,7 +2,7 @@ import { managedNotebook, WORKSPACE_DOCUMENTS, workspaceDocument } from '@mygitn
 import express, { Request, Response } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
-import { assetHash, assetInfo, assetPath, assetRoot, classifyResource, decodeAsset, deleteNoteFile, extractFirstH1, formatTemplateDate, isAssetPath, listWorkspaceAgentFiles, loadNoteTemplate, loadWorkspaceConfig, lookupNotes, noteAgenda, type NoteCatalog, noteFacets, noteGraph, type NoteItem, parseNoteContent, parseNoteQuery, parseWorkspaceConfig, productAgentResources, queryNotePaths, queryNotes, readNoteFile, renderNoteTemplate, replaceNoteTags, resolveSafePath, resolveWorkspaceAgentPath, resolveWorkspaceConfigPath, sanitizeFilename, scanAssets, scanNotebookFolders, scanNotebookNotes, serializeWorkspaceConfig, SourceError, WORKSPACE_CONFIG_FILENAME, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, writeNoteFile } from '@mygitnotes/core';
+import { assetHash, assetInfo, assetPath, assetRoot, classifyResource, decodeAsset, deleteNoteFile, extractFirstH1, formatTemplateDate, isAssetPath, listWorkspaceAgentFiles, loadNoteTemplate, loadWorkspaceConfig, lookupNotes, noteAgenda, type NoteCatalog, noteFacets, noteGraph, type NoteItem, parseNoteContent, parseNoteQuery, parseWorkspaceConfig, productAgentResources, queryNotePaths, queryNotes, readNoteFile, renderNoteTemplate, replaceNoteTags, resolveSafePath, resolveWorkspaceAgentPath, resolveWorkspaceConfigPath, scanAssets, scanNotebookFolders, scanNotebookNotes, serializeWorkspaceConfig, SourceError, WORKSPACE_CONFIG_FILENAME, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, writeNoteFile } from '@mygitnotes/core';
 import { changeFile, commitSelectedFiles, commitStagedFiles, fileDiff, generateCommitMessage, getCurrentBranch, getDiff, getGitStatus, getRecentCommits, listChanges, stageAndCommit, SyncError, syncWorkspace, updateCore } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 
@@ -71,7 +71,7 @@ export function createLocalApp(repoRoot: string, appRoot = repoRoot): express.Ex
   });
 
   // Static asset handler for notes assets
-  app.use('/raw-assets', (req, res, next) => {
+  app.use('/raw-assets', (req, res) => {
     try {
       const relPath = decodeURIComponent(req.path.replace(/^\//, ''));
       const config = loadWorkspaceConfig(repoRoot);

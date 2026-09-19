@@ -685,21 +685,33 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<EditorView>();
   const youtubeOwner = useRef('');
+  /* eslint-disable react/refs -- The persistent CodeMirror view reads current callbacks and options through refs. */
   if (!youtubeOwner.current) youtubeOwner.current = `youtube-editor-${++youtubeEditorSequence}`;
+  /* eslint-enable react/refs */
   const callback = useRef(onChange);
+  /* eslint-disable react/refs -- The persistent CodeMirror view reads current callbacks and options through refs. */
   callback.current = onChange;
+  /* eslint-enable react/refs */
   const queryClient = useQueryClient();
   const scope = useNoteQueryScope();
   const completionSource = useRef({ queryClient, scope });
+  /* eslint-disable react/refs -- The persistent CodeMirror view reads current callbacks and options through refs. */
   completionSource.current = { queryClient, scope };
+  /* eslint-enable react/refs */
   const caretCallback = useRef(onCaret);
+  /* eslint-disable react/refs -- The persistent CodeMirror view reads current callbacks and options through refs. */
   caretCallback.current = onCaret;
+  /* eslint-enable react/refs */
   const permission = useRef(new Compartment());
   const lineNumberGutter = useRef(new Compartment());
   const copyLinesCallback = useRef(onCopyLines);
+  /* eslint-disable react/refs -- The persistent CodeMirror view reads current callbacks and options through refs. */
   copyLinesCallback.current = onCopyLines;
+  /* eslint-enable react/refs */
   const lineOffset = useRef(lineNumberOffset);
+  /* eslint-disable react/refs -- The persistent CodeMirror view reads current callbacks and options through refs. */
   lineOffset.current = lineNumberOffset;
+  /* eslint-enable react/refs */
   const gutterDrag = useRef<{ start: number; current: number; } | null>(null);
   const lastGutterClick = useRef<{ line: number; at: number; } | null>(null);
   const lastGutterCopy = useRef<{ line: number; at: number; } | null>(null);
@@ -736,6 +748,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
       return atEnd ? view.state.doc.lines : view.state.doc.lineAt(view.viewport.from).number;
     },
   }), []);
+  /* eslint-disable react-hooks/exhaustive-deps -- Create the CodeMirror view for its identity; separate effects update content, permissions and line numbers. */
   useEffect(() => {
     const field = StateField.define<{ decorations: DecorationSet; focused: boolean; }>({
       create(state) {
@@ -889,6 +902,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
       editor.current = undefined;
     };
   }, [notePath, ariaLabel, linkLabel, tableLabel, pageLabel, t]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   useEffect(() => {
     const view = editor.current;
     if (view && view.state.doc.toString() !== content) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content }, annotations: Transaction.addToHistory.of(false) });

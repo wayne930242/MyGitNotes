@@ -28,7 +28,7 @@ export const NOTE_PANEL_MODES: readonly NotePanelMode[] = ['outline', 'find', 'f
 
 /** Server-managed on every save; excluded when deciding whether there is a new edit to save. */
 function sameIgnoringTimestamps(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
-  const strip = ({ created, updated, ...rest }: Record<string, unknown>) => rest;
+  const strip = ({ created: _created, updated: _updated, ...rest }: Record<string, unknown>) => rest;
   return sameValue(strip(a), strip(b));
 }
 
@@ -95,11 +95,13 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   const { t } = useTranslation();
   const panel = usePanelContext();
   // The workspace rail hides only behind zoom; a pane editor shares the page with it.
+  /* eslint-disable react-hooks/exhaustive-deps -- The effect is keyed to editor identity; incoming note snapshots must not reset an active draft. */
   useEffect(() => {
     if (frame !== 'zoom') return;
     panel.setHasOpenNote(true);
     return () => panel.setHasOpenNote(false);
   }, [frame]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Editor states
   const [content, setContent] = useState(note.content);
@@ -194,8 +196,12 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
     };
   }, []);
   const current = useRef({ content, metadata, baseNote, blocked });
+  /* eslint-disable react/refs -- The editor keeps current draft and event callbacks in refs for async saves and imperative keyboard handlers. */
   current.current = { content, metadata, baseNote, blocked };
+  /* eslint-enable react/refs */
+  /* eslint-disable react/refs -- The editor keeps current draft and event callbacks in refs for async saves and imperative keyboard handlers. */
   const locked = readOnly || blocked || isRestoring || closing.current || (!autoSave && isSaving);
+  /* eslint-enable react/refs */
   const preserveConflict = () => {
     const key = `${draftScope || branch}:conflict`;
     const draft = { content: current.current.content, metadata: current.current.metadata };
@@ -266,7 +272,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
     }
   };
   const checkRemoteRef = useRef(checkRemote);
+  /* eslint-disable react/refs -- The editor keeps current draft and event callbacks in refs for async saves and imperative keyboard handlers. */
   checkRemoteRef.current = checkRemote;
+  /* eslint-enable react/refs */
   useEffect(() => {
     if (!onReadRemote) return;
     void checkRemoteRef.current();
@@ -342,12 +350,16 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   const matches = useMemo(() => findTextMatches(content, findQuery), [content, findQuery]);
   const outline = useMemo(() => parseMarkdownOutline(content), [content]);
 
+  /* eslint-disable react/set-state-in-effect -- Document identity and search changes reset editor state; autosave starts from the committed effect snapshot. */
   useEffect(() => setFindIndex(0), [findQuery]);
+  /* eslint-enable react/set-state-in-effect */
   useEffect(() => {
     if (!isFindOpen || matches.length === 0) return;
     const index = Math.min(findIndex, matches.length - 1);
     if (index !== findIndex) {
+      /* eslint-disable react/set-state-in-effect -- Document identity and search changes reset editor state; autosave starts from the committed effect snapshot. */
       setFindIndex(index);
+      /* eslint-enable react/set-state-in-effect */
       return;
     }
     editorRef.current?.revealRange(matches[index].from, matches[index].to);
@@ -379,7 +391,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
     },
   }), [locked]);
   const sessionCallback = useRef(onSession);
+  /* eslint-disable react/refs -- The editor keeps current draft and event callbacks in refs for async saves and imperative keyboard handlers. */
   sessionCallback.current = onSession;
+  /* eslint-enable react/refs */
   useEffect(() => {
     sessionCallback.current?.({ content, title, dirty: hasUnsavedChanges, locked });
   }, [content, title, hasUnsavedChanges, locked]);
@@ -389,8 +403,11 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   const [recoveredDraft, setRecoveredDraft] = useState<{ content: string; metadata: Record<string, unknown>; savedAt: number; } | null>(null);
 
   // Check local draft on note open
+  /* eslint-disable react-hooks/exhaustive-deps -- The effect is keyed to editor identity; incoming note snapshots must not reset an active draft. */
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Document identity and search changes reset editor state; autosave starts from the committed effect snapshot. */
     setBaseNote(remoteBase || note);
+    /* eslint-enable react/set-state-in-effect */
     setContent(note.content);
     setMetadata(note.metadata || {});
     setHasUnsavedChanges(false);
@@ -414,6 +431,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
       setRecoveredDraft(null);
     }
   }, [note.path, branch, draftScope, readOnly]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Debounced auto-save directly to disk on edit (Requirement 1)
   useEffect(() => {
@@ -439,7 +457,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
       const absorbTimestamps = (saved: NoteItem) => setMetadata(current => (current.created === saved.metadata.created && current.updated === saved.metadata.updated ? current : { ...current, created: saved.metadata.created, updated: saved.metadata.updated }));
 
       if (draftMode) {
+        /* eslint-disable react/set-state-in-effect -- Document identity and search changes reset editor state; autosave starts from the committed effect snapshot. */
         setIsSaving(true);
+        /* eslint-enable react/set-state-in-effect */
         void onSave({ path: note.path, content, metadata, baseNote }).then(saved => {
           if (!mounted.current) return;
           lastSaved.current = { content, metadata };
@@ -604,12 +624,14 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
     }, 2000);
   };
   const escapeAction = useRef<() => boolean>(() => false);
+  /* eslint-disable react/refs -- The editor keeps current draft and event callbacks in refs for async saves and imperative keyboard handlers. */
   escapeAction.current = () => {
     if (isEditorLeaderOpen) setIsEditorLeaderOpen(false);
     else if (notePanel) setNotePanel(null);
     else return false;
     return true;
   };
+  /* eslint-enable react/refs */
   const openOutline = () => {
     const currentLine = editorRef.current?.getCurrentLine() ?? 1;
     setIsEditorLeaderOpen(false);
@@ -630,6 +652,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
     chooseOutline(nextIndex, false);
   };
   const shortcutAction = useRef<(event: KeyboardEvent) => boolean>(() => false);
+  /* eslint-disable react/refs -- The editor keeps current draft and event callbacks in refs for async saves and imperative keyboard handlers. */
   shortcutAction.current = event => {
     const slashKey = event.code === 'Slash' || event.key === '/';
     // Outside zoom, Alt+/ belongs to the command palette.
@@ -665,6 +688,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
     }
     return false;
   };
+  /* eslint-enable react/refs */
   useEffect(() => {
     if (!active) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -689,7 +713,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
     if (!isOutlineOpen || outline.length === 0) return;
     const index = Math.min(outlineIndex, outline.length - 1);
     if (index !== outlineIndex) {
+      /* eslint-disable react/set-state-in-effect -- Document identity and search changes reset editor state; autosave starts from the committed effect snapshot. */
       setOutlineIndex(index);
+      /* eslint-enable react/set-state-in-effect */
       return;
     }
     if (isEditableTarget(document.activeElement)) return;

@@ -13,7 +13,9 @@ function TreeNode({ node, depth, ...navigation }: NavigationProps & { node: Agen
   const containsSelection = navigation.selectedPath.startsWith(`${node.path}/`);
   const [expanded, setExpanded] = useState(depth === 0 || containsSelection);
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Navigation to a descendant expands its ancestor branch. */
     if (containsSelection) setExpanded(true);
+    /* eslint-enable react/set-state-in-effect */
   }, [containsSelection, navigation.selectedPath]);
   if (node.children) {
     return (

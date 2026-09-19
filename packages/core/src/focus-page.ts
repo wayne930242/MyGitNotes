@@ -15,7 +15,9 @@ export function focusPaneCount(division: FocusDivision): number {
 }
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
+/* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
 const repoPath = z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value) && value.split('/').every(part => part !== '' && part !== '.' && part !== '..'), 'Invalid workspace path');
+/* eslint-enable no-control-regex */
 const notebookId = z.string().min(1).max(128);
 
 export const FocusTabSchema = z.discriminatedUnion('kind', [z.object({ kind: z.literal('note'), path: repoPath }).strict(), z.object({ kind: z.literal('lane'), id }).strict()]);

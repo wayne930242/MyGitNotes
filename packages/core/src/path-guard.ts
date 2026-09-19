@@ -66,5 +66,7 @@ export function resolveSafePath(repoRoot: string, targetPath: string): string {
 export function sanitizeFilename(filename: string): string {
   // Remove control characters, slashes, backslashes, path traversal
   const basename = path.basename(filename);
+  /* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
   return basename.replace(/[<>:"/\\|?*\x00-\x1F]/g, '-').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'untitled';
+  /* eslint-enable no-control-regex */
 }

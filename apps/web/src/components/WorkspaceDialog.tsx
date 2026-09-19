@@ -6,7 +6,10 @@ export function WorkspaceDialog({ title, children, onClose, className = '' }: { 
   const { t } = useTranslation();
   const dialog = useRef<HTMLDialogElement>(null);
   const close = useRef(onClose);
+  /* eslint-disable react/refs -- Keep the current callback in a ref for an imperative listener without recreating its subscription. */
   close.current = onClose;
+  /* eslint-enable react/refs */
+  /* eslint-disable react-hooks/exhaustive-deps -- Cleanup intentionally reads the latest cancellation or resource ref, including work started after mounting. */
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     dialog.current?.showModal();
@@ -15,6 +18,7 @@ export function WorkspaceDialog({ title, children, onClose, className = '' }: { 
       previous?.focus();
     };
   }, []);
+  /* eslint-enable react-hooks/exhaustive-deps */
   return (
     <dialog
       ref={dialog}

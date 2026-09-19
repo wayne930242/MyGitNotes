@@ -36,7 +36,9 @@ export function getWorkspaceNotebooks(): NotebookConfig[] {
 
 export function resolveWorkspaceHref(value: string, sourcePath: string, aliasesOrNotebooks?: Record<string, string> | NotebookConfig[], currentOrigin?: string): WorkspaceLink | null {
   const href = value.trim();
+  /* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
   if (!href || /[\\\x00-\x1f\x7f]/.test(href)) return null;
+  /* eslint-enable no-control-regex */
   try {
     if (/^(https?:|mailto:)/i.test(href) || href.startsWith('//')) {
       const url = new URL(href.startsWith('//') ? `https:${href}` : href);
@@ -110,7 +112,9 @@ function resolveRelativeWorkspaceHref(href: string, sourcePath: string, aliasesO
     const stack = absolute ? [] : sourcePath.split('/').slice(0, -1);
     for (const encoded of raw.replace(/^\//, '').split('/')) {
       const part = decodeURIComponent(encoded);
+      /* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
       if (/[/\\\x00-\x1f\x7f]/.test(part)) return null;
+      /* eslint-enable no-control-regex */
       if (!part || part === '.') continue;
       if (part === '..') {
         if (!stack.length) return null;

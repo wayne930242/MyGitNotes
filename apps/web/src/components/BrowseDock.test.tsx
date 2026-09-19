@@ -22,26 +22,34 @@ it('exports a positive card two-row height threshold', () => {
 });
 
 it('renders only the browse content when narrow and narrowView is browse', () => {
+  /* eslint-disable react/no-children-prop -- The component test passes children explicitly as part of the tested props contract. */
   render(createElement(BrowseDock, { ...baseProps, narrow: true, narrowView: 'browse', browse: createElement('div', null, 'browse-content'), children: createElement('div', null, 'focus-content') }));
+  /* eslint-enable react/no-children-prop */
   expect(screen.getByText('browse-content')).toBeInTheDocument();
   expect(screen.queryByText('focus-content')).not.toBeInTheDocument();
 });
 
 it('renders only the Focus content when narrow and narrowView is focus', () => {
+  /* eslint-disable react/no-children-prop -- The component test passes children explicitly as part of the tested props contract. */
   render(createElement(BrowseDock, { ...baseProps, narrow: true, narrowView: 'focus', browse: createElement('div', null, 'browse-content'), children: createElement('div', null, 'focus-content') }));
+  /* eslint-enable react/no-children-prop */
   expect(screen.getByText('focus-content')).toBeInTheDocument();
   expect(screen.queryByText('browse-content')).not.toBeInTheDocument();
 });
 
 it('collapsed shows only the Focus area, with no control over it', () => {
+  /* eslint-disable react/no-children-prop -- The component test passes children explicitly as part of the tested props contract. */
   render(createElement(BrowseDock, { ...baseProps, narrow: false, collapsed: true, narrowView: 'browse', browse: createElement('div', null, 'browse-content'), children: createElement('div', null, 'focus-content') }));
+  /* eslint-enable react/no-children-prop */
   expect(screen.getByText('focus-content')).toBeInTheDocument();
   expect(screen.queryByText('browse-content')).not.toBeInTheDocument();
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });
 
 it('renders both regions, with no control over them, when docked and expanded', () => {
+  /* eslint-disable react/no-children-prop -- The component test passes children explicitly as part of the tested props contract. */
   render(createElement(BrowseDock, { ...baseProps, narrow: false, collapsed: false, narrowView: 'browse', browse: createElement('div', null, 'browse-content'), children: createElement('div', null, 'focus-content') }));
+  /* eslint-enable react/no-children-prop */
   expect(screen.getByText('browse-content')).toBeInTheDocument();
   expect(screen.getByText('focus-content')).toBeInTheDocument();
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
@@ -59,6 +67,8 @@ it('toggle collapses an expanded dock and reopens a collapsed one', () => {
 
 it('passes the measured panel height to a function browse prop', () => {
   const browse = vi.fn((height: number) => createElement('div', null, `h:${height}`));
+  /* eslint-disable react/no-children-prop -- The component test passes children explicitly as part of the tested props contract. */
   render(createElement(BrowseDock, { ...baseProps, narrow: false, collapsed: false, narrowView: 'browse', browse, children: createElement('div', null, 'focus-content') }));
+  /* eslint-enable react/no-children-prop */
   expect(browse).toHaveBeenCalledWith(expect.any(Number));
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changeDivision, closeTab, displayPanes, findFocusTab, findFocusTabInPane, FOCUS_DIVISIONS, FOCUS_MAX_TABS, FocusError, FocusLayoutSchema, FocusPageSchema, focusPaneCount, FocusSchema, focusTabCount, focusTabKey, foreignFocusTab, moveTab, nameFocus, notebookFocuses, ownFocusPage, placeTab, placeTabs, pruneFocus, relocateFocusPaths, removeFocus, renameFocus, updateFocus } from '../src/focus-page.js';
+import { changeDivision, closeTab, displayPanes, findFocusTab, findFocusTabInPane, FOCUS_DIVISIONS, FOCUS_MAX_TABS, FocusError, FocusLayoutSchema, FocusPageSchema, FocusSchema, focusTabCount, focusTabKey, foreignFocusTab, moveTab, nameFocus, notebookFocuses, ownFocusPage, placeTab, placeTabs, pruneFocus, relocateFocusPaths, removeFocus, renameFocus, updateFocus } from '../src/focus-page.js';
 
 const note = (path: string) => ({ kind: 'note' as const, path });
 const lane = (id: string) => ({ kind: 'lane' as const, id });

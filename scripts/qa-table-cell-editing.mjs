@@ -43,7 +43,7 @@ page.on('pageerror', e => {
   console.error('PAGE ERROR', e.message);
 });
 page.setDefaultTimeout(8000);
-const click = async text => {
+const _click = async text => {
   const ok = await page.evaluate(text => {
     const b = Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === text);
     b?.click();

@@ -25,8 +25,12 @@ export function AssetLibrary({ assets, initialAssetPath, initialDirectory, onUpl
   const [directory, setDirectory] = useState('');
   useEffect(() => {
     if (initialDirectory !== undefined) {
+      /* eslint-disable react/set-state-in-effect -- Selection and initial directory transitions reset the asset dialog state. */
       setDirectory(initialDirectory);
+      /* eslint-enable react/set-state-in-effect */
+      /* eslint-disable react/immutability -- The deferred effect or imperative callback runs after local initialization has completed. */
       setSelectedPath('');
+      /* eslint-enable react/immutability */
     }
   }, [initialDirectory]);
   const [selectedPath, setSelectedPath] = useState('');
@@ -45,7 +49,9 @@ export function AssetLibrary({ assets, initialAssetPath, initialDirectory, onUpl
     if (!initialAssetPath) return;
     const asset = assets.find(item => item.path === initialAssetPath);
     if (asset) {
+      /* eslint-disable react/set-state-in-effect -- Selection and initial directory transitions reset the asset dialog state. */
       setDirectory(asset.directory || '');
+      /* eslint-enable react/set-state-in-effect */
       setSelectedPath(asset.path);
     }
   }, [initialAssetPath, assets]);
@@ -57,10 +63,14 @@ export function AssetLibrary({ assets, initialAssetPath, initialDirectory, onUpl
     })),
   ].sort();
   const visible = assets.filter(a => (a.directory || '') === directory);
+  /* eslint-disable react-hooks/exhaustive-deps -- Changing the selected asset initializes the move destination; later edits retain the user choice. */
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Selection and initial directory transitions reset the asset dialog state. */
     setConfirmDelete(false);
+    /* eslint-enable react/set-state-in-effect */
     setDestination(selected?.directory || '');
   }, [selectedPath]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!confirmDelete) return;
     const timer = setTimeout(() => setConfirmDelete(false), 4000);

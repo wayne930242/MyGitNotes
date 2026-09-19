@@ -11,6 +11,7 @@ export function useGraphMinimap({ graphRef: fgRef, graphData, dimensions, isDark
   const minimapTransform = useRef({ x: 0, y: 0, scale: 1 });
   const minimapViewport = useRef<{ x: number; y: number; w: number; h: number; } | null>(null);
   const minimapGesture = useRef<{ pointerId: number; startX: number; startY: number; inside: boolean; moved: boolean; centerX: number; centerY: number; scale: number; offsetX: number; offsetY: number; } | null>(null);
+  /* eslint-disable react-hooks/exhaustive-deps -- Theme changes invalidate canvas painting even when the chosen CSS colors are read indirectly. */
   const paintMinimap = useCallback(() => {
     const canvas = minimapRef.current;
     const ctx = canvas?.getContext('2d');
@@ -67,6 +68,7 @@ export function useGraphMinimap({ graphRef: fgRef, graphData, dimensions, isDark
     ctx.fillRect(vx, vy, vw, vh);
     ctx.strokeRect(vx, vy, vw, vh);
   }, [fgRef, graphData, dimensions, isDark, nodeColor]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const minimap = (
     <button

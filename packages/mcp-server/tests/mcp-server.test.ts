@@ -4,10 +4,9 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { runGit, stageAndCommit } from '@mygitnotes/git';
 import { WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
-import { handleAddAsset, handleDeleteAsset, handleGetFolderMetadata, handleGetNoteMetadata, handleGetStatuses, handleGetWorkspaceConfig, handleListAssets, handleListFolders, handleListNotes, handleMkdir, handleReadAgentResource, handleReadNote, handleReplaceNotes, handleSaveNote, handleSearchNotes, handleUpdateCore, handleUpdateFolderMetadata, handleUpdateNoteMetadata } from '../src/tools.js';
+import { handleAddAsset, handleDeleteAsset, handleGetFolderMetadata, handleGetNoteMetadata, handleGetStatuses, handleGetWorkspaceConfig, handleListFolders, handleMkdir, handleReadAgentResource, handleReadNote, handleReplaceNotes, handleSaveNote, handleSearchNotes, handleUpdateCore, handleUpdateFolderMetadata, handleUpdateNoteMetadata } from '../src/tools.js';
 import { localTools } from '../src/local-tools.js';
 import { createMCPServer } from '../src/server.js';
-import { assertUserWorkspaceBranch } from '../src/guards.js';
 
 describe('MCP Server Safe Tools & Boundaries', () => {
   let testRepo: string;

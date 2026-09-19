@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractFirstH1, parseNoteContent, serializeNoteContent } from '../src/frontmatter.js';
+import { parseNoteContent, serializeNoteContent } from '../src/frontmatter.js';
 
 describe('Frontmatter Parser & Serializer', () => {
   it('parses markdown with full YAML frontmatter', () => {

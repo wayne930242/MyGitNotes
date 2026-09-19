@@ -50,12 +50,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
   const [expandedNotebooks, setExpandedNotebooks] = useState<Set<string>>(() => new Set(selectedNotebookId ? [selectedNotebookId] : []));
   useEffect(() => {
     if (selectedNotebookId) {
+      /* eslint-disable react/set-state-in-effect -- Notebook and filter navigation expand matching branches and reset the tag query. */
       setExpandedNotebooks(previous => new Set([...previous, selectedNotebookId]));
+      /* eslint-enable react/set-state-in-effect */
     }
   }, [selectedNotebookId]);
   useEffect(() => {
     const selected = filters.notebooks.filter(nb => value.folders.some(path => path.startsWith(nb.root.replace(/\/$/, '') + '/')));
+    /* eslint-disable react/set-state-in-effect -- Notebook and filter navigation expand matching branches and reset the tag query. */
     if (selected.length) setExpandedNotebooks(previous => new Set([...previous, ...selected.map(nb => nb.id)]));
+    /* eslint-enable react/set-state-in-effect */
   }, [value.folders, filters.notebooks]);
   const [folderExpandCommand, setFolderExpandCommand] = useState<{ expanded: boolean; }>();
   // Collapse all folds every folder but keeps notebooks open, so their first-level folders stay visible.
@@ -104,7 +108,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
   const [tagQuery, setTagQuery] = useState('');
   const [tagSort, setTagSort] = useState<TagSort>(getSavedTagSort);
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Notebook and filter navigation expand matching branches and reset the tag query. */
     setTagQuery('');
+    /* eslint-enable react/set-state-in-effect */
   }, [selectedNotebookId]);
 
   const notebookFacets = mergeNotebookFacets(queryNotebookIds(filters.notebooks, value.notebookId, value.folders).flatMap(id => facets?.[id] || []));

@@ -65,9 +65,12 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     };
   }, [remote]);
   const fileKey = changes.map(file => `${file.path}:${file.revision}:${file.staged}:${file.unstaged}`).join('|');
+  /* eslint-disable react-hooks/exhaustive-deps -- File-list and selection keys trigger initialization; selection edits must not reapply the initial request. */
   useEffect(() => {
     if (!changes.length) {
+      /* eslint-disable react/set-state-in-effect -- Change-list and preview transitions initialize dialog selections and loading state. */
       setActive(undefined);
+      /* eslint-enable react/set-state-in-effect */
       return;
     }
     if (!selected || !selectionMode && (active?.side === 'staged' && !selected.staged || active?.side === 'working' && !selected.unstaged)) {
@@ -75,15 +78,23 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
       setActive({ path: file.path, side: selectionMode || file.unstaged ? 'working' : 'staged' });
     }
   }, [fileKey]);
+  /* eslint-enable react-hooks/exhaustive-deps */
+  /* eslint-disable react-hooks/exhaustive-deps -- File-list and selection keys trigger initialization; selection edits must not reapply the initial request. */
   useEffect(() => {
     if (loading || requestApplied.current) return;
     requestApplied.current = true;
+    /* eslint-disable react/set-state-in-effect -- Change-list and preview transitions initialize dialog selections and loading state. */
     if (request?.action === 'restore') setRestoreFiles(changes.filter(file => request.paths.includes(file.path) && file.available));
+    /* eslint-enable react/set-state-in-effect */
   }, [loading, fileKey]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   const remoteDiff = active && getPreview ? getPreview(active.path) : undefined;
+  /* eslint-disable react-hooks/exhaustive-deps -- File-list and selection keys trigger initialization; selection edits must not reapply the initial request. */
   useEffect(() => {
     let cancelled = false;
+    /* eslint-disable react/set-state-in-effect -- Change-list and preview transitions initialize dialog selections and loading state. */
     setDiff('');
+    /* eslint-enable react/set-state-in-effect */
     setDiffLoading(false);
     setDiffError('');
     if (!active || !selected?.available) return;
@@ -103,6 +114,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
       cancelled = true;
     };
   }, [active?.path, active?.side, selected?.revision, selected?.available, remoteDiff, selectionMode]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const act = async (file: FileChange, action: 'stage' | 'unstage' | 'restore', confirmed = false) => {
     if (busy || !writable || !file.available) return;

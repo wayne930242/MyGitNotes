@@ -1,7 +1,5 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import path from 'node:path';
-import fs from 'node:fs';
 import { GitCommitItem, GitStatusResult } from './types.js';
 
 const execFileAsync = promisify(execFile);

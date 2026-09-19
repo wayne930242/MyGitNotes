@@ -19,7 +19,9 @@ export function parseSourceConfig(raw: unknown, base: string): SourceConfig {
   const source = (raw as { source?: Record<string, unknown>; })?.source;
   if (source?.type === 'local' && typeof source.path === 'string' && source.path.trim()) return { type: 'local', path: path.resolve(base, source.path) };
   const branch = source?.branch;
+  /* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
   const validBranch = typeof branch === 'string' && branch.trim() && !/[\x00-\x20~^:?*[\\]/.test(branch) && !branch.includes('..') && !branch.startsWith('-') && !branch.endsWith('/') && !branch.endsWith('.') && !branch.endsWith('.lock') && !branch.includes('//') && !branch.includes('@{');
+  /* eslint-enable no-control-regex */
   if (validBranch && typeof source?.repository === 'string') {
     if (source.type === 'github' && /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_.-]+$/.test(source.repository) && !/\/\.{1,2}$/.test(source.repository)) {
       return { type: 'github', repository: source.repository, branch };

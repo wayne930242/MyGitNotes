@@ -68,12 +68,16 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const pendingDocuments = remote && canWrite ? documents.filter((document) => document.dirty) : [];
   const activeWorkingNotes = useMemo(() => (remote && canWrite ? workingNotes : {}), [remote, canWrite, workingNotes]);
 
+  /* eslint-disable react/use-memo -- The joined pending-document paths intentionally form a stable primitive projection key. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Pending document paths are the status projection key; initial refresh runs once for this workspace instance. */
   const gitStatus = useMemo<GitStatus | null>(() => {
     if (remote) {
       return { branch, isClean: !pendingDocuments.length && Object.keys(activeWorkingNotes).length === 0, staged: [], modified: [...Object.values(activeWorkingNotes).filter((entry) => entry.base).map((entry) => entry.note.path), ...pendingDocuments.map((document) => document.file)], untracked: Object.values(activeWorkingNotes).filter((entry) => !entry.base).map((entry) => entry.note.path) };
     }
     return serverGitStatus;
   }, [remote, branch, workingNotes, canWrite, serverGitStatus, pendingDocuments.map((document) => document.file).join('\n'), activeWorkingNotes]);
+  /* eslint-enable react-hooks/exhaustive-deps */
+  /* eslint-enable react/use-memo */
 
   useEffect(() => {
     const refresh = (event: StorageEvent) => {
@@ -127,12 +131,16 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     }
   };
 
+  /* eslint-disable react-hooks/exhaustive-deps -- Cleanup intentionally reads the latest cancellation or resource ref, including work started after mounting. */
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Refresh remote workspace state when this workspace hook mounts. */
     void refreshWorkspace();
+    /* eslint-enable react/set-state-in-effect */
     return () => {
       refreshRequest.current++;
     };
   }, []);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   useEffect(() => {
     if (!sourceId || !config) return;

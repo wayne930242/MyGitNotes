@@ -11,7 +11,9 @@ export function useGraphRelaxation(data: GraphData, focusId: string | undefined,
   const source = useRef(data);
   const baseline = useRef<GraphData | null>(null);
   const readZoom = useRef(zoom);
+  /* eslint-disable react/refs -- Keep the current callback in a ref for an imperative listener without recreating its subscription. */
   readZoom.current = zoom;
+  /* eslint-enable react/refs */
 
   useLayoutEffect(() => {
     if (source.current !== data) {

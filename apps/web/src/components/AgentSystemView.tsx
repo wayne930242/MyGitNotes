@@ -38,7 +38,9 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
   const current = useRef({ path: selectedPath, content });
+  /* eslint-disable react/refs -- Keep the current callback in a ref for an imperative listener without recreating its subscription. */
   current.current = { path: selectedPath, content };
+  /* eslint-enable react/refs */
   const pendingSaves = useRef(0);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const hasUnsavedChanges = loadedPath === selectedPath && content !== savedContent;
@@ -84,9 +86,12 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     void load();
   }, []);
 
+  /* eslint-disable react-hooks/exhaustive-deps -- The explicit document, draft and notebook keys drive this transition; recreating local helpers must not restart it. */
   useEffect(() => {
     if (!selectedPath) {
+      /* eslint-disable react/set-state-in-effect -- Document and notebook transitions initialize the resource editor and select an available resource. */
       setContent('');
+      /* eslint-enable react/set-state-in-effect */
       setSavedContent('');
       setLoadedPath('');
       return;
@@ -114,6 +119,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
       cancelled = true;
     };
   }, [selectedPath]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const saveDocument = async (file: string, snapshot: string) => {
     pendingSaves.current++;
@@ -133,6 +139,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     }
   };
 
+  /* eslint-disable react-hooks/exhaustive-deps -- The explicit document, draft and notebook keys drive this transition; recreating local helpers must not restart it. */
   useEffect(() => {
     if (locked || !hasUnsavedChanges) return;
     saveTimer.current = setTimeout(() => {
@@ -140,6 +147,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     }, 750);
     return () => clearTimeout(saveTimer.current);
   }, [content, hasUnsavedChanges, selectedPath, locked]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const selectDocument = async (file: string) => {
     if (switching || restoring) return false;
@@ -224,7 +232,9 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
       return false;
     }
   };
+  /* eslint-disable react-hooks/exhaustive-deps -- The explicit document, draft and notebook keys drive this transition; recreating local helpers must not restart it. */
   useEffect(() => registerBeforeNavigate(prepareLeave), [registerBeforeNavigate, switching, restoring, loading, hasUnsavedChanges, editable, selectedPath, content]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const groups = groupAgentResources(instructions, notebooks, selectedNotebookId);
   const visibleResources = [...groups.skills, ...groups.shared, ...groups.notebook, ...groups.product];
@@ -270,11 +280,15 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
   }, [navigationBusy, onBusyChange]);
 
   // Browser history can also change the notebook without remounting the editor.
+  /* eslint-disable react-hooks/exhaustive-deps -- The explicit document, draft and notebook keys drive this transition; recreating local helpers must not restart it. */
   useEffect(() => {
     if (!instructions.length || visibleResources.some(resource => resource.path === selectedPath)) return;
     const fallback = groups.notebook[0] || groups.skills[0] || groups.shared[0] || groups.product[0];
+    /* eslint-disable react/set-state-in-effect -- Document and notebook transitions initialize the resource editor and select an available resource. */
     void selectDocument(fallback?.path || '');
+    /* eslint-enable react/set-state-in-effect */
   }, [selectedNotebookId, instructions]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   return (
     <div className='agent-layout workspace-route has-sidebar-drawer' style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>

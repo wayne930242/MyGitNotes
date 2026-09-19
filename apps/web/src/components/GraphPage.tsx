@@ -51,13 +51,17 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
   const [saveLayoutRequested, setSaveLayoutRequested] = useState(false);
   const [closing, setClosing] = useState<Set<string>>(() => new Set());
   const closeTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  /* eslint-disable react-hooks/exhaustive-deps -- Cleanup intentionally reads the latest cancellation or resource ref, including work started after mounting. */
   useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Lane transitions reset canvas state and layout saves consume an explicit pending request. */
     setClosing(new Set());
+    /* eslint-enable react/set-state-in-effect */
     return () => {
       closeTimers.current.forEach(clearTimeout);
       closeTimers.current.clear();
     };
   }, [laneKey]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>();
   const container = useRef<HTMLDivElement>(null), controls = useRef<HTMLDivElement>(null);
   const fg = useRef<any>();
@@ -80,9 +84,14 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
   const graphNotebook = filters?.value.notebookId;
   const laneRows = graphNotebook && graphNotebook !== 'all' ? rows.filter(row => row.notebookId === graphNotebook) : rows;
   const latest = useRef({ screen, layout });
+  /* eslint-disable react/refs -- The force-graph adapter keeps imperative graph state and current layout in refs for canvas callbacks. */
   latest.current = { screen, layout };
+  /* eslint-enable react/refs */
+  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
   useLayoutEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Lane transitions reset canvas state and layout saves consume an explicit pending request. */
     setLayout(activeLane?.graph || { nodes: [] });
+    /* eslint-enable react/set-state-in-effect */
     setSelected([]);
     setOnly(null);
     setMaximized(null);
@@ -90,6 +99,7 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
     fitted.current = false;
     interacted.current = false;
   }, [laneKey]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   useLayoutEffect(() => {
     if (activeLane?.graph && JSON.stringify(activeLane.graph) !== JSON.stringify(latest.current.layout)) setLayout(activeLane.graph);
   }, [activeLane?.graph]);
@@ -113,12 +123,14 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
     return () => observer.disconnect();
   }, [lane]);
   // A lane belongs to one notebook, so the graph showing it follows that notebook.
+  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
   useEffect(() => {
     if (lane || !activeLane || !filters || graphNotebook === activeLane.notebookId) return;
     const next = new URLSearchParams(params);
     next.set('notebook', activeLane.notebookId);
     setParams(next, { replace: true });
   }, [lane, activeLane?.notebookId, graphNotebook]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   // Expanded cards host the notes' editors; their sessions drive the pending edges and link insertion.
   const editing = useNoteEditing();
   const [sessions, setSessions] = useState(() => new Map<string, NoteEditorSession>());
@@ -145,10 +157,14 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
   // path queries, and unsaved drafts are laid over the answer.
   const graphSource = useNoteGraph();
   const scopeNotebook = activeLane?.notebookId || filters?.value.notebookId || 'all';
+  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
   const filterQuery = useMemo<Partial<NoteQuery>>(() => (filters ? { notebookId: scopeNotebook, folders: filters.value.folders, descendants: filters.value.descendants, tags: filters.value.tags, tagMode: filters.value.tagMode, status: filters.value.status, showHidden: filters.value.showHidden, q: filters.value.q } : { notebookId: scopeNotebook, showHidden: false }), [filters?.value, scopeNotebook]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   const matchingPaths = useNotePaths(filterQuery);
   const visiblePaths = useNotePaths(filters?.value.showHidden ? null : { notebookId: scopeNotebook, showHidden: false });
+  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
   const shownLanes = useMemo(() => [...rows.filter(row => laneIds.includes(row.id)), ...(lane ? [lane] : [])], [rows, laneKey, lane]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   const lanePaths = useLanePaths(shownLanes);
   const editingDrafts = useMemo(() =>
     [...sessions].flatMap(([path, session]) => {
@@ -156,6 +172,7 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
       return session.dirty && node ? [{ path, notebookId: node.notebookId, title: session.title || node.title, status: node.status, tags: node.tags, content: session.content }] : [];
     }), [sessions, graphSource.graph]);
   const graph = useMemo(() => (graphSource.graph ? overlayGraphDrafts(graphSource.graph, editingDrafts) : { nodes: [], links: [] }), [graphSource.graph, editingDrafts]);
+  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
   const matching = useMemo(() => {
     let matches = matchingPaths.paths;
     if (laneIds.length && !showOutside) {
@@ -165,8 +182,13 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
     if (only) matches = matches.filter(path => only.includes(path));
     return matches;
   }, [matchingPaths.paths, laneKey, shownLanes, only, showOutside, lanePaths.paths]);
+  /* eslint-enable react-hooks/exhaustive-deps */
+  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
   const laneMembers = useMemo(() => new Set(rows.filter(row => laneIds.includes(row.id)).flatMap(row => lanePaths.paths.get(row.id) || [])), [rows, laneKey, lanePaths.paths]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   const expanded = useMemo(() => new Set(layout.nodes.filter(node => node.expanded).map(node => node.path)), [layout]);
+  /* eslint-disable react/refs -- The force-graph adapter keeps imperative graph state and current layout in refs for canvas callbacks. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
   const graphData = useMemo(() => {
     const eligible = new Set(filters?.value.showHidden ? graph.nodes.map(node => node.id) : visiblePaths.paths);
     const nodes = graph.nodes.filter(node => eligible.has(node.id) && (!activeLane || node.notebookId === activeLane.notebookId));
@@ -188,6 +210,8 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
       }),
     };
   }, [graph, matching, visiblePaths.paths, layout, showOrphans, filters?.neighbors, filters?.value.showHidden, activeLane?.notebookId]);
+  /* eslint-enable react-hooks/exhaustive-deps */
+  /* eslint-enable react/refs */
   const colors = useMemo(() => graphColorGroups(graphData.nodes, notebooks, appearance), [graphData, notebooks, appearance]);
   const nodeColor = useCallback((node: NoteGraphNode) => themeColor(colors.find(group => group.key === graphColorGroup(node, notebooks, appearance.mode).key)?.color || 'var(--color-muted)'), [colors, notebooks, appearance]);
   const changeAppearance = (value: GraphAppearance) => {
@@ -210,15 +234,21 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
     const controller = latest.current.screen;
     if (activeLane && controller?.writable) controller.change({ ...controller.page, rows: controller.page.rows.map(row => row.id === activeLane.id ? { ...row, graph: next } : row) });
   };
+  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
   useEffect(() => {
     if (!saveLayoutRequested || !screen || screen.saving) return;
+    /* eslint-disable react/set-state-in-effect -- Lane transitions reset canvas state and layout saves consume an explicit pending request. */
     setSaveLayoutRequested(false);
+    /* eslint-enable react/set-state-in-effect */
     void screen.save();
   }, [saveLayoutRequested, screen?.saving, screen?.page, screen?.save]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   const freeze = () => {
     interacted.current = true;
     for (const node of graphData.nodes as Node[]) {
+      /* eslint-disable react/immutability -- Force-graph owns mutable simulation nodes; pinning writes its documented fx/fy coordinates. */
       node.fx = node.x;
+      /* eslint-enable react/immutability */
       node.fy = node.y;
     }
   };
@@ -298,6 +328,7 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
     setLaneGeometry({ nodes: currentLayout().nodes.filter(node => visible.has(node.path)).map(node => ({ ...node, expanded: node.expanded || closing.has(node.path) })) });
   };
   const laneViewport = graphLaneViewport(laneGeometry, size.width);
+  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
   useEffect(() => {
     if (!lane || cardDragging) return;
     // Wait for pointer movement to settle; resizing the canvas during a drag
@@ -305,6 +336,8 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
     const timer = setTimeout(captureLaneGeometry, 200);
     return () => clearTimeout(timer);
   }, [lane, layout, closing, graphData, cardDragging]);
+  /* eslint-enable react-hooks/exhaustive-deps */
+  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
   useEffect(() => {
     if (!lane || !fg.current) return;
     const timer = setTimeout(() => {
@@ -314,6 +347,7 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
     }, 30);
     return () => clearTimeout(timer);
   }, [laneViewport.height, laneViewport.x, laneViewport.y, laneViewport.zoom, size.width, size.height, Boolean(lane)]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   const { paintMinimap, minimap } = useGraphMinimap({
     graphRef: fg,
     graphData,
@@ -326,6 +360,7 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
       interacted.current = true;
     },
   });
+  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
   useEffect(() => {
     if (!graphData.nodes.length || fitted.current || interacted.current) return;
     const timer = setTimeout(() => {
@@ -336,6 +371,7 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
     }, 100);
     return () => clearTimeout(timer);
   }, [graphData.nodes.length, size.width, size.height, laneKey]);
+  /* eslint-enable react-hooks/exhaustive-deps */
   const frameSignature = useRef('');
   const frame = () => {
     paintMinimap();
@@ -512,6 +548,7 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
     )
     : null;
 
+  /* eslint-disable react/refs -- The force-graph adapter keeps imperative graph state and current layout in refs for canvas callbacks. */
   return (
     <div
       ref={container}
@@ -632,7 +669,8 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
                   checked={showOutside}
                   onChange={event => {
                     const next = new URLSearchParams(params);
-                    event.target.checked ? next.set('laneScope', 'all') : next.delete('laneScope');
+                    if (event.target.checked) next.set('laneScope', 'all');
+                    else next.delete('laneScope');
                     setParams(next);
                   }}
                 />
@@ -880,4 +918,5 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
       )}
     </div>
   );
+  /* eslint-enable react/refs */
 }
