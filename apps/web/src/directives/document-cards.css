@@ -1,0 +1,52 @@
+/* ===== 3. Document cards ===== */
+.prose-custom .handout-block { --document-surface: var(--color-surface); --document-ink: var(--color-text); --document-muted: var(--color-muted); --document-accent: var(--color-primary); margin: 2rem 0; display: block; }
+
+.prose-custom .handout-keeper-note { margin-bottom: 0.75rem; display: grid; grid-template-columns: minmax(7rem, auto) 1fr; gap: 0.5rem; border: 1px dashed var(--color-border); border-radius: 6px; background: var(--color-surface); padding: 0.75rem 1rem; }
+
+.prose-custom .handout-keeper-kicker { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.68rem; line-height: 1.5; font-weight: 600; letter-spacing: 0.14em; color: var(--color-primary); }
+
+.prose-custom .handout-keeper-text { margin: 0; font-size: 0.85rem; line-height: 1.5; color: var(--color-muted); }
+
+.prose-custom .handout-reference { margin-bottom: 0.6rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; color: var(--document-muted); }
+
+.prose-custom .handout-code, .prose-custom .handout-variant-label { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.72rem; line-height: 1; font-weight: 600; letter-spacing: 0.14em; }
+
+.prose-custom .handout-code { color: var(--document-accent); }
+
+.prose-custom .handout-document { color: var(--document-ink); background: var(--document-surface); border: 1px solid var(--color-border); border-radius: 8px; box-shadow: 0 2px 10px color-mix(in srgb, var(--color-text) 8%, transparent); }
+
+.prose-custom .handout-document-header { padding: 1.5rem 1.75rem 1rem; border-bottom: 1px solid var(--color-border); }
+
+.prose-custom .handout-title { margin: 0; font-size: 1.5rem; line-height: 1.25; font-weight: 750; color: var(--document-ink); }
+
+.prose-custom .handout-body { padding: 0.85rem 1.1rem; color: var(--document-ink); }
+
+.prose-custom .handout-body > *:first-child { margin-top: 0; }
+
+.prose-custom .handout-body > *:last-child { margin-bottom: 0; }
+
+.prose-custom .handout-body p { color: var(--document-ink); }
+
+/* Handout variant cues */
+.prose-custom .handout-variant-report .handout-document { border-top: 3px solid var(--document-accent); }
+
+.prose-custom .handout-variant-newspaper .handout-document { border: 2px solid color-mix(in srgb, var(--document-ink) 32%, var(--color-border)); }
+
+.prose-custom .handout-variant-newspaper .handout-title { text-transform: uppercase; letter-spacing: 0.05em; }
+
+.prose-custom .handout-variant-letter .handout-document { border-radius: 2px; background: color-mix(in srgb, var(--document-surface) 96%, var(--document-accent)); }
+
+.prose-custom .handout-variant-letter .handout-body > p + p { text-indent: 2em; }
+
+.prose-custom .handout-variant-journal .handout-document {
+  background:
+    repeating-linear-gradient(0deg, transparent 0, transparent 1.75rem, color-mix(in srgb, var(--document-muted) 15%, transparent) 1.75rem, color-mix(in srgb, var(--document-muted) 15%, transparent) calc(1.75rem + 1px)),
+    var(--document-surface);
+}
+
+.prose-custom .handout-variant-note .handout-document { border-style: dashed; max-width: 38rem; margin-inline: auto; }
+
+.prose-custom .handout-variant-scripture .handout-document { border: 4px double color-mix(in srgb, var(--document-ink) 38%, var(--color-border)); }
+
+.prose-custom .handout-variant-scripture .handout-document-header { text-align: center; }
+

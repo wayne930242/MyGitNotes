@@ -9,7 +9,16 @@ import { PanelProvider } from './lib/panel-context.js';
 import './index.css';
 import './workspace.css';
 import './ui-buttons.css';
-import './directives.css';
+import './directives/general-containers.css';
+import './directives/character-stat-blocks.css';
+import './directives/document-cards.css';
+import './directives/parallel-quotes.css';
+import './directives/embedded-cards.css';
+import './directives/presentation.css';
+import './directives/inline.css';
+import './directives/mdx-components.css';
+import './directives/live-editor-toolbar.css';
+import './directives/mobile-adaptations.css';
 
 // Note answers are addressed by workspace revision, so they never go stale on their own; a
 // failed query surfaces its error instead of retrying behind the user's back.

@@ -1,0 +1,73 @@
+/* ===== 9. Live Editor Directive Toolbar & Inline Editing ===== */
+.live-md-directive { position: relative; display: block; width: 100%; margin: 0.35rem 0; }
+
+/* CodeMirror uses break-spaces for source text. Rendered HTML needs normal whitespace,
+   otherwise newlines between list-item tags become visible blank lines. */
+.live-md-directive .live-directive-preview-content { white-space: normal; }
+
+/* 消除 live editor preview 內 renderNote 輸出的容器自帶 margin/padding，
+   避免 .live-md-directive margin 和內部容器 margin 疊加 */
+.live-md-directive .live-directive-preview-content > .custom-directive, .live-md-directive .live-directive-preview-content > .comment-directive, .live-md-directive .live-directive-preview-content > .handout-block, .live-md-directive .live-directive-preview-content > .coc-stat-block, .live-md-directive .live-directive-preview-content > .embedded-card { margin: 0; }
+
+.live-md-directive.live-directive-editing { outline: 2px solid var(--color-primary); outline-offset: 3px; border-radius: 9px; }
+
+/* Toolbar */
+.live-directive-toolbar { position: absolute; top: -14px; right: 14px; display: flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--color-text) 18%, var(--color-border)); border-radius: 6px; background: var(--color-surface); box-shadow: 0 3px 10px color-mix(in srgb, var(--color-scrim) 8%, transparent); opacity: 0; pointer-events: none; transition: opacity 120ms ease, top 120ms ease; z-index: 20; }
+
+.live-md-directive:hover .live-directive-toolbar, .live-md-directive:focus-within .live-directive-toolbar { opacity: 1; pointer-events: auto; top: -18px; }
+
+.live-directive-toolbar select, .live-directive-toolbar input, .live-directive-toolbar button { height: 26px; padding: 2px 8px; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 4px; font-size: 11px; outline: none; transition: all 120ms ease; }
+
+.live-directive-toolbar select { cursor: pointer; color-scheme: light; }
+
+.dark .live-directive-toolbar select { color-scheme: dark; }
+
+.live-directive-toolbar input.live-directive-title-input { width: 130px; font-weight: 500; }
+
+.live-directive-toolbar input.live-directive-title-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 1px var(--color-primary); width: 170px; }
+
+.live-directive-toolbar button.live-directive-edit-btn { background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface)); color: var(--color-primary); border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border)); font-weight: 600; cursor: pointer; padding: 2px 10px; }
+
+.live-directive-toolbar button.live-directive-edit-btn:hover { background: var(--color-primary); color: var(--color-on-primary); }
+
+.live-directive-toolbar select:hover, .live-directive-toolbar input:hover { border-color: var(--color-muted); }
+
+/* Inline Edit Form Panel */
+.live-directive-editor-panel { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 2px solid var(--color-primary); border-radius: 8px; background: var(--color-surface); box-shadow: 0 6px 20px color-mix(in srgb, var(--color-scrim) 10%, transparent); box-sizing: border-box; width: 100%; }
+
+.live-directive-editor-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border); padding-bottom: 8px; }
+
+.live-directive-editor-badge { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-primary); }
+
+.live-directive-form-row { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.live-directive-form-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
+
+.live-directive-form-field label { font-size: 11px; font-weight: 600; color: var(--color-muted); user-select: none; }
+
+.live-directive-form-field input, .live-directive-form-field select { height: 30px; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 5px; background: var(--color-surface); color: var(--color-text); font-size: 12px; outline: none; }
+
+.live-directive-form-field input:focus, .live-directive-form-field select:focus { border-color: var(--color-primary); box-shadow: 0 0 0 1px var(--color-primary); }
+
+.live-directive-body-label { font-size: 11px; font-weight: 600; color: var(--color-muted); user-select: none; }
+
+.live-directive-body-editor { width: 100%; min-height: 110px; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text); font-family: inherit; font-size: 13px; line-height: 1.6; resize: vertical; box-sizing: border-box; outline: none; }
+
+.live-directive-body-editor:focus { border-color: var(--color-primary); box-shadow: 0 0 0 1px var(--color-primary); }
+
+.live-directive-editor-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--color-border); }
+
+.live-directive-editor-hint { font-size: 11px; color: var(--color-muted); }
+
+.live-directive-editor-actions { display: flex; gap: 8px; }
+
+.live-directive-editor-actions button { height: 28px; padding: 0 12px; border-radius: 5px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 120ms ease; }
+
+.live-directive-btn-save { background: var(--color-primary); color: var(--color-on-primary); border: 1px solid var(--color-primary); }
+
+.live-directive-btn-save:hover { background: var(--color-primary-hover); color: var(--color-on-primary-hover); }
+
+.live-directive-btn-cancel { background: transparent; color: var(--color-muted); border: 1px solid var(--color-border); }
+
+.live-directive-btn-cancel:hover { background: color-mix(in srgb, var(--color-text) 6%, var(--color-surface)); color: var(--color-text); }
+

@@ -1,0 +1,75 @@
+/* ==========================================================================
+   MyGitNotes Directives & MDX Styling
+   Standard editorial directives, character sheets, player handouts,
+   bilingual quotes, source cards, and presentation grids.
+   Designed to seamlessly adapt to all themes and light/dark modes.
+   ========================================================================== */
+
+/* ===== 1. General Directive Containers ===== */
+.prose-custom .custom-directive, .prose-custom .comment-directive { margin: 0.6rem 0; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--color-text) 14%, var(--color-border)); padding: 0.65rem 0.95rem; box-sizing: border-box; width: 100%; box-shadow: 0 1px 2px color-mix(in srgb, var(--color-scrim) 3%, transparent); transition: border-color 150ms ease, box-shadow 150ms ease; background: color-mix(in srgb, var(--color-text) 2.5%, var(--color-surface)); }
+
+.prose-custom .custom-directive > .directive-body, .prose-custom .comment-directive > .directive-body { padding-top: 0.4rem; font-size: 0.935rem; line-height: 1.6; }
+
+/* 消除前後多餘留白：首尾子元素外距清零 */
+.prose-custom .custom-directive > :first-child:not(.directive-title):not(.comment-title), .prose-custom .directive-body > :first-child { margin-top: 0 !important; }
+
+.prose-custom .custom-directive > :last-child, .prose-custom .directive-body > :last-child { margin-bottom: 0 !important; }
+
+/* 內文段落與清單 Typography 校準。所有 directive renderer 都掛上同一個內容 class，
+   新增 directive 類型時不需要擴充領域專用 selector。 */
+.prose-custom .directive-content p { margin-top: 0.25rem; margin-bottom: 0.3rem !important; line-height: 1.55; }
+
+.prose-custom .directive-content ul, .prose-custom .directive-content ol { margin-top: 0.2rem; margin-bottom: 0.25rem !important; padding-left: 1.35rem; }
+
+.prose-custom .directive-content li { margin-top: 0.05rem; margin-bottom: 0.1rem !important; line-height: 1.5; }
+
+.prose-custom .directive-content li > p { margin: 0 !important; display: inline; }
+
+.prose-custom .directive-content hr { margin: 0.65rem 0; border-color: color-mix(in srgb, var(--color-text) 12%, var(--color-border)); }
+
+.prose-custom .directive-content blockquote { margin: 0.35rem 0 !important; padding: 0.25rem 0.65rem; border-left: 2px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border)) !important; background: color-mix(in srgb, var(--color-text) 2.5%, transparent) !important; border-radius: 0 4px 4px 0; font-style: normal; }
+
+.prose-custom :is(.directive-title, .comment-title, .optional-summary) { margin: 0; color: var(--color-text); font-weight: 700; }
+
+.prose-custom :is(.directive-title, .comment-title, .optional-summary).directive-title-default { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.72rem; line-height: 1; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-muted); }
+
+.prose-custom :is(.directive-title, .comment-title, .optional-summary).directive-title-custom { font-size: 0.975rem; line-height: 1.35; letter-spacing: -0.01em; }
+
+/* --- INFO DIRECTIVE --- (沉穩冷灰紙質感，全包覆微細框，徹底移除厚重 left-border) */
+.prose-custom .info-directive { background: color-mix(in srgb, var(--color-text) 2.8%, var(--color-surface)); border: 1px solid color-mix(in srgb, var(--color-text) 14%, var(--color-border)); }
+
+.dark .prose-custom .info-directive { background: color-mix(in srgb, var(--color-text) 5%, var(--color-surface)); border-color: color-mix(in srgb, var(--color-text) 18%, var(--color-border)); }
+
+.prose-custom .info-directive > .directive-title-default { color: var(--color-muted); }
+
+/* --- SIDEBAR / IMPORTANT DIRECTIVE --- (經典專欄風格，全包覆微細框，去除頂部/左側厚邊條) */
+.prose-custom .sidebar-directive { background: color-mix(in srgb, var(--color-primary) 3.5%, var(--color-surface)); border: 1px solid color-mix(in srgb, var(--color-primary) 22%, var(--color-border)); }
+
+.dark .prose-custom .sidebar-directive { background: color-mix(in srgb, var(--color-primary) 7.5%, var(--color-surface)); border-color: color-mix(in srgb, var(--color-primary) 28%, var(--color-border)); }
+
+.prose-custom .sidebar-directive > .directive-title-default { color: color-mix(in srgb, var(--color-primary) 85%, var(--color-text)); }
+
+/* --- COMMENT DIRECTIVE --- (溫潤羊皮紙色調，微細全框，移除厚左條) */
+.prose-custom aside.comment-directive { background: color-mix(in srgb, var(--color-warning) 5%, var(--color-surface)); border: 1px solid color-mix(in srgb, var(--color-warning) 22%, var(--color-border)); border-radius: 6px; padding: 0.65rem 0.95rem; font-style: normal; }
+
+.prose-custom .comment-directive > .comment-title.directive-title-default { color: var(--color-warning); }
+
+/* --- OPTIONAL / DISCLOSURE DIRECTIVE --- */
+.prose-custom details.optional-directive { border: 1px solid color-mix(in srgb, var(--color-text) 14%, var(--color-border)); background: color-mix(in srgb, var(--color-text) 2.5%, var(--color-surface)); border-radius: 6px; padding: 0; overflow: hidden; }
+
+.dark .prose-custom details.optional-directive { border-color: color-mix(in srgb, var(--color-text) 18%, var(--color-border)); background: color-mix(in srgb, var(--color-text) 5%, var(--color-surface)); }
+
+.prose-custom details.optional-directive > summary.optional-summary { display: flex; cursor: pointer; list-style: none; align-items: center; justify-content: space-between; gap: 1rem; user-select: none; padding: 0.6rem 0.95rem; background: color-mix(in srgb, var(--color-text) 2.5%, var(--color-surface)); transition: background-color 150ms ease; }
+
+.prose-custom details.optional-directive > summary.optional-summary:hover { background: color-mix(in srgb, var(--color-text) 8%, var(--color-surface)); }
+
+.prose-custom details.optional-directive > summary.optional-summary::-webkit-details-marker { display: none; }
+
+.prose-custom details.optional-directive > summary.optional-summary::after { content: '+'; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 1.2rem; line-height: 1; font-weight: 600; color: var(--color-primary); transition: transform 0.15s ease; }
+
+.prose-custom details.optional-directive[open] > summary.optional-summary { border-bottom: 1.5px solid color-mix(in srgb, var(--color-text) 16%, var(--color-border)); }
+
+.prose-custom details.optional-directive[open] > summary.optional-summary::after { content: '−'; }
+
+.prose-custom details.optional-directive > .directive-body { padding: 1rem 1.25rem; }
+
