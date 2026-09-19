@@ -33,7 +33,7 @@ const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
 const server = createServer(createApp(product));
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
-const browser = await puppeteer.launch({ executablePath: resolveQaChromePath('GRAPH_QA_CHROME'), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const browser = await puppeteer.launch({ executablePath: resolveQaChromePath('GRAPH_QA_CHROME'), headless: true, pipe: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const page = await browser.newPage(), errors = [];
 page.on('pageerror', error => errors.push(error.message));
 await page.evaluateOnNewDocument(() => localStorage.setItem('github-notes:language', 'en'));

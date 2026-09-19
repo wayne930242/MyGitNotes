@@ -37,7 +37,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
 fs.writeFileSync(internalLinksPath, fs.readFileSync(internalLinksPath, 'utf8').replace('__ABSOLUTE_NOTE__', `${base}/notebooks/example/notes/target.md`).replace('__ABSOLUTE_ROUTE__', `${base}/notes`));
 git('add', '.');
 git('commit', '-m', 'resolve internal link fixture origin');
-const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, pipe: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const page = await browser.newPage();
 await page.setViewport({ width: 1440, height: 1100 });
 const errors = [];

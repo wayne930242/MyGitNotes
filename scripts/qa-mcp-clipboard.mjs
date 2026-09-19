@@ -9,7 +9,7 @@ const externalBase = process.env.CLIPBOARD_QA_URL;
 const vite = externalBase ? null : await startViteDevServer();
 const base = externalBase || vite.base;
 const url = `${base}/mcp/clipboard-test-token`;
-const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, pipe: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 
 try {
   for (const mode of ['normal', 'denied', 'unavailable', 'pending', 'blocked']) {

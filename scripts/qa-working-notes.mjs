@@ -42,7 +42,7 @@ const { parseNoteQuery, queryNotes, queryNotePaths, noteFacets, lookupNotes } = 
 const server = createServer(createApp(product));
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
-const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, pipe: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const page = await browser.newPage();
 await page.setViewport({ width: 1440, height: 1000 });
 const errors = [];

@@ -8,7 +8,7 @@ const puppeteer = require('puppeteer-core');
 const externalBase = process.env.CONNECTION_QA_URL;
 const vite = externalBase ? null : await startViteDevServer();
 const base = externalBase || vite.base;
-const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, pipe: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 try {
   const page = await browser.newPage();
   await page.setRequestInterception(true);
