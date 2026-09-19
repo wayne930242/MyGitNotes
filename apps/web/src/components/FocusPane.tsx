@@ -27,6 +27,8 @@ export interface FocusPaneContext {
 }
 
 interface PaneTab { tab: FocusTab; key: string; pane: number; index: number; label: string }
+/** Where a drop lands: before `index` of stored `pane`, or at its end without one. */
+interface DropSlot { pane: number; index?: number }
 
 /** One pane on screen: its tab list and the displayed tab. On narrow screens it stands for several stored panes. */
 export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }> = ({ displayed, ...context }) => {
@@ -60,28 +62,44 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
     list.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [displayed.key]);
 
-  const [dropping, setDropping] = useState(false);
+  const [slot, setSlot] = useState<DropSlot>();
   const accepts = (event: React.DragEvent) => editable && [TAB_DRAG_TYPE, NOTE_DRAG_TYPE, 'text/plain'].some(type => event.dataTransfer.types.includes(type));
-  /** Drops before `before`, or at the end of the displayed stored pane. */
-  const drop = (event: React.DragEvent, before?: PaneTab) => {
-    setDropping(false);
+  const hover = (event: React.DragEvent, next: DropSlot) => {
+    if (!accepts(event)) return;
+    event.preventDefault(); event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    setSlot(current => current?.pane === next.pane && current.index === next.index ? current : next);
+  };
+  /** Over a tab, the half under the pointer picks the gap before or after it. */
+  const slotAt = (event: React.DragEvent, tab: PaneTab): DropSlot => {
+    const box = event.currentTarget.getBoundingClientRect();
+    return { pane: tab.pane, index: event.clientX > box.left + box.width / 2 ? tab.index + 1 : tab.index };
+  };
+  /** The insertion line sits before the tab at the slot, or after the last tab of its pane. */
+  const marker = (tab: PaneTab) => {
+    if (!slot || tab.pane !== slot.pane) return undefined;
+    if (tab.index === slot.index) return 'before';
+    const count = layout.panes[tab.pane].tabs.length;
+    return tab.index === count - 1 && (slot.index === undefined || slot.index >= count) ? 'after' : undefined;
+  };
+  const drop = (event: React.DragEvent, target: DropSlot) => {
+    setSlot(undefined);
     if (!accepts(event)) return;
     event.preventDefault(); event.stopPropagation();
     const tab = droppedTab(event.dataTransfer, notebookRoot);
     if (!tab || !focus.shown) return;
-    const pane = before?.pane ?? displayed.pane;
     const found = findFocusTab(layout, focusTabKey(tab));
-    const index = before && found && found.pane === before.pane && found.index < before.index ? before.index - 1 : before?.index;
-    void focus.place(focus.shown, tab, pane, index).catch(() => {});
+    const index = target.index !== undefined && found && found.pane === target.pane && found.index < target.index ? target.index - 1 : target.index;
+    void focus.place(focus.shown, tab, target.pane, index).catch(() => {});
   };
 
   return (
-    <section className="focus-pane" data-focus-pane={displayed.pane} data-active={active || undefined} data-dropping={dropping || undefined}
+    <section className="focus-pane" data-focus-pane={displayed.pane} data-active={active || undefined} data-dropping={slot ? true : undefined}
       data-autohide={autoHide || undefined} aria-label={t('focus.paneNumber', { number: displayed.pane + 1 })}
       onPointerDownCapture={() => focus.activate(displayed.pane)} onFocusCapture={() => focus.activate(displayed.pane)}
-      onDragOver={event => { if (!accepts(event)) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropping(true); }}
-      onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(false); }}
-      onDrop={event => drop(event)}>
+      onDragOver={event => hover(event, { pane: displayed.pane })}
+      onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setSlot(undefined); }}
+      onDrop={event => drop(event, { pane: displayed.pane })}>
       <div className="focus-pane-bar">
         <div ref={list} className="focus-tabs" role="tablist" aria-label={t('focus.paneTabs', { number: displayed.pane + 1 })} onKeyDown={event => {
           const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
@@ -92,13 +110,13 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
           buttons[(target + buttons.length) % buttons.length].focus();
         }}>
           {tabs.map(tab => (
-            <div key={tab.key} role="presentation" className="focus-tab" data-shown={tab.key === displayed.key || undefined}
+            <div key={tab.key} role="presentation" className="focus-tab" data-shown={tab.key === displayed.key || undefined} data-drop={marker(tab)}
               draggable={editable} onDragStart={event => {
                 event.dataTransfer.setData(TAB_DRAG_TYPE, JSON.stringify(tab.tab));
                 event.dataTransfer.effectAllowed = 'move';
               }}
-              onDragOver={event => { if (accepts(event)) { event.preventDefault(); setDropping(true); } }}
-              onDrop={event => drop(event, tab)}>
+              onDragOver={event => hover(event, slotAt(event, tab))}
+              onDrop={event => drop(event, slotAt(event, tab))}>
               <button type="button" role="tab" aria-selected={tab.key === displayed.key} aria-controls={panelId}
                 tabIndex={tab.key === displayed.key || (!displayed.key && tab === tabs[0]) ? 0 : -1} title={tab.label}
                 onClick={() => void focus.show(tab.pane, tab.key)}

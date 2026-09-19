@@ -61,7 +61,7 @@
 .focus-pane[data-active] .focus-pane-bar { background: var(--color-sidebar); }
 .focus-tabs { display: flex; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .focus-tabs::-webkit-scrollbar { display: none; }
-.focus-tab { display: flex; flex: 0 1 auto; align-items: center; min-width: 5.5rem; max-width: 14rem; border-right: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent); color: var(--color-muted); }
+.focus-tab { position: relative; display: flex; flex: 0 1 auto; align-items: center; min-width: 5.5rem; max-width: 14rem; border-right: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent); color: var(--color-muted); }
 .focus-tab:hover { color: var(--color-text); background: color-mix(in srgb, var(--color-surface) 55%, transparent); }
 .focus-tab[data-shown] { background: var(--color-surface); color: var(--color-text); }
 .focus-pane:not([data-active]) .focus-tab[data-shown] { color: color-mix(in srgb, var(--color-text) 75%, var(--color-muted)); }
@@ -70,6 +70,10 @@
 .focus-tab > [role="tab"]:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -3px; }
 .focus-tab > [role="tab"] > svg { width: 14px; height: 14px; flex: none; opacity: .7; }
 .focus-tab > [role="tab"] > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.focus-tab[data-drop]::before { content: ''; position: absolute; top: 6px; bottom: 6px; z-index: 1; width: 2px; border-radius: 1px; background: var(--color-primary); pointer-events: none; }
+.focus-tab[data-drop="before"]::before { left: 0; }
+.focus-tab:first-child[data-drop="before"]::before { left: 4px; }
+.focus-tab[data-drop="after"]::before { right: 0; }
 .focus-tab-close { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: 4px; border-radius: 5px; color: var(--color-muted); opacity: 0; }
 .focus-tab:hover .focus-tab-close, .focus-tab[data-shown] .focus-tab-close, .focus-tab:focus-within .focus-tab-close { opacity: 1; }
 .focus-tab-close:hover { background: var(--workspace-selection); color: var(--color-text); }
