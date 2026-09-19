@@ -44,7 +44,7 @@ export function formatFiles(files, check = false) {
   return run(path.join(root, 'node_modules/.bin/dprint'), [check ? 'check' : 'fmt', '--config', path.join(root, 'dprint.json'), '--', ...files]);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const command = process.argv[2];
   if (!['format', 'format-check', 'lint', 'lint-fix'].includes(command)) throw new Error('Expected format, format-check, lint or lint-fix');
   const files = trackedSources();
