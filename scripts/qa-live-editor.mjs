@@ -30,6 +30,30 @@ const errors=[];page.on('pageerror',e=>errors.push(e.message));
 // CodeMirror binds Undo to Mod-z, which is Command on macOS.
 const undoKey=process.platform==='darwin'?'Meta':'Control';
 const click=async text=>{const ok=await page.evaluate(text=>{const buttons=Array.from(document.querySelectorAll('button'));const b=buttons.find(b=>b.textContent.trim()===text)??buttons.find(b=>b.getAttribute('aria-label')===text);b?.click();return !!b;},text);if(!ok)throw Error(`Missing button: ${text}`);};
+// The plain Source-mode <textarea> has no custom keymap (unlike CodeMirror's .cm-content, which binds
+// Mod-End itself), and neither Control+End nor Meta+Down reliably move a real Chrome textarea's caret
+// via CDP-synthesized key events here, leaving it at position 0 and causing typed text to be prepended
+// instead of appended. Set the caret directly instead of relying on a navigation shortcut.
+const gotoTextareaEnd=()=>page.$eval('textarea[aria-label="Note content"]',e=>{e.selectionStart=e.selectionEnd=e.value.length;});
+const dispatchFocus=()=>page.evaluate(()=>{window.dispatchEvent(new Event('focus'));document.dispatchEvent(new Event('visibilitychange'));});
+// Local-mode autosave (hardcoded on) commits dirty content to disk ~750ms after the last keystroke;
+// once it lands, content===baseNote again and a later external change is adopted silently, never shown
+// as a merge. The 60s-throttled remote check can only ever observe a genuine local-vs-remote merge while
+// content is still dirty, so this nudges the textarea (add+remove a harmless character) faster than the
+// 750ms debounce to keep it dirty until the periodic check actually runs and merges the concurrent edits.
+const waitForMergedNoticeWhileEditing=async(timeoutMs=75000,mergedText='Remote changes merged',conflictText='Remote changes conflict')=>{
+ const start=Date.now();
+ while(Date.now()-start<timeoutMs){
+  const state=await page.evaluate((mergedText,conflictText)=>({merged:document.body.innerText.includes(mergedText),conflict:document.body.innerText.includes(conflictText)}),mergedText,conflictText);
+  if(state.merged)return;
+  if(state.conflict)throw Error('Editor reached a conflict state instead of a clean merge');
+  await page.keyboard.type(' ');await page.keyboard.press('Backspace');
+  await dispatchFocus();
+  await new Promise(resolve=>setTimeout(resolve,400));
+ }
+ const diag=await page.evaluate(()=>({text:document.body.innerText.slice(0,800),count:document.querySelectorAll('textarea[aria-label="Note content"]').length,values:Array.from(document.querySelectorAll('textarea[aria-label="Note content"]')).map(e=>e.value)}));
+ throw Error(`Merged notice did not appear within ${timeoutMs}ms: ${JSON.stringify(diag)}`);
+};
 try {
  await page.goto(base+'/notebooks/example/notes/root.md',{waitUntil:'networkidle0'});
  await page.waitForSelector('.cm-content');
@@ -184,7 +208,7 @@ try {
 
  // The app's own autosave must never be mistaken for an external change on the next check.
  await page.focus('textarea[aria-label="Note content"]');
- await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');
+ await gotoTextareaEnd();
  await page.keyboard.type('\nAutosaved local edit.');
  await new Promise(resolve=>setTimeout(resolve,1200)); // clear the autosave debounce
  if(!fs.readFileSync(path.join(root,'notes/example/reload.md'),'utf8').includes('Autosaved local edit.'))throw Error('Autosave did not reach disk before the next remote check');
@@ -195,4 +219,58 @@ try {
  if(afterOwnSave.text.includes('Remote changes merged'))throw Error('The app treated its own autosave as an external change');
  if(!afterOwnSave.value?.includes('Autosaved local edit.'))throw Error('Content changed unexpectedly after the remote check');
  console.log('PASS local reload: local autosave is never treated as an external change');
+
+ // A merged notice must be dismissible, stay hidden until a new merge, and never reappear on a bare reload.
+ // Disk edits below always touch a different line than the concurrent in-editor local edit, so each merge is clean rather than a conflict.
+ // Each mount's own unthrottled check-on-mount fires at t=0, so the next opportunity is the ~60s periodic interval, not a manual dispatch:
+ // waiting a fixed 61s before editing would let that interval fire its own (no-op) check first and re-arm the throttle for another 60s.
+ // So the local+external edit below happens right after mount, well inside the first window, and waitForMergedNotice's own retries ride out the interval's natural tick.
+ await page.goto(base+'/notebooks/example/notes/reload.md',{waitUntil:'networkidle0'});
+ await click('Source');await page.waitForSelector('textarea[aria-label="Note content"]');
+ await page.waitForFunction(()=>document.querySelector('textarea[aria-label="Note content"]')?.value.includes('Autosaved local edit.'));
+ await page.focus('textarea[aria-label="Note content"]');
+ await gotoTextareaEnd();
+ await page.keyboard.type('\nDismiss-flow local edit.'); // appends a new line; disjoint from the external edit below, which only replaces an existing line
+ fs.writeFileSync(path.join(root,'notes/example/reload.md'),'---\ntitle: Reload\n---\n# Reload\n\nChanged externally (external edit before dismiss).\nAutosaved local edit.\n');
+ await waitForMergedNoticeWhileEditing();
+ if(!await page.$eval('textarea[aria-label="Note content"]',e=>e.value.includes('external edit before dismiss')&&e.value.includes('Dismiss-flow local edit.')))throw Error('The merged draft is missing the local or external change');
+ console.log('PASS dismiss: an external change while editing shows the translated merged notice');
+
+ await page.click('button[aria-label="Dismiss notice"]');
+ if(await page.evaluate(()=>document.body.innerText.includes('Remote changes merged')))throw Error('The notice stayed visible after dismissing it');
+ console.log('PASS dismiss: dismissing the merged notice hides it');
+
+ await page.goto(base+'/notebooks/example/notes/reload.md',{waitUntil:'networkidle0'});
+ await click('Source');await page.waitForSelector('textarea[aria-label="Note content"]');
+ await new Promise(resolve=>setTimeout(resolve,500));
+ if(await page.evaluate(()=>document.body.innerText.includes('Remote changes merged')))throw Error('Reopening the note without a new remote change brought the merged notice back');
+ console.log('PASS reload: reopening an unchanged note does not resurrect a stale merged notice');
+
+ // Same mount as the reload check above, so its own check-on-mount already claimed t=0; edit now, well inside its first window.
+ await page.focus('textarea[aria-label="Note content"]');
+ await gotoTextareaEnd();
+ // Appends after the last line; the external edit below changes the *first* content line instead of the
+ // last one, so the two edits stay on non-adjacent lines (an insertion right next to a changed line is an
+ // ambiguous 3-way merge that legitimately conflicts, as opposed to a clean, disjoint merge).
+ await page.keyboard.type('\nSecond dismiss-flow local edit.');
+ fs.writeFileSync(path.join(root,'notes/example/reload.md'),'---\ntitle: Reload\n---\n# Reload\n\nChanged externally, a second time (external edit before dismiss).\nAutosaved local edit.\n');
+ await waitForMergedNoticeWhileEditing();
+ console.log('PASS dismiss: a later, different merge shows the notice again after an earlier dismissal');
+
+ // The merge/dismiss notices must be translated, not just the rest of the UI.
+ await page.evaluate(()=>localStorage.setItem('github-notes:language','zh-TW'));
+ fs.writeFileSync(path.join(root,'notes/example/reload.md'),'---\ntitle: Reload\n---\n# Reload\n\nChanged externally, a third time (external edit before dismiss).\nAutosaved local edit.\n');
+ await page.goto(base+'/notebooks/example/notes/reload.md',{waitUntil:'networkidle0'});
+ await click('原始碼');await page.waitForSelector('textarea[aria-label="Note content"]');
+ await page.waitForFunction(()=>document.querySelector('textarea[aria-label="Note content"]')?.value.includes('Autosaved local edit.'));
+ await page.focus('textarea[aria-label="Note content"]');
+ await gotoTextareaEnd();
+ await page.keyboard.type('\nZh-TW dismiss-flow local edit.');
+ fs.writeFileSync(path.join(root,'notes/example/reload.md'),'---\ntitle: Reload\n---\n# Reload\n\nChanged externally, a fourth time (external edit before dismiss).\nAutosaved local edit.\n');
+ await waitForMergedNoticeWhileEditing(75000,'遠端變更已併入此草稿','遠端變更與您的草稿衝突');
+ console.log('PASS zh-TW: the merged notice is translated');
+
+ await page.click('button[aria-label="關閉通知"]');
+ if(await page.evaluate(()=>document.body.innerText.includes('遠端變更已併入此草稿')))throw Error('The zh-TW notice stayed visible after dismissing it');
+ console.log('PASS zh-TW: dismissing the merged notice hides it');
 } finally {await browser.close();await new Promise(r=>server.close(r));fs.rmSync(root,{recursive:true,force:true});}
