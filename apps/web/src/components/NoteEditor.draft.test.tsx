@@ -120,6 +120,38 @@ it('lets close proceed while a local autosave is still in flight', async () => {
   expect(onClose).toHaveBeenCalled();
 });
 
+it('discards a stale autosave superseded by a remote merge, saving the merged content once', async () => {
+  const start: NoteItem = { ...note, content: 'line1\nline2\nline3\n' };
+  let resolveRead: ((value: NoteItem) => void) | null = null;
+  const onReadRemote = vi.fn((): Promise<NoteItem> => new Promise(resolve => { resolveRead = resolve; }));
+  const onSave = vi.fn(async ({ content, metadata }: { content: string; metadata?: Record<string, unknown> }) =>
+    ({ ...start, content, metadata: { ...metadata, updated: 't1' } }));
+  render(editor({ note: start, onReadRemote, onSave }));
+  await act(async () => { resolveRead?.(start); await vi.advanceTimersByTimeAsync(0); }); // the mount's own check resolves
+
+  await act(async () => { await vi.advanceTimersByTimeAsync(61000); }); // past the remote-check throttle
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: 'LOCAL1\nline2\nline3\n' } });
+  window.dispatchEvent(new Event('focus')); // a remote check starts, holding operation.current
+  expect(onReadRemote).toHaveBeenCalledTimes(2);
+
+  // The debounce elapses while the check is still in flight; the autosave must wait, not save yet.
+  await act(async () => { await vi.advanceTimersByTimeAsync(750); });
+  expect(onSave).not.toHaveBeenCalled();
+
+  // The check resolves with an unrelated external change; it merges cleanly with the local edit.
+  await act(async () => { resolveRead?.({ ...start, content: 'line1\nline2\nREMOTE3\n' }); await vi.advanceTimersByTimeAsync(0); });
+  expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('LOCAL1\nline2\nREMOTE3\n');
+
+  // The stale autosave, still holding the pre-merge draft, must not fire now that it's free to.
+  await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+  expect(onSave).not.toHaveBeenCalled();
+
+  // The fresh effect's own debounce, scheduled for the merged content, saves it once.
+  await act(async () => { await vi.advanceTimersByTimeAsync(750); });
+  expect(onSave).toHaveBeenCalledTimes(1);
+  expect(onSave.mock.calls[0][0].content).toBe('LOCAL1\nline2\nREMOTE3\n');
+});
+
 it('merges a concurrent local edit with an unrelated external change', async () => {
   const start: NoteItem = { ...note, content: 'line1\nline2\nline3\n' };
   let resolveRead: ((value: NoteItem) => void) | null = null;

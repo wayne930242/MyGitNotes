@@ -441,10 +441,13 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
       }
 
       // Debounced auto-save to disk
+      let cancelled = false;
       const timer = setTimeout(async () => {
         // Defer to an in-flight checkRemote/save/restore rather than racing it.
-        while (operation.current) await new Promise(resolve => setTimeout(resolve, 50));
-        if (!mounted.current) return;
+        while (operation.current && !cancelled) await new Promise(resolve => setTimeout(resolve, 50));
+        // A newer effect run (e.g. a remote merge, or further typing) superseded this one
+        // while it waited; its own debounce now owns saving the current draft.
+        if (cancelled || !mounted.current) return;
         setIsSaving(true);
         // Held for the save's duration so a concurrent remote check (focus/interval)
         // can't read this same write back mid-flight and mistake it for an external change.
@@ -471,7 +474,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
         }
       }, 750);
 
-      return () => clearTimeout(timer);
+      return () => { cancelled = true; clearTimeout(timer); };
     } else {
       setHasUnsavedChanges(false);
       // Edits undone after a save leave nothing newer than it to recover.
