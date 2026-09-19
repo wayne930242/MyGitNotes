@@ -60,8 +60,9 @@ export function writeNoteFile(
     fs.mkdirSync(dir, { recursive: true });
   }
 
+  const existingRaw = isNew ? undefined : fs.readFileSync(safePath, 'utf-8');
   const finalOutput = metadata
-    ? serializeNoteContent(metadata, content, isNew)
+    ? serializeNoteContent(metadata, content, isNew, new Date(), existingRaw)
     : content;
 
   fs.writeFileSync(safePath, finalOutput, 'utf-8');

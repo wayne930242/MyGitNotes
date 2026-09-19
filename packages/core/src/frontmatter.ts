@@ -1,5 +1,6 @@
 import YAML from 'yaml';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { NoteMetadata } from './types.js';
 import { stampSaveTimestamps } from './note-timestamps.js';
 
@@ -92,16 +93,137 @@ function stringifyMetadata(metadata: NoteMetadata): string {
 }
 
 /**
+ * Sets, replaces or removes one frontmatter key in place: the key's own quoting, flow/block
+ * style and surrounding comments are kept, and every other key and the Markdown body are left
+ * untouched. `value === undefined` removes the key. Mirrors `replaceNoteStatus`/`replaceNoteTags`,
+ * generalized to an arbitrary key so a multi-key metadata patch can apply them one at a time.
+ */
+function patchFrontmatterField(raw: string, key: string, value: unknown): string {
+  const match = raw.match(FRONTMATTER_REGEX);
+  if (!match) return raw;
+  const yaml = match[1];
+  const document = YAML.parseDocument(yaml);
+  if (!YAML.isMap(document.contents)) return raw;
+  const map = document.contents;
+  const index = map.items.findIndex(item => YAML.isScalar(item.key) && item.key.value === key);
+  const pair = map.items[index];
+  const newline = match[0].includes('\r\n') ? '\r\n' : '\n';
+  const offset = raw.indexOf('\n') + 1;
+  const patch = (start: number, end: number, text: string) => raw.slice(0, offset + start) + text + raw.slice(offset + end);
+
+  if (value === undefined) {
+    if (!pair) return raw;
+    let start = (pair.key as YAML.Node).range![0];
+    let end = (pair.value as YAML.Node).range![2];
+    if (map.flow) {
+      end = (pair.value as YAML.Node).range![1];
+      if (index < map.items.length - 1) end = (map.items[index + 1].key as YAML.Node).range![0];
+      else if (index > 0) start = yaml.lastIndexOf(',', start);
+    } else {
+      start = yaml.lastIndexOf('\n', start - 1) + 1;
+      // The extracted YAML omits the newline before the closing delimiter.
+      if (end === yaml.length) end += newline.length;
+    }
+    return patch(start, end, !map.flow && map.items.length === 1 ? `{}${newline}` : '');
+  }
+
+  const isCollection = value !== null && typeof value === 'object';
+
+  if (!pair) {
+    if (isCollection) {
+      const rendered = new YAML.Document({ [key]: value }).toString({ lineWidth: 0, flowCollectionPadding: false }).trimEnd();
+      if (map.flow) {
+        const end = yaml.lastIndexOf('}');
+        return patch(end, end, `${map.items.length ? ', ' : ''}${rendered}`);
+      }
+      return patch(yaml.length, yaml.length, `${newline}${rendered}`);
+    }
+    const node = new YAML.Scalar(value);
+    if (typeof value === 'string' && (key === 'created' || key === 'updated')) node.type = 'QUOTE_DOUBLE';
+    const rendered = new YAML.Document(node).toString({ lineWidth: 0 }).trimEnd();
+    if (map.flow) {
+      const end = yaml.lastIndexOf('}');
+      return patch(end, end, `${map.items.length ? ', ' : ''}${key}: ${rendered}`);
+    }
+    return patch(yaml.length, yaml.length, `${newline}${key}: ${rendered}`);
+  }
+
+  const oldValue = pair.value as YAML.Node;
+
+  if (isCollection || YAML.isSeq(oldValue) || YAML.isMap(oldValue)) {
+    const flow = (YAML.isSeq(oldValue) || YAML.isMap(oldValue)) ? oldValue.flow === true : false;
+    const newDocument = new YAML.Document({ [key]: value });
+    if (flow) {
+      const newNode = newDocument.get(key, true);
+      if (YAML.isSeq(newNode) || YAML.isMap(newNode)) newNode.flow = true;
+    }
+    const rendered = newDocument.toString({ lineWidth: 0, flowCollectionPadding: false });
+    const withoutKey = rendered.slice(key.length);
+    const [vStart, vEnd] = oldValue.range!;
+    const hadTrailingNewline = yaml.slice(vStart, vEnd).endsWith('\n');
+    let replacement = !hadTrailingNewline && withoutKey.endsWith('\n') ? withoutKey.slice(0, -1) : withoutKey;
+    if (match[0].includes('\r\n')) replacement = replacement.replace(/\n/g, '\r\n');
+    return patch((pair.key as YAML.Node).range![1], vEnd, replacement);
+  }
+
+  const [start, end] = oldValue.range!;
+  const trailingNewline = yaml.slice(start, end).endsWith('\n') ? newline : '';
+  const spacing = start === end && !/\s/.test(yaml[start - 1]) ? ' ' : '';
+  const node = new YAML.Scalar(value);
+  if (YAML.isScalar(oldValue) && ['QUOTE_SINGLE', 'QUOTE_DOUBLE'].includes(oldValue.type || '')) node.type = oldValue.type;
+  const rendered = new YAML.Document(node).toString({ lineWidth: 0 }).trimEnd();
+  return patch(start, end, spacing + rendered + trailingNewline);
+}
+
+/**
+ * Patches an existing frontmatter block onto `metadata`: a key whose value is unchanged keeps
+ * its original quoting, flow/block style, position and comments; a changed or new key is
+ * written in place or appended; a key no longer present is removed. Returns `null` when `raw`
+ * has no parsable frontmatter map, so the caller falls back to a full render.
+ */
+function patchNoteMetadata(raw: string, metadata: NoteMetadata): string | null {
+  const { metadata: oldMetadata, hasFrontmatter } = parseNoteContent(raw);
+  if (!hasFrontmatter) return null;
+  let next = raw;
+  for (const key of Object.keys(oldMetadata)) {
+    if (!(key in metadata)) next = patchFrontmatterField(next, key, undefined);
+  }
+  for (const [key, value] of Object.entries(metadata)) {
+    if (!isDeepStrictEqual(oldMetadata[key], value)) next = patchFrontmatterField(next, key, value);
+  }
+  return next;
+}
+
+/**
  * Serializes metadata and Markdown body back into file format.
  * Preserves all unknown frontmatter keys. Stamps `created`/`updated`
  * (see `stampSaveTimestamps`) on every save; `isNew` must reflect whether
  * this note existed before this save, so an edit to a pre-existing note
  * that predates this feature never invents a `created` date.
+ *
+ * When `existingRaw` is the note's current file content and its Markdown body is unchanged,
+ * the frontmatter is patched key by key onto that existing block instead of being rendered
+ * from scratch, so a metadata-only edit (e.g. a status change) changes only the lines of the
+ * keys it actually edits.
  */
-export function serializeNoteContent(metadata: NoteMetadata, content: string, isNew: boolean, now: Date = new Date()): string {
+export function serializeNoteContent(
+  metadata: NoteMetadata,
+  content: string,
+  isNew: boolean,
+  now: Date = new Date(),
+  existingRaw?: string
+): string {
   const stamped = stampSaveTimestamps(metadata, isNew, now);
   const keys = Object.keys(stamped);
   const trimmedContent = content.trim();
+
+  if (existingRaw !== undefined) {
+    const existing = parseNoteContent(existingRaw);
+    if (existing.hasFrontmatter && existing.content === content) {
+      const patched = patchNoteMetadata(existingRaw, stamped);
+      if (patched !== null) return patched;
+    }
+  }
 
   if (keys.length === 0) {
     return trimmedContent ? `${trimmedContent}\n` : '';
