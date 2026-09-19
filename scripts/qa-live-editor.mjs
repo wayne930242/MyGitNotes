@@ -170,6 +170,11 @@ try {
  await page.waitForSelector('[data-line-copy-feedback][data-state="error"]');
  if(!await page.$eval('[data-line-copy-feedback]',node=>node.textContent.includes('Could not copy')))throw Error('Clipboard rejection did not show localized failure feedback');
  await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__linePrompt=text;window.__linePromptWrites.push(text);}}});});
+ await page.waitForFunction(()=>document.querySelector('[data-source-line-numbers] [data-line-number]')?.textContent.trim()==='8');
+ if(!fs.readFileSync(path.join(root,'notes/example/root.md'),'utf8').includes('\nupdated:'))throw Error('Autosave did not persist the metadata line that changed the real-line offset');
+ const firstSourceLineBox=await page.$eval('textarea[aria-label="Note content"]',node=>{const rect=node.getBoundingClientRect();return{x:rect.left+20,y:rect.top+10};});
+ await page.mouse.click(firstSourceLineBox.x,firstSourceLineBox.y);
+ await page.waitForFunction(()=>{const node=document.querySelector('[data-line-number][data-active-line="true"]');const style=node&&getComputedStyle(node);return node?.textContent.trim()==='8'&&Number(style?.fontWeight)>=600&&style?.transform!=='none'&&style?.transform!=='matrix(1, 0, 0, 1, 0, 0)';});
  const sourceLineStyle=await page.evaluate(()=>{const gutter=getComputedStyle(document.querySelector('[data-source-line-numbers] > div'));const source=getComputedStyle(document.querySelector('textarea[aria-label="Note content"]'));return {gutterFont:parseFloat(gutter.fontSize),sourceFont:parseFloat(source.fontSize),gutterLineHeight:gutter.lineHeight,sourceLineHeight:source.lineHeight};});
  if(sourceLineStyle.gutterFont>=sourceLineStyle.sourceFont||sourceLineStyle.gutterLineHeight!==sourceLineStyle.sourceLineHeight)throw Error('Source line numbers are not subdued and aligned');
  fs.mkdirSync(path.join(product,'artifacts/qa'),{recursive:true});
