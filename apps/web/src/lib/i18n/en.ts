@@ -855,7 +855,7 @@ export const en = {
   'settings.defaultLanguage': 'Default',
   'settings.languageDescription': 'Select your preferred interface display language.',
   'settings.coreUpdates': 'Core Product Updates',
-  'settings.coreUpdatesDesc': 'Safely fetch and merge changes from the Core product branch into your workspace.',
+  'settings.coreUpdatesDesc': 'Safely update Core from upstream: fast-forward the core checkout, or merge into a workspace that still carries the product.',
   'settings.manifest': 'Workspace Manifest (.mygitnotes.yaml)',
   'settings.saveCommit': 'Save & Commit',
   'settings.saving': 'Saving...',

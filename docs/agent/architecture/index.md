@@ -9,17 +9,17 @@ MyGitNotes is structured as a TypeScript monorepo using pnpm workspaces.
 - `packages/mcp-server`: Stdio Model Context Protocol (MCP) server providing safe note, asset, git, and workspace operations to coding agents.
 - `apps/local-server`: Lightweight local HTTP bridge serving workspace APIs and static assets to the frontend web application.
 - `apps/web`: Responsive, modern React frontend supporting List, Card, and Kanban views, pure Markdown & plain-text editors, asset manager, and crash-recovery drafts.
-- `scripts/`: Cross-platform Node/TypeScript scripts for `bootstrap-workspace` and `update-core`.
+- `scripts/`: Cross-platform Node/TypeScript scripts for `bootstrap-workspace`, `update-core`, `migrate-workspace` and `convert-workspace`.
 
 ## Core Invariants
 
 1. **Markdown is the source of truth**: Notes are plain Markdown files with optional YAML frontmatter. No proprietary database or HTML blob becomes authoritative over files on disk.
-2. **Boundary between Core and User content**: Core updates merge into the user workspace branch `main` without touching or overwriting `notes/**`.
+2. **Boundary between Core and User content**: `core` carries only product source and `main` carries only workspace content (`.mygitnotes.yaml`, notebook roots, assets, workspace Agent settings). The local server runs from a `core` worktree and edits the `main` worktree named by `MYGITNOTES_LOCAL_PATH`; `core` only fast-forwards and never merges into a content-only `main`. Fork-model workspaces whose `main` still carries the product merge Core with workspace Agent paths restored until they run `convert-workspace`.
 3. **Round-trip fidelity**: Updating a note's frontmatter (e.g. changing Kanban column/status) preserves all unknown frontmatter fields and the original markdown text unchanged.
 
 ## Configurable sources
 
-`mygitnotes.server.yaml` (or the compatible `github-notes.server.yaml`) selects a local repository, GitHub repository or GitLab project. Source configuration accepts `MYGITNOTES_*` and legacy `GITHUB_NOTES_*` environment variables.
+`mygitnotes.server.yaml` (or the compatible `github-notes.server.yaml`) selects a local repository, GitHub repository or GitLab project. Without a configured local path, a local source reads the application root only when it holds a workspace manifest (fork model); otherwise startup fails and names `bootstrap-workspace`. Local startup also rejects a workspace whose `schema_version` differs from `SUPPORTED_SCHEMA_VERSION`; `migrate-workspace` upgrades it. Product reference documents under `docs/agent/**` are served read-only from the application root, not from the workspace. Source configuration accepts `MYGITNOTES_*` and legacy `GITHUB_NOTES_*` environment variables.
 
 `RemoteSource` contains shared note, folder, asset, Screen and Study rules. `GitHubSource` and `GitLabSource` implement immutable reads and atomic commits. `createRemoteSource` selects the adapter for HTTP and remote MCP. GitLab supports an HTTPS base URL and nested project namespaces.
 

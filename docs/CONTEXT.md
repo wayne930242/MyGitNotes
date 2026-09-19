@@ -2,6 +2,22 @@
 
 MyGitNotes 是以 Git 保存的個人筆記與文件工作區。平台指 GitHub 或 GitLab；站台指平台所在的服務網址；儲存庫是筆記的來源。每個部署指定一個平台、站台、儲存庫與分支。GitLab.com 與自架 GitLab 使用相同的工作區操作。
 
+# Core 與工作區分支
+
+同一個儲存庫以兩條分支分開產品與內容。`core` 只放產品原始碼，工作區只從 upstream fast-forward 它；`main` 只放工作區內容，不再合併 `core`。兩者各自 checkout 在自己的 worktree，local server 從 core worktree 執行並編輯 main worktree。
+
+## 用語
+
+**Core**：產品原始碼所在的 `core` 分支與其 worktree。避免稱為：上游分支（upstream 指 remote）。
+
+**工作區內容**：`main` 上的 `.mygitnotes.yaml`、筆記本根目錄、素材與工作區 Agent 設定。避免稱為：使用者分支。
+
+**fork 模型工作區**：`main` 仍帶著產品程式碼、以 `update-core` 合併 Core 的舊工作區。
+
+**轉換**：以一個 commit 移除 fork 模型 `main` 上的產品路徑，使它只放工作區內容；不改寫歷史，之後不再合併 Core。
+
+**產品參考**：Core 的 `docs/agent/**`，在 Agents 頁唯讀顯示，不屬於工作區。
+
 # 工作區呈現
 
 Screen Page 是筆記本的閱讀空間，以河道組織內容。每條河道屬於一個筆記本，只收該筆記本的內容；Screen 只顯示目前筆記本的河道。自訂河道持有項目參照；動態河道持有 tag 或 folder 查詢。河道採用縮圖、小、中版型，另以獨立按鈕進入學習頁，卡片可以獨立捲動，需要修改時開啟原本編輯器。
