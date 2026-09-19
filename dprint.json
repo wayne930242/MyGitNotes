@@ -43,7 +43,7 @@
     "apps/**/*.{ts,tsx,js,mjs}",
     "packages/**/*.{ts,tsx,js,mjs}",
     "scripts/**/*.{ts,tsx,js,mjs}",
-    "apps/web/src/{index,workspace,directives}.css"
+    "apps/**/*.css"
   ],
   "excludes": [
     "**/node_modules/**",
@@ -56,7 +56,7 @@
     "examples/**"
   ],
   "plugins": [
-    "https://plugins.dprint.dev/typescript-0.96.1.wasm",
-    "https://plugins.dprint.dev/g-plane/malva-v0.16.0.wasm"
+    "./node_modules/@dprint/typescript/plugin.wasm",
+    "./node_modules/dprint-plugin-malva/plugin.wasm"
   ]
 }

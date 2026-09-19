@@ -8,12 +8,18 @@ importers:
 
   .:
     devDependencies:
+      '@dprint/typescript':
+        specifier: ^0.96.1
+        version: 0.96.1
       '@types/node':
         specifier: ^22.5.4
         version: 22.20.2
       dprint:
         specifier: ^0.57.4
         version: 0.57.4
+      dprint-plugin-malva:
+        specifier: ^0.16.0
+        version: 0.16.0
       oxlint:
         specifier: ^1.83.0
         version: 1.83.0
@@ -571,6 +577,9 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [musl]
+
+  '@dprint/typescript@0.96.1':
+    resolution: {integrity: sha512-mz/nINSFQh1R5i2Qy90SWOCCK4SgNGRkNhCZba7LYmUkE4Zi8/45p8l8pqc9yN1fb4XY5Muhrzdh5Q3jFsYimw==}
 
   '@dprint/win32-arm64@0.57.4':
     resolution: {integrity: sha512-bGEtcSjl6T4xjwr9nUF5kgd3174NP7yb338+Ulqq5DMYcSN4ibI62eVQKBTuyLWByz56aVOL06dj8pKTUzn+yQ==}
@@ -2405,6 +2414,9 @@ packages:
   dompurify@3.4.15:
     resolution: {integrity: sha512-EUBjM+B+lkDE41iE82DDSCfkoPGfXx8IxFxPMjNzm/Uk4xDet77rTN9wqlxlVg71kK7XGuUMv6wUxJUwwv+Xyw==}
 
+  dprint-plugin-malva@0.16.0:
+    resolution: {integrity: sha512-cHisdhrNcBHfvTG/jgHUkVyL6zeY+C5yLO+E/UyiTbp6wzauB3d25YyPZeMlsd7M/PDT8W4Yre8jKJ/xMwthiw==}
+
   dprint@0.57.4:
     resolution: {integrity: sha512-iiorgfJrrV7DDf7S9AB/d5ZB59Jn5idMDQoU7o6H9m6AvGVaLAPrGTAslmTwykkft9CYbWzqUrKjmKT80KWmAA==}
     hasBin: true
@@ -3963,6 +3975,8 @@ snapshots:
   '@dprint/linux-x64-musl@0.57.4':
     optional: true
 
+  '@dprint/typescript@0.96.1': {}
+
   '@dprint/win32-arm64@0.57.4':
     optional: true
 
@@ -5373,6 +5387,8 @@ snapshots:
   dompurify@3.4.15:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
+
+  dprint-plugin-malva@0.16.0: {}
 
   dprint@0.57.4:
     optionalDependencies:

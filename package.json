@@ -23,8 +23,10 @@
     "lint:fix": "node scripts/source-tools.mjs lint-fix"
   },
   "devDependencies": {
+    "@dprint/typescript": "^0.96.1",
     "@types/node": "^22.5.4",
     "dprint": "^0.57.4",
+    "dprint-plugin-malva": "^0.16.0",
     "oxlint": "^1.83.0",
     "tsx": "^4.19.1",
     "typescript": "7.0.2",

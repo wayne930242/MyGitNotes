@@ -74,7 +74,7 @@ describe('edit hook payloads', () => {
   });
 
   it('formats scoped CSS without trying to parse lint JSON for it', () => {
-    const file = write('apps/web/src/index.css', '.probe {\n color: red;\n padding: 0;\n}\n');
+    const file = write('apps/web/src/components/split-styles.css', '.probe {\n color: red;\n padding: 0;\n}\n');
     expect(invoke({ tool_name: 'Write', tool_input: { file_path: file } })).toBe('');
     expect(readFileSync(file, 'utf8')).toBe('.probe { color: red; padding: 0; }\n');
   });

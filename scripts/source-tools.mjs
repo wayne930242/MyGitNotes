@@ -4,7 +4,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const root = realpathSync(fileURLToPath(new URL('..', import.meta.url)));
-const cssFiles = new Set(['apps/web/src/index.css', 'apps/web/src/workspace.css', 'apps/web/src/directives.css']);
 
 export function run(binary, args) {
   const result = spawnSync(binary, args, { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: 120000 });
@@ -17,7 +16,7 @@ export function sourceFile(file) {
   const absolute = path.resolve(root, file);
   const relative = path.relative(root, absolute).split(path.sep).join('/');
   if (!/^(apps|packages|scripts)\//.test(relative)) return null;
-  if (!/\.(ts|tsx|js|mjs)$/.test(relative) && !cssFiles.has(relative)) return null;
+  if (!/\.(ts|tsx|js|mjs)$/.test(relative) && !/^apps\/.*\.css$/.test(relative)) return null;
   if (/(^|\/)(node_modules|dist|build|coverage|generated|\.cache|notes|examples)(\/|$)/.test(relative)) return null;
   if (!existsSync(absolute) || !statSync(absolute).isFile()) return null;
   if (realpathSync(absolute) !== absolute) return null;
