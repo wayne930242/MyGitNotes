@@ -16,6 +16,9 @@ const content = '# Link QA\n\n[Named link](https://example.com/named)\n\n(https:
 fs.mkdirSync(path.join(root, 'notes/example'), { recursive: true });
 fs.writeFileSync(path.join(root, '.github-notes.yaml'), 'schema_version: 1\nworkspace:\n  title: Link QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
 fs.writeFileSync(path.join(root, 'notes/example/links.md'), content);
+fs.writeFileSync(path.join(root, 'notes/example/target.md'), '# Target\n\nLanding note for internal link QA.\n');
+const internalLinksPath = path.join(root, 'notes/example/internal-links.md');
+fs.writeFileSync(internalLinksPath, '# Internal Links QA\n\n| Link |\n| --- |\n| [Relative note](target.md) |\n| [Relative route](/graph) |\n| [Absolute note](__ABSOLUTE_NOTE__) |\n| [Absolute route](__ABSOLUTE_ROUTE__) |\n| [In-note anchor](#landing) |\n\n## Landing\n');
 const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
 git('init', '-b', 'main'); git('config', 'user.name', 'Browser QA'); git('config', 'user.email', 'qa@example.com'); git('add', '.'); git('commit', '-m', 'fixture');
 process.env.MYGITNOTES_SOURCE = 'local';
@@ -25,6 +28,11 @@ const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
 const server = createServer(createApp(process.env.LINK_QA_PRODUCT || product));
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
+// The absolute-URL cases must match the app's own origin, which is only known once the server is listening.
+fs.writeFileSync(internalLinksPath, fs.readFileSync(internalLinksPath, 'utf8')
+  .replace('__ABSOLUTE_NOTE__', `${base}/notebooks/example/notes/target.md`)
+  .replace('__ABSOLUTE_ROUTE__', `${base}/notes`));
+git('add', '.'); git('commit', '-m', 'resolve internal link fixture origin');
 const browser = await puppeteer.launch({
   executablePath: resolveQaChromePath(),
   headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'],
@@ -122,6 +130,50 @@ try {
     assert.equal(browser.targets().length, targetsBefore, 'Unsafe links and code must not open tabs');
     assert.equal(fs.readFileSync(path.join(root, 'notes/example/links.md'), 'utf8'), content, 'Link clicks must not change the note');
     console.log('PASS link clicks: Ctrl/Cmd, active line, bare URL, angle URL, nested formatting, table, unsafe protocol and code');
+  }
+  if (!process.env.LINK_QA_CASE || process.env.LINK_QA_CASE === 'internal') {
+    const internalUrl = `${base}/notebooks/example/notes/internal-links.md`;
+    const openInternal = async () => {
+      await open('flexoki:dark');
+      await page.goto(internalUrl, { waitUntil: 'networkidle0' });
+      await page.waitForSelector('.live-md-rendered table a');
+    };
+    const expectRoutedNavigation = async (text, destinationPath) => {
+      await openInternal();
+      await page.evaluate(() => { window.__linkQaMarker = 'alive'; });
+      const targetsBefore = browser.targets().length;
+      await clickText(text);
+      // The destination may carry a `returnTo` query string, so only the path is asserted.
+      await page.waitForFunction(pathname => location.pathname === pathname, {}, destinationPath);
+      assert.equal(new URL(page.url()).pathname, destinationPath);
+      assert.equal(await page.evaluate(() => window.__linkQaMarker), 'alive', `${text}: routed navigation must not reload the page`);
+      assert.equal(browser.targets().length, targetsBefore, `${text}: a plain click must not open a new tab`);
+    };
+    // A relative link (unaffected by this change) and a same-origin absolute link (the fix) must both route in place.
+    await expectRoutedNavigation('Relative note', '/notebooks/example/notes/target.md');
+    await expectRoutedNavigation('Relative route', '/graph');
+    await expectRoutedNavigation('Absolute note', '/notebooks/example/notes/target.md');
+    await expectRoutedNavigation('Absolute route', '/notes');
+    const expectPopupFrom = async (text, modifier, destination) => {
+      const popupPromise = browser.waitForTarget(target => target.url() === destination, { timeout: 3000 });
+      await clickText(text, modifier);
+      const target = await popupPromise;
+      const popup = await target.page();
+      assert.equal(await popup.evaluate(() => window.opener === null), true);
+      await popup.close(); await page.bringToFront();
+      assert.equal(page.url(), internalUrl, `${text}: a modifier click must leave the current tab on the source note`);
+    };
+    await openInternal();
+    await expectPopupFrom('Absolute note', newTabKey, `${base}/notebooks/example/notes/target.md`);
+    await expectPopupFrom('Absolute route', newTabKey, `${base}/notes`);
+    await openInternal();
+    await page.evaluate(() => { window.__linkQaMarker = 'alive'; });
+    await clickText('In-note anchor');
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(page.url(), internalUrl, 'An in-note anchor click must not navigate');
+    assert.equal(await page.evaluate(() => window.__linkQaMarker), 'alive');
+    assert.equal(fs.readFileSync(internalLinksPath, 'utf8').includes('__ABSOLUTE_'), false);
+    console.log('PASS internal links: relative and same-origin absolute links route in place without a reload; modifier clicks still open a new tab; anchors just scroll');
   }
   if (!process.env.LINK_QA_CASE || process.env.LINK_QA_CASE === 'mobile') {
     await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
