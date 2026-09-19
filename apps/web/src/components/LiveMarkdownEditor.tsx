@@ -570,6 +570,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
   const lineOffset = useRef(lineNumberOffset); lineOffset.current = lineNumberOffset;
   const gutterDrag = useRef<{ start: number; current: number } | null>(null);
   const lastGutterClick = useRef<{ line: number; at: number } | null>(null);
+  const lastGutterCopy = useRef<{ line: number; at: number } | null>(null);
   const gutterDragCleanup = useRef<(() => void) | null>(null);
   useImperativeHandle(ref, () => ({
     insert(text, at) {
@@ -647,7 +648,9 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
       event.preventDefault();event.stopPropagation();
       const line=displayed-lineOffset.current;gutterDrag.current={start:line,current:line};target.classList.add('cm-line-copy-selected');
       const previous=lastGutterClick.current;
-      if(event.detail===2||(previous?.line===line&&performance.now()-previous.at<500)){lastGutterClick.current=null;gutterDrag.current=null;clearGutterRange();copyLinesCallback.current?.(line);return;}
+      if(previous?.line===line&&performance.now()-previous.at<500){
+        lastGutterClick.current=null;lastGutterCopy.current={line,at:performance.now()};gutterDrag.current=null;clearGutterRange();copyLinesCallback.current?.(line);return;
+      }
       const move=(moveEvent:MouseEvent)=>{
         const drag=gutterDrag.current;if(!drag)return;
         const hovered=document.elementFromPoint(moveEvent.clientX,moveEvent.clientY)?.closest<HTMLElement>('.cm-lineNumbers .cm-gutterElement');
@@ -671,7 +674,10 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
     const gutterDoubleClick=(event:MouseEvent)=>{
       const target=(event.target as HTMLElement).closest<HTMLElement>('.cm-lineNumbers .cm-gutterElement');
       const displayed=Number(target?.textContent);if(!target||!Number.isFinite(displayed))return;
-      event.preventDefault();event.stopPropagation();copyLinesCallback.current?.(displayed-lineOffset.current);
+      event.preventDefault();event.stopPropagation();
+      const line=displayed-lineOffset.current, recent=lastGutterCopy.current;
+      if(recent?.line===line&&performance.now()-recent.at<500)return;
+      lastGutterCopy.current={line,at:performance.now()};copyLinesCallback.current?.(line);
     };
     view.dom.addEventListener('mousedown',gutterMouseDown,true);view.dom.addEventListener('dblclick',gutterDoubleClick,true);
     editor.current=view;return()=>{gutterDragCleanup.current?.();view.dom.removeEventListener('mousedown',gutterMouseDown,true);view.dom.removeEventListener('dblclick',gutterDoubleClick,true);view.destroy();editor.current=undefined;};

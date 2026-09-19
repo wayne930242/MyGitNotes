@@ -81,6 +81,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   const [draggedSourceRange, setDraggedSourceRange] = useState<[number, number] | null>(null);
   const sourceDragStart = useRef<number | null>(null);
   const lastSourceGutterClick = useRef<{ line: number; at: number } | null>(null);
+  const lastSourceGutterCopy = useRef<{ line: number; at: number } | null>(null);
   const [lineCopyFeedback, setLineCopyFeedback] = useState<{ ok: boolean; start: number; end: number } | null>(null);
   const lineCopyTimer = useRef<ReturnType<typeof setTimeout>>();
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
@@ -253,12 +254,17 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
                           event.preventDefault();
                           const previous = lastSourceGutterClick.current;
                           if (previous?.line === line && performance.now() - previous.at < 500) {
-                            lastSourceGutterClick.current = null; void copyLines(line); return;
+                            lastSourceGutterClick.current = null; lastSourceGutterCopy.current = { line, at: performance.now() }; void copyLines(line); return;
                           }
                           sourceDragStart.current = line; setDraggedSourceRange([line, line]);
                           event.currentTarget.setPointerCapture(event.pointerId);
                         }}
-                        onDoubleClick={event => { event.preventDefault(); event.stopPropagation(); void copyLines(line); }}
+                        onDoubleClick={event => {
+                          event.preventDefault(); event.stopPropagation();
+                          const recent = lastSourceGutterCopy.current;
+                          if (recent?.line === line && performance.now() - recent.at < 500) return;
+                          lastSourceGutterCopy.current = { line, at: performance.now() }; void copyLines(line);
+                        }}
                         className={`cursor-default select-none origin-right transition-[background-color,color,opacity,transform,font-weight] duration-150 ${inDraggedRange ? 'bg-fg/10 text-fg' : ''} ${line === activeSourceLine ? 'scale-[1.08] font-semibold text-muted' : ''}`}
                       >
                         {line + lineNumberOffset}

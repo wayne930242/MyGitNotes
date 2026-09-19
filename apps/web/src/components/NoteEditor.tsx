@@ -1143,7 +1143,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
 
         {frame === 'compact' ? <>
           <div className="note-editor-body">
-            <MarkdownEditor ref={editorRef} compact content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} onCaret={onCaret} ariaLabel="Note content" showLineNumbers={showLineNumbers} lineNumberOffset={note.lineNumberOffset} />
+            <MarkdownEditor ref={editorRef} compact content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} onCaret={onCaret} ariaLabel="Note content" showLineNumbers={showLineNumbers} lineNumberOffset={baseNote.lineNumberOffset} />
           </div>
           <div className="note-compact-bar">
             {isMarkdown && <button type="button" className="ui-icon-button" data-mode-toggle={editorMode} title={t(editorMode === 'live' ? 'editor.source' : 'editor.livePreview')} aria-label={t(editorMode === 'live' ? 'editor.source' : 'editor.livePreview')}
@@ -1206,7 +1206,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
         </div>
 
         <div className="note-editor-body">
-          <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} onCaret={onCaret} insertSlot={insertSlot} ariaLabel="Note content" showLineNumbers={showLineNumbers} lineNumberOffset={note.lineNumberOffset} />
+          <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} onCaret={onCaret} insertSlot={insertSlot} ariaLabel="Note content" showLineNumbers={showLineNumbers} lineNumberOffset={baseNote.lineNumberOffset} />
           {frame === 'zoom' ? <aside className="note-document-panel" data-open={Boolean(notePanel)} data-panel={notePanel || undefined} aria-label={t('editor.documentPanel')}>
             {panelTabs}
             {panelSections}
