@@ -4,6 +4,7 @@ export * from './workspace-documents.js';
 export * from './focus-page.js';
 export * from './note-status.js';
 export * from './config.js';
+export * from './workspace-migration.js';
 export * from './frontmatter.js';
 export * from './note-timestamps.js';
 export * from './classifier.js';

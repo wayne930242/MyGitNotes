@@ -1,12 +1,13 @@
 import fs from 'node:fs';
 import { loadWorkspaceConfig, resolveSafePath, scanNotebookNotes, fillMissingNoteTimestamps } from '../packages/core/src/index.js';
 import { getFirstAndLastCommitDates } from '../packages/git/src/index.js';
+import { resolveWorkspaceRoot } from './lib/workspace-root.js';
 
 async function backfillNoteTimestamps() {
-  const repoRoot = process.cwd();
+  const repoRoot = resolveWorkspaceRoot();
   const config = loadWorkspaceConfig(repoRoot);
   if (!config) {
-    console.error('[backfill] No workspace configuration found in the current directory.');
+    console.error('[backfill] No workspace configuration found at ${repoRoot}.');
     process.exit(1);
   }
 

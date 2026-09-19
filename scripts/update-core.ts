@@ -1,18 +1,20 @@
 import { updateCore } from '../packages/git/src/index.js';
-import path from 'node:path';
+import { resolveWorkspaceRoot } from './lib/workspace-root.js';
 
 async function main() {
-  const workspaceIndex = process.argv.indexOf('--workspace');
-  if (workspaceIndex >= 0 && (!process.argv[workspaceIndex + 1] || process.argv[workspaceIndex + 1].startsWith('--'))) {
-    throw new Error('--workspace requires the path to a workspace.');
+  // --workspace names a fork-model checkout to update; a Core checkout updates itself and migrates its configured workspace.
+  const repoRoot = process.argv.includes('--workspace') ? resolveWorkspaceRoot() : process.cwd();
+  let workspaceRoot: string | undefined;
+  if (repoRoot === process.cwd()) {
+    try { workspaceRoot = resolveWorkspaceRoot(repoRoot); }
+    catch (error) { console.log(`[update-core] Workspace migration skipped: ${error instanceof Error ? error.message : String(error)}`); }
   }
-  const repoRoot = workspaceIndex >= 0 ? path.resolve(process.argv[workspaceIndex + 1]) : process.cwd();
   const autoPush = process.argv.includes('--push');
 
   console.log(`[update-core] Checking for Core product updates...`);
 
   try {
-    const result = await updateCore({ repoRoot, autoPush });
+    const result = await updateCore({ repoRoot, workspaceRoot, autoPush });
 
     if (result.alreadyUpToDate) {
       console.log(`\n✅ ${result.message}`);
@@ -33,7 +35,7 @@ async function main() {
 
     console.log(`\n🎉 ${result.message}`);
     console.log(`Previous revision: ${result.currentHash.slice(0, 7)}`);
-    console.log(`Merged revision:   ${result.coreRemoteHash.slice(0, 7)} (via ${result.remoteUsed})`);
+    console.log(`Core revision:     ${result.coreRemoteHash.slice(0, 7)} (via ${result.remoteUsed})`);
     console.log(`Workspace validated successfully.\n`);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

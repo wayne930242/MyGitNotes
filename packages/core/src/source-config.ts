@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
+import { resolveWorkspaceConfigPath } from './config.js';
 
 export type RemoteSourceConfig = { type: 'github'; repository: string; branch: string } | { type: 'gitlab'; url: string; repository: string; branch: string };
 export type SourceConfig = { type: 'local'; path: string } | RemoteSourceConfig;
@@ -28,17 +29,22 @@ export function parseSourceConfig(raw: unknown, base: string): SourceConfig {
   }
   throw new Error('Configure source.type local with path, github with owner/repo and branch, or gitlab with url, group/project and branch.');
 }
+/** A fork-model checkout holds its workspace at the application root; a Core checkout names its `main` worktree. */
+function defaultLocalPath(base: string): string {
+  if (resolveWorkspaceConfigPath(base)) return base;
+  throw new Error(`No MyGitNotes workspace at ${base}. Run \`pnpm bootstrap-workspace\` or set MYGITNOTES_LOCAL_PATH to your main worktree.`);
+}
 export function loadSourceConfig(base: string, env: NodeJS.ProcessEnv = process.env): SourceConfig {
   const get = (suffix: string) => env[`MYGITNOTES_${suffix}`] ?? env[`GITHUB_NOTES_${suffix}`];
   const type = get('SOURCE');
   if (type) return parseSourceConfig({ source: type === 'local'
-    ? { type, path: get('LOCAL_PATH') || env.REPO_ROOT || base }
+    ? { type, path: get('LOCAL_PATH') || env.REPO_ROOT || defaultLocalPath(base) }
     : { type, repository: get('REPOSITORY'), branch: get('BRANCH'), url: get('GITLAB_URL') ?? env.GITLAB_URL } }, base);
   const configured = get('SERVER_CONFIG');
   const file = path.resolve(base, configured || (fs.existsSync(path.join(base, 'mygitnotes.server.yaml')) ? 'mygitnotes.server.yaml' : SERVER_CONFIG_FILENAME));
   if (fs.existsSync(file)) return parseSourceConfig(YAML.parse(fs.readFileSync(file, 'utf8')), path.dirname(file));
   if (env.VERCEL) throw new Error('Set MYGITNOTES_SOURCE, MYGITNOTES_REPOSITORY and MYGITNOTES_BRANCH. Existing GITHUB_NOTES_REPOSITORY and related settings remain supported.');
-  return { type: 'local', path: path.resolve(env.REPO_ROOT || base) };
+  return { type: 'local', path: env.REPO_ROOT ? path.resolve(env.REPO_ROOT) : defaultLocalPath(base) };
 }
 export function sourceIdentity(source: SourceConfig): string {
   if (source.type === 'local') return `local:${source.path}`;

@@ -2,7 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { runGit, getCurrentBranch, getGitStatus } from './git-service.js';
 import { CoreUpdateOptions, CoreUpdateResult } from './types.js';
-import { loadWorkspaceConfig, WORKSPACE_CONFIG_FILENAME, scanNotebookNotes } from '@mygitnotes/core';
+import { loadWorkspaceConfig, migrateWorkspace, resolveWorkspaceConfigPath } from '@mygitnotes/core';
 import { mergeWorkspaceCore } from '../../../scripts/lib/workspace-agent-merge.mjs';
 
 export class CoreUpdateError extends Error {
@@ -32,8 +32,13 @@ export async function discoverCoreRemote(repoRoot: string): Promise<'upstream' |
   );
 }
 
+const backfillHint = (count: number) => count > 0
+  ? ` ${count} note(s) are missing created/updated. Run \`pnpm backfill-note-timestamps\` and review the diff.`
+  : '';
+
 /**
  * Executes the safe, non-destructive Core update workflow.
+ * A `core` checkout fast-forwards; a fork-model `main` that still tracks product files merges Core.
  */
 export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdateResult> {
   const { repoRoot, autoPush = false } = options;
@@ -49,11 +54,11 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
     throw new CoreUpdateError('The workspace path must be the repository root.', 'NOT_REPO_ROOT');
   }
 
-  // 2. Verify the active user branch is main
+  // 2. Core checkouts fast-forward; fork-model workspaces merge into main.
   const currentBranch = await getCurrentBranch(repoRoot);
-  if (currentBranch !== 'main') {
+  if (currentBranch !== 'main' && currentBranch !== 'core') {
     throw new CoreUpdateError(
-      `Core updates can only be merged into the user workspace branch 'main'. Current active branch is '${currentBranch}'.`,
+      `Core updates run on the 'core' checkout, or on a fork-model 'main' workspace. Current active branch is '${currentBranch}'.`,
       'INVALID_BRANCH'
     );
   }
@@ -92,6 +97,50 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
     isAncestor = false;
   }
 
+  if (isAncestor && currentBranch === 'core') {
+    const migration = options.workspaceRoot && resolveWorkspaceConfigPath(options.workspaceRoot) ? migrateWorkspace(options.workspaceRoot) : undefined;
+    return {
+      success: true,
+      currentHash,
+      coreRemoteHash,
+      remoteUsed: remote,
+      alreadyUpToDate: true,
+      notesMissingTimestamps: migration?.notesMissingTimestamps,
+      message: `Core is already up to date with ${remote}/core (${coreRemoteHash.slice(0, 7)}).${backfillHint(migration?.notesMissingTimestamps ?? 0)}`,
+    };
+  }
+
+  if (currentBranch === 'core') {
+    try {
+      await runGit(['merge', '--ff-only', `${remote}/core`], repoRoot);
+    } catch {
+      throw new CoreUpdateError(
+        `Local 'core' has commits that ${remote}/core does not. Core only fast-forwards from upstream; move local work to another branch first.`,
+        'CORE_DIVERGED'
+      );
+    }
+    const migration = options.workspaceRoot && resolveWorkspaceConfigPath(options.workspaceRoot) ? migrateWorkspace(options.workspaceRoot) : undefined;
+    if (autoPush) await runGit(['push', 'origin', 'core'], repoRoot);
+    return {
+      success: true,
+      currentHash,
+      coreRemoteHash,
+      remoteUsed: remote,
+      alreadyUpToDate: false,
+      notesMissingTimestamps: migration?.notesMissingTimestamps,
+      message: `Fast-forwarded core to ${remote}/core (${coreRemoteHash.slice(0, 7)}).${backfillHint(migration?.notesMissingTimestamps ?? 0)}`,
+    };
+  }
+
+  // A converted main holds only content; merging Core would bring the product back.
+  const tracks = async (revision: string) => Boolean((await runGit(['ls-tree', '--name-only', revision, '--', 'pnpm-workspace.yaml'], repoRoot)).stdout);
+  if (await tracks(coreRemoteHash) && !await tracks('HEAD')) {
+    throw new CoreUpdateError(
+      `'main' holds only workspace content. Update the 'core' checkout instead: run \`pnpm update-core\` there.`,
+      'CONTENT_ONLY_MAIN'
+    );
+  }
+
   if (isAncestor) {
     return {
       success: true,
@@ -119,27 +168,12 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
   }
 
   // 8. Run versioned workspace migrations if required
-  const config = loadWorkspaceConfig(repoRoot);
-  if (config) {
-    // Check if schema_version needs migration
-    if (config.schema_version < 1) {
-      config.schema_version = 1;
-      fs.writeFileSync(
-        path.join(repoRoot, WORKSPACE_CONFIG_FILENAME),
-        JSON.stringify(config, null, 2),
-        'utf-8'
-      );
-    }
-  }
-
-  // Notes without created/updated predate this feature; point the user at the backfill command.
   let notesMissingTimestamps = 0;
-  if (config) {
-    for (const notebook of config.notebooks) {
-      for (const note of scanNotebookNotes(repoRoot, notebook)) {
-        if (!note.metadata.created || !note.metadata.updated) notesMissingTimestamps++;
-      }
-    }
+  const configPath = resolveWorkspaceConfigPath(repoRoot);
+  if (configPath) {
+    const migration = migrateWorkspace(repoRoot);
+    notesMissingTimestamps = migration.notesMissingTimestamps;
+    if (migration.migrated) await runGit(['add', '--', configPath], repoRoot);
   }
 
   // 9. Validate the workspace after merge
@@ -159,10 +193,6 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
     await runGit(['push', 'origin', 'main'], repoRoot);
   }
 
-  const backfillHint = notesMissingTimestamps > 0
-    ? ` ${notesMissingTimestamps} note(s) are missing created/updated. Run \`pnpm backfill-note-timestamps\` and review the diff.`
-    : '';
-
   return {
     success: true,
     currentHash,
@@ -170,6 +200,6 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
     remoteUsed: remote,
     alreadyUpToDate: false,
     notesMissingTimestamps,
-    message: `Successfully merged ${remote}/core (${coreRemoteHash.slice(0, 7)}) into main.${backfillHint}`,
+    message: `Successfully merged ${remote}/core (${coreRemoteHash.slice(0, 7)}) into main.${backfillHint(notesMissingTimestamps)}`,
   };
 }

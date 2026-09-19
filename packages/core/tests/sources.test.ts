@@ -55,6 +55,14 @@ describe('source configuration', () => {
     expect(loadSourceConfig(root, { GITHUB_NOTES_SERVER_CONFIG: 'runtime/server.yaml' })).toEqual({ type: 'local', path: path.join(root, 'notes') });
     expect(loadSourceConfig(root, {})).toEqual({ type: 'local', path: root });
   });
+  it('reads the application root only when it holds a workspace, and otherwise requires MYGITNOTES_LOCAL_PATH', () => {
+    const core = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-core-'));
+    try {
+      for (const env of [{}, { MYGITNOTES_SOURCE: 'local' }]) expect(() => loadSourceConfig(core, env)).toThrow(/pnpm bootstrap-workspace.*MYGITNOTES_LOCAL_PATH/);
+      expect(loadSourceConfig(core, { MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: '../notes' })).toEqual({ type: 'local', path: path.resolve(core, '../notes') });
+      expect(loadSourceConfig(core, { REPO_ROOT: root })).toEqual({ type: 'local', path: root });
+    } finally { fs.rmSync(core, { recursive: true, force: true }); }
+  });
   it('validates remote source settings and fails closed in an unconfigured cloud', () => {
     expect(parseSourceConfig({ source: { type: 'github', repository: 'owner/repo', branch: 'main' } }, root).type).toBe('github');
     for (const repository of ['https://evil.example/a', '../repo', 'owner/repo/extra']) expect(() => parseSourceConfig({ source: { type: 'github', repository, branch: 'main' } }, root)).toThrow();

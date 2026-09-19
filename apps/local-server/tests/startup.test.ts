@@ -6,6 +6,8 @@ import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { get } from 'node:http';
 
+const writeWorkspace = (dir: string, version = 1) => fs.writeFileSync(path.join(dir, '.mygitnotes.yaml'), `schema_version: ${version}\nworkspace:\n  title: Startup\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n`);
+
 let child: ChildProcess | undefined;
 let root: string | undefined;
 afterEach(async () => {
@@ -20,6 +22,7 @@ afterEach(async () => {
 it.each(['127.0.0.1', '0.0.0.0'])('local development supports HOST=%s and opens the selected checkout despite deployment settings', async host => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-startup-'));
   execFileSync('git', ['init', '-b', 'main', root], { stdio: 'pipe' });
+  writeWorkspace(root);
   const reservation = createServer();
   await new Promise<void>(resolve => reservation.listen(0, '127.0.0.1', resolve));
   const port = (reservation.address() as { port: number }).port;
@@ -69,6 +72,7 @@ it.each(['127.0.0.1', '0.0.0.0'])('local development supports HOST=%s and opens 
 it('binds the next free port when the desired one is occupied and records it for the web dev server', async () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-startup-'));
   execFileSync('git', ['init', '-b', 'main', root], { stdio: 'pipe' });
+  writeWorkspace(root);
   const occupied = createServer();
   await new Promise<void>(resolve => occupied.listen(0, '127.0.0.1', resolve));
   const desiredPort = (occupied.address() as { port: number }).port;
@@ -93,4 +97,22 @@ it('binds the next free port when the desired one is occupied and records it for
   } finally {
     await new Promise<void>(resolve => occupied.close(() => resolve()));
   }
+}, 15000);
+
+it.each([
+  ['a newer schema_version', 2, /requires a newer Core/],
+  ['no workspace', 0, /pnpm bootstrap-workspace/],
+])('fails fast at startup on %s', async (_label, version, message) => {
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-startup-'));
+  if (version) writeWorkspace(root, version);
+  const env: NodeJS.ProcessEnv = { ...process.env, PORT: '0', HOST: '127.0.0.1', APP_URL: '', VERCEL: '', MYGITNOTES_DEV_PORTS_FILE: path.join(root, '.mygitnotes-dev-ports.json') };
+  for (const key of ['REPO_ROOT', 'MYGITNOTES_LOCAL_PATH', 'GITHUB_NOTES_LOCAL_PATH', 'MYGITNOTES_SOURCE', 'GITHUB_NOTES_SOURCE']) delete env[key];
+  if (version) env.MYGITNOTES_LOCAL_PATH = root;
+  // Without a local path the server reads the application root, which on Core holds no workspace.
+  child = spawn(process.execPath, ['--import', 'tsx', 'apps/local-server/src/index.ts', '--local'], { cwd: path.resolve('.'), env, stdio: ['ignore', 'pipe', 'pipe'] });
+  let stderr = '';
+  child.stderr!.on('data', data => { stderr += String(data); });
+  const code = await new Promise(resolve => child!.once('exit', resolve));
+  expect(code).not.toBe(0);
+  expect(stderr).toMatch(message);
 }, 15000);

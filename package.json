@@ -6,6 +6,7 @@
   "scripts": {
     "bootstrap-workspace": "tsx scripts/bootstrap-workspace.ts",
     "update-core": "tsx scripts/update-core.ts",
+    "migrate-workspace": "tsx scripts/migrate-workspace.ts",
     "backfill-note-timestamps": "tsx scripts/backfill-note-timestamps.ts",
     "build": "pnpm --filter \"@mygitnotes/*\" run build",
     "test": "node scripts/check-core-ownership.mjs && node scripts/check-vercel-sparse-paths.mjs && vitest run",
