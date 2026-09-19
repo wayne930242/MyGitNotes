@@ -54,13 +54,16 @@ const tabLabels = (page, pane) => page.$$eval(`[data-focus-pane="${pane}"] .focu
 const shownTab = (page, pane) => page.$eval(`[data-focus-pane="${pane}"] .focus-tab [role="tab"][aria-selected="true"]`, tab => tab.textContent.trim()).catch(() => null);
 const paneCount = page => page.$$eval('[data-focus-pane]', panes => panes.length);
 const activePane = page => page.$eval('[data-focus-pane][data-active]', pane => Number(pane.dataset.focusPane));
+const BROWSE_ROW_SELECTOR = '.workspace-scroll :is(.note-list tbody tr, [data-notepath], .cursor-pointer.rounded-xl)';
 /** A note in the browse region: a list row, a card or a Kanban card. */
-const browseRow = (page, title) => page.evaluateHandle(title => [...document.querySelectorAll('.workspace-scroll :is(.note-list tbody tr, [data-notepath], .cursor-pointer.rounded-xl)')]
-  .find(row => row.textContent.includes(title)), title);
-/** Clicks a browse item's title, away from its status and action controls. */
+const browseRow = (page, title) => page.evaluateHandle((selector, title) => [...document.querySelectorAll(selector)]
+  .find(row => row.textContent.includes(title)), BROWSE_ROW_SELECTOR, title);
+/** Clicks a browse item's title, away from its status and action controls.
+ *  A view switch (e.g. to Kanban) renders its columns before their notes finish loading, so this waits for the row itself. */
 const clickRow = async (page, title) => {
+  await page.waitForFunction((selector, title) => [...document.querySelectorAll(selector)].some(row => row.textContent.includes(title)),
+    { timeout: 5000 }, BROWSE_ROW_SELECTOR, title).catch(() => assert.fail(`Browse row ${title} is missing`));
   const row = await browseRow(page, title);
-  assert(row.asElement(), `Browse row ${title} is missing`);
   const label = await row.evaluateHandle((row, title) => [...row.querySelectorAll('*')].reverse().find(element => element.textContent.trim() === title), title);
   await (label.asElement() ?? row.asElement()).click();
 };
