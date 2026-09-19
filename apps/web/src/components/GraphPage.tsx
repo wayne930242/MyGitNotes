@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Focus, LayoutGrid, ListChecks, Maximize2, Minus, PanelsTopLeft, PanelTopClose, PanelTopOpen, Pencil, Plus, Save, Scan, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Maximize2, PanelTopOpen } from 'lucide-react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { insertNoteLink, type NoteGraphNode } from '@mygitnotes/core/note-graph';
+import type { NoteGraphNode } from '@mygitnotes/core/note-graph';
 import { selectFilteredGraph } from '@mygitnotes/core/note-filters';
 import { type GraphLayout, ScreenPageSchema, type ScreenRow } from '@mygitnotes/core/screen-page';
 import type { NoteQuery } from '@mygitnotes/core/note-query';
@@ -12,19 +12,21 @@ import { overlayGraphDrafts } from '../lib/draft-overlay.js';
 import { useLanePaths } from '../lib/screen-queries.js';
 import type { FilterControls } from '../lib/filter-controls.js';
 import type { ScreenController } from '../lib/use-screen-page.js';
-import { useNoteEditing } from '../lib/note-editing.js';
 import { arrangeGraphLayout, graphLaneViewport } from '../lib/graph-layout.js';
 import { optimizeGraphLayout } from '../lib/graph-topology-layout.js';
 import { initializeGraphLayout } from '../lib/graph-initial-layout.js';
 import { useTranslation } from '../lib/i18n/index.js';
-import type { NoteEditorHandle, NoteEditorSession } from './NoteEditor.js';
 import { GRAPH_APPEARANCE_KEY, type GraphAppearance, graphColorGroup, graphColorGroups, readGraphAppearance } from '../lib/graph-colors.js';
 import { GraphControls } from './graph/GraphControls.js';
 import { GraphFilters } from './GraphFilters.js';
+import { GraphLanePanel } from './graph/GraphLanePanel.js';
 import { GraphNoteCard } from './graph/GraphNoteCard.js';
+import { GraphSelectionToolbar } from './graph/GraphSelectionToolbar.js';
 import { GraphTool } from './graph/GraphTool.js';
 import { ScreenEditRow } from './ScreenDialogs.js';
 import { useGraphMinimap } from './graph/useGraphMinimap.js';
+import { useGraphNoteSessions } from './graph/useGraphNoteSessions.js';
+import { useLaneSelection } from './graph/useLaneSelection.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { themeColor, tokenAlpha } from '../lib/theme-color.js';
 import './graph/graph-editing.css';
@@ -42,12 +44,7 @@ export interface GraphPageProps {
 export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: GraphPageProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [params, setParams] = useSearchParams();
-  const laneIds = lane ? [lane.id] : params.getAll('lanes');
-  const laneKey = laneIds.join(',');
-  const activeLane = lane || (laneIds.length === 1 ? screen?.page.rows.find(row => row.id === laneIds[0]) : undefined);
-  const showOutside = !lane && params.get('laneScope') === 'all';
-  const [lanePanel, setLanePanel] = useState(false), [editLane, setEditLane] = useState(false);
+  const { params, setParams, laneIds, laneKey, activeLane, showOutside, lanePanel, setLanePanel, editLane, setEditLane, rows, laneRows, selectLane } = useLaneSelection({ lane, screen, filters });
   const [saveLayoutRequested, setSaveLayoutRequested] = useState(false);
   const [closing, setClosing] = useState<Set<string>>(() => new Set());
   const closeTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -77,12 +74,9 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
   const [saveOpen, setSaveOpen] = useState(false), [name, setName] = useState(''), [notice, setNotice] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [appearance, setAppearance] = useState(readGraphAppearance), [appearanceError, setAppearanceError] = useState(false);
-  const positions = useRef(new Map<string, LayoutNode>()), carets = useRef(new Map<string, number>());
+  const positions = useRef(new Map<string, LayoutNode>());
   const fitted = useRef(false), interacted = useRef(false);
   const [gesture, setGesture] = useState<{ kind: 'box' | 'link'; start: { x: number; y: number; }; end: { x: number; y: number; }; source?: string; } | null>(null);
-  const rows = screen?.page.rows || [];
-  const graphNotebook = filters?.value.notebookId;
-  const laneRows = graphNotebook && graphNotebook !== 'all' ? rows.filter(row => row.notebookId === graphNotebook) : rows;
   const latest = useRef({ screen, layout });
   /* eslint-disable react/refs -- The force-graph adapter keeps imperative graph state and current layout in refs for canvas callbacks. */
   latest.current = { screen, layout };
@@ -122,37 +116,8 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
     observer.observe(bar);
     return () => observer.disconnect();
   }, [lane]);
-  // A lane belongs to one notebook, so the graph showing it follows that notebook.
-  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
-  useEffect(() => {
-    if (lane || !activeLane || !filters || graphNotebook === activeLane.notebookId) return;
-    const next = new URLSearchParams(params);
-    next.set('notebook', activeLane.notebookId);
-    setParams(next, { replace: true });
-  }, [lane, activeLane?.notebookId, graphNotebook]);
-  /* eslint-enable react-hooks/exhaustive-deps */
   // Expanded cards host the notes' editors; their sessions drive the pending edges and link insertion.
-  const editing = useNoteEditing();
-  const [sessions, setSessions] = useState(() => new Map<string, NoteEditorSession>());
-  const updateSession = (path: string, session: NoteEditorSession | null) =>
-    setSessions(previous => {
-      const next = new Map(previous);
-      if (session) next.set(path, session);
-      else next.delete(path);
-      return next;
-    });
-  const handles = useRef(new Map<string, NoteEditorHandle>()), editorRefs = useRef(new Map<string, (handle: NoteEditorHandle | null) => void>());
-  const editorRef = (path: string) => {
-    let ref = editorRefs.current.get(path);
-    if (!ref) {
-      ref = handle => {
-        if (handle) handles.current.set(path, handle);
-        else handles.current.delete(path);
-      };
-      editorRefs.current.set(path, ref);
-    }
-    return ref;
-  };
+  const { editing, sessions, updateSession, editorRef, carets, link } = useGraphNoteSessions({ t, onNotice: setNotice });
   // Nodes and links come from the server; the filter, the visible set and lane membership are
   // path queries, and unsaved drafts are laid over the answer.
   const graphSource = useNoteGraph();
@@ -416,19 +381,6 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
     window.addEventListener('pointerup', finish);
     window.addEventListener('pointercancel', cancel);
   };
-  const link = (source: string, target: { path: string; title: string; }) => {
-    const session = sessions.get(source), handle = handles.current.get(source);
-    if (!session || session.locked || !handle) return;
-    const result = insertNoteLink(session.content, source, target.path, target.title, carets.current.get(source));
-    if (result.content === session.content) {
-      setNotice(t('graph.linkExists'));
-      return;
-    }
-    const at = result.position - (result.content.length - session.content.length);
-    handle.insert(result.content.slice(at, result.position), at);
-    carets.current.set(source, result.position);
-    setNotice(t('graph.linkAdded'));
-  };
   const drag = (event: React.PointerEvent, path: string, kind: 'move' | 'resize') => {
     if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || maximized) return;
     event.preventDefault();
@@ -489,13 +441,6 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
   };
   const graphLoading = graphSource.loading || matchingPaths.loading || visiblePaths.loading || lanePaths.loading;
   const visibleSelected = selected.filter(path => graphData.nodes.some(node => node.id === path));
-  const selectLane = (id: string) => {
-    const next = new URLSearchParams(params);
-    next.delete('lanes');
-    next.delete('laneScope');
-    if (id) next.set('lanes', id);
-    setParams(next);
-  };
   const changeMembership = (add: boolean) => {
     if (!screen?.writable || activeLane?.kind !== 'custom') return;
     const selectedSet = new Set(visibleSelected);
@@ -582,67 +527,39 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
     >
       {!lane && <GraphControls controlsRef={controls} filterPanel={filtersElement} appearance={appearance} onAppearanceChange={changeAppearance} visibleColorGroups={colors} appearanceSaveError={appearanceError} />}
       {!lane && (
-        <div className='graph-selection-toolbar' role='toolbar' aria-label={t('graph.tools')}>
-          <GraphTool label={t('graph.boxSelect')} pressed={boxMode} onClick={() => setBoxMode(v => !v)}>
-            <Scan size={18} />
-          </GraphTool>
-          <GraphTool
-            label={`${t('graph.selectNotes')} (${visibleSelected.length})`}
-            pressed={pickerOpen}
-            onClick={() => {
-              setPickerOpen(v => !v);
-              setLanePanel(false);
-            }}
-          >
-            <ListChecks size={18} />
-            <small>{visibleSelected.length || ''}</small>
-          </GraphTool>
-          <GraphTool label={t('graph.expand')} disabled={!visibleSelected.length} onClick={() => setExpanded(visibleSelected, true)}>
-            <PanelTopOpen size={18} />
-          </GraphTool>
-          <GraphTool label={t('graph.collapse')} disabled={!visibleSelected.length} onClick={() => setExpanded(visibleSelected, false)}>
-            <PanelTopClose size={18} />
-          </GraphTool>
-          <GraphTool label={t(only ? 'graph.showAll' : 'graph.onlySelected')} pressed={Boolean(only)} disabled={!visibleSelected.length && !only} onClick={() => setOnly(only ? null : visibleSelected)}>
-            <Focus size={18} />
-          </GraphTool>
-          <GraphTool
-            label={t('graph.saveLane')}
-            disabled={!saveNotebook || !screen?.writable}
-            onClick={() => {
-              setName('');
-              setSaveOpen(true);
-            }}
-          >
-            <Save size={18} />
-          </GraphTool>
-          <GraphTool
-            label={t('graph.arrange')}
-            onClick={() => {
-              freeze();
-              const arranged = reflow(currentLayout(), true);
-              persistLayout(arranged);
-              requestAnimationFrame(() => fitView(arranged));
-            }}
-          >
-            <LayoutGrid size={18} />
-          </GraphTool>
-          <GraphTool
-            label={t('graph.chooseLane')}
-            pressed={lanePanel || Boolean(activeLane)}
-            onClick={() => {
-              setLanePanel(v => !v);
-              setPickerOpen(false);
-            }}
-          >
-            <PanelsTopLeft size={18} />
-          </GraphTool>
-          {activeLane && (
-            <GraphTool label={t('screen.editRow')} disabled={!screen?.writable} onClick={() => setEditLane(true)}>
-              <Pencil size={18} />
-            </GraphTool>
-          )}
-        </div>
+        <GraphSelectionToolbar
+          t={t}
+          boxMode={boxMode}
+          onToggleBoxMode={() => setBoxMode(v => !v)}
+          pickerOpen={pickerOpen}
+          onTogglePicker={() => {
+            setPickerOpen(v => !v);
+            setLanePanel(false);
+          }}
+          visibleSelected={visibleSelected}
+          onExpand={setExpanded}
+          only={only}
+          onOnly={setOnly}
+          saveNotebook={saveNotebook}
+          screenWritable={screen?.writable}
+          onSaveLane={() => {
+            setName('');
+            setSaveOpen(true);
+          }}
+          onArrange={() => {
+            freeze();
+            const arranged = reflow(currentLayout(), true);
+            persistLayout(arranged);
+            requestAnimationFrame(() => fitView(arranged));
+          }}
+          lanePanel={lanePanel}
+          onToggleLanePanel={() => {
+            setLanePanel(v => !v);
+            setPickerOpen(false);
+          }}
+          activeLane={activeLane}
+          onEditLane={() => setEditLane(true)}
+        />
       )}
       {lane && (
         <div className='graph-fullscreen-tool'>
@@ -652,67 +569,30 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
         </div>
       )}
       {!lane && lanePanel && (
-        <section className='graph-lane-panel' aria-label={t('graph.chooseLane')}>
-          <header>
-            <strong>{activeLane?.name || t('graph.lanes')}</strong>
-            <button aria-label={t(activeLane ? 'graph.minimizeLane' : 'common.close')} title={t(activeLane ? 'graph.minimizeLane' : 'common.close')} onClick={() => setLanePanel(false)}>{activeLane ? <Minus size={16} /> : <X size={16} />}</button>
-          </header>
-          <select aria-label={t('graph.chooseLane')} value={activeLane?.id || ''} onChange={event => selectLane(event.target.value)}>
-            <option value=''>{t('graph.allLanes')}</option>
-            {laneRows.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
-          </select>
-          {activeLane && (
-            <>
-              <label>
-                <input
-                  type='checkbox'
-                  checked={showOutside}
-                  onChange={event => {
-                    const next = new URLSearchParams(params);
-                    if (event.target.checked) next.set('laneScope', 'all');
-                    else next.delete('laneScope');
-                    setParams(next);
-                  }}
-                />
-                {t('graph.showOutsideLane')}
-              </label>
-              {showOutside && <p>{t('graph.outsideLaneHint')}</p>}
-              <button className='ui-button' disabled={!screen?.writable} title={t('screen.editRow')} onClick={() => setEditLane(true)}>
-                <Pencil size={14} />
-                {t('screen.editRow')}
-              </button>
-              <button
-                className='ui-button graph-save-lane'
-                disabled={!screen?.writable || screen.saving || Boolean(screen.error)}
-                title={t('graph.saveLayoutHint')}
-                onClick={() => {
-                  freeze();
-                  persistLayout(currentLayout());
-                  setSaveLayoutRequested(true);
-                }}
-              >
-                <Save size={14} />
-                {t(screen?.saving ? 'editor.saving' : 'graph.saveCurrentLane')}
-              </button>
-              <p className='graph-save-hint'>{t('graph.saveLayoutHint')}</p>
-              {activeLane.kind === 'custom'
-                ? (
-                  <div className='graph-lane-membership'>
-                    <button className='ui-button' disabled={!screen?.writable || !visibleSelected.some(path => !laneMembers.has(path))} onClick={() => changeMembership(true)}>
-                      <Plus size={14} />
-                      {t('graph.addToLane')}
-                    </button>
-                    <button className='ui-button' disabled={!screen?.writable || !visibleSelected.some(path => laneMembers.has(path))} onClick={() => changeMembership(false)}>
-                      <Minus size={14} />
-                      {t('graph.removeFromLane')}
-                    </button>
-                  </div>
-                )
-                : <p>{t('graph.dynamicLaneHint')}</p>}
-            </>
-          )}
-          {screen?.error && <p role='alert'>{screen.error}</p>}
-        </section>
+        <GraphLanePanel
+          t={t}
+          activeLane={activeLane}
+          onClose={() => setLanePanel(false)}
+          laneRows={laneRows}
+          onSelectLane={selectLane}
+          showOutside={showOutside}
+          onToggleShowOutside={checked => {
+            const next = new URLSearchParams(params);
+            if (checked) next.set('laneScope', 'all');
+            else next.delete('laneScope');
+            setParams(next);
+          }}
+          screen={screen}
+          onEditLane={() => setEditLane(true)}
+          onSaveCurrentLane={() => {
+            freeze();
+            persistLayout(currentLayout());
+            setSaveLayoutRequested(true);
+          }}
+          laneMembers={laneMembers}
+          visibleSelected={visibleSelected}
+          onChangeMembership={changeMembership}
+        />
       )}
       {!lane && !lanePanel && activeLane && (
         <button
