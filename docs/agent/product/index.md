@@ -30,7 +30,7 @@ Detailed architecture, security, and workflow guides live in `docs/agent/`:
 Product development skills are maintained in `docs/agent/product/skills/`:
 - `github-notes-dev`: Product development, testing, boundaries, and validation.
 - `github-notes-workspace`: Initializing and manipulating workspaces, notebooks, notes, and manifests.
-- `github-notes-core-update`: Safe fetch/merge updates from Core into user branches without data loss.
+- `github-notes-core-update`: Safe fast-forward Core updates and one-time workspace conversion without data loss.
 - `github-notes-mcp`: Developing, testing, and invoking the local MCP server safely.
 
 ## 5. Local MCP Usage & Safety

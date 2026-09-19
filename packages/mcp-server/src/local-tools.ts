@@ -214,7 +214,7 @@ export const localTools: Tool[] = [
   },
   {
     name: 'update_core',
-    description: 'Performs the safe Core fetch/merge workflow into user workspace branch (main), or inspects available updates if checkOnly is true.',
+    description: 'Fast-forwards the core checkout from upstream Core, or inspects available updates if checkOnly is true.',
     inputSchema: {
       type: 'object',
       properties: {
