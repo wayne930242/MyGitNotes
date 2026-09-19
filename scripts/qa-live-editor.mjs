@@ -32,7 +32,14 @@ const click=async text=>{const ok=await page.evaluate(text=>{const b=Array.from(
 try {
  await page.goto(base+'/notebooks/example/notes/root.md',{waitUntil:'networkidle0'});
  await page.waitForSelector('.cm-content');
+ if(await page.$('[data-live-markdown] .cm-lineNumbers'))throw Error('Live preview line numbers are visible by default');
+ if(await page.$eval('button[aria-label="Line Numbers"]',e=>e.getAttribute('aria-pressed'))!=='false')throw Error('Line Numbers toggle does not report unpressed while hidden');
+ await click('Source');await page.waitForSelector('textarea[aria-label="Note content"]');
+ if(await page.$('[data-source-line-numbers]'))throw Error('Source line numbers are visible by default');
+ await click('Live Preview');await page.waitForSelector('.cm-content');
+ await click('Line Numbers');
  await page.waitForSelector('[data-live-markdown] .cm-lineNumbers .cm-gutterElement');
+ if(await page.$eval('button[aria-label="Line Numbers"]',e=>e.getAttribute('aria-pressed'))!=='true')throw Error('Line Numbers toggle does not report pressed once shown');
  const liveLines=await page.$$eval('[data-live-markdown] .cm-lineNumbers .cm-gutterElement',nodes=>nodes.map(node=>node.textContent.trim()).filter(Boolean));
  if(!liveLines.includes('1'))throw Error('Live preview line numbers do not include line 1');
  const liveLineStyle=await page.evaluate(()=>{const gutter=getComputedStyle(document.querySelector('[data-live-markdown] .cm-lineNumbers'));const content=getComputedStyle(document.querySelector('[data-live-markdown] .cm-content'));return {opacity:Number(gutter.opacity),gutterFont:parseFloat(gutter.fontSize),contentFont:parseFloat(content.fontSize)};});
@@ -63,8 +70,18 @@ try {
  await page.waitForFunction(()=>document.querySelector('.cm-line')?.textContent.startsWith('# Root'));
  await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.press('Enter');
  await page.keyboard.type('繁體中文 live edit');
- await page.keyboard.down(undoKey);await page.keyboard.press('KeyZ');await page.keyboard.up(undoKey);
- await click('Source');if(await page.$eval('textarea[aria-label="Note content"]',e=>e.value.includes('繁體中文 live edit')))throw Error('Undo failed');
+ // Toggling line numbers reconfigures a Compartment; it must not remount the view, so the caret stays put and typing continues in place.
+ await click('Line Numbers');await page.waitForFunction(()=>!document.querySelector('[data-live-markdown] .cm-lineNumbers'));
+ await page.keyboard.type(' continued');
+ if(!await page.$eval('.cm-content',e=>e.textContent.includes('繁體中文 live edit continued')))throw Error('Toggling line numbers off lost the caret position');
+ await click('Line Numbers');await page.waitForSelector('[data-live-markdown] .cm-lineNumbers .cm-gutterElement');
+ // CodeMirror's history groups nearby edits by time, not by what happened in between, so undo may
+ // take a couple of presses to clear both typed segments; what matters is that it clears them at all.
+ for(let attempt=0;attempt<4&&await page.$eval('.cm-content',e=>e.textContent.includes('live edit'));attempt++){
+  await page.keyboard.down(undoKey);await page.keyboard.press('KeyZ');await page.keyboard.up(undoKey);
+ }
+ if(await page.$eval('.cm-content',e=>e.textContent.includes('live edit')))throw Error('Undo across a line-number toggle did not restore the earlier content');
+ await click('Source');if(await page.$eval('textarea[aria-label="Note content"]',e=>e.value.includes('live edit')))throw Error('Undo failed');
  await click('Live Preview');await page.focus('.cm-content');await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.type('繁體中文 live edit');
  await page.click('button[aria-label="Document tools"]');await page.click('.note-panel-tabs [role="tab"][aria-label="Insert image"]');await page.waitForSelector('button[aria-label="Open folder: assets"]');await page.click('button[aria-label="Open folder: assets"]');await page.waitForSelector('button[aria-label="Select file: pixel.png"]');await page.click('button[aria-label="Select file: pixel.png"]');await page.waitForSelector('.file-detail button.ui-button:not([disabled])');await click('Insert image');
  await page.waitForFunction(()=>!document.querySelector('.note-document-panel[data-open="true"]'));
@@ -72,6 +89,9 @@ try {
  if(!text.includes('繁體中文 live edit')||!text.includes('/raw-assets/by-hash/'))throw Error('Live insertion lost content');
  await click('Live Preview');await page.waitForSelector('.live-md-rendered img');
  await page.screenshot({path:product+'/artifacts/qa/live-markdown-editor.png',fullPage:true});
+ await click('Line Numbers');await page.waitForFunction(()=>!document.querySelector('[data-live-markdown] .cm-lineNumbers'));
+ if(await page.$eval('button[aria-label="Line Numbers"]',e=>e.getAttribute('aria-pressed'))!=='false')throw Error('Line Numbers toggle does not report unpressed once hidden again');
+ await click('Line Numbers');await page.waitForSelector('[data-live-markdown] .cm-lineNumbers .cm-gutterElement');
  await page.setViewport({width:390,height:844});
  await page.waitForFunction(()=>document.querySelector('[data-markdown-editor]')?.clientWidth<=390);
  const mobileLive=await page.$eval('[data-markdown-editor]',editor=>({clientWidth:editor.clientWidth,scrollWidth:editor.scrollWidth,gutterWidth:document.querySelector('[data-live-markdown] .cm-gutters')?.getBoundingClientRect().width}));

@@ -628,6 +628,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'editor.livePreview': '即時預覽',
   'editor.live': '預覽',
   'editor.source': '原始碼',
+  'editor.lineNumbers': '行號',
   'editor.rawSource': 'Markdown 原始文字',
   'editor.plainTextSource': '純文字 / 原始碼編輯器',
   'editor.loadingEditor': '編輯器載入中…',

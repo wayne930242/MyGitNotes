@@ -454,6 +454,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 /* Compact frame: the body with a status bar, inside a graph card. */
 .note-compact-bar { display: flex; flex: none; align-items: center; gap: 8px; padding: 3px 20px 3px 6px; border-top: 1px solid var(--color-border); font-size: 11px; color: var(--color-muted); }
 .note-compact-bar .ui-icon-button { flex: none; width: 24px; height: 24px; min-height: 0; }
+.note-compact-bar .ui-icon-button[aria-pressed="true"] { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 14%, transparent); }
 .note-compact-path { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .note-compact-status { display: inline-flex; flex: none; align-items: center; gap: 6px; white-space: nowrap; }
 .note-compact-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); }
@@ -694,6 +695,13 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   .agent-toolbar > div:last-child { flex-wrap: wrap; gap: 6px; }
   .agent-toolbar [aria-label="Editor mode"] { margin-left: auto; }
   .agent-document-picker { padding: 8px 12px; }
+  .editor-line-numbers-action { padding: 0; width: 32px; justify-content: center; }
+  .editor-line-numbers-action > span { display: none; }
+}
+
+@media (min-width: 768px) and (max-width: 1100px) {
+  .note-controls { flex-wrap: wrap; justify-content: flex-end; padding-right: 56px; }
+  .note-close { position: absolute; top: 14px; right: 20px; margin-left: 0; }
 }
 
 @media (max-width: 767px) {

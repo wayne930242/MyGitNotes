@@ -32,7 +32,7 @@ export interface LiveMarkdownHandle {
   goToLine: (line: number, options?: { focus?: boolean; smooth?: boolean }) => void;
   getCurrentLine: () => number;
 }
-interface Props { content: string; notePath: string; readOnly: boolean; ariaLabel?: string; onChange: (content: string) => void; onCaret?: (position: number) => void }
+interface Props { content: string; notePath: string; readOnly: boolean; ariaLabel?: string; onChange: (content: string) => void; onCaret?: (position: number) => void; showLineNumbers?: boolean }
 const focusChanged = StateEffect.define<boolean>();
 function externalLinkIcon(href: string, label: string, sourcePath: string): HTMLAnchorElement {
   const anchor = document.createElement('a');
@@ -539,7 +539,7 @@ const theme = EditorView.theme({
   '.cm-tooltip-autocomplete ul li[aria-selected] .live-md-completion-icon':{color:'inherit'},
   '.live-md-due-adder':{display:'inline-flex',alignItems:'center',gap:'2px',marginLeft:'6px',padding:'0 6px',borderRadius:'999px',fontSize:'0.8em',cursor:'pointer',color:'var(--color-muted)',border:'1px dashed var(--color-border)',background:'none'},
 });
-export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content,notePath,readOnly,onChange,onCaret,ariaLabel = 'Note content'},ref) => {
+export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content,notePath,readOnly,onChange,onCaret,ariaLabel = 'Note content',showLineNumbers = true},ref) => {
   const { t } = useTranslation(); const linkLabel = t('links.open');
   const tableLabel = t('preview.scrollableTable'), pageLabel = t('editor.page');
   const location = useLocation();
@@ -549,6 +549,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
   const completionSource = useRef({ queryClient, scope }); completionSource.current = { queryClient, scope };
   const caretCallback = useRef(onCaret); caretCallback.current = onCaret;
   const permission = useRef(new Compartment());
+  const lineNumberGutter = useRef(new Compartment());
   useImperativeHandle(ref, () => ({
     insert(text, at) {
       const view=editor.current;if(!view||view.state.readOnly)return;
@@ -587,7 +588,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
       provide: field => EditorView.decorations.from(field,value=>value.decorations),
     });
     const view = new EditorView({parent:host.current!,state:EditorState.create({doc:content,extensions:[
-      markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),cardBackgroundLayer,lineNumbers(),highlightActiveLineGutter(),EditorView.lineWrapping,
+      markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),cardBackgroundLayer,lineNumberGutter.current.of(showLineNumbers?[lineNumbers(),highlightActiveLineGutter()]:[]),EditorView.lineWrapping,
       syntaxHighlighting(tokenHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'},{tag:tags.contentSeparator,class:'live-md-hr'}])),codeMirrorTokenTheme,theme,tableUIState,chipEditState,field,
       autocompletion({ icons: false, addToOptions: [{ position: 20, render: completion => {
         const icon = completion.type && TASK_TOKEN_ICON_SVG[completion.type];
@@ -618,6 +619,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
   },[notePath,ariaLabel,linkLabel,tableLabel,pageLabel,t]);
   useEffect(()=>{const view=editor.current;if(view && view.state.doc.toString()!==content)view.dispatch({changes:{from:0,to:view.state.doc.length,insert:content},annotations:Transaction.addToHistory.of(false)});},[content]);
   useEffect(()=>{editor.current?.dispatch({effects:permission.current.reconfigure([EditorState.readOnly.of(readOnly),EditorView.editable.of(!readOnly)])});},[readOnly]);
+  useEffect(()=>{editor.current?.dispatch({effects:lineNumberGutter.current.reconfigure(showLineNumbers?[lineNumbers(),highlightActiveLineGutter()]:[])});},[showLineNumbers]);
   useEffect(() => {
     if (!location.hash) return;
     let anchor: string;

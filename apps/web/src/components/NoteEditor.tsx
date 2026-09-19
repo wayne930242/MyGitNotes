@@ -23,6 +23,7 @@ import {
   LayoutGrid,
   Copy,
   Check,
+  ListOrdered,
 } from 'lucide-react';
 import { mergeNote, sameValue, NoteDraft } from '../lib/merge-note.js';
 import { ApiError } from '../lib/api.js';
@@ -195,6 +196,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
   }, [metadataFields, metadata]);
 
   const [editorMode, setEditorMode] = useState<MarkdownEditorMode>('live');
+  const [showLineNumbers, setShowLineNumbers] = useState(false);
   const [ownPanel, updateNotePanel] = useState<NotePanelMode | null>(null);
   const notePanel = frame === 'pane' ? documentPanel?.mode ?? null : ownPanel;
   const lastNotePanel = useRef<NotePanelMode>((() => {
@@ -1073,11 +1075,13 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
 
         {frame === 'compact' ? <>
           <div className="note-editor-body">
-            <MarkdownEditor ref={editorRef} compact content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} onCaret={onCaret} ariaLabel="Note content" />
+            <MarkdownEditor ref={editorRef} compact content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} onCaret={onCaret} ariaLabel="Note content" showLineNumbers={showLineNumbers} />
           </div>
           <div className="note-compact-bar">
             {isMarkdown && <button type="button" className="ui-icon-button" data-mode-toggle={editorMode} title={t(editorMode === 'live' ? 'editor.source' : 'editor.livePreview')} aria-label={t(editorMode === 'live' ? 'editor.source' : 'editor.livePreview')}
               onClick={() => setEditorMode(editorMode === 'live' ? 'raw' : 'live')}>{editorMode === 'live' ? <Code2 size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}</button>}
+            <button type="button" className="ui-icon-button" aria-pressed={showLineNumbers} title={t('editor.lineNumbers')} aria-label={t('editor.lineNumbers')}
+              onClick={() => setShowLineNumbers(value => !value)}><ListOrdered size={14} aria-hidden="true" /></button>
             <button type="button" className="ui-icon-button" title={t(copyState === 'copied' ? 'editor.noteCopied' : copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')} aria-label={t(copyState === 'copied' ? 'editor.noteCopied' : copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')}
               onClick={copyNote}>{copyState === 'copied' ? <Check size={14} aria-hidden="true" /> : copyState === 'error' ? <AlertTriangle size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}</button>
             <span className="note-compact-path" title={note.path}>{note.notebookId} · {note.path.split('/').pop()}</span>
@@ -1109,6 +1113,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
           <div className="note-controls flex items-center gap-2">
             {!autoSave && !readOnly && <Button variant="primary" aria-label={t('editor.saveToGitHub')} title={t('editor.saveToGitHub')} disabled={locked || !hasUnsavedChanges} onClick={handleExplicitSave} className="note-save editor-action" ><Save className="editor-mobile-icon w-5 h-5" /><span>{isSaving ? t('editor.saving') : t('editor.saveToGitHub')}</span></Button>}
             {isMarkdown && <MarkdownEditorModeSwitch mode={editorMode} onChange={setEditorMode} />}
+            <button type="button" aria-pressed={showLineNumbers} aria-label={t('editor.lineNumbers')} title={t('editor.lineNumbers')}
+              onClick={() => setShowLineNumbers(value => !value)}
+              className="editor-action editor-secondary-action editor-line-numbers-action"><ListOrdered className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('editor.lineNumbers')}</span></button>
             {frame === 'zoom' && <button type="button" aria-label={t('editor.documentPanel')} title={t('editor.documentPanel')}
               aria-pressed={Boolean(notePanel)} onClick={() => { if (notePanel) setNotePanel(null); else if (lastNotePanel.current === 'outline') { if (isMarkdown) openOutline(); else openFind(); } else if (lastNotePanel.current === 'find') openFind(); else setNotePanel(lastNotePanel.current); }}
               className="editor-action editor-secondary-action editor-panel-action"><PanelRight className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('editor.documentPanel')}</span></button>}
@@ -1130,7 +1137,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
         </div>
 
         <div className="note-editor-body">
-          <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} onCaret={onCaret} insertSlot={insertSlot} ariaLabel="Note content" />
+          <MarkdownEditor ref={editorRef} content={content} path={note.path} mode={editorMode} readOnly={locked} onChange={setContent} onCaret={onCaret} insertSlot={insertSlot} ariaLabel="Note content" showLineNumbers={showLineNumbers} />
           {frame === 'zoom' ? <aside className="note-document-panel" data-open={Boolean(notePanel)} data-panel={notePanel || undefined} aria-label={t('editor.documentPanel')}>
             {panelTabs}
             {panelSections}

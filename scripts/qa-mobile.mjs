@@ -99,6 +99,9 @@ try {
    assert((await bounds('.note-controls')).height<=48,'Note toolbar wraps on mobile');
    const close=await bounds('button[aria-label="Close note"]');assert(close.width>=44&&close.height>=44,'Small Close target');
    await page.screenshot({path:product+'/artifacts/qa/mobile-note-'+width+'.png'});
+   await click('Line Numbers');await page.waitForSelector('[data-live-markdown] .cm-lineNumbers');
+   assert((await bounds('.note-controls')).height<=48,'Note toolbar wraps on mobile with line numbers shown');
+   await click('Line Numbers');await page.waitForFunction(()=>!document.querySelector('[data-live-markdown] .cm-lineNumbers'));
    if(width===320) {
     await tap('.note-panel-tabs [role="tab"][aria-label="Find in note"]');await fits('.note-document-panel[data-panel="find"]');await fits('.note-find-field');
     await page.keyboard.press('Escape');

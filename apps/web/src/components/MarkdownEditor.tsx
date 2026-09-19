@@ -31,6 +31,7 @@ interface Props {
   compact?: boolean;
   /** A toolbar element that hosts the insert actions; without one they sit in a row above the content. */
   insertSlot?: HTMLElement | null;
+  showLineNumbers?: boolean;
 }
 
 export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEditorMode; onChange: (mode: MarkdownEditorMode) => void }) {
@@ -61,7 +62,7 @@ export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEdi
   );
 }
 
-export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, mode, readOnly, onChange, onCaret, compact = false, insertSlot, ariaLabel = 'Document content' }, ref) => {
+export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, mode, readOnly, onChange, onCaret, compact = false, insertSlot, ariaLabel = 'Document content', showLineNumbers = true }, ref) => {
   const { t } = useTranslation();
   const [caret, setCaret] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -184,7 +185,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
       </div>}
       {mode === 'live' && isMarkdown ? (
         <React.Suspense fallback={<p className="p-6 text-sm text-muted">{t('editor.loadingEditor')}</p>}>
-          <LiveMarkdownEditor key={path} ref={live} content={content} notePath={path} readOnly={readOnly} onChange={onChange} onCaret={onCaret} ariaLabel={ariaLabel} />
+          <LiveMarkdownEditor key={path} ref={live} content={content} notePath={path} readOnly={readOnly} onChange={onChange} onCaret={onCaret} ariaLabel={ariaLabel} showLineNumbers={showLineNumbers} />
         </React.Suspense>
       ) : (
         <div className="flex-1 flex flex-col min-h-0 bg-surface">
@@ -196,27 +197,29 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
             {suggestions.length > 0 && <div role="listbox" aria-label={t('graph.findNote')} className="note-source-completions">
               {suggestions.map((note, index) => <button type="button" role="option" aria-selected={index === choice % suggestions.length} key={note.path} onMouseDown={event => event.preventDefault()} onClick={() => accept(note)}>{note.title}<small>{note.notebookId} · {note.path}</small></button>)}
             </div>}
-            <div
-              data-source-line-numbers
-              aria-hidden="true"
-              className="w-12 shrink-0 overflow-hidden border-r border-line/70 bg-sidebar/60 text-muted/70"
-            >
-              <div ref={sourceLineNumbers} className="py-4 pr-3 text-right font-mono text-xs tabular-nums" style={{ lineHeight: '1.421875rem' }}>
-                {Array.from({ length: sourceLineCount }, (_, index) => {
-                  const line = index + 1;
-                  return (
-                    <div
-                      key={index}
-                      data-line-number
-                      data-active-line={line === activeSourceLine ? 'true' : undefined}
-                      className={`origin-right transition-[color,opacity,transform,font-weight] duration-150 ${line === activeSourceLine ? 'scale-[1.08] font-semibold text-muted' : ''}`}
-                    >
-                      {line}
-                    </div>
-                  );
-                })}
+            {showLineNumbers && (
+              <div
+                data-source-line-numbers
+                aria-hidden="true"
+                className="w-12 shrink-0 overflow-hidden border-r border-line/70 bg-sidebar/60 text-muted/70"
+              >
+                <div ref={sourceLineNumbers} className="py-4 pr-3 text-right font-mono text-xs tabular-nums" style={{ lineHeight: '1.421875rem' }}>
+                  {Array.from({ length: sourceLineCount }, (_, index) => {
+                    const line = index + 1;
+                    return (
+                      <div
+                        key={index}
+                        data-line-number
+                        data-active-line={line === activeSourceLine ? 'true' : undefined}
+                        className={`origin-right transition-[color,opacity,transform,font-weight] duration-150 ${line === activeSourceLine ? 'scale-[1.08] font-semibold text-muted' : ''}`}
+                      >
+                        {line}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
             <textarea
               ref={source}
               readOnly={readOnly}

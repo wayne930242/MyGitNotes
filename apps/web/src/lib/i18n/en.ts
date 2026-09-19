@@ -628,6 +628,7 @@ export const en = {
   'editor.livePreview': 'Live Preview',
   'editor.live': 'Live',
   'editor.source': 'Source',
+  'editor.lineNumbers': 'Line Numbers',
   'editor.rawSource': 'Markdown Raw Source',
   'editor.plainTextSource': 'Plain-Text / Source Editor',
   'editor.loadingEditor': 'Loading editor…',
