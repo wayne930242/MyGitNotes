@@ -9,7 +9,8 @@ const dirs: string[] = [];
 const temp = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-migrate-cli-')); dirs.push(dir); return dir; };
 afterEach(() => { for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 const env = { ...process.env };
-for (const key of ['MYGITNOTES_LOCAL_PATH', 'GITHUB_NOTES_LOCAL_PATH', 'MYGITNOTES_SOURCE', 'GITHUB_NOTES_SOURCE', 'REPO_ROOT']) delete env[key];
+// Empty keys, as a shell or .env.example leaves them, must not hide the checkout .env.
+for (const key of ['MYGITNOTES_LOCAL_PATH', 'GITHUB_NOTES_LOCAL_PATH', 'MYGITNOTES_SOURCE', 'GITHUB_NOTES_SOURCE', 'REPO_ROOT']) env[key] = '';
 const run = (cwd: string, args: string[] = []) => execFileSync(process.execPath, [path.join(product, 'node_modules/tsx/dist/cli.mjs'), path.join(product, 'scripts/migrate-workspace.ts'), ...args], { cwd, encoding: 'utf8', stdio: 'pipe', env });
 
 it('migrates the workspace named by the Core checkout .env', () => {

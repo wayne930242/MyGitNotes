@@ -41,7 +41,7 @@ const backfillHint = (count: number) => count > 0
  * itself; otherwise the served workspace is a fork-model `main` that merges Core.
  */
 export async function coreUpdateCheckout(appRoot: string, workspaceRoot: string): Promise<string> {
-  if (appRoot === workspaceRoot) return workspaceRoot;
+  if (fs.realpathSync(appRoot) === fs.realpathSync(workspaceRoot)) return workspaceRoot;
   return (await getCurrentBranch(appRoot)) === 'core' ? appRoot : workspaceRoot;
 }
 

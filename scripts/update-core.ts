@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 import { getCurrentBranch, updateCore } from '../packages/git/src/index.js';
 import { resolveWorkspaceRoot } from './lib/workspace-root.js';
 
@@ -11,7 +12,7 @@ async function main() {
   // --workspace names a fork-model checkout to update; a Core checkout updates itself and migrates its configured workspace.
   const repoRoot = process.argv.includes('--workspace') ? resolveWorkspaceRoot() : process.cwd();
   let workspaceRoot: string | undefined;
-  if (repoRoot === process.cwd() && await getCurrentBranch(repoRoot).catch(() => '') === 'core') {
+  if (fs.realpathSync(repoRoot) === fs.realpathSync(process.cwd()) && await getCurrentBranch(repoRoot).catch(() => '') === 'core') {
     try { workspaceRoot = resolveWorkspaceRoot(repoRoot); }
     catch (error) { console.log(`[update-core] Workspace migration skipped: ${error instanceof Error ? error.message : String(error)}`); }
   }

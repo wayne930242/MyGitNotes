@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { parseEnv } from 'node:util';
 import YAML from 'yaml';
 import { resolveWorkspaceConfigPath } from './config.js';
 
@@ -29,13 +30,21 @@ export function parseSourceConfig(raw: unknown, base: string): SourceConfig {
   }
   throw new Error('Configure source.type local with path, github with owner/repo and branch, or gitlab with url, group/project and branch.');
 }
+/** Fills keys that are missing or empty in `env` from a `.env` file; a missing file changes nothing. */
+export function loadEnvDefaults(file: string, env: NodeJS.ProcessEnv = process.env) {
+  let text: string;
+  try { text = fs.readFileSync(file, 'utf8'); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error; }
+  for (const [key, value] of Object.entries(parseEnv(text))) if (!env[key]) env[key] = value;
+}
 /** A fork-model checkout holds its workspace at the application root; a Core checkout names its `main` worktree. */
 function defaultLocalPath(base: string): string {
   if (resolveWorkspaceConfigPath(base)) return base;
   throw new Error(`No MyGitNotes workspace at ${base}. Run \`pnpm bootstrap-workspace\` or set MYGITNOTES_LOCAL_PATH to your main worktree.`);
 }
 export function loadSourceConfig(base: string, env: NodeJS.ProcessEnv = process.env): SourceConfig {
-  const get = (suffix: string) => env[`MYGITNOTES_${suffix}`] ?? env[`GITHUB_NOTES_${suffix}`];
+  // An empty key, as .env.example ships them, counts as unset.
+  const get = (suffix: string) => env[`MYGITNOTES_${suffix}`] || env[`GITHUB_NOTES_${suffix}`] || undefined;
   const type = get('SOURCE');
   if (type) return parseSourceConfig({ source: type === 'local'
     ? { type, path: get('LOCAL_PATH') || env.REPO_ROOT || defaultLocalPath(base) }

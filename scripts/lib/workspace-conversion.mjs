@@ -3,6 +3,14 @@ import { workspaceOwnedRoots } from './workspace-agent-merge.mjs';
 
 const SPARSE_LIST = '.github/vercel-sparse-paths.txt';
 
+/** Core's product paths at `coreRevision`: its sparse deploy list without .github. */
+export function coreProductPaths(git, coreRevision) {
+  let list;
+  try { list = git('show', `${coreRevision}:${SPARSE_LIST}`); }
+  catch { throw Error(`Core ${coreRevision} does not track ${SPARSE_LIST}, which names its product paths.`); }
+  return list.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#') && line.split('/')[0] !== '.github');
+}
+
 /**
  * Plans which tracked files leave a fork-model main when it becomes content-only.
  * Product paths (the sparse deploy list, except .github) leave whole.
@@ -15,8 +23,7 @@ export function planWorkspaceConversion(repoRoot, coreRevision) {
     .map(line => { const [meta, file] = line.split('\t'); return [file, meta.split(' ')[2]]; }));
   const head = listTree('HEAD');
   const core = listTree(coreRevision);
-  const sparse = git('show', `${coreRevision}:${SPARSE_LIST}`).split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
-  const productPaths = sparse.filter(entry => entry.split('/')[0] !== '.github');
+  const productPaths = coreProductPaths(git, coreRevision);
   const product = file => productPaths.some(entry => file === entry || file.startsWith(`${entry}/`));
   const coreRoots = new Set([...core.keys()].map(file => file.split('/')[0]));
   const owned = file => workspaceOwnedRoots.some(root => file === root || file.startsWith(`${root}/`));

@@ -10,7 +10,7 @@
     "convert-workspace": "node scripts/convert-workspace.mjs",
     "backfill-note-timestamps": "tsx scripts/backfill-note-timestamps.ts",
     "build": "pnpm --filter \"@mygitnotes/*\" run build",
-    "test": "node scripts/check-core-ownership.mjs && node scripts/check-vercel-sparse-paths.mjs && vitest run",
+    "test": "pnpm --filter \"./packages/*\" run build && node scripts/check-core-ownership.mjs && node scripts/check-vercel-sparse-paths.mjs && vitest run",
     "check:core-ownership": "node scripts/check-core-ownership.mjs",
     "check:vercel-sparse-paths": "node scripts/check-vercel-sparse-paths.mjs",
     "dev": "pnpm --parallel --filter \"@mygitnotes/local-server\" --filter \"@mygitnotes/web\" dev",

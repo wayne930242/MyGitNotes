@@ -1,9 +1,9 @@
 import type { AddressInfo } from 'node:net';
 import { createApp, applicationRoot } from './app.js';
 import { writeDevPorts } from './dev-ports.js';
-import { assertWorkspaceCompatible, loadSourceConfig } from '@mygitnotes/core';
+import { assertWorkspaceCompatible, loadEnvDefaults, loadSourceConfig } from '@mygitnotes/core';
 
-try { process.loadEnvFile(`${applicationRoot()}/.env`); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+loadEnvDefaults(`${applicationRoot()}/.env`);
 const desiredPort = Number(process.env.PORT || 4321);
 const host = process.env.HOST || '127.0.0.1';
 const MAX_PORT_ATTEMPTS = 20;

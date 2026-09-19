@@ -53,6 +53,10 @@ describe('Core Update Engine Rules', () => {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'gh-notes-served-'));
     try {
       expect(await coreUpdateCheckout(userRepo, userRepo)).toBe(userRepo);
+      // A symlinked path to the same checkout (macOS /var -> /private/var) is the same checkout.
+      const alias = path.join(workspace, 'alias');
+      fs.symlinkSync(userRepo, alias);
+      expect(await coreUpdateCheckout(userRepo, alias)).toBe(alias);
       expect(await coreUpdateCheckout(userRepo, workspace)).toBe(userRepo);
       await runGit(['checkout', '-b', 'main'], userRepo);
       expect(await coreUpdateCheckout(userRepo, workspace)).toBe(workspace);

@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { mergeWorkspaceCore } from './lib/workspace-agent-merge.mjs';
+import { coreProductPaths } from './lib/workspace-conversion.mjs';
 
 const gitIn = cwd => (...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const git = gitIn(process.cwd());
@@ -67,9 +68,8 @@ try {
   const core = git('rev-parse', 'origin/core');
   const expected = process.env.CORE_REVISION || core;
   if (expected !== core) { output('synced', 'false'); console.log('A newer Core revision superseded this run.'); process.exit(0); }
-  // A main that no longer tracks the product Core tracks is content-only: it never merges Core again.
-  const tracksProduct = revision => Boolean(git('ls-tree', '--name-only', revision, '--', 'pnpm-workspace.yaml'));
-  const contentOnly = tracksProduct(core) && !tracksProduct('origin/main');
+  // A main that tracks none of Core's product paths is content-only: it never merges Core again.
+  const contentOnly = !git('ls-tree', '-r', '--name-only', 'origin/main', '--', ...coreProductPaths(git, core));
   let root = process.cwd();
   let pending = false;
   let previousCore;
