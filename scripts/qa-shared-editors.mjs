@@ -87,11 +87,19 @@ try {
  console.log('PASS shared agent editor saves both modes and serializes pending edits before switching');
  await click('Workspace Guidelines');await page.waitForFunction(()=>document.querySelector('textarea[aria-label="Agent document content"]')?.value.includes('# Workspace Guidelines'));
  delayReads=true;
+ const lateRead=page.waitForResponse(r=>{const u=new URL(r.url());return u.pathname==='/api/agent-resources/read'&&u.searchParams.get('path')==='notes/example/AGENTS.md';});
  await click('Notebook: Example Guidelines');await page.waitForFunction(()=>document.body.innerText.includes('Loading document…'));
  await click('Workspace Guidelines');
  await page.waitForFunction(()=>document.querySelector('textarea[aria-label="Agent document content"]')?.value.includes('# Workspace Guidelines'));
- await page.waitForNetworkIdle({idleTime:1000});
- if(!await page.$eval(agentText,e=>e.value.startsWith('# Workspace Guidelines')))throw Error('Late read changed the active document');
+ // waitForNetworkIdle is unreliable while request interception is active; wait for the
+ // specific delayed read to land instead, so its (discarded) response can't race the assertion
+ // below. Puppeteer's response event only means headers arrived; the page still has to read the
+ // body and apply (or discard) it through React state, so read the body ourselves and give that a
+ // bounded settle window tied to this exact response, not a global network-idle signal.
+ await (await lateRead).text();
+ await new Promise(resolve => setTimeout(resolve, 250));
+ const stillOnWorkspaceGuidelines = await page.evaluate(() => document.querySelector('textarea[aria-label="Agent document content"]')?.value.startsWith('# Workspace Guidelines') ?? false);
+ if(!stillOnWorkspaceGuidelines)throw Error('Late read changed the active document');
  console.log('PASS late reads cannot replace the currently selected agent document');
  failSave=true;await append(agentText,'\nUnsaved retry');await click('Notebook: Example Guidelines');
  await page.waitForFunction(()=>document.querySelector('[role="alert"]')?.textContent.includes('Fixture save failure'));
