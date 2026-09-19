@@ -614,6 +614,16 @@ notebooks:
     const resources = (await handleReadAgentResource({ repoRoot: testRepo })) as any;
     expect(resources.instructions).toContain('AGENTS.md');
 
+    fs.writeFileSync(path.join(testRepo, '.env'), 'SECRET=hidden');
+    expect(await handleReadAgentResource({ repoRoot: testRepo }, { path: '.env' }).catch(error => ({ error: error.message }))).toMatchObject({ error: expect.stringMatching(/not a workspace Agent document/) });
+    const product = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-product-'));
+    fs.mkdirSync(path.join(product, 'docs/agent'), { recursive: true });
+    fs.writeFileSync(path.join(product, 'docs/agent/index.md'), '# Product\n');
+    try {
+      expect(((await handleReadAgentResource({ repoRoot: testRepo, productRoot: product })) as any).docs).toEqual(['docs/agent/index.md']);
+      expect(await handleReadAgentResource({ repoRoot: testRepo, productRoot: product }, { path: 'docs/agent/index.md' })).toEqual({ path: 'docs/agent/index.md', content: '# Product\n' });
+    } finally { fs.rmSync(product, { recursive: true, force: true }); }
+
     // 6. update_core with checkOnly: true
     const checkRes = (await handleUpdateCore({ repoRoot: testRepo }, { checkOnly: true })) as any;
     expect(checkRes.error || checkRes.currentHash).toBeDefined();

@@ -14,7 +14,7 @@ beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-release-')); remote = path.join(root, 'origin.git'); checkout = path.join(root, 'checkout'); fs.mkdirSync(checkout);
   execFileSync('git', ['init', '--bare', remote], { stdio: 'pipe' });
   git('init', '-b', 'core'); git('config', 'user.name', 'Test'); git('config', 'user.email', 'test@example.com'); git('remote', 'add', 'origin', remote);
-  write('product.txt', 'baseline\n'); write('examples/demo-workspace/.mygitnotes.yaml', 'fixture\n'); write('examples/demo-workspace/notes/example/welcome.md', '# Baseline\n');
+  write('product.txt', 'baseline\n'); write('.github/vercel-sparse-paths.txt', '# product\n.github/vercel-sparse-paths.txt\nproduct.txt\n'); write('examples/demo-workspace/.mygitnotes.yaml', 'fixture\n'); write('examples/demo-workspace/notes/example/welcome.md', '# Baseline\n');
   git('add', '.'); git('commit', '-m', 'core baseline'); git('push', 'origin', 'core');
   git('checkout', '-b', 'main'); write('.mygitnotes.yaml', 'fixture\n'); write('notes/example/welcome.md', '# Baseline\n'); write('notes/personal.md', '# Keep personal note\n');
   git('add', '.'); git('commit', '-m', 'workspace'); git('push', 'origin', 'main');
@@ -64,5 +64,30 @@ describe('release transaction', () => {
     fs.writeFileSync(hook, `#!/bin/sh\ngit --git-dir='${remote}' update-ref refs/heads/main ${concurrent} ${old}\n`); fs.chmodSync(hook, 0o755);
     expect(() => run()).toThrow();
     expect(remoteGit('rev-parse', 'main')).toBe(concurrent);
+  });
+  it('fails clearly when Core does not track its product path list', () => {
+    git('checkout', 'core'); git('rm', '-q', '.github/vercel-sparse-paths.txt'); git('commit', '-qm', 'drop list'); git('push', '-q', 'origin', 'core');
+    const old = remoteGit('rev-parse', 'main');
+    expect(() => run()).toThrow(/vercel-sparse-paths\.txt/);
+    expect(remoteGit('rev-parse', 'main')).toBe(old);
+  });
+  it('keeps a content-only main content-only, syncs examples and deploys the Core revision', () => {
+    git('checkout', '-q', '--orphan', 'content'); git('rm', '-rq', '--cached', '.');
+    for (const file of ['product.txt', 'examples', '.github']) fs.rmSync(path.join(checkout, file), { recursive: true, force: true });
+    write('.mygitnotes.yaml', 'fixture\n'); write('notes/example/welcome.md', '# Baseline\n'); write('notes/example/retired.md', '# Retired\n'); write('notes/personal.md', '# Keep personal note\n');
+    git('add', '.'); git('commit', '-qm', 'content-only main'); git('push', '-qf', 'origin', 'content:main');
+    git('checkout', '-qf', 'core'); git('clean', '-fdq');
+    write('examples/demo-workspace/notes/example/retired.md', '# Retired\n');
+    git('add', '.'); git('commit', '-qm', 'retired template'); git('push', '-q', 'origin', 'core');
+    const first = run();
+    expect(first).toContain(`deploy_sha=${git('rev-parse', 'core')}`);
+    expect(remoteGit('log', '-1', '--format=%B', 'main')).toContain(`Core-Revision: ${git('rev-parse', 'core')}`);
+    git('rm', '-q', 'examples/demo-workspace/notes/example/retired.md'); git('commit', '-qm', 'drop template'); git('push', '-q', 'origin', 'core');
+    expect(run()).toContain('synced=true');
+    expect(remoteGit('ls-tree', '-r', '--name-only', 'main').split('\n').sort()).toEqual(['.mygitnotes.yaml', 'notes/example/welcome.md', 'notes/personal.md']);
+    expect(remoteGit('show', 'main:notes/example/welcome.md')).toBe('# Updated tutorial');
+    expect(() => remoteGit('merge-base', 'main', 'core')).toThrow();
+    expect(git('status', '--porcelain')).toBe('');
+    expect(git('worktree', 'list').split('\n')).toHaveLength(1);
   });
 });

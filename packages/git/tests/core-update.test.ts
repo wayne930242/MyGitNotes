@@ -4,7 +4,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { runGit, stageAndCommit } from '../src/git-service.js';
-import { updateCore, CoreUpdateError } from '../src/core-update.js';
+import { updateCore, coreUpdateCheckout, CoreUpdateError } from '../src/core-update.js';
 import { WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
 
 describe('Core Update Engine Rules', () => {
@@ -33,11 +33,57 @@ describe('Core Update Engine Rules', () => {
     if (fs.existsSync(userRepo)) fs.rmSync(userRepo, { recursive: true, force: true });
   });
 
-  it('refuses to run update if active branch is not main', async () => {
-    // Current branch is core
-    await expect(updateCore({ repoRoot: userRepo })).rejects.toThrow(
-      /Core updates can only be merged into the user workspace branch 'main'/
-    );
+  it('refuses to run update on a branch other than core or main', async () => {
+    await runGit(['checkout', '-b', 'feature'], userRepo);
+    await expect(updateCore({ repoRoot: userRepo })).rejects.toMatchObject({ code: 'INVALID_BRANCH' });
+  });
+
+  it('fast-forwards a core checkout and leaves workspace migration to the new Core', async () => {
+    expect((await updateCore({ repoRoot: userRepo })).alreadyUpToDate).toBe(true);
+    fs.writeFileSync(path.join(upstreamRepo, 'NEW_FEATURE.md'), '# New Core Feature');
+    await stageAndCommit(upstreamRepo, ['NEW_FEATURE.md'], 'feat: add new feature');
+    const result = await updateCore({ repoRoot: userRepo });
+    expect(result).toMatchObject({ success: true, alreadyUpToDate: false });
+    expect(result.message).toContain('pnpm migrate-workspace');
+    expect((await runGit(['rev-parse', 'HEAD'], userRepo)).stdout).toBe((await runGit(['rev-parse', 'HEAD'], upstreamRepo)).stdout);
+    expect((await runGit(['log', '--merges', '--oneline'], userRepo)).stdout).toBe('');
+  });
+
+  it('updates the app checkout only when it is a core checkout serving another workspace', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'gh-notes-served-'));
+    try {
+      expect(await coreUpdateCheckout(userRepo, userRepo)).toBe(userRepo);
+      // A symlinked path to the same checkout (macOS /var -> /private/var) is the same checkout.
+      const alias = path.join(workspace, 'alias');
+      fs.symlinkSync(userRepo, alias);
+      expect(await coreUpdateCheckout(userRepo, alias)).toBe(alias);
+      expect(await coreUpdateCheckout(userRepo, workspace)).toBe(userRepo);
+      await runGit(['checkout', '-b', 'main'], userRepo);
+      expect(await coreUpdateCheckout(userRepo, workspace)).toBe(workspace);
+    } finally { fs.rmSync(workspace, { recursive: true, force: true }); }
+  });
+
+  it('refuses to fast-forward a core checkout with local commits', async () => {
+    fs.writeFileSync(path.join(userRepo, 'LOCAL.md'), 'local');
+    await stageAndCommit(userRepo, ['LOCAL.md'], 'local core commit');
+    fs.writeFileSync(path.join(upstreamRepo, 'NEW_FEATURE.md'), '# New Core Feature');
+    await stageAndCommit(upstreamRepo, ['NEW_FEATURE.md'], 'feat: add new feature');
+    const head = (await runGit(['rev-parse', 'HEAD'], userRepo)).stdout;
+    await expect(updateCore({ repoRoot: userRepo })).rejects.toMatchObject({ code: 'CORE_DIVERGED' });
+    expect((await runGit(['rev-parse', 'HEAD'], userRepo)).stdout).toBe(head);
+  });
+
+  it('never merges Core into a content-only main', async () => {
+    fs.writeFileSync(path.join(upstreamRepo, 'pnpm-workspace.yaml'), 'packages: []\n');
+    await stageAndCommit(upstreamRepo, ['pnpm-workspace.yaml'], 'product marker');
+    await runGit(['checkout', '--orphan', 'main'], userRepo);
+    await runGit(['rm', '-r', '--cached', '.'], userRepo);
+    for (const file of ['README.md', 'pnpm-workspace.yaml']) fs.rmSync(path.join(userRepo, file), { force: true });
+    fs.writeFileSync(path.join(userRepo, WORKSPACE_CONFIG_FILENAME), 'schema_version: 1\nworkspace:\n  title: Notes\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n');
+    await stageAndCommit(userRepo, [WORKSPACE_CONFIG_FILENAME], 'content only');
+    const head = (await runGit(['rev-parse', 'HEAD'], userRepo)).stdout;
+    await expect(updateCore({ repoRoot: userRepo })).rejects.toMatchObject({ code: 'CONTENT_ONLY_MAIN' });
+    expect((await runGit(['rev-parse', 'HEAD'], userRepo)).stdout).toBe(head);
   });
 
   it('requires an explicit workspace path to be the repository root', async () => {

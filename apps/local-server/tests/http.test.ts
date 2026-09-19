@@ -28,6 +28,24 @@ beforeEach(async () => {
 afterEach(async()=>{ await new Promise<void>(resolve=>server.close(()=>resolve())); fs.rmSync(root,{recursive:true,force:true}); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe('real HTTP local boundaries',()=>{
+  it('serves product reference documents read-only from the Core checkout, not the workspace', async () => {
+    const product = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-product-'));
+    fs.mkdirSync(path.join(product, 'docs/agent/product'), { recursive: true });
+    fs.writeFileSync(path.join(product, 'docs/agent/product/index.md'), '# Product Guide\n');
+    fs.writeFileSync(path.join(product, 'docs/agent/.hidden.md'), '# Hidden\n');
+    const split = createServer(createApp(product)); await new Promise<void>(resolve => split.listen(0, '127.0.0.1', resolve));
+    const url = `http://127.0.0.1:${(split.address() as any).port}`;
+    try {
+      const listing = await fetch(`${url}/api/agent-resources`).then(r => r.json());
+      expect(listing.docs.filter((r: any) => r.scope === 'product')).toEqual([{ path: 'docs/agent/product/index.md', name: 'Product Guide', editable: false, scope: 'product' }]);
+      expect(await fetch(`${url}/api/agent-resources/read?path=docs/agent/product/index.md`).then(r => r.json())).toEqual({ path: 'docs/agent/product/index.md', content: '# Product Guide\n' });
+      for (const file of ['docs/agent/.hidden.md', 'docs/agent/../../etc/passwd.md', 'docs/agent/missing.md']) expect((await fetch(`${url}/api/agent-resources/read?path=${encodeURIComponent(file)}`)).ok).toBe(false);
+      const save = await fetch(`${url}/api/agent-resources/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'docs/agent/product/index.md', content: 'bad' }) });
+      expect(save.ok).toBe(false);
+      expect(fs.readFileSync(path.join(product, 'docs/agent/product/index.md'), 'utf8')).toBe('# Product Guide\n');
+      expect(fs.existsSync(path.join(root, 'docs'))).toBe(false);
+    } finally { await new Promise<void>(resolve => split.close(() => resolve())); fs.rmSync(product, { recursive: true, force: true }); }
+  });
   it('renders a notebook template and excludes it from note listings', async () => {
     fs.writeFileSync(path.join(root,'notes/.github-notes.yaml'),'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n    templates:\n      - id: reading\n        title: Reading\n        file: .templates/reading.md\n');
     fs.mkdirSync(path.join(root,'notes/example/.templates'),{recursive:true});

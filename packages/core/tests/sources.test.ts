@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { parseSourceConfig, loadSourceConfig } from '../src/source-config.js';
+import { parseSourceConfig, loadSourceConfig, loadEnvDefaults } from '../src/source-config.js';
 import { scanNotebookFolders, parseFolderConfig } from '../src/folders.js';
 import { scanNotebookNotes, writeNoteFile } from '../src/note-service.js';
 import { resolveSafePath } from '../src/path-guard.js';
@@ -54,6 +54,28 @@ describe('source configuration', () => {
     fs.mkdirSync(path.join(root,'runtime')); fs.writeFileSync(path.join(root,'runtime','server.yaml'), 'source:\n  type: local\n  path: ../notes\n');
     expect(loadSourceConfig(root, { GITHUB_NOTES_SERVER_CONFIG: 'runtime/server.yaml' })).toEqual({ type: 'local', path: path.join(root, 'notes') });
     expect(loadSourceConfig(root, {})).toEqual({ type: 'local', path: root });
+  });
+  it('reads the application root only when it holds a workspace, and otherwise requires MYGITNOTES_LOCAL_PATH', () => {
+    const core = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-core-'));
+    try {
+      for (const env of [{}, { MYGITNOTES_SOURCE: 'local' }]) expect(() => loadSourceConfig(core, env)).toThrow(/pnpm bootstrap-workspace.*MYGITNOTES_LOCAL_PATH/);
+      expect(loadSourceConfig(core, { MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: '../notes' })).toEqual({ type: 'local', path: path.resolve(core, '../notes') });
+      expect(loadSourceConfig(core, { REPO_ROOT: root })).toEqual({ type: 'local', path: root });
+    } finally { fs.rmSync(core, { recursive: true, force: true }); }
+  });
+  it('treats empty source keys as unset', () => {
+    const notes = path.join(root, 'legacy');
+    expect(loadSourceConfig(root, { MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: '', GITHUB_NOTES_LOCAL_PATH: notes })).toEqual({ type: 'local', path: notes });
+    expect(loadSourceConfig(root, { MYGITNOTES_SOURCE: '', GITHUB_NOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: '', GITHUB_NOTES_REPOSITORY: 'owner/repo', GITHUB_NOTES_BRANCH: 'main' })).toEqual({ type: 'github', repository: 'owner/repo', branch: 'main' });
+    expect(loadSourceConfig(root, { MYGITNOTES_SOURCE: 'gitlab', MYGITNOTES_REPOSITORY: 'group/project', MYGITNOTES_BRANCH: 'main', MYGITNOTES_GITLAB_URL: '', GITLAB_URL: '' })).toMatchObject({ type: 'gitlab', url: 'https://gitlab.com' });
+  });
+  it('fills empty or missing environment keys from a .env file without overriding set ones', () => {
+    const file = path.join(root, '.env');
+    fs.writeFileSync(file, 'MYGITNOTES_LOCAL_PATH=../notes\nMYGITNOTES_SOURCE=local\nPORT=4000\n');
+    const env: NodeJS.ProcessEnv = { MYGITNOTES_LOCAL_PATH: '', PORT: '5000' };
+    loadEnvDefaults(file, env);
+    expect(env).toEqual({ MYGITNOTES_LOCAL_PATH: '../notes', MYGITNOTES_SOURCE: 'local', PORT: '5000' });
+    expect(() => loadEnvDefaults(path.join(root, 'missing.env'), env)).not.toThrow();
   });
   it('validates remote source settings and fails closed in an unconfigured cloud', () => {
     expect(parseSourceConfig({ source: { type: 'github', repository: 'owner/repo', branch: 'main' } }, root).type).toBe('github');

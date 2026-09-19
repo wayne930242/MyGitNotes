@@ -855,7 +855,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'settings.defaultLanguage': '預設語言',
   'settings.languageDescription': '選擇您偏好的使用者介面顯示語言。',
   'settings.coreUpdates': '核心產品更新',
-  'settings.coreUpdatesDesc': '安全地將 Core 核心產品分支的最新更新擷取並合併至您的個人工作區。',
+  'settings.coreUpdatesDesc': '安全地從上游更新 Core：core checkout 以 fast-forward 前進；仍帶有產品程式碼的工作區則合併更新。',
   'settings.manifest': '工作區設定清單 (.mygitnotes.yaml)',
   'settings.saveCommit': '儲存並提交',
   'settings.saving': '儲存中...',

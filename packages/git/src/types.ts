@@ -18,6 +18,7 @@ export interface GitCommitItem {
 }
 
 export interface CoreUpdateOptions {
+  /** The checkout to update: a `core` checkout, or a fork-model `main` that still tracks product files. */
   repoRoot: string;
   autoPush?: boolean;
 }

@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { loadSourceConfig, loadWorkspaceConfig, classifyResource, resolveSafePath, sourceIdentity, RemoteSource, createRemoteSource, SourceError, workspaceAgentKind, workspaceAgentResource, replaceNoteTags, type WorkspaceAgentResource,
+import { loadSourceConfig, loadWorkspaceConfig, classifyResource, resolveSafePath, sourceIdentity, RemoteSource, createRemoteSource, SourceError, workspaceAgentKind, workspaceAgentResource, isProductAgentDoc, readProductAgentDoc, productAgentResources, replaceNoteTags, type WorkspaceAgentResource,
   parseNoteQuery, parseRevision, queryNotes, queryNotePaths, noteFacets, lookupNotes, noteAgenda, noteGraph, SCREEN_DOCUMENT, FOCUS_DOCUMENT } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRemoteMCP } from './mcp.js';
@@ -61,6 +61,13 @@ export function createApp(base: string): express.Express {
   if (source) app.use('/api/screen-page', createWorkspaceDocumentRouter(base, source, SCREEN_DOCUMENT));
   if (source) app.use('/api/focus-page', createWorkspaceDocumentRouter(base, source, FOCUS_DOCUMENT));
   if (source) app.use('/api/folder-manager', createFolderManagerRouter(base, source));
+  // Product reference documents come from this Core checkout, not from the workspace being served.
+  app.get('/api/agent-resources/read', (req, res, next) => {
+    const file = req.query.path;
+    if (typeof file !== 'string' || !isProductAgentDoc(file)) return next();
+    try { res.json({ path: file, content: readProductAgentDoc(base, file) }); }
+    catch (error) { res.status(404).json({ error: (error as Error).message }); }
+  });
   const cache = source && source.type !== 'local' ? createRemoteCache() : undefined;
   app.use('/mcp', createRemoteMCP(base, source, cache));
   if (source?.type === 'local') {
@@ -69,7 +76,7 @@ export function createApp(base: string): express.Express {
       if (classifyResource(notePath, loadWorkspaceConfig(root)).type !== 'note') throw new Error('Path is not a configured note.');
       return fs.readFileSync(resolveSafePath(root, notePath), 'utf8');
     }));
-    app.use(createLocalApp(root));
+    app.use(createLocalApp(root, base));
   } else {
     app.use(['/api', '/raw-assets', '/r2-assets'], async (req, res, next) => {
       if (!source) return res.status(503).json({ error: setupError, setupRequired: true });
@@ -219,6 +226,7 @@ export function createApp(base: string): express.Express {
           const kind = workspaceAgentKind(entry.path);
           if (kind && entry.type === 'blob' && entry.mode !== '120000') groups[kind].push(workspaceAgentResource(entry.path, editable));
         }
+        groups.docs.push(...productAgentResources(base));
         res.json({ ...groups, revision: snapshot.sha });
       } catch (error) { fail(res, error); }
     });

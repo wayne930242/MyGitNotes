@@ -2,6 +2,7 @@ import {
   getGitStatus,
   stageAndCommit,
   updateCore,
+  coreUpdateCheckout,
   runGit,
 } from '@mygitnotes/git';
 import { assertSafeRepoPath } from '../guards.js';
@@ -23,18 +24,21 @@ export async function handleGitCommit(
   return { success: true, commit: result };
 }
 
-export async function handleCheckCoreUpdate(ctx: ToolContext) {
-  try {
-    const { stdout: remotes } = await runGit(['remote'], ctx.repoRoot);
-    const remote = remotes.includes('upstream') ? 'upstream' : 'origin';
-    await runGit(['fetch', remote, 'core'], ctx.repoRoot);
+const coreCheckout = (ctx: ToolContext) => coreUpdateCheckout(ctx.productRoot ?? ctx.repoRoot, ctx.repoRoot);
 
-    const { stdout: currentHash } = await runGit(['rev-parse', 'HEAD'], ctx.repoRoot);
-    const { stdout: coreHash } = await runGit(['rev-parse', `${remote}/core`], ctx.repoRoot);
+export async function handleCheckCoreUpdate(ctx: ToolContext) {
+  const checkout = await coreCheckout(ctx);
+  try {
+    const { stdout: remotes } = await runGit(['remote'], checkout);
+    const remote = remotes.includes('upstream') ? 'upstream' : 'origin';
+    await runGit(['fetch', remote, 'core'], checkout);
+
+    const { stdout: currentHash } = await runGit(['rev-parse', 'HEAD'], checkout);
+    const { stdout: coreHash } = await runGit(['rev-parse', `${remote}/core`], checkout);
 
     let isUpToDate = false;
     try {
-      await runGit(['merge-base', '--is-ancestor', `${remote}/core`, 'HEAD'], ctx.repoRoot);
+      await runGit(['merge-base', '--is-ancestor', `${remote}/core`, 'HEAD'], checkout);
       isUpToDate = true;
     } catch {
       isUpToDate = false;
@@ -58,9 +62,7 @@ export async function handleUpdateCore(
   if (args.checkOnly) {
     return handleCheckCoreUpdate(ctx);
   }
-  const result = await updateCore({
-    repoRoot: ctx.repoRoot,
-    autoPush: args.autoPush,
-  });
+  const checkout = await coreCheckout(ctx);
+  const result = await updateCore({ repoRoot: checkout, autoPush: args.autoPush });
   return { result };
 }

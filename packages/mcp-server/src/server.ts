@@ -36,7 +36,7 @@ import {
 
 export function createMCPServer(repoRoot: string): Server {
   const source = loadSourceConfig(repoRoot);
-  const ctx: ToolContext = { repoRoot: source.type === 'local' ? source.path : repoRoot };
+  const ctx: ToolContext = { repoRoot: source.type === 'local' ? source.path : repoRoot, productRoot: repoRoot };
 
   const server = new Server(
     {

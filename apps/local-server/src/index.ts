@@ -1,8 +1,9 @@
 import type { AddressInfo } from 'node:net';
 import { createApp, applicationRoot } from './app.js';
 import { writeDevPorts } from './dev-ports.js';
+import { assertWorkspaceCompatible, loadEnvDefaults, loadSourceConfig } from '@mygitnotes/core';
 
-try { process.loadEnvFile(`${applicationRoot()}/.env`); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+loadEnvDefaults(`${applicationRoot()}/.env`);
 const desiredPort = Number(process.env.PORT || 4321);
 const host = process.env.HOST || '127.0.0.1';
 const MAX_PORT_ATTEMPTS = 20;
@@ -10,7 +11,11 @@ const repoRoot = applicationRoot();
 const isLocal = process.argv.includes('--local');
 if (isLocal) {
   process.env.MYGITNOTES_SOURCE = 'local';
-  process.env.MYGITNOTES_LOCAL_PATH = process.env.REPO_ROOT || process.env.MYGITNOTES_LOCAL_PATH || process.env.GITHUB_NOTES_LOCAL_PATH || repoRoot;
+  const localPath = process.env.REPO_ROOT || process.env.MYGITNOTES_LOCAL_PATH || process.env.GITHUB_NOTES_LOCAL_PATH;
+  if (localPath) process.env.MYGITNOTES_LOCAL_PATH = localPath;
+  // Fail fast: a missing workspace or a schema this Core cannot serve stops the dev server.
+  const source = loadSourceConfig(repoRoot);
+  if (source.type === 'local') assertWorkspaceCompatible(source.path);
 }
 const app = createApp(repoRoot);
 

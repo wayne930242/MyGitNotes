@@ -1,12 +1,14 @@
 name: Deploy Vercel (sparse checkout)
 on:
   push:
-    branches: [main]
+    # A fork-model workspace deploys from main; a converted one sets MYGITNOTES_DEPLOY_BRANCH=core.
+    branches: [main, core]
     paths:
       - '.github/vercel-sparse-paths.txt'
       - '.vercelignore'
       - 'api/**'
       - 'apps/**'
+      - 'docs/agent/**'
       - 'package.json'
       - 'packages/**'
       - 'pnpm-lock.yaml'
@@ -33,8 +35,11 @@ jobs:
         id: settings
         env:
           DEPLOY_MODE: ${{ vars.MYGITNOTES_VERCEL_DEPLOY }}
+          DEPLOY_BRANCH: ${{ vars.MYGITNOTES_DEPLOY_BRANCH || 'main' }}
         run: |
-          if [ "$DEPLOY_MODE" = git-integration ]; then
+          if [ "$GITHUB_REF_NAME" != "$DEPLOY_BRANCH" ]; then
+            echo "::notice title=Vercel deploy skipped::This repository deploys from '$DEPLOY_BRANCH' (MYGITNOTES_DEPLOY_BRANCH), not '$GITHUB_REF_NAME'."
+          elif [ "$DEPLOY_MODE" = git-integration ]; then
             echo "::notice title=Vercel deploy skipped::MYGITNOTES_VERCEL_DEPLOY=git-integration; Vercel Git integration deploys this repository."
           elif [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
             echo "::notice title=Vercel deploy skipped::Set the VERCEL_TOKEN secret and the VERCEL_ORG_ID and VERCEL_PROJECT_ID variables to deploy with sparse checkout."

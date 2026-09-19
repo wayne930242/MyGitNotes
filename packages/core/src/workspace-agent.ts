@@ -7,7 +7,7 @@ export interface WorkspaceAgentResource {
   path: string;
   name: string;
   editable: boolean;
-  scope: 'workspace' | 'notes';
+  scope: 'workspace' | 'notes' | 'product';
 }
 
 const instructionFiles = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'];
@@ -67,4 +67,41 @@ export function workspaceAgentResource(file: string, editable: boolean): Workspa
   return { path: file, editable, scope: file.startsWith('notes/') ? 'notes' : 'workspace',
     name: file === 'AGENTS.md' ? 'Workspace Guidelines' : file === 'notes/AGENTS.md' ? 'Notes Workspace Guidelines'
       : notebook ? `Notebook: ${notebook[1].charAt(0).toUpperCase() + notebook[1].slice(1)} Guidelines` : file };
+}
+
+/** Product reference documents ship with Core under docs/agent and are read-only in every workspace. */
+export function isProductAgentDoc(file: string): boolean {
+  if (file.includes('\\') || /[\x00-\x1f\x7f]/.test(file)) return false;
+  const parts = file.split('/');
+  return parts.length >= 3 && parts[0] === 'docs' && parts[1] === 'agent' && parts.every(p => p && !p.startsWith('.')) && /\.md$/i.test(file);
+}
+
+export function listProductAgentDocs(productRoot: string): string[] {
+  const files: string[] = [];
+  const walk = (relative: string) => {
+    const full = path.join(productRoot, relative);
+    if (!fs.existsSync(full) || fs.lstatSync(full).isSymbolicLink()) return;
+    if (fs.statSync(full).isFile()) { if (isProductAgentDoc(relative)) files.push(relative); return; }
+    for (const entry of fs.readdirSync(full)) if (!entry.startsWith('.')) walk(path.posix.join(relative, entry));
+  };
+  walk('docs/agent');
+  return files.sort();
+}
+
+export function readProductAgentDoc(productRoot: string, file: string): string {
+  if (!isProductAgentDoc(file)) throw new Error('Path is not a product reference document.');
+  let current = productRoot;
+  for (const part of file.split('/')) {
+    current = path.join(current, part);
+    if (fs.lstatSync(current).isSymbolicLink()) throw new Error('Product documents cannot cross symlinks.');
+  }
+  return fs.readFileSync(resolveSafePath(productRoot, file), 'utf8');
+}
+
+export function productAgentResource(file: string, content: string): WorkspaceAgentResource {
+  return { path: file, editable: false, scope: 'product', name: content.match(/^#\s+(.+)$/m)?.[1].trim() || file };
+}
+
+export function productAgentResources(productRoot: string): WorkspaceAgentResource[] {
+  return listProductAgentDocs(productRoot).map(file => productAgentResource(file, readProductAgentDoc(productRoot, file)));
 }

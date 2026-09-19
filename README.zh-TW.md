@@ -44,10 +44,14 @@ MyGitNotes 把一個 Git 儲存庫變成集中處理筆記、文件、素材與 
 
 ## 儲存庫模型
 
-- **`core`**：產品原始碼、套件、測試、指令稿與說明文件，不包含個人筆記。
-- **`main`**：你的工作區分支，包含 `.mygitnotes.yaml`、`notes/**`、素材與工作區 Agent 設定。
+一個儲存庫有兩條互不相干的分支，各自 checkout 在自己的 worktree：
 
-這個分離讓產品可以持續更新，卻不取得你內容的所有權。
+- **`core`**：產品原始碼、套件、測試、指令稿與說明文件，不包含個人筆記。工作區只從 upstream fast-forward 它。
+- **`main`**：只放工作區內容，包括 `.mygitnotes.yaml`、`notes/**` 等筆記本根目錄、素材，以及工作區 Agent 設定（`AGENTS.md`、`CLAUDE.md`、`.agents/`、`.claude/`、`.codex/`、`.github-notes-*.yaml`）。它不再合併 `core`。
+
+`pnpm dev` 在 `core` worktree 執行，編輯 `.env` 裡 `MYGITNOTES_LOCAL_PATH` 指向的 `main` worktree。這個分離讓產品可以持續更新，卻不取得你內容的所有權。
+
+分離前建立的工作區，`main` 仍帶著產品程式碼，轉換前繼續用 `pnpm update-core` 更新，見[轉換 fork 模型工作區](#轉換-fork-模型工作區)。
 
 ## 檔案管理
 
@@ -59,20 +63,20 @@ MyGitNotes 把一個 Git 儲存庫變成集中處理筆記、文件、素材與 
 
 ## 快速開始
 
-需要 Node.js 22+、pnpm 9+ 與 Git（若使用 pnpm 10+，相依套件建置腳本已由 `pnpm-workspace.yaml` 的 `allowBuilds` 配置，亦可使用 `pnpm approve-builds`）。
+需要 Node.js 22+、pnpm 9+ 與 Git 2.42+（若使用 pnpm 10+，相依套件建置腳本已由 `pnpm-workspace.yaml` 的 `allowBuilds` 配置，亦可使用 `pnpm approve-builds`）。
 
 ```bash
-git clone <repository-url> mygitnotes
+git clone <repository-url> mygitnotes   # checkout 的是 core
 cd mygitnotes
 pnpm install
 pnpm build              # 編譯 local-server 所需的 @mygitnotes 核心套件產物
-pnpm bootstrap-workspace  # 加上 --no-examples 建立不含範例的空工作區；會印出 Vercel 部署步驟
+pnpm bootstrap-workspace  # 在 ../mygitnotes-notes 建立 main 並寫入 .env；可加 --path <dir>、--no-examples
 pnpm dev
 ```
 
-要部署到 Vercel，依 bootstrap 印出的步驟或 [Vercel 部署](#vercel-部署選用) 設定。
+`bootstrap-workspace` 以 orphan 分支在相鄰 worktree 建立 `main`，用 Core 範本一次提交填好內容，並把 `MYGITNOTES_LOCAL_PATH` 寫進 `.env`。要部署到 Vercel，依它印出的步驟或 [Vercel 部署](#vercel-部署選用) 設定。
 
-開啟 [http://localhost:5173](http://localhost:5173)。開發指令直接使用本機儲存庫，不需要平台登入。
+開啟 [http://localhost:5173](http://localhost:5173)。開發指令直接使用本機儲存庫，不需要平台登入。編輯直接寫入 `main` worktree 的檔案，在那裡或透過 Changes 面板提交與同步。
 
 若要開啟另一個 checkout：
 
@@ -80,12 +84,28 @@ pnpm dev
 REPO_ROOT=/absolute/path/to/workspace pnpm dev
 ```
 
-若要從產品分支更新既有工作區：
+在 `core` worktree 更新 Core：
 
 ```bash
-git remote add upstream <product-repository-url>
-pnpm update-core
+git remote add upstream <product-repository-url>   # clone 的是自己的 fork 時
+pnpm update-core      # fast-forward core，再 migrate 設定中的工作區
+pnpm install && pnpm build
 ```
+
+`pnpm migrate-workspace` 可單獨執行工作區 schema migration。工作區的 `schema_version` 與此 Core 支援的版本不同時，local server 拒絕啟動，並指出要執行的指令。
+
+### 轉換 fork 模型工作區
+
+`main` 仍帶著產品程式碼的工作區只需轉換一次：
+
+```bash
+# 在工作區 checkout、乾淨的 main 上
+pnpm update-core           # 先把 main 更新到最新 Core
+pnpm convert-workspace     # 一個 commit 移除 main 上的產品路徑
+git worktree add ../mygitnotes-core core   # 或：git fetch upstream core && git branch core upstream/core
+```
+
+`convert-workspace` 移除產品路徑，以及與 `main` 上次合併的 Core 版本完全相同的檔案。工作區 Agent 設定，以及共用資料夾內屬於工作區的檔案（例如 `docs/specs/**`、改過的 `.gitignore`）都會保留，指令會列出這些檔案。不改寫歷史。接著在 `core` worktree 的 `.env` 把 `MYGITNOTES_LOCAL_PATH` 設為這個 checkout，在那裡執行 `pnpm install && pnpm dev`。轉換後 `update-core` 不再合併進 `main`。Vercel 部署改由 `core` 的方式見 [Vercel 部署](#vercel-部署選用)。
 
 ## Docker 與 Docker Compose 部署
 
@@ -177,11 +197,11 @@ R2 不是必要功能。只有當 workspace 有大檔案，例如掃描 PDF、�
 
 ## Vercel 部署（選用）
 
-將 `main` 分支部署到你自己的 Vercel 專案。隨附的 [`vercel.json`](vercel.json) 會建置網頁介面，並將 `/api/*`、`/mcp/*`、`/raw-assets/*` 與 `/r2-assets/*` 導向 serverless API。
+將 `core` 分支部署到你自己的 Vercel 專案，部署在執行期透過 GitHub 或 GitLab 來源讀取 `main` 的筆記。fork 模型工作區在轉換前仍部署 `main`。隨附的 [`vercel.json`](vercel.json) 會建置網頁介面，並將 `/api/*`、`/mcp/*`、`/raw-assets/*` 與 `/r2-assets/*` 導向 serverless API。
 
 ### 預設：GitHub Actions 搭配 sparse checkout
 
-[`deploy-vercel-sparse.yml`](.github/workflows/deploy-vercel-sparse.yml) 只 checkout [`.github/vercel-sparse-paths.txt`](.github/vercel-sparse-paths.txt) 列出的產品路徑，用 Vercel CLI 建置並部署 production。筆記、圖片與字型不會被下載，部署時間不隨工作區內容成長。推送到 `main` 且變更產品路徑時才部署，只改筆記的推送不會觸發。`pnpm update-core` 會一併更新路徑清單；Core 新增建置或執行期需要的路徑卻沒列入清單時，`pnpm check:vercel-sparse-paths --core` 會失敗。
+[`deploy-vercel-sparse.yml`](.github/workflows/deploy-vercel-sparse.yml) 只 checkout [`.github/vercel-sparse-paths.txt`](.github/vercel-sparse-paths.txt) 列出的產品路徑，用 Vercel CLI 建置並部署 production。筆記、圖片與字型不會被下載，部署時間不隨工作區內容成長。workflow 在推送到 `main` 與 `core` 時執行，只從儲存庫變數 `MYGITNOTES_DEPLOY_BRANCH`（預設 `main`）指定的分支部署；只放內容的工作區設為 `core`。變更產品路徑才部署，只改筆記的推送不會觸發。更新 Core 時會一併更新路徑清單；Core 新增建置或執行期需要的路徑卻沒列入清單時，`pnpm check:vercel-sparse-paths --core` 會失敗。
 
 下列設定完成前，workflow 會顯示 notice 並略過，不會失敗。`pnpm bootstrap-workspace` 也會印出相同步驟。
 
@@ -198,14 +218,16 @@ gh variable set VERCEL_PROJECT_ID --body <projectId>
 gh secret set VERCEL_TOKEN   # 在提示時貼上 token
 ```
 
-6. 部署並驗證：執行 `gh workflow run deploy-vercel-sparse.yml`，用 `gh run watch` 等待完成，再以 `vercel ls --prod` 確認新部署為 Ready，且網域已提供該部署。
+   只放內容的工作區另外執行 `gh variable set MYGITNOTES_DEPLOY_BRANCH --body core`。
+
+6. 部署並驗證：執行 `gh workflow run deploy-vercel-sparse.yml --ref <部署分支>`，用 `gh run watch` 等待完成，再以 `vercel ls --prod` 確認新部署為 Ready，且網域已提供該部署。
 
 ### 改用：Vercel Git integration
 
-保留 Git integration，並執行 `gh variable set MYGITNOTES_VERCEL_DEPLOY --body git-integration`，workflow 便會略過。Vercel 每次部署都會 clone 整個儲存庫，適合小型工作區。預設 Actions 模式的取捨：
+保留 Git integration，並執行 `gh variable set MYGITNOTES_VERCEL_DEPLOY --body git-integration`，workflow 便會略過。Vercel 的 production branch 設為部署分支（只放內容的工作區為 `core`），[`vercel.json`](vercel.json) 的 `git.deploymentEnabled` 必須允許該分支。Vercel 每次部署都會 clone 整個儲存庫，適合小型工作區。預設 Actions 模式的取捨：
 
 - **Actions 分鐘數：** 每次部署在 GitHub runner 上安裝與建置，消耗 Actions 額度；Git integration 則在 Vercel 建置。
-- **沒有自動 preview 部署：** 只有 `main` 部署到 production，分支與 pull request 不會產生 preview URL。
+- **沒有自動 preview 部署：** 只有部署分支部署到 production，分支與 pull request 不會產生 preview URL。
 - **Token 管理：** `VERCEL_TOKEN` 可存取你的 Vercel 帳號。只存為儲存庫 secret，限定在擁有該專案的 team，設定到期日，外洩時立即輪替。Git integration 不需要 token。
 
 ### 執行期設定

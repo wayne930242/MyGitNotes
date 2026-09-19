@@ -1,9 +1,10 @@
 import fs from 'node:fs';
-import { loadSourceConfig } from '../packages/core/src/source-config.js';
+import { loadEnvDefaults, loadSourceConfig } from '../packages/core/src/source-config.js';
 import { spawnSync } from 'node:child_process';
 
 // Node parses .env without executing shell expressions. Values pass through stdin.
-process.loadEnvFile('.env');
+if (!fs.existsSync('.env')) throw new Error('Create .env from .env.example first.');
+loadEnvDefaults('.env');
 if (!fs.existsSync('.vercel/project.json')) throw new Error('Link the intended project with vercel link first.');
 const environment = process.argv[2] || 'production';
 if (!['production', 'preview', 'development'].includes(environment)) throw new Error('Use production, preview or development.');

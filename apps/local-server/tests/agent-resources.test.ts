@@ -43,6 +43,7 @@ beforeEach(async () => {
 afterEach(async () => { await new Promise<void>(resolve=>server.close(()=>resolve())); fs.rmSync(root,{recursive:true,force:true}); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 it('serves workspace Agent settings with revision and enforces login for remote saves',async () => {
+  fs.mkdirSync(path.join(root,'docs/agent'),{recursive:true}); fs.writeFileSync(path.join(root,'docs/agent/index.md'),'# Product\n');
   const anonymous=await fetch(`${base}/api/agent-resources`).then(r=>r.json());
   expect(anonymous.instructions).toContainEqual(expect.objectContaining({path:'AGENTS.md',scope:'workspace',editable:false}));
   const headers={Cookie:`gh_notes_session=${session}`,'Content-Type':'application/json'};
@@ -51,7 +52,9 @@ it('serves workspace Agent settings with revision and enforces login for remote 
   expect(listing.instructions).toContainEqual(expect.objectContaining({path:'AGENTS.md',scope:'workspace',editable:true}));
   expect(listing.skills).toContainEqual(expect.objectContaining({path:'.agents/skills/custom/SKILL.md',editable:true}));
   expect(listing.skills).toContainEqual(expect.objectContaining({path:'.agents/skills/custom/agents/openai.yaml',editable:true}));
-  expect(listing.docs.map((r:any)=>r.path)).toEqual(['.codex/agents/reviewer.toml']);
+  expect(listing.docs.map((r:any)=>r.path)).toEqual(['.codex/agents/reviewer.toml','docs/agent/index.md']);
+  expect(listing.docs[1]).toMatchObject({scope:'product',editable:false});
+  expect(await fetch(`${base}/api/agent-resources/read?path=docs/agent/index.md`).then(r=>r.json())).toMatchObject({content:'# Product\n'});
   expect(await fetch(`${base}/api/agent-resources/read?path=AGENTS.md`,{headers}).then(r=>r.json())).toMatchObject({content:'# Workspace\n',revision:'before'});
   expect((await fetch(`${base}/api/agent-resources/read?path=.codex/auth.json`,{headers})).status).toBe(403);
   const body=JSON.stringify({path:'AGENTS.md',content:'# Updated\n',revision:'before'});
