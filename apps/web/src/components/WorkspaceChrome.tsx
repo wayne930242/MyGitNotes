@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useLayoutEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PanelLeft } from 'lucide-react';
 import { Group, type LayoutChangedMeta, Panel, type PanelImperativeHandle, type PanelSize, Separator, usePanelRef } from 'react-resizable-panels';
@@ -120,10 +120,10 @@ const SidebarContext = createContext<SidebarContextValue | null>(null);
 
 export function useWorkspaceSidebarDrawer() {
   const context = useContext(SidebarContext);
+  const [open, setOpen] = useState(false);
   if (context) {
     return { open: context.open, setOpen: context.setOpen };
   }
-  const [open, setOpen] = useState(false);
   return { open, setOpen };
 }
 
@@ -132,11 +132,11 @@ export function SidebarProvider({ children, open: controlledOpen, onOpenChange }
   const [target, setTarget] = useState<HTMLDivElement | null>(null);
 
   const open = controlledOpen !== undefined ? controlledOpen : uncontrolledOpen;
-  const setOpen: React.Dispatch<React.SetStateAction<boolean>> = (value) => {
+  const setOpen = useCallback<React.Dispatch<React.SetStateAction<boolean>>>((value) => {
     const next = typeof value === 'function' ? (value as any)(open) : value;
     if (onOpenChange) onOpenChange(next);
     else setUncontrolledOpen(next);
-  };
+  }, [open, onOpenChange]);
 
   useEffect(() => {
     if (!open) return;
@@ -145,7 +145,7 @@ export function SidebarProvider({ children, open: controlledOpen, onOpenChange }
     };
     document.addEventListener('keydown', close);
     return () => document.removeEventListener('keydown', close);
-  }, [open]);
+  }, [open, setOpen]);
 
   return <SidebarContext.Provider value={{ open, setOpen, target, setTarget }}>{children}</SidebarContext.Provider>;
 }

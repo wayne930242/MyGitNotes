@@ -305,3 +305,20 @@ describe('WorkspaceSplitLayout and WorkspaceSidebarPortal', () => {
     expect(container.querySelector('.workspace-splitter')).toBeNull();
   });
 });
+
+it('uses the latest controlled drawer callback when Escape closes an open drawer', () => {
+  const first = vi.fn(), second = vi.fn();
+  const view = render(
+    <SidebarProvider open onOpenChange={first}>
+      <span>Drawer</span>
+    </SidebarProvider>,
+  );
+  view.rerender(
+    <SidebarProvider open onOpenChange={second}>
+      <span>Drawer</span>
+    </SidebarProvider>,
+  );
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(first).not.toHaveBeenCalled();
+  expect(second).toHaveBeenCalledWith(false);
+});
