@@ -16,6 +16,14 @@ it('keeps safe external links and rejects unsafe protocols and escaping paths', 
   }
 });
 
+it('treats a same-origin absolute URL as internal when the current origin is given, and external otherwise', () => {
+  const origin = 'https://notes.wayneh.tw';
+  expect(resolveWorkspaceHref(`${origin}/notebooks/x/notes/y.md`, 'notes/a.md', undefined, origin)).toEqual({ kind: 'route', url: '/notebooks/x/notes/y.md' });
+  expect(resolveWorkspaceHref(`${origin}/graph`, 'notes/a.md', undefined, origin)).toEqual({ kind: 'route', url: '/graph' });
+  expect(resolveWorkspaceHref(`${origin}/notebooks/x/notes/y.md`, 'notes/a.md')).toMatchObject({ kind: 'external' });
+  expect(resolveWorkspaceHref('https://other.example/notebooks/x/notes/y.md', 'notes/a.md', undefined, origin)).toMatchObject({ kind: 'external' });
+});
+
 it('resolves alias paths from notebook pathAliases', () => {
   const notebooks = [
     {

@@ -38,7 +38,7 @@ export function WorkspaceLinks({ notebooks, folders, children, onOpenNote }: {
   const open = async (element: HTMLElement, newTab: boolean) => {
     const href = element.dataset.workspaceLink || '';
     const sourcePath = element.dataset.sourcePath || '';
-    const link = resolveWorkspaceHref(href, sourcePath);
+    const link = resolveWorkspaceHref(href, sourcePath, undefined, window.location.origin);
     setError('');
     if (!link) { setError(t('links.invalid')); return; }
     if (link.kind === 'external') { window.open(link.url, '_blank', 'noopener,noreferrer'); return; }

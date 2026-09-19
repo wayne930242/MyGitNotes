@@ -120,7 +120,7 @@ export function renderNote(content: string, notePath: string, tableLabel = 'Hori
       link.setAttribute('href', r2AssetUrl(r2Key, notePath)); link.setAttribute('target', '_blank'); link.setAttribute('rel', 'noopener noreferrer');
       continue;
     }
-    const target = resolveWorkspaceHref(href, notePath);
+    const target = resolveWorkspaceHref(href, notePath, undefined, typeof window !== 'undefined' ? window.location.origin : undefined);
     if (!target) { link.removeAttribute('href'); continue; }
     link.dataset.workspaceLink = href; link.dataset.sourcePath = notePath;
     link.setAttribute('rel', 'noopener noreferrer');

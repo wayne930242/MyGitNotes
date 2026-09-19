@@ -45,7 +45,8 @@ export function getWorkspaceNotebooks(): NotebookConfig[] {
 export function resolveWorkspaceHref(
   value: string,
   sourcePath: string,
-  aliasesOrNotebooks?: Record<string, string> | NotebookConfig[]
+  aliasesOrNotebooks?: Record<string, string> | NotebookConfig[],
+  currentOrigin?: string
 ): WorkspaceLink | null {
   const href = value.trim();
   if (!href || /[\\\x00-\x1f\x7f]/.test(href)) return null;
@@ -53,6 +54,9 @@ export function resolveWorkspaceHref(
     if (/^(https?:|mailto:)/i.test(href) || href.startsWith('//')) {
       const url = new URL(href.startsWith('//') ? `https:${href}` : href);
       if (url.username || url.password) return null;
+      if (currentOrigin && url.origin === currentOrigin) {
+        return resolveWorkspaceHref(`${url.pathname}${url.search}${url.hash}`, sourcePath, aliasesOrNotebooks, currentOrigin);
+      }
       return { kind: 'external', url: url.href };
     }
     if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return null;
