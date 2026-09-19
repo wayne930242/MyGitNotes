@@ -779,7 +779,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   .editor-action.editor-confirming { width: auto; padding: 0 6px; }
   .editor-action.editor-confirming::after { content: "Confirm?"; white-space: nowrap; font-size: 11px; }
   .note-save { position: absolute; top: 8px; right: 56px; }
-  .note-close { position: absolute !important; right: 8px; top: 10px; }
+  .note-controls .note-close { position: absolute; right: 8px; top: 8px; width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
   .agent-toolbar { padding: 8px 12px; }
   .agent-toolbar .agent-controls { flex-wrap: nowrap; height: 44px; width: 100%; }
   .agent-controls .editor-mode-switch { order: 0; margin: 0; }
