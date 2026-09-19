@@ -71,3 +71,38 @@ it('does not report its own autosave as an external change on the next remote ch
   expect(screen.queryByText(/Remote changes merged/i)).toBeNull();
   expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('# Alpha\nMore.');
 });
+
+it('merges a concurrent local edit with an unrelated external change', async () => {
+  const start: NoteItem = { ...note, content: 'line1\nline2\nline3\n' };
+  let resolveRead: ((value: NoteItem) => void) | null = null;
+  const onReadRemote = vi.fn((): Promise<NoteItem> => new Promise(resolve => { resolveRead = resolve; }));
+  render(editor({ note: start, onReadRemote }));
+  // The immediate mount check: resolve it as a no-op so the throttle starts from a known point.
+  await act(async () => { resolveRead?.(start); await vi.advanceTimersByTimeAsync(0); });
+
+  await act(async () => { await vi.advanceTimersByTimeAsync(61000); }); // past the remote-check throttle
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: 'LOCAL1\nline2\nline3\n' } });
+  window.dispatchEvent(new Event('focus'));
+  expect(onReadRemote).toHaveBeenCalledTimes(2);
+  await act(async () => { resolveRead?.({ ...start, content: 'line1\nline2\nREMOTE3\n' }); await vi.advanceTimersByTimeAsync(0); });
+
+  expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('LOCAL1\nline2\nREMOTE3\n');
+  expect(screen.getByText(/Remote changes merged/i)).toBeTruthy();
+});
+
+it('blocks on an external change that conflicts with the unsaved local edit, preserving the draft', async () => {
+  const start: NoteItem = { ...note, content: 'line1\nline2\nline3\n' };
+  let resolveRead: ((value: NoteItem) => void) | null = null;
+  const onReadRemote = vi.fn((): Promise<NoteItem> => new Promise(resolve => { resolveRead = resolve; }));
+  render(editor({ note: start, onReadRemote }));
+  await act(async () => { resolveRead?.(start); await vi.advanceTimersByTimeAsync(0); });
+
+  await act(async () => { await vi.advanceTimersByTimeAsync(61000); });
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: 'LOCAL1\nline2\nline3\n' } });
+  window.dispatchEvent(new Event('focus'));
+  expect(onReadRemote).toHaveBeenCalledTimes(2);
+  await act(async () => { resolveRead?.({ ...start, content: 'REMOTE1\nline2\nline3\n' }); await vi.advanceTimersByTimeAsync(0); });
+
+  expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('LOCAL1\nline2\nline3\n');
+  expect(screen.getByText(/conflict/i)).toBeTruthy();
+});

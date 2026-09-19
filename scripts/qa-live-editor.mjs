@@ -18,6 +18,7 @@ write('notes/example/projects/_dir.yml','title: Projects\norder: -1\n');
 write('notes/example/projects/deep/_dir.yml','title: Deep work\n');
 write('notes/example/projects/deep/nested.md','# Nested Note\n');
 write('notes/example/assets/pixel.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64'));
+write('notes/example/reload.md','---\ntitle: Reload\n---\n# Reload\n\nOriginal line.\n');
 git('init','-b','main');git('config','user.name','Browser QA');git('config','user.email','qa@example.com');git('add','.');git('commit','-m','fixture');
 process.env.MYGITNOTES_SOURCE='local';process.env.MYGITNOTES_LOCAL_PATH=root;delete process.env.VERCEL;delete process.env.APP_URL;
 const {createApp}=await import(`${product}/apps/local-server/dist/app.js`);
@@ -106,4 +107,31 @@ try {
  await page.waitForFunction(()=>document.body.innerText.includes('Uncommitted Changes'));
  if(errors.length)throw Error(errors.join('; '));
  console.log('PASS live Markdown: formatting, active syntax, images, tables, tasks, Unicode, undo and asset insertion');
+
+ // Local mode: an open note picks up an external file change through the same
+ // remote-check machinery (onReadRemote) that remote mode already used.
+ await page.setViewport({width:1440,height:1000});
+ await page.goto(base+'/notebooks/example/notes/reload.md',{waitUntil:'networkidle0'});
+ await click('Source');await page.waitForSelector('textarea[aria-label="Note content"]');
+ await page.waitForFunction(()=>document.querySelector('textarea[aria-label="Note content"]')?.value.includes('Original line.'));
+ fs.writeFileSync(path.join(root,'notes/example/reload.md'),'---\ntitle: Reload\n---\n# Reload\n\nChanged externally.\n');
+ // Reopening remounts the editor, which runs an unthrottled check on mount.
+ await page.goto(base+'/notebooks/example/notes/reload.md',{waitUntil:'networkidle0'});
+ await click('Source');await page.waitForSelector('textarea[aria-label="Note content"]');
+ await page.waitForFunction(()=>document.querySelector('textarea[aria-label="Note content"]')?.value.includes('Changed externally.'));
+ console.log('PASS local reload: reopening an unedited note shows a file changed on disk');
+
+ // The app's own autosave must never be mistaken for an external change on the next check.
+ await page.focus('textarea[aria-label="Note content"]');
+ await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');
+ await page.keyboard.type('\nAutosaved local edit.');
+ await new Promise(resolve=>setTimeout(resolve,1200)); // clear the autosave debounce
+ if(!fs.readFileSync(path.join(root,'notes/example/reload.md'),'utf8').includes('Autosaved local edit.'))throw Error('Autosave did not reach disk before the next remote check');
+ await new Promise(resolve=>setTimeout(resolve,61000)); // clear the remote-check throttle on this mount
+ await page.evaluate(()=>{window.dispatchEvent(new Event('focus'));document.dispatchEvent(new Event('visibilitychange'));});
+ await new Promise(resolve=>setTimeout(resolve,800));
+ const afterOwnSave=await page.evaluate(()=>({text:document.body.innerText,value:document.querySelector('textarea[aria-label="Note content"]')?.value}));
+ if(afterOwnSave.text.includes('Remote changes merged'))throw Error('The app treated its own autosave as an external change');
+ if(!afterOwnSave.value?.includes('Autosaved local edit.'))throw Error('Content changed unexpectedly after the remote check');
+ console.log('PASS local reload: local autosave is never treated as an external change');
 } finally {await browser.close();await new Promise(r=>server.close(r));fs.rmSync(root,{recursive:true,force:true});}
