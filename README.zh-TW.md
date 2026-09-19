@@ -69,14 +69,13 @@ MyGitNotes 把一個 Git 儲存庫變成集中處理筆記、文件、素材與 
 git clone <repository-url> mygitnotes   # checkout 的是 core
 cd mygitnotes
 pnpm install
-pnpm build              # 編譯 local-server 所需的 @mygitnotes 核心套件產物
 pnpm bootstrap-workspace  # 在 ../mygitnotes-notes 建立 main 並寫入 .env；可加 --path <dir>、--no-examples
-pnpm dev
+pnpm dev                 # 先編譯 @mygitnotes 套件，再啟動 local-server 與 web
 ```
 
 `bootstrap-workspace` 以 orphan 分支在相鄰 worktree 建立 `main`，用 Core 範本一次提交填好內容，並把 `MYGITNOTES_LOCAL_PATH` 寫進 `.env`。要部署到 Vercel，依它印出的步驟或 [Vercel 部署](#vercel-部署選用) 設定。
 
-開啟 [http://localhost:5173](http://localhost:5173)。開發指令直接使用本機儲存庫，不需要平台登入。編輯直接寫入 `main` worktree 的檔案，在那裡或透過 Changes 面板提交與同步。
+開啟 [http://localhost:5173](http://localhost:5173)；在 `.env` 設定 `MYGITNOTES_WEB_PORT` 可改用其他埠號。開發指令直接使用本機儲存庫，不需要平台登入。編輯直接寫入 `main` worktree 的檔案，在那裡或透過 Changes 面板提交與同步。
 
 若要開啟另一個 checkout：
 
@@ -102,7 +101,7 @@ pnpm install && pnpm build
 # 在工作區 checkout、乾淨的 main 上
 pnpm update-core           # 先把 main 更新到最新 Core
 pnpm convert-workspace     # 一個 commit 移除 main 上的產品路徑
-git worktree add ../mygitnotes-core core   # 或：git fetch upstream core && git branch core upstream/core
+git worktree add --track -b core ../mygitnotes-core origin/core   # 若是自己的 fork，改用 upstream/core
 ```
 
 `convert-workspace` 移除產品路徑，以及與 `main` 上次合併的 Core 版本完全相同的檔案。工作區 Agent 設定，以及共用資料夾內屬於工作區的檔案（例如 `docs/specs/**`、改過的 `.gitignore`）都會保留，指令會列出這些檔案。不改寫歷史。接著在 `core` worktree 的 `.env` 把 `MYGITNOTES_LOCAL_PATH` 設為這個 checkout，在那裡執行 `pnpm install && pnpm dev`。轉換後 `update-core` 不再合併進 `main`。Vercel 部署改由 `core` 的方式見 [Vercel 部署](#vercel-部署選用)。

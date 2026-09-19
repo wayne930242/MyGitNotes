@@ -69,14 +69,13 @@ Requires Node.js 22+, pnpm 9+, and Git 2.42+. (On pnpm 10+, dependency build scr
 git clone <repository-url> mygitnotes   # checks out core
 cd mygitnotes
 pnpm install
-pnpm build              # Compiles @mygitnotes packages required by local-server
 pnpm bootstrap-workspace  # Creates main in ../mygitnotes-notes and points .env at it; --path <dir>, --no-examples
-pnpm dev
+pnpm dev                 # Compiles @mygitnotes packages, then starts local-server and web
 ```
 
 `bootstrap-workspace` creates `main` as an orphan branch in a sibling worktree, fills it from the Core templates in one commit, and writes `MYGITNOTES_LOCAL_PATH` into `.env`. To deploy the workspace to Vercel, follow the steps it prints or [Vercel deployment](#vercel-deployment-optional).
 
-Open [http://localhost:5173](http://localhost:5173). The development commands use the local repository and do not require GitHub sign-in. Edits write to the `main` worktree on disk; commit and sync them there or from the Changes panel.
+Open [http://localhost:5173](http://localhost:5173); set `MYGITNOTES_WEB_PORT` in `.env` to use a different port. The development commands use the local repository and do not require GitHub sign-in. Edits write to the `main` worktree on disk; commit and sync them there or from the Changes panel.
 
 To open another checkout:
 
@@ -102,7 +101,7 @@ A workspace whose `main` still carries the product converts once:
 # in the workspace checkout on a clean main
 pnpm update-core           # bring main to the latest Core first
 pnpm convert-workspace     # one commit that removes the product paths from main
-git worktree add ../mygitnotes-core core   # or: git fetch upstream core && git branch core upstream/core
+git worktree add --track -b core ../mygitnotes-core origin/core   # use upstream/core when you cloned your own fork
 ```
 
 `convert-workspace` removes the product paths and every file identical to the Core revision `main` last merged. Workspace Agent settings and workspace-owned files inside shared folders, such as `docs/specs/**` or an edited `.gitignore`, stay; the command lists them. History is not rewritten. Then set `MYGITNOTES_LOCAL_PATH` in the `core` worktree's `.env` to this checkout and run `pnpm install && pnpm dev` there. After conversion, `update-core` refuses to merge into `main`. Move a Vercel deployment to `core` as described in [Vercel deployment](#vercel-deployment-optional).

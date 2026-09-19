@@ -3,8 +3,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { loadEnvDefaults } from '@mygitnotes/core';
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../..');
+// Read into a private object, not process.env: resolveApiPort() below trusts an explicit
+// process.env.PORT as the live local-server port, which a merely-default .env value is not.
+const fileEnv: NodeJS.ProcessEnv = {};
+loadEnvDefaults(path.join(repoRoot, '.env'), fileEnv);
+const webPort = process.env.MYGITNOTES_WEB_PORT || fileEnv.MYGITNOTES_WEB_PORT;
 const devPortsFile = process.env.MYGITNOTES_DEV_PORTS_FILE || path.join(repoRoot, '.mygitnotes-dev-ports.json');
 
 interface DevPorts {
@@ -79,7 +85,7 @@ export default defineConfig(async ({ command }) => {
   return {
     plugins: [react(), recordWebPort()],
     server: {
-      port: 5173,
+      port: toPort(Number(webPort)) ?? 5173,
       proxy: {
         '/api': {
           target: apiTarget,
