@@ -28,6 +28,18 @@ export interface NoteDocumentPanelProps {
   setOutlineIndex: (index: number) => void;
   chooseOutline: (index: number, closeAfter?: boolean) => void;
   openOutline: () => void;
+  newFieldKey: string;
+  setNewFieldKey: (value: string) => void;
+  frontmatterViewMode: 'form' | 'yaml';
+  setFrontmatterViewMode: (mode: 'form' | 'yaml') => void;
+  yamlText: string;
+  setYamlText: (value: string) => void;
+  yamlError: string;
+  setYamlError: (value: string) => void;
+  tagInput: string;
+  setTagInput: (value: string) => void;
+  isTagDropdownOpen: boolean;
+  setIsTagDropdownOpen: (value: boolean) => void;
   metadata: Record<string, unknown>;
   setMetadata: (metadata: Record<string, unknown>) => void;
   statuses: string[];
@@ -38,7 +50,6 @@ export interface NoteDocumentPanelProps {
   onInsertAssetRef: (ref: string) => void;
   notePath: string;
   branch: string;
-  draftScope?: string;
   editorState: 'saving' | 'pending' | 'saved';
   editorStatus: string;
   autoSave: boolean;
@@ -50,7 +61,7 @@ export interface NoteDocumentPanelProps {
 }
 
 /** The zoom/pane editor's document panel: its tab strip and the find, outline, frontmatter, asset and git sections it switches between. */
-export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isGitPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, openOutline, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, notePath, branch, draftScope, editorState, editorStatus, autoSave, readOnly, isDirty, canRestore, confirmRestore, onRestoreClick }: NoteDocumentPanelProps) {
+export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isGitPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, notePath, branch, editorState, editorStatus, autoSave, readOnly, isDirty, canRestore, confirmRestore, onRestoreClick }: NoteDocumentPanelProps) {
   const { t } = useTranslation();
 
   const sections = (
@@ -125,7 +136,7 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
             : <p>{t('editor.outlineEmpty')}</p>}
         </section>
       )}
-      {showFrontmatter && <NoteFrontmatterPanel metadata={metadata} setMetadata={setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={locked} notePath={notePath} branch={branch} draftScope={draftScope} readOnly={readOnly} />}
+      {showFrontmatter && <NoteFrontmatterPanel metadata={metadata} setMetadata={setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={locked} newFieldKey={newFieldKey} setNewFieldKey={setNewFieldKey} frontmatterViewMode={frontmatterViewMode} setFrontmatterViewMode={setFrontmatterViewMode} yamlText={yamlText} setYamlText={setYamlText} yamlError={yamlError} setYamlError={setYamlError} tagInput={tagInput} setTagInput={setTagInput} isTagDropdownOpen={isTagDropdownOpen} setIsTagDropdownOpen={setIsTagDropdownOpen} />}
       {isAssetPickerOpen && <FileManager notebookId={notebookId} writable={false} mode='pick-image' layout='panel' onInsert={locked ? undefined : onInsertAssetRef} />}
       {isGitPanelOpen && (
         <div className='note-git-panel note-panel-scroll'>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import YAML from 'yaml';
 import { chooseOutlineHeading, findOutlineIndexForLine, findTextMatches, isEditableTarget, parseMarkdownOutline } from '../../lib/note-navigation.js';
 import type { MarkdownEditorHandle, MarkdownEditorMode } from '../MarkdownEditor.js';
 import type { NotePanelMode } from '../NoteEditor.js';
@@ -12,14 +13,15 @@ export interface UseNoteDocumentPanelParams {
   documentPanel?: { target: HTMLElement | null; mode: NotePanelMode | null; onChange: (mode: NotePanelMode | null) => void; };
   /** Owned by the host `NoteEditor`, which renders the `MarkdownEditor` this ref points to. */
   editorRef: React.RefObject<MarkdownEditorHandle>;
+  metadata: Record<string, unknown>;
   notePath: string;
   branch: string;
   draftScope?: string;
   readOnly: boolean;
 }
 
-/** The document panel's visibility, find/outline navigation, and its keyboard leader menu. */
-export function useNoteDocumentPanel({ frame, active, isMarkdown, content, editorMode, documentPanel, editorRef, notePath, branch, draftScope, readOnly }: UseNoteDocumentPanelParams) {
+/** The document panel's visibility, find/outline navigation, its frontmatter form/tag state, and its keyboard leader menu. */
+export function useNoteDocumentPanel({ frame, active, isMarkdown, content, editorMode, documentPanel, editorRef, metadata, notePath, branch, draftScope, readOnly }: UseNoteDocumentPanelParams) {
   const [ownPanel, updateNotePanel] = useState<NotePanelMode | null>(null);
   const notePanel = frame === 'pane' ? documentPanel?.mode ?? null : ownPanel;
   const lastNotePanel = useRef<NotePanelMode>((() => {
@@ -50,6 +52,17 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
   const [outlineIndex, setOutlineIndex] = useState(0);
   const [isEditorLeaderOpen, setIsEditorLeaderOpen] = useState(false);
   const findInputRef = useRef<HTMLInputElement>(null);
+
+  // Frontmatter form state, kept here rather than in NoteFrontmatterPanel so it survives
+  // switching to another document-panel tab and back.
+  const [newFieldKey, setNewFieldKey] = useState('');
+  const [frontmatterViewMode, setFrontmatterViewMode] = useState<'form' | 'yaml'>('form');
+  const [yamlText, setYamlText] = useState(() => YAML.stringify(metadata || {}));
+  const [yamlError, setYamlError] = useState('');
+
+  // Tag autocomplete state (Requirement 4)
+  const [tagInput, setTagInput] = useState('');
+  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const matches = useMemo(() => findTextMatches(content, findQuery), [content, findQuery]);
   const outline = useMemo(() => parseMarkdownOutline(content), [content]);
 
@@ -175,6 +188,8 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
     setFindIndex(0);
     setOutlineIndex(0);
     setIsEditorLeaderOpen(false);
+    setTagInput('');
+    setIsTagDropdownOpen(false);
     /* eslint-enable react/set-state-in-effect */
   }, [notePath, branch, draftScope, readOnly]);
   /* eslint-enable react-hooks/exhaustive-deps */
@@ -192,5 +207,5 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
     requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-outline-index="${index}"]`)?.focus());
   }, [isOutlineOpen, outline, outlineIndex]);
 
-  return { editorRef, notePanel, setNotePanel, lastNotePanel, isAssetPickerOpen, isFindOpen, isOutlineOpen, showFrontmatter, isGitPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, moveOutline, openFind, openOutline, isEditorLeaderOpen, setIsEditorLeaderOpen };
+  return { editorRef, notePanel, setNotePanel, lastNotePanel, isAssetPickerOpen, isFindOpen, isOutlineOpen, showFrontmatter, isGitPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, moveOutline, openFind, openOutline, isEditorLeaderOpen, setIsEditorLeaderOpen, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen };
 }

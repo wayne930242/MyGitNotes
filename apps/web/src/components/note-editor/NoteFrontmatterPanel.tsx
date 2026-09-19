@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import YAML from 'yaml';
 import { Code } from 'lucide-react';
 import { isNoteHidden, withNoteStatus } from '@mygitnotes/core/note-status';
@@ -14,19 +14,23 @@ export interface NoteFrontmatterPanelProps {
   metadataFields?: NotebookMetadataField[];
   availableTags: string[];
   locked: boolean;
-  notePath: string;
-  branch: string;
-  draftScope?: string;
-  readOnly: boolean;
+  newFieldKey: string;
+  setNewFieldKey: (value: string) => void;
+  frontmatterViewMode: 'form' | 'yaml';
+  setFrontmatterViewMode: (mode: 'form' | 'yaml') => void;
+  yamlText: string;
+  setYamlText: (value: string) => void;
+  yamlError: string;
+  setYamlError: (value: string) => void;
+  tagInput: string;
+  setTagInput: (value: string) => void;
+  isTagDropdownOpen: boolean;
+  setIsTagDropdownOpen: (value: boolean) => void;
 }
 
 /** A note's frontmatter: title, status, tags with autocomplete, custom metadata fields, and a raw-YAML view. */
-export function NoteFrontmatterPanel({ metadata, setMetadata, statuses, metadataFields, availableTags, locked, notePath, branch, draftScope, readOnly }: NoteFrontmatterPanelProps) {
+export function NoteFrontmatterPanel({ metadata, setMetadata, statuses, metadataFields, availableTags, locked, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen }: NoteFrontmatterPanelProps) {
   const { t } = useTranslation();
-  const [newFieldKey, setNewFieldKey] = useState('');
-  const [frontmatterViewMode, setFrontmatterViewMode] = useState<'form' | 'yaml'>('form');
-  const [yamlText, setYamlText] = useState(() => YAML.stringify(metadata || {}));
-  const [yamlError, setYamlError] = useState('');
 
   const customFields = useMemo(() => {
     const RESERVED_METADATA_KEYS = new Set(['title', 'status', 'hiden', 'tags', 'created', 'updated']);
@@ -52,19 +56,6 @@ export function NoteFrontmatterPanel({ metadata, setMetadata, statuses, metadata
     }
     return fields;
   }, [metadataFields, metadata]);
-
-  // Tag autocomplete states (Requirement 4)
-  const [tagInput, setTagInput] = useState('');
-  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
-
-  /* eslint-disable react-hooks/exhaustive-deps -- The effect is keyed to editor identity; incoming metadata changes must not reset in-progress tag input. */
-  useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Document identity and search changes reset editor state; autosave starts from the committed effect snapshot. */
-    setTagInput('');
-    setIsTagDropdownOpen(false);
-    /* eslint-enable react/set-state-in-effect */
-  }, [notePath, branch, draftScope, readOnly]);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   const currentTags: string[] = useMemo(() => {
     return Array.isArray(metadata.tags) ? metadata.tags.map(String) : [];
