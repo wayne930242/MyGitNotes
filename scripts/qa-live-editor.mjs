@@ -40,8 +40,8 @@ try {
  await page.click('.note-youtube-embed [data-youtube-copy]');await page.waitForFunction(()=>document.querySelector('.note-youtube-embed [data-youtube-copy]')?.dataset.copyState==='copied');
  if(await page.evaluate(()=>window.__youtubeCopied)!=='https://youtu.be/dQw4w9WgXcQ?t=45')throw Error('YouTube Copy did not preserve the source URL');
  const geometry=async mode=>{
-  await page.click(`[data-youtube-mode-option="${mode}"]`);await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
-  return page.evaluate(()=>{const embed=document.querySelector('.note-youtube-embed').getBoundingClientRect();const line=[...document.querySelectorAll('.cm-line')].find(line=>line.textContent.includes('Paragraph'));const range=document.createRange();range.setStart(line.firstChild,0);range.setEnd(line.firstChild,1);const glyph=range.getBoundingClientRect();const content=document.querySelector('.cm-content').getBoundingClientRect();const style=getComputedStyle(document.querySelector('.cm-content'));return {left:embed.left,right:embed.right,width:embed.width,glyphLeft:glyph.left,columnRight:content.right-parseFloat(style.paddingRight)};});
+  await page.click(`[data-youtube-mode-option="${mode}"]`);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>resolve())));
+  return page.evaluate(()=>{const embed=document.querySelector('.note-youtube-embed').getBoundingClientRect();const line=[...document.querySelectorAll('.cm-line')].find(line=>line.textContent.includes('Paragraph'));const range=document.createRange();range.setStart(line.firstChild,0);range.setEnd(line.firstChild,1);const glyph=range.getBoundingClientRect();const lineBox=line.getBoundingClientRect();const style=getComputedStyle(line);return {left:embed.left,right:embed.right,width:embed.width,glyphLeft:glyph.left,columnRight:lineBox.right-parseFloat(style.paddingRight)};});
  };
  const medium=await geometry('medium');if(Math.abs(medium.left-medium.glyphLeft)>1||medium.width>641)throw Error(`YouTube medium alignment failed: ${JSON.stringify(medium)}`);
  const theater=await geometry('theater');if(Math.abs(theater.left-theater.glyphLeft)>1||Math.abs(theater.right-theater.columnRight)>1)throw Error(`YouTube theater alignment failed: ${JSON.stringify(theater)}`);
@@ -52,7 +52,7 @@ try {
  if(!await page.evaluate(()=>window.__youtubeQaPlayer?.isConnected&&window.__youtubeQaPlayer===document.querySelector('.note-youtube-persistent-player iframe')))throw Error('YouTube playback iframe was replaced when CodeMirror virtualized its widget');
  await page.focus('.cm-content');await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.type(' playback continues');
  if(!await page.evaluate(()=>window.__youtubeQaPlayer?.isConnected&&window.__youtubeQaPlayer===document.querySelector('.note-youtube-persistent-player iframe')))throw Error('Editing elsewhere replaced the persistent YouTube iframe');
- await page.evaluate(()=>{const scroller=document.querySelector('.cm-scroller');scroller.scrollTop=0;});await page.waitForSelector('.note-youtube-embed');
+ await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('.cm-content');await page.waitForSelector('.note-youtube-embed');
  console.log('PASS YouTube modes: alignment, persistence, inline playback, and CodeMirror virtualization continuity');
  if(await page.$('[data-live-markdown] .cm-lineNumbers'))throw Error('Live preview line numbers are visible by default');
  if(await page.$eval('button[aria-label="Line Numbers"]',e=>e.getAttribute('aria-pressed'))!=='false')throw Error('Line Numbers toggle does not report unpressed while hidden');

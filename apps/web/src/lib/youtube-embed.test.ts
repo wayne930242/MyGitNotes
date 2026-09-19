@@ -32,7 +32,7 @@ describe('YouTube display mode preference', () => {
 
 describe('YouTube URL copy', () => {
   it('prefers the source URL and falls back to a canonical timestamped URL', async () => {
-    const writeText = vi.fn(async () => undefined);
+    const writeText = vi.fn(async (_text: string) => undefined);
     vi.stubGlobal('window', { setTimeout: vi.fn() });
     vi.stubGlobal('navigator', { clipboard: { writeText } });
     vi.stubGlobal('document', { querySelectorAll: () => [] });
