@@ -95,6 +95,13 @@ try {
   await page.waitForSelector('.cm-content');await fits('button[aria-label="Close note"]');
   await fits('button[aria-label="Document tools"]');
   await fits('[data-markdown-editor]',Math.min(width-40,500));
+  if(width>=768&&width<=1100) {
+   // The Line Numbers button collapses to icon-only and the Close button goes absolute in this range;
+   // this directly exercises that fix rather than relying on the generic Close-button fit check alone.
+   await click('Line Numbers');await page.waitForSelector('[data-live-markdown] .cm-lineNumbers');
+   await fits('button[aria-label="Close note"]');await fits('button[aria-label="Document tools"]');
+   await click('Line Numbers');await page.waitForFunction(()=>!document.querySelector('[data-live-markdown] .cm-lineNumbers'));
+  }
   if(width<768) {
    assert((await bounds('.note-controls')).height<=48,'Note toolbar wraps on mobile');
    const close=await bounds('button[aria-label="Close note"]');assert(close.width>=44&&close.height>=44,'Small Close target');
