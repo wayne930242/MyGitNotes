@@ -463,9 +463,9 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 .note-preview { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .note-preview-bar { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--color-border); font-size: 12px; color: var(--color-muted); }
 .note-preview-body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; }
-.editor-secondary-action { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-surface); color: var(--color-text); font-size: 12px; line-height: 18px; font-weight: 500; white-space: nowrap; }
+.editor-secondary-action { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-surface); color: var(--color-text); font-size: 12px; line-height: 18px; font-weight: 500; white-space: nowrap; transition-property: background-color, border-color, box-shadow, transform, filter; }
 .editor-secondary-action:hover, .editor-secondary-action[aria-pressed="true"] { background: var(--color-sidebar); }
-.editor-secondary-action[aria-pressed="true"] { color: var(--color-primary); border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border)); }
+.editor-secondary-action[aria-pressed="true"] { color: var(--color-primary); border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border)); background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface)); font-weight: 600; }
 .changes-overlay { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 16px; background: color-mix(in srgb, var(--color-scrim) 53%, transparent); }
 .changes-dialog { display: flex; flex-direction: column; width: min(1100px, 100%); height: min(780px, 90dvh); overflow: hidden; color: var(--color-text); }
 .changes-dialog > header { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--color-border); }

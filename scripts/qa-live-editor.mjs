@@ -37,9 +37,12 @@ try {
  await click('Source');await page.waitForSelector('textarea[aria-label="Note content"]');
  if(await page.$('[data-source-line-numbers]'))throw Error('Source line numbers are visible by default');
  await click('Live Preview');await page.waitForSelector('.cm-content');
+ const unpressedColor=await page.$eval('button[aria-label="Line Numbers"]',e=>getComputedStyle(e).color);
  await click('Line Numbers');
  await page.waitForSelector('[data-live-markdown] .cm-lineNumbers .cm-gutterElement');
  if(await page.$eval('button[aria-label="Line Numbers"]',e=>e.getAttribute('aria-pressed'))!=='true')throw Error('Line Numbers toggle does not report pressed once shown');
+ const pressedStyle=await page.$eval('button[aria-label="Line Numbers"]',e=>{const style=getComputedStyle(e);return {color:style.color,weight:Number(style.fontWeight)};});
+ if(pressedStyle.color===unpressedColor||pressedStyle.weight<600)throw Error(`Line Numbers pressed state is not visually distinct: ${JSON.stringify({unpressedColor,pressedStyle})}`);
  const liveLines=await page.$$eval('[data-live-markdown] .cm-lineNumbers .cm-gutterElement',nodes=>nodes.map(node=>node.textContent.trim()).filter(Boolean));
  if(!liveLines.includes('1'))throw Error('Live preview line numbers do not include line 1');
  const liveLineStyle=await page.evaluate(()=>{const gutter=getComputedStyle(document.querySelector('[data-live-markdown] .cm-lineNumbers'));const content=getComputedStyle(document.querySelector('[data-live-markdown] .cm-content'));return {opacity:Number(gutter.opacity),gutterFont:parseFloat(gutter.fontSize),contentFont:parseFloat(content.fontSize)};});
