@@ -103,7 +103,7 @@ import {
   SortField,
   SortOrder,
 } from './lib/note-sort.js';
-import { I18nProvider, useTranslation } from './lib/i18n/index.js';
+import { I18nProvider, useTranslation, type TranslationKey } from './lib/i18n/index.js';
 import { AlertTriangle, FileText, X } from 'lucide-react';
 
 const ScreenPage = React.lazy(() => import('./components/ScreenPage.js').then(module => ({ default: module.ScreenPage })));
@@ -898,7 +898,7 @@ const AppContent: React.FC = () => {
     const latestNotes = existingPaths.length ? await readNotes(existingPaths, expected) : [];
     const latestByPath = new Map(latestNotes.map(note => [note.path, note]));
     for (const entry of selected) {
-      if (entry.blocked) throw new Error(`${entry.note.path}: ${entry.blocked}`);
+      if (entry.blocked) throw new Error(`${entry.note.path}: ${t(entry.blocked as TranslationKey)}`);
       let prepared = entry;
       if (entry.base) {
         let latest: NoteItem;

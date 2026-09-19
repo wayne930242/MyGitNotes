@@ -219,6 +219,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
   const [isSaving, setIsSaving] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [saveError, setSaveError] = useState(conflictReason || '');
+  // Translated at render time alongside saveError, so a raw error message doesn't get frozen
+  // in whatever language was active when it was caught.
+  const [saveErrorParams, setSaveErrorParams] = useState<Record<string, string> | undefined>(undefined);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [baseNote, setBaseNote] = useState(remoteBase || note);
   const [blocked, setBlocked] = useState(Boolean(conflictReason));
@@ -456,7 +459,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
           clearLocalDraft(draftScope || branch, note.path);
           absorbTimestamps(saved);
           setHasUnsavedChanges(false); setSaveError('');
-        }).catch(error => { if (mounted.current) setSaveError(t('editor.localSaveFailed', { message: error.message })); })
+        }).catch(error => { if (mounted.current) { setSaveError('editor.localSaveFailed'); setSaveErrorParams({ message: error.message }); } })
           .finally(() => { if (mounted.current) setIsSaving(false); });
         return;
       }
@@ -569,7 +572,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
         await onSave({ path: note.path, content: current.current.content, metadata: current.current.metadata, baseNote: current.current.baseNote });
         clearLocalDraft(draftScope || branch, note.path);
       }
-      catch (error) { closing.current = false; setIsSaving(false); setSaveError(t('editor.localSaveFailed', { message: (error as Error).message })); return; }
+      catch (error) { closing.current = false; setIsSaving(false); setSaveError('editor.localSaveFailed'); setSaveErrorParams({ message: (error as Error).message }); return; }
     }
     if (!autoSave && !readOnly && hasUnsavedChanges && !window.confirm(t('editor.confirmCloseUnsaved'))) return;
     closing.current = false; setIsSaving(false);
@@ -1119,7 +1122,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
           />
         )}
 
-        {saveError && <EditorNotice tone="error">{t(saveError as TranslationKey)}</EditorNotice>}
+        {saveError && <EditorNotice tone="error">{t(saveError as TranslationKey, saveErrorParams)}</EditorNotice>}
 
         {(blocked || showRemoteNotice || showConflictDraftNotice) && <EditorNotice actions={<>
           {blocked && <button disabled={isSaving} onClick={refreshRemote} className="font-semibold underline hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed transition">{t('editor.refreshRemote')}</button>}
