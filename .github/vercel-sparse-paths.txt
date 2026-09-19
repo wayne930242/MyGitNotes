@@ -5,6 +5,7 @@
 .vercelignore
 api
 apps
+docs/agent
 package.json
 packages
 pnpm-lock.yaml

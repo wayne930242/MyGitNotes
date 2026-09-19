@@ -13,6 +13,9 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      # Only the repository that publishes the demo holds the deploy key; workspaces tracking Core skip the sync.
+      HAS_CORE_SYNC_KEY: ${{ secrets.CORE_SYNC_SSH_KEY != '' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -31,7 +34,11 @@ jobs:
           pnpm check:vercel-sparse-paths --core
           pnpm build
           pnpm test
+      - name: Skip demo synchronization
+        if: env.HAS_CORE_SYNC_KEY != 'true'
+        run: echo "::notice title=Demo sync skipped::CORE_SYNC_SSH_KEY is not set; this repository does not publish the demo workspace."
       - name: Merge Core and synchronize examples
+        if: env.HAS_CORE_SYNC_KEY == 'true'
         id: sync
         env:
           CORE_REVISION: ${{ github.sha }}
@@ -41,9 +48,9 @@ jobs:
           git config user.name "$REPOSITORY_OWNER"
           git config user.email "$REPOSITORY_OWNER_ID+$REPOSITORY_OWNER@users.noreply.github.com"
           node scripts/sync-demo-main.mjs
-      - name: Verify Vercel deployment of main
+      - name: Verify Vercel deployment
         if: steps.sync.outputs.synced == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          MAIN_SHA: ${{ steps.sync.outputs.main_sha }}
+          DEPLOY_SHA: ${{ steps.sync.outputs.deploy_sha }}
         run: node scripts/wait-vercel-status.mjs

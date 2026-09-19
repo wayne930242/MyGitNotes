@@ -65,4 +65,23 @@ describe('release transaction', () => {
     expect(() => run()).toThrow();
     expect(remoteGit('rev-parse', 'main')).toBe(concurrent);
   });
+  it('keeps a content-only main content-only, syncs examples and deploys the Core revision', () => {
+    git('checkout', '-q', '--orphan', 'content'); git('rm', '-rq', '--cached', '.');
+    for (const file of ['product.txt', 'examples']) fs.rmSync(path.join(checkout, file), { recursive: true, force: true });
+    write('.mygitnotes.yaml', 'fixture\n'); write('notes/example/welcome.md', '# Baseline\n'); write('notes/example/retired.md', '# Retired\n'); write('notes/personal.md', '# Keep personal note\n');
+    git('add', '.'); git('commit', '-qm', 'content-only main'); git('push', '-qf', 'origin', 'content:main');
+    git('checkout', '-qf', 'core'); git('clean', '-fdq');
+    write('examples/demo-workspace/notes/example/retired.md', '# Retired\n'); write('pnpm-workspace.yaml', 'packages: []\n');
+    git('add', '.'); git('commit', '-qm', 'retired template'); git('push', '-q', 'origin', 'core');
+    const first = run();
+    expect(first).toContain(`deploy_sha=${git('rev-parse', 'core')}`);
+    expect(remoteGit('log', '-1', '--format=%B', 'main')).toContain(`Core-Revision: ${git('rev-parse', 'core')}`);
+    git('rm', '-q', 'examples/demo-workspace/notes/example/retired.md'); git('commit', '-qm', 'drop template'); git('push', '-q', 'origin', 'core');
+    expect(run()).toContain('synced=true');
+    expect(remoteGit('ls-tree', '-r', '--name-only', 'main').split('\n').sort()).toEqual(['.mygitnotes.yaml', 'notes/example/welcome.md', 'notes/personal.md']);
+    expect(remoteGit('show', 'main:notes/example/welcome.md')).toBe('# Updated tutorial');
+    expect(() => remoteGit('merge-base', 'main', 'core')).toThrow();
+    expect(git('status', '--porcelain')).toBe('');
+    expect(git('worktree', 'list').split('\n')).toHaveLength(1);
+  });
 });
