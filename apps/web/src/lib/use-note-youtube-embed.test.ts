@@ -23,10 +23,12 @@ describe('useNoteYouTubeEmbed hook', () => {
     });
 
     const embed = {
+      isConnected: true,
       dataset: { videoId: 'dQw4w9WgXcQ', start: '45', youtubeMode: 'thumbnail', youtubeSession: `test-${Math.random()}` },
       replaceChildren: vi.fn(),
       querySelectorAll: () => [],
       querySelector: () => null,
+      closest: () => null,
       getBoundingClientRect: () => ({ left: 10, top: 20, width: 360, height: 203 }),
     };
 
@@ -52,6 +54,7 @@ describe('useNoteYouTubeEmbed hook', () => {
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
 
     const surface = {
+      dataset: {},
       contains: (el: any) => el === poster,
       querySelectorAll: () => [embed],
       addEventListener: (event: string, fn: any) => {

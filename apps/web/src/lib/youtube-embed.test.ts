@@ -20,6 +20,17 @@ describe('YouTube display mode preference', () => {
     expect(dispatchEvent.mock.calls[0][0].type).toBe(YOUTUBE_MODE_EVENT);
   });
 
+  it('keeps the selected mode in memory when storage is unavailable', () => {
+    vi.stubGlobal('localStorage', { getItem: vi.fn(() => { throw new Error('blocked'); }), setItem: vi.fn(() => { throw new Error('blocked'); }) });
+    vi.stubGlobal('document', { querySelectorAll: () => [] });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn() });
+    vi.stubGlobal('CustomEvent', class { constructor(public type: string, public init: unknown) {} });
+
+    setYouTubeDisplayMode('medium');
+
+    expect(readYouTubeDisplayMode()).toBe('medium');
+  });
+
   it('marks exactly the selected mode as pressed', () => {
     const buttons = ['thumbnail', 'medium', 'theater'].map(mode => ({ dataset: { youtubeModeOption: mode }, setAttribute: vi.fn() }));
     const embed = { dataset: {}, querySelectorAll: () => buttons };

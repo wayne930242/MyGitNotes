@@ -4,6 +4,8 @@
 
 A shared YouTube embed module owns mode parsing, `localStorage`, translated facade/control DOM, mounted-embed synchronization, and inline playback. `renderNote` emits translated markup through that module; the live CodeMirror widget builds the same DOM directly. A document-level playback host owns the live iframe so CodeMirror virtualization cannot destroy it, while the rendered-note hook delegates actions at `WorkspaceLinks`.
 
+The host retains its original mounted surface and a stable per-editor session key, so duplicate notes in Focus, Graph, Screen, or separate editors cannot steal a virtualized player. It clips to each overflow ancestor while remaining mounted. An in-memory preference mirrors successful or failed storage writes for later widgets in the same page session.
+
 ## Interfaces and data flow
 
 1. Rendering creates `.note-youtube-embed` with video metadata and mode controls.
@@ -51,3 +53,23 @@ Unit tests cover storage/synchronization, mode markup, and inline activation. Pr
 - Tried: Assert the rendered heading while the restored caret selected that heading's source line.
   Found: Live preview intentionally exposes Markdown source for the active block; the caret must move to the following paragraph before asserting the heading widget.
   Led by: Existing live-preview active-block contract
+- Tried: Copy the demo workspace with a repository-relative source while the command ran inside the scratch directory.
+  Found: The disposable workspace copy needs the checkout's absolute source path once the command working directory changes.
+  Led by: Dispatch disposable-workspace anchor
+
+## Friction disposition
+
+- Friction: The contract named an approximate component filename. (gap)
+  Action: Resolved by locating the existing TypeScript component; no durable project rule changed.
+- Friction: Focused tests and browser QA require built workspace dependencies and production bundles. (gap)
+  Action: Resolved in the verification order below; the repository scripts already encode their runtime dependencies.
+- Friction: Browser animation waits execute in the page context. (gap)
+  Action: Resolved in the QA implementation; this is general browser-tool behavior.
+- Friction: Live block widgets need the same inset as text lines. (gap)
+  Action: Resolved by the responsive embed CSS and measured browser matrix.
+- Friction: Typed spies must declare inspected arguments. (gap)
+  Action: Resolved in the test implementation; this is general TypeScript behavior.
+- Friction: CodeMirror selection controls which virtualized block is remounted and whether active syntax is shown. (gap)
+  Action: Resolved in the QA implementation using explicit caret movement.
+- Friction: Scratch-directory copies require an absolute checkout source. (gap)
+  Action: Resolved in the disposable verification command; this is general shell behavior.

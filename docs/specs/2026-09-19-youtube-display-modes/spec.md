@@ -18,7 +18,7 @@ Approved from: "Begin contract task."
 ## Compatibility and edge cases
 
 - Existing accepted YouTube URLs, start times, MDX YouTube components, and `youtube-nocookie.com` playback remain supported.
-- A blocked or unavailable `localStorage` falls back to thumbnail while the current page remains usable.
+- A blocked or unavailable `localStorage` starts at thumbnail and retains later mode choices for the current page session.
 - The standalone Screen YouTube card is unchanged.
 
 ## Applied standards

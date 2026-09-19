@@ -1,7 +1,8 @@
 export const YOUTUBE_MODE_STORAGE_KEY = 'github-notes:youtube-display-mode';
 export const YOUTUBE_MODE_EVENT = 'github-notes:youtube-display-mode-change';
 let youtubeSessionSequence = 0;
-let activePlayer: { key: string; host: HTMLDivElement; route: string; frame: number } | null = null;
+let rememberedYouTubeMode: YouTubeDisplayMode | null = null;
+let activePlayer: { key: string; host: HTMLDivElement; route: string; frame: number; target: HTMLElement; surface: HTMLElement } | null = null;
 
 export function stopYouTubePlayback() {
   if (!activePlayer) return;
@@ -47,13 +48,19 @@ export function isYouTubeDisplayMode(value: unknown): value is YouTubeDisplayMod
 }
 
 export function readYouTubeDisplayMode(storage?: Pick<Storage, 'getItem'>): YouTubeDisplayMode {
+  if (!storage && rememberedYouTubeMode) return rememberedYouTubeMode;
   try {
     const value = (storage ?? globalThis.localStorage).getItem(YOUTUBE_MODE_STORAGE_KEY);
-    if (value === 'music') return 'thumbnail';
-    return isYouTubeDisplayMode(value) ? value : 'thumbnail';
+    const mode = value === 'music' ? 'thumbnail' : isYouTubeDisplayMode(value) ? value : 'thumbnail';
+    if (!storage) rememberedYouTubeMode = mode;
+    return mode;
   } catch {
-    return 'thumbnail';
+    return rememberedYouTubeMode ?? 'thumbnail';
   }
+}
+
+export function rememberYouTubeDisplayMode(mode: YouTubeDisplayMode) {
+  rememberedYouTubeMode = mode;
 }
 
 export function applyYouTubeDisplayMode(embed: HTMLElement, mode: YouTubeDisplayMode) {
@@ -68,6 +75,7 @@ function selectedButtons(root: ParentNode, mode: YouTubeDisplayMode) {
 }
 
 export function setYouTubeDisplayMode(mode: YouTubeDisplayMode, storage?: Pick<Storage, 'setItem'>) {
+  rememberYouTubeDisplayMode(mode);
   try { (storage ?? globalThis.localStorage).setItem(YOUTUBE_MODE_STORAGE_KEY, mode); } catch { /* Keep the in-page preference. */ }
   document.querySelectorAll<HTMLElement>('.note-youtube-embed').forEach(embed => applyYouTubeDisplayMode(embed, mode));
   if (activePlayer) selectedButtons(activePlayer.host, mode);
@@ -98,7 +106,7 @@ const failedIcon = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" 
 export async function copyYouTubeUrl(button: HTMLElement) {
   const embed = button.closest<HTMLElement>('.note-youtube-embed');
   const host = button.closest<HTMLElement>('.note-youtube-persistent-player');
-  const source = embed ?? ([...document.querySelectorAll<HTMLElement>('.note-youtube-embed')].find(candidate => candidate.dataset.youtubeSession === host?.dataset.youtubeSession) || host);
+  const source = embed ?? host;
   const videoId = source?.dataset.videoId || host?.dataset.videoId || '';
   const start = Number(source?.dataset.start || host?.dataset.start || '0');
   const url = source?.dataset.youtubeSourceUrl || host?.dataset.youtubeSourceUrl || `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}${start ? `&t=${start}s` : ''}`;
@@ -141,7 +149,8 @@ export function activateYouTubeEmbed(poster: HTMLElement) {
   const start = Number(embed.dataset.start || '0');
   const playerLabel = poster.dataset.youtubePlayerLabel || DEFAULT_YOUTUBE_LABELS.player;
   const key = embed.dataset.youtubeSession!;
-  if (activePlayer?.key === key) return;
+  const surface = embed.closest<HTMLElement>('[data-note-youtube-surface]') ?? embed.parentElement ?? document.body;
+  if (activePlayer?.key === key && activePlayer.surface === surface) return;
   stopYouTubePlayback();
   const host = document.createElement('div');
   host.className = 'note-youtube-persistent-player';
@@ -152,16 +161,31 @@ export function activateYouTubeEmbed(poster: HTMLElement) {
   host.append(createYouTubeIframe(videoId, start, playerLabel));
   document.body.append(host);
   embed.dataset.youtubePlaying = 'true';
-  const player = { key, host, route: location.pathname, frame: 0 };
+  const player = { key, host, route: location.pathname, frame: 0, target: embed, surface };
   activePlayer = player;
   const position = () => {
     if (activePlayer !== player) return;
     if (location.pathname !== player.route) { host.remove(); activePlayer = null; return; }
-    const target = [...document.querySelectorAll<HTMLElement>('.note-youtube-embed')].find(candidate => candidate.dataset.youtubeSession === key);
+    const target = player.target.isConnected
+      ? player.target
+      : [...player.surface.querySelectorAll<HTMLElement>('.note-youtube-embed')].find(candidate => candidate.dataset.youtubeSession === key);
     if (target) {
+      player.target = target;
       const box = target.getBoundingClientRect();
       host.style.transform = `translate(${box.left}px, ${box.top}px)`;
-      host.style.width = `${box.width}px`; host.style.height = `${box.height}px`; host.style.visibility = 'visible';
+      host.style.width = `${box.width}px`; host.style.height = `${box.height}px`;
+      let top = 0; let left = 0; let right = window.innerWidth; let bottom = window.innerHeight;
+      for (let ancestor = target.parentElement; ancestor && ancestor !== document.body; ancestor = ancestor.parentElement) {
+        const style = getComputedStyle(ancestor);
+        if (/(auto|scroll|hidden|clip)/.test(`${style.overflow} ${style.overflowX} ${style.overflowY}`)) {
+          const clip = ancestor.getBoundingClientRect();
+          top = Math.max(top, clip.top); left = Math.max(left, clip.left);
+          right = Math.min(right, clip.right); bottom = Math.min(bottom, clip.bottom);
+        }
+      }
+      const visible = box.right > left && box.left < right && box.bottom > top && box.top < bottom;
+      host.style.clipPath = visible ? `inset(${Math.max(0, top - box.top)}px ${Math.max(0, box.right - right)}px ${Math.max(0, box.bottom - bottom)}px ${Math.max(0, left - box.left)}px)` : 'inset(100%)';
+      host.style.visibility = visible ? 'visible' : 'hidden';
       target.dataset.youtubePlaying = 'true';
     } else {
       host.style.transform = 'translate(-10000px, -10000px)'; host.style.visibility = 'hidden';

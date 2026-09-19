@@ -254,16 +254,17 @@ class BulletMarker extends WidgetType {
   eq() { return true; }
   toDOM() { const span=document.createElement('span');span.textContent='•';span.setAttribute('aria-hidden','true');return span; }
 }
+let youtubeEditorSequence = 0;
 class YouTubeWidget extends WidgetType {
-  constructor(readonly videoId: string, readonly start: number, readonly sourceUrl: string, readonly from: number, readonly labels: YouTubeLabels) { super(); }
-  eq(other: YouTubeWidget) { return this.videoId === other.videoId && this.start === other.start && this.sourceUrl === other.sourceUrl && this.from === other.from && this.labels === other.labels; }
+  constructor(readonly owner: string, readonly videoId: string, readonly start: number, readonly sourceUrl: string, readonly from: number, readonly labels: YouTubeLabels) { super(); }
+  eq(other: YouTubeWidget) { return this.owner === other.owner && this.videoId === other.videoId && this.start === other.start && this.sourceUrl === other.sourceUrl && this.from === other.from && this.labels === other.labels; }
   toDOM(view: EditorView) {
     const container = document.createElement('div');
     container.className = 'note-youtube-embed';
     container.dataset.videoId = this.videoId;
     container.dataset.start = String(this.start);
     container.dataset.youtubeSourceUrl = this.sourceUrl;
-    container.dataset.youtubeSession = `${this.videoId}:${this.start}:${this.from}`;
+    container.dataset.youtubeSession = `${this.owner}:${this.videoId}:${this.start}:${this.from}`;
 
     const { poster: button, image: img } = populateYouTubeEmbed(container, this.labels);
     img.addEventListener('load', () => view.requestMeasure());
@@ -288,7 +289,7 @@ class YouTubeWidget extends WidgetType {
   }
   get estimatedHeight() { return 280; }
 }
-function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string, pageLabel: string, t: I18nContextValue['t']): DecorationSet {
+function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string, pageLabel: string, youtubeOwner: string, t: I18nContextValue['t']): DecorationSet {
   const marks: Range<Decoration>[] = [];
   let pageNumber = 1;
   const references = marked.lexer(state.doc.toString()).links;
@@ -350,7 +351,7 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
       const video = parseYouTubeUrl(url);
       if (video) {
         if (!editing) {
-          marks.push(Decoration.replace({ widget: new YouTubeWidget(video.videoId, video.start, url, from, {
+          marks.push(Decoration.replace({ widget: new YouTubeWidget(youtubeOwner, video.videoId, video.start, url, from, {
             play: t('youtube.play'), player: t('youtube.player'), modes: t('youtube.modes'),
             thumbnail: t('youtube.thumbnail'), medium: t('youtube.medium'), theater: t('youtube.theater'),
             copy: t('youtube.copy'), copied: t('youtube.copied'), copyFailed: t('youtube.copyFailed'),
@@ -555,6 +556,8 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
   const tableLabel = t('preview.scrollableTable'), pageLabel = t('editor.page');
   const location = useLocation();
   const host = useRef<HTMLDivElement>(null); const editor = useRef<EditorView>();
+  const youtubeOwner = useRef('');
+  if (!youtubeOwner.current) youtubeOwner.current = `youtube-editor-${++youtubeEditorSequence}`;
   const callback = useRef(onChange); callback.current = onChange;
   const queryClient = useQueryClient(); const scope = useNoteQueryScope();
   const completionSource = useRef({ queryClient, scope }); completionSource.current = { queryClient, scope };
@@ -591,10 +594,10 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
   }),[]);
   useEffect(() => {
     const field = StateField.define<{decorations:DecorationSet;focused:boolean}>({
-      create(state) {return {decorations:liveDecorations(state,false,notePath,linkLabel,tableLabel,pageLabel,t),focused:false};},
+      create(state) {return {decorations:liveDecorations(state,false,notePath,linkLabel,tableLabel,pageLabel,youtubeOwner.current,t),focused:false};},
       update(value,tr) {
         let focused=value.focused;for(const effect of tr.effects)if(effect.is(focusChanged))focused=effect.value;
-        return {focused,decorations:liveDecorations(tr.state,focused,notePath,linkLabel,tableLabel,pageLabel,t)};
+        return {focused,decorations:liveDecorations(tr.state,focused,notePath,linkLabel,tableLabel,pageLabel,youtubeOwner.current,t)};
       },
       provide: field => EditorView.decorations.from(field,value=>value.decorations),
     });

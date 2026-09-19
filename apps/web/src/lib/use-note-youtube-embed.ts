@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { activateYouTubeEmbed, applyYouTubeDisplayMode, copyYouTubeUrl, isYouTubeDisplayMode, readYouTubeDisplayMode, setYouTubeDisplayMode, YOUTUBE_MODE_EVENT, YOUTUBE_MODE_STORAGE_KEY } from './youtube-embed.js';
+import { activateYouTubeEmbed, applyYouTubeDisplayMode, copyYouTubeUrl, isYouTubeDisplayMode, readYouTubeDisplayMode, rememberYouTubeDisplayMode, setYouTubeDisplayMode, YOUTUBE_MODE_EVENT, YOUTUBE_MODE_STORAGE_KEY } from './youtube-embed.js';
 
 type ElementRef = { readonly current: HTMLElement | null };
 
@@ -7,6 +7,7 @@ export function useNoteYouTubeEmbed(surfaceRef: ElementRef) {
   useEffect(() => {
     const surface = surfaceRef.current;
     if (!surface) return;
+    surface.dataset.noteYoutubeSurface = 'true';
 
     const apply = (mode = readYouTubeDisplayMode()) => surface.querySelectorAll<HTMLElement>('.note-youtube-embed').forEach(embed => applyYouTubeDisplayMode(embed, mode));
     apply();
@@ -35,7 +36,7 @@ export function useNoteYouTubeEmbed(surfaceRef: ElementRef) {
       }
     };
     const onMode = (event: Event) => { const mode = (event as CustomEvent).detail; if (isYouTubeDisplayMode(mode)) apply(mode); };
-    const onStorage = (event: StorageEvent) => { if (event.key === YOUTUBE_MODE_STORAGE_KEY && isYouTubeDisplayMode(event.newValue)) apply(event.newValue); };
+    const onStorage = (event: StorageEvent) => { if (event.key === YOUTUBE_MODE_STORAGE_KEY && isYouTubeDisplayMode(event.newValue)) { rememberYouTubeDisplayMode(event.newValue); apply(event.newValue); } };
 
     surface.addEventListener('click', onClick);
     surface.addEventListener('keydown', onKeyDown);
@@ -46,6 +47,7 @@ export function useNoteYouTubeEmbed(surfaceRef: ElementRef) {
       surface.removeEventListener('keydown', onKeyDown);
       window.removeEventListener(YOUTUBE_MODE_EVENT, onMode);
       window.removeEventListener('storage', onStorage);
+      delete surface.dataset.noteYoutubeSurface;
     };
   }, [surfaceRef]);
 }
