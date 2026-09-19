@@ -19,7 +19,7 @@ describe('live markdown block margins', () => {
   });
 
   it('contains rendered markdown child margins inside block widgets', () => {
-    const source = fs.readFileSync(path.resolve('apps/web/src/components/LiveMarkdownEditor.tsx'), 'utf8');
+    const source = fs.readFileSync(path.resolve('apps/web/src/components/live-markdown/widgets.ts'), 'utf8');
     expect(source).toMatch(/if\s*\(this\.block\)\s*\{\s*dom\.style\.display\s*=\s*'flow-root';/);
   });
 });
