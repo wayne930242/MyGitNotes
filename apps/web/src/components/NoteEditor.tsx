@@ -440,6 +440,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
       // Debounced auto-save to disk
       const timer = setTimeout(async () => {
         setIsSaving(true);
+        // Held for the save's duration so a concurrent remote check (focus/interval)
+        // can't read this same write back mid-flight and mistake it for an external change.
+        operation.current = true;
         try {
           const saved = await onSave({
             path: note.path,
@@ -457,6 +460,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
         } catch (err) {
           setSaveError((err as Error).message);
         } finally {
+          operation.current = false;
           setIsSaving(false);
         }
       }, 750);

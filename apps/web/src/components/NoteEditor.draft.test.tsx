@@ -72,6 +72,32 @@ it('does not report its own autosave as an external change on the next remote ch
   expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('# Alpha\nMore.');
 });
 
+it('does not let a concurrent remote check read back its own in-flight autosave as an external change', async () => {
+  let diskNote: NoteItem = note;
+  let resolveSave: (() => void) | null = null;
+  const onSave = vi.fn(({ content, metadata }: { content: string; metadata?: Record<string, unknown> }): Promise<NoteItem> => {
+    diskNote = { ...note, content, metadata: { ...metadata, updated: 't1' } };
+    return new Promise(resolve => { resolveSave = () => resolve(diskNote); });
+  });
+  const onReadRemote = vi.fn(async () => diskNote);
+  render(editor({ onSave, onReadRemote }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); }); // the mount's own check resolves
+
+  await act(async () => { await vi.advanceTimersByTimeAsync(61000); }); // past the remote-check throttle
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: '# Alpha\nMore.' } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(750); }); // debounce fires; onSave now in flight
+  expect(onSave).toHaveBeenCalledTimes(1);
+
+  onReadRemote.mockClear();
+  window.dispatchEvent(new Event('focus')); // a remote check races the in-flight save
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  expect(onReadRemote).not.toHaveBeenCalled();
+
+  await act(async () => { resolveSave?.(); await vi.advanceTimersByTimeAsync(0); });
+  expect(screen.queryByText(/Remote changes merged/i)).toBeNull();
+  expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('# Alpha\nMore.');
+});
+
 it('merges a concurrent local edit with an unrelated external change', async () => {
   const start: NoteItem = { ...note, content: 'line1\nline2\nline3\n' };
   let resolveRead: ((value: NoteItem) => void) | null = null;
