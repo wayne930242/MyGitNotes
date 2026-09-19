@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   FOCUS_DIVISIONS, FOCUS_MAX_TABS, FocusError, FocusLayoutSchema, FocusPageSchema, FocusSchema,
-  changeDivision, closeTab, displayPanes, findFocusTab, focusPaneCount, focusTabCount, focusTabKey,
-  foreignFocusTab, nameFocus, notebookFocuses, ownFocusPage, placeTab, pruneFocus, relocateFocusPaths, removeFocus, renameFocus, updateFocus,
+  changeDivision, closeTab, displayPanes, findFocusTab, findFocusTabInPane, focusPaneCount, focusTabCount, focusTabKey,
+  foreignFocusTab, moveTab, nameFocus, notebookFocuses, ownFocusPage, placeTab, placeTabs, pruneFocus, relocateFocusPaths, removeFocus, renameFocus, updateFocus,
 } from '../src/focus-page.js';
 
 const note = (path: string) => ({ kind: 'note' as const, path });
@@ -16,8 +16,16 @@ describe('Focus schema invariants', () => {
     expect(FocusLayoutSchema.safeParse({ division: 'grid-2x2', panes: [pane()] }).success).toBe(false);
     expect(FocusLayoutSchema.safeParse({ division: 'grid-2x2', panes: [pane(), pane(), pane(), pane()] }).success).toBe(true);
   });
-  it('rejects the same note tab placed in two panes', () => {
-    expect(FocusLayoutSchema.safeParse({ division: 'columns-2', panes: [pane(note('a.md')), pane(note('a.md'))] }).success).toBe(false);
+  it('allows the same note tab placed in two panes', () => {
+    expect(FocusLayoutSchema.safeParse({ division: 'columns-2', panes: [pane(note('a.md')), pane(note('a.md'))] }).success).toBe(true);
+  });
+  it('dedupes a same-pane duplicate on parse, keeping the first occurrence', () => {
+    const parsed = FocusLayoutSchema.parse({ division: 'single', panes: [pane(note('a.md'), lane('l1'), note('a.md'))] });
+    expect(parsed).toEqual({ division: 'single', panes: [pane(note('a.md'), lane('l1'))] });
+  });
+  it('returns the same reference when parsing finds no duplicate', () => {
+    const input = { division: 'single', panes: [pane(note('a.md'))] };
+    expect(FocusLayoutSchema.parse(input)).toEqual(input);
   });
   it('caps total tabs at FOCUS_MAX_TABS across the whole layout', () => {
     expect(FocusLayoutSchema.safeParse({ division: 'single', panes: [pane(...notes(FOCUS_MAX_TABS))] }).success).toBe(true);
@@ -73,9 +81,12 @@ describe('placeTab', () => {
     expect(placeTab(layout, note('d.md'), 0, -5)).toEqual({ ...layout, panes: [pane(note('d.md'), note('a.md'), note('b.md')), layout.panes[1]] });
     expect(placeTab(layout, note('d.md'), 0, 999)).toEqual({ ...layout, panes: [pane(note('a.md'), note('b.md'), note('d.md')), layout.panes[1]] });
   });
-  it('moves an existing tab by removing it first, without duplicating it', () => {
-    expect(placeTab(layout, note('b.md'), 1, 0)).toEqual({ division: 'columns-2', panes: [pane(note('a.md')), pane(note('b.md'), note('c.md'))] });
+  it('places a tab in the target pane without removing it from another pane', () => {
+    expect(placeTab(layout, note('b.md'), 1, 0)).toEqual({ division: 'columns-2', panes: [pane(note('a.md'), note('b.md')), pane(note('b.md'), note('c.md'))] });
     expect(layout.panes[0].tabs).toEqual([note('a.md'), note('b.md')]);
+  });
+  it('repositions an existing tab within the target pane, without duplicating it', () => {
+    expect(placeTab(layout, note('a.md'), 0, 1)).toEqual({ ...layout, panes: [pane(note('b.md'), note('a.md')), layout.panes[1]] });
   });
   it('throws invalid-pane for an out-of-range pane', () => {
     expect(() => placeTab(layout, note('d.md'), 2)).toThrow(FocusError);
@@ -90,12 +101,43 @@ describe('placeTab', () => {
 });
 
 describe('closeTab', () => {
-  const layout = { division: 'single' as const, panes: [pane(note('a.md'), note('b.md'))] };
-  it('removes the matching tab', () => {
-    expect(closeTab(layout, focusTabKey(note('a.md')))).toEqual({ division: 'single', panes: [pane(note('b.md'))] });
+  const layout = { division: 'columns-2' as const, panes: [pane(note('a.md'), note('b.md')), pane(note('a.md'))] };
+  it('removes the matching tab from the given pane only', () => {
+    expect(closeTab(layout, 0, focusTabKey(note('a.md')))).toEqual({ division: 'columns-2', panes: [pane(note('b.md')), pane(note('a.md'))] });
   });
   it('returns the same reference for an unknown key', () => {
-    expect(closeTab(layout, 'note:missing.md')).toBe(layout);
+    expect(closeTab(layout, 0, 'note:missing.md')).toBe(layout);
+  });
+});
+
+describe('moveTab', () => {
+  const layout = { division: 'columns-2' as const, panes: [pane(note('a.md'), note('b.md')), pane(note('c.md'))] };
+  it('removes the tab from the source pane and places it in the target pane', () => {
+    expect(moveTab(layout, 0, 1, focusTabKey(note('a.md')), 0)).toEqual({ division: 'columns-2', panes: [pane(note('b.md')), pane(note('a.md'), note('c.md'))] });
+  });
+  it('reorders within the same pane when fromPane and toPane match', () => {
+    expect(moveTab(layout, 0, 0, focusTabKey(note('a.md')), 1)).toEqual({ ...layout, panes: [pane(note('b.md'), note('a.md')), layout.panes[1]] });
+  });
+  it('throws invalid-pane when the key is not in the source pane', () => {
+    try { moveTab(layout, 0, 1, focusTabKey(note('c.md'))); throw new Error('expected throw'); } catch (error) { expect((error as FocusError).code).toBe('invalid-pane'); }
+  });
+});
+
+describe('placeTabs', () => {
+  const layout = { division: 'columns-2' as const, panes: [pane(note('a.md')), pane(note('b.md'))] };
+  it('adds only the tabs the target pane does not already hold, reporting counts', () => {
+    const result = placeTabs(layout, [note('a.md'), note('c.md'), note('d.md')], 0);
+    expect(result).toEqual({ layout: { division: 'columns-2', panes: [pane(note('a.md'), note('c.md'), note('d.md')), layout.panes[1]] }, added: 2, skipped: 1 });
+  });
+  it('stops adding once the layout-wide tab budget is reached, reporting the shortfall as skipped', () => {
+    const full = { division: 'single' as const, panes: [pane(...notes(FOCUS_MAX_TABS))] };
+    const result = placeTabs(full, [note('overflow-1.md'), note('overflow-2.md')], 0);
+    expect(result.added).toBe(0);
+    expect(result.skipped).toBe(2);
+    expect(result.layout).toEqual(full);
+  });
+  it('throws invalid-pane for an out-of-range pane', () => {
+    expect(() => placeTabs(layout, [note('x.md')], 5)).toThrow(FocusError);
   });
 });
 
@@ -118,6 +160,20 @@ describe('findFocusTab and focusTabCount', () => {
     expect(findFocusTab(layout, focusTabKey(note('b.md')))).toEqual({ pane: 1, index: 0 });
     expect(findFocusTab(layout, 'note:missing.md')).toBeUndefined();
     expect(focusTabCount(layout)).toBe(3);
+  });
+  it('finds the first pane holding a tab open in several panes', () => {
+    const layout = { division: 'columns-2' as const, panes: [pane(note('a.md')), pane(note('a.md'))] };
+    expect(findFocusTab(layout, focusTabKey(note('a.md')))).toEqual({ pane: 0, index: 0 });
+  });
+});
+
+describe('findFocusTabInPane', () => {
+  it('only looks inside the given pane, even when the tab is open elsewhere too', () => {
+    const layout = { division: 'columns-2' as const, panes: [pane(note('a.md')), pane(note('a.md'), note('b.md'))] };
+    expect(findFocusTabInPane(layout, 0, focusTabKey(note('a.md')))).toBe(0);
+    expect(findFocusTabInPane(layout, 1, focusTabKey(note('a.md')))).toBe(0);
+    expect(findFocusTabInPane(layout, 1, focusTabKey(note('b.md')))).toBe(1);
+    expect(findFocusTabInPane(layout, 0, focusTabKey(note('b.md')))).toBe(-1);
   });
 });
 

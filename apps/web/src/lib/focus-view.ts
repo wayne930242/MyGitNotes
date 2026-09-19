@@ -1,4 +1,4 @@
-import { FocusLayoutSchema, displayPanes, emptyFocusLayout, focusTabKey, findFocusTab, type FocusDivision, type FocusLayout } from '@mygitnotes/core/focus-page';
+import { FocusLayoutSchema, displayPanes, emptyFocusLayout, focusTabKey, findFocusTabInPane, type FocusDivision, type FocusLayout } from '@mygitnotes/core/focus-page';
 
 export const CURRENT_FOCUS = 'current';
 
@@ -109,14 +109,14 @@ export function sideTarget(entry: FocusEntryView, sourcePane: number, paneCount:
   return found !== undefined ? found : (sourcePane + 1) % paneCount;
 }
 
-/** Given the layout before closing `key`, the key that should be shown afterward: next tab right, else left, else none. */
-export function shownAfterClose(layout: FocusLayout, key: string): string | null {
-  const found = findFocusTab(layout, key);
-  if (!found) return null;
-  const tabs = layout.panes[found.pane].tabs;
-  const right = tabs[found.index + 1];
+/** Given the layout before closing `key` in `pane`, the key that should be shown afterward: next tab right, else left, else none. */
+export function shownAfterClose(layout: FocusLayout, pane: number, key: string): string | null {
+  const index = findFocusTabInPane(layout, pane, key);
+  if (index === -1) return null;
+  const tabs = layout.panes[pane].tabs;
+  const right = tabs[index + 1];
   if (right) return focusTabKey(right);
-  const left = tabs[found.index - 1];
+  const left = tabs[index - 1];
   return left ? focusTabKey(left) : null;
 }
 

@@ -142,18 +142,22 @@ describe('sideTarget', () => {
 describe('shownAfterClose', () => {
   const three = layout('columns-3', pane(note('a.md'), note('b.md'), note('c.md')), pane(), pane());
   it('prefers the next tab to the right', () => {
-    expect(shownAfterClose(three, 'note:a.md')).toBe('note:b.md');
-    expect(shownAfterClose(three, 'note:b.md')).toBe('note:c.md');
+    expect(shownAfterClose(three, 0, 'note:a.md')).toBe('note:b.md');
+    expect(shownAfterClose(three, 0, 'note:b.md')).toBe('note:c.md');
   });
   it('falls back to the tab on the left when there is no tab to the right', () => {
-    expect(shownAfterClose(three, 'note:c.md')).toBe('note:b.md');
+    expect(shownAfterClose(three, 0, 'note:c.md')).toBe('note:b.md');
   });
   it('returns null when the pane becomes empty', () => {
     const single = layout('single', pane(note('only.md')));
-    expect(shownAfterClose(single, 'note:only.md')).toBeNull();
+    expect(shownAfterClose(single, 0, 'note:only.md')).toBeNull();
   });
-  it('returns null when the key is not in the layout', () => {
-    expect(shownAfterClose(three, 'note:missing.md')).toBeNull();
+  it('returns null when the key is not in the pane', () => {
+    expect(shownAfterClose(three, 0, 'note:missing.md')).toBeNull();
+  });
+  it('only looks inside the given pane, even when the key is open elsewhere', () => {
+    const twoPanes = layout('columns-2', pane(note('a.md')), pane(note('b.md')));
+    expect(shownAfterClose(twoPanes, 1, 'note:a.md')).toBeNull();
   });
 });
 

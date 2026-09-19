@@ -27,22 +27,34 @@ export type FocusPane = z.infer<typeof FocusPaneSchema>;
 
 export function focusTabKey(tab: FocusTab): string { return tab.kind === 'note' ? `note:${tab.path}` : `lane:${tab.id}`; }
 
-/** Shared by a bare layout and a named Focus: pane shape must match the division, tab identity is unique, and the tab budget is layout-wide. */
+/** A note may sit in several panes at once; within one pane a tab key is unique. Drops a later duplicate, keeping the first. Same reference when nothing changes. */
+function dedupePanes<T extends { panes: { tabs: FocusTab[] }[] }>(layout: T): T {
+  let changed = false;
+  const panes = layout.panes.map(pane => {
+    const seen = new Set<string>();
+    const tabs = pane.tabs.filter(tab => {
+      const key = focusTabKey(tab);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (tabs.length === pane.tabs.length) return pane;
+    changed = true;
+    return { tabs };
+  });
+  return changed ? { ...layout, panes } : layout;
+}
+
+/** Shared by a bare layout and a named Focus: pane shape must match the division, and the tab budget is layout-wide. Runs after `dedupePanes`, so tab keys are already unique per pane. */
 function checkFocusLayout(layout: { division: FocusDivision; panes: { tabs: FocusTab[] }[] }, context: z.RefinementCtx): void {
   if (layout.panes.length !== focusPaneCount(layout.division)) context.addIssue({ code: 'custom', message: 'Focus pane count must match the division' });
-  const keys = new Set<string>(); let total = 0;
-  for (const pane of layout.panes) for (const tab of pane.tabs) {
-    total++;
-    const key = focusTabKey(tab);
-    if (keys.has(key)) context.addIssue({ code: 'custom', message: 'Duplicate tab in Focus layout' });
-    keys.add(key);
-  }
+  const total = layout.panes.reduce((sum, pane) => sum + pane.tabs.length, 0);
   if (total > FOCUS_MAX_TABS) context.addIssue({ code: 'custom', message: 'Focus layout has too many tabs' });
 }
 
 const layoutFields = { division: z.enum(FOCUS_DIVISIONS), panes: z.array(FocusPaneSchema) };
-export const FocusLayoutSchema = z.object(layoutFields).strict().superRefine(checkFocusLayout);
-export const FocusSchema = z.object({ id, notebookId, name: z.string().trim().min(1).max(100), ...layoutFields }).strict().superRefine(checkFocusLayout);
+export const FocusLayoutSchema = z.object(layoutFields).strict().transform(dedupePanes).superRefine(checkFocusLayout);
+export const FocusSchema = z.object({ id, notebookId, name: z.string().trim().min(1).max(100), ...layoutFields }).strict().transform(dedupePanes).superRefine(checkFocusLayout);
 export type FocusLayout = z.infer<typeof FocusLayoutSchema>;
 export type Focus = z.infer<typeof FocusSchema>;
 
@@ -70,12 +82,17 @@ export const emptyFocusPage = (): FocusPage => ({ version: 1, focuses: [] });
 export const emptyFocusLayout = (): FocusLayout => ({ division: 'single', panes: [{ tabs: [] }] });
 export function readFocusPage(value: unknown): FocusPage { return FocusPageSchema.parse(value); }
 
+/** First pane (in pane order) holding `key`, for UI heuristics that only need to know whether a tab exists somewhere — never for deciding where to place or remove one. */
 export function findFocusTab(layout: FocusLayout, key: string): { pane: number; index: number } | undefined {
   for (let pane = 0; pane < layout.panes.length; pane++) {
-    const index = layout.panes[pane].tabs.findIndex(tab => focusTabKey(tab) === key);
+    const index = findFocusTabInPane(layout, pane, key);
     if (index !== -1) return { pane, index };
   }
   return undefined;
+}
+/** `key`'s index within `pane` specifically, or -1. Placement and removal are pane-scoped: a tab may sit in several panes at once. */
+export function findFocusTabInPane(layout: FocusLayout, pane: number, key: string): number {
+  return layout.panes[pane].tabs.findIndex(tab => focusTabKey(tab) === key);
 }
 export function focusTabCount(layout: FocusLayout): number { return layout.panes.reduce((total, pane) => total + pane.tabs.length, 0); }
 
@@ -93,23 +110,52 @@ export function changeDivision<T extends FocusLayout>(layout: T, division: Focus
   return { ...layout, division, panes } as T;
 }
 
+/** Places `tab` in `pane` only: a tab already open in another pane is untouched there, so the same note may end up open in several panes. Already in `pane`, it moves to `index` instead of duplicating. */
 export function placeTab<T extends FocusLayout>(layout: T, tab: FocusTab, pane: number, index?: number): T {
   if (pane < 0 || pane >= layout.panes.length) throw new FocusError('invalid-pane', 'Pane is out of range');
   const key = focusTabKey(tab);
-  const existing = findFocusTab(layout, key);
-  if (!existing && focusTabCount(layout) >= FOCUS_MAX_TABS) throw new FocusError('tab-limit', 'Focus layout has too many tabs');
+  const existingIndex = findFocusTabInPane(layout, pane, key);
+  if (existingIndex === -1 && focusTabCount(layout) >= FOCUS_MAX_TABS) throw new FocusError('tab-limit', 'Focus layout has too many tabs');
   const panes = layout.panes.map(current => ({ tabs: [...current.tabs] }));
-  if (existing) panes[existing.pane].tabs.splice(existing.index, 1);
   const target = panes[pane].tabs;
+  if (existingIndex !== -1) target.splice(existingIndex, 1);
   const at = index === undefined ? target.length : Math.max(0, Math.min(index, target.length));
   target.splice(at, 0, tab);
   return { ...layout, panes } as T;
 }
 
-export function closeTab<T extends FocusLayout>(layout: T, key: string): T {
-  const existing = findFocusTab(layout, key);
-  if (!existing) return layout;
-  const panes = layout.panes.map((pane, index) => index === existing.pane ? { tabs: pane.tabs.filter((_, i) => i !== existing.index) } : pane);
+/** Places several tabs in `pane` in one pass (one mutation instead of one per tab): each is placed only if `pane` does not already hold it. */
+export function placeTabs<T extends FocusLayout>(layout: T, tabs: FocusTab[], pane: number): { layout: T; added: number; skipped: number } {
+  if (pane < 0 || pane >= layout.panes.length) throw new FocusError('invalid-pane', 'Pane is out of range');
+  const panes = layout.panes.map(current => ({ tabs: [...current.tabs] }));
+  const held = new Set(panes[pane].tabs.map(focusTabKey));
+  let total = focusTabCount(layout), added = 0, skipped = 0;
+  for (const tab of tabs) {
+    const key = focusTabKey(tab);
+    if (held.has(key)) { skipped++; continue; }
+    if (total >= FOCUS_MAX_TABS) { skipped++; continue; }
+    panes[pane].tabs.push(tab);
+    held.add(key);
+    total++; added++;
+  }
+  return { layout: { ...layout, panes } as T, added, skipped };
+}
+
+/** Removes `key` from `fromPane`, then places it in `toPane` (a no-op move when they're the same pane and the tab is already there). Used for an explicit cross-pane move; `placeTab` alone never removes a tab from another pane. */
+export function moveTab<T extends FocusLayout>(layout: T, fromPane: number, toPane: number, key: string, index?: number): T {
+  if (fromPane < 0 || fromPane >= layout.panes.length) throw new FocusError('invalid-pane', 'Pane is out of range');
+  const removeIndex = findFocusTabInPane(layout, fromPane, key);
+  if (removeIndex === -1) throw new FocusError('invalid-pane', 'Tab is not in the source pane');
+  const tab = layout.panes[fromPane].tabs[removeIndex];
+  const withoutSource = fromPane === toPane ? layout
+    : { ...layout, panes: layout.panes.map((pane, i) => i === fromPane ? { tabs: pane.tabs.filter((_, j) => j !== removeIndex) } : pane) } as T;
+  return placeTab(withoutSource, tab, toPane, index);
+}
+
+export function closeTab<T extends FocusLayout>(layout: T, pane: number, key: string): T {
+  const index = findFocusTabInPane(layout, pane, key);
+  if (index === -1) return layout;
+  const panes = layout.panes.map((current, i) => i === pane ? { tabs: current.tabs.filter((_, j) => j !== index) } : current);
   return { ...layout, panes } as T;
 }
 

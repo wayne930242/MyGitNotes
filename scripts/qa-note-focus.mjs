@@ -20,8 +20,11 @@ const write = (file, content) => {
 const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
 write('.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Focus QA\n  default_notebook: work\nnotebooks:\n  - id: work\n    title: Work\n    root: notes/work\n  - id: other\n    title: Other\n    root: notes/other\n');
 const notes = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta'];
+const tags = { Alpha: ['project'], Gamma: ['project'], Beta: ['personal'] };
 notes.forEach((title, index) => write(`notes/work/${title.toLowerCase()}.md`,
-  `---\ntitle: ${title}\nstatus: ${index % 2 ? 'doing' : 'todo'}\nupdated: 2026-09-${String(10 + index).padStart(2, '0')}\n---\n# ${title}\n\n${title} body.\n\n${title === 'Delta' ? '[Open Epsilon](epsilon.md)\n' : ''}`));
+  `---\ntitle: ${title}\nstatus: ${index % 2 ? 'doing' : 'todo'}\nupdated: 2026-09-${String(10 + index).padStart(2, '0')}\n${tags[title] ? `tags: [${tags[title].join(', ')}]\n` : ''}---\n# ${title}\n\n${title} body.\n\n${title === 'Delta' ? '[Open Epsilon](epsilon.md)\n' : ''}`));
+write('notes/work/sub/omega.md', '---\ntitle: Omega\nstatus: todo\nupdated: 2026-09-16\ntags: [project]\n---\n# Omega\n\nOmega body.\n');
+write('notes/work/sub/nested/deep.md', '---\ntitle: Deep\nstatus: todo\nupdated: 2026-09-17\n---\n# Deep\n\nDeep body.\n');
 write('notes/other/outside.md', '---\ntitle: Outside\n---\n# Outside\n');
 write('.github-notes-screen.yaml', JSON.stringify({ version: 2, rows: [
   { id: 'pins', name: 'Pins', kind: 'custom', view: 'small', notebookId: 'work', items: [{ id: 'pin-gamma', kind: 'note', notebookId: 'work', path: 'notes/work/gamma.md' }] },
@@ -61,6 +64,11 @@ const clickRow = async (page, title) => {
   const label = await row.evaluateHandle((row, title) => [...row.querySelectorAll('*')].reverse().find(element => element.textContent.trim() === title), title);
   await (label.asElement() ?? row.asElement()).click();
 };
+const clickTagOption = async (page, tag) => {
+  const label = await page.waitForFunction(tag => [...document.querySelectorAll('.focus-batch-dialog .filter-options label')]
+    .find(item => item.textContent.trim() === `#${tag}`), {}, tag);
+  await (await label.asElement().$('input')).click();
+};
 const menuItem = async (page, label) => {
   const item = await page.waitForFunction(label => [...document.querySelectorAll('.focus-menu [role^="menuitem"]')].find(item => item.textContent.trim() === label), {}, label);
   await item.asElement().click();
@@ -69,17 +77,18 @@ const chooseDivision = async (page, label) => {
   await page.click('.focus-division-trigger');
   await menuItem(page, label);
 };
-/** Drags with HTML5 drag and drop: puppeteer's mouse does not start native drags, so the events are dispatched with one DataTransfer. */
-const dragTo = (page, source, target) => page.evaluate((source, target) => {
+/** Drags with HTML5 drag and drop: puppeteer's mouse does not start native drags, so the events are dispatched with one DataTransfer.
+ *  `shift: true` holds the Shift modifier through the drop, matching a Shift-held tab-bar drag (copy instead of move). */
+const dragTo = (page, source, target, { shift = false } = {}) => page.evaluate((source, target, shiftKey) => {
   const from = typeof source === 'string' ? document.querySelector(source) : source;
   const to = typeof target === 'string' ? document.querySelector(target) : target;
   const data = new DataTransfer();
-  from.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: data }));
-  to.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: data }));
-  to.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: data }));
-  to.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data }));
-  from.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: data }));
-}, source, target);
+  from.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
+  to.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
+  to.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
+  to.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
+  from.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
+}, source, target, shift);
 const tabHandle = (page, pane, label) => page.evaluateHandle((pane, label) => [...document.querySelectorAll(`[data-focus-pane="${pane}"] .focus-tab`)]
   .find(tab => tab.querySelector('[role="tab"]').textContent.trim() === label), pane, label);
 const clickTab = async (page, pane, label) => (await (await tabHandle(page, pane, label)).asElement().$('[role="tab"]')).click();
@@ -138,10 +147,48 @@ try {
   await page.waitForSelector('[data-focus-pane="0"] .note-editor[data-frame="pane"]');
   await dragTo(page, await browseRow(page, 'Beta'), '[data-focus-pane="1"] .focus-pane-body');
   await waitTabs(page, 1, ['Beta']);
-  await waitTabs(page, 0, ['Alpha', 'Gamma']);
+  // A browse-row drag copies: the note stays open in its source pane too.
+  await waitTabs(page, 0, ['Alpha', 'Beta', 'Gamma']);
   assert.equal(await activePane(page), 1);
   await shot(page, '1440-major-left');
-  console.log('PASS 2 Focus docks the list left, opens rows in the active pane and drops a row into another pane');
+  console.log('PASS 2 Focus docks the list left, opens rows in the active pane and copies a dropped row into another pane');
+  // Closing one pane's copy leaves the note open in the other pane: close/dedupe are pane-scoped.
+  await page.click('[data-focus-pane="0"] [aria-label="Close Beta"]');
+  await waitTabs(page, 0, ['Alpha', 'Gamma']);
+  await waitTabs(page, 1, ['Beta']);
+  console.log('PASS 2a closing one pane\'s copy of a cross-pane note leaves the other pane\'s copy open');
+  // Closing a tab activated pane 0 (any click inside a pane does); restore pane 1 active before continuing.
+  await clickTab(page, 1, 'Beta');
+  assert.equal(await activePane(page), 1);
+
+  // Tab-bar drag: a note the target pane already holds is a no-op regardless of the modifier key.
+  await dragTo(page, await browseRow(page, 'Alpha'), '[data-focus-pane="1"] .focus-pane-body');
+  await waitTabs(page, 1, ['Beta', 'Alpha']);
+  await dragTo(page, await tabHandle(page, 0, 'Alpha'), '[data-focus-pane="1"] .focus-pane-body');
+  await waitTabs(page, 0, ['Alpha', 'Gamma']);
+  await waitTabs(page, 1, ['Beta', 'Alpha']);
+  console.log('PASS 2b a tab-bar drag onto a pane that already holds the tab is a no-op, in both panes');
+  await page.click('[data-focus-pane="1"] [aria-label="Close Alpha"]');
+  await waitTabs(page, 1, ['Beta']);
+
+  // Tab-bar drag without Shift moves the tab out of its source pane.
+  await dragTo(page, await tabHandle(page, 0, 'Gamma'), '[data-focus-pane="1"] .focus-pane-body');
+  await waitTabs(page, 0, ['Alpha']);
+  await waitTabs(page, 1, ['Beta', 'Gamma']);
+  console.log('PASS 2c a tab-bar drag without Shift moves the tab out of its source pane');
+  await dragTo(page, await tabHandle(page, 1, 'Gamma'), '[data-focus-pane="0"] .focus-pane-body');
+  await waitTabs(page, 0, ['Alpha', 'Gamma']);
+  await waitTabs(page, 1, ['Beta']);
+  await clickTab(page, 1, 'Beta');
+  assert.equal(await activePane(page), 1);
+
+  // Tab-bar drag with Shift held copies instead, leaving the source pane's tab in place.
+  await dragTo(page, await tabHandle(page, 0, 'Alpha'), '[data-focus-pane="1"] .focus-pane-body', { shift: true });
+  await waitTabs(page, 0, ['Alpha', 'Gamma']);
+  await waitTabs(page, 1, ['Beta', 'Alpha']);
+  console.log('PASS 2d a Shift-held tab-bar drag copies the tab, leaving the source pane unchanged');
+  await page.click('[data-focus-pane="1"] [aria-label="Close Alpha"]');
+  await waitTabs(page, 1, ['Beta']);
 
   // 3. Kanban docks above the Focus; a card opens in the active pane.
   await page.click('.desktop-views > button:nth-child(4)');
@@ -155,6 +202,9 @@ try {
   // 4. A link in the bottom-right pane opens in the most recently used other pane; the source stays visible.
   await dragTo(page, await browseRow(page, 'Delta'), '[data-focus-pane="2"] .focus-pane-body');
   await waitTabs(page, 2, ['Delta']);
+  // The browse-row drag copies Delta rather than moving it out of pane 1.
+  await waitTabs(page, 1, ['Beta', 'Delta']);
+  await page.click('[data-focus-pane="1"] [aria-label="Close Delta"]');
   await waitTabs(page, 1, ['Beta']);
   const link = await page.waitForSelector('[data-focus-pane="2"] [data-workspace-link]');
   await link.click();
@@ -270,6 +320,51 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-focus-pane="0"] .note-editor[data-frame="pane"] .cm-content')?.textContent.includes('saved in zoom'), { timeout: 5000 });
   console.log('PASS 8 a pane reopens a note with the text saved in zoom');
 
+  // Batch add fills a pane from a folder or a tag filter, deduplicated against what it already holds.
+  await page.click('[data-focus-pane="0"] [aria-label="Add matching"]');
+  await page.waitForSelector('.focus-batch-dialog');
+  await page.click('.focus-batch-dialog .screen-form > .filter-check input[type="checkbox"]');
+  await chooseSelect(page, '.focus-batch-folder .select-trigger', 'notes/work/sub');
+  await page.waitForFunction(() => document.querySelector('.focus-batch-dialog .filter-results')?.textContent.includes('1 matching'));
+  await page.click('.focus-batch-dialog button[type="submit"]');
+  await page.waitForFunction(() => document.querySelector('.focus-batch-dialog [role="status"]')?.textContent.includes('1 added, 0 already present'));
+  await page.click('.focus-batch-dialog button[type="button"]');
+  await page.waitForFunction(() => !document.querySelector('.focus-batch-dialog'));
+  await waitTabs(page, 0, ['Alpha', 'Omega']);
+  console.log('PASS 8i batch add by folder with subfolders excluded adds only its direct notes');
+
+  await page.click('[data-focus-pane="0"] [aria-label="Add matching"]');
+  await page.waitForSelector('.focus-batch-dialog');
+  await chooseSelect(page, '.focus-batch-folder .select-trigger', 'notes/work/sub');
+  await page.waitForFunction(() => document.querySelector('.focus-batch-dialog .filter-results')?.textContent.includes('2 matching'));
+  await page.click('.focus-batch-dialog button[type="submit"]');
+  await page.waitForFunction(() => document.querySelector('.focus-batch-dialog [role="status"]')?.textContent.includes('1 added, 1 already present'));
+  await page.click('.focus-batch-dialog button[type="button"]');
+  await page.waitForFunction(() => !document.querySelector('.focus-batch-dialog'));
+  await waitTabs(page, 0, ['Alpha', 'Omega', 'Deep']);
+  console.log('PASS 8j batch add by folder including subfolders adds the nested note, skipping what is already present');
+
+  await page.click('[data-focus-pane="0"] [aria-label="Add matching"]');
+  await page.waitForSelector('.focus-batch-dialog');
+  await clickTagOption(page, 'project');
+  await page.waitForFunction(() => document.querySelector('.focus-batch-dialog .filter-results')?.textContent.includes('3 matching'));
+  await page.click('.focus-batch-dialog button[type="submit"]');
+  await page.waitForFunction(() => document.querySelector('.focus-batch-dialog [role="status"]')?.textContent.includes('1 added, 2 already present'));
+  await page.click('.focus-batch-dialog button[type="button"]');
+  await page.waitForFunction(() => !document.querySelector('.focus-batch-dialog'));
+  await waitTabs(page, 0, ['Alpha', 'Omega', 'Deep', 'Gamma']);
+  console.log('PASS 8k batch add by tag adds every match, reporting what was already present');
+
+  await page.click('[data-focus-pane="0"] [aria-label="Add matching"]');
+  await page.waitForSelector('.focus-batch-dialog');
+  await clickTagOption(page, 'project');
+  await page.click('.focus-batch-dialog button[type="submit"]');
+  await page.waitForFunction(() => document.querySelector('.focus-batch-dialog [role="status"]')?.textContent.includes('0 added, 3 already present'));
+  await page.click('.focus-batch-dialog button[type="button"]');
+  await page.waitForFunction(() => !document.querySelector('.focus-batch-dialog'));
+  await waitTabs(page, 0, ['Alpha', 'Omega', 'Deep', 'Gamma']);
+  console.log('PASS 8l a repeat batch add over the same filter adds nothing');
+
   // Local view state follows in another tab of the same browser and survives a reload.
   const twin = await other.newPage();
   twin.on('pageerror', error => errors.push(error.message));
@@ -323,17 +418,28 @@ try {
   await device.waitForFunction(() => document.querySelector('.right-panel-document .note-document-panel[data-frame="rail"]')?.textContent.includes('Delta'));
   console.log('PASS 8c the rail shows the active note’s document panel and disables it for lanes');
 
-  // Browse rows: an existing note switches to its tab; the row zoom button opens zoom without adding a tab.
+  // Browse rows: a note already open in another pane opens a fresh copy in the active pane, not a jump to it.
   await clickRow(device, 'Beta');
-  await device.waitForFunction(() => document.querySelector('[data-focus-pane][data-active]')?.dataset.focusPane === '1');
-  assert.equal(await shownTab(device, 1), 'Beta');
+  await waitTabs(device, 2, ['Delta', 'Beta']);
+  assert.equal(await activePane(device), 2);
+  assert.equal(await shownTab(device, 2), 'Beta');
+  await waitTabs(device, 1, ['Beta', 'Epsilon']);
+  console.log('PASS 8d a browse row for a note open elsewhere opens a fresh copy in the active pane, not a jump to it');
+  // A repeat click for a note already open in the SAME pane switches to it instead of adding another copy.
+  await clickRow(device, 'Delta');
+  await waitTabs(device, 2, ['Delta', 'Beta']);
+  assert.equal(await shownTab(device, 2), 'Delta');
+  console.log('PASS 8d a repeat click for a note already open in the active pane switches to it without duplicating it');
+  // Clean up the pane-2 copy so later panes keep their original contents; the row zoom button leaves the Focus unchanged.
+  await device.click('[data-focus-pane="2"] [aria-label="Close Beta"]');
+  await waitTabs(device, 2, ['Delta']);
   const beta = await browseRow(device, 'Beta');
   await (await beta.asElement().$('[aria-label="Open in zoom"]')).click();
   await device.waitForSelector('.note-editor[data-frame="zoom"]');
   await device.click('[aria-label="Close note"]');
   await device.waitForFunction(() => !document.querySelector('.note-editor[data-frame="zoom"]'));
   await waitTabs(device, 1, ['Beta', 'Epsilon']);
-  console.log('PASS 8d rows switch to an existing tab and the row zoom button leaves the Focus unchanged');
+  console.log('PASS 8d the row zoom button leaves the Focus unchanged');
 
   // Tabs reorder within a pane; the browse panel collapses and expands.
   await dragTo(device, await tabHandle(device, 0, 'Zeta'), await tabHandle(device, 0, 'Alpha'));

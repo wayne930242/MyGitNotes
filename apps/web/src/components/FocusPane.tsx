@@ -1,17 +1,19 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, FileText, GalleryHorizontalEnd, Maximize2, PanelTopDashed, Plus, X } from 'lucide-react';
-import { findFocusTab, focusTabKey, type FocusTab } from '@mygitnotes/core/focus-page';
+import { ChevronDown, FileText, FolderPlus, GalleryHorizontalEnd, Maximize2, PanelTopDashed, Plus, X } from 'lucide-react';
+import { findFocusTabInPane, focusTabKey, type FocusTab } from '@mygitnotes/core/focus-page';
 import type { ScreenRow } from '@mygitnotes/core/screen-page';
 import type { NoteFocus } from '../lib/use-note-focus.js';
 import type { DisplayedPane } from '../lib/focus-view.js';
+import type { FolderItem } from '../lib/types.js';
 import { NOTE_DRAG_TYPE } from '../lib/note-drag.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import type { NoteEditorProps } from './NoteEditor.js';
 import { HostedNoteEditor } from './NoteEditorHost.js';
+import { BatchAddDialog } from './BatchAddDialog.js';
 
-/** Drag payload for a tab moved inside the displayed Focus: its FocusTab as JSON. */
+/** Drag payload for a tab moved inside the displayed Focus: its FocusTab and the pane it was dragged from, as JSON. */
 const TAB_DRAG_TYPE = 'application/x-mygitnotes-focus-tab';
 
 export interface FocusPaneContext {
@@ -20,6 +22,8 @@ export interface FocusPaneContext {
   lanes: readonly ScreenRow[];
   /** Notes dropped from outside must live under this root. */
   notebookRoot: string;
+  /** The notebook's configured folders, for the batch-add picker. */
+  folders: readonly FolderItem[];
   renderLane: (row: ScreenRow, pane: number) => ReactNode;
   onZoomNote: (path: string) => void;
   /** The rail container and section the active pane's editor renders its document panel into. */
@@ -32,7 +36,7 @@ interface DropSlot { pane: number; index?: number }
 
 /** One pane on screen: its tab list and the displayed tab. On narrow screens it stands for several stored panes. */
 export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }> = ({ displayed, ...context }) => {
-  const { focus, lanes, notebookRoot, renderLane, onZoomNote, documentPanel } = context;
+  const { focus, lanes, notebookRoot, folders, renderLane, onZoomNote, documentPanel } = context;
   const { t } = useTranslation();
   const navigate = useNavigate();
   const layout = focus.layout!, entry = focus.entry!;
@@ -63,11 +67,12 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
   }, [displayed.key]);
 
   const [slot, setSlot] = useState<DropSlot>();
+  const [batchAddOpen, setBatchAddOpen] = useState(false);
   const accepts = (event: React.DragEvent) => editable && [TAB_DRAG_TYPE, NOTE_DRAG_TYPE, 'text/plain'].some(type => event.dataTransfer.types.includes(type));
   const hover = (event: React.DragEvent, next: DropSlot) => {
     if (!accepts(event)) return;
     event.preventDefault(); event.stopPropagation();
-    event.dataTransfer.dropEffect = 'move';
+    event.dataTransfer.dropEffect = event.shiftKey ? 'copy' : 'move';
     setSlot(current => current?.pane === next.pane && current.index === next.index ? current : next);
   };
   /** Over a tab, the half under the pointer picks the gap before or after it. */
@@ -82,14 +87,22 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
     const count = layout.panes[tab.pane].tabs.length;
     return tab.index === count - 1 && (slot.index === undefined || slot.index >= count) ? 'after' : undefined;
   };
+  /** A tab-bar drag moves by default; Shift copies instead. A browse-row drag (no source pane) always copies. Same-pane drops always reorder. */
   const drop = (event: React.DragEvent, target: DropSlot) => {
     setSlot(undefined);
     if (!accepts(event)) return;
     event.preventDefault(); event.stopPropagation();
-    const tab = droppedTab(event.dataTransfer, notebookRoot);
-    if (!tab || !focus.shown) return;
-    const found = findFocusTab(layout, focusTabKey(tab));
-    const index = target.index !== undefined && found && found.pane === target.pane && found.index < target.index ? target.index - 1 : target.index;
+    const dropped = droppedTab(event.dataTransfer, notebookRoot);
+    if (!dropped || !focus.shown) return;
+    const { tab, pane: sourcePane } = dropped;
+    const key = focusTabKey(tab);
+    const existingIndex = findFocusTabInPane(layout, target.pane, key);
+    const index = target.index !== undefined && existingIndex !== -1 && existingIndex < target.index ? target.index - 1 : target.index;
+    // The target pane already holding this tab has nothing to move or copy; the modifier key is irrelevant.
+    if (sourcePane !== undefined && sourcePane !== target.pane && existingIndex === -1 && !event.shiftKey) {
+      void focus.moveTab(focus.shown, key, sourcePane, target.pane, index).catch(() => {});
+      return;
+    }
     void focus.place(focus.shown, tab, target.pane, index).catch(() => {});
   };
 
@@ -112,20 +125,20 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
           {tabs.map(tab => (
             <div key={tab.key} role="presentation" className="focus-tab" data-shown={tab.key === displayed.key || undefined} data-drop={marker(tab)}
               draggable={editable} onDragStart={event => {
-                event.dataTransfer.setData(TAB_DRAG_TYPE, JSON.stringify(tab.tab));
-                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData(TAB_DRAG_TYPE, JSON.stringify({ tab: tab.tab, pane: tab.pane }));
+                event.dataTransfer.effectAllowed = 'copyMove';
               }}
               onDragOver={event => hover(event, slotAt(event, tab))}
               onDrop={event => drop(event, slotAt(event, tab))}>
               <button type="button" role="tab" aria-selected={tab.key === displayed.key} aria-controls={panelId}
                 tabIndex={tab.key === displayed.key || (!displayed.key && tab === tabs[0]) ? 0 : -1} title={tab.label}
                 onClick={() => void focus.show(tab.pane, tab.key)}
-                onKeyDown={event => { if (editable && event.key === 'Delete') { event.preventDefault(); void focus.close(tab.key).catch(() => {}); } }}>
+                onKeyDown={event => { if (editable && event.key === 'Delete') { event.preventDefault(); void focus.close(tab.key, tab.pane).catch(() => {}); } }}>
                 {tab.tab.kind === 'note' ? <FileText aria-hidden="true" /> : <GalleryHorizontalEnd aria-hidden="true" />}
                 <span>{tab.label}</span>
               </button>
               {editable && <button type="button" className="focus-tab-close" tabIndex={-1} aria-label={t('focus.closeTab', { name: tab.label })}
-                title={t('focus.closeTab', { name: tab.label })} onClick={() => void focus.close(tab.key).catch(() => {})}><X aria-hidden="true" /></button>}
+                title={t('focus.closeTab', { name: tab.label })} onClick={() => void focus.close(tab.key, tab.pane).catch(() => {})}><X aria-hidden="true" /></button>}
             </div>
           ))}
         </div>
@@ -136,6 +149,8 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
             items={lanes.length > 0
               ? lanes.map(row => ({ key: row.id, label: row.name, onSelect: () => { if (focus.shown) void focus.place(focus.shown, { kind: 'lane', id: row.id }, displayed.pane).catch(() => {}); } }))
               : [{ key: 'screen', label: t('focus.goAddLane'), onSelect: () => navigate(`/screen?notebook=${encodeURIComponent(focus.notebookId)}`) }]} />}
+          {editable && <button type="button" className="ui-icon-button" aria-label={t('focus.batchAdd')} title={t('focus.batchAdd')}
+            onClick={() => setBatchAddOpen(true)}><FolderPlus aria-hidden="true" /></button>}
           {shown?.tab.kind === 'note' && <button type="button" className="ui-icon-button" aria-label={t('focus.zoomNote')} title={t('focus.zoomNote')}
             onClick={() => shown.tab.kind === 'note' && onZoomNote(shown.tab.path)}><Maximize2 aria-hidden="true" /></button>}
           <button type="button" className="ui-icon-button focus-pane-autohide" aria-pressed={autoHide} aria-label={t('focus.autoHideTabs')} title={t('focus.autoHideTabs')}
@@ -148,20 +163,26 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
           : lane ? renderLane(lane, displayed.pane)
           : <p className="focus-pane-empty">{editable ? t('focus.emptyPane') : t('focus.emptyPaneReadonly')}</p>}
       </div>
+      {batchAddOpen && focus.shown && <BatchAddDialog focus={focus} target={focus.shown} pane={displayed.pane}
+        notebookId={focus.notebookId} notebookRoot={notebookRoot} folders={folders} onClose={() => setBatchAddOpen(false)} />}
     </section>
   );
 };
 
-function droppedTab(data: DataTransfer, notebookRoot: string): FocusTab | undefined {
+/** A dropped tab: its FocusTab, and (for a tab-bar drag) the pane it came from — undefined for a browse-row drag, which always copies. */
+interface DroppedTab { tab: FocusTab; pane?: number }
+
+function droppedTab(data: DataTransfer, notebookRoot: string): DroppedTab | undefined {
   const moved = data.getData(TAB_DRAG_TYPE);
   if (moved) {
     try {
-      const tab = JSON.parse(moved) as FocusTab;
-      if ((tab.kind === 'note' && typeof tab.path === 'string') || (tab.kind === 'lane' && typeof tab.id === 'string')) return tab;
-    } catch { return undefined; }
+      const { tab, pane } = JSON.parse(moved) as { tab: FocusTab; pane: number };
+      if (typeof pane === 'number' && ((tab.kind === 'note' && typeof tab.path === 'string') || (tab.kind === 'lane' && typeof tab.id === 'string'))) return { tab, pane };
+    } catch { /* falls through to undefined */ }
+    return undefined;
   }
   const path = (data.getData(NOTE_DRAG_TYPE) || data.getData('text/plain')).trim();
-  return path.startsWith(`${notebookRoot}/`) && path.endsWith('.md') ? { kind: 'note', path } : undefined;
+  return path.startsWith(`${notebookRoot}/`) && path.endsWith('.md') ? { tab: { kind: 'note', path } } : undefined;
 }
 
 const FocusMenu: React.FC<{ label: string; showLabel?: boolean; icon: ReactNode; items: { key: string; label: string; current?: boolean; onSelect: () => void }[] }> = ({ label, showLabel, icon, items }) => (

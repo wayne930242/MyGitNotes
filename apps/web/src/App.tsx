@@ -1094,7 +1094,7 @@ const AppContent: React.FC = () => {
     { id: 'focus-previous-pane', label: t('focus.previousPane'), disabled: (focusDisplay?.panes.length ?? 0) < 2, run: () => cycleFocusPane(-1) },
     { id: 'focus-next-tab', label: t('focus.nextTab'), disabled: !activeFocusPane, run: () => cycleFocusTab(1) },
     { id: 'focus-previous-tab', label: t('focus.previousTab'), disabled: !activeFocusPane, run: () => cycleFocusTab(-1) },
-    { id: 'focus-close-tab', label: t('focus.closeCurrentTab'), disabled: !noteFocus.editable || !activeFocusPane?.key, run: () => { if (activeFocusPane?.key) void noteFocus.close(activeFocusPane.key).catch(() => {}); } },
+    { id: 'focus-close-tab', label: t('focus.closeCurrentTab'), disabled: !noteFocus.editable || !activeFocusPane?.key, run: () => { if (activeFocusPane?.key) void noteFocus.close(activeFocusPane.key, activeFocusPane.pane).catch(() => {}); } },
     { id: 'focus-zoom-tab', label: t('focus.zoomCurrentTab'), disabled: !zoomablePath, run: () => { if (zoomablePath) zoomFocusNote(zoomablePath); } },
     ...FOCUS_DIVISIONS.map(division => ({
       id: `focus-division-${division}`, label: t('focus.divisionCommand', { name: t(`focus.division.${division}`) }),
@@ -1366,7 +1366,7 @@ const AppContent: React.FC = () => {
                 onSizeChange={size => noteFocus.setDock(topDock ? { top: size } : { left: size })}
                 collapsed={noteFocus.view.dock.collapsed}
                 narrow={focusCapacity === 1} narrowView={focusNarrowView} browse={height => browseRegion(true, height)}>
-                <FocusArea focus={noteFocus} capacity={focusCapacity} lanes={notebookLanes ?? []} notebookRoot={folderRoot ?? ''}
+                <FocusArea focus={noteFocus} capacity={focusCapacity} lanes={notebookLanes ?? []} notebookRoot={folderRoot ?? ''} folders={folders}
                   renderLane={renderFocusLane} onZoomNote={zoomFocusNote} documentPanel={focusDocumentPanel} />
               </BrowseDock> : <div className="workspace-scroll">{browseRegion(false, 0)}</div>}
             </main>

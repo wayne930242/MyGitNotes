@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { FOCUS_MAX_TABS, findFocusTab, focusTabCount, focusTabKey, type FocusTab } from '@mygitnotes/core/focus-page';
+import { FOCUS_MAX_TABS, findFocusTab, findFocusTabInPane, focusTabCount, focusTabKey, type FocusTab } from '@mygitnotes/core/focus-page';
 import { CURRENT_FOCUS } from '../lib/focus-view.js';
 import type { NoteFocus } from '../lib/use-note-focus.js';
 import { focusErrorMessage } from '../lib/focus-error-message.js';
@@ -26,6 +26,7 @@ export const AddToFocusDialog: React.FC<{ focus: NoteFocus; tab: FocusTab; label
   const layout = target ? focus.layoutOf(target) : undefined;
   const current = layout ? findFocusTab(layout, key)?.pane : undefined;
   const [pane, setPane] = useState(() => (target && focus.entryOf(target)?.activePane) || 0);
+  const found = layout ? findFocusTabInPane(layout, pane, key) !== -1 : false;
   const [placed, setPlaced] = useState(false);
   const [error, setError] = useState('');
   const flight = useRef<HTMLSpanElement>(null);
@@ -65,7 +66,7 @@ export const AddToFocusDialog: React.FC<{ focus: NoteFocus; tab: FocusTab; label
       {error && <p role="alert">{error}</p>}
       <div className="workspace-dialog-actions">
         <Button type="button" onClick={onClose}>{t(placed ? 'common.close' : 'common.cancel')}</Button>
-        <Button type="submit" variant="primary" disabled={!layout || placed}>{t(current === undefined ? 'focus.addTo' : current === pane ? 'focus.showThere' : 'focus.moveThere')}</Button>
+        <Button type="submit" variant="primary" disabled={!layout || placed}>{t(found ? 'focus.showThere' : 'focus.addTo')}</Button>
       </div>
     </form>
   </WorkspaceDialog>;
