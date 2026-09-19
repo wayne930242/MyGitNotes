@@ -1,8 +1,8 @@
 name: Deploy Vercel (sparse checkout)
 on:
   push:
-    # Deploys from core; MYGITNOTES_DEPLOY_BRANCH overrides the branch.
-    branches: [core]
+    # Deploys from core; MYGITNOTES_DEPLOY_BRANCH overrides the branch, and the settings step skips every other branch.
+    branches: ['**']
     paths:
       - '.github/vercel-sparse-paths.txt'
       - '.vercelignore'

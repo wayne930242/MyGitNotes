@@ -1,5 +1,5 @@
 const repository = process.env.GITHUB_REPOSITORY;
-// The demo deploys main while it carries the product, and core once main holds only content.
+// The demo deploys the Core revision; main holds only content.
 const sha = process.env.DEPLOY_SHA;
 if (!repository || !/^[a-f0-9]{40}$/.test(sha || '') || !process.env.GH_TOKEN) throw Error('Repository, deploy SHA and GitHub token are required.');
 for (let attempt = 0; attempt < 90; attempt++) {

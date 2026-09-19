@@ -52,9 +52,9 @@ Remote sources have no sync step because each remote commit updates the branch d
 
 ## 5. Public Demo CI/CD
 
-`.github/workflows/release-main.yml` runs on Core pushes and manual dispatch. It installs dependencies, tests and builds the product, then merges the tested Core revision into main while preserving workspace Agent settings. The release script synchronizes the public demo from `examples/demo-workspace` and uses a non-forced push. Conflicts or concurrent remote note saves stop publication. Ordinary workspace bootstrap continues to preserve existing user content.
+`.github/workflows/release-main.yml` runs on Core pushes and manual dispatch. It installs dependencies, tests and builds the product, then synchronizes the public demo examples from `examples/demo-workspace` into the content-only main with a `Core-Revision:` trailer and a non-forced push. A main that still tracks product paths or a concurrent remote note save stops publication. Ordinary workspace bootstrap continues to preserve existing user content.
 
-Vercel production tracks `main`; Core auto-deployment is disabled in `vercel.json`. The workflow waits for Vercel's commit status on the exact main SHA. The `CORE_SYNC_SSH_KEY` Actions secret contains a dedicated repository write deploy key. Application and OAuth secrets stay in Vercel environment variables.
+Vercel production tracks `core`; `main` auto-deployment is disabled in `vercel.json`. The workflow waits for Vercel's commit status on the exact Core SHA. The `CORE_SYNC_SSH_KEY` Actions secret contains a dedicated repository write deploy key. Application and OAuth secrets stay in Vercel environment variables.
 
 ## Workspace Agent System
 

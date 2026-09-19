@@ -17,7 +17,6 @@ WORKDIR /app
 COPY pnpm-workspace.yaml ./
 COPY --from=build /build/node_modules ./node_modules
 COPY --from=build /build/packages ./packages
-COPY --from=build /build/scripts/lib ./scripts/lib
 COPY --from=build /build/apps/local-server/package.json ./apps/local-server/package.json
 COPY --from=build /build/apps/local-server/node_modules ./apps/local-server/node_modules
 COPY --from=build /build/apps/local-server/dist ./apps/local-server/dist
