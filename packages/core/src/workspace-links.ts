@@ -110,7 +110,7 @@ function resolveRelativeWorkspaceHref(href: string, sourcePath: string, aliasesO
     const stack = absolute ? [] : sourcePath.split('/').slice(0, -1);
     for (const encoded of raw.replace(/^\//, '').split('/')) {
       const part = decodeURIComponent(encoded);
-      if (/[\/\\\x00-\x1f\x7f]/.test(part)) return null;
+      if (/[/\\\x00-\x1f\x7f]/.test(part)) return null;
       if (!part || part === '.') continue;
       if (part === '..') {
         if (!stack.length) return null;

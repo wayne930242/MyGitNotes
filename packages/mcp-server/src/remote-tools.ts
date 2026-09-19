@@ -130,7 +130,7 @@ async function runRemoteTool(reader: RemoteSource, name: string, args: Record<st
       }
       let finalMetadata = args.metadata as Record<string, unknown> | undefined;
       if (args.status !== undefined || args.tags !== undefined || args.title !== undefined) {
-        finalMetadata = { ...(finalMetadata || {}) };
+        finalMetadata = { ...finalMetadata };
         if (args.status !== undefined) finalMetadata = withNoteStatus(finalMetadata, String(args.status));
         if (args.tags !== undefined) finalMetadata.tags = args.tags;
         if (args.title !== undefined) finalMetadata.title = args.title;

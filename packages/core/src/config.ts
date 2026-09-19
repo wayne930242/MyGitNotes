@@ -265,7 +265,7 @@ export function discoverTsconfigPaths(repoRoot: string, notebookRoot: string): R
 function attachTsconfigPaths(parsed: WorkspaceConfig, repoRoot: string): WorkspaceConfig {
   parsed.notebooks = parsed.notebooks.map((nb) => {
     const discovered = discoverTsconfigPaths(repoRoot, nb.root);
-    const pathAliases = { ...discovered, ...(nb.pathAliases || {}) };
+    const pathAliases = { ...discovered, ...nb.pathAliases };
     return { ...nb, ...(Object.keys(pathAliases).length > 0 ? { pathAliases } : {}) };
   });
   return parsed;

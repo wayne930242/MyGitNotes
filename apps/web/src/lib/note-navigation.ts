@@ -36,7 +36,7 @@ export function findTextMatches(content: string, query: string): TextMatch[] {
 }
 
 function headingLabel(source: string) {
-  return source.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[`*_~]/g, '').replace(/<[^>]+>/g, '').replace(/\\([\\`*{}\[\]()#+.!_>-])/g, '$1').trim();
+  return source.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[`*_~]/g, '').replace(/<[^>]+>/g, '').replace(/\\([\\`*{}[\]()#+.!_>-])/g, '$1').trim();
 }
 
 export function parseMarkdownOutline(content: string): OutlineHeading[] {

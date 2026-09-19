@@ -57,7 +57,7 @@ export async function handleSaveNote(ctx: ToolContext, args: { path: string; con
 
   let finalMetadata = args.metadata;
   if (args.status !== undefined || args.tags !== undefined || args.title !== undefined) {
-    finalMetadata = { ...(finalMetadata || {}) };
+    finalMetadata = { ...finalMetadata };
     if (args.status !== undefined) finalMetadata = withNoteStatus(finalMetadata, args.status);
     if (args.tags !== undefined) finalMetadata.tags = args.tags;
     if (args.title !== undefined) finalMetadata.title = args.title;
@@ -141,7 +141,7 @@ export async function handleUpdateNoteMetadata(ctx: ToolContext, args: { path: s
   const notebookId = nb ? nb.id : 'default';
 
   const existingNote = readNoteFile(ctx.repoRoot, args.path, notebookId);
-  let updatedMetadata: NoteMetadata = { ...existingNote.metadata, ...(args.metadata || {}) };
+  let updatedMetadata: NoteMetadata = { ...existingNote.metadata, ...args.metadata };
 
   if (args.status !== undefined) {
     updatedMetadata = withNoteStatus(updatedMetadata, args.status);

@@ -31,7 +31,7 @@ const WEIGHT = { title: 4, path: 3, metadata: 3, content: 1 };
 
 /** Splits a free-text query into terms; long Han runs also contribute bigrams so partial Chinese phrasing still matches. */
 export function searchTerms(query: string, caseSensitive = false): { term: string; weight: number; }[] {
-  const words = (caseSensitive ? query : query.toLowerCase()).split(/[\s,，、。;；:：!！?？()（）「」『』《》〈〉"'“”‘’\[\]]+/u).filter(Boolean);
+  const words = (caseSensitive ? query : query.toLowerCase()).split(/[\s,，、。;；:：!！?？()（）「」『』《》〈〉"'“”‘’[\]]+/u).filter(Boolean);
   const terms = new Map<string, number>();
   for (const word of words) {
     terms.set(word, Math.max(terms.get(word) || 0, 1));

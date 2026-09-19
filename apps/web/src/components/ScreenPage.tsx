@@ -64,7 +64,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
     query.delete('studyFilter');
     navigate(`/screen${query.size ? '?' + query.toString() : ''}#screen-lane-${focusedLaneId}`);
   };
-  const reviewRow = focusedRow && { ...focusedRow, progression: focusedRow.progression || defaultStudyProgression(studyLaneStatuses(focusedRow, notebooks)), study: { ...(focusedRow.study || {}), filter: focusedRow.study?.filter || 'all', dueFirst: true } };
+  const reviewRow = focusedRow && { ...focusedRow, progression: focusedRow.progression || defaultStudyProgression(studyLaneStatuses(focusedRow, notebooks)), study: { ...focusedRow.study, filter: focusedRow.study?.filter || 'all', dueFirst: true } };
   const facets = useNoteFacets(false);
   // A study session orders its whole queue, so the focused lane reads every member at once.
   const reviewLane = useLaneNotes(focusedLaneId ? reviewRow : undefined, { all: true });

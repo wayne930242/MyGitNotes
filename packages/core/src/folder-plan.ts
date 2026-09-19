@@ -106,7 +106,7 @@ export function planFolderChange(snapshot: FolderSnapshot, input: unknown) {
     list.splice(before ? list.findIndex(folder => folder.path === before) : list.length, 0, siblings.find(folder => folder.path === current)!);
     list.forEach((folder, order) => {
       const file = `${full(folder.path)}/_dir.yml`;
-      files.set(file, YAML.stringify({ ...(YAML.parse(files.get(file) || '') || {}), order }));
+      files.set(file, YAML.stringify({ ...YAML.parse(files.get(file) || ''), order }));
     });
   }
   return { files, directories: [...directories], folders: folders(), selectedPath: command.kind === 'delete' ? parent : destination.slice(root.length + 1) };

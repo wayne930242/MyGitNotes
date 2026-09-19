@@ -71,7 +71,7 @@ export function ScreenLane({ row, graph, reorder, disabled, study, facets, noteb
   // Cards show a body, so the lane's page is read with content; a graph lane needs none.
   const laneNotes = useLaneNotes(row, { content: row.view !== 'graph' });
   const content: ScreenContentProps = { notebooks, assets, onOpen, notes: laneNotes.notes };
-  const ordinaryRow = { ...row, study: { ...(row.study || {}), filter: 'all' as const, dueFirst: false } };
+  const ordinaryRow = { ...row, study: { ...row.study, filter: 'all' as const, dueFirst: false } };
   const items = studyRowItems(screenRowItems(row, content.notes, content.assets, content.notebooks), ordinaryRow, content.notes, study.study, clock);
   const query = row.study || { filter: 'all' as const, dueFirst: false };
   const filtered = Boolean(query.status);

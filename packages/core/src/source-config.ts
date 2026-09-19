@@ -19,7 +19,7 @@ export function parseSourceConfig(raw: unknown, base: string): SourceConfig {
   const source = (raw as { source?: Record<string, unknown>; })?.source;
   if (source?.type === 'local' && typeof source.path === 'string' && source.path.trim()) return { type: 'local', path: path.resolve(base, source.path) };
   const branch = source?.branch;
-  const validBranch = typeof branch === 'string' && branch.trim() && !/[\x00-\x20~^:?*\[\\]/.test(branch) && !branch.includes('..') && !branch.startsWith('-') && !branch.endsWith('/') && !branch.endsWith('.') && !branch.endsWith('.lock') && !branch.includes('//') && !branch.includes('@{');
+  const validBranch = typeof branch === 'string' && branch.trim() && !/[\x00-\x20~^:?*[\\]/.test(branch) && !branch.includes('..') && !branch.startsWith('-') && !branch.endsWith('/') && !branch.endsWith('.') && !branch.endsWith('.lock') && !branch.includes('//') && !branch.includes('@{');
   if (validBranch && typeof source?.repository === 'string') {
     if (source.type === 'github' && /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_.-]+$/.test(source.repository) && !/\/\.{1,2}$/.test(source.repository)) {
       return { type: 'github', repository: source.repository, branch };

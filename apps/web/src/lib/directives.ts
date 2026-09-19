@@ -66,7 +66,7 @@ export function transformMdxComponents(content: string): string {
     const url = attrs.url || '';
     let targetId = videoId;
     if (!targetId && url) {
-      const idMatch = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/ ]{11})/i.exec(url);
+      const idMatch = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/ ]{11})/i.exec(url);
       if (idMatch) targetId = idMatch[1];
     }
     if (!targetId) return '';

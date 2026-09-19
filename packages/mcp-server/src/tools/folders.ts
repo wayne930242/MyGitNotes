@@ -53,7 +53,7 @@ export async function handleMkdir(ctx: ToolContext, args: { path: string; title?
   }
 
   const title = args.title !== undefined ? args.title : (exists ? undefined : path.basename(normalizedRel));
-  const meta: FolderMetadata = { ...(args.metadata || {}) };
+  const meta: FolderMetadata = { ...args.metadata };
   if (title !== undefined) meta.title = title;
   if (args.order !== undefined) meta.order = args.order;
   if (args.description !== undefined) meta.description = args.description;
