@@ -4,7 +4,7 @@
 .graph-selection-toolbar { position:absolute; top:var(--graph-tools-top); left:12px; z-index:45; display:flex; flex-direction:column; gap:4px; padding:5px; border:1px solid var(--color-border); border-radius:9px; background:var(--color-surface); }
 .graph-selection-toolbar>* { pointer-events:auto; background:var(--color-surface); }
 .graph-card-position { position:absolute; transform-origin:0 0; }
-.graph-note-card { height:100%; display:flex; flex-direction:column; background:var(--color-surface); color:var(--color-text); border:1px solid var(--color-border); border-radius:10px; overflow:hidden; box-shadow:0 3px 12px #0002; position:relative; }
+.graph-note-card { height:100%; display:flex; flex-direction:column; background:var(--color-surface); color:var(--color-text); border:1px solid var(--color-border); border-radius:10px; overflow:hidden; box-shadow:0 3px 12px color-mix(in srgb, var(--color-scrim) 13%, transparent); position:relative; }
 .graph-note-card.is-selected { outline:2px solid var(--graph-node-color); outline-offset:2px; }
 .graph-note-card>header { display:flex; align-items:center; padding:8px; gap:8px; cursor:grab; border-bottom:1px solid var(--color-border); touch-action:none; }
 .graph-note-title { font-size:14px; font-weight:600; flex:1; min-width:0; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:grab; }

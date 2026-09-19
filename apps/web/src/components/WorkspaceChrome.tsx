@@ -363,7 +363,7 @@ export function WorkspaceSidebarDrawer({ open, onClose, closeLabel, children }: 
   children: React.ReactNode;
 }) {
   return <>
-    {open && <button type="button" data-sidebar-backdrop="" className="notebook-backdrop mobile-only absolute inset-0 z-[56] bg-slate-950/40" aria-label={closeLabel} onClick={onClose} />}
+    {open && <button type="button" data-sidebar-backdrop="" className="notebook-backdrop mobile-only absolute inset-0 z-[56] bg-scrim/40" aria-label={closeLabel} onClick={onClose} />}
     <div data-responsive-sidebar="" className={`workspace-responsive-sidebar ${open ? 'is-open' : ''}`}>{children}</div>
   </>;
 }

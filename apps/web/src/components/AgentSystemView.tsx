@@ -337,14 +337,14 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
           }}
         >
           <div className="flex items-center gap-2.5 truncate">
-            <span className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">
+            <span className="font-mono text-xs font-semibold text-fg truncate">
               {selectedPath || t('agent.document')}
             </span>
             <span
-              className="text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider text-white"
+              className="text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider text-on-primary"
               style={{
-                backgroundColor: editable ? 'var(--color-primary)' : 'var(--color-text-muted, #64748b)',
-                color: editable ? 'var(--color-on-primary)' : 'white',
+                backgroundColor: editable ? 'var(--color-primary)' : 'var(--color-muted)',
+                color: editable ? 'var(--color-on-primary)' : 'var(--color-bg)',
               }}
             >
               {editable ? t('agent.editable') : t('agent.readOnly')}
@@ -359,8 +359,8 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
               onClick={handleRestoreClick}
               className={`editor-action ${confirmRestore ? 'editor-confirming' : ''} flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed ${
                 confirmRestore
-                  ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-md animate-pulse'
-                  : 'bg-black/5 dark:bg-white/5 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-black/10 dark:hover:bg-white/10'
+                  ? 'bg-danger hover:bg-danger/90 text-on-danger shadow-md animate-pulse'
+                  : 'bg-fg/5 border border-line text-fg hover:bg-fg/10'
               }`}
               title={confirmRestore ? t('editor.confirmRestoreTooltip') : t('editor.restoreTooltip')}
             >
@@ -388,18 +388,18 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
           </div>
         )}
         {isProductResource && (
-          <div className="px-6 py-2 border-b text-[11px] leading-relaxed text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/30">
+          <div className="px-6 py-2 border-b text-[11px] leading-relaxed text-muted bg-sidebar/50">
             {t('agent.systemNotice')}
           </div>
         )}
         {!editable && !isProductResource && selectedPath && (
-          <div className="px-6 py-2 border-b text-[11px] leading-relaxed text-amber-700 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-950/20">
+          <div className="px-6 py-2 border-b text-[11px] leading-relaxed text-warning bg-warning-soft/50">
             {readOnlyNotice || t('agent.workspaceReadOnlyNotice')}
           </div>
         )}
 
         {loading ? (
-          <p className="p-6 text-sm text-slate-400">{t('agent.loadingDocument')}</p>
+          <p className="p-6 text-sm text-muted">{t('agent.loadingDocument')}</p>
         ) : selectedPath ? (
           <MarkdownEditor
             content={content}
@@ -411,8 +411,8 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
           />
         ) : (
           <div className="p-8 flex flex-col items-center justify-center text-center gap-3 my-auto">
-            <Bot className="w-10 h-10 text-slate-400" />
-            <p className="text-sm text-slate-500 dark:text-slate-400">{t('agent.noDocuments')}</p>
+            <Bot className="w-10 h-10 text-muted" />
+            <p className="text-sm text-muted">{t('agent.noDocuments')}</p>
             {!readOnly && (
               <Button variant="primary"
                 disabled={isCreating}

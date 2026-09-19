@@ -3,11 +3,11 @@ import { useTranslation } from '../lib/i18n/index.js';
 
 function statusColor(status: string) {
   switch (status.toLowerCase()) {
-    case 'done': return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
-    case 'working': case 'doing': case 'in-progress': return 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800';
-    case 'todo': return 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800';
-    case 'inbox': return 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800';
-    default: return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700';
+    case 'done': return 'bg-success-soft text-success border-success/40';
+    case 'working': case 'doing': case 'in-progress': return 'bg-info-soft text-info border-info/40';
+    case 'todo': return 'bg-warning-soft text-warning border-warning/40';
+    case 'inbox': return 'bg-primary-soft text-primary-hover border-primary';
+    default: return 'bg-sidebar text-muted border-line';
   }
 }
 
@@ -22,7 +22,7 @@ export function NoteStatusSelect({ status = '', statuses, readOnly, onChange, la
         value={status}
         onValueChange={onChange}
         options={['', ...statuses, ...(status && !statuses.includes(status) ? [status] : [])].map(value => ({ value, label: value || t('notes.noStatus') }))}
-        className={`cursor-pointer disabled:cursor-default min-h-6 px-2.5 py-0.5 text-xs rounded-md border font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 ${status ? statusColor(status) : 'status-empty'}`}
+        className={`cursor-pointer disabled:cursor-default min-h-6 px-2.5 py-0.5 text-xs rounded-md border font-medium focus:outline-none focus:ring-1 focus:ring-primary ${status ? statusColor(status) : 'status-empty'}`}
         title={label}
       />
     </div>

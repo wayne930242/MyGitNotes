@@ -725,18 +725,18 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
             {showFrontmatter && (
               <div className="note-panel-scroll flex flex-col h-full">
                 {/* Frontmatter Mode Switch */}
-                <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
-                  <span className="font-semibold text-xs text-slate-700 dark:text-slate-200">
+                <div className="flex items-center justify-between pb-2 mb-3 border-b border-line shrink-0">
+                  <span className="font-semibold text-xs text-fg">
                     {t('editor.frontmatter')}
                   </span>
-                  <div className="inline-flex rounded-md p-0.5 bg-slate-100 dark:bg-slate-800 text-[11px]">
+                  <div className="inline-flex rounded-md p-0.5 bg-sidebar text-[11px]">
                     <button
                       type="button"
                       onClick={() => setFrontmatterViewMode('form')}
                       className={`px-2 py-0.5 rounded font-medium transition-colors ${
                         frontmatterViewMode === 'form'
-                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                          ? 'bg-surface text-fg shadow-sm'
+                          : 'text-muted hover:text-fg'
                       }`}
                     >
                       {t('editor.formMode')}
@@ -750,8 +750,8 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
                       }}
                       className={`px-2 py-0.5 rounded font-medium flex items-center gap-1 transition-colors ${
                         frontmatterViewMode === 'yaml'
-                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                          ? 'bg-surface text-fg shadow-sm'
+                          : 'text-muted hover:text-fg'
                       }`}
                     >
                       <Code className="w-3 h-3" />
@@ -763,7 +763,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
                 {frontmatterViewMode === 'form' ? (
                   <fieldset disabled={locked} className="note-metadata min-w-0 text-xs animate-fadeIn space-y-3">
             <div>
-              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">{t('editor.title')}</label>
+              <label className="block text-muted font-semibold mb-1">{t('editor.title')}</label>
               <input
                 type="text"
                 value={String(metadata.title || '')}
@@ -773,32 +773,32 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
               />
             </div>
             <div>
-              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">{t('editor.status')}</label>
+              <label className="block text-muted font-semibold mb-1">{t('editor.status')}</label>
               <Select aria-label={t('editor.status')} disabled={locked} value={String(metadata.status || '')} onValueChange={value => setMetadata(withNoteStatus(metadata, value))} options={Array.from(new Set(['', ...statuses, String(metadata.status || '')])).map(value => ({value,label:value || t('editor.noStatus')}))} className={`w-full ${metadata.status ? '' : 'status-empty'}`} />
               <label className="flex items-center gap-2 min-h-11 cursor-pointer">
                 <input type="checkbox" aria-label={t('editor.hideNote')} checked={isNoteHidden(metadata)}
                   onChange={event => setMetadata({ ...metadata, hiden: event.target.checked })}
-                  className="w-4 h-4 accent-indigo-600" />
+                  className="w-4 h-4 accent-primary" />
                 {t('editor.hideNote')}
               </label>
             </div>
 
             {/* Tags with Autocomplete (Requirement 4) */}
             <div className="relative">
-              <label className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">
+              <label className="block text-muted font-semibold mb-1">
                 {t('editor.tags')}
               </label>
-              <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md min-h-[35px] relative">
+              <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-surface border border-line rounded-md min-h-[35px] relative">
                 {currentTags.map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-black/5 dark:bg-white/10 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-fg/5 text-fg border border-line"
                   >
                     <span>{tag}</span>
                     <button
                       type="button"
                       onClick={() => handleRemoveTag(tag)}
-                      className="text-slate-400 hover:text-rose-500 font-bold ml-0.5"
+                      className="text-muted hover:text-danger font-bold ml-0.5"
                     >
                       ×
                     </button>
@@ -823,12 +823,12 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
                       }
                     }}
                     placeholder={currentTags.length === 0 ? t('editor.addTagPlaceholder') : t('editor.addPlaceholder')}
-                    className="w-full text-xs bg-transparent focus:outline-none text-slate-900 dark:text-slate-100"
+                    className="w-full text-xs bg-transparent focus:outline-none text-fg"
                   />
 
                   {/* Autocomplete Dropdown */}
                   {isTagDropdownOpen && suggestedTags.length > 0 && (
-                    <div className="absolute top-full left-0 mt-1 w-52 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 max-h-40 overflow-y-auto py-1">
+                    <div className="absolute top-full left-0 mt-1 w-52 bg-surface border border-line rounded-lg shadow-xl z-50 max-h-40 overflow-y-auto py-1">
                       {suggestedTags.map((st) => (
                         <button
                           key={st}
@@ -837,10 +837,10 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
                             e.preventDefault();
                             handleAddTag(st);
                           }}
-                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between text-slate-800 dark:text-slate-200"
+                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-fg/5 flex items-center justify-between text-fg"
                         >
                           <span className="font-semibold">{st}</span>
-                          <span className="text-[10px] text-slate-400">{t('editor.add')}</span>
+                          <span className="text-[10px] text-muted">{t('editor.add')}</span>
                         </button>
                       ))}
                     </div>
@@ -850,7 +850,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
 
               {/* Quick suggestion suggestions below */}
               {suggestedTags.length > 0 && !tagInput && (
-                <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-400 flex-wrap">
+                <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted flex-wrap">
                   <span>{t('editor.suggestions')}</span>
                   {suggestedTags.slice(0, 5).map((st) => (
                     <button
@@ -869,8 +869,8 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
 
             {/* Custom / Notebook Metadata fields */}
             {customFields.length > 0 && (
-              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-3">
-                <span className="block text-slate-500 dark:text-slate-400 font-semibold mb-1">
+              <div className="pt-2 border-t border-line space-y-3">
+                <span className="block text-muted font-semibold mb-1">
                   {t('editor.metadata') || 'Metadata'}
                 </span>
                 {customFields.map((field) => {
@@ -882,9 +882,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
                           aria-label={field.label}
                           checked={Boolean(metadata[field.key])}
                           onChange={(e) => setMetadata({ ...metadata, [field.key]: e.target.checked })}
-                          className="w-4 h-4 accent-indigo-600 rounded"
+                          className="w-4 h-4 accent-primary rounded"
                         />
-                        <span className="text-slate-700 dark:text-slate-300 font-medium">{field.label}</span>
+                        <span className="text-fg font-medium">{field.label}</span>
                       </label>
                     );
                   }
@@ -892,7 +892,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
                   return (
                     <div key={field.key}>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-slate-500 dark:text-slate-400 font-semibold">{field.label}</label>
+                        <label className="text-muted font-semibold">{field.label}</label>
                         {!field.isConfigured && (
                           <button
                             type="button"
@@ -901,7 +901,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
                               delete next[field.key];
                               setMetadata(next);
                             }}
-                            className="text-[10px] text-slate-400 hover:text-rose-500"
+                            className="text-[10px] text-muted hover:text-danger"
                             title="Remove field"
                           >
                             ×
@@ -934,7 +934,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
             )}
 
             {/* Add Custom Field */}
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+            <div className="pt-2 border-t border-line">
               <div className="flex gap-1.5 items-center">
                 <input
                   type="text"
@@ -963,7 +963,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
                     setNewFieldKey('');
                   }}
                   disabled={!newFieldKey.trim()}
-                  className="px-2 py-1 text-xs bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded disabled:opacity-50 text-slate-800 dark:text-slate-200"
+                  className="px-2 py-1 text-xs bg-line hover:bg-line rounded disabled:opacity-50 text-fg"
                 >
                   +
                 </button>
@@ -973,11 +973,11 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
         ) : (
                   <div className="flex-1 flex flex-col min-h-0 text-xs space-y-2">
                     {yamlError && (
-                      <div className="p-2 rounded bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 font-mono text-[11px] break-all">
+                      <div className="p-2 rounded bg-danger-soft border border-danger/40 text-danger font-mono text-[11px] break-all">
                         {yamlError}
                       </div>
                     )}
-                    <div className="flex-1 border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden min-h-[340px]">
+                    <div className="flex-1 border border-line rounded-md overflow-hidden min-h-[340px]">
                       <FileSourceEditor
                         path="metadata.yaml"
                         content={yamlText}
@@ -1002,7 +1002,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
                         }}
                       />
                     </div>
-                    <p className="text-[11px] text-slate-400 leading-tight">
+                    <p className="text-[11px] text-muted leading-tight">
                       {t('editor.yamlHint')}
                     </p>
                   </div>
@@ -1085,7 +1085,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
           </div>
         </> : <>
         {/* Modal Top Bar */}
-        <div className="note-toolbar relative shrink-0 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4 bg-slate-50/60 dark:bg-slate-900/80">
+        <div className="note-toolbar relative shrink-0 px-5 py-3.5 border-b border-line flex items-center justify-between gap-4 bg-sidebar/60">
           {frame === 'zoom' && <div className="note-heading flex items-center gap-3 truncate">
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
@@ -1097,10 +1097,10 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
               <FileText className="w-4 h-4" />
             </div>
             <div className="truncate">
-              <div className="font-serif font-semibold text-slate-900 dark:text-slate-100 text-sm truncate">
+              <div className="font-serif font-semibold text-fg text-sm truncate">
                 {String(metadata.title || note.title || t('editor.untitled'))}
               </div>
-              <div className="text-xs text-slate-400 dark:text-slate-500 font-mono truncate">
+              <div className="text-xs text-muted font-mono truncate">
                 {note.path}
               </div>
             </div>
@@ -1122,7 +1122,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
             {onClose && <button
               aria-label={t('editor.closeNote')}
               onClick={close}
-              className="note-close p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition ml-1"
+              className="note-close p-1.5 text-muted hover:text-fg hover:bg-sidebar rounded-lg transition ml-1"
             >
               <X className="w-5 h-5" />
             </button>}

@@ -15,7 +15,7 @@
 .file-detail{margin-top:20px;border:1px solid var(--color-border);border-radius:9px;padding:14px;min-width:0}.file-detail-heading{display:flex;gap:8px;flex-direction:column;margin-bottom:12px;overflow-wrap:anywhere}.file-detail-heading code{font-size:11px;color:var(--color-muted)}
 .file-save-bar{display:flex;justify-content:space-between;align-items:center;margin:12px 0 8px;color:var(--color-muted)}.file-source-editor{height:340px;border:1px solid var(--color-border);border-radius:6px;overflow:hidden}
 .file-preview-image{display:block;max-width:100%;max-height:440px;object-fit:contain;margin:18px auto}.file-preview-pdf{width:100%;height:460px;margin-top:15px}.file-detail video{max-width:100%;max-height:400px;margin-top:15px}.file-detail audio{width:100%;margin-top:15px}
-.file-empty{padding:30px;text-align:center;color:var(--color-muted)}.file-error{padding:10px 18px;color:#dc2626;overflow-wrap:anywhere}.file-operation{border:1px solid var(--color-border);border-radius:9px;background:var(--color-bg);padding:18px;margin-top:16px;display:flex;flex-direction:column;gap:12px}.file-operation h3{font-weight:600;font-size:15px}.file-operation label{display:flex;flex-direction:column;gap:6px}.file-operation code{overflow-wrap:anywhere}.file-destination{font-size:12px}
+.file-empty{padding:30px;text-align:center;color:var(--color-muted)}.file-error{padding:10px 18px;color:var(--color-danger);overflow-wrap:anywhere}.file-operation{border:1px solid var(--color-border);border-radius:9px;background:var(--color-bg);padding:18px;margin-top:16px;display:flex;flex-direction:column;gap:12px}.file-operation h3{font-weight:600;font-size:15px}.file-operation label{display:flex;flex-direction:column;gap:6px}.file-operation code{overflow-wrap:anywhere}.file-destination{font-size:12px}
 @media(max-width:700px){.file-tree-toggle{display:inline-flex!important}.file-tree{display:none;width:100%;max-height:180px;border-bottom:1px solid var(--color-border)}.file-tree.is-open{display:block}.file-manager-body{flex-direction:column}.file-content{padding:12px}.file-manager-toolbar{padding:10px;gap:8px}.file-hidden-toggle{font-size:12px}.file-markdown-toggle{font-size:12px}.workspace-dialog.file-manager-dialog{height:94dvh;width:98vw;max-width:98vw;max-height:94dvh}.file-source-editor{height:280px}.file-row-name small{font-size:10px}.file-operation{padding:12px}}
 
 .assets-main>.file-manager{width:100%;flex:1}
@@ -77,7 +77,7 @@
 .file-info-panel{flex:0 0 300px;width:300px;min-width:0;overflow-y:auto;padding:18px;border-left:1px solid var(--workspace-divider,var(--color-border));background:var(--color-surface)}
 .file-info-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.file-info-heading h2{font-size:14px;font-weight:600}
 .file-info-panel .file-operation{padding:12px}
-@media(max-width:700px){.file-info-panel{position:absolute;inset:auto 0 0;z-index:5;width:auto;max-height:70%;border:1px solid var(--color-border);border-radius:12px 12px 0 0;box-shadow:0 -6px 20px #0003}}
+@media(max-width:700px){.file-info-panel{position:absolute;inset:auto 0 0;z-index:5;width:auto;max-height:70%;border:1px solid var(--color-border);border-radius:12px 12px 0 0;box-shadow:0 -6px 20px color-mix(in srgb, var(--color-scrim) 20%, transparent)}}
 
 /* The note panel uses a single-column browser at any viewport width. */
 .note-document-panel > .file-manager[data-layout="panel"] { flex: 1; min-height: 0; height: auto; overflow: hidden; }

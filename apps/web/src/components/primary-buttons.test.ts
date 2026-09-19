@@ -18,7 +18,7 @@ describe('primary action consistency', () => {
         const visit = (node: ts.Node) => {
           if (ts.isJsxOpeningElement(node) && node.tagName.getText(source) === 'button') {
             const attrs = node.attributes.getText(source);
-            if (attrs.includes('ui-button-primary') || /backgroundColor:\s*['"]var\(--color-primary\)['"]/.test(attrs) || attrs.includes('text-white') && attrs.includes('bg-indigo-600') || attrs.includes('mobile-nav-create')) {
+            if (attrs.includes('ui-button-primary') || /backgroundColor:\s*['"]var\(--color-primary\)['"]/.test(attrs) || attrs.includes('text-on-primary') && attrs.includes('bg-primary') || attrs.includes('mobile-nav-create')) {
               violations.push(`${path.relative(root, file)}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`);
             }
           }

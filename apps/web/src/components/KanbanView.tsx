@@ -112,8 +112,8 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
       onClick={() => board.onOpenNote(note)}
       className={`p-3 rounded-lg border transition-all cursor-grab active:cursor-grabbing group shadow-xs ${
         isBeingDragged
-          ? 'opacity-40 scale-[0.98] border-indigo-400 dark:border-indigo-500 shadow-inner'
-          : 'hover:shadow-sm hover:border-slate-400'
+          ? 'opacity-40 scale-[0.98] border-primary shadow-inner'
+          : 'hover:shadow-sm hover:border-muted'
       }`}
       style={{
         backgroundColor: 'var(--color-surface)',
@@ -121,10 +121,10 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
       }}
     >
       <div className="flex items-start justify-between gap-1 mb-1.5">
-        <div className="font-medium text-slate-900 dark:text-slate-100 text-sm line-clamp-2 transition">
+        <div className="font-medium text-fg text-sm line-clamp-2 transition">
           {note.title}
         </div>
-        <GripVertical className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 shrink-0 opacity-0 group-hover:opacity-100 transition" />
+        <GripVertical className="w-3.5 h-3.5 text-muted shrink-0 opacity-0 group-hover:opacity-100 transition" />
       </div>
 
       {note.tags.length > 0 && (
@@ -132,9 +132,9 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
           {note.tags.map((tag) => (
             <span
               key={tag}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400 rounded text-[10px]"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-fg/5 text-muted rounded text-[10px]"
             >
-              <Tag className="w-2 h-2 text-slate-400" />
+              <Tag className="w-2 h-2 text-muted" />
               {tag}
             </span>
           ))}
@@ -143,13 +143,13 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
 
       {/* Card Actions & Timestamp */}
       <div
-        className="flex items-center justify-between pt-2 border-t text-slate-400 text-xs"
+        className="flex items-center justify-between pt-2 border-t text-muted text-xs"
         style={{ borderColor: 'var(--color-border)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-1.5 text-slate-400">
+        <div className="flex items-center gap-1.5 text-muted">
           <span className="flex items-center gap-1 text-[11px]">
-            <Clock className="w-3 h-3 text-slate-400" />
+            <Clock className="w-3 h-3 text-muted" />
             {formattedDate}
           </span>
         </div>
@@ -172,7 +172,7 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
               type="button"
               onClick={() => board.onUpdateNoteStatus(note, board.columns[index - 1].id)}
               title={t('kanban.moveTo', { title: board.columns[index - 1].title })}
-              className="p-1 hover:text-indigo-600 dark:hover:text-indigo-400 rounded hover:bg-black/5 dark:hover:bg-white/10 transition"
+              className="p-1 hover:text-primary rounded hover:bg-fg/5 transition"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
             </button>
@@ -182,7 +182,7 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
               type="button"
               onClick={() => board.onUpdateNoteStatus(note, board.columns[index + 1].id)}
               title={t('kanban.moveTo', { title: board.columns[index + 1].title })}
-              className="p-1 hover:text-indigo-600 dark:hover:text-indigo-400 rounded hover:bg-black/5 dark:hover:bg-white/10 transition"
+              className="p-1 hover:text-primary rounded hover:bg-fg/5 transition"
             >
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
@@ -193,8 +193,8 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
               onClick={() => requestDelete(note.path)}
               title={pendingDeletePath === note.path ? t('notes.confirmDelete') : t('notes.delete')}
               className={pendingDeletePath === note.path
-                ? 'p-1 text-white bg-rose-600 hover:bg-rose-700 rounded transition'
-                : 'p-1 hover:text-rose-600 dark:hover:text-rose-400 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 transition opacity-40 hover:opacity-100'}
+                ? 'p-1 text-on-danger bg-danger hover:bg-danger/90 rounded transition'
+                : 'p-1 hover:text-danger rounded hover:bg-danger-soft transition opacity-40 hover:opacity-100'}
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -234,7 +234,7 @@ function KanbanColumn({ col, index, board, query, hiddenNote, sort, onSort }: {
       onDragLeave={drag.onDragLeave}
       onDrop={drag.onDrop}
       className={`w-80 rounded-xl p-3 flex flex-col max-h-full shrink-0 border transition-colors shadow-xs ${
-        isColumnDragOver ? '' : 'border-slate-200/80 dark:border-slate-800'
+        isColumnDragOver ? '' : 'border-line/80'
       }`}
       style={{
         backgroundColor: isColumnDragOver ? 'var(--color-primary-light)' : 'var(--color-surface)',
@@ -249,8 +249,8 @@ function KanbanColumn({ col, index, board, query, hiddenNote, sort, onSort }: {
             className={`w-2.5 h-2.5 rounded-full shrink-0 ${col.id === 'inbox' ? '' : col.color}`}
             style={col.id === 'inbox' ? { backgroundColor: 'var(--color-primary)' } : undefined}
           />
-          <h3 className="font-semibold text-slate-800 dark:text-slate-200 text-sm truncate">{col.title}</h3>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400 font-medium shrink-0">
+          <h3 className="font-semibold text-fg text-sm truncate">{col.title}</h3>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-fg/5 text-muted font-medium shrink-0">
             {result.total}
           </span>
         </div>
@@ -272,7 +272,7 @@ function KanbanColumn({ col, index, board, query, hiddenNote, sort, onSort }: {
             <button
               type="button"
               onClick={() => board.onNewNoteWithStatus(col.id)}
-              className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition"
+              className="p-1 text-muted hover:text-fg hover:bg-fg/5 rounded-md transition"
               title={t('kanban.addNoteTo', { title: col.title })}
             >
               <Plus className="w-4 h-4" />
@@ -293,10 +293,10 @@ function KanbanColumn({ col, index, board, query, hiddenNote, sort, onSort }: {
           </div>
         )}
 
-        {result.error && <p role="alert" className="text-xs text-rose-600">{result.error}</p>}
-        {result.loading && <p role="status" className="text-xs text-slate-400">{t('notes.loading')}</p>}
+        {result.error && <p role="alert" className="text-xs text-danger">{result.error}</p>}
+        {result.loading && <p role="status" className="text-xs text-muted">{t('notes.loading')}</p>}
         {!result.loading && notes.length === 0 && !isColumnDragOver ? (
-          <div className="py-8 text-center text-xs text-slate-400 dark:text-slate-500 border border-dashed border-slate-200 dark:border-slate-800 rounded-lg">
+          <div className="py-8 text-center text-xs text-muted border border-dashed border-line rounded-lg">
             {board.readOnly ? t('kanban.noNotes') : t('kanban.dragNotesHere')}
           </div>
         ) : (
@@ -330,16 +330,16 @@ function KanbanUnassignedColumn({ board, query, hiddenNote, sort }: {
     >
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
+          <span className="w-2.5 h-2.5 rounded-full bg-muted" />
           <h3 className="font-medium text-sm" style={{ color: 'var(--color-muted)' }}>{t('kanban.noStatus')}</h3>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400 font-medium">
+          <span className="text-xs px-2 py-0.5 rounded-full bg-fg/5 text-muted font-medium">
             {result.total}
           </span>
         </div>
       </div>
 
       <div className="overflow-y-auto space-y-2.5 flex-1 pr-0.5">
-        {result.loading && <p role="status" className="text-xs text-slate-400">{t('notes.loading')}</p>}
+        {result.loading && <p role="status" className="text-xs text-muted">{t('notes.loading')}</p>}
         {notes.map((note) => {
           const canDragForFocus = !!board.focusMode?.canDrag(note);
           return (
@@ -358,7 +358,7 @@ function KanbanUnassignedColumn({ board, query, hiddenNote, sort }: {
             className="p-3 rounded-lg border hover:shadow-xs transition cursor-grab active:cursor-grabbing"
             style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
           >
-            <div className="font-medium text-slate-900 dark:text-slate-100 text-sm mb-1 line-clamp-2">{note.title}</div>
+            <div className="font-medium text-fg text-sm mb-1 line-clamp-2">{note.title}</div>
             {(board.focusMode || (!board.readOnly && board.onMoveNote)) && (
               <div className="flex justify-end items-center gap-1" onClick={event => event.stopPropagation()}>
                 {board.focusMode && (
@@ -417,12 +417,12 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
     title: status,
     color:
       status === 'done'
-        ? 'bg-emerald-500'
+        ? 'bg-success'
         : status === 'working' || status === 'doing'
-        ? 'bg-sky-500'
+        ? 'bg-info'
         : status === 'archived'
-        ? 'bg-slate-400'
-        : 'bg-purple-500',
+        ? 'bg-muted'
+        : 'bg-accent-6',
   }));
 
   // Board sort key: inside Kanban, 'status' defaults to 'updated'
@@ -452,8 +452,8 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
       <div className="flex items-center justify-between px-2 mb-3 flex-wrap gap-2 text-xs shrink-0">
         <div className="kanban-leading flex items-center gap-3 min-w-0">
           {leading}
-          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium">
-            <KanbanIcon className="w-4 h-4 text-indigo-500 shrink-0" />
+          <div className="flex items-center gap-2 text-muted font-medium">
+            <KanbanIcon className="w-4 h-4 text-primary shrink-0" />
             <span>{t('kanban.columns', { count: columns.length })}</span>
             <span>·</span>
             <span>{t('kanban.notes', { count: boardTotal })}</span>
@@ -462,7 +462,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
 
         {onSortChange && (
           <div className="flex items-center gap-2">
-            <span className="text-slate-400 font-medium whitespace-nowrap">{t('kanban.sortBy')}</span>
+            <span className="text-muted font-medium whitespace-nowrap">{t('kanban.sortBy')}</span>
             <Select
               aria-label={t('kanban.sortBy')}
               value={boardSortKey}

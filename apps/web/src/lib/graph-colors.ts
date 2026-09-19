@@ -6,10 +6,12 @@ export const GRAPH_PALETTES = ['soft', 'vivid', 'warm'] as const;
 export type GraphAppearance = { mode: typeof GRAPH_COLOR_MODES[number]; palette: typeof GRAPH_PALETTES[number] };
 export const DEFAULT_GRAPH_APPEARANCE: GraphAppearance = { mode: 'folder', palette: 'soft' };
 export const GRAPH_APPEARANCE_KEY = 'github-notes:graph-appearance';
+// Graph groups cycle through the active theme's accents; each scheme is a token expression.
+const accentTokens = ['accent-1', 'accent-2', 'accent-3', 'accent-4', 'accent-5', 'accent-6', 'primary', 'info'];
 const palettes = {
-  soft: ['#7fa58d', '#7895b5', '#b58ba4', '#c5a16b', '#a799be', '#6faaa8', '#bc8c79', '#989e65'],
-  vivid: ['#249d78', '#4285d4', '#c85891', '#d59a28', '#8b63c7', '#239da9', '#d97551', '#869d30'],
-  warm: ['#b97f64', '#c5a16b', '#b78091', '#a69a64', '#cc956f', '#997d9f', '#a99b87', '#977968'],
+  soft: accentTokens.map(token => `color-mix(in srgb, var(--color-${token}) 60%, var(--color-surface))`),
+  vivid: accentTokens.map(token => `var(--color-${token})`),
+  warm: accentTokens.map(token => `color-mix(in srgb, var(--color-${token}) 65%, var(--color-warning))`),
 };
 
 export function parseGraphAppearance(raw: string | null): GraphAppearance {

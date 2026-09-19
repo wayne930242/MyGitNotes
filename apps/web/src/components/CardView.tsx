@@ -59,13 +59,13 @@ export const CardView: React.FC<CardViewProps> = ({
   if (isEmpty) {
     return (
       <div className="flex flex-col items-center justify-center h-96 text-center px-4">
-        <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
+        <div className="w-12 h-12 rounded-full bg-sidebar flex items-center justify-center text-muted mb-3">
           <FileText className="w-6 h-6" />
         </div>
-        <h3 className="text-base font-medium text-slate-800 dark:text-slate-200 mb-1">
+        <h3 className="text-base font-medium text-fg mb-1">
           {t('notes.emptyTitle')}
         </h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm mb-4">
+        <p className="text-sm text-muted max-w-sm mb-4">
           {t('notes.emptyDescription')}
         </p>
         {!readOnly && (
@@ -114,14 +114,14 @@ export const CardView: React.FC<CardViewProps> = ({
               backgroundColor: 'var(--color-surface)',
               borderColor: 'var(--color-border)',
             }}
-            className={`rounded-xl border hover:border-indigo-300 dark:hover:border-indigo-600/60 p-5 flex flex-col justify-between shadow-xs hover:shadow-md transition cursor-pointer group${strip ? ' note-card-strip-item' : ''}`}
+            className={`rounded-xl border hover:border-primary p-5 flex flex-col justify-between shadow-xs hover:shadow-md transition cursor-pointer group${strip ? ' note-card-strip-item' : ''}`}
           >
             <div>
               <div className="flex items-start justify-between gap-2 mb-2">
-                <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base line-clamp-1 transition flex items-center gap-1.5">
+                <h3 className="font-semibold text-fg text-base line-clamp-1 transition flex items-center gap-1.5">
                   <span className="truncate">{note.title}</span>
                   {note.path.endsWith('.mdx') && (
-                    <span className="shrink-0 text-[10px] font-semibold font-mono px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700/60 leading-none">
+                    <span className="shrink-0 text-[10px] font-semibold font-mono px-1.5 py-0.5 rounded bg-warning-soft text-warning border border-warning/40 leading-none">
                       MDX
                     </span>
                   )}
@@ -135,9 +135,9 @@ export const CardView: React.FC<CardViewProps> = ({
                 />
               </div>
 
-              <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 mb-4 leading-relaxed">
+              <p className="text-xs text-muted line-clamp-3 mb-4 leading-relaxed">
                 {getExcerpt(note.content || '') || (
-                  <span className="italic text-slate-300 dark:text-slate-600">
+                  <span className="italic text-muted">
                     {t('notes.noContent')}
                   </span>
                 )}
@@ -145,12 +145,12 @@ export const CardView: React.FC<CardViewProps> = ({
             </div>
 
             <div
-              className="note-card-footer pt-3 border-t flex items-center justify-between gap-2 text-xs text-slate-400"
+              className="note-card-footer pt-3 border-t flex items-center justify-between gap-2 text-xs text-muted"
               style={{ borderColor: 'var(--color-border)' }}
             >
               <NoteTags tags={note.tags.slice(0, 2)} chipClassName="px-1.5 py-0.5 text-[11px]" tagActions={tagActions} className="note-card-tags max-w-[65%] min-w-0">
                 {note.tags.length > 2 && (
-                  <span className="text-[10px] text-slate-400 self-center">
+                  <span className="text-[10px] text-muted self-center">
                     +{note.tags.length - 2}
                   </span>
                 )}
@@ -183,8 +183,8 @@ export const CardView: React.FC<CardViewProps> = ({
                       onClick={() => requestDelete(note.path)}
                       title={pendingDeletePath === note.path ? t('notes.confirmDelete') : t('notes.delete')}
                       className={pendingDeletePath === note.path
-                        ? 'p-1 text-white bg-rose-600 hover:bg-rose-700 transition rounded'
-                        : 'p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition rounded'}
+                        ? 'p-1 text-on-danger bg-danger hover:bg-danger/90 transition rounded'
+                        : 'p-1 text-muted hover:text-danger transition rounded'}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -201,7 +201,7 @@ export const CardView: React.FC<CardViewProps> = ({
   return (
     <>
     {uncommitted.length > 0 && <section className="note-card-uncommitted mb-4">
-      <h3 className="mb-2 text-xs uppercase font-semibold text-amber-600 dark:text-amber-400">{t('notes.uncommitted')}</h3>
+      <h3 className="mb-2 text-xs uppercase font-semibold text-warning">{t('notes.uncommitted')}</h3>
       <div className={gridClassName}>{uncommitted.map(renderCard)}</div>
     </section>}
     <div className={gridClassName}>

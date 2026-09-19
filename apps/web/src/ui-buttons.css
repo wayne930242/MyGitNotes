@@ -19,12 +19,11 @@
 .ui-button-primary, .ui-button[aria-pressed="true"] {
   --button-bg: var(--color-primary);
   --button-hover-bg: var(--color-primary-hover);
-  --button-text: var(--color-on-primary, white);
-  --button-hover-text: var(--color-on-primary-hover, white);
+  --button-text: var(--color-on-primary);
+  --button-hover-text: var(--color-on-primary-hover);
   --button-border: var(--color-primary);
 }
-.ui-button-danger { --button-text: #e11d48; }
-.dark .ui-button-danger { --button-text: #fb7185; }
+.ui-button-danger { --button-text: var(--color-danger); }
 .ui-button:not(:disabled):not([aria-disabled="true"]):hover,
 .ui-icon-button:not(:disabled):not([aria-disabled="true"]):hover { background: var(--button-hover-bg); color: var(--button-hover-text); }
 .ui-button:focus-visible, .ui-button:focus-within, .ui-icon-button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; position: relative; z-index: 1; }

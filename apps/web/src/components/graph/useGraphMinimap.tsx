@@ -1,6 +1,7 @@
 import { useCallback, useRef, type RefObject } from 'react';
 import type { ForceGraphMethods } from 'react-force-graph-2d';
 import type { NoteGraphNode, NoteGraphLink } from '@mygitnotes/core/note-graph';
+import { themeColor, tokenAlpha } from '../../lib/theme-color.js';
 import { useTranslation } from '../../lib/i18n/index.js';
 type PositionedNode = NoteGraphNode & { x?: number; y?: number };
 
@@ -47,7 +48,7 @@ export function useGraphMinimap({ graphRef: fgRef, graphData, dimensions, isDark
     const y = (height - (bottom - top) * scale) / 2 - top * scale;
     minimapTransform.current = { x, y, scale };
     const byId = new Map(nodes.map(n => [n.id, n]));
-    ctx.strokeStyle = isDark ? '#475569' : '#d1d9e2';
+    ctx.strokeStyle = themeColor('var(--color-border)');
     ctx.lineWidth = 0.75;
     for (const link of graphData.links) {
       const source = typeof link.source === 'object' ? link.source as PositionedNode : byId.get(link.source);
@@ -71,8 +72,8 @@ export function useGraphMinimap({ graphRef: fgRef, graphData, dimensions, isDark
     const vw = Math.max(0, Math.min(width - 1, end.x * scale + x) - vx);
     const vh = Math.max(0, Math.min(height - 1, end.y * scale + y) - vy);
     minimapViewport.current = { x: vx, y: vy, w: vw, h: vh };
-    ctx.fillStyle = 'rgba(120,149,181,0.08)';
-    ctx.strokeStyle = isDark ? '#94adc7' : '#8b9fb5';
+    ctx.fillStyle = themeColor(tokenAlpha('primary', 8));
+    ctx.strokeStyle = themeColor('var(--color-primary)');
     ctx.lineWidth = 1;
     ctx.fillRect(vx, vy, vw, vh);
     ctx.strokeRect(vx, vy, vw, vh);
@@ -84,7 +85,7 @@ export function useGraphMinimap({ graphRef: fgRef, graphData, dimensions, isDark
         aria-label={t('graph.minimap')}
         title={t('graph.minimapHint')}
         onMouseEnter={onClearHover}
-        className="overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 shadow-sm backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+        className="overflow-hidden rounded-xl border border-line/80 bg-surface/90 shadow-sm backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         onClick={(event) => {
           if (!fgRef.current || !graphData.nodes.length) return;
           if (event.detail === 0) handleResetZoom();
@@ -146,7 +147,7 @@ export function useGraphMinimap({ graphRef: fgRef, graphData, dimensions, isDark
           onPointerCancel={() => { minimapGesture.current = null; }}
           onLostPointerCapture={event => { minimapGesture.current = null; event.currentTarget.style.cursor = 'crosshair'; }}
         />
-        <span className="block pb-2 text-[10px] text-slate-500 dark:text-slate-400">{t('graph.minimap')}</span>
+        <span className="block pb-2 text-[10px] text-muted">{t('graph.minimap')}</span>
       </button>
   );
   return { paintMinimap, minimap };

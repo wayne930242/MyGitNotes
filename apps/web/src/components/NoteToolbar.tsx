@@ -87,11 +87,11 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
               {focusControls && <div className="note-focus-controls" role="group" aria-label={t('focus.title')}>{focusControls}</div>}
 
               {/* View Switcher Desktop */}
-              <div className="desktop-views flex items-center bg-black/5 dark:bg-white/5 p-1 rounded-lg gap-1 shrink-0">
+              <div className="desktop-views flex items-center bg-fg/5 p-1 rounded-lg gap-1 shrink-0">
                 {([{ mode: 'flat', icon: ListTree }, { mode: 'list', icon: LayoutList }, { mode: 'card', icon: LayoutGrid }, { mode: 'kanban', icon: Kanban }] as const).map(({ mode, icon: Icon }) =>
                   <button key={mode} type="button" onClick={() => setViewMode(mode)} title={t(`view.${mode}`)} aria-label={t(`view.${mode}`)} aria-pressed={viewMode === mode}
                     style={viewMode === mode ? { backgroundColor: 'var(--color-surface)', color: 'var(--color-primary)' } : undefined}
-                    className={`p-1.5 rounded-md transition ${viewMode === mode ? 'shadow-xs hover:opacity-90' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10'}`}>
+                    className={`p-1.5 rounded-md transition ${viewMode === mode ? 'shadow-xs hover:opacity-90' : 'text-muted hover:text-fg hover:bg-fg/5'}`}>
                     <Icon className="w-4 h-4" />
                   </button>)}
               </div>

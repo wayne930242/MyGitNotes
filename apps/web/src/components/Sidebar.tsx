@@ -143,16 +143,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <div className="flex items-center gap-2.5">
             <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-black/5 dark:bg-white/5"
+              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-fg/5"
               style={{ color: 'var(--color-muted)' }}
             >
               <GitBranch className="w-4 h-4" />
             </div>
             <div className="flex flex-col">
-              <span className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200 leading-tight">
+              <span className="font-mono text-xs font-semibold text-fg leading-tight">
                 {gitStatus?.branch || 'main'}
               </span>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
+              <span className="text-[10px] text-muted leading-tight">
                 {gitStatus?.branch === 'core'
                   ? t('sidebar.productCore')
                   : t('sidebar.userWorkspace')}
@@ -162,12 +162,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <div>
             {dirtyCount > 0 ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warning-soft text-warning">
+                <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
                 {t('sidebar.dirty', { count: dirtyCount })}
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+              <span className="inline-flex items-center gap-1 text-[10px] text-success font-medium">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 {t('sidebar.clean')}
               </span>
@@ -321,7 +321,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Status Filters */}
         <details key={`status-${selectedNotebookId}-${Boolean(selectedStatus)}`} open={!allNotebooks || Boolean(selectedStatus)} className="sidebar-filter-section">
           <summary>{t('sidebar.statusFilter')}</summary>
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5 px-2">
+          <div className="flex items-center justify-between text-xs font-semibold text-muted uppercase tracking-wider mb-2.5 px-2">
 
             {selectedStatus && (
               <button
@@ -343,14 +343,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition ${
                 selectedStatus === null
                   ? 'font-semibold hover:opacity-90'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200'
+                  : 'text-muted hover:bg-fg/5 hover:text-fg'
               }`}
             >
               <div className="flex items-center gap-2">
-                <Filter className="w-3.5 h-3.5 text-slate-400" />
+                <Filter className="w-3.5 h-3.5 text-muted" />
                 <span>{t('sidebar.allStatuses')}</span>
               </div>
-              <span className="text-xs text-slate-400">{facets ? notebookFacets.total : '—'}</span>
+              <span className="text-xs text-muted">{facets ? notebookFacets.total : '—'}</span>
             </button>
 
             {statuses.map((status) => {
@@ -368,24 +368,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition ${
                     isSelected
                       ? 'font-semibold hover:opacity-90'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200'
+                      : 'text-muted hover:bg-fg/5 hover:text-fg'
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <span
                       className={`w-2 h-2 rounded-full ${
                         status === 'done'
-                          ? 'bg-emerald-500'
+                          ? 'bg-success'
                           : status === 'working' || status === 'doing'
-                          ? 'bg-sky-500'
+                          ? 'bg-info'
                           : status === 'todo'
-                          ? 'bg-amber-500'
-                          : 'bg-slate-400'
+                          ? 'bg-warning'
+                          : 'bg-muted'
                       }`}
                     />
                     <span className="truncate">{status}</span>
                   </div>
-                  <span className="text-xs text-slate-400">{count ?? '—'}</span>
+                  <span className="text-xs text-muted">{count ?? '—'}</span>
                 </button>
               );
             })}
@@ -397,7 +397,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {allTags.length > 0 && (
           <details key={`tags-${selectedNotebookId}-${selectedTags.length > 0}`} open={!allNotebooks || selectedTags.length > 0} className="sidebar-filter-section" aria-label={t('sidebar.tags')}>
             <summary>{t('sidebar.tags')}</summary>
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5 px-2">
+            <div className="flex items-center justify-between text-xs font-semibold text-muted uppercase tracking-wider mb-2.5 px-2">
 
               {selectedTags.length > 0 && (
                 <button
@@ -412,21 +412,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div className="space-y-2 px-1 mb-2.5">
               <div className="relative">
-                <Search aria-hidden="true" className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                <Search aria-hidden="true" className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted pointer-events-none" />
                 <input
                   type="search"
                   aria-label={t('sidebar.searchTags')}
                   placeholder={t('sidebar.searchTags')}
                   value={tagQuery}
                   onChange={event => setTagQuery(event.target.value)}
-                  className="w-full min-w-0 h-9 pl-8 pr-8 rounded-lg border bg-transparent text-xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 [&::-webkit-search-cancel-button]:hidden"
+                  className="w-full min-w-0 h-9 pl-8 pr-8 rounded-lg border bg-transparent text-xs placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-muted [&::-webkit-search-cancel-button]:hidden"
                   style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}
                 />
                 {tagQuery && <button
                   type="button"
                   aria-label={t('sidebar.clearTagSearch')}
                   onClick={() => setTagQuery('')}
-                  className="absolute right-1 top-1 p-1.5 rounded-md text-slate-400 hover:bg-black/5 dark:hover:bg-white/5"
+                  className="absolute right-1 top-1 p-1.5 rounded-md text-muted hover:bg-fg/5"
                 ><X className="w-4 h-4" /></button>}
               </div>
               <Select
@@ -442,12 +442,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className="w-full"
                 style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}
               />
-              <p role="status" className="text-[11px] text-slate-400">
+              <p role="status" className="text-[11px] text-muted">
                 {t('sidebar.tagResults', { count: visibleTags.length, total: allTags.length })}
               </p>
               {selectedTags.filter(tag => !visibleTags.includes(tag)).map(tag => <button type="button" key={tag} className="sidebar-missing-filter" onClick={() => onSelectTag(tag)} aria-label={t('sidebar.clearActiveTag', { tag })}><span>#{tag}</span><X size={12} /></button>)}
             </div>
-            {visibleTags.length === 0 && <p className="px-2 py-3 text-xs text-slate-400">{t('sidebar.noMatchingTags')}</p>}
+            {visibleTags.length === 0 && <p className="px-2 py-3 text-xs text-muted">{t('sidebar.noMatchingTags')}</p>}
             <div className="sidebar-tag-mode" role="group" aria-label={t('filters.tagMode')}>
               {(['any', 'all'] as const).map(mode => <button type="button" key={mode} aria-pressed={value.tagMode === mode} onClick={() => onChange({ tagMode: mode })}>{t(`filters.${mode}`)}</button>)}
             </div>
@@ -463,15 +463,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           style={isSelected ? selectedItemStyle : undefined}
                           className={`max-w-full inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition border ${
                             isSelected
-                              ? 'font-semibold border-black/10 dark:border-white/15 hover:opacity-90'
-                              : 'text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-200'
+                              ? 'font-semibold border-line hover:opacity-90'
+                              : 'text-muted bg-surface border-line hover:border-muted hover:bg-sidebar hover:text-fg'
                           }`}
                         >
                           <Tag className="w-3 h-3 shrink-0" />
                           <span className="min-w-0 break-words text-left">{tag}</span>
                           <span
                             className={`text-[10px] ml-0.5 ${
-                              isSelected ? 'opacity-70' : 'text-slate-400'
+                              isSelected ? 'opacity-70' : 'text-muted'
                             }`}
                           >
                             {tagCounts[tag]}

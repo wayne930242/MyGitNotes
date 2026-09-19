@@ -3,7 +3,7 @@
 .study-lane-card > header { display: flex; align-items: center; gap: 12px; padding: 8px 16px; flex: none; font-size: 12px; color: var(--color-muted); }
 .study-lane-card > header .screen-card-title { flex: 1; min-width: 0; text-align: left; }
 .study-card-stage { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: 12px; }
-.study-card-stars { color: #eab308; letter-spacing: 1px; font-size: 13px; font-family: monospace, sans-serif; line-height: 1; }
+.study-card-stars { color: var(--color-warning); letter-spacing: 1px; font-size: 13px; font-family: monospace, sans-serif; line-height: 1; }
 .study-card-stage-status { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .study-page { overflow: auto; overscroll-behavior: contain; touch-action: pan-y; padding: 16px 24px; }
 .study-page .prose-custom { overflow-wrap: anywhere; }
@@ -31,9 +31,9 @@
 .study-ratings { min-height: 0; overflow: hidden; display: grid; grid-template-columns: repeat(var(--rating-columns, 4), minmax(0, 1fr)); gap: 6px; }
 .study-ratings .ui-button { min-height: 52px; display: flex; flex-direction: column; padding: 6px 2px; }
 .study-rating-label { font-weight: 500; }
-.study-rating-stars { color: #eab308; font-size: 11px; letter-spacing: 0.5px; font-family: monospace, sans-serif; line-height: 1.2; }
+.study-rating-stars { color: var(--color-warning); font-size: 11px; letter-spacing: 0.5px; font-family: monospace, sans-serif; line-height: 1.2; }
 .study-ratings small { font-weight: normal; font-size: 11px; }
-.study-alert { border: 1px solid #bd7b28; border-radius: 6px; padding: 8px; margin: 8px 0; font-size: 13px; }
+.study-alert { border: 1px solid var(--color-warning); border-radius: 6px; padding: 8px; margin: 8px 0; font-size: 13px; }
 .study-alert .ui-button { margin: 4px; }
 .study-lane-empty { flex: 1; padding: 32px 12px; text-align: center; color: var(--color-muted); }
 .study-session-actions, .study-session-actions label, .study-postpone { display: flex; flex-direction: column; gap: 12px; min-width: 0; }

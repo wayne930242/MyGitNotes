@@ -34,7 +34,7 @@ await page.setViewport({ width: 1440, height: 1100 });
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
 const open = async theme => {
-  await page.evaluateOnNewDocument(theme => localStorage.setItem('github_notes_theme', theme), theme);
+  await page.evaluateOnNewDocument(theme => { localStorage.setItem('github_notes_theme', theme.split(':')[0]); localStorage.setItem('github_notes_theme_mode', theme.split(':')[1]); }, theme);
   await page.goto(`${base}/notebooks/example/notes/links.md`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.live-md-rendered table a');
 };
@@ -62,7 +62,7 @@ const contrast = (a, b) => {
 };
 try {
   if (!process.env.LINK_QA_CASE || process.env.LINK_QA_CASE === 'color') {
-    for (const theme of ['github-dark', 'nord-arctic', 'midnight-violet', 'clean-indigo']) {
+    for (const theme of ['flexoki','github','catppuccin','rose-pine','gruvbox','tokyo-night','carbon','solarized','everforest'].flatMap(family => [`${family}:light`, `${family}:dark`])) {
       await open(theme);
       const colors = await page.evaluate(() => {
         const walker = document.createTreeWalker(document.querySelector('.cm-content'), NodeFilter.SHOW_TEXT);
@@ -84,11 +84,11 @@ try {
       assert.ok(colors.length >= 5);
       for (const sample of colors) assert.ok(contrast(sample.color, sample.background) >= 4.5, `${theme}: insufficient contrast for ${sample.text}`);
       fs.mkdirSync(path.join(product, 'artifacts/qa'), { recursive: true });
-      await page.screenshot({ path: path.join(product, `artifacts/qa/editor-links-${theme}.png`) });
+      await page.screenshot({ path: path.join(product, `artifacts/qa/editor-links-${theme.replace(':', '-')}.png`) });
     }
   }
   if (!process.env.LINK_QA_CASE || process.env.LINK_QA_CASE === 'click') {
-    await open('midnight-violet');
+    await open('flexoki:dark');
     const expectPopup = async (text, modifier, destination) => {
       const popupPromise = browser.waitForTarget(target => target.url() === destination, { timeout: 3000 });
       await clickText(text, modifier);
@@ -125,7 +125,7 @@ try {
   }
   if (!process.env.LINK_QA_CASE || process.env.LINK_QA_CASE === 'mobile') {
     await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
-    await open('midnight-violet');
+    await open('flexoki:dark');
     const icons = await page.$$('.live-md-external-link');
     assert.equal(icons.length, 4, 'Every safe inline link needs its own external-link button');
     // Rendered table links open on a plain tap, so they carry no separate button.

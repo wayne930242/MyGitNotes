@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { themeColor, tokenAlpha } from '../../lib/theme-color.js';
 import type { NoteGraphNode } from '@mygitnotes/core/note-graph';
 
 export const nodeRadius = (node: NoteGraphNode) => 3.5 + Math.min(5, Math.sqrt(node.inDegree || 0) * 1.5);
@@ -28,7 +29,7 @@ export function useGraphPainting({ nodes, hoverNode, focusNodeId, neighbors, isD
       if (isHovered) {
         ctx.beginPath();
         ctx.arc(n.x, n.y, radius + 4 / globalScale, 0, 2 * Math.PI, false);
-        ctx.fillStyle = isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(120, 149, 181, 0.16)';
+        ctx.fillStyle = themeColor(tokenAlpha('muted', 20));
         ctx.fill();
       }
 
@@ -40,14 +41,14 @@ export function useGraphPainting({ nodes, hoverNode, focusNodeId, neighbors, isD
 
       // Border stroke
       ctx.lineWidth = 1.5 / globalScale;
-      ctx.strokeStyle = isDark ? '#1e293b' : '#ffffff';
+      ctx.strokeStyle = themeColor('var(--color-bg)');
       ctx.stroke();
 
       if (n.id === focusNodeId) {
         ctx.beginPath();
         ctx.arc(n.x, n.y, radius + 5 / globalScale, 0, 2 * Math.PI);
         ctx.lineWidth = 2 / globalScale;
-        ctx.strokeStyle = isDark ? '#cbd5e1' : '#64748b';
+        ctx.strokeStyle = themeColor('var(--color-muted)');
         ctx.stroke();
       }
 
@@ -114,11 +115,11 @@ export function useGraphPainting({ nodes, hoverNode, focusNodeId, neighbors, isD
       if (!box) continue;
       occupied.push(box);
       ctx.globalAlpha = n.external ? 0.45 : 1;
-      ctx.fillStyle = isDark ? 'rgba(15,23,42,0.9)' : 'rgba(248,250,252,0.94)';
+      ctx.fillStyle = themeColor(tokenAlpha('surface', 92));
       ctx.beginPath();
       ctx.roundRect(box.x, box.y, w, h, 4 / scale);
       ctx.fill();
-      ctx.fillStyle = isDark ? focused ? '#f1f5f9' : '#cbd5e1' : focused ? '#334155' : '#64748b';
+      ctx.fillStyle = themeColor(focused ? 'var(--color-text)' : 'var(--color-muted)');
       visible.forEach((text, i) => ctx.fillText(text, box.x + w / 2, box.y + (11.5 + i * 17) / scale));
     }
     ctx.restore();

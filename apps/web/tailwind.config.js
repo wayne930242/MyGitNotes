@@ -1,3 +1,5 @@
+const token = name => `color-mix(in srgb, var(--color-${name}) calc(<alpha-value> * 100%), transparent)`;
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -6,6 +8,32 @@ export default {
   ],
   darkMode: 'class',
   theme: {
+    // Every colour class resolves to a theme token; the default Tailwind palette is not available.
+    colors: {
+      transparent: 'transparent',
+      current: 'currentColor',
+      inherit: 'inherit',
+      canvas: token('bg'),
+      surface: token('surface'),
+      sidebar: token('sidebar'),
+      line: token('border'),
+      fg: token('text'),
+      muted: token('muted'),
+      primary: { DEFAULT: token('primary'), hover: token('primary-hover'), soft: token('primary-soft') },
+      'on-primary': token('on-primary'),
+      selection: token('selection'),
+      code: token('code-bg'),
+      danger: { DEFAULT: token('danger'), soft: token('danger-soft') },
+      'on-danger': token('on-danger'),
+      warning: { DEFAULT: token('warning'), soft: token('warning-soft') },
+      'on-warning': token('on-warning'),
+      success: { DEFAULT: token('success'), soft: token('success-soft') },
+      'on-success': token('on-success'),
+      info: { DEFAULT: token('info'), soft: token('info-soft') },
+      'on-info': token('on-info'),
+      scrim: token('scrim'),
+      accent: Object.fromEntries([1, 2, 3, 4, 5, 6].map(index => [index, token(`accent-${index}`)])),
+    },
     extend: {
       fontFamily: {
         sans: ['var(--font-body)'],
@@ -19,51 +47,6 @@ export default {
         xl: 'var(--radius-panel)',
         '2xl': 'var(--radius-dialog)',
         '3xl': 'var(--radius-dialog)',
-      },
-      colors: {
-        primary: {
-          50: 'var(--color-primary-light)',
-          100: 'var(--color-primary-light)',
-          200: 'var(--color-primary-light)',
-          300: 'var(--color-primary)',
-          400: 'var(--color-primary)',
-          500: 'var(--color-primary)',
-          600: 'var(--color-primary)',
-          700: 'var(--color-primary-hover)',
-          800: 'var(--color-primary-hover)',
-          900: 'var(--color-primary-hover)',
-          DEFAULT: 'var(--color-primary)',
-          hover: 'var(--color-primary-hover)',
-          light: 'var(--color-primary-light)',
-        },
-        indigo: {
-          50: 'var(--color-primary-light)',
-          100: 'var(--color-primary-light)',
-          200: 'var(--color-primary-light)',
-          300: 'var(--color-primary)',
-          400: 'var(--color-primary)',
-          500: 'var(--color-primary)',
-          600: 'var(--color-primary)',
-          700: 'var(--color-primary-hover)',
-          800: 'var(--color-primary-hover)',
-          900: 'var(--color-primary-hover)',
-          950: 'var(--color-primary-light)',
-        },
-        palette: {
-          bg: 'var(--color-bg)',
-          surface: 'var(--color-surface)',
-          sidebar: 'var(--color-sidebar)',
-          border: 'var(--color-border)',
-          text: 'var(--color-text)',
-          muted: 'var(--color-muted)',
-        },
-        brand: {
-          50: 'var(--color-primary-light)',
-          100: 'var(--color-primary-light)',
-          500: 'var(--color-primary)',
-          600: 'var(--color-primary)',
-          700: 'var(--color-primary-hover)',
-        },
       },
     },
   },

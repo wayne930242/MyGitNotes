@@ -34,8 +34,8 @@ const visit = route => page.goto(base + route, { waitUntil: 'networkidle0' });
 try {
   await page.setViewport({ width: 1440, height: 1000 });
   await visit('/settings');
-  for (const theme of ['clean-indigo', 'warm-sepia', 'forest-emerald', 'github-dark', 'nord-arctic', 'midnight-violet']) {
-    await page.evaluate(theme => localStorage.setItem('github_notes_theme', theme), theme);
+  for (const theme of ['flexoki','github','catppuccin','rose-pine','gruvbox','tokyo-night','carbon','solarized','everforest'].flatMap(family => [`${family}:light`, `${family}:dark`])) {
+    await page.evaluate(theme => { localStorage.setItem('github_notes_theme', theme.split(':')[0]); localStorage.setItem('github_notes_theme_mode', theme.split(':')[1]); }, theme);
     await visit('/settings');
     await page.focus('#settings-manifest textarea');
     const colors = await page.$eval('#settings-manifest textarea', element => {
@@ -52,7 +52,7 @@ try {
     await page.keyboard.type(original);
   }
   assert.deepEqual(errors, []);
-  console.log('PASS focused editable manifest caret in all six themes');
+  console.log('PASS focused editable manifest caret in all 18 theme variants');
 } finally {
   await browser.close(); await new Promise(resolve => server.close(resolve));
   fs.rmSync(root, { recursive: true, force: true });

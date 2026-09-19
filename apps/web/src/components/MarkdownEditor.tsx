@@ -37,7 +37,7 @@ export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEdi
   const { t } = useTranslation();
 
   return (
-    <div className="editor-mode-switch flex items-center bg-slate-200/70 dark:bg-slate-800 p-0.5 rounded-lg text-xs font-medium" role="group" aria-label="Editor mode">
+    <div className="editor-mode-switch flex items-center bg-line/70 p-0.5 rounded-lg text-xs font-medium" role="group" aria-label="Editor mode">
       <Select
         className="editor-mode-select"
         aria-label="Editor mode"
@@ -47,7 +47,7 @@ export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEdi
       />
       {([['live', t('editor.livePreview'), Eye], ['raw', t('editor.source'), Code2]] as const).map(([value, label, Icon]) => (
         <button
-          className={`editor-mode-button flex items-center gap-1 px-3 py-1.5 rounded-md transition ${mode === value ? 'bg-white dark:bg-slate-900 shadow-sm hover:opacity-90' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5'}`}
+          className={`editor-mode-button flex items-center gap-1 px-3 py-1.5 rounded-md transition ${mode === value ? 'bg-surface shadow-sm hover:opacity-90' : 'text-muted hover:text-fg hover:bg-fg/5'}`}
           key={value}
           aria-pressed={mode === value}
           onClick={() => onChange(value)}
@@ -183,12 +183,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
         {pickerCandidates.map(note => <button type="button" key={note.path} onClick={() => insertPicked(note)}>{note.title}<small>{note.notebookId} · {note.path}</small></button>)}
       </div>}
       {mode === 'live' && isMarkdown ? (
-        <React.Suspense fallback={<p className="p-6 text-sm text-slate-400">{t('editor.loadingEditor')}</p>}>
+        <React.Suspense fallback={<p className="p-6 text-sm text-muted">{t('editor.loadingEditor')}</p>}>
           <LiveMarkdownEditor key={path} ref={live} content={content} notePath={path} readOnly={readOnly} onChange={onChange} onCaret={onCaret} ariaLabel={ariaLabel} />
         </React.Suspense>
       ) : (
-        <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900">
-          {!compact && <div className="px-3 py-1 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between gap-4">
+        <div className="flex-1 flex flex-col min-h-0 bg-surface">
+          {!compact && <div className="px-3 py-1 bg-sidebar border-b border-line text-[11px] font-semibold text-muted uppercase tracking-wider flex items-center justify-between gap-4">
             <span>{isMarkdown ? t('editor.rawSource') : t('editor.plainTextSource')}</span>
             <span className="font-mono truncate">{path}</span>
           </div>}
@@ -199,7 +199,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
             <div
               data-source-line-numbers
               aria-hidden="true"
-              className="w-12 shrink-0 overflow-hidden border-r border-slate-200/70 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900 text-slate-400/70 dark:text-slate-500/70"
+              className="w-12 shrink-0 overflow-hidden border-r border-line/70 bg-sidebar/60 text-muted/70"
             >
               <div ref={sourceLineNumbers} className="py-4 pr-3 text-right font-mono text-xs tabular-nums" style={{ lineHeight: '1.421875rem' }}>
                 {Array.from({ length: sourceLineCount }, (_, index) => {
@@ -209,7 +209,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
                       key={index}
                       data-line-number
                       data-active-line={line === activeSourceLine ? 'true' : undefined}
-                      className={`origin-right transition-[color,opacity,transform,font-weight] duration-150 ${line === activeSourceLine ? 'scale-[1.08] font-semibold text-slate-600 dark:text-slate-300' : ''}`}
+                      className={`origin-right transition-[color,opacity,transform,font-weight] duration-150 ${line === activeSourceLine ? 'scale-[1.08] font-semibold text-muted' : ''}`}
                     >
                       {line}
                     </div>
@@ -235,7 +235,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
                 if (sourceLineNumbers.current) sourceLineNumbers.current.style.transform = `translateY(-${event.currentTarget.scrollTop}px)`;
               }}
               wrap="off"
-              className="flex-1 min-w-0 min-h-0 px-4 py-4 font-mono text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 resize-none focus:outline-none"
+              className="flex-1 min-w-0 min-h-0 px-4 py-4 font-mono text-sm text-fg bg-surface resize-none focus:outline-none"
               style={{ lineHeight: '1.421875rem' }}
               spellCheck={false}
             />

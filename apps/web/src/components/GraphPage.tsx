@@ -26,6 +26,7 @@ import { GraphTool } from './graph/GraphTool.js';
 import { ScreenEditRow } from './ScreenDialogs.js';
 import { useGraphMinimap } from './graph/useGraphMinimap.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
+import { themeColor, tokenAlpha } from '../lib/theme-color.js';
 import './graph/graph-editing.css';
 
 type LayoutNode = GraphLayout['nodes'][number];
@@ -158,7 +159,7 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
     }) };
   }, [graph, matching, visiblePaths.paths, layout, showOrphans, filters?.neighbors, filters?.value.showHidden, activeLane?.notebookId]);
   const colors = useMemo(() => graphColorGroups(graphData.nodes, notebooks, appearance), [graphData, notebooks, appearance]);
-  const nodeColor = useCallback((node: NoteGraphNode) => colors.find(group => group.key === graphColorGroup(node, notebooks, appearance.mode).key)?.color || '#94a3b8', [colors, notebooks, appearance]);
+  const nodeColor = useCallback((node: NoteGraphNode) => themeColor(colors.find(group => group.key === graphColorGroup(node, notebooks, appearance.mode).key)?.color || 'var(--color-muted)'), [colors, notebooks, appearance]);
   const changeAppearance = (value: GraphAppearance) => { setAppearance(value); try { localStorage.setItem(GRAPH_APPEARANCE_KEY, JSON.stringify(value)); setAppearanceError(false); } catch { setAppearanceError(true); } };
   const isDark = document.documentElement.classList.contains('dark');
   const currentLayout = (): GraphLayout => {
@@ -394,8 +395,8 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
         if (expanded.has(node.id) || closing.has(node.id)) return;
         const x = node.x || 0, y = node.y || 0, radius = selected.includes(node.id) ? 9 : 6;
         ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fillStyle = nodeColor(node); ctx.globalAlpha = showOutside && laneIds.length && !laneMembers.has(node.id) ? .25 : node.external ? .4 : 1; ctx.fill();
-        if (selected.includes(node.id)) { ctx.strokeStyle = isDark ? '#fff' : '#222'; ctx.lineWidth = 2 / scale; ctx.stroke(); }
-        ctx.font = `${12 / scale}px sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = isDark ? '#cbd5e1' : '#475569';
+        if (selected.includes(node.id)) { ctx.strokeStyle = themeColor('var(--color-text)'); ctx.lineWidth = 2 / scale; ctx.stroke(); }
+        ctx.font = `${12 / scale}px sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = themeColor('var(--color-muted)');
         ctx.fillText(node.title, x, y + radius + 15 / scale); ctx.globalAlpha = 1;
       }} nodePointerAreaPaint={(node: Node, color, ctx) => { if (expanded.has(node.id)) return; ctx.beginPath(); ctx.arc(node.x || 0, node.y || 0, 12, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill(); }}
       linkCanvasObjectMode={() => 'replace'} linkCanvasObject={(edge: any, ctx, scale) => {
@@ -403,7 +404,7 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
         const end = (from: Node, to: Node) => { const card = layout.nodes.find(n => n.path === from.id && n.expanded); const dx = to.x! - from.x!, dy = to.y! - from.y!; const factor = card ? Math.min((card.width || 360) / 2 / (Math.abs(dx) || 1e-9), (card.height || 300) / 2 / (Math.abs(dy) || 1e-9)) : 8 / Math.max(1, Math.hypot(dx, dy)); return { x: from.x! + dx * Math.min(.49, factor), y: from.y! + dy * Math.min(.49, factor) }; };
         const start = end(a,b), stop = end(b,a), angle = Math.atan2(stop.y-start.y, stop.x-start.x);
         const pending = sessions.get(a.id)?.dirty;
-        ctx.strokeStyle = isDark ? '#64748b' : '#94a3b8'; ctx.lineWidth = (hover === a.id || hover === b.id ? 2 : 1) / scale; ctx.setLineDash(pending ? [5/scale,4/scale] : []);
+        ctx.strokeStyle = themeColor(tokenAlpha('muted', 55)); ctx.lineWidth = (hover === a.id || hover === b.id ? 2 : 1) / scale; ctx.setLineDash(pending ? [5/scale,4/scale] : []);
         ctx.beginPath(); ctx.moveTo(start.x,start.y); ctx.lineTo(stop.x,stop.y); ctx.stroke(); ctx.setLineDash([]);
         ctx.beginPath(); ctx.moveTo(stop.x,stop.y); ctx.lineTo(stop.x-Math.cos(angle-.45)*8/scale,stop.y-Math.sin(angle-.45)*8/scale); ctx.moveTo(stop.x,stop.y); ctx.lineTo(stop.x-Math.cos(angle+.45)*8/scale,stop.y-Math.sin(angle+.45)*8/scale); ctx.stroke();
       }} />
@@ -424,7 +425,7 @@ export function GraphPage({ notebooks, filters, screen, lane, folders = [] }: Gr
         if (gesture?.kind !== 'box') return;
         selectBox(gesture.start, point(event), additive(event)); setGesture(null); setBoxMode(false);
       }} />}
-    {gesture && <svg className="graph-gesture" width={size.width} height={size.height}>{gesture.kind === 'box' ? <rect x={Math.min(gesture.start.x,gesture.end.x)} y={Math.min(gesture.start.y,gesture.end.y)} width={Math.abs(gesture.end.x-gesture.start.x)} height={Math.abs(gesture.end.y-gesture.start.y)} fill="#818cf833" stroke="#818cf8" /> : <line x1={gesture.start.x} y1={gesture.start.y} x2={gesture.end.x} y2={gesture.end.y} stroke="#818cf8" strokeWidth="2" />}</svg>}
+    {gesture && <svg className="graph-gesture" width={size.width} height={size.height}>{gesture.kind === 'box' ? <rect x={Math.min(gesture.start.x,gesture.end.x)} y={Math.min(gesture.start.y,gesture.end.y)} width={Math.abs(gesture.end.x-gesture.start.x)} height={Math.abs(gesture.end.y-gesture.start.y)} style={{ fill: tokenAlpha('primary', 20), stroke: 'var(--color-primary)' }} /> : <line x1={gesture.start.x} y1={gesture.start.y} x2={gesture.end.x} y2={gesture.end.y} style={{ stroke: 'var(--color-primary)' }} strokeWidth="2" />}</svg>}
     {(graphSource.error || matchingPaths.error || visiblePaths.error || lanePaths.error) && <div role="alert" className="graph-notice">{graphSource.error || matchingPaths.error || visiblePaths.error || lanePaths.error}</div>}
     {graphLoading && <p className="graph-empty" role="status">{t('notes.loading')}</p>}
     {!graphLoading && !graphData.nodes.length && <p className="graph-empty" role="status">{t('filters.graphEmpty')}</p>}

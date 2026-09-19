@@ -15,8 +15,8 @@ export const NoteTags: React.FC<{ tags: string[]; chipClassName: string; tagActi
   <div className={`note-tags flex flex-wrap gap-1 ${className}`} onClick={event => event.stopPropagation()}>
     {tags.map(tag => {
       const chip = (
-        <span className={`inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded ${chipClassName}`}>
-          <Tag className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+        <span className={`inline-flex items-center gap-1 bg-sidebar text-muted rounded ${chipClassName}`}>
+          <Tag className="w-2.5 h-2.5 text-muted shrink-0" />
           <span className="min-w-0 break-words">{tag}</span>
         </span>
       );

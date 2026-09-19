@@ -76,13 +76,13 @@ const checkAutoHeight=async()=>{
 try {
  fs.mkdirSync(path.join(product,'artifacts/qa'),{recursive:true});
  await page.goto(base+'/notebooks/example/notes/root.md',{waitUntil:'networkidle0'});
- for(const theme of ['clean-indigo','nord-arctic','midnight-violet']){
-   await page.evaluate(theme=>localStorage.setItem('github_notes_theme',theme),theme);await page.reload({waitUntil:'networkidle0'});await page.waitForSelector(tableRoot);
+ for(const theme of ['flexoki:light','flexoki:dark','catppuccin:dark']){
+   await page.evaluate(theme=>{ localStorage.setItem('github_notes_theme', theme.split(':')[0]); localStorage.setItem('github_notes_theme_mode', theme.split(':')[1]); },theme);await page.reload({waitUntil:'networkidle0'});await page.waitForSelector(tableRoot);
    await page.hover('.live-table-toolbar select');
    const result=await contrast();if(result.ratios.some(ratio=>ratio<4.5))throw Error('Dropdown contrast failed: '+JSON.stringify({theme,...result}));
-   if(result.scheme!==(theme==='clean-indigo'?'light':'dark'))throw Error('Native select uses the wrong color scheme');
+   if(result.scheme!==theme.split(':')[1])throw Error('Native select uses the wrong color scheme');
    await page.click('.live-table-toolbar select');
-   if(theme==='midnight-violet')await page.screenshot({path:product+'/artifacts/qa/table-dark-options.png',fullPage:true});
+   if(theme==='catppuccin:dark')await page.screenshot({path:product+'/artifacts/qa/table-dark-options.png',fullPage:true});
    await page.keyboard.press('Escape');
  }
  for(const mode of ['expanded','fit']){

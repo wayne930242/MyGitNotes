@@ -57,7 +57,7 @@ import type {
   AssetItem,
   ViewMode,
 } from './lib/types.js';
-import { ThemeDefinition, getSavedTheme, applyTheme } from './lib/themes.js';
+import { ThemeChoice, getSavedTheme, applyTheme } from './lib/themes.js';
 import { AuthControls, ConnectionState, AgentAccessSettings } from './components/AuthControls.js';
 import { Header } from './components/Header.js';
 import { KeyboardShortcuts, type PaletteCommand, type ShortcutSurfaceMode } from './components/KeyboardShortcuts.js';
@@ -142,16 +142,18 @@ const AppContent: React.FC = () => {
   }, [filtersOpen]);
   const [createError, setCreateError] = useState('');
   // Theme State
-  const [currentTheme, setCurrentTheme] = useState<ThemeDefinition>(() => getSavedTheme());
+  const [currentTheme, setCurrentTheme] = useState<ThemeChoice>(() => getSavedTheme());
 
   useEffect(() => {
     applyTheme(currentTheme);
+    if (currentTheme.mode !== 'system') return;
+    const query = window.matchMedia('(prefers-color-scheme: dark)');
+    const follow = () => applyTheme(currentTheme);
+    query.addEventListener('change', follow);
+    return () => query.removeEventListener('change', follow);
   }, [currentTheme]);
 
-  const handleSelectTheme = (theme: ThemeDefinition) => {
-    setCurrentTheme(theme);
-    applyTheme(theme);
-  };
+  const handleSelectTheme = (theme: ThemeChoice) => setCurrentTheme(theme);
 
   const [editingNote, setEditingNote] = useState<NoteListItem | null>(null);
   const [fileEditorRevision, setFileEditorRevision] = useState(0);
@@ -1109,12 +1111,12 @@ const AppContent: React.FC = () => {
   const dockToggle = noteFocus.layout && focusCapacity > 1
     ? <BrowseDockToggle placement={topDock ? 'top' : 'left'} collapsed={noteFocus.view.dock.collapsed} onCollapsedChange={collapsed => noteFocus.setDock({ collapsed })} /> : undefined;
   const browseRegion = (docked: boolean, dockHeight: number) => <>
-              {actionError && <p role="alert" className="mb-3 text-sm text-rose-600">{actionError}</p>}
-              {staleNotice && <p role="alert" className="mb-3 text-sm text-amber-600">{staleNotice}</p>}
-              {listResult.error && <p role="alert" className="mb-3 text-sm text-rose-600">{t('notes.loadFailed', { message: listResult.error })}</p>}
-              {facetsQuery.error && <p role="alert" className="mb-3 text-sm text-rose-600">{t('notes.countsFailed', { message: facetsQuery.error })}</p>}
-              {indexLookup.error && <p role="alert" className="mb-3 text-sm text-rose-600">{t('notes.loadFailed', { message: indexLookup.error })}</p>}
-              {listResult.loading && <p role="status" className="mb-3 text-sm text-slate-500">{t('notes.loading')}</p>}
+              {actionError && <p role="alert" className="mb-3 text-sm text-danger">{actionError}</p>}
+              {staleNotice && <p role="alert" className="mb-3 text-sm text-warning">{staleNotice}</p>}
+              {listResult.error && <p role="alert" className="mb-3 text-sm text-danger">{t('notes.loadFailed', { message: listResult.error })}</p>}
+              {facetsQuery.error && <p role="alert" className="mb-3 text-sm text-danger">{t('notes.countsFailed', { message: facetsQuery.error })}</p>}
+              {indexLookup.error && <p role="alert" className="mb-3 text-sm text-danger">{t('notes.loadFailed', { message: indexLookup.error })}</p>}
+              {listResult.loading && <p role="status" className="mb-3 text-sm text-muted">{t('notes.loading')}</p>}
               {!folderless && <>
                 <Breadcrumbs
                   segments={breadcrumbs}
@@ -1237,14 +1239,14 @@ const AppContent: React.FC = () => {
           }}
         >
           <div className="flex items-center gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+            <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
             <span
-              className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-white shrink-0 shadow-xs"
+              className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-on-primary shrink-0 shadow-xs"
               style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-on-primary)' }}
             >
               {t('nav.coreBaseline')}
             </span>
-            <span className="text-slate-600 dark:text-slate-300">
+            <span className="text-muted">
               {t('nav.coreBanner')}
             </span>
           </div>
@@ -1275,7 +1277,7 @@ const AppContent: React.FC = () => {
         pageCommands={focusCommands} />
 
       {routeError && (
-        <div role="alert" className="px-6 py-3 text-sm text-rose-600">
+        <div role="alert" className="px-6 py-3 text-sm text-danger">
           {routeError.startsWith('route.') ? t(routeError as any) : routeError}{' '}
           <button className="underline" onClick={() => navigate('/notes')}>
             {t('route.goToNotes')}
@@ -1439,19 +1441,19 @@ const AppContent: React.FC = () => {
       {/* Undo Toast Notification (Requirement 2) */}
       {undoToast && (
         <div className="fixed top-20 right-6 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
-          <div className="bg-slate-900/95 dark:bg-slate-800/95 text-white backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-slate-700/80 flex items-center gap-3 text-xs">
+          <div className="bg-surface/95 text-fg backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-line/80 flex items-center gap-3 text-xs">
             <span>
               {t('toast.noteMovedToTrash', { title: undoToast.note.title })}
             </span>
             <button
               onClick={() => handleRestoreNote(undoToast.note)}
-              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-semibold rounded-md transition"
+              className="px-2.5 py-1 bg-warning hover:bg-warning active:scale-95 text-fg font-semibold rounded-md transition"
             >
               {t('common.undo')}
             </button>
             <button
               onClick={() => setUndoToast(null)}
-              className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/10 transition ml-1"
+              className="text-muted hover:text-fg p-1 rounded hover:bg-fg/10 transition ml-1"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -1466,19 +1468,19 @@ const AppContent: React.FC = () => {
       {tagOperations.history.length > 0 && (
         <section className="fixed top-28 sm:top-auto sm:bottom-6 right-4 sm:right-16 left-4 sm:left-auto z-50 flex flex-col gap-2 items-end" aria-label={t('sidebar.recentTagChanges')}>
           {tagOperations.history.map(record => (
-            <div key={record.id} className="bg-slate-900/95 dark:bg-slate-800/95 text-white backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-slate-700/80 flex items-center gap-3 text-xs max-w-sm">
+            <div key={record.id} className="bg-surface/95 text-fg backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-line/80 flex items-center gap-3 text-xs max-w-sm">
               <span>{record.label}</span>
               <button
                 autoFocus
                 onClick={() => void handleUndoTagOperation(record.id)}
-                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-semibold rounded-md transition shrink-0"
+                className="px-2.5 py-1 bg-warning hover:bg-warning active:scale-95 text-fg font-semibold rounded-md transition shrink-0"
               >
                 {t('common.undo')}
               </button>
               <button
                 aria-label={t('sidebar.dismissTagOperation')}
                 onClick={() => tagOperations.dismiss(record.id)}
-                className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/10 transition ml-1 shrink-0"
+                className="text-muted hover:text-fg p-1 rounded hover:bg-fg/10 transition ml-1 shrink-0"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -1534,20 +1536,20 @@ const AppContent: React.FC = () => {
 
       {/* Create New Note Modal */}
       {isNewNoteOpen && (
-        <div className="viewport-overlay fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div
             className="rounded-2xl shadow-2xl border w-full max-w-md max-h-full overflow-y-auto p-4 md:p-6"
             style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
           >
-            <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base mb-4 flex items-center gap-2">
+            <h3 className="font-semibold text-fg text-base mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
               {t('createNote.title')}
             </h3>
 
-            {createError && <p id="create-note-error" role="alert" className="mb-3 text-sm text-red-600">{createError}</p>}
+            {createError && <p id="create-note-error" role="alert" className="mb-3 text-sm text-danger">{createError}</p>}
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5">
                   {t('createNote.noteTitle')}
                 </label>
                 <input
@@ -1555,7 +1557,7 @@ const AppContent: React.FC = () => {
                   placeholder={t('createNote.placeholder')}
                   aria-describedby="create-note-error" value={newNoteTitle}
                   onChange={(e) => setNewNoteTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-black/5 dark:bg-white/5 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:outline-none"
+                  className="w-full px-3 py-2 bg-fg/5 border border-line rounded-lg text-sm text-fg focus:outline-none"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleCreateNewNote();
@@ -1564,7 +1566,7 @@ const AppContent: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5" htmlFor="create-note-folder">
+                <label className="block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5" htmlFor="create-note-folder">
                   {t('createNote.folder')}
                 </label>
                 <input id="create-note-folder" type="text" list="create-note-folders" aria-label={t('createNote.folder')}
@@ -1575,7 +1577,7 @@ const AppContent: React.FC = () => {
 
               {newNoteTemplates.length > 0 && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5">
                     {t('createNote.template')}
                   </label>
                   <Select aria-label={t('createNote.template')} value={newNoteTemplateId} onValueChange={handleTemplateChange}
@@ -1586,7 +1588,7 @@ const AppContent: React.FC = () => {
 
               {newNoteTags.length > 0 && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5">
                     {t('notes.tags')}
                   </label>
                   <div className="flex flex-wrap gap-1.5 py-1">
@@ -1600,17 +1602,17 @@ const AppContent: React.FC = () => {
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5">
                   {t('createNote.initialStatus')}
                 </label>
                 <Select aria-label={t('createNote.initialStatus')} value={newNoteStatus} onValueChange={setNewNoteStatus} options={newNoteStatuses.map(value => ({value,label:value}))} className="w-full" />
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-line">
               <button
                 onClick={() => { setIsNewNoteOpen(false); setNewNoteTags([]); setNewNoteTemplateId(''); }}
-                className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition active:scale-95"
+                className="px-4 py-2 text-xs font-medium text-muted hover:bg-fg/5 rounded-lg transition active:scale-95"
               >
                 {t('common.cancel')}
               </button>

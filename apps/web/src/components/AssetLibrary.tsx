@@ -87,13 +87,13 @@ export function AssetLibrary({ assets, initialAssetPath, initialDirectory, onUpl
         <input aria-label={t('assets.uploadAsset')} type="file" disabled={!onUploadAsset || busy} onChange={upload} className="sr-only" />
       </label>
     </div>
-    {error && <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
+    {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     {!renderSidebar && <div className="flex flex-wrap gap-2">{folders.filter(f => f && f !== directory).map(folder => <button key={folder} className="ui-button" disabled={busy} onClick={() => { setDirectory(folder); setSelectedPath(''); }}>{folder}</button>)}</div>}
     {visible.length === 0 ? <p className="text-sm theme-muted py-10 text-center">{t('assets.emptyFolder')}</p> : <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
       {visible.map(asset => <button key={asset.path} aria-label={`Select ${asset.name}`} aria-pressed={selectedPath === asset.path} disabled={busy} onClick={() => { setSelectedPath(asset.path); setConfirmDelete(false); }} className="asset-tile relative border rounded-xl overflow-hidden text-left transition hover:shadow-sm" style={{ backgroundColor:'var(--color-surface)',borderColor:selectedPath === asset.path ? 'var(--color-primary)' : 'var(--color-border)',boxShadow:selectedPath === asset.path ? '0 0 0 1px var(--color-primary)' : undefined }}>
-        <div className="h-28 bg-black/5 dark:bg-white/5 flex items-center justify-center">{imageFile(asset.name) ? <img src={asset.rawUrl} alt={asset.name} className="w-full h-full object-cover" /> : <File className="w-9 h-9 theme-muted" />}</div>
+        <div className="h-28 bg-fg/5 flex items-center justify-center">{imageFile(asset.name) ? <img src={asset.rawUrl} alt={asset.name} className="w-full h-full object-cover" /> : <File className="w-9 h-9 theme-muted" />}</div>
         <div className="p-2.5"><div className="text-xs font-medium truncate" title={asset.name}>{asset.name}</div><div className="text-[10px] theme-muted mt-1">{(asset.size/1024).toFixed(1)} KB</div></div>
-        {selectedPath === asset.path && <Check className="absolute right-2 top-2 w-5 h-5 bg-white text-emerald-600 rounded-full" />}
+        {selectedPath === asset.path && <Check className="absolute right-2 top-2 w-5 h-5 bg-surface text-success rounded-full" />}
       </button>)}
     </div>}
     {selected && <div className="border-t theme-border pt-3 flex flex-wrap items-center gap-2">
@@ -117,7 +117,7 @@ export function AssetLibrary({ assets, initialAssetPath, initialDirectory, onUpl
       <input aria-label="Move asset to folder" list={folderList} placeholder={t('assets.destinationPlaceholder')} value={destination} disabled={!selected || busy} onChange={e => setDestination(e.target.value)} className="ui-control min-w-0 flex-1" />
       <button className={button} disabled={!selected || busy || destination === (selected.directory || '')} onClick={() => selected && void run(async () => { const moved = await onMoveAsset(selected, destination); setDirectory(destination); setSelectedPath(moved.path); })}>{t('assets.move')}</button>
     </div>}
-    {preview && <div role="dialog" aria-label="Asset preview" aria-modal="true" className="viewport-overlay fixed inset-0 z-[70] bg-slate-950/80 flex items-center justify-center p-6" onClick={() => setPreview(null)}>
+    {preview && <div role="dialog" aria-label="Asset preview" aria-modal="true" className="viewport-overlay fixed inset-0 z-[70] bg-scrim/80 flex items-center justify-center p-6" onClick={() => setPreview(null)}>
       <div className="ui-dialog overflow-hidden min-w-0 max-w-4xl max-h-[85dvh] shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="p-3 flex items-center gap-4 border-b theme-border"><ImageIcon className="w-4 h-4" /><span className="text-sm mr-auto min-w-0 truncate">{preview.name}</span><a href={preview.rawUrl} target="_blank" rel="noopener noreferrer" className="text-xs underline shrink-0">{t('assets.openOriginal')}</a><button aria-label="Close asset preview" onClick={() => setPreview(null)} className="ui-icon-button"><X className="w-5 h-5" /></button></div>
         {imageFile(preview.name) ? <img src={preview.rawUrl} alt={preview.name} className="max-h-[70vh] max-w-full object-contain" /> : <p className="p-10 text-sm">{t('assets.openToViewFormat')}</p>}
