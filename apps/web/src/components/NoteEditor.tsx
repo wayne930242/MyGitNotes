@@ -449,6 +449,10 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
           lastSaved.current = { content, metadata };
           clearLocalDraft(draftScope || branch, note.path);
           absorbTimestamps(saved);
+          // The file on disk now matches this draft; adopt it as the base so a later
+          // remote check does not treat the app's own write as an external change.
+          current.current = { ...current.current, baseNote: saved };
+          setBaseNote(saved);
           setHasUnsavedChanges(false);
         } catch (err) {
           setSaveError((err as Error).message);

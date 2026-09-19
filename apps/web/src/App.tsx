@@ -1062,7 +1062,9 @@ const AppContent: React.FC = () => {
     remoteBase: activeWorkingNotes[note.path]?.base || (committed && typeof committed.content === 'string' ? committed : undefined),
     conflictReason: activeWorkingNotes[note.path]?.blocked,
     onMarkConflict: remote ? (reason, draft, base) => { stageWorkingNote(draft, base, reason); } : undefined,
-    onReadRemote: remote && activeWorkingNotes[note.path]?.base !== null ? readNote : undefined,
+    onReadRemote: remote
+      ? (activeWorkingNotes[note.path]?.base !== null ? readNote : undefined)
+      : (path: string) => readNote(path, note.notebookId),
     branch,
     draftScope: `${sourceId}:${branch}`,
   });

@@ -260,13 +260,15 @@ app.get('/api/templates/render', (req: Request, res: Response) => {
 app.get('/api/notes/read', (req: Request, res: Response) => {
   try {
     const relPath = req.query.path as string;
-    const notebookId = (req.query.notebookId as string) || 'default';
     if (!relPath) {
       return res.status(400).json({ error: 'path query parameter is required' });
     }
+    const config = loadWorkspaceConfig(repoRoot);
+    const notebookId = (req.query.notebookId as string) || classifyResource(relPath, config).notebookId || 'default';
     const note = readNoteFile(repoRoot, relPath, notebookId);
     res.json({ note });
   } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return res.status(404).json({ error: 'Note not found.' });
     res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });

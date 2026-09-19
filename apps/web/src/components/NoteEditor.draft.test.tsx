@@ -51,3 +51,23 @@ it('keeps a recovery draft for edits that were not saved', async () => {
   view.unmount();
   expect(getLocalDraft('src:main', note.path)?.content).toBe('# Alpha\nUnsaved.');
 });
+
+it('does not report its own autosave as an external change on the next remote check', async () => {
+  let diskNote: NoteItem = note;
+  const onSave = vi.fn(async ({ content, metadata }: { content: string; metadata?: Record<string, unknown> }) => {
+    diskNote = { ...note, content, metadata: { ...metadata, updated: `t${onSave.mock.calls.length}` } };
+    return diskNote;
+  });
+  const onReadRemote = vi.fn(async () => diskNote);
+  render(editor({ onSave, onReadRemote }));
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: '# Alpha\nMore.' } });
+
+  await act(async () => { await vi.advanceTimersByTimeAsync(750); });
+  expect(onSave).toHaveBeenCalledTimes(1);
+
+  // Past the remote-check throttle, so the interval fires again and re-reads the note.
+  await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
+  expect(onReadRemote.mock.calls.length).toBeGreaterThan(1);
+  expect(screen.queryByText(/Remote changes merged/i)).toBeNull();
+  expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('# Alpha\nMore.');
+});
