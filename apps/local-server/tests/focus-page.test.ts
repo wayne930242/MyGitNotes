@@ -1,16 +1,14 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, writeFile, symlink, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
 import { FOCUS_PAGE_FILE } from '@mygitnotes/core';
 
 let root: string, server: Server, base: string, url: string;
-const page = { version: 1, focuses: [{ id: 'weekly', notebookId: 'a', name: '週報', division: 'major-left', panes: [
-  { tabs: [{ kind: 'note', path: 'notes/a/guide.md' }] }, { tabs: [{ kind: 'lane', id: 'row' }] }, { tabs: [] },
-] }] };
+const page = { version: 1, focuses: [{ id: 'weekly', notebookId: 'a', name: '週報', division: 'major-left', panes: [{ tabs: [{ kind: 'note', path: 'notes/a/guide.md' }] }, { tabs: [{ kind: 'lane', id: 'row' }] }, { tabs: [] }] }] };
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), 'focus-yaml-'));
   execFileSync('git', ['init', '-b', 'main', root], { stdio: 'pipe' });
@@ -18,16 +16,22 @@ beforeEach(async () => {
   for (const [key, value] of Object.entries({ GITHUB_NOTES_SOURCE: 'local', GITHUB_NOTES_LOCAL_PATH: root, VERCEL: '', APP_URL: '' })) vi.stubEnv(key, value);
   server = createServer(createApp(root));
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  base = `http://127.0.0.1:${(server.address() as {port: number}).port}/api`;
+  base = `http://127.0.0.1:${(server.address() as { port: number; }).port}/api`;
   url = `${base}/focus-page`;
 });
-afterEach(async () => { await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true }); vi.unstubAllEnvs(); });
+afterEach(async () => {
+  await new Promise<void>(resolve => server.close(() => resolve()));
+  await rm(root, { recursive: true, force: true });
+  vi.unstubAllEnvs();
+});
 const put = (value: unknown, revision = 'missing') => fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: value, revision }) });
 
 it('persists named Focus YAML, rejects stale or invalid writes and joins Git review', async () => {
   expect(await fetch(url).then(r => r.json())).toMatchObject({ page: { version: 1, focuses: [] }, writable: true, revision: 'missing', path: FOCUS_PAGE_FILE });
-  const saved = await put(page); expect(saved.status).toBe(200);
-  const record = await saved.json(); expect(record.page).toEqual(page);
+  const saved = await put(page);
+  expect(saved.status).toBe(200);
+  const record = await saved.json();
+  expect(record.page).toEqual(page);
   expect(await readFile(path.join(root, FOCUS_PAGE_FILE), 'utf8')).toContain('name: 週報');
   expect((await put({ version: 1, focuses: [] })).status).toBe(409);
   const duplicate = { ...page, focuses: [page.focuses[0], { ...page.focuses[0], id: 'copy' }] };
@@ -57,7 +61,8 @@ it('protects Core, rejects symlink targets and reports invalid YAML without repl
 it('rewrites Focus tabs when the file manager moves a note', async () => {
   await mkdir(path.join(root, 'notes/a/one'), { recursive: true });
   await writeFile(path.join(root, 'notes/a/guide.md'), '# Guide\n');
-  execFileSync('git', ['add', '.'], { cwd: root }); execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'fixture'], { cwd: root, stdio: 'pipe' });
+  execFileSync('git', ['add', '.'], { cwd: root });
+  execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'fixture'], { cwd: root, stdio: 'pipe' });
   expect((await put(page)).status).toBe(200);
   const { revision } = await fetch(`${base}/files?notebookId=a`).then(r => r.json());
   const moved = await fetch(`${base}/files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision, command: { kind: 'move', notebookId: 'a', path: 'notes/a/guide.md', destination: 'notes/a/one/guide.md' } }) });

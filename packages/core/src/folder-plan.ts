@@ -3,16 +3,17 @@ import YAML from 'yaml';
 import { z } from 'zod';
 import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js';
 import { relocateWorkspaceDocuments } from './workspace-documents.js';
-import type { NotebookConfig, FolderItem } from './types.js';
+import type { FolderItem, NotebookConfig } from './types.js';
 
 const relative = z.string().max(512).refine(value => !value || !/[\\\0]/.test(value) && value.split('/').every(part => part && part !== '.' && part !== '..'));
-export const FolderCommandSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('create'), notebookId: z.string(), parent: relative, name: relative.refine(value => Boolean(value) && !value.includes('/')), title: z.string().trim().min(1).max(120).optional() }).strict(),
-  z.object({ kind: z.literal('move'), notebookId: z.string(), path: relative.refine(Boolean), parent: relative, before: relative.optional() }).strict(),
-  z.object({ kind: z.literal('delete'), notebookId: z.string(), path: relative.refine(Boolean), destination: relative }).strict(),
-]);
+export const FolderCommandSchema = z.discriminatedUnion('kind', [z.object({ kind: z.literal('create'), notebookId: z.string(), parent: relative, name: relative.refine(value => Boolean(value) && !value.includes('/')), title: z.string().trim().min(1).max(120).optional() }).strict(), z.object({ kind: z.literal('move'), notebookId: z.string(), path: relative.refine(Boolean), parent: relative, before: relative.optional() }).strict(), z.object({ kind: z.literal('delete'), notebookId: z.string(), path: relative.refine(Boolean), destination: relative }).strict()]);
 export type FolderCommand = z.infer<typeof FolderCommandSchema>;
-export interface FolderSnapshot { notebooks: NotebookConfig[]; directories: string[]; protectedPaths: string[]; files: Map<string, string> }
+export interface FolderSnapshot {
+  notebooks: NotebookConfig[];
+  directories: string[];
+  protectedPaths: string[];
+  files: Map<string, string>;
+}
 const inside = (file: string, dir: string) => file === dir || file.startsWith(dir + '/');
 const parentOf = (file: string) => path.posix.dirname(file) === '.' ? '' : path.posix.dirname(file);
 
@@ -22,8 +23,11 @@ export function relocateLinks(raw: string, oldFile: string, newFile: string, rel
     if (!href || /^(?:[a-z][a-z\d+.-]*:|#|\/\/)/i.test(href)) return href;
     if (href.startsWith('/raw-assets/') && !href.startsWith('/raw-assets/by-hash/')) {
       const match = /^([^?#]*)(.*)$/.exec(href.slice('/raw-assets/'.length))!;
-      try { return '/raw-assets/' + relocate(decodeURIComponent(match[1])).split('/').map(encodeURIComponent).join('/') + match[2]; }
-      catch { return href; }
+      try {
+        return '/raw-assets/' + relocate(decodeURIComponent(match[1])).split('/').map(encodeURIComponent).join('/') + match[2];
+      } catch {
+        return href;
+      }
     }
     if (href.startsWith('/api/files/raw?')) {
       const url = new URL(href, 'https://workspace.invalid');
@@ -33,7 +37,11 @@ export function relocateLinks(raw: string, oldFile: string, newFile: string, rel
     }
     const match = /^([^?#]*)(.*)$/.exec(href)!;
     let decoded: string;
-    try { decoded = decodeURIComponent(match[1]); } catch { return href; }
+    try {
+      decoded = decodeURIComponent(match[1]);
+    } catch {
+      return href;
+    }
     const root = decoded.startsWith('/') || decoded.startsWith('notes/');
     const target = root ? decoded.replace(/^\//, '') : path.posix.normalize(path.posix.join(path.posix.dirname(oldFile), decoded));
     const moved = relocate(target);
@@ -43,14 +51,13 @@ export function relocateLinks(raw: string, oldFile: string, newFile: string, rel
     return next + match[2];
   };
   // Preserve frontmatter, fenced/inline code. Handle inline destinations and reference definitions.
-  return raw.replace(/(^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$))|(^\s*(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\s*\3[^\n]*(?:\n|$))|(`+)[\s\S]*?\4|(!?\[[^\]\n]*\]\()(<[^>\n]*>|(?:\\.|[^\s()])+)([^\n)]*\))|(^ {0,3}\[[^\]\n]+\]:\s*)(<[^>\n]*>|\S+)/gm,
-    (all, front, fence, _marker, code, start, destination, end, ref, refDest) => {
-      if (front || fence || code) return all;
-      const value = destination || refDest;
-      const angle = value.startsWith('<');
-      const next = rewrite(angle ? value.slice(1, -1) : value);
-      return (start || ref) + (angle ? `<${next}>` : next) + (end || '');
-    });
+  return raw.replace(/(^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$))|(^\s*(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\s*\3[^\n]*(?:\n|$))|(`+)[\s\S]*?\4|(!?\[[^\]\n]*\]\()(<[^>\n]*>|(?:\\.|[^\s()])+)([^\n)]*\))|(^ {0,3}\[[^\]\n]+\]:\s*)(<[^>\n]*>|\S+)/gm, (all, front, fence, _marker, code, start, destination, end, ref, refDest) => {
+    if (front || fence || code) return all;
+    const value = destination || refDest;
+    const angle = value.startsWith('<');
+    const next = rewrite(angle ? value.slice(1, -1) : value);
+    return (start || ref) + (angle ? `<${next}>` : next) + (end || '');
+  });
 }
 
 export function planFolderChange(snapshot: FolderSnapshot, input: unknown) {
@@ -89,9 +96,7 @@ export function planFolderChange(snapshot: FolderSnapshot, input: unknown) {
     files.set(`${destination}/_dir.yml`, YAML.stringify({ title: command.title || command.name }));
   }
   if (source && source !== destination) relocateWorkspaceDocuments(files, { notebooks: snapshot.notebooks, workspace: { default_notebook: snapshot.notebooks[0]?.id } }, notebook.id, relocate);
-  const folders = (): FolderItem[] => sortFolders([...directories].filter(dir => dir.startsWith(root + '/') && isNotebookContent(dir.slice(root.length + 1), notebook)).map(dir => ({
-    notebookId: notebook.id, path: dir.slice(root.length + 1), ...parseFolderConfig(files.get(`${dir}/_dir.yml`) || '', path.posix.basename(dir), dir),
-  })));
+  const folders = (): FolderItem[] => sortFolders([...directories].filter(dir => dir.startsWith(root + '/') && isNotebookContent(dir.slice(root.length + 1), notebook)).map(dir => ({ notebookId: notebook.id, path: dir.slice(root.length + 1), ...parseFolderConfig(files.get(`${dir}/_dir.yml`) || '', path.posix.basename(dir), dir) })));
   const siblings = folders().filter(folder => parentOf(folder.path) === parent);
   if (command.kind !== 'delete') {
     const current = destination.slice(root.length + 1);

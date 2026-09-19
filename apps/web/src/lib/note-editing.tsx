@@ -1,11 +1,15 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import type { NoteItem } from './types.js';
 import type { NoteEditorSharedProps } from '../components/NoteEditor.js';
 
 type Flush = () => Promise<boolean>;
 
 /** Zoom shows a note with its own editor, or with the editor of the host that owns it moved into `slot`. */
-export interface ZoomState { path: string; borrowed: boolean; slot: HTMLElement | null }
+export interface ZoomState {
+  path: string;
+  borrowed: boolean;
+  slot: HTMLElement | null;
+}
 
 /**
  * Places that can show a note's editor: Focus panes and graph cards. A note has one mounted editor,
@@ -15,25 +19,38 @@ export class NoteHosts {
   private hosts = new Map<string, string[]>();
   private listeners = new Set<() => void>();
   private version = 0;
-  subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
   snapshot = () => this.version;
-  private emit() { this.version++; this.listeners.forEach(listener => listener()); }
-  owner(path: string): string | undefined { return this.hosts.get(path)?.[0]; }
+  private emit() {
+    this.version++;
+    this.listeners.forEach(listener => listener());
+  }
+  owner(path: string): string | undefined {
+    return this.hosts.get(path)?.[0];
+  }
   register(path: string, id: string) {
     const ids = this.hosts.get(path) ?? [];
     if (ids.includes(id)) return;
-    this.hosts.set(path, [...ids, id]); this.emit();
+    this.hosts.set(path, [...ids, id]);
+    this.emit();
   }
   release(path: string, id: string) {
     const ids = (this.hosts.get(path) ?? []).filter(other => other !== id);
-    if (ids.length) this.hosts.set(path, ids); else this.hosts.delete(path);
+    if (ids.length) this.hosts.set(path, ids);
+    else this.hosts.delete(path);
     this.emit();
   }
   /** Makes `id` the owner; it must be registered for `path`. */
   claim(path: string, id: string) {
     const ids = this.hosts.get(path) ?? [];
     if (!ids.includes(id) || ids[0] === id) return;
-    this.hosts.set(path, [id, ...ids.filter(other => other !== id)]); this.emit();
+    this.hosts.set(path, [id, ...ids.filter(other => other !== id)]);
+    this.emit();
   }
 }
 
@@ -67,11 +84,13 @@ export const useEditorRegistry = () => useContext(RegistryContext);
 
 /** Tracks mounted editors so a caller can save their pending edits before it unmounts them. */
 export function useNoteEditorRegistry() {
-  const editors = useRef(new Set<{ path: string; flush: Flush }>());
+  const editors = useRef(new Set<{ path: string; flush: Flush; }>());
   const register = useCallback((path: string, flush: Flush) => {
     const entry = { path, flush };
     editors.current.add(entry);
-    return () => { editors.current.delete(entry); };
+    return () => {
+      editors.current.delete(entry);
+    };
   }, []);
   /** Saves the editors of `paths`, or all of them; false when one could not be saved. */
   const flushEditors = useCallback(async (paths?: readonly string[]) => {
@@ -84,9 +103,7 @@ export function useNoteEditorRegistry() {
   return { register, flushEditors };
 }
 
-export function NoteEditingProvider({ register, children, ...value }: Omit<NoteEditingValue, 'zoom' | 'setZoom' | 'hosts' | 'claimEditor'> & {
-  register: (path: string, flush: Flush) => () => void; children: ReactNode;
-}) {
+export function NoteEditingProvider({ register, children, ...value }: Omit<NoteEditingValue, 'zoom' | 'setZoom' | 'hosts' | 'claimEditor'> & { register: (path: string, flush: Flush) => () => void; children: ReactNode; }) {
   const [zoom, setZoom] = useState<ZoomState | null>(null);
   const [hosts] = useState(() => new NoteHosts());
   const { editorProps, flushEditors, refreshNotes, closeZoom, addToFocus } = value;
@@ -100,17 +117,22 @@ export function NoteEditingProvider({ register, children, ...value }: Omit<NoteE
       try {
         if (!await flushEditors([path])) return false;
         await refreshNotes();
-      } catch { return false; }
+      } catch {
+        return false;
+      }
       hosts.claim(path, id);
       return true;
     });
     claims.current.set(path, queued);
-    queued.finally(() => { if (claims.current.get(path) === queued) claims.current.delete(path); });
+    queued.finally(() => {
+      if (claims.current.get(path) === queued) claims.current.delete(path);
+    });
     return queued;
   }, [flushEditors, refreshNotes, hosts]);
-  const context = useMemo(() => ({ editorProps, hosts, claimEditor, flushEditors, refreshNotes, closeZoom, addToFocus, zoom, setZoom }),
-    [editorProps, hosts, claimEditor, flushEditors, refreshNotes, closeZoom, addToFocus, zoom]);
-  return <RegistryContext.Provider value={register}>
-    <NoteEditingContext.Provider value={context}>{children}</NoteEditingContext.Provider>
-  </RegistryContext.Provider>;
+  const context = useMemo(() => ({ editorProps, hosts, claimEditor, flushEditors, refreshNotes, closeZoom, addToFocus, zoom, setZoom }), [editorProps, hosts, claimEditor, flushEditors, refreshNotes, closeZoom, addToFocus, zoom]);
+  return (
+    <RegistryContext.Provider value={register}>
+      <NoteEditingContext.Provider value={context}>{children}</NoteEditingContext.Provider>
+    </RegistryContext.Provider>
+  );
 }

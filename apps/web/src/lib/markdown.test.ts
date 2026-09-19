@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('dompurify', () => ({
-  default: { sanitize: (html: string) => html },
-}));
+vi.mock('dompurify', () => ({ default: { sanitize: (html: string) => html } }));
 
 import { renderNote } from './markdown.js';
 import { setWorkspaceNotebooks } from './workspace-links.js';
@@ -253,16 +251,7 @@ describe('renderNote R2 assets', () => {
   });
 
   it('renders images using @/ alias without removing them', () => {
-    const notebooks = [
-      {
-        id: 'blog',
-        title: 'Blog',
-        root: 'blog/src/content/posts',
-        pathAliases: {
-          '@/*': 'blog/src/*',
-        },
-      },
-    ];
+    const notebooks = [{ id: 'blog', title: 'Blog', root: 'blog/src/content/posts', pathAliases: { '@/*': 'blog/src/*' } }];
     setWorkspaceNotebooks(notebooks);
     const html = renderNote('<p><img src="@/assets/images/diag.png" alt="Diagram"></p>', 'blog/src/content/posts/tech/note.md');
     expect(html).toContain('src="/raw-assets/blog/src/assets/images/diag.png"');

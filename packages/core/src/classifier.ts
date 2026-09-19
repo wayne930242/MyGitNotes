@@ -1,10 +1,10 @@
 import path from 'node:path';
 import { ClassifiedResource, ResourceType, WorkspaceConfig } from './types.js';
-import { WORKSPACE_CONFIG_FILENAME, LEGACY_WORKSPACE_CONFIG_FILENAME } from './config.js';
+import { LEGACY_WORKSPACE_CONFIG_FILENAME, WORKSPACE_CONFIG_FILENAME } from './config.js';
 import { workspaceAgentKind } from './workspace-agent.js';
 
 const HIDDEN_PATTERNS = [
-  /(?:^|\/)\.[^/]/,           // Any dotfile/dotdirectory (.git, .github, etc.)
+  /(?:^|\/)\.[^/]/, // Any dotfile/dotdirectory (.git, .github, etc.)
   /(?:^|\/)node_modules\//,
   /(?:^|\/)dist\//,
   /(?:^|\/)build\//,
@@ -24,20 +24,14 @@ export function isHiddenPath(relPath: string): boolean {
 /**
  * Classifies a repository-relative path into its distinct product resource category.
  */
-export function classifyResource(
-  relPath: string,
-  config?: WorkspaceConfig | null
-): ClassifiedResource {
+export function classifyResource(relPath: string, config?: WorkspaceConfig | null): ClassifiedResource {
   const normalized = path.posix.normalize(relPath.replace(/\\/g, '/')).replace(/^\.\//, '');
 
   const agentKind = workspaceAgentKind(relPath);
   if (agentKind) return { path: normalized, type: agentKind === 'instructions' ? 'agent_instruction' : 'agent_doc' };
 
   // 1. Workspace / System configuration file (standard or legacy name)
-  if (
-    normalized === WORKSPACE_CONFIG_FILENAME || normalized === `notes/${WORKSPACE_CONFIG_FILENAME}` ||
-    normalized === LEGACY_WORKSPACE_CONFIG_FILENAME || normalized === `notes/${LEGACY_WORKSPACE_CONFIG_FILENAME}`
-  ) {
+  if (normalized === WORKSPACE_CONFIG_FILENAME || normalized === `notes/${WORKSPACE_CONFIG_FILENAME}` || normalized === LEGACY_WORKSPACE_CONFIG_FILENAME || normalized === `notes/${LEGACY_WORKSPACE_CONFIG_FILENAME}`) {
     return { path: normalized, type: 'workspace_config' };
   }
 
@@ -52,11 +46,7 @@ export function classifyResource(
   }
 
   // 4. Agent Docs: docs/agent/** or notes/<notebook>/docs/agent/**
-  if (
-    normalized.startsWith('docs/agent/') ||
-    normalized === 'docs/agent' ||
-    normalized.includes('/docs/agent/')
-  ) {
+  if (normalized.startsWith('docs/agent/') || normalized === 'docs/agent' || normalized.includes('/docs/agent/')) {
     return { path: normalized, type: 'agent_doc' };
   }
 
@@ -101,10 +91,7 @@ export function classifyResource(
           const targetDir = target.replace(/\*$/, '').replace(/\/$/, '');
           if (targetDir && (normalized === targetDir || normalized.startsWith(`${targetDir}/`))) {
             const ext = path.posix.extname(normalized).toLowerCase();
-            if (
-              ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.avif', '.ico', '.pdf', '.mp4', '.webm', '.m4a', '.mp3', '.ogg'].includes(ext) ||
-              normalized.includes('/assets/')
-            ) {
+            if (['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.avif', '.ico', '.pdf', '.mp4', '.webm', '.m4a', '.mp3', '.ogg'].includes(ext) || normalized.includes('/assets/')) {
               return { path: normalized, type: 'asset', notebookId: nb.id };
             }
           }
@@ -125,17 +112,7 @@ export function classifyResource(
   }
 
   // 5. Product source code: packages/**, apps/**, scripts/**, etc.
-  if (
-    normalized.startsWith('packages/') ||
-    normalized.startsWith('apps/') ||
-    normalized.startsWith('scripts/') ||
-    normalized.startsWith('.agents/') ||
-    normalized.startsWith('examples/') ||
-    normalized === 'package.json' ||
-    normalized === 'pnpm-workspace.yaml' ||
-    normalized === 'README.md' ||
-    normalized === '.env.example'
-  ) {
+  if (normalized.startsWith('packages/') || normalized.startsWith('apps/') || normalized.startsWith('scripts/') || normalized.startsWith('.agents/') || normalized.startsWith('examples/') || normalized === 'package.json' || normalized === 'pnpm-workspace.yaml' || normalized === 'README.md' || normalized === '.env.example') {
     return { path: normalized, type: 'product_source' };
   }
 

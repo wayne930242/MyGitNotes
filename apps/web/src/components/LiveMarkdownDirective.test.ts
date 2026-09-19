@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../lib/markdown.js', () => ({
-  renderNote: (text: string) => `<div class="mock-rendered">${text}</div>`,
-}));
+vi.mock('../lib/markdown.js', () => ({ renderNote: (text: string) => `<div class="mock-rendered">${text}</div>` }));
 
 import { LiveMarkdownDirective } from './LiveMarkdownDirective.js';
 import type { EditorView } from '@codemirror/view';
@@ -78,14 +76,15 @@ class MockDomNode {
 }
 
 beforeEach(() => {
-  vi.stubGlobal('document', {
-    createElement: (tag: string) => new MockDomNode(tag),
-  });
-  vi.stubGlobal('Event', class {
-    constructor(readonly type: string) {}
-    stopPropagation() {}
-    preventDefault() {}
-  });
+  vi.stubGlobal('document', { createElement: (tag: string) => new MockDomNode(tag) });
+  vi.stubGlobal(
+    'Event',
+    class {
+      constructor(readonly type: string) {}
+      stopPropagation() {}
+      preventDefault() {}
+    },
+  );
 });
 
 afterEach(() => {
@@ -106,11 +105,7 @@ describe('LiveMarkdownDirective widget', () => {
     const text = ':::info\n重要通知\n:::';
     const directive = new LiveMarkdownDirective(text, 'note.md', 10, false, 'info');
 
-    const mockView = {
-      dispatch: vi.fn(),
-      requestMeasure: vi.fn(),
-      focus: vi.fn(),
-    } as unknown as EditorView;
+    const mockView = { dispatch: vi.fn(), requestMeasure: vi.fn(), focus: vi.fn() } as unknown as EditorView;
 
     const dom = directive.toDOM(mockView);
     expect(dom.className).toContain('live-md-directive');
@@ -131,11 +126,7 @@ describe('LiveMarkdownDirective widget', () => {
     const text = ':::handout{id="H-01" variant="newspaper"}\n剪報報導\n:::';
     const directive = new LiveMarkdownDirective(text, 'note.md', 0, false, 'handout', 'newspaper');
 
-    const mockView = {
-      dispatch: vi.fn(),
-      requestMeasure: vi.fn(),
-      focus: vi.fn(),
-    } as unknown as EditorView;
+    const mockView = { dispatch: vi.fn(), requestMeasure: vi.fn(), focus: vi.fn() } as unknown as EditorView;
 
     const dom = directive.toDOM(mockView);
     const variantSelect = dom.querySelector<HTMLSelectElement>('.live-directive-variant-select');
@@ -147,38 +138,21 @@ describe('LiveMarkdownDirective widget', () => {
     const text = ':::info\n內容文字\n:::';
     const directive = new LiveMarkdownDirective(text, 'note.md', 5, false, 'info');
 
-    const mockView = {
-      dispatch: vi.fn(),
-      requestMeasure: vi.fn(),
-      focus: vi.fn(),
-    } as unknown as EditorView;
+    const mockView = { dispatch: vi.fn(), requestMeasure: vi.fn(), focus: vi.fn() } as unknown as EditorView;
 
     const dom = directive.toDOM(mockView);
     const typeSelect = dom.querySelector<HTMLSelectElement>('.live-directive-type-select')!;
     typeSelect.value = 'sidebar';
     typeSelect.dispatchEvent(new Event('change'));
 
-    expect(mockView.dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        changes: expect.objectContaining({
-          from: 5,
-          to: 5 + text.length,
-          insert: expect.stringContaining(':::sidebar'),
-        }),
-        userEvent: 'input.directive',
-      })
-    );
+    expect(mockView.dispatch).toHaveBeenCalledWith(expect.objectContaining({ changes: expect.objectContaining({ from: 5, to: 5 + text.length, insert: expect.stringContaining(':::sidebar') }), userEvent: 'input.directive' }));
   });
 
   it('supports title field editing from toolbar input', () => {
     const text = ':::info\n內容文字\n:::';
     const directive = new LiveMarkdownDirective(text, 'note.md', 0, false, 'info');
 
-    const mockView = {
-      dispatch: vi.fn(),
-      requestMeasure: vi.fn(),
-      focus: vi.fn(),
-    } as unknown as EditorView;
+    const mockView = { dispatch: vi.fn(), requestMeasure: vi.fn(), focus: vi.fn() } as unknown as EditorView;
 
     const dom = directive.toDOM(mockView);
     const titleInput = dom.querySelector<HTMLInputElement>('.live-directive-title-input')!;
@@ -186,27 +160,14 @@ describe('LiveMarkdownDirective widget', () => {
     titleInput.value = '新標題';
     titleInput.dispatchEvent(new Event('blur'));
 
-    expect(mockView.dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        changes: expect.objectContaining({
-          from: 0,
-          to: text.length,
-          insert: expect.stringContaining(':::info[新標題]'),
-        }),
-        userEvent: 'input.directive',
-      })
-    );
+    expect(mockView.dispatch).toHaveBeenCalledWith(expect.objectContaining({ changes: expect.objectContaining({ from: 0, to: text.length, insert: expect.stringContaining(':::info[新標題]') }), userEvent: 'input.directive' }));
   });
 
   it('switches to inline edit form when clicking edit button', () => {
     const text = ':::info[原標題]\n原有內文\n:::';
     const directive = new LiveMarkdownDirective(text, 'note.md', 0, false, 'info');
 
-    const mockView = {
-      dispatch: vi.fn(),
-      requestMeasure: vi.fn(),
-      focus: vi.fn(),
-    } as unknown as EditorView;
+    const mockView = { dispatch: vi.fn(), requestMeasure: vi.fn(), focus: vi.fn() } as unknown as EditorView;
 
     const dom = directive.toDOM(mockView);
     const editBtn = dom.querySelector<HTMLButtonElement>('.live-directive-edit-btn')!;
@@ -236,4 +197,3 @@ describe('LiveMarkdownDirective widget', () => {
     expect(dom.querySelector('.live-directive-toolbar')).toBeNull();
   });
 });
-

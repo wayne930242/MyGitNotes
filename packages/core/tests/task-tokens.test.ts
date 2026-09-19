@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DUE_EMOJI, START_EMOJI, findToken, getTokenValue, setTokenValue, stripTaskTokens } from '../src/task-tokens.js';
+import { DUE_EMOJI, findToken, getTokenValue, setTokenValue, START_EMOJI, stripTaskTokens } from '../src/task-tokens.js';
 
 describe('start-date token', () => {
   it('finds a start-date token', () => {

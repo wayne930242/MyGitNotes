@@ -30,7 +30,7 @@ const HAN = /\p{Script=Han}/u;
 const WEIGHT = { title: 4, path: 3, metadata: 3, content: 1 };
 
 /** Splits a free-text query into terms; long Han runs also contribute bigrams so partial Chinese phrasing still matches. */
-export function searchTerms(query: string, caseSensitive = false): { term: string; weight: number }[] {
+export function searchTerms(query: string, caseSensitive = false): { term: string; weight: number; }[] {
   const words = (caseSensitive ? query : query.toLowerCase()).split(/[\s,，、。;；:：!！?？()（）「」『』《》〈〉"'“”‘’\[\]]+/u).filter(Boolean);
   const terms = new Map<string, number>();
   for (const word of words) {
@@ -53,10 +53,7 @@ function count(haystack: string, needle: string) {
 }
 
 function metadataText(note: NoteItem) {
-  return Object.entries(note.metadata)
-    .filter(([key]) => key !== 'title')
-    .map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`)
-    .join('\n');
+  return Object.entries(note.metadata).filter(([key]) => key !== 'title').map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`).join('\n');
 }
 
 function snippetFor(content: string, needles: string[], lower: boolean) {
@@ -65,7 +62,10 @@ function snippetFor(content: string, needles: string[], lower: boolean) {
   for (const line of content.split('\n')) {
     const text = lower ? line.toLowerCase() : line;
     const hits = needles.filter((n) => text.includes(n)).length;
-    if (hits > bestHits) { best = line; bestHits = hits; }
+    if (hits > bestHits) {
+      best = line;
+      bestHits = hits;
+    }
   }
   return best.trim().slice(0, 240);
 }
@@ -84,11 +84,7 @@ export function searchNotes(notes: NoteItem[], options: NoteSearchOptions) {
     throw new SourceError('Provide query or at least one filter (notebookId, status, tags, pattern).');
   }
   const matcher = options.pattern ? matchNoteGlob(options.pattern) : null;
-  const candidates = notes.filter((note) =>
-    (!options.notebookId || note.notebookId === options.notebookId) &&
-    (!options.status || note.status === options.status) &&
-    wantedTags.every((tag) => note.tags.some((t) => t.toLowerCase() === tag)) &&
-    (!matcher || matcher(note.path)));
+  const candidates = notes.filter((note) => (!options.notebookId || note.notebookId === options.notebookId) && (!options.status || note.status === options.status) && wantedTags.every((tag) => note.tags.some((t) => t.toLowerCase() === tag)) && (!matcher || matcher(note.path)));
 
   const sensitive = options.caseSensitive === true;
   const fold = (text: string) => (sensitive ? text : text.toLowerCase());
@@ -100,7 +96,11 @@ export function searchNotes(notes: NoteItem[], options: NoteSearchOptions) {
     scored.sort((a, b) => a.path.localeCompare(b.path));
   } else if (options.isRegex) {
     let regex: RegExp;
-    try { regex = new RegExp(query, sensitive ? 'g' : 'gi'); } catch (err) { throw new SourceError(`Invalid regular expression: ${(err as Error).message}`); }
+    try {
+      regex = new RegExp(query, sensitive ? 'g' : 'gi');
+    } catch (err) {
+      throw new SourceError(`Invalid regular expression: ${(err as Error).message}`);
+    }
     const lineRegex = new RegExp(query, sensitive ? '' : 'i');
     for (const note of candidates) {
       const hits = [...(note.content.match(regex) || []), ...(note.title.match(regex) || [])];
@@ -112,10 +112,7 @@ export function searchNotes(notes: NoteItem[], options: NoteSearchOptions) {
   } else {
     const phrase = fold(query.trim());
     const terms = searchTerms(query, sensitive);
-    const docs = candidates.map((note) => ({
-      note,
-      fields: { title: fold(note.title), path: fold(note.path), metadata: fold(metadataText(note)), content: fold(note.content) },
-    }));
+    const docs = candidates.map((note) => ({ note, fields: { title: fold(note.title), path: fold(note.path), metadata: fold(metadataText(note)), content: fold(note.content) } }));
     const df = new Map(terms.map(({ term }) => [term, docs.filter((d) => Object.values(d.fields).some((f) => f.includes(term))).length]));
     const avgLength = docs.reduce((sum, d) => sum + d.fields.content.length, 0) / Math.max(docs.length, 1) || 1;
     const primaryWeight = terms.reduce((sum, t) => sum + (t.weight === 1 ? 1 : 0), 0) || 1;

@@ -16,7 +16,11 @@ export function createR2AssetHandler(readNote: NoteReader): express.RequestHandl
     const notePath = req.query.note;
     if (!settings || !key || typeof notePath !== 'string') return res.status(404).json({ error: 'Asset not found.' });
     let content: string;
-    try { content = await readNote(res, notePath); } catch { return res.status(404).json({ error: 'Asset not found.' }); }
+    try {
+      content = await readNote(res, notePath);
+    } catch {
+      return res.status(404).json({ error: 'Asset not found.' });
+    }
     if (!r2ReferenceKeys(content).includes(key)) return res.status(404).json({ error: 'Asset not found.' });
     res.redirect(302, await presignR2Object(settings, key));
   };

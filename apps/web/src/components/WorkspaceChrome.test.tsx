@@ -2,25 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import {
-  SidebarProvider,
-  WorkspaceSidebarPortal,
-  WorkspaceSplitLayout,
-  useWorkspaceSidebarDrawer,
-  getSavedSidebarWidth,
-  saveSidebarWidth,
-  getSavedRightPanelWidth,
-  saveRightPanelWidth,
-  persistWidthOnUserInteraction,
-  scheduleRightPanelResize,
-  RIGHT_PANEL_RAIL_WIDTH,
-  SIDEBAR_WIDTH_STORAGE_KEY,
-  MIN_SIDEBAR_WIDTH,
-  MAX_SIDEBAR_WIDTH,
-  RIGHT_PANEL_WIDTH_STORAGE_KEY,
-  MIN_RIGHT_PANEL_WIDTH,
-  MAX_RIGHT_PANEL_WIDTH,
-} from './WorkspaceChrome.js';
+import { getSavedRightPanelWidth, getSavedSidebarWidth, MAX_RIGHT_PANEL_WIDTH, MAX_SIDEBAR_WIDTH, MIN_RIGHT_PANEL_WIDTH, MIN_SIDEBAR_WIDTH, persistWidthOnUserInteraction, RIGHT_PANEL_RAIL_WIDTH, RIGHT_PANEL_WIDTH_STORAGE_KEY, saveRightPanelWidth, saveSidebarWidth, scheduleRightPanelResize, SIDEBAR_WIDTH_STORAGE_KEY, SidebarProvider, useWorkspaceSidebarDrawer, WorkspaceSidebarPortal, WorkspaceSplitLayout } from './WorkspaceChrome.js';
 
 afterEach(cleanup);
 
@@ -116,15 +98,7 @@ describe('persistWidthOnUserInteraction', () => {
   });
 
   function fakePanelRef(inPixels: number) {
-    return {
-      current: {
-        getSize: () => ({ inPixels, asPercentage: 0 }),
-        collapse: () => {},
-        expand: () => {},
-        isCollapsed: () => false,
-        resize: () => {},
-      },
-    };
+    return { current: { getSize: () => ({ inPixels, asPercentage: 0 }), collapse: () => {}, expand: () => {}, isCollapsed: () => false, resize: () => {} } };
   }
 
   it('does not persist a layout change that was not caused by direct user interaction', () => {
@@ -138,14 +112,7 @@ describe('persistWidthOnUserInteraction', () => {
   });
 
   it('subtracts the rail offset before clamping and persisting a right-panel width', () => {
-    persistWidthOnUserInteraction(
-      { isUserInteraction: true },
-      fakePanelRef(RIGHT_PANEL_RAIL_WIDTH + 400),
-      RIGHT_PANEL_RAIL_WIDTH,
-      MIN_RIGHT_PANEL_WIDTH,
-      MAX_RIGHT_PANEL_WIDTH,
-      saveRightPanelWidth
-    );
+    persistWidthOnUserInteraction({ isUserInteraction: true }, fakePanelRef(RIGHT_PANEL_RAIL_WIDTH + 400), RIGHT_PANEL_RAIL_WIDTH, MIN_RIGHT_PANEL_WIDTH, MAX_RIGHT_PANEL_WIDTH, saveRightPanelWidth);
     expect(localStorage.getItem(RIGHT_PANEL_WIDTH_STORAGE_KEY)).toBe('400');
   });
 });
@@ -202,7 +169,7 @@ describe('SidebarProvider and useWorkspaceSidebarDrawer', () => {
     const { open, setOpen } = useWorkspaceSidebarDrawer();
     return (
       <div>
-        <span data-testid="drawer-status">{open ? 'open' : 'closed'}</span>
+        <span data-testid='drawer-status'>{open ? 'open' : 'closed'}</span>
         <button onClick={() => setOpen(true)}>Open</button>
         <button onClick={() => setOpen(false)}>Close</button>
         <button onClick={() => setOpen((prev) => !prev)}>Toggle</button>
@@ -214,7 +181,7 @@ describe('SidebarProvider and useWorkspaceSidebarDrawer', () => {
     render(
       <SidebarProvider>
         <TestConsumer />
-      </SidebarProvider>
+      </SidebarProvider>,
     );
 
     expect(screen.getByTestId('drawer-status')).toHaveTextContent('closed');
@@ -230,7 +197,7 @@ describe('SidebarProvider and useWorkspaceSidebarDrawer', () => {
     render(
       <SidebarProvider>
         <TestConsumer />
-      </SidebarProvider>
+      </SidebarProvider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
@@ -244,25 +211,16 @@ describe('SidebarProvider and useWorkspaceSidebarDrawer', () => {
 describe('WorkspaceSplitLayout and WorkspaceSidebarPortal', () => {
   beforeEach(() => {
     // Mock matchMedia for desktop (min-width: 768px matches true)
-    window.matchMedia = ((query: string) => ({
-      matches: !query.includes('max-width: 767px'),
-      media: query,
-      onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => false,
-    })) as unknown as typeof window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: !query.includes('max-width: 767px'), media: query, onchange: null, addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false })) as unknown as typeof window.matchMedia;
   });
 
   it('renders only main content when hasSidebar is false', () => {
     const { container } = render(
       <SidebarProvider>
         <WorkspaceSplitLayout hasSidebar={false}>
-          <div data-testid="main-content">Main Page Content</div>
+          <div data-testid='main-content'>Main Page Content</div>
         </WorkspaceSplitLayout>
-      </SidebarProvider>
+      </SidebarProvider>,
     );
 
     expect(screen.getByTestId('main-content')).toBeInTheDocument();
@@ -273,13 +231,13 @@ describe('WorkspaceSplitLayout and WorkspaceSidebarPortal', () => {
   it('renders split layout with splitter and portaled sidebar when hasSidebar is true', () => {
     const { container } = render(
       <SidebarProvider>
-        <WorkspaceSplitLayout hasSidebar={true} sidebarDomId="custom-sidebar-panel">
+        <WorkspaceSplitLayout hasSidebar={true} sidebarDomId='custom-sidebar-panel'>
           <WorkspaceSidebarPortal>
-            <div data-testid="sidebar-content">Navigation Tree</div>
+            <div data-testid='sidebar-content'>Navigation Tree</div>
           </WorkspaceSidebarPortal>
-          <div data-testid="main-content">Main Notes Content</div>
+          <div data-testid='main-content'>Main Notes Content</div>
         </WorkspaceSplitLayout>
-      </SidebarProvider>
+      </SidebarProvider>,
     );
 
     expect(screen.getByTestId('main-content')).toBeInTheDocument();
@@ -292,9 +250,9 @@ describe('WorkspaceSplitLayout and WorkspaceSidebarPortal', () => {
     const { container } = render(
       <SidebarProvider>
         <WorkspaceSplitLayout hasSidebar={false}>
-          <div data-testid="main-content">Main Page Content</div>
+          <div data-testid='main-content'>Main Page Content</div>
         </WorkspaceSplitLayout>
-      </SidebarProvider>
+      </SidebarProvider>,
     );
 
     expect(container.querySelector('.workspace-split-right-panel')).toBeNull();
@@ -304,10 +262,10 @@ describe('WorkspaceSplitLayout and WorkspaceSidebarPortal', () => {
   it('keeps the right panel mounted but visually collapsed while rightPanelWidth is 0 (hidden)', () => {
     const { container } = render(
       <SidebarProvider>
-        <WorkspaceSplitLayout hasSidebar={false} rightPanelWidth={0} rightPanel={<div data-testid="right-content">Right</div>}>
-          <div data-testid="main-content">Main Page Content</div>
+        <WorkspaceSplitLayout hasSidebar={false} rightPanelWidth={0} rightPanel={<div data-testid='right-content'>Right</div>}>
+          <div data-testid='main-content'>Main Page Content</div>
         </WorkspaceSplitLayout>
-      </SidebarProvider>
+      </SidebarProvider>,
     );
 
     // Mounted (not unmounted) so it can keep reporting its own width via onWidthChange —
@@ -320,10 +278,10 @@ describe('WorkspaceSplitLayout and WorkspaceSidebarPortal', () => {
   it('renders the right panel inside a resizable splitter panel when rightPanelWidth > 0', () => {
     const { container } = render(
       <SidebarProvider>
-        <WorkspaceSplitLayout hasSidebar={false} rightPanelWidth={RIGHT_PANEL_RAIL_WIDTH + 320} rightPanel={<div data-testid="right-content">Right</div>}>
-          <div data-testid="main-content">Main Page Content</div>
+        <WorkspaceSplitLayout hasSidebar={false} rightPanelWidth={RIGHT_PANEL_RAIL_WIDTH + 320} rightPanel={<div data-testid='right-content'>Right</div>}>
+          <div data-testid='main-content'>Main Page Content</div>
         </WorkspaceSplitLayout>
-      </SidebarProvider>
+      </SidebarProvider>,
     );
 
     expect(screen.getByTestId('right-content')).toBeInTheDocument();
@@ -332,23 +290,14 @@ describe('WorkspaceSplitLayout and WorkspaceSidebarPortal', () => {
   });
 
   it('renders the right panel as a plain sibling (no Group) below the desktop breakpoint', () => {
-    window.matchMedia = ((query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => false,
-    })) as unknown as typeof window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: false, media: query, onchange: null, addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false })) as unknown as typeof window.matchMedia;
 
     const { container } = render(
       <SidebarProvider>
-        <WorkspaceSplitLayout hasSidebar={false} rightPanelWidth={RIGHT_PANEL_RAIL_WIDTH + 320} rightPanel={<div data-testid="right-content">Right</div>}>
-          <div data-testid="main-content">Main Page Content</div>
+        <WorkspaceSplitLayout hasSidebar={false} rightPanelWidth={RIGHT_PANEL_RAIL_WIDTH + 320} rightPanel={<div data-testid='right-content'>Right</div>}>
+          <div data-testid='main-content'>Main Page Content</div>
         </WorkspaceSplitLayout>
-      </SidebarProvider>
+      </SidebarProvider>,
     );
 
     expect(screen.getByTestId('right-content')).toBeInTheDocument();

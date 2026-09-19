@@ -21,11 +21,17 @@ async function start(env: Record<string, string>) {
     fs.writeFileSync(path.join(root, 'notes/ex/rules.md'), NOTE);
   }
   for (const [key, value] of Object.entries({ SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '', ...env })) vi.stubEnv(key, value);
-  server = createServer(createApp(root)); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  server = createServer(createApp(root));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as any).port}`;
 }
 const get = (url: string, headers: Record<string, string> = {}) => fetch(`${base}${url}`, { redirect: 'manual', headers });
-afterEach(async () => { await new Promise<void>(resolve => server.close(() => resolve())); fs.rmSync(root, { recursive: true, force: true }); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+afterEach(async () => {
+  await new Promise<void>(resolve => server.close(() => resolve()));
+  fs.rmSync(root, { recursive: true, force: true });
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 describe('R2 asset authorization', () => {
   it('redirects a local reference to a presigned object only for a note that references the key', async () => {
@@ -61,10 +67,7 @@ describe('R2 asset authorization', () => {
       if (!String(url).startsWith('https://api.github.com/repos/owner/private')) return nativeFetch(url, init);
       if (!(init?.headers as any)?.Authorization) return new Response('{}', { status: 404 });
       const endpoint = String(url).replace('https://api.github.com/repos/owner/private', '');
-      const value = endpoint === '' ? { private: true, permissions: { push: false } }
-        : endpoint.startsWith('/commits/') ? { sha: 'head', commit: { tree: { sha: 'tree' } } }
-        : endpoint.startsWith('/git/trees/') ? { truncated: false, tree: Object.keys(files).map(file => ({ path: file, sha: file, type: 'blob', mode: '100644' })) }
-        : endpoint.startsWith('/git/blobs/') ? { encoding: 'base64', content: Buffer.from(files[decodeURIComponent(endpoint.slice('/git/blobs/'.length))] || '').toString('base64') } : {};
+      const value = endpoint === '' ? { private: true, permissions: { push: false } } : endpoint.startsWith('/commits/') ? { sha: 'head', commit: { tree: { sha: 'tree' } } } : endpoint.startsWith('/git/trees/') ? { truncated: false, tree: Object.keys(files).map(file => ({ path: file, sha: file, type: 'blob', mode: '100644' })) } : endpoint.startsWith('/git/blobs/') ? { encoding: 'base64', content: Buffer.from(files[decodeURIComponent(endpoint.slice('/git/blobs/'.length))] || '').toString('base64') } : {};
       return new Response(JSON.stringify(value), { status: 200 });
     });
     await start({ ...R2, GITHUB_NOTES_SOURCE: 'github', GITHUB_NOTES_REPOSITORY: 'owner/private', GITHUB_NOTES_BRANCH: 'main' });

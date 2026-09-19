@@ -5,20 +5,7 @@ import { parseNoteContent, serializeNoteContent } from '../src/frontmatter.js';
 // frontmatter block — title lost its quotes, `tags` turned from flow into block style, and a
 // blank line appeared before the body. A metadata-only edit must change only the edited key
 // (plus `updated`, which changes by design) and leave the body byte-identical.
-const evidenceRaw = [
-  '---',
-  'title: "Keys"',
-  'tags: [技術, 筆記]',
-  'sticker: emoji//1f469-200d-1f9b3',
-  'status: inbox',
-  'created: "2026-09-16T08:32:02.000Z"',
-  'updated: "2026-09-17T15:21:41.000Z"',
-  '---',
-  '### NPM backup',
-  '33ab3399cbe4e1b1cfbb49091af56dc7646e358d4eea769c3f4c5db568ff4113',
-  'aaafcd2fbb342654ac6713cf5e7bc26f07d724bbd473f7df1523b876095b9bd2',
-  '',
-].join('\n');
+const evidenceRaw = ['---', 'title: "Keys"', 'tags: [技術, 筆記]', 'sticker: emoji//1f469-200d-1f9b3', 'status: inbox', 'created: "2026-09-16T08:32:02.000Z"', 'updated: "2026-09-17T15:21:41.000Z"', '---', '### NPM backup', '33ab3399cbe4e1b1cfbb49091af56dc7646e358d4eea769c3f4c5db568ff4113', 'aaafcd2fbb342654ac6713cf5e7bc26f07d724bbd473f7df1523b876095b9bd2', ''].join('\n');
 
 describe('serializeNoteContent patches an existing frontmatter block in place', () => {
   it('changing status only touches status and updated, leaving everything else byte-identical', () => {
@@ -27,11 +14,7 @@ describe('serializeNoteContent patches an existing frontmatter block in place', 
 
     const serialized = serializeNoteContent({ ...metadata, status: 'working' }, content, false, now, evidenceRaw);
 
-    expect(serialized).toBe(
-      evidenceRaw
-        .replace('status: inbox', 'status: working')
-        .replace('updated: "2026-09-17T15:21:41.000Z"', 'updated: "2026-09-19T07:22:17.552Z"')
-    );
+    expect(serialized).toBe(evidenceRaw.replace('status: inbox', 'status: working').replace('updated: "2026-09-17T15:21:41.000Z"', 'updated: "2026-09-19T07:22:17.552Z"'));
     // Explicitly confirm the previously-observed regressions did not happen.
     expect(serialized).toContain('title: "Keys"');
     expect(serialized).toContain('tags: [技術, 筆記]');
@@ -48,9 +31,7 @@ describe('serializeNoteContent patches an existing frontmatter block in place', 
     const raw = '---\n# lead comment\ntitle: Note\ntags:\n  - alpha\n  - beta\ncustom: value # trailing\nstatus: todo\ncreated: "2020-01-01T00:00:00.000Z"\nupdated: "2020-01-02T00:00:00.000Z"\n---\n\nBody.\n';
     const { metadata, content } = parseNoteContent(raw);
     const serialized = serializeNoteContent({ ...metadata, status: 'done' }, content, false, new Date('2026-01-01T00:00:00.000Z'), raw);
-    expect(serialized).toBe(
-      raw.replace('status: todo', 'status: done').replace('updated: "2020-01-02T00:00:00.000Z"', 'updated: "2026-01-01T00:00:00.000Z"')
-    );
+    expect(serialized).toBe(raw.replace('status: todo', 'status: done').replace('updated: "2020-01-02T00:00:00.000Z"', 'updated: "2026-01-01T00:00:00.000Z"'));
   });
 
   it('appends a brand-new metadata key without disturbing existing fields, quoting a newly-stamped `updated`', () => {
@@ -86,18 +67,14 @@ describe('serializeNoteContent patches an existing frontmatter block in place', 
     const { metadata, content } = parseNoteContent(raw);
     const { archived, ...rest } = metadata;
     const serialized = serializeNoteContent(rest, content, false, new Date('2026-01-01T00:00:00.000Z'), raw);
-    expect(serialized).toBe(
-      '---\ntitle: Note\ncreated: "2020-01-01T00:00:00.000Z"\nupdated: "2026-01-01T00:00:00.000Z"\n---\n\nBody.\n'
-    );
+    expect(serialized).toBe('---\ntitle: Note\ncreated: "2020-01-01T00:00:00.000Z"\nupdated: "2026-01-01T00:00:00.000Z"\n---\n\nBody.\n');
   });
 
   it('keeps CRLF line endings intact', () => {
     const raw = '---\r\ntitle: Note\r\nstatus: todo\r\ncreated: "2020-01-01T00:00:00.000Z"\r\nupdated: "2020-01-02T00:00:00.000Z"\r\n---\r\nBody.\r\n';
     const { metadata, content } = parseNoteContent(raw);
     const serialized = serializeNoteContent({ ...metadata, status: 'done' }, content, false, new Date('2026-01-01T00:00:00.000Z'), raw);
-    expect(serialized).toBe(
-      raw.replace('status: todo', 'status: done').replace('updated: "2020-01-02T00:00:00.000Z"', 'updated: "2026-01-01T00:00:00.000Z"')
-    );
+    expect(serialized).toBe(raw.replace('status: todo', 'status: done').replace('updated: "2020-01-02T00:00:00.000Z"', 'updated: "2026-01-01T00:00:00.000Z"'));
   });
 
   it('falls back to a full render when the Markdown body itself changed', () => {

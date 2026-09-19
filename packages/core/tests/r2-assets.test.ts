@@ -40,7 +40,7 @@ describe('R2 references', () => {
     await expect(presignR2Object(settings, '/etc/passwd')).rejects.toThrow(/path traversal/i);
   });
 
-  it("percent-encodes a single quote in the RFC 5987 filename", async () => {
+  it('percent-encodes a single quote in the RFC 5987 filename', async () => {
     const url = new URL(await presignR2Object({ accountId: 'acc', accessKeyId: 'AK', secretAccessKey: 'SK', bucket: 'private' }, "User's Guide.pdf"));
     expect(url.searchParams.get('response-content-disposition')).toContain("filename*=UTF-8''User%27s%20Guide.pdf");
   });

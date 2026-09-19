@@ -2,9 +2,9 @@ import { Router } from 'express';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { SourceError, createRemoteSource, SourceConfig, sourceIdentity, type RemoteCache } from '@mygitnotes/core';
-import { callRemoteTool, remoteTools, isMutationTool } from '@mygitnotes/mcp-server';
-import { SessionStore, credentialToken, CredentialRejected } from './auth.js';
+import { createRemoteSource, type RemoteCache, SourceConfig, SourceError, sourceIdentity } from '@mygitnotes/core';
+import { callRemoteTool, isMutationTool, remoteTools } from '@mygitnotes/mcp-server';
+import { CredentialRejected, credentialToken, SessionStore } from './auth.js';
 
 export function createRemoteMCP(base: string, source: SourceConfig | undefined, cache?: RemoteCache): Router {
   const router = Router();
@@ -25,8 +25,9 @@ export function createRemoteMCP(base: string, source: SourceConfig | undefined, 
         return res.status(401).json({ error: 'Create a MyGitNotes agent token after signing in.' });
       }
       let token: string;
-      try { token = await credentialToken(base, grant.credential || grant.session); }
-      catch (error) {
+      try {
+        token = await credentialToken(base, grant.credential || grant.session);
+      } catch (error) {
         if (!(error instanceof SourceError)) console.warn(`[mcp] credential lookup failed: ${(error as Error).message}`);
         await remember(error instanceof CredentialRejected ? error.reason : 'credential-unavailable');
         return res.status(error instanceof SourceError ? error.status : 503).json({ error: error instanceof SourceError ? error.message : 'Agent authorization service unavailable. Retry later.' });
@@ -35,11 +36,18 @@ export function createRemoteMCP(base: string, source: SourceConfig | undefined, 
       const server = new Server({ name: 'mygitnotes', version: '0.1.0' }, { capabilities: { tools: {} }, instructions: 'Operate on the configured note repository. Use ls or glob to locate paths, read or find to inspect complete files, then pass the returned revision to a write operation. Each successful mutation creates one atomic remote commit with a program-generated message. Respect read-only grants. Use Settings to revoke persistent connector URLs.' });
       server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: remoteTools.filter(t => grant.write || !isMutationTool(t.name)) }));
       server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
-        try { const result = await callRemoteTool(reader, params.name, params.arguments || {}, grant.write, process.env.APP_URL); return { structuredContent: result, content: [{ type: 'text', text: JSON.stringify(result) }] }; }
-        catch (error) { return { isError: true, content: [{ type: 'text', text: JSON.stringify({ error: (error as Error).message }) }] }; }
+        try {
+          const result = await callRemoteTool(reader, params.name, params.arguments || {}, grant.write, process.env.APP_URL);
+          return { structuredContent: result, content: [{ type: 'text', text: JSON.stringify(result) }] };
+        } catch (error) {
+          return { isError: true, content: [{ type: 'text', text: JSON.stringify({ error: (error as Error).message }) }] };
+        }
       });
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-      res.on('close', () => { void transport.close(); void server.close(); });
+      res.on('close', () => {
+        void transport.close();
+        void server.close();
+      });
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
     } catch (error) {

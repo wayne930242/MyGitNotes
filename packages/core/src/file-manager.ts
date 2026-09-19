@@ -6,20 +6,11 @@ import { parseFolderConfig } from './folders.js';
 import { relocateLinks } from './folder-plan.js';
 import { relocateWorkspaceDocuments } from './workspace-documents.js';
 import { decodeAsset } from './assets.js';
-import { WORKSPACE_CONFIG_FILENAME, LEGACY_WORKSPACE_CONFIG_FILENAME } from './config.js';
+import { LEGACY_WORKSPACE_CONFIG_FILENAME, WORKSPACE_CONFIG_FILENAME } from './config.js';
 
 const filePath = z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value) && value.split('/').every(p => p && p !== '.' && p !== '..'), 'Use a relative workspace path.');
 const target = { notebookId: z.string().min(1), path: filePath };
-export const FileCommandSchema = z.discriminatedUnion('kind', [
-  z.object({ ...target, kind: z.literal('create') }).strict(),
-  z.object({ ...target, kind: z.literal('write'), content: z.string() }).strict(),
-  z.object({ ...target, kind: z.literal('upload'), base64: z.string() }).strict(),
-  z.object({ ...target, kind: z.literal('mkdir') }).strict(),
-  z.object({ ...target, kind: z.literal('move'), destination: filePath }).strict(),
-  z.object({ ...target, kind: z.literal('delete') }).strict(),
-  z.object({ ...target, kind: z.literal('remove-directory'), destination: filePath }).strict(),
-  z.object({ ...target, kind: z.literal('metadata'), title: z.string().trim().min(1).max(120), description: z.string().max(10000), order: z.number().finite() }).strict(),
-]);
+export const FileCommandSchema = z.discriminatedUnion('kind', [z.object({ ...target, kind: z.literal('create') }).strict(), z.object({ ...target, kind: z.literal('write'), content: z.string() }).strict(), z.object({ ...target, kind: z.literal('upload'), base64: z.string() }).strict(), z.object({ ...target, kind: z.literal('mkdir') }).strict(), z.object({ ...target, kind: z.literal('move'), destination: filePath }).strict(), z.object({ ...target, kind: z.literal('delete') }).strict(), z.object({ ...target, kind: z.literal('remove-directory'), destination: filePath }).strict(), z.object({ ...target, kind: z.literal('metadata'), title: z.string().trim().min(1).max(120), description: z.string().max(10000), order: z.number().finite() }).strict()]);
 export type FileCommand = z.infer<typeof FileCommandSchema>;
 export interface FileSnapshot {
   notebooks: NotebookConfig[];
@@ -59,7 +50,9 @@ export function decodeTextFile(bytes: Uint8Array): string | undefined {
   try {
     const value = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
     return /[\x00-\x08\x0b\x0e-\x1f]/.test(value) ? undefined : value;
-  } catch { return; }
+  } catch {
+    return;
+  }
 }
 export function filePresentation(file: string): 'image' | 'pdf' | 'audio' | 'video' | 'file' {
   if (/\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i.test(file)) return 'image';
@@ -82,7 +75,9 @@ export function planFileChange(snapshot: FileSnapshot, input: unknown) {
   assertPath(command.path, command.kind === 'metadata');
   const files = new Map(snapshot.files), directories = new Set(snapshot.directories);
   const exists = (file: string) => files.has(file) || directories.has(file) || snapshot.protectedPaths.includes(file);
-  const assertParent = (file: string) => { if (!directories.has(path.posix.dirname(file))) throw new Error('Destination directory does not exist.'); };
+  const assertParent = (file: string) => {
+    if (!directories.has(path.posix.dirname(file))) throw new Error('Destination directory does not exist.');
+  };
   let selectedPath = command.path;
   const pathMap: Record<string, string> = {};
   if (['create', 'upload', 'mkdir'].includes(command.kind)) {
@@ -107,7 +102,8 @@ export function planFileChange(snapshot: FileSnapshot, input: unknown) {
     files.set(file, Buffer.from(raw));
   } else if (command.kind === 'delete') {
     if (!files.has(command.path)) throw new Error('File does not exist.');
-    files.delete(command.path); selectedPath = path.posix.dirname(command.path);
+    files.delete(command.path);
+    selectedPath = path.posix.dirname(command.path);
   } else if (command.kind === 'move' || command.kind === 'remove-directory') {
     const destination = command.destination;
     assertPath(destination, command.kind === 'remove-directory');
@@ -118,7 +114,10 @@ export function planFileChange(snapshot: FileSnapshot, input: unknown) {
     if (snapshot.notebooks.some(other => other.id !== nb!.id && withinPath(other.root, command.path))) throw new Error('This directory contains another notebook.');
     if (command.kind === 'remove-directory') {
       if (!isDirectory || !directories.has(destination)) throw new Error('Choose an existing destination directory.');
-    } else { assertParent(destination); if (exists(destination)) throw new Error('Destination already exists.'); }
+    } else {
+      assertParent(destination);
+      if (exists(destination)) throw new Error('Destination already exists.');
+    }
     const relocate = (file: string) => withinPath(file, command.path) ? destination + file.slice(command.path.length) : file;
     const removedMetadata = command.kind === 'remove-directory' ? command.path + '/_dir.yml' : '';
     for (const source of [...directories, ...files.keys()]) {
@@ -128,7 +127,8 @@ export function planFileChange(snapshot: FileSnapshot, input: unknown) {
       if (exists(next)) throw new Error('Destination already exists.');
       pathMap[source] = next;
     }
-    files.clear(); directories.clear();
+    files.clear();
+    directories.clear();
     for (const dir of snapshot.directories) if (!(command.kind === 'remove-directory' && dir === command.path)) directories.add(relocate(dir));
     for (const [file, bytes] of snapshot.files) {
       if (file === removedMetadata) continue;
@@ -137,8 +137,7 @@ export function planFileChange(snapshot: FileSnapshot, input: unknown) {
       files.set(next, raw === undefined ? bytes : Buffer.from(relocateLinks(raw, file, next, relocate)));
     }
     pathMap[command.path] = destination;
-    relocateWorkspaceDocuments({ get: file => files.get(file)?.toString('utf8'), set: (file, text) => files.set(file, Buffer.from(text)) },
-      { notebooks: snapshot.notebooks, workspace: { default_notebook: snapshot.notebooks[0]?.id } }, nb!.id, relocate);
+    relocateWorkspaceDocuments({ get: file => files.get(file)?.toString('utf8'), set: (file, text) => files.set(file, Buffer.from(text)) }, { notebooks: snapshot.notebooks, workspace: { default_notebook: snapshot.notebooks[0]?.id } }, nb!.id, relocate);
     selectedPath = destination;
   }
   for (const [file, bytes] of files) if (path.posix.basename(file) === '_dir.yml' && bytes !== snapshot.files.get(file)) parseFolderConfig(bytes.toString('utf8'), path.posix.basename(path.posix.dirname(file)), file);

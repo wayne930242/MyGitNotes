@@ -16,11 +16,7 @@ describe('working note diff previews', () => {
     lines[249] = 'Updated line 250';
     const note = { ...original, content: lines.join('\n') + '\n' };
     const diff = workingDiff({ [note.path]: { base: original, note } });
-    expect(diff).toBe([
-      '--- notes/ex/a.md', '+++ notes/ex/a.md', '@@ -250,7 +250,7 @@',
-      ' Line 247', ' Line 248', ' Line 249', '-Line 250', '+Updated line 250',
-      ' Line 251', ' Line 252', ' Line 253', '',
-    ].join('\n'));
+    expect(diff).toBe(['--- notes/ex/a.md', '+++ notes/ex/a.md', '@@ -250,7 +250,7 @@', ' Line 247', ' Line 248', ' Line 249', '-Line 250', '+Updated line 250', ' Line 251', ' Line 252', ' Line 253', ''].join('\n'));
   });
 
   it('includes metadata changes and omits unchanged entries', () => {
@@ -33,10 +29,7 @@ describe('working note diff previews', () => {
   });
 
   it('shows a new note as additions including its frontmatter', () => {
-    expect(workingDiff({ [base.path]: { base: null, note: base } })).toBe([
-      '--- /dev/null', '+++ notes/ex/a.md', '@@ -0,0 +1,4 @@',
-      '+---', '+custom: keep', '+---', '+# A', '',
-    ].join('\n'));
+    expect(workingDiff({ [base.path]: { base: null, note: base } })).toBe(['--- /dev/null', '+++ notes/ex/a.md', '@@ -0,0 +1,4 @@', '+---', '+custom: keep', '+---', '+# A', ''].join('\n'));
   });
 });
 describe('browser working notes', () => {
@@ -57,7 +50,12 @@ describe('browser working notes', () => {
   it('treats a return to baseline as clean and reports storage failure', () => {
     updateWorkingNote('repo:main', base.path, { base, note: { ...base, content: 'changed' } });
     expect(updateWorkingNote('repo:main', base.path, { base, note: base })).toEqual({});
-    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => { throw new Error('Storage full'); } });
+    vi.stubGlobal('localStorage', {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('Storage full');
+      },
+    });
     expect(() => updateWorkingNote('repo:main', base.path, { base, note: { ...base, content: 'changed' } })).toThrow('Storage full');
   });
 });

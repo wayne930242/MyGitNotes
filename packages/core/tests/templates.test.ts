@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { parseWorkspaceConfig, ConfigValidationError } from '../src/config.js';
-import { loadNoteTemplate, renderNoteTemplate, formatTemplateDate } from '../src/templates.js';
+import { ConfigValidationError, parseWorkspaceConfig } from '../src/config.js';
+import { formatTemplateDate, loadNoteTemplate, renderNoteTemplate } from '../src/templates.js';
 import { scanNotebookNotes } from '../src/note-service.js';
 import type { NotebookConfig } from '../src/types.js';
 
@@ -24,9 +24,7 @@ notebooks:
         file: .templates/reading.md
 `;
     const config = parseWorkspaceConfig(yaml);
-    expect(config.notebooks[0].templates).toEqual([
-      { id: 'reading', title: 'Literature Note', file: '.templates/reading.md' },
-    ]);
+    expect(config.notebooks[0].templates).toEqual([{ id: 'reading', title: 'Literature Note', file: '.templates/reading.md' }]);
   });
 
   it('rejects a template file path that escapes the notebook', () => {
@@ -71,22 +69,13 @@ notebooks:
 
 describe('loadNoteTemplate + renderNoteTemplate', () => {
   let repoRoot: string;
-  const notebook: NotebookConfig = {
-    id: 'academic',
-    title: 'Academic',
-    root: 'notes/academic',
-    templates: [{ id: 'reading', title: 'Literature Note', file: 'templates/reading.md' }],
-  };
+  const notebook: NotebookConfig = { id: 'academic', title: 'Academic', root: 'notes/academic', templates: [{ id: 'reading', title: 'Literature Note', file: 'templates/reading.md' }] };
 
   beforeEach(() => {
     repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gh-notes-templates-'));
     const templateDir = path.join(repoRoot, 'notes/academic/templates');
     fs.mkdirSync(templateDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(templateDir, 'reading.md'),
-      '---\ntitle: "{{title}}"\nstatus: unread\ntags:\n  - reading\ncreated_on: "{{date}}"\n---\n\n# {{title}}\n\nCaptured on {{date}}.\n',
-      'utf-8'
-    );
+    fs.writeFileSync(path.join(templateDir, 'reading.md'), '---\ntitle: "{{title}}"\nstatus: unread\ntags:\n  - reading\ncreated_on: "{{date}}"\n---\n\n# {{title}}\n\nCaptured on {{date}}.\n', 'utf-8');
   });
 
   afterEach(() => {

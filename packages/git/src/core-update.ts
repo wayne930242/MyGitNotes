@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { runGit, getCurrentBranch, getGitStatus } from './git-service.js';
+import { getCurrentBranch, getGitStatus, runGit } from './git-service.js';
 import { CoreUpdateOptions, CoreUpdateResult } from './types.js';
 
 export class CoreUpdateError extends Error {
@@ -24,10 +24,7 @@ export async function discoverCoreRemote(repoRoot: string): Promise<'upstream' |
     return 'origin';
   }
 
-  throw new CoreUpdateError(
-    'No suitable Git remote found. Expected "upstream" or "origin".',
-    'NO_REMOTE'
-  );
+  throw new CoreUpdateError('No suitable Git remote found. Expected "upstream" or "origin".', 'NO_REMOTE');
 }
 
 /**
@@ -50,20 +47,14 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
   // 2. Only the 'core' checkout updates; 'main' holds workspace content.
   const currentBranch = await getCurrentBranch(repoRoot);
   if (currentBranch !== 'core') {
-    throw new CoreUpdateError(
-      `Core updates run on the 'core' checkout. Current active branch is '${currentBranch}'. A 'main' that still carries the product converts once with \`pnpm convert-workspace\`.`,
-      'INVALID_BRANCH'
-    );
+    throw new CoreUpdateError(`Core updates run on the 'core' checkout. Current active branch is '${currentBranch}'. A 'main' that still carries the product converts once with \`pnpm convert-workspace\`.`, 'INVALID_BRANCH');
   }
 
   // 3. Refuse to continue with a dirty working tree
   const status = await getGitStatus(repoRoot);
   if (!status.isClean) {
     const dirtyItems = [...status.staged, ...status.modified, ...status.untracked].join(', ');
-    throw new CoreUpdateError(
-      `Working tree has uncommitted modifications (${dirtyItems}). Commit or clean working directory before updating Core. Auto-stash is strictly prohibited.`,
-      'DIRTY_WORKING_TREE'
-    );
+    throw new CoreUpdateError(`Working tree has uncommitted modifications (${dirtyItems}). Commit or clean working directory before updating Core. Auto-stash is strictly prohibited.`, 'DIRTY_WORKING_TREE');
   }
 
   // 4. Discover remote
@@ -91,32 +82,15 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
   }
 
   if (isAncestor) {
-    return {
-      success: true,
-      currentHash,
-      coreRemoteHash,
-      remoteUsed: remote,
-      alreadyUpToDate: true,
-      message: `Core is already up to date with ${remote}/core (${coreRemoteHash.slice(0, 7)}).`,
-    };
+    return { success: true, currentHash, coreRemoteHash, remoteUsed: remote, alreadyUpToDate: true, message: `Core is already up to date with ${remote}/core (${coreRemoteHash.slice(0, 7)}).` };
   }
 
   try {
     await runGit(['merge', '--ff-only', `${remote}/core`], repoRoot);
   } catch {
-    throw new CoreUpdateError(
-      `Local 'core' has commits that ${remote}/core does not. Core only fast-forwards from upstream; move local work to another branch first.`,
-      'CORE_DIVERGED'
-    );
+    throw new CoreUpdateError(`Local 'core' has commits that ${remote}/core does not. Core only fast-forwards from upstream; move local work to another branch first.`, 'CORE_DIVERGED');
   }
   if (autoPush) await runGit(['push', 'origin', 'core'], repoRoot);
   // This process still runs the previous Core; the new Core migrates the workspace.
-  return {
-    success: true,
-    currentHash,
-    coreRemoteHash,
-    remoteUsed: remote,
-    alreadyUpToDate: false,
-    message: `Fast-forwarded core to ${remote}/core (${coreRemoteHash.slice(0, 7)}). Run \`pnpm migrate-workspace\` and restart the dev server.`,
-  };
+  return { success: true, currentHash, coreRemoteHash, remoteUsed: remote, alreadyUpToDate: false, message: `Fast-forwarded core to ${remote}/core (${coreRemoteHash.slice(0, 7)}). Run \`pnpm migrate-workspace\` and restart the dev server.` };
 }

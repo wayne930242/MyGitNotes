@@ -1,4 +1,4 @@
-import type { NoteGraphNode, NoteGraphLink } from '@mygitnotes/core/note-graph';
+import type { NoteGraphLink, NoteGraphNode } from '@mygitnotes/core/note-graph';
 
 export const toggleGraphFocus = (selectedId: string | null, clickedId: string) => selectedId === clickedId ? null : clickedId;
 
@@ -9,8 +9,8 @@ export function graphFocus(nodes: NoteGraphNode[], links: NoteGraphLink[], selec
   if (highlighted) {
     neighbors.add(highlighted.id);
     for (const link of links) {
-      const source = typeof link.source === 'object' ? (link.source as { id: string }).id : link.source;
-      const target = typeof link.target === 'object' ? (link.target as { id: string }).id : link.target;
+      const source = typeof link.source === 'object' ? (link.source as { id: string; }).id : link.source;
+      const target = typeof link.target === 'object' ? (link.target as { id: string; }).id : link.target;
       if (source === highlighted.id) neighbors.add(target);
       if (target === highlighted.id) neighbors.add(source);
     }

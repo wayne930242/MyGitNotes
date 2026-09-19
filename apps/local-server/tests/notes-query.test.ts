@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,7 +6,9 @@ import { execFileSync } from 'node:child_process';
 import { createServer, Server } from 'node:http';
 import { createApp } from '../src/app.js';
 
-let root: string; let server: Server; let base: string;
+let root: string;
+let server: Server;
+let base: string;
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
 const write = (file: string, content: string) => {
   fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
@@ -15,19 +17,31 @@ const write = (file: string, content: string) => {
 
 beforeEach(async () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-query-'));
-  vi.stubEnv('GITHUB_NOTES_SOURCE', 'local'); vi.stubEnv('GITHUB_NOTES_LOCAL_PATH', root); vi.stubEnv('VERCEL', ''); vi.stubEnv('APP_URL', '');
-  vi.stubEnv('SESSION_SECRET', 's'.repeat(64)); vi.stubEnv('UPSTASH_REDIS_REST_URL', '');
-  git('init', '-b', 'main'); git('config', 'user.name', 'Test'); git('config', 'user.email', 'test@example.com');
+  vi.stubEnv('GITHUB_NOTES_SOURCE', 'local');
+  vi.stubEnv('GITHUB_NOTES_LOCAL_PATH', root);
+  vi.stubEnv('VERCEL', '');
+  vi.stubEnv('APP_URL', '');
+  vi.stubEnv('SESSION_SECRET', 's'.repeat(64));
+  vi.stubEnv('UPSTASH_REDIS_REST_URL', '');
+  git('init', '-b', 'main');
+  git('config', 'user.name', 'Test');
+  git('config', 'user.email', 'test@example.com');
   write('notes/.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: other\n    title: Other\n    root: notes/other\n');
   write('notes/example/alpha.md', '---\ntags: [work]\nstatus: inbox\nupdated: 2026-09-02\n---\n# Alpha\n\n- [ ] ship 📅 2026-09-20\n');
   write('notes/example/deep/beta.md', '---\ntags: [work, deep]\nstatus: done\nupdated: 2026-09-03\n---\n# Beta\n\n[Alpha](../alpha.md)\n');
   write('notes/example/hidden.md', '---\nhiden: true\nupdated: 2026-09-04\n---\n# Hidden\n');
   write('notes/other/gamma.md', '---\nupdated: 2026-09-01\n---\n# Gamma\n\nkeyword in the body\n');
-  git('add', '.'); git('commit', '-m', 'fixture');
-  server = createServer(createApp(root)); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  git('add', '.');
+  git('commit', '-m', 'fixture');
+  server = createServer(createApp(root));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
 });
-afterEach(async () => { await new Promise<void>(resolve => server.close(() => resolve())); fs.rmSync(root, { recursive: true, force: true }); vi.unstubAllEnvs(); });
+afterEach(async () => {
+  await new Promise<void>(resolve => server.close(() => resolve()));
+  fs.rmSync(root, { recursive: true, force: true });
+  vi.unstubAllEnvs();
+});
 
 const json = async (url: string, init?: RequestInit) => {
   const response = await fetch(`${base}${url}`, init);

@@ -2,10 +2,7 @@
  * Robust clipboard copy helper with fallback for non-secure contexts (HTTP)
  * and environments where navigator.clipboard is unavailable or restricted.
  */
-export async function copyToClipboard(
-  text: string,
-  targetElement?: HTMLInputElement | HTMLTextAreaElement | null
-): Promise<boolean> {
+export async function copyToClipboard(text: string, targetElement?: HTMLInputElement | HTMLTextAreaElement | null): Promise<boolean> {
   if (typeof window === 'undefined') return false;
 
   // Copy the displayed value while the click's user activation is still active.

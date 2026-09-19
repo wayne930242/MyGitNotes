@@ -1,4 +1,4 @@
-import { RemoteSource, type RemoteSnapshot, type RemoteEntry, type RemoteChange } from './remote-source.js';
+import { type RemoteChange, type RemoteEntry, type RemoteSnapshot, RemoteSource } from './remote-source.js';
 import { SourceError } from './github-api.js';
 import { normalizeGitLabUrl } from './source-config.js';
 import type { RemoteCache } from './remote-cache.js';
@@ -14,11 +14,10 @@ export class GitLabSource extends RemoteSource {
   private async response(endpoint: string, init: RequestInit = {}): Promise<Response> {
     let response: Response;
     try {
-      response = await this.request(`${this.url}/api/v4/projects/${encodeURIComponent(this.repository)}${endpoint}`, {
-        ...init, redirect: 'error', signal: AbortSignal.timeout(20000),
-        headers: { Accept: 'application/json', 'User-Agent': 'MyGitNotes', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...(init.body ? { 'Content-Type': 'application/json' } : {}) },
-      });
-    } catch { throw new SourceError('GitLab could not be reached. Check the configured site and connection.', 502); }
+      response = await this.request(`${this.url}/api/v4/projects/${encodeURIComponent(this.repository)}${endpoint}`, { ...init, redirect: 'error', signal: AbortSignal.timeout(20000), headers: { Accept: 'application/json', 'User-Agent': 'MyGitNotes', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...(init.body ? { 'Content-Type': 'application/json' } : {}) } });
+    } catch {
+      throw new SourceError('GitLab could not be reached. Check the configured site and connection.', 502);
+    }
     if (!response.ok) {
       const retry = response.headers.get('retry-after');
       const seconds = retry && /^\d+$/.test(retry) ? Math.max(1, Number(retry)) : 60;
@@ -42,9 +41,9 @@ export class GitLabSource extends RemoteSource {
     if (typeof sha !== 'string' || !/^[a-f0-9]{40,64}$/.test(sha)) throw new SourceError('GitLab returned an invalid branch revision.', 502);
     const entries: RemoteEntry[] = [];
     const seen = new Set<string>();
-    for (let page = 1; ; page++) {
+    for (let page = 1;; page++) {
       const response = await this.response(`/repository/tree?ref=${sha}&recursive=true&per_page=100&page=${page}`);
-      const tree = await response.json() as { path: string; type: string; mode: string; id: string }[];
+      const tree = await response.json() as { path: string; type: string; mode: string; id: string; }[];
       if (!Array.isArray(tree)) throw new SourceError('GitLab returned an invalid repository tree.', 502);
       for (const entry of tree) {
         if (!entry.path || !entry.id || seen.has(entry.path)) throw new SourceError('GitLab returned an incomplete repository listing.', 502);
@@ -82,7 +81,10 @@ export class GitLabSource extends RemoteSource {
         if (file.blob_id !== existing.sha || typeof file.last_commit_id !== 'string') throw new SourceError('GitLab file version is unavailable.', 409);
         lastCommit = file.last_commit_id;
       }
-      if (change.sha === null) { actions.push({ action: 'delete', file_path: change.path, last_commit_id: lastCommit }); continue; }
+      if (change.sha === null) {
+        actions.push({ action: 'delete', file_path: change.path, last_commit_id: lastCommit });
+        continue;
+      }
       const bytes = change.content !== undefined ? Buffer.from(change.content) : change.base64 !== undefined ? Buffer.from(change.base64, 'base64') : await this.readBlob(change.sha!);
       total += bytes.length;
       if (total > 5 * 1024 * 1024) throw new SourceError('Mutation exceeds the 5 MiB limit.', 413);

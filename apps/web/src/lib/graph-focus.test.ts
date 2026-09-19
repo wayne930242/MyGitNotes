@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NoteGraphNode, NoteGraphLink } from '@mygitnotes/core/note-graph';
+import type { NoteGraphLink, NoteGraphNode } from '@mygitnotes/core/note-graph';
 import { graphFocus, toggleGraphFocus } from './graph-focus.js';
 
 const nodes = ['a', 'b', 'c', 'd'].map(id => ({ id, title: id })) as NoteGraphNode[];

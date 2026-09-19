@@ -1,9 +1,35 @@
 import { ApiError } from './api.js';
 import type { FileCommand } from '@mygitnotes/core';
-export interface FileEntry { path: string; name: string; directory: boolean; noteDirectory?: boolean; size: number; hidden: boolean; hash?: string; presentation: 'image' | 'pdf' | 'audio' | 'video' | 'file' }
-export interface FileListing { root: string; entries: FileEntry[]; revision: string; writable: boolean; remote: boolean }
-export interface FileRead { path: string; hash?: string; content?: string | null; revision: string; metadata?: { title: string; description?: string; order: number } }
-export interface FileResult { revision: string; selectedPath: string; pathMap: Record<string, string>; deletedPaths: string[] }
+export interface FileEntry {
+  path: string;
+  name: string;
+  directory: boolean;
+  noteDirectory?: boolean;
+  size: number;
+  hidden: boolean;
+  hash?: string;
+  presentation: 'image' | 'pdf' | 'audio' | 'video' | 'file';
+}
+export interface FileListing {
+  root: string;
+  entries: FileEntry[];
+  revision: string;
+  writable: boolean;
+  remote: boolean;
+}
+export interface FileRead {
+  path: string;
+  hash?: string;
+  content?: string | null;
+  revision: string;
+  metadata?: { title: string; description?: string; order: number; };
+}
+export interface FileResult {
+  revision: string;
+  selectedPath: string;
+  pathMap: Record<string, string>;
+  deletedPaths: string[];
+}
 const query = (notebookId: string, path?: string) => new URLSearchParams({ notebookId, ...(path ? { path } : {}) }).toString();
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init), data = await response.json();

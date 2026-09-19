@@ -29,17 +29,23 @@ write('notes/other/README.md', '# 其他筆記本\n');
 write('notes/hidden/index.md', '---\nhiden: true\n---\n# 隱藏介紹\n');
 write('notes/hidden/README.md', '# Visible fallback\n');
 write('notes/blank/index.md', '');
-git('init', '-b', 'main'); git('config', 'user.name', 'Browser QA'); git('config', 'user.email', 'qa@example.com');
-git('add', '.'); git('commit', '-m', 'fixture');
-process.env.MYGITNOTES_SOURCE = 'local'; process.env.MYGITNOTES_LOCAL_PATH = root;
-delete process.env.VERCEL; delete process.env.APP_URL;
+git('init', '-b', 'main');
+git('config', 'user.name', 'Browser QA');
+git('config', 'user.email', 'qa@example.com');
+git('add', '.');
+git('commit', '-m', 'fixture');
+process.env.MYGITNOTES_SOURCE = 'local';
+process.env.MYGITNOTES_LOCAL_PATH = root;
+delete process.env.VERCEL;
+delete process.env.APP_URL;
 const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
 const server = createServer(createApp(product));
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
 const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const page = await browser.newPage();
-const errors = []; page.on('pageerror', error => errors.push(error.message));
+const errors = [];
+page.on('pageerror', error => errors.push(error.message));
 const visit = route => page.goto(base + route, { waitUntil: 'networkidle0' });
 const openIndex = async (relativePath = 'index.md') => {
   await page.click('button[data-folder-index]');
@@ -52,11 +58,7 @@ try {
   await visit('/notebooks/example');
   assert(await page.$('.desktop-views > button:first-child[aria-label="Expand"][aria-pressed="true"]'), 'Expand must be the default and first view');
   // Flat lists the index as the first note row; Kanban puts it at the start of the board's header row.
-  const indexSelector = view => view === 'flat'
-    ? '.note-list tbody:not(.note-list-uncommitted) > tr:first-child.note-list-leading button[data-folder-index]'
-    : view === 'kanban'
-      ? '.kanban-leading > button[data-folder-index]:first-child'
-      : '.folder-links > button[data-folder-index]:first-child';
+  const indexSelector = view => view === 'flat' ? '.note-list tbody:not(.note-list-uncommitted) > tr:first-child.note-list-leading button[data-folder-index]' : view === 'kanban' ? '.kanban-leading > button[data-folder-index]:first-child' : '.folder-links > button[data-folder-index]:first-child';
   fs.mkdirSync(`${product}/artifacts/qa`, { recursive: true });
   await page.evaluate(() => localStorage.setItem('github-notes:language', 'zh-TW'));
   for (const width of [1440, 768, 390, 320]) {
@@ -106,13 +108,20 @@ try {
         assert(await page.$('.note-toolbar-sort[aria-label="排序"]'), 'Expanded notes must retain mobile sorting');
         // The server sorts; the list must show its answer in order, without the root index it lists separately.
         const sortByTitle = async order => {
-          const answered = page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/api/notes/query' && url.searchParams.get('sort') === 'title' && (url.searchParams.get('order') || 'desc') === order; });
+          const answered = page.waitForResponse(response => {
+            const url = new URL(response.url());
+            return url.pathname === '/api/notes/query' && url.searchParams.get('sort') === 'title' && (url.searchParams.get('order') || 'desc') === order;
+          });
           await chooseSelect(page, '.note-toolbar-sort[aria-label="排序"]', `title:${order}`);
           const paths = (await (await answered).json()).notes.map(note => note.path).filter(path => path !== 'notes/example/index.md');
-          await page.waitForFunction(paths => {
-            const cells = [...document.querySelectorAll('.note-list tbody tr:not(.note-list-leading) td:first-child')].map(cell => cell.textContent);
-            return cells.length === paths.length && cells.every((text, index) => text.endsWith(paths[index]));
-          }, {}, paths);
+          await page.waitForFunction(
+            paths => {
+              const cells = [...document.querySelectorAll('.note-list tbody tr:not(.note-list-leading) td:first-child')].map(cell => cell.textContent);
+              return cells.length === paths.length && cells.every((text, index) => text.endsWith(paths[index]));
+            },
+            {},
+            paths,
+          );
           return paths;
         };
         const ascending = await sortByTitle('asc'), descending = await sortByTitle('desc');
@@ -141,7 +150,11 @@ try {
   assert.equal(await page.$eval('[data-folder-index]', element => element.textContent.trim()), 'Index');
   assert(await page.$('[data-folder-index] .lucide-file-text'), 'Index needs a note icon');
   assert(!await page.$('.folder-index-content, .folder-index-header'), 'Inline introduction must be removed');
-  const bounds = await page.$$eval('.folder-links > button', elements => elements.slice(0, 2).map(element => { const box = element.getBoundingClientRect(); return { x: box.x, y: box.y, w: box.width, h: box.height }; }));
+  const bounds = await page.$$eval('.folder-links > button', elements =>
+    elements.slice(0, 2).map(element => {
+      const box = element.getBoundingClientRect();
+      return { x: box.x, y: box.y, w: box.width, h: box.height };
+    }));
   assert.equal(bounds[0].y, bounds[1].y, 'Index must sit alongside folders');
   assert(Math.abs(bounds[0].w - bounds[1].w) < 1 && Math.abs(bounds[0].h - bounds[1].h) < 1, `Index and folder cards must share a size: ${JSON.stringify(bounds)}`);
   assert(!await page.$('.workspace-page-heading'), 'Page title and subtitle must be removed');
@@ -168,8 +181,10 @@ try {
   await openIndex('index.md');
   await closeIndex();
   await visit('/notebooks/example');
-  await page.focus('button[data-folder-index]'); await page.keyboard.press('Enter');
-  await page.waitForSelector('[aria-label="Close note"]'); await closeIndex();
+  await page.focus('button[data-folder-index]');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('[aria-label="Close note"]');
+  await closeIndex();
   fs.mkdirSync(`${product}/artifacts/qa`, { recursive: true });
   await page.screenshot({ path: `${product}/artifacts/qa/folder-index-desktop.png`, fullPage: true });
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
@@ -194,6 +209,7 @@ try {
   assert.deepEqual(errors, []);
   console.log('PASS first Index card, root/README/hidden/blank indexes, notebook isolation, page headings removed, views, filters, keyboard, mobile sorting, locales and unchanged files');
 } finally {
-  await browser.close(); await new Promise(resolve => server.close(resolve));
+  await browser.close();
+  await new Promise(resolve => server.close(resolve));
   fs.rmSync(root, { recursive: true, force: true });
 }

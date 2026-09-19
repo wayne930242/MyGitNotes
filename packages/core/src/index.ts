@@ -27,7 +27,7 @@ export * from './study.js';
 export * from './tag-ops.js';
 
 export * from './study-stages.js';
-export { RemoteSource, type RemoteEntry, type RemoteSnapshot, type RemoteChange } from './remote-source.js';
+export { type RemoteChange, type RemoteEntry, type RemoteSnapshot, RemoteSource } from './remote-source.js';
 export { GitLabSource } from './gitlab-source.js';
 export { createRemoteSource } from './remote-factory.js';
 export * from './r2-references.js';

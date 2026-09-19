@@ -1,27 +1,45 @@
-import { beforeEach, afterEach, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
-import { localFileSnapshot, applyLocalFilePlan } from '../src/file-manager.js';
+import { applyLocalFilePlan, localFileSnapshot } from '../src/file-manager.js';
 import { assetHash, planFileChange } from '@mygitnotes/core';
 let root: string, server: Server, base: string;
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
-const write = (file: string, content: string | Buffer) => { fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true }); fs.writeFileSync(path.join(root, file), content); };
+const write = (file: string, content: string | Buffer) => {
+  fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+  fs.writeFileSync(path.join(root, file), content);
+};
 beforeEach(async () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-files-'));
-  vi.stubEnv('MYGITNOTES_SOURCE', 'local'); vi.stubEnv('MYGITNOTES_LOCAL_PATH', root); vi.stubEnv('VERCEL', ''); vi.stubEnv('APP_URL', '');
-  git('init', '-b', 'main'); git('config', 'user.name', 'Test'); git('config', 'user.email', 'test@example.com');
+  vi.stubEnv('MYGITNOTES_SOURCE', 'local');
+  vi.stubEnv('MYGITNOTES_LOCAL_PATH', root);
+  vi.stubEnv('VERCEL', '');
+  vi.stubEnv('APP_URL', '');
+  git('init', '-b', 'main');
+  git('config', 'user.name', 'Test');
+  git('config', 'user.email', 'test@example.com');
   write('.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n  - id: b\n    title: B\n    root: notes/b\n');
-  write('notes/a/one/note.md', '# Note\n'); write('notes/a/two/_dir.yml', 'title: Two\n'); write('notes/a/.hidden.json', '{"a":1}\n'); write('notes/b/other.md', '# Other');
+  write('notes/a/one/note.md', '# Note\n');
+  write('notes/a/two/_dir.yml', 'title: Two\n');
+  write('notes/a/.hidden.json', '{"a":1}\n');
+  write('notes/b/other.md', '# Other');
   write('notes/a/one/image.png', Buffer.from([137, 80, 78, 71, 0, 255]));
-  git('add', '.'); git('commit', '-m', 'fixture');
-  server = createServer(createApp(root)); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  git('add', '.');
+  git('commit', '-m', 'fixture');
+  server = createServer(createApp(root));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as any).port}`;
 });
-afterEach(async () => { await new Promise<void>(resolve => server.close(() => resolve())); vi.restoreAllMocks(); vi.unstubAllEnvs(); fs.rmSync(root, { recursive: true, force: true }); });
+afterEach(async () => {
+  await new Promise<void>(resolve => server.close(() => resolve()));
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+  fs.rmSync(root, { recursive: true, force: true });
+});
 const list = () => fetch(base + '/api/files?notebookId=a').then(r => r.json());
 const post = async (command: Record<string, unknown>, revision?: string) => fetch(base + '/api/files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: { notebookId: 'a', ...command }, revision: revision || (await list()).revision }) });
 
@@ -48,7 +66,8 @@ it('moves binary files with a directory, preserves hash URLs, uploads and delete
   expect(fs.existsSync(path.join(root, 'notes/a/upload.bin'))).toBe(false);
 });
 it('rejects stale revisions, cross-notebook paths, symlinks, overwrite and read-only writes', async () => {
-  const before = await list(); write('notes/a/newer.txt', 'new');
+  const before = await list();
+  write('notes/a/newer.txt', 'new');
   expect((await post({ kind: 'write', path: 'notes/a/.hidden.json', content: 'old' }, before.revision)).status).toBe(409);
   expect(fs.readFileSync(path.join(root, 'notes/a/.hidden.json'), 'utf8')).toContain('"a":1');
   expect((await post({ kind: 'create', path: 'notes/b/new.txt' })).status).toBe(400);
@@ -62,8 +81,12 @@ it('rejects stale revisions, cross-notebook paths, symlinks, overwrite and read-
 });
 it('restores the original binary and text snapshot after a write fails', () => {
   const before = localFileSnapshot(root), after = planFileChange(before, { kind: 'move', notebookId: 'a', path: 'notes/a/one', destination: 'notes/a/two/one' });
-  const rename = fs.renameSync.bind(fs); let calls = 0;
-  vi.spyOn(fs, 'renameSync').mockImplementation((...args) => { if (++calls === 2) throw new Error('Injected failure'); return rename(...args); });
+  const rename = fs.renameSync.bind(fs);
+  let calls = 0;
+  vi.spyOn(fs, 'renameSync').mockImplementation((...args) => {
+    if (++calls === 2) throw new Error('Injected failure');
+    return rename(...args);
+  });
   expect(() => applyLocalFilePlan(root, before, after)).toThrow('Injected failure');
   expect(localFileSnapshot(root)).toEqual(before);
 });

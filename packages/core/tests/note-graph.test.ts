@@ -3,14 +3,7 @@ import { buildNoteGraph, extractNoteLinks } from '../src/note-graph.js';
 import { NoteItem } from '../src/types.js';
 
 describe('note graph extraction', () => {
-  const validPaths = new Set([
-    'notes/example/welcome.md',
-    'notes/example/index.md',
-    'notes/example/getting-started/edit-and-commit.md',
-    'notes/example/projects/weekly-review.md',
-    'notes/example/projects/ideas/reading-list.md',
-    'notes/example/hidden.md',
-  ]);
+  const validPaths = new Set(['notes/example/welcome.md', 'notes/example/index.md', 'notes/example/getting-started/edit-and-commit.md', 'notes/example/projects/weekly-review.md', 'notes/example/projects/ideas/reading-list.md', 'notes/example/hidden.md']);
 
   it('extracts valid internal relative markdown links and ignores external/assets/images', () => {
     const content = `
@@ -42,48 +35,7 @@ Self link: [Self](welcome.md).
   });
 
   it('builds graph data with accurate in-degrees, out-degrees and node sizing', () => {
-    const notes: NoteItem[] = [
-      {
-        id: 'notes/example/welcome.md',
-        path: 'notes/example/welcome.md',
-        notebookId: 'example',
-        title: 'Welcome',
-        status: 'done',
-        tags: ['guide'],
-        metadata: {},
-        content: 'Links to [Edit](getting-started/edit-and-commit.md) and [Weekly](projects/weekly-review.md)',
-      },
-      {
-        id: 'notes/example/getting-started/edit-and-commit.md',
-        path: 'notes/example/getting-started/edit-and-commit.md',
-        notebookId: 'example',
-        title: 'Edit & Commit',
-        status: 'working',
-        tags: ['editing'],
-        metadata: {},
-        content: 'Back to [Welcome](../welcome.md)',
-      },
-      {
-        id: 'notes/example/projects/weekly-review.md',
-        path: 'notes/example/projects/weekly-review.md',
-        notebookId: 'example',
-        title: 'Weekly Review',
-        status: 'inbox',
-        tags: ['planning'],
-        metadata: {},
-        content: 'Also references [Welcome](../welcome.md)',
-      },
-      {
-        id: 'notes/example/hidden.md',
-        path: 'notes/example/hidden.md',
-        notebookId: 'example',
-        title: 'Hidden Note',
-        status: 'archived',
-        tags: [],
-        metadata: { hiden: true },
-        content: 'Nothing here',
-      },
-    ];
+    const notes: NoteItem[] = [{ id: 'notes/example/welcome.md', path: 'notes/example/welcome.md', notebookId: 'example', title: 'Welcome', status: 'done', tags: ['guide'], metadata: {}, content: 'Links to [Edit](getting-started/edit-and-commit.md) and [Weekly](projects/weekly-review.md)' }, { id: 'notes/example/getting-started/edit-and-commit.md', path: 'notes/example/getting-started/edit-and-commit.md', notebookId: 'example', title: 'Edit & Commit', status: 'working', tags: ['editing'], metadata: {}, content: 'Back to [Welcome](../welcome.md)' }, { id: 'notes/example/projects/weekly-review.md', path: 'notes/example/projects/weekly-review.md', notebookId: 'example', title: 'Weekly Review', status: 'inbox', tags: ['planning'], metadata: {}, content: 'Also references [Welcome](../welcome.md)' }, { id: 'notes/example/hidden.md', path: 'notes/example/hidden.md', notebookId: 'example', title: 'Hidden Note', status: 'archived', tags: [], metadata: { hiden: true }, content: 'Nothing here' }];
 
     const graph = buildNoteGraph(notes);
     // Hidden note is excluded by default

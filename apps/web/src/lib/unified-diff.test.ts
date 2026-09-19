@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createUnifiedDiff } from './unified-diff.js';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -13,14 +13,7 @@ describe('createUnifiedDiff', () => {
 
   it('generates full added hunk for new files without baseline', () => {
     const diff = createUnifiedDiff('/dev/null', 'notes/new.md', null, 'first line\nsecond line\n');
-    expect(diff).toBe([
-      '--- /dev/null',
-      '+++ notes/new.md',
-      '@@ -0,0 +1,2 @@',
-      '+first line',
-      '+second line',
-      '',
-    ].join('\n'));
+    expect(diff).toBe(['--- /dev/null', '+++ notes/new.md', '@@ -0,0 +1,2 @@', '+first line', '+second line', ''].join('\n'));
   });
 
   it('formats single line modification with context lines', () => {
@@ -28,16 +21,7 @@ describe('createUnifiedDiff', () => {
     const newText = ['line 1', 'line 2', 'line 3 modified', 'line 4', 'line 5'].join('\n');
 
     const diff = createUnifiedDiff('doc.md', 'doc.md', oldText, newText, { context: 1 });
-    expect(diff).toBe([
-      '--- doc.md',
-      '+++ doc.md',
-      '@@ -2,3 +2,3 @@',
-      ' line 2',
-      '-line 3',
-      '+line 3 modified',
-      ' line 4',
-      '',
-    ].join('\n'));
+    expect(diff).toBe(['--- doc.md', '+++ doc.md', '@@ -2,3 +2,3 @@', ' line 2', '-line 3', '+line 3 modified', ' line 4', ''].join('\n'));
   });
 
   it('formats pure insertion and pure deletion correctly', () => {
@@ -81,38 +65,20 @@ describe('createUnifiedDiff', () => {
   });
 
   it('uses the insertion position for a zero-context empty range', () => {
-    expect(createUnifiedDiff('file.txt', 'file.txt', 'a\nb\n', 'a\nnew\nb\n', { context: 0 }))
-      .toContain('@@ -1,0 +2,1 @@\n+new\n');
-    expect(createUnifiedDiff('file.txt', 'file.txt', 'a\nold\nb\n', 'a\nb\n', { context: 0 }))
-      .toContain('@@ -2,1 +1,0 @@\n-old\n');
+    expect(createUnifiedDiff('file.txt', 'file.txt', 'a\nb\n', 'a\nnew\nb\n', { context: 0 })).toContain('@@ -1,0 +2,1 @@\n+new\n');
+    expect(createUnifiedDiff('file.txt', 'file.txt', 'a\nold\nb\n', 'a\nb\n', { context: 0 })).toContain('@@ -2,1 +1,0 @@\n-old\n');
   });
 
   it('treats empty text as zero lines', () => {
-    expect(createUnifiedDiff('file.txt', 'file.txt', '', 'a\n'))
-      .toBe('--- file.txt\n+++ file.txt\n@@ -0,0 +1,1 @@\n+a\n');
-    expect(createUnifiedDiff('file.txt', 'file.txt', 'a\n', ''))
-      .toBe('--- file.txt\n+++ file.txt\n@@ -1,1 +0,0 @@\n-a\n');
+    expect(createUnifiedDiff('file.txt', 'file.txt', '', 'a\n')).toBe('--- file.txt\n+++ file.txt\n@@ -0,0 +1,1 @@\n+a\n');
+    expect(createUnifiedDiff('file.txt', 'file.txt', 'a\n', '')).toBe('--- file.txt\n+++ file.txt\n@@ -1,1 +0,0 @@\n-a\n');
   });
 
   it('marks a missing final newline without inventing a blank line', () => {
-    expect(createUnifiedDiff('file.txt', 'file.txt', 'a\n', 'a'))
-      .toBe('--- file.txt\n+++ file.txt\n@@ -1,1 +1,1 @@\n-a\n+a\n\\ No newline at end of file\n');
+    expect(createUnifiedDiff('file.txt', 'file.txt', 'a\n', 'a')).toBe('--- file.txt\n+++ file.txt\n@@ -1,1 +1,1 @@\n-a\n+a\n\\ No newline at end of file\n');
   });
 
-  it.each([
-    ['a\nb\nc\n', 'a\nB\nc\n'],
-    ['', 'first\n'],
-    ['last\n', ''],
-    ['a\n', 'a'],
-    ['a', 'a\n'],
-    ['a\nb', 'A\nb'],
-    ['a\r\nb\r\n', 'a\r\nB\r\n'],
-    ['甲\n乙\n', '甲\n丙\n'],
-    [null, 'created\n'],
-    ['deleted\n', null],
-    [null, 'created without newline'],
-    ['deleted without newline', null],
-  ])('produces a Git-applicable patch: %j → %j', (before, after) => {
+  it.each([['a\nb\nc\n', 'a\nB\nc\n'], ['', 'first\n'], ['last\n', ''], ['a\n', 'a'], ['a', 'a\n'], ['a\nb', 'A\nb'], ['a\r\nb\r\n', 'a\r\nB\r\n'], ['甲\n乙\n', '甲\n丙\n'], [null, 'created\n'], ['deleted\n', null], [null, 'created without newline'], ['deleted without newline', null]])('produces a Git-applicable patch: %j → %j', (before, after) => {
     const dir = mkdtempSync(join(tmpdir(), 'unified-diff-'));
     try {
       const file = join(dir, 'file.txt');

@@ -35,9 +35,7 @@ export function getDeterministicFallback(filePath?: string, diff?: string): stri
  * Generates a semantic commit message using Gemini Flash-Lite if an API key is available,
  * gracefully falling back to a deterministic message upon absence or error.
  */
-export async function generateCommitMessage(
-  options: SemanticCommitOptions
-): Promise<string> {
+export async function generateCommitMessage(options: SemanticCommitOptions): Promise<string> {
   const { apiKey = process.env.GEMINI_API_KEY, model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL, diff = '', filePath } = options;
 
   const fallback = getDeterministicFallback(filePath, diff);
@@ -61,24 +59,7 @@ ${truncatedDiff}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 4000);
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: prompt }],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 60,
-        },
-      }),
-      signal: controller.signal,
-    });
+    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 60 } }), signal: controller.signal });
 
     clearTimeout(timeout);
 
@@ -86,9 +67,7 @@ ${truncatedDiff}`;
       return fallback;
     }
 
-    const data = (await response.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
+    const data = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string; }>; }; }>; };
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     if (text) {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RemoteSource, type RemoteSnapshot } from '../src/remote-source.js';
+import { type RemoteSnapshot, RemoteSource } from '../src/remote-source.js';
 
 // A 200-note batch commit previously fired one readFile per note inside a single Promise.all,
 // which could burst up to 200 concurrent uncached blob reads at the GitHub/GitLab API. commitNotes
@@ -21,12 +21,18 @@ describe('RemoteSource.commitNotes bounds concurrent blob reads', () => {
       protected async readBlob(sha: string): Promise<Buffer> {
         const path = entries.find(e => e.sha === sha)!.path;
         const isNote = notePaths.has(path);
-        if (isNote) { noteReads++; concurrent++; maxConcurrent = Math.max(maxConcurrent, concurrent); }
+        if (isNote) {
+          noteReads++;
+          concurrent++;
+          maxConcurrent = Math.max(maxConcurrent, concurrent);
+        }
         await new Promise(resolve => setTimeout(resolve, 5));
         if (isNote) concurrent--;
         return Buffer.from(files[path], 'utf8');
       }
-      protected async publishChanges(): Promise<string> { return 'c'.repeat(40); }
+      protected async publishChanges(): Promise<string> {
+        return 'c'.repeat(40);
+      }
     }
 
     const source = new FakeSource('owner/repo', 'main', 'token');

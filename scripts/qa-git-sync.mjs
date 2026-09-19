@@ -12,24 +12,45 @@ const puppeteer = require('puppeteer-core');
 const base = fs.mkdtempSync(path.join(os.tmpdir(), 'notes-sync-ui-'));
 const remote = path.join(base, 'remote.git'), root = path.join(base, 'workspace'), other = path.join(base, 'other');
 const run = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim();
-const write = (dir, file, text) => { fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true }); fs.writeFileSync(path.join(dir, file), text); };
+const write = (dir, file, text) => {
+  fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+  fs.writeFileSync(path.join(dir, file), text);
+};
 const note = 'notes/example/a.md';
 run(base, 'init', '--bare', '-b', 'main', remote);
 fs.mkdirSync(root);
 write(root, '.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Sync QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
 write(root, note, '# A\n\nfirst\nsecond\nthird\n');
-run(root, 'init', '-b', 'main'); run(root, 'config', 'user.name', 'QA'); run(root, 'config', 'user.email', 'qa@example.com');
-run(root, 'add', '.'); run(root, 'commit', '-m', 'fixture'); run(root, 'remote', 'add', 'origin', remote); run(root, 'push', '-u', 'origin', 'main');
-run(base, 'clone', remote, other); run(other, 'config', 'user.name', 'Other'); run(other, 'config', 'user.email', 'other@example.com');
-const commitIn = (dir, text, message) => { write(dir, note, text); run(dir, 'commit', '-am', message); };
-process.env.MYGITNOTES_SOURCE = 'local'; process.env.MYGITNOTES_LOCAL_PATH = root; delete process.env.VERCEL; delete process.env.APP_URL;
+run(root, 'init', '-b', 'main');
+run(root, 'config', 'user.name', 'QA');
+run(root, 'config', 'user.email', 'qa@example.com');
+run(root, 'add', '.');
+run(root, 'commit', '-m', 'fixture');
+run(root, 'remote', 'add', 'origin', remote);
+run(root, 'push', '-u', 'origin', 'main');
+run(base, 'clone', remote, other);
+run(other, 'config', 'user.name', 'Other');
+run(other, 'config', 'user.email', 'other@example.com');
+const commitIn = (dir, text, message) => {
+  write(dir, note, text);
+  run(dir, 'commit', '-am', message);
+};
+process.env.MYGITNOTES_SOURCE = 'local';
+process.env.MYGITNOTES_LOCAL_PATH = root;
+delete process.env.VERCEL;
+delete process.env.APP_URL;
 const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
-const server = createServer(createApp(product)); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+const server = createServer(createApp(product));
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const url = `http://127.0.0.1:${server.address().port}`;
 const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
-const page = await browser.newPage(); await page.setViewport({ width: 1440, height: 1000 });
-const errors = []; page.on('pageerror', error => errors.push(error.message));
-const assert = (condition, message) => { if (!condition) throw Error(message); };
+const page = await browser.newPage();
+await page.setViewport({ width: 1440, height: 1000 });
+const errors = [];
+page.on('pageerror', error => errors.push(error.message));
+const assert = (condition, message) => {
+  if (!condition) throw Error(message);
+};
 const text = selector => page.$eval(selector, node => node.textContent.trim()).catch(() => '');
 const clickText = async label => {
   await page.waitForFunction(value => [...document.querySelectorAll('.git-sync button')].some(button => button.textContent.trim() === value && !button.disabled), {}, label);
@@ -50,7 +71,9 @@ try {
   assert(run(remote, 'show', `main:${note}`).includes('local one'), 'Push did not reach the remote');
   console.log('PASS ahead count, pull --rebase and push from the Changes tool');
 
-  run(other, 'pull'); commitIn(other, '# A\n\nfirst\nremote two\nthird\n', 'remote edit'); run(other, 'push');
+  run(other, 'pull');
+  commitIn(other, '# A\n\nfirst\nremote two\nthird\n', 'remote edit');
+  run(other, 'push');
   commitIn(root, '# A\n\nfirst\nlocal two\nthird\n', 'conflicting local edit');
   const head = run(root, 'rev-parse', 'HEAD');
   await openChanges();
@@ -71,7 +94,9 @@ try {
   assert(run(remote, 'show', `main:${note}`).includes('local two') && run(root, 'rev-parse', 'HEAD') === run(remote, 'rev-parse', 'main'), 'Local side was not pushed');
   console.log('PASS conflict aborts, lists files, offers three actions and keeps local content on request');
 
-  run(other, 'pull'); commitIn(other, '# A\n\nfirst\nremote three\nthird\n', 'remote edit'); run(other, 'push');
+  run(other, 'pull');
+  commitIn(other, '# A\n\nfirst\nremote three\nthird\n', 'remote edit');
+  run(other, 'push');
   commitIn(root, '# A\n\nfirst\nlocal three\nthird\n', 'conflicting local edit');
   await openChanges();
   await clickText('Pull and push');
@@ -93,4 +118,8 @@ try {
 } catch (error) {
   console.log(await page.evaluate(() => ({ sync: document.querySelector('.git-sync')?.innerText, alerts: [...document.querySelectorAll('[role="alert"]')].map(node => node.textContent) })).catch(() => ({})));
   throw error;
-} finally { await browser.close(); await new Promise(resolve => server.close(resolve)); fs.rmSync(base, { recursive: true, force: true }); }
+} finally {
+  await browser.close();
+  await new Promise(resolve => server.close(resolve));
+  fs.rmSync(base, { recursive: true, force: true });
+}

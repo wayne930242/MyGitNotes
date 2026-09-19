@@ -13,39 +13,43 @@ let client: QueryClient;
 let observed: (() => void)[];
 
 /** Drives every observed sentinel as if it had scrolled into view. */
-function intersect() { for (const notify of observed) notify(); }
+function intersect() {
+  for (const notify of observed) notify();
+}
 
 beforeEach(() => {
   observed = [];
   class TestObserver {
-    constructor(private callback: (entries: { isIntersecting: boolean }[]) => void) {}
-    observe() { observed.push(() => this.callback([{ isIntersecting: true }])); }
-    disconnect() { observed = []; }
+    constructor(private callback: (entries: { isIntersecting: boolean; }[]) => void) {}
+    observe() {
+      observed.push(() => this.callback([{ isIntersecting: true }]));
+    }
+    disconnect() {
+      observed = [];
+    }
   }
   vi.stubGlobal('IntersectionObserver', TestObserver);
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-    const second = url.includes('cursor=page-2');
-    return new Response(JSON.stringify({
-      revision: REVISION, total: 2, nextCursor: second ? null : 'page-2',
-      notes: [{ id: second ? 'b' : 'a', path: second ? 'notes/life/b.md' : 'notes/life/a.md', notebookId: 'life', title: second ? 'Second' : 'First', tags: [], metadata: {} }],
-    }), { headers: { 'Content-Type': 'application/json' } });
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      const second = url.includes('cursor=page-2');
+      return new Response(JSON.stringify({ revision: REVISION, total: 2, nextCursor: second ? null : 'page-2', notes: [{ id: second ? 'b' : 'a', path: second ? 'notes/life/b.md' : 'notes/life/a.md', notebookId: 'life', title: second ? 'Second' : 'First', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } });
+    }),
+  );
   client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   setNoteQueryScope({ sourceId: 'github:me/notes', revision: REVISION, drafts: {} });
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
-const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
+const wrapper = ({ children }: { children: ReactNode; }) => createElement(QueryClientProvider, { client }, children);
 
 /** The notes page: a list of server-answered rows with the sentinel that loads the next page. */
 function NotesList() {
   const result = useNoteList({ notebookId: 'life' }, { limit: 1 });
-  return createElement('div', {},
-    createElement(ListView, {
-      notes: result.notes, uncommitted: result.uncommitted, statuses: ['inbox'],
-      onOpenNote: () => {}, onDeleteNote: () => {}, onUpdateNoteStatus: () => {}, onNewNote: () => {},
-    }),
-    createElement(NoteListSentinel, { hasMore: result.hasMore, loading: result.loadingMore, error: result.error, onLoadMore: result.loadMore }));
+  return createElement('div', {}, createElement(ListView, { notes: result.notes, uncommitted: result.uncommitted, statuses: ['inbox'], onOpenNote: () => {}, onDeleteNote: () => {}, onUpdateNoteStatus: () => {}, onNewNote: () => {} }), createElement(NoteListSentinel, { hasMore: result.hasMore, loading: result.loadingMore, error: result.error, onLoadMore: result.loadMore }));
 }
 
 it('loads the next page when the end of the list scrolls into view', async () => {
@@ -62,10 +66,7 @@ it('loads the next page when the end of the list scrolls into view', async () =>
 it('waits for the retry button after a page fails, instead of asking in a loop', async () => {
   vi.mocked(fetch).mockImplementation(async (url: unknown) => {
     if (String(url).includes('cursor=page-2')) return new Response(JSON.stringify({ error: 'GitHub is unavailable' }), { status: 502 }) as never;
-    return new Response(JSON.stringify({
-      revision: REVISION, total: 2, nextCursor: 'page-2',
-      notes: [{ id: 'a', path: 'notes/life/a.md', notebookId: 'life', title: 'First', tags: [], metadata: {} }],
-    }), { headers: { 'Content-Type': 'application/json' } }) as never;
+    return new Response(JSON.stringify({ revision: REVISION, total: 2, nextCursor: 'page-2', notes: [{ id: 'a', path: 'notes/life/a.md', notebookId: 'life', title: 'First', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } }) as never;
   });
   render(createElement(NotesList), { wrapper });
   await waitFor(() => expect(screen.getByText('First')).toBeInTheDocument());

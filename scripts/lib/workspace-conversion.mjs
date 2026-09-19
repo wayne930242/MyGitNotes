@@ -7,8 +7,11 @@ const workspaceOwnedRoots = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md', '.agents', '
 /** Core's product paths at `coreRevision`: its sparse deploy list without .github. */
 export function coreProductPaths(git, coreRevision) {
   let list;
-  try { list = git('show', `${coreRevision}:${SPARSE_LIST}`); }
-  catch { throw Error(`Core ${coreRevision} does not track ${SPARSE_LIST}, which names its product paths.`); }
+  try {
+    list = git('show', `${coreRevision}:${SPARSE_LIST}`);
+  } catch {
+    throw Error(`Core ${coreRevision} does not track ${SPARSE_LIST}, which names its product paths.`);
+  }
   return list.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#') && line.split('/')[0] !== '.github');
 }
 
@@ -20,8 +23,13 @@ export function coreProductPaths(git, coreRevision) {
  */
 export function planWorkspaceConversion(repoRoot, coreRevision, listRevision = coreRevision) {
   const git = (...args) => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
-  const listTree = revision => new Map(git('ls-tree', '-r', '-z', '--full-tree', revision).split('\0').filter(Boolean)
-    .map(line => { const [meta, file] = line.split('\t'); return [file, meta.split(' ')[2]]; }));
+  const listTree = revision =>
+    new Map(
+      git('ls-tree', '-r', '-z', '--full-tree', revision).split('\0').filter(Boolean).map(line => {
+        const [meta, file] = line.split('\t');
+        return [file, meta.split(' ')[2]];
+      }),
+    );
   const head = listTree('HEAD');
   const core = listTree(coreRevision);
   const productPaths = coreProductPaths(git, listRevision);

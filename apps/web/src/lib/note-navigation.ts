@@ -36,13 +36,7 @@ export function findTextMatches(content: string, query: string): TextMatch[] {
 }
 
 function headingLabel(source: string) {
-  return source
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/[`*_~]/g, '')
-    .replace(/<[^>]+>/g, '')
-    .replace(/\\([\\`*{}\[\]()#+.!_>-])/g, '$1')
-    .trim();
+  return source.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[`*_~]/g, '').replace(/<[^>]+>/g, '').replace(/\\([\\`*{}\[\]()#+.!_>-])/g, '$1').trim();
 }
 
 export function parseMarkdownOutline(content: string): OutlineHeading[] {
@@ -88,24 +82,12 @@ export interface OutlineSelectionResult {
   focusEditor: boolean;
 }
 
-export function chooseOutlineHeading(
-  outline: OutlineHeading[],
-  index: number,
-  options: { closeAfter?: boolean; focusEditor?: boolean } = {},
-): OutlineSelectionResult | null {
+export function chooseOutlineHeading(outline: OutlineHeading[], index: number, options: { closeAfter?: boolean; focusEditor?: boolean; } = {}): OutlineSelectionResult | null {
   const heading = outline[index];
   if (!heading) return null;
-  return {
-    heading,
-    line: heading.line,
-    shouldClosePanel: options.closeAfter ?? false,
-    focusEditor: options.focusEditor ?? false,
-  };
+  return { heading, line: heading.line, shouldClosePanel: options.closeAfter ?? false, focusEditor: options.focusEditor ?? false };
 }
 
 export function isEditableTarget(target: EventTarget | null): boolean {
-  return typeof Element !== 'undefined'
-    && target instanceof Element
-    && Boolean(target.closest('input, textarea, select, [role="combobox"], [contenteditable="true"], .cm-content'));
+  return typeof Element !== 'undefined' && target instanceof Element && Boolean(target.closest('input, textarea, select, [role="combobox"], [contenteditable="true"], .cm-content'));
 }
-

@@ -1,7 +1,7 @@
 import YAML from 'yaml';
 import path from 'node:path';
 import fs from 'node:fs';
-import { WorkspaceConfig, NotebookConfig, NoteTemplate, NotebookMetadataField } from './types.js';
+import { NotebookConfig, NotebookMetadataField, NoteTemplate, WorkspaceConfig } from './types.js';
 
 export const WORKSPACE_CONFIG_FILENAME = '.mygitnotes.yaml';
 export const LEGACY_WORKSPACE_CONFIG_FILENAME = '.github-notes.yaml';
@@ -63,9 +63,7 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
 
     // Validate notebook id: slug format
     if (typeof item.id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(item.id)) {
-      throw new ConfigValidationError(
-        `Notebook ID '${item.id}' must be an alphanumeric/slug string without special characters`
-      );
+      throw new ConfigValidationError(`Notebook ID '${item.id}' must be an alphanumeric/slug string without special characters`);
     }
     if (notebookIds.has(item.id)) {
       throw new ConfigValidationError(`Duplicate notebook ID detected: '${item.id}'`);
@@ -83,9 +81,7 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
     }
     const normalizedRoot = path.posix.normalize(item.root.replace(/\\/g, '/'));
     if (path.isAbsolute(normalizedRoot) || normalizedRoot.startsWith('..') || normalizedRoot === '.') {
-      throw new ConfigValidationError(
-        `Notebook '${item.id}' root must be a relative subdirectory inside the repository: '${item.root}'`
-      );
+      throw new ConfigValidationError(`Notebook '${item.id}' root must be a relative subdirectory inside the repository: '${item.root}'`);
     }
 
     // Check non-overlapping roots
@@ -93,9 +89,7 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
       const relA = path.posix.relative(existingRoot, normalizedRoot);
       const relB = path.posix.relative(normalizedRoot, existingRoot);
       if (!relA.startsWith('..') || !relB.startsWith('..')) {
-        throw new ConfigValidationError(
-          `Notebook roots overlap: '${existingRoot}' and '${normalizedRoot}'`
-        );
+        throw new ConfigValidationError(`Notebook roots overlap: '${existingRoot}' and '${normalizedRoot}'`);
       }
     }
     notebookRoots.push(normalizedRoot);
@@ -106,9 +100,7 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
     }
 
     if (item.statuses !== undefined) {
-      if (!Array.isArray(item.statuses) || item.statuses.some(status =>
-        typeof status !== 'string' || !status.trim() || status !== status.trim()
-      ) || new Set(item.statuses).size !== item.statuses.length) {
+      if (!Array.isArray(item.statuses) || item.statuses.some(status => typeof status !== 'string' || !status.trim() || status !== status.trim()) || new Set(item.statuses).size !== item.statuses.length) {
         throw new ConfigValidationError(`Notebook '${item.id}' statuses must be an array of distinct nonblank strings without surrounding whitespace`);
       }
     }
@@ -125,9 +117,7 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
         }
         const tpl = raw as Record<string, unknown>;
         if (typeof tpl.id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(tpl.id)) {
-          throw new ConfigValidationError(
-            `Notebook '${item.id}' template ID '${tpl.id}' must be an alphanumeric/slug string without special characters`
-          );
+          throw new ConfigValidationError(`Notebook '${item.id}' template ID '${tpl.id}' must be an alphanumeric/slug string without special characters`);
         }
         if (templateIds.has(tpl.id)) {
           throw new ConfigValidationError(`Notebook '${item.id}' has a duplicate template ID: '${tpl.id}'`);
@@ -140,14 +130,8 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
           throw new ConfigValidationError(`Notebook '${item.id}' template '${tpl.id}' must have a file`);
         }
         const file = tpl.file.replace(/\\/g, '/');
-        if (
-          path.isAbsolute(file) ||
-          file.split('/').some(p => p === '..' || p === '' || p === '.') ||
-          !/\.(md|markdown)$/i.test(file)
-        ) {
-          throw new ConfigValidationError(
-            `Notebook '${item.id}' template '${tpl.id}' file must be a relative Markdown path inside the notebook: '${tpl.file}'`
-          );
+        if (path.isAbsolute(file) || file.split('/').some(p => p === '..' || p === '' || p === '.') || !/\.(md|markdown)$/i.test(file)) {
+          throw new ConfigValidationError(`Notebook '${item.id}' template '${tpl.id}' file must be a relative Markdown path inside the notebook: '${tpl.file}'`);
         }
         return { id: tpl.id, title: tpl.title, file };
       });
@@ -188,11 +172,7 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
         if (field.label !== undefined && (typeof field.label !== 'string' || !field.label.trim())) {
           throw new ConfigValidationError(`Notebook '${item.id}' metadata field '${field.key}' has invalid label`);
         }
-        return {
-          key: field.key,
-          ...(field.type ? { type: field.type as 'string' | 'boolean' | 'number' } : {}),
-          ...(field.label ? { label: field.label as string } : {}),
-        };
+        return { key: field.key, ...(field.type ? { type: field.type as 'string' | 'boolean' | 'number' } : {}), ...(field.label ? { label: field.label as string } : {}) };
       });
     }
 
@@ -209,39 +189,15 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
       }
     }
 
-    validatedNotebooks.push({
-      id: item.id,
-      title: item.title,
-      root: normalizedRoot,
-      assets: assetPath,
-      default_view: (item.default_view as 'list' | 'card' | 'kanban' | 'flat') || 'list',
-      ...(item.statuses !== undefined ? { statuses: [...item.statuses as string[]] } : {}),
-      ...(validatedTemplates !== undefined ? { templates: validatedTemplates } : {}),
-      ...(validatedMetadata !== undefined ? { metadata: validatedMetadata } : {}),
-      ...(validatedPathAliases !== undefined ? { pathAliases: validatedPathAliases } : {}),
-    });
+    validatedNotebooks.push({ id: item.id, title: item.title, root: normalizedRoot, assets: assetPath, default_view: (item.default_view as 'list' | 'card' | 'kanban' | 'flat') || 'list', ...(item.statuses !== undefined ? { statuses: [...item.statuses as string[]] } : {}), ...(validatedTemplates !== undefined ? { templates: validatedTemplates } : {}), ...(validatedMetadata !== undefined ? { metadata: validatedMetadata } : {}), ...(validatedPathAliases !== undefined ? { pathAliases: validatedPathAliases } : {}) });
   }
 
   // Ensure default_notebook exists
   if (!notebookIds.has(ws.default_notebook as string)) {
-    throw new ConfigValidationError(
-      `default_notebook '${ws.default_notebook}' does not match any configured notebook ID`
-    );
+    throw new ConfigValidationError(`default_notebook '${ws.default_notebook}' does not match any configured notebook ID`);
   }
 
-  return {
-    schema_version: raw.schema_version as number,
-    workspace: {
-      title: ws.title as string,
-      default_notebook: ws.default_notebook as string,
-    },
-    notebooks: validatedNotebooks,
-    files: {
-      hide_dotfiles: raw.files && typeof raw.files === 'object' && 'hide_dotfiles' in (raw.files as Record<string, unknown>)
-        ? Boolean((raw.files as Record<string, unknown>).hide_dotfiles)
-        : true,
-    },
-  };
+  return { schema_version: raw.schema_version as number, workspace: { title: ws.title as string, default_notebook: ws.default_notebook as string }, notebooks: validatedNotebooks, files: { hide_dotfiles: raw.files && typeof raw.files === 'object' && 'hide_dotfiles' in (raw.files as Record<string, unknown>) ? Boolean((raw.files as Record<string, unknown>).hide_dotfiles) : true } };
 }
 
 /**
@@ -276,9 +232,7 @@ export function discoverTsconfigPaths(repoRoot: string, notebookRoot: string): R
         if (fs.existsSync(configPath)) {
           try {
             const raw = fs.readFileSync(configPath, 'utf-8');
-            const cleaned = raw
-              .replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1')
-              .replace(/,\s*([}\]])/g, '$1');
+            const cleaned = raw.replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1').replace(/,\s*([}\]])/g, '$1');
             const parsed = JSON.parse(cleaned);
             const compilerOptions = parsed?.compilerOptions;
             if (compilerOptions && typeof compilerOptions.paths === 'object') {
@@ -287,9 +241,7 @@ export function discoverTsconfigPaths(repoRoot: string, notebookRoot: string): R
               for (const [pattern, targetList] of Object.entries(compilerOptions.paths)) {
                 if (Array.isArray(targetList) && typeof targetList[0] === 'string') {
                   const targetFirst = targetList[0];
-                  const resolvedTarget = path.posix.normalize(
-                    path.posix.join(relProjectDir, baseUrl, targetFirst)
-                  );
+                  const resolvedTarget = path.posix.normalize(path.posix.join(relProjectDir, baseUrl, targetFirst));
                   aliases[pattern] = resolvedTarget;
                 }
               }
@@ -314,10 +266,7 @@ function attachTsconfigPaths(parsed: WorkspaceConfig, repoRoot: string): Workspa
   parsed.notebooks = parsed.notebooks.map((nb) => {
     const discovered = discoverTsconfigPaths(repoRoot, nb.root);
     const pathAliases = { ...discovered, ...(nb.pathAliases || {}) };
-    return {
-      ...nb,
-      ...(Object.keys(pathAliases).length > 0 ? { pathAliases } : {}),
-    };
+    return { ...nb, ...(Object.keys(pathAliases).length > 0 ? { pathAliases } : {}) };
   });
   return parsed;
 }
@@ -362,10 +311,7 @@ export function loadWorkspaceConfig(repoRoot: string): WorkspaceConfig | null {
     const exampleConfig = path.join(exampleDir, exampleFilename);
     const content = fs.readFileSync(exampleConfig, 'utf-8');
     const parsed = parseWorkspaceConfig(content);
-    parsed.notebooks = parsed.notebooks.map((nb) => ({
-      ...nb,
-      root: path.posix.join('examples/workspace', nb.root),
-    }));
+    parsed.notebooks = parsed.notebooks.map((nb) => ({ ...nb, root: path.posix.join('examples/workspace', nb.root) }));
     return attachTsconfigPaths(parsed, repoRoot);
   }
 

@@ -71,13 +71,7 @@ export function parseNoteContent(rawContent: string, fallbackFilename?: string):
     metadata.tags = metadata.tags.map(String);
   }
 
-  return {
-    metadata,
-    content,
-    title,
-    hasFrontmatter,
-    lineNumberOffset: hasFrontmatter && match ? (match[0].match(/\n/g) || []).length : 0,
-  };
+  return { metadata, content, title, hasFrontmatter, lineNumberOffset: hasFrontmatter && match ? (match[0].match(/\n/g) || []).length : 0 };
 }
 
 /** Forces a document's `created`/`updated` scalars to render double-quoted, matching existing note style. */
@@ -210,13 +204,7 @@ function patchNoteMetadata(raw: string, metadata: NoteMetadata): string | null {
  * from scratch, so a metadata-only edit (e.g. a status change) changes only the lines of the
  * keys it actually edits.
  */
-export function serializeNoteContent(
-  metadata: NoteMetadata,
-  content: string,
-  isNew: boolean,
-  now: Date = new Date(),
-  existingRaw?: string
-): string {
+export function serializeNoteContent(metadata: NoteMetadata, content: string, isNew: boolean, now: Date = new Date(), existingRaw?: string): string {
   const stamped = stampSaveTimestamps(metadata, isNew, now);
   const keys = Object.keys(stamped);
   const trimmedContent = content.trim();
@@ -332,11 +320,7 @@ function setQuoted(document: YAML.Document, key: string, value: string): void {
   document.set(key, node);
 }
 
-export function fillMissingNoteTimestamps(
-  raw: string,
-  created: string | undefined,
-  updated: string | undefined
-): { raw: string; changed: boolean } {
+export function fillMissingNoteTimestamps(raw: string, created: string | undefined, updated: string | undefined): { raw: string; changed: boolean; } {
   const match = raw.match(FRONTMATTER_REGEX);
   if (match && parseNoteContent(raw).hasFrontmatter) {
     const document = YAML.parseDocument(match[1]);

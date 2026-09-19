@@ -1,8 +1,18 @@
 import { AwsClient, AwsV4Signer } from 'aws4fetch';
 import { isValidR2Key, r2PreviewType } from './r2-references.js';
 
-export interface R2Settings { accountId: string; accessKeyId: string; secretAccessKey: string; bucket: string; endpoint?: string }
-export interface R2Object { key: string; size: number; lastModified: string }
+export interface R2Settings {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+  endpoint?: string;
+}
+export interface R2Object {
+  key: string;
+  size: number;
+  lastModified: string;
+}
 
 /** Reads R2 settings from deployment environment; returns null when R2 is not configured. */
 export function r2SettingsFromEnv(env: NodeJS.ProcessEnv = process.env): R2Settings | null {
@@ -24,8 +34,7 @@ function objectUrl(settings: R2Settings, key: string): URL {
 
 async function presign(settings: R2Settings, url: URL, method: 'GET' | 'PUT', expiresInSeconds: number, headers?: Record<string, string>): Promise<string> {
   url.searchParams.set('X-Amz-Expires', String(expiresInSeconds));
-  const signer = new AwsV4Signer({ url: url.toString(), method, headers, accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey,
-    service: 's3', region: 'auto', signQuery: true });
+  const signer = new AwsV4Signer({ url: url.toString(), method, headers, accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey, service: 's3', region: 'auto', signQuery: true });
   return (await signer.sign()).url.toString();
 }
 
@@ -55,9 +64,11 @@ async function send(settings: R2Settings, url: URL | string, init: RequestInit =
   return response;
 }
 
-const xmlText = (value: string) => value.replace(/&(lt|gt|quot|apos|amp|#(\d+)|#x([0-9a-f]+));/gi, (_, name: string, dec?: string, hex?: string) =>
-  dec ? String.fromCodePoint(Number(dec)) : hex ? String.fromCodePoint(parseInt(hex, 16)) : ({ lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' } as Record<string, string>)[name.toLowerCase()]);
-const xmlField = (xml: string, name: string) => { const match = new RegExp(`<${name}>([\\s\\S]*?)</${name}>`).exec(xml); return match ? xmlText(match[1]) : ''; };
+const xmlText = (value: string) => value.replace(/&(lt|gt|quot|apos|amp|#(\d+)|#x([0-9a-f]+));/gi, (_, name: string, dec?: string, hex?: string) => dec ? String.fromCodePoint(Number(dec)) : hex ? String.fromCodePoint(parseInt(hex, 16)) : ({ lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' } as Record<string, string>)[name.toLowerCase()]);
+const xmlField = (xml: string, name: string) => {
+  const match = new RegExp(`<${name}>([\\s\\S]*?)</${name}>`).exec(xml);
+  return match ? xmlText(match[1]) : '';
+};
 
 /** Lists every object under `prefix`, following ListObjectsV2 continuation tokens. */
 export async function listR2Objects(settings: R2Settings, prefix: string): Promise<R2Object[]> {

@@ -1,22 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import YAML from 'yaml';
-import { planFileChange, managedNotebook, editableFile, type FileSnapshot } from '../src/file-manager.js';
+import { editableFile, type FileSnapshot, managedNotebook, planFileChange } from '../src/file-manager.js';
 import { createStudyNote, STUDY_FILE } from '../src/study.js';
 import { SCREEN_PAGE_FILE } from '../src/screen-page.js';
 import { assetHash } from '../src/assets.js';
 
 function fixture(): FileSnapshot {
   const note = createStudyNote({ notebookId: 'a', path: 'notes/a/one/note.md', title: 'Note', content: '# Note', metadata: {} });
-  return { notebooks: [{ id: 'a', title: 'A', root: 'notes/a' }, { id: 'b', title: 'B', root: 'notes/b' }], directories: ['notes/a', 'notes/a/one', 'notes/a/two', 'notes/a/one/child', 'notes/b'], protectedPaths: [], files: new Map([
-    ['notes/a/one/note.md', Buffer.from('---\ncustom: keep\n---\n# Note\n\n![image](image.png)\n[other](../two/other.md)\n')],
-    ['notes/a/one/image.png', Buffer.from([137, 80, 78, 71, 0, 255])],
-    ['notes/a/two/other.md', Buffer.from('[note](../one/note.md#heading)\n![image](/api/files/raw?notebookId=a&path=notes%2Fa%2Fone%2Fimage.png)\n')],
-    ['notes/a/.hidden.json', Buffer.from('{"keep":true}\r\n')],
-    ['notes/a/one/_dir.yml', Buffer.from('title: One\ncustom: preserve\n')],
-    ['notes/a/two/_dir.yml', Buffer.from('title: Two\ncustom: destination\n')],
-    [STUDY_FILE, Buffer.from(YAML.stringify({ version: 1, notes: [note], events: [] }))],
-    [SCREEN_PAGE_FILE, Buffer.from(YAML.stringify({ version: 2, rows: [{ id: 'row', notebookId: 'a', kind: 'custom', name: 'Row', view: 'small', items: [{ id: 'note', kind: 'note', notebookId: 'a', path: 'notes/a/one/note.md' }, { id: 'image', kind: 'asset', notebookId: 'a', path: 'notes/a/one/image.png' }] }] }))],
-  ]) };
+  return { notebooks: [{ id: 'a', title: 'A', root: 'notes/a' }, { id: 'b', title: 'B', root: 'notes/b' }], directories: ['notes/a', 'notes/a/one', 'notes/a/two', 'notes/a/one/child', 'notes/b'], protectedPaths: [], files: new Map([['notes/a/one/note.md', Buffer.from('---\ncustom: keep\n---\n# Note\n\n![image](image.png)\n[other](../two/other.md)\n')], ['notes/a/one/image.png', Buffer.from([137, 80, 78, 71, 0, 255])], ['notes/a/two/other.md', Buffer.from('[note](../one/note.md#heading)\n![image](/api/files/raw?notebookId=a&path=notes%2Fa%2Fone%2Fimage.png)\n')], ['notes/a/.hidden.json', Buffer.from('{"keep":true}\r\n')], ['notes/a/one/_dir.yml', Buffer.from('title: One\ncustom: preserve\n')], ['notes/a/two/_dir.yml', Buffer.from('title: Two\ncustom: destination\n')], [STUDY_FILE, Buffer.from(YAML.stringify({ version: 1, notes: [note], events: [] }))], [SCREEN_PAGE_FILE, Buffer.from(YAML.stringify({ version: 2, rows: [{ id: 'row', notebookId: 'a', kind: 'custom', name: 'Row', view: 'small', items: [{ id: 'note', kind: 'note', notebookId: 'a', path: 'notes/a/one/note.md' }, { id: 'image', kind: 'asset', notebookId: 'a', path: 'notes/a/one/image.png' }] }] }))]]) };
 }
 describe('file planning', () => {
   it('moves a directory with binary files, rewrites references and preserves study identities', () => {
@@ -70,16 +61,7 @@ describe('file planning', () => {
     expect(editableFile('file.pdf', Buffer.from('%PDF text'))).toBeUndefined();
   });
   it('recognizes files under pathAliases target paths in managedNotebook', () => {
-    const notebooks = [
-      {
-        id: 'blog',
-        title: 'Blog',
-        root: 'blog/src/content/posts',
-        pathAliases: {
-          '@/*': 'blog/src/*',
-        },
-      },
-    ];
+    const notebooks = [{ id: 'blog', title: 'Blog', root: 'blog/src/content/posts', pathAliases: { '@/*': 'blog/src/*' } }];
     expect(managedNotebook('blog/src/assets/images/photo.png', notebooks)?.id).toBe('blog');
   });
 });

@@ -1,6 +1,6 @@
 import type { SortField, SortOrder } from '@mygitnotes/core/note-sort';
 
-export { noteUpdatedTime, sortNotes, type SortField, type SortOrder } from '@mygitnotes/core/note-sort';
+export { noteUpdatedTime, type SortField, sortNotes, type SortOrder } from '@mygitnotes/core/note-sort';
 
 export interface SortConfig {
   field: SortField;
@@ -10,10 +10,7 @@ export interface SortConfig {
 export const SORT_FIELD_STORAGE_KEY = 'github-notes:sort-field';
 export const SORT_ORDER_STORAGE_KEY = 'github-notes:sort-order';
 
-export const DEFAULT_SORT: SortConfig = {
-  field: 'updated',
-  order: 'desc',
-};
+export const DEFAULT_SORT: SortConfig = { field: 'updated', order: 'desc' };
 
 /**
  * Loads sort configuration from localStorage with safe fallback to DEFAULT_SORT.

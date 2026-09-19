@@ -1,13 +1,11 @@
-export type WorkspaceLink =
-  | { kind: 'external'; url: string }
-  | { kind: 'anchor'; anchor: string }
-  | { kind: 'path'; path: string; anchor: string }
-  | { kind: 'route'; url: string }
-  | { kind: 'asset-hash'; hash: string };
+export type WorkspaceLink = { kind: 'external'; url: string; } | { kind: 'anchor'; anchor: string; } | { kind: 'path'; path: string; anchor: string; } | { kind: 'route'; url: string; } | { kind: 'asset-hash'; hash: string; };
 
 export function noteLinkHref(sourcePath: string, targetPath: string): string {
   const source = sourcePath.split('/').slice(0, -1), target = targetPath.split('/');
-  while (source.length && target.length && source[0] === target[0]) { source.shift(); target.shift(); }
+  while (source.length && target.length && source[0] === target[0]) {
+    source.shift();
+    target.shift();
+  }
   return [...source.map(() => '..'), ...target.map(part => encodeURIComponent(part).replace(/[!'()*]/g, value => '%' + value.charCodeAt(0).toString(16).toUpperCase()))].join('/');
 }
 
@@ -21,13 +19,7 @@ export function noteMarkdownLink(sourcePath: string, targetPath: string, title: 
 }
 
 export function headingSlug(text: string): string {
-  return text
-    .replace(/^#{1,6}\s*/, '')
-    .replace(/[*_`]/g, '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s-]/gu, '')
-    .replace(/\s+/g, '-');
+  return text.replace(/^#{1,6}\s*/, '').replace(/[*_`]/g, '').trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-');
 }
 
 import type { NotebookConfig } from './types.js';
@@ -42,12 +34,7 @@ export function getWorkspaceNotebooks(): NotebookConfig[] {
   return workspaceNotebooksRegistry;
 }
 
-export function resolveWorkspaceHref(
-  value: string,
-  sourcePath: string,
-  aliasesOrNotebooks?: Record<string, string> | NotebookConfig[],
-  currentOrigin?: string
-): WorkspaceLink | null {
+export function resolveWorkspaceHref(value: string, sourcePath: string, aliasesOrNotebooks?: Record<string, string> | NotebookConfig[], currentOrigin?: string): WorkspaceLink | null {
   const href = value.trim();
   if (!href || /[\\\x00-\x1f\x7f]/.test(href)) return null;
   try {
@@ -68,11 +55,7 @@ export function resolveWorkspaceHref(
   }
 }
 
-function resolveRelativeWorkspaceHref(
-  href: string,
-  sourcePath: string,
-  aliasesOrNotebooks?: Record<string, string> | NotebookConfig[]
-): WorkspaceLink | null {
+function resolveRelativeWorkspaceHref(href: string, sourcePath: string, aliasesOrNotebooks?: Record<string, string> | NotebookConfig[]): WorkspaceLink | null {
   try {
     if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return null;
     if (href.startsWith('#')) return { kind: 'anchor', anchor: decodeURIComponent(href.slice(1)) };

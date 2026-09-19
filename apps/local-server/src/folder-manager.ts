@@ -2,7 +2,7 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { loadWorkspaceConfig, resolveSafePath, isNotebookContent, planFolderChange, FolderCommandSchema, RemoteSource, createRemoteSource, SourceError, WORKSPACE_DOCUMENTS, type FolderSnapshot, type SourceConfig } from '@mygitnotes/core';
+import { createRemoteSource, FolderCommandSchema, type FolderSnapshot, isNotebookContent, loadWorkspaceConfig, planFolderChange, RemoteSource, resolveSafePath, type SourceConfig, SourceError, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
@@ -15,8 +15,11 @@ function regularPath(root: string, relative: string) {
   let current = root;
   for (const part of relative.split('/')) {
     current = path.join(current, part);
-    try { if (fs.lstatSync(current).isSymbolicLink()) throw new SourceError('Symlinks are protected.', 403); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    try {
+      if (fs.lstatSync(current).isSymbolicLink()) throw new SourceError('Symlinks are protected.', 403);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
   }
   return full;
 }
@@ -41,8 +44,12 @@ export function localFolderSnapshot(root: string): FolderSnapshot {
       for (const entry of fs.readdirSync(regularPath(root, directory), { withFileTypes: true })) {
         const file = `${directory}/${entry.name}`;
         const relative = file.slice(nb.root.length + 1);
-        if (entry.isSymbolicLink() || !isNotebookContent(relative, nb) || !entry.isDirectory() && (!entry.isFile() || !isText(file))) { snapshot.protectedPaths.push(file); continue; }
-        if (entry.isDirectory()) visit(file); else read(file);
+        if (entry.isSymbolicLink() || !isNotebookContent(relative, nb) || !entry.isDirectory() && (!entry.isFile() || !isText(file))) {
+          snapshot.protectedPaths.push(file);
+          continue;
+        }
+        if (entry.isDirectory()) visit(file);
+        else read(file);
       }
     };
     visit(nb.root);
@@ -70,13 +77,23 @@ export function applyLocalFolderPlan(root: string, before: FolderSnapshot, after
   const write = (file: string, content: string) => {
     const target = regularPath(root, file);
     const temporary = `${target}.${randomUUID()}.tmp`;
-    try { fs.writeFileSync(temporary, content, { flag: 'wx', mode: modes.get(file) || 0o600 }); fs.renameSync(temporary, target); }
-    finally { if (fs.existsSync(temporary)) fs.unlinkSync(temporary); }
+    try {
+      fs.writeFileSync(temporary, content, { flag: 'wx', mode: modes.get(file) || 0o600 });
+      fs.renameSync(temporary, target);
+    } finally {
+      if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+    }
   };
   try {
     for (const dir of newDirs) fs.mkdirSync(regularPath(root, dir), { recursive: true });
-    for (const change of changes.filter(c => c.content !== undefined)) { write(change.path, change.content!); applied.push(change.path); }
-    for (const change of changes.filter(c => c.sha === null)) { fs.unlinkSync(regularPath(root, change.path)); applied.push(change.path); }
+    for (const change of changes.filter(c => c.content !== undefined)) {
+      write(change.path, change.content!);
+      applied.push(change.path);
+    }
+    for (const change of changes.filter(c => c.sha === null)) {
+      fs.unlinkSync(regularPath(root, change.path));
+      applied.push(change.path);
+    }
     for (const dir of removedDirs) fs.rmdirSync(regularPath(root, dir));
   } catch (error) {
     for (const dir of [...removedDirs].reverse()) fs.mkdirSync(regularPath(root, dir), { recursive: true });
@@ -102,7 +119,10 @@ async function remoteSnapshot(reader: RemoteSource): Promise<FolderSnapshot> {
     const allowed = isDocument || nb && (entry.path === nb.root || isNotebookContent(entry.path.slice(nb.root.length + 1), nb));
     if (!allowed || entry.mode === '120000' || !['blob', 'tree'].includes(entry.type) || entry.type === 'blob' && !isDocument && !isText(entry.path)) snapshot.protectedPaths.push(entry.path);
     else if (entry.type === 'tree') snapshot.directories.push(entry.path);
-    else { readable.push(entry.path); bytes += entry.size || 0; }
+    else {
+      readable.push(entry.path);
+      bytes += entry.size || 0;
+    }
   }
   if (bytes > 32 * 1024 * 1024) throw new SourceError('Folder operations currently support up to 32 MiB of notebook text.', 413);
   await reader.prefetchFiles(readable);
@@ -118,7 +138,9 @@ export function createFolderManagerRouter(base: string, source: SourceConfig): R
       const token = await authToken(req, base);
       const snapshot = await createRemoteSource(source, token).getSnapshot(true);
       res.json({ revision: snapshot.sha, writable: Boolean(token && snapshot.info.permissions?.push && source.branch === 'main') });
-    } catch (error) { fail(res, error); }
+    } catch (error) {
+      fail(res, error);
+    }
   });
   router.post('/', async (req, res) => {
     try {
@@ -126,12 +148,12 @@ export function createFolderManagerRouter(base: string, source: SourceConfig): R
       if (!command.success || typeof req.body?.revision !== 'string') throw new SourceError('Invalid folder request.', 400);
       if (source.type === 'local') {
         return await serializeWorkspaceMutation(source.path, async () => {
-        if (await getCurrentBranch(source.path) !== 'main') throw new SourceError('Folder changes require the main workspace branch.', 403);
-        const before = localFolderSnapshot(source.path);
-        if (revision(before) !== req.body.revision) throw new SourceError('The workspace changed. Reload the folders and try again.', 409);
-        const after = planFolderChange(before, command.data);
-        applyLocalFolderPlan(source.path, before, after);
-        return res.json({ selectedPath: after.selectedPath, revision: revision(localFolderSnapshot(source.path)) });
+          if (await getCurrentBranch(source.path) !== 'main') throw new SourceError('Folder changes require the main workspace branch.', 403);
+          const before = localFolderSnapshot(source.path);
+          if (revision(before) !== req.body.revision) throw new SourceError('The workspace changed. Reload the folders and try again.', 409);
+          const after = planFolderChange(before, command.data);
+          applyLocalFolderPlan(source.path, before, after);
+          return res.json({ selectedPath: after.selectedPath, revision: revision(localFolderSnapshot(source.path)) });
         });
       }
       const token = await authToken(req, base);
@@ -144,7 +166,9 @@ export function createFolderManagerRouter(base: string, source: SourceConfig): R
       const changes = changesFor(before, after);
       const receipt = changes.length ? await reader.commitChanges(changes, req.body.revision, command.data.kind, 'folders') : { revision: current.sha };
       res.json({ selectedPath: after.selectedPath, revision: receipt.revision });
-    } catch (error) { fail(res, error); }
+    } catch (error) {
+      fail(res, error);
+    }
   });
   return router;
 }

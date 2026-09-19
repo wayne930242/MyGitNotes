@@ -12,14 +12,7 @@ export const THEME_FAMILY_KEY = 'github_notes_theme';
 export const THEME_MODE_KEY = 'github_notes_theme_mode';
 
 /** Retired single-mode themes; a saved retired id still tells us the mode the user chose. */
-const RETIRED_THEME_MODES: Record<string, PaletteMode> = {
-  'clean-indigo': 'light',
-  'warm-sepia': 'light',
-  'forest-emerald': 'light',
-  'github-dark': 'dark',
-  'nord-arctic': 'dark',
-  'midnight-violet': 'dark',
-};
+const RETIRED_THEME_MODES: Record<string, PaletteMode> = { 'clean-indigo': 'light', 'warm-sepia': 'light', 'forest-emerald': 'light', 'github-dark': 'dark', 'nord-arctic': 'dark', 'midnight-violet': 'dark' };
 
 export function getFamily(id: string): PaletteFamily {
   return PALETTE_FAMILIES.find(family => family.id === id) ?? PALETTE_FAMILIES.find(family => family.id === DEFAULT_FAMILY_ID)!;
@@ -58,31 +51,10 @@ export function buttonTextColor(background: string): string {
 
 /** CSS custom properties for one variant; every UI colour resolves from these. */
 export function themeTokens(variant: PaletteVariant): Record<string, string> {
-  const tokens: Record<string, string> = {
-    '--color-bg': variant.background,
-    '--color-surface': variant.surface,
-    '--color-sidebar': variant.sidebar,
-    '--color-border': variant.border,
-    '--color-text': variant.text,
-    '--color-muted': variant.muted,
-    '--color-primary': variant.primary,
-    '--color-primary-hover': variant.primaryHover,
-    '--color-on-primary': buttonTextColor(variant.primary),
-    '--color-on-primary-hover': buttonTextColor(variant.primaryHover),
-    '--color-selection': variant.selection,
-    '--color-code-bg': variant.codeBackground,
-    '--color-danger': variant.danger,
-    '--color-on-danger': buttonTextColor(variant.danger),
-    '--color-warning': variant.warning,
-    '--color-on-warning': buttonTextColor(variant.warning),
-    '--color-success': variant.success,
-    '--color-on-success': buttonTextColor(variant.success),
-    '--color-info': variant.info,
-    '--color-on-info': buttonTextColor(variant.info),
-    '--color-scrim': INK.black,
-    '--color-on-scrim': INK.white,
-  };
-  variant.accents.forEach((accent, index) => { tokens[`--color-accent-${index + 1}`] = accent; });
+  const tokens: Record<string, string> = { '--color-bg': variant.background, '--color-surface': variant.surface, '--color-sidebar': variant.sidebar, '--color-border': variant.border, '--color-text': variant.text, '--color-muted': variant.muted, '--color-primary': variant.primary, '--color-primary-hover': variant.primaryHover, '--color-on-primary': buttonTextColor(variant.primary), '--color-on-primary-hover': buttonTextColor(variant.primaryHover), '--color-selection': variant.selection, '--color-code-bg': variant.codeBackground, '--color-danger': variant.danger, '--color-on-danger': buttonTextColor(variant.danger), '--color-warning': variant.warning, '--color-on-warning': buttonTextColor(variant.warning), '--color-success': variant.success, '--color-on-success': buttonTextColor(variant.success), '--color-info': variant.info, '--color-on-info': buttonTextColor(variant.info), '--color-scrim': INK.black, '--color-on-scrim': INK.white };
+  variant.accents.forEach((accent, index) => {
+    tokens[`--color-accent-${index + 1}`] = accent;
+  });
   return tokens;
 }
 

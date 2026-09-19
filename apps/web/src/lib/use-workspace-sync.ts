@@ -1,26 +1,10 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useScreenPage } from './use-screen-page.js';
 import { useFocusPage } from './use-focus-page.js';
-import {
-  WorkspaceConfig,
-  FolderItem,
-  NoteItem,
-  AssetItem,
-  GitStatus,
-} from './types.js';
-import {
-  fetchWorkspace,
-  fetchFolders,
-  fetchAssets,
-  fetchGitStatus,
-} from './api.js';
-import {
-  readWorkingNotes,
-  updateWorkingNote,
-  clearCommittedNotes,
-  WorkingNotes,
-} from './working-notes.js';
+import { AssetItem, FolderItem, GitStatus, NoteItem, WorkspaceConfig } from './types.js';
+import { fetchAssets, fetchFolders, fetchGitStatus, fetchWorkspace } from './api.js';
+import { clearCommittedNotes, readWorkingNotes, updateWorkingNote, WorkingNotes } from './working-notes.js';
 import { sameValue } from './merge-note.js';
 import { invalidateNoteQueries } from './use-note-queries.js';
 import { setWorkspaceNotebooks } from './workspace-links.js';
@@ -55,8 +39,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [workingNotes, setWorkingNotes] = useState<WorkingNotes>({});
 
-  const selectedNotebookId =
-    routeNotebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
+  const selectedNotebookId = routeNotebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
 
   const workingScope = `${sourceId}:${branch}`;
 
@@ -67,7 +50,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     },
     remote,
     Boolean(config && sourceId),
-    config
+    config,
   );
 
   const focus = useFocusPage(
@@ -77,7 +60,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     },
     remote,
     Boolean(config && sourceId),
-    config
+    config,
   );
 
   const documents = [screen, focus];
@@ -87,16 +70,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
 
   const gitStatus = useMemo<GitStatus | null>(() => {
     if (remote) {
-      return {
-        branch,
-        isClean: !pendingDocuments.length && Object.keys(activeWorkingNotes).length === 0,
-        staged: [],
-        modified: [
-          ...Object.values(activeWorkingNotes).filter((entry) => entry.base).map((entry) => entry.note.path),
-          ...pendingDocuments.map((document) => document.file),
-        ],
-        untracked: Object.values(activeWorkingNotes).filter((entry) => !entry.base).map((entry) => entry.note.path),
-      };
+      return { branch, isClean: !pendingDocuments.length && Object.keys(activeWorkingNotes).length === 0, staged: [], modified: [...Object.values(activeWorkingNotes).filter((entry) => entry.base).map((entry) => entry.note.path), ...pendingDocuments.map((document) => document.file)], untracked: Object.values(activeWorkingNotes).filter((entry) => !entry.base).map((entry) => entry.note.path) };
     }
     return serverGitStatus;
   }, [remote, branch, workingNotes, canWrite, serverGitStatus, pendingDocuments.map((document) => document.file).join('\n'), activeWorkingNotes]);
@@ -123,11 +97,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
       const ws = await fetchWorkspace();
       if (request !== refreshRequest.current) return;
       const folderRequest = fetchFolders();
-      const workspace = JSON.stringify([
-        ws.source.identity,
-        ws.branch,
-        ws.config?.notebooks.map((nb) => [nb.id, nb.root]),
-      ]);
+      const workspace = JSON.stringify([ws.source.identity, ws.branch, ws.config?.notebooks.map((nb) => [nb.id, nb.root])]);
       // A local workspace keeps one empty revision, so its cached answers are refetched by hand.
       if (ws.capabilities.local && loadedWorkspace.current) void invalidateNoteQueries(queryClient);
       loadedWorkspace.current = workspace;
@@ -167,26 +137,16 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   useEffect(() => {
     if (!sourceId || !config) return;
     let active = true;
-    fetchAssets(selectedNotebookId)
-      .then((items) => {
-        if (active) setAssets(items);
-      })
-      .catch(console.error);
+    fetchAssets(selectedNotebookId).then((items) => {
+      if (active) setAssets(items);
+    }).catch(console.error);
     return () => {
       active = false;
     };
   }, [sourceId, selectedNotebookId, config]);
 
   const stageWorkingNote = (note: NoteItem, base: NoteItem | null, blocked?: string) => {
-    note = {
-      ...note,
-      status: typeof note.metadata.status === 'string' ? note.metadata.status : undefined,
-      tags: Array.isArray(note.metadata.tags) ? note.metadata.tags.map(String) : [],
-      title:
-        typeof note.metadata.title === 'string' && note.metadata.title
-          ? note.metadata.title
-          : note.content.match(/^#\s+(.+)$/m)?.[1] || note.title,
-    };
+    note = { ...note, status: typeof note.metadata.status === 'string' ? note.metadata.status : undefined, tags: Array.isArray(note.metadata.tags) ? note.metadata.tags.map(String) : [], title: typeof note.metadata.title === 'string' && note.metadata.title ? note.metadata.title : note.content.match(/^#\s+(.+)$/m)?.[1] || note.title };
     const previous = readWorkingNotes(workingScope)[note.path];
     const entry = { note, base, ...(blocked ? { blocked } : {}) };
     if (!sameValue(previous, entry)) {
@@ -204,40 +164,5 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     setWorkingNotes(clearCommittedNotes(workingScope, sent));
   };
 
-  return {
-    selectedNotebookId,
-    folders,
-    setFolders,
-    sourceId,
-    remote,
-    canWrite,
-    revision,
-    setRevision,
-    loadError,
-    loading,
-    setLoading,
-    actionError,
-    setActionError,
-    repoRoot,
-    branch,
-    config,
-    setConfig,
-    serverGitStatus,
-    gitStatus,
-    setGitStatus,
-    assets,
-    setAssets,
-    workingNotes,
-    setWorkingNotes,
-    workingScope,
-    activeWorkingNotes,
-    screen,
-    focus,
-    documents,
-    pendingDocuments,
-    refreshWorkspace,
-    stageWorkingNote,
-    discardWorkingNote,
-    clearCommittedWorkingNotes,
-  };
+  return { selectedNotebookId, folders, setFolders, sourceId, remote, canWrite, revision, setRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, branch, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, setWorkingNotes, workingScope, activeWorkingNotes, screen, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote, discardWorkingNote, clearCommittedWorkingNotes };
 }

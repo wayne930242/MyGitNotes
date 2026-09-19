@@ -1,23 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { classifyResource, isHiddenPath } from '../src/classifier.js';
 import { WorkspaceConfig } from '../src/types.js';
 
 describe('Resource Classifier', () => {
-  const sampleConfig: WorkspaceConfig = {
-    schema_version: 1,
-    workspace: {
-      title: 'Test Workspace',
-      default_notebook: 'example',
-    },
-    notebooks: [
-      {
-        id: 'example',
-        title: 'Example Notebook',
-        root: 'notes/example',
-        assets: 'assets',
-      },
-    ],
-  };
+  const sampleConfig: WorkspaceConfig = { schema_version: 1, workspace: { title: 'Test Workspace', default_notebook: 'example' }, notebooks: [{ id: 'example', title: 'Example Notebook', root: 'notes/example', assets: 'assets' }] };
 
   it('classifies notes properly', () => {
     expect(classifyResource('notes/example/intro.md', sampleConfig).type).toBe('note');
@@ -47,19 +33,7 @@ describe('Resource Classifier', () => {
   });
 
   it('classifies assets under notebook pathAliases target directories', () => {
-    const aliasedConfig: WorkspaceConfig = {
-      ...sampleConfig,
-      notebooks: [
-        {
-          id: 'blog',
-          title: 'Blog',
-          root: 'blog/src/content/posts',
-          pathAliases: {
-            '@/*': 'blog/src/*',
-          },
-        },
-      ],
-    };
+    const aliasedConfig: WorkspaceConfig = { ...sampleConfig, notebooks: [{ id: 'blog', title: 'Blog', root: 'blog/src/content/posts', pathAliases: { '@/*': 'blog/src/*' } }] };
     const res = classifyResource('blog/src/assets/images/two-params-weibull/fix-beta.png', aliasedConfig);
     expect(res.type).toBe('asset');
     expect(res.notebookId).toBe('blog');

@@ -15,35 +15,29 @@ afterEach(cleanup);
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (err: unknown) => void;
-  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
   return { promise, resolve, reject };
 }
 
-function renderTagActions(overrides: Partial<{
-  onPreviewUsage: (tag: string) => Promise<number>;
-  onRename: (from: string, to: string) => Promise<void>;
-  onMerge: (from: string, into: string) => Promise<void>;
-  onDelete: (tag: string) => Promise<void>;
-  allTags: string[];
-}> = {}) {
+function renderTagActions(overrides: Partial<{ onPreviewUsage: (tag: string) => Promise<number>; onRename: (from: string, to: string) => Promise<void>; onMerge: (from: string, into: string) => Promise<void>; onDelete: (tag: string) => Promise<void>; allTags: string[]; }> = {}) {
   const onPreviewUsage = overrides.onPreviewUsage ?? vi.fn().mockResolvedValue(0);
   const onRename = overrides.onRename ?? vi.fn().mockResolvedValue(undefined);
   const onMerge = overrides.onMerge ?? vi.fn().mockResolvedValue(undefined);
   const onDelete = overrides.onDelete ?? vi.fn().mockResolvedValue(undefined);
   const allTags = overrides.allTags ?? [];
-  const utils = render(
-    createElement(
-      TagActions,
-      { tag: 'alpha', allTags, onPreviewUsage, onRename, onMerge, onDelete, children: createElement('button', {}, '#alpha') }
-    )
-  );
+  const utils = render(createElement(TagActions, { tag: 'alpha', allTags, onPreviewUsage, onRename, onMerge, onDelete, children: createElement('button', {}, '#alpha') }));
   return { ...utils, onPreviewUsage, onRename, onMerge, onDelete };
 }
 
 async function openMenu() {
   const trigger = screen.getByRole('button', { name: /manage tag/i });
   trigger.focus();
-  await act(async () => { fireEvent.keyDown(trigger, { key: 'Enter' }); });
+  await act(async () => {
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+  });
 }
 
 describe('TagActions cancel during preview', () => {
@@ -52,7 +46,9 @@ describe('TagActions cancel during preview', () => {
     renderTagActions({ onPreviewUsage: vi.fn().mockReturnValue(promise) });
 
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Rename')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Rename'));
+    });
 
     const cancelButton = screen.getByRole('button', { name: 'Cancel' });
     expect(cancelButton).not.toBeDisabled();
@@ -66,7 +62,9 @@ describe('TagActions cancel during preview', () => {
     renderTagActions({ onPreviewUsage: vi.fn().mockReturnValue(promise) });
 
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Rename')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Rename'));
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByPlaceholderText('New tag name')).not.toBeInTheDocument();
@@ -79,38 +77,56 @@ describe('TagActions cancel during preview', () => {
     renderTagActions({ onPreviewUsage });
 
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Rename')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Rename'));
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Rename')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Rename'));
+    });
 
-    await act(async () => { first.resolve(42); await Promise.resolve(); });
+    await act(async () => {
+      first.resolve(42);
+      await Promise.resolve();
+    });
     expect(screen.getByRole('status')).toHaveTextContent('…');
 
-    await act(async () => { second.resolve(7); await second.promise; });
+    await act(async () => {
+      second.resolve(7);
+      await second.promise;
+    });
     expect(screen.getByText('7 notes affected across the workspace')).toBeInTheDocument();
   });
 
   it('ignores a preview that resolves after reopening a different form', async () => {
     const first = deferred<number>();
     const second = deferred<number>();
-    const onPreviewUsage = vi.fn()
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise);
+    const onPreviewUsage = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     renderTagActions({ onPreviewUsage });
 
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Rename')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Rename'));
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Merge into…')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Merge into…'));
+    });
 
-    await act(async () => { first.resolve(99); await Promise.resolve(); });
+    await act(async () => {
+      first.resolve(99);
+      await Promise.resolve();
+    });
     expect(screen.getByRole('status', { name: '' })).toHaveTextContent('…');
 
-    await act(async () => { second.resolve(3); await second.promise; });
+    await act(async () => {
+      second.resolve(3);
+      await second.promise;
+    });
     expect(screen.getByText('3 notes affected across the workspace')).toBeInTheDocument();
   });
 
@@ -119,12 +135,17 @@ describe('TagActions cancel during preview', () => {
     renderTagActions({ onPreviewUsage: vi.fn().mockReturnValue(promise) });
 
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Rename')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Rename'));
+    });
     fireEvent.change(screen.getByPlaceholderText('New tag name'), { target: { value: 'beta' } });
 
     expect(screen.getByRole('button', { name: /Rename in/i })).toBeDisabled();
 
-    await act(async () => { resolve(5); await promise; });
+    await act(async () => {
+      resolve(5);
+      await promise;
+    });
     expect(screen.getByRole('button', { name: /Rename in/i })).not.toBeDisabled();
   });
 });
@@ -135,7 +156,9 @@ describe('TagActions form vs chip visibility', () => {
 
     expect(screen.getByText('#alpha')).toBeInTheDocument();
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Rename')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Rename'));
+    });
 
     expect(screen.queryByText('#alpha')).not.toBeInTheDocument();
     expect(screen.getByText('Rename #alpha')).toBeInTheDocument();
@@ -144,7 +167,9 @@ describe('TagActions form vs chip visibility', () => {
   it('restores the chip after Cancel', async () => {
     renderTagActions({ onPreviewUsage: vi.fn().mockResolvedValue(0) });
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Rename')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Rename'));
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.getByText('#alpha')).toBeInTheDocument();
   });
@@ -154,7 +179,9 @@ describe('TagActions merge target autocomplete', () => {
   it('suggests matching workspace tags excluding the source tag', async () => {
     renderTagActions({ onPreviewUsage: vi.fn().mockResolvedValue(0), allTags: ['alpha', 'beta', 'betting', 'gamma'] });
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Merge into…')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Merge into…'));
+    });
 
     fireEvent.change(screen.getByPlaceholderText('Target tag'), { target: { value: 'bet' } });
     expect(screen.getByRole('option', { name: 'beta' })).toBeInTheDocument();
@@ -165,7 +192,9 @@ describe('TagActions merge target autocomplete', () => {
   it('selects a suggestion with ArrowDown + Enter', async () => {
     renderTagActions({ onPreviewUsage: vi.fn().mockResolvedValue(0), allTags: ['beta', 'betting'] });
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Merge into…')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Merge into…'));
+    });
 
     const input = screen.getByPlaceholderText('Target tag');
     fireEvent.change(input, { target: { value: 'bet' } });
@@ -182,11 +211,15 @@ describe('TagActions merge target autocomplete', () => {
     const onMerge = vi.fn().mockResolvedValue(undefined);
     renderTagActions({ onPreviewUsage: vi.fn().mockResolvedValue(5), onMerge, allTags: ['beta', 'betting'] });
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Merge into…')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Merge into…'));
+    });
 
     const input = screen.getByPlaceholderText('Target tag');
     fireEvent.change(input, { target: { value: 'betting' } });
-    await act(async () => { fireEvent.keyDown(input, { key: 'Enter' }); });
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' });
+    });
 
     expect(onMerge).toHaveBeenCalledWith('alpha', 'betting');
   });
@@ -194,7 +227,9 @@ describe('TagActions merge target autocomplete', () => {
   it('selects a suggestion by click (touch tap)', async () => {
     renderTagActions({ onPreviewUsage: vi.fn().mockResolvedValue(0), allTags: ['beta'] });
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Merge into…')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Merge into…'));
+    });
 
     const input = screen.getByPlaceholderText('Target tag');
     fireEvent.change(input, { target: { value: 'bet' } });
@@ -206,7 +241,9 @@ describe('TagActions merge target autocomplete', () => {
   it('shows a new-tag hint when the typed target does not exist yet', async () => {
     renderTagActions({ onPreviewUsage: vi.fn().mockResolvedValue(0), allTags: ['beta'] });
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Merge into…')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Merge into…'));
+    });
 
     fireEvent.change(screen.getByPlaceholderText('Target tag'), { target: { value: 'brandnew' } });
     expect(screen.getByText('"brandnew" is not an existing tag yet.')).toBeInTheDocument();
@@ -215,7 +252,9 @@ describe('TagActions merge target autocomplete', () => {
   it('hides the new-tag hint while the suggestion list is open to avoid overlapping it', async () => {
     renderTagActions({ onPreviewUsage: vi.fn().mockResolvedValue(0), allTags: ['alphabet'] });
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Merge into…')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Merge into…'));
+    });
 
     fireEvent.change(screen.getByPlaceholderText('Target tag'), { target: { value: 'al' } });
     expect(screen.getByRole('listbox')).toBeInTheDocument();
@@ -229,7 +268,9 @@ describe('TagActions merge target autocomplete', () => {
   it('closes suggestions on Escape without closing the form', async () => {
     renderTagActions({ onPreviewUsage: vi.fn().mockResolvedValue(0), allTags: ['beta'] });
     await openMenu();
-    await act(async () => { fireEvent.click(screen.getByText('Merge into…')); });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Merge into…'));
+    });
 
     const input = screen.getByPlaceholderText('Target tag');
     fireEvent.change(input, { target: { value: 'bet' } });

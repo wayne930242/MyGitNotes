@@ -20,6 +20,9 @@ async function main() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch((err) => { console.error('[github-notes-mcp] Fatal error:', err); process.exit(1); });
+  main().catch((err) => {
+    console.error('[github-notes-mcp] Fatal error:', err);
+    process.exit(1);
+  });
 }
 export * from './remote-tools.js';

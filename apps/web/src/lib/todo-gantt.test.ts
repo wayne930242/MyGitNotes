@@ -1,20 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TodoTask } from './todo-list.js';
-import {
-  computeGanttRange,
-  computeGanttRows,
-  computeGanttTicks,
-  formatDayIndex,
-  ganttDayWidth,
-  getSavedGanttScale,
-  saveGanttScale,
-} from './todo-gantt.js';
+import { computeGanttRange, computeGanttRows, computeGanttTicks, formatDayIndex, ganttDayWidth, getSavedGanttScale, saveGanttScale } from './todo-gantt.js';
 
 function task(overrides: Partial<TodoTask>): TodoTask {
-  return {
-    id: 'a.md#0', notePath: 'a.md', notebookId: 'nb', noteTitle: 'a', lineIndex: 0,
-    lineText: '- [ ] Task', checked: false, ...overrides,
-  };
+  return { id: 'a.md#0', notePath: 'a.md', notebookId: 'nb', noteTitle: 'a', lineIndex: 0, lineText: '- [ ] Task', checked: false, ...overrides };
 }
 
 describe('computeGanttRange', () => {
@@ -27,11 +16,7 @@ describe('computeGanttRange', () => {
   });
 
   it('expands to cover every open task date, ignoring completed tasks', () => {
-    const tasks = [
-      task({ start: '2026-09-10', due: '2026-09-12' }),
-      task({ due: '2026-10-01' }),
-      task({ checked: true, due: '2026-12-25' }),
-    ];
+    const tasks = [task({ start: '2026-09-10', due: '2026-09-12' }), task({ due: '2026-10-01' }), task({ checked: true, due: '2026-12-25' })];
     const range = computeGanttRange(tasks, today);
     const firstDay = formatDayIndex(range.startDay);
     const lastDay = formatDayIndex(range.startDay + range.days - 1);
@@ -98,10 +83,7 @@ describe('computeGanttRows', () => {
 
   it('excludes completed and undated tasks', () => {
     const range = computeGanttRange([], today);
-    const rows = computeGanttRows([
-      task({ id: 't1', checked: true, due: '2026-09-16' }),
-      task({ id: 't2' }),
-    ], range);
+    const rows = computeGanttRows([task({ id: 't1', checked: true, due: '2026-09-16' }), task({ id: 't2' })], range);
     expect(rows).toHaveLength(0);
   });
 

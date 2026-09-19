@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { legacyAllNotebooksRoute, screenLaneRoute, noteRoute, notebookRoute, noteReturnRoute, parseWorkspaceRoute } from './routes.js';
+import { legacyAllNotebooksRoute, notebookRoute, noteReturnRoute, noteRoute, parseWorkspaceRoute, screenLaneRoute } from './routes.js';
 describe('workspace URLs', () => {
   it('returns editors to their original workspace and preserves filters', () => {
     for (const origin of ['/graph?notebook=example', '/screen?notebook=work', '/notebooks/example/folders/projects?view=graph&tag=demo&q=hello']) {
@@ -26,10 +26,10 @@ describe('workspace URLs', () => {
   });
   it('roundtrips nested notes and reserved filename characters', () => {
     for (const path of ['projects/week/note.md', '研究/百分比 100% #?+.md', 'literal%2F.md']) {
-      expect(parseWorkspaceRoute(noteRoute('example',path),'').note).toBe(path);
+      expect(parseWorkspaceRoute(noteRoute('example', path), '').note).toBe(path);
     }
-    expect(parseWorkspaceRoute(notebookRoute('example','projects/week'),'?view=kanban&status=inbox')).toMatchObject({ valid:true,folder:'projects/week',view:'kanban',status:'inbox' });
-    expect(parseWorkspaceRoute(notebookRoute('example','projects'),'?view=flat')).toMatchObject({ folder:'projects', view:'flat' });
+    expect(parseWorkspaceRoute(notebookRoute('example', 'projects/week'), '?view=kanban&status=inbox')).toMatchObject({ valid: true, folder: 'projects/week', view: 'kanban', status: 'inbox' });
+    expect(parseWorkspaceRoute(notebookRoute('example', 'projects'), '?view=flat')).toMatchObject({ folder: 'projects', view: 'flat' });
   });
   it('restores pages, notebook and filters from URLs', () => {
     expect(parseWorkspaceRoute('/', '')).toMatchObject({ valid: true, tab: 'notes' });
@@ -39,11 +39,11 @@ describe('workspace URLs', () => {
     expect(parseWorkspaceRoute('/notes', '?showHidden=true').showHidden).toBe(true);
     expect(parseWorkspaceRoute('/notes', '').showHidden).toBe(false);
     expect(parseWorkspaceRoute('/notes', '?folder=').valid).toBe(true);
-    for (const tab of ['settings','assets','agent','screen','graph']) for (const suffix of ['', '/']) expect(parseWorkspaceRoute('/'+tab+suffix,'?notebook=work').tab).toBe(tab);
-    expect(parseWorkspaceRoute(noteRoute('work','note.md'),'?folder=projects&q=hello&tag=demo')).toMatchObject({ notebook:'work',folder:'projects',q:'hello',tag:'demo' });
+    for (const tab of ['settings', 'assets', 'agent', 'screen', 'graph']) for (const suffix of ['', '/']) expect(parseWorkspaceRoute('/' + tab + suffix, '?notebook=work').tab).toBe(tab);
+    expect(parseWorkspaceRoute(noteRoute('work', 'note.md'), '?folder=projects&q=hello&tag=demo')).toMatchObject({ notebook: 'work', folder: 'projects', q: 'hello', tag: 'demo' });
   });
   it('rejects unknown pages, traversal and malformed URLs', () => {
-    for(const route of ['/missing','/notebooks/work/notes/../secret.md','/notebooks/work/notes/%00.md','/notebooks/work/notes/%zz']) expect(parseWorkspaceRoute(route,'').valid).toBe(false);
+    for (const route of ['/missing', '/notebooks/work/notes/../secret.md', '/notebooks/work/notes/%00.md', '/notebooks/work/notes/%zz']) expect(parseWorkspaceRoute(route, '').valid).toBe(false);
   });
 });
 

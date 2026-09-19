@@ -42,11 +42,7 @@ function substitute(value: unknown, vars: TemplateVariables): unknown {
 }
 
 /** Reads a notebook's configured template file (frontmatter + body) safely from disk. */
-export function loadNoteTemplate(
-  repoRoot: string,
-  notebook: NotebookConfig,
-  templateId: string
-): LoadedNoteTemplate {
+export function loadNoteTemplate(repoRoot: string, notebook: NotebookConfig, templateId: string): LoadedNoteTemplate {
   const entry = notebook.templates?.find(t => t.id === templateId);
   if (!entry) {
     throw new Error(`Template '${templateId}' is not configured for notebook '${notebook.id}'`);
@@ -64,10 +60,7 @@ export function loadNoteTemplate(
  * Substitutes `{{title}}` and `{{date}}` in a template's frontmatter and body.
  * The resulting metadata always carries the given title, matching normal note creation.
  */
-export function renderNoteTemplate(
-  template: { metadata: NoteMetadata; content: string },
-  vars: TemplateVariables
-): RenderedNoteTemplate {
+export function renderNoteTemplate(template: { metadata: NoteMetadata; content: string; }, vars: TemplateVariables): RenderedNoteTemplate {
   const metadata = substitute(template.metadata, vars) as NoteMetadata;
   const content = substitute(template.content, vars) as string;
   return { metadata: { ...metadata, title: vars.title }, content };

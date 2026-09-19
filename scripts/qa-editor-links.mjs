@@ -20,29 +20,33 @@ fs.writeFileSync(path.join(root, 'notes/example/target.md'), '# Target\n\nLandin
 const internalLinksPath = path.join(root, 'notes/example/internal-links.md');
 fs.writeFileSync(internalLinksPath, '# Internal Links QA\n\n| Link |\n| --- |\n| [Relative note](target.md) |\n| [Relative route](/graph) |\n| [Absolute note](__ABSOLUTE_NOTE__) |\n| [Absolute route](__ABSOLUTE_ROUTE__) |\n| [In-note anchor](#landing) |\n\n## Landing\n');
 const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
-git('init', '-b', 'main'); git('config', 'user.name', 'Browser QA'); git('config', 'user.email', 'qa@example.com'); git('add', '.'); git('commit', '-m', 'fixture');
+git('init', '-b', 'main');
+git('config', 'user.name', 'Browser QA');
+git('config', 'user.email', 'qa@example.com');
+git('add', '.');
+git('commit', '-m', 'fixture');
 process.env.MYGITNOTES_SOURCE = 'local';
 process.env.MYGITNOTES_LOCAL_PATH = root;
-delete process.env.VERCEL; delete process.env.APP_URL;
+delete process.env.VERCEL;
+delete process.env.APP_URL;
 const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
 const server = createServer(createApp(process.env.LINK_QA_PRODUCT || product));
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
 // The absolute-URL cases must match the app's own origin, which is only known once the server is listening.
-fs.writeFileSync(internalLinksPath, fs.readFileSync(internalLinksPath, 'utf8')
-  .replace('__ABSOLUTE_NOTE__', `${base}/notebooks/example/notes/target.md`)
-  .replace('__ABSOLUTE_ROUTE__', `${base}/notes`));
-git('add', '.'); git('commit', '-m', 'resolve internal link fixture origin');
-const browser = await puppeteer.launch({
-  executablePath: resolveQaChromePath(),
-  headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'],
-});
+fs.writeFileSync(internalLinksPath, fs.readFileSync(internalLinksPath, 'utf8').replace('__ABSOLUTE_NOTE__', `${base}/notebooks/example/notes/target.md`).replace('__ABSOLUTE_ROUTE__', `${base}/notes`));
+git('add', '.');
+git('commit', '-m', 'resolve internal link fixture origin');
+const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const page = await browser.newPage();
 await page.setViewport({ width: 1440, height: 1100 });
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
 const open = async theme => {
-  await page.evaluateOnNewDocument(theme => { localStorage.setItem('github_notes_theme', theme.split(':')[0]); localStorage.setItem('github_notes_theme_mode', theme.split(':')[1]); }, theme);
+  await page.evaluateOnNewDocument(theme => {
+    localStorage.setItem('github_notes_theme', theme.split(':')[0]);
+    localStorage.setItem('github_notes_theme_mode', theme.split(':')[1]);
+  }, theme);
   await page.goto(`${base}/notebooks/example/notes/links.md`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.live-md-rendered table a');
 };
@@ -50,16 +54,23 @@ const clickText = async (text, modifier) => {
   const point = await page.evaluate(text => {
     const walker = document.createTreeWalker(document.querySelector('.cm-content'), NodeFilter.SHOW_TEXT);
     while (walker.nextNode()) {
-      const node = walker.currentNode; const start = node.textContent.indexOf(text);
+      const node = walker.currentNode;
+      const start = node.textContent.indexOf(text);
       if (start < 0) continue;
-      const range = document.createRange(); range.setStart(node, start); range.setEnd(node, start + text.length);
-      const box = range.getBoundingClientRect(); return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, start + text.length);
+      const box = range.getBoundingClientRect();
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
     }
     throw Error(`Missing visible text: ${text}`);
   }, text);
   if (modifier) await page.keyboard.down(modifier);
-  try { await page.mouse.click(point.x, point.y); }
-  finally { if (modifier) await page.keyboard.up(modifier); }
+  try {
+    await page.mouse.click(point.x, point.y);
+  } finally {
+    if (modifier) await page.keyboard.up(modifier);
+  }
 };
 // macOS turns Control+click into a context-menu click, so new-tab clicks use Command there.
 const newTabKey = process.platform === 'darwin' ? 'Meta' : 'Control';
@@ -70,7 +81,7 @@ const contrast = (a, b) => {
 };
 try {
   if (!process.env.LINK_QA_CASE || process.env.LINK_QA_CASE === 'color') {
-    for (const theme of ['flexoki','github','catppuccin','rose-pine','gruvbox','tokyo-night','carbon','solarized','everforest'].flatMap(family => [`${family}:light`, `${family}:dark`])) {
+    for (const theme of ['flexoki', 'github', 'catppuccin', 'rose-pine', 'gruvbox', 'tokyo-night', 'carbon', 'solarized', 'everforest'].flatMap(family => [`${family}:light`, `${family}:dark`])) {
       await open(theme);
       const colors = await page.evaluate(() => {
         const walker = document.createTreeWalker(document.querySelector('.cm-content'), NodeFilter.SHOW_TEXT);
@@ -78,7 +89,8 @@ try {
         while (walker.nextNode()) {
           const node = walker.currentNode;
           if (!/Named link|https:\/\/example.com\/(bare|angle)|Bold link|Table link/.test(node.textContent)) continue;
-          let ancestor = node.parentElement; let background;
+          let ancestor = node.parentElement;
+          let background;
           while (ancestor) {
             background = getComputedStyle(ancestor).backgroundColor;
             if (background !== 'rgba(0, 0, 0, 0)' && background !== 'transparent') break;
@@ -104,7 +116,8 @@ try {
       const popup = await target.page();
       assert.equal(target.url(), destination);
       assert.equal(await popup.evaluate(() => window.opener === null), true);
-      await popup.close(); await page.bringToFront();
+      await popup.close();
+      await page.bringToFront();
       assert.equal(page.url(), `${base}/notebooks/example/notes/links.md`);
     };
     await expectPopup('Named link', newTabKey, 'https://example.com/named');
@@ -140,7 +153,9 @@ try {
     };
     const expectRoutedNavigation = async (text, destinationPath) => {
       await openInternal();
-      await page.evaluate(() => { window.__linkQaMarker = 'alive'; });
+      await page.evaluate(() => {
+        window.__linkQaMarker = 'alive';
+      });
       const targetsBefore = browser.targets().length;
       await clickText(text);
       // The destination may carry a `returnTo` query string, so only the path is asserted.
@@ -160,14 +175,17 @@ try {
       const target = await popupPromise;
       const popup = await target.page();
       assert.equal(await popup.evaluate(() => window.opener === null), true);
-      await popup.close(); await page.bringToFront();
+      await popup.close();
+      await page.bringToFront();
       assert.equal(page.url(), internalUrl, `${text}: a modifier click must leave the current tab on the source note`);
     };
     await openInternal();
     await expectPopupFrom('Absolute note', newTabKey, `${base}/notebooks/example/notes/target.md`);
     await expectPopupFrom('Absolute route', newTabKey, `${base}/notes`);
     await openInternal();
-    await page.evaluate(() => { window.__linkQaMarker = 'alive'; });
+    await page.evaluate(() => {
+      window.__linkQaMarker = 'alive';
+    });
     await clickText('In-note anchor');
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     assert.equal(page.url(), internalUrl, 'An in-note anchor click must not navigate');
@@ -191,13 +209,16 @@ try {
       });
       if (icon) {
         assert.ok(size.width >= 28 && size.height >= 28, 'Mobile link icon needs a usable tap target');
-        assert.ok(size.label); assert.equal(size.target, '_blank'); assert.match(size.rel, /noopener/);
+        assert.ok(size.label);
+        assert.equal(size.target, '_blank');
+        assert.match(size.rel, /noopener/);
       }
       const popupPromise = browser.waitForTarget(target => target.url() === destination, { timeout: 3000 });
       await page.tap(selector);
       const popup = await (await popupPromise).page();
       assert.equal(await popup.evaluate(() => window.opener === null), true);
-      await popup.close(); await page.bringToFront();
+      await popup.close();
+      await page.bringToFront();
       assert.equal(page.url(), `${base}/notebooks/example/notes/links.md`);
     }
     assert.equal(fs.readFileSync(path.join(root, 'notes/example/links.md'), 'utf8'), content);
@@ -207,6 +228,7 @@ try {
   }
   assert.deepEqual(errors, []);
 } finally {
-  await browser.close(); await new Promise(resolve => server.close(resolve));
+  await browser.close();
+  await new Promise(resolve => server.close(resolve));
   fs.rmSync(root, { recursive: true, force: true });
 }

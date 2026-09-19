@@ -1,13 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import {
-  resolveSafePath,
-  sanitizeFilename,
-  PathTraversalError,
-  SymlinkEscapeError,
-} from '../src/path-guard.js';
+import { PathTraversalError, resolveSafePath, sanitizeFilename, SymlinkEscapeError } from '../src/path-guard.js';
 
 describe('Path Guard & Traversal Defense', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gh-notes-guard-test-'));

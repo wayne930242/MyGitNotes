@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import YAML from 'yaml';
-import { relocateWorkspaceDocuments, validateWorkspaceDocument, workspaceDocument, WORKSPACE_DOCUMENTS } from '../src/workspace-documents.js';
+import { relocateWorkspaceDocuments, validateWorkspaceDocument, WORKSPACE_DOCUMENTS, workspaceDocument } from '../src/workspace-documents.js';
 import { planFolderChange } from '../src/folder-plan.js';
 import { SCREEN_PAGE_FILE } from '../src/screen-page.js';
 import { createStudyNote, STUDY_FILE } from '../src/study.js';
@@ -12,17 +12,7 @@ const move = (file: string) => file.startsWith('notes/a/one/') ? 'notes/a/two/' 
 function documents() {
   const study = createStudyNote({ notebookId: 'a', path: 'notes/a/one/note.md', title: 'Note', content: '# Note', metadata: {} });
   const other = createStudyNote({ notebookId: 'b', path: 'notes/a/one/note.md', title: 'Same path, other notebook', content: '# Other', metadata: {} });
-  return new Map([
-    [SCREEN_PAGE_FILE, YAML.stringify({ version: 2, rows: [
-      { id: 'row', notebookId: 'a', kind: 'custom', name: 'Row', view: 'graph', items: [{ id: 'note', kind: 'note', notebookId: 'a', path: 'notes/a/one/note.md' }], graph: { nodes: [{ path: 'notes/a/one/note.md', x: 0, y: 0 }] } },
-      { id: 'folder', notebookId: 'a', kind: 'dynamic', name: 'Folder', view: 'small', source: { kind: 'folder', notebookId: 'a', path: 'notes/a/one', recursive: true } },
-    ] })],
-    [STUDY_FILE, YAML.stringify({ version: 1, notes: [study, other], events: [] })],
-    [FOCUS_PAGE_FILE, YAML.stringify({ version: 1, focuses: [
-      { id: 'weekly', notebookId: 'a', name: 'Weekly', division: 'columns-2', panes: [{ tabs: [{ kind: 'note', path: 'notes/a/one/note.md' }] }, { tabs: [{ kind: 'lane', id: 'row' }] }] },
-      { id: 'other', notebookId: 'b', name: 'Other', division: 'single', panes: [{ tabs: [{ kind: 'note', path: 'notes/a/one/note.md' }] }] },
-    ] })],
-  ]);
+  return new Map([[SCREEN_PAGE_FILE, YAML.stringify({ version: 2, rows: [{ id: 'row', notebookId: 'a', kind: 'custom', name: 'Row', view: 'graph', items: [{ id: 'note', kind: 'note', notebookId: 'a', path: 'notes/a/one/note.md' }], graph: { nodes: [{ path: 'notes/a/one/note.md', x: 0, y: 0 }] } }, { id: 'folder', notebookId: 'a', kind: 'dynamic', name: 'Folder', view: 'small', source: { kind: 'folder', notebookId: 'a', path: 'notes/a/one', recursive: true } }] })], [STUDY_FILE, YAML.stringify({ version: 1, notes: [study, other], events: [] })], [FOCUS_PAGE_FILE, YAML.stringify({ version: 1, focuses: [{ id: 'weekly', notebookId: 'a', name: 'Weekly', division: 'columns-2', panes: [{ tabs: [{ kind: 'note', path: 'notes/a/one/note.md' }] }, { tabs: [{ kind: 'lane', id: 'row' }] }] }, { id: 'other', notebookId: 'b', name: 'Other', division: 'single', panes: [{ tabs: [{ kind: 'note', path: 'notes/a/one/note.md' }] }] }] })]]);
 }
 
 describe('workspace documents', () => {
@@ -47,8 +37,8 @@ describe('workspace documents', () => {
     expect(screen.rows[0].items[0].path).toBe('notes/a/two/note.md');
     expect(screen.rows[0].graph.nodes[0].path).toBe('notes/a/two/note.md');
     expect(screen.rows[1].source.path).toBe('notes/a/one');
-    expect(study.notes.map((note: { path: string }) => note.path)).toEqual(['notes/a/two/note.md', 'notes/a/one/note.md']);
-    expect(focus.focuses.map((entry: { panes: { tabs: { path?: string }[] }[] }) => entry.panes[0].tabs[0].path)).toEqual(['notes/a/two/note.md', 'notes/a/one/note.md']);
+    expect(study.notes.map((note: { path: string; }) => note.path)).toEqual(['notes/a/two/note.md', 'notes/a/one/note.md']);
+    expect(focus.focuses.map((entry: { panes: { tabs: { path?: string; }[]; }[]; }) => entry.panes[0].tabs[0].path)).toEqual(['notes/a/two/note.md', 'notes/a/one/note.md']);
     const unchanged = documents(), original = new Map(unchanged);
     relocateWorkspaceDocuments(unchanged, config, 'b', file => file);
     expect(unchanged).toEqual(original);

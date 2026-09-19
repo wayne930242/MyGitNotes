@@ -1,62 +1,32 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import {
-  loadWorkspaceConfig,
-  scanNotebookFolders,
-  resolveSafePath,
-  writeFolderConfig,
-  getFolderItem,
-  isNotebookContent,
-  FolderMetadata,
-} from '@mygitnotes/core';
-import { stageAndCommit, runGit } from '@mygitnotes/git';
-import { assertUserWorkspaceBranch, assertSafeRepoPath } from '../guards.js';
+import { FolderMetadata, getFolderItem, isNotebookContent, loadWorkspaceConfig, resolveSafePath, scanNotebookFolders, writeFolderConfig } from '@mygitnotes/core';
+import { runGit, stageAndCommit } from '@mygitnotes/git';
+import { assertSafeRepoPath, assertUserWorkspaceBranch } from '../guards.js';
 import type { ToolContext } from './context.js';
 
-export async function handleListFolders(
-  ctx: ToolContext,
-  args?: { path?: string; notebookId?: string }
-) {
+export async function handleListFolders(ctx: ToolContext, args?: { path?: string; notebookId?: string; }) {
   if (args?.path) {
     return handleGetFolderMetadata(ctx, { path: args.path });
   }
   const config = loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { folders: [] };
-  const notebooks = args?.notebookId
-    ? config.notebooks.filter((nb) => nb.id === args.notebookId)
-    : config.notebooks;
+  const notebooks = args?.notebookId ? config.notebooks.filter((nb) => nb.id === args.notebookId) : config.notebooks;
   const folders = notebooks.flatMap((nb) => scanNotebookFolders(ctx.repoRoot, nb));
   return { folders };
 }
 
-export async function handleGetFolderMetadata(
-  ctx: ToolContext,
-  args: { path: string }
-) {
+export async function handleGetFolderMetadata(ctx: ToolContext, args: { path: string; }) {
   assertSafeRepoPath(ctx.repoRoot, args.path);
   const normalizedRel = args.path.replace(/\\/g, '/').replace(/\/(_dir\.yml)?$/, '');
   const folder = getFolderItem(ctx.repoRoot, normalizedRel);
   if (!folder) {
     return { error: `Folder not found or invalid: ${args.path}` };
   }
-  return {
-    path: normalizedRel,
-    folder,
-  };
+  return { path: normalizedRel, folder };
 }
 
-export async function handleMkdir(
-  ctx: ToolContext,
-  args: {
-    path: string;
-    title?: string;
-    order?: number;
-    description?: string;
-    metadata?: Record<string, unknown>;
-    overwrite?: boolean;
-    commitMessage?: string;
-  }
-) {
+export async function handleMkdir(ctx: ToolContext, args: { path: string; title?: string; order?: number; description?: string; metadata?: Record<string, unknown>; overwrite?: boolean; commitMessage?: string; }) {
   await assertUserWorkspaceBranch(ctx.repoRoot);
   assertSafeRepoPath(ctx.repoRoot, args.path);
 
@@ -83,25 +53,19 @@ export async function handleMkdir(
   }
 
   const title = args.title !== undefined ? args.title : (exists ? undefined : path.basename(normalizedRel));
-  const meta: FolderMetadata = {
-    ...(args.metadata || {}),
-  };
+  const meta: FolderMetadata = { ...(args.metadata || {}) };
   if (title !== undefined) meta.title = title;
   if (args.order !== undefined) meta.order = args.order;
   if (args.description !== undefined) meta.description = args.description;
 
   const { folder, dirFileRel } = writeFolderConfig(ctx.repoRoot, normalizedRel, meta);
 
-  const message =
-    args.commitMessage ||
-    (exists
-      ? `chore(metadata): update folder metadata for ${path.basename(normalizedRel)}`
-      : `docs(folders): create ${path.basename(normalizedRel)}`);
+  const message = args.commitMessage || (exists ? `chore(metadata): update folder metadata for ${path.basename(normalizedRel)}` : `docs(folders): create ${path.basename(normalizedRel)}`);
 
   await runGit(['add', '--', dirFileRel], ctx.repoRoot);
   const { stdout: status } = await runGit(['status', '--porcelain', '--', dirFileRel], ctx.repoRoot);
 
-  let commit: { commitHash: string; shortHash: string };
+  let commit: { commitHash: string; shortHash: string; };
   if (status.trim()) {
     commit = await stageAndCommit(ctx.repoRoot, [dirFileRel], message);
   } else {
@@ -110,25 +74,9 @@ export async function handleMkdir(
     commit = { commitHash: hash, shortHash };
   }
 
-  return {
-    success: true,
-    path: normalizedRel,
-    folder,
-    commit,
-  };
+  return { success: true, path: normalizedRel, folder, commit };
 }
 
-export async function handleUpdateFolderMetadata(
-  ctx: ToolContext,
-  args: {
-    path: string;
-    title?: string;
-    order?: number;
-    description?: string;
-    metadata?: Record<string, unknown>;
-    commitMessage?: string;
-  }
-) {
+export async function handleUpdateFolderMetadata(ctx: ToolContext, args: { path: string; title?: string; order?: number; description?: string; metadata?: Record<string, unknown>; commitMessage?: string; }) {
   return handleMkdir(ctx, { ...args, overwrite: true });
 }
-

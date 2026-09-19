@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { loadWorkspaceConfig, resolveSafePath, scanNotebookNotes, fillMissingNoteTimestamps } from '../packages/core/src/index.js';
+import { fillMissingNoteTimestamps, loadWorkspaceConfig, resolveSafePath, scanNotebookNotes } from '../packages/core/src/index.js';
 import { getFirstAndLastCommitDates } from '../packages/git/src/index.js';
 import { resolveWorkspaceRoot } from './lib/workspace-root.js';
 
@@ -32,9 +32,7 @@ async function backfillNoteTimestamps() {
       const safePath = resolveSafePath(repoRoot, note.path);
       const raw = fs.readFileSync(safePath, 'utf-8');
       // Imported notes keep their original modification time in `modified`; prefer it over git history.
-      const modified = typeof note.metadata.modified === 'string' && !Number.isNaN(Date.parse(note.metadata.modified))
-        ? new Date(note.metadata.modified).toISOString()
-        : undefined;
+      const modified = typeof note.metadata.modified === 'string' && !Number.isNaN(Date.parse(note.metadata.modified)) ? new Date(note.metadata.modified).toISOString() : undefined;
       const { raw: patched, changed } = fillMissingNoteTimestamps(raw, first, modified ?? last);
       if (!changed) {
         skipped++;

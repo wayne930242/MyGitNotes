@@ -1,6 +1,9 @@
 import { diff3Merge } from 'node-diff3';
 
-export interface NoteDraft { content: string; metadata: Record<string, unknown> }
+export interface NoteDraft {
+  content: string;
+  metadata: Record<string, unknown>;
+}
 const object = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 export function sameValue(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
@@ -11,7 +14,7 @@ export function sameValue(a: unknown, b: unknown): boolean {
   }
   return false;
 }
-function mergeValue(base: unknown, local: unknown, remote: unknown): { conflict: boolean; value?: unknown } {
+function mergeValue(base: unknown, local: unknown, remote: unknown): { conflict: boolean; value?: unknown; } {
   if (sameValue(local, remote) || sameValue(base, remote)) return { conflict: false, value: local };
   if (sameValue(base, local)) return { conflict: false, value: remote };
   if (object(base) && object(local) && object(remote)) {
@@ -25,7 +28,7 @@ function mergeValue(base: unknown, local: unknown, remote: unknown): { conflict:
   }
   return { conflict: true };
 }
-export function mergeNote(base: NoteDraft, local: NoteDraft, remote: NoteDraft): { conflict: true } | { conflict: false; draft: NoteDraft } {
+export function mergeNote(base: NoteDraft, local: NoteDraft, remote: NoteDraft): { conflict: true; } | { conflict: false; draft: NoteDraft; } {
   const metadata = mergeValue(base.metadata, local.metadata, remote.metadata);
   if (metadata.conflict) return { conflict: true };
   // Retain line terminators, including CRLF and the final newline.

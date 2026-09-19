@@ -2,14 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseWorkspaceConfig, serializeWorkspaceConfig, validateWorkspaceConfig } from '../src/config.js';
 import { isNoteHidden, resolveNoteStatuses, withNoteStatus } from '../src/note-status.js';
 
-const manifest = (statuses?: unknown) => ({
-  schema_version: 1,
-  workspace: { title: 'Notes', default_notebook: 'personal' },
-  notebooks: [
-    { id: 'personal', title: 'Personal', root: 'notes/personal', ...(statuses !== undefined ? { statuses } : {}) },
-    { id: 'research', title: 'Research', root: 'notes/research' },
-  ],
-});
+const manifest = (statuses?: unknown) => ({ schema_version: 1, workspace: { title: 'Notes', default_notebook: 'personal' }, notebooks: [{ id: 'personal', title: 'Personal', root: 'notes/personal', ...(statuses !== undefined ? { statuses } : {}) }, { id: 'research', title: 'Research', root: 'notes/research' }] });
 
 describe('notebook status vocabulary', () => {
   it('defaults archived to hidden and respects explicit visibility booleans', () => {
@@ -55,9 +48,7 @@ describe('notebook status vocabulary', () => {
     expect(resolveNoteStatuses({ statuses: [] }, ['doing'])).toContain('doing');
   });
 
-  it.each([null, 'inbox', [42], [''], ['  '], [' inbox'], ['done '], ['inbox', 'inbox']])(
-    'rejects malformed status definitions: %j', statuses => {
-      expect(() => validateWorkspaceConfig(manifest(statuses))).toThrow(/statuses must be an array/);
-    },
-  );
+  it.each([null, 'inbox', [42], [''], ['  '], [' inbox'], ['done '], ['inbox', 'inbox']])('rejects malformed status definitions: %j', statuses => {
+    expect(() => validateWorkspaceConfig(manifest(statuses))).toThrow(/statuses must be an array/);
+  });
 });

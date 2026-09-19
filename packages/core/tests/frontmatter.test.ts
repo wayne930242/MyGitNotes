@@ -1,9 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import {
-  parseNoteContent,
-  serializeNoteContent,
-  extractFirstH1,
-} from '../src/frontmatter.js';
+import { describe, expect, it } from 'vitest';
+import { extractFirstH1, parseNoteContent, serializeNoteContent } from '../src/frontmatter.js';
 
 describe('Frontmatter Parser & Serializer', () => {
   it('parses markdown with full YAML frontmatter', () => {
@@ -36,14 +32,7 @@ Body text here.
   });
 
   it('preserves unknown frontmatter keys during round-trip serialization', () => {
-    const originalMetadata = {
-      id: 'custom-123',
-      title: 'Preserved Title',
-      status: 'todo',
-      tags: ['one'],
-      unknown_flag: true,
-      arbitrary_object: { key: 'value', numbers: [1, 2, 3] },
-    };
+    const originalMetadata = { id: 'custom-123', title: 'Preserved Title', status: 'todo', tags: ['one'], unknown_flag: true, arbitrary_object: { key: 'value', numbers: [1, 2, 3] } };
     const body = 'This is the note content that should remain unchanged.';
 
     const serialized = serializeNoteContent(originalMetadata, body, true);

@@ -10,26 +10,14 @@ describe('buildNewNoteDraft', () => {
   });
 
   it("keeps the user's final tags and status even when the rendered template sets its own", () => {
-    const draft = buildNewNoteDraft({
-      slug: 'my-note',
-      title: 'My Note',
-      tags: ['user-tag'],
-      status: 'active',
-      template: { content: '# templated\n', metadata: { title: 'My Note', tags: ['template-tag'], status: 'inbox' } },
-    });
+    const draft = buildNewNoteDraft({ slug: 'my-note', title: 'My Note', tags: ['user-tag'], status: 'active', template: { content: '# templated\n', metadata: { title: 'My Note', tags: ['template-tag'], status: 'inbox' } } });
     expect(draft.content).toBe('# templated\n');
     expect(draft.metadata.tags).toEqual(['user-tag']);
     expect(draft.status).toBe('active');
   });
 
   it('keeps other template metadata fields that are not tags or status', () => {
-    const draft = buildNewNoteDraft({
-      slug: 'my-note',
-      title: 'My Note',
-      tags: ['user-tag'],
-      status: 'active',
-      template: { content: '# templated\n', metadata: { created_on: '2026-09-16' } },
-    });
+    const draft = buildNewNoteDraft({ slug: 'my-note', title: 'My Note', tags: ['user-tag'], status: 'active', template: { content: '# templated\n', metadata: { created_on: '2026-09-16' } } });
     expect(draft.metadata).toEqual({ id: 'my-note', created_on: '2026-09-16', tags: ['user-tag'] });
   });
 });

@@ -26,12 +26,7 @@ describe('retagList', () => {
 });
 
 describe('planTagRename / planTagMerge', () => {
-  const notes = [
-    note('a.md', ['todo', 'x']),
-    note('b.md', ['todo']),
-    note('c.md', ['todo', 'doing']),
-    note('d.md', ['other']),
-  ];
+  const notes = [note('a.md', ['todo', 'x']), note('b.md', ['todo']), note('c.md', ['todo', 'doing']), note('d.md', ['other'])];
 
   it('rename: affects only notes carrying the source tag, dedupes against an existing target', () => {
     const plan = planTagRename(notes, 'todo', 'doing');

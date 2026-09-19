@@ -17,11 +17,7 @@ export function stampSaveTimestamps(metadata: NoteMetadata, isNew: boolean, now:
  * Fills `created`/`updated` only where missing, from the given fallbacks.
  * Never overwrites an existing value. Used by the one-time backfill command.
  */
-export function fillMissingTimestamps(
-  metadata: NoteMetadata,
-  createdFallback: string | undefined,
-  updatedFallback: string | undefined
-): { metadata: NoteMetadata; changed: boolean } {
+export function fillMissingTimestamps(metadata: NoteMetadata, createdFallback: string | undefined, updatedFallback: string | undefined): { metadata: NoteMetadata; changed: boolean; } {
   let changed = false;
   const next: NoteMetadata = { ...metadata };
   if (!next.created && createdFallback) {

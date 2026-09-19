@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { GitHubSource, SourceError, assetHash, type RemoteChange } from '@mygitnotes/core';
+import { assetHash, GitHubSource, type RemoteChange, SourceError } from '@mygitnotes/core';
 import { createApp } from '../src/app.js';
 
 let remoteToken: string | undefined;
@@ -15,12 +15,15 @@ const NOTE = '# Rules\n\n![Core](<r2:ex/old/Core Rules.pdf>)\n[map](r2:ex/old/ma
 
 /** Minimal S3-compatible stand-in recording every request. */
 async function startBucket() {
-  const objects = new Map<string, Buffer>(), requests: string[] = [], hooks: { onCopy?: () => void } = {};
+  const objects = new Map<string, Buffer>(), requests: string[] = [], hooks: { onCopy?: () => void; } = {};
   const server = createServer((req, res) => {
     const url = new URL(req.url!, 'http://bucket'), [, bucket, ...parts] = url.pathname.split('/');
     const key = parts.map(decodeURIComponent).join('/');
     requests.push(`${req.method} ${key}${req.headers['x-amz-copy-source'] ? ' <- ' + decodeURIComponent(String(req.headers['x-amz-copy-source'])) : ''}`);
-    if (bucket !== 'private-assets') { res.statusCode = 404; return res.end(); }
+    if (bucket !== 'private-assets') {
+      res.statusCode = 404;
+      return res.end();
+    }
     const chunks: Buffer[] = [];
     req.on('data', chunk => chunks.push(chunk)).on('end', () => {
       if (req.method === 'GET' && url.searchParams.get('list-type') === '2') {
@@ -28,19 +31,34 @@ async function startBucket() {
         const contents = [...objects].filter(([name]) => name.startsWith(prefix)).map(([name, body]) => `<Contents><Key>${name.replace(/&/g, '&amp;')}</Key><Size>${body.length}</Size><LastModified>2026-09-16T00:00:00.000Z</LastModified></Contents>`);
         return res.end(`<?xml version="1.0"?><ListBucketResult><IsTruncated>false</IsTruncated>${contents.join('')}</ListBucketResult>`);
       }
-      if (req.method === 'HEAD') { res.statusCode = objects.has(key) ? 200 : 404; return res.end(); }
+      if (req.method === 'HEAD') {
+        res.statusCode = objects.has(key) ? 200 : 404;
+        return res.end();
+      }
       if (req.method === 'PUT') {
-        if (req.headers['if-none-match'] === '*' && objects.has(key)) { res.statusCode = 412; return res.end(); }
+        if (req.headers['if-none-match'] === '*' && objects.has(key)) {
+          res.statusCode = 412;
+          return res.end();
+        }
         const copy = req.headers['x-amz-copy-source'];
         if (copy) {
           const from = decodeURIComponent(String(copy)).split('/').slice(2).join('/');
-          if (!objects.has(from)) { res.statusCode = 404; return res.end(); }
-          objects.set(key, objects.get(from)!); hooks.onCopy?.();
+          if (!objects.has(from)) {
+            res.statusCode = 404;
+            return res.end();
+          }
+          objects.set(key, objects.get(from)!);
+          hooks.onCopy?.();
         } else objects.set(key, Buffer.concat(chunks));
         return res.end('<CopyObjectResult/>');
       }
-      if (req.method === 'DELETE') { objects.delete(key); res.statusCode = 204; return res.end(); }
-      res.statusCode = objects.has(key) ? 200 : 404; res.end(objects.get(key));
+      if (req.method === 'DELETE') {
+        objects.delete(key);
+        res.statusCode = 204;
+        return res.end();
+      }
+      res.statusCode = objects.has(key) ? 200 : 404;
+      res.end(objects.get(key));
     });
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -53,36 +71,35 @@ async function start(env: Record<string, string>) {
   bucket = await startBucket();
   const settings = { MYGITNOTES_R2_ACCOUNT_ID: 'acc', MYGITNOTES_R2_ACCESS_KEY_ID: 'AK', MYGITNOTES_R2_SECRET_ACCESS_KEY: 'r2-secret', MYGITNOTES_R2_BUCKET: 'private-assets', MYGITNOTES_R2_ENDPOINT: bucket.endpoint };
   for (const [key, value] of Object.entries({ SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '', ...settings, ...env })) vi.stubEnv(key, value);
-  app = createServer(createApp(root)); await new Promise<void>(resolve => app.listen(0, '127.0.0.1', resolve));
+  app = createServer(createApp(root));
+  await new Promise<void>(resolve => app.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(app.address() as any).port}`;
 }
 async function startLocal(branch = 'main') {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-r2-manager-'));
-  fs.mkdirSync(path.join(root, 'notes/ex'), { recursive: true }); fs.mkdirSync(path.join(root, 'notes/other'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'notes/ex'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'notes/other'), { recursive: true });
   fs.writeFileSync(path.join(root, '.github-notes.yaml'), MANIFEST);
   fs.writeFileSync(path.join(root, 'notes/ex/rules.md'), NOTE);
   fs.writeFileSync(path.join(root, 'notes/other/cross.md'), '![x](r2:ex/old/map.webp)\n');
   fs.writeFileSync(path.join(root, 'notes/ex/plain.md'), '# Plain\n');
-  git('init', '-b', branch); git('config', 'user.name', 'Test'); git('config', 'user.email', 'test@example.com'); git('add', '.'); git('commit', '-m', 'fixture');
+  git('init', '-b', branch);
+  git('config', 'user.name', 'Test');
+  git('config', 'user.email', 'test@example.com');
+  git('add', '.');
+  git('commit', '-m', 'fixture');
   await start({ MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: root });
   for (const key of ['ex/old/Core Rules.pdf', 'ex/old/map.webp', 'ex/keep.pdf', 'other/secret.pdf']) bucket.objects.set(key, Buffer.from(key));
 }
-const call = (method: string, url: string, body?: unknown, headers: Record<string, string> = {}) =>
-  fetch(base + url, { method, redirect: 'manual', headers: { 'Content-Type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
-const operations = (notebookId = 'ex') => [
-  () => call('GET', `/api/r2?notebookId=${notebookId}`),
-  () => call('GET', `/api/r2/raw?notebookId=${notebookId}&key=ex/keep.pdf`),
-  () => call('GET', `/api/r2/references?notebookId=${notebookId}&key=ex/keep.pdf`),
-  () => call('POST', '/api/r2/upload', { notebookId, key: 'ex/new.pdf' }),
-  () => call('POST', '/api/r2/mkdir', { notebookId, key: 'ex/folder' }),
-  () => call('POST', '/api/r2/move', { notebookId, key: 'ex/keep.pdf', destination: 'ex/moved.pdf' }),
-  () => call('POST', '/api/r2/delete', { notebookId, key: 'ex/keep.pdf' }),
-];
+const call = (method: string, url: string, body?: unknown, headers: Record<string, string> = {}) => fetch(base + url, { method, redirect: 'manual', headers: { 'Content-Type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
+const operations = (notebookId = 'ex') => [() => call('GET', `/api/r2?notebookId=${notebookId}`), () => call('GET', `/api/r2/raw?notebookId=${notebookId}&key=ex/keep.pdf`), () => call('GET', `/api/r2/references?notebookId=${notebookId}&key=ex/keep.pdf`), () => call('POST', '/api/r2/upload', { notebookId, key: 'ex/new.pdf' }), () => call('POST', '/api/r2/mkdir', { notebookId, key: 'ex/folder' }), () => call('POST', '/api/r2/move', { notebookId, key: 'ex/keep.pdf', destination: 'ex/moved.pdf' }), () => call('POST', '/api/r2/delete', { notebookId, key: 'ex/keep.pdf' })];
 
 afterEach(async () => {
-  await new Promise<void>(resolve => app.close(() => resolve())); await new Promise<void>(resolve => bucket.server.close(() => resolve()));
+  await new Promise<void>(resolve => app.close(() => resolve()));
+  await new Promise<void>(resolve => bucket.server.close(() => resolve()));
   if (root) fs.rmSync(root, { recursive: true, force: true });
-  vi.restoreAllMocks(); vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe('R2 management on a local workspace', () => {
@@ -178,15 +195,18 @@ describe('R2 management on a hosted workspace', () => {
   const published: RemoteChange[][] = [];
   async function startRemote(token: string | undefined) {
     root = '';
-    files.clear(); published.length = 0; revision = 'one';
-    files.set('.github-notes.yaml', Buffer.from(MANIFEST)); files.set('notes/ex/rules.md', Buffer.from(NOTE));
+    files.clear();
+    published.length = 0;
+    revision = 'one';
+    files.set('.github-notes.yaml', Buffer.from(MANIFEST));
+    files.set('notes/ex/rules.md', Buffer.from(NOTE));
     remoteToken = token;
     const prototype = GitHubSource.prototype as any;
-    vi.spyOn(prototype, 'loadSnapshot').mockImplementation(async () => ({ sha: revision, treeSha: revision, info: { private: true, permissions: { push: canPush }, default_branch: 'main' },
-      entries: [...files].map(([file, bytes]) => ({ path: file, type: 'blob', mode: '100644', sha: assetHash(bytes), size: bytes.length })) }));
+    vi.spyOn(prototype, 'loadSnapshot').mockImplementation(async () => ({ sha: revision, treeSha: revision, info: { private: true, permissions: { push: canPush }, default_branch: 'main' }, entries: [...files].map(([file, bytes]) => ({ path: file, type: 'blob', mode: '100644', sha: assetHash(bytes), size: bytes.length })) }));
     vi.spyOn(prototype, 'readBlob').mockImplementation(async (...args: unknown[]) => [...files.values()].find(bytes => assetHash(bytes) === args[0])!);
     vi.spyOn(prototype, 'publishChanges').mockImplementation(async (...args: unknown[]) => {
-      const changes = args[0] as RemoteChange[]; published.push(changes);
+      const changes = args[0] as RemoteChange[];
+      published.push(changes);
       for (const change of changes) files.set(change.path, Buffer.from(change.content!));
       return revision += '-next';
     });
@@ -209,7 +229,9 @@ describe('R2 management on a hosted workspace', () => {
   it('rolls copied objects back when the rewrite commit hits a revision conflict', async () => {
     canPush = true;
     await startRemote('writer-token');
-    bucket.hooks.onCopy = () => { revision = 'moved-on'; };
+    bucket.hooks.onCopy = () => {
+      revision = 'moved-on';
+    };
     expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old/map.webp', destination: 'ex/maps/region.webp' })).status).toBe(409);
     expect(published).toEqual([]);
     expect(files.get('notes/ex/rules.md')!.toString()).toBe(NOTE);
@@ -223,7 +245,9 @@ describe('R2 management on a hosted workspace', () => {
     const prototype = GitHubSource.prototype as any, read = prototype.readBlob;
     let active = 0, peak = 0;
     read.mockImplementation(async (sha: unknown) => {
-      peak = Math.max(peak, ++active); await new Promise(resolve => setTimeout(resolve, 1)); active--;
+      peak = Math.max(peak, ++active);
+      await new Promise(resolve => setTimeout(resolve, 1));
+      active--;
       return [...files.values()].find(bytes => assetHash(bytes) === sha)!;
     });
     const prefetch = vi.spyOn(prototype, 'prefetchFiles').mockResolvedValue(undefined);
@@ -243,16 +267,8 @@ describe('R2 management on a hosted workspace', () => {
     canPush = true;
     await startRemote('writer-token');
     const prototype = GitHubSource.prototype as any;
-    const hugeEntries = Array.from({ length: 8 }, (_, i) => ({
-      path: `notes/ex/chunk-${i}.md`, type: 'blob', mode: '100644', sha: `chunk-${i}-sha`, size: 4.5 * 1024 * 1024,
-    }));
-    vi.spyOn(prototype, 'loadSnapshot').mockImplementation(async () => ({
-      sha: revision, treeSha: revision, info: { private: true, permissions: { push: canPush }, default_branch: 'main' },
-      entries: [
-        ...[...files].map(([file, bytes]) => ({ path: file, type: 'blob', mode: '100644', sha: assetHash(bytes), size: bytes.length })),
-        ...hugeEntries,
-      ],
-    }));
+    const hugeEntries = Array.from({ length: 8 }, (_, i) => ({ path: `notes/ex/chunk-${i}.md`, type: 'blob', mode: '100644', sha: `chunk-${i}-sha`, size: 4.5 * 1024 * 1024 }));
+    vi.spyOn(prototype, 'loadSnapshot').mockImplementation(async () => ({ sha: revision, treeSha: revision, info: { private: true, permissions: { push: canPush }, default_branch: 'main' }, entries: [...[...files].map(([file, bytes]) => ({ path: file, type: 'blob', mode: '100644', sha: assetHash(bytes), size: bytes.length })), ...hugeEntries] }));
     const response = await call('GET', '/api/r2/references?notebookId=ex&key=ex/old&directory=1');
     const body = await response.json();
     expect(response.status).toBe(413);
@@ -263,8 +279,10 @@ describe('R2 management on a hosted workspace', () => {
     canPush = false;
     await startRemote('reader-token');
     for (const operation of operations()) expect((await operation()).status).toBe(403);
-    await new Promise<void>(resolve => app.close(() => resolve())); await new Promise<void>(resolve => bucket.server.close(() => resolve()));
-    vi.restoreAllMocks(); canPush = true;
+    await new Promise<void>(resolve => app.close(() => resolve()));
+    await new Promise<void>(resolve => bucket.server.close(() => resolve()));
+    vi.restoreAllMocks();
+    canPush = true;
     await startRemote(undefined);
     for (const operation of operations()) expect((await operation()).status).toBe(403);
     expect(bucket.requests).toEqual([]);

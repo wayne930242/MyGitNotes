@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import {
-  FOCUS_DIVISIONS, FOCUS_MAX_TABS, FocusError, FocusLayoutSchema, FocusPageSchema, FocusSchema,
-  changeDivision, closeTab, displayPanes, findFocusTab, findFocusTabInPane, focusPaneCount, focusTabCount, focusTabKey,
-  foreignFocusTab, moveTab, nameFocus, notebookFocuses, ownFocusPage, placeTab, placeTabs, pruneFocus, relocateFocusPaths, removeFocus, renameFocus, updateFocus,
-} from '../src/focus-page.js';
+import { changeDivision, closeTab, displayPanes, findFocusTab, findFocusTabInPane, FOCUS_DIVISIONS, FOCUS_MAX_TABS, FocusError, FocusLayoutSchema, FocusPageSchema, focusPaneCount, FocusSchema, focusTabCount, focusTabKey, foreignFocusTab, moveTab, nameFocus, notebookFocuses, ownFocusPage, placeTab, placeTabs, pruneFocus, relocateFocusPaths, removeFocus, renameFocus, updateFocus } from '../src/focus-page.js';
 
 const note = (path: string) => ({ kind: 'note' as const, path });
 const lane = (id: string) => ({ kind: 'lane' as const, id });
-const pane = (...tabs: { kind: string }[]) => ({ tabs });
+const pane = (...tabs: { kind: string; }[]) => ({ tabs });
 const focus = (overrides: Record<string, unknown> = {}) => ({ division: 'single', panes: [pane()], id: 'f1', notebookId: 'nb1', name: 'Work', ...overrides });
 const notes = (count: number) => Array.from({ length: count }, (_, index) => note(`n${index}.md`));
 
@@ -69,11 +65,11 @@ describe('changeDivision', () => {
     const named = focus({ division: 'columns-2', panes: [pane(note('a.md')), pane()] });
     expect(changeDivision(named, 'single')).toMatchObject({ id: 'f1', notebookId: 'nb1', name: 'Work' });
   });
-  it('dedupes a note the kept pane already holds when a removed pane folds onto it, keeping the kept pane\'s own copy', () => {
+  it("dedupes a note the kept pane already holds when a removed pane folds onto it, keeping the kept pane's own copy", () => {
     const layout = { division: 'columns-2' as const, panes: [pane(note('a.md'), note('x.md')), pane(note('x.md'))] };
     expect(changeDivision(layout, 'single')).toEqual({ division: 'single', panes: [pane(note('a.md'), note('x.md'))] });
   });
-  it('dedupes a note shared between two removed panes when both fold onto the kept pane, keeping the earlier pane\'s copy', () => {
+  it("dedupes a note shared between two removed panes when both fold onto the kept pane, keeping the earlier pane's copy", () => {
     const layout = { division: 'major-left' as const, panes: [pane(note('a.md')), pane(note('y.md'), note('b.md')), pane(note('y.md'), note('c.md'))] };
     expect(changeDivision(layout, 'single')).toEqual({ division: 'single', panes: [pane(note('a.md'), note('y.md'), note('b.md'), note('c.md'))] });
   });
@@ -98,12 +94,22 @@ describe('placeTab', () => {
   });
   it('throws invalid-pane for an out-of-range pane', () => {
     expect(() => placeTab(layout, note('d.md'), 2)).toThrow(FocusError);
-    try { placeTab(layout, note('d.md'), -1); throw new Error('expected throw'); } catch (error) { expect((error as FocusError).code).toBe('invalid-pane'); }
+    try {
+      placeTab(layout, note('d.md'), -1);
+      throw new Error('expected throw');
+    } catch (error) {
+      expect((error as FocusError).code).toBe('invalid-pane');
+    }
   });
   it('throws tab-limit only when adding would exceed the cap, never when moving', () => {
     const full = { division: 'single' as const, panes: [pane(...notes(FOCUS_MAX_TABS))] };
     expect(() => placeTab(full, note('overflow.md'), 0)).toThrow(FocusError);
-    try { placeTab(full, note('overflow.md'), 0); throw new Error('expected throw'); } catch (error) { expect((error as FocusError).code).toBe('tab-limit'); }
+    try {
+      placeTab(full, note('overflow.md'), 0);
+      throw new Error('expected throw');
+    } catch (error) {
+      expect((error as FocusError).code).toBe('tab-limit');
+    }
     expect(focusTabCount(placeTab(full, note('n5.md'), 0, 0))).toBe(FOCUS_MAX_TABS);
   });
 });
@@ -127,7 +133,12 @@ describe('moveTab', () => {
     expect(moveTab(layout, 0, 0, focusTabKey(note('a.md')), 1)).toEqual({ ...layout, panes: [pane(note('b.md'), note('a.md')), layout.panes[1]] });
   });
   it('throws invalid-pane when the key is not in the source pane', () => {
-    try { moveTab(layout, 0, 1, focusTabKey(note('c.md'))); throw new Error('expected throw'); } catch (error) { expect((error as FocusError).code).toBe('invalid-pane'); }
+    try {
+      moveTab(layout, 0, 1, focusTabKey(note('c.md')));
+      throw new Error('expected throw');
+    } catch (error) {
+      expect((error as FocusError).code).toBe('invalid-pane');
+    }
   });
 });
 
@@ -186,29 +197,7 @@ describe('findFocusTabInPane', () => {
 });
 
 describe('displayPanes', () => {
-  const cases: [typeof FOCUS_DIVISIONS[number], 1 | 2 | 4, typeof FOCUS_DIVISIONS[number], number[][]][] = [
-    ['single', 4, 'single', [[0]]],
-    ['columns-2', 4, 'columns-2', [[0], [1]]],
-    ['rows-2', 4, 'rows-2', [[0], [1]]],
-    ['major-left', 4, 'major-left', [[0], [1], [2]]],
-    ['major-top', 4, 'major-top', [[0], [1], [2]]],
-    ['columns-3', 4, 'columns-3', [[0], [1], [2]]],
-    ['grid-2x2', 4, 'grid-2x2', [[0], [1], [2], [3]]],
-    ['single', 2, 'single', [[0]]],
-    ['columns-2', 2, 'columns-2', [[0], [1]]],
-    ['rows-2', 2, 'rows-2', [[0], [1]]],
-    ['major-left', 2, 'columns-2', [[0], [1, 2]]],
-    ['major-top', 2, 'rows-2', [[0], [1, 2]]],
-    ['columns-3', 2, 'columns-2', [[0], [1, 2]]],
-    ['grid-2x2', 2, 'columns-2', [[0], [1, 2, 3]]],
-    ['single', 1, 'single', [[0]]],
-    ['columns-2', 1, 'single', [[0, 1]]],
-    ['rows-2', 1, 'single', [[0, 1]]],
-    ['major-left', 1, 'single', [[0, 1, 2]]],
-    ['major-top', 1, 'single', [[0, 1, 2]]],
-    ['columns-3', 1, 'single', [[0, 1, 2]]],
-    ['grid-2x2', 1, 'single', [[0, 1, 2, 3]]],
-  ];
+  const cases: [typeof FOCUS_DIVISIONS[number], 1 | 2 | 4, typeof FOCUS_DIVISIONS[number], number[][]][] = [['single', 4, 'single', [[0]]], ['columns-2', 4, 'columns-2', [[0], [1]]], ['rows-2', 4, 'rows-2', [[0], [1]]], ['major-left', 4, 'major-left', [[0], [1], [2]]], ['major-top', 4, 'major-top', [[0], [1], [2]]], ['columns-3', 4, 'columns-3', [[0], [1], [2]]], ['grid-2x2', 4, 'grid-2x2', [[0], [1], [2], [3]]], ['single', 2, 'single', [[0]]], ['columns-2', 2, 'columns-2', [[0], [1]]], ['rows-2', 2, 'rows-2', [[0], [1]]], ['major-left', 2, 'columns-2', [[0], [1, 2]]], ['major-top', 2, 'rows-2', [[0], [1, 2]]], ['columns-3', 2, 'columns-2', [[0], [1, 2]]], ['grid-2x2', 2, 'columns-2', [[0], [1, 2, 3]]], ['single', 1, 'single', [[0]]], ['columns-2', 1, 'single', [[0, 1]]], ['rows-2', 1, 'single', [[0, 1]]], ['major-left', 1, 'single', [[0, 1, 2]]], ['major-top', 1, 'single', [[0, 1, 2]]], ['columns-3', 1, 'single', [[0, 1, 2]]], ['grid-2x2', 1, 'single', [[0, 1, 2, 3]]]];
   it('maps every division at capacities 1, 2 and 4', () => {
     for (const [division, capacity, expectedDivision, groups] of cases) {
       expect(displayPanes(division, capacity)).toEqual({ division: expectedDivision, groups });
@@ -220,10 +209,7 @@ describe('displayPanes', () => {
 });
 
 describe('relocateFocusPaths', () => {
-  const build = () => ({ version: 1 as const, focuses: [
-    focus({ id: 'f1', notebookId: 'one', panes: [pane(note('notes/one/a.md'), lane('l1'))] }),
-    focus({ id: 'f2', notebookId: 'two', name: 'Other', panes: [pane(note('notes/two/a.md'))] }),
-  ] });
+  const build = () => ({ version: 1 as const, focuses: [focus({ id: 'f1', notebookId: 'one', panes: [pane(note('notes/one/a.md'), lane('l1'))] }), focus({ id: 'f2', notebookId: 'two', name: 'Other', panes: [pane(note('notes/two/a.md'))] })] });
   it('rewrites note paths only for the matching notebook, mutating in place', () => {
     const page = build();
     const changed = relocateFocusPaths(page, 'one', path => path.replace('notes/one', 'notes/one-renamed'));
@@ -253,23 +239,48 @@ describe('notebookFocuses, nameFocus, renameFocus, updateFocus and removeFocus',
   });
   it('throws focus-limit at the cap and duplicate-name within a notebook', () => {
     const full = { version: 1 as const, focuses: Array.from({ length: 40 }, (_, index) => focus({ id: `f${index}`, name: `F${index}` })) };
-    try { nameFocus(full, layout, 'nb1', 'Overflow'); throw new Error('expected throw'); } catch (error) { expect((error as FocusError).code).toBe('focus-limit'); }
+    try {
+      nameFocus(full, layout, 'nb1', 'Overflow');
+      throw new Error('expected throw');
+    } catch (error) {
+      expect((error as FocusError).code).toBe('focus-limit');
+    }
     const page = { version: 1 as const, focuses: [focus({ id: 'f1', notebookId: 'nb1', name: 'Work' })] };
-    try { nameFocus(page, layout, 'nb1', 'Work'); throw new Error('expected throw'); } catch (error) { expect((error as FocusError).code).toBe('duplicate-name'); }
+    try {
+      nameFocus(page, layout, 'nb1', 'Work');
+      throw new Error('expected throw');
+    } catch (error) {
+      expect((error as FocusError).code).toBe('duplicate-name');
+    }
     expect(nameFocus(page, layout, 'other', 'Work').focus.notebookId).toBe('other');
   });
   it('renames a Focus, allowing its own current name and rejecting a sibling collision', () => {
     const page = { version: 1 as const, focuses: [focus({ id: 'f1', notebookId: 'nb1', name: 'Work' }), focus({ id: 'f2', notebookId: 'nb1', name: 'Play' })] };
     expect(renameFocus(page, 'f1', 'Work').focuses[0].name).toBe('Work');
     expect(renameFocus(page, 'f1', '  Renamed  ').focuses[0].name).toBe('Renamed');
-    try { renameFocus(page, 'f2', 'Work'); throw new Error('expected throw'); } catch (error) { expect((error as FocusError).code).toBe('duplicate-name'); }
-    try { renameFocus(page, 'missing', 'X'); throw new Error('expected throw'); } catch (error) { expect((error as FocusError).code).toBe('unknown-focus'); }
+    try {
+      renameFocus(page, 'f2', 'Work');
+      throw new Error('expected throw');
+    } catch (error) {
+      expect((error as FocusError).code).toBe('duplicate-name');
+    }
+    try {
+      renameFocus(page, 'missing', 'X');
+      throw new Error('expected throw');
+    } catch (error) {
+      expect((error as FocusError).code).toBe('unknown-focus');
+    }
   });
   it('updates a Focus through a pure change function and validates the result', () => {
     const page = { version: 1 as const, focuses: [focus({ id: 'f1', panes: [pane()] })] };
     const updated = updateFocus(page, 'f1', current => ({ ...current, panes: [pane(note('a.md'))] }));
     expect(updated.focuses[0].panes[0].tabs).toEqual([note('a.md')]);
-    try { updateFocus(page, 'missing', current => current); throw new Error('expected throw'); } catch (error) { expect((error as FocusError).code).toBe('unknown-focus'); }
+    try {
+      updateFocus(page, 'missing', current => current);
+      throw new Error('expected throw');
+    } catch (error) {
+      expect((error as FocusError).code).toBe('unknown-focus');
+    }
   });
   it('removes a Focus, leaving an unknown id unchanged', () => {
     const page = { version: 1 as const, focuses: [focus({ id: 'f1' }), focus({ id: 'f2', name: 'Other' })] };
@@ -280,10 +291,7 @@ describe('notebookFocuses, nameFocus, renameFocus, updateFocus and removeFocus',
 
 describe('Focus notebook ownership', () => {
   const notebooks = [{ id: 'work', root: 'notes/work' }, { id: 'other', root: 'notes/other' }];
-  const screen = { version: 2 as const, rows: [
-    { id: 'mine', notebookId: 'work', kind: 'custom' as const, name: 'Mine', view: 'small', items: [] },
-    { id: 'theirs', notebookId: 'other', kind: 'custom' as const, name: 'Theirs', view: 'small', items: [] },
-  ] } as never;
+  const screen = { version: 2 as const, rows: [{ id: 'mine', notebookId: 'work', kind: 'custom' as const, name: 'Mine', view: 'small', items: [] }, { id: 'theirs', notebookId: 'other', kind: 'custom' as const, name: 'Theirs', view: 'small', items: [] }] } as never;
   it('rejects note and lane tabs owned by another notebook and keeps stale lanes for pruning', () => {
     expect(foreignFocusTab(note('notes/work/a.md'), 'work', notebooks, screen)).toBe(false);
     expect(foreignFocusTab(note('notes/other/outside.md'), 'work', notebooks, screen)).toBe(true);

@@ -1,6 +1,6 @@
-import { loadSourceConfig, sourceIdentity, SourceError } from '@mygitnotes/core';
-import { Router, Request, Response } from 'express';
-import { createHash, randomBytes, createCipheriv, createDecipheriv, timingSafeEqual } from 'node:crypto';
+import { loadSourceConfig, SourceError, sourceIdentity } from '@mygitnotes/core';
+import { Request, Response, Router } from 'express';
+import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { nativeRedisCommand } from './redis-store.js';
@@ -30,9 +30,7 @@ export function unseal(value: string, secret = key()): any {
 }
 
 function redisConnection() {
-  return process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_TOKEN
-    ? { url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN }
-    : { url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN };
+  return process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_TOKEN ? { url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN } : { url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN };
 }
 
 /** Encrypted records use native Redis, Redis REST, or a persistent local directory. */
@@ -43,14 +41,16 @@ export class SessionStore {
     if (namespace && !/^[A-Za-z0-9_-]{1,64}$/.test(namespace)) throw new Error('MYGITNOTES_SESSION_NAMESPACE must contain 1-64 letters, digits, underscores or hyphens.');
     this.prefix = namespace ? `gh-notes:${namespace}` : 'gh-notes';
   }
-  private get redis() { return Boolean(process.env.REDIS_URL || process.env.VERCEL || redisConnection().url); }
+  private get redis() {
+    return Boolean(process.env.REDIS_URL || process.env.VERCEL || redisConnection().url);
+  }
   async command(command: string[]): Promise<any> {
     if (process.env.REDIS_URL) return nativeRedisCommand(process.env.REDIS_URL, command);
     const { url, token } = redisConnection();
     if (!url || !token || !url.startsWith('https://')) throw new Error('Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN for server-held sessions.');
     const response = await fetch(url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(command) });
     if (!response.ok) throw new Error('Session store unavailable.');
-    const body = await response.json() as { result: unknown; error?: string };
+    const body = await response.json() as { result: unknown; error?: string; };
     if (body.error) throw new Error('Session store command failed.');
     return body.result;
   }
@@ -81,15 +81,27 @@ export class SessionStore {
     let raw: string | null;
     if (this.redis) raw = await this.command(['GET', `${this.prefix}:${hash}`]);
     else {
-      try { raw = await fs.readFile(path.join(this.base, '.github-notes-sessions', hash), 'utf8'); }
-      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
+      try {
+        raw = await fs.readFile(path.join(this.base, '.github-notes-sessions', hash), 'utf8');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+        throw error;
+      }
     }
     if (!raw) return null;
     const secret = key();
     let record: any;
     // Another deployment sharing this keyspace, or a rotated secret, sealed the record; it stays with its writer.
-    try { record = unseal(raw, secret); } catch { console.warn(`[auth] record ${hash.slice(0, 8)} sealed with another SESSION_SECRET`); return sealedElsewhere; }
-    if (record?.expires !== null && record?.expires <= Date.now()) { await this.deleteByDigest(hash); return null; }
+    try {
+      record = unseal(raw, secret);
+    } catch {
+      console.warn(`[auth] record ${hash.slice(0, 8)} sealed with another SESSION_SECRET`);
+      return sealedElsewhere;
+    }
+    if (record?.expires !== null && record?.expires <= Date.now()) {
+      await this.deleteByDigest(hash);
+      return null;
+    }
     return record?.value;
   }
   async delete(id: string) {
@@ -104,7 +116,9 @@ export class SessionStore {
     const lockKey = `${this.base}:${this.prefix}:${id}`;
     const previous = credentialLocks.get(lockKey) || Promise.resolve();
     let release!: () => void;
-    const gate = new Promise<void>(resolve => { release = resolve; });
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
     const tail = previous.then(() => gate);
     credentialLocks.set(lockKey, tail);
     await previous;
@@ -113,7 +127,10 @@ export class SessionStore {
     try {
       if (this.redis) {
         for (let attempt = 0; attempt < 100; attempt++) {
-          if (await this.command(['SET', redisKey, nonce, 'NX', 'PX', '30000']) === 'OK') { acquired = true; break; }
+          if (await this.command(['SET', redisKey, nonce, 'NX', 'PX', '30000']) === 'OK') {
+            acquired = true;
+            break;
+          }
           await new Promise(resolve => setTimeout(resolve, 100));
         }
         if (!acquired) throw new SourceError('Authorization refresh is busy. Retry shortly.', 503);
@@ -122,7 +139,10 @@ export class SessionStore {
     } finally {
       try {
         if (acquired) await this.command(['EVAL', "if redis.call('GET',KEYS[1]) == ARGV[1] then return redis.call('DEL',KEYS[1]) else return 0 end", '1', redisKey, nonce]);
-      } finally { release(); if (credentialLocks.get(lockKey) === tail) credentialLocks.delete(lockKey); }
+      } finally {
+        release();
+        if (credentialLocks.get(lockKey) === tail) credentialLocks.delete(lockKey);
+      }
     }
   }
   async recordRejection(token: string, reason: string) {
@@ -135,8 +155,12 @@ export class SessionStore {
     let hashes: string[];
     if (this.redis) hashes = await this.command(['SMEMBERS', `${this.prefix}:grants:${ownerId}`]);
     else {
-      try { hashes = await fs.readdir(path.join(this.base, '.github-notes-sessions')); }
-      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
+      try {
+        hashes = await fs.readdir(path.join(this.base, '.github-notes-sessions'));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+        throw error;
+      }
     }
     const results = [];
     for (const id of hashes) {
@@ -156,9 +180,11 @@ export class SessionStore {
   }
 }
 export class CredentialRejected extends SourceError {
-  constructor(public reason: string, message: string) { super(message, 401); }
+  constructor(public reason: string, message: string) {
+    super(message, 401);
+  }
 }
-type Provider = { type: 'github' | 'gitlab'; site: string; realm: string; clientId?: string; clientSecret?: string; authorize: string; token: string; user: string };
+type Provider = { type: 'github' | 'gitlab'; site: string; realm: string; clientId?: string; clientSecret?: string; authorize: string; token: string; user: string; };
 const credentialLocks = new Map<string, Promise<void>>();
 function providerFor(base: string): Provider {
   const source = loadSourceConfig(base);
@@ -166,13 +192,14 @@ function providerFor(base: string): Provider {
   const site = source.type === 'gitlab' ? source.url : 'https://github.com';
   const clientId = process.env[type === 'gitlab' ? 'GITLAB_CLIENT_ID' : 'GITHUB_CLIENT_ID'];
   const clientSecret = process.env[type === 'gitlab' ? 'GITLAB_CLIENT_SECRET' : 'GITHUB_CLIENT_SECRET'];
-  return { type, site, clientId, clientSecret, realm: `${type}:${site}:${clientId || ''}`,
-    authorize: `${site}${type === 'gitlab' ? '/oauth/authorize' : '/login/oauth/authorize'}`,
-    token: `${site}${type === 'gitlab' ? '/oauth/token' : '/login/oauth/access_token'}`,
-    user: type === 'gitlab' ? `${site}/api/v4/user` : 'https://api.github.com/user' };
+  return { type, site, clientId, clientSecret, realm: `${type}:${site}:${clientId || ''}`, authorize: `${site}${type === 'gitlab' ? '/oauth/authorize' : '/login/oauth/authorize'}`, token: `${site}${type === 'gitlab' ? '/oauth/token' : '/login/oauth/access_token'}`, user: type === 'gitlab' ? `${site}/api/v4/user` : 'https://api.github.com/user' };
 }
-function matchesProvider(record: any, provider: Provider) { return record?.realm === provider.realm || (!record?.realm && provider.type === 'github'); }
-function ownerOf(session: any, provider: Provider): string | number { return provider.type === 'github' ? session.userId : `${digest(provider.realm)}:${session.userId}`; }
+function matchesProvider(record: any, provider: Provider) {
+  return record?.realm === provider.realm || (!record?.realm && provider.type === 'github');
+}
+function ownerOf(session: any, provider: Provider): string | number {
+  return provider.type === 'github' ? session.userId : `${digest(provider.realm)}:${session.userId}`;
+}
 function credentialId(userId: number, provider: Provider) {
   return createHash('sha256').update(provider.type === 'github' ? `github-credential:${provider.clientId}:${userId}` : `${provider.realm}:credential:${userId}`).digest('base64url');
 }
@@ -185,17 +212,17 @@ async function saveCredential(store: SessionStore, session: any, provider: Provi
 function cookies(req: Request): Record<string, string> {
   return Object.fromEntries((req.headers.cookie || '').split(';').map(p => p.trim().split('=')).filter(p => p.length === 2));
 }
-function options() { return { httpOnly: true, secure: process.env.APP_URL?.startsWith('https://') || Boolean(process.env.VERCEL), sameSite: 'lax' as const, path: '/' }; }
+function options() {
+  return { httpOnly: true, secure: process.env.APP_URL?.startsWith('https://') || Boolean(process.env.VERCEL), sameSite: 'lax' as const, path: '/' };
+}
 async function getSession(req: Request, store: SessionStore, provider: Provider) {
   const id = cookies(req)[cookieName];
   const session = id ? await store.get(id) : null;
   return session?.kind === 'session' && matchesProvider(session, provider) ? session : null;
 }
 async function tokenRequest(provider: Provider, body: Record<string, unknown>) {
-  const response = await fetch(provider.token, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(15000),
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ client_id: provider.clientId, client_secret: provider.clientSecret, ...body }) });
-  const data = await response.json() as { access_token?: string; refresh_token?: string; expires_in?: number };
+  const response = await fetch(provider.token, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(15000), headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ client_id: provider.clientId, client_secret: provider.clientSecret, ...body }) });
+  const data = await response.json() as { access_token?: string; refresh_token?: string; expires_in?: number; };
   if (!response.ok || typeof data.access_token !== 'string' || !data.access_token || provider.type === 'gitlab' && (typeof data.refresh_token !== 'string' || !data.refresh_token || !Number.isFinite(data.expires_in) || data.expires_in! <= 0)) {
     throw new SourceError('Authorization failed. Sign in again to reconnect.', 401);
   }
@@ -205,14 +232,19 @@ export async function credentialToken(base: string, id: string): Promise<string>
   const provider = providerFor(base), store = new SessionStore(base);
   // GitHub OAuth apps with short-lived tokens return a refresh token; long-lived GitHub tokens carry neither.
   const refreshable = (record: any) => (provider.type === 'gitlab' || Boolean(record?.refreshToken)) && record?.upstreamExpiresAt <= Date.now() + 60000;
-  const reject = (reason: string, message: string) => { console.warn(`[auth] credential rejected: ${reason}`); return new CredentialRejected(reason, message); };
+  const reject = (reason: string, message: string) => {
+    console.warn(`[auth] credential rejected: ${reason}`);
+    return new CredentialRejected(reason, message);
+  };
   const resolve = async (record: any) => {
     const invalid = record === sealedElsewhere ? 'sealed-elsewhere' : !record ? 'missing' : !['credential', 'session'].includes(record.kind) ? 'kind' : !matchesProvider(record, provider) ? 'realm' : typeof record.token !== 'string' ? 'token' : '';
     if (invalid) throw reject(invalid, 'Agent authorization unavailable. Sign in again.');
     if (refreshable(record)) {
       if (!record.refreshToken) throw reject('expired', 'GitLab authorization expired. Sign in again.');
-      const data = await tokenRequest(provider, { grant_type: 'refresh_token', refresh_token: record.refreshToken, ...(provider.type === 'gitlab' ? { redirect_uri: `${process.env.APP_URL}/api/auth/gitlab/callback` } : {}) })
-        .catch(error => { console.warn('[auth] credential rejected: refresh-failed'); throw error instanceof SourceError ? new CredentialRejected('refresh-failed', error.message) : error; });
+      const data = await tokenRequest(provider, { grant_type: 'refresh_token', refresh_token: record.refreshToken, ...(provider.type === 'gitlab' ? { redirect_uri: `${process.env.APP_URL}/api/auth/gitlab/callback` } : {}) }).catch(error => {
+        console.warn('[auth] credential rejected: refresh-failed');
+        throw error instanceof SourceError ? new CredentialRejected('refresh-failed', error.message) : error;
+      });
       record = { ...record, token: data.access_token, refreshToken: data.refresh_token, upstreamExpiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined };
       await store.set(id, record, null);
     }
@@ -234,9 +266,10 @@ export function createAuth(base: string): Router {
   router.get('/session', async (req, res) => {
     try {
       const provider = providerFor(base), session = await getSession(req, store, provider);
-      res.json({ authenticated: Boolean(session), login: session?.login, provider: provider.type, loginUrl: `/api/auth/${provider.type}`,
-        configured: Boolean(provider.clientId && provider.clientSecret && process.env.SESSION_SECRET && (!process.env.VERCEL || (redisConnection().url && redisConnection().token))) });
-    } catch { res.status(503).json({ error: 'Session store or source configuration unavailable.' }); }
+      res.json({ authenticated: Boolean(session), login: session?.login, provider: provider.type, loginUrl: `/api/auth/${provider.type}`, configured: Boolean(provider.clientId && provider.clientSecret && process.env.SESSION_SECRET && (!process.env.VERCEL || (redisConnection().url && redisConnection().token))) });
+    } catch {
+      res.status(503).json({ error: 'Session store or source configuration unavailable.' });
+    }
   });
   router.get('/:provider(github|gitlab)', async (req, res) => {
     try {
@@ -246,12 +279,15 @@ export function createAuth(base: string): Router {
       const state = random(), verifier = random();
       await store.set(state, { kind: 'oauth', realm: provider.realm, verifier }, 600);
       res.cookie('gh_notes_oauth', state, { ...options(), maxAge: 600000 });
-      const params = new URLSearchParams({ client_id: provider.clientId, redirect_uri: `${process.env.APP_URL}/api/auth/${provider.type}/callback`, state,
-        code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256' });
-      if (provider.type === 'gitlab') { params.set('response_type', 'code'); params.set('scope', 'api'); }
-      else if (process.env.GITHUB_APP_TYPE !== 'github-app') params.set('scope', 'repo');
+      const params = new URLSearchParams({ client_id: provider.clientId, redirect_uri: `${process.env.APP_URL}/api/auth/${provider.type}/callback`, state, code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256' });
+      if (provider.type === 'gitlab') {
+        params.set('response_type', 'code');
+        params.set('scope', 'api');
+      } else if (process.env.GITHUB_APP_TYPE !== 'github-app') params.set('scope', 'repo');
       res.redirect(`${provider.authorize}?${params}`);
-    } catch (error) { res.status(503).json({ error: (error as Error).message }); }
+    } catch (error) {
+      res.status(503).json({ error: (error as Error).message });
+    }
   });
   router.get('/:provider(github|gitlab)/callback', async (req, res) => {
     try {
@@ -266,17 +302,20 @@ export function createAuth(base: string): Router {
       const data = await tokenRequest(provider, { code: req.query.code, code_verifier: pending.verifier, redirect_uri: `${process.env.APP_URL}/api/auth/${provider.type}/callback`, ...(provider.type === 'gitlab' ? { grant_type: 'authorization_code' } : {}) });
       const response = await fetch(provider.user, { redirect: 'error', signal: AbortSignal.timeout(15000), headers: { Authorization: `Bearer ${data.access_token}`, 'User-Agent': 'MyGitNotes' } });
       if (!response.ok) throw new Error('Account lookup failed.');
-      const user = await response.json() as { login?: string; username?: string; id: number };
+      const user = await response.json() as { login?: string; username?: string; id: number; };
       const login = provider.type === 'gitlab' ? user.username : user.login;
       if (!Number.isSafeInteger(user.id) || !login) throw new Error('Account lookup returned an invalid identity.');
-      const old = cookies(req)[cookieName]; if (old) await store.delete(old);
+      const old = cookies(req)[cookieName];
+      if (old) await store.delete(old);
       const id = random(), ttl = provider.type === 'gitlab' ? lifetime : Math.min(lifetime, data.expires_in || lifetime);
       const session = { kind: 'session', realm: provider.realm, token: data.access_token, refreshToken: data.refresh_token, login, userId: user.id, upstreamExpiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined };
       const credential = await saveCredential(store, session, provider);
       await store.set(id, provider.type === 'gitlab' ? { kind: 'session', realm: provider.realm, login, userId: user.id, credential } : session, ttl);
       res.cookie(cookieName, id, { ...options(), maxAge: ttl * 1000 });
       res.redirect('/');
-    } catch (error) { res.status(400).json({ error: (error as Error).message }); }
+    } catch (error) {
+      res.status(400).json({ error: (error as Error).message });
+    }
   });
   router.post('/agent-token', async (req, res) => {
     try {
@@ -287,16 +326,25 @@ export function createAuth(base: string): Router {
       const token = random(), credential = await saveCredential(store, session, provider), ownerId = ownerOf(session, provider);
       const name = typeof req.body.name === 'string' ? req.body.name.trim().slice(0, 80) : '';
       await store.set(token, { kind: 'agent', ownerId, credential, name: name || 'MCP client', createdAt: Date.now(), source: sourceIdentity(source), audience: `${process.env.APP_URL}/mcp`, write: req.body.write === true }, null);
-      try { await store.indexGrant(token, ownerId); } catch (error) { await store.delete(token); throw error; }
+      try {
+        await store.indexGrant(token, ownerId);
+      } catch (error) {
+        await store.delete(token);
+        throw error;
+      }
       res.json({ token, id: digest(token), endpoint: `${process.env.APP_URL}/mcp`, url: `${process.env.APP_URL}/mcp/${token}`, expiresIn: null, write: req.body.write === true });
-    } catch { res.status(503).json({ error: 'Agent grant storage unavailable.' }); }
+    } catch {
+      res.status(503).json({ error: 'Agent grant storage unavailable.' });
+    }
   });
   router.get('/agent-tokens', async (req, res) => {
     try {
       const provider = providerFor(base), session = await getSession(req, store, provider);
       if (!session) return res.status(401).json({ error: 'Sign in to manage agent access.' });
       res.json({ grants: await store.listGrants(ownerOf(session, provider)) });
-    } catch { res.status(503).json({ error: 'Agent grant storage unavailable.' }); }
+    } catch {
+      res.status(503).json({ error: 'Agent grant storage unavailable.' });
+    }
   });
   router.delete('/agent-tokens/:id', async (req, res) => {
     try {
@@ -304,11 +352,19 @@ export function createAuth(base: string): Router {
       if (!session) return res.status(401).json({ error: 'Sign in to manage agent access.' });
       if (!await store.revokeGrant(String(req.params.id), ownerOf(session, provider))) return res.status(404).json({ error: 'Agent grant not found.' });
       res.json({ success: true });
-    } catch { res.status(503).json({ error: 'Agent grant storage unavailable.' }); }
+    } catch {
+      res.status(503).json({ error: 'Agent grant storage unavailable.' });
+    }
   });
   router.post('/logout', async (req, res) => {
-    try { const id = cookies(req)[cookieName]; if (id) await store.delete(id); res.clearCookie(cookieName, options()); res.json({ success: true }); }
-    catch { res.status(503).json({ error: 'Session store unavailable.' }); }
+    try {
+      const id = cookies(req)[cookieName];
+      if (id) await store.delete(id);
+      res.clearCookie(cookieName, options());
+      res.json({ success: true });
+    } catch {
+      res.status(503).json({ error: 'Session store unavailable.' });
+    }
   });
   return router;
 }

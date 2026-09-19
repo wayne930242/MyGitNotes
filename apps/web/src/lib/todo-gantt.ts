@@ -52,7 +52,7 @@ export function formatDayIndex(index: number): string {
   return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
 }
 
-function ymFromDay(day: number): { year: number; month: number } {
+function ymFromDay(day: number): { year: number; month: number; } {
   const date = new Date(day * MS_PER_DAY);
   return { year: date.getUTCFullYear(), month: date.getUTCMonth() };
 }
@@ -100,11 +100,7 @@ export interface GanttRange {
  */
 export function computeGanttRange(tasks: TodoTask[], today: string, scale: GanttScale = 'day'): GanttRange {
   const todayDay = dayIndex(today);
-  const taskDays = tasks
-    .filter(task => !task.checked)
-    .flatMap(task => [task.start, task.due])
-    .filter((value): value is string => Boolean(value))
-    .map(dayIndex);
+  const taskDays = tasks.filter(task => !task.checked).flatMap(task => [task.start, task.due]).filter((value): value is string => Boolean(value)).map(dayIndex);
   const all = [...taskDays, todayDay];
   const min = Math.min(...all);
   const max = Math.max(...all);

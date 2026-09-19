@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { GitHubApi, SourceError } from './github-api.js';
 import { readGitHubArchive } from './github-archive.js';
-import { RemoteSource, type RemoteEntry, type RemoteSnapshot, type RemoteChange, type RepositoryInfo } from './remote-source.js';
+import { type RemoteChange, type RemoteEntry, type RemoteSnapshot, RemoteSource, type RepositoryInfo } from './remote-source.js';
 import { hashJson, type RemoteCache } from './remote-cache.js';
 export { SourceError } from './github-api.js';
 export type { RepositoryInfo } from './remote-source.js';
@@ -18,36 +18,37 @@ export class GitHubSource extends RemoteSource {
     return this.client.json(endpoint, init, this.fresh && (endpoint === '' || endpoint.startsWith('/commits/')));
   }
   protected async loadSnapshot(): Promise<RemoteSnapshot> {
-
-      const info: RepositoryInfo = await this.api('');
-      if (info.private && !this.token) throw new SourceError('Sign in to read this private repository.', 401);
-      const commit = await this.api(`/commits/${encodeURIComponent(this.branch)}`);
-      const treeSha: string = commit.commit.tree.sha;
-      const result = await this.api(`/git/trees/${treeSha}?recursive=1`);
-      let entries: GitHubEntry[] = result.tree;
-      if (result.truncated) {
-        entries = [];
-        const pending = [{ sha: treeSha, prefix: '' }];
-        while (pending.length) {
-          const next = pending.shift()!;
-          const tree = await this.api(`/git/trees/${next.sha}`);
-          if (tree.truncated) throw new SourceError('Repository directory is too large to list completely.', 422);
-          for (const entry of tree.tree as GitHubEntry[]) {
-            const full = { ...entry, path: `${next.prefix}${entry.path}` };
-            entries.push(full);
-            if (entry.type === 'tree') pending.push({ sha: entry.sha, prefix: `${full.path}/` });
-          }
-          if (entries.length > 100000) throw new SourceError('Repository exceeds the supported file listing size.', 422);
+    const info: RepositoryInfo = await this.api('');
+    if (info.private && !this.token) throw new SourceError('Sign in to read this private repository.', 401);
+    const commit = await this.api(`/commits/${encodeURIComponent(this.branch)}`);
+    const treeSha: string = commit.commit.tree.sha;
+    const result = await this.api(`/git/trees/${treeSha}?recursive=1`);
+    let entries: GitHubEntry[] = result.tree;
+    if (result.truncated) {
+      entries = [];
+      const pending = [{ sha: treeSha, prefix: '' }];
+      while (pending.length) {
+        const next = pending.shift()!;
+        const tree = await this.api(`/git/trees/${next.sha}`);
+        if (tree.truncated) throw new SourceError('Repository directory is too large to list completely.', 422);
+        for (const entry of tree.tree as GitHubEntry[]) {
+          const full = { ...entry, path: `${next.prefix}${entry.path}` };
+          entries.push(full);
+          if (entry.type === 'tree') pending.push({ sha: entry.sha, prefix: `${full.path}/` });
         }
+        if (entries.length > 100000) throw new SourceError('Repository exceeds the supported file listing size.', 422);
       }
-      return { sha: commit.sha as string, treeSha, entries, info };
+    }
+    return { sha: commit.sha as string, treeSha, entries, info };
   }
   protected async readBlob(sha: string): Promise<Buffer> {
     const blob = await this.api(`/git/blobs/${sha}`);
     if (blob.encoding !== 'base64') throw new SourceError('Unsupported GitHub file encoding.', 422);
     return Buffer.from(blob.content, 'base64');
   }
-  protected invalidate() { this.client.invalidate(); }
+  protected invalidate() {
+    this.client.invalidate();
+  }
   async prefetchFiles(files: string[]) {
     const snapshot = await this.getSnapshot();
     const wanted = new Set(files);
@@ -61,8 +62,7 @@ export class GitHubSource extends RemoteSource {
       if (this.token) return this.prefetchBlobBatches(missing);
       try {
         const archive = await this.client.archive(snapshot.sha);
-        const contents = await readGitHubArchive(archive, snapshot.entries.filter(entry => entry.type === 'blob' && entry.mode !== '120000' &&
-          /\.(md|markdown|mdx|txt|ya?ml)$/i.test(entry.path)));
+        const contents = await readGitHubArchive(archive, snapshot.entries.filter(entry => entry.type === 'blob' && entry.mode !== '120000' && /\.(md|markdown|mdx|txt|ya?ml)$/i.test(entry.path)));
         for (const [sha, bytes] of contents) this.client.putBlob(sha, bytes);
       } catch (error) {
         // A missing archive may still have individually readable blobs. Never fall back through a cooldown.
@@ -76,8 +76,9 @@ export class GitHubSource extends RemoteSource {
     const pending = entries.filter(entry => !this.client.hasBlob(entry.sha));
     for (let i = 0; i < pending.length; i += 100) {
       let texts: Map<string, string>;
-      try { texts = await this.client.blobTexts(pending.slice(i, i + 100).map(entry => entry.sha)); }
-      catch (error) {
+      try {
+        texts = await this.client.blobTexts(pending.slice(i, i + 100).map(entry => entry.sha));
+      } catch (error) {
         // Unloaded notes fall back to individual blob reads. Never fall back through a cooldown or lost access.
         if (!(error instanceof SourceError) || [401, 403, 404, 429].includes(error.status)) throw error;
         return;
@@ -98,9 +99,7 @@ export class GitHubSource extends RemoteSource {
   protected async publishChanges(changes: RemoteChange[], snapshot: RemoteSnapshot, message: string): Promise<string> {
     const entries = [];
     for (const change of changes) {
-      const value = change.content !== undefined ? { content: change.content } : {
-        sha: change.base64 !== undefined ? (await this.api('/git/blobs', { method: 'POST', body: JSON.stringify({ content: change.base64, encoding: 'base64' }) })).sha : change.sha,
-      };
+      const value = change.content !== undefined ? { content: change.content } : { sha: change.base64 !== undefined ? (await this.api('/git/blobs', { method: 'POST', body: JSON.stringify({ content: change.base64, encoding: 'base64' }) })).sha : change.sha };
       entries.push({ path: change.path, mode: '100644', type: 'blob', ...value });
     }
     const tree = await this.api('/git/trees', { method: 'POST', body: JSON.stringify({ base_tree: snapshot.treeSha, tree: entries }) });

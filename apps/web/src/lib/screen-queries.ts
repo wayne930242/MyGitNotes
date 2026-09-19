@@ -7,16 +7,7 @@ import { notePathsOptions, useNoteList, useNoteLookup, useNotePaths, useNoteQuer
 export function laneNoteQuery(row: ScreenRow): Partial<NoteQuery> | null {
   if (row.kind !== 'dynamic') return null;
   const source = row.source;
-  return {
-    notebookId: row.notebookId,
-    tags: source.kind === 'tag' ? [source.tag] : [],
-    folders: source.kind === 'folder' ? [source.path] : [],
-    descendants: source.kind === 'folder' ? source.recursive : true,
-    status: row.study?.status || null,
-    showHidden: false,
-    sort: row.sort?.field || 'title',
-    order: row.sort?.order || 'asc',
-  };
+  return { notebookId: row.notebookId, tags: source.kind === 'tag' ? [source.tag] : [], folders: source.kind === 'folder' ? [source.path] : [], descendants: source.kind === 'folder' ? source.recursive : true, status: row.study?.status || null, showHidden: false, sort: row.sort?.field || 'title', order: row.sort?.order || 'asc' };
 }
 
 export interface LaneNotes {
@@ -32,7 +23,7 @@ export interface LaneNotes {
  * A lane's notes: a dynamic lane queries the server, a custom lane reads its pinned paths.
  * `all` skips paging for a study session, which needs the whole queue to order it.
  */
-export function useLaneNotes(row: ScreenRow | undefined, options: { content?: boolean; all?: boolean } = {}): LaneNotes {
+export function useLaneNotes(row: ScreenRow | undefined, options: { content?: boolean; all?: boolean; } = {}): LaneNotes {
   const dynamic = row?.kind === 'dynamic' ? laneNoteQuery(row) : null;
   const paged = useNoteList(options.all ? null : dynamic, { content: options.content });
   const allPaths = useNotePaths(options.all ? dynamic : null);
@@ -40,25 +31,13 @@ export function useLaneNotes(row: ScreenRow | undefined, options: { content?: bo
   const lookupPaths = row?.kind === 'custom' ? pinned : (options.all ? allPaths.paths : []);
   const lookup = useNoteLookup(lookupPaths, Boolean(options.content));
   if (row?.kind === 'custom' || options.all) {
-    return {
-      notes: lookup.notes,
-      loading: allPaths.loading || lookup.loading,
-      error: allPaths.error || lookup.error,
-      hasMore: false, loadingMore: false, loadMore: () => {},
-    };
+    return { notes: lookup.notes, loading: allPaths.loading || lookup.loading, error: allPaths.error || lookup.error, hasMore: false, loadingMore: false, loadMore: () => {} };
   }
-  return {
-    notes: [...paged.uncommitted, ...paged.notes],
-    loading: paged.loading,
-    error: paged.error,
-    hasMore: paged.hasMore,
-    loadingMore: paged.loadingMore,
-    loadMore: paged.loadMore,
-  };
+  return { notes: [...paged.uncommitted, ...paged.notes], loading: paged.loading, error: paged.error, hasMore: paged.hasMore, loadingMore: paged.loadingMore, loadMore: paged.loadMore };
 }
 
 /** The note paths each lane holds, for views that draw several lanes at once (the graph). */
-export function useLanePaths(rows: ScreenRow[]): { paths: Map<string, string[]>; loading: boolean; error: string } {
+export function useLanePaths(rows: ScreenRow[]): { paths: Map<string, string[]>; loading: boolean; error: string; } {
   const scope = useNoteQueryScope();
   const dynamic = rows.filter(row => row.kind === 'dynamic');
   const results = useQueries({ queries: dynamic.map(row => notePathsOptions(scope, laneNoteQuery(row)!)) });

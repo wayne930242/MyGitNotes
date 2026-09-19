@@ -19,18 +19,7 @@ export interface BreadcrumbSegment {
  * A touch long-press enters the same multi-select toggling for every following tap
  * until `touchMultiSelect` is cleared (see Sidebar's exit-when-empty effect).
  */
-export function resolveFolderClick(
-  event: {
-    shiftKey: boolean;
-    ctrlKey?: boolean;
-    metaKey?: boolean;
-    pointerType?: string;
-    nativeEvent?: { pointerType?: string };
-  },
-  onSelect: (folder: string | null) => void,
-  onFilterFolder?: (folder: string | null) => void,
-  touchMultiSelect = false
-): (folder: string | null) => void {
+export function resolveFolderClick(event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean; pointerType?: string; nativeEvent?: { pointerType?: string; }; }, onSelect: (folder: string | null) => void, onFilterFolder?: (folder: string | null) => void, touchMultiSelect = false): (folder: string | null) => void {
   const isMouse = event.pointerType === 'mouse' || event.nativeEvent?.pointerType === 'mouse';
   const hasModifier = Boolean(event.shiftKey || event.ctrlKey || event.metaKey);
   const shouldToggle = hasModifier || (touchMultiSelect && !isMouse);
@@ -42,11 +31,7 @@ export function resolveFolderClick(
  * Guarantees that the targeted folder becomes selected and is not removed even if
  * it was already part of the current selection.
  */
-export function resolveEnterTouchMultiSelect(
-  currentFolders: string[],
-  notebookRoot: string | undefined,
-  folder: string
-): string[] {
+export function resolveEnterTouchMultiSelect(currentFolders: string[], notebookRoot: string | undefined, folder: string): string[] {
   if (!notebookRoot || !folder) return currentFolders;
   const root = notebookRoot.replace(/\/$/, '');
   const path = `${root}/${folder}`;
@@ -60,11 +45,7 @@ export function resolveEnterTouchMultiSelect(
  * null when only one notebook is shown, so the caller falls back to its normal
  * single-notebook selection path.
  */
-export function resolveAllNotebooksFolderSelect(
-  selectedNotebookId: string,
-  notebookRoot: string | undefined,
-  folder: string | null
-): string[] | null {
+export function resolveAllNotebooksFolderSelect(selectedNotebookId: string, notebookRoot: string | undefined, folder: string | null): string[] | null {
   if (selectedNotebookId !== 'all') return null;
   if (!notebookRoot || !folder) return [];
   return [`${notebookRoot}/${folder}`];
@@ -75,16 +56,9 @@ export function resolveAllNotebooksFolderSelect(
  * Discovers subfolders from both explicit FolderItem records and the notebook's directory
  * counts (`NotebookFacets.directories`: repo-relative directory to direct note count).
  */
-export function getImmediateSubfolders(
-  directories: Record<string, number>,
-  folders: FolderItem[],
-  notebookId: string,
-  notebookRoot: string,
-  currentFolder: string | null
-): SubfolderInfo[] {
+export function getImmediateSubfolders(directories: Record<string, number>, folders: FolderItem[], notebookId: string, notebookRoot: string, currentFolder: string | null): SubfolderInfo[] {
   const rootPrefixPath = notebookRoot.replace(/\/$/, '') + '/';
-  const notebookDirectories = Object.entries(directories).flatMap(([directory, count]) =>
-    directory.startsWith(rootPrefixPath) ? [[directory.slice(rootPrefixPath.length), count] as const] : []);
+  const notebookDirectories = Object.entries(directories).flatMap(([directory, count]) => directory.startsWith(rootPrefixPath) ? [[directory.slice(rootPrefixPath.length), count] as const] : []);
   const notebookFolders = folders.filter((f) => f.notebookId === notebookId);
 
   // Normalize current folder prefix
@@ -95,24 +69,12 @@ export function getImmediateSubfolders(
   for (const f of notebookFolders) {
     if (currentFolder === null) {
       if (!f.path.includes('/')) {
-        folderMap.set(f.path, {
-          path: f.path,
-          name: f.path,
-          title: f.title || f.path,
-          noteCount: 0,
-          description: f.description,
-        });
+        folderMap.set(f.path, { path: f.path, name: f.path, title: f.title || f.path, noteCount: 0, description: f.description });
       }
     } else if (f.path.startsWith(prefix)) {
       const rest = f.path.slice(prefix.length);
       if (rest && !rest.includes('/')) {
-        folderMap.set(f.path, {
-          path: f.path,
-          name: rest,
-          title: f.title || rest,
-          noteCount: 0,
-          description: f.description,
-        });
+        folderMap.set(f.path, { path: f.path, name: rest, title: f.title || rest, noteCount: 0, description: f.description });
       }
     }
   }
@@ -123,12 +85,7 @@ export function getImmediateSubfolders(
     if (currentFolder === null) {
       const firstSegment = noteDir.split('/')[0];
       if (!folderMap.has(firstSegment)) {
-        folderMap.set(firstSegment, {
-          path: firstSegment,
-          name: firstSegment,
-          title: firstSegment,
-          noteCount: 0,
-        });
+        folderMap.set(firstSegment, { path: firstSegment, name: firstSegment, title: firstSegment, noteCount: 0 });
       }
     } else if (noteDir.startsWith(prefix)) {
       const rest = noteDir.slice(prefix.length);
@@ -136,12 +93,7 @@ export function getImmediateSubfolders(
       if (firstSubSegment) {
         const fullSubPath = `${prefix}${firstSubSegment}`;
         if (!folderMap.has(fullSubPath)) {
-          folderMap.set(fullSubPath, {
-            path: fullSubPath,
-            name: firstSubSegment,
-            title: firstSubSegment,
-            noteCount: 0,
-          });
+          folderMap.set(fullSubPath, { path: fullSubPath, name: firstSubSegment, title: firstSubSegment, noteCount: 0 });
         }
       }
     }
@@ -150,30 +102,18 @@ export function getImmediateSubfolders(
   // 3. Compute recursive note counts for each immediate subfolder
   for (const subfolder of folderMap.values()) {
     const subPrefix = `${subfolder.path}/`;
-    subfolder.noteCount = notebookDirectories
-      .filter(([directory]) => directory === subfolder.path || directory.startsWith(subPrefix))
-      .reduce((total, [, count]) => total + count, 0);
+    subfolder.noteCount = notebookDirectories.filter(([directory]) => directory === subfolder.path || directory.startsWith(subPrefix)).reduce((total, [, count]) => total + count, 0);
   }
 
   const orders = new Map(notebookFolders.map(folder => [folder.path, folder.order]));
-  return Array.from(folderMap.values()).sort((a, b) =>
-    (orders.get(a.path) || 0) - (orders.get(b.path) || 0) ||
-    a.title.localeCompare(b.title) || a.path.localeCompare(b.path)
-  );
+  return Array.from(folderMap.values()).sort((a, b) => (orders.get(a.path) || 0) - (orders.get(b.path) || 0) || a.title.localeCompare(b.title) || a.path.localeCompare(b.path));
 }
 
 /**
  * Generates breadcrumb segments from root ('All folders') to `currentFolder`.
  */
-export function getBreadcrumbs(
-  currentFolder: string | null,
-  folders: FolderItem[],
-  notebookId: string,
-  allFoldersLabel = 'All folders'
-): BreadcrumbSegment[] {
-  const segments: BreadcrumbSegment[] = [
-    { name: allFoldersLabel, path: null },
-  ];
+export function getBreadcrumbs(currentFolder: string | null, folders: FolderItem[], notebookId: string, allFoldersLabel = 'All folders'): BreadcrumbSegment[] {
+  const segments: BreadcrumbSegment[] = [{ name: allFoldersLabel, path: null }];
 
   if (!currentFolder) {
     return segments;
@@ -184,13 +124,8 @@ export function getBreadcrumbs(
 
   for (const part of parts) {
     accumulated = accumulated ? `${accumulated}/${part}` : part;
-    const match = folders.find(
-      (f) => f.notebookId === notebookId && f.path === accumulated
-    );
-    segments.push({
-      name: match?.title || part,
-      path: accumulated,
-    });
+    const match = folders.find((f) => f.notebookId === notebookId && f.path === accumulated);
+    segments.push({ name: match?.title || part, path: accumulated });
   }
 
   return segments;
@@ -211,14 +146,7 @@ export function buildFolderTree(folders: FolderItem[], notebookId: string): Fold
 
   for (const f of scopedFolders) {
     const name = f.path.includes('/') ? f.path.slice(f.path.lastIndexOf('/') + 1) : f.path;
-    nodeMap.set(f.path, {
-      folder: f,
-      path: f.path,
-      name,
-      title: f.title || name,
-      depth: 0,
-      children: [],
-    });
+    nodeMap.set(f.path, { folder: f, path: f.path, name, title: f.title || name, depth: 0, children: [] });
   }
 
   for (const f of scopedFolders) {
@@ -227,19 +155,7 @@ export function buildFolderTree(folders: FolderItem[], notebookId: string): Fold
       const ancestorPath = parts.slice(0, i).join('/');
       if (!nodeMap.has(ancestorPath)) {
         const ancestorName = parts[i - 1];
-        nodeMap.set(ancestorPath, {
-          folder: {
-            notebookId,
-            path: ancestorPath,
-            title: ancestorName,
-            order: 0,
-          },
-          path: ancestorPath,
-          name: ancestorName,
-          title: ancestorName,
-          depth: 0,
-          children: [],
-        });
+        nodeMap.set(ancestorPath, { folder: { notebookId, path: ancestorPath, title: ancestorName, order: 0 }, path: ancestorPath, name: ancestorName, title: ancestorName, depth: 0, children: [] });
       }
     }
   }
@@ -283,4 +199,3 @@ export function expandedPathsForFolder(path: string | null): string[] {
   }
   return result;
 }
-

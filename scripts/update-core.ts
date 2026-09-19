@@ -12,8 +12,11 @@ async function main() {
   const repoRoot = process.cwd();
   let workspaceRoot: string | undefined;
   if (await getCurrentBranch(repoRoot).catch(() => '') === 'core') {
-    try { workspaceRoot = resolveWorkspaceRoot(repoRoot); }
-    catch (error) { console.log(`[update-core] Workspace migration skipped: ${error instanceof Error ? error.message : String(error)}`); }
+    try {
+      workspaceRoot = resolveWorkspaceRoot(repoRoot);
+    } catch (error) {
+      console.log(`[update-core] Workspace migration skipped: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
   const autoPush = process.argv.includes('--push');
 

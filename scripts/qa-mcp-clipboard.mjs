@@ -9,11 +9,7 @@ const externalBase = process.env.CLIPBOARD_QA_URL;
 const vite = externalBase ? null : await startViteDevServer();
 const base = externalBase || vite.base;
 const url = `${base}/mcp/clipboard-test-token`;
-const browser = await puppeteer.launch({
-  executablePath: resolveQaChromePath(),
-  headless: true,
-  args: ['--no-sandbox', '--disable-dev-shm-usage'],
-});
+const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 
 try {
   for (const mode of ['normal', 'denied', 'unavailable', 'pending', 'blocked']) {
@@ -24,8 +20,7 @@ try {
       if (request.isNavigationRequest()) {
         void request.respond({ contentType: 'text/html', body: '<div id="root"></div><textarea id="paste" aria-label="Paste verification"></textarea>' });
       } else if (pathname.startsWith('/api/')) {
-        const body = pathname === '/api/auth/session' ? { authenticated: true }
-          : pathname === '/api/auth/agent-token' ? { url } : { grants: [] };
+        const body = pathname === '/api/auth/session' ? { authenticated: true } : pathname === '/api/auth/agent-token' ? { url } : { grants: [] };
         void request.respond({ contentType: 'application/json', body: JSON.stringify(body) });
       } else void request.continue();
     });

@@ -1,12 +1,6 @@
 import { EditorView, WidgetType } from '@codemirror/view';
 import { isolateHistory } from '@codemirror/commands';
-import {
-  DIRECTIVE_TEMPLATES,
-  HANDOUT_VARIANTS,
-  parseDirectiveModel,
-  serializeDirectiveModel,
-  type DirectiveModel,
-} from '../lib/directives.js';
+import { DIRECTIVE_TEMPLATES, type DirectiveModel, HANDOUT_VARIANTS, parseDirectiveModel, serializeDirectiveModel } from '../lib/directives.js';
 import { renderNote } from '../lib/markdown.js';
 import type { TranslationKey } from '../lib/i18n/en.js';
 import { DEFAULT_YOUTUBE_LABELS, youtubeLabels } from '../lib/youtube-embed.js';
@@ -14,27 +8,12 @@ import { DEFAULT_YOUTUBE_LABELS, youtubeLabels } from '../lib/youtube-embed.js';
 type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
 export class LiveMarkdownDirective extends WidgetType {
-  constructor(
-    readonly text: string,
-    readonly path: string,
-    readonly from: number,
-    readonly readOnly: boolean,
-    readonly currentType: string,
-    readonly currentVariant?: string,
-    readonly t?: Translate
-  ) {
+  constructor(readonly text: string, readonly path: string, readonly from: number, readonly readOnly: boolean, readonly currentType: string, readonly currentVariant?: string, readonly t?: Translate) {
     super();
   }
 
   eq(other: LiveMarkdownDirective) {
-    return (
-      this.text === other.text &&
-      this.path === other.path &&
-      this.from === other.from &&
-      this.readOnly === other.readOnly &&
-      this.currentType === other.currentType &&
-      this.currentVariant === other.currentVariant
-    );
+    return (this.text === other.text && this.path === other.path && this.from === other.from && this.readOnly === other.readOnly && this.currentType === other.currentType && this.currentVariant === other.currentVariant);
   }
 
   toDOM(view: EditorView) {
@@ -54,11 +33,7 @@ export class LiveMarkdownDirective extends WidgetType {
     const saveChanges = (updatedModel: DirectiveModel) => {
       const newText = serializeDirectiveModel(updatedModel);
       if (newText !== this.text) {
-        view.dispatch({
-          changes: { from: this.from, to: this.from + this.text.length, insert: newText },
-          annotations: isolateHistory.of('full'),
-          userEvent: 'input.directive',
-        });
+        view.dispatch({ changes: { from: this.from, to: this.from + this.text.length, insert: newText }, annotations: isolateHistory.of('full'), userEvent: 'input.directive' });
         view.requestMeasure();
       }
     };

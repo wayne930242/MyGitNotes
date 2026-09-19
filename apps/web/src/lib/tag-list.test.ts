@@ -27,10 +27,7 @@ describe('tag list', () => {
 
   it('remembers the tag order independently of note sorting', () => {
     const storage = new Map([['github-notes:sort-field', 'updated']]);
-    vi.stubGlobal('window', { localStorage: {
-      getItem: (key: string) => storage.get(key) ?? null,
-      setItem: (key: string, value: string) => storage.set(key, value),
-    } });
+    vi.stubGlobal('window', { localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) } });
     expect(getSavedTagSort()).toBe('name-asc');
     saveTagSort('count-desc');
     expect(getSavedTagSort()).toBe('count-desc');
@@ -42,7 +39,11 @@ describe('tag list', () => {
   it('remains usable when browser storage is unavailable', () => {
     expect(getSavedTagSort()).toBe('name-asc');
     expect(() => saveTagSort('count-desc')).not.toThrow();
-    vi.stubGlobal('window', { get localStorage() { throw new Error('Storage blocked'); } });
+    vi.stubGlobal('window', {
+      get localStorage() {
+        throw new Error('Storage blocked');
+      },
+    });
     expect(getSavedTagSort()).toBe('name-asc');
     expect(() => saveTagSort('count-desc')).not.toThrow();
   });

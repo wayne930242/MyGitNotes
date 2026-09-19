@@ -36,7 +36,8 @@ export function buildFileTree(entries: FileEntry[], root: string): FileTree {
   for (const dir of dirs) {
     const node = nodeByPath.get(dir.path)!;
     const parent = nodeByPath.get(dir.path.slice(0, dir.path.lastIndexOf('/')));
-    if (parent) parent.children.push(node); else roots.push(node);
+    if (parent) parent.children.push(node);
+    else roots.push(node);
   }
   let rootHasNonDocument = false;
   for (const file of files) {
@@ -47,7 +48,11 @@ export function buildFileTree(entries: FileEntry[], root: string): FileTree {
     else if (parentPath === root) rootHasNonDocument = true;
   }
   const propagate = (nodes: FileTreeNode[]): boolean =>
-    nodes.reduce((any, node) => { const fromChildren = propagate(node.children); node.hasNonDocument = node.hasNonDocument || fromChildren; return any || node.hasNonDocument; }, false);
+    nodes.reduce((any, node) => {
+      const fromChildren = propagate(node.children);
+      node.hasNonDocument = node.hasNonDocument || fromChildren;
+      return any || node.hasNonDocument;
+    }, false);
   rootHasNonDocument = propagate(roots) || rootHasNonDocument;
   return { roots, rootHasNonDocument };
 }
@@ -58,6 +63,9 @@ export function expandedPathsFor(path: string, root: string): string[] {
   if (!relative) return [];
   const result: string[] = [];
   let cursor = root;
-  for (const part of relative.split('/')) { cursor = cursor + '/' + part; result.push(cursor); }
+  for (const part of relative.split('/')) {
+    cursor = cursor + '/' + part;
+    result.push(cursor);
+  }
   return result;
 }

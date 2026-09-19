@@ -1,4 +1,4 @@
-import { focusTabKey, type FocusTab } from '@mygitnotes/core/focus-page';
+import { type FocusTab, focusTabKey } from '@mygitnotes/core/focus-page';
 
 /** Folder and tags combine with Or (either matches) unless both are set and Combine is switched to And (both must match). */
 export function batchAddMode(hasFolder: boolean, hasTags: boolean, combine: 'or' | 'and'): 'and' | 'or' {
@@ -21,6 +21,6 @@ export function batchAddExisting(tabs: readonly FocusTab[], heldKeys: ReadonlySe
 }
 
 /** Splits addBatch's single `skipped` count into "already present" and "budget exceeded" for the result message. */
-export function batchAddResult(outcome: { added: number; skipped: number }, existing: number): { added: number; existing: number; full: number } {
+export function batchAddResult(outcome: { added: number; skipped: number; }, existing: number): { added: number; existing: number; full: number; } {
   return { added: outcome.added, existing, full: outcome.skipped - existing };
 }

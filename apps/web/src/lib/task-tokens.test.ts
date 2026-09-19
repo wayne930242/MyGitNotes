@@ -1,16 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  classifyDueDate,
-  DONE_EMOJI,
-  DUE_EMOJI,
-  findToken,
-  getTokenValue,
-  isTaskChecked,
-  isTaskLine,
-  setTaskChecked,
-  setTokenValue,
-  TIMESTAMP_EMOJI,
-} from './task-tokens.js';
+import { classifyDueDate, DONE_EMOJI, DUE_EMOJI, findToken, getTokenValue, isTaskChecked, isTaskLine, setTaskChecked, setTokenValue, TIMESTAMP_EMOJI } from './task-tokens.js';
 
 describe('isTaskLine / isTaskChecked', () => {
   it('recognizes GFM task markers with -, *, or +', () => {

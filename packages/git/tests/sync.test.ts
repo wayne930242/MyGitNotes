@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { runGit, getUpstreamStatus } from '../src/git-service.js';
-import { syncWorkspace, SyncError } from '../src/sync.js';
+import { getUpstreamStatus, runGit } from '../src/git-service.js';
+import { SyncError, syncWorkspace } from '../src/sync.js';
 
 let base: string, remote: string, local: string, other: string;
 const git = async (cwd: string, ...args: string[]) => (await runGit(args, cwd)).stdout;
@@ -21,7 +21,10 @@ async function clone(name: string) {
   await git(dir, 'config', 'user.email', 'test@example.com');
   return dir;
 }
-const failure = (promise: Promise<unknown>) => promise.then(() => { throw new Error('Expected sync to fail'); }, (error: SyncError) => error);
+const failure = (promise: Promise<unknown>) =>
+  promise.then(() => {
+    throw new Error('Expected sync to fail');
+  }, (error: SyncError) => error);
 
 beforeEach(async () => {
   base = fs.mkdtempSync(path.join(os.tmpdir(), 'notes-sync-'));
@@ -46,7 +49,8 @@ describe('syncWorkspace', () => {
   });
 
   it('pulls only, pushes only, and rebases local commits onto remote commits', async () => {
-    await commit(other, 'remote.md', 'remote\n'); await git(other, 'push');
+    await commit(other, 'remote.md', 'remote\n');
+    await git(other, 'push');
     expect(await syncWorkspace(local)).toMatchObject({ pulled: 1, pushed: 0 });
     expect(read(local, 'remote.md')).toBe('remote\n');
 
@@ -55,7 +59,8 @@ describe('syncWorkspace', () => {
     expect(await syncWorkspace(local)).toMatchObject({ pulled: 0, pushed: 1 });
 
     await git(other, 'pull');
-    await commit(other, 'second.md', 'second\n'); await git(other, 'push');
+    await commit(other, 'second.md', 'second\n');
+    await git(other, 'push');
     await commit(local, 'third.md', 'third\n');
     expect(await syncWorkspace(local)).toMatchObject({ pulled: 1, pushed: 1 });
     expect(await git(local, 'rev-list', '--merges', 'HEAD')).toBe('');
@@ -64,7 +69,8 @@ describe('syncWorkspace', () => {
   });
 
   it('refuses uncommitted tracked changes before fetching and allows untracked files', async () => {
-    await commit(other, 'remote.md', 'remote\n'); await git(other, 'push');
+    await commit(other, 'remote.md', 'remote\n');
+    await git(other, 'push');
     const tracking = await git(local, 'rev-parse', 'origin/main');
     write(local, 'a.md', 'edited\n');
     const error = await failure(syncWorkspace(local));
@@ -85,7 +91,8 @@ describe('syncWorkspace', () => {
 
   describe('conflicts', () => {
     beforeEach(async () => {
-      await commit(other, 'a.md', 'one\nremote\nthree\n'); await git(other, 'push');
+      await commit(other, 'a.md', 'one\nremote\nthree\n');
+      await git(other, 'push');
       write(local, 'local.md', 'kept\n');
       await commit(local, 'a.md', 'one\nlocal\nthree\n');
     });
@@ -116,7 +123,9 @@ describe('syncWorkspace', () => {
   });
 
   it('leaves delete conflicts to the user after aborting the chosen strategy', async () => {
-    await git(other, 'rm', 'a.md'); await git(other, 'commit', '-m', 'remove a'); await git(other, 'push');
+    await git(other, 'rm', 'a.md');
+    await git(other, 'commit', '-m', 'remove a');
+    await git(other, 'push');
     await commit(local, 'a.md', 'one\nlocal\nthree\n');
     const head = await git(local, 'rev-parse', 'HEAD');
     expect(await failure(syncWorkspace(local))).toMatchObject({ code: 'CONFLICT', files: ['a.md'] });
@@ -138,7 +147,8 @@ describe('syncWorkspace', () => {
     await git(local, 'push');
     await mergeCore('core-2.md');
     await git(other, 'pull');
-    await commit(other, 'remote.md', 'remote\n'); await git(other, 'push');
+    await commit(other, 'remote.md', 'remote\n');
+    await git(other, 'push');
     expect(await syncWorkspace(local)).toMatchObject({ pulled: 1, pushed: 2 });
     expect((await git(remote, 'rev-list', '--merges', 'main')).split('\n')).toHaveLength(2);
     expect(await git(remote, 'rev-parse', 'main^2')).toBe(await git(local, 'rev-parse', 'core'));

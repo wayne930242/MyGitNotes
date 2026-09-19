@@ -12,17 +12,10 @@ export class MCPGuardError extends Error {
  * Asserts that the current git branch is an allowed user workspace branch (default: main).
  * Prevents agents from mutating user data or creating notes while on the 'core' product branch.
  */
-export async function assertUserWorkspaceBranch(
-  repoRoot: string,
-  allowedBranches: string[] = ['main']
-): Promise<void> {
+export async function assertUserWorkspaceBranch(repoRoot: string, allowedBranches: string[] = ['main']): Promise<void> {
   const currentBranch = await getCurrentBranch(repoRoot);
   if (!allowedBranches.includes(currentBranch)) {
-    throw new MCPGuardError(
-      `User content modifications are restricted to workspace branch (${allowedBranches.join(
-        ', '
-      )}). Current branch is '${currentBranch}'. Switch to 'main' before modifying notes.`
-    );
+    throw new MCPGuardError(`User content modifications are restricted to workspace branch (${allowedBranches.join(', ')}). Current branch is '${currentBranch}'. Switch to 'main' before modifying notes.`);
   }
 }
 

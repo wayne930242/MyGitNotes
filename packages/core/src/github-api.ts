@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto';
 
 export class SourceError extends Error {
-  constructor(message: string, public status = 400, public retryAfter?: number) { super(message); }
+  constructor(message: string, public status = 400, public retryAfter?: number) {
+    super(message);
+  }
 }
 
-type Cached = { value: any; expires: number; etag?: string; bytes: number; immutable: boolean };
-type Lane = { tail: Promise<unknown>; queued: number; blockedUntil: number; lastWrite: number };
-type Runtime = { cache: Map<string, Cached>; pending: Map<string, Promise<any>>; lanes: Map<string, Lane>; bytes: number; generation: Map<string, number> };
+type Cached = { value: any; expires: number; etag?: string; bytes: number; immutable: boolean; };
+type Lane = { tail: Promise<unknown>; queued: number; blockedUntil: number; lastWrite: number; };
+type Runtime = { cache: Map<string, Cached>; pending: Map<string, Promise<any>>; lanes: Map<string, Lane>; bytes: number; generation: Map<string, number>; };
 const runtimes = new WeakMap<typeof fetch, Runtime>();
 const MAX_BYTES = 64 * 1024 * 1024;
 const IMMUTABLE_TTL = 60 * 60 * 1000;
@@ -20,46 +22,70 @@ export class GitHubApi {
   private lane: Lane;
   constructor(private repository: string, private token: string | undefined, private request: typeof fetch) {
     let runtime = runtimes.get(request);
-    if (!runtime) { runtime = { cache: new Map(), pending: new Map(), lanes: new Map(), bytes: 0, generation: new Map() }; runtimes.set(request, runtime); }
+    if (!runtime) {
+      runtime = { cache: new Map(), pending: new Map(), lanes: new Map(), bytes: 0, generation: new Map() };
+      runtimes.set(request, runtime);
+    }
     this.runtime = runtime;
     this.scope = token ? createHash('sha256').update(token).digest('hex') : 'anonymous';
     this.prefix = `${this.scope}:${repository.toLowerCase()}:`;
     let lane = runtime.lanes.get(this.scope);
     if (!lane) {
       // Drop idle lanes, retaining active cooldowns and queued work.
-      if (runtime.lanes.size >= 1000) for (const [key, entry] of runtime.lanes) {
-        if (!entry.queued && entry.blockedUntil < Date.now() && entry.lastWrite < Date.now() - IMMUTABLE_TTL) runtime.lanes.delete(key);
+      if (runtime.lanes.size >= 1000) {
+        for (const [key, entry] of runtime.lanes) {
+          if (!entry.queued && entry.blockedUntil < Date.now() && entry.lastWrite < Date.now() - IMMUTABLE_TTL) runtime.lanes.delete(key);
+        }
       }
       if (runtime.lanes.size >= 1000) throw new SourceError('GitHub service is busy. Retry later.', 503, 60);
-      lane = { tail: Promise.resolve(), queued: 0, blockedUntil: 0, lastWrite: 0 }; runtime.lanes.set(this.scope, lane);
+      lane = { tail: Promise.resolve(), queued: 0, blockedUntil: 0, lastWrite: 0 };
+      runtime.lanes.set(this.scope, lane);
     }
     this.lane = lane;
   }
 
-  private key(endpoint: string) { return this.prefix + endpoint; }
+  private key(endpoint: string) {
+    return this.prefix + endpoint;
+  }
   private cached(endpoint: string) {
-    const key = this.key(endpoint); const entry = this.runtime.cache.get(key);
-    if (entry) { this.runtime.cache.delete(key); this.runtime.cache.set(key, entry); }
+    const key = this.key(endpoint);
+    const entry = this.runtime.cache.get(key);
+    if (entry) {
+      this.runtime.cache.delete(key);
+      this.runtime.cache.set(key, entry);
+    }
     return entry;
   }
   private put(endpoint: string, value: any, ttl: number, etag?: string, immutable = true) {
     const bytes = Buffer.byteLength(JSON.stringify(value));
-    const key = this.key(endpoint); const previous = this.runtime.cache.get(key);
-    if (previous) { this.runtime.bytes -= previous.bytes; this.runtime.cache.delete(key); }
+    const key = this.key(endpoint);
+    const previous = this.runtime.cache.get(key);
+    if (previous) {
+      this.runtime.bytes -= previous.bytes;
+      this.runtime.cache.delete(key);
+    }
     if (bytes > MAX_BYTES / 2) return;
     while (this.runtime.cache.size >= 5000 || this.runtime.bytes + bytes > MAX_BYTES) {
       const oldest = this.runtime.cache.keys().next().value!;
-      this.runtime.bytes -= this.runtime.cache.get(oldest)!.bytes; this.runtime.cache.delete(oldest);
+      this.runtime.bytes -= this.runtime.cache.get(oldest)!.bytes;
+      this.runtime.cache.delete(oldest);
     }
-    this.runtime.cache.set(key, { value, expires: Date.now() + ttl, etag, bytes, immutable }); this.runtime.bytes += bytes;
+    this.runtime.cache.set(key, { value, expires: Date.now() + ttl, etag, bytes, immutable });
+    this.runtime.bytes += bytes;
   }
   invalidate() {
     this.runtime.generation.set(this.prefix, (this.runtime.generation.get(this.prefix) || 0) + 1);
-    for (const [key, entry] of this.runtime.cache) if (key.startsWith(this.prefix) && !entry.immutable) {
-      this.runtime.bytes -= entry.bytes; this.runtime.cache.delete(key);
+    for (const [key, entry] of this.runtime.cache) {
+      if (key.startsWith(this.prefix) && !entry.immutable) {
+        this.runtime.bytes -= entry.bytes;
+        this.runtime.cache.delete(key);
+      }
     }
   }
-  hasBlob(sha: string) { const entry = this.cached(`/git/blobs/${sha}`); return Boolean(entry && entry.expires > Date.now()); }
+  hasBlob(sha: string) {
+    const entry = this.cached(`/git/blobs/${sha}`);
+    return Boolean(entry && entry.expires > Date.now());
+  }
   putBlob(sha: string, bytes: Buffer) {
     this.put(`/git/blobs/${sha}`, { encoding: 'base64', content: bytes.toString('base64') }, IMMUTABLE_TTL);
   }
@@ -67,8 +93,13 @@ export class GitHubApi {
     const id = this.key(key);
     const pending = this.runtime.pending.get(id);
     if (pending) return pending;
-    const result = work(); this.runtime.pending.set(id, result);
-    try { return await result; } finally { if (this.runtime.pending.get(id) === result) this.runtime.pending.delete(id); }
+    const result = work();
+    this.runtime.pending.set(id, result);
+    try {
+      return await result;
+    } finally {
+      if (this.runtime.pending.get(id) === result) this.runtime.pending.delete(id);
+    }
   }
   private cooldown() {
     const seconds = Math.ceil((this.lane.blockedUntil - Date.now()) / 1000);
@@ -84,14 +115,10 @@ export class GitHubApi {
       if (write) {
         const wait = this.lane.lastWrite + 1000 - Date.now();
         if (wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
-        this.cooldown(); this.lane.lastWrite = Date.now();
+        this.cooldown();
+        this.lane.lastWrite = Date.now();
       }
-      const response = await this.request(url, {
-        ...init, signal: AbortSignal.timeout(20000),
-        headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'GitHub-Notes',
-          ...(credentials && this.token ? { Authorization: `Bearer ${this.token}` } : {}),
-          ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...init.headers },
-      });
+      const response = await this.request(url, { ...init, signal: AbortSignal.timeout(20000), headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'GitHub-Notes', ...(credentials && this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...init.headers } });
       const remaining = response.headers.get('x-ratelimit-remaining');
       const reset = Number(response.headers.get('x-ratelimit-reset')) * 1000;
       if (remaining === '0') this.lane.blockedUntil = Math.max(this.lane.blockedUntil, reset || Date.now() + 60_000);
@@ -108,7 +135,11 @@ export class GitHubApi {
       return response;
     });
     this.lane.tail = run.catch(() => {});
-    try { return await run; } finally { this.lane.queued--; }
+    try {
+      return await run;
+    } finally {
+      this.lane.queued--;
+    }
   }
 
   async json(endpoint: string, init: RequestInit = {}, fresh = false): Promise<any> {
@@ -119,9 +150,7 @@ export class GitHubApi {
     if (!fresh && !(this.token && endpoint === '') && cached && cached.expires > Date.now()) return structuredClone(cached.value);
     const generation = this.runtime.generation.get(this.prefix) || 0;
     const load = async () => {
-      const response = await this.send(`https://api.github.com/repos/${this.repository}${endpoint}`, {
-        ...init, redirect: 'error', headers: { ...(cached?.etag ? { 'If-None-Match': cached.etag } : {}), ...init.headers },
-      });
+      const response = await this.send(`https://api.github.com/repos/${this.repository}${endpoint}`, { ...init, redirect: 'error', headers: { ...(cached?.etag ? { 'If-None-Match': cached.etag } : {}), ...init.headers } });
       if (!response.ok && !(response.status === 304 && cached)) {
         if ([401, 403, 404].includes(response.status)) this.invalidate();
         throw this.error(response.status);
@@ -140,13 +169,12 @@ export class GitHubApi {
   async blobTexts(shas: string[]): Promise<Map<string, string>> {
     const [owner, name] = this.repository.split('/');
     const fields = shas.map((sha, i) => `b${i}: object(oid: "${sha}") { ... on Blob { isBinary isTruncated text } }`).join('\n');
-    const response = await this.send('https://api.github.com/graphql', { method: 'POST', redirect: 'error',
-      body: JSON.stringify({ query: `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields} } }`, variables: { owner, name } }) });
+    const response = await this.send('https://api.github.com/graphql', { method: 'POST', redirect: 'error', body: JSON.stringify({ query: `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields} } }`, variables: { owner, name } }) });
     if (!response.ok) {
       if ([401, 403, 404].includes(response.status)) this.invalidate();
       throw this.error(response.status);
     }
-    const result = await response.json() as { data?: { repository?: Record<string, { isBinary?: boolean; isTruncated?: boolean; text?: string | null } | null> }; errors?: { type?: string }[] };
+    const result = await response.json() as { data?: { repository?: Record<string, { isBinary?: boolean; isTruncated?: boolean; text?: string | null; } | null>; }; errors?: { type?: string; }[]; };
     if (result.errors?.some(error => error.type === 'RATE_LIMITED')) {
       this.lane.blockedUntil = Math.max(this.lane.blockedUntil, Date.now() + 60_000);
       this.cooldown();
@@ -154,7 +182,10 @@ export class GitHubApi {
     const repository = result.data?.repository;
     if (!repository) throw new SourceError('GitHub GraphQL blob request failed.', 502);
     const output = new Map<string, string>();
-    shas.forEach((sha, i) => { const blob = repository[`b${i}`]; if (blob && !blob.isBinary && !blob.isTruncated && typeof blob.text === 'string') output.set(sha, blob.text); });
+    shas.forEach((sha, i) => {
+      const blob = repository[`b${i}`];
+      if (blob && !blob.isBinary && !blob.isTruncated && typeof blob.text === 'string') output.set(sha, blob.text);
+    });
     return output;
   }
 
@@ -175,8 +206,6 @@ export class GitHubApi {
   }
 
   private error(status: number) {
-    return new SourceError(status === 404 ? 'Repository, branch or file unavailable. Private repositories require GitHub sign-in.' :
-      status === 403 ? 'GitHub denied access. Check repository permissions.' :
-      status === 409 || status === 422 ? 'The repository changed. Reload the note before saving again.' : `GitHub request failed (${status}).`, status === 422 ? 409 : status);
+    return new SourceError(status === 404 ? 'Repository, branch or file unavailable. Private repositories require GitHub sign-in.' : status === 403 ? 'GitHub denied access. Check repository permissions.' : status === 409 || status === 422 ? 'The repository changed. Reload the note before saving again.' : `GitHub request failed (${status}).`, status === 422 ? 409 : status);
   }
 }

@@ -6,9 +6,7 @@ import { useGraphPainting } from './useGraphPainting.js';
 
 describe('focused graph painting', () => {
   it('draws every connected title even when nodes overlap at low zoom', () => {
-    const nodes = Array.from({ length: 8 }, (_, i) => ({
-      id: String(i), title: `Title ${i}`, notebookId: 'test', tags: [], inDegree: 0, outDegree: 0, val: 1, x: 0, y: 0,
-    }));
+    const nodes = Array.from({ length: 8 }, (_, i) => ({ id: String(i), title: `Title ${i}`, notebookId: 'test', tags: [], inDegree: 0, outDegree: 0, val: 1, x: 0, y: 0 }));
     let paint: ReturnType<typeof useGraphPainting> | undefined;
     function Probe() {
       paint = useGraphPainting({ nodes, hoverNode: nodes[0], focusNodeId: '0', neighbors: new Set(nodes.map(n => n.id)), isDark: false, nodeColor: () => '#7895b5' });
@@ -16,10 +14,7 @@ describe('focused graph painting', () => {
     }
     renderToStaticMarkup(createElement(Probe));
     const fillText = vi.fn();
-    const context = {
-      save() {}, restore() {}, beginPath() {}, roundRect() {}, fill() {},
-      measureText: (text: string) => ({ width: text.length * 6 }), fillText,
-    } as unknown as CanvasRenderingContext2D;
+    const context = { save() {}, restore() {}, beginPath() {}, roundRect() {}, fill() {}, measureText: (text: string) => ({ width: text.length * 6 }), fillText } as unknown as CanvasRenderingContext2D;
     paint!.paintLabels(context, 0.1);
     expect(fillText.mock.calls.map(call => call[0])).toEqual(nodes.map(n => n.title));
   });

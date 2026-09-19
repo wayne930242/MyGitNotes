@@ -2,20 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let currentHookInstance: any = null;
 
-vi.mock('react', () => ({
-  useState: (init: any) => currentHookInstance.useState(init),
-  useRef: (init: any) => currentHookInstance.useRef(init),
-  useCallback: (fn: any) => currentHookInstance.useCallback(fn),
-  useEffect: (fn: any, deps?: any[]) => currentHookInstance.useEffect(fn, deps),
-}));
+vi.mock('react', () => ({ useState: (init: any) => currentHookInstance.useState(init), useRef: (init: any) => currentHookInstance.useRef(init), useCallback: (fn: any) => currentHookInstance.useCallback(fn), useEffect: (fn: any, deps?: any[]) => currentHookInstance.useEffect(fn, deps) }));
 
-import {
-  useLongPress,
-  shouldCancelLongPress,
-  LONG_PRESS_MS,
-  MOVE_CANCEL_X_PX,
-  MOVE_CANCEL_Y_PX,
-} from './use-long-press.js';
+import { LONG_PRESS_MS, MOVE_CANCEL_X_PX, MOVE_CANCEL_Y_PX, shouldCancelLongPress, useLongPress } from './use-long-press.js';
 
 interface HookRunner {
   result: ReturnType<typeof useLongPress>;
@@ -26,7 +15,7 @@ interface HookRunner {
 
 function setupHook(enabled = true, onLongPress = vi.fn()): HookRunner {
   const stateMap = new Map<number, any>();
-  const refMap = new Map<number, { current: any }>();
+  const refMap = new Map<number, { current: any; }>();
   const cleanups: Array<() => void> = [];
   const scrollListeners: Function[] = [];
   let currentResult!: ReturnType<typeof useLongPress>;
@@ -95,7 +84,9 @@ function setupHook(enabled = true, onLongPress = vi.fn()): HookRunner {
   render();
 
   return {
-    get result() { return currentResult; },
+    get result() {
+      return currentResult;
+    },
     onLongPress,
     dispatchScroll: () => {
       for (const listener of [...scrollListeners]) listener();
@@ -106,15 +97,12 @@ function setupHook(enabled = true, onLongPress = vi.fn()): HookRunner {
   };
 }
 
-function makeTouchEvent(touches: Array<{ clientX: number; clientY: number }>) {
+function makeTouchEvent(touches: Array<{ clientX: number; clientY: number; }>) {
   return { touches } as unknown as import('react').TouchEvent;
 }
 
 function makeMouseEvent() {
-  return {
-    defaultPrevented: false,
-    preventDefault: vi.fn(),
-  } as unknown as import('react').MouseEvent;
+  return { defaultPrevented: false, preventDefault: vi.fn() } as unknown as import('react').MouseEvent;
 }
 
 describe('use-long-press geometry', () => {

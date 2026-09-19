@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { exclusive } from './change-management.js';
-import { GitExecutionError, getCurrentBranch, runGit } from './git-service.js';
+import { getCurrentBranch, GitExecutionError, runGit } from './git-service.js';
 
 export type SyncStrategy = 'remote' | 'local';
 export type SyncErrorCode = 'INVALID_BRANCH' | 'NO_UPSTREAM' | 'DIRTY' | 'CONFLICT' | 'UNRESOLVED' | 'FAILED';
@@ -26,9 +26,7 @@ const gitMessage = (error: unknown) => error instanceof GitExecutionError ? erro
 
 /** Network commands fail instead of waiting for a credential prompt. */
 async function networkOptions(root: string) {
-  const ssh = process.env.GIT_SSH_COMMAND
-    || (await runGit(['config', '--get', 'core.sshCommand'], root).catch(() => ({ stdout: '' }))).stdout.trim()
-    || 'ssh';
+  const ssh = process.env.GIT_SSH_COMMAND || (await runGit(['config', '--get', 'core.sshCommand'], root).catch(() => ({ stdout: '' }))).stdout.trim() || 'ssh';
   return { timeout: NETWORK_TIMEOUT, env: { GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: `${ssh} -o BatchMode=yes` } };
 }
 
@@ -47,8 +45,11 @@ export async function syncWorkspace(root: string, strategy?: SyncStrategy): Prom
     if (dirty.length) throw new SyncError('Commit or restore changes before syncing.', 'DIRTY', dirty);
 
     const network = await networkOptions(root);
-    try { await runGit(['fetch', remote], root, network); }
-    catch (error) { throw new SyncError(gitMessage(error), 'FAILED'); }
+    try {
+      await runGit(['fetch', remote], root, network);
+    } catch (error) {
+      throw new SyncError(gitMessage(error), 'FAILED');
+    }
     const pulled = await count(root, 'HEAD..@{u}');
 
     let backup: string | undefined;
@@ -60,8 +61,7 @@ export async function syncWorkspace(root: string, strategy?: SyncStrategy): Prom
       // Keep Core update merges intact instead of replaying Core commits one by one.
       await runGit(['rebase', '--rebase-merges', '--no-autostash', ...(strategy ? ['-X', strategy === 'remote' ? 'ours' : 'theirs'] : [])], root);
     } catch (error) {
-      const rebasing = (await Promise.all(['rebase-merge', 'rebase-apply'].map(async name =>
-        fs.existsSync(path.resolve(root, (await runGit(['rev-parse', '--git-path', name], root)).stdout.trim()))))).some(Boolean);
+      const rebasing = (await Promise.all(['rebase-merge', 'rebase-apply'].map(async name => fs.existsSync(path.resolve(root, (await runGit(['rev-parse', '--git-path', name], root)).stdout.trim()))))).some(Boolean);
       if (!rebasing) {
         if (backup) await runGit(['update-ref', '-d', backup], root);
         throw new SyncError(gitMessage(error), 'FAILED');
@@ -69,15 +69,16 @@ export async function syncWorkspace(root: string, strategy?: SyncStrategy): Prom
       const files = (await runGit(['diff', '--name-only', '--diff-filter=U', '-z'], root)).stdout.split('\0').filter(Boolean);
       await runGit(['rebase', '--abort'], root);
       if (backup) await runGit(['update-ref', '-d', backup], root);
-      throw strategy
-        ? new SyncError('Git could not resolve these conflicts automatically. Resolve them in a terminal.', 'UNRESOLVED', files)
-        : new SyncError('Remote changes conflict with local commits.', 'CONFLICT', files);
+      throw strategy ? new SyncError('Git could not resolve these conflicts automatically. Resolve them in a terminal.', 'UNRESOLVED', files) : new SyncError('Remote changes conflict with local commits.', 'CONFLICT', files);
     }
 
     const pushed = await count(root, '@{u}..HEAD');
     if (pushed > 0) {
-      try { await runGit(['push', remote, `HEAD:${merge}`], root, network); }
-      catch (error) { throw new SyncError(gitMessage(error), 'FAILED'); }
+      try {
+        await runGit(['push', remote, `HEAD:${merge}`], root, network);
+      } catch (error) {
+        throw new SyncError(gitMessage(error), 'FAILED');
+      }
     }
     return { upstream, pulled, pushed, ...(backup ? { backup } : {}) };
   });

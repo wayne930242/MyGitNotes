@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractTodoTasks, type AgendaSourceNote } from '../src/note-agenda.js';
+import { type AgendaSourceNote, extractTodoTasks } from '../src/note-agenda.js';
 
 function note(path: string, content: string): AgendaSourceNote {
   return { path, notebookId: 'nb', title: path, content };

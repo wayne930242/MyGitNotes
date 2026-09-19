@@ -34,46 +34,86 @@ describe('NoteHosts', () => {
 describe('claimEditor', () => {
   it('saves the owner before handing the note over, and keeps the owner when saving fails', async () => {
     let captured: ReturnType<typeof useNoteEditing> | undefined;
-    const Probe = () => { captured = useNoteEditing(); return null; };
+    const Probe = () => {
+      captured = useNoteEditing();
+      return null;
+    };
     const flushEditors = vi.fn(async (paths?: readonly string[]) => paths?.[0] !== 'notes/fail.md');
     render(createElement(NoteEditingProvider, {
-      register: () => () => {}, editorProps: () => { throw new Error('unused'); }, flushEditors, refreshNotes: async () => {}, closeZoom: () => {}, addToFocus: () => undefined,
+      register: () => () => {},
+      editorProps: () => {
+        throw new Error('unused');
+      },
+      flushEditors,
+      refreshNotes: async () => {},
+      closeZoom: () => {},
+      addToFocus: () => undefined,
       children: createElement(Probe),
     }));
     const { hosts, claimEditor } = captured!;
-    hosts.register('notes/a.md', 'pane'); hosts.register('notes/a.md', 'card');
+    hosts.register('notes/a.md', 'pane');
+    hosts.register('notes/a.md', 'card');
     await expect(claimEditor('notes/a.md', 'card')).resolves.toBe(true);
     expect(flushEditors).toHaveBeenCalledWith(['notes/a.md']);
     expect(hosts.owner('notes/a.md')).toBe('card');
-    hosts.register('notes/fail.md', 'pane'); hosts.register('notes/fail.md', 'card');
+    hosts.register('notes/fail.md', 'pane');
+    hosts.register('notes/fail.md', 'card');
     await expect(claimEditor('notes/fail.md', 'card')).resolves.toBe(false);
     expect(hosts.owner('notes/fail.md')).toBe('pane');
   });
 
   it('resolves false and keeps the owner when refreshing the notes fails', async () => {
     let captured: ReturnType<typeof useNoteEditing> | undefined;
-    const Probe = () => { captured = useNoteEditing(); return null; };
+    const Probe = () => {
+      captured = useNoteEditing();
+      return null;
+    };
     render(createElement(NoteEditingProvider, {
-      register: () => () => {}, editorProps: () => { throw new Error('unused'); }, flushEditors: async () => true,
-      refreshNotes: async () => { throw new Error('offline'); }, closeZoom: () => {}, addToFocus: () => undefined, children: createElement(Probe),
+      register: () => () => {},
+      editorProps: () => {
+        throw new Error('unused');
+      },
+      flushEditors: async () => true,
+      refreshNotes: async () => {
+        throw new Error('offline');
+      },
+      closeZoom: () => {},
+      addToFocus: () => undefined,
+      children: createElement(Probe),
     }));
     const { hosts, claimEditor } = captured!;
-    hosts.register('notes/a.md', 'pane'); hosts.register('notes/a.md', 'card');
+    hosts.register('notes/a.md', 'pane');
+    hosts.register('notes/a.md', 'card');
     await expect(claimEditor('notes/a.md', 'card')).resolves.toBe(false);
     expect(hosts.owner('notes/a.md')).toBe('pane');
   });
 
   it('serializes concurrent claims for the same note so the most recent one wins', async () => {
     let captured: ReturnType<typeof useNoteEditing> | undefined;
-    const Probe = () => { captured = useNoteEditing(); return null; };
+    const Probe = () => {
+      captured = useNoteEditing();
+      return null;
+    };
     const refreshResolvers: (() => void)[] = [];
-    const refreshNotes = vi.fn(() => new Promise<void>(resolve => { refreshResolvers.push(resolve); }));
+    const refreshNotes = vi.fn(() =>
+      new Promise<void>(resolve => {
+        refreshResolvers.push(resolve);
+      })
+    );
     render(createElement(NoteEditingProvider, {
-      register: () => () => {}, editorProps: () => { throw new Error('unused'); }, flushEditors: async () => true, refreshNotes,
-      closeZoom: () => {}, addToFocus: () => undefined, children: createElement(Probe),
+      register: () => () => {},
+      editorProps: () => {
+        throw new Error('unused');
+      },
+      flushEditors: async () => true,
+      refreshNotes,
+      closeZoom: () => {},
+      addToFocus: () => undefined,
+      children: createElement(Probe),
     }));
     const { hosts, claimEditor } = captured!;
-    hosts.register('notes/a.md', 'pane'); hosts.register('notes/a.md', 'card');
+    hosts.register('notes/a.md', 'pane');
+    hosts.register('notes/a.md', 'card');
 
     // Two rapid claims for the same note, oldest first; the second's flush/refresh must not
     // start until the first's has fully settled, so ownership always lands on the last click.
@@ -95,15 +135,30 @@ describe('claimEditor', () => {
 
   it('hands the note over only after the notes the claiming host reads are refreshed', async () => {
     let captured: ReturnType<typeof useNoteEditing> | undefined;
-    const Probe = () => { captured = useNoteEditing(); return null; };
+    const Probe = () => {
+      captured = useNoteEditing();
+      return null;
+    };
     let refreshed!: () => void;
-    const refreshNotes = vi.fn(() => new Promise<void>(resolve => { refreshed = resolve; }));
+    const refreshNotes = vi.fn(() =>
+      new Promise<void>(resolve => {
+        refreshed = resolve;
+      })
+    );
     render(createElement(NoteEditingProvider, {
-      register: () => () => {}, editorProps: () => { throw new Error('unused'); }, flushEditors: async () => true, refreshNotes,
-      closeZoom: () => {}, addToFocus: () => undefined, children: createElement(Probe),
+      register: () => () => {},
+      editorProps: () => {
+        throw new Error('unused');
+      },
+      flushEditors: async () => true,
+      refreshNotes,
+      closeZoom: () => {},
+      addToFocus: () => undefined,
+      children: createElement(Probe),
     }));
     const { hosts, claimEditor } = captured!;
-    hosts.register('notes/a.md', 'pane'); hosts.register('notes/a.md', 'card');
+    hosts.register('notes/a.md', 'pane');
+    hosts.register('notes/a.md', 'card');
     const claim = claimEditor('notes/a.md', 'card');
     await vi.waitFor(() => expect(refreshNotes).toHaveBeenCalled());
     expect(hosts.owner('notes/a.md')).toBe('pane');

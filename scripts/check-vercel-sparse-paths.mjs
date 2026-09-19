@@ -6,7 +6,7 @@ import { nonDeployPaths } from './vercel-sparse-non-deploy-paths.mjs';
 const listFile = '.github/vercel-sparse-paths.txt';
 const workflowFile = '.github/workflows/deploy-vercel-sparse.yml';
 
-const git = (...args) => execFileSync('git', args, {encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 if (git('branch', '--show-current') !== 'core' && !process.argv.includes('--core')) {
   console.log('Workspace branch: the Vercel sparse path list is verified on Core.');
   process.exit(0);

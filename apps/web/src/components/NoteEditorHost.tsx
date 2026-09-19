@@ -31,7 +31,10 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ path, frame,
   const { hosts } = editing;
   const id = useId();
   useSyncExternalStore(hosts.subscribe, hosts.snapshot);
-  useLayoutEffect(() => { hosts.register(path, id); return () => hosts.release(path, id); }, [hosts, path, id]);
+  useLayoutEffect(() => {
+    hosts.register(path, id);
+    return () => hosts.release(path, id);
+  }, [hosts, path, id]);
   const owner = hosts.owner(path) === id;
   const lookup = useNoteLookup([path], true);
   const found = lookup.notes[0], committed = lookup.committed[0];
@@ -48,7 +51,11 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ path, frame,
   const note = (showsEditor && pinned) || loaded;
 
   const zoomSlot = lending ? zoom!.slot : null;
-  const [host] = useState(() => { const element = document.createElement('div'); element.className = 'note-editor-host'; return element; });
+  const [host] = useState(() => {
+    const element = document.createElement('div');
+    element.className = 'note-editor-host';
+    return element;
+  });
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
     const parent = zoomSlot ?? slot;
@@ -57,32 +64,56 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ path, frame,
     return () => host.remove();
   }, [zoomSlot, slot, host]);
 
-  if (zoom && !lending) return <p className="note-editor-placeholder" role="status">{t('focus.editingInZoom')}</p>;
-  if (!note) return <p className="note-editor-placeholder" role={lookup.error ? 'alert' : 'status'}>{lookup.error || t('notes.loadingNote')}</p>;
+  if (zoom && !lending) return <p className='note-editor-placeholder' role='status'>{t('focus.editingInZoom')}</p>;
+  if (!note) return <p className='note-editor-placeholder' role={lookup.error ? 'alert' : 'status'}>{lookup.error || t('notes.loadingNote')}</p>;
   if (!owner) return <NotePreview note={note} onClaim={() => void editing.claimEditor(path, id)} />;
   const props = editing.editorProps(note, committed && typeof committed.content === 'string' ? committed as NoteItem : undefined);
-  return <>
-    <div ref={setSlot} className="note-editor-slot" />
-    {lending && <p className="note-editor-placeholder" role="status">{t('focus.editingInZoom')}</p>}
-    {createPortal(<NoteEditor ref={editorRef} key={`${props.draftScope}:${path}`} {...props} note={note}
-      onSave={async params => { const saved = await props.onSave(params); setPinned(current => current?.path === saved.path ? saved : current); return saved; }}
-      frame={lending ? 'zoom' : frame} active={lending || (active && !editing.zoom)} documentPanel={lending ? undefined : documentPanel}
-      onClose={lending ? editing.closeZoom : undefined}
-      onAddToFocus={lending ? editing.addToFocus(note) : undefined}
-      onSession={onSession} onCaret={onCaret} />, host)}
-  </>;
+  return (
+    <>
+      <div ref={setSlot} className='note-editor-slot' />
+      {lending && <p className='note-editor-placeholder' role='status'>{t('focus.editingInZoom')}</p>}
+      {createPortal(
+        <NoteEditor
+          ref={editorRef}
+          key={`${props.draftScope}:${path}`}
+          {...props}
+          note={note}
+          onSave={async params => {
+            const saved = await props.onSave(params);
+            setPinned(current => current?.path === saved.path ? saved : current);
+            return saved;
+          }}
+          frame={lending ? 'zoom' : frame}
+          active={lending || (active && !editing.zoom)}
+          documentPanel={lending ? undefined : documentPanel}
+          onClose={lending ? editing.closeZoom : undefined}
+          onAddToFocus={lending ? editing.addToFocus(note) : undefined}
+          onSession={onSession}
+          onCaret={onCaret}
+        />,
+        host,
+      )}
+    </>
+  );
 };
 
 /** The note as another host is editing it, with the control that moves editing here. */
-const NotePreview: React.FC<{ note: NoteItem; onClaim: () => void }> = ({ note, onClaim }) => {
+const NotePreview: React.FC<{ note: NoteItem; onClaim: () => void; }> = ({ note, onClaim }) => {
   const { t } = useTranslation();
   const tableLabel = t('preview.scrollableTable');
   const html = useMemo(() => renderNote(note.content, note.path, tableLabel, youtubeLabels(t)), [note.content, note.path, tableLabel, t]);
-  return <div className="note-preview">
-    <div className="note-preview-bar">
-      <span>{t('editor.editingElsewhere')}</span>
-      <button type="button" className="ui-button" onClick={onClaim}><Pencil size={13} aria-hidden="true" />{t('editor.editHere')}</button>
+  return (
+    <div className='note-preview'>
+      <div className='note-preview-bar'>
+        <span>{t('editor.editingElsewhere')}</span>
+        <button type='button' className='ui-button' onClick={onClaim}>
+          <Pencil size={13} aria-hidden='true' />
+          {t('editor.editHere')}
+        </button>
+      </div>
+      <div className='note-preview-body'>
+        <div className='prose-custom screen-markdown' data-markdown-view dangerouslySetInnerHTML={{ __html: html }} />
+      </div>
     </div>
-    <div className="note-preview-body"><div className="prose-custom screen-markdown" data-markdown-view dangerouslySetInnerHTML={{ __html: html }} /></div>
-  </div>;
+  );
 };

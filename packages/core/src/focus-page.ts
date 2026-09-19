@@ -10,25 +10,25 @@ export const FOCUS_MAX_TABS = 100;
 export const FOCUS_DIVISIONS = ['single', 'columns-2', 'rows-2', 'major-left', 'major-top', 'columns-3', 'grid-2x2'] as const;
 export type FocusDivision = typeof FOCUS_DIVISIONS[number];
 const PANE_COUNTS: Record<FocusDivision, number> = { single: 1, 'columns-2': 2, 'rows-2': 2, 'major-left': 3, 'major-top': 3, 'columns-3': 3, 'grid-2x2': 4 };
-export function focusPaneCount(division: FocusDivision): number { return PANE_COUNTS[division]; }
+export function focusPaneCount(division: FocusDivision): number {
+  return PANE_COUNTS[division];
+}
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
-const repoPath = z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value)
-  && value.split('/').every(part => part !== '' && part !== '.' && part !== '..'), 'Invalid workspace path');
+const repoPath = z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value) && value.split('/').every(part => part !== '' && part !== '.' && part !== '..'), 'Invalid workspace path');
 const notebookId = z.string().min(1).max(128);
 
-export const FocusTabSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('note'), path: repoPath }).strict(),
-  z.object({ kind: z.literal('lane'), id }).strict(),
-]);
+export const FocusTabSchema = z.discriminatedUnion('kind', [z.object({ kind: z.literal('note'), path: repoPath }).strict(), z.object({ kind: z.literal('lane'), id }).strict()]);
 export const FocusPaneSchema = z.object({ tabs: z.array(FocusTabSchema) }).strict();
 export type FocusTab = z.infer<typeof FocusTabSchema>;
 export type FocusPane = z.infer<typeof FocusPaneSchema>;
 
-export function focusTabKey(tab: FocusTab): string { return tab.kind === 'note' ? `note:${tab.path}` : `lane:${tab.id}`; }
+export function focusTabKey(tab: FocusTab): string {
+  return tab.kind === 'note' ? `note:${tab.path}` : `lane:${tab.id}`;
+}
 
 /** A note may sit in several panes at once; within one pane a tab key is unique. Drops a later duplicate, keeping the first. Same reference when nothing changes. Also used by `changeDivision` to dedupe a fold. */
-export function dedupePanes<T extends { panes: { tabs: FocusTab[] }[] }>(layout: T): T {
+export function dedupePanes<T extends { panes: { tabs: FocusTab[]; }[]; }>(layout: T): T {
   let changed = false;
   const panes = layout.panes.map(pane => {
     const seen = new Set<string>();
@@ -46,7 +46,7 @@ export function dedupePanes<T extends { panes: { tabs: FocusTab[] }[] }>(layout:
 }
 
 /** Shared by a bare layout and a named Focus: pane shape must match the division, and the tab budget is layout-wide. Runs after `dedupePanes`, so tab keys are already unique per pane. */
-function checkFocusLayout(layout: { division: FocusDivision; panes: { tabs: FocusTab[] }[] }, context: z.RefinementCtx): void {
+function checkFocusLayout(layout: { division: FocusDivision; panes: { tabs: FocusTab[]; }[]; }, context: z.RefinementCtx): void {
   if (layout.panes.length !== focusPaneCount(layout.division)) context.addIssue({ code: 'custom', message: 'Focus pane count must match the division' });
   const total = layout.panes.reduce((sum, pane) => sum + pane.tabs.length, 0);
   if (total > FOCUS_MAX_TABS) context.addIssue({ code: 'custom', message: 'Focus layout has too many tabs' });
@@ -58,18 +58,18 @@ export const FocusSchema = z.object({ id, notebookId, name: z.string().trim().mi
 export type FocusLayout = z.infer<typeof FocusLayoutSchema>;
 export type Focus = z.infer<typeof FocusSchema>;
 
-export const FocusPageSchema = z.object({ version: z.literal(1), focuses: z.array(FocusSchema).max(FOCUS_MAX_FOCUSES) }).strict()
-  .superRefine((page, context) => {
-    const ids = new Set<string>(); const names = new Map<string, Set<string>>();
-    for (const focus of page.focuses) {
-      if (ids.has(focus.id)) context.addIssue({ code: 'custom', message: 'Duplicate Focus id' });
-      ids.add(focus.id);
-      const used = names.get(focus.notebookId) || new Set<string>();
-      if (used.has(focus.name)) context.addIssue({ code: 'custom', message: 'Duplicate Focus name in notebook' });
-      used.add(focus.name);
-      names.set(focus.notebookId, used);
-    }
-  });
+export const FocusPageSchema = z.object({ version: z.literal(1), focuses: z.array(FocusSchema).max(FOCUS_MAX_FOCUSES) }).strict().superRefine((page, context) => {
+  const ids = new Set<string>();
+  const names = new Map<string, Set<string>>();
+  for (const focus of page.focuses) {
+    if (ids.has(focus.id)) context.addIssue({ code: 'custom', message: 'Duplicate Focus id' });
+    ids.add(focus.id);
+    const used = names.get(focus.notebookId) || new Set<string>();
+    if (used.has(focus.name)) context.addIssue({ code: 'custom', message: 'Duplicate Focus name in notebook' });
+    used.add(focus.name);
+    names.set(focus.notebookId, used);
+  }
+});
 export type FocusPage = z.infer<typeof FocusPageSchema>;
 
 export class FocusError extends Error {
@@ -80,10 +80,12 @@ export class FocusError extends Error {
 
 export const emptyFocusPage = (): FocusPage => ({ version: 1, focuses: [] });
 export const emptyFocusLayout = (): FocusLayout => ({ division: 'single', panes: [{ tabs: [] }] });
-export function readFocusPage(value: unknown): FocusPage { return FocusPageSchema.parse(value); }
+export function readFocusPage(value: unknown): FocusPage {
+  return FocusPageSchema.parse(value);
+}
 
 /** First pane (in pane order) holding `key`, for UI heuristics that only need to know whether a tab exists somewhere — never for deciding where to place or remove one. */
-export function findFocusTab(layout: FocusLayout, key: string): { pane: number; index: number } | undefined {
+export function findFocusTab(layout: FocusLayout, key: string): { pane: number; index: number; } | undefined {
   for (let pane = 0; pane < layout.panes.length; pane++) {
     const index = findFocusTabInPane(layout, pane, key);
     if (index !== -1) return { pane, index };
@@ -94,7 +96,9 @@ export function findFocusTab(layout: FocusLayout, key: string): { pane: number; 
 export function findFocusTabInPane(layout: FocusLayout, pane: number, key: string): number {
   return layout.panes[pane].tabs.findIndex(tab => focusTabKey(tab) === key);
 }
-export function focusTabCount(layout: FocusLayout): number { return layout.panes.reduce((total, pane) => total + pane.tabs.length, 0); }
+export function focusTabCount(layout: FocusLayout): number {
+  return layout.panes.reduce((total, pane) => total + pane.tabs.length, 0);
+}
 
 /** Growing a division appends empty panes; shrinking folds every removed pane's tabs, in pane order, onto the end of the last remaining pane, then dedupes: a note the kept pane already held (or shared between two removed panes) survives once, in first-occurrence order. */
 export function changeDivision<T extends FocusLayout>(layout: T, division: FocusDivision): T {
@@ -125,18 +129,25 @@ export function placeTab<T extends FocusLayout>(layout: T, tab: FocusTab, pane: 
 }
 
 /** Places several tabs in `pane` in one pass (one mutation instead of one per tab): each is placed only if `pane` does not already hold it. */
-export function placeTabs<T extends FocusLayout>(layout: T, tabs: FocusTab[], pane: number): { layout: T; added: number; skipped: number } {
+export function placeTabs<T extends FocusLayout>(layout: T, tabs: FocusTab[], pane: number): { layout: T; added: number; skipped: number; } {
   if (pane < 0 || pane >= layout.panes.length) throw new FocusError('invalid-pane', 'Pane is out of range');
   const panes = layout.panes.map(current => ({ tabs: [...current.tabs] }));
   const held = new Set(panes[pane].tabs.map(focusTabKey));
   let total = focusTabCount(layout), added = 0, skipped = 0;
   for (const tab of tabs) {
     const key = focusTabKey(tab);
-    if (held.has(key)) { skipped++; continue; }
-    if (total >= FOCUS_MAX_TABS) { skipped++; continue; }
+    if (held.has(key)) {
+      skipped++;
+      continue;
+    }
+    if (total >= FOCUS_MAX_TABS) {
+      skipped++;
+      continue;
+    }
     panes[pane].tabs.push(tab);
     held.add(key);
-    total++; added++;
+    total++;
+    added++;
   }
   return { layout: { ...layout, panes } as T, added, skipped };
 }
@@ -147,8 +158,7 @@ export function moveTab<T extends FocusLayout>(layout: T, fromPane: number, toPa
   const removeIndex = findFocusTabInPane(layout, fromPane, key);
   if (removeIndex === -1) throw new FocusError('invalid-pane', 'Tab is not in the source pane');
   const tab = layout.panes[fromPane].tabs[removeIndex];
-  const withoutSource = fromPane === toPane ? layout
-    : { ...layout, panes: layout.panes.map((pane, i) => i === fromPane ? { tabs: pane.tabs.filter((_, j) => j !== removeIndex) } : pane) } as T;
+  const withoutSource = fromPane === toPane ? layout : { ...layout, panes: layout.panes.map((pane, i) => i === fromPane ? { tabs: pane.tabs.filter((_, j) => j !== removeIndex) } : pane) } as T;
   return placeTab(withoutSource, tab, toPane, index);
 }
 
@@ -168,7 +178,7 @@ export function pruneFocus<T extends FocusLayout>(layout: T, exists: (tab: Focus
 const DISPLAY_2: Record<FocusDivision, FocusDivision> = { single: 'single', 'columns-2': 'columns-2', 'rows-2': 'rows-2', 'major-left': 'columns-2', 'major-top': 'rows-2', 'columns-3': 'columns-2', 'grid-2x2': 'columns-2' };
 
 /** Narrow-screen display mapping: panes beyond capacity fold into the last displayed pane, in stored pane order. */
-export function displayPanes(division: FocusDivision, capacity: 1 | 2 | 4): { division: FocusDivision; groups: number[][] } {
+export function displayPanes(division: FocusDivision, capacity: 1 | 2 | 4): { division: FocusDivision; groups: number[][]; } {
   const count = focusPaneCount(division);
   if (count <= capacity) return { division, groups: Array.from({ length: count }, (_, index) => [index]) };
   if (capacity === 1) return { division: 'single', groups: [Array.from({ length: count }, (_, index) => index)] };
@@ -180,18 +190,25 @@ export function relocateFocusPaths(page: FocusPage, notebookId: string, move: (p
   let changed = false;
   for (const focus of page.focuses) {
     if (focus.notebookId !== notebookId) continue;
-    for (const pane of focus.panes) for (const tab of pane.tabs) {
-      if (tab.kind !== 'note') continue;
-      const next = move(tab.path);
-      if (next !== tab.path) { tab.path = next; changed = true; }
+    for (const pane of focus.panes) {
+      for (const tab of pane.tabs) {
+        if (tab.kind !== 'note') continue;
+        const next = move(tab.path);
+        if (next !== tab.path) {
+          tab.path = next;
+          changed = true;
+        }
+      }
     }
   }
   return changed;
 }
 
-export function notebookFocuses(page: FocusPage, notebookId: string): Focus[] { return page.focuses.filter(focus => focus.notebookId === notebookId); }
+export function notebookFocuses(page: FocusPage, notebookId: string): Focus[] {
+  return page.focuses.filter(focus => focus.notebookId === notebookId);
+}
 
-export function nameFocus(page: FocusPage, layout: FocusLayout, notebookId: string, name: string): { page: FocusPage; focus: Focus } {
+export function nameFocus(page: FocusPage, layout: FocusLayout, notebookId: string, name: string): { page: FocusPage; focus: Focus; } {
   if (page.focuses.length >= FOCUS_MAX_FOCUSES) throw new FocusError('focus-limit', 'Too many Focus entries');
   const trimmed = name.trim();
   if (page.focuses.some(focus => focus.notebookId === notebookId && focus.name === trimmed)) throw new FocusError('duplicate-name', 'Focus name already used in this notebook');
@@ -226,24 +243,26 @@ const within = (path: string, root: string) => path === root || path.startsWith(
  * Tab content must belong to the Focus's notebook: a note by its notebook root, a lane by the Screen lane's notebook.
  * A lane id no Screen lane carries is stale, not foreign; stale tabs are hidden and dropped on the next write.
  */
-export function foreignFocusTab(tab: FocusTab, notebookId: string, notebooks: readonly { id: string; root: string }[], screen: ScreenPage): boolean {
-  if (tab.kind === 'lane') { const row = screen.rows.find(row => row.id === tab.id); return Boolean(row && row.notebookId !== notebookId); }
+export function foreignFocusTab(tab: FocusTab, notebookId: string, notebooks: readonly { id: string; root: string; }[], screen: ScreenPage): boolean {
+  if (tab.kind === 'lane') {
+    const row = screen.rows.find(row => row.id === tab.id);
+    return Boolean(row && row.notebookId !== notebookId);
+  }
   const owner = [...notebooks].sort((a, b) => b.root.length - a.root.length).find(notebook => within(tab.path, notebook.root));
   return owner?.id !== notebookId;
 }
 
 /** Drops every tab that belongs to another notebook and reports whether any was dropped. */
-export function ownFocusPage(page: FocusPage, notebooks: readonly { id: string; root: string }[], screen: ScreenPage): { page: FocusPage; foreign: boolean } {
+export function ownFocusPage(page: FocusPage, notebooks: readonly { id: string; root: string; }[], screen: ScreenPage): { page: FocusPage; foreign: boolean; } {
   let foreign = false;
-  const focuses = page.focuses.map(focus => pruneFocus(focus, tab => {
-    const outside = foreignFocusTab(tab, focus.notebookId, notebooks, screen);
-    if (outside) foreign = true;
-    return !outside;
-  }));
+  const focuses = page.focuses.map(focus =>
+    pruneFocus(focus, tab => {
+      const outside = foreignFocusTab(tab, focus.notebookId, notebooks, screen);
+      if (outside) foreign = true;
+      return !outside;
+    })
+  );
   return foreign ? { page: { ...page, focuses }, foreign } : { page, foreign };
 }
 
-export const FOCUS_DOCUMENT: WorkspaceDocument<FocusPage> = {
-  file: FOCUS_PAGE_FILE, label: 'Focus', maxBytes: FOCUS_MAX_BYTES, scopes: ['focus', 'folders', 'files'],
-  schema: FocusPageSchema, fileSchema: FocusPageSchema, empty: emptyFocusPage, read: readFocusPage, relocate: relocateFocusPaths, own: ownFocusPage,
-};
+export const FOCUS_DOCUMENT: WorkspaceDocument<FocusPage> = { file: FOCUS_PAGE_FILE, label: 'Focus', maxBytes: FOCUS_MAX_BYTES, scopes: ['focus', 'folders', 'files'], schema: FocusPageSchema, fileSchema: FocusPageSchema, empty: emptyFocusPage, read: readFocusPage, relocate: relocateFocusPaths, own: ownFocusPage };

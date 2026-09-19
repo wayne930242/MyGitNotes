@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MouseEvent, TouchEvent } from 'react';
 
 export const LONG_PRESS_MS = 500;
 export const MOVE_CANCEL_X_PX = 10;
 export const MOVE_CANCEL_Y_PX = 8;
 
-export function shouldCancelLongPress(start: { x: number; y: number }, current: { x: number; y: number }): boolean {
+export function shouldCancelLongPress(start: { x: number; y: number; }, current: { x: number; y: number; }): boolean {
   return Math.abs(current.x - start.x) > MOVE_CANCEL_X_PX || Math.abs(current.y - start.y) > MOVE_CANCEL_Y_PX;
 }
 
@@ -23,11 +23,14 @@ export function useLongPress(onLongPress: () => void, enabled: boolean) {
   const [isPressing, setIsPressing] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const suppressTimer = useRef<ReturnType<typeof setTimeout>>();
-  const start = useRef<{ x: number; y: number } | null>(null);
+  const start = useRef<{ x: number; y: number; } | null>(null);
   const suppressClick = useRef(false);
 
   const clear = useCallback(() => {
-    if (timer.current) { clearTimeout(timer.current); timer.current = undefined; }
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = undefined;
+    }
     start.current = null;
     setIsPressing(false);
   }, []);
@@ -36,7 +39,9 @@ export function useLongPress(onLongPress: () => void, enabled: boolean) {
     if (!isPressing) return;
     const onScroll = () => clear();
     window.addEventListener('scroll', onScroll, { capture: true, passive: true });
-    return () => { window.removeEventListener('scroll', onScroll, { capture: true }); };
+    return () => {
+      window.removeEventListener('scroll', onScroll, { capture: true });
+    };
   }, [isPressing, clear]);
 
   useEffect(() => () => {
@@ -133,4 +138,3 @@ export function useLongPress(onLongPress: () => void, enabled: boolean) {
 
   return { onTouchStart, onTouchMove, onTouchEnd, onTouchCancel, onClick, onContextMenu, isPressing };
 }
-

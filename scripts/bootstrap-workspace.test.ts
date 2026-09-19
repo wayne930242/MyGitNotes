@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,7 +11,11 @@ let root: string;
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim();
 const coreGit = (...args: string[]) => execFileSync('git', args, { cwd: core, encoding: 'utf8', stdio: 'pipe' }).trim();
 const bootstrap = (...args: string[]) => execFileSync(process.execPath, [path.join(product, 'node_modules/tsx/dist/cli.mjs'), path.join(product, 'scripts/bootstrap-workspace.ts'), ...args], { cwd: core, stdio: 'pipe' });
-const write = (name: string, content: string, base = root) => { const target = path.join(base, name); fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, content); };
+const write = (name: string, content: string, base = root) => {
+  const target = path.join(base, name);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, content);
+};
 const files = (directory: string): string[] => fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? files(path.join(directory, entry.name)) : [path.join(directory, entry.name)]);
 beforeEach(() => {
   core = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-bootstrap-'));
@@ -21,14 +25,21 @@ beforeEach(() => {
   write('examples/workspace-agent-system/AGENTS.md', '# 工作區指引\n', core);
   write('examples/workspace-agent-system/.agents/skills/workspace/SKILL.md', '# 工作區技能\n', core);
   fs.cpSync(path.join(product, 'examples/demo-workspace'), path.join(core, 'examples/demo-workspace'), { recursive: true });
-  coreGit('init', '-b', 'core'); coreGit('config', 'user.name', 'Test'); coreGit('config', 'user.email', 'test@example.com'); coreGit('add', '.'); coreGit('commit', '-m', 'product fixture');
+  coreGit('init', '-b', 'core');
+  coreGit('config', 'user.name', 'Test');
+  coreGit('config', 'user.email', 'test@example.com');
+  coreGit('add', '.');
+  coreGit('commit', '-m', 'product fixture');
 });
-afterEach(() => { for (const dir of [core, root]) fs.rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => {
+  for (const dir of [core, root]) fs.rmSync(dir, { recursive: true, force: true });
+});
 /** A content-only main that already exists, as a converted workspace or a clone of one has it. */
 const existingMain = (files: Record<string, string>) => {
   coreGit('worktree', 'add', '--orphan', '-b', 'main', root);
   for (const [file, content] of Object.entries(files)) write(file, content);
-  git('add', '.'); git('commit', '-m', 'existing workspace');
+  git('add', '.');
+  git('commit', '-m', 'existing workspace');
 };
 
 describe('canonical starter workspace CLI', () => {
@@ -79,7 +90,8 @@ describe('canonical starter workspace CLI', () => {
   it('respects an existing root manifest and does not add an unconfigured notebook', () => {
     const manifest = 'schema_version: 1\nworkspace:\n  title: Personal\n  default_notebook: personal\nnotebooks:\n  - id: personal\n    title: Personal\n    root: notes/personal\n';
     existingMain({ '.mygitnotes.yaml': manifest, 'notes/personal/mine.md': '# Mine' });
-    fs.rmSync(root, { recursive: true, force: true }); coreGit('worktree', 'prune');
+    fs.rmSync(root, { recursive: true, force: true });
+    coreGit('worktree', 'prune');
     bootstrap();
     expect(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8')).toBe(manifest);
     expect(fs.existsSync(path.join(root, 'notes/.mygitnotes.yaml'))).toBe(false);
@@ -105,7 +117,9 @@ describe('canonical starter workspace CLI', () => {
       fs.symlinkSync(outside, path.join(root, 'notes'));
       expect(() => bootstrap()).toThrow();
       expect(fs.readdirSync(outside)).toEqual([]);
-    } finally { fs.rmSync(outside, { recursive: true, force: true }); }
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
   });
 
   it('refuses a main that still carries the product', () => {
@@ -141,7 +155,8 @@ describe('canonical starter workspace CLI', () => {
     expect(config.notebooks[0].statuses).toBeUndefined();
     const seen = new Set<string>();
     for (const file of files(path.join(template, 'notes')).filter(file => file.endsWith('.md'))) {
-      const raw = fs.readFileSync(file, 'utf8'); const note = parseNoteContent(raw);
+      const raw = fs.readFileSync(file, 'utf8');
+      const note = parseNoteContent(raw);
       seen.add(String(note.metadata.status));
       if (note.metadata.status === 'archived') expect(note.metadata.hiden).toBe(true);
       for (const match of raw.matchAll(/\]\(([^)]+\.md)\)/g)) expect(fs.existsSync(path.resolve(path.dirname(file), match[1])), `${file}: ${match[1]}`).toBe(true);

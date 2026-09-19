@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { Fragment, createElement, forwardRef, useEffect, type ReactNode } from 'react';
+import { createElement, forwardRef, Fragment, type ReactNode, useEffect } from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
@@ -9,9 +9,7 @@ import { HostedNoteEditor } from './NoteEditorHost.js';
 
 const alpha = { id: 'a', path: 'notes/a.md', notebookId: 'a', title: 'Alpha', tags: [], metadata: {}, content: '# Alpha\n\nBody.' };
 
-vi.mock('../lib/use-note-queries.js', () => ({
-  useNoteLookup: () => ({ notes: [{ id: 'a', path: 'notes/a.md', notebookId: 'a', title: 'Alpha', tags: [], metadata: {}, content: '# Alpha\n\nBody.' }], committed: [], loading: false, error: '' }),
-}));
+vi.mock('../lib/use-note-queries.js', () => ({ useNoteLookup: () => ({ notes: [{ id: 'a', path: 'notes/a.md', notebookId: 'a', title: 'Alpha', tags: [], metadata: {}, content: '# Alpha\n\nBody.' }], committed: [], loading: false, error: '' }) }));
 vi.mock('./NoteEditor.js', () => ({
   NoteEditor: forwardRef<unknown, NoteEditorProps>(({ frame, note, onSession }, _ref) => {
     useEffect(() => {
@@ -25,20 +23,18 @@ vi.mock('./NoteEditor.js', () => ({
 afterEach(cleanup);
 
 let editing: ReturnType<typeof useNoteEditing>;
-const Probe = () => { editing = useNoteEditing(); return null; };
+const Probe = () => {
+  editing = useNoteEditing();
+  return null;
+};
 let flushEditors: ReturnType<typeof vi.fn<(paths?: readonly string[]) => Promise<boolean>>>;
-beforeEach(() => { flushEditors = vi.fn(async () => true); });
-
-const provide = (...children: ReactNode[]) => createElement(NoteEditingProvider, {
-  register: () => () => {}, flushEditors, refreshNotes: async () => {}, closeZoom: () => {}, addToFocus: () => undefined,
-  editorProps: () => ({ statuses: [], onSave: async () => alpha, onRestoreFile: async () => null, branch: 'main', draftScope: 'src:main' }),
-  children: createElement(Fragment, null, createElement(Probe), ...children),
+beforeEach(() => {
+  flushEditors = vi.fn(async () => true);
 });
 
-const twoHosts = () => provide(
-  createElement('section', { 'data-testid': 'pane' }, createElement(HostedNoteEditor, { path: 'notes/a.md', frame: 'pane', active: true })),
-  createElement('section', { 'data-testid': 'card' }, createElement(HostedNoteEditor, { path: 'notes/a.md', frame: 'compact', active: false })),
-);
+const provide = (...children: ReactNode[]) => createElement(NoteEditingProvider, { register: () => () => {}, flushEditors, refreshNotes: async () => {}, closeZoom: () => {}, addToFocus: () => undefined, editorProps: () => ({ statuses: [], onSave: async () => alpha, onRestoreFile: async () => null, branch: 'main', draftScope: 'src:main' }), children: createElement(Fragment, null, createElement(Probe), ...children) });
+
+const twoHosts = () => provide(createElement('section', { 'data-testid': 'pane' }, createElement(HostedNoteEditor, { path: 'notes/a.md', frame: 'pane', active: true })), createElement('section', { 'data-testid': 'card' }, createElement(HostedNoteEditor, { path: 'notes/a.md', frame: 'compact', active: false })));
 
 it('mounts one editor for a note shown in two hosts and lets the other host claim it', async () => {
   render(twoHosts());
@@ -47,7 +43,9 @@ it('mounts one editor for a note shown in two hosts and lets the other host clai
   expect(screen.getByTestId('card')).toHaveTextContent('This note is open for editing elsewhere.');
   expect(screen.getByTestId('card').querySelector('h1')).toHaveTextContent('Alpha');
 
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Edit here' })); });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Edit here' }));
+  });
   expect(flushEditors).toHaveBeenCalledWith(['notes/a.md']);
   expect(screen.getAllByTestId('editor')).toHaveLength(1);
   expect(screen.getByTestId('card').querySelector('[data-testid="editor"]')).toHaveAttribute('data-frame', 'compact');
@@ -57,7 +55,9 @@ it('mounts one editor for a note shown in two hosts and lets the other host clai
 it('keeps the owner when its pending edits cannot be saved', async () => {
   flushEditors.mockResolvedValue(false);
   render(twoHosts());
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Edit here' })); });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Edit here' }));
+  });
   expect(screen.getByTestId('pane').querySelector('[data-testid="editor"]')).toBeInTheDocument();
   expect(screen.getByTestId('card').querySelector('[data-testid="editor"]')).toBeNull();
 });

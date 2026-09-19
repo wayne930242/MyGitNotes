@@ -5,16 +5,14 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { KeyboardShortcuts, type ShortcutSurfaceMode } from './KeyboardShortcuts.js';
 
-beforeEach(() => { Element.prototype.scrollIntoView = () => {}; });
+beforeEach(() => {
+  Element.prototype.scrollIntoView = () => {};
+});
 afterEach(() => cleanup());
 
 const Harness = () => {
   const [mode, setMode] = useState<ShortcutSurfaceMode | null>(null);
-  return createElement(KeyboardShortcuts, {
-    mode, onModeChange: setMode,
-    activeTab: 'notes', canCreateNote: true,
-    onNavigate: () => {}, onCreateNote: () => {}, onFocusSearch: () => {},
-  });
+  return createElement(KeyboardShortcuts, { mode, onModeChange: setMode, activeTab: 'notes', canCreateNote: true, onNavigate: () => {}, onCreateNote: () => {}, onFocusSearch: () => {} });
 };
 
 const openPalette = async () => {

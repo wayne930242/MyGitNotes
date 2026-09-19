@@ -2,14 +2,11 @@ import type { NotebookConfig, WorkspaceConfig } from './types.js';
 import { SourceError } from './github-api.js';
 import { isNoteHidden } from './note-status.js';
 import { safeFilterPath } from './note-filters.js';
-import { sortNotes, type SortField, type SortOrder } from './note-sort.js';
+import { type SortField, sortNotes, type SortOrder } from './note-sort.js';
 import { extractTodoTasks } from './note-agenda.js';
 import { buildNoteGraph } from './note-graph.js';
 import { hashJson } from './remote-cache.js';
-import {
-  DEFAULT_NOTE_QUERY, noteDirectory, noteMatchesQuery, noteQueryStatuses,
-  type NoteAgenda, type NoteFacets, type NoteGraph, type NoteListItem, type NoteLookup, type NotePaths, type NoteQuery, type NoteQueryPage, type NotebookFacets,
-} from './note-query.js';
+import { DEFAULT_NOTE_QUERY, type NoteAgenda, type NotebookFacets, noteDirectory, type NoteFacets, type NoteGraph, type NoteListItem, type NoteLookup, noteMatchesQuery, type NotePaths, type NoteQuery, type NoteQueryPage, noteQueryStatuses } from './note-query.js';
 
 /** Read model behind the note query routes, implemented by remote and local sources. */
 export interface NoteCatalog {
@@ -23,16 +20,22 @@ export interface NoteCatalog {
   memo<T>(kind: string, notebooks: NotebookConfig[], compute: () => Promise<T>): Promise<T>;
 }
 
-export interface NoteQueryOptions { limit: number; cursor?: string; content: boolean; select?: 'paths' }
+export interface NoteQueryOptions {
+  limit: number;
+  cursor?: string;
+  content: boolean;
+  select?: 'paths';
+}
 
 const SORT_FIELDS: SortField[] = ['updated', 'created', 'title', 'status'];
 const SORT_ORDERS: SortOrder[] = ['asc', 'desc'];
 const REVISION = /^[a-f0-9]{40}([a-f0-9]{24})?$/;
 
-const values = (value: unknown): string[] => (Array.isArray(value) ? value : value === undefined ? [] : [value]).map(item => {
-  if (typeof item !== 'string') throw new SourceError('Query parameters must be strings.');
-  return item;
-});
+const values = (value: unknown): string[] =>
+  (Array.isArray(value) ? value : value === undefined ? [] : [value]).map(item => {
+    if (typeof item !== 'string') throw new SourceError('Query parameters must be strings.');
+    return item;
+  });
 const single = (value: unknown): string | undefined => {
   const list = values(value);
   if (list.length > 1) throw new SourceError('Repeated query parameter.');
@@ -46,7 +49,7 @@ export function parseRevision(value: unknown): string | undefined {
   return revision || undefined;
 }
 
-export function parseNoteQuery(input: Record<string, unknown>): { query: NoteQuery; options: NoteQueryOptions } {
+export function parseNoteQuery(input: Record<string, unknown>): { query: NoteQuery; options: NoteQueryOptions; } {
   const notebookId = single(input.notebookId);
   if (!notebookId) throw new SourceError('notebookId is required.');
   const folders = values(input.folder), exclude = values(input.exclude), tags = values(input.tag).filter(tag => tag.trim());
@@ -59,11 +62,7 @@ export function parseNoteQuery(input: Record<string, unknown>): { query: NoteQue
   if (select !== undefined && select !== 'paths') throw new SourceError('Invalid select option.');
   const limit = limitText === undefined ? 50 : Number(limitText);
   if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new SourceError('limit must be between 1 and 200.');
-  return {
-    query: { notebookId, folders, descendants: single(input.descendants) !== '0', tags, tagMode: tagMode as NoteQuery['tagMode'], status: single(input.status) || null, withoutStatus: flag(input.noStatus),
-      showHidden: flag(input.showHidden), q, match: match as NoteQuery['match'], exclude, sort, order },
-    options: { limit, cursor: single(input.cursor), content: flag(input.content), select: select as 'paths' | undefined },
-  };
+  return { query: { notebookId, folders, descendants: single(input.descendants) !== '0', tags, tagMode: tagMode as NoteQuery['tagMode'], status: single(input.status) || null, withoutStatus: flag(input.noStatus), showHidden: flag(input.showHidden), q, match: match as NoteQuery['match'], exclude, sort, order }, options: { limit, cursor: single(input.cursor), content: flag(input.content), select: select as 'paths' | undefined } };
 }
 
 async function scope(catalog: NoteCatalog, notebookId: string) {
@@ -91,8 +90,12 @@ export async function queryNotes(catalog: NoteCatalog, query: NoteQuery, options
   const key = cursorKey(revision, query);
   let offset = 0;
   if (options.cursor) {
-    let cursor: { k?: unknown; o?: unknown };
-    try { cursor = JSON.parse(Buffer.from(options.cursor, 'base64url').toString('utf8')); } catch { throw new SourceError('Invalid cursor.'); }
+    let cursor: { k?: unknown; o?: unknown; };
+    try {
+      cursor = JSON.parse(Buffer.from(options.cursor, 'base64url').toString('utf8'));
+    } catch {
+      throw new SourceError('Invalid cursor.');
+    }
     if (cursor.k !== key || !Number.isInteger(cursor.o) || (cursor.o as number) < 0) throw new SourceError('Cursor does not match this query.');
     offset = cursor.o as number;
   }
@@ -100,11 +103,7 @@ export async function queryNotes(catalog: NoteCatalog, query: NoteQuery, options
   const page = sorted.slice(offset, offset + options.limit);
   const contents = options.content ? await catalog.contents(page) : undefined;
   const next = offset + options.limit;
-  return {
-    revision, total: sorted.length,
-    notes: contents ? page.map(note => ({ ...note, content: contents.get(note.path) ?? '' })) : page,
-    nextCursor: next < sorted.length ? Buffer.from(JSON.stringify({ k: key, o: next })).toString('base64url') : null,
-  };
+  return { revision, total: sorted.length, notes: contents ? page.map(note => ({ ...note, content: contents.get(note.path) ?? '' })) : page, nextCursor: next < sorted.length ? Buffer.from(JSON.stringify({ k: key, o: next })).toString('base64url') : null };
 }
 
 export async function queryNotePaths(catalog: NoteCatalog, query: NoteQuery): Promise<NotePaths> {
@@ -149,14 +148,13 @@ export async function lookupNotes(catalog: NoteCatalog, paths: unknown, content:
 
 export async function noteAgenda(catalog: NoteCatalog, notebookId: string, showHidden: boolean): Promise<NoteAgenda> {
   const { notebooks } = await scope(catalog, notebookId);
-  const parts = await Promise.all(notebooks.map(notebook => catalog.memo(`agenda:${showHidden ? 1 : 0}`, [notebook], async () => {
-    const visible = (await catalog.index(notebook)).filter(note => showHidden || !isNoteHidden({ ...note.metadata, status: note.status }));
-    const contents = await catalog.contents(visible);
-    return {
-      tasks: extractTodoTasks(visible.map(note => ({ ...note, content: contents.get(note.path) ?? '' }))),
-      dated: visible.filter(note => note.metadata.created !== undefined || note.metadata.updated !== undefined),
-    };
-  })));
+  const parts = await Promise.all(notebooks.map(notebook =>
+    catalog.memo(`agenda:${showHidden ? 1 : 0}`, [notebook], async () => {
+      const visible = (await catalog.index(notebook)).filter(note => showHidden || !isNoteHidden({ ...note.metadata, status: note.status }));
+      const contents = await catalog.contents(visible);
+      return { tasks: extractTodoTasks(visible.map(note => ({ ...note, content: contents.get(note.path) ?? '' }))), dated: visible.filter(note => note.metadata.created !== undefined || note.metadata.updated !== undefined) };
+    })
+  ));
   const revision = await catalog.revision();
   return { revision, tasks: parts.flatMap(part => part.tasks), dated: parts.flatMap(part => part.dated.map(note => ({ ...note, revision }))) };
 }

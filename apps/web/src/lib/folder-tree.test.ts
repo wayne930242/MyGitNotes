@@ -1,34 +1,16 @@
-import { describe, it, expect, vi } from 'vitest';
-import {
-  getImmediateSubfolders,
-  getBreadcrumbs,
-  resolveFolderClick,
-  resolveAllNotebooksFolderSelect,
-  resolveEnterTouchMultiSelect,
-  buildFolderTree,
-  expandedPathsForFolder,
-} from './folder-tree.js';
+import { describe, expect, it, vi } from 'vitest';
+import { buildFolderTree, expandedPathsForFolder, getBreadcrumbs, getImmediateSubfolders, resolveAllNotebooksFolderSelect, resolveEnterTouchMultiSelect, resolveFolderClick } from './folder-tree.js';
 import { FolderItem } from './types.js';
 
 describe('folder-tree', () => {
   it('keeps folder cards in the persisted sidebar order', () => {
-    const ordered = [{ notebookId:'n', path:'a', title:'A', order:1 }, { notebookId:'n', path:'z', title:'Z', order:0 }];
-    expect(getImmediateSubfolders({}, ordered, 'n', 'notes/n', null).map(folder => folder.path)).toEqual(['z','a']);
+    const ordered = [{ notebookId: 'n', path: 'a', title: 'A', order: 1 }, { notebookId: 'n', path: 'z', title: 'Z', order: 0 }];
+    expect(getImmediateSubfolders({}, ordered, 'n', 'notes/n', null).map(folder => folder.path)).toEqual(['z', 'a']);
   });
   // Facet directory counts: repo-relative directory to the notes directly inside it.
-  const directories: Record<string, number> = {
-    'notes': 1,
-    'notes/projects': 1,
-    'notes/projects/web': 1,
-    'notes/projects/backend': 1,
-    'notes/personal': 1,
-  };
+  const directories: Record<string, number> = { 'notes': 1, 'notes/projects': 1, 'notes/projects/web': 1, 'notes/projects/backend': 1, 'notes/personal': 1 };
 
-  const folders: FolderItem[] = [
-    { notebookId: 'nb1', path: 'projects', title: 'Projects', order: 1 },
-    { notebookId: 'nb1', path: 'projects/web', title: 'Web App Dev', order: 2 },
-    { notebookId: 'nb1', path: 'personal', title: 'Personal Notes', order: 3 },
-  ];
+  const folders: FolderItem[] = [{ notebookId: 'nb1', path: 'projects', title: 'Projects', order: 1 }, { notebookId: 'nb1', path: 'projects/web', title: 'Web App Dev', order: 2 }, { notebookId: 'nb1', path: 'personal', title: 'Personal Notes', order: 3 }];
 
   it('lists immediate subfolders under All folders (null)', () => {
     const subfolders = getImmediateSubfolders(directories, folders, 'nb1', 'notes', null);
@@ -44,7 +26,7 @@ describe('folder-tree', () => {
     expect(subfolders.find((s) => s.path === 'projects/web')?.title).toBe('Web App Dev');
   });
 
-  it('sums a subfolder\'s own notes and every note below it', () => {
+  it("sums a subfolder's own notes and every note below it", () => {
     const nested = getImmediateSubfolders({ 'notes/projects': 2, 'notes/projects/web/deep': 3 }, folders, 'nb1', 'notes', null);
     expect(nested.find(folder => folder.path === 'projects')?.noteCount).toBe(5);
   });
@@ -54,11 +36,7 @@ describe('folder-tree', () => {
     expect(rootBreadcrumbs).toEqual([{ name: 'All folders', path: null }]);
 
     const nestedBreadcrumbs = getBreadcrumbs('projects/web', folders, 'nb1');
-    expect(nestedBreadcrumbs).toEqual([
-      { name: 'All folders', path: null },
-      { name: 'Projects', path: 'projects' },
-      { name: 'Web App Dev', path: 'projects/web' },
-    ]);
+    expect(nestedBreadcrumbs).toEqual([{ name: 'All folders', path: null }, { name: 'Projects', path: 'projects' }, { name: 'Web App Dev', path: 'projects/web' }]);
   });
 
   it('resolves a plain click to the single-select callback', () => {
@@ -131,10 +109,7 @@ describe('folder-tree', () => {
     // 3.1: Long-pressing an already-selected folder must not deselect it
     expect(resolveEnterTouchMultiSelect(['notes/nb1/projects'], 'notes/nb1', 'projects')).toEqual(['notes/nb1/projects']);
     expect(resolveEnterTouchMultiSelect([], 'notes/nb1', 'projects')).toEqual(['notes/nb1/projects']);
-    expect(resolveEnterTouchMultiSelect(['notes/nb1/personal'], 'notes/nb1', 'projects')).toEqual([
-      'notes/nb1/personal',
-      'notes/nb1/projects',
-    ]);
+    expect(resolveEnterTouchMultiSelect(['notes/nb1/personal'], 'notes/nb1', 'projects')).toEqual(['notes/nb1/personal', 'notes/nb1/projects']);
   });
 
   it('resolves a plain mouse click to single-select even when touch multi-select is active on hybrid devices', () => {
@@ -155,11 +130,7 @@ describe('folder-tree', () => {
   });
 
   it('builds a nested tree with accurate depth and synthesized parent nodes', () => {
-    const rawFolders: FolderItem[] = [
-      { notebookId: 'nb1', path: 'tech/web/react', title: 'React', order: 1 },
-      { notebookId: 'nb1', path: 'tech', title: 'Technology', order: 0 },
-      { notebookId: 'nb2', path: 'other', title: 'Other Notebook', order: 0 },
-    ];
+    const rawFolders: FolderItem[] = [{ notebookId: 'nb1', path: 'tech/web/react', title: 'React', order: 1 }, { notebookId: 'nb1', path: 'tech', title: 'Technology', order: 0 }, { notebookId: 'nb2', path: 'other', title: 'Other Notebook', order: 0 }];
     const tree = buildFolderTree(rawFolders, 'nb1');
     expect(tree).toHaveLength(1);
     expect(tree[0].path).toBe('tech');

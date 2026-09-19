@@ -1,27 +1,10 @@
 import fs from 'node:fs';
-import {
-  loadWorkspaceConfig,
-  scanNotebookNotes,
-  resolveSafePath,
-  matchNoteGlob,
-  textLines,
-  NoteItem,
-} from '@mygitnotes/core';
+import { loadWorkspaceConfig, matchNoteGlob, NoteItem, resolveSafePath, scanNotebookNotes, textLines } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { assertUserWorkspaceBranch } from '../guards.js';
 import type { ToolContext } from './context.js';
 
-export async function handleSearchNotes(
-  ctx: ToolContext,
-  args: {
-    query: string;
-    isRegex?: boolean;
-    pattern?: string;
-    notebookId?: string;
-    caseSensitive?: boolean;
-    maxResults?: number;
-  }
-) {
+export async function handleSearchNotes(ctx: ToolContext, args: { query: string; isRegex?: boolean; pattern?: string; notebookId?: string; caseSensitive?: boolean; maxResults?: number; }) {
   const config = loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
   if (!args.query) return { error: 'query is required' };
@@ -38,9 +21,7 @@ export async function handleSearchNotes(
     return { error: `Invalid regular expression: ${(err as Error).message}` };
   }
 
-  const notebooks = args.notebookId
-    ? config.notebooks.filter((nb) => nb.id === args.notebookId)
-    : config.notebooks;
+  const notebooks = args.notebookId ? config.notebooks.filter((nb) => nb.id === args.notebookId) : config.notebooks;
 
   const notes: NoteItem[] = [];
   for (const nb of notebooks) {
@@ -54,7 +35,7 @@ export async function handleSearchNotes(
   }
 
   const maxResults = args.maxResults || 100;
-  const matches: { path: string; line: number; text: string; matches?: string[] }[] = [];
+  const matches: { path: string; line: number; text: string; matches?: string[]; }[] = [];
   let scannedFiles = 0;
   let truncated = false;
 
@@ -69,12 +50,7 @@ export async function handleSearchNotes(
       re.lastIndex = 0;
       const matchTerms = lineText.match(re);
       if (matchTerms && matchTerms.length > 0) {
-        matches.push({
-          path: note.path,
-          line: i + 1,
-          text: lineText.replace(/\r?\n$/, '').slice(0, 2000),
-          matches: [...new Set(matchTerms)],
-        });
+        matches.push({ path: note.path, line: i + 1, text: lineText.replace(/\r?\n$/, '').slice(0, 2000), matches: [...new Set(matchTerms)] });
         if (matches.length >= maxResults) {
           truncated = true;
           break;
@@ -84,27 +60,10 @@ export async function handleSearchNotes(
     if (truncated) break;
   }
 
-  return {
-    matches,
-    totalMatches: matches.length,
-    scannedFiles,
-    truncated,
-  };
+  return { matches, totalMatches: matches.length, scannedFiles, truncated };
 }
 
-export async function handleReplaceNotes(
-  ctx: ToolContext,
-  args: {
-    find: string;
-    replace: string;
-    isRegex?: boolean;
-    pattern?: string;
-    notebookId?: string;
-    caseSensitive?: boolean;
-    dryRun?: boolean;
-    commitMessage?: string;
-  }
-) {
+export async function handleReplaceNotes(ctx: ToolContext, args: { find: string; replace: string; isRegex?: boolean; pattern?: string; notebookId?: string; caseSensitive?: boolean; dryRun?: boolean; commitMessage?: string; }) {
   if (!args.dryRun) {
     await assertUserWorkspaceBranch(ctx.repoRoot);
   }
@@ -125,9 +84,7 @@ export async function handleReplaceNotes(
     return { error: `Invalid regular expression: ${(err as Error).message}` };
   }
 
-  const notebooks = args.notebookId
-    ? config.notebooks.filter((nb) => nb.id === args.notebookId)
-    : config.notebooks;
+  const notebooks = args.notebookId ? config.notebooks.filter((nb) => nb.id === args.notebookId) : config.notebooks;
 
   const notes: NoteItem[] = [];
   for (const nb of notebooks) {
@@ -161,19 +118,11 @@ export async function handleReplaceNotes(
     }
   }
 
-  let commit: { commitHash: string; shortHash: string } | undefined;
+  let commit: { commitHash: string; shortHash: string; } | undefined;
   if (!args.dryRun && changedFiles.length > 0) {
-    const message =
-      args.commitMessage ||
-      `chore(notes): replace ${args.find.slice(0, 30)} in ${changedFiles.length} file(s)`;
+    const message = args.commitMessage || `chore(notes): replace ${args.find.slice(0, 30)} in ${changedFiles.length} file(s)`;
     commit = await stageAndCommit(ctx.repoRoot, changedFiles, message);
   }
 
-  return {
-    success: true,
-    dryRun: Boolean(args.dryRun),
-    changedFiles,
-    totalReplacements,
-    commit,
-  };
+  return { success: true, dryRun: Boolean(args.dryRun), changedFiles, totalReplacements, commit };
 }

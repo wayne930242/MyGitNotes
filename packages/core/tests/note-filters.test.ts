@@ -1,19 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { filterNotes, selectFilteredGraph, type NoteFilters } from '../src/note-filters.js';
+import { filterNotes, type NoteFilters, selectFilteredGraph } from '../src/note-filters.js';
 import { buildNoteGraph } from '../src/note-graph.js';
 import type { NoteItem } from '../src/types.js';
 
 const base: NoteFilters = { notebookId: 'a', folders: [], descendants: true, tags: [], tagMode: 'any', q: '', status: null, showHidden: false };
 const note = (path: string, tags: string[] = [], content = '', status = 'inbox', metadata = {}): NoteItem => ({ id: path, path, title: path, notebookId: path.startsWith('notes/b/') ? 'b' : 'a', tags, content, status, metadata });
-const notes = [
-  note('notes/a/research/one.md', ['red', 'blue'], 'needle [[two]]'),
-  note('notes/a/research/nested/two.md', ['blue'], '[[three]]'),
-  note('notes/a/research-extra/three.md', ['red'], '[[four]]'),
-  note('notes/a/other/four.md', ['green']),
-  note('notes/b/research/five.md', ['blue']),
-  note('notes/a/research/hidden.md', ['red'], '', 'archived'),
-  note('notes/a/research/visible.md', ['red'], '', 'archived', { hiden: false }),
-];
+const notes = [note('notes/a/research/one.md', ['red', 'blue'], 'needle [[two]]'), note('notes/a/research/nested/two.md', ['blue'], '[[three]]'), note('notes/a/research-extra/three.md', ['red'], '[[four]]'), note('notes/a/other/four.md', ['green']), note('notes/b/research/five.md', ['blue']), note('notes/a/research/hidden.md', ['red'], '', 'archived'), note('notes/a/research/visible.md', ['red'], '', 'archived', { hiden: false })];
 const paths = (filters: Partial<NoteFilters>) => filterNotes(notes, { ...base, ...filters }).map(note => note.path);
 
 describe('shared note filters', () => {

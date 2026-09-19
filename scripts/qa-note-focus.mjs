@@ -21,18 +21,20 @@ const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' })
 write('.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Focus QA\n  default_notebook: work\nnotebooks:\n  - id: work\n    title: Work\n    root: notes/work\n  - id: other\n    title: Other\n    root: notes/other\n');
 const notes = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta'];
 const tags = { Alpha: ['project'], Gamma: ['project'], Beta: ['personal'] };
-notes.forEach((title, index) => write(`notes/work/${title.toLowerCase()}.md`,
-  `---\ntitle: ${title}\nstatus: ${index % 2 ? 'doing' : 'todo'}\nupdated: 2026-09-${String(10 + index).padStart(2, '0')}\n${tags[title] ? `tags: [${tags[title].join(', ')}]\n` : ''}---\n# ${title}\n\n${title} body.\n\n${title === 'Delta' ? '[Open Epsilon](epsilon.md)\n' : ''}`));
+notes.forEach((title, index) => write(`notes/work/${title.toLowerCase()}.md`, `---\ntitle: ${title}\nstatus: ${index % 2 ? 'doing' : 'todo'}\nupdated: 2026-09-${String(10 + index).padStart(2, '0')}\n${tags[title] ? `tags: [${tags[title].join(', ')}]\n` : ''}---\n# ${title}\n\n${title} body.\n\n${title === 'Delta' ? '[Open Epsilon](epsilon.md)\n' : ''}`));
 write('notes/work/sub/omega.md', '---\ntitle: Omega\nstatus: todo\nupdated: 2026-09-16\ntags: [project]\n---\n# Omega\n\nOmega body.\n');
 write('notes/work/sub/nested/deep.md', '---\ntitle: Deep\nstatus: todo\nupdated: 2026-09-17\n---\n# Deep\n\nDeep body.\n');
 write('notes/other/outside.md', '---\ntitle: Outside\n---\n# Outside\n');
-write('.github-notes-screen.yaml', JSON.stringify({ version: 2, rows: [
-  { id: 'pins', name: 'Pins', kind: 'custom', view: 'small', notebookId: 'work', items: [{ id: 'pin-gamma', kind: 'note', notebookId: 'work', path: 'notes/work/gamma.md' }] },
-] }));
-git('init', '-b', 'main'); git('config', 'user.name', 'Browser QA'); git('config', 'user.email', 'qa@example.com');
-git('add', '.'); git('commit', '-m', 'fixture');
-process.env.MYGITNOTES_SOURCE = 'local'; process.env.MYGITNOTES_LOCAL_PATH = root;
-delete process.env.VERCEL; delete process.env.APP_URL;
+write('.github-notes-screen.yaml', JSON.stringify({ version: 2, rows: [{ id: 'pins', name: 'Pins', kind: 'custom', view: 'small', notebookId: 'work', items: [{ id: 'pin-gamma', kind: 'note', notebookId: 'work', path: 'notes/work/gamma.md' }] }] }));
+git('init', '-b', 'main');
+git('config', 'user.name', 'Browser QA');
+git('config', 'user.email', 'qa@example.com');
+git('add', '.');
+git('commit', '-m', 'fixture');
+process.env.MYGITNOTES_SOURCE = 'local';
+process.env.MYGITNOTES_LOCAL_PATH = root;
+delete process.env.VERCEL;
+delete process.env.APP_URL;
 const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
 const server = createServer(createApp(product));
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -56,20 +58,17 @@ const paneCount = page => page.$$eval('[data-focus-pane]', panes => panes.length
 const activePane = page => page.$eval('[data-focus-pane][data-active]', pane => Number(pane.dataset.focusPane));
 const BROWSE_ROW_SELECTOR = '.workspace-scroll :is(.note-list tbody tr, [data-notepath], .cursor-pointer.rounded-xl)';
 /** A note in the browse region: a list row, a card or a Kanban card. */
-const browseRow = (page, title) => page.evaluateHandle((selector, title) => [...document.querySelectorAll(selector)]
-  .find(row => row.textContent.includes(title)), BROWSE_ROW_SELECTOR, title);
+const browseRow = (page, title) => page.evaluateHandle((selector, title) => [...document.querySelectorAll(selector)].find(row => row.textContent.includes(title)), BROWSE_ROW_SELECTOR, title);
 /** Clicks a browse item's title, away from its status and action controls.
  *  A view switch (e.g. to Kanban) renders its columns before their notes finish loading, so this waits for the row itself. */
 const clickRow = async (page, title) => {
-  await page.waitForFunction((selector, title) => [...document.querySelectorAll(selector)].some(row => row.textContent.includes(title)),
-    { timeout: 5000 }, BROWSE_ROW_SELECTOR, title).catch(() => assert.fail(`Browse row ${title} is missing`));
+  await page.waitForFunction((selector, title) => [...document.querySelectorAll(selector)].some(row => row.textContent.includes(title)), { timeout: 5000 }, BROWSE_ROW_SELECTOR, title).catch(() => assert.fail(`Browse row ${title} is missing`));
   const row = await browseRow(page, title);
   const label = await row.evaluateHandle((row, title) => [...row.querySelectorAll('*')].reverse().find(element => element.textContent.trim() === title), title);
   await (label.asElement() ?? row.asElement()).click();
 };
 const clickTagOption = async (page, tag) => {
-  const label = await page.waitForFunction(tag => [...document.querySelectorAll('.focus-batch-dialog .filter-options label')]
-    .find(item => item.textContent.trim() === `#${tag}`), {}, tag);
+  const label = await page.waitForFunction(tag => [...document.querySelectorAll('.focus-batch-dialog .filter-options label')].find(item => item.textContent.trim() === `#${tag}`), {}, tag);
   await (await label.asElement().$('input')).click();
 };
 const menuItem = async (page, label) => {
@@ -82,46 +81,66 @@ const chooseDivision = async (page, label) => {
 };
 /** Drags with HTML5 drag and drop: puppeteer's mouse does not start native drags, so the events are dispatched with one DataTransfer.
  *  `shift: true` holds the Shift modifier through the drop, matching a Shift-held tab-bar drag (copy instead of move). */
-const dragTo = (page, source, target, { shift = false } = {}) => page.evaluate((source, target, shiftKey) => {
-  const from = typeof source === 'string' ? document.querySelector(source) : source;
-  const to = typeof target === 'string' ? document.querySelector(target) : target;
-  const data = new DataTransfer();
-  from.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
-  to.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
-  to.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
-  to.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
-  from.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
-}, source, target, shift);
-const tabHandle = (page, pane, label) => page.evaluateHandle((pane, label) => [...document.querySelectorAll(`[data-focus-pane="${pane}"] .focus-tab`)]
-  .find(tab => tab.querySelector('[role="tab"]').textContent.trim() === label), pane, label);
+const dragTo = (page, source, target, { shift = false } = {}) =>
+  page.evaluate(
+    (source, target, shiftKey) => {
+      const from = typeof source === 'string' ? document.querySelector(source) : source;
+      const to = typeof target === 'string' ? document.querySelector(target) : target;
+      const data = new DataTransfer();
+      from.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
+      to.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
+      to.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
+      to.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
+      from.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: data, shiftKey }));
+    },
+    source,
+    target,
+    shift,
+  );
+const tabHandle = (page, pane, label) => page.evaluateHandle((pane, label) => [...document.querySelectorAll(`[data-focus-pane="${pane}"] .focus-tab`)].find(tab => tab.querySelector('[role="tab"]').textContent.trim() === label), pane, label);
 const clickTab = async (page, pane, label) => (await (await tabHandle(page, pane, label)).asElement().$('[role="tab"]')).click();
 /** Places the caret at the end of `text` inside the editor under `scope`. */
 const clickEnd = async (page, scope, text) => {
-  const point = await page.evaluate((scope, text) => {
-    const walker = document.createTreeWalker(document.querySelector(`${scope} .cm-content`), NodeFilter.SHOW_TEXT);
-    while (walker.nextNode()) {
-      const node = walker.currentNode, start = node.textContent.indexOf(text);
-      if (start < 0) continue;
-      const range = document.createRange(); range.setStart(node, start); range.setEnd(node, start + text.length);
-      const box = range.getBoundingClientRect(); return { x: box.right - 1, y: box.y + box.height / 2 };
-    }
-    throw Error(`Missing editor text: ${text}`);
-  }, scope, text);
+  const point = await page.evaluate(
+    (scope, text) => {
+      const walker = document.createTreeWalker(document.querySelector(`${scope} .cm-content`), NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode, start = node.textContent.indexOf(text);
+        if (start < 0) continue;
+        const range = document.createRange();
+        range.setStart(node, start);
+        range.setEnd(node, start + text.length);
+        const box = range.getBoundingClientRect();
+        return { x: box.right - 1, y: box.y + box.height / 2 };
+      }
+      throw Error(`Missing editor text: ${text}`);
+    },
+    scope,
+    text,
+  );
   await page.mouse.click(point.x, point.y);
   await page.keyboard.press('End');
 };
 const palette = async (page, command) => {
-  await page.keyboard.down('Alt'); await page.keyboard.press('Slash'); await page.keyboard.up('Alt');
+  await page.keyboard.down('Alt');
+  await page.keyboard.press('Slash');
+  await page.keyboard.up('Alt');
   await page.waitForSelector('.keyboard-shortcuts-panel[data-mode="palette"] input');
   await page.type('.keyboard-shortcuts-panel input', command);
   await page.waitForFunction(command => document.querySelector('.keyboard-shortcuts-list .is-active')?.textContent.toLowerCase().includes(command), {}, command.toLowerCase());
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => !document.querySelector('.keyboard-shortcuts-panel'));
 };
-const waitTabs = (page, pane, labels) => page.waitForFunction((pane, labels) => {
-  const tabs = [...document.querySelectorAll(`[data-focus-pane="${pane}"] .focus-tab [role="tab"]`)].map(tab => tab.textContent.trim());
-  return JSON.stringify(tabs) === JSON.stringify(labels);
-}, { timeout: 5000 }, pane, labels).catch(async () => assert.fail(`Pane ${pane} tabs ${JSON.stringify(await tabLabels(page, pane))} are not ${JSON.stringify(labels)}`));
+const waitTabs = (page, pane, labels) =>
+  page.waitForFunction(
+    (pane, labels) => {
+      const tabs = [...document.querySelectorAll(`[data-focus-pane="${pane}"] .focus-tab [role="tab"]`)].map(tab => tab.textContent.trim());
+      return JSON.stringify(tabs) === JSON.stringify(labels);
+    },
+    { timeout: 5000 },
+    pane,
+    labels,
+  ).catch(async () => assert.fail(`Pane ${pane} tabs ${JSON.stringify(await tabLabels(page, pane))} are not ${JSON.stringify(labels)}`));
 
 let page, device;
 try {
@@ -159,7 +178,7 @@ try {
   await page.click('[data-focus-pane="0"] [aria-label="Close Beta"]');
   await waitTabs(page, 0, ['Alpha', 'Gamma']);
   await waitTabs(page, 1, ['Beta']);
-  console.log('PASS 2a closing one pane\'s copy of a cross-pane note leaves the other pane\'s copy open');
+  console.log("PASS 2a closing one pane's copy of a cross-pane note leaves the other pane's copy open");
   // Closing a tab activated pane 0 (any click inside a pane does); restore pane 1 active before continuing.
   await clickTab(page, 1, 'Beta');
   assert.equal(await activePane(page), 1);
@@ -302,11 +321,9 @@ try {
   await device.waitForFunction(() => document.querySelectorAll('[data-focus-pane]').length === 2);
   const merged7a = (await device.$$eval('[data-focus-pane]', elements => elements.map(element => Number(element.dataset.focusPane))))[1];
   await waitTabs(device, merged7a, ['Beta', 'Epsilon', 'Delta', 'Delta']);
-  const deltaPanes = await device.$$eval(`[data-focus-pane="${merged7a}"] .focus-tab`, tabs => tabs
-    .filter(tab => tab.querySelector('[role="tab"]').textContent.trim() === 'Delta').map(tab => tab.dataset.pane));
+  const deltaPanes = await device.$$eval(`[data-focus-pane="${merged7a}"] .focus-tab`, tabs => tabs.filter(tab => tab.querySelector('[role="tab"]').textContent.trim() === 'Delta').map(tab => tab.dataset.pane));
   assert.deepEqual(deltaPanes.sort(), ['1', '2'], 'Each duplicate Delta tab keeps its own stored pane');
-  const shownDeltaCount = await device.$$eval(`[data-focus-pane="${merged7a}"] .focus-tab [role="tab"][aria-selected="true"]`,
-    tabs => tabs.filter(tab => tab.textContent.trim() === 'Delta').length);
+  const shownDeltaCount = await device.$$eval(`[data-focus-pane="${merged7a}"] .focus-tab [role="tab"][aria-selected="true"]`, tabs => tabs.filter(tab => tab.textContent.trim() === 'Delta').length);
   assert.equal(shownDeltaCount, 1, 'Only one of the duplicate Delta tabs is marked shown');
   await device.click(`[data-focus-pane="${merged7a}"] .focus-tab[data-pane="1"] [aria-label="Close Delta"]`);
   await waitTabs(device, merged7a, ['Beta', 'Epsilon', 'Delta']);
@@ -320,7 +337,10 @@ try {
   const focusUrl = `${base}/notebooks/work?view=list&focus=${focusId}`;
   const workFile = name => fs.readFileSync(path.join(root, `notes/work/${name}.md`), 'utf8');
   const waitFile = async (name, text) => {
-    for (let attempt = 0; attempt < 100; attempt++) { if (workFile(name).includes(text)) return; await new Promise(resolve => setTimeout(resolve, 100)); }
+    for (let attempt = 0; attempt < 100; attempt++) {
+      if (workFile(name).includes(text)) return;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
     assert.fail(`notes/work/${name}.md does not contain ${text}`);
   };
   // Naming moved the layout out of (current), which starts as one empty pane with a hint.
@@ -402,8 +422,7 @@ try {
   await device.bringToFront();
   await clickTab(device, 1, 'Epsilon');
   await clickTab(device, 2, 'Delta');
-  await twin.waitForFunction(() => document.querySelector('[data-focus-pane][data-active]')?.dataset.focusPane === '2'
-    && document.querySelector('[data-focus-pane="1"] [role="tab"][aria-selected="true"]')?.textContent.trim() === 'Epsilon', { polling: 100 });
+  await twin.waitForFunction(() => document.querySelector('[data-focus-pane][data-active]')?.dataset.focusPane === '2' && document.querySelector('[data-focus-pane="1"] [role="tab"][aria-selected="true"]')?.textContent.trim() === 'Epsilon', { polling: 100 });
   await twin.close();
   await device.reload({ waitUntil: 'networkidle0' });
   await device.waitForSelector('.focus-area');
@@ -455,8 +474,7 @@ try {
   // A repeat click for a note already open in the SAME pane switches to it instead of adding another copy.
   // The tab set doesn't change here, so waitTabs alone isn't a signal; wait for the shown tab itself to flip.
   await clickRow(device, 'Delta');
-  await device.waitForFunction(pane => document.querySelector(`[data-focus-pane="${pane}"] .focus-tab [role="tab"][aria-selected="true"]`)?.textContent.trim() === 'Delta',
-    { timeout: 5000 }, 2).catch(() => assert.fail('Pane 2 did not switch to the already-open Delta tab'));
+  await device.waitForFunction(pane => document.querySelector(`[data-focus-pane="${pane}"] .focus-tab [role="tab"][aria-selected="true"]`)?.textContent.trim() === 'Delta', { timeout: 5000 }, 2).catch(() => assert.fail('Pane 2 did not switch to the already-open Delta tab'));
   await waitTabs(device, 2, ['Delta', 'Beta']);
   assert.equal(await shownTab(device, 2), 'Delta');
   console.log('PASS 8d a repeat click for a note already open in the active pane switches to it without duplicating it');
@@ -535,4 +553,7 @@ try {
   server.close();
   fs.rmSync(root, { recursive: true, force: true });
 }
-if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }
+if (errors.length) {
+  console.error(errors.join('\n'));
+  process.exitCode = 1;
+}

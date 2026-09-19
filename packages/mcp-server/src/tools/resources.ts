@@ -9,10 +9,7 @@ export async function handleListAgentResources(ctx: ToolContext) {
   return { instructions, docs };
 }
 
-export async function handleReadAgentResource(
-  ctx: ToolContext,
-  args?: { path?: string }
-) {
+export async function handleReadAgentResource(ctx: ToolContext, args?: { path?: string; }) {
   if (!args?.path) {
     return handleListAgentResources(ctx);
   }

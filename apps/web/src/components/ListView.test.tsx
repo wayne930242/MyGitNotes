@@ -11,18 +11,14 @@ afterEach(cleanup);
 
 const noteOf = (path: string): NoteListItem => ({ id: path, path, notebookId: 'life', title: `Title: ${path}`, tags: [], metadata: {} });
 
-const baseProps = {
-  statuses: ['inbox'],
-  onOpenNote: vi.fn(),
-  onDeleteNote: vi.fn(),
-  onUpdateNoteStatus: vi.fn(),
-  onNewNote: vi.fn(),
-};
+const baseProps = { statuses: ['inbox'], onOpenNote: vi.fn(), onDeleteNote: vi.fn(), onUpdateNoteStatus: vi.fn(), onNewNote: vi.fn() };
 
 function makeDataTransfer() {
   const data: Record<string, string> = {};
   return {
-    setData: (type: string, value: string) => { data[type] = value; },
+    setData: (type: string, value: string) => {
+      data[type] = value;
+    },
     getData: (type: string) => data[type] || '',
     effectAllowed: '',
     _data: data,
@@ -39,20 +35,14 @@ it('renders no zoom button and non-draggable rows without focusMode', () => {
 it('shows a zoom button that calls onZoomNote without opening the note', () => {
   const onOpenNote = vi.fn();
   const onZoomNote = vi.fn();
-  render(createElement(ListView, {
-    ...baseProps, onOpenNote, notes: [noteOf('notes/a.md')],
-    focusMode: { onZoomNote, canDrag: () => true },
-  }));
+  render(createElement(ListView, { ...baseProps, onOpenNote, notes: [noteOf('notes/a.md')], focusMode: { onZoomNote, canDrag: () => true } }));
   fireEvent.click(screen.getByTitle('Open in zoom'));
   expect(onZoomNote).toHaveBeenCalledWith(expect.objectContaining({ path: 'notes/a.md' }));
   expect(onOpenNote).not.toHaveBeenCalled();
 });
 
 it('makes a row draggable with the note-drag payload when canDrag is true', () => {
-  render(createElement(ListView, {
-    ...baseProps, notes: [noteOf('notes/a.md')],
-    focusMode: { onZoomNote: vi.fn(), canDrag: () => true },
-  }));
+  render(createElement(ListView, { ...baseProps, notes: [noteOf('notes/a.md')], focusMode: { onZoomNote: vi.fn(), canDrag: () => true } }));
   const row = screen.getByText('Title: notes/a.md').closest('tr')!;
   expect(row).toHaveAttribute('draggable', 'true');
   const dataTransfer = makeDataTransfer();
@@ -62,10 +52,7 @@ it('makes a row draggable with the note-drag payload when canDrag is true', () =
 });
 
 it('leaves a row non-draggable when canDrag returns false', () => {
-  render(createElement(ListView, {
-    ...baseProps, notes: [noteOf('notes/a.md')],
-    focusMode: { onZoomNote: vi.fn(), canDrag: () => false },
-  }));
+  render(createElement(ListView, { ...baseProps, notes: [noteOf('notes/a.md')], focusMode: { onZoomNote: vi.fn(), canDrag: () => false } }));
   const row = screen.getByText('Title: notes/a.md').closest('tr')!;
   expect(row).toHaveAttribute('draggable', 'false');
 });

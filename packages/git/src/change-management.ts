@@ -18,7 +18,9 @@ export function exclusive<T>(root: string, action: () => Promise<T>): Promise<T>
   const key = fs.realpathSync(root);
   const next = (queues.get(key) || Promise.resolve()).catch(() => {}).then(action);
   queues.set(key, next);
-  void next.finally(() => { if (queues.get(key) === next) queues.delete(key); }).catch(() => {});
+  void next.finally(() => {
+    if (queues.get(key) === next) queues.delete(key);
+  }).catch(() => {});
   return next;
 }
 function regularFile(root: string, file: string) {
@@ -26,8 +28,11 @@ function regularFile(root: string, file: string) {
   const target = resolveSafePath(root, file);
   let ancestor = target;
   while (ancestor !== path.resolve(root)) {
-    try { if (fs.lstatSync(ancestor).isSymbolicLink()) throw new Error('Symbolic links cannot be managed.'); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    try {
+      if (fs.lstatSync(ancestor).isSymbolicLink()) throw new Error('Symbolic links cannot be managed.');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
     ancestor = path.dirname(ancestor);
   }
   if (fs.existsSync(target) && !fs.statSync(target).isFile()) throw new Error('An exact regular file is required.');
@@ -44,23 +49,27 @@ export async function listChanges(root: string): Promise<FileChange[]> {
     const file = record.slice(3), x = record[0], y = record[1];
     let bytes: Buffer | string = '';
     let available = true;
-    try { const target = regularFile(root, file); if (fs.existsSync(target)) bytes = fs.readFileSync(target); }
-    catch { available = false; }
+    try {
+      const target = regularFile(root, file);
+      if (fs.existsSync(target)) bytes = fs.readFileSync(target);
+    } catch {
+      available = false;
+    }
     const conflict = x === 'U' || y === 'U' || ['AA', 'DD'].includes(x + y);
-    return { path: file, staged: x !== ' ' && x !== '?', unstaged: y !== ' ' || x === '?',
-      kind: conflict ? 'conflict' : x === 'D' || y === 'D' ? 'deleted' : !committed.has(file) ? 'added' : 'modified',
-      tracked: committed.has(file), available: available && !conflict && !committed.get(file)?.startsWith('120000') && !staged.get(file)?.startsWith('120000'),
-      revision: createHash('sha256').update(record).update(committed.get(file) || '').update(staged.get(file) || '').update(bytes).digest('hex') };
+    return { path: file, staged: x !== ' ' && x !== '?', unstaged: y !== ' ' || x === '?', kind: conflict ? 'conflict' : x === 'D' || y === 'D' ? 'deleted' : !committed.has(file) ? 'added' : 'modified', tracked: committed.has(file), available: available && !conflict && !committed.get(file)?.startsWith('120000') && !staged.get(file)?.startsWith('120000'), revision: createHash('sha256').update(record).update(committed.get(file) || '').update(staged.get(file) || '').update(bytes).digest('hex') };
   });
 }
 
-export async function changeFile(root: string, file: string, action: 'stage' | 'unstage' | 'restore', revision: string): Promise<{ backup?: string }> {
+export async function changeFile(root: string, file: string, action: 'stage' | 'unstage' | 'restore', revision: string): Promise<{ backup?: string; }> {
   return exclusive(root, async () => {
     const target = regularFile(root, file);
     const change = (await listChanges(root)).find(entry => entry.path === file);
     if (!change || !change.available || change.revision !== revision) throw new Error('This file changed. Refresh and review it again.');
     const literal = `:(literal)${file}`;
-    if (action === 'stage') { await runGit(['add', '--', literal], root); return {}; }
+    if (action === 'stage') {
+      await runGit(['add', '--', literal], root);
+      return {};
+    }
     if (action === 'unstage') {
       if (change.tracked) await runGit(['restore', '--staged', '--source=HEAD', '--', literal], root);
       else await runGit(['rm', '--cached', '--force', '--', literal], root);
@@ -113,8 +122,7 @@ export async function commitStagedFiles(root: string, expected: Pick<FileChange,
 export async function commitSelectedFiles(root: string, expected: Pick<FileChange, 'path' | 'revision'>[], message: string) {
   return exclusive(root, async () => {
     const changes = await listChanges(root);
-    if (!message.trim() || !expected.length || new Set(expected.map(file => file.path)).size !== expected.length ||
-      expected.some(file => !changes.some(current => current.path === file.path && current.available && current.revision === file.revision))) {
+    if (!message.trim() || !expected.length || new Set(expected.map(file => file.path)).size !== expected.length || expected.some(file => !changes.some(current => current.path === file.path && current.available && current.revision === file.revision))) {
       throw new Error('Selected files changed. Refresh and review them before committing.');
     }
     return stageAndCommit(root, expected.map(file => file.path), message);

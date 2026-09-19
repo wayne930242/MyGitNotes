@@ -1,8 +1,8 @@
-import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { parseWorkspaceConfig, ConfigValidationError, loadWorkspaceConfig, resolveWorkspaceConfigPath, WORKSPACE_CONFIG_FILENAME, LEGACY_WORKSPACE_CONFIG_FILENAME } from '../src/config.js';
+import { ConfigValidationError, LEGACY_WORKSPACE_CONFIG_FILENAME, loadWorkspaceConfig, parseWorkspaceConfig, resolveWorkspaceConfigPath, WORKSPACE_CONFIG_FILENAME } from '../src/config.js';
 
 describe('Workspace Config Parser', () => {
   it('parses a valid multi-notebook configuration', () => {
@@ -117,11 +117,7 @@ notebooks:
         type: number
 `;
     const config = parseWorkspaceConfig(yaml);
-    expect(config.notebooks[0].metadata).toEqual([
-      { key: 'draft' },
-      { key: 'private', type: 'boolean', label: '私密文章' },
-      { key: 'order', type: 'number' },
-    ]);
+    expect(config.notebooks[0].metadata).toEqual([{ key: 'draft' }, { key: 'private', type: 'boolean', label: '私密文章' }, { key: 'order', type: 'number' }]);
   });
 
   it('rejects duplicate metadata field keys', () => {
@@ -156,16 +152,16 @@ notebooks:
       "@/*": "src/*"
 `;
     const config = parseWorkspaceConfig(yaml);
-    expect(config.notebooks[0].pathAliases).toEqual({
-      '@/*': 'src/*',
-    });
+    expect(config.notebooks[0].pathAliases).toEqual({ '@/*': 'src/*' });
   });
 });
 
 describe('Workspace manifest filename resolution', () => {
   let root: string;
   const manifest = (title: string) => `schema_version: 1\nworkspace:\n  title: ${title}\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n`;
-  beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-config-')); });
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-config-'));
+  });
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
   it('loads the standard filename from the repository root', () => {

@@ -10,8 +10,7 @@ export interface AgentTreeNode {
 /** Classification is for navigation only; resource permissions remain API-owned. */
 export function groupAgentResources(resources: AgentResource[], notebooks: NotebookConfig[], notebookId: string) {
   const groups = { skills: [] as AgentResource[], shared: [] as AgentResource[], notebook: [] as AgentResource[], product: [] as AgentResource[] };
-  const roots = notebooks.map(nb => ({ id: nb.id, root: nb.root.replace(/\/+$/, '') }))
-    .sort((a, b) => b.root.length - a.root.length);
+  const roots = notebooks.map(nb => ({ id: nb.id, root: nb.root.replace(/\/+$/, '') })).sort((a, b) => b.root.length - a.root.length);
   for (const resource of resources) {
     if (resource.scope === 'product') {
       groups.product.push(resource);

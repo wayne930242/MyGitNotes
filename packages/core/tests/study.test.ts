@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { splitNotePages } from '../src/note-pages.js';
 import { parseNoteContent } from '../src/frontmatter.js';
-import { applyStudyAction, createStudyNote, emptyStudyWorkspace, findStudyNote, matchesStudyFilter,
-  previewStudyRating, reconcileStudyNote, rebindStudyNote, studyCardContent, StudyWorkspaceSchema, undoStudyAction } from '../src/study.js';
+import { applyStudyAction, createStudyNote, emptyStudyWorkspace, findStudyNote, matchesStudyFilter, previewStudyRating, rebindStudyNote, reconcileStudyNote, studyCardContent, StudyWorkspaceSchema, undoStudyAction } from '../src/study.js';
 
 const now = new Date('2026-09-14T04:00:00.000Z');
 const source = { notebookId: 'english', path: 'notes/english/abandon.md', title: 'abandon', metadata: { id: 'stable-note' }, content: 'What does abandon mean?\n\n---\n\nGive up.\n\n---\n\nThey abandoned the plan.' };

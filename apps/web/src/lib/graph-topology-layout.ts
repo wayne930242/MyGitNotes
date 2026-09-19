@@ -7,7 +7,7 @@ import forceAtlas2 from 'graphology-layout-forceatlas2';
 
 type Node = GraphLayout['nodes'][number];
 type Edge = [number, number];
-const endpoint = (value: string | { id: string }) => typeof value === 'string' ? value : value.id;
+const endpoint = (value: string | { id: string; }) => typeof value === 'string' ? value : value.id;
 const dimensions = (n: Node) => n.expanded ? [n.width || 360, n.height || 300] : [32, 32];
 const overlaps = (a: Node, b: Node) => {
   const [aw, ah] = dimensions(a), [bw, bh] = dimensions(b);
@@ -16,8 +16,7 @@ const overlaps = (a: Node, b: Node) => {
 const turn = (a: Node, b: Node, c: Node) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 function crosses(nodes: Node[], [a, b]: Edge, [c, d]: Edge) {
   if (a === c || a === d || b === c || b === d) return false;
-  return turn(nodes[a], nodes[b], nodes[c]) * turn(nodes[a], nodes[b], nodes[d]) < 0
-    && turn(nodes[c], nodes[d], nodes[a]) * turn(nodes[c], nodes[d], nodes[b]) < 0;
+  return turn(nodes[a], nodes[b], nodes[c]) * turn(nodes[a], nodes[b], nodes[d]) < 0 && turn(nodes[c], nodes[d], nodes[a]) * turn(nodes[c], nodes[d], nodes[b]) < 0;
 }
 
 // A bounded local search: swaps within a community preserve its footprint.
@@ -26,9 +25,11 @@ function untangle(nodes: Node[], edges: Edge[], communities: Record<string, numb
   let budget = 250_000;
   const count = () => {
     let total = 0;
-    for (let i = 0; i < edges.length; i++) for (let j = i + 1; j < edges.length; j++) {
-      if (--budget < 0) return Infinity;
-      if (crosses(nodes, edges[i], edges[j])) total++;
+    for (let i = 0; i < edges.length; i++) {
+      for (let j = i + 1; j < edges.length; j++) {
+        if (--budget < 0) return Infinity;
+        if (crosses(nodes, edges[i], edges[j])) total++;
+      }
     }
     return total;
   };
@@ -38,17 +39,24 @@ function untangle(nodes: Node[], edges: Edge[], communities: Record<string, numb
   if (!Number.isFinite(best) || !best) return;
   for (let pass = 0; pass < 3 && budget > 0; pass++) {
     let improved = false;
-    for (let i = 0; i < nodes.length && budget > 0; i++) for (let j = i + 1; j < nodes.length && budget > 0; j++) {
-      budget--;
-      const a = nodes[i], b = nodes[j];
-      if (a.pinned || b.pinned || communities[a.path] !== communities[b.path]) continue;
-      [a.x, b.x] = [b.x, a.x]; [a.y, b.y] = [b.y, a.y];
-      const collision = nodes.some((n, k) => (k !== i && overlaps(a, n)) || (k !== j && overlaps(b, n)));
-      const score = collision ? Infinity : count(), candidateLength = length();
-      if (score < best && candidateLength <= lengthLimit) {
-        best = score; improved = true;
-      } else { [a.x, b.x] = [b.x, a.x]; [a.y, b.y] = [b.y, a.y]; }
-      if (!best) return;
+    for (let i = 0; i < nodes.length && budget > 0; i++) {
+      for (let j = i + 1; j < nodes.length && budget > 0; j++) {
+        budget--;
+        const a = nodes[i], b = nodes[j];
+        if (a.pinned || b.pinned || communities[a.path] !== communities[b.path]) continue;
+        [a.x, b.x] = [b.x, a.x];
+        [a.y, b.y] = [b.y, a.y];
+        const collision = nodes.some((n, k) => (k !== i && overlaps(a, n)) || (k !== j && overlaps(b, n)));
+        const score = collision ? Infinity : count(), candidateLength = length();
+        if (score < best && candidateLength <= lengthLimit) {
+          best = score;
+          improved = true;
+        } else {
+          [a.x, b.x] = [b.x, a.x];
+          [a.y, b.y] = [b.y, a.y];
+        }
+        if (!best) return;
+      }
     }
     if (!improved) break;
   }
@@ -67,18 +75,25 @@ export function optimizeGraphLayout(layout: GraphLayout, links: NoteGraphLink[])
   if (!graph.size) return arrangeGraphLayout(layout, { compact: true });
   const communities = louvain(graph, { randomWalk: false });
   const groups = new Map<number, Node[]>();
-  for (const n of sorted) { const key = communities[n.path]; const group = groups.get(key) || []; group.push(n); groups.set(key, group); }
+  for (const n of sorted) {
+    const key = communities[n.path];
+    const group = groups.get(key) || [];
+    group.push(n);
+    groups.set(key, group);
+  }
   const coarse = new UndirectedGraph();
   const groupLayouts = new Map<string, GraphLayout>();
   const center = { x: sorted.reduce((s, n) => s + n.x, 0) / sorted.length, y: sorted.reduce((s, n) => s + n.y, 0) / sorted.length };
   for (const [key, members] of groups) {
     const id = String(key), local = new UndirectedGraph(), pinned = members.filter(n => n.pinned);
-    const anchor = pinned.length ? { x: pinned.reduce((s,n) => s+n.x,0)/pinned.length, y: pinned.reduce((s,n) => s+n.y,0)/pinned.length } : center;
+    const anchor = pinned.length ? { x: pinned.reduce((s, n) => s + n.x, 0) / pinned.length, y: pinned.reduce((s, n) => s + n.y, 0) / pinned.length } : center;
     members.forEach((n, i) => {
       const angle = i * 2.399963229728653, radius = 40 * Math.sqrt(i + 1);
       local.addNode(n.path, { x: n.pinned ? n.x - anchor.x : Math.cos(angle) * radius, y: n.pinned ? n.y - anchor.y : Math.sin(angle) * radius, fixed: !!n.pinned });
     });
-    graph.forEachEdge((_edge, _attributes, a, b) => { if (local.hasNode(a) && local.hasNode(b)) local.addEdge(a, b); });
+    graph.forEachEdge((_edge, _attributes, a, b) => {
+      if (local.hasNode(a) && local.hasNode(b)) local.addEdge(a, b);
+    });
     if (local.size) forceAtlas2.assign(local, { iterations: 160, settings: { linLogMode: true, gravity: .1, scalingRatio: 12, slowDown: 2, barnesHutOptimize: local.order > 100 } });
     const arranged = arrangeGraphLayout({ nodes: members.map(n => ({ ...n, x: local.getNodeAttribute(n.path, 'x'), y: local.getNodeAttribute(n.path, 'y') })) });
     groupLayouts.set(id, arranged);
@@ -93,12 +108,14 @@ export function optimizeGraphLayout(layout: GraphLayout, links: NoteGraphLink[])
   });
   if (coarse.order > 1) forceAtlas2.assign(coarse, { iterations: 120, settings: { linLogMode: true, gravity: .05, scalingRatio: 50, barnesHutOptimize: coarse.order > 100 } });
   // Reserve each group's full rectangular footprint, including expanded cards.
-  const boxes = arrangeGraphLayout({ nodes: coarse.nodes().map(path => {
-    const local = groupLayouts.get(path)!.nodes;
-    const width = Math.max(...local.map(n => Math.abs(n.x) + dimensions(n)[0] / 2)) * 2 + 80;
-    const height = Math.max(...local.map(n => Math.abs(n.y) + dimensions(n)[1] / 2)) * 2 + 80;
-    return { path, x: coarse.getNodeAttribute(path, 'x'), y: coarse.getNodeAttribute(path, 'y'), width, height, expanded: true, pinned: coarse.getNodeAttribute(path, 'fixed') };
-  }) });
+  const boxes = arrangeGraphLayout({
+    nodes: coarse.nodes().map(path => {
+      const local = groupLayouts.get(path)!.nodes;
+      const width = Math.max(...local.map(n => Math.abs(n.x) + dimensions(n)[0] / 2)) * 2 + 80;
+      const height = Math.max(...local.map(n => Math.abs(n.y) + dimensions(n)[1] / 2)) * 2 + 80;
+      return { path, x: coarse.getNodeAttribute(path, 'x'), y: coarse.getNodeAttribute(path, 'y'), width, height, expanded: true, pinned: coarse.getNodeAttribute(path, 'fixed') };
+    }),
+  });
   const positions = new Map<string, Node>();
   for (const box of boxes.nodes) for (const node of groupLayouts.get(box.path)!.nodes) positions.set(node.path, { ...node, x: node.x + box.x, y: node.y + box.y });
   const result = arrangeGraphLayout({ nodes: layout.nodes.map(n => n.pinned ? { ...n } : positions.get(n.path)!) });

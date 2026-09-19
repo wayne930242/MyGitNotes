@@ -11,7 +11,10 @@ describe('primary action consistency', () => {
     const scan = (dir: string) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const file = path.join(dir, entry.name);
-        if (entry.isDirectory()) { scan(file); continue; }
+        if (entry.isDirectory()) {
+          scan(file);
+          continue;
+        }
         if (!file.endsWith('.tsx') || file.endsWith('.test.tsx')) continue;
         const text = fs.readFileSync(file, 'utf8');
         const source = parseSync(file, text);

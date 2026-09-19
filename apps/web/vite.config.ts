@@ -31,7 +31,9 @@ function readDevPorts(): DevPorts {
   try {
     const parsed = JSON.parse(fs.readFileSync(devPortsFile, 'utf-8'));
     return { serverPort: toPort(parsed.serverPort), serverPid: toPid(parsed.serverPid), webPort: toPort(parsed.webPort) };
-  } catch { return {}; }
+  } catch {
+    return {};
+  }
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -46,7 +48,9 @@ function isProcessAlive(pid: number): boolean {
 function writeDevPort(key: keyof DevPorts, port: number): void {
   const ports = readDevPorts();
   ports[key] = port;
-  try { fs.writeFileSync(devPortsFile, JSON.stringify(ports)); } catch {
+  try {
+    fs.writeFileSync(devPortsFile, JSON.stringify(ports));
+  } catch {
     // Best-effort dev convenience; the local-server falls back to its default origin allowlist.
   }
 }
@@ -82,24 +86,5 @@ function recordWebPort(): Plugin {
 export default defineConfig(async ({ command }) => {
   const apiTarget = `http://127.0.0.1:${command === 'serve' ? await resolveApiPort() : 4321}`;
 
-  return {
-    plugins: [react(), recordWebPort()],
-    server: {
-      port: toPort(Number(webPort)) ?? 5173,
-      proxy: {
-        '/api': {
-          target: apiTarget,
-          changeOrigin: true,
-        },
-        '/raw-assets': {
-          target: apiTarget,
-          changeOrigin: true,
-        },
-        '/r2-assets': {
-          target: apiTarget,
-          changeOrigin: true,
-        },
-      },
-    },
-  };
+  return { plugins: [react(), recordWebPort()], server: { port: toPort(Number(webPort)) ?? 5173, proxy: { '/api': { target: apiTarget, changeOrigin: true }, '/raw-assets': { target: apiTarget, changeOrigin: true }, '/r2-assets': { target: apiTarget, changeOrigin: true } } } };
 });

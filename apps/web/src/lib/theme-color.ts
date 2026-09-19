@@ -7,7 +7,10 @@ const cache = new Map<string, string>();
 export function themeColor(css: string): string {
   const root = document.documentElement;
   const key = `${root.getAttribute('data-theme')}:${root.getAttribute('data-theme-mode')}`;
-  if (key !== cacheKey) { cache.clear(); cacheKey = key; }
+  if (key !== cacheKey) {
+    cache.clear();
+    cacheKey = key;
+  }
   const cached = cache.get(css);
   if (cached) return cached;
   if (!probe) {

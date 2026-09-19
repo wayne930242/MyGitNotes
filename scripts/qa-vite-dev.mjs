@@ -34,13 +34,11 @@ async function waitUntilReady(base, deadline) {
 export async function startViteDevServer() {
   const port = await findFreePort();
   const base = `http://127.0.0.1:${port}`;
-  const child = spawn(path.join(webDir, 'node_modules/.bin/vite'), ['--port', String(port), '--host', '127.0.0.1', '--strictPort'], {
-    cwd: webDir,
-    env: { ...process.env, PORT: String(port) },
-    stdio: ['ignore', 'ignore', 'pipe'],
-  });
+  const child = spawn(path.join(webDir, 'node_modules/.bin/vite'), ['--port', String(port), '--host', '127.0.0.1', '--strictPort'], { cwd: webDir, env: { ...process.env, PORT: String(port) }, stdio: ['ignore', 'ignore', 'pipe'] });
   let stderr = '';
-  child.stderr.on('data', chunk => { stderr += chunk; });
+  child.stderr.on('data', chunk => {
+    stderr += chunk;
+  });
   const exited = new Promise((resolve, reject) => {
     child.once('exit', code => reject(new Error(`vite dev exited early (code ${code}): ${stderr}`)));
     child.once('error', reject);

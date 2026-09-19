@@ -32,8 +32,7 @@ describe('pathInFolder', () => {
 describe('filterTasksByFolder', () => {
   it('keeps only tasks whose note is in the folder or a subfolder', () => {
     const tasks = [task('example/projects/a.md'), task('example/projects/2026/b.md'), task('example/inbox/c.md')];
-    expect(filterTasksByFolder(tasks, 'example/projects').map(t => t.notePath))
-      .toEqual(['example/projects/a.md', 'example/projects/2026/b.md']);
+    expect(filterTasksByFolder(tasks, 'example/projects').map(t => t.notePath)).toEqual(['example/projects/a.md', 'example/projects/2026/b.md']);
   });
 });
 

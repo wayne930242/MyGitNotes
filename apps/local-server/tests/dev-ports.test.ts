@@ -11,10 +11,7 @@ afterEach(() => {
 
 it('ignores non-numeric or out-of-range port values from a corrupted or malicious discovery file', () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'dev-ports-'));
-  fs.writeFileSync(path.join(root, '.mygitnotes-dev-ports.json'), JSON.stringify({
-    serverPort: '4321@evil.com',
-    webPort: '1|.*',
-  }));
+  fs.writeFileSync(path.join(root, '.mygitnotes-dev-ports.json'), JSON.stringify({ serverPort: '4321@evil.com', webPort: '1|.*' }));
   expect(readDevPorts(root)).toEqual({ serverPort: undefined, webPort: undefined });
 });
 

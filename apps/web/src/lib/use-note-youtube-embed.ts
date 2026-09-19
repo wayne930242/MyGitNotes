@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { activateYouTubeEmbed, applyYouTubeDisplayMode, copyYouTubeUrl, isYouTubeDisplayMode, readYouTubeDisplayMode, rememberYouTubeDisplayMode, setYouTubeDisplayMode, YOUTUBE_MODE_EVENT, YOUTUBE_MODE_STORAGE_KEY } from './youtube-embed.js';
 
-type ElementRef = { readonly current: HTMLElement | null };
+type ElementRef = { readonly current: HTMLElement | null; };
 
 export function useNoteYouTubeEmbed(surfaceRef: ElementRef) {
   useEffect(() => {
@@ -14,7 +14,9 @@ export function useNoteYouTubeEmbed(surfaceRef: ElementRef) {
     const action = (target: EventTarget | null) => target instanceof Element ? target.closest<HTMLElement>('[data-youtube-mode-option], [data-youtube-copy], .note-youtube-poster') : null;
     const run = (target: HTMLElement) => {
       const mode = target.dataset.youtubeModeOption;
-      if (isYouTubeDisplayMode(mode)) setYouTubeDisplayMode(mode); else if (target.matches('[data-youtube-copy]')) void copyYouTubeUrl(target); else activateYouTubeEmbed(target);
+      if (isYouTubeDisplayMode(mode)) setYouTubeDisplayMode(mode);
+      else if (target.matches('[data-youtube-copy]')) void copyYouTubeUrl(target);
+      else activateYouTubeEmbed(target);
     };
 
     const onClick = (event: MouseEvent) => {
@@ -35,8 +37,16 @@ export function useNoteYouTubeEmbed(surfaceRef: ElementRef) {
         run(target);
       }
     };
-    const onMode = (event: Event) => { const mode = (event as CustomEvent).detail; if (isYouTubeDisplayMode(mode)) apply(mode); };
-    const onStorage = (event: StorageEvent) => { if (event.key === YOUTUBE_MODE_STORAGE_KEY && isYouTubeDisplayMode(event.newValue)) { rememberYouTubeDisplayMode(event.newValue); apply(event.newValue); } };
+    const onMode = (event: Event) => {
+      const mode = (event as CustomEvent).detail;
+      if (isYouTubeDisplayMode(mode)) apply(mode);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === YOUTUBE_MODE_STORAGE_KEY && isYouTubeDisplayMode(event.newValue)) {
+        rememberYouTubeDisplayMode(event.newValue);
+        apply(event.newValue);
+      }
+    };
 
     surface.addEventListener('click', onClick);
     surface.addEventListener('keydown', onKeyDown);

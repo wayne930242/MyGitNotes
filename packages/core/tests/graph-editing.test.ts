@@ -19,8 +19,7 @@ describe('graph editing contracts', () => {
     expect(insertNoteLink('A', 'notes/a.md', 'notes/a.md', 'A').content).toBe('A');
   });
   it('round trips graph lanes and layout while preserving old lanes', () => {
-    const page = { version: 2, rows: [{ id: 'old', name: 'Old', view: 'small', notebookId: 'n', kind: 'custom', items: [] },
-      { id: 'graph', name: 'Graph', view: 'graph', notebookId: 'n', kind: 'custom', items: [], graph: { nodes: [{ path: 'notes/a.md', x: 12, y: 20, width: 360, height: 300, expanded: true, pinned: true }] } }] };
+    const page = { version: 2, rows: [{ id: 'old', name: 'Old', view: 'small', notebookId: 'n', kind: 'custom', items: [] }, { id: 'graph', name: 'Graph', view: 'graph', notebookId: 'n', kind: 'custom', items: [], graph: { nodes: [{ path: 'notes/a.md', x: 12, y: 20, width: 360, height: 300, expanded: true, pinned: true }] } }] };
     expect(ScreenPageSchema.parse(page)).toEqual(page);
     expect(ScreenPageSchema.safeParse({ ...page, rows: [{ ...page.rows[1], graph: { nodes: [{ path: '../bad', x: Infinity, y: 0 }] } }] }).success).toBe(false);
   });

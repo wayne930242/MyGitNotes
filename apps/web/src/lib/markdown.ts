@@ -6,68 +6,7 @@ import { headingSlug, resolveWorkspaceHref } from './workspace-links.js';
 import { stripMdxImports, transformDirectives, transformMdxComponents } from './directives.js';
 import { DEFAULT_YOUTUBE_LABELS, type YouTubeDisplayMode, type YouTubeLabels } from './youtube-embed.js';
 
-export const DOMPURIFY_DIRECTIVE_CONFIG = {
-  ADD_TAGS: [
-    'iframe',
-    'details',
-    'summary',
-    'aside',
-    'section',
-    'article',
-    'header',
-    'footer',
-    'figure',
-    'figcaption',
-    'abbr',
-    'svg',
-    'path',
-    'circle',
-    'cite'
-  ],
-  ADD_ATTR: [
-    'allow',
-    'allowfullscreen',
-    'loading',
-    'data-video-id',
-    'data-start',
-    'data-youtube-mode',
-    'data-youtube-mode-option',
-    'data-youtube-session',
-    'data-youtube-source-url',
-    'data-youtube-copy',
-    'data-copy-label',
-    'data-copied-label',
-    'data-copy-failed-label',
-    'controls',
-    'preload',
-    'data-type',
-    'data-variant',
-    'data-stat',
-    'data-cols',
-    'data-col-span',
-    'data-direction',
-    'data-arrow',
-    'data-icon',
-    'data-qrcode',
-    'data-size',
-    'data-component-name',
-    'data-lucide',
-    'data-slide-index',
-    'data-vertical',
-    'data-label',
-    'data-card-type',
-    'open',
-    'aria-label',
-    'aria-hidden',
-    'style',
-    'viewBox',
-    'fill',
-    'stroke',
-    'stroke-width',
-    'stroke-linecap',
-    'stroke-linejoin'
-  ]
-};
+export const DOMPURIFY_DIRECTIVE_CONFIG = { ADD_TAGS: ['iframe', 'details', 'summary', 'aside', 'section', 'article', 'header', 'footer', 'figure', 'figcaption', 'abbr', 'svg', 'path', 'circle', 'cite'], ADD_ATTR: ['allow', 'allowfullscreen', 'loading', 'data-video-id', 'data-start', 'data-youtube-mode', 'data-youtube-mode-option', 'data-youtube-session', 'data-youtube-source-url', 'data-youtube-copy', 'data-copy-label', 'data-copied-label', 'data-copy-failed-label', 'controls', 'preload', 'data-type', 'data-variant', 'data-stat', 'data-cols', 'data-col-span', 'data-direction', 'data-arrow', 'data-icon', 'data-qrcode', 'data-size', 'data-component-name', 'data-lucide', 'data-slide-index', 'data-vertical', 'data-label', 'data-card-type', 'open', 'aria-label', 'aria-hidden', 'style', 'viewBox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'] };
 
 export function renderNote(content: string, notePath: string, tableLabel = 'Horizontally scrollable table (Alt + wheel)', youtubeLabels: YouTubeLabels = DEFAULT_YOUTUBE_LABELS): string {
   const isMdx = /\.mdx$/i.test(notePath);
@@ -96,11 +35,16 @@ export function renderNote(content: string, notePath: string, tableLabel = 'Hori
   for (const image of parsed.querySelectorAll('img')) {
     const src = image.getAttribute('src') || '';
     const r2Key = parseR2Reference(src);
-    if (r2Key !== null) { image.replaceWith(r2Preview(parsed, r2Key, notePath, image.getAttribute('alt') || '')); continue; }
+    if (r2Key !== null) {
+      image.replaceWith(r2Preview(parsed, r2Key, notePath, image.getAttribute('alt') || ''));
+      continue;
+    }
     const target = resolveWorkspaceHref(src, notePath);
     if (target && target.kind !== 'external') {
-      image.dataset.workspaceLink = src; image.dataset.sourcePath = notePath;
-      image.tabIndex = 0; image.setAttribute('role', 'button');
+      image.dataset.workspaceLink = src;
+      image.dataset.sourcePath = notePath;
+      image.tabIndex = 0;
+      image.setAttribute('role', 'button');
     }
     if (target?.kind === 'path') image.setAttribute('src', `/raw-assets/${target.path.split('/').map(encodeURIComponent).join('/')}`);
     else if (!target && !/^data:image\//i.test(src)) image.remove();
@@ -125,27 +69,66 @@ export function renderNote(content: string, notePath: string, tableLabel = 'Hori
   for (const [index, embed] of youtubeEmbeds.entries()) {
     embed.dataset.youtubeSession = `${notePath}:${index}:${embed.dataset.videoId}:${embed.dataset.start}`;
     embed.dataset.youtubeMode = 'thumbnail';
-    const toolbar = parsed.createElement('div'); toolbar.className = 'note-youtube-mode-control'; toolbar.setAttribute('role', 'group'); toolbar.setAttribute('aria-label', youtubeLabels.modes);
+    const toolbar = parsed.createElement('div');
+    toolbar.className = 'note-youtube-mode-control';
+    toolbar.setAttribute('role', 'group');
+    toolbar.setAttribute('aria-label', youtubeLabels.modes);
     for (const [mode, label] of [['thumbnail', youtubeLabels.thumbnail], ['medium', youtubeLabels.medium], ['theater', youtubeLabels.theater]] as [YouTubeDisplayMode, string][]) {
-      const control = parsed.createElement('button'); control.setAttribute('type', 'button'); control.dataset.youtubeModeOption = mode; control.textContent = label; control.setAttribute('title', label); control.setAttribute('aria-label', label); control.setAttribute('aria-pressed', String(mode === 'thumbnail')); toolbar.append(control);
+      const control = parsed.createElement('button');
+      control.setAttribute('type', 'button');
+      control.dataset.youtubeModeOption = mode;
+      control.textContent = label;
+      control.setAttribute('title', label);
+      control.setAttribute('aria-label', label);
+      control.setAttribute('aria-pressed', String(mode === 'thumbnail'));
+      toolbar.append(control);
     }
-    const copy = parsed.createElement('button'); copy.setAttribute('type', 'button'); copy.className = 'note-youtube-copy'; copy.dataset.youtubeCopy = ''; copy.dataset.copyLabel = youtubeLabels.copy; copy.dataset.copiedLabel = youtubeLabels.copied; copy.dataset.copyFailedLabel = youtubeLabels.copyFailed; copy.setAttribute('aria-label', youtubeLabels.copy); copy.setAttribute('title', youtubeLabels.copy); copy.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>'; toolbar.append(copy);
-    const poster = parsed.createElement('button'); poster.setAttribute('type', 'button'); poster.className = 'note-youtube-poster'; poster.setAttribute('aria-label', youtubeLabels.play); poster.dataset.youtubePlayerLabel = youtubeLabels.player;
-    const image = parsed.createElement('img'); image.setAttribute('src', `https://img.youtube.com/vi/${encodeURIComponent(embed.dataset.videoId || '')}/hqdefault.jpg`); image.setAttribute('alt', ''); image.setAttribute('loading', 'lazy');
-    const play = parsed.createElement('span'); play.className = 'note-youtube-play-btn'; play.setAttribute('aria-hidden', 'true'); play.innerHTML = '<svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>';
-    poster.append(image); poster.append(play); embed.append(toolbar); embed.append(poster);
+    const copy = parsed.createElement('button');
+    copy.setAttribute('type', 'button');
+    copy.className = 'note-youtube-copy';
+    copy.dataset.youtubeCopy = '';
+    copy.dataset.copyLabel = youtubeLabels.copy;
+    copy.dataset.copiedLabel = youtubeLabels.copied;
+    copy.dataset.copyFailedLabel = youtubeLabels.copyFailed;
+    copy.setAttribute('aria-label', youtubeLabels.copy);
+    copy.setAttribute('title', youtubeLabels.copy);
+    copy.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+    toolbar.append(copy);
+    const poster = parsed.createElement('button');
+    poster.setAttribute('type', 'button');
+    poster.className = 'note-youtube-poster';
+    poster.setAttribute('aria-label', youtubeLabels.play);
+    poster.dataset.youtubePlayerLabel = youtubeLabels.player;
+    const image = parsed.createElement('img');
+    image.setAttribute('src', `https://img.youtube.com/vi/${encodeURIComponent(embed.dataset.videoId || '')}/hqdefault.jpg`);
+    image.setAttribute('alt', '');
+    image.setAttribute('loading', 'lazy');
+    const play = parsed.createElement('span');
+    play.className = 'note-youtube-play-btn';
+    play.setAttribute('aria-hidden', 'true');
+    play.innerHTML = '<svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>';
+    poster.append(image);
+    poster.append(play);
+    embed.append(toolbar);
+    embed.append(poster);
   }
   for (const link of parsed.querySelectorAll('a')) {
     const href = link.getAttribute('href') || '';
     if (href.startsWith('/r2-assets/')) continue;
     const r2Key = parseR2Reference(href);
     if (r2Key !== null) {
-      link.setAttribute('href', r2AssetUrl(r2Key, notePath)); link.setAttribute('target', '_blank'); link.setAttribute('rel', 'noopener noreferrer');
+      link.setAttribute('href', r2AssetUrl(r2Key, notePath));
+      link.setAttribute('target', '_blank');
+      link.setAttribute('rel', 'noopener noreferrer');
       continue;
     }
     const target = resolveWorkspaceHref(href, notePath, undefined, typeof window !== 'undefined' ? window.location.origin : undefined);
-    if (!target) { link.removeAttribute('href'); continue; }
-    link.dataset.workspaceLink = href; link.dataset.sourcePath = notePath;
+    if (!target) {
+      link.removeAttribute('href');
+      continue;
+    }
+    link.dataset.workspaceLink = href;
+    link.dataset.sourcePath = notePath;
     link.setAttribute('rel', 'noopener noreferrer');
     if (target.kind === 'external') link.setAttribute('target', '_blank');
   }
@@ -161,7 +144,9 @@ function r2Preview(doc: Document, key: string, notePath: string, label: string):
   if (kind === 'file') {
     const link = doc.createElement('a');
     link.className = 'note-r2-file-link';
-    link.setAttribute('href', url); link.setAttribute('target', '_blank'); link.setAttribute('rel', 'noopener noreferrer');
+    link.setAttribute('href', url);
+    link.setAttribute('target', '_blank');
+    link.setAttribute('rel', 'noopener noreferrer');
     const icon = doc.createElement('span');
     icon.className = 'note-r2-file-icon';
     icon.textContent = '📎';
@@ -171,18 +156,29 @@ function r2Preview(doc: Document, key: string, notePath: string, label: string):
     const badge = doc.createElement('span');
     badge.className = 'note-r2-file-badge';
     badge.textContent = 'R2';
-    link.append(icon); link.append(text); link.append(badge);
+    link.append(icon);
+    link.append(text);
+    link.append(badge);
     figure.append(link);
     return figure;
   }
   const media = doc.createElement(kind === 'pdf' ? 'iframe' : kind === 'image' ? 'img' : kind);
   media.setAttribute('src', url);
-  if (kind === 'pdf') { media.setAttribute('title', name); media.setAttribute('loading', 'lazy'); }
-  else if (kind === 'image') { media.setAttribute('alt', label); media.setAttribute('loading', 'lazy'); }
-  else { media.setAttribute('controls', ''); media.setAttribute('preload', 'metadata'); }
+  if (kind === 'pdf') {
+    media.setAttribute('title', name);
+    media.setAttribute('loading', 'lazy');
+  } else if (kind === 'image') {
+    media.setAttribute('alt', label);
+    media.setAttribute('loading', 'lazy');
+  } else {
+    media.setAttribute('controls', '');
+    media.setAttribute('preload', 'metadata');
+  }
   const caption = doc.createElement('figcaption');
   const open = doc.createElement('a');
-  open.setAttribute('href', url); open.setAttribute('target', '_blank'); open.setAttribute('rel', 'noopener noreferrer');
+  open.setAttribute('href', url);
+  open.setAttribute('target', '_blank');
+  open.setAttribute('rel', 'noopener noreferrer');
   open.textContent = name;
   const extIcon = doc.createElement('span');
   extIcon.className = 'note-r2-ext-icon';

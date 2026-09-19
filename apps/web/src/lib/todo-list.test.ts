@@ -8,10 +8,7 @@ function note(path: string, content: string): NoteItem {
 
 describe('extractTodoTasks', () => {
   it('pulls every task line out of the notes, ignoring non-task lines', () => {
-    const notes = [
-      note('a.md', '# Title\n\n- [ ] First 📅 2026-09-20\nNot a task\n- [x] Second ✅ 2026-09-10\n'),
-      note('b.md', '- [ ] Third\n'),
-    ];
+    const notes = [note('a.md', '# Title\n\n- [ ] First 📅 2026-09-20\nNot a task\n- [x] Second ✅ 2026-09-10\n'), note('b.md', '- [ ] Third\n')];
     const tasks = extractTodoTasks(notes);
     expect(tasks).toHaveLength(3);
     expect(tasks[0]).toMatchObject({ notePath: 'a.md', lineIndex: 2, checked: false, due: '2026-09-20' });
@@ -31,12 +28,7 @@ describe('groupTodoTasks', () => {
   });
 
   it('groups open tasks by overdue/today/upcoming/no date', () => {
-    const notes = [note('a.md', [
-      '- [ ] Overdue 📅 2026-09-10',
-      '- [ ] Due today 📅 2026-09-15',
-      '- [ ] Upcoming 📅 2026-09-20',
-      '- [ ] No date',
-    ].join('\n'))];
+    const notes = [note('a.md', ['- [ ] Overdue 📅 2026-09-10', '- [ ] Due today 📅 2026-09-15', '- [ ] Upcoming 📅 2026-09-20', '- [ ] No date'].join('\n'))];
     const groups = groupTodoTasks(extractTodoTasks(notes), today);
     expect(groups.overdue.map(t => t.lineText)).toEqual(['- [ ] Overdue 📅 2026-09-10']);
     expect(groups.today.map(t => t.lineText)).toEqual(['- [ ] Due today 📅 2026-09-15']);

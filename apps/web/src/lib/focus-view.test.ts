@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FocusLayout, FocusTab } from '@mygitnotes/core/focus-page';
-import {
-  CURRENT_FOCUS, activatePane, browseTarget, displayedPanes, emptyFocusView, entryView, groupShown,
-  readFocusView, showTab, shownAfterClose, sideTarget, type FocusEntryView, type FocusViewState,
-} from './focus-view.js';
+import { activatePane, browseTarget, CURRENT_FOCUS, displayedPanes, emptyFocusView, entryView, type FocusEntryView, type FocusViewState, groupShown, readFocusView, shownAfterClose, showTab, sideTarget } from './focus-view.js';
 
 const note = (path: string): FocusTab => ({ kind: 'note', path });
 const lane = (id: string): FocusTab => ({ kind: 'lane', id });
@@ -14,10 +11,7 @@ const state = (overrides: Partial<FocusViewState> = {}): FocusViewState => ({ ..
 
 describe('emptyFocusView', () => {
   it('starts with a single empty pane and default dock sizes', () => {
-    expect(emptyFocusView()).toEqual({
-      current: { division: 'single', panes: [{ tabs: [] }] },
-      entries: {}, last: null, dock: { left: 320, top: 280, collapsed: false },
-    });
+    expect(emptyFocusView()).toEqual({ current: { division: 'single', panes: [{ tabs: [] }] }, entries: {}, last: null, dock: { left: 320, top: 280, collapsed: false } });
   });
 });
 
@@ -35,17 +29,7 @@ describe('readFocusView', () => {
   });
   it('drops individually invalid entries and keeps valid ones', () => {
     const valid = entry({ activePane: 1, shown: ['note:a.md', null], recent: [1, 0], ratios: { g: [50, 50] } });
-    const raw = {
-      entries: {
-        good: valid,
-        notAnObject: 42,
-        badActivePane: { ...valid, activePane: 'x' },
-        badShown: { ...valid, shown: [1, 2] },
-        badRecent: { ...valid, recent: ['x'] },
-        badRatios: { ...valid, ratios: { g: ['x'] } },
-        badAutoHide: { ...valid, autoHide: ['yes'] },
-      },
-    };
+    const raw = { entries: { good: valid, notAnObject: 42, badActivePane: { ...valid, activePane: 'x' }, badShown: { ...valid, shown: [1, 2] }, badRecent: { ...valid, recent: ['x'] }, badRatios: { ...valid, ratios: { g: ['x'] } }, badAutoHide: { ...valid, autoHide: ['yes'] } } };
     expect(readFocusView(raw).entries).toEqual({ good: valid });
   });
   it('reads an entry stored without autoHide as having none', () => {
@@ -77,9 +61,7 @@ describe('readFocusView', () => {
 describe('entryView', () => {
   const twoPane = layout('columns-2', pane(note('a.md'), note('b.md')), pane(lane('l1')));
   it('normalizes a fresh key against the layout', () => {
-    expect(entryView(state(), 'missing', twoPane)).toEqual({
-      activePane: 0, shown: ['note:a.md', 'lane:l1'], recent: [0, 1], ratios: {}, autoHide: [false, false],
-    });
+    expect(entryView(state(), 'missing', twoPane)).toEqual({ activePane: 0, shown: ['note:a.md', 'lane:l1'], recent: [0, 1], ratios: {}, autoHide: [false, false] });
   });
   it('falls back to the first tab when the stored shown key is stale', () => {
     const stored = entry({ shown: ['note:gone.md', 'lane:gone'] });
@@ -188,9 +170,7 @@ describe('displayedPanes', () => {
     expect(displayedPanes(entry({ shown }), grid, 4)).toEqual({ division: 'grid-2x2', panes: [0, 1, 2, 3].map(index => ({ panes: [index], pane: index, key: shown[index] })) });
   });
   it('folds the extra panes into the second pane and follows the active pane', () => {
-    expect(displayedPanes(entry({ shown, activePane: 3 }), grid, 2)).toEqual({ division: 'columns-2', panes: [
-      { panes: [0], pane: 0, key: 'note:a.md' }, { panes: [1, 2, 3], pane: 3, key: 'note:d.md' },
-    ] });
+    expect(displayedPanes(entry({ shown, activePane: 3 }), grid, 2)).toEqual({ division: 'columns-2', panes: [{ panes: [0], pane: 0, key: 'note:a.md' }, { panes: [1, 2, 3], pane: 3, key: 'note:d.md' }] });
   });
   it('shows one pane on a phone', () => {
     expect(displayedPanes(entry({ shown, activePane: 2 }), grid, 1)).toEqual({ division: 'single', panes: [{ panes: [0, 1, 2, 3], pane: 2, key: 'note:c.md' }] });

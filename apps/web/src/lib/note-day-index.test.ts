@@ -30,10 +30,7 @@ function formattedLocalDay(iso: string): string {
 describe('buildDayCounts', () => {
   it('counts created, updated, and due independently per day', () => {
     const day = formattedLocalDay('2026-09-15T10:00:00.000Z');
-    const notes = [
-      note('a', { created: '2026-09-15T10:00:00.000Z', updated: '2026-09-15T12:00:00.000Z' }),
-      note('b', { created: '2026-09-10T10:00:00.000Z', updated: '2026-09-15T09:00:00.000Z' }),
-    ];
+    const notes = [note('a', { created: '2026-09-15T10:00:00.000Z', updated: '2026-09-15T12:00:00.000Z' }), note('b', { created: '2026-09-10T10:00:00.000Z', updated: '2026-09-15T09:00:00.000Z' })];
     const tasks = [task('t1', day), task('t2', day, true)];
     const counts = buildDayCounts(notes, tasks);
     expect(counts.get(day)).toEqual({ created: 1, updated: 2, due: 2 });
@@ -55,12 +52,7 @@ describe('notesForDay / tasksForDay', () => {
 describe('notesForMonth / tasksForMonth', () => {
   it('filters notes and tasks to the given year/month regardless of day', () => {
     // Times are kept well clear of local midnight so this holds regardless of the runner's timezone.
-    const notes = [
-      note('a', { created: '2026-09-01T12:00:00.000Z' }),
-      note('b', { created: '2026-09-30T12:00:00.000Z' }),
-      note('c', { created: '2026-10-01T12:00:00.000Z' }),
-      note('d', { created: '2025-09-15T12:00:00.000Z' }),
-    ];
+    const notes = [note('a', { created: '2026-09-01T12:00:00.000Z' }), note('b', { created: '2026-09-30T12:00:00.000Z' }), note('c', { created: '2026-10-01T12:00:00.000Z' }), note('d', { created: '2025-09-15T12:00:00.000Z' })];
     expect(notesForMonth(notes, 2026, 8, 'created').map(n => n.path).sort()).toEqual(['a', 'b']);
 
     const tasks = [task('t1', '2026-09-05'), task('t2', '2026-10-01'), task('t3', undefined)];

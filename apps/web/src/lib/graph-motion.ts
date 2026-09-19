@@ -5,6 +5,6 @@ export function graphMotionProgress(elapsed: number, duration = GRAPH_RELAX_DURA
   return t * t * (3 - 2 * t);
 }
 
-export function interpolateGraphPosition(from: { x: number; y: number }, to: { x: number; y: number }, progress: number) {
+export function interpolateGraphPosition(from: { x: number; y: number; }, to: { x: number; y: number; }, progress: number) {
   return { x: from.x + (to.x - from.x) * progress, y: from.y + (to.y - from.y) * progress };
 }

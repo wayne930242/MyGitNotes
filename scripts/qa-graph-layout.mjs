@@ -14,7 +14,10 @@ const puppeteer = require('puppeteer-core'), { stringify, parse } = require('yam
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'notes-layout-'));
 const output = path.join(product, 'artifacts/qa');
 fs.mkdirSync(output, { recursive: true });
-const write = (name, content) => { fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true }); fs.writeFileSync(path.join(root, name), content); };
+const write = (name, content) => {
+  fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
+  fs.writeFileSync(path.join(root, name), content);
+};
 const nodes = Array.from({ length: 8 }, (_, i) => ({ path: `notes/a/${i}.md`, x: (i % 2) * 800, y: Math.floor(i / 2) * 300, pinned: i === 0 }));
 const edges = [0, 4].flatMap(start => Array.from({ length: 4 }, (_, i) => Array.from({ length: i }, (_, j) => [start + i, start + j])).flat());
 edges.push([3, 4]);
@@ -22,9 +25,13 @@ write('.github-notes.yaml', stringify({ schema_version: 1, workspace: { title: '
 for (let i = 0; i < nodes.length; i++) write(nodes[i].path, `---\ntitle: ${i < 4 ? '哲學' : '劇本'} ${i}\n---\n${edges.filter(([a]) => a === i).map(([, b]) => `[筆記 ${b}](${b}.md)`).join('\n')}\n`);
 write('.github-notes-screen.yaml', stringify({ version: 1, rows: [{ id: 'layout', name: '群聚佈局', kind: 'custom', view: 'graph', items: nodes.map((n, i) => ({ id: `n${i}`, kind: 'note', path: n.path, notebookId: 'a' })), graph: { nodes } }] }));
 for (const args of [['init', '-b', 'main'], ['config', 'user.name', 'Graph QA'], ['config', 'user.email', 'qa@example.com'], ['add', '.'], ['commit', '-m', 'fixture']]) execFileSync('git', args, { cwd: root, stdio: 'pipe' });
-process.env.MYGITNOTES_SOURCE = 'local'; process.env.MYGITNOTES_LOCAL_PATH = root; delete process.env.VERCEL; delete process.env.APP_URL;
+process.env.MYGITNOTES_SOURCE = 'local';
+process.env.MYGITNOTES_LOCAL_PATH = root;
+delete process.env.VERCEL;
+delete process.env.APP_URL;
 const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
-const server = createServer(createApp(product)); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+const server = createServer(createApp(product));
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
 const browser = await puppeteer.launch({ executablePath: resolveQaChromePath('GRAPH_QA_CHROME'), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const page = await browser.newPage(), errors = [];
@@ -36,13 +43,15 @@ function metrics(layout) {
   const ordered = nodes.map(n => layout.find(item => item.path === n.path));
   const turn = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
   let crossings = 0;
-  for (let i = 0; i < edges.length; i++) for (let j = i + 1; j < edges.length; j++) {
-    const [ai, bi] = edges[i], [ci, di] = edges[j];
-    if (new Set([ai, bi, ci, di]).size < 4) continue;
-    const [a,b,c,d] = [ai,bi,ci,di].map(k => ordered[k]);
-    if (turn(a,b,c)*turn(a,b,d) < 0 && turn(c,d,a)*turn(c,d,b) < 0) crossings++;
+  for (let i = 0; i < edges.length; i++) {
+    for (let j = i + 1; j < edges.length; j++) {
+      const [ai, bi] = edges[i], [ci, di] = edges[j];
+      if (new Set([ai, bi, ci, di]).size < 4) continue;
+      const [a, b, c, d] = [ai, bi, ci, di].map(k => ordered[k]);
+      if (turn(a, b, c) * turn(a, b, d) < 0 && turn(c, d, a) * turn(c, d, b) < 0) crossings++;
+    }
   }
-  const meanWithinGroup = edges.slice(0, -1).reduce((sum, [a,b]) => sum + Math.hypot(ordered[a].x - ordered[b].x, ordered[a].y - ordered[b].y), 0) / (edges.length - 1);
+  const meanWithinGroup = edges.slice(0, -1).reduce((sum, [a, b]) => sum + Math.hypot(ordered[a].x - ordered[b].x, ordered[a].y - ordered[b].y), 0) / (edges.length - 1);
   return { crossings, meanWithinGroup };
 }
 try {
@@ -54,7 +63,8 @@ try {
   const elapsedMs = performance.now() - start;
   await page.click('button[aria-label="Choose or edit a swimlane"]');
   const saved = page.waitForResponse(response => response.url().endsWith('/api/screen-page') && response.request().method() === 'PUT');
-  await page.click('.graph-save-lane'); await saved;
+  await page.click('.graph-save-lane');
+  await saved;
   const arranged = read(), before = metrics(nodes), after = metrics(arranged);
   assert(after.crossings < before.crossings, JSON.stringify({ before, after }));
   assert(after.meanWithinGroup < before.meanWithinGroup * .6);
@@ -93,5 +103,9 @@ try {
   fs.writeFileSync(`${output}/graph-layout-result.json`, JSON.stringify(result, null, 2));
   console.log('PASS', JSON.stringify(result));
 } catch (error) {
-  await page.screenshot({ path: `${output}/graph-layout-failure.png` }); throw error;
-} finally { await browser.close(); server.close(); }
+  await page.screenshot({ path: `${output}/graph-layout-failure.png` });
+  throw error;
+} finally {
+  await browser.close();
+  server.close();
+}

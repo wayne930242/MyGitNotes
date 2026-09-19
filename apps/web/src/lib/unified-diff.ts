@@ -14,13 +14,7 @@ interface DiffHunk {
  * Generates a unified diff string between old and new text.
  * Returns an empty string if there are no differences.
  */
-export function createUnifiedDiff(
-  oldPath: string,
-  newPath: string,
-  oldStr: string | null | undefined,
-  newStr: string | null | undefined,
-  options?: UnifiedDiffOptions
-): string {
+export function createUnifiedDiff(oldPath: string, newPath: string, oldStr: string | null | undefined, newStr: string | null | undefined, options?: UnifiedDiffOptions): string {
   if (oldStr === newStr) return '';
   // Retain terminators so a final-newline change is compared as part of its line.
   const splitLines = (text: string | null | undefined) => text?.match(/[^\n]*\n|[^\n]+$/g) ?? [];
@@ -42,11 +36,7 @@ export function createUnifiedDiff(
     const len1 = change.buffer1[1];
 
     if (!currentHunk) {
-      currentHunk = {
-        changes: [change],
-        oldStart: Math.max(0, s1 - context),
-        oldEnd: Math.min(oldLines.length, s1 + len1 + context),
-      };
+      currentHunk = { changes: [change], oldStart: Math.max(0, s1 - context), oldEnd: Math.min(oldLines.length, s1 + len1 + context) };
     } else {
       const nextOldStart = Math.max(0, s1 - context);
       if (nextOldStart <= currentHunk.oldEnd) {
@@ -54,11 +44,7 @@ export function createUnifiedDiff(
         currentHunk.oldEnd = Math.min(oldLines.length, s1 + len1 + context);
       } else {
         hunks.push(currentHunk);
-        currentHunk = {
-          changes: [change],
-          oldStart: Math.max(0, s1 - context),
-          oldEnd: Math.min(oldLines.length, s1 + len1 + context),
-        };
+        currentHunk = { changes: [change], oldStart: Math.max(0, s1 - context), oldEnd: Math.min(oldLines.length, s1 + len1 + context) };
       }
     }
   }

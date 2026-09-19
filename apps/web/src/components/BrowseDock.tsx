@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Group, Panel, Separator, type PanelSize } from 'react-resizable-panels';
+import React, { type ReactNode, useEffect, useRef, useState } from 'react';
+import { Group, Panel, type PanelSize, Separator } from 'react-resizable-panels';
 import { PanelLeftClose, PanelTopClose } from 'lucide-react';
 import { useTranslation } from '../lib/i18n/index.js';
 import './browse-dock.css';
@@ -56,49 +56,32 @@ function useMeasuredHeight(): [React.RefObject<HTMLDivElement>, number] {
 }
 
 /** Collapses and reopens the browse region from the Notes toolbar's left end. */
-export function BrowseDockToggle({ placement, collapsed, onCollapsedChange }: { placement: BrowseDockPlacement; collapsed: boolean; onCollapsedChange: (collapsed: boolean) => void }): JSX.Element {
+export function BrowseDockToggle({ placement, collapsed, onCollapsedChange }: { placement: BrowseDockPlacement; collapsed: boolean; onCollapsedChange: (collapsed: boolean) => void; }): JSX.Element {
   const { t } = useTranslation();
   // The browse region sits left of or above the Focus; browse-dock.css turns the icon's arrow as it collapses.
   const Icon = placement === 'left' ? PanelLeftClose : PanelTopClose;
   const label = t(collapsed ? 'focus.expandBrowse' : 'focus.collapseBrowse');
   return (
-    <button type="button" className="ui-icon-button browse-dock-toggle" data-collapsed={collapsed || undefined} aria-label={label} title={label} onClick={() => onCollapsedChange(!collapsed)}>
+    <button type='button' className='ui-icon-button browse-dock-toggle' data-collapsed={collapsed || undefined} aria-label={label} title={label} onClick={() => onCollapsedChange(!collapsed)}>
       <Icon size={16} />
     </button>
   );
 }
 
-export function BrowseDock({
-  placement,
-  size,
-  onSizeChange,
-  collapsed,
-  narrow,
-  narrowView,
-  browse,
-  children,
-}: BrowseDockProps): JSX.Element {
+export function BrowseDock({ placement, size, onSizeChange, collapsed, narrow, narrowView, browse, children }: BrowseDockProps): JSX.Element {
   const [scrollRef, height] = useMeasuredHeight();
   const browseContent = typeof browse === 'function' ? browse(height) : browse;
   // Reported continuously while dragging; onSizeChange only fires once the drag settles.
   const lastResizePx = useRef(size);
 
   if (narrow) {
-    return (
-      <div className="browse-dock" data-placement={placement} data-narrow="true">
-        {narrowView === 'browse' ? (
-          <div ref={scrollRef} className="workspace-scroll browse-dock-scroll">{browseContent}</div>
-        ) : (
-          <div className="browse-dock-focus">{children}</div>
-        )}
-      </div>
-    );
+    return <div className='browse-dock' data-placement={placement} data-narrow='true'>{narrowView === 'browse' ? <div ref={scrollRef} className='workspace-scroll browse-dock-scroll'>{browseContent}</div> : <div className='browse-dock-focus'>{children}</div>}</div>;
   }
 
   if (collapsed) {
     return (
-      <div className="browse-dock" data-placement={placement} data-collapsed="true">
-        <div className="browse-dock-focus">{children}</div>
+      <div className='browse-dock' data-placement={placement} data-collapsed='true'>
+        <div className='browse-dock-focus'>{children}</div>
       </div>
     );
   }
@@ -110,12 +93,12 @@ export function BrowseDock({
   const groupId = `browse-dock-${placement}`;
 
   return (
-    <div className="browse-dock" data-placement={placement}>
+    <div className='browse-dock' data-placement={placement}>
       <Group
         key={groupId}
         id={groupId}
         orientation={orientation}
-        className="browse-dock-group"
+        className='browse-dock-group'
         onLayoutChanged={(_layout, meta) => {
           if (meta.isUserInteraction) onSizeChange(lastResizePx.current);
         }}
@@ -125,23 +108,19 @@ export function BrowseDock({
           defaultSize={`${size}px`}
           minSize={`${minSize}px`}
           maxSize={`${Math.round(maxRatio * 100)}%`}
-          groupResizeBehavior="preserve-pixel-size"
+          groupResizeBehavior='preserve-pixel-size'
           onResize={(panelSize: PanelSize) => {
             if (panelSize?.inPixels) lastResizePx.current = Math.round(panelSize.inPixels);
           }}
-          className="browse-dock-panel"
+          className='browse-dock-panel'
         >
-          <div className="browse-dock-panel-content">
-            <div ref={scrollRef} className="workspace-scroll browse-dock-scroll">{browseContent}</div>
+          <div className='browse-dock-panel-content'>
+            <div ref={scrollRef} className='workspace-scroll browse-dock-scroll'>{browseContent}</div>
           </div>
         </Panel>
-        <Separator className="workspace-splitter browse-dock-splitter" />
-        <Panel
-          id={`${groupId}-focus`}
-          groupResizeBehavior="preserve-relative-size"
-          className="browse-dock-focus-panel"
-        >
-          <div className="browse-dock-focus">{children}</div>
+        <Separator className='workspace-splitter browse-dock-splitter' />
+        <Panel id={`${groupId}-focus`} groupResizeBehavior='preserve-relative-size' className='browse-dock-focus-panel'>
+          <div className='browse-dock-focus'>{children}</div>
         </Panel>
       </Group>
     </div>

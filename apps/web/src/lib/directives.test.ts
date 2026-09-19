@@ -1,16 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DIRECTIVE_TEMPLATES,
-  findDirectiveBlocks,
-  parseDirectiveAttributes,
-  parseDirectiveModel,
-  parseDirectiveTitle,
-  stripMdxImports,
-  transformDirectives,
-  transformMdxComponents,
-  updateDirectiveType,
-  updateDirectiveVariant,
-} from './directives.js';
+import { DIRECTIVE_TEMPLATES, findDirectiveBlocks, parseDirectiveAttributes, parseDirectiveModel, parseDirectiveTitle, stripMdxImports, transformDirectives, transformMdxComponents, updateDirectiveType, updateDirectiveVariant } from './directives.js';
 
 describe('directive templates', () => {
   it('uses domain-neutral labels and starter content in the notes editor', () => {
@@ -29,7 +18,7 @@ describe('directives and MDX Layer 2 preprocessor', () => {
       const output = stripMdxImports(input);
       expect(output).not.toContain('import YouTubeEmbed');
       expect(output).not.toContain('import { Card }');
-      expect(output).not.toContain('import \'some-style.css\'');
+      expect(output).not.toContain("import 'some-style.css'");
       expect(output).toContain('# Heading');
       expect(output).toContain('Paragraph text.');
     });

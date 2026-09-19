@@ -1,10 +1,7 @@
 import { expect, it } from 'vitest';
 import { initializeGraphLayout } from './graph-initial-layout.js';
 
-const graph = {
-  nodes: Array.from({ length: 6 }, (_, i) => ({ id: String(i), title: String(i), notebookId: 'a', tags: [], inDegree: 0, outDegree: 0, val: 3 })),
-  links: [{ source: '0', target: '1' }, { source: '1', target: '2' }, { source: '3', target: '4' }, { source: '4', target: '5' }],
-};
+const graph = { nodes: Array.from({ length: 6 }, (_, i) => ({ id: String(i), title: String(i), notebookId: 'a', tags: [], inDegree: 0, outDegree: 0, val: 3 })), links: [{ source: '0', target: '1' }, { source: '1', target: '2' }, { source: '3', target: '4' }, { source: '4', target: '5' }] };
 it('computes a separated, deterministic layout before the renderer starts', () => {
   const result = initializeGraphLayout(graph, { nodes: [] });
   expect(new Set(result.nodes.map(n => `${n.x},${n.y}`)).size).toBe(6);

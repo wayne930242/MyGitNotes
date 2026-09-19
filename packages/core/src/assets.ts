@@ -11,10 +11,11 @@ export function assetInfo(file: string, root: string, hash: string, size: number
   const name = path.posix.basename(file);
   const relative = file.slice(root.length + 1);
   const rawUrl = `/raw-assets/by-hash/${hash}`;
-  return { name, path: file, directory: path.posix.dirname(relative) === '.' ? '' : path.posix.dirname(relative), hash, size, mtime, rawUrl,
-    markdownRef: `![${name.replace(/[\\[\]]/g, '\\$&')}](${rawUrl})` };
+  return { name, path: file, directory: path.posix.dirname(relative) === '.' ? '' : path.posix.dirname(relative), hash, size, mtime, rawUrl, markdownRef: `![${name.replace(/[\\[\]]/g, '\\$&')}](${rawUrl})` };
 }
-export function assetRoot(nb: NotebookConfig) { return `${nb.root}/${nb.assets || 'assets'}`; }
+export function assetRoot(nb: NotebookConfig) {
+  return `${nb.root}/${nb.assets || 'assets'}`;
+}
 export function assetPath(nb: NotebookConfig, directory: unknown, filename: unknown) {
   if (typeof directory !== 'string' || directory.includes('\\') || directory.includes('\0') || (directory && directory.split('/').some(p => !p || p.startsWith('.')))) throw new Error('Use a folder path relative to the notebook assets directory.');
   if (typeof filename !== 'string' || !filename || filename.startsWith('.') || /[/\\\0]/.test(filename)) throw new Error('Use a filename without path segments.');
@@ -43,14 +44,21 @@ export function scanAssets(repoRoot: string, nb: NotebookConfig) {
       const file = relative + '/' + entry.name;
       if (entry.isDirectory()) visit(file);
       else if (entry.isFile()) {
-        const target = resolveSafePath(repoRoot, file); const stat = fs.statSync(target);
+        const target = resolveSafePath(repoRoot, file);
+        const stat = fs.statSync(target);
         const hash = crypto.createHash('sha1').update(`blob ${stat.size}\0`);
-        const fd = fs.openSync(target, 'r'); const buffer = Buffer.alloc(65536);
-        try { let count: number; while ((count = fs.readSync(fd, buffer, 0, buffer.length, null))) hash.update(buffer.subarray(0, count)); }
-        finally { fs.closeSync(fd); }
+        const fd = fs.openSync(target, 'r');
+        const buffer = Buffer.alloc(65536);
+        try {
+          let count: number;
+          while ((count = fs.readSync(fd, buffer, 0, buffer.length, null))) hash.update(buffer.subarray(0, count));
+        } finally {
+          fs.closeSync(fd);
+        }
         result.push(assetInfo(file, root, hash.digest('hex'), stat.size, stat.mtimeMs));
       }
     }
   };
-  visit(root); return result.sort((a,b) => a.path.localeCompare(b.path));
+  visit(root);
+  return result.sort((a, b) => a.path.localeCompare(b.path));
 }

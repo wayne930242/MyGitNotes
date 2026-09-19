@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { resolveWorkspaceHref, headingSlug } from './workspace-links.js';
+import { headingSlug, resolveWorkspaceHref } from './workspace-links.js';
 it('resolves relative notes, cross-notebook references, encoded assets and anchors', () => {
   const source = 'notes/a/folder/readme.md';
   expect(resolveWorkspaceHref('../next.md#Part%202', source)).toEqual({ kind: 'path', path: 'notes/a/next.md', anchor: 'Part 2' });
@@ -32,20 +32,7 @@ it('does not let a same-origin URL whose pathname starts with // redirect to ano
 });
 
 it('resolves alias paths from notebook pathAliases', () => {
-  const notebooks = [
-    {
-      id: 'blog',
-      title: 'Blog',
-      root: 'blog/src/content/posts',
-      pathAliases: {
-        '@/*': 'blog/src/*',
-      },
-    },
-  ];
+  const notebooks = [{ id: 'blog', title: 'Blog', root: 'blog/src/content/posts', pathAliases: { '@/*': 'blog/src/*' } }];
   const source = 'blog/src/content/posts/tech/note.md';
-  expect(resolveWorkspaceHref('@/assets/images/pic.png', source, notebooks)).toEqual({
-    kind: 'path',
-    path: 'blog/src/assets/images/pic.png',
-    anchor: '',
-  });
+  expect(resolveWorkspaceHref('@/assets/images/pic.png', source, notebooks)).toEqual({ kind: 'path', path: 'blog/src/assets/images/pic.png', anchor: '' });
 });

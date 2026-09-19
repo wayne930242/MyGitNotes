@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, writeFile, symlink, rm, mkdir } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import syncFs from 'node:fs';
 import { parse, stringify } from 'yaml';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
-import { STUDY_FILE, createStudyNote, emptyStudyWorkspace, applyStudyAction, parseNoteContent, readNoteFile } from '@mygitnotes/core';
+import { applyStudyAction, createStudyNote, emptyStudyWorkspace, parseNoteContent, readNoteFile, STUDY_FILE } from '@mygitnotes/core';
 
 let root: string, server: Server, url: string;
 const source = { notebookId: 'a', path: 'notes/a/guide.md', title: 'Question', metadata: {}, content: 'Question\n\n---\n\nAnswer' };
@@ -20,15 +20,22 @@ beforeEach(async () => {
   for (const [key, value] of Object.entries({ GITHUB_NOTES_SOURCE: 'local', GITHUB_NOTES_LOCAL_PATH: root, VERCEL: '', APP_URL: '' })) vi.stubEnv(key, value);
   server = createServer(createApp(root));
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  url = `http://127.0.0.1:${(server.address() as {port: number}).port}/api/study`;
+  url = `http://127.0.0.1:${(server.address() as { port: number; }).port}/api/study`;
 });
-afterEach(async () => { await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true }); vi.unstubAllEnvs(); vi.useRealTimers(); });
+afterEach(async () => {
+  await new Promise<void>(resolve => server.close(() => resolve()));
+  await rm(root, { recursive: true, force: true });
+  vi.unstubAllEnvs();
+  vi.useRealTimers();
+});
 const put = (value: unknown, revision = 'missing') => fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ study: value, revision }) });
 
 it('persists a study events and memory state and rejects stale writes', async () => {
   expect(await fetch(url).then(r => r.json())).toMatchObject({ study: { version: 1, notes: [], events: [] }, writable: true, revision: 'missing' });
-  const saved = await put(study); expect(saved.status).toBe(200);
-  const record = await saved.json(); expect(record.study).toEqual(study);
+  const saved = await put(study);
+  expect(saved.status).toBe(200);
+  const record = await saved.json();
+  expect(record.study).toEqual(study);
   expect(await readFile(path.join(root, STUDY_FILE), 'utf8')).toContain('algorithm: ts-fsrs@5.4.2');
   expect((await put(emptyStudyWorkspace())).status).toBe(409);
   expect(await fetch(url).then(r => r.json())).toMatchObject({ study, revision: record.revision });
@@ -56,10 +63,7 @@ async function stageFixture() {
   const raw = '---\ntitle: Question\ncustom: keep-me\nstatus: new\n---\n\nQuestion\n\n---\n\nAnswer  \n';
   await mkdir(path.join(root, 'notes/a'), { recursive: true });
   await writeFile(path.join(root, source.path), raw);
-  await writeFile(path.join(root, '.github-notes-screen.yaml'), stringify({ version: 1, rows: [{ id: 'lane', name: 'Study', kind: 'dynamic', view: 'study',
-    source: { kind: 'folder', notebookId: 'a', path: 'notes/a', recursive: true },
-    progression: { stages: [{ status: 'new', intervalDays: 1 }, { status: 'learning', intervalDays: 3 }, { status: 'review', intervalDays: 7 }, { status: 'known', intervalDays: 30 }], easy: 'two' },
-  }] }));
+  await writeFile(path.join(root, '.github-notes-screen.yaml'), stringify({ version: 1, rows: [{ id: 'lane', name: 'Study', kind: 'dynamic', view: 'study', source: { kind: 'folder', notebookId: 'a', path: 'notes/a', recursive: true }, progression: { stages: [{ status: 'new', intervalDays: 1 }, { status: 'learning', intervalDays: 3 }, { status: 'review', intervalDays: 7 }, { status: 'known', intervalDays: 30 }], easy: 'two' } }] }));
   return raw;
 }
 async function stageRequest(action = 'stage-review', extra: Record<string, unknown> = {}) {
@@ -70,8 +74,10 @@ async function stageRequest(action = 'stage-review', extra: Record<string, unkno
 const act = (body: unknown) => fetch(url + '/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 it('saves a stage transition with note status, preserves the body and undoes both', async () => {
   const raw = await stageFixture(), request = await stageRequest();
-  const response = await act(request); expect(response.status).toBe(200);
-  const saved = await response.json(); expect(saved.note.status).toBe('review');
+  const response = await act(request);
+  expect(response.status).toBe(200);
+  const saved = await response.json();
+  expect(saved.note.status).toBe('review');
   expect(saved.study.notes[0].stage.status).toBe('review');
   expect(parseNoteContent(await readFile(path.join(root, source.path), 'utf8')).content).toBe(parseNoteContent(raw).content);
   expect(saved.note.metadata.custom).toBe('keep-me');
@@ -82,7 +88,8 @@ it('saves a stage transition with note status, preserves the body and undoes bot
   expect(readNoteFile(root, source.path, 'a').status).toBe('new');
 });
 it('refuses a stale note without writing its stage history', async () => {
-  await stageFixture(); const request = await stageRequest();
+  await stageFixture();
+  const request = await stageRequest();
   await writeFile(path.join(root, source.path), '# Edited outside\n');
   expect((await act(request)).status).toBe(409);
   expect((await fetch(url).then(response => response.json())).study.events).toEqual([]);
@@ -95,7 +102,11 @@ it('restores the note if the study file cannot be published', async () => {
     if (String(to) === path.join(root, STUDY_FILE)) throw new Error('Injected storage failure');
     return rename(from, to);
   });
-  try { expect((await act(request)).status).toBe(500); } finally { spy.mockRestore(); }
+  try {
+    expect((await act(request)).status).toBe(500);
+  } finally {
+    spy.mockRestore();
+  }
   expect(await readFile(path.join(root, source.path), 'utf8')).toBe(raw);
   expect((await fetch(url).then(response => response.json())).study.events).toEqual([]);
 });
@@ -104,34 +115,29 @@ it('rejects stage actions on Core and note symlinks', async () => {
   execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/core'], { cwd: root });
   expect((await act(request)).status).toBe(403);
   execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/main'], { cwd: root });
-  await writeFile(path.join(root, 'target.md'), raw); await rm(path.join(root, source.path));
+  await writeFile(path.join(root, 'target.md'), raw);
+  await rm(path.join(root, source.path));
   await symlink(path.join(root, 'target.md'), path.join(root, source.path));
   expect((await act(request)).status).toBe(403);
 });
 
 it('rejects reviewing a note from outside the lane notebook', async () => {
   const raw = await stageFixture();
-  await writeFile(path.join(root, '.github-notes.yaml'), stringify({ schema_version: 1, workspace: { title: 'Test', default_notebook: 'a' }, notebooks: [
-    { id: 'a', title: 'A', root: 'notes/a' }, { id: 'b', title: 'B', root: 'notes/b' },
-  ] }));
-  await writeFile(path.join(root, '.github-notes-screen.yaml'), stringify({ version: 2, rows: [{ id: 'lane', name: 'Other', kind: 'dynamic', view: 'small', notebookId: 'b',
-    source: { kind: 'folder', notebookId: 'b', path: 'notes/b', recursive: true },
-    progression: { stages: [{ status: 'new', intervalDays: 1 }, { status: 'known', intervalDays: 3 }], easy: 'two' },
-  }] }));
+  await writeFile(path.join(root, '.github-notes.yaml'), stringify({ schema_version: 1, workspace: { title: 'Test', default_notebook: 'a' }, notebooks: [{ id: 'a', title: 'A', root: 'notes/a' }, { id: 'b', title: 'B', root: 'notes/b' }] }));
+  await writeFile(path.join(root, '.github-notes-screen.yaml'), stringify({ version: 2, rows: [{ id: 'lane', name: 'Other', kind: 'dynamic', view: 'small', notebookId: 'b', source: { kind: 'folder', notebookId: 'b', path: 'notes/b', recursive: true }, progression: { stages: [{ status: 'new', intervalDays: 1 }, { status: 'known', intervalDays: 3 }], easy: 'two' } }] }));
   expect((await act(await stageRequest())).status).toBe(403);
   expect(await readFile(path.join(root, source.path), 'utf8')).toBe(raw);
   expect((await fetch(url).then(response => response.json())).study.events).toEqual([]);
 });
 it('uses only the lane notebook statuses when its progression is omitted', async () => {
   await stageFixture();
-  await writeFile(path.join(root, '.github-notes.yaml'), stringify({ schema_version: 1, workspace: { title: 'Test', default_notebook: 'a' }, notebooks: [
-    { id: 'b', title: 'Other', root: 'notes/b', statuses: ['unrelated', 'other'] },
-    { id: 'a', title: 'A', root: 'notes/a', statuses: ['new', 'known'] },
-  ] }));
+  await writeFile(path.join(root, '.github-notes.yaml'), stringify({ schema_version: 1, workspace: { title: 'Test', default_notebook: 'a' }, notebooks: [{ id: 'b', title: 'Other', root: 'notes/b', statuses: ['unrelated', 'other'] }, { id: 'a', title: 'A', root: 'notes/a', statuses: ['new', 'known'] }] }));
   const screenPath = path.join(root, '.github-notes-screen.yaml');
-  const screen = parse(await readFile(screenPath, 'utf8')); delete screen.rows[0].progression;
+  const screen = parse(await readFile(screenPath, 'utf8'));
+  delete screen.rows[0].progression;
   await writeFile(screenPath, stringify(screen));
-  const response = await act(await stageRequest()); expect(response.status).toBe(200);
+  const response = await act(await stageRequest());
+  expect(response.status).toBe(200);
   const saved = await response.json();
   expect(saved.note.status).toBe('known');
   expect(saved.study.events.at(-1).transition.intervalDays).toBe(3);
@@ -140,14 +146,15 @@ it('uses only the lane notebook statuses when its progression is omitted', async
 it('requires explicit stages when only an archival status is configured', async () => {
   const original = await stageFixture();
   const configPath = path.join(root, '.github-notes.yaml'), config = parse(await readFile(configPath, 'utf8'));
-  config.notebooks[0].statuses = ['archived']; await writeFile(configPath, stringify(config));
+  config.notebooks[0].statuses = ['archived'];
+  await writeFile(configPath, stringify(config));
   const screenPath = path.join(root, '.github-notes-screen.yaml'), screen = parse(await readFile(screenPath, 'utf8'));
-  delete screen.rows[0].progression; await writeFile(screenPath, stringify(screen));
+  delete screen.rows[0].progression;
+  await writeFile(screenPath, stringify(screen));
   expect((await act(await stageRequest())).status).toBe(400);
   expect(await readFile(path.join(root, source.path), 'utf8')).toBe(original);
   expect((await fetch(url).then(response => response.json())).study.events).toEqual([]);
 });
-
 
 it('persists each same-stage move time, reloads it and restores the previous time on undo', async () => {
   await stageFixture();
@@ -160,7 +167,8 @@ it('persists each same-stage move time, reloads it and restores the previous tim
   expect(firstAt).toBe(initial.study.events.at(-1).at);
   const request = await stageRequest('stage-review', { rating: 2 });
   vi.setSystemTime(new Date('2026-09-14T11:00:00.000Z'));
-  const response = await act(request); expect(response.status).toBe(200);
+  const response = await act(request);
+  expect(response.status).toBe(200);
   const saved = await response.json(), moved = saved.study.notes[0];
   expect(saved.note.status).toBe('new');
   expect(moved.lastMovedAt).toBe(saved.study.events.at(-1).at);

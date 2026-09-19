@@ -3,12 +3,7 @@ import { graphColorGroup, graphColorGroups, parseGraphAppearance } from './graph
 import type { NotebookConfig } from './types.js';
 
 const notebooks = [{ id: 'rules', title: 'Rules', root: 'notes/rules' }, { id: 'campaign', title: 'Campaign', root: 'notes/campaign' }] as NotebookConfig[];
-const nodes = [
-  { id: 'notes/rules/combat/attacks.md', notebookId: 'rules', status: 'done' },
-  { id: 'notes/rules/combat/damage/table.md', notebookId: 'rules', status: 'done' },
-  { id: 'notes/rules/magic/spells.md', notebookId: 'rules', status: 'done' },
-  { id: 'notes/campaign/combat/encounter.md', notebookId: 'campaign', status: 'working' },
-];
+const nodes = [{ id: 'notes/rules/combat/attacks.md', notebookId: 'rules', status: 'done' }, { id: 'notes/rules/combat/damage/table.md', notebookId: 'rules', status: 'done' }, { id: 'notes/rules/magic/spells.md', notebookId: 'rules', status: 'done' }, { id: 'notes/campaign/combat/encounter.md', notebookId: 'campaign', status: 'working' }];
 
 describe('graph colors', () => {
   it('groups nested notes by the first folder and distinguishes notebooks', () => {

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { readWorkspaceDocument, serializeWorkspaceDocument, loadWorkspaceConfig, createRemoteSource, SourceError, SCREEN_DOCUMENT, type WorkspaceConfig, type SourceConfig, type WorkspaceDocument } from '@mygitnotes/core';
+import { createRemoteSource, loadWorkspaceConfig, readWorkspaceDocument, SCREEN_DOCUMENT, serializeWorkspaceDocument, type SourceConfig, SourceError, type WorkspaceConfig, type WorkspaceDocument } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
@@ -19,18 +19,27 @@ export function createWorkspaceDocumentRouter(base: string, source: SourceConfig
       if (!stat.isFile() || stat.isSymbolicLink()) throw new SourceError(`${label} configuration must be a regular file.`, 403);
       if (stat.size > maxBytes) throw new SourceError(`${label} configuration is too large.`, 413);
       return await fs.readFile(target, 'utf8');
-    } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw error;
+    }
   }
   function decode(raw: string | null, config: WorkspaceConfig | null) {
-    try { return readWorkspaceDocument(document, raw, config); }
-    catch { throw new SourceError(`Invalid ${label} YAML. Fix the file before saving.`, 422); }
+    try {
+      return readWorkspaceDocument(document, raw, config);
+    } catch {
+      throw new SourceError(`Invalid ${label} YAML. Fix the file before saving.`, 422);
+    }
   }
   /** Applies the document's notebook ownership rule against the workspace notebooks and Screen lanes. */
   async function own(value: unknown, config: WorkspaceConfig | null, readScreen: () => Promise<string | null>) {
     if (!document.own) return { page: value, foreign: false };
     let screen;
-    try { screen = readWorkspaceDocument(SCREEN_DOCUMENT, await readScreen(), config); }
-    catch { throw new SourceError('Invalid Screen YAML. Fix the file before saving.', 422); }
+    try {
+      screen = readWorkspaceDocument(SCREEN_DOCUMENT, await readScreen(), config);
+    } catch {
+      throw new SourceError('Invalid Screen YAML. Fix the file before saving.', 422);
+    }
     return document.own(value, config?.notebooks ?? [], screen);
   }
   function fail(res: import('express').Response, error: unknown) {
@@ -53,7 +62,9 @@ export function createWorkspaceDocumentRouter(base: string, source: SourceConfig
       const config = await reader.config();
       const { page } = await own(decode(raw, config), config, async () => snapshot.entries.some(entry => entry.path === SCREEN_DOCUMENT.file) ? (await reader.readFile(SCREEN_DOCUMENT.file)).toString('utf8') : null);
       res.json({ page, revision: snapshot.sha, path: file, writable: Boolean(token && snapshot.info.permissions?.push && source.branch === 'main') });
-    } catch (error) { fail(res, error); }
+    } catch (error) {
+      fail(res, error);
+    }
   });
   router.put('/', async (req, res) => {
     try {
@@ -71,8 +82,12 @@ export function createWorkspaceDocumentRouter(base: string, source: SourceConfig
           if (revisionOf(raw) !== revision) throw new SourceError(`The ${label} configuration changed. Reload it before saving your draft.`, 409);
           const target = path.join(source.path, file);
           const temporary = `${target}.${randomUUID()}.tmp`;
-          try { await fs.writeFile(temporary, yaml, { flag: 'wx', mode: 0o600 }); await fs.rename(temporary, target); }
-          finally { await fs.rm(temporary, { force: true }); }
+          try {
+            await fs.writeFile(temporary, yaml, { flag: 'wx', mode: 0o600 });
+            await fs.rename(temporary, target);
+          } finally {
+            await fs.rm(temporary, { force: true });
+          }
           res.json({ page: value.data, revision: revisionOf(yaml), path: file, writable: true });
         });
       }
@@ -84,7 +99,9 @@ export function createWorkspaceDocumentRouter(base: string, source: SourceConfig
       if ((await own(value.data, await reader.config(), screen)).foreign) throw foreign();
       const saved = await reader.saveWorkspaceDocument(document, yaml, revision);
       res.json({ page: value.data, revision: saved.revision, path: file, writable: true });
-    } catch (error) { fail(res, error); }
+    } catch (error) {
+      fail(res, error);
+    }
   });
   return router;
 }

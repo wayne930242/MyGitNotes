@@ -1,28 +1,14 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '../lib/i18n/index.js';
 import { stripTaskTokens } from '../lib/task-tokens.js';
-import {
-  computeGanttRange,
-  computeGanttRows,
-  computeGanttTicks,
-  GANTT_SCALES,
-  ganttDayWidth,
-  getSavedGanttScale,
-  saveGanttScale,
-  type GanttRow,
-  type GanttScale,
-} from '../lib/todo-gantt.js';
+import { computeGanttRange, computeGanttRows, computeGanttTicks, GANTT_SCALES, ganttDayWidth, type GanttRow, type GanttScale, getSavedGanttScale, saveGanttScale } from '../lib/todo-gantt.js';
 import type { TodoTask } from '../lib/todo-list.js';
 import { Button } from './Button.js';
 
 /** Days of history kept visible left of today when the chart first opens or the scale changes. */
 const LEAD_DAYS = 2;
 
-const SCALE_LABEL_KEY: Record<GanttScale, 'panel.todoGanttScaleDay' | 'panel.todoGanttScaleWeek' | 'panel.todoGanttScaleMonth'> = {
-  day: 'panel.todoGanttScaleDay',
-  week: 'panel.todoGanttScaleWeek',
-  month: 'panel.todoGanttScaleMonth',
-};
+const SCALE_LABEL_KEY: Record<GanttScale, 'panel.todoGanttScaleDay' | 'panel.todoGanttScaleWeek' | 'panel.todoGanttScaleMonth'> = { day: 'panel.todoGanttScaleDay', week: 'panel.todoGanttScaleWeek', month: 'panel.todoGanttScaleMonth' };
 
 interface TodoGanttChartProps {
   tasks: TodoTask[];
@@ -64,59 +50,34 @@ export function TodoGanttChart({ tasks, today, onOpenTask }: TodoGanttChartProps
     saveGanttScale(next);
   };
 
-  const scaleToggle = (
-    <div className="todo-gantt-scale-toggle" role="group">
-      {GANTT_SCALES.map(option => (
-        <Button key={option} type="button" aria-pressed={scale === option} onClick={() => changeScale(option)}>
-          {t(SCALE_LABEL_KEY[option])}
-        </Button>
-      ))}
-    </div>
-  );
+  const scaleToggle = <div className='todo-gantt-scale-toggle' role='group'>{GANTT_SCALES.map(option => <Button key={option} type='button' aria-pressed={scale === option} onClick={() => changeScale(option)}>{t(SCALE_LABEL_KEY[option])}</Button>)}</div>;
 
-  if (rows.length === 0) return (
-    <>
-      {scaleToggle}
-      <p className="todo-empty">{t('panel.todoGanttEmpty')}</p>
-    </>
-  );
+  if (rows.length === 0) {
+    return (
+      <>
+        {scaleToggle}
+        <p className='todo-empty'>{t('panel.todoGanttEmpty')}</p>
+      </>
+    );
+  }
 
   return (
-    <div className="todo-gantt" role="group" aria-label={t('panel.todoGanttTimeline')}>
+    <div className='todo-gantt' role='group' aria-label={t('panel.todoGanttTimeline')}>
       {scaleToggle}
-      <div className="todo-gantt-scroll" ref={scrollRef}>
-        <div className="todo-gantt-header todo-gantt-row">
-          <div className="todo-gantt-label-cell" />
-          <div className="todo-gantt-track" style={{ width: trackWidth }}>
-            {ticks.map(tick => (
-              <span key={tick.offset} className="todo-gantt-tick" style={{ left: tick.offset * dayWidth }}>{tickLabel(tick.date, scale, language)}</span>
-            ))}
-            <span
-              className="todo-gantt-today-line"
-              style={{ left: range.todayOffset * dayWidth }}
-              title={t('panel.todoGanttToday')}
-              aria-hidden="true"
-            />
+      <div className='todo-gantt-scroll' ref={scrollRef}>
+        <div className='todo-gantt-header todo-gantt-row'>
+          <div className='todo-gantt-label-cell' />
+          <div className='todo-gantt-track' style={{ width: trackWidth }}>
+            {ticks.map(tick => <span key={tick.offset} className='todo-gantt-tick' style={{ left: tick.offset * dayWidth }}>{tickLabel(tick.date, scale, language)}</span>)}
+            <span className='todo-gantt-today-line' style={{ left: range.todayOffset * dayWidth }} title={t('panel.todoGanttToday')} aria-hidden='true' />
           </div>
         </div>
-
         {rows.map(row => (
-          <div className="todo-gantt-row" key={row.task.id}>
-            <button
-              type="button"
-              className="todo-gantt-label-cell todo-gantt-label-button"
-              title={`${stripTaskTokens(row.task.lineText)} · ${row.task.noteTitle}`}
-              onClick={() => onOpenTask(row.task)}
-            >
-              {stripTaskTokens(row.task.lineText)}
-            </button>
-            <div className="todo-gantt-track" style={{ width: trackWidth }}>
-              <span className="todo-gantt-today-line" style={{ left: range.todayOffset * dayWidth }} aria-hidden="true" />
-              <span
-                className={`todo-gantt-bar todo-gantt-bar-${row.kind}`}
-                style={{ left: row.offset * dayWidth, width: row.span * dayWidth }}
-                title={barTitle(row)}
-              />
+          <div className='todo-gantt-row' key={row.task.id}>
+            <button type='button' className='todo-gantt-label-cell todo-gantt-label-button' title={`${stripTaskTokens(row.task.lineText)} · ${row.task.noteTitle}`} onClick={() => onOpenTask(row.task)}>{stripTaskTokens(row.task.lineText)}</button>
+            <div className='todo-gantt-track' style={{ width: trackWidth }}>
+              <span className='todo-gantt-today-line' style={{ left: range.todayOffset * dayWidth }} aria-hidden='true' />
+              <span className={`todo-gantt-bar todo-gantt-bar-${row.kind}`} style={{ left: row.offset * dayWidth, width: row.span * dayWidth }} title={barTitle(row)} />
             </div>
           </div>
         ))}

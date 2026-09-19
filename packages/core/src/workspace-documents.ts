@@ -23,7 +23,7 @@ export interface WorkspaceDocument<T = unknown> {
   /** Rewrites one notebook's note paths in place and reports whether anything changed. */
   relocate?(value: T, notebookId: string, move: (path: string) => string): boolean;
   /** Keeps only content owned by its notebook; `foreign` reports that something was dropped. */
-  own?(value: T, notebooks: readonly { id: string; root: string }[], screen: ScreenPage): { page: T; foreign: boolean };
+  own?(value: T, notebooks: readonly { id: string; root: string; }[], screen: ScreenPage): { page: T; foreign: boolean; };
 }
 
 export const WORKSPACE_DOCUMENTS: readonly WorkspaceDocument[] = [SCREEN_DOCUMENT, STUDY_DOCUMENT, FOCUS_DOCUMENT];
@@ -38,12 +38,15 @@ export function readWorkspaceDocument<T>(document: WorkspaceDocument<T>, content
 /** Checks committed content against the size limit and every accepted stored version. */
 export function validateWorkspaceDocument(document: WorkspaceDocument, content: unknown) {
   if (typeof content !== 'string' || Buffer.byteLength(content) > document.maxBytes) throw new SourceError(`${document.label} YAML is required.`);
-  try { document.fileSchema.parse(parse(content)); }
-  catch { throw new SourceError(`Invalid ${document.label} YAML.`); }
+  try {
+    document.fileSchema.parse(parse(content));
+  } catch {
+    throw new SourceError(`Invalid ${document.label} YAML.`);
+  }
 }
 
 /** Keeps every workspace document pointing at the notes that moved inside one notebook. */
-export function relocateWorkspaceDocuments(files: { get(file: string): string | undefined; set(file: string, content: string): void }, config: ScreenNotebookConfig, notebookId: string, move: (path: string) => string) {
+export function relocateWorkspaceDocuments(files: { get(file: string): string | undefined; set(file: string, content: string): void; }, config: ScreenNotebookConfig, notebookId: string, move: (path: string) => string) {
   for (const document of WORKSPACE_DOCUMENTS) {
     const raw = files.get(document.file);
     if (raw === undefined || !document.relocate) continue;

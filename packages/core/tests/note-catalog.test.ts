@@ -2,34 +2,15 @@ import { describe, expect, it } from 'vitest';
 import type { NotebookConfig, WorkspaceConfig } from '../src/types.js';
 import type { NoteListItem } from '../src/note-query.js';
 import { DEFAULT_NOTE_QUERY } from '../src/note-query.js';
-import { lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, queryNotePaths, queryNotes, type NoteCatalog } from '../src/note-catalog.js';
+import { lookupNotes, noteAgenda, type NoteCatalog, noteFacets, noteGraph, parseNoteQuery, queryNotePaths, queryNotes } from '../src/note-catalog.js';
 
-const config: WorkspaceConfig = {
-  schema_version: 1,
-  workspace: { title: 'Test', default_notebook: 'work' },
-  notebooks: [
-    { id: 'work', title: 'Work', root: 'notes/work', statuses: ['inbox', 'done'] },
-    { id: 'life', title: 'Life', root: 'notes/life' },
-  ] as NotebookConfig[],
-};
+const config: WorkspaceConfig = { schema_version: 1, workspace: { title: 'Test', default_notebook: 'work' }, notebooks: [{ id: 'work', title: 'Work', root: 'notes/work', statuses: ['inbox', 'done'] }, { id: 'life', title: 'Life', root: 'notes/life' }] as NotebookConfig[] };
 
-const bodies: Record<string, string> = {
-  'notes/work/alpha.md': 'Alpha body with keyword\n\n- [ ] ship it 📅 2026-09-20\n',
-  'notes/work/deep/beta.md': 'Beta body\n\n[alpha](../alpha.md)\n',
-  'notes/work/archived.md': 'Old body\n',
-  'notes/life/gamma.md': 'Gamma body keyword\n',
-};
-const item = (path: string, notebookId: string, extra: Partial<NoteListItem> = {}): NoteListItem => ({
-  id: path, path, notebookId, title: path.split('/').pop()!.replace('.md', ''), tags: [], metadata: {}, ...extra,
-});
-const items: NoteListItem[] = [
-  item('notes/work/alpha.md', 'work', { status: 'inbox', tags: ['a', 'b'], metadata: { updated: '2026-09-02', created: '2026-09-01' } }),
-  item('notes/work/deep/beta.md', 'work', { status: 'done', tags: ['b'], metadata: { updated: '2026-09-03' } }),
-  item('notes/work/archived.md', 'work', { status: 'archived', tags: ['a'], metadata: { hiden: true, updated: '2026-09-04' } }),
-  item('notes/life/gamma.md', 'life', { tags: ['c'], metadata: { updated: '2026-09-01', created: '2026-09-01' } }),
-];
+const bodies: Record<string, string> = { 'notes/work/alpha.md': 'Alpha body with keyword\n\n- [ ] ship it 📅 2026-09-20\n', 'notes/work/deep/beta.md': 'Beta body\n\n[alpha](../alpha.md)\n', 'notes/work/archived.md': 'Old body\n', 'notes/life/gamma.md': 'Gamma body keyword\n' };
+const item = (path: string, notebookId: string, extra: Partial<NoteListItem> = {}): NoteListItem => ({ id: path, path, notebookId, title: path.split('/').pop()!.replace('.md', ''), tags: [], metadata: {}, ...extra });
+const items: NoteListItem[] = [item('notes/work/alpha.md', 'work', { status: 'inbox', tags: ['a', 'b'], metadata: { updated: '2026-09-02', created: '2026-09-01' } }), item('notes/work/deep/beta.md', 'work', { status: 'done', tags: ['b'], metadata: { updated: '2026-09-03' } }), item('notes/work/archived.md', 'work', { status: 'archived', tags: ['a'], metadata: { hiden: true, updated: '2026-09-04' } }), item('notes/life/gamma.md', 'life', { tags: ['c'], metadata: { updated: '2026-09-01', created: '2026-09-01' } })];
 
-function catalog(): NoteCatalog & { contentReads: string[] } {
+function catalog(): NoteCatalog & { contentReads: string[]; } {
   const contentReads: string[] = [];
   return {
     contentReads,

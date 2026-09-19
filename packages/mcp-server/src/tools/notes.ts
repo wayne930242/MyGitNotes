@@ -1,28 +1,14 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import {
-  loadWorkspaceConfig,
-  readNoteFile,
-  writeNoteFile,
-  deleteNoteFile,
-  scanNotebookNotes,
-  resolveSafePath,
-  NoteItem,
-  NoteMetadata,
-  DEFAULT_NOTE_STATUSES,
-  resolveNoteStatuses,
-  withNoteStatus,
-} from '@mygitnotes/core';
-import { stageAndCommit, generateCommitMessage } from '@mygitnotes/git';
-import { assertUserWorkspaceBranch, assertSafeRepoPath } from '../guards.js';
+import { DEFAULT_NOTE_STATUSES, deleteNoteFile, loadWorkspaceConfig, NoteItem, NoteMetadata, readNoteFile, resolveNoteStatuses, resolveSafePath, scanNotebookNotes, withNoteStatus, writeNoteFile } from '@mygitnotes/core';
+import { generateCommitMessage, stageAndCommit } from '@mygitnotes/git';
+import { assertSafeRepoPath, assertUserWorkspaceBranch } from '../guards.js';
 import type { ToolContext } from './context.js';
 
 export async function handleGetWorkspaceConfig(ctx: ToolContext) {
   const config = loadWorkspaceConfig(ctx.repoRoot);
   if (!config) {
-    return {
-      error: 'No .mygitnotes.yaml (or legacy .github-notes.yaml) configuration file found in workspace.',
-    };
+    return { error: 'No .mygitnotes.yaml (or legacy .github-notes.yaml) configuration file found in workspace.' };
   }
   return { config };
 }
@@ -35,18 +21,13 @@ export async function handleListNotebooks(ctx: ToolContext) {
   return { notebooks: config.notebooks };
 }
 
-export async function handleListNotes(
-  ctx: ToolContext,
-  args: { notebookId?: string }
-) {
+export async function handleListNotes(ctx: ToolContext, args: { notebookId?: string; }) {
   const config = loadWorkspaceConfig(ctx.repoRoot);
   if (!config) {
     return { error: 'Workspace not initialized.' };
   }
 
-  const notebooks = args.notebookId
-    ? config.notebooks.filter((nb) => nb.id === args.notebookId)
-    : config.notebooks;
+  const notebooks = args.notebookId ? config.notebooks.filter((nb) => nb.id === args.notebookId) : config.notebooks;
 
   const notes: NoteItem[] = [];
   for (const nb of notebooks) {
@@ -56,10 +37,7 @@ export async function handleListNotes(
   return { count: notes.length, notes };
 }
 
-export async function handleReadNote(
-  ctx: ToolContext,
-  args: { path: string; notebookId?: string; metadataOnly?: boolean }
-) {
+export async function handleReadNote(ctx: ToolContext, args: { path: string; notebookId?: string; metadataOnly?: boolean; }) {
   assertSafeRepoPath(ctx.repoRoot, args.path);
   if (args.metadataOnly) {
     return handleGetNoteMetadata(ctx, { path: args.path });
@@ -69,18 +47,7 @@ export async function handleReadNote(
   return { note };
 }
 
-export async function handleSaveNote(
-  ctx: ToolContext,
-  args: {
-    path: string;
-    content?: string;
-    metadata?: Record<string, unknown>;
-    status?: string;
-    tags?: string[];
-    title?: string;
-    commitMessage?: string;
-  }
-) {
+export async function handleSaveNote(ctx: ToolContext, args: { path: string; content?: string; metadata?: Record<string, unknown>; status?: string; tags?: string[]; title?: string; commitMessage?: string; }) {
   await assertUserWorkspaceBranch(ctx.repoRoot);
   assertSafeRepoPath(ctx.repoRoot, args.path);
 
@@ -100,26 +67,15 @@ export async function handleSaveNote(
 
   let message = args.commitMessage;
   if (!message) {
-    message = await generateCommitMessage({
-      filePath: args.path,
-      diff: args.content,
-    });
+    message = await generateCommitMessage({ filePath: args.path, diff: args.content });
   }
 
   const commitResult = await stageAndCommit(ctx.repoRoot, [args.path], message);
 
-  return {
-    success: true,
-    path: args.path,
-    note: saved,
-    commit: commitResult,
-  };
+  return { success: true, path: args.path, note: saved, commit: commitResult };
 }
 
-export async function handleDeleteNote(
-  ctx: ToolContext,
-  args: { path: string; commitMessage?: string }
-) {
+export async function handleDeleteNote(ctx: ToolContext, args: { path: string; commitMessage?: string; }) {
   await assertUserWorkspaceBranch(ctx.repoRoot);
   assertSafeRepoPath(ctx.repoRoot, args.path);
 
@@ -128,46 +84,26 @@ export async function handleDeleteNote(
   const message = args.commitMessage || `docs(notes): delete ${path.basename(args.path)}`;
   const commitResult = await stageAndCommit(ctx.repoRoot, [args.path], message);
 
-  return {
-    success: true,
-    path: args.path,
-    commit: commitResult,
-  };
+  return { success: true, path: args.path, commit: commitResult };
 }
 
-export async function handleGetStatuses(
-  ctx: ToolContext,
-  args: { notebookId?: string } = {}
-) {
+export async function handleGetStatuses(ctx: ToolContext, args: { notebookId?: string; } = {}) {
   const config = loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
 
-  const notebooks = args.notebookId
-    ? config.notebooks.filter((nb) => nb.id === args.notebookId)
-    : config.notebooks;
+  const notebooks = args.notebookId ? config.notebooks.filter((nb) => nb.id === args.notebookId) : config.notebooks;
 
   const result = notebooks.map((nb) => {
     const notes = scanNotebookNotes(ctx.repoRoot, nb);
     const observed = notes.map((n) => n.status);
     const allStatuses = resolveNoteStatuses(nb, observed);
-    return {
-      notebookId: nb.id,
-      configuredStatuses: nb.statuses || [...DEFAULT_NOTE_STATUSES],
-      observedStatuses: [...new Set(observed.filter(Boolean) as string[])],
-      allStatuses,
-    };
+    return { notebookId: nb.id, configuredStatuses: nb.statuses || [...DEFAULT_NOTE_STATUSES], observedStatuses: [...new Set(observed.filter(Boolean) as string[])], allStatuses };
   });
 
-  return {
-    defaultStatuses: [...DEFAULT_NOTE_STATUSES],
-    notebooks: result,
-  };
+  return { defaultStatuses: [...DEFAULT_NOTE_STATUSES], notebooks: result };
 }
 
-export async function handleGetNoteMetadata(
-  ctx: ToolContext,
-  args: { path: string }
-) {
+export async function handleGetNoteMetadata(ctx: ToolContext, args: { path: string; }) {
   assertSafeRepoPath(ctx.repoRoot, args.path);
   const config = loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
@@ -185,28 +121,10 @@ export async function handleGetNoteMetadata(
   const observedStatuses = nb ? scanNotebookNotes(ctx.repoRoot, nb).map((n) => n.status) : [];
   const availableStatuses = resolveNoteStatuses(nb, observedStatuses);
 
-  return {
-    path: note.path,
-    notebookId,
-    title: note.title,
-    status: note.status,
-    tags: note.tags,
-    metadata: note.metadata,
-    availableStatuses,
-  };
+  return { path: note.path, notebookId, title: note.title, status: note.status, tags: note.tags, metadata: note.metadata, availableStatuses };
 }
 
-export async function handleUpdateNoteMetadata(
-  ctx: ToolContext,
-  args: {
-    path: string;
-    metadata?: Record<string, unknown>;
-    status?: string;
-    tags?: string[];
-    title?: string;
-    commitMessage?: string;
-  }
-) {
+export async function handleUpdateNoteMetadata(ctx: ToolContext, args: { path: string; metadata?: Record<string, unknown>; status?: string; tags?: string[]; title?: string; commitMessage?: string; }) {
   await assertUserWorkspaceBranch(ctx.repoRoot);
   assertSafeRepoPath(ctx.repoRoot, args.path);
 
@@ -235,13 +153,7 @@ export async function handleUpdateNoteMetadata(
     updatedMetadata.title = args.title;
   }
 
-  const updatedNote = writeNoteFile(
-    ctx.repoRoot,
-    args.path,
-    existingNote.content,
-    updatedMetadata,
-    notebookId
-  );
+  const updatedNote = writeNoteFile(ctx.repoRoot, args.path, existingNote.content, updatedMetadata, notebookId);
 
   const observedStatuses = nb ? scanNotebookNotes(ctx.repoRoot, nb).map((n) => n.status) : [];
   const availableStatuses = resolveNoteStatuses(nb, observedStatuses);
@@ -257,11 +169,5 @@ export async function handleUpdateNoteMetadata(
 
   const commit = await stageAndCommit(ctx.repoRoot, [args.path], message);
 
-  return {
-    success: true,
-    path: args.path,
-    note: updatedNote,
-    availableStatuses,
-    commit,
-  };
+  return { success: true, path: args.path, note: updatedNote, availableStatuses, commit };
 }

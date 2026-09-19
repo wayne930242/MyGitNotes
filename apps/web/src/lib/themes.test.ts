@@ -3,8 +3,7 @@ import { PALETTE_FAMILIES } from './palettes.js';
 import { resolveThemeChoice, themeTokens } from './themes.js';
 
 const luminance = (hex: string) => {
-  const [r, g, b] = hex.slice(1, 7).match(/.{2}/g)!.map(value => parseInt(value, 16) / 255)
-    .map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
+  const [r, g, b] = hex.slice(1, 7).match(/.{2}/g)!.map(value => parseInt(value, 16) / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
   return .2126 * r + .7152 * g + .0722 * b;
 };
 const contrast = (a: string, b: string) => {

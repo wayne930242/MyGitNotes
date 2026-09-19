@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import { getSavedPanelState, savePanelState } from './panel-state.js';
 
 export type WorkspaceToolId = 'calendar' | 'todo' | 'changes';
@@ -31,7 +31,7 @@ export function usePanelContext(): PanelContextValue {
   return context;
 }
 
-export function PanelProvider({ children }: { children: ReactNode }) {
+export function PanelProvider({ children }: { children: ReactNode; }) {
   const saved = useMemo(() => getSavedPanelState([...WORKSPACE_TOOL_IDS, ...DOCUMENT_TOOL_IDS]), []);
   const [isOpen, setIsOpen] = useState(saved.open);
   const [activeTool, setActiveTool] = useState<PanelToolId>(saved.tool);
@@ -40,7 +40,10 @@ export function PanelProvider({ children }: { children: ReactNode }) {
   useEffect(() => savePanelState({ open: isOpen, tool: activeTool }), [isOpen, activeTool]);
 
   const openTool = (id: PanelToolId) => {
-    if (isOpen && activeTool === id) { setIsOpen(false); return; }
+    if (isOpen && activeTool === id) {
+      setIsOpen(false);
+      return;
+    }
     setActiveTool(id);
     setIsOpen(true);
   };

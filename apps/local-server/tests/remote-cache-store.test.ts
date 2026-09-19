@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRemoteCache, SourceError } from '@mygitnotes/core';
-import { RedisRemoteCache, createRemoteCache } from '../src/remote-cache-store.js';
+import { createRemoteCache, RedisRemoteCache } from '../src/remote-cache-store.js';
 
 const restUrl = 'https://cache.example.test';
 beforeEach(() => {
@@ -9,11 +9,14 @@ beforeEach(() => {
   vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'token');
   vi.stubEnv('MYGITNOTES_SESSION_NAMESPACE', '');
 });
-afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 describe('shared cache store', () => {
   it('reads and writes through the Redis REST API under its own key space', async () => {
-    const requests: { url: string; body: unknown }[] = [];
+    const requests: { url: string; body: unknown; }[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       requests.push({ url: String(input), body: JSON.parse(String(init!.body)) });
       return new Response(JSON.stringify(String(input).endsWith('/pipeline') ? [{ result: 'OK' }] : { result: ['value', null] }), { status: 200 });

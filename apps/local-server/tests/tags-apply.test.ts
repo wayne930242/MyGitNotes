@@ -1,11 +1,11 @@
-import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, Server } from 'node:http';
 import { createApp } from '../src/app.js';
-import { GitHubSource, GitLabSource, assetHash, type RemoteChange } from '@mygitnotes/core';
+import { assetHash, GitHubSource, GitLabSource, type RemoteChange } from '@mygitnotes/core';
 
 vi.mock('../src/auth.js', async original => ({ ...await original<typeof import('../src/auth.js')>(), authToken: async () => 'fixture-token' }));
 
@@ -29,22 +29,10 @@ describe('local /api/tags/apply', () => {
     git('config', 'user.email', 'test@example.com');
     fs.mkdirSync(path.join(root, 'notes/blog'), { recursive: true });
     fs.mkdirSync(path.join(root, 'notes/thesis'), { recursive: true });
-    fs.writeFileSync(
-      path.join(root, 'notes/.mygitnotes.yaml'),
-      'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: blog\nnotebooks:\n  - id: blog\n    title: Blog\n    root: notes/blog\n  - id: thesis\n    title: Thesis\n    root: notes/thesis\n'
-    );
-    fs.writeFileSync(
-      path.join(root, 'notes/blog/a.md'),
-      '---\nid: a\ncustom: {x: 1,y: 2}\ntags: [todo, x]\ntitle: A\n---\n\nBody A\n'
-    );
-    fs.writeFileSync(
-      path.join(root, 'notes/blog/b.md'),
-      '---\nid: b\ntags: [todo, doing]\n---\n\nBody B\n'
-    );
-    fs.writeFileSync(
-      path.join(root, 'notes/thesis/c.md'),
-      '---\nid: c\ntags:\n  - todo\ntitle: C\n---\n\nBody C\n'
-    );
+    fs.writeFileSync(path.join(root, 'notes/.mygitnotes.yaml'), 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: blog\nnotebooks:\n  - id: blog\n    title: Blog\n    root: notes/blog\n  - id: thesis\n    title: Thesis\n    root: notes/thesis\n');
+    fs.writeFileSync(path.join(root, 'notes/blog/a.md'), '---\nid: a\ncustom: {x: 1,y: 2}\ntags: [todo, x]\ntitle: A\n---\n\nBody A\n');
+    fs.writeFileSync(path.join(root, 'notes/blog/b.md'), '---\nid: b\ntags: [todo, doing]\n---\n\nBody B\n');
+    fs.writeFileSync(path.join(root, 'notes/thesis/c.md'), '---\nid: c\ntags:\n  - todo\ntitle: C\n---\n\nBody C\n');
     fs.writeFileSync(path.join(root, 'notes/blog/d.md'), '---\nid: d\ntags: [other]\n---\n\nBody D\n');
     git('add', '.');
     git('commit', '-m', 'fixture');
@@ -112,7 +100,8 @@ describe('local /api/tags/apply', () => {
 
   it('deletes a tag, leaving an empty array rather than removing the key', async () => {
     fs.writeFileSync(path.join(root, 'notes/blog/e.md'), '---\nid: e\ntags: [solo]\n---\n\nBody E\n');
-    git('add', '.'); git('commit', '-m', 'add e');
+    git('add', '.');
+    git('commit', '-m', 'add e');
     const res = await post({ entries: [{ path: 'notes/blog/e.md', notebookId: 'blog', tags: [] }], message: 'delete solo' });
     expect(res.status).toBe(200);
     expect(fs.readFileSync(path.join(root, 'notes/blog/e.md'), 'utf8')).toContain('tags: []');
@@ -136,12 +125,7 @@ describe('local /api/tags/apply', () => {
   it('leaves every note untouched on disk when a later entry in the same batch fails validation', async () => {
     const before = fs.readFileSync(path.join(root, 'notes/blog/a.md'), 'utf8');
     const commitsBefore = git('rev-list', '--count', 'HEAD').toString().trim();
-    const res = await post({
-      entries: [
-        { path: 'notes/blog/a.md', notebookId: 'blog', tags: ['doing', 'x'] },
-        { path: 'notes/blog/missing.md', notebookId: 'blog', tags: [] },
-      ],
-    });
+    const res = await post({ entries: [{ path: 'notes/blog/a.md', notebookId: 'blog', tags: ['doing', 'x'] }, { path: 'notes/blog/missing.md', notebookId: 'blog', tags: [] }] });
     expect(res.status).toBe(403);
     expect(fs.readFileSync(path.join(root, 'notes/blog/a.md'), 'utf8')).toBe(before);
     expect(git('rev-list', '--count', 'HEAD').toString().trim()).toBe(commitsBefore);
@@ -151,22 +135,18 @@ describe('local /api/tags/apply', () => {
 
 describe.each(['github', 'gitlab'])('remote /api/tags/apply (%s)', provider => {
   it('applies one atomic commit across notebooks and preserves other frontmatter bytes', async () => {
-    const files = new Map([
-      ['.mygitnotes.yaml', Buffer.from('schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: blog\nnotebooks:\n  - id: blog\n    title: Blog\n    root: notes/blog\n  - id: thesis\n    title: Thesis\n    root: notes/thesis\n')],
-      ['notes/blog/a.md', Buffer.from('---\nid: a\ncustom: {x: 1,y: 2}\ntags: [todo, x]\ntitle: A\n---\n\nBody A\n')],
-      ['notes/thesis/c.md', Buffer.from('---\nid: c\ntags:\n  - todo\n---\n\nBody C\n')],
-    ]);
+    const files = new Map([['.mygitnotes.yaml', Buffer.from('schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: blog\nnotebooks:\n  - id: blog\n    title: Blog\n    root: notes/blog\n  - id: thesis\n    title: Thesis\n    root: notes/thesis\n')], ['notes/blog/a.md', Buffer.from('---\nid: a\ncustom: {x: 1,y: 2}\ntags: [todo, x]\ntitle: A\n---\n\nBody A\n')], ['notes/thesis/c.md', Buffer.from('---\nid: c\ntags:\n  - todo\n---\n\nBody C\n')]]);
     let revision = 'one';
     let canPush = true;
     const published: RemoteChange[][] = [];
     const prototype = (provider === 'github' ? GitHubSource : GitLabSource).prototype as any;
     vi.spyOn(prototype, 'loadSnapshot').mockImplementation(async () => {
       const dirs = new Set<string>();
-      for (const file of files.keys()) { const parts = file.split('/'); for (let i = 1; i < parts.length; i++) dirs.add(parts.slice(0, i).join('/')); }
-      return { sha: revision, treeSha: revision, info: { private: true, permissions: { push: canPush }, default_branch: 'main' }, entries: [
-        ...[...dirs].map(p => ({ path: p, type: 'tree', mode: '040000', sha: p })),
-        ...[...files].map(([p, bytes]) => ({ path: p, type: 'blob', mode: '100644', sha: assetHash(bytes), size: bytes.length })),
-      ] };
+      for (const file of files.keys()) {
+        const parts = file.split('/');
+        for (let i = 1; i < parts.length; i++) dirs.add(parts.slice(0, i).join('/'));
+      }
+      return { sha: revision, treeSha: revision, info: { private: true, permissions: { push: canPush }, default_branch: 'main' }, entries: [...[...dirs].map(p => ({ path: p, type: 'tree', mode: '040000', sha: p })), ...[...files].map(([p, bytes]) => ({ path: p, type: 'blob', mode: '100644', sha: assetHash(bytes), size: bytes.length }))] };
     });
     vi.spyOn(prototype, 'readBlob').mockImplementation(async (...args: unknown[]) => [...files.values()].find(bytes => assetHash(bytes) === args[0])!);
     vi.spyOn(prototype, 'publishChanges').mockImplementation(async (...args: unknown[]) => {
@@ -188,14 +168,7 @@ describe.each(['github', 'gitlab'])('remote /api/tags/apply (%s)', provider => {
     const base = `http://127.0.0.1:${(server.address() as any).port}`;
     const post = (body: unknown) => fetch(`${base}/api/tags/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     try {
-      const res = await post({
-        entries: [
-          { path: 'notes/blog/a.md', notebookId: 'blog', tags: ['doing', 'x'] },
-          { path: 'notes/thesis/c.md', notebookId: 'thesis', tags: ['doing'] },
-        ],
-        revision,
-        message: 'rename todo to doing',
-      });
+      const res = await post({ entries: [{ path: 'notes/blog/a.md', notebookId: 'blog', tags: ['doing', 'x'] }, { path: 'notes/thesis/c.md', notebookId: 'thesis', tags: ['doing'] }], revision, message: 'rename todo to doing' });
       expect(res.status).toBe(200);
       expect(published).toHaveLength(1); // one atomic commit for both notebooks
       expect(published[0]).toHaveLength(2);

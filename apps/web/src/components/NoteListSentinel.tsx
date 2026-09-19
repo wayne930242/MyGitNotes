@@ -3,13 +3,7 @@ import { Button } from './Button.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
 /** Loads the next page once the end of a note list scrolls into view. */
-export function NoteListSentinel({ hasMore, loading, error, onLoadMore, className = '' }: {
-  hasMore: boolean;
-  loading: boolean;
-  error?: string;
-  onLoadMore: () => void;
-  className?: string;
-}) {
+export function NoteListSentinel({ hasMore, loading, error, onLoadMore, className = '' }: { hasMore: boolean; loading: boolean; error?: string; onLoadMore: () => void; className?: string; }) {
   const { t } = useTranslation();
   const anchor = useRef<HTMLDivElement>(null);
   const load = useRef(onLoadMore);
@@ -26,11 +20,16 @@ export function NoteListSentinel({ hasMore, loading, error, onLoadMore, classNam
     return () => observer.disconnect();
   }, [hasMore, loading, error]);
   if (!hasMore && !loading && !error) return null;
-  return <div ref={anchor} className={`note-list-sentinel ${className}`.trim()} data-note-sentinel={hasMore ? 'more' : 'end'}>
-    {error
-      ? <p role="alert" className="note-list-sentinel-error">{error}
-          <Button type="button" onClick={onLoadMore} disabled={loading}>{t('notes.retryPage')}</Button>
-        </p>
-      : <p role="status">{loading ? t('notes.loadingMore') : t('notes.moreAvailable')}</p>}
-  </div>;
+  return (
+    <div ref={anchor} className={`note-list-sentinel ${className}`.trim()} data-note-sentinel={hasMore ? 'more' : 'end'}>
+      {error
+        ? (
+          <p role='alert' className='note-list-sentinel-error'>
+            {error}
+            <Button type='button' onClick={onLoadMore} disabled={loading}>{t('notes.retryPage')}</Button>
+          </p>
+        )
+        : <p role='status'>{loading ? t('notes.loadingMore') : t('notes.moreAvailable')}</p>}
+    </div>
+  );
 }

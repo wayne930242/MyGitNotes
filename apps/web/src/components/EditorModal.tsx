@@ -23,14 +23,14 @@ export const EditorModal: React.FC<EditorModalProps> = ({ note, committed, loadi
 /** Shown while a note's body is read; the editor never starts from a missing body. */
 const EditorModalLoading: React.FC = () => {
   const { t } = useTranslation();
-  return <div className="viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <p role="status" className="px-6 py-4 rounded-xl text-sm" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}>
-      {t('notes.loadingNote')}
-    </p>
-  </div>;
+  return (
+    <div className='viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-4'>
+      <p role='status' className='px-6 py-4 rounded-xl text-sm' style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}>{t('notes.loadingNote')}</p>
+    </div>
+  );
 };
 
-const ZoomFrame: React.FC<{ note: NoteItem; committed?: NoteItem }> = ({ note, committed }) => {
+const ZoomFrame: React.FC<{ note: NoteItem; committed?: NoteItem; }> = ({ note, committed }) => {
   const editing = useNoteEditing();
   const { setZoom, hosts } = editing;
   // A host that already edits this note lends its editor, so both places keep one session, cursor and undo history.
@@ -44,13 +44,8 @@ const ZoomFrame: React.FC<{ note: NoteItem; committed?: NoteItem }> = ({ note, c
   }, [setZoom, note.path, borrowed, slot]);
   const props = editing.editorProps(note, committed);
   return (
-    <div className="note-overlay viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn">
-      <div role="dialog" aria-modal="true" aria-label="Note editor" className="note-dialog ui-dialog shadow-2xl w-full max-w-none h-full flex flex-col overflow-hidden transition-colors">
-        {borrowed
-          ? <div ref={setSlot} className="note-editor-slot" />
-          : <NoteEditor key={`${props.draftScope}:${note.path}`} {...props} note={note} frame="zoom" active
-            onClose={editing.closeZoom} onAddToFocus={editing.addToFocus(note)} />}
-      </div>
+    <div className='note-overlay viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn'>
+      <div role='dialog' aria-modal='true' aria-label='Note editor' className='note-dialog ui-dialog shadow-2xl w-full max-w-none h-full flex flex-col overflow-hidden transition-colors'>{borrowed ? <div ref={setSlot} className='note-editor-slot' /> : <NoteEditor key={`${props.draftScope}:${note.path}`} {...props} note={note} frame='zoom' active onClose={editing.closeZoom} onAddToFocus={editing.addToFocus(note)} />}</div>
     </div>
   );
 };

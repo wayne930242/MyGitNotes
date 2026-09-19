@@ -1,9 +1,4 @@
-import {
-  getGitStatus,
-  stageAndCommit,
-  updateCore,
-  runGit,
-} from '@mygitnotes/git';
+import { getGitStatus, runGit, stageAndCommit, updateCore } from '@mygitnotes/git';
 import { assertSafeRepoPath } from '../guards.js';
 import type { ToolContext } from './context.js';
 
@@ -12,10 +7,7 @@ export async function handleGetGitStatus(ctx: ToolContext) {
   return { status };
 }
 
-export async function handleGitCommit(
-  ctx: ToolContext,
-  args: { files: string[]; message: string }
-) {
+export async function handleGitCommit(ctx: ToolContext, args: { files: string[]; message: string; }) {
   for (const f of args.files) {
     assertSafeRepoPath(ctx.repoRoot, f);
   }
@@ -43,21 +35,13 @@ export async function handleCheckCoreUpdate(ctx: ToolContext) {
       isUpToDate = false;
     }
 
-    return {
-      remoteUsed: remote,
-      currentHash,
-      coreHash,
-      isUpToDate,
-    };
+    return { remoteUsed: remote, currentHash, coreHash, isUpToDate };
   } catch (err: unknown) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
 }
 
-export async function handleUpdateCore(
-  ctx: ToolContext,
-  args: { autoPush?: boolean; checkOnly?: boolean } = {}
-) {
+export async function handleUpdateCore(ctx: ToolContext, args: { autoPush?: boolean; checkOnly?: boolean; } = {}) {
   if (args.checkOnly) {
     return handleCheckCoreUpdate(ctx);
   }

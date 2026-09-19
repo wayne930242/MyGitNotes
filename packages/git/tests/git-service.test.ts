@@ -1,27 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import {
-  runGit,
-  getCurrentBranch,
-  getGitStatus,
-  stageAndCommit,
-  getRecentCommits,
-  getFirstAndLastCommitDates,
-} from '../src/git-service.js';
+import { getCurrentBranch, getFirstAndLastCommitDates, getGitStatus, getRecentCommits, runGit, stageAndCommit } from '../src/git-service.js';
 
 const execFileAsync = promisify(execFile);
 
 /** Commits with an explicit author/committer date, for deterministic history tests. */
 async function commitAt(repoRoot: string, files: string[], message: string, isoDate: string): Promise<void> {
   await execFileAsync('git', ['add', '--', ...files], { cwd: repoRoot });
-  await execFileAsync('git', ['commit', '-m', message], {
-    cwd: repoRoot,
-    env: { ...process.env, GIT_AUTHOR_DATE: isoDate, GIT_COMMITTER_DATE: isoDate },
-  });
+  await execFileAsync('git', ['commit', '-m', message], { cwd: repoRoot, env: { ...process.env, GIT_AUTHOR_DATE: isoDate, GIT_COMMITTER_DATE: isoDate } });
 }
 
 describe('Guarded Git Service', () => {

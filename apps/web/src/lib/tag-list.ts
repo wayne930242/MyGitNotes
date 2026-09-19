@@ -4,23 +4,19 @@ export const TAG_SORT_STORAGE_KEY = 'github-notes:tag-sort';
 export function filterAndSortTags(counts: Record<string, number>, query: string, sort: TagSort, locale: string): string[] {
   const search = query.trim().toLocaleLowerCase(locale);
   const byName = new Intl.Collator(locale, { numeric: true, sensitivity: 'base' });
-  return Object.keys(counts)
-    .filter(tag => tag.toLocaleLowerCase(locale).includes(search))
-    .sort((a, b) => {
-      const nameOrder = byName.compare(a, b) || a.localeCompare(b, locale);
-      if (sort === 'count-desc') return counts[b] - counts[a] || nameOrder;
-      if (sort === 'count-asc') return counts[a] - counts[b] || nameOrder;
-      return sort === 'name-desc' ? -nameOrder : nameOrder;
-    });
+  return Object.keys(counts).filter(tag => tag.toLocaleLowerCase(locale).includes(search)).sort((a, b) => {
+    const nameOrder = byName.compare(a, b) || a.localeCompare(b, locale);
+    if (sort === 'count-desc') return counts[b] - counts[a] || nameOrder;
+    if (sort === 'count-asc') return counts[a] - counts[b] || nameOrder;
+    return sort === 'name-desc' ? -nameOrder : nameOrder;
+  });
 }
 
 export function filterTagCandidates(allTags: string[], excludeTag: string, query: string, locale = 'en'): string[] {
   const trimmed = query.trim();
   if (!trimmed) return [];
   const search = trimmed.toLocaleLowerCase(locale);
-  return allTags
-    .filter(t => t !== excludeTag && t.toLocaleLowerCase(locale).includes(search))
-    .sort((a, b) => a.localeCompare(b, locale));
+  return allTags.filter(t => t !== excludeTag && t.toLocaleLowerCase(locale).includes(search)).sort((a, b) => a.localeCompare(b, locale));
 }
 
 export function getSavedTagSort(): TagSort {

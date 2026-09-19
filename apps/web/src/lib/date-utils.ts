@@ -37,7 +37,7 @@ export function nextMonday(from: Date): Date {
 export function getLocaleWeekStartDay(locale?: string): number {
   const resolved = locale || (typeof navigator !== 'undefined' ? navigator.language : 'en-US');
   try {
-    const info = (new Intl.Locale(resolved) as Intl.Locale & { weekInfo?: { firstDay: number } }).weekInfo;
+    const info = (new Intl.Locale(resolved) as Intl.Locale & { weekInfo?: { firstDay: number; }; }).weekInfo;
     if (info && typeof info.firstDay === 'number') return info.firstDay % 7;
   } catch {
     // Unsupported locale or missing weekInfo; fall through to the default.

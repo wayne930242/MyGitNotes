@@ -1,25 +1,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
-import { NotebookConfig, FolderItem, FolderMetadata } from './types.js';
+import { FolderItem, FolderMetadata, NotebookConfig } from './types.js';
 import { resolveSafePath } from './path-guard.js';
 import { loadWorkspaceConfig } from './config.js';
 
-export function parseFolderConfig(raw: string, fallback: string, filename: string): { title: string; order: number; description?: string } {
+export function parseFolderConfig(raw: string, fallback: string, filename: string): { title: string; order: number; description?: string; } {
   try {
     const data = YAML.parse(raw) ?? {};
-    if (typeof data !== 'object' || Array.isArray(data) ||
-      (data.title !== undefined && (typeof data.title !== 'string' || !data.title.trim())) ||
-      (data.order !== undefined && (typeof data.order !== 'number' || !Number.isFinite(data.order))) ||
-      (data.description !== undefined && typeof data.description !== 'string')) throw new Error('Expected title (string), order (number), description (string).');
+    if (typeof data !== 'object' || Array.isArray(data) || (data.title !== undefined && (typeof data.title !== 'string' || !data.title.trim())) || (data.order !== undefined && (typeof data.order !== 'number' || !Number.isFinite(data.order))) || (data.description !== undefined && typeof data.description !== 'string')) throw new Error('Expected title (string), order (number), description (string).');
     return { title: data.title || fallback, order: data.order ?? 0, description: data.description };
-  } catch (error) { throw new Error(`Invalid folder configuration ${filename}: ${(error as Error).message}`); }
+  } catch (error) {
+    throw new Error(`Invalid folder configuration ${filename}: ${(error as Error).message}`);
+  }
 }
 
 export function isNotebookContent(relative: string, notebook: NotebookConfig): boolean {
   const assetDir = (notebook.assets || 'assets').replace(/\\/g, '/').replace(/\/$/, '');
-  return !relative.split('/').some(p => p.startsWith('.') || p.toLowerCase() === 'agents.md' || ['node_modules', 'dist', 'build'].includes(p)) &&
-    relative !== assetDir && !relative.startsWith(`${assetDir}/`) && !/(^|\/)docs\/agent(\/|$)/.test(relative);
+  return !relative.split('/').some(p => p.startsWith('.') || p.toLowerCase() === 'agents.md' || ['node_modules', 'dist', 'build'].includes(p)) && relative !== assetDir && !relative.startsWith(`${assetDir}/`) && !/(^|\/)docs\/agent(\/|$)/.test(relative);
 }
 
 export function sortFolders(folders: FolderItem[]): FolderItem[] {
@@ -27,7 +25,10 @@ export function sortFolders(folders: FolderItem[]): FolderItem[] {
   function visit(parent: string) {
     const children = folders.filter(f => path.posix.dirname(f.path) === (parent || '.'));
     children.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title) || a.path.localeCompare(b.path));
-    for (const child of children) { sorted.push(child); visit(child.path); }
+    for (const child of children) {
+      sorted.push(child);
+      visit(child.path);
+    }
   }
   visit('');
   return sorted;
@@ -83,11 +84,7 @@ export function getFolderItem(repoRoot: string, folderRelPath: string): FolderIt
   return { notebookId: nb.id, path: relInNb, ...metadata };
 }
 
-export function writeFolderConfig(
-  repoRoot: string,
-  folderRelPath: string,
-  metadata: FolderMetadata
-): { folder: FolderItem; dirFileRel: string } {
+export function writeFolderConfig(repoRoot: string, folderRelPath: string, metadata: FolderMetadata): { folder: FolderItem; dirFileRel: string; } {
   const normalizedRel = folderRelPath.replace(/\\/g, '/').replace(/\/+$/, '');
   const fullFolder = resolveSafePath(repoRoot, normalizedRel);
   if (!fs.existsSync(fullFolder)) {
@@ -116,12 +113,5 @@ export function writeFolderConfig(
   const content = serializeFolderConfig(merged);
   fs.writeFileSync(dirFileFull, content, 'utf8');
 
-  return {
-    folder: {
-      notebookId,
-      path: relInNb,
-      ...validated,
-    },
-    dirFileRel,
-  };
+  return { folder: { notebookId, path: relInNb, ...validated }, dirFileRel };
 }

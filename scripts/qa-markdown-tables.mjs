@@ -6,130 +6,232 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { resolveQaChromePath } from './qa-chrome.mjs';
-const product=path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const require=createRequire(`${product}/apps/web/package.json`);
-const puppeteer=require('puppeteer-core');
-const root=fs.mkdtempSync(path.join(os.tmpdir(),'github-notes-browser-'));
-const write=(p,s)=>{fs.mkdirSync(path.dirname(path.join(root,p)),{recursive:true});fs.writeFileSync(path.join(root,p),s);};
-const git=(...args)=>execFileSync('git',args,{cwd:root,stdio:'pipe'});
-write('notes/.github-notes.yaml','schema_version: 1\nworkspace:\n  title: Folder QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
-write('notes/example/root.md','# Root Note\n\nParagraph **bold** and *italic*.\n\n- [ ] Task\n\n| A | B |\n| - | - |\n| a | b |\n\n![pixel](assets/pixel.png)\n');
-write('notes/example/projects/_dir.yml','title: Projects\norder: -1\n');
-write('notes/example/projects/deep/_dir.yml','title: Deep work\n');
-write('notes/example/projects/deep/nested.md','# Nested Note\n');
-write('notes/example/assets/pixel.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64'));
-git('init','-b','main');git('config','user.name','Browser QA');git('config','user.email','qa@example.com');git('add','.');git('commit','-m','fixture');
-process.env.MYGITNOTES_SOURCE='local';process.env.MYGITNOTES_LOCAL_PATH=root;delete process.env.VERCEL;delete process.env.APP_URL;
-const {createApp}=await import(`${product}/apps/local-server/dist/app.js`);
-const server=createServer(createApp(product));await new Promise(r=>server.listen(0,'127.0.0.1',r));
-const base=`http://127.0.0.1:${server.address().port}`;
-const browser=await puppeteer.launch({executablePath:resolveQaChromePath(),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
-const page=await browser.newPage();await page.setViewport({width:1440,height:1000});
-const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE ERROR',e.message);});
-page.setDefaultTimeout(8000);
-const click=async text=>{const ok=await page.evaluate(text=>{const b=Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()===text);b?.click();return !!b;},text);if(!ok)throw Error(`Missing button: ${text}`);};
-const tableRoot='.live-md-table';
-const bodyCell=(r,c)=>`${tableRoot} tbody tr:nth-child(${r}) > :nth-child(${c+1})`;
-const hoverEdge=async(axis,index)=>{
- const point=await page.$eval(tableRoot,(root,{axis,index})=>{
-   const table=root.querySelector('table');
-   const rect=axis==='row'?table.rows[index-1].getBoundingClientRect():table.rows[0].cells[Math.max(0,index-1)].getBoundingClientRect();
-   return axis==='row'?{x:rect.left+rect.width/2,y:rect.bottom}:{x:index===0?rect.left:rect.right,y:rect.top+rect.height/2};
- },{axis,index});
- await page.mouse.move(point.x,point.y);
- await page.waitForFunction(({axis,index})=>{const handle=document.querySelector(`.live-table-insert-${axis}[data-visible="true"]`);return handle?.dataset.insertIndex===String(index)&&getComputedStyle(handle).opacity==='1';},{}, {axis,index});
- if(axis==='column' && await page.$eval(tableRoot,root=>{const handle=root.querySelector('.live-table-insert-column').getBoundingClientRect(),toolbar=root.querySelector('.live-table-toolbar').getBoundingClientRect();return handle.top<toolbar.bottom && handle.right>toolbar.left && handle.left<toolbar.right;}))throw Error('Column insertion handle overlaps the floating toolbar');
+const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(`${product}/apps/web/package.json`);
+const puppeteer = require('puppeteer-core');
+const root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-browser-'));
+const write = (p, s) => {
+  fs.mkdirSync(path.dirname(path.join(root, p)), { recursive: true });
+  fs.writeFileSync(path.join(root, p), s);
 };
-const count=()=>page.$eval(`${tableRoot} table`,e=>({rows:e.rows.length,columns:e.rows[0].cells.length}));
-const toolbar=label=>`${tableRoot} .live-table-toolbar button[aria-label="${label}"]`;
+const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+write('notes/.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Folder QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
+write('notes/example/root.md', '# Root Note\n\nParagraph **bold** and *italic*.\n\n- [ ] Task\n\n| A | B |\n| - | - |\n| a | b |\n\n![pixel](assets/pixel.png)\n');
+write('notes/example/projects/_dir.yml', 'title: Projects\norder: -1\n');
+write('notes/example/projects/deep/_dir.yml', 'title: Deep work\n');
+write('notes/example/projects/deep/nested.md', '# Nested Note\n');
+write('notes/example/assets/pixel.png', Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64'));
+git('init', '-b', 'main');
+git('config', 'user.name', 'Browser QA');
+git('config', 'user.email', 'qa@example.com');
+git('add', '.');
+git('commit', '-m', 'fixture');
+process.env.MYGITNOTES_SOURCE = 'local';
+process.env.MYGITNOTES_LOCAL_PATH = root;
+delete process.env.VERCEL;
+delete process.env.APP_URL;
+const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
+const server = createServer(createApp(product));
+await new Promise(r => server.listen(0, '127.0.0.1', r));
+const base = `http://127.0.0.1:${server.address().port}`;
+const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const page = await browser.newPage();
+await page.setViewport({ width: 1440, height: 1000 });
+const errors = [];
+page.on('pageerror', e => {
+  errors.push(e.message);
+  console.error('PAGE ERROR', e.message);
+});
+page.setDefaultTimeout(8000);
+const click = async text => {
+  const ok = await page.evaluate(text => {
+    const b = Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === text);
+    b?.click();
+    return !!b;
+  }, text);
+  if (!ok) throw Error(`Missing button: ${text}`);
+};
+const tableRoot = '.live-md-table';
+const bodyCell = (r, c) => `${tableRoot} tbody tr:nth-child(${r}) > :nth-child(${c + 1})`;
+const hoverEdge = async (axis, index) => {
+  const point = await page.$eval(tableRoot, (root, { axis, index }) => {
+    const table = root.querySelector('table');
+    const rect = axis === 'row' ? table.rows[index - 1].getBoundingClientRect() : table.rows[0].cells[Math.max(0, index - 1)].getBoundingClientRect();
+    return axis === 'row' ? { x: rect.left + rect.width / 2, y: rect.bottom } : { x: index === 0 ? rect.left : rect.right, y: rect.top + rect.height / 2 };
+  }, { axis, index });
+  await page.mouse.move(point.x, point.y);
+  await page.waitForFunction(
+    ({ axis, index }) => {
+      const handle = document.querySelector(`.live-table-insert-${axis}[data-visible="true"]`);
+      return handle?.dataset.insertIndex === String(index) && getComputedStyle(handle).opacity === '1';
+    },
+    {},
+    { axis, index },
+  );
+  if (
+    axis === 'column' && await page.$eval(tableRoot, root => {
+      const handle = root.querySelector('.live-table-insert-column').getBoundingClientRect(), toolbar = root.querySelector('.live-table-toolbar').getBoundingClientRect();
+      return handle.top < toolbar.bottom && handle.right > toolbar.left && handle.left < toolbar.right;
+    })
+  ) throw Error('Column insertion handle overlaps the floating toolbar');
+};
+const count = () => page.$eval(`${tableRoot} table`, e => ({ rows: e.rows.length, columns: e.rows[0].cells.length }));
+const toolbar = label => `${tableRoot} .live-table-toolbar button[aria-label="${label}"]`;
 try {
- await page.goto(base+'/notebooks/example/notes/root.md',{waitUntil:'networkidle0'});
- await page.waitForSelector(tableRoot);
- await page.mouse.move(0,0);
- await page.waitForFunction(()=>getComputedStyle(document.querySelector('.live-table-toolbar')).opacity==='0');
- await page.hover(`${tableRoot} th`);
- await page.waitForFunction(()=>getComputedStyle(document.querySelector('.live-table-toolbar')).opacity==='1');
- if(await page.$('dialog[open]'))throw Error('Table editing opened a dialog');
- await hoverEdge('column',1);await page.click('.live-table-insert-column');
- await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows[0].cells.length===3);
- const headers=await page.$eval(`${tableRoot} table`,e=>[...e.rows[0].cells].map(c=>c.textContent));
- if(JSON.stringify(headers)!==JSON.stringify(['A','','B']))throw Error('Column inserted at wrong boundary: '+headers);
- await hoverEdge('row',1);await page.click('.live-table-insert-row');
- await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows.length===3);
- await page.click(bodyCell(1,1),{count:2});
- await page.waitForSelector('.live-table-cell-editor');
- await page.keyboard.type('new|value');await page.keyboard.down('Control');await page.keyboard.press('Enter');await page.keyboard.up('Control');
- await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows[1].cells[1].textContent==='new|value');
- await page.click(bodyCell(1,1));await page.select(`${tableRoot} select[aria-label="Column alignment"]`,'center');
- await page.waitForFunction(()=>getComputedStyle(document.querySelector('.live-md-table table').rows[1].cells[1]).textAlign==='center');
- await page.click(bodyCell(1,1));await page.click(toolbar('Delete column'));
- await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows[0].cells.length===2);
- const remaining=await page.$eval(`${tableRoot} table`,e=>[...e.rows[2].cells].map(c=>c.textContent));
- if(JSON.stringify(remaining)!==JSON.stringify(['a','b']))throw Error('Column deletion damaged neighboring content');
- await page.waitForFunction(()=>document.activeElement?.matches('.live-md-table th, .live-md-table td'));await page.keyboard.down('Control');await page.keyboard.press('KeyZ');await page.keyboard.up('Control');
- await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows[0].cells.length===3);
- if(!await page.$eval(tableRoot,e=>e.textContent.includes('new|value')))throw Error('Undo lost deleted cell content');
- await page.click(bodyCell(1,1));await page.click(toolbar('Delete row'));
- await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows.length===2);
- await page.waitForFunction(()=>document.activeElement?.matches('.live-md-table th, .live-md-table td'));await page.keyboard.down('Control');await page.keyboard.press('KeyZ');await page.keyboard.up('Control');
- await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows.length===3);
- await page.click(`${tableRoot} th`);
- if(!await page.$eval(toolbar('Delete row'),e=>e.disabled))throw Error('Header row must stay present');
- await page.click(toolbar('Edit cell'));await page.waitForSelector('.live-table-cell-editor');
- await page.keyboard.type('cancelled');await page.keyboard.press('Escape');
- if(await page.$eval(`${tableRoot} th`,e=>e.textContent)!=='A')throw Error('Escape did not cancel cell edit');
- await page.click(bodyCell(2,0),{count:2});await page.waitForSelector('.live-table-cell-editor');
- await page.keyboard.type('a updated');await page.keyboard.press('Tab');
- await page.waitForFunction(()=>document.activeElement===document.querySelector('.live-md-table table').rows[2].cells[1]);
- await page.click(bodyCell(2,0),{count:2});await page.waitForSelector('.live-table-cell-editor');
- await page.keyboard.type('blur saved');await page.click('.live-md-heading');
- await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows[2].cells[0].textContent==='blur saved');
- await click('Source');
- const source=await page.$eval('textarea[aria-label="Note content"]',e=>e.value);
- if(!source.includes('new\\|value')||!source.includes(':---:')||!source.startsWith('# Root Note\n\nParagraph **bold** and *italic*.'))throw Error('Inline edits corrupted Markdown or surrounding text');
- await click('Live Preview');await page.waitForSelector(tableRoot);
- for(let i=0;i<5;i++){const previous=await count();await hoverEdge('column',1);await page.click('.live-table-insert-column');await page.waitForFunction(columns=>document.querySelector('.live-md-table table').rows[0].cells.length===columns+1,{},previous.columns);}
- const finalColumns=(await count()).columns;
- for(let attempt=0;attempt<50;attempt++){if(fs.readFileSync(path.join(root,'notes/example/root.md'),'utf8').split('\n').find(line=>line.startsWith('| A |'))?.split('|').length===finalColumns+2)break;await new Promise(resolve=>setTimeout(resolve,100));}
- if(fs.readFileSync(path.join(root,'notes/example/root.md'),'utf8').split('\n').find(line=>line.startsWith('| A |'))?.split('|').length!==finalColumns+2)throw Error('Inline table edits were not saved to disk');
- await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
- await page.waitForSelector(tableRoot);
- await page.tap(`${tableRoot} th`);
- await page.waitForSelector('.live-table-insert-row[data-visible="true"]');
- await page.waitForFunction(()=>{const e=document.querySelector('.markdown-table-scroll');return e.scrollWidth>e.clientWidth+10;});
- await page.tap(toolbar('Fit page'));
- await page.waitForFunction(()=>{const e=document.querySelector('.markdown-table-scroll');return e.scrollWidth<=e.clientWidth+1;});
- await page.tap(`${tableRoot} th`);
- const beforeTouch=await count();await page.tap('.live-table-insert-row[data-visible="true"]');
- await page.waitForFunction(rows=>document.querySelector('.live-md-table table').rows.length===rows+1,{},beforeTouch.rows);
- await page.tap(bodyCell(1,0));await page.tap(toolbar('Delete row'));
- await page.waitForFunction(rows=>document.querySelector('.live-md-table table').rows.length===rows,{},beforeTouch.rows);
- await page.tap(`${tableRoot} th`);await page.tap(toolbar('Delete column'));
- await page.waitForFunction(columns=>document.querySelector('.live-md-table table').rows[0].cells.length===columns-1,{},beforeTouch.columns);
- if(await page.$eval('[data-markdown-editor]',e=>e.scrollWidth>e.clientWidth))throw Error('Mobile editor overflows');
- fs.mkdirSync(path.join(product,'artifacts/qa'),{recursive:true});
- await page.tap(`${tableRoot} th`);await page.screenshot({path:product+'/artifacts/qa/table-inline-mobile.png',fullPage:true});
- const mobileColumns=(await count()).columns;
- for(let attempt=0;attempt<50;attempt++){if(fs.readFileSync(path.join(root,'notes/example/root.md'),'utf8').split('\n').find(line=>line.startsWith('|'))?.split('|').length===mobileColumns+2)break;await new Promise(resolve=>setTimeout(resolve,100));}
- await page.setViewport({width:1440,height:1000});await page.waitForSelector(tableRoot);
- await hoverEdge('column',1);await page.screenshot({path:product+'/artifacts/qa/table-inline-desktop.png',fullPage:true});
- await page.click('[aria-label="Insert table"]');
- await page.waitForFunction(()=>document.querySelectorAll('.live-md-table').length===2);
- await page.click(`${tableRoot} th`);await page.click(toolbar('Delete column'));
- await page.waitForFunction(()=>document.querySelector('.live-md-table table').rows[0].cells.length===1);
- if(!await page.$eval(toolbar('Delete column'),e=>e.disabled))throw Error('Last column must stay present');
- const demo='# 調查線索\n\n| 調查員 | 目前位置 | 發現的線索 |\n| --- | --- | --- |\n| 艾琳 | 市立圖書館 | 一份缺頁的借閱紀錄 |\n| 里昂 | 舊車站 | 凌晨抵達的神祕訪客 |\n\n';
- await click('Source');await page.focus('textarea[aria-label="Note content"]');
- await page.keyboard.down('Control');await page.keyboard.press('KeyA');await page.keyboard.up('Control');await page.keyboard.type(demo);
- for(let attempt=0;attempt<50;attempt++){if(fs.readFileSync(path.join(root,'notes/example/root.md'),'utf8')===demo)break;await new Promise(resolve=>setTimeout(resolve,100));}
- await click('Live Preview');await page.evaluate(()=>localStorage.setItem('github-notes:language','zh-TW'));await page.reload({waitUntil:'networkidle0'});await page.waitForSelector(tableRoot);
- await page.evaluate(()=>Array.from(document.querySelectorAll('button')).find(button=>button.textContent.trim()==='捨棄草稿')?.click());
- await hoverEdge('column',1);await page.screenshot({path:product+'/artifacts/qa/table-inline-desktop.png',fullPage:true});
- await page.click(bodyCell(1,1));await page.hover(toolbar('刪除欄'));await page.screenshot({path:product+'/artifacts/qa/table-inline-delete-column.png',fullPage:true});
- await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});await page.waitForSelector(tableRoot);await page.tap(`${tableRoot} th`);await page.screenshot({path:product+'/artifacts/qa/table-inline-mobile.png',fullPage:true});
- if(errors.length)throw Error(errors.join('; '));
- console.log('PASS inline tables: hover toolbar; exact edge insertion; cell editing/cancel; alignment; row/column deletion; undo restores data; Markdown fidelity; touch insertion/deletion; fit/expanded; desktop/mobile layout; direct table creation');
-} catch(error) {
- console.error(await page.evaluate(()=>({text:document.body.innerText.slice(-1500),tables:Array.from(document.querySelectorAll('.live-md-table')).map(e=>({hover:e.matches(':hover'),focus:e.matches(':focus-within'),touch:e.dataset.touchActive,buttons:Array.from(e.querySelectorAll('.live-table-insert')).map(b=>({visible:b.dataset.visible,index:b.dataset.insertIndex,opacity:getComputedStyle(b).opacity,rect:b.getBoundingClientRect().toJSON()}))}))})));
- fs.mkdirSync(path.join(product,'artifacts/qa'),{recursive:true});await page.screenshot({path:product+'/artifacts/qa/table-inline-failure.png',fullPage:true});throw error;
-} finally {await browser.close();await new Promise(r=>server.close(r));fs.rmSync(root,{recursive:true,force:true});}
+  await page.goto(base + '/notebooks/example/notes/root.md', { waitUntil: 'networkidle0' });
+  await page.waitForSelector(tableRoot);
+  await page.mouse.move(0, 0);
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.live-table-toolbar')).opacity === '0');
+  await page.hover(`${tableRoot} th`);
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.live-table-toolbar')).opacity === '1');
+  if (await page.$('dialog[open]')) throw Error('Table editing opened a dialog');
+  await hoverEdge('column', 1);
+  await page.click('.live-table-insert-column');
+  await page.waitForFunction(() => document.querySelector('.live-md-table table').rows[0].cells.length === 3);
+  const headers = await page.$eval(`${tableRoot} table`, e => [...e.rows[0].cells].map(c => c.textContent));
+  if (JSON.stringify(headers) !== JSON.stringify(['A', '', 'B'])) throw Error('Column inserted at wrong boundary: ' + headers);
+  await hoverEdge('row', 1);
+  await page.click('.live-table-insert-row');
+  await page.waitForFunction(() => document.querySelector('.live-md-table table').rows.length === 3);
+  await page.click(bodyCell(1, 1), { count: 2 });
+  await page.waitForSelector('.live-table-cell-editor');
+  await page.keyboard.type('new|value');
+  await page.keyboard.down('Control');
+  await page.keyboard.press('Enter');
+  await page.keyboard.up('Control');
+  await page.waitForFunction(() => document.querySelector('.live-md-table table').rows[1].cells[1].textContent === 'new|value');
+  await page.click(bodyCell(1, 1));
+  await page.select(`${tableRoot} select[aria-label="Column alignment"]`, 'center');
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.live-md-table table').rows[1].cells[1]).textAlign === 'center');
+  await page.click(bodyCell(1, 1));
+  await page.click(toolbar('Delete column'));
+  await page.waitForFunction(() => document.querySelector('.live-md-table table').rows[0].cells.length === 2);
+  const remaining = await page.$eval(`${tableRoot} table`, e => [...e.rows[2].cells].map(c => c.textContent));
+  if (JSON.stringify(remaining) !== JSON.stringify(['a', 'b'])) throw Error('Column deletion damaged neighboring content');
+  await page.waitForFunction(() => document.activeElement?.matches('.live-md-table th, .live-md-table td'));
+  await page.keyboard.down('Control');
+  await page.keyboard.press('KeyZ');
+  await page.keyboard.up('Control');
+  await page.waitForFunction(() => document.querySelector('.live-md-table table').rows[0].cells.length === 3);
+  if (!await page.$eval(tableRoot, e => e.textContent.includes('new|value'))) throw Error('Undo lost deleted cell content');
+  await page.click(bodyCell(1, 1));
+  await page.click(toolbar('Delete row'));
+  await page.waitForFunction(() => document.querySelector('.live-md-table table').rows.length === 2);
+  await page.waitForFunction(() => document.activeElement?.matches('.live-md-table th, .live-md-table td'));
+  await page.keyboard.down('Control');
+  await page.keyboard.press('KeyZ');
+  await page.keyboard.up('Control');
+  await page.waitForFunction(() => document.querySelector('.live-md-table table').rows.length === 3);
+  await page.click(`${tableRoot} th`);
+  if (!await page.$eval(toolbar('Delete row'), e => e.disabled)) throw Error('Header row must stay present');
+  await page.click(toolbar('Edit cell'));
+  await page.waitForSelector('.live-table-cell-editor');
+  await page.keyboard.type('cancelled');
+  await page.keyboard.press('Escape');
+  if (await page.$eval(`${tableRoot} th`, e => e.textContent) !== 'A') throw Error('Escape did not cancel cell edit');
+  await page.click(bodyCell(2, 0), { count: 2 });
+  await page.waitForSelector('.live-table-cell-editor');
+  await page.keyboard.type('a updated');
+  await page.keyboard.press('Tab');
+  await page.waitForFunction(() => document.activeElement === document.querySelector('.live-md-table table').rows[2].cells[1]);
+  await page.click(bodyCell(2, 0), { count: 2 });
+  await page.waitForSelector('.live-table-cell-editor');
+  await page.keyboard.type('blur saved');
+  await page.click('.live-md-heading');
+  await page.waitForFunction(() => document.querySelector('.live-md-table table').rows[2].cells[0].textContent === 'blur saved');
+  await click('Source');
+  const source = await page.$eval('textarea[aria-label="Note content"]', e => e.value);
+  if (!source.includes('new\\|value') || !source.includes(':---:') || !source.startsWith('# Root Note\n\nParagraph **bold** and *italic*.')) throw Error('Inline edits corrupted Markdown or surrounding text');
+  await click('Live Preview');
+  await page.waitForSelector(tableRoot);
+  for (let i = 0; i < 5; i++) {
+    const previous = await count();
+    await hoverEdge('column', 1);
+    await page.click('.live-table-insert-column');
+    await page.waitForFunction(columns => document.querySelector('.live-md-table table').rows[0].cells.length === columns + 1, {}, previous.columns);
+  }
+  const finalColumns = (await count()).columns;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (fs.readFileSync(path.join(root, 'notes/example/root.md'), 'utf8').split('\n').find(line => line.startsWith('| A |'))?.split('|').length === finalColumns + 2) break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  if (fs.readFileSync(path.join(root, 'notes/example/root.md'), 'utf8').split('\n').find(line => line.startsWith('| A |'))?.split('|').length !== finalColumns + 2) throw Error('Inline table edits were not saved to disk');
+  await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+  await page.waitForSelector(tableRoot);
+  await page.tap(`${tableRoot} th`);
+  await page.waitForSelector('.live-table-insert-row[data-visible="true"]');
+  await page.waitForFunction(() => {
+    const e = document.querySelector('.markdown-table-scroll');
+    return e.scrollWidth > e.clientWidth + 10;
+  });
+  await page.tap(toolbar('Fit page'));
+  await page.waitForFunction(() => {
+    const e = document.querySelector('.markdown-table-scroll');
+    return e.scrollWidth <= e.clientWidth + 1;
+  });
+  await page.tap(`${tableRoot} th`);
+  const beforeTouch = await count();
+  await page.tap('.live-table-insert-row[data-visible="true"]');
+  await page.waitForFunction(rows => document.querySelector('.live-md-table table').rows.length === rows + 1, {}, beforeTouch.rows);
+  await page.tap(bodyCell(1, 0));
+  await page.tap(toolbar('Delete row'));
+  await page.waitForFunction(rows => document.querySelector('.live-md-table table').rows.length === rows, {}, beforeTouch.rows);
+  await page.tap(`${tableRoot} th`);
+  await page.tap(toolbar('Delete column'));
+  await page.waitForFunction(columns => document.querySelector('.live-md-table table').rows[0].cells.length === columns - 1, {}, beforeTouch.columns);
+  if (await page.$eval('[data-markdown-editor]', e => e.scrollWidth > e.clientWidth)) throw Error('Mobile editor overflows');
+  fs.mkdirSync(path.join(product, 'artifacts/qa'), { recursive: true });
+  await page.tap(`${tableRoot} th`);
+  await page.screenshot({ path: product + '/artifacts/qa/table-inline-mobile.png', fullPage: true });
+  const mobileColumns = (await count()).columns;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (fs.readFileSync(path.join(root, 'notes/example/root.md'), 'utf8').split('\n').find(line => line.startsWith('|'))?.split('|').length === mobileColumns + 2) break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  await page.setViewport({ width: 1440, height: 1000 });
+  await page.waitForSelector(tableRoot);
+  await hoverEdge('column', 1);
+  await page.screenshot({ path: product + '/artifacts/qa/table-inline-desktop.png', fullPage: true });
+  await page.click('[aria-label="Insert table"]');
+  await page.waitForFunction(() => document.querySelectorAll('.live-md-table').length === 2);
+  await page.click(`${tableRoot} th`);
+  await page.click(toolbar('Delete column'));
+  await page.waitForFunction(() => document.querySelector('.live-md-table table').rows[0].cells.length === 1);
+  if (!await page.$eval(toolbar('Delete column'), e => e.disabled)) throw Error('Last column must stay present');
+  const demo = '# 調查線索\n\n| 調查員 | 目前位置 | 發現的線索 |\n| --- | --- | --- |\n| 艾琳 | 市立圖書館 | 一份缺頁的借閱紀錄 |\n| 里昂 | 舊車站 | 凌晨抵達的神祕訪客 |\n\n';
+  await click('Source');
+  await page.focus('textarea[aria-label="Note content"]');
+  await page.keyboard.down('Control');
+  await page.keyboard.press('KeyA');
+  await page.keyboard.up('Control');
+  await page.keyboard.type(demo);
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (fs.readFileSync(path.join(root, 'notes/example/root.md'), 'utf8') === demo) break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  await click('Live Preview');
+  await page.evaluate(() => localStorage.setItem('github-notes:language', 'zh-TW'));
+  await page.reload({ waitUntil: 'networkidle0' });
+  await page.waitForSelector(tableRoot);
+  await page.evaluate(() => Array.from(document.querySelectorAll('button')).find(button => button.textContent.trim() === '捨棄草稿')?.click());
+  await hoverEdge('column', 1);
+  await page.screenshot({ path: product + '/artifacts/qa/table-inline-desktop.png', fullPage: true });
+  await page.click(bodyCell(1, 1));
+  await page.hover(toolbar('刪除欄'));
+  await page.screenshot({ path: product + '/artifacts/qa/table-inline-delete-column.png', fullPage: true });
+  await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+  await page.waitForSelector(tableRoot);
+  await page.tap(`${tableRoot} th`);
+  await page.screenshot({ path: product + '/artifacts/qa/table-inline-mobile.png', fullPage: true });
+  if (errors.length) throw Error(errors.join('; '));
+  console.log('PASS inline tables: hover toolbar; exact edge insertion; cell editing/cancel; alignment; row/column deletion; undo restores data; Markdown fidelity; touch insertion/deletion; fit/expanded; desktop/mobile layout; direct table creation');
+} catch (error) {
+  console.error(await page.evaluate(() => ({ text: document.body.innerText.slice(-1500), tables: Array.from(document.querySelectorAll('.live-md-table')).map(e => ({ hover: e.matches(':hover'), focus: e.matches(':focus-within'), touch: e.dataset.touchActive, buttons: Array.from(e.querySelectorAll('.live-table-insert')).map(b => ({ visible: b.dataset.visible, index: b.dataset.insertIndex, opacity: getComputedStyle(b).opacity, rect: b.getBoundingClientRect().toJSON() })) })) })));
+  fs.mkdirSync(path.join(product, 'artifacts/qa'), { recursive: true });
+  await page.screenshot({ path: product + '/artifacts/qa/table-inline-failure.png', fullPage: true });
+  throw error;
+} finally {
+  await browser.close();
+  await new Promise(r => server.close(r));
+  fs.rmSync(root, { recursive: true, force: true });
+}

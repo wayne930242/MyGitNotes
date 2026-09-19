@@ -4,7 +4,13 @@ import { execFileSync } from 'node:child_process';
 import { planWorkspaceConversion } from './lib/workspace-conversion.mjs';
 
 // Converts a fork-model main into workspace content only: one commit, no history rewrite, no push.
-const arg = name => { const index = process.argv.indexOf(name); if (index < 0) return; const value = process.argv[index + 1]; if (!value || value.startsWith('--')) throw Error(`${name} requires a value.`); return value; };
+const arg = name => {
+  const index = process.argv.indexOf(name);
+  if (index < 0) return;
+  const value = process.argv[index + 1];
+  if (!value || value.startsWith('--')) throw Error(`${name} requires a value.`);
+  return value;
+};
 try {
   const repoRoot = path.resolve(arg('--workspace') ?? process.cwd());
   const git = (...args) => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 }).trim();
@@ -17,8 +23,11 @@ try {
     const remotes = git('remote').split('\n');
     const remote = remotes.includes('upstream') ? 'upstream' : remotes.includes('origin') ? 'origin' : undefined;
     if (!remote) throw Error('No upstream or origin remote. Pass --core <revision>.');
-    try { git('fetch', remote, 'core'); }
-    catch { throw Error(`Could not fetch ${remote}/core. Add the MyGitNotes remote as upstream or pass --core <revision>.`); }
+    try {
+      git('fetch', remote, 'core');
+    } catch {
+      throw Error(`Could not fetch ${remote}/core. Add the MyGitNotes remote as upstream or pass --core <revision>.`);
+    }
     coreRevision = `${remote}/core`;
   }
   // The Core revision main last merged decides which shared-namespace files are unmodified product copies;

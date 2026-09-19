@@ -14,7 +14,7 @@ export const REMOTE_CACHE_BATCH_BYTES = 800 * 1024;
 
 /** Process-local cache used when no shared store is configured. */
 export class MemoryRemoteCache implements RemoteCache {
-  private entries = new Map<string, { value: string; expires: number }>();
+  private entries = new Map<string, { value: string; expires: number; }>();
   private bytes = 0;
   constructor(private maxBytes = 64 * 1024 * 1024) {}
   async get(keys: string[]): Promise<(string | null)[]> {
@@ -22,7 +22,10 @@ export class MemoryRemoteCache implements RemoteCache {
       const entry = this.entries.get(key);
       if (!entry) return null;
       this.entries.delete(key);
-      if (entry.expires <= Date.now()) { this.bytes -= entry.value.length; return null; }
+      if (entry.expires <= Date.now()) {
+        this.bytes -= entry.value.length;
+        return null;
+      }
       this.entries.set(key, entry);
       return entry.value;
     });
@@ -30,7 +33,10 @@ export class MemoryRemoteCache implements RemoteCache {
   async set(entries: [string, string][], ttlSeconds: number): Promise<void> {
     for (const [key, value] of entries) {
       const previous = this.entries.get(key);
-      if (previous) { this.bytes -= previous.value.length; this.entries.delete(key); }
+      if (previous) {
+        this.bytes -= previous.value.length;
+        this.entries.delete(key);
+      }
       if (value.length > this.maxBytes) continue;
       while (this.bytes + value.length > this.maxBytes) {
         const oldest = this.entries.keys().next().value!;

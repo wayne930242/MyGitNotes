@@ -21,13 +21,7 @@ describe('copyToClipboard', () => {
     const writeText = vi.fn(() => new Promise<void>(() => {}));
     vi.stubGlobal('navigator', { clipboard: { writeText } });
     vi.stubGlobal('window', {});
-    const target = {
-      value: 'https://example.com/mcp/test-token',
-      readOnly: true,
-      focus: vi.fn(),
-      select: vi.fn(),
-      setSelectionRange: vi.fn(),
-    } as unknown as HTMLInputElement;
+    const target = { value: 'https://example.com/mcp/test-token', readOnly: true, focus: vi.fn(), select: vi.fn(), setSelectionRange: vi.fn() } as unknown as HTMLInputElement;
     const execCommand = vi.fn(() => {
       expect(target.readOnly).toBe(false);
       return true;
@@ -59,20 +53,10 @@ describe('copyToClipboard', () => {
     const execCommand = vi.fn().mockReturnValue(true);
     vi.stubGlobal('document', {
       createElement: () => {
-        const el = {
-          value: '',
-          style: {},
-          setAttribute: vi.fn(),
-          focus: vi.fn(),
-          select: vi.fn(),
-          setSelectionRange: vi.fn(),
-        };
+        const el = { value: '', style: {}, setAttribute: vi.fn(), focus: vi.fn(), select: vi.fn(), setSelectionRange: vi.fn() };
         return el;
       },
-      body: {
-        appendChild: vi.fn(),
-        removeChild: vi.fn(),
-      },
+      body: { appendChild: vi.fn(), removeChild: vi.fn() },
       execCommand,
     });
 
@@ -87,21 +71,7 @@ describe('copyToClipboard', () => {
     vi.stubGlobal('window', {});
 
     const execCommand = vi.fn().mockReturnValue(true);
-    vi.stubGlobal('document', {
-      createElement: () => ({
-        value: '',
-        style: {},
-        setAttribute: vi.fn(),
-        focus: vi.fn(),
-        select: vi.fn(),
-        setSelectionRange: vi.fn(),
-      }),
-      body: {
-        appendChild: vi.fn(),
-        removeChild: vi.fn(),
-      },
-      execCommand,
-    });
+    vi.stubGlobal('document', { createElement: () => ({ value: '', style: {}, setAttribute: vi.fn(), focus: vi.fn(), select: vi.fn(), setSelectionRange: vi.fn() }), body: { appendChild: vi.fn(), removeChild: vi.fn() }, execCommand });
 
     const result = await copyToClipboard('http-token-url');
     expect(result).toBe(true);
@@ -113,17 +83,9 @@ describe('copyToClipboard', () => {
     vi.stubGlobal('window', {});
 
     const execCommand = vi.fn().mockReturnValue(true);
-    vi.stubGlobal('document', {
-      execCommand,
-    });
+    vi.stubGlobal('document', { execCommand });
 
-    const targetInput = {
-      value: 'token-url-to-copy',
-      readOnly: true,
-      focus: vi.fn(),
-      select: vi.fn(),
-      setSelectionRange: vi.fn(),
-    } as unknown as HTMLInputElement;
+    const targetInput = { value: 'token-url-to-copy', readOnly: true, focus: vi.fn(), select: vi.fn(), setSelectionRange: vi.fn() } as unknown as HTMLInputElement;
 
     const result = await copyToClipboard('token-url-to-copy', targetInput);
     expect(result).toBe(true);
@@ -140,20 +102,10 @@ describe('copyToClipboard', () => {
     let createdEl: any = null;
     vi.stubGlobal('document', {
       createElement: () => {
-        createdEl = {
-          value: '',
-          style: {},
-          setAttribute: vi.fn(),
-          focus: vi.fn(),
-          select: vi.fn(),
-          setSelectionRange: vi.fn(),
-        };
+        createdEl = { value: '', style: {}, setAttribute: vi.fn(), focus: vi.fn(), select: vi.fn(), setSelectionRange: vi.fn() };
         return createdEl;
       },
-      body: {
-        appendChild: vi.fn(),
-        removeChild: vi.fn(),
-      },
+      body: { appendChild: vi.fn(), removeChild: vi.fn() },
       execCommand,
     });
 
@@ -176,28 +128,9 @@ describe('copyToClipboard', () => {
     vi.stubGlobal('window', {});
 
     const execCommand = vi.fn().mockReturnValue(false);
-    vi.stubGlobal('document', {
-      createElement: () => ({
-        value: '',
-        style: {},
-        setAttribute: vi.fn(),
-        focus: vi.fn(),
-        select: vi.fn(),
-        setSelectionRange: vi.fn(),
-      }),
-      body: {
-        appendChild: vi.fn(),
-        removeChild: vi.fn(),
-      },
-      execCommand,
-    });
+    vi.stubGlobal('document', { createElement: () => ({ value: '', style: {}, setAttribute: vi.fn(), focus: vi.fn(), select: vi.fn(), setSelectionRange: vi.fn() }), body: { appendChild: vi.fn(), removeChild: vi.fn() }, execCommand });
 
-    const targetInput = {
-      value: 'token-url',
-      focus: vi.fn(),
-      select: vi.fn(),
-      setSelectionRange: vi.fn(),
-    } as unknown as HTMLInputElement;
+    const targetInput = { value: 'token-url', focus: vi.fn(), select: vi.fn(), setSelectionRange: vi.fn() } as unknown as HTMLInputElement;
 
     const result = await copyToClipboard('token-url', targetInput);
     expect(result).toBe(false);

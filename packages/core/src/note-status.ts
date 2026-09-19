@@ -9,19 +9,11 @@ export function isNoteHidden(metadata: NoteMetadata): boolean {
 
 /** Explicit status actions archive/unarchive while preserving other metadata. */
 export function withNoteStatus(metadata: NoteMetadata, status: string): NoteMetadata {
-  return {
-    ...metadata,
-    status: status || undefined,
-    ...(status === 'archived' ? { hiden: true }
-      : metadata.status === 'archived' ? { hiden: false } : {}),
-  };
+  return { ...metadata, status: status || undefined, ...(status === 'archived' ? { hiden: true } : metadata.status === 'archived' ? { hiden: false } : {}) };
 }
 
 /** Ordered notebook choices followed by observed extensions; metadata stays unchanged. */
-export function resolveNoteStatuses(
-  notebook?: Pick<NotebookConfig, 'statuses'>,
-  observed: Iterable<string | undefined> = [],
-): string[] {
+export function resolveNoteStatuses(notebook?: Pick<NotebookConfig, 'statuses'>, observed: Iterable<string | undefined> = []): string[] {
   const configured = notebook?.statuses?.length ? notebook.statuses : DEFAULT_NOTE_STATUSES;
   const extensions = new Set<string>();
   for (const status of observed) {

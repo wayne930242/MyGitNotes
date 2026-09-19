@@ -14,11 +14,11 @@ export class WorkspaceCompatibilityError extends Error {
   }
 }
 
-function readSchemaVersion(root: string): { file: string; version: unknown } {
+function readSchemaVersion(root: string): { file: string; version: unknown; } {
   const relative = resolveWorkspaceConfigPath(root);
   if (!relative) throw new WorkspaceCompatibilityError(`No MyGitNotes workspace found at ${root}. Run \`pnpm bootstrap-workspace\` or set MYGITNOTES_LOCAL_PATH.`);
   const file = path.join(root, relative);
-  return { file, version: (YAML.parse(fs.readFileSync(file, 'utf8')) as { schema_version?: unknown } | null)?.schema_version };
+  return { file, version: (YAML.parse(fs.readFileSync(file, 'utf8')) as { schema_version?: unknown; } | null)?.schema_version };
 }
 
 /** Startup check: this Core only serves workspaces on its own schema version. */

@@ -1,20 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { searchNotes, searchTerms } from '../src/note-search.js';
 import type { NoteItem } from '../src/types.js';
 
-const note = (path: string, title: string, content: string, extra: Partial<NoteItem> = {}): NoteItem => ({
-  id: path, path, notebookId: path.split('/')[0], title, content, metadata: {}, tags: [], ...extra,
-});
+const note = (path: string, title: string, content: string, extra: Partial<NoteItem> = {}): NoteItem => ({ id: path, path, notebookId: path.split('/')[0], title, content, metadata: {}, tags: [], ...extra });
 
-const notes: NoteItem[] = [
-  note('blog/watermark.mdx', '我是不是「被 AI」了——文字工作者如何面對 AI 浮水印', '文責與製程的誠實。\n浮水印不能證明作者。'),
-  note('blog/apology.md', '道歉的哲學', '「因為你生氣所以我道歉」為何不妥？\n道歉要表達對規則的重視。'),
-  note('blog/logic.md', '普通人的邏輯學', '邏輯與道德無關。'),
-  note('thesis/readings/fine1994essence/index.md', 'Essence and Modality', 'Reading entry.', { status: 'read', tags: ['reading', '形上學'], metadata: { citekey: 'fine1994essence', status: 'read' } }),
-  note('thesis/readings/sidelle2023-grounding-mystique/notes.md', 'Reading Notes', 'Deflationism about ground.', { status: 'reading', tags: ['立基', '超內涵性'] }),
-  note('literature/fine1994essence/paper.md', 'paper', 'ESSENCE AND MODALITY\nKit Fine argues essence is not modal.'),
-  note('life/bridge/mltc.md', '現代失墩計算法 (MLTC) 概要', '橋牌失墩計算。', { tags: ['橋牌'] }),
-];
+const notes: NoteItem[] = [note('blog/watermark.mdx', '我是不是「被 AI」了——文字工作者如何面對 AI 浮水印', '文責與製程的誠實。\n浮水印不能證明作者。'), note('blog/apology.md', '道歉的哲學', '「因為你生氣所以我道歉」為何不妥？\n道歉要表達對規則的重視。'), note('blog/logic.md', '普通人的邏輯學', '邏輯與道德無關。'), note('thesis/readings/fine1994essence/index.md', 'Essence and Modality', 'Reading entry.', { status: 'read', tags: ['reading', '形上學'], metadata: { citekey: 'fine1994essence', status: 'read' } }), note('thesis/readings/sidelle2023-grounding-mystique/notes.md', 'Reading Notes', 'Deflationism about ground.', { status: 'reading', tags: ['立基', '超內涵性'] }), note('literature/fine1994essence/paper.md', 'paper', 'ESSENCE AND MODALITY\nKit Fine argues essence is not modal.'), note('life/bridge/mltc.md', '現代失墩計算法 (MLTC) 概要', '橋牌失墩計算。', { tags: ['橋牌'] })];
 
 describe('searchNotes', () => {
   it('ranks a note matching several independent words above notes matching one', () => {
@@ -64,13 +54,7 @@ describe('searchNotes', () => {
 
 describe('searchTerms', () => {
   it('splits on spaces and punctuation and adds Han bigrams at lower weight', () => {
-    expect(searchTerms('Essence, 超內涵性')).toEqual([
-      { term: 'essence', weight: 1 },
-      { term: '超內涵性', weight: 1 },
-      { term: '超內', weight: 0.5 },
-      { term: '內涵', weight: 0.5 },
-      { term: '涵性', weight: 0.5 },
-    ]);
+    expect(searchTerms('Essence, 超內涵性')).toEqual([{ term: 'essence', weight: 1 }, { term: '超內涵性', weight: 1 }, { term: '超內', weight: 0.5 }, { term: '內涵', weight: 0.5 }, { term: '涵性', weight: 0.5 }]);
   });
 });
 

@@ -1,4 +1,4 @@
-import { FocusLayoutSchema, displayPanes, emptyFocusLayout, focusTabKey, findFocusTabInPane, type FocusDivision, type FocusLayout } from '@mygitnotes/core/focus-page';
+import { displayPanes, emptyFocusLayout, findFocusTabInPane, type FocusDivision, type FocusLayout, FocusLayoutSchema, focusTabKey } from '@mygitnotes/core/focus-page';
 
 export const CURRENT_FOCUS = 'current';
 
@@ -22,7 +22,7 @@ export interface FocusViewState {
   /** Focus key last displayed in this notebook; null means normal browsing. */
   last: string | null;
   /** Browse region: left dock width (px), top dock height (px), collapsed flag. */
-  dock: { left: number; top: number; collapsed: boolean };
+  dock: { left: number; top: number; collapsed: boolean; };
 }
 
 const FOCUS_KEY_RE = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -83,9 +83,17 @@ export function entryView(state: FocusViewState, key: string, layout: FocusLayou
   const seen = new Set<number>();
   const recent: number[] = [];
   for (const pane of stored?.recent || []) {
-    if (Number.isInteger(pane) && pane >= 0 && pane < paneCount && !seen.has(pane)) { seen.add(pane); recent.push(pane); }
+    if (Number.isInteger(pane) && pane >= 0 && pane < paneCount && !seen.has(pane)) {
+      seen.add(pane);
+      recent.push(pane);
+    }
   }
-  for (let pane = 0; pane < paneCount; pane++) if (!seen.has(pane)) { seen.add(pane); recent.push(pane); }
+  for (let pane = 0; pane < paneCount; pane++) {
+    if (!seen.has(pane)) {
+      seen.add(pane);
+      recent.push(pane);
+    }
+  }
   const autoHide = layout.panes.map((_, index) => stored?.autoHide[index] === true);
   return { activePane, shown, recent, ratios: stored?.ratios || {}, autoHide };
 }
@@ -100,7 +108,9 @@ export function showTab(entry: FocusEntryView, pane: number, key: string): Focus
 }
 
 /** The pane a row clicked in the browse region opens into. */
-export function browseTarget(entry: FocusEntryView): number { return entry.activePane; }
+export function browseTarget(entry: FocusEntryView): number {
+  return entry.activePane;
+}
 
 /** For lane cards and [[links]] opened from inside a pane: the most recently used pane other than the source. */
 export function sideTarget(entry: FocusEntryView, sourcePane: number, paneCount: number): number {
@@ -121,7 +131,7 @@ export function shownAfterClose(layout: FocusLayout, pane: number, key: string):
 }
 
 /** Narrow screens display several stored panes as one merged pane; picks which stored pane and key to show for it. */
-export function groupShown(entry: FocusEntryView, layout: FocusLayout, group: number[]): { pane: number; key: string | null } {
+export function groupShown(entry: FocusEntryView, layout: FocusLayout, group: number[]): { pane: number; key: string | null; } {
   const keyIn = (pane: number): string | null => {
     const key = entry.shown[pane];
     return key && layout.panes[pane]?.tabs.some(tab => focusTabKey(tab) === key) ? key : null;
@@ -135,10 +145,14 @@ export function groupShown(entry: FocusEntryView, layout: FocusLayout, group: nu
 }
 
 /** One pane on screen: the stored panes it stands for, and the stored pane and tab key it currently shows. */
-export interface DisplayedPane { panes: number[]; pane: number; key: string | null }
+export interface DisplayedPane {
+  panes: number[];
+  pane: number;
+  key: string | null;
+}
 
 /** What the screen shows at `capacity` panes (1, 2 or 4): the display division and one entry per displayed pane. */
-export function displayedPanes(entry: FocusEntryView, layout: FocusLayout, capacity: 1 | 2 | 4): { division: FocusDivision; panes: DisplayedPane[] } {
+export function displayedPanes(entry: FocusEntryView, layout: FocusLayout, capacity: 1 | 2 | 4): { division: FocusDivision; panes: DisplayedPane[]; } {
   const display = displayPanes(layout.division, capacity);
   return { division: display.division, panes: display.groups.map(group => ({ panes: group, ...groupShown(entry, layout, group) })) };
 }

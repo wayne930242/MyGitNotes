@@ -1,5 +1,5 @@
-import type { NoteItem, NotebookConfig } from './types.js';
-import { resolveWorkspaceHref, noteMarkdownLink } from './workspace-links.js';
+import type { NotebookConfig, NoteItem } from './types.js';
+import { noteMarkdownLink, resolveWorkspaceHref } from './workspace-links.js';
 import { marked } from 'marked';
 
 export interface NoteGraphNode {
@@ -74,7 +74,7 @@ export function extractNoteLinks(content: string, sourcePath: string, validNoteP
   return Array.from(targets);
 }
 
-export function insertNoteLink(content: string, sourcePath: string, targetPath: string, title: string, caret?: number): { content: string; position: number } {
+export function insertNoteLink(content: string, sourcePath: string, targetPath: string, title: string, caret?: number): { content: string; position: number; } {
   if (sourcePath === targetPath || extractNoteLinks(content, sourcePath, new Set([targetPath])).includes(targetPath)) return { content, position: caret ?? content.length };
   const position = caret === undefined ? content.length : Math.max(0, Math.min(content.length, caret));
   const link = (caret === undefined && content && !content.endsWith('\n\n') ? '\n\n' : '') + noteMarkdownLink(sourcePath, targetPath, title);
@@ -84,7 +84,7 @@ export function insertNoteLink(content: string, sourcePath: string, targetPath: 
 export function buildNoteGraph(notes: NoteItem[], options?: NoteGraphOptions): NoteGraphData {
   let filteredNotes = notes;
   if (!options?.includeHidden) {
-    filteredNotes = filteredNotes.filter((n) => !n.metadata?.hiden && (n as unknown as { hiden?: boolean }).hiden !== true);
+    filteredNotes = filteredNotes.filter((n) => !n.metadata?.hiden && (n as unknown as { hiden?: boolean; }).hiden !== true);
   }
   if (options?.notebookId) {
     filteredNotes = filteredNotes.filter((n) => n.notebookId === options.notebookId);
@@ -115,16 +115,7 @@ export function buildNoteGraph(notes: NoteItem[], options?: NoteGraphOptions): N
   const nodes: NoteGraphNode[] = filteredNotes.map((note) => {
     const inDegree = inDegreeMap.get(note.path) || 0;
     const outDegree = outDegreeMap.get(note.path) || 0;
-    return {
-      id: note.path,
-      title: note.title || note.path.split('/').pop()?.replace(/\.md$/, '') || note.path,
-      notebookId: note.notebookId,
-      status: note.status,
-      tags: note.tags || [],
-      inDegree,
-      outDegree,
-      val: Math.max(3, Math.min(18, 3 + inDegree * 2.5)),
-    };
+    return { id: note.path, title: note.title || note.path.split('/').pop()?.replace(/\.md$/, '') || note.path, notebookId: note.notebookId, status: note.status, tags: note.tags || [], inDegree, outDegree, val: Math.max(3, Math.min(18, 3 + inDegree * 2.5)) };
   });
 
   return { nodes, links };

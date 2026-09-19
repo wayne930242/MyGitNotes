@@ -3,7 +3,10 @@ vi.mock('react', () => ({ useEffect: (effect: () => unknown) => effect() }));
 import { useNoteYouTubeEmbed } from './use-note-youtube-embed.js';
 import { stopYouTubePlayback } from './youtube-embed.js';
 
-afterEach(() => { stopYouTubePlayback(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  stopYouTubePlayback();
+  vi.unstubAllGlobals();
+});
 
 describe('useNoteYouTubeEmbed hook', () => {
   function setup() {
@@ -22,21 +25,9 @@ describe('useNoteYouTubeEmbed hook', () => {
       },
     });
 
-    const embed = {
-      isConnected: true,
-      dataset: { videoId: 'dQw4w9WgXcQ', start: '45', youtubeMode: 'thumbnail', youtubeSession: `test-${Math.random()}` },
-      replaceChildren: vi.fn(),
-      querySelectorAll: () => [],
-      querySelector: () => null,
-      closest: () => null,
-      getBoundingClientRect: () => ({ left: 10, top: 20, width: 360, height: 203 }),
-    };
+    const embed = { isConnected: true, dataset: { videoId: 'dQw4w9WgXcQ', start: '45', youtubeMode: 'thumbnail', youtubeSession: `test-${Math.random()}` }, replaceChildren: vi.fn(), querySelectorAll: () => [], querySelector: () => null, closest: () => null, getBoundingClientRect: () => ({ left: 10, top: 20, width: 360, height: 203 }) };
 
-    const poster = {
-      dataset: { youtubePlayerLabel: 'YouTube video player' },
-      closest: (selector: string) => (selector === '.note-youtube-embed' ? embed : null),
-      matches: () => false,
-    };
+    const poster = { dataset: { youtubePlayerLabel: 'YouTube video player' }, closest: (selector: string) => (selector === '.note-youtube-embed' ? embed : null), matches: () => false };
 
     class MockElement {
       closest(selector: string) {
@@ -47,7 +38,12 @@ describe('useNoteYouTubeEmbed hook', () => {
     }
     vi.stubGlobal('Element', MockElement);
     vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn() });
-    vi.stubGlobal('CustomEvent', class { constructor(public type: string, public init: unknown) {} });
+    vi.stubGlobal(
+      'CustomEvent',
+      class {
+        constructor(public type: string, public init: unknown) {}
+      },
+    );
     vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() });
     vi.stubGlobal('location', { pathname: '/notes/test' });
     vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
@@ -72,21 +68,12 @@ describe('useNoteYouTubeEmbed hook', () => {
       iframeElements,
       bodyAppend,
       dispatchClick: (target: any) => {
-        const event = {
-          target,
-          preventDefault: vi.fn(),
-          stopPropagation: vi.fn(),
-        } as unknown as MouseEvent;
+        const event = { target, preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as MouseEvent;
         clickListener(event);
         return event;
       },
       dispatchKeydown: (key: string, target: any) => {
-        const event = {
-          key,
-          target,
-          preventDefault: vi.fn(),
-          stopPropagation: vi.fn(),
-        } as unknown as KeyboardEvent;
+        const event = { key, target, preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as KeyboardEvent;
         keydownListener(event);
         return event;
       },

@@ -1,8 +1,8 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { migrateWorkspace, assertWorkspaceCompatible, WorkspaceCompatibilityError, SUPPORTED_SCHEMA_VERSION } from '../src/workspace-migration.js';
+import { assertWorkspaceCompatible, migrateWorkspace, SUPPORTED_SCHEMA_VERSION, WorkspaceCompatibilityError } from '../src/workspace-migration.js';
 
 const roots: string[] = [];
 const workspace = (manifest: string, files: Record<string, string> = {}) => {
@@ -16,7 +16,9 @@ const workspace = (manifest: string, files: Record<string, string> = {}) => {
   return root;
 };
 const body = 'workspace:\n  title: Notes # keep comment\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n';
-afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
+afterEach(() => {
+  for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+});
 
 describe('workspace migration', () => {
   it('sets a missing schema_version while preserving the YAML document', () => {

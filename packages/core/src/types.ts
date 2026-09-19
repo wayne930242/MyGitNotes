@@ -28,14 +28,9 @@ export interface NotebookConfig {
 
 export interface WorkspaceConfig {
   schema_version: number;
-  workspace: {
-    title: string;
-    default_notebook: string;
-  };
+  workspace: { title: string; default_notebook: string; };
   notebooks: NotebookConfig[];
-  files?: {
-    hide_dotfiles?: boolean;
-  };
+  files?: { hide_dotfiles?: boolean; };
 }
 
 export interface NoteMetadata {
@@ -62,14 +57,7 @@ export interface NoteItem {
   size?: number;
 }
 
-export type ResourceType =
-  | 'note'
-  | 'agent_instruction'
-  | 'agent_doc'
-  | 'workspace_config'
-  | 'asset'
-  | 'product_source'
-  | 'hidden';
+export type ResourceType = 'note' | 'agent_instruction' | 'agent_doc' | 'workspace_config' | 'asset' | 'product_source' | 'hidden';
 
 export interface ClassifiedResource {
   path: string;

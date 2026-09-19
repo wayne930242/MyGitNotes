@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runGit, stageAndCommit } from '../src/git-service.js';
-import { listChanges, changeFile, commitStagedFiles, commitSelectedFiles, fileDiff } from '../src/change-management.js';
+import { changeFile, commitSelectedFiles, commitStagedFiles, fileDiff, listChanges } from '../src/change-management.js';
 
 let root: string;
 beforeEach(async () => {

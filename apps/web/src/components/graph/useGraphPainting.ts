@@ -3,66 +3,59 @@ import { themeColor, tokenAlpha } from '../../lib/theme-color.js';
 import type { NoteGraphNode } from '@mygitnotes/core/note-graph';
 
 export const nodeRadius = (node: NoteGraphNode) => 3.5 + Math.min(5, Math.sqrt(node.inDegree || 0) * 1.5);
-type PositionedNode = NoteGraphNode & { x?: number; y?: number };
+type PositionedNode = NoteGraphNode & { x?: number; y?: number; };
 
-export function useGraphPainting({ nodes, hoverNode, focusNodeId, neighbors, isDark, nodeColor }: {
-  nodes: NoteGraphNode[]; hoverNode: NoteGraphNode | null; focusNodeId?: string; neighbors: Set<string>; isDark: boolean; nodeColor: (node: NoteGraphNode) => string;
-}) {
+export function useGraphPainting({ nodes, hoverNode, focusNodeId, neighbors, isDark, nodeColor }: { nodes: NoteGraphNode[]; hoverNode: NoteGraphNode | null; focusNodeId?: string; neighbors: Set<string>; isDark: boolean; nodeColor: (node: NoteGraphNode) => string; }) {
   // Custom node rendering on Canvas
-  const paintNode = useCallback(
-    (node: unknown, ctx: CanvasRenderingContext2D, globalScale: number) => {
-      const n = node as NoteGraphNode & { x?: number; y?: number };
-      if (n.x === undefined || n.y === undefined) return;
+  const paintNode = useCallback((node: unknown, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    const n = node as NoteGraphNode & { x?: number; y?: number; };
+    if (n.x === undefined || n.y === undefined) return;
 
-      const isHovered = hoverNode?.id === n.id;
-      const isNeighbor = neighbors.has(n.id);
-      const isDimmed = hoverNode && !isHovered && !isNeighbor;
+    const isHovered = hoverNode?.id === n.id;
+    const isNeighbor = neighbors.has(n.id);
+    const isDimmed = hoverNode && !isHovered && !isNeighbor;
 
-      const color = nodeColor(n);
+    const color = nodeColor(n);
 
-      const radius = nodeRadius(n);
+    const radius = nodeRadius(n);
 
-      ctx.save();
-      ctx.globalAlpha = (isDimmed ? 0.25 : 1.0) * (n.external ? 0.35 : 1);
+    ctx.save();
+    ctx.globalAlpha = (isDimmed ? 0.25 : 1.0) * (n.external ? 0.35 : 1);
 
-      // Outer glow for hovered
-      if (isHovered) {
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, radius + 4 / globalScale, 0, 2 * Math.PI, false);
-        ctx.fillStyle = themeColor(tokenAlpha('muted', 20));
-        ctx.fill();
-      }
-
-      // Main circle
+    // Outer glow for hovered
+    if (isHovered) {
       ctx.beginPath();
-      ctx.arc(n.x, n.y, radius, 0, 2 * Math.PI, false);
-      ctx.fillStyle = color;
+      ctx.arc(n.x, n.y, radius + 4 / globalScale, 0, 2 * Math.PI, false);
+      ctx.fillStyle = themeColor(tokenAlpha('muted', 20));
       ctx.fill();
+    }
 
-      // Border stroke
-      ctx.lineWidth = 1.5 / globalScale;
-      ctx.strokeStyle = themeColor('var(--color-bg)');
+    // Main circle
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, radius, 0, 2 * Math.PI, false);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    // Border stroke
+    ctx.lineWidth = 1.5 / globalScale;
+    ctx.strokeStyle = themeColor('var(--color-bg)');
+    ctx.stroke();
+
+    if (n.id === focusNodeId) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, radius + 5 / globalScale, 0, 2 * Math.PI);
+      ctx.lineWidth = 2 / globalScale;
+      ctx.strokeStyle = themeColor('var(--color-muted)');
       ctx.stroke();
+    }
 
-      if (n.id === focusNodeId) {
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, radius + 5 / globalScale, 0, 2 * Math.PI);
-        ctx.lineWidth = 2 / globalScale;
-        ctx.strokeStyle = themeColor('var(--color-muted)');
-        ctx.stroke();
-      }
-
-      ctx.restore();
-    },
-    [hoverNode, focusNodeId, neighbors, isDark, nodeColor]
-  );
+    ctx.restore();
+  }, [hoverNode, focusNodeId, neighbors, isDark, nodeColor]);
 
   // Lay labels out after the nodes, in screen-sized units, with priority for focus.
   const paintLabels = useCallback((ctx: CanvasRenderingContext2D, scale: number) => {
-    const positionedNodes = (nodes as PositionedNode[]).filter(
-      (n): n is PositionedNode & { x: number; y: number } => n.x !== undefined && n.y !== undefined
-    );
-    type Box = { x: number; y: number; w: number; h: number };
+    const positionedNodes = (nodes as PositionedNode[]).filter((n): n is PositionedNode & { x: number; y: number; } => n.x !== undefined && n.y !== undefined);
+    type Box = { x: number; y: number; w: number; h: number; };
     const occupied: Box[] = positionedNodes.filter(n => !hoverNode || neighbors.has(n.id)).map(n => {
       const r = nodeRadius(n) + 5 / scale;
       return { x: n.x - r, y: n.y - r, w: r * 2, h: r * 2 };
@@ -99,12 +92,7 @@ export function useGraphPainting({ nodes, hoverNode, focusNodeId, neighbors, isD
       const w = Math.max(...visible.map(l => ctx.measureText(l).width), 0) + 12 / scale;
       const h = (visible.length * 17 + 6) / scale;
       const gap = nodeRadius(n) + 9 / scale;
-      const candidates: Box[] = [
-        { x: n.x - w / 2, y: n.y + gap, w, h },
-        { x: n.x - w / 2, y: n.y - gap - h, w, h },
-        { x: n.x + gap, y: n.y - h / 2, w, h },
-        { x: n.x - gap - w, y: n.y - h / 2, w, h },
-      ];
+      const candidates: Box[] = [{ x: n.x - w / 2, y: n.y + gap, w, h }, { x: n.x - w / 2, y: n.y - gap - h, w, h }, { x: n.x + gap, y: n.y - h / 2, w, h }, { x: n.x - gap - w, y: n.y - h / 2, w, h }];
       if (hoverNode) {
         // Focus labels are mandatory; search additional lanes instead of hiding them.
         for (let lane = 1; lane <= nodes.length; lane++) {

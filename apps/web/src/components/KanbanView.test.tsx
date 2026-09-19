@@ -16,26 +16,33 @@ const noteOf = (path: string, status?: string) => ({ id: path, path, notebookId:
 
 beforeEach(() => {
   requests = [];
-  vi.stubGlobal('IntersectionObserver', class { observe() {} disconnect() {} });
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-    requests.push(url);
-    const withoutStatus = url.includes('noStatus=1');
-    const body = withoutStatus
-      ? { revision: REVISION, total: 7, nextCursor: null, notes: [noteOf('notes/life/loose.md')] }
-      : { revision: REVISION, total: 3, nextCursor: null, notes: [noteOf('notes/life/a.md', 'inbox')] };
-    return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
-  }));
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      requests.push(url);
+      const withoutStatus = url.includes('noStatus=1');
+      const body = withoutStatus ? { revision: REVISION, total: 7, nextCursor: null, notes: [noteOf('notes/life/loose.md')] } : { revision: REVISION, total: 3, nextCursor: null, notes: [noteOf('notes/life/a.md', 'inbox')] };
+      return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
+    }),
+  );
   client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   setNoteQueryScope({ sourceId: 'github:me/notes', revision: REVISION, drafts: {} });
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
-
-const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
-
-const board = () => createElement(KanbanView, {
-  query: { notebookId: 'life' }, statuses: ['inbox'],
-  onOpenNote: () => {}, onUpdateNoteStatus: () => {}, onDeleteNote: () => {}, onNewNoteWithStatus: () => {},
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
 });
+
+const wrapper = ({ children }: { children: ReactNode; }) => createElement(QueryClientProvider, { client }, children);
+
+const board = () => createElement(KanbanView, { query: { notebookId: 'life' }, statuses: ['inbox'], onOpenNote: () => {}, onUpdateNoteStatus: () => {}, onDeleteNote: () => {}, onNewNoteWithStatus: () => {} });
 
 it('asks the server for the notes that carry no status', async () => {
   render(board(), { wrapper });
@@ -54,21 +61,14 @@ it('counts each column and the board from the server totals', async () => {
 });
 
 it('leaves out the no-status column when the server answers none', async () => {
-  vi.mocked(fetch).mockImplementation(async (url: unknown) => new Response(JSON.stringify(
-    String(url).includes('noStatus=1')
-      ? { revision: REVISION, total: 0, nextCursor: null, notes: [] }
-      : { revision: REVISION, total: 3, nextCursor: null, notes: [noteOf('notes/life/a.md', 'inbox')] },
-  ), { headers: { 'Content-Type': 'application/json' } }) as never);
+  vi.mocked(fetch).mockImplementation(async (url: unknown) => new Response(JSON.stringify(String(url).includes('noStatus=1') ? { revision: REVISION, total: 0, nextCursor: null, notes: [] } : { revision: REVISION, total: 3, nextCursor: null, notes: [noteOf('notes/life/a.md', 'inbox')] }), { headers: { 'Content-Type': 'application/json' } }) as never);
   render(board(), { wrapper });
   await waitFor(() => expect(screen.getByText('notes/life/a.md')).toBeInTheDocument());
   await waitFor(() => expect(screen.queryByText('No status')).not.toBeInTheDocument());
 });
 
 it('asks only the filtered status column when the board filters by status', async () => {
-  render(createElement(KanbanView, {
-    query: { notebookId: 'life', status: 'inbox' }, statuses: ['inbox', 'done'],
-    onOpenNote: () => {}, onUpdateNoteStatus: () => {}, onDeleteNote: () => {}, onNewNoteWithStatus: () => {},
-  }), { wrapper });
+  render(createElement(KanbanView, { query: { notebookId: 'life', status: 'inbox' }, statuses: ['inbox', 'done'], onOpenNote: () => {}, onUpdateNoteStatus: () => {}, onDeleteNote: () => {}, onNewNoteWithStatus: () => {} }), { wrapper });
   await waitFor(() => expect(screen.getByText('notes/life/a.md')).toBeInTheDocument());
   expect(requests.some(url => url.includes('status=inbox'))).toBe(true);
   expect(requests.some(url => url.includes('status=done'))).toBe(false);
@@ -77,9 +77,7 @@ it('asks only the filtered status column when the board filters by status', asyn
 
 it('dates a card by its updated field when the source reports no mtime', async () => {
   const dated = { ...noteOf('notes/life/dated.md', 'inbox'), metadata: { updated: '2026-01-05T10:00:00Z' } };
-  vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify(
-    { revision: REVISION, total: 1, nextCursor: null, notes: [dated] },
-  ), { headers: { 'Content-Type': 'application/json' } }) as never);
+  vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify({ revision: REVISION, total: 1, nextCursor: null, notes: [dated] }), { headers: { 'Content-Type': 'application/json' } }) as never);
   render(board(), { wrapper });
   const expected = new Date('2026-01-05T10:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   await waitFor(() => expect(screen.getAllByText(expected).length).toBeGreaterThan(0));
@@ -88,19 +86,17 @@ it('dates a card by its updated field when the source reports no mtime', async (
 function makeDataTransfer() {
   const data: Record<string, string> = {};
   return {
-    setData: (type: string, value: string) => { data[type] = value; },
+    setData: (type: string, value: string) => {
+      data[type] = value;
+    },
     getData: (type: string) => data[type] || '',
     dropEffect: '',
     effectAllowed: '',
   };
 }
 
-function twoColumnBoard(props: { onUpdateNoteStatus: (note: unknown, status: string) => void; readOnly?: boolean; focusMode?: { onZoomNote: (note: unknown) => void; canDrag: (note: unknown) => boolean } }) {
-  return createElement(KanbanView, {
-    query: { notebookId: 'life' }, statuses: ['inbox', 'doing'],
-    onOpenNote: () => {}, onDeleteNote: () => {}, onNewNoteWithStatus: () => {},
-    ...props,
-  });
+function twoColumnBoard(props: { onUpdateNoteStatus: (note: unknown, status: string) => void; readOnly?: boolean; focusMode?: { onZoomNote: (note: unknown) => void; canDrag: (note: unknown) => boolean; }; }) {
+  return createElement(KanbanView, { query: { notebookId: 'life' }, statuses: ['inbox', 'doing'], onOpenNote: () => {}, onDeleteNote: () => {}, onNewNoteWithStatus: () => {}, ...props });
 }
 
 function mockTwoColumnFetch() {

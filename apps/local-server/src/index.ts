@@ -1,5 +1,5 @@
 import type { AddressInfo } from 'node:net';
-import { createApp, applicationRoot } from './app.js';
+import { applicationRoot, createApp } from './app.js';
 import { writeDevPorts } from './dev-ports.js';
 import { assertWorkspaceCompatible, loadEnvDefaults, loadSourceConfig } from '@mygitnotes/core';
 

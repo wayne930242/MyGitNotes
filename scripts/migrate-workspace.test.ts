@@ -6,8 +6,14 @@ import { execFileSync } from 'node:child_process';
 
 const product = process.cwd();
 const dirs: string[] = [];
-const temp = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-migrate-cli-')); dirs.push(dir); return dir; };
-afterEach(() => { for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
+const temp = () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-migrate-cli-'));
+  dirs.push(dir);
+  return dir;
+};
+afterEach(() => {
+  for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+});
 const env = { ...process.env };
 // Empty keys, as a shell or .env.example leaves them, must not hide the checkout .env.
 for (const key of ['MYGITNOTES_LOCAL_PATH', 'GITHUB_NOTES_LOCAL_PATH', 'MYGITNOTES_SOURCE', 'GITHUB_NOTES_SOURCE', 'REPO_ROOT']) env[key] = '';

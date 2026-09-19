@@ -10,7 +10,12 @@ describe('YouTube display mode preference', () => {
     const dispatchEvent = vi.fn();
     vi.stubGlobal('document', { querySelectorAll: () => [embed] });
     vi.stubGlobal('window', { dispatchEvent });
-    vi.stubGlobal('CustomEvent', class { constructor(public type: string, public init: unknown) {} });
+    vi.stubGlobal(
+      'CustomEvent',
+      class {
+        constructor(public type: string, public init: unknown) {}
+      },
+    );
 
     expect(readYouTubeDisplayMode(storage)).toBe('thumbnail');
     setYouTubeDisplayMode('theater', storage);
@@ -21,10 +26,22 @@ describe('YouTube display mode preference', () => {
   });
 
   it('keeps the selected mode in memory when storage is unavailable', () => {
-    vi.stubGlobal('localStorage', { getItem: vi.fn(() => { throw new Error('blocked'); }), setItem: vi.fn(() => { throw new Error('blocked'); }) });
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn(() => {
+        throw new Error('blocked');
+      }),
+      setItem: vi.fn(() => {
+        throw new Error('blocked');
+      }),
+    });
     vi.stubGlobal('document', { querySelectorAll: () => [] });
     vi.stubGlobal('window', { dispatchEvent: vi.fn() });
-    vi.stubGlobal('CustomEvent', class { constructor(public type: string, public init: unknown) {} });
+    vi.stubGlobal(
+      'CustomEvent',
+      class {
+        constructor(public type: string, public init: unknown) {}
+      },
+    );
 
     setYouTubeDisplayMode('medium');
 
@@ -35,9 +52,7 @@ describe('YouTube display mode preference', () => {
     const buttons = ['thumbnail', 'medium', 'theater'].map(mode => ({ dataset: { youtubeModeOption: mode }, setAttribute: vi.fn() }));
     const embed = { dataset: {}, querySelectorAll: () => buttons };
     applyYouTubeDisplayMode(embed as unknown as HTMLElement, 'theater');
-    expect(buttons.map(button => button.setAttribute.mock.calls[0])).toEqual([
-      ['aria-pressed', 'false'], ['aria-pressed', 'false'], ['aria-pressed', 'true'],
-    ]);
+    expect(buttons.map(button => button.setAttribute.mock.calls[0])).toEqual([['aria-pressed', 'false'], ['aria-pressed', 'false'], ['aria-pressed', 'true']]);
   });
 });
 

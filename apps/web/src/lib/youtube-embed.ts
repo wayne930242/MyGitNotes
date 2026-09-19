@@ -2,7 +2,7 @@ export const YOUTUBE_MODE_STORAGE_KEY = 'github-notes:youtube-display-mode';
 export const YOUTUBE_MODE_EVENT = 'github-notes:youtube-display-mode-change';
 let youtubeSessionSequence = 0;
 let rememberedYouTubeMode: YouTubeDisplayMode | null = null;
-let activePlayer: { key: string; host: HTMLDivElement; route: string; frame: number; target: HTMLElement; surface: HTMLElement } | null = null;
+let activePlayer: { key: string; host: HTMLDivElement; route: string; frame: number; target: HTMLElement; surface: HTMLElement; } | null = null;
 
 export function stopYouTubePlayback() {
   if (!activePlayer) return;
@@ -11,36 +11,12 @@ export function stopYouTubePlayback() {
   activePlayer = null;
 }
 export type YouTubeDisplayMode = 'thumbnail' | 'medium' | 'theater';
-export type YouTubeLabels = {
-  play: string;
-  player: string;
-  modes: string;
-  thumbnail: string;
-  medium: string;
-  theater: string;
-  copy: string;
-  copied: string;
-  copyFailed: string;
-};
+export type YouTubeLabels = { play: string; player: string; modes: string; thumbnail: string; medium: string; theater: string; copy: string; copied: string; copyFailed: string; };
 
-export const DEFAULT_YOUTUBE_LABELS: YouTubeLabels = {
-  play: 'Play YouTube video',
-  player: 'YouTube video player',
-  modes: 'YouTube display mode',
-  thumbnail: 'Thumbnail',
-  medium: 'Medium',
-  theater: 'Theater',
-  copy: 'Copy video URL',
-  copied: 'Video URL copied',
-  copyFailed: 'Could not copy video URL',
-};
+export const DEFAULT_YOUTUBE_LABELS: YouTubeLabels = { play: 'Play YouTube video', player: 'YouTube video player', modes: 'YouTube display mode', thumbnail: 'Thumbnail', medium: 'Medium', theater: 'Theater', copy: 'Copy video URL', copied: 'Video URL copied', copyFailed: 'Could not copy video URL' };
 
 export function youtubeLabels(t: (key: 'youtube.play' | 'youtube.player' | 'youtube.modes' | 'youtube.thumbnail' | 'youtube.medium' | 'youtube.theater' | 'youtube.copy' | 'youtube.copied' | 'youtube.copyFailed') => string): YouTubeLabels {
-  return {
-    play: t('youtube.play'), player: t('youtube.player'), modes: t('youtube.modes'),
-    thumbnail: t('youtube.thumbnail'), medium: t('youtube.medium'), theater: t('youtube.theater'),
-    copy: t('youtube.copy'), copied: t('youtube.copied'), copyFailed: t('youtube.copyFailed'),
-  };
+  return { play: t('youtube.play'), player: t('youtube.player'), modes: t('youtube.modes'), thumbnail: t('youtube.thumbnail'), medium: t('youtube.medium'), theater: t('youtube.theater'), copy: t('youtube.copy'), copied: t('youtube.copied'), copyFailed: t('youtube.copyFailed') };
 }
 
 export function isYouTubeDisplayMode(value: unknown): value is YouTubeDisplayMode {
@@ -76,7 +52,9 @@ function selectedButtons(root: ParentNode, mode: YouTubeDisplayMode) {
 
 export function setYouTubeDisplayMode(mode: YouTubeDisplayMode, storage?: Pick<Storage, 'setItem'>) {
   rememberYouTubeDisplayMode(mode);
-  try { (storage ?? globalThis.localStorage).setItem(YOUTUBE_MODE_STORAGE_KEY, mode); } catch { /* Keep the in-page preference. */ }
+  try {
+    (storage ?? globalThis.localStorage).setItem(YOUTUBE_MODE_STORAGE_KEY, mode);
+  } catch { /* Keep the in-page preference. */ }
   document.querySelectorAll<HTMLElement>('.note-youtube-embed').forEach(embed => applyYouTubeDisplayMode(embed, mode));
   if (activePlayer) selectedButtons(activePlayer.host, mode);
   window.dispatchEvent(new CustomEvent(YOUTUBE_MODE_EVENT, { detail: mode }));
@@ -112,8 +90,18 @@ export async function copyYouTubeUrl(button: HTMLElement) {
   const url = source?.dataset.youtubeSourceUrl || host?.dataset.youtubeSourceUrl || `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}${start ? `&t=${start}s` : ''}`;
   const ok = await copyToClipboard(url);
   const label = button.dataset[ok ? 'copiedLabel' : 'copyFailedLabel'] || '';
-  button.dataset.copyState = ok ? 'copied' : 'error'; button.innerHTML = ok ? copiedIcon : failedIcon; button.setAttribute('aria-label', label); button.title = label;
-  window.setTimeout(() => { if (!button.isConnected) return; button.dataset.copyState = 'idle'; button.innerHTML = copyIcon; const idle = button.dataset.copyLabel || ''; button.setAttribute('aria-label', idle); button.title = idle; }, 2000);
+  button.dataset.copyState = ok ? 'copied' : 'error';
+  button.innerHTML = ok ? copiedIcon : failedIcon;
+  button.setAttribute('aria-label', label);
+  button.title = label;
+  window.setTimeout(() => {
+    if (!button.isConnected) return;
+    button.dataset.copyState = 'idle';
+    button.innerHTML = copyIcon;
+    const idle = button.dataset.copyLabel || '';
+    button.setAttribute('aria-label', idle);
+    button.title = idle;
+  }, 2000);
   return ok;
 }
 
@@ -123,9 +111,11 @@ function bindYouTubeToolbar(toolbar: HTMLElement) {
   toolbar.addEventListener('click', event => {
     const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-youtube-mode-option], [data-youtube-copy]') : null;
     if (!target) return;
-    event.preventDefault(); event.stopPropagation();
+    event.preventDefault();
+    event.stopPropagation();
     const mode = target.dataset.youtubeModeOption;
-    if (isYouTubeDisplayMode(mode)) setYouTubeDisplayMode(mode); else void copyYouTubeUrl(target);
+    if (isYouTubeDisplayMode(mode)) setYouTubeDisplayMode(mode);
+    else void copyYouTubeUrl(target);
   });
 }
 
@@ -163,19 +153,26 @@ export function activateYouTubeEmbed(poster: HTMLElement) {
   const host = document.createElement('div');
   host.className = 'note-youtube-persistent-player';
   host.dataset.youtubeSession = key;
-  host.dataset.videoId = videoId; host.dataset.start = String(start); host.dataset.youtubeSourceUrl = embed.dataset.youtubeSourceUrl || '';
+  host.dataset.videoId = videoId;
+  host.dataset.start = String(start);
+  host.dataset.youtubeSourceUrl = embed.dataset.youtubeSourceUrl || '';
   const toolbar = embed.querySelector('.note-youtube-mode-control');
-  if (toolbar) { bindYouTubeToolbar(toolbar as HTMLElement); host.append(toolbar); }
+  if (toolbar) {
+    bindYouTubeToolbar(toolbar as HTMLElement);
+    host.append(toolbar);
+  }
   host.append(createYouTubeIframe(videoId, start, playerLabel));
   embed.dataset.youtubePlaying = 'true';
   const player = { key, host, route: location.pathname, frame: 0, target: embed, surface };
   activePlayer = player;
   const position = () => {
     if (activePlayer !== player) return;
-    if (location.pathname !== player.route) { host.remove(); activePlayer = null; return; }
-    const target = player.target.isConnected
-      ? player.target
-      : [...player.surface.querySelectorAll<HTMLElement>('.note-youtube-embed')].find(candidate => candidate.dataset.youtubeSession === key);
+    if (location.pathname !== player.route) {
+      host.remove();
+      activePlayer = null;
+      return;
+    }
+    const target = player.target.isConnected ? player.target : [...player.surface.querySelectorAll<HTMLElement>('.note-youtube-embed')].find(candidate => candidate.dataset.youtubeSession === key);
     if (target) {
       player.target = target;
       // Re-picked every frame: reparenting here (instead of once at activation) keeps the
@@ -186,14 +183,20 @@ export function activateYouTubeEmbed(poster: HTMLElement) {
       const rootBox = root.getBoundingClientRect();
       const box = target.getBoundingClientRect();
       host.style.transform = `translate(${box.left - rootBox.left}px, ${box.top - rootBox.top}px)`;
-      host.style.width = `${box.width}px`; host.style.height = `${box.height}px`;
-      let top = 0; let left = 0; let right = window.innerWidth; let bottom = window.innerHeight;
+      host.style.width = `${box.width}px`;
+      host.style.height = `${box.height}px`;
+      let top = 0;
+      let left = 0;
+      let right = window.innerWidth;
+      let bottom = window.innerHeight;
       for (let ancestor = target.parentElement; ancestor && ancestor !== document.body; ancestor = ancestor.parentElement) {
         const style = getComputedStyle(ancestor);
         if (/(auto|scroll|hidden|clip)/.test(`${style.overflow} ${style.overflowX} ${style.overflowY}`)) {
           const clip = ancestor.getBoundingClientRect();
-          top = Math.max(top, clip.top); left = Math.max(left, clip.left);
-          right = Math.min(right, clip.right); bottom = Math.min(bottom, clip.bottom);
+          top = Math.max(top, clip.top);
+          left = Math.max(left, clip.left);
+          right = Math.min(right, clip.right);
+          bottom = Math.min(bottom, clip.bottom);
         }
       }
       const visible = box.right > left && box.left < right && box.bottom > top && box.top < bottom;
@@ -201,7 +204,8 @@ export function activateYouTubeEmbed(poster: HTMLElement) {
       host.style.visibility = visible ? 'visible' : 'hidden';
       target.dataset.youtubePlaying = 'true';
     } else {
-      host.style.transform = 'translate(-10000px, -10000px)'; host.style.visibility = 'hidden';
+      host.style.transform = 'translate(-10000px, -10000px)';
+      host.style.visibility = 'hidden';
     }
     player.frame = requestAnimationFrame(position);
   };

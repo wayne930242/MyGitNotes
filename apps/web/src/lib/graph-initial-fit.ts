@@ -5,6 +5,8 @@ export function createInitialGraphFit(fit: () => boolean) {
     onEngineStop() {
       if (!finished && fit()) finished = true;
     },
-    cancel() { finished = true; },
+    cancel() {
+      finished = true;
+    },
   };
 }

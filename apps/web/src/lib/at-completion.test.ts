@@ -16,11 +16,7 @@ describe('getAtCompletionItems', () => {
   it('adds due-date items and a date picker item on a task line', () => {
     const items = getAtCompletionItems({ onTaskLine: true, now });
     const ids = items.map(item => item.id);
-    expect(ids).toEqual([
-      'now', 'today', 'yesterday', 'tomorrow',
-      'due-today', 'due-tomorrow', 'due-next-monday', 'pick-date',
-      'start-today', 'start-tomorrow', 'start-next-monday', 'pick-start-date',
-    ]);
+    expect(ids).toEqual(['now', 'today', 'yesterday', 'tomorrow', 'due-today', 'due-tomorrow', 'due-next-monday', 'pick-date', 'start-today', 'start-tomorrow', 'start-next-monday', 'pick-start-date']);
     expect(items.find(item => item.id === 'due-today')?.insertText).toBe('📅 2026-09-15');
     expect(items.find(item => item.id === 'due-tomorrow')?.insertText).toBe('📅 2026-09-16');
     expect(items.find(item => item.id === 'due-next-monday')?.insertText).toBe('📅 2026-09-21');

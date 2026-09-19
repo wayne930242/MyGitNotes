@@ -19,7 +19,7 @@ export function mergeNotebookFacets(facets: NotebookFacets[]): NotebookFacets {
 }
 
 /** The notebooks a query's counts describe: those its folder filters reach, or every notebook in its scope. */
-export function queryNotebookIds(notebooks: { id: string; root: string }[], notebookId: string, folders: string[]): string[] {
+export function queryNotebookIds(notebooks: { id: string; root: string; }[], notebookId: string, folders: string[]): string[] {
   const scoped = notebooks.filter(notebook => notebookId === 'all' || notebook.id === notebookId);
   const reached = scoped.filter(notebook => {
     const root = notebook.root.replace(/\/$/, '');

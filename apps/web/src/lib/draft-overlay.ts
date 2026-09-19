@@ -1,6 +1,6 @@
 import { isNoteHidden } from '@mygitnotes/core/note-status';
 import { noteDirectory, noteMatchesQuery } from '@mygitnotes/core/note-query';
-import type { NoteAgenda, NoteListItem, NoteQuery, NotebookFacets } from '@mygitnotes/core/note-query';
+import type { NoteAgenda, NotebookFacets, NoteListItem, NoteQuery } from '@mygitnotes/core/note-query';
 import { extractTodoTasks } from '@mygitnotes/core/note-agenda';
 import { extractNoteLinks } from '@mygitnotes/core/note-graph';
 import type { NoteGraphData } from '@mygitnotes/core/note-graph';
@@ -23,7 +23,7 @@ export interface DraftRows {
 
 const matches = (note: NoteListItem | null | undefined, query: NoteQuery) => Boolean(note && noteMatchesQuery(note, query));
 
-export function overlayDraftRows(rows: NoteListItem[], query: NoteQuery, drafts: WorkingNotes, options: { hide?: string } = {}): DraftRows {
+export function overlayDraftRows(rows: NoteListItem[], query: NoteQuery, drafts: WorkingNotes, options: { hide?: string; } = {}): DraftRows {
   const entries = Object.values(drafts);
   if (!entries.length && !options.hide) return { notes: rows, uncommitted: [], removed: 0 };
   const notes: NoteListItem[] = [];
@@ -31,15 +31,15 @@ export function overlayDraftRows(rows: NoteListItem[], query: NoteQuery, drafts:
   for (const row of rows) {
     if (row.path === options.hide) continue;
     const draft = drafts[row.path];
-    if (!draft) { notes.push(row); continue; }
+    if (!draft) {
+      notes.push(row);
+      continue;
+    }
     if (matches(draft.note, query)) notes.push(draft.note);
     else removed++;
   }
   const loaded = new Set(rows.map(row => row.path));
-  const uncommitted = entries
-    .filter(entry => entry.note.path !== options.hide && !loaded.has(entry.note.path)
-      && matches(entry.note, query) && !matches(entry.base, query))
-    .map(entry => entry.note);
+  const uncommitted = entries.filter(entry => entry.note.path !== options.hide && !loaded.has(entry.note.path) && matches(entry.note, query) && !matches(entry.base, query)).map(entry => entry.note);
   return { notes, uncommitted, removed };
 }
 
@@ -68,7 +68,8 @@ export function overlayDraftFacets(notebooks: Record<string, NotebookFacets>, dr
   }
   const bump = (counts: Record<string, number>, name: string, sign: number) => {
     const next = (counts[name] || 0) + sign;
-    if (next > 0) counts[name] = next; else delete counts[name];
+    if (next > 0) counts[name] = next;
+    else delete counts[name];
   };
   const apply = (note: FacetSource, sign: number) => {
     const facets = result[note.notebookId];
@@ -88,21 +89,23 @@ export function overlayDraftFacets(notebooks: Record<string, NotebookFacets>, dr
   return result;
 }
 
-export function overlayDraftAgenda(agenda: NoteAgenda, drafts: WorkingNotes, options: { notebookId: string; showHidden: boolean }): NoteAgenda {
-  const entries = Object.values(drafts).filter(entry =>
-    (options.notebookId === 'all' || entry.note.notebookId === options.notebookId)
-    && (options.showHidden || !isNoteHidden({ ...entry.note.metadata, status: entry.note.status })));
+export function overlayDraftAgenda(agenda: NoteAgenda, drafts: WorkingNotes, options: { notebookId: string; showHidden: boolean; }): NoteAgenda {
+  const entries = Object.values(drafts).filter(entry => (options.notebookId === 'all' || entry.note.notebookId === options.notebookId) && (options.showHidden || !isNoteHidden({ ...entry.note.metadata, status: entry.note.status })));
   if (!Object.keys(drafts).length) return agenda;
   const drafted = new Set(Object.keys(drafts));
   const tasks = [...agenda.tasks.filter(task => !drafted.has(task.notePath)), ...extractTodoTasks(entries.map(entry => entry.note))];
-  const dated = [
-    ...agenda.dated.filter(note => !drafted.has(note.path)),
-    ...entries.filter(entry => entry.note.metadata.created !== undefined || entry.note.metadata.updated !== undefined).map(entry => entry.note),
-  ];
+  const dated = [...agenda.dated.filter(note => !drafted.has(note.path)), ...entries.filter(entry => entry.note.metadata.created !== undefined || entry.note.metadata.updated !== undefined).map(entry => entry.note)];
   return { revision: agenda.revision, tasks, dated };
 }
 
-export interface GraphDraftNote { path: string; notebookId: string; title: string; status?: string; tags: string[]; content: string }
+export interface GraphDraftNote {
+  path: string;
+  notebookId: string;
+  title: string;
+  status?: string;
+  tags: string[];
+  content: string;
+}
 
 /** Replaces a drafted note's outgoing links with the ones its unsaved content carries, and adds nodes for drafts the server has never seen. */
 export function overlayGraphDrafts(graph: NoteGraphData, drafts: GraphDraftNote[]): NoteGraphData {
@@ -122,7 +125,4 @@ export function overlayGraphDrafts(graph: NoteGraphData, drafts: GraphDraftNote[
   return { nodes, links };
 }
 
-export const draftGraphNotes = (drafts: WorkingNotes): GraphDraftNote[] => Object.values(drafts).map(entry => ({
-  path: entry.note.path, notebookId: entry.note.notebookId, title: entry.note.title,
-  status: entry.note.status, tags: entry.note.tags, content: entry.note.content,
-}));
+export const draftGraphNotes = (drafts: WorkingNotes): GraphDraftNote[] => Object.values(drafts).map(entry => ({ path: entry.note.path, notebookId: entry.note.notebookId, title: entry.note.title, status: entry.note.status, tags: entry.note.tags, content: entry.note.content }));

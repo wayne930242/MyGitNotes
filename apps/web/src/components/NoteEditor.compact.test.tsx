@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { createElement, createRef, forwardRef, useImperativeHandle, type ChangeEvent } from 'react';
+import { type ChangeEvent, createElement, createRef, forwardRef, useImperativeHandle } from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
@@ -9,17 +9,18 @@ import type { MarkdownEditorHandle } from './MarkdownEditor.js';
 
 vi.mock('./MarkdownEditor.js', () => ({
   MarkdownEditorModeSwitch: () => null,
-  MarkdownEditor: forwardRef<MarkdownEditorHandle, { content: string; mode: string; readOnly: boolean; compact?: boolean; onChange: (content: string) => void }>(
-    ({ content, mode, readOnly, compact, onChange }, ref) => {
-      useImperativeHandle(ref, () => ({
-        insert: (text, at) => { const position = at ?? content.length; onChange(content.slice(0, position) + text + content.slice(position)); },
-        revealRange() {}, goToLine() {}, getCurrentLine: () => 1,
-      }), [content, onChange]);
-      return createElement('textarea', {
-        'aria-label': 'Note content', value: content, readOnly, 'data-compact': compact ? 'true' : undefined, 'data-mode': mode,
-        onChange: (event: ChangeEvent<HTMLTextAreaElement>) => onChange(event.target.value),
-      });
-    }),
+  MarkdownEditor: forwardRef<MarkdownEditorHandle, { content: string; mode: string; readOnly: boolean; compact?: boolean; onChange: (content: string) => void; }>(({ content, mode, readOnly, compact, onChange }, ref) => {
+    useImperativeHandle(ref, () => ({
+      insert: (text, at) => {
+        const position = at ?? content.length;
+        onChange(content.slice(0, position) + text + content.slice(position));
+      },
+      revealRange() {},
+      goToLine() {},
+      getCurrentLine: () => 1,
+    }), [content, onChange]);
+    return createElement('textarea', { 'aria-label': 'Note content', value: content, readOnly, 'data-compact': compact ? 'true' : undefined, 'data-mode': mode, onChange: (event: ChangeEvent<HTMLTextAreaElement>) => onChange(event.target.value) });
+  }),
 }));
 
 afterEach(cleanup);
@@ -29,10 +30,7 @@ const note = { id: 'a', path: 'notes/a/a.md', notebookId: 'a', title: 'Alpha', t
 it('renders the body with a status bar only, reports its session and inserts through its handle', () => {
   const ref = createRef<NoteEditorHandle>();
   const onSession = vi.fn<(session: NoteEditorSession | null) => void>();
-  const { container, unmount } = render(createElement(PanelProvider, null, createElement(NoteEditor, {
-    ref, note, frame: 'compact', active: false, statuses: [], onSave: async () => note, onRestoreFile: async () => null,
-    branch: 'main', draftScope: 'src:main', onSession,
-  })));
+  const { container, unmount } = render(createElement(PanelProvider, null, createElement(NoteEditor, { ref, note, frame: 'compact', active: false, statuses: [], onSave: async () => note, onRestoreFile: async () => null, branch: 'main', draftScope: 'src:main', onSession })));
 
   expect(container.querySelector('.note-editor')).toHaveAttribute('data-frame', 'compact');
   expect(container.querySelector('.note-toolbar')).toBeNull();
@@ -61,20 +59,18 @@ it('renders the body with a status bar only, reports its session and inserts thr
 
 it('refuses handle inserts while read-only', () => {
   const ref = createRef<NoteEditorHandle>();
-  render(createElement(PanelProvider, null, createElement(NoteEditor, {
-    ref, note, frame: 'compact', active: false, statuses: [], readOnly: true, onSave: async () => note, onRestoreFile: async () => null, branch: 'main',
-  })));
+  render(createElement(PanelProvider, null, createElement(NoteEditor, { ref, note, frame: 'compact', active: false, statuses: [], readOnly: true, onSave: async () => note, onRestoreFile: async () => null, branch: 'main' })));
   act(() => ref.current!.insert('x', 0));
   expect(screen.getByLabelText('Note content')).toHaveValue('# Alpha\n');
 });
 
 it('opens the note commands leader on Alt+/ only in zoom, leaving other frames to the command palette', () => {
   for (const frame of ['pane', 'zoom'] as const) {
-    render(createElement(PanelProvider, null, createElement(NoteEditor, {
-      note, frame, active: true, statuses: [], onSave: async () => note, onRestoreFile: async () => null, branch: 'main', draftScope: 'src:main',
-    })));
+    render(createElement(PanelProvider, null, createElement(NoteEditor, { note, frame, active: true, statuses: [], onSave: async () => note, onRestoreFile: async () => null, branch: 'main', draftScope: 'src:main' })));
     const event = new KeyboardEvent('keydown', { key: '/', code: 'Slash', altKey: true, bubbles: true, cancelable: true });
-    act(() => { document.dispatchEvent(event); });
+    act(() => {
+      document.dispatchEvent(event);
+    });
     expect(Boolean(screen.queryByRole('dialog', { name: 'Note commands' }))).toBe(frame === 'zoom');
     expect(event.defaultPrevented).toBe(frame === 'zoom');
     cleanup();

@@ -1,13 +1,9 @@
-import { Router, type Response } from 'express';
+import { type Response, Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { getCurrentBranch } from '@mygitnotes/git';
-import {
-  loadWorkspaceConfig, resolveSafePath, managedNotebook, withinPath, editableFile, filePresentation, isNotebookContent,
-  planFileChange, FileCommandSchema, assetHash, assetInfo, assetRoot, parseFolderConfig, WORKSPACE_DOCUMENTS,
-  createRemoteSource, SourceError, type FileSnapshot, type FileCommand, type SourceConfig, type RemoteSource, type RemoteChange,
-} from '@mygitnotes/core';
+import { assetHash, assetInfo, assetRoot, createRemoteSource, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isNotebookContent, loadWorkspaceConfig, managedNotebook, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSource, resolveSafePath, type SourceConfig, SourceError, withinPath, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
 import { authToken } from './auth.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 
@@ -17,13 +13,26 @@ function regularPath(root: string, file: string) {
   let cursor = root;
   for (const part of file.split('/')) {
     cursor = path.join(cursor, part);
-    try { if (fs.lstatSync(cursor).isSymbolicLink()) throw new SourceError('Symlinks are protected.', 403); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    try {
+      if (fs.lstatSync(cursor).isSymbolicLink()) throw new SourceError('Symlinks are protected.', 403);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
   }
   return full;
 }
-interface CatalogFile { size: number; stamp: string; hash?: string; mtime?: number }
-interface FileCatalog { notebooks: FileSnapshot['notebooks']; directories: string[]; protectedPaths: string[]; files: Map<string, CatalogFile> }
+interface CatalogFile {
+  size: number;
+  stamp: string;
+  hash?: string;
+  mtime?: number;
+}
+interface FileCatalog {
+  notebooks: FileSnapshot['notebooks'];
+  directories: string[];
+  protectedPaths: string[];
+  files: Map<string, CatalogFile>;
+}
 export function localFileCatalog(root: string): FileCatalog {
   const config = loadWorkspaceConfig(root);
   if (!config) throw new SourceError('Workspace configuration is missing.', 400);
@@ -79,7 +88,10 @@ export function localFileSnapshot(root: string, command?: FileCommand): FileSnap
   for (const [file, entry] of catalog.files) {
     // Untouched entries retain their paths for collision checks. Only affected
     // files and reference-bearing documents need content for the planner.
-    if (!needsContent(file, command)) { files.set(file, Buffer.alloc(0)); continue; }
+    if (!needsContent(file, command)) {
+      files.set(file, Buffer.alloc(0));
+      continue;
+    }
     total += entry.size;
     if (total > 32 * 1024 * 1024) throw new SourceError('File operations support 32 MiB per workspace snapshot.', 413);
     files.set(file, localRead(root, file));
@@ -87,8 +99,7 @@ export function localFileSnapshot(root: string, command?: FileCommand): FileSnap
   return { ...catalog, files };
 }
 function catalogRevision(catalog: FileCatalog) {
-  return createHash('sha256').update(JSON.stringify([catalog.notebooks, [...catalog.directories].sort(), [...catalog.protectedPaths].sort(),
-    [...catalog.files].sort(([a], [b]) => a.localeCompare(b)).map(([file, entry]) => [file, entry.stamp])])).digest('hex');
+  return createHash('sha256').update(JSON.stringify([catalog.notebooks, [...catalog.directories].sort(), [...catalog.protectedPaths].sort(), [...catalog.files].sort(([a], [b]) => a.localeCompare(b)).map(([file, entry]) => [file, entry.stamp])])).digest('hex');
 }
 async function remoteFiles(reader: RemoteSource, command: FileCommand): Promise<FileSnapshot> {
   const state = await reader.getSnapshot(true), config = await reader.config();
@@ -102,8 +113,12 @@ async function remoteFiles(reader: RemoteSource, command: FileCommand): Promise<
   }
   let total = 0;
   for (const file of readable) {
-    if (!needsContent(file, command)) { snapshot.files.set(file, Buffer.alloc(0)); continue; }
-    const bytes = await reader.readFile(file); total += bytes.length;
+    if (!needsContent(file, command)) {
+      snapshot.files.set(file, Buffer.alloc(0));
+      continue;
+    }
+    const bytes = await reader.readFile(file);
+    total += bytes.length;
     if (total > 32 * 1024 * 1024) throw new SourceError('File operations support 32 MiB per workspace snapshot.', 413);
     snapshot.files.set(file, bytes);
   }
@@ -123,14 +138,20 @@ export function applyLocalFilePlan(root: string, before: FileSnapshot, after: Re
   for (const file of [...changes, ...addedDirs, ...removedDirs]) regularPath(root, file);
   const write = (file: string, bytes: Buffer, mode?: number) => {
     const target = regularPath(root, file), temp = target + '.' + randomUUID() + '.tmp';
-    try { fs.writeFileSync(temp, bytes, { flag: 'wx', mode: mode ?? 0o600 }); fs.renameSync(temp, target); }
-    finally { if (fs.existsSync(temp)) fs.unlinkSync(temp); }
+    try {
+      fs.writeFileSync(temp, bytes, { flag: 'wx', mode: mode ?? 0o600 });
+      fs.renameSync(temp, target);
+    } finally {
+      if (fs.existsSync(temp)) fs.unlinkSync(temp);
+    }
   };
   try {
     for (const dir of addedDirs) fs.mkdirSync(regularPath(root, dir), { recursive: true });
-    for (const file of changes) if (after.files.has(file)) {
-      const source = Object.keys(after.pathMap).find(key => after.pathMap[key] === file);
-      write(file, after.files.get(file)!, modes.get(source || file));
+    for (const file of changes) {
+      if (after.files.has(file)) {
+        const source = Object.keys(after.pathMap).find(key => after.pathMap[key] === file);
+        write(file, after.files.get(file)!, modes.get(source || file));
+      }
     }
     for (const file of changes) if (!after.files.has(file)) fs.unlinkSync(regularPath(root, file));
     for (const dir of removedDirs) fs.rmdirSync(regularPath(root, dir));
@@ -179,11 +200,11 @@ export function createFileManagerRouter(base: string, source: SourceConfig): Rou
   router.get('/api/files', async (req, res) => {
     try {
       const state = await catalog(req), nb = notebook(state.index, req.query.notebookId);
-      const entries = [...state.index.directories.map(file => ({ path: file, directory: true, size: 0 })), ...[...state.index.files].map(([file, info]) => ({ path: file, directory: false, size: info.size }))]
-        .filter(entry => managedNotebook(entry.path, state.index.notebooks)?.id === nb.id && entry.path !== nb.root)
-        .map(entry => ({ ...entry, noteDirectory: entry.directory && isNotebookContent(entry.path.slice(nb.root.length + 1), nb), name: path.posix.basename(entry.path), hidden: entry.path.slice(nb.root.length + 1).split('/').some(p => p.startsWith('.')), presentation: filePresentation(entry.path) }));
+      const entries = [...state.index.directories.map(file => ({ path: file, directory: true, size: 0 })), ...[...state.index.files].map(([file, info]) => ({ path: file, directory: false, size: info.size }))].filter(entry => managedNotebook(entry.path, state.index.notebooks)?.id === nb.id && entry.path !== nb.root).map(entry => ({ ...entry, noteDirectory: entry.directory && isNotebookContent(entry.path.slice(nb.root.length + 1), nb), name: path.posix.basename(entry.path), hidden: entry.path.slice(nb.root.length + 1).split('/').some(p => p.startsWith('.')), presentation: filePresentation(entry.path) }));
       res.json({ root: nb.root, entries, revision: state.revision, writable: state.writable, remote: source.type !== 'local' });
-    } catch (error) { fail(res, error); }
+    } catch (error) {
+      fail(res, error);
+    }
   });
   router.get('/api/files/read', async (req, res) => {
     try {
@@ -196,7 +217,9 @@ export function createFileManagerRouter(base: string, source: SourceConfig): Rou
       if (!state.index.files.has(file)) throw new SourceError('File unavailable.', 404);
       const bytes = await state.read(file);
       res.json({ path: file, hash: assetHash(bytes), content: editableFile(file, bytes) ?? null, revision: state.revision, size: bytes.length });
-    } catch (error) { fail(res, error); }
+    } catch (error) {
+      fail(res, error);
+    }
   });
   router.get('/api/assets', async (req, res) => {
     try {
@@ -209,7 +232,9 @@ export function createFileManagerRouter(base: string, source: SourceConfig): Rou
         assets.push({ ...assetInfo(file, withinPath(file, root) ? root : nb.root, hash, info.size, info.mtime), revision: state.revision });
       }
       res.json({ assets });
-    } catch (error) { fail(res, error); }
+    } catch (error) {
+      fail(res, error);
+    }
   });
   router.get(['/api/files/raw', '/raw-assets/by-hash/:hash', '/raw-assets/*'], async (req, res) => {
     try {
@@ -221,10 +246,18 @@ export function createFileManagerRouter(base: string, source: SourceConfig): Rou
         file = '';
         for (const [candidate, info] of state.index.files) {
           if (!managedNotebook(candidate, state.index.notebooks) || info.size > 5 * 1024 * 1024) continue;
-          if (info.hash) { if (info.hash === req.params.hash) { file = candidate; break; } }
-          else {
+          if (info.hash) {
+            if (info.hash === req.params.hash) {
+              file = candidate;
+              break;
+            }
+          } else {
             const content = await state.read(candidate);
-            if (assetHash(content) === req.params.hash) { file = candidate; bytes = content; break; }
+            if (assetHash(content) === req.params.hash) {
+              file = candidate;
+              bytes = content;
+              break;
+            }
           }
         }
       } else if (req.path.startsWith('/raw-assets/')) {
@@ -241,7 +274,9 @@ export function createFileManagerRouter(base: string, source: SourceConfig): Rou
       res.type(path.extname(file) || 'application/octet-stream');
       if (req.query.download === '1') res.attachment(path.posix.basename(file));
       res.send(bytes);
-    } catch (error) { fail(res, error); }
+    } catch (error) {
+      fail(res, error);
+    }
   });
   router.post('/api/files', async (req, res) => {
     const execute = async () => {
@@ -250,8 +285,10 @@ export function createFileManagerRouter(base: string, source: SourceConfig): Rou
       if (!req.body.revision || req.body.revision !== state.revision) throw new SourceError('The workspace changed. Reload before saving.', 409);
       const after = planFileChange(state.snapshot, command), paths = changedFiles(state.snapshot, after);
       let nextRevision: string;
-      if (source.type === 'local') { applyLocalFilePlan(source.path, state.snapshot, after); nextRevision = catalogRevision(localFileCatalog(source.path)); }
-      else {
+      if (source.type === 'local') {
+        applyLocalFilePlan(source.path, state.snapshot, after);
+        nextRevision = catalogRevision(localFileCatalog(source.path));
+      } else {
         const entries = (await state.reader!.getSnapshot()).entries;
         const changes: RemoteChange[] = paths.map(file => {
           const bytes = after.files.get(file);
@@ -266,9 +303,14 @@ export function createFileManagerRouter(base: string, source: SourceConfig): Rou
       res.json({ revision: nextRevision, selectedPath: after.selectedPath, pathMap: after.pathMap, deletedPaths: paths.filter(file => !after.files.has(file)) });
     };
     try {
-      if (source.type === 'local') await serializeWorkspaceMutation(source.path, execute); else await execute();
-    } catch (error) { fail(res, error); }
+      if (source.type === 'local') await serializeWorkspaceMutation(source.path, execute);
+      else await execute();
+    } catch (error) {
+      fail(res, error);
+    }
   });
   return router;
 }
-function fail(res: Response, error: unknown) { res.status(error instanceof SourceError ? error.status : 400).json({ error: error instanceof Error ? error.message : 'File operation failed.' }); }
+function fail(res: Response, error: unknown) {
+  res.status(error instanceof SourceError ? error.status : 400).json({ error: error instanceof Error ? error.message : 'File operation failed.' });
+}

@@ -3,7 +3,7 @@ import { createElement, type ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { FocusError, emptyFocusPage, FOCUS_MAX_TABS, type FocusLayout } from '@mygitnotes/core/focus-page';
+import { emptyFocusPage, FOCUS_MAX_TABS, FocusError, type FocusLayout } from '@mygitnotes/core/focus-page';
 import type { ScreenRow } from '@mygitnotes/core/screen-page';
 import { useNoteFocus } from './use-note-focus.js';
 import { CURRENT_FOCUS } from './focus-view.js';
@@ -14,15 +14,28 @@ const storageKey = `github-notes:focus-view:${SCOPE}:${NOTEBOOK}`;
 
 function fakeController(): FocusPageController {
   return {
-    file: '.github-notes-focus.yaml', page: emptyFocusPage(), change: () => {}, save: async () => {},
-    reload: async () => {}, refresh: async () => {}, loading: false, saving: false, dirty: false,
-    error: '', writable: true, setError: () => {}, prepareCommit: () => { throw new Error('unused'); }, diff: '',
+    file: '.github-notes-focus.yaml',
+    page: emptyFocusPage(),
+    change: () => {},
+    save: async () => {},
+    reload: async () => {},
+    refresh: async () => {},
+    loading: false,
+    saving: false,
+    dirty: false,
+    error: '',
+    writable: true,
+    setError: () => {},
+    prepareCommit: () => {
+      throw new Error('unused');
+    },
+    diff: '',
   };
 }
 const lane = (id: string): ScreenRow => ({ id, notebookId: NOTEBOOK, kind: 'custom', name: id, view: 'small', items: [] });
 
 let client: QueryClient;
-const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
+const wrapper = ({ children }: { children: ReactNode; }) => createElement(QueryClientProvider, { client }, children);
 
 beforeEach(() => {
   localStorage.clear();
@@ -36,9 +49,7 @@ describe('useNoteFocus place', () => {
     const layout: FocusLayout = { division: 'single', panes: [{ tabs: lanes.map(row => ({ kind: 'lane', id: row.id })) }] };
     localStorage.setItem(storageKey, JSON.stringify({ current: layout, entries: {}, last: null, dock: { left: 320, bottom: 280, collapsed: false } }));
 
-    const { result } = renderHook(() => useNoteFocus({
-      page: fakeController(), notebookId: NOTEBOOK, scope: SCOPE, focusKey: CURRENT_FOCUS, writable: true, lanes, flushEditors: async () => true,
-    }), { wrapper });
+    const { result } = renderHook(() => useNoteFocus({ page: fakeController(), notebookId: NOTEBOOK, scope: SCOPE, focusKey: CURRENT_FOCUS, writable: true, lanes, flushEditors: async () => true }), { wrapper });
     await waitFor(() => expect(result.current.layout?.panes[0]?.tabs.length).toBe(FOCUS_MAX_TABS));
 
     const attempt = result.current.place(CURRENT_FOCUS, { kind: 'lane', id: 'lane-new' }, 0);
@@ -49,9 +60,7 @@ describe('useNoteFocus place', () => {
   });
 
   it('still resolves true when the Focus has room', async () => {
-    const { result } = renderHook(() => useNoteFocus({
-      page: fakeController(), notebookId: NOTEBOOK, scope: SCOPE, focusKey: CURRENT_FOCUS, writable: true, lanes: [lane('lane-a')], flushEditors: async () => true,
-    }), { wrapper });
+    const { result } = renderHook(() => useNoteFocus({ page: fakeController(), notebookId: NOTEBOOK, scope: SCOPE, focusKey: CURRENT_FOCUS, writable: true, lanes: [lane('lane-a')], flushEditors: async () => true }), { wrapper });
     await waitFor(() => expect(result.current.layout).not.toBeNull());
 
     await expect(result.current.place(CURRENT_FOCUS, { kind: 'lane', id: 'lane-a' }, 0)).resolves.toBe(true);
@@ -66,9 +75,7 @@ describe('useNoteFocus mutationError', () => {
   it('records a failed change, and clears it on dismiss and when another Focus is shown', async () => {
     localStorage.setItem(storageKey, JSON.stringify({ current: fullLayout(FOCUS_MAX_TABS), entries: {}, last: null }));
     const lanes = lanesFor(FOCUS_MAX_TABS + 1);
-    const { result, rerender } = renderHook(({ focusKey }: { focusKey: string | null }) => useNoteFocus({
-      page: fakeController(), notebookId: NOTEBOOK, scope: SCOPE, focusKey, writable: true, lanes, flushEditors: async () => true,
-    }), { wrapper, initialProps: { focusKey: CURRENT_FOCUS as string | null } });
+    const { result, rerender } = renderHook(({ focusKey }: { focusKey: string | null; }) => useNoteFocus({ page: fakeController(), notebookId: NOTEBOOK, scope: SCOPE, focusKey, writable: true, lanes, flushEditors: async () => true }), { wrapper, initialProps: { focusKey: CURRENT_FOCUS as string | null } });
     await waitFor(() => expect(result.current.layout).not.toBeNull());
 
     const fail = () => result.current.place(CURRENT_FOCUS, { kind: 'lane', id: `lane-${FOCUS_MAX_TABS}` }, 0).catch(() => {});
@@ -87,20 +94,30 @@ describe('useNoteFocus mutationError', () => {
     localStorage.setItem(storageKey, JSON.stringify({ current: fullLayout(FOCUS_MAX_TABS - 1), entries: {}, last: null }));
     const lanes = lanesFor(FOCUS_MAX_TABS);
     let raced = false;
-    const { result } = renderHook(() => useNoteFocus({
-      page: fakeController(), notebookId: NOTEBOOK, scope: SCOPE, focusKey: CURRENT_FOCUS, writable: true, lanes,
-      // While the editors flush, another tab takes the last free slot.
-      flushEditors: async () => {
-        if (!raced) { raced = true; await result.current.place(CURRENT_FOCUS, { kind: 'lane', id: `lane-${FOCUS_MAX_TABS - 1}` }, 0); }
-        return true;
-      },
-    }), { wrapper });
+    const { result } = renderHook(() =>
+      useNoteFocus({
+        page: fakeController(),
+        notebookId: NOTEBOOK,
+        scope: SCOPE,
+        focusKey: CURRENT_FOCUS,
+        writable: true,
+        lanes,
+        // While the editors flush, another tab takes the last free slot.
+        flushEditors: async () => {
+          if (!raced) {
+            raced = true;
+            await result.current.place(CURRENT_FOCUS, { kind: 'lane', id: `lane-${FOCUS_MAX_TABS - 1}` }, 0);
+          }
+          return true;
+        },
+      }), { wrapper });
     await waitFor(() => expect(result.current.layout).not.toBeNull());
 
     let opened: string | undefined;
-    await act(async () => { opened = await result.current.openNote('notes/a.md'); });
+    await act(async () => {
+      opened = await result.current.openNote('notes/a.md');
+    });
     expect(opened).toBe('full');
     expect(result.current.mutationError).toBeNull();
   });
 });
-

@@ -2,7 +2,10 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { SessionStore } from '../src/auth.js';
 
 const id = 's'.repeat(43);
-afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 it('isolates credentials, grants, revocation and refresh locks while retaining legacy Redis keys', async () => {
   vi.stubEnv('VERCEL', '1');
@@ -14,9 +17,17 @@ it('isolates credentials, grants, revocation and refresh locks while retaining l
     commands.push(command);
     const [op, key, ...args] = command;
     if (op === 'GET') return values.get(key) ?? null;
-    if (op === 'SET') { values.set(key, args[0]); return 'OK'; }
+    if (op === 'SET') {
+      values.set(key, args[0]);
+      return 'OK';
+    }
     if (op === 'DEL') return Number(values.delete(key));
-    if (op === 'SADD') { const set = sets.get(key) || new Set<string>(); set.add(args[0]); sets.set(key, set); return 1; }
+    if (op === 'SADD') {
+      const set = sets.get(key) || new Set<string>();
+      set.add(args[0]);
+      sets.set(key, set);
+      return 1;
+    }
     if (op === 'SMEMBERS') return [...(sets.get(key) || [])];
     if (op === 'SREM') return Number(sets.get(key)?.delete(args[0]));
     if (op === 'EVAL') return Number(values.delete(args[1]));

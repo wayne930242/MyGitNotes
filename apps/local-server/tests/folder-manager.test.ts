@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,23 +12,36 @@ let root: string, server: Server, base: string;
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
 beforeEach(async () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'gn-folder-'));
-  vi.stubEnv('GITHUB_NOTES_SOURCE', 'local'); vi.stubEnv('GITHUB_NOTES_LOCAL_PATH', root); vi.stubEnv('VERCEL', ''); vi.stubEnv('APP_URL', '');
-  git('init', '-b', 'main'); git('config', 'user.name', 'Test'); git('config', 'user.email', 'test@example.com');
+  vi.stubEnv('GITHUB_NOTES_SOURCE', 'local');
+  vi.stubEnv('GITHUB_NOTES_LOCAL_PATH', root);
+  vi.stubEnv('VERCEL', '');
+  vi.stubEnv('APP_URL', '');
+  git('init', '-b', 'main');
+  git('config', 'user.name', 'Test');
+  git('config', 'user.email', 'test@example.com');
   fs.mkdirSync(path.join(root, 'notes/a/one/child'), { recursive: true });
   fs.mkdirSync(path.join(root, 'notes/a/two'), { recursive: true });
   fs.writeFileSync(path.join(root, '.github-notes.yaml'), 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n');
   fs.writeFileSync(path.join(root, 'notes/a/one/note.md'), '# Keep me\n');
   fs.writeFileSync(path.join(root, 'notes/a/two/_dir.yml'), 'title: Two\n');
-  git('add', '.'); git('commit', '-m', 'fixture');
-  server = createServer(createApp(root)); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  git('add', '.');
+  git('commit', '-m', 'fixture');
+  server = createServer(createApp(root));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as any).port}`;
 });
-afterEach(async () => { await new Promise<void>(resolve => server.close(() => resolve())); vi.restoreAllMocks(); fs.rmSync(root, { recursive: true, force: true }); vi.unstubAllEnvs(); });
+afterEach(async () => {
+  await new Promise<void>(resolve => server.close(() => resolve()));
+  vi.restoreAllMocks();
+  fs.rmSync(root, { recursive: true, force: true });
+  vi.unstubAllEnvs();
+});
 const getRevision = () => fetch(`${base}/api/folder-manager`).then(r => r.json()).then(data => data.revision);
 const post = async (command: unknown, revision?: string) => fetch(`${base}/api/folder-manager`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, revision: revision || await getRevision() }) });
 
 it('creates, nests, reorders and removes folders without deleting notes or staging unrelated work', async () => {
-  fs.writeFileSync(path.join(root, 'unrelated.txt'), 'Unrelated'); git('add', 'unrelated.txt');
+  fs.writeFileSync(path.join(root, 'unrelated.txt'), 'Unrelated');
+  git('add', 'unrelated.txt');
   expect((await post({ kind: 'create', notebookId: 'a', parent: '', name: 'new', title: 'New' })).status).toBe(200);
   expect((await post({ kind: 'move', notebookId: 'a', path: 'one', parent: 'two' })).status).toBe(200);
   expect(fs.readFileSync(path.join(root, 'notes/a/two/one/note.md'), 'utf8')).toBe('# Keep me\n');
@@ -55,7 +68,10 @@ it('rolls back completed writes when a later write fails', () => {
   const after = planFolderChange(before, { kind: 'move', notebookId: 'a', path: 'one', parent: 'two' });
   const rename = fs.renameSync.bind(fs);
   let calls = 0;
-  vi.spyOn(fs, 'renameSync').mockImplementation((...args) => { if (++calls === 2) throw new Error('Injected disk failure'); return rename(...args); });
+  vi.spyOn(fs, 'renameSync').mockImplementation((...args) => {
+    if (++calls === 2) throw new Error('Injected disk failure');
+    return rename(...args);
+  });
   expect(() => applyLocalFolderPlan(root, before, after)).toThrow('Injected disk failure');
   expect(localFolderSnapshot(root)).toEqual(before);
 });

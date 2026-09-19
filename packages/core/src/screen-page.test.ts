@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { ScreenPageSchema, moveScreenItem, moveScreenRow, parseYouTubeUrl, readScreenPage } from './screen-page.js';
+import { moveScreenItem, moveScreenRow, parseYouTubeUrl, readScreenPage, ScreenPageSchema } from './screen-page.js';
 
 const note = { id: 'a', kind: 'note', notebookId: 'one', path: 'notes/one/a.md' };
-const page = { version: 2, rows: [
-  { id: 'first', name: '閱讀', view: 'small', notebookId: 'one', kind: 'custom', items: [note] },
-  { id: 'second', name: '參考', view: 'medium', notebookId: 'one', kind: 'custom', items: [{ ...note, id: 'b', path: 'notes/one/b.md' }] },
-  { id: 'live', name: '動態標籤', view: 'thumbnail', notebookId: 'one', kind: 'dynamic', source: { kind: 'tag', tag: 'clue', notebookId: 'one' } },
-  { id: 'other', name: '其他', view: 'small', notebookId: 'two', kind: 'custom', items: [] },
-] };
+const page = { version: 2, rows: [{ id: 'first', name: '閱讀', view: 'small', notebookId: 'one', kind: 'custom', items: [note] }, { id: 'second', name: '參考', view: 'medium', notebookId: 'one', kind: 'custom', items: [{ ...note, id: 'b', path: 'notes/one/b.md' }] }, { id: 'live', name: '動態標籤', view: 'thumbnail', notebookId: 'one', kind: 'dynamic', source: { kind: 'tag', tag: 'clue', notebookId: 'one' } }, { id: 'other', name: '其他', view: 'small', notebookId: 'two', kind: 'custom', items: [] }] };
 const config = { workspace: { default_notebook: 'two' }, notebooks: [{ id: 'one' }, { id: 'two' }, { id: 'three' }] };
 const video = { id: 'v', kind: 'youtube', videoId: 'dQw4w9WgXcQ', start: 0 };
 describe('Screen Page swimlanes', () => {
@@ -53,20 +48,10 @@ describe('Screen Page swimlanes', () => {
   });
   it('migrates version 1 lanes into their notebooks without losing items', () => {
     const mixed = [{ ...note, id: 'b1', notebookId: 'two', path: 'notes/two/b.md' }, note, video, { ...note, id: 'b2', notebookId: 'two', path: 'notes/two/c.md' }];
-    const legacy = { version: 1, rows: [
-      { id: 'mixed', name: '混合', view: 'medium', kind: 'custom', study: { filter: 'due', dueFirst: true }, items: mixed },
-      { id: 'mixed-one', name: '衝突 id', view: 'small', kind: 'custom', items: [] },
-      { id: 'single', name: '單一', view: 'small', kind: 'custom', items: [{ ...note, id: 'c', notebookId: 'three', path: 'notes/three/c.md' }] },
-      { id: 'videos', name: '影片', view: 'small', kind: 'custom', items: [{ ...video, id: 'v2' }] },
-      { id: 'every', name: '全部 tag', view: 'small', kind: 'dynamic', source: { kind: 'tag', tag: 'clue' } },
-      { id: 'tagged', name: 'tag', view: 'small', kind: 'dynamic', source: { kind: 'tag', tag: 'clue', notebookId: 'three' } },
-      { id: 'folder', name: '資料夾', view: 'small', kind: 'dynamic', source: { kind: 'folder', notebookId: 'one', path: 'notes/one', recursive: true } },
-    ] };
+    const legacy = { version: 1, rows: [{ id: 'mixed', name: '混合', view: 'medium', kind: 'custom', study: { filter: 'due', dueFirst: true }, items: mixed }, { id: 'mixed-one', name: '衝突 id', view: 'small', kind: 'custom', items: [] }, { id: 'single', name: '單一', view: 'small', kind: 'custom', items: [{ ...note, id: 'c', notebookId: 'three', path: 'notes/three/c.md' }] }, { id: 'videos', name: '影片', view: 'small', kind: 'custom', items: [{ ...video, id: 'v2' }] }, { id: 'every', name: '全部 tag', view: 'small', kind: 'dynamic', source: { kind: 'tag', tag: 'clue' } }, { id: 'tagged', name: 'tag', view: 'small', kind: 'dynamic', source: { kind: 'tag', tag: 'clue', notebookId: 'three' } }, { id: 'folder', name: '資料夾', view: 'small', kind: 'dynamic', source: { kind: 'folder', notebookId: 'one', path: 'notes/one', recursive: true } }] };
     const migrated = readScreenPage(legacy, config);
     expect(migrated.version).toBe(2);
-    expect(migrated.rows.map(row => [row.id, row.notebookId])).toEqual([
-      ['mixed', 'two'], ['mixed-one-2', 'one'], ['mixed-one', 'two'], ['single', 'three'], ['videos', 'two'], ['every', 'two'], ['tagged', 'three'], ['folder', 'one'],
-    ]);
+    expect(migrated.rows.map(row => [row.id, row.notebookId])).toEqual([['mixed', 'two'], ['mixed-one-2', 'one'], ['mixed-one', 'two'], ['single', 'three'], ['videos', 'two'], ['every', 'two'], ['tagged', 'three'], ['folder', 'one']]);
     expect(migrated.rows[0]).toMatchObject({ name: '混合', view: 'medium', study: { filter: 'due', dueFirst: true }, items: [{ id: 'b1' }, { id: 'v' }, { id: 'b2' }] });
     expect(migrated.rows[1]).toMatchObject({ name: '混合', view: 'medium', study: { filter: 'due', dueFirst: true }, items: [note] });
     expect(migrated.rows[5]).toMatchObject({ source: { kind: 'tag', tag: 'clue', notebookId: 'two' } });

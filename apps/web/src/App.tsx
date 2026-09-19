@@ -1,9 +1,9 @@
 import { Button } from './components/Button.js';
 import type { ChangeRequest } from './lib/types.js';
 import { useQueryStates } from 'nuqs';
-import { filterParsers, writeFilterQuery, type FilterQuery } from './lib/filter-query.js';
+import { filterParsers, type FilterQuery, writeFilterQuery } from './lib/filter-query.js';
 import { legacyFolderPaths, type NoteFilters } from '@mygitnotes/core/note-filters';
-import { noteQueryStatuses, type NoteListItem, type NoteQuery } from '@mygitnotes/core/note-query';
+import { type NoteListItem, type NoteQuery, noteQueryStatuses } from '@mygitnotes/core/note-query';
 import type { FilterControls } from './lib/filter-controls.js';
 import { adoptGraphDrafts, listLocalDrafts } from './lib/storage.js';
 import { useWorkspaceSync } from './lib/use-workspace-sync.js';
@@ -12,53 +12,22 @@ import { ImageLightbox } from './components/ImageLightbox.js';
 import { isNoteHidden, withNoteStatus } from '@mygitnotes/core/note-status';
 import { Select } from './components/Select.js';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { legacyAllNotebooksRoute, notebookRoute, noteRoute, noteReturnRoute, parseWorkspaceRoute, WorkspaceTab } from './lib/routes.js';
-import { readWorkingNotes, updateWorkingNote, clearCommittedNotes, workingDiff, type WorkingNotes } from './lib/working-notes.js';
+import { legacyAllNotebooksRoute, notebookRoute, noteReturnRoute, noteRoute, parseWorkspaceRoute, WorkspaceTab } from './lib/routes.js';
+import { clearCommittedNotes, readWorkingNotes, updateWorkingNote, workingDiff, type WorkingNotes } from './lib/working-notes.js';
 import { mergeNote, sameValue } from './lib/merge-note.js';
 import { buildNewNoteDraft } from './lib/new-note.js';
-import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import {
-  fetchWorkspace,
-  commitRemoteNotes,
-  ApiError,
-  readNote,
-  readNotes,
-  saveNote,
-  renderNoteTemplate,
-  deleteNote,
-  restoreNote,
-  fetchAssets,
-  uploadAsset,
-  deleteAsset,
-  moveAsset,
-  fetchGitStatus,
-  applyTagChange,
-} from './lib/api.js';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ApiError, applyTagChange, commitRemoteNotes, deleteAsset, deleteNote, fetchAssets, fetchGitStatus, fetchWorkspace, moveAsset, readNote, readNotes, renderNoteTemplate, restoreNote, saveNote, uploadAsset } from './lib/api.js';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  invalidateNoteQueries,
-  noteLookupOptions,
-  notePathsOptions,
-  setNoteQueryScope,
-  useNoteFacets,
-  useNoteList,
-  useNoteLookup,
-  useNoteQueryScope,
-  useStaleNoteQueries,
-  NOTE_QUERY_KEY,
-} from './lib/use-note-queries.js';
+import { invalidateNoteQueries, NOTE_QUERY_KEY, noteLookupOptions, notePathsOptions, setNoteQueryScope, useNoteFacets, useNoteList, useNoteLookup, useNoteQueryScope, useStaleNoteQueries } from './lib/use-note-queries.js';
 import { useDebounced } from './lib/use-debounced.js';
 import { noteStatusChange } from './lib/note-mutations.js';
 import { NoteListSentinel } from './components/NoteListSentinel.js';
-import { planTagRename, planTagMerge, planTagDelete, invertTagOperationPlan } from '@mygitnotes/core/tag-ops';
-import { useTagOperations, type TagOperationKind } from './lib/use-tag-operations.js';
-import type {
-  NoteItem,
-  AssetItem,
-  ViewMode,
-} from './lib/types.js';
-import { ThemeChoice, getSavedTheme, applyTheme } from './lib/themes.js';
-import { AuthControls, ConnectionState, AgentAccessSettings } from './components/AuthControls.js';
+import { invertTagOperationPlan, planTagDelete, planTagMerge, planTagRename } from '@mygitnotes/core/tag-ops';
+import { type TagOperationKind, useTagOperations } from './lib/use-tag-operations.js';
+import type { AssetItem, NoteItem, ViewMode } from './lib/types.js';
+import { applyTheme, getSavedTheme, ThemeChoice } from './lib/themes.js';
+import { AgentAccessSettings, AuthControls, ConnectionState } from './components/AuthControls.js';
 import { Header } from './components/Header.js';
 import { KeyboardShortcuts, type PaletteCommand, type ShortcutSurfaceMode } from './components/KeyboardShortcuts.js';
 import { NoteToolbar } from './components/NoteToolbar.js';
@@ -72,7 +41,7 @@ import { KanbanView } from './components/KanbanView.js';
 import { EditorModal } from './components/EditorModal.js';
 import type { NoteEditorSharedProps } from './components/NoteEditor.js';
 import { NoteEditingProvider, useNoteEditorRegistry } from './lib/note-editing.js';
-import { FOCUS_DIVISIONS, focusTabKey, type FocusTab } from '@mygitnotes/core/focus-page';
+import { FOCUS_DIVISIONS, type FocusTab, focusTabKey } from '@mygitnotes/core/focus-page';
 import { useNoteFocus } from './lib/use-note-focus.js';
 import { CURRENT_FOCUS, displayedPanes } from './lib/focus-view.js';
 import { FocusArea, usePaneCapacity } from './components/FocusArea.js';
@@ -83,27 +52,19 @@ import { FocusList } from './components/FocusList.js';
 import { BrowseDock, BrowseDockToggle, CARD_TWO_ROW_HEIGHT } from './components/BrowseDock.js';
 import type { ScreenRow } from '@mygitnotes/core/screen-page';
 import { RightPanel } from './components/RightPanel.js';
-import { isDocumentTool, usePanelContext, type DocumentToolId } from './lib/panel-context.js';
-import { FileManager, FileManagerDialog, FileMetadata, type FileManagerHandle } from './components/FileManager.js';
-import { mutateFile, type FileResult, type FileEntry } from './lib/files-api.js';
-import { AgentSystemView, type AgentSystemHandle } from './components/AgentSystemView.js';
+import { type DocumentToolId, isDocumentTool, usePanelContext } from './lib/panel-context.js';
+import { FileManager, FileManagerDialog, type FileManagerHandle, FileMetadata } from './components/FileManager.js';
+import { type FileEntry, type FileResult, mutateFile } from './lib/files-api.js';
+import { type AgentSystemHandle, AgentSystemView } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { CommitModal } from './components/CommitModal.js';
 import { Breadcrumbs } from './components/Breadcrumbs.js';
 import { FolderIndex } from './components/FolderIndex.js';
 import { FolderLinks } from './components/FolderLinks.js';
-import {
-  getImmediateSubfolders,
-  getBreadcrumbs,
-} from './lib/folder-tree.js';
+import { getBreadcrumbs, getImmediateSubfolders } from './lib/folder-tree.js';
 import { mergeNotebookFacets, queryNotebookIds } from './lib/note-facets.js';
-import {
-  getSavedSort,
-  saveSort,
-  SortField,
-  SortOrder,
-} from './lib/note-sort.js';
-import { I18nProvider, useTranslation, type TranslationKey } from './lib/i18n/index.js';
+import { getSavedSort, saveSort, SortField, SortOrder } from './lib/note-sort.js';
+import { I18nProvider, type TranslationKey, useTranslation } from './lib/i18n/index.js';
 import { AlertTriangle, FileText, X } from 'lucide-react';
 
 const ScreenPage = React.lazy(() => import('./components/ScreenPage.js').then(module => ({ default: module.ScreenPage })));
@@ -133,10 +94,14 @@ const AppContent: React.FC = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const location = useLocation();
   const [queryState, setFilterQuery] = useQueryStates(filterParsers, { history: 'push', shallow: false });
-  useEffect(() => { setFiltersOpen(false); }, [location.pathname]);
+  useEffect(() => {
+    setFiltersOpen(false);
+  }, [location.pathname]);
   useEffect(() => {
     if (!filtersOpen) return;
-    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setFiltersOpen(false); };
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFiltersOpen(false);
+    };
     document.addEventListener('keydown', close);
     return () => document.removeEventListener('keydown', close);
   }, [filtersOpen]);
@@ -157,7 +122,7 @@ const AppContent: React.FC = () => {
 
   const [editingNote, setEditingNote] = useState<NoteListItem | null>(null);
   const [fileEditorRevision, setFileEditorRevision] = useState(0);
-  const [fileDialog, setFileDialog] = useState<{ notebookId: string; path?: string; movePath?: string }>();
+  const [fileDialog, setFileDialog] = useState<{ notebookId: string; path?: string; movePath?: string; }>();
   const [fileMetadataContainer, setFileMetadataContainer] = useState<HTMLDivElement | null>(null);
   const [fileMetadataOpen, setFileMetadataOpen] = useState(false);
   // Seeded to the rail width (not 0) so the right panel mounts on first render and can report
@@ -170,48 +135,25 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const editorRoute = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
 
-  const {
-    selectedNotebookId,
-    folders,
-    sourceId,
-    remote,
-    canWrite,
-    revision,
-    setRevision,
-    loadError,
-    loading,
-    actionError,
-    setActionError,
-    repoRoot,
-    branch,
-    config,
-    gitStatus,
-    setGitStatus,
-    assets,
-    setAssets,
-    setWorkingNotes,
-    workingScope,
-    activeWorkingNotes,
-    screen,
-    focus: focusPage,
-    documents,
-    pendingDocuments,
-    refreshWorkspace,
-    stageWorkingNote,
-  } = useWorkspaceSync({
-    routeNotebook: editorRoute.notebook || undefined,
-    onStageNote: note => setEditingNote(current => current?.path === note.path && !sameValue(current, note) ? note : current),
-  });
-  const refreshDocuments = async () => { await Promise.all(documents.map(document => document.refresh())); };
+  const { selectedNotebookId, folders, sourceId, remote, canWrite, revision, setRevision, loadError, loading, actionError, setActionError, repoRoot, branch, config, gitStatus, setGitStatus, assets, setAssets, setWorkingNotes, workingScope, activeWorkingNotes, screen, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current?.path === note.path && !sameValue(current, note) ? note : current) });
+  const refreshDocuments = async () => {
+    await Promise.all(documents.map(document => document.refresh()));
+  };
   const editorRegistry = useNoteEditorRegistry();
 
   // Every note query is answered for this source and revision; staged drafts are overlaid on top.
   const queryClient = useQueryClient();
-  useLayoutEffect(() => { setNoteQueryScope({ sourceId, revision, drafts: activeWorkingNotes }); }, [sourceId, revision, activeWorkingNotes]);
+  useLayoutEffect(() => {
+    setNoteQueryScope({ sourceId, revision, drafts: activeWorkingNotes });
+  }, [sourceId, revision, activeWorkingNotes]);
   const queryScope = useNoteQueryScope();
-  const invalidateNotes = () => { void invalidateNoteQueries(queryClient); };
+  const invalidateNotes = () => {
+    void invalidateNoteQueries(queryClient);
+  };
   // Staged drafts are overlaid on remote answers; only local saves change what the note queries return.
-  const refreshNotes = async () => { if (!remote) await invalidateNoteQueries(queryClient); };
+  const refreshNotes = async () => {
+    if (!remote) await invalidateNoteQueries(queryClient);
+  };
   // The server answers from the branch head: a rejected revision or cursor means this client is
   // behind, so the workspace is refreshed and every list restarts from its first page.
   const [staleNotice, setStaleNotice] = useState('');
@@ -219,7 +161,9 @@ const AppContent: React.FC = () => {
     setStaleNotice(message);
     void refreshWorkspace().then(() => queryClient.resetQueries({ queryKey: NOTE_QUERY_KEY }));
   });
-  useEffect(() => { setStaleNotice(''); }, [revision]);
+  useEffect(() => {
+    setStaleNotice('');
+  }, [revision]);
   /** The committed note behind a path, ignoring any staged draft, for use as a merge base. */
   const readCommittedNote = async (path: string): Promise<NoteItem> => {
     const result = await queryClient.fetchQuery(noteLookupOptions(queryScope, [path], true));
@@ -232,12 +176,11 @@ const AppContent: React.FC = () => {
     const pending = remote ? readWorkingNotes(workingScope)[path] : undefined;
     return pending ? pending.note : readCommittedNote(path);
   };
-  const readNotePaths = async (query: Partial<NoteQuery>): Promise<string[]> =>
-    (await queryClient.fetchQuery(notePathsOptions(queryScope, query))).paths;
+  const readNotePaths = async (query: Partial<NoteQuery>): Promise<string[]> => (await queryClient.fetchQuery(notePathsOptions(queryScope, query))).paths;
 
   // Deletion and Undo Buffer State (Requirement 2)
   const [deletedNotes, setDeletedNotes] = useState<NoteItem[]>([]);
-  const [undoToast, setUndoToast] = useState<{ note: NoteItem; timerId: any } | null>(null);
+  const [undoToast, setUndoToast] = useState<{ note: NoteItem; timerId: any; } | null>(null);
 
   // Tag management: rename/merge/delete across the whole workspace, each a single commit
   // with a session-lifetime undo (kept in `tagOperations.history` until page reload).
@@ -249,13 +192,13 @@ const AppContent: React.FC = () => {
     const result = await queryClient.fetchQuery(noteLookupOptions(queryScope, paths, false));
     return result.notes;
   };
-  const previewTagUsage = async (tag: string): Promise<number> =>
-    (await readNotePaths({ notebookId: 'all', tags: [tag], showHidden: true })).length;
+  const previewTagUsage = async (tag: string): Promise<number> => (await readNotePaths({ notebookId: 'all', tags: [tag], showHidden: true })).length;
   const runTagOperation = async (kind: TagOperationKind, plan: ReturnType<typeof planTagDelete>, label: string) => {
     if (plan.affected.length === 0) throw new Error(t('sidebar.tagNoNotesAffected'));
     const entries = plan.affected.map(({ path, notebookId, nextTags }) => ({ path, notebookId, tags: nextTags }));
     const result = await applyTagChange(entries, revision, label);
-    if (remote) setRevision(result.revision || revision); else invalidateNotes();
+    if (remote) setRevision(result.revision || revision);
+    else invalidateNotes();
     tagOperations.record(kind, label, plan);
   };
   const handleRenameTag = async (from: string, to: string) => {
@@ -280,10 +223,14 @@ const AppContent: React.FC = () => {
       const inverted = invertTagOperationPlan(record.plan);
       const existing = (await queryClient.fetchQuery(noteLookupOptions(queryScope, inverted.affected.map(entry => entry.path), false))).notes;
       const validEntries = inverted.affected.filter(entry => existing.some(note => note.path === entry.path && note.notebookId === entry.notebookId));
-      if (validEntries.length === 0) { tagOperations.dismiss(id); return; }
+      if (validEntries.length === 0) {
+        tagOperations.dismiss(id);
+        return;
+      }
       const entries = validEntries.map(({ path, notebookId, nextTags }) => ({ path, notebookId, tags: nextTags }));
       const result = await applyTagChange(entries, revision, `${t('common.undo')}: ${record.label}`);
-      if (remote) setRevision(result.revision || revision); else invalidateNotes();
+      if (remote) setRevision(result.revision || revision);
+      else invalidateNotes();
       tagOperations.dismiss(id);
     } catch (error) {
       // Keep the record so the user can retry; a silently vanished undo with no feedback
@@ -300,52 +247,37 @@ const AppContent: React.FC = () => {
     return parseWorkspaceRoute(origin.pathname, origin.search);
   }, [editorRoute, returnTo, queryState]);
   const activeTab = route.tab;
-  useEffect(() => { setFolderReorder(false); }, [activeTab, route.notebook]);
-  useEffect(() => { setFileMetadataOpen(false); }, [activeTab]);
+  useEffect(() => {
+    setFolderReorder(false);
+  }, [activeTab, route.notebook]);
+  useEffect(() => {
+    setFileMetadataOpen(false);
+  }, [activeTab]);
   const sidebarGestureRef = useSidebarSwipe(activeTab === 'notes' && !loading && !loadError, filtersOpen, setFiltersOpen);
   const selectedFolders = useMemo(() => route.folders.length ? [...new Set(route.folders)] : legacyFolderPaths(config?.notebooks || [], selectedNotebookId, route.folder), [route.folders, route.folder, config, selectedNotebookId]);
   const folderRoot = config?.notebooks.find(nb => nb.id === selectedNotebookId)?.root.replace(/\/$/, '');
-  const selectedFolder = selectedFolders.length === 1 && folderRoot && selectedFolders[0].startsWith(folderRoot + '/')
-    ? selectedFolders[0].slice(folderRoot.length + 1) : route.folder;
+  const selectedFolder = selectedFolders.length === 1 && folderRoot && selectedFolders[0].startsWith(folderRoot + '/') ? selectedFolders[0].slice(folderRoot.length + 1) : route.folder;
   // Notes and Graph query every notebook while the all-notebooks toggle is on; the current notebook stays selected.
   const scopeNotebookId = route.allNotebooks ? 'all' : selectedNotebookId;
   const selectedStatus = route.status;
   const showHidden = route.showHidden;
   // Counts, status options, tag lists and subfolder counts all come from one facet answer.
   const facetsQuery = useNoteFacets(showHidden);
-  const facetNotebookIds = useMemo(
-    () => queryNotebookIds(config?.notebooks || [], scopeNotebookId, selectedFolders),
-    [config, scopeNotebookId, selectedFolders],
-  );
-  const notebookFacets = useMemo(() => mergeNotebookFacets(
-    facetNotebookIds.flatMap(id => facetsQuery.facets?.[id] || []),
-  ), [facetsQuery.facets, facetNotebookIds]);
-  const notebookStatuses = useMemo(
-    () => noteQueryStatuses(config?.notebooks || [], facetNotebookIds.length === 1 ? facetNotebookIds[0] : 'all', Object.keys(notebookFacets.statuses)),
-    [config, facetNotebookIds, notebookFacets],
-  );
+  const facetNotebookIds = useMemo(() => queryNotebookIds(config?.notebooks || [], scopeNotebookId, selectedFolders), [config, scopeNotebookId, selectedFolders]);
+  const notebookFacets = useMemo(() => mergeNotebookFacets(facetNotebookIds.flatMap(id => facetsQuery.facets?.[id] || [])), [facetsQuery.facets, facetNotebookIds]);
+  const notebookStatuses = useMemo(() => noteQueryStatuses(config?.notebooks || [], facetNotebookIds.length === 1 ? facetNotebookIds[0] : 'all', Object.keys(notebookFacets.statuses)), [config, facetNotebookIds, notebookFacets]);
   // A new note is created in the current notebook, so it offers that notebook's statuses even while every notebook is listed.
-  const newNoteStatuses = useMemo(
-    () => noteQueryStatuses(config?.notebooks || [], selectedNotebookId, Object.keys(facetsQuery.facets?.[selectedNotebookId]?.statuses || {})),
-    [config, selectedNotebookId, facetsQuery.facets],
-  );
+  const newNoteStatuses = useMemo(() => noteQueryStatuses(config?.notebooks || [], selectedNotebookId, Object.keys(facetsQuery.facets?.[selectedNotebookId]?.statuses || {})), [config, selectedNotebookId, facetsQuery.facets]);
   const selectedTags = useMemo(() => [...new Set(route.tags)], [route.tags]);
   // Stable across renders so memoized note rows skip re-rendering; calls reach the latest handlers.
   const tagHandlers = useRef({ previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag });
-  useLayoutEffect(() => { tagHandlers.current = { previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag }; });
+  useLayoutEffect(() => {
+    tagHandlers.current = { previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag };
+  });
   // The tag vocabulary spans hidden notes too, so it has its own facet answer.
   const tagFacets = useNoteFacets(true);
-  const workspaceTagNames = useMemo(
-    () => Array.from(new Set(Object.values(tagFacets.facets || {}).flatMap(facets => Object.keys(facets.tags)))),
-    [tagFacets.facets],
-  );
-  const noteTagActions = useMemo(() => canWrite ? {
-    allTags: workspaceTagNames,
-    onPreviewUsage: (tag: string) => tagHandlers.current.previewTagUsage(tag),
-    onRename: (from: string, to: string) => tagHandlers.current.handleRenameTag(from, to),
-    onMerge: (from: string, into: string) => tagHandlers.current.handleMergeTag(from, into),
-    onDelete: (tag: string) => tagHandlers.current.handleDeleteTag(tag),
-  } : undefined, [canWrite, workspaceTagNames]);
+  const workspaceTagNames = useMemo(() => Array.from(new Set(Object.values(tagFacets.facets || {}).flatMap(facets => Object.keys(facets.tags)))), [tagFacets.facets]);
+  const noteTagActions = useMemo(() => canWrite ? { allTags: workspaceTagNames, onPreviewUsage: (tag: string) => tagHandlers.current.previewTagUsage(tag), onRename: (from: string, to: string) => tagHandlers.current.handleRenameTag(from, to), onMerge: (from: string, into: string) => tagHandlers.current.handleMergeTag(from, into), onDelete: (tag: string) => tagHandlers.current.handleDeleteTag(tag) } : undefined, [canWrite, workspaceTagNames]);
   const searchQuery = route.q;
   const viewMode = route.view;
   // Flat and Kanban list the whole notebook, without folder navigation.
@@ -353,18 +285,12 @@ const AppContent: React.FC = () => {
 
   // Focus: the URL names the displayed one; named Focus sync through their workspace document.
   const focusCapacity = usePaneCapacity();
-  const notebookLanes = useMemo(
-    () => screen.loading || screen.error ? undefined : screen.page.rows.filter(row => row.notebookId === selectedNotebookId),
-    [screen.loading, screen.error, screen.page, selectedNotebookId],
-  );
-  const noteFocus = useNoteFocus({
-    page: focusPage, notebookId: selectedNotebookId, scope: remote ? sourceId : `local:${repoRoot}`,
-    focusKey: activeTab === 'notes' ? route.focus : null, writable: canWrite, lanes: notebookLanes, flushEditors: editorRegistry.flushEditors,
-  });
+  const notebookLanes = useMemo(() => screen.loading || screen.error ? undefined : screen.page.rows.filter(row => row.notebookId === selectedNotebookId), [screen.loading, screen.error, screen.page, selectedNotebookId]);
+  const noteFocus = useNoteFocus({ page: focusPage, notebookId: selectedNotebookId, scope: remote ? sourceId : `local:${repoRoot}`, focusKey: activeTab === 'notes' ? route.focus : null, writable: canWrite, lanes: notebookLanes, flushEditors: editorRegistry.flushEditors });
   const focusDisplay = noteFocus.layout && noteFocus.entry ? displayedPanes(noteFocus.entry, noteFocus.layout, focusCapacity) : undefined;
   /** On phones the browse region and the Focus take turns filling the screen. */
   const [focusNarrowView, setFocusNarrowView] = useState<'focus' | 'browse'>('focus');
-  const [addingToFocus, setAddingToFocus] = useState<{ tab: FocusTab; label: string } | null>(null);
+  const [addingToFocus, setAddingToFocus] = useState<{ tab: FocusTab; label: string; } | null>(null);
   // The rail shows the active pane's document panel when that pane displays a note.
   const panel = usePanelContext();
   const [documentContainer, setDocumentContainer] = useState<HTMLDivElement | null>(null);
@@ -382,14 +308,18 @@ const AppContent: React.FC = () => {
     if (!await editorRegistry.flushEditors()) return;
     if (!key) noteFocus.forget();
     const query = new URLSearchParams(location.search);
-    if (key) query.set('focus', key); else query.delete('focus');
+    if (key) query.set('focus', key);
+    else query.delete('focus');
     setFocusNarrowView('focus');
     navigate({ pathname: location.pathname, search: query.toString() });
   };
   // Arriving at a notebook's Notes page shows the Focus it displayed last.
   const focusArrival = useRef('');
   useEffect(() => {
-    if (activeTab !== 'notes') { focusArrival.current = ''; return; }
+    if (activeTab !== 'notes') {
+      focusArrival.current = '';
+      return;
+    }
     if (loading || editorRoute.note) return;
     const arrival = `${sourceId}:${selectedNotebookId}`;
     if (focusArrival.current === arrival) return;
@@ -453,7 +383,9 @@ const AppContent: React.FC = () => {
         if (tab === 'assets' && selectedFolder && folderRoot) query.set('asset', `${folderRoot}/${selectedFolder}`);
         navigate(`/${tab === 'assets' ? 'files' : tab}?${query.toString()}`);
       }
-    } finally { setNotebookSwitchBusy(false); }
+    } finally {
+      setNotebookSwitchBusy(false);
+    }
   };
   const agentSystemRef = useRef<AgentSystemHandle>(null);
   const [resourceNavigationBusy, setResourceNavigationBusy] = useState(false);
@@ -469,13 +401,17 @@ const AppContent: React.FC = () => {
       query.delete('focus');
       query.set('notebook', id);
       await navigateFiltered(activeTab === 'notes' ? notebookRoute(id) : `/${activeTab}`, query);
-    } finally { setNotebookSwitchBusy(false); }
+    } finally {
+      setNotebookSwitchBusy(false);
+    }
   };
   const setSelectedFolder = (folder: string | null) => {
     const query = currentFilterSearch({ folders: legacyFolderPaths(config?.notebooks || [], selectedNotebookId, folder) });
     void navigateFiltered(notebookRoute(selectedNotebookId), query);
   };
-  const setViewMode = (mode: ViewMode) => { void setFilterQuery({ view: mode }); };
+  const setViewMode = (mode: ViewMode) => {
+    void setFilterQuery({ view: mode });
+  };
   useEffect(() => {
     if (!config) return;
     const canonical = legacyAllNotebooksRoute(location.pathname, location.search, selectedNotebookId);
@@ -488,7 +424,6 @@ const AppContent: React.FC = () => {
     query.set('notebook', selectedNotebookId);
     void navigateFiltered('/graph', query, true);
   }, [loading, config, editorRoute.note, route.tab, route.view]);
-
 
   // Modal States
   const [commitRequest, setCommitRequest] = useState<ChangeRequest>();
@@ -521,7 +456,7 @@ const AppContent: React.FC = () => {
       // Ignore template preview error
     }
   };
-  const openNewNote = (options?: string | { status?: string; folder?: string; tag?: string; tags?: string[]; notebookId?: string }) => {
+  const openNewNote = (options?: string | { status?: string; folder?: string; tag?: string; tags?: string[]; notebookId?: string; }) => {
     const opts = typeof options === 'string' ? { status: options } : { ...options };
     if (opts.notebookId && opts.notebookId !== selectedNotebookId && config?.notebooks.some(n => n.id === opts.notebookId)) {
       setSelectedNotebookId(opts.notebookId);
@@ -535,13 +470,12 @@ const AppContent: React.FC = () => {
   };
 
   // Aggregated tags across the workspace for autocomplete
-  const availableTags = useMemo(
-    () => Array.from(new Set(workspaceTagNames.map(tag => tag.trim()))).filter(Boolean).sort(),
-    [workspaceTagNames],
-  );
+  const availableTags = useMemo(() => Array.from(new Set(workspaceTagNames.map(tag => tag.trim()))).filter(Boolean).sort(), [workspaceTagNames]);
 
   useEffect(() => {
-    setEditingNote(null);  setDeletedNotes([]); setIsNewNoteOpen(false);
+    setEditingNote(null);
+    setDeletedNotes([]);
+    setIsNewNoteOpen(false);
   }, [sourceId]);
 
   const routedNotebook = config?.notebooks.find(nb => nb.id === editorNotebookId) || (!editorRoute.notebook ? config?.notebooks[0] : undefined);
@@ -559,19 +493,31 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     if (loading || !config) return;
-    if (!editorRoute.valid) { setRouteError('route.pageNotFound');  return; }
-    if (!routedNotebook) { setRouteError('route.notebookNotFound');  return; }
-    if (!editorRoute.note) { setRouteError(''); setEditingNote(null);  return; }
-    if (routedLookup.error) { setRouteError(routedLookup.error); return; }
-    if (routedNote || routedLoading) { setRouteError(''); return; }
+    if (!editorRoute.valid) {
+      setRouteError('route.pageNotFound');
+      return;
+    }
+    if (!routedNotebook) {
+      setRouteError('route.notebookNotFound');
+      return;
+    }
+    if (!editorRoute.note) {
+      setRouteError('');
+      setEditingNote(null);
+      return;
+    }
+    if (routedLookup.error) {
+      setRouteError(routedLookup.error);
+      return;
+    }
+    if (routedNote || routedLoading) {
+      setRouteError('');
+      return;
+    }
     setRouteError('route.noteNotFound');
   }, [editorRoute, config, loading, editorNotebookId, sourceId, routedNotebook, routedNote, routedLoading, routedLookup.error]);
 
-  const noteFilters = useMemo<NoteFilters>(() => ({
-    notebookId: scopeNotebookId, folders: selectedFolders, tags: selectedTags,
-    descendants: route.descendants, tagMode: route.tagMode, q: searchQuery,
-    status: selectedStatus, showHidden,
-  }), [scopeNotebookId, selectedFolders, selectedTags, route.descendants, route.tagMode, searchQuery, selectedStatus, showHidden]);
+  const noteFilters = useMemo<NoteFilters>(() => ({ notebookId: scopeNotebookId, folders: selectedFolders, tags: selectedTags, descendants: route.descendants, tagMode: route.tagMode, q: searchQuery, status: selectedStatus, showHidden }), [scopeNotebookId, selectedFolders, selectedTags, route.descendants, route.tagMode, searchQuery, selectedStatus, showHidden]);
   const hasCollectionFilter = selectedFolders.length > 0 || selectedTags.length > 0 || scopeNotebookId === 'all';
   // Typing in the search box must not fire one server query per keystroke.
   const debouncedSearch = useDebounced(searchQuery);
@@ -581,45 +527,24 @@ const AppContent: React.FC = () => {
 
   // Choose by filename before applying visibility so a hidden index keeps priority.
   const browsingNotes = activeTab === 'notes';
-  const indexCandidates = useMemo(
-    () => (browsingNotes && !filtered && notebookRoot ? [`${currentDirectory}/index.md`, `${currentDirectory}/README.md`] : []),
-    [browsingNotes, filtered, notebookRoot, currentDirectory],
-  );
+  const indexCandidates = useMemo(() => (browsingNotes && !filtered && notebookRoot ? [`${currentDirectory}/index.md`, `${currentDirectory}/README.md`] : []), [browsingNotes, filtered, notebookRoot, currentDirectory]);
   const indexLookup = useNoteLookup(indexCandidates, false);
   const folderIndex = useMemo(() => {
-    const selected = indexLookup.notes.find(note => note.path === indexCandidates[0])
-      ?? indexLookup.notes.find(note => note.path === indexCandidates[1]);
+    const selected = indexLookup.notes.find(note => note.path === indexCandidates[0]) ?? indexLookup.notes.find(note => note.path === indexCandidates[1]);
     return selected && (showHidden || !isNoteHidden({ ...selected.metadata, status: selected.status })) ? selected : undefined;
   }, [indexLookup.notes, indexCandidates, showHidden]);
 
-  const baseQuery = useMemo<Partial<NoteQuery>>(() => ({
-    notebookId: scopeNotebookId, folders: selectedFolders, descendants: route.descendants,
-    tags: selectedTags, tagMode: route.tagMode, status: selectedStatus, showHidden,
-    q: debouncedSearch, sort: sortField, order: sortOrder,
-  }), [scopeNotebookId, selectedFolders, route.descendants, selectedTags, route.tagMode, selectedStatus, showHidden, debouncedSearch, sortField, sortOrder]);
+  const baseQuery = useMemo<Partial<NoteQuery>>(() => ({ notebookId: scopeNotebookId, folders: selectedFolders, descendants: route.descendants, tags: selectedTags, tagMode: route.tagMode, status: selectedStatus, showHidden, q: debouncedSearch, sort: sortField, order: sortOrder }), [scopeNotebookId, selectedFolders, route.descendants, selectedTags, route.tagMode, selectedStatus, showHidden, debouncedSearch, sortField, sortOrder]);
   // Browsing a folder lists that one directory; searching or filtering lists the whole result.
-  const listQuery = useMemo<Partial<NoteQuery>>(
-    () => (filtered || viewMode === 'flat' || viewMode === 'kanban'
-      ? baseQuery
-      : { ...baseQuery, folders: currentDirectory ? [currentDirectory] : [], descendants: false }),
-    [baseQuery, filtered, viewMode, currentDirectory],
-  );
+  const listQuery = useMemo<Partial<NoteQuery>>(() => (filtered || viewMode === 'flat' || viewMode === 'kanban' ? baseQuery : { ...baseQuery, folders: currentDirectory ? [currentDirectory] : [], descendants: false }), [baseQuery, filtered, viewMode, currentDirectory]);
   // Only the notes page lists notes; the other tabs ask for what they draw themselves.
   const listResult = useNoteList(browsingNotes && viewMode !== 'kanban' ? listQuery : null, { content: viewMode === 'card', hide: folderIndex?.path });
   // Kanban pages each column on its own, so the filter result count needs its own answer.
   const kanbanCount = useNoteList(browsingNotes && filtered && viewMode === 'kanban' ? baseQuery : null);
-  const filterCount = filtered
-    ? (viewMode === 'kanban' ? kanbanCount.total : listResult.total)
-    : (facetsQuery.facets ? notebookFacets.total : null);
+  const filterCount = filtered ? (viewMode === 'kanban' ? kanbanCount.total : listResult.total) : (facetsQuery.facets ? notebookFacets.total : null);
   const displayedNotes = listResult.notes;
 
-  const filterProps: FilterControls = {
-    value: noteFilters, neighbors: route.neighbors, notebooks: config?.notebooks || [], folders,
-    tags: Object.keys(notebookFacets.tags),
-    statuses: notebookStatuses, count: filterCount,
-    allNotebooks: route.allNotebooks, onAllNotebooksChange: changeAllNotebooks,
-    onChange: changeFilters, onClear: clearFilters,
-  };
+  const filterProps: FilterControls = { value: noteFilters, neighbors: route.neighbors, notebooks: config?.notebooks || [], folders, tags: Object.keys(notebookFacets.tags), statuses: notebookStatuses, count: filterCount, allNotebooks: route.allNotebooks, onAllNotebooksChange: changeAllNotebooks, onChange: changeFilters, onClear: clearFilters };
 
   // Hierarchical Subfolder Discovery for current folder
   const immediateSubfolders = useMemo(() => {
@@ -643,8 +568,9 @@ const AppContent: React.FC = () => {
       const query = new URLSearchParams(location.search);
       query.delete('notebook');
       query.set('returnTo', editorRoute.note ? returnTo : location.pathname + location.search + location.hash);
-      if (selectedFolder && note.notebookId === selectedNotebookId) query.set('folder',selectedFolder); else query.delete('folder');
-      navigate(noteRoute(notebook.id,note.path.slice(notebook.root.length+1))+'?'+query.toString()+(anchor ? '#'+encodeURIComponent(anchor) : ''));
+      if (selectedFolder && note.notebookId === selectedNotebookId) query.set('folder', selectedFolder);
+      else query.delete('folder');
+      navigate(noteRoute(notebook.id, note.path.slice(notebook.root.length + 1)) + '?' + query.toString() + (anchor ? '#' + encodeURIComponent(anchor) : ''));
     }
     const targetNotebook = note.notebookId || selectedNotebookId;
     if (targetNotebook) {
@@ -658,23 +584,20 @@ const AppContent: React.FC = () => {
     if (result === 'opened') setFocusNarrowView('focus');
     return result === 'opened' || result === 'blocked';
   };
-  const openFromBrowse = async (note: NoteListItem) => { if (!await openInFocus(note)) await handleOpenNote(note); };
+  const openFromBrowse = async (note: NoteListItem) => {
+    if (!await openInFocus(note)) await handleOpenNote(note);
+  };
   const openLink = async (note: NoteListItem, anchor?: string, source?: HTMLElement) => {
     const pane = source?.closest<HTMLElement>('[data-focus-pane]')?.dataset.focusPane;
     if (pane === undefined || !await openInFocus(note, Number(pane))) await handleOpenNote(note, anchor);
   };
-  const zoomFocusNote = (path: string) => { const note = noteFocus.notes.get(path); if (note) void handleOpenNote(note); };
-  const addToFocus = (note: NoteItem) => note.notebookId === selectedNotebookId
-    ? () => setAddingToFocus({ tab: { kind: 'note', path: note.path }, label: note.title }) : undefined;
+  const zoomFocusNote = (path: string) => {
+    const note = noteFocus.notes.get(path);
+    if (note) void handleOpenNote(note);
+  };
+  const addToFocus = (note: NoteItem) => note.notebookId === selectedNotebookId ? () => setAddingToFocus({ tab: { kind: 'note', path: note.path }, label: note.title }) : undefined;
 
-  const handleSaveNote = async (params: {
-    path: string;
-    content: string;
-    metadata?: Record<string, unknown>;
-    notebookId?: string;
-    revision?: string;
-    baseNote?: NoteItem;
-  }) => {
+  const handleSaveNote = async (params: { path: string; content: string; metadata?: Record<string, unknown>; notebookId?: string; revision?: string; baseNote?: NoteItem; }) => {
     if (!canWrite) throw new Error('This workspace is read-only.');
     if (remote) {
       // A draft is staged against the committed note it was edited from; read it when the
@@ -683,18 +606,10 @@ const AppContent: React.FC = () => {
       const base = pending?.base === null ? null : params.baseNote || pending?.base || await readCommittedNote(params.path);
       const original = pending?.note || base;
       if (!original) throw new Error(t('notes.unavailable'));
-      return stageWorkingNote({ ...original, content: params.content, metadata: params.metadata || original.metadata,
-        title: typeof params.metadata?.title === 'string' ? params.metadata.title : original.title,
-        status: typeof params.metadata?.status === 'string' ? params.metadata.status : undefined,
-        tags: Array.isArray(params.metadata?.tags) ? params.metadata.tags.map(String) : [],
-        revision: base?.revision || original.revision }, base, pending?.blocked);
+      return stageWorkingNote({ ...original, content: params.content, metadata: params.metadata || original.metadata, title: typeof params.metadata?.title === 'string' ? params.metadata.title : original.title, status: typeof params.metadata?.status === 'string' ? params.metadata.status : undefined, tags: Array.isArray(params.metadata?.tags) ? params.metadata.tags.map(String) : [], revision: base?.revision || original.revision }, base, pending?.blocked);
     }
     // Local saves update the working tree for the explicit Commit action.
-    const res = await saveNote({
-      ...params,
-      notebookId: params.notebookId || selectedNotebookId,
-      noCommit: true,
-    });
+    const res = await saveNote({ ...params, notebookId: params.notebookId || selectedNotebookId, noCommit: true });
     // The local workspace keeps one revision, so its cached query answers are refetched.
     invalidateNotes();
     setEditingNote(prev => prev?.path === res.note.path ? res.note : prev);
@@ -713,12 +628,18 @@ const AppContent: React.FC = () => {
     let result: FileResult;
     try {
       result = await mutateFile({ kind: 'delete', notebookId: note.notebookId, path: note.path }, note.revision || revision);
-    } catch (error) { setActionError((error as Error).message); throw error; }
+    } catch (error) {
+      setActionError((error as Error).message);
+      throw error;
+    }
     // Apply everything in one synchronous batch: the still-mounted editor must not re-stage a
     // phantom draft for the path we just deleted while the new revision is being queried.
     setRevision(result.revision);
     setWorkingNotes(updateWorkingNote(workingScope, note.path, null));
-    if (editingNote?.path === note.path) { setEditingNote(null); navigate(returnTo, { replace: true }); }
+    if (editingNote?.path === note.path) {
+      setEditingNote(null);
+      navigate(returnTo, { replace: true });
+    }
   };
 
   // Trash action: delete without immediate commit, allowing restore (Requirement 2)
@@ -727,8 +648,12 @@ const AppContent: React.FC = () => {
     if (remote) return handleRemoteDeleteNote(note);
     // 1. Read the full note first; Undo restores it from this buffer.
     let deleted: NoteItem;
-    try { deleted = await readNoteForChange(note.path); }
-    catch (error) { setActionError((error as Error).message); return; }
+    try {
+      deleted = await readNoteForChange(note.path);
+    } catch (error) {
+      setActionError((error as Error).message);
+      return;
+    }
     setDeletedNotes((prev) => [deleted, ...prev.filter((n) => n.path !== note.path)]);
 
     // 2. Delete from disk without committing to git
@@ -738,7 +663,6 @@ const AppContent: React.FC = () => {
     setGitStatus(statusRes.status);
 
     if (editingNote?.path === note.path) {
-
       setEditingNote(null);
     }
 
@@ -752,12 +676,7 @@ const AppContent: React.FC = () => {
 
   // Restore deleted note before commit (Requirement 2)
   const handleRestoreNote = async (note: NoteItem) => {
-    const res = await restoreNote({
-      path: note.path,
-      content: note.content,
-      metadata: note.metadata,
-      notebookId: note.notebookId,
-    });
+    const res = await restoreNote({ path: note.path, content: note.content, metadata: note.metadata, notebookId: note.notebookId });
     if (!res.note) throw new Error('The deleted note could not be restored.');
     invalidateNotes();
     setDeletedNotes((prev) => prev.filter((n) => n.path !== note.path));
@@ -804,8 +723,11 @@ const AppContent: React.FC = () => {
   const handleUpdateNoteStatus = async (note: NoteListItem, newStatus: string) => {
     setActionError('');
     // The row carries no body; the note is read in full before the status is written.
-    try { await handleSaveNote(await noteStatusChange(readNoteForChange, note, newStatus)); }
-    catch (error) { setActionError((error as Error).message); }
+    try {
+      await handleSaveNote(await noteStatusChange(readNoteForChange, note, newStatus));
+    } catch (error) {
+      setActionError((error as Error).message);
+    }
   };
 
   const handleOpenFolderIndex = async (folder: string, folderRevision?: string, notebookId = selectedNotebookId) => {
@@ -818,15 +740,13 @@ const AppContent: React.FC = () => {
     if (!note) {
       const metadata = { title: t('folder.index'), tags: [] };
       const content = `# ${t('folder.index')}\n\n`;
-      note = remote ? stageWorkingNote({
-        id: path, path, notebookId: notebook.id, title: metadata.title,
-        content, metadata, tags: [], revision: folderRevision || revision,
-      }, null) : (await saveNote({ path, notebookId: notebook.id, content, metadata, createOnly: true, noCommit: true })).note;
+      note = remote ? stageWorkingNote({ id: path, path, notebookId: notebook.id, title: metadata.title, content, metadata, tags: [], revision: folderRevision || revision }, null) : (await saveNote({ path, notebookId: notebook.id, content, metadata, createOnly: true, noCommit: true })).note;
       if (!remote) invalidateNotes();
     }
     setEditingNote(note);
     const query = new URLSearchParams(location.search);
-    query.delete('notebook'); query.set('folder', folder);
+    query.delete('notebook');
+    query.set('folder', folder);
     navigate(noteRoute(notebook.id, `${folder}/index.md`) + '?' + query.toString());
     if (!remote) void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError(error.message));
   };
@@ -836,40 +756,24 @@ const AppContent: React.FC = () => {
       setCreateError('');
       if (!canWrite) throw new Error('This workspace is read-only.');
       const title = newNoteTitle.trim() || 'Untitled Note';
-      const slug = title
-        .toLowerCase()
-        .replace(/[^\p{L}\p{N}]+/gu, '-')
-        .replace(/^-|-$/g, '') || 'untitled';
+      const slug = title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'untitled';
 
       const currentNotebook = config?.notebooks.find((n) => n.id === selectedNotebookId) || config?.notebooks[0];
       const root = currentNotebook?.root || 'notes/example';
       const folder = newNoteFolder.trim().replace(/^\/+|\/+$/g, '');
       if (folder && !newNoteFolders.includes(folder)) throw new Error(t('createNote.invalidFolder'));
       const notePath = [root, folder, `${slug}.md`].filter(Boolean).join('/');
-      const taken = Boolean(remote && readWorkingNotes(workingScope)[notePath])
-        || (await queryClient.fetchQuery(noteLookupOptions(queryScope, [notePath], false))).notes.length > 0;
+      const taken = Boolean(remote && readWorkingNotes(workingScope)[notePath]) || (await queryClient.fetchQuery(noteLookupOptions(queryScope, [notePath], false))).notes.length > 0;
       if (taken) throw new Error('A note with this filename already exists in this folder. Choose another title.');
 
       const status = statusOverride || newNoteStatus;
-      const template = newNoteTemplateId
-        ? await renderNoteTemplate({ notebookId: currentNotebook!.id, templateId: newNoteTemplateId, title })
-        : undefined;
+      const template = newNoteTemplateId ? await renderNoteTemplate({ notebookId: currentNotebook!.id, templateId: newNoteTemplateId, title }) : undefined;
       const draft = buildNewNoteDraft({ slug, title, tags: newNoteTags, status, template });
       const initialContent = draft.content;
       const finalStatus = draft.status;
       const initialMetadata = withNoteStatus(draft.metadata, finalStatus);
 
-      const res = remote ? { note: stageWorkingNote({
-        id: slug, path: notePath, notebookId: currentNotebook!.id, title,
-        content: initialContent, metadata: initialMetadata, status: finalStatus, tags: Array.isArray(initialMetadata.tags) ? initialMetadata.tags.map(String) : [], revision,
-      }, null) } : await saveNote({
-        path: notePath,
-        notebookId: currentNotebook?.id,
-        createOnly: true,
-        content: initialContent,
-        metadata: initialMetadata,
-        noCommit: true,
-      });
+      const res = remote ? { note: stageWorkingNote({ id: slug, path: notePath, notebookId: currentNotebook!.id, title, content: initialContent, metadata: initialMetadata, status: finalStatus, tags: Array.isArray(initialMetadata.tags) ? initialMetadata.tags.map(String) : [], revision }, null) } : await saveNote({ path: notePath, notebookId: currentNotebook?.id, createOnly: true, content: initialContent, metadata: initialMetadata, noCommit: true });
       if (!remote) invalidateNotes();
 
       setIsNewNoteOpen(false);
@@ -881,7 +785,9 @@ const AppContent: React.FC = () => {
       const statusRes = await fetchGitStatus();
       setGitStatus(statusRes.status);
       handleOpenNote(res.note);
-    } catch (error) { setCreateError((error as Error).message); }
+    } catch (error) {
+      setCreateError((error as Error).message);
+    }
   };
 
   const commitWorkingNotes = async (files: string[], message: string) => {
@@ -905,8 +811,7 @@ const AppContent: React.FC = () => {
         try {
           latest = latestByPath.get(entry.note.path)!;
           if (!latest) throw new ApiError('Note moved or deleted remotely.', 404);
-        }
-        catch (error) {
+        } catch (error) {
           if (error instanceof ApiError && error.status === 404) {
             const blocked = 'Moved or deleted remotely. Open the note and refresh after it is restored.';
             stageWorkingNote(entry.note, entry.base, blocked);
@@ -931,8 +836,7 @@ const AppContent: React.FC = () => {
     }
     if (reviewRequired) throw new Error(t('changes.reviewRequired'));
     if (!Object.keys(sent).length && !sentDocuments.length) return;
-    const result = await commitRemoteNotes(Object.values(sent).map(entry => ({ path: entry.note.path,
-      content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base })), expected, message, sentDocuments.map(({ path, page, base }) => ({ path, page, base })));
+    const result = await commitRemoteNotes(Object.values(sent).map(entry => ({ path: entry.note.path, content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base })), expected, message, sentDocuments.map(({ path, page, base }) => ({ path, page, base })));
     for (const document of sentDocuments) document.committed(result.revision);
     setWorkingNotes(clearCommittedNotes(workingScope, sent));
     setRevision(result.revision);
@@ -966,8 +870,10 @@ const AppContent: React.FC = () => {
 
   const refreshAssets = async () => {
     const targetNotebookId = editingNote?.notebookId || selectedNotebookId;
-    const assetList = await fetchAssets(targetNotebookId); setAssets(assetList);
-    const statusRes = await fetchGitStatus(); setGitStatus(statusRes.status);
+    const assetList = await fetchAssets(targetNotebookId);
+    setAssets(assetList);
+    const statusRes = await fetchGitStatus();
+    setGitStatus(statusRes.status);
     return assetList;
   };
   const handleDeleteAsset = async (asset: AssetItem) => {
@@ -991,12 +897,20 @@ const AppContent: React.FC = () => {
     if (notebook) setFileDialog({ notebookId, path: notebook.root + (relativePath ? '/' + relativePath : '') });
   };
   const handleMoveNote = async (note: NoteListItem) => {
-    try { await beforeFileChange(); setFileDialog({ notebookId: note.notebookId, path: note.path, movePath: note.path }); }
-    catch (error) { setActionError((error as Error).message); throw error; }
+    try {
+      await beforeFileChange();
+      setFileDialog({ notebookId: note.notebookId, path: note.path, movePath: note.path });
+    } catch (error) {
+      setActionError((error as Error).message);
+      throw error;
+    }
   };
-  const moveNoteAction = (note: NoteListItem) => { void handleMoveNote(note).catch(() => {}); };
+  const moveNoteAction = (note: NoteListItem) => {
+    void handleMoveNote(note).catch(() => {});
+  };
   const onFilesChanged = async (result: FileResult) => {
-    await refreshWorkspace(); await refreshDocuments();
+    await refreshWorkspace();
+    await refreshDocuments();
     if (editorRoute.note) {
       const nb = config?.notebooks.find(nb => nb.id === editorNotebookId);
       const previous = nb ? nb.root + '/' + editorRoute.note : '';
@@ -1006,11 +920,15 @@ const AppContent: React.FC = () => {
         setFileDialog(undefined);
       } else if (nb) {
         try {
-          if (result.deletedPaths.includes(previous)) { setEditingNote(null); navigate(returnTo, { replace: true }); }
-          else { setEditingNote(await readNote(previous, nb.id)); setFileEditorRevision(value => value + 1); }
-        }
-        catch (error) {
-          if ((error as { status?: number }).status !== 404) throw error;
+          if (result.deletedPaths.includes(previous)) {
+            setEditingNote(null);
+            navigate(returnTo, { replace: true });
+          } else {
+            setEditingNote(await readNote(previous, nb.id));
+            setFileEditorRevision(value => value + 1);
+          }
+        } catch (error) {
+          if ((error as { status?: number; }).status !== 404) throw error;
           setEditingNote(null);
           navigate(returnTo, { replace: true });
         }
@@ -1030,18 +948,16 @@ const AppContent: React.FC = () => {
 
   const noteEditorOpen = (Boolean(routedNote) || routedLoading) && !routeError;
 
-  const openCommitModal = (request?: ChangeRequest) => { void (async () => {
-    if (activeTab === 'agent' && !await agentSystemRef.current?.prepareLeave()) return;
-    if (!remote) await Promise.all(documents.map(document => document.save()));
-    setCommitRequest(request);
-    setIsCommitOpen(true);
-  })().catch(error => setActionError(error.message)); };
+  const openCommitModal = (request?: ChangeRequest) => {
+    void (async () => {
+      if (activeTab === 'agent' && !await agentSystemRef.current?.prepareLeave()) return;
+      if (!remote) await Promise.all(documents.map(document => document.save()));
+      setCommitRequest(request);
+      setIsCommitOpen(true);
+    })().catch(error => setActionError(error.message));
+  };
 
-  const panelRemoteChanges = remote ? [
-          ...Object.values(activeWorkingNotes).map(entry => ({ path: entry.note.path, kind: entry.blocked ? 'conflict' as const : entry.base ? 'modified' as const : 'added' as const,
-            tracked: Boolean(entry.base), revision: JSON.stringify(entry), available: canWrite && !entry.blocked, staged: false, unstaged: true })),
-          ...pendingDocuments.map(document => ({ path: document.file, kind: 'modified' as const, tracked: true, revision: document.diff, available: canWrite && !document.error, staged: false, unstaged: true })),
-        ] : undefined;
+  const panelRemoteChanges = remote ? [...Object.values(activeWorkingNotes).map(entry => ({ path: entry.note.path, kind: entry.blocked ? 'conflict' as const : entry.base ? 'modified' as const : 'added' as const, tracked: Boolean(entry.base), revision: JSON.stringify(entry), available: canWrite && !entry.blocked, staged: false, unstaged: true })), ...pendingDocuments.map(document => ({ path: document.file, kind: 'modified' as const, tracked: true, revision: document.diff, available: canWrite && !document.error, staged: false, unstaged: true }))] : undefined;
   const panelGetPreview = remote ? (file: string) => documents.find(document => document.file === file)?.diff ?? (activeWorkingNotes[file] ? workingDiff({ [file]: activeWorkingNotes[file] }) : '') : undefined;
 
   // Every editor of a note, in zoom or in a Focus pane, is wired to the same handlers and per-path state.
@@ -1050,7 +966,7 @@ const AppContent: React.FC = () => {
     metadataFields: config?.notebooks.find(nb => nb.id === note.notebookId)?.metadata,
     onSave: handleSaveNote,
     onRestoreFile: handleRestoreNoteFile,
-    isDirty: Boolean(gitStatus && [ ...gitStatus.modified, ...gitStatus.staged, ...gitStatus.untracked ].includes(note.path)),
+    isDirty: Boolean(gitStatus && [...gitStatus.modified, ...gitStatus.staged, ...gitStatus.untracked].includes(note.path)),
     availableTags,
     assets,
     onUploadAsset: !canWrite ? undefined : handleUploadAsset,
@@ -1061,10 +977,12 @@ const AppContent: React.FC = () => {
     draftMode: remote,
     remoteBase: activeWorkingNotes[note.path]?.base || (committed && typeof committed.content === 'string' ? committed : undefined),
     conflictReason: activeWorkingNotes[note.path]?.blocked,
-    onMarkConflict: remote ? (reason, draft, base) => { stageWorkingNote(draft, base, reason); } : undefined,
-    onReadRemote: remote
-      ? (activeWorkingNotes[note.path]?.base !== null ? readNote : undefined)
-      : readNote,
+    onMarkConflict: remote
+      ? (reason, draft, base) => {
+        stageWorkingNote(draft, base, reason);
+      }
+      : undefined,
+    onReadRemote: remote ? (activeWorkingNotes[note.path]?.base !== null ? readNote : undefined) : readNote,
     branch,
     draftScope: `${sourceId}:${branch}`,
   });
@@ -1090,547 +1008,466 @@ const AppContent: React.FC = () => {
   };
   const lastFocus = noteFocus.view.last && (noteFocus.view.last === CURRENT_FOCUS || noteFocus.focuses.some(item => item.id === noteFocus.view.last)) ? noteFocus.view.last : CURRENT_FOCUS;
   const zoomablePath = activeFocusPane?.key?.startsWith('note:') ? activeFocusPane.key.slice('note:'.length) : null;
-  const focusCommands: PaletteCommand[] = [
-    { id: 'focus-toggle', label: t(noteFocus.shown ? 'focus.close' : 'focus.open'), disabled: activeTab !== 'notes', run: () => void showFocus(noteFocus.shown ? null : lastFocus) },
-    { id: 'focus-next-pane', label: t('focus.nextPane'), disabled: (focusDisplay?.panes.length ?? 0) < 2, run: () => cycleFocusPane(1) },
-    { id: 'focus-previous-pane', label: t('focus.previousPane'), disabled: (focusDisplay?.panes.length ?? 0) < 2, run: () => cycleFocusPane(-1) },
-    { id: 'focus-next-tab', label: t('focus.nextTab'), disabled: !activeFocusPane, run: () => cycleFocusTab(1) },
-    { id: 'focus-previous-tab', label: t('focus.previousTab'), disabled: !activeFocusPane, run: () => cycleFocusTab(-1) },
-    { id: 'focus-close-tab', label: t('focus.closeCurrentTab'), disabled: !noteFocus.editable || !activeFocusPane?.key, run: () => { if (activeFocusPane?.key) void noteFocus.close(activeFocusPane.key, activeFocusPane.pane).catch(() => {}); } },
-    { id: 'focus-zoom-tab', label: t('focus.zoomCurrentTab'), disabled: !zoomablePath, run: () => { if (zoomablePath) zoomFocusNote(zoomablePath); } },
-    ...FOCUS_DIVISIONS.map(division => ({
-      id: `focus-division-${division}`, label: t('focus.divisionCommand', { name: t(`focus.division.${division}`) }),
-      disabled: !noteFocus.editable || !noteFocus.layout || noteFocus.layout.division === division, run: () => void noteFocus.setDivision(division).catch(() => {}),
-    })),
-  ];
+  const focusCommands: PaletteCommand[] = [{ id: 'focus-toggle', label: t(noteFocus.shown ? 'focus.close' : 'focus.open'), disabled: activeTab !== 'notes', run: () => void showFocus(noteFocus.shown ? null : lastFocus) }, { id: 'focus-next-pane', label: t('focus.nextPane'), disabled: (focusDisplay?.panes.length ?? 0) < 2, run: () => cycleFocusPane(1) }, { id: 'focus-previous-pane', label: t('focus.previousPane'), disabled: (focusDisplay?.panes.length ?? 0) < 2, run: () => cycleFocusPane(-1) }, { id: 'focus-next-tab', label: t('focus.nextTab'), disabled: !activeFocusPane, run: () => cycleFocusTab(1) }, { id: 'focus-previous-tab', label: t('focus.previousTab'), disabled: !activeFocusPane, run: () => cycleFocusTab(-1) }, {
+    id: 'focus-close-tab',
+    label: t('focus.closeCurrentTab'),
+    disabled: !noteFocus.editable || !activeFocusPane?.key,
+    run: () => {
+      if (activeFocusPane?.key) void noteFocus.close(activeFocusPane.key, activeFocusPane.pane).catch(() => {});
+    },
+  }, {
+    id: 'focus-zoom-tab',
+    label: t('focus.zoomCurrentTab'),
+    disabled: !zoomablePath,
+    run: () => {
+      if (zoomablePath) zoomFocusNote(zoomablePath);
+    },
+  }, ...FOCUS_DIVISIONS.map(division => ({ id: `focus-division-${division}`, label: t('focus.divisionCommand', { name: t(`focus.division.${division}`) }), disabled: !noteFocus.editable || !noteFocus.layout || noteFocus.layout.division === division, run: () => void noteFocus.setDivision(division).catch(() => {}) }))];
   // With a Focus displayed, the browse region docks beside it (list, flat) or above it (card, kanban).
   const topDock = viewMode === 'card' || viewMode === 'kanban';
-  const browseFocusMode = noteFocus.layout ? {
-    onZoomNote: (note: NoteListItem) => void handleOpenNote(note),
-    canDrag: (note: NoteListItem) => noteFocus.editable && note.notebookId === selectedNotebookId,
-  } : undefined;
+  const browseFocusMode = noteFocus.layout ? { onZoomNote: (note: NoteListItem) => void handleOpenNote(note), canDrag: (note: NoteListItem) => noteFocus.editable && note.notebookId === selectedNotebookId } : undefined;
   // Either dock collapses and reopens from the toolbar's left end.
-  const dockToggle = noteFocus.layout && focusCapacity > 1
-    ? <BrowseDockToggle placement={topDock ? 'top' : 'left'} collapsed={noteFocus.view.dock.collapsed} onCollapsedChange={collapsed => noteFocus.setDock({ collapsed })} /> : undefined;
-  const browseRegion = (docked: boolean, dockHeight: number) => <>
-              {actionError && <p role="alert" className="mb-3 text-sm text-danger">{actionError}</p>}
-              {staleNotice && <p role="alert" className="mb-3 text-sm text-warning">{staleNotice}</p>}
-              {listResult.error && <p role="alert" className="mb-3 text-sm text-danger">{t('notes.loadFailed', { message: listResult.error })}</p>}
-              {facetsQuery.error && <p role="alert" className="mb-3 text-sm text-danger">{t('notes.countsFailed', { message: facetsQuery.error })}</p>}
-              {indexLookup.error && <p role="alert" className="mb-3 text-sm text-danger">{t('notes.loadFailed', { message: indexLookup.error })}</p>}
-              {listResult.loading && <p role="status" className="mb-3 text-sm text-muted">{t('notes.loading')}</p>}
-              {!folderless && <>
-                <Breadcrumbs
-                  segments={breadcrumbs}
-                  currentFolder={selectedFolder}
-                  onSelectFolder={setSelectedFolder}
-                  subfolderCount={immediateSubfolders.length}
-                  noteCount={listResult.total}
-                  sortField={sortField}
-                  sortOrder={sortOrder}
-                  onSortChange={handleSortChange}
-                  compact={docked && !topDock}
-                />
-                <FolderLinks folders={immediateSubfolders} onSelect={setSelectedFolder}>
-                  {folderIndex && <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} />}
-                </FolderLinks>
-              </>}
-              {(viewMode === 'list' || viewMode === 'flat') && (<>
-                <ListView
-                  showMobileSort={false}
-                  compact={docked}
-                  focusMode={browseFocusMode}
-                  statuses={notebookStatuses}
-                  readOnly={!canWrite}
-                  canDelete={canWrite}
-                  confirmDelete={remote}
-                  notes={displayedNotes}
-                  uncommitted={listResult.uncommitted}
-                  hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
-                  onOpenNote={note => void openFromBrowse(note)}
-                  onDeleteNote={handleDeleteNote}
-                  onMoveNote={moveNoteAction}
-                  onUpdateNoteStatus={handleUpdateNoteStatus}
-                  onNewNote={() => openNewNote()}
-                  sortField={sortField}
-                  sortOrder={sortOrder}
-                  onSortChange={handleSortChange}
-                  tagActions={noteTagActions}
-                  leading={viewMode === 'flat' && folderIndex ? <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} /> : undefined}
-                />
-                <NoteListSentinel hasMore={listResult.hasMore} loading={listResult.loadingMore} error={listResult.error} onLoadMore={listResult.loadMore} />
-              </>)}
-              {viewMode === 'card' && (<>
-                <CardView
-                  strip={docked && dockHeight < CARD_TWO_ROW_HEIGHT}
-                  focusMode={browseFocusMode}
-                  statuses={notebookStatuses}
-                  readOnly={!canWrite}
-                  canDelete={canWrite}
-                  confirmDelete={remote}
-                  notes={displayedNotes}
-                  uncommitted={listResult.uncommitted}
-                  hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
-                  onOpenNote={note => void openFromBrowse(note)}
-                  onDeleteNote={handleDeleteNote}
-                  onMoveNote={moveNoteAction}
-                  onNewNote={() => openNewNote()}
-                  onUpdateNoteStatus={handleUpdateNoteStatus}
-                  tagActions={noteTagActions}
-                />
-                <NoteListSentinel hasMore={listResult.hasMore} loading={listResult.loadingMore} error={listResult.error} onLoadMore={listResult.loadMore} />
-              </>)}
-              {viewMode === 'kanban' && (
-                <KanbanView
-                  focusMode={browseFocusMode}
-                  statuses={notebookStatuses}
-                  readOnly={!canWrite}
-                  canDelete={canWrite}
-                  confirmDelete={remote}
-                  query={baseQuery}
-                  hiddenNote={folderIndex}
-                  leading={folderIndex ? <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} /> : undefined}
-                  onOpenNote={note => void openFromBrowse(note)}
-                  onUpdateNoteStatus={handleUpdateNoteStatus}
-                  onDeleteNote={handleDeleteNote}
-                  onMoveNote={moveNoteAction}
-                  onNewNoteWithStatus={(status) => {
-                    openNewNote(status);
-                  }}
-                  sortField={sortField}
-                  sortOrder={sortOrder}
-                  onSortChange={handleSortChange}
-                />
-              )}
-  </>;
-  const renderFocusLane = (row: ScreenRow, pane: number) => <FocusLaneTab key={row.id} row={row} notebooks={config?.notebooks || []}
-    graph={row.view === 'graph' ? <React.Suspense fallback={<p role="status">{t('graph.title')}</p>}>
-      <GraphPage notebooks={config?.notebooks || []} lane={row} screen={screen} />
-    </React.Suspense> : undefined}
-    onOpenNote={note => void openInFocus(note, pane).then(opened => { if (!opened) void handleOpenNote(note); })}
-    onOpenFolder={item => {
-      // A folder of this notebook filters the browse region and keeps the Focus; others open as they do on Screen.
-      const notebook = config?.notebooks.find(nb => nb.id === item.notebookId);
-      if (item.notebookId !== selectedNotebookId || !notebook || !folderRoot) return false;
-      const assetRoot = `${folderRoot}/${notebook.assets || 'assets'}`;
-      if (item.path === assetRoot || item.path.startsWith(`${assetRoot}/`)) return false;
-      if (item.path !== folderRoot && !item.path.startsWith(`${folderRoot}/`)) return false;
-      setSelectedFolder(item.path === folderRoot ? null : item.path.slice(folderRoot.length + 1));
-      return true;
-    }} />;
+  const dockToggle = noteFocus.layout && focusCapacity > 1 ? <BrowseDockToggle placement={topDock ? 'top' : 'left'} collapsed={noteFocus.view.dock.collapsed} onCollapsedChange={collapsed => noteFocus.setDock({ collapsed })} /> : undefined;
+  const browseRegion = (docked: boolean, dockHeight: number) => (
+    <>
+      {actionError && <p role='alert' className='mb-3 text-sm text-danger'>{actionError}</p>}
+      {staleNotice && <p role='alert' className='mb-3 text-sm text-warning'>{staleNotice}</p>}
+      {listResult.error && <p role='alert' className='mb-3 text-sm text-danger'>{t('notes.loadFailed', { message: listResult.error })}</p>}
+      {facetsQuery.error && <p role='alert' className='mb-3 text-sm text-danger'>{t('notes.countsFailed', { message: facetsQuery.error })}</p>}
+      {indexLookup.error && <p role='alert' className='mb-3 text-sm text-danger'>{t('notes.loadFailed', { message: indexLookup.error })}</p>}
+      {listResult.loading && <p role='status' className='mb-3 text-sm text-muted'>{t('notes.loading')}</p>}
+      {!folderless && (
+        <>
+          <Breadcrumbs segments={breadcrumbs} currentFolder={selectedFolder} onSelectFolder={setSelectedFolder} subfolderCount={immediateSubfolders.length} noteCount={listResult.total} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} compact={docked && !topDock} />
+          <FolderLinks folders={immediateSubfolders} onSelect={setSelectedFolder}>{folderIndex && <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} />}</FolderLinks>
+        </>
+      )}
+      {(viewMode === 'list' || viewMode === 'flat') && (
+        <>
+          <ListView
+            showMobileSort={false}
+            compact={docked}
+            focusMode={browseFocusMode}
+            statuses={notebookStatuses}
+            readOnly={!canWrite}
+            canDelete={canWrite}
+            confirmDelete={remote}
+            notes={displayedNotes}
+            uncommitted={listResult.uncommitted}
+            hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
+            onOpenNote={note => void openFromBrowse(note)}
+            onDeleteNote={handleDeleteNote}
+            onMoveNote={moveNoteAction}
+            onUpdateNoteStatus={handleUpdateNoteStatus}
+            onNewNote={() => openNewNote()}
+            sortField={sortField}
+            sortOrder={sortOrder}
+            onSortChange={handleSortChange}
+            tagActions={noteTagActions}
+            leading={viewMode === 'flat' && folderIndex
+              ? <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} />
+              : undefined}
+          />
+          <NoteListSentinel hasMore={listResult.hasMore} loading={listResult.loadingMore} error={listResult.error} onLoadMore={listResult.loadMore} />
+        </>
+      )}
+      {viewMode === 'card' && (
+        <>
+          <CardView strip={docked && dockHeight < CARD_TWO_ROW_HEIGHT} focusMode={browseFocusMode} statuses={notebookStatuses} readOnly={!canWrite} canDelete={canWrite} confirmDelete={remote} notes={displayedNotes} uncommitted={listResult.uncommitted} hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)} onOpenNote={note => void openFromBrowse(note)} onDeleteNote={handleDeleteNote} onMoveNote={moveNoteAction} onNewNote={() => openNewNote()} onUpdateNoteStatus={handleUpdateNoteStatus} tagActions={noteTagActions} />
+          <NoteListSentinel hasMore={listResult.hasMore} loading={listResult.loadingMore} error={listResult.error} onLoadMore={listResult.loadMore} />
+        </>
+      )}
+      {viewMode === 'kanban' && (
+        <KanbanView
+          focusMode={browseFocusMode}
+          statuses={notebookStatuses}
+          readOnly={!canWrite}
+          canDelete={canWrite}
+          confirmDelete={remote}
+          query={baseQuery}
+          hiddenNote={folderIndex}
+          leading={folderIndex
+            ? <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} />
+            : undefined}
+          onOpenNote={note => void openFromBrowse(note)}
+          onUpdateNoteStatus={handleUpdateNoteStatus}
+          onDeleteNote={handleDeleteNote}
+          onMoveNote={moveNoteAction}
+          onNewNoteWithStatus={(status) => {
+            openNewNote(status);
+          }}
+          sortField={sortField}
+          sortOrder={sortOrder}
+          onSortChange={handleSortChange}
+        />
+      )}
+    </>
+  );
+  const renderFocusLane = (row: ScreenRow, pane: number) => (
+    <FocusLaneTab
+      key={row.id}
+      row={row}
+      notebooks={config?.notebooks || []}
+      graph={row.view === 'graph'
+        ? (
+          <React.Suspense fallback={<p role='status'>{t('graph.title')}</p>}>
+            <GraphPage notebooks={config?.notebooks || []} lane={row} screen={screen} />
+          </React.Suspense>
+        )
+        : undefined}
+      onOpenNote={note => void openInFocus(note, pane).then(opened => {
+        if (!opened) void handleOpenNote(note);
+      })}
+      onOpenFolder={item => {
+        // A folder of this notebook filters the browse region and keeps the Focus; others open as they do on Screen.
+        const notebook = config?.notebooks.find(nb => nb.id === item.notebookId);
+        if (item.notebookId !== selectedNotebookId || !notebook || !folderRoot) return false;
+        const assetRoot = `${folderRoot}/${notebook.assets || 'assets'}`;
+        if (item.path === assetRoot || item.path.startsWith(`${assetRoot}/`)) return false;
+        if (item.path !== folderRoot && !item.path.startsWith(`${folderRoot}/`)) return false;
+        setSelectedFolder(item.path === folderRoot ? null : item.path.slice(folderRoot.length + 1));
+        return true;
+      }}
+    />
+  );
 
   if (loading || loadError) return <ConnectionState loading={loading} error={loadError} onRetry={refreshWorkspace} />;
 
   return (
     <WorkspaceLinks notebooks={config?.notebooks || []} folders={folders} onOpenNote={(note, anchor, source) => void openLink(note, anchor, source)}>
-    <NoteEditingProvider register={editorRegistry.register} editorProps={editorProps} flushEditors={editorRegistry.flushEditors} refreshNotes={refreshNotes} closeZoom={closeZoom} addToFocus={addToFocus}>
-    <div
-      className="app-shell h-dvh w-full overflow-hidden flex flex-col font-sans transition-colors duration-200"
-      data-workspace-tab={activeTab}
-      data-screen-focus={activeTab === 'screen' && Boolean(route.lane)}
-      style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-    >
-      {/* Core Branch User Guidance Banner (Theme-aware, harmonized with active palette) */}
-      {!remote && branch === 'core' && (
-        <div
-          className="shrink-0 flex-none px-4 py-2 text-xs flex items-center justify-between font-medium border-b transition-colors"
-          style={{
-            backgroundColor: 'var(--color-sidebar)',
-            borderColor: 'var(--color-border)',
-            color: 'var(--color-text)',
-          }}
-        >
-          <div className="flex items-center gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
-            <span
-              className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-on-primary shrink-0 shadow-xs"
-              style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-on-primary)' }}
-            >
-              {t('nav.coreBaseline')}
-            </span>
-            <span className="text-muted">
-              {t('nav.coreBanner')}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Top Header */}
-      <Header
-        workspaceTitle={config?.workspace.title || 'MyGitNotes'}
-        sourceLabel={remote ? `${sourceId.replace(/^(github|gitlab):/, '')}${canWrite ? '' : ' · Read-only'}` : undefined}
-        accountControls={<AuthControls local={!remote} />}
-        notebooks={config?.notebooks || []}
-        selectedNotebookId={selectedNotebookId}
-        onSelectNotebook={id => void setSelectedNotebookId(id)}
-        notebookDisabled={loading || resourceNavigationBusy || notebookSwitchBusy}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onCreateNote={() => openNewNote()}
-        createNoteDisabled={!canWrite}
-        onOpenCommands={() => setShortcutMode('palette')}
-        navigationDisabled={noteEditorOpen || isCommitOpen}
-      />
-      <KeyboardShortcuts mode={shortcutMode} onModeChange={setShortcutMode}
-        suspended={noteEditorOpen || isCommitOpen}
-        activeTab={activeTab} canCreateNote={canWrite}
-        onNavigate={tab => void setActiveTab(tab)} onCreateNote={() => openNewNote()}
-        onFocusSearch={() => { if (activeTab === 'notes') setFiltersOpen(true); requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.header-search input')?.focus()); }}
-        pageCommands={focusCommands} />
-
-      {routeError && (
-        <div role="alert" className="px-6 py-3 text-sm text-danger">
-          {routeError.startsWith('route.') ? t(routeError as any) : routeError}{' '}
-          <button className="underline" onClick={() => navigate('/notes')}>
-            {t('route.goToNotes')}
-          </button>
-        </div>
-      )}
-      {/* Main Workspace Layout */}
-      <SidebarProvider open={filtersOpen} onOpenChange={setFiltersOpen}>
-        <div ref={sidebarGestureRef} className="workspace-body relative flex-1 min-h-0 min-w-0 flex overflow-hidden">
-          <WorkspaceSplitLayout
-            hasSidebar={activeTab !== 'graph' && activeTab !== 'screen'}
-            sidebarDomId={activeTab === 'notes' ? 'notebook-panel' : activeTab === 'agent' ? 'agent-sidebar-panel' : activeTab === 'assets' ? 'assets-sidebar-panel' : activeTab === 'settings' ? 'settings-sidebar-panel' : undefined}
-            closeLabel={t('sidebar.closeFilters')}
-            rightPanelWidth={rightPanelWidth}
-            rightPanel={
-              <RightPanel
-                documentPanel={activeTab === 'notes' && noteFocus.layout ? { enabled: activePaneNote, onContainer: setDocumentContainer } : undefined}
-                fileMode={activeTab === 'assets'}
-                metadataOpen={fileMetadataOpen}
-                onMetadataOpenChange={setFileMetadataOpen}
-                fileMetadata={selectedFileEntry ? <FileMetadata entry={selectedFileEntry} onEdit={canWrite && !resourceNavigationBusy ? () => void fileManagerRef.current?.editMetadata() : undefined} /> : undefined}
-                onFileMetadataContainer={setFileMetadataContainer}
-                notebooks={config?.notebooks || []}
-                selectedNotebookId={selectedNotebookId}
-                currentFolder={selectedFolder && notebookRoot ? `${notebookRoot}/${selectedFolder}` : undefined}
-                onOpenNote={handleOpenNote}
-                onSaveNote={handleSaveNote}
-                onReadNote={readNoteForChange}
-                gitStatus={gitStatus}
-                deletedNotes={deletedNotes}
-                onRestoreNote={handleRestoreNote}
-                onOpenCommitModal={openCommitModal}
-                writable={canWrite}
-                remoteChanges={panelRemoteChanges}
-                getPreview={panelGetPreview}
-                onSynced={remote ? undefined : async () => { await refreshWorkspace(); await refreshDocuments(); }}
-                onWidthChange={setRightPanelWidth}
-              />
-            }
-          >
-            {activeTab === 'notes' && (
-              <>
-                <WorkspaceSidebarPortal>
-                  <Sidebar
+      <NoteEditingProvider register={editorRegistry.register} editorProps={editorProps} flushEditors={editorRegistry.flushEditors} refreshNotes={refreshNotes} closeZoom={closeZoom} addToFocus={addToFocus}>
+        <div className='app-shell h-dvh w-full overflow-hidden flex flex-col font-sans transition-colors duration-200' data-workspace-tab={activeTab} data-screen-focus={activeTab === 'screen' && Boolean(route.lane)} style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}>
+          {/* Core Branch User Guidance Banner (Theme-aware, harmonized with active palette) */}
+          {!remote && branch === 'core' && (
+            <div className='shrink-0 flex-none px-4 py-2 text-xs flex items-center justify-between font-medium border-b transition-colors' style={{ backgroundColor: 'var(--color-sidebar)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              <div className='flex items-center gap-2.5'>
+                <AlertTriangle className='w-4 h-4 text-warning shrink-0' />
+                <span className='px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-on-primary shrink-0 shadow-xs' style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-on-primary)' }}>{t('nav.coreBaseline')}</span>
+                <span className='text-muted'>{t('nav.coreBanner')}</span>
+              </div>
+            </div>
+          )}
+          {/* Top Header */}
+          <Header workspaceTitle={config?.workspace.title || 'MyGitNotes'} sourceLabel={remote ? `${sourceId.replace(/^(github|gitlab):/, '')}${canWrite ? '' : ' · Read-only'}` : undefined} accountControls={<AuthControls local={!remote} />} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} onSelectNotebook={id => void setSelectedNotebookId(id)} notebookDisabled={loading || resourceNavigationBusy || notebookSwitchBusy} activeTab={activeTab} setActiveTab={setActiveTab} onCreateNote={() => openNewNote()} createNoteDisabled={!canWrite} onOpenCommands={() => setShortcutMode('palette')} navigationDisabled={noteEditorOpen || isCommitOpen} />
+          <KeyboardShortcuts
+            mode={shortcutMode}
+            onModeChange={setShortcutMode}
+            suspended={noteEditorOpen || isCommitOpen}
+            activeTab={activeTab}
+            canCreateNote={canWrite}
+            onNavigate={tab => void setActiveTab(tab)}
+            onCreateNote={() => openNewNote()}
+            onFocusSearch={() => {
+              if (activeTab === 'notes') setFiltersOpen(true);
+              requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.header-search input')?.focus());
+            }}
+            pageCommands={focusCommands}
+          />
+          {routeError && (
+            <div role='alert' className='px-6 py-3 text-sm text-danger'>
+              {routeError.startsWith('route.') ? t(routeError as any) : routeError} <button className='underline' onClick={() => navigate('/notes')}>{t('route.goToNotes')}</button>
+            </div>
+          )}
+          {/* Main Workspace Layout */}
+          <SidebarProvider open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <div ref={sidebarGestureRef} className='workspace-body relative flex-1 min-h-0 min-w-0 flex overflow-hidden'>
+              <WorkspaceSplitLayout
+                hasSidebar={activeTab !== 'graph' && activeTab !== 'screen'}
+                sidebarDomId={activeTab === 'notes' ? 'notebook-panel' : activeTab === 'agent' ? 'agent-sidebar-panel' : activeTab === 'assets' ? 'assets-sidebar-panel' : activeTab === 'settings' ? 'settings-sidebar-panel' : undefined}
+                closeLabel={t('sidebar.closeFilters')}
+                rightPanelWidth={rightPanelWidth}
+                rightPanel={
+                  <RightPanel
+                    documentPanel={activeTab === 'notes' && noteFocus.layout ? { enabled: activePaneNote, onContainer: setDocumentContainer } : undefined}
+                    fileMode={activeTab === 'assets'}
+                    metadataOpen={fileMetadataOpen}
+                    onMetadataOpenChange={setFileMetadataOpen}
+                    fileMetadata={selectedFileEntry
+                      ? (
+                        <FileMetadata
+                          entry={selectedFileEntry}
+                          onEdit={canWrite && !resourceNavigationBusy
+                            ? () => void fileManagerRef.current?.editMetadata()
+                            : undefined}
+                        />
+                      )
+                      : undefined}
+                    onFileMetadataContainer={setFileMetadataContainer}
+                    notebooks={config?.notebooks || []}
                     selectedNotebookId={selectedNotebookId}
-                    folders={folders}
-                    onManageFiles={openFileManager}
-                    foldersWritable={canWrite}
-                    reorder={folderReorder}
-                    onToggleReorder={() => setFolderReorder(value => !value)}
-                    filters={filterProps}
-                    facets={facetsQuery.facets}
-                    facetsLoading={facetsQuery.loading}
-                    facetsError={facetsQuery.error}
-                    workspaceTagNames={workspaceTagNames}
-                    beforeFolderChange={() => {
-                      if (Object.keys(activeWorkingNotes).length || listLocalDrafts(workingScope).length || documents.some(document => document.dirty)) throw new Error(t('folder.draftsHint'));
-                    }}
-                    onFoldersChanged={async () => { await refreshWorkspace(); await refreshDocuments(); }}
-                    selectedFolder={selectedFolder}
-                    onSelectFolder={setSelectedFolder}
+                    currentFolder={selectedFolder && notebookRoot ? `${notebookRoot}/${selectedFolder}` : undefined}
+                    onOpenNote={handleOpenNote}
+                    onSaveNote={handleSaveNote}
+                    onReadNote={readNoteForChange}
                     gitStatus={gitStatus}
-                    canManageTags={canWrite}
-                    onPreviewTagUsage={previewTagUsage}
-                    onRenameTag={handleRenameTag}
-                    onMergeTag={handleMergeTag}
-                    onDeleteTag={handleDeleteTag}
+                    deletedNotes={deletedNotes}
+                    onRestoreNote={handleRestoreNote}
+                    onOpenCommitModal={openCommitModal}
+                    writable={canWrite}
+                    remoteChanges={panelRemoteChanges}
+                    getPreview={panelGetPreview}
+                    onSynced={remote ? undefined : async () => {
+                      await refreshWorkspace();
+                      await refreshDocuments();
+                    }}
+                    onWidthChange={setRightPanelWidth}
                   />
-                </WorkspaceSidebarPortal>
-
-                {/* Main Content Area */}
-                <main className="workspace-main notes-main">
-              <PageToolbar>
-                {dockToggle}
-                <NoteToolbar sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode}
-                  hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null}
-                  showHidden={showHidden} descendants={route.descendants}
-                  onShowHiddenChange={value => changeFilters({ showHidden: value })}
-                  onDescendantsChange={value => changeFilters({ descendants: value })}
-                  onOpenNewNoteModal={() => openNewNote()} filtersOpen={filtersOpen}
-                  onToggleFilters={() => setFiltersOpen(open => !open)}
-                  focusControls={<FocusControls focus={noteFocus} onShow={key => void showFocus(key)} onReload={() => void focusPage.reload()}
-                    browseToggle={focusCapacity === 1 ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') } : undefined} />} />
-              </PageToolbar>
-              {noteFocus.layout ? <BrowseDock placement={topDock ? 'top' : 'left'} size={topDock ? noteFocus.view.dock.top : noteFocus.view.dock.left}
-                onSizeChange={size => noteFocus.setDock(topDock ? { top: size } : { left: size })}
-                collapsed={noteFocus.view.dock.collapsed}
-                narrow={focusCapacity === 1} narrowView={focusNarrowView} browse={height => browseRegion(true, height)}>
-                <FocusArea focus={noteFocus} capacity={focusCapacity} lanes={notebookLanes ?? []} notebookRoot={folderRoot ?? ''} folders={folders}
-                  renderLane={renderFocusLane} onZoomNote={zoomFocusNote} documentPanel={focusDocumentPanel} />
-              </BrowseDock> : <div className="workspace-scroll">{browseRegion(false, 0)}</div>}
-            </main>
-          </>
-        )}
-
-        {activeTab === 'agent' && (
-          <main className="workspace-route agent-main">
-            <AgentSystemView
-              notebooks={config?.notebooks || []}
-              selectedNotebookId={selectedNotebookId}
-              ref={agentSystemRef}
-              onBusyChange={setResourceNavigationBusy}
-              readOnly={!canWrite}
-              remote={remote}
-              onGitStatus={setGitStatus}
-              readOnlyNotice={t(remote ? 'agent.remoteReadOnlyNotice' : branch === 'core' ? 'agent.coreBranchNotice' : 'agent.workspaceReadOnlyNotice')}
-            />
-          </main>
-        )}
-
-        {activeTab === 'assets' && (
-          <main className="workspace-route assets-main has-sidebar-drawer">
-            <FileManager key={`${sourceId}:${selectedNotebookId}`} ref={fileManagerRef}
-              notebookId={selectedNotebookId} notebooks={config?.notebooks || []} onNotebookChange={id => void setSelectedNotebookId(id)}
-              writable={canWrite} onSelectionChange={setSelectedFileEntry} metadataContainer={fileMetadataContainer} onShowMetadata={() => setFileMetadataOpen(true)}
-              initialPath={new URLSearchParams(location.search).get('asset') || (new URLSearchParams(location.search).has('directory') ? `${folderRoot}/${config?.notebooks.find(nb => nb.id === selectedNotebookId)?.assets || 'assets'}${new URLSearchParams(location.search).get('directory') ? '/' + new URLSearchParams(location.search).get('directory') : ''}` : undefined)}
-              onBusyChange={setResourceNavigationBusy} beforeChange={beforeFileChange}
-              onChanged={onFilesChanged} onOpenIndex={openFileIndex} />
-          </main>
-        )}
-
-        {activeTab === 'screen' && <React.Suspense fallback={<p role="status" className="p-8">{t('screen.loading')}</p>}><ScreenPage key={remote ? sourceId : repoRoot} screen={screen} focusedLaneId={route.lane} onStudySaved={() => { if (remote) void refreshWorkspace(); else invalidateNotes(); void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message)); }} notebooks={config?.notebooks || []} folders={folders} selectedNotebookId={selectedNotebookId} onOpenNote={handleOpenNote} onCreateNote={openNewNote}
-          focusSection={<FocusList focus={noteFocus} onOpen={id => navigate(`${notebookRoute(selectedNotebookId)}?${new URLSearchParams({ focus: id })}`)} />}
-          onAddLaneToFocus={row => setAddingToFocus({ tab: { kind: 'lane', id: row.id }, label: row.name })} /></React.Suspense>}
-
-        {activeTab === 'graph' && (
-          <main className="workspace-route graph-main flex-1 w-full h-full relative min-h-0">
-            <React.Suspense fallback={<p role="status" className="p-8">{t('graph.title')}</p>}>
-              <GraphPage
-                key={remote ? sourceId : repoRoot}
-                notebooks={config?.notebooks || []}
-                filters={filterProps}
-                folders={folders}
-                screen={screen}
-              />
-            </React.Suspense>
-          </main>
-        )}
-
-        {activeTab === 'settings' && (
-          <main className="workspace-route settings-main has-sidebar-drawer">
-            <SettingsModal
-              config={config}
-              branch={branch}
-              repoRoot={remote ? sourceId.replace(/^(github|gitlab):/, '') : repoRoot}
-              local={!remote}
-              accountSettings={<AgentAccessSettings local={!remote} />}
-              onRefreshWorkspace={refreshWorkspace}
-              currentTheme={currentTheme}
-              onSelectTheme={handleSelectTheme}
-            />
-          </main>
-        )}
-
-          </WorkspaceSplitLayout>
-        </div>
-      </SidebarProvider>
-
-      {activeTab !== 'screen' && screen.dirty && screen.error && <div role="alert" className="workspace-link-error">{screen.error}<button className="ui-button" onClick={() => navigate('/screen')}>{t('nav.screen')}</button></div>}
-
-      {/* Undo Toast Notification (Requirement 2) */}
-      {undoToast && (
-        <div className="fixed top-20 right-6 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
-          <div className="bg-surface/95 text-fg backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-line/80 flex items-center gap-3 text-xs">
-            <span>
-              {t('toast.noteMovedToTrash', { title: undoToast.note.title })}
-            </span>
-            <button
-              onClick={() => handleRestoreNote(undoToast.note)}
-              className="px-2.5 py-1 bg-warning hover:bg-warning/90 active:scale-95 text-on-warning font-semibold rounded-md transition"
-            >
-              {t('common.undo')}
-            </button>
-            <button
-              onClick={() => setUndoToast(null)}
-              className="text-muted hover:text-fg p-1 rounded hover:bg-fg/10 transition ml-1"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Recent tag operations: session-lifetime, each independently undoable (the list itself
+                }
+              >
+                {activeTab === 'notes' && (
+                  <>
+                    <WorkspaceSidebarPortal>
+                      <Sidebar
+                        selectedNotebookId={selectedNotebookId}
+                        folders={folders}
+                        onManageFiles={openFileManager}
+                        foldersWritable={canWrite}
+                        reorder={folderReorder}
+                        onToggleReorder={() => setFolderReorder(value => !value)}
+                        filters={filterProps}
+                        facets={facetsQuery.facets}
+                        facetsLoading={facetsQuery.loading}
+                        facetsError={facetsQuery.error}
+                        workspaceTagNames={workspaceTagNames}
+                        beforeFolderChange={() => {
+                          if (Object.keys(activeWorkingNotes).length || listLocalDrafts(workingScope).length || documents.some(document => document.dirty)) throw new Error(t('folder.draftsHint'));
+                        }}
+                        onFoldersChanged={async () => {
+                          await refreshWorkspace();
+                          await refreshDocuments();
+                        }}
+                        selectedFolder={selectedFolder}
+                        onSelectFolder={setSelectedFolder}
+                        gitStatus={gitStatus}
+                        canManageTags={canWrite}
+                        onPreviewTagUsage={previewTagUsage}
+                        onRenameTag={handleRenameTag}
+                        onMergeTag={handleMergeTag}
+                        onDeleteTag={handleDeleteTag}
+                      />
+                    </WorkspaceSidebarPortal>
+                    {/* Main Content Area */}
+                    <main className='workspace-main notes-main'>
+                      <PageToolbar>
+                        {dockToggle}
+                        <NoteToolbar sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode} hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null} showHidden={showHidden} descendants={route.descendants} onShowHiddenChange={value => changeFilters({ showHidden: value })} onDescendantsChange={value => changeFilters({ descendants: value })} onOpenNewNoteModal={() => openNewNote()} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(open => !open)} focusControls={<FocusControls focus={noteFocus} onShow={key => void showFocus(key)} onReload={() => void focusPage.reload()} browseToggle={focusCapacity === 1 ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') } : undefined} />} />
+                      </PageToolbar>
+                      {noteFocus.layout
+                        ? (
+                          <BrowseDock placement={topDock ? 'top' : 'left'} size={topDock ? noteFocus.view.dock.top : noteFocus.view.dock.left} onSizeChange={size => noteFocus.setDock(topDock ? { top: size } : { left: size })} collapsed={noteFocus.view.dock.collapsed} narrow={focusCapacity === 1} narrowView={focusNarrowView} browse={height => browseRegion(true, height)}>
+                            <FocusArea focus={noteFocus} capacity={focusCapacity} lanes={notebookLanes ?? []} notebookRoot={folderRoot ?? ''} folders={folders} renderLane={renderFocusLane} onZoomNote={zoomFocusNote} documentPanel={focusDocumentPanel} />
+                          </BrowseDock>
+                        )
+                        : <div className='workspace-scroll'>{browseRegion(false, 0)}</div>}
+                    </main>
+                  </>
+                )}
+                {activeTab === 'agent' && (
+                  <main className='workspace-route agent-main'>
+                    <AgentSystemView notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} ref={agentSystemRef} onBusyChange={setResourceNavigationBusy} readOnly={!canWrite} remote={remote} onGitStatus={setGitStatus} readOnlyNotice={t(remote ? 'agent.remoteReadOnlyNotice' : branch === 'core' ? 'agent.coreBranchNotice' : 'agent.workspaceReadOnlyNotice')} />
+                  </main>
+                )}
+                {activeTab === 'assets' && (
+                  <main className='workspace-route assets-main has-sidebar-drawer'>
+                    <FileManager key={`${sourceId}:${selectedNotebookId}`} ref={fileManagerRef} notebookId={selectedNotebookId} notebooks={config?.notebooks || []} onNotebookChange={id => void setSelectedNotebookId(id)} writable={canWrite} onSelectionChange={setSelectedFileEntry} metadataContainer={fileMetadataContainer} onShowMetadata={() => setFileMetadataOpen(true)} initialPath={new URLSearchParams(location.search).get('asset') || (new URLSearchParams(location.search).has('directory') ? `${folderRoot}/${config?.notebooks.find(nb => nb.id === selectedNotebookId)?.assets || 'assets'}${new URLSearchParams(location.search).get('directory') ? '/' + new URLSearchParams(location.search).get('directory') : ''}` : undefined)} onBusyChange={setResourceNavigationBusy} beforeChange={beforeFileChange} onChanged={onFilesChanged} onOpenIndex={openFileIndex} />
+                  </main>
+                )}
+                {activeTab === 'screen' && (
+                  <React.Suspense fallback={<p role='status' className='p-8'>{t('screen.loading')}</p>}>
+                    <ScreenPage
+                      key={remote ? sourceId : repoRoot}
+                      screen={screen}
+                      focusedLaneId={route.lane}
+                      onStudySaved={() => {
+                        if (remote) void refreshWorkspace();
+                        else invalidateNotes();
+                        void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message));
+                      }}
+                      notebooks={config?.notebooks || []}
+                      folders={folders}
+                      selectedNotebookId={selectedNotebookId}
+                      onOpenNote={handleOpenNote}
+                      onCreateNote={openNewNote}
+                      focusSection={<FocusList focus={noteFocus} onOpen={id => navigate(`${notebookRoute(selectedNotebookId)}?${new URLSearchParams({ focus: id })}`)} />}
+                      onAddLaneToFocus={row => setAddingToFocus({ tab: { kind: 'lane', id: row.id }, label: row.name })}
+                    />
+                  </React.Suspense>
+                )}
+                {activeTab === 'graph' && (
+                  <main className='workspace-route graph-main flex-1 w-full h-full relative min-h-0'>
+                    <React.Suspense fallback={<p role='status' className='p-8'>{t('graph.title')}</p>}>
+                      <GraphPage key={remote ? sourceId : repoRoot} notebooks={config?.notebooks || []} filters={filterProps} folders={folders} screen={screen} />
+                    </React.Suspense>
+                  </main>
+                )}
+                {activeTab === 'settings' && (
+                  <main className='workspace-route settings-main has-sidebar-drawer'>
+                    <SettingsModal config={config} branch={branch} repoRoot={remote ? sourceId.replace(/^(github|gitlab):/, '') : repoRoot} local={!remote} accountSettings={<AgentAccessSettings local={!remote} />} onRefreshWorkspace={refreshWorkspace} currentTheme={currentTheme} onSelectTheme={handleSelectTheme} />
+                  </main>
+                )}
+              </WorkspaceSplitLayout>
+            </div>
+          </SidebarProvider>
+          {activeTab !== 'screen' && screen.dirty && screen.error && (
+            <div role='alert' className='workspace-link-error'>
+              {screen.error}
+              <button className='ui-button' onClick={() => navigate('/screen')}>{t('nav.screen')}</button>
+            </div>
+          )}
+          {/* Undo Toast Notification (Requirement 2) */}
+          {undoToast && (
+            <div className='fixed top-20 right-6 z-50 animate-in fade-in slide-in-from-top-3 duration-200'>
+              <div className='bg-surface/95 text-fg backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-line/80 flex items-center gap-3 text-xs'>
+                <span>{t('toast.noteMovedToTrash', { title: undoToast.note.title })}</span>
+                <button onClick={() => handleRestoreNote(undoToast.note)} className='px-2.5 py-1 bg-warning hover:bg-warning/90 active:scale-95 text-on-warning font-semibold rounded-md transition'>{t('common.undo')}</button>
+                <button onClick={() => setUndoToast(null)} className='text-muted hover:text-fg p-1 rounded hover:bg-fg/10 transition ml-1'>
+                  <X className='w-3.5 h-3.5' />
+                </button>
+              </div>
+            </div>
+          )}
+          {
+            /* Recent tag operations: session-lifetime, each independently undoable (the list itself
           is not cleared by navigation or further mutations, only by page reload). Undoing a
           record unconditionally restores its recorded prior tags on every note it touched; it
-          does not detect or warn about a later edit to the same note's tags in the meantime. */}
-      {tagOperations.history.length > 0 && (
-        <section className="fixed top-28 sm:top-auto sm:bottom-6 right-4 sm:right-16 left-4 sm:left-auto z-50 flex flex-col gap-2 items-end" aria-label={t('sidebar.recentTagChanges')}>
-          {tagOperations.history.map(record => (
-            <div key={record.id} className="bg-surface/95 text-fg backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-line/80 flex items-center gap-3 text-xs max-w-sm">
-              <span>{record.label}</span>
-              <button
-                autoFocus
-                onClick={() => void handleUndoTagOperation(record.id)}
-                className="px-2.5 py-1 bg-warning hover:bg-warning/90 active:scale-95 text-on-warning font-semibold rounded-md transition shrink-0"
-              >
-                {t('common.undo')}
-              </button>
-              <button
-                aria-label={t('sidebar.dismissTagOperation')}
-                onClick={() => tagOperations.dismiss(record.id)}
-                className="text-muted hover:text-fg p-1 rounded hover:bg-fg/10 transition ml-1 shrink-0"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
-        </section>
-      )}
-
-      {fileDialog && <FileManagerDialog notebookId={fileDialog.notebookId} notebooks={config?.notebooks || []} writable={canWrite}
-        initialPath={fileDialog.path} movePath={fileDialog.movePath} beforeChange={beforeFileChange}
-        onChanged={onFilesChanged} onOpenIndex={openFileIndex} onClose={() => setFileDialog(undefined)} />}
-      {/* Note Editor Modal */}
-      <EditorModal
-        key={fileEditorRevision}
-        note={routedNote}
-        committed={routedCommitted && typeof routedCommitted.content === 'string' ? routedCommitted as NoteItem : undefined}
-        loading={routedLoading}
-        isOpen={noteEditorOpen}
-      />
-      {addingToFocus && <AddToFocusDialog focus={noteFocus} tab={addingToFocus.tab} label={addingToFocus.label} onClose={() => setAddingToFocus(null)} />}
-
-      {/* Commit Modal */}
-      <CommitModal
-        writable={canWrite}
-        remoteChanges={panelRemoteChanges}
-        getPreview={panelGetPreview}
-        request={commitRequest}
-        restoreFile={remote ? async file => {
-          const pendingDocument = documents.find(document => document.file === file.path);
-          if (pendingDocument) { if (file.revision !== pendingDocument.diff) throw new Error('Draft changed. Review it again.'); await pendingDocument.reload(); return; }
-          const entry = readWorkingNotes(workingScope)[file.path];
-          if (!entry || JSON.stringify(entry) !== file.revision) throw new Error('Draft changed. Review it again.');
-          const latest = entry.base ? await readNote(file.path) : null;
-          if (JSON.stringify(readWorkingNotes(workingScope)[file.path]) !== file.revision) throw new Error('Draft changed. Review it again.');
-          setWorkingNotes(updateWorkingNote(workingScope, file.path, null));
-          if (latest && editingNote?.path === file.path) setEditingNote(latest);
-        } : undefined}
-        commitFiles={remote ? commitWorkingNotes : undefined}
-        isOpen={isCommitOpen}
-        onClose={() => setIsCommitOpen(false)}
-        gitStatus={gitStatus}
-        onChanged={async () => {
-          await refreshWorkspace();
-          if (!remote) { await refreshDocuments(); await agentSystemRef.current?.refresh(); }
-        }}
-        onCommitted={async () => {
-          await refreshWorkspace();
-          if (!remote) { await refreshDocuments(); await agentSystemRef.current?.refresh(); }
-          setDeletedNotes([]);
-          setUndoToast(null);
-        }}
-      />
-
-      {/* Create New Note Modal */}
-      {isNewNoteOpen && (
-        <div className="viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div
-            className="rounded-2xl shadow-2xl border w-full max-w-md max-h-full overflow-y-auto p-4 md:p-6"
-            style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-          >
-            <h3 className="font-semibold text-fg text-base mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
-              {t('createNote.title')}
-            </h3>
-
-            {createError && <p id="create-note-error" role="alert" className="mb-3 text-sm text-danger">{createError}</p>}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5">
-                  {t('createNote.noteTitle')}
-                </label>
-                <input
-                  type="text"
-                  placeholder={t('createNote.placeholder')}
-                  aria-describedby="create-note-error" value={newNoteTitle}
-                  onChange={(e) => setNewNoteTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-fg/5 border border-line rounded-lg text-sm text-fg focus:outline-none"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleCreateNewNote();
-                  }}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5" htmlFor="create-note-folder">
-                  {t('createNote.folder')}
-                </label>
-                <input id="create-note-folder" type="text" list="create-note-folders" aria-label={t('createNote.folder')}
-                  placeholder={t('createNote.folderPlaceholder')} value={newNoteFolder} onChange={event => setNewNoteFolder(event.target.value)}
-                  className="ui-control" autoComplete="off" />
-                <datalist id="create-note-folders">{newNoteFolders.map(folder => <option key={folder} value={folder} />)}</datalist>
-              </div>
-
-              {newNoteTemplates.length > 0 && (
-                <div>
-                  <label className="block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5">
-                    {t('createNote.template')}
-                  </label>
-                  <Select aria-label={t('createNote.template')} value={newNoteTemplateId} onValueChange={handleTemplateChange}
-                    options={[{ value: '', label: t('createNote.noTemplate') }, ...newNoteTemplates.map(tpl => ({ value: tpl.id, label: tpl.title }))]}
-                    className="w-full" />
+          does not detect or warn about a later edit to the same note's tags in the meantime. */
+          }
+          {tagOperations.history.length > 0 && (
+            <section className='fixed top-28 sm:top-auto sm:bottom-6 right-4 sm:right-16 left-4 sm:left-auto z-50 flex flex-col gap-2 items-end' aria-label={t('sidebar.recentTagChanges')}>
+              {tagOperations.history.map(record => (
+                <div key={record.id} className='bg-surface/95 text-fg backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-line/80 flex items-center gap-3 text-xs max-w-sm'>
+                  <span>{record.label}</span>
+                  <button
+                    autoFocus
+                    onClick={() => void handleUndoTagOperation(record.id)}
+                    className='px-2.5 py-1 bg-warning hover:bg-warning/90 active:scale-95 text-on-warning font-semibold rounded-md transition shrink-0'
+                  >
+                    {t('common.undo')}
+                  </button>
+                  <button
+                    aria-label={t('sidebar.dismissTagOperation')}
+                    onClick={() => tagOperations.dismiss(record.id)}
+                    className='text-muted hover:text-fg p-1 rounded hover:bg-fg/10 transition ml-1 shrink-0'
+                  >
+                    <X className='w-3.5 h-3.5' />
+                  </button>
                 </div>
-              )}
-
-              {newNoteTags.length > 0 && (
-                <div>
-                  <label className="block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5">
-                    {t('notes.tags')}
-                  </label>
-                  <div className="flex flex-wrap gap-1.5 py-1">
-                    {newNoteTags.map(tag => (
-                      <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
-                        #{tag}
-                      </span>
-                    ))}
+              ))}
+            </section>
+          )}
+          {fileDialog && <FileManagerDialog notebookId={fileDialog.notebookId} notebooks={config?.notebooks || []} writable={canWrite} initialPath={fileDialog.path} movePath={fileDialog.movePath} beforeChange={beforeFileChange} onChanged={onFilesChanged} onOpenIndex={openFileIndex} onClose={() => setFileDialog(undefined)} />}
+          {/* Note Editor Modal */}
+          <EditorModal key={fileEditorRevision} note={routedNote} committed={routedCommitted && typeof routedCommitted.content === 'string' ? routedCommitted as NoteItem : undefined} loading={routedLoading} isOpen={noteEditorOpen} />
+          {addingToFocus && <AddToFocusDialog focus={noteFocus} tab={addingToFocus.tab} label={addingToFocus.label} onClose={() => setAddingToFocus(null)} />}
+          {/* Commit Modal */}
+          <CommitModal
+            writable={canWrite}
+            remoteChanges={panelRemoteChanges}
+            getPreview={panelGetPreview}
+            request={commitRequest}
+            restoreFile={remote
+              ? async file => {
+                const pendingDocument = documents.find(document => document.file === file.path);
+                if (pendingDocument) {
+                  if (file.revision !== pendingDocument.diff) throw new Error('Draft changed. Review it again.');
+                  await pendingDocument.reload();
+                  return;
+                }
+                const entry = readWorkingNotes(workingScope)[file.path];
+                if (!entry || JSON.stringify(entry) !== file.revision) throw new Error('Draft changed. Review it again.');
+                const latest = entry.base ? await readNote(file.path) : null;
+                if (JSON.stringify(readWorkingNotes(workingScope)[file.path]) !== file.revision) throw new Error('Draft changed. Review it again.');
+                setWorkingNotes(updateWorkingNote(workingScope, file.path, null));
+                if (latest && editingNote?.path === file.path) setEditingNote(latest);
+              }
+              : undefined}
+            commitFiles={remote ? commitWorkingNotes : undefined}
+            isOpen={isCommitOpen}
+            onClose={() => setIsCommitOpen(false)}
+            gitStatus={gitStatus}
+            onChanged={async () => {
+              await refreshWorkspace();
+              if (!remote) {
+                await refreshDocuments();
+                await agentSystemRef.current?.refresh();
+              }
+            }}
+            onCommitted={async () => {
+              await refreshWorkspace();
+              if (!remote) {
+                await refreshDocuments();
+                await agentSystemRef.current?.refresh();
+              }
+              setDeletedNotes([]);
+              setUndoToast(null);
+            }}
+          />
+          {/* Create New Note Modal */}
+          {isNewNoteOpen && (
+            <div className='viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-4'>
+              <div className='rounded-2xl shadow-2xl border w-full max-w-md max-h-full overflow-y-auto p-4 md:p-6' style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                <h3 className='font-semibold text-fg text-base mb-4 flex items-center gap-2'>
+                  <FileText className='w-5 h-5' style={{ color: 'var(--color-primary)' }} />
+                  {t('createNote.title')}
+                </h3>
+                {createError && <p id='create-note-error' role='alert' className='mb-3 text-sm text-danger'>{createError}</p>}
+                <div className='space-y-4'>
+                  <div>
+                    <label className='block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5'>{t('createNote.noteTitle')}</label>
+                    <input
+                      type='text'
+                      placeholder={t('createNote.placeholder')}
+                      aria-describedby='create-note-error'
+                      value={newNoteTitle}
+                      onChange={(e) => setNewNoteTitle(e.target.value)}
+                      className='w-full px-3 py-2 bg-fg/5 border border-line rounded-lg text-sm text-fg focus:outline-none'
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleCreateNewNote();
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className='block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5' htmlFor='create-note-folder'>{t('createNote.folder')}</label>
+                    <input id='create-note-folder' type='text' list='create-note-folders' aria-label={t('createNote.folder')} placeholder={t('createNote.folderPlaceholder')} value={newNoteFolder} onChange={event => setNewNoteFolder(event.target.value)} className='ui-control' autoComplete='off' />
+                    <datalist id='create-note-folders'>{newNoteFolders.map(folder => <option key={folder} value={folder} />)}</datalist>
+                  </div>
+                  {newNoteTemplates.length > 0 && (
+                    <div>
+                      <label className='block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5'>{t('createNote.template')}</label>
+                      <Select aria-label={t('createNote.template')} value={newNoteTemplateId} onValueChange={handleTemplateChange} options={[{ value: '', label: t('createNote.noTemplate') }, ...newNoteTemplates.map(tpl => ({ value: tpl.id, label: tpl.title }))]} className='w-full' />
+                    </div>
+                  )}
+                  {newNoteTags.length > 0 && (
+                    <div>
+                      <label className='block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5'>{t('notes.tags')}</label>
+                      <div className='flex flex-wrap gap-1.5 py-1'>{newNoteTags.map(tag => <span key={tag} className='inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20'>#{tag}</span>)}</div>
+                    </div>
+                  )}
+                  <div>
+                    <label className='block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5'>{t('createNote.initialStatus')}</label>
+                    <Select aria-label={t('createNote.initialStatus')} value={newNoteStatus} onValueChange={setNewNoteStatus} options={newNoteStatuses.map(value => ({ value, label: value }))} className='w-full' />
                   </div>
                 </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5">
-                  {t('createNote.initialStatus')}
-                </label>
-                <Select aria-label={t('createNote.initialStatus')} value={newNoteStatus} onValueChange={setNewNoteStatus} options={newNoteStatuses.map(value => ({value,label:value}))} className="w-full" />
+                <div className='flex items-center justify-end gap-2 mt-6 pt-4 border-t border-line'>
+                  <button
+                    onClick={() => {
+                      setIsNewNoteOpen(false);
+                      setNewNoteTags([]);
+                      setNewNoteTemplateId('');
+                    }}
+                    className='px-4 py-2 text-xs font-medium text-muted hover:bg-fg/5 rounded-lg transition active:scale-95'
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <Button variant='primary' onClick={() => handleCreateNewNote()} disabled={!newNoteTitle.trim()}>{t('createNote.submit')}</Button>
+                </div>
               </div>
             </div>
-
-            <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-line">
-              <button
-                onClick={() => { setIsNewNoteOpen(false); setNewNoteTags([]); setNewNoteTemplateId(''); }}
-                className="px-4 py-2 text-xs font-medium text-muted hover:bg-fg/5 rounded-lg transition active:scale-95"
-              >
-                {t('common.cancel')}
-              </button>
-              <Button variant="primary"
-                onClick={() => handleCreateNewNote()}
-                disabled={!newNoteTitle.trim()}
->
-                {t('createNote.submit')}
-              </Button>
-            </div>
-          </div>
+          )}
         </div>
-      )}
-    </div>
-    <ImageLightbox />
-    </NoteEditingProvider>
+        <ImageLightbox />
+      </NoteEditingProvider>
     </WorkspaceLinks>
   );
 };

@@ -15,8 +15,10 @@ function cells(line: string): string[] {
   const parts: string[] = [];
   let cell = '', slashes = 0;
   for (const char of line.trim()) {
-    if (char === '|' && slashes % 2 === 0) { parts.push(cell.trim()); cell = ''; }
-    else cell += char;
+    if (char === '|' && slashes % 2 === 0) {
+      parts.push(cell.trim());
+      cell = '';
+    } else cell += char;
     slashes = char === '\\' ? slashes + 1 : 0;
   }
   parts.push(cell.trim());
@@ -34,19 +36,21 @@ export function findMarkdownTables(content: string): MarkdownTable[] {
   const sourceOffset = (offset: number) => offset + collapsedNewlines.filter(position => position < offset).length;
   const state = EditorState.create({ doc: normalized, extensions: [markdown({ base: markdownLanguage })] });
   const tables: MarkdownTable[] = [];
-  ensureSyntaxTree(state, normalized.length, 1000)?.iterate({ enter(node) {
-    if (node.name !== 'Table' || node.node.parent?.name !== 'Document') return;
-    const lines = normalized.slice(node.from, node.to).split('\n');
-    const header = cells(lines[0]);
-    const alignments = cells(lines[1]).map<TableAlignment>(cell => cell.startsWith(':') ? (cell.endsWith(':') ? 'center' : 'left') : cell.endsWith(':') ? 'right' : 'none');
-    const rows = [header, ...lines.slice(2).map(cells)];
-    // Preserve surplus source cells too, including malformed but recoverable tables.
-    const width = Math.max(header.length, ...rows.map(row => row.length));
-    for (const row of rows) while (row.length < width) row.push('');
-    while (alignments.length < width) alignments.push('none');
-    tables.push({ from: sourceOffset(node.from), to: sourceOffset(node.to), rows, alignments });
-    return false;
-  } });
+  ensureSyntaxTree(state, normalized.length, 1000)?.iterate({
+    enter(node) {
+      if (node.name !== 'Table' || node.node.parent?.name !== 'Document') return;
+      const lines = normalized.slice(node.from, node.to).split('\n');
+      const header = cells(lines[0]);
+      const alignments = cells(lines[1]).map<TableAlignment>(cell => cell.startsWith(':') ? (cell.endsWith(':') ? 'center' : 'left') : cell.endsWith(':') ? 'right' : 'none');
+      const rows = [header, ...lines.slice(2).map(cells)];
+      // Preserve surplus source cells too, including malformed but recoverable tables.
+      const width = Math.max(header.length, ...rows.map(row => row.length));
+      for (const row of rows) while (row.length < width) row.push('');
+      while (alignments.length < width) alignments.push('none');
+      tables.push({ from: sourceOffset(node.from), to: sourceOffset(node.to), rows, alignments });
+      return false;
+    },
+  });
   return tables;
 }
 

@@ -9,11 +9,7 @@ import { loadWorkspaceConfig } from './config.js';
 /**
  * Reads a single note file from disk safely.
  */
-export function readNoteFile(
-  repoRoot: string,
-  relPath: string,
-  notebookId: string
-): NoteItem {
+export function readNoteFile(repoRoot: string, relPath: string, notebookId: string): NoteItem {
   const safePath = resolveSafePath(repoRoot, relPath);
   const raw = fs.readFileSync(safePath, 'utf-8');
   const stat = fs.statSync(safePath);
@@ -21,39 +17,18 @@ export function readNoteFile(
 
   const { metadata, content, title, lineNumberOffset } = parseNoteContent(raw, filename);
 
-  const noteId =
-    typeof metadata.id === 'string' && metadata.id.trim()
-      ? metadata.id.trim()
-      : path.basename(filename, path.extname(filename));
+  const noteId = typeof metadata.id === 'string' && metadata.id.trim() ? metadata.id.trim() : path.basename(filename, path.extname(filename));
 
   const tags = Array.isArray(metadata.tags) ? metadata.tags.map(String) : [];
   const status = typeof metadata.status === 'string' ? metadata.status : undefined;
 
-  return {
-    id: noteId,
-    path: relPath.replace(/\\/g, '/'),
-    notebookId,
-    title,
-    status,
-    tags,
-    metadata,
-    content,
-    lineNumberOffset,
-    mtime: stat.mtimeMs,
-    size: stat.size,
-  };
+  return { id: noteId, path: relPath.replace(/\\/g, '/'), notebookId, title, status, tags, metadata, content, lineNumberOffset, mtime: stat.mtimeMs, size: stat.size };
 }
 
 /**
  * Writes or updates a note file on disk safely.
  */
-export function writeNoteFile(
-  repoRoot: string,
-  relPath: string,
-  content: string,
-  metadata?: NoteMetadata,
-  notebookId?: string
-): NoteItem {
+export function writeNoteFile(repoRoot: string, relPath: string, content: string, metadata?: NoteMetadata, notebookId?: string): NoteItem {
   const safePath = resolveSafePath(repoRoot, relPath);
   const isNew = !fs.existsSync(safePath);
   const dir = path.dirname(safePath);
@@ -62,9 +37,7 @@ export function writeNoteFile(
   }
 
   const existingRaw = isNew ? undefined : fs.readFileSync(safePath, 'utf-8');
-  const finalOutput = metadata
-    ? serializeNoteContent(metadata, content, isNew, new Date(), existingRaw)
-    : content;
+  const finalOutput = metadata ? serializeNoteContent(metadata, content, isNew, new Date(), existingRaw) : content;
 
   fs.writeFileSync(safePath, finalOutput, 'utf-8');
 
@@ -99,10 +72,7 @@ export function writeNoteFile(
 /**
  * Lists all notes in a given notebook.
  */
-export function scanNotebookNotes(
-  repoRoot: string,
-  notebook: NotebookConfig
-): NoteItem[] {
+export function scanNotebookNotes(repoRoot: string, notebook: NotebookConfig): NoteItem[] {
   const safeRoot = resolveSafePath(repoRoot, notebook.root);
   if (!fs.existsSync(safeRoot)) {
     return [];

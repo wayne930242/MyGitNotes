@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PanelLeft } from 'lucide-react';
-import { Group, Panel, Separator, usePanelRef, type LayoutChangedMeta, type PanelImperativeHandle, type PanelSize } from 'react-resizable-panels';
+import { Group, type LayoutChangedMeta, Panel, type PanelImperativeHandle, type PanelSize, Separator, usePanelRef } from 'react-resizable-panels';
 
 export const SIDEBAR_WIDTH_STORAGE_KEY = 'mygitnotes:sidebar-width';
 export const DEFAULT_SIDEBAR_WIDTH = 256;
@@ -83,14 +83,7 @@ export function scheduleRightPanelResize(width: number, resize: (width: number) 
  * only signal that distinguishes that from a group-driven resize (e.g. a viewport-width clamp),
  * which `Panel.onResize` fires for too but carries no such flag.
  */
-export function persistWidthOnUserInteraction(
-  meta: LayoutChangedMeta,
-  panelRef: React.RefObject<PanelImperativeHandle | null>,
-  offset: number,
-  min: number,
-  max: number,
-  save: (width: number) => void,
-): void {
+export function persistWidthOnUserInteraction(meta: LayoutChangedMeta, panelRef: React.RefObject<PanelImperativeHandle | null>, offset: number, min: number, max: number, save: (width: number) => void): void {
   if (!meta.isUserInteraction) return;
   const size = panelRef.current?.getSize();
   if (!size) return;
@@ -128,20 +121,13 @@ const SidebarContext = createContext<SidebarContextValue | null>(null);
 export function useWorkspaceSidebarDrawer() {
   const context = useContext(SidebarContext);
   if (context) {
-    return {
-      open: context.open,
-      setOpen: context.setOpen,
-    };
+    return { open: context.open, setOpen: context.setOpen };
   }
   const [open, setOpen] = useState(false);
   return { open, setOpen };
 }
 
-export function SidebarProvider({ children, open: controlledOpen, onOpenChange }: {
-  children: React.ReactNode;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-}) {
+export function SidebarProvider({ children, open: controlledOpen, onOpenChange }: { children: React.ReactNode; open?: boolean; onOpenChange?: (open: boolean) => void; }) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [target, setTarget] = useState<HTMLDivElement | null>(null);
 
@@ -154,19 +140,17 @@ export function SidebarProvider({ children, open: controlledOpen, onOpenChange }
 
   useEffect(() => {
     if (!open) return;
-    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
     document.addEventListener('keydown', close);
     return () => document.removeEventListener('keydown', close);
   }, [open]);
 
-  return (
-    <SidebarContext.Provider value={{ open, setOpen, target, setTarget }}>
-      {children}
-    </SidebarContext.Provider>
-  );
+  return <SidebarContext.Provider value={{ open, setOpen, target, setTarget }}>{children}</SidebarContext.Provider>;
 }
 
-export function WorkspaceSidebarPortal({ children }: { children: React.ReactNode }) {
+export function WorkspaceSidebarPortal({ children }: { children: React.ReactNode; }) {
   const context = useContext(SidebarContext);
   const [domTarget, setDomTarget] = useState<HTMLElement | null>(null);
 
@@ -199,22 +183,7 @@ export interface WorkspaceSplitLayoutProps {
   rightPanelWidth?: number;
 }
 
-export function WorkspaceSplitLayout({
-  sidebar,
-  children,
-  hasSidebar = true,
-  drawerOpen: propDrawerOpen,
-  onCloseDrawer: propOnCloseDrawer,
-  closeLabel = 'Close sidebar',
-  className = '',
-  sidebarId = 'workspace-sidebar-panel',
-  sidebarDomId,
-  mainId = 'workspace-main-panel',
-  mainClassName = '',
-  rightPanel,
-  rightPanelId = 'workspace-right-panel',
-  rightPanelWidth,
-}: WorkspaceSplitLayoutProps) {
+export function WorkspaceSplitLayout({ sidebar, children, hasSidebar = true, drawerOpen: propDrawerOpen, onCloseDrawer: propOnCloseDrawer, closeLabel = 'Close sidebar', className = '', sidebarId = 'workspace-sidebar-panel', sidebarDomId, mainId = 'workspace-main-panel', mainClassName = '', rightPanel, rightPanelId = 'workspace-right-panel', rightPanelWidth }: WorkspaceSplitLayoutProps) {
   const isDesktop = useIsDesktop();
   const context = useContext(SidebarContext);
   const drawerOpen = propDrawerOpen !== undefined ? propDrawerOpen : (context?.open ?? false);
@@ -250,51 +219,22 @@ export function WorkspaceSplitLayout({
   // The Panel stays mounted (gated on `rightPanel` alone, not `rightPanelWidth`) so RightPanel
   // never unmounts — it is the sole source of rightPanelWidth via onWidthChange, so if it were
   // unmounted while hidden it could never report a width again and the panel would stay hidden forever.
-  const rightPanelNode = rightPanel ? (
-    <React.Fragment key="right-panel">
-      <Separator
-        className={`workspace-splitter${rightPanelHidden ? ' workspace-splitter-hidden' : ''}`}
-        disabled={!rightPanelExpanded}
-      />
-      <Panel
-        id={rightPanelId}
-        defaultSize={`${rightPanelWidth || RIGHT_PANEL_RAIL_WIDTH}px`}
-        minSize={`${rightPanelHidden ? 0 : rightPanelExpanded ? RIGHT_PANEL_RAIL_WIDTH + MIN_RIGHT_PANEL_WIDTH : RIGHT_PANEL_RAIL_WIDTH}px`}
-        maxSize={`${rightPanelHidden ? 0 : rightPanelExpanded ? RIGHT_PANEL_RAIL_WIDTH + MAX_RIGHT_PANEL_WIDTH : RIGHT_PANEL_RAIL_WIDTH}px`}
-        groupResizeBehavior="preserve-pixel-size"
-        panelRef={rightPanelRef}
-        className="workspace-split-right-panel"
-      >
-        {rightPanel}
-      </Panel>
-    </React.Fragment>
-  ) : null;
+  const rightPanelNode = rightPanel
+    ? (
+      <React.Fragment key='right-panel'>
+        <Separator className={`workspace-splitter${rightPanelHidden ? ' workspace-splitter-hidden' : ''}`} disabled={!rightPanelExpanded} />
+        <Panel id={rightPanelId} defaultSize={`${rightPanelWidth || RIGHT_PANEL_RAIL_WIDTH}px`} minSize={`${rightPanelHidden ? 0 : rightPanelExpanded ? RIGHT_PANEL_RAIL_WIDTH + MIN_RIGHT_PANEL_WIDTH : RIGHT_PANEL_RAIL_WIDTH}px`} maxSize={`${rightPanelHidden ? 0 : rightPanelExpanded ? RIGHT_PANEL_RAIL_WIDTH + MAX_RIGHT_PANEL_WIDTH : RIGHT_PANEL_RAIL_WIDTH}px`} groupResizeBehavior='preserve-pixel-size' panelRef={rightPanelRef} className='workspace-split-right-panel'>{rightPanel}</Panel>
+      </React.Fragment>
+    )
+    : null;
 
-  const slotNode = hasSidebar ? (
-    <div
-      ref={context ? (node) => context.setTarget(node) : undefined}
-      id={sidebarDomId || 'workspace-sidebar-slot'}
-      className="workspace-sidebar-slot h-full flex flex-col min-w-0 min-h-0"
-    >
-      {sidebar}
-    </div>
-  ) : null;
+  const slotNode = hasSidebar ? <div ref={context ? (node) => context.setTarget(node) : undefined} id={sidebarDomId || 'workspace-sidebar-slot'} className='workspace-sidebar-slot h-full flex flex-col min-w-0 min-h-0'>{sidebar}</div> : null;
 
   if (!isDesktop) {
     return (
       <div className={`workspace-split-layout flex-1 min-w-0 min-h-0 h-full flex overflow-hidden ${className}`}>
-        {hasSidebar && (
-          <WorkspaceSidebarDrawer
-            open={drawerOpen}
-            onClose={onCloseDrawer}
-            closeLabel={closeLabel}
-          >
-            {slotNode}
-          </WorkspaceSidebarDrawer>
-        )}
-        <div className={`workspace-split-main-panel flex-1 min-w-0 min-h-0 h-full ${mainClassName}`}>
-          {children}
-        </div>
+        {hasSidebar && <WorkspaceSidebarDrawer open={drawerOpen} onClose={onCloseDrawer} closeLabel={closeLabel}>{slotNode}</WorkspaceSidebarDrawer>}
+        <div className={`workspace-split-main-panel flex-1 min-w-0 min-h-0 h-full ${mainClassName}`}>{children}</div>
         {rightPanel}
       </div>
     );
@@ -302,78 +242,40 @@ export function WorkspaceSplitLayout({
 
   return (
     <div className={`workspace-split-layout flex-1 min-w-0 min-h-0 h-full flex overflow-hidden ${className}`}>
-      <Group
-        orientation="horizontal"
-        className="workspace-split-group flex-1 min-w-0 min-h-0 h-full flex"
-        onLayoutChanged={(_layout, meta) =>
-          persistWidthOnUserInteraction(meta, sidebarPanelRef, 0, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, saveSidebarWidth)
-        }
-      >
+      <Group orientation='horizontal' className='workspace-split-group flex-1 min-w-0 min-h-0 h-full flex' onLayoutChanged={(_layout, meta) => persistWidthOnUserInteraction(meta, sidebarPanelRef, 0, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, saveSidebarWidth)}>
         {hasSidebar && (
           <>
-            <Panel
-              id={sidebarId}
-              defaultSize={`${initialWidth}px`}
-              minSize={`${MIN_SIDEBAR_WIDTH}px`}
-              maxSize={`${MAX_SIDEBAR_WIDTH}px`}
-              groupResizeBehavior="preserve-pixel-size"
-              onResize={handleResize}
-              panelRef={sidebarPanelRef}
-              className="workspace-split-sidebar-panel h-full"
-            >
-              <div className="workspace-split-sidebar-content h-full">
-                {slotNode}
-              </div>
+            <Panel id={sidebarId} defaultSize={`${initialWidth}px`} minSize={`${MIN_SIDEBAR_WIDTH}px`} maxSize={`${MAX_SIDEBAR_WIDTH}px`} groupResizeBehavior='preserve-pixel-size' onResize={handleResize} panelRef={sidebarPanelRef} className='workspace-split-sidebar-panel h-full'>
+              <div className='workspace-split-sidebar-content h-full'>{slotNode}</div>
             </Panel>
-            <Separator className="workspace-splitter" />
+            <Separator className='workspace-splitter' />
           </>
         )}
-        <Panel id={mainId} groupResizeBehavior="preserve-relative-size" className="flex-1 min-w-0 min-h-0 h-full">
-          {rightPanelNode ? (
-            <Group
-              orientation="horizontal"
-              className="workspace-split-inner-group flex-1 min-w-0 min-h-0 h-full flex"
-              onLayoutChanged={(_layout, meta) =>
-                persistWidthOnUserInteraction(meta, rightPanelRef, RIGHT_PANEL_RAIL_WIDTH, MIN_RIGHT_PANEL_WIDTH, MAX_RIGHT_PANEL_WIDTH, saveRightPanelWidth)
-              }
-            >
-              <Panel
-                groupResizeBehavior="preserve-relative-size"
-                className={`workspace-split-main-panel flex-1 min-w-0 min-h-0 h-full ${mainClassName}`}
-              >
-                {children}
-              </Panel>
-              {rightPanelNode}
-            </Group>
-          ) : (
-            <div className={`workspace-split-main-panel flex-1 min-w-0 min-h-0 h-full ${mainClassName}`}>
-              {children}
-            </div>
-          )}
+        <Panel id={mainId} groupResizeBehavior='preserve-relative-size' className='flex-1 min-w-0 min-h-0 h-full'>
+          {rightPanelNode
+            ? (
+              <Group orientation='horizontal' className='workspace-split-inner-group flex-1 min-w-0 min-h-0 h-full flex' onLayoutChanged={(_layout, meta) => persistWidthOnUserInteraction(meta, rightPanelRef, RIGHT_PANEL_RAIL_WIDTH, MIN_RIGHT_PANEL_WIDTH, MAX_RIGHT_PANEL_WIDTH, saveRightPanelWidth)}>
+                <Panel groupResizeBehavior='preserve-relative-size' className={`workspace-split-main-panel flex-1 min-w-0 min-h-0 h-full ${mainClassName}`}>{children}</Panel>
+                {rightPanelNode}
+              </Group>
+            )
+            : <div className={`workspace-split-main-panel flex-1 min-w-0 min-h-0 h-full ${mainClassName}`}>{children}</div>}
         </Panel>
       </Group>
     </div>
   );
 }
 
-export function WorkspaceSidebarDrawer({ open, onClose, closeLabel, children }: {
-  open: boolean;
-  onClose: () => void;
-  closeLabel: string;
-  children: React.ReactNode;
-}) {
-  return <>
-    {open && <button type="button" data-sidebar-backdrop="" className="notebook-backdrop mobile-only absolute inset-0 z-[56] bg-scrim/40" aria-label={closeLabel} onClick={onClose} />}
-    <div data-responsive-sidebar="" className={`workspace-responsive-sidebar ${open ? 'is-open' : ''}`}>{children}</div>
-  </>;
+export function WorkspaceSidebarDrawer({ open, onClose, closeLabel, children }: { open: boolean; onClose: () => void; closeLabel: string; children: React.ReactNode; }) {
+  return (
+    <>
+      {open && <button type='button' data-sidebar-backdrop='' className='notebook-backdrop mobile-only absolute inset-0 z-[56] bg-scrim/40' aria-label={closeLabel} onClick={onClose} />}
+      <div data-responsive-sidebar='' className={`workspace-responsive-sidebar ${open ? 'is-open' : ''}`}>{children}</div>
+    </>
+  );
 }
 
-export function WorkspaceSidebarToggle({ label, open, onClick, controlsId }: {
-  label: string;
-  controlsId?: string;
-  open: boolean;
-  onClick: () => void;
-}) {
+export function WorkspaceSidebarToggle({ label, open, onClick, controlsId }: { label: string; controlsId?: string; open: boolean; onClick: () => void; }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
   useEffect(() => {
     const mobile = window.matchMedia('(max-width: 767px)');
@@ -382,27 +284,29 @@ export function WorkspaceSidebarToggle({ label, open, onClick, controlsId }: {
     mobile.addEventListener('change', pick);
     return () => mobile.removeEventListener('change', pick);
   }, []);
-  return host && createPortal(<button type="button" data-sidebar-toggle="" className="ui-icon-button workspace-sidebar-toggle"
-    aria-label={label} title={label} aria-expanded={open} aria-controls={controlsId} onClick={onClick}><PanelLeft size={17} /><span className="sr-only">{label}</span></button>, host);
+  return host && createPortal(
+    <button type='button' data-sidebar-toggle='' className='ui-icon-button workspace-sidebar-toggle' aria-label={label} title={label} aria-expanded={open} aria-controls={controlsId} onClick={onClick}>
+      <PanelLeft size={17} />
+      <span className='sr-only'>{label}</span>
+    </button>,
+    host,
+  );
 }
 
 /** One content origin and one scroll boundary for every workspace section. */
-export function WorkspaceSidebar({ children, footer, label, className = '' }: {
-  children: React.ReactNode;
-  footer?: React.ReactNode;
-  label: string;
-  className?: string;
-}) {
-  return <aside aria-label={label} className={`workspace-sidebar ${className}`}>
-    <div className="workspace-sidebar-scroll">{children}</div>
-    {footer && <div className="workspace-sidebar-footer">{footer}</div>}
-  </aside>;
+export function WorkspaceSidebar({ children, footer, label, className = '' }: { children: React.ReactNode; footer?: React.ReactNode; label: string; className?: string; }) {
+  return (
+    <aside aria-label={label} className={`workspace-sidebar ${className}`}>
+      <div className='workspace-sidebar-scroll'>{children}</div>
+      {footer && <div className='workspace-sidebar-footer'>{footer}</div>}
+    </aside>
+  );
 }
 
-export function PageToolbar({ children }: {
-  children: React.ReactNode;
-}) {
-  return <div className="workspace-page-header">
-    <div className="workspace-page-actions">{children}</div>
-  </div>;
+export function PageToolbar({ children }: { children: React.ReactNode; }) {
+  return (
+    <div className='workspace-page-header'>
+      <div className='workspace-page-actions'>{children}</div>
+    </div>
+  );
 }

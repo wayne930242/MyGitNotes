@@ -18,18 +18,25 @@ const drafts: WorkingNotes = { [staged.path]: { note: staged, base: null } };
 
 beforeEach(() => {
   requests = [];
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-    requests.push(url);
-    return new Response(JSON.stringify({ revision: REVISION, total: 1, nextCursor: null, notes: [committed] }), { headers: { 'Content-Type': 'application/json' } });
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      requests.push(url);
+      return new Response(JSON.stringify({ revision: REVISION, total: 1, nextCursor: null, notes: [committed] }), { headers: { 'Content-Type': 'application/json' } });
+    }),
+  );
   client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   setNoteQueryScope({ sourceId: 'github:me/notes', revision: REVISION, drafts });
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); setNoteQueryScope({ sourceId: '', revision: '', drafts: {} }); });
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  setNoteQueryScope({ sourceId: '', revision: '', drafts: {} });
+});
 
-const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
+const wrapper = ({ children }: { children: ReactNode; }) => createElement(QueryClientProvider, { client }, children);
 
-function Candidates({ query }: { query: string | null }) {
+function Candidates({ query }: { query: string | null; }) {
   const notes = useNoteCandidates(query, 'notes/life/source.md');
   return createElement('p', { 'data-testid': 'candidates' }, notes.map(note => note.title).join(','));
 }

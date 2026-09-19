@@ -1,43 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { noteUpdatedTime, sortNotes } from './note-sort.js';
 import { NoteItem } from './types.js';
 
 describe('note-sort', () => {
-  const notes: NoteItem[] = [
-    {
-      id: '1',
-      path: 'notes/b.md',
-      notebookId: 'nb1',
-      title: 'Beta Note',
-      status: 'working',
-      tags: [],
-      metadata: { created: '2026-01-01T10:00:00Z', updated: '2026-01-05T10:00:00Z' },
-      content: '',
-      mtime: 1000,
-    },
-    {
-      id: '2',
-      path: 'notes/a.md',
-      notebookId: 'nb1',
-      title: 'Alpha Note',
-      status: 'inbox',
-      tags: [],
-      metadata: { created: '2026-01-02T10:00:00Z', updated: '2026-01-02T10:00:00Z' },
-      content: '',
-      mtime: 500,
-    },
-    {
-      id: '3',
-      path: 'notes/c.md',
-      notebookId: 'nb1',
-      title: 'Gamma Note',
-      status: 'done',
-      tags: [],
-      metadata: { created: '2026-01-03T10:00:00Z', updated: '2026-01-08T10:00:00Z' },
-      content: '',
-      mtime: 2000,
-    },
-  ];
+  const notes: NoteItem[] = [{ id: '1', path: 'notes/b.md', notebookId: 'nb1', title: 'Beta Note', status: 'working', tags: [], metadata: { created: '2026-01-01T10:00:00Z', updated: '2026-01-05T10:00:00Z' }, content: '', mtime: 1000 }, { id: '2', path: 'notes/a.md', notebookId: 'nb1', title: 'Alpha Note', status: 'inbox', tags: [], metadata: { created: '2026-01-02T10:00:00Z', updated: '2026-01-02T10:00:00Z' }, content: '', mtime: 500 }, { id: '3', path: 'notes/c.md', notebookId: 'nb1', title: 'Gamma Note', status: 'done', tags: [], metadata: { created: '2026-01-03T10:00:00Z', updated: '2026-01-08T10:00:00Z' }, content: '', mtime: 2000 }];
 
   const statuses = ['inbox', 'working', 'done'];
 
@@ -77,41 +43,7 @@ describe('note-sort', () => {
   });
 
   it('sorts notes inside a Kanban column independently', () => {
-    const workingNotes: NoteItem[] = [
-      {
-        id: 'w1',
-        path: 'notes/w1.md',
-        notebookId: 'nb1',
-        title: 'Task Z',
-        status: 'working',
-        tags: [],
-        metadata: { updated: '2026-02-01T10:00:00Z' },
-        content: '',
-        mtime: 100,
-      },
-      {
-        id: 'w2',
-        path: 'notes/w2.md',
-        notebookId: 'nb1',
-        title: 'Task A',
-        status: 'working',
-        tags: [],
-        metadata: { updated: '2026-02-05T10:00:00Z' },
-        content: '',
-        mtime: 500,
-      },
-      {
-        id: 'w3',
-        path: 'notes/w3.md',
-        notebookId: 'nb1',
-        title: 'Task M',
-        status: 'working',
-        tags: [],
-        metadata: { updated: '2026-02-03T10:00:00Z' },
-        content: '',
-        mtime: 300,
-      },
-    ];
+    const workingNotes: NoteItem[] = [{ id: 'w1', path: 'notes/w1.md', notebookId: 'nb1', title: 'Task Z', status: 'working', tags: [], metadata: { updated: '2026-02-01T10:00:00Z' }, content: '', mtime: 100 }, { id: 'w2', path: 'notes/w2.md', notebookId: 'nb1', title: 'Task A', status: 'working', tags: [], metadata: { updated: '2026-02-05T10:00:00Z' }, content: '', mtime: 500 }, { id: 'w3', path: 'notes/w3.md', notebookId: 'nb1', title: 'Task M', status: 'working', tags: [], metadata: { updated: '2026-02-03T10:00:00Z' }, content: '', mtime: 300 }];
 
     // Column sorted by updated desc (newest first)
     const byNewest = sortNotes(workingNotes, 'updated', 'desc');

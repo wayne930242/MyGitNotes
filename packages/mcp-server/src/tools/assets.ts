@@ -1,20 +1,11 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import {
-  loadWorkspaceConfig,
-  resolveSafePath,
-  assetPath,
-  isAssetPath,
-  decodeAsset,
-} from '@mygitnotes/core';
+import { assetPath, decodeAsset, isAssetPath, loadWorkspaceConfig, resolveSafePath } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
-import { assertUserWorkspaceBranch, assertSafeRepoPath } from '../guards.js';
+import { assertSafeRepoPath, assertUserWorkspaceBranch } from '../guards.js';
 import type { ToolContext } from './context.js';
 
-export async function handleListAssets(
-  ctx: ToolContext,
-  args: { notebookId: string }
-) {
+export async function handleListAssets(ctx: ToolContext, args: { notebookId: string; }) {
   const config = loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
 
@@ -26,30 +17,15 @@ export async function handleListAssets(
     return { assets: [] };
   }
 
-  const files = fs
-    .readdirSync(assetDir, { withFileTypes: true })
-    .filter((e) => e.isFile() && !e.name.startsWith('.'))
-    .map((e) => {
-      const rel = path.relative(ctx.repoRoot, path.join(assetDir, e.name)).replace(/\\/g, '/');
-      return {
-        name: e.name,
-        path: rel,
-        markdownRef: `![${e.name}](${nb.assets || 'assets'}/${e.name})`,
-      };
-    });
+  const files = fs.readdirSync(assetDir, { withFileTypes: true }).filter((e) => e.isFile() && !e.name.startsWith('.')).map((e) => {
+    const rel = path.relative(ctx.repoRoot, path.join(assetDir, e.name)).replace(/\\/g, '/');
+    return { name: e.name, path: rel, markdownRef: `![${e.name}](${nb.assets || 'assets'}/${e.name})` };
+  });
 
   return { assets: files };
 }
 
-export async function handleAddAsset(
-  ctx: ToolContext,
-  args: {
-    notebookId: string;
-    filename: string;
-    base64Content: string;
-    directory?: string;
-  }
-) {
+export async function handleAddAsset(ctx: ToolContext, args: { notebookId: string; filename: string; base64Content: string; directory?: string; }) {
   await assertUserWorkspaceBranch(ctx.repoRoot);
   const config = loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
@@ -76,25 +52,12 @@ export async function handleAddAsset(
   fs.writeFileSync(targetPath, buffer);
 
   const markdownRel = relPath.slice(nb.root.length + 1);
-  const commit = await stageAndCommit(
-    ctx.repoRoot,
-    [relPath],
-    `chore(assets): add asset ${safeFilename}`
-  );
+  const commit = await stageAndCommit(ctx.repoRoot, [relPath], `chore(assets): add asset ${safeFilename}`);
 
-  return {
-    success: true,
-    filename: safeFilename,
-    path: relPath,
-    markdownRef: `![${safeFilename}](${markdownRel})`,
-    commit,
-  };
+  return { success: true, filename: safeFilename, path: relPath, markdownRef: `![${safeFilename}](${markdownRel})`, commit };
 }
 
-export async function handleDeleteAsset(
-  ctx: ToolContext,
-  args: { path: string; commitMessage?: string }
-) {
+export async function handleDeleteAsset(ctx: ToolContext, args: { path: string; commitMessage?: string; }) {
   await assertUserWorkspaceBranch(ctx.repoRoot);
   assertSafeRepoPath(ctx.repoRoot, args.path);
 
@@ -113,9 +76,5 @@ export async function handleDeleteAsset(
   const message = args.commitMessage || `chore(assets): delete ${path.basename(args.path)}`;
   const commitResult = await stageAndCommit(ctx.repoRoot, [args.path], message);
 
-  return {
-    success: true,
-    path: args.path,
-    commit: commitResult,
-  };
+  return { success: true, path: args.path, commit: commitResult };
 }

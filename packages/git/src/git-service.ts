@@ -7,11 +7,7 @@ import { GitCommitItem, GitStatusResult } from './types.js';
 const execFileAsync = promisify(execFile);
 
 export class GitExecutionError extends Error {
-  constructor(
-    message: string,
-    public readonly stderr: string,
-    public readonly exitCode?: number
-  ) {
+  constructor(message: string, public readonly stderr: string, public readonly exitCode?: number) {
     super(message);
     this.name = 'GitExecutionError';
   }
@@ -20,29 +16,13 @@ export class GitExecutionError extends Error {
 /**
  * Runs a git command safely in a specified directory using execFile (no shell interpolation).
  */
-export async function runGit(
-  args: string[],
-  cwd: string,
-  options: { env?: Record<string, string>; timeout?: number } = {}
-): Promise<{ stdout: string; stderr: string }> {
+export async function runGit(args: string[], cwd: string, options: { env?: Record<string, string>; timeout?: number; } = {}): Promise<{ stdout: string; stderr: string; }> {
   try {
-    const result = await execFileAsync('git', args, {
-      cwd,
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: options.timeout,
-      env: options.env && { ...process.env, ...options.env },
-    });
-    return {
-      stdout: result.stdout.replace(/[\r\n]+$/, ''),
-      stderr: result.stderr.trim(),
-    };
+    const result = await execFileAsync('git', args, { cwd, maxBuffer: 10 * 1024 * 1024, timeout: options.timeout, env: options.env && { ...process.env, ...options.env } });
+    return { stdout: result.stdout.replace(/[\r\n]+$/, ''), stderr: result.stderr.trim() };
   } catch (err: unknown) {
-    const error = err as { message: string; stderr?: string; code?: number };
-    throw new GitExecutionError(
-      error.message,
-      error.stderr || '',
-      error.code
-    );
+    const error = err as { message: string; stderr?: string; code?: number; };
+    throw new GitExecutionError(error.message, error.stderr || '', error.code);
   }
 }
 
@@ -90,22 +70,14 @@ export async function getGitStatus(repoRoot: string): Promise<GitStatusResult> {
 
   const isClean = staged.length === 0 && modified.length === 0 && untracked.length === 0;
 
-  return {
-    branch,
-    isClean,
-    staged,
-    modified,
-    untracked,
-    ...(await getUpstreamStatus(repoRoot)),
-  };
+  return { branch, isClean, staged, modified, untracked, ...(await getUpstreamStatus(repoRoot)) };
 }
 
 /**
  * Compares HEAD with its upstream as of the last fetch.
  */
-export async function getUpstreamStatus(repoRoot: string): Promise<{ upstream: string | null; ahead: number; behind: number }> {
-  const upstream = await runGit(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], repoRoot)
-    .then(result => result.stdout.trim(), () => null);
+export async function getUpstreamStatus(repoRoot: string): Promise<{ upstream: string | null; ahead: number; behind: number; }> {
+  const upstream = await runGit(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], repoRoot).then(result => result.stdout.trim(), () => null);
   if (!upstream) return { upstream: null, ahead: 0, behind: 0 };
   const { stdout } = await runGit(['rev-list', '--left-right', '--count', '@{u}...HEAD'], repoRoot);
   const [behind, ahead] = stdout.trim().split(/\s+/).map(Number);
@@ -115,11 +87,7 @@ export async function getUpstreamStatus(repoRoot: string): Promise<{ upstream: s
 /**
  * Stages specified files and creates a Git commit.
  */
-export async function stageAndCommit(
-  repoRoot: string,
-  files: string[],
-  message: string
-): Promise<{ commitHash: string; shortHash: string }> {
+export async function stageAndCommit(repoRoot: string, files: string[], message: string): Promise<{ commitHash: string; shortHash: string; }> {
   if (files.length === 0) {
     throw new Error('No files provided to stage and commit');
   }
@@ -152,15 +120,9 @@ export async function getDiff(repoRoot: string, filePath?: string): Promise<stri
 /**
  * Returns recent Git commits.
  */
-export async function getRecentCommits(
-  repoRoot: string,
-  count = 10
-): Promise<GitCommitItem[]> {
+export async function getRecentCommits(repoRoot: string, count = 10): Promise<GitCommitItem[]> {
   try {
-    const { stdout } = await runGit(
-      ['log', `-${count}`, '--pretty=format:%H|%h|%s|%an|%ad', '--date=iso'],
-      repoRoot
-    );
+    const { stdout } = await runGit(['log', `-${count}`, '--pretty=format:%H|%h|%s|%an|%ad', '--date=iso'], repoRoot);
 
     if (!stdout) return [];
 
@@ -177,10 +139,7 @@ export async function getRecentCommits(
  * Returns the author date of a path's first and last commit (following
  * renames), as ISO 8601 UTC strings. Used by the note-timestamps backfill.
  */
-export async function getFirstAndLastCommitDates(
-  repoRoot: string,
-  relPath: string
-): Promise<{ first?: string; last?: string }> {
+export async function getFirstAndLastCommitDates(repoRoot: string, relPath: string): Promise<{ first?: string; last?: string; }> {
   try {
     const { stdout } = await runGit(['log', '--follow', '--format=%aI', '--', relPath], repoRoot);
     if (!stdout) return {};

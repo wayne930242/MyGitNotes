@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { nextStudyStage, deduplicatedStudyRatings, StudyProgressionSchema, defaultStudyProgression, studyLaneStatuses } from '../src/study-stages.js';
-import { applyStageAction, createStudyNote, emptyStudyWorkspace, studyDue, undoStudyAction, StudyWorkspaceSchema, applyStudyAction, rebindStudyNote } from '../src/study.js';
+import { deduplicatedStudyRatings, defaultStudyProgression, nextStudyStage, studyLaneStatuses, StudyProgressionSchema } from '../src/study-stages.js';
+import { applyStageAction, applyStudyAction, createStudyNote, emptyStudyWorkspace, rebindStudyNote, studyDue, StudyWorkspaceSchema, undoStudyAction } from '../src/study.js';
 import { parseNoteContent, replaceNoteStatus } from '../src/frontmatter.js';
 
 const plan = { stages: [{ status: 'new', intervalDays: 1 }, { status: 'learning', intervalDays: 3 }, { status: 'review', intervalDays: 7 }, { status: 'known', intervalDays: 30 }], easy: 'two' as const };
@@ -49,12 +49,7 @@ describe('Lane stage progression', () => {
 });
 
 describe('Default learning strategies', () => {
-  it.each([
-    [['only'], [1]],
-    [['new', 'known'], [1, 3]],
-    [['new', 'learning', 'known'], [1, 3, 7]],
-    [['a', 'b', 'c', 'd', 'e', 'f'], [1, 3, 7, 14, 30, 30]],
-  ])('uses the available status count without inventing stages: %j', (statuses, intervals) => {
+  it.each([[['only'], [1]], [['new', 'known'], [1, 3]], [['new', 'learning', 'known'], [1, 3, 7]], [['a', 'b', 'c', 'd', 'e', 'f'], [1, 3, 7, 14, 30, 30]]])('uses the available status count without inventing stages: %j', (statuses, intervals) => {
     const progression = defaultStudyProgression(statuses as string[])!;
     expect(progression.stages.map(stage => stage.status)).toEqual(statuses);
     expect(progression.stages.map(stage => stage.intervalDays)).toEqual(intervals);
@@ -73,7 +68,6 @@ describe('Default learning strategies', () => {
     expect(studyLaneStatuses({ ...row, notebookId: 'a', kind: 'custom', items: [] }, notebooks)).toEqual(['new', 'known']);
   });
 });
-
 
 describe('Last learning move time', () => {
   const later = new Date('2026-09-16T09:30:00.000Z');
@@ -122,7 +116,8 @@ describe('Last learning move time', () => {
     expect(StudyWorkspaceSchema.parse(unknown).notes[0].lastMovedAt).toBeUndefined();
   });
   it('keeps explicit timestamps when event history is unavailable and validates them', () => {
-    const workspace = firstMove(); workspace.events = [];
+    const workspace = firstMove();
+    workspace.events = [];
     expect(StudyWorkspaceSchema.parse(workspace).notes[0].lastMovedAt).toBe(now.toISOString());
     workspace.notes[0].lastMovedAt = 'invalid';
     expect(StudyWorkspaceSchema.safeParse(workspace).success).toBe(false);
@@ -130,16 +125,7 @@ describe('Last learning move time', () => {
 });
 
 describe('Deduplicated study ratings', () => {
-  const fiveStagePlan = {
-    stages: [
-      { status: 's1', intervalDays: 1 },
-      { status: 's2', intervalDays: 3 },
-      { status: 's3', intervalDays: 7 },
-      { status: 's4', intervalDays: 14 },
-      { status: 's5', intervalDays: 30 },
-    ],
-    easy: 'two' as const,
-  };
+  const fiveStagePlan = { stages: [{ status: 's1', intervalDays: 1 }, { status: 's2', intervalDays: 3 }, { status: 's3', intervalDays: 7 }, { status: 's4', intervalDays: 14 }, { status: 's5', intervalDays: 30 }], easy: 'two' as const };
 
   it('deduplicates ratings at the initial stage (s1) to avoid duplicate 1-day actions', () => {
     const options = deduplicatedStudyRatings(fiveStagePlan, 's1');
@@ -173,13 +159,7 @@ describe('Deduplicated study ratings', () => {
   });
 
   it('handles a 2-stage plan cleanly without duplicate buttons', () => {
-    const twoStagePlan = {
-      stages: [
-        { status: 'learning', intervalDays: 1 },
-        { status: 'known', intervalDays: 3 },
-      ],
-      easy: 'two' as const,
-    };
+    const twoStagePlan = { stages: [{ status: 'learning', intervalDays: 1 }, { status: 'known', intervalDays: 3 }], easy: 'two' as const };
     const options0 = deduplicatedStudyRatings(twoStagePlan, 'learning');
     expect(options0.map(o => o.targetIndex)).toEqual([0, 1]);
     expect(options0.map(o => o.rating)).toEqual([1, 3]);

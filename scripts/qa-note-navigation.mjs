@@ -12,14 +12,24 @@ import { resolveQaChromePath } from './qa-chrome.mjs';
 // The built local server runs against a temporary git workspace; no external requests.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'qa-note-navigation-'));
-const write = (file, text) => { fs.mkdirSync(path.dirname(path.join(workspace, file)), { recursive: true }); fs.writeFileSync(path.join(workspace, file), text); };
+const write = (file, text) => {
+  fs.mkdirSync(path.dirname(path.join(workspace, file)), { recursive: true });
+  fs.writeFileSync(path.join(workspace, file), text);
+};
 const git = (...args) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });
 write('notes/.github-notes.yaml', `schema_version: 1\nworkspace:\n  title: Navigation QA\n  default_notebook: rules\nnotebooks:\n${['rules', 'other', 'archive'].map(id => `  - id: ${id}\n    title: ${id}\n    root: notes/${id}\n`).join('')}`);
 for (let index = 0; index < 174; index++) write(`notes/rules/rule-${index}.md`, `---\ntitle: Rule ${String(index).padStart(3, '0')}\nstatus: inbox\ncustom: keep\n---\n# Rule ${index}\n\n[Other notebook](../other/linked.md)\n`);
 write('notes/other/linked.md', '# Linked note\n');
 write('notes/archive/old.md', '# Archived plan\n');
-git('init', '-b', 'main'); git('config', 'user.name', 'Navigation QA'); git('config', 'user.email', 'qa@example.com'); git('add', '.'); git('commit', '-m', 'fixture');
-process.env.MYGITNOTES_SOURCE = 'local'; process.env.MYGITNOTES_LOCAL_PATH = workspace; delete process.env.VERCEL; delete process.env.APP_URL;
+git('init', '-b', 'main');
+git('config', 'user.name', 'Navigation QA');
+git('config', 'user.email', 'qa@example.com');
+git('add', '.');
+git('commit', '-m', 'fixture');
+process.env.MYGITNOTES_SOURCE = 'local';
+process.env.MYGITNOTES_LOCAL_PATH = workspace;
+delete process.env.VERCEL;
+delete process.env.APP_URL;
 const { createApp } = await import(`${root}/apps/local-server/dist/app.js`);
 const app = createApp(root);
 
@@ -32,7 +42,11 @@ const server = createServer((req, res) => {
   if (url.pathname === '/api/notes/query') {
     const notebookId = url.searchParams.get('notebookId');
     queries.push(notebookId);
-    if (notebookId === holdNotebook) { holdNotebook = null; held.push(() => app(req, res)); return; }
+    if (notebookId === holdNotebook) {
+      holdNotebook = null;
+      held.push(() => app(req, res));
+      return;
+    }
   }
   app(req, res);
 });
@@ -42,12 +56,10 @@ if (process.argv.includes('--serve')) {
   console.log(`Navigation fixture: ${base}/notebooks/rules?view=flat`);
 } else {
   const require = createRequire(`${root}/apps/web/package.json`);
-  const browser = await require('puppeteer-core').launch({
-    executablePath: resolveQaChromePath(),
-    headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'],
-  });
+  const browser = await require('puppeteer-core').launch({ executablePath: resolveQaChromePath(), headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   try {
-    const page = await browser.newPage(); const errors = [];
+    const page = await browser.newPage();
+    const errors = [];
     await page.evaluateOnNewDocument(() => localStorage.setItem('github-notes:language', 'en'));
     page.on('pageerror', error => errors.push(error.message));
     const rows = () => page.$$eval('tbody tr', items => items.length);
@@ -101,5 +113,8 @@ if (process.argv.includes('--serve')) {
     assert.equal(await page.$eval('tbody', body => body.textContent.includes('Rule ')), true);
     assert.deepEqual(errors, []);
     console.log(JSON.stringify({ result: 'passed', queries }));
-  } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
+  } finally {
+    await browser.close();
+    await new Promise(resolve => server.close(resolve));
+  }
 }

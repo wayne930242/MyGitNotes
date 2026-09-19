@@ -42,8 +42,11 @@ export function resolveWorkspaceAgentPath(root: string, file: string): string {
   let current = root;
   for (const part of file.split('/')) {
     current = path.join(current, part);
-    try { if (fs.lstatSync(current).isSymbolicLink()) throw new Error('Agent documents cannot cross symlinks.'); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    try {
+      if (fs.lstatSync(current).isSymbolicLink()) throw new Error('Agent documents cannot cross symlinks.');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
   }
   return target;
 }
@@ -53,7 +56,10 @@ export function listWorkspaceAgentFiles(root: string): string[] {
   const walk = (relative: string) => {
     const full = path.join(root, relative);
     if (!fs.existsSync(full) || fs.lstatSync(full).isSymbolicLink()) return;
-    if (fs.statSync(full).isFile()) { if (workspaceAgentKind(relative)) files.push(relative); return; }
+    if (fs.statSync(full).isFile()) {
+      if (workspaceAgentKind(relative)) files.push(relative);
+      return;
+    }
     for (const entry of fs.readdirSync(full, { withFileTypes: true })) {
       if (!entry.isSymbolicLink() && !entry.name.startsWith('.') && !['node_modules', 'dist', 'build'].includes(entry.name)) walk(path.posix.join(relative, entry.name));
     }
@@ -64,9 +70,7 @@ export function listWorkspaceAgentFiles(root: string): string[] {
 
 export function workspaceAgentResource(file: string, editable: boolean): WorkspaceAgentResource {
   const notebook = file.match(/^notes\/([^/]+)\/AGENTS\.md$/);
-  return { path: file, editable, scope: file.startsWith('notes/') ? 'notes' : 'workspace',
-    name: file === 'AGENTS.md' ? 'Workspace Guidelines' : file === 'notes/AGENTS.md' ? 'Notes Workspace Guidelines'
-      : notebook ? `Notebook: ${notebook[1].charAt(0).toUpperCase() + notebook[1].slice(1)} Guidelines` : file };
+  return { path: file, editable, scope: file.startsWith('notes/') ? 'notes' : 'workspace', name: file === 'AGENTS.md' ? 'Workspace Guidelines' : file === 'notes/AGENTS.md' ? 'Notes Workspace Guidelines' : notebook ? `Notebook: ${notebook[1].charAt(0).toUpperCase() + notebook[1].slice(1)} Guidelines` : file };
 }
 
 /** Product reference documents ship with Core under docs/agent and are read-only in every workspace. */
@@ -81,7 +85,10 @@ export function listProductAgentDocs(productRoot: string): string[] {
   const walk = (relative: string) => {
     const full = path.join(productRoot, relative);
     if (!fs.existsSync(full) || fs.lstatSync(full).isSymbolicLink()) return;
-    if (fs.statSync(full).isFile()) { if (isProductAgentDoc(relative)) files.push(relative); return; }
+    if (fs.statSync(full).isFile()) {
+      if (isProductAgentDoc(relative)) files.push(relative);
+      return;
+    }
     for (const entry of fs.readdirSync(full)) if (!entry.startsWith('.')) walk(path.posix.join(relative, entry));
   };
   walk('docs/agent');

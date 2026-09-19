@@ -2,12 +2,11 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { loadSourceConfig, loadWorkspaceConfig, classifyResource, resolveSafePath, sourceIdentity, RemoteSource, createRemoteSource, SourceError, workspaceAgentKind, workspaceAgentResource, isProductAgentDoc, readProductAgentDoc, productAgentResources, replaceNoteTags, type WorkspaceAgentResource,
-  parseNoteQuery, parseRevision, queryNotes, queryNotePaths, noteFacets, lookupNotes, noteAgenda, noteGraph, SCREEN_DOCUMENT, FOCUS_DOCUMENT } from '@mygitnotes/core';
+import { classifyResource, createRemoteSource, FOCUS_DOCUMENT, isProductAgentDoc, loadSourceConfig, loadWorkspaceConfig, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, parseRevision, productAgentResources, queryNotePaths, queryNotes, readProductAgentDoc, RemoteSource, replaceNoteTags, resolveSafePath, SCREEN_DOCUMENT, SourceError, sourceIdentity, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRemoteMCP } from './mcp.js';
 import { createLocalApp } from './local-app.js';
-import { createAuth, authToken } from './auth.js';
+import { authToken, createAuth } from './auth.js';
 import { createStudyRouter } from './study.js';
 import { createWorkspaceDocumentRouter } from './workspace-document.js';
 import { createFolderManagerRouter } from './folder-manager.js';
@@ -36,8 +35,13 @@ export function createApp(base: string): express.Express {
   app.disable('x-powered-by');
   let source: ReturnType<typeof loadSourceConfig> | undefined;
   let setupError = '';
-  try { source = loadSourceConfig(base); if (process.env.VERCEL && source.type === 'local') throw new Error('Vercel requires a GitHub or GitLab source. Configure MYGITNOTES_SOURCE, MYGITNOTES_REPOSITORY and MYGITNOTES_BRANCH.'); }
-  catch (error) { setupError = (error as Error).message; source = undefined; }
+  try {
+    source = loadSourceConfig(base);
+    if (process.env.VERCEL && source.type === 'local') throw new Error('Vercel requires a GitHub or GitLab source. Configure MYGITNOTES_SOURCE, MYGITNOTES_REPOSITORY and MYGITNOTES_BRANCH.');
+  } catch (error) {
+    setupError = (error as Error).message;
+    source = undefined;
+  }
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
@@ -65,17 +69,23 @@ export function createApp(base: string): express.Express {
   app.get('/api/agent-resources/read', (req, res, next) => {
     const file = req.query.path;
     if (typeof file !== 'string' || !isProductAgentDoc(file)) return next();
-    try { res.json({ path: file, content: readProductAgentDoc(base, file) }); }
-    catch (error) { res.status(404).json({ error: (error as Error).message }); }
+    try {
+      res.json({ path: file, content: readProductAgentDoc(base, file) });
+    } catch (error) {
+      res.status(404).json({ error: (error as Error).message });
+    }
   });
   const cache = source && source.type !== 'local' ? createRemoteCache() : undefined;
   app.use('/mcp', createRemoteMCP(base, source, cache));
   if (source?.type === 'local') {
     const root = source.path;
-    app.get('/r2-assets/*', createR2AssetHandler(async (_res, notePath) => {
-      if (classifyResource(notePath, loadWorkspaceConfig(root)).type !== 'note') throw new Error('Path is not a configured note.');
-      return fs.readFileSync(resolveSafePath(root, notePath), 'utf8');
-    }));
+    app.get(
+      '/r2-assets/*',
+      createR2AssetHandler(async (_res, notePath) => {
+        if (classifyResource(notePath, loadWorkspaceConfig(root)).type !== 'note') throw new Error('Path is not a configured note.');
+        return fs.readFileSync(resolveSafePath(root, notePath), 'utf8');
+      }),
+    );
     app.use(createLocalApp(root, base));
   } else {
     app.use(['/api', '/raw-assets', '/r2-assets'], async (req, res, next) => {
@@ -85,19 +95,27 @@ export function createApp(base: string): express.Express {
         res.locals.reader = createRemoteSource(source, token, fetch, cache);
         res.locals.authenticated = Boolean(token);
         next();
-      } catch (error) { res.status(401).json({ error: 'Session unavailable. Sign in again.' }); }
+      } catch (error) {
+        res.status(401).json({ error: 'Session unavailable. Sign in again.' });
+      }
     });
     app.get('/api/workspace', async (req, res) => {
       try {
         const reader: RemoteSource = res.locals.reader;
         const snapshot = await reader.getSnapshot(req.query.fresh === '1');
         const config = await reader.config();
-        res.json({ repoRoot: '', branch: reader.branch, config, gitStatus: { branch: reader.branch, isClean: true, staged: [], modified: [], untracked: [] },
-          isCoreBranch: reader.branch === 'core', source: { type: source!.type, identity: sourceIdentity(source!), repository: reader.repository },
-          revision: snapshot.sha, capabilities: { write: Boolean(res.locals.authenticated && snapshot.info.permissions?.push && reader.branch === 'main'), local: false } });
-      } catch (error) { fail(res, error); }
+        res.json({ repoRoot: '', branch: reader.branch, config, gitStatus: { branch: reader.branch, isClean: true, staged: [], modified: [], untracked: [] }, isCoreBranch: reader.branch === 'core', source: { type: source!.type, identity: sourceIdentity(source!), repository: reader.repository }, revision: snapshot.sha, capabilities: { write: Boolean(res.locals.authenticated && snapshot.info.permissions?.push && reader.branch === 'main'), local: false } });
+      } catch (error) {
+        fail(res, error);
+      }
     });
-    app.get('/api/notes', async (req, res) => { try { res.json({ notes: await (res.locals.reader as RemoteSource).notes(req.query.notebookId as string) }); } catch (error) { fail(res, error); } });
+    app.get('/api/notes', async (req, res) => {
+      try {
+        res.json({ notes: await (res.locals.reader as RemoteSource).notes(req.query.notebookId as string) });
+      } catch (error) {
+        fail(res, error);
+      }
+    });
     /** `revision` is the snapshot the browser is working from; reads always answer from the branch head. */
     const catalog = async (res: express.Response, revision: unknown) => {
       const reader: RemoteSource = res.locals.reader;
@@ -111,36 +129,83 @@ export function createApp(base: string): express.Express {
         const { query, options } = parseNoteQuery(req.query);
         const notes = await catalog(res, req.query.revision);
         res.json(options.select ? await queryNotePaths(notes, query) : await queryNotes(notes, query, options));
-      } catch (error) { fail(res, error); }
+      } catch (error) {
+        fail(res, error);
+      }
     });
-    app.get('/api/notes/facets', async (req, res) => { try { res.json(await noteFacets(await catalog(res, req.query.revision), req.query.showHidden === '1')); } catch (error) { fail(res, error); } });
-    app.post('/api/notes/lookup', async (req, res) => { try { res.json(await lookupNotes(await catalog(res, req.body?.revision), req.body?.paths, req.body?.content === true)); } catch (error) { fail(res, error); } });
+    app.get('/api/notes/facets', async (req, res) => {
+      try {
+        res.json(await noteFacets(await catalog(res, req.query.revision), req.query.showHidden === '1'));
+      } catch (error) {
+        fail(res, error);
+      }
+    });
+    app.post('/api/notes/lookup', async (req, res) => {
+      try {
+        res.json(await lookupNotes(await catalog(res, req.body?.revision), req.body?.paths, req.body?.content === true));
+      } catch (error) {
+        fail(res, error);
+      }
+    });
     app.get('/api/notes/agenda', async (req, res) => {
       try {
         if (typeof req.query.notebookId !== 'string' || !req.query.notebookId) throw new SourceError('notebookId is required.');
         res.json(await noteAgenda(await catalog(res, req.query.revision), req.query.notebookId, req.query.showHidden === '1'));
-      } catch (error) { fail(res, error); }
+      } catch (error) {
+        fail(res, error);
+      }
     });
-    app.get('/api/notes/graph', async (req, res) => { try { res.json(await noteGraph(await catalog(res, req.query.revision))); } catch (error) { fail(res, error); } });
-    app.get('/api/folders', async (req, res) => { try { res.json({ folders: await (res.locals.reader as RemoteSource).folders() }); } catch (error) { fail(res, error); } });
+    app.get('/api/notes/graph', async (req, res) => {
+      try {
+        res.json(await noteGraph(await catalog(res, req.query.revision)));
+      } catch (error) {
+        fail(res, error);
+      }
+    });
+    app.get('/api/folders', async (req, res) => {
+      try {
+        res.json({ folders: await (res.locals.reader as RemoteSource).folders() });
+      } catch (error) {
+        fail(res, error);
+      }
+    });
     app.get('/api/templates/render', async (req, res) => {
       try {
         const { notebookId, templateId, title } = req.query;
         res.json(await (res.locals.reader as RemoteSource).renderTemplate(String(notebookId || ''), String(templateId || ''), String(title || '')));
-      } catch (error) { fail(res, error); }
+      } catch (error) {
+        fail(res, error);
+      }
     });
-    app.get('/api/notes/read', async (req, res) => { try { res.json({ note: await (res.locals.reader as RemoteSource).note(String(req.query.path || '')) }); } catch (error) { fail(res, error); } });
+    app.get('/api/notes/read', async (req, res) => {
+      try {
+        res.json({ note: await (res.locals.reader as RemoteSource).note(String(req.query.path || '')) });
+      } catch (error) {
+        fail(res, error);
+      }
+    });
     app.post('/api/notes/read-batch', async (req, res) => {
-      try { res.json({ notes: await (res.locals.reader as RemoteSource).readNotes(req.body.paths, req.body.revision) }); }
-      catch (error) { fail(res, error); }
+      try {
+        res.json({ notes: await (res.locals.reader as RemoteSource).readNotes(req.body.paths, req.body.revision) });
+      } catch (error) {
+        fail(res, error);
+      }
     });
-    app.get('/api/assets', async (req, res) => { try { res.json({ assets: await (res.locals.reader as RemoteSource).assets(req.query.notebookId as string) }); } catch (error) { fail(res, error); } });
+    app.get('/api/assets', async (req, res) => {
+      try {
+        res.json({ assets: await (res.locals.reader as RemoteSource).assets(req.query.notebookId as string) });
+      } catch (error) {
+        fail(res, error);
+      }
+    });
     for (const [method, operation] of [['post', 'upload'], ['patch', 'move'], ['delete', 'delete']] as const) {
       app[method]('/api/assets', async (req, res) => {
         try {
           if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to manage assets.', 403);
           res.json(await (res.locals.reader as RemoteSource).mutateAsset(operation, { ...req.query, ...req.body }));
-        } catch (error) { fail(res, error); }
+        } catch (error) {
+          fail(res, error);
+        }
       });
     }
     app.get('/r2-assets/*', createR2AssetHandler(async (res, notePath) => (await (res.locals.reader as RemoteSource).note(notePath)).content));
@@ -154,7 +219,9 @@ export function createApp(base: string): express.Express {
         if (!asset) throw new SourceError('Asset not found.', 404);
         res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
         res.type(path.extname(asset.name)).send(await reader.readFile(asset.path));
-      } catch (error) { fail(res, error); }
+      } catch (error) {
+        fail(res, error);
+      }
     });
     app.get('/raw-assets/*', async (req, res) => {
       try {
@@ -165,14 +232,18 @@ export function createApp(base: string): express.Express {
         if (!assetLists.flat().some(asset => asset.path === file)) throw new SourceError('Path is not a workspace asset.', 403);
         res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
         res.type(path.extname(file)).send(await reader.readFile(file));
-      } catch (error) { fail(res, error); }
+      } catch (error) {
+        fail(res, error);
+      }
     });
     app.post('/api/notes/commit', async (req, res) => {
       try {
         if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to commit notes.', 403);
         const { notes, revision, message, documents } = req.body;
         res.json(await (res.locals.reader as RemoteSource).commitNotes(notes, revision, message, documents));
-      } catch (error) { fail(res, error); }
+      } catch (error) {
+        fail(res, error);
+      }
     });
     app.post('/api/notes', async (req, res) => {
       try {
@@ -180,7 +251,9 @@ export function createApp(base: string): express.Express {
         const { path: file, content, metadata, revision, createOnly } = req.body;
         if (typeof file !== 'string' || typeof content !== 'string') throw new SourceError('path and content are required.');
         res.json(await (res.locals.reader as RemoteSource).save(file, content, metadata, revision, createOnly));
-      } catch (error) { fail(res, error); }
+      } catch (error) {
+        fail(res, error);
+      }
     });
     // Apply an explicit tags array to each of the given notes and create one remote commit
     // for the whole batch. Used for tag rename/merge/delete and for undoing any of them (the
@@ -199,7 +272,7 @@ export function createApp(base: string): express.Express {
         // repository paths ahead of the write-scope check that would otherwise reject them.
         const snapshot = await reader.getSnapshot();
         if (!snapshot.info.permissions?.push || reader.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
-        const changes: { path: string; content: string }[] = [];
+        const changes: { path: string; content: string; }[] = [];
         for (const entry of entries) {
           const raw = (await reader.readFile(String(entry.path))).toString('utf8');
           const patched = replaceNoteTags(raw, entry.tags as string[]);
@@ -207,12 +280,12 @@ export function createApp(base: string): express.Express {
           changes.push({ path: String(entry.path), content: patched });
         }
         if (changes.length === 0) return res.json({ success: true, changedPaths: [] });
-        const message = typeof req.body.message === 'string' && req.body.message.trim()
-          ? req.body.message.trim()
-          : `docs(notes): update tags in ${changes.length} note${changes.length === 1 ? '' : 's'}`;
+        const message = typeof req.body.message === 'string' && req.body.message.trim() ? req.body.message.trim() : `docs(notes): update tags in ${changes.length} note${changes.length === 1 ? '' : 's'}`;
         const receipt = await reader.commitChanges(changes, String(req.body.revision || ''), 'tags', 'notes', message);
         res.json(receipt);
-      } catch (error) { fail(res, error); }
+      } catch (error) {
+        fail(res, error);
+      }
     });
     app.get('/api/git/status', (req, res) => res.json({ status: { branch: source?.branch || '', isClean: true, staged: [], modified: [], untracked: [] }, commits: [] }));
     app.get('/api/agent-resources', async (req, res) => {
@@ -220,7 +293,7 @@ export function createApp(base: string): express.Express {
         const reader: RemoteSource = res.locals.reader;
         const snapshot = await reader.getSnapshot();
         const entries = snapshot.entries;
-        const groups: { instructions: WorkspaceAgentResource[]; skills: WorkspaceAgentResource[]; docs: WorkspaceAgentResource[] } = { instructions: [], skills: [], docs: [] };
+        const groups: { instructions: WorkspaceAgentResource[]; skills: WorkspaceAgentResource[]; docs: WorkspaceAgentResource[]; } = { instructions: [], skills: [], docs: [] };
         const editable = Boolean(res.locals.authenticated && snapshot.info.permissions?.push && reader.branch === 'main');
         for (const entry of entries) {
           const kind = workspaceAgentKind(entry.path);
@@ -228,7 +301,9 @@ export function createApp(base: string): express.Express {
         }
         groups.docs.push(...productAgentResources(base));
         res.json({ ...groups, revision: snapshot.sha });
-      } catch (error) { fail(res, error); }
+      } catch (error) {
+        fail(res, error);
+      }
     });
     app.get('/api/agent-resources/read', async (req, res) => {
       try {
@@ -238,7 +313,9 @@ export function createApp(base: string): express.Express {
         const reader: RemoteSource = res.locals.reader;
         const buf = await reader.readFile(targetPath);
         res.json({ path: targetPath, content: buf.toString('utf8'), revision: (await reader.getSnapshot()).sha });
-      } catch (error) { fail(res, error); }
+      } catch (error) {
+        fail(res, error);
+      }
     });
     app.post('/api/agent-resources/save', async (req, res) => {
       try {
@@ -246,7 +323,9 @@ export function createApp(base: string): express.Express {
         const { path: file, content, revision } = req.body;
         const result = await (res.locals.reader as RemoteSource).saveAgentResource(file, content, revision);
         res.json({ ...result, path: file });
-      } catch (error) { fail(res, error); }
+      } catch (error) {
+        fail(res, error);
+      }
     });
     app.use('/api', (req, res) => res.status(403).json({ error: 'This operation is available only in a local workspace.' }));
   }

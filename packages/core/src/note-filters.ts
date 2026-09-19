@@ -1,4 +1,4 @@
-import type { NoteItem, NotebookConfig } from './types.js';
+import type { NotebookConfig, NoteItem } from './types.js';
 import { isNoteHidden } from './note-status.js';
 import type { NoteGraphData } from './note-graph.js';
 
@@ -14,8 +14,7 @@ export interface NoteFilters {
 }
 
 export function safeFilterPath(value: string): boolean {
-  return Boolean(value) && !value.includes('\\') && !value.includes('\0')
-    && value.split('/').every(part => Boolean(part) && part !== '.' && part !== '..');
+  return Boolean(value) && !value.includes('\\') && !value.includes('\0') && value.split('/').every(part => Boolean(part) && part !== '.' && part !== '..');
 }
 
 export function filterNotes(notes: NoteItem[], filters: NoteFilters): NoteItem[] {
@@ -23,16 +22,15 @@ export function filterNotes(notes: NoteItem[], filters: NoteFilters): NoteItem[]
   return notes.filter(note => {
     if (!filters.showHidden && isNoteHidden({ ...note.metadata, status: note.status })) return false;
     if (filters.notebookId !== 'all' && note.notebookId !== filters.notebookId) return false;
-    if (filters.folders.length && !filters.folders.some(folder => {
-      const directory = note.path.slice(0, note.path.lastIndexOf('/'));
-      return directory === folder || (filters.descendants && directory.startsWith(folder + '/'));
-    })) return false;
+    if (
+      filters.folders.length && !filters.folders.some(folder => {
+        const directory = note.path.slice(0, note.path.lastIndexOf('/'));
+        return directory === folder || (filters.descendants && directory.startsWith(folder + '/'));
+      })
+    ) return false;
     if (filters.status && note.status !== filters.status) return false;
-    if (filters.tags.length && !(filters.tagMode === 'all'
-      ? filters.tags.every(tag => note.tags.includes(tag))
-      : filters.tags.some(tag => note.tags.includes(tag)))) return false;
-    return !q.trim() || [note.title, note.path, note.content, note.status || '', ...note.tags]
-      .some(text => text.toLowerCase().includes(q));
+    if (filters.tags.length && !(filters.tagMode === 'all' ? filters.tags.every(tag => note.tags.includes(tag)) : filters.tags.some(tag => note.tags.includes(tag)))) return false;
+    return !q.trim() || [note.title, note.path, note.content, note.status || '', ...note.tags].some(text => text.toLowerCase().includes(q));
   });
 }
 
@@ -57,8 +55,5 @@ export function selectFilteredGraph(graph: NoteGraphData, matchingIds: Set<strin
     inbound.set(link.target, (inbound.get(link.target) || 0) + 1);
     outbound.set(link.source, (outbound.get(link.source) || 0) + 1);
   }
-  return { links, nodes: graph.nodes.filter(node => included.has(node.id)).map(node => ({
-    ...node, external: !matchingIds.has(node.id), inDegree: inbound.get(node.id) || 0,
-    outDegree: outbound.get(node.id) || 0,
-  })) };
+  return { links, nodes: graph.nodes.filter(node => included.has(node.id)).map(node => ({ ...node, external: !matchingIds.has(node.id), inDegree: inbound.get(node.id) || 0, outDegree: outbound.get(node.id) || 0 })) };
 }

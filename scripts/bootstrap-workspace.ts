@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { runGit, getCurrentBranch, stageAndCommit } from '../packages/git/src/index.js';
-import { WORKSPACE_CONFIG_FILENAME, loadWorkspaceConfig, resolveSafePath, resolveWorkspaceConfigPath } from '../packages/core/src/index.js';
+import { getCurrentBranch, runGit, stageAndCommit } from '../packages/git/src/index.js';
+import { loadWorkspaceConfig, resolveSafePath, resolveWorkspaceConfigPath, WORKSPACE_CONFIG_FILENAME } from '../packages/core/src/index.js';
 
 const EMPTY_WORKSPACE_CONFIG = `schema_version: 1
 workspace:
@@ -144,10 +144,7 @@ async function bootstrapWorkspace() {
   const notesAgentsPath = resolveSafePath(repoRoot, 'notes/AGENTS.md');
   if (!fs.existsSync(notesAgentsPath)) {
     fs.mkdirSync(path.dirname(notesAgentsPath), { recursive: true });
-    fs.writeFileSync(
-      notesAgentsPath,
-      `# MyGitNotes Workspace Agent System\n\nOperational guidelines for AI agents working within this note repository.\n`
-    );
+    fs.writeFileSync(notesAgentsPath, `# MyGitNotes Workspace Agent System\n\nOperational guidelines for AI agents working within this note repository.\n`);
     filesToStage.push('notes/AGENTS.md');
     needsCommit = true;
   }
@@ -155,11 +152,7 @@ async function bootstrapWorkspace() {
   // 6. Commit user initialization
   if (needsCommit && filesToStage.length > 0) {
     console.log(`[bootstrap] Creating initial user workspace commit on 'main'...`);
-    const { commitHash } = await stageAndCommit(
-      repoRoot,
-      filesToStage,
-      'chore(workspace): initialize user workspace'
-    );
+    const { commitHash } = await stageAndCommit(repoRoot, filesToStage, 'chore(workspace): initialize user workspace');
     console.log(`[bootstrap] Initialized commit: ${commitHash.slice(0, 7)}`);
   } else {
     console.log(`[bootstrap] Workspace files already up to date.`);

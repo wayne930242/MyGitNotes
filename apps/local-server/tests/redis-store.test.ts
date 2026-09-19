@@ -9,14 +9,21 @@ function client() {
   const instance = {
     isOpen: false,
     on: vi.fn(),
-    connect: vi.fn(async () => { instance.isOpen = true; }),
+    connect: vi.fn(async () => {
+      instance.isOpen = true;
+    }),
     unref: vi.fn(),
     sendCommand: vi.fn(async (_command: string[]): Promise<any> => 'OK'),
-    destroy: vi.fn(() => { instance.isOpen = false; }),
+    destroy: vi.fn(() => {
+      instance.isOpen = false;
+    }),
   };
   return instance;
 }
-afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.clearAllMocks();
+});
 
 it('shares the native connection across stores and prefers it over REST credentials', async () => {
   const redis = client();
@@ -50,6 +57,8 @@ it('rejects unsupported native Redis URL schemes', async () => {
 });
 
 it('keeps malformed URL details out of errors returned to the caller', async () => {
-  mock.createClient.mockImplementationOnce(() => { throw new Error('Invalid URL redis://user:private-password@'); });
+  mock.createClient.mockImplementationOnce(() => {
+    throw new Error('Invalid URL redis://user:private-password@');
+  });
   await expect(nativeRedisCommand('redis://user:private-password@', ['PING'])).rejects.toThrow(/^Session store unavailable\.$/);
 });

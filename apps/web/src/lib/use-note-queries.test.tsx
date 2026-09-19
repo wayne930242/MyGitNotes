@@ -13,39 +13,37 @@ let client: QueryClient;
 let requests: string[];
 
 function page(paths: string[], nextCursor: string | null, total = paths.length) {
-  return {
-    revision: REVISION, total, nextCursor,
-    notes: paths.map(path => ({ id: path, path, notebookId: 'life', title: path, tags: [], metadata: {} })),
-  };
+  return { revision: REVISION, total, nextCursor, notes: paths.map(path => ({ id: path, path, notebookId: 'life', title: path, tags: [], metadata: {} })) };
 }
 
 function stubFetch(answer: (url: string) => unknown) {
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-    requests.push(url);
-    const result = answer(url);
-    if (result instanceof Response) return result;
-    return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      requests.push(url);
+      const result = answer(url);
+      if (result instanceof Response) return result;
+      return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
+    }),
+  );
 }
 
-const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
+const wrapper = ({ children }: { children: ReactNode; }) => createElement(QueryClientProvider, { client }, children);
 
-function Rows({ notebookId = 'life' }: { notebookId?: string }) {
+function Rows({ notebookId = 'life' }: { notebookId?: string; }) {
   const result = useNoteList({ notebookId });
-  return createElement('div', {},
-    createElement('p', { 'data-testid': 'rows' }, result.notes.map(note => note.path).join(',')),
-    createElement('button', { onClick: result.loadMore }, 'more'));
+  return createElement('div', {}, createElement('p', { 'data-testid': 'rows' }, result.notes.map(note => note.path).join(',')), createElement('button', { onClick: result.loadMore }, 'more'));
 }
 
 beforeEach(() => {
   requests = [];
-  client = new QueryClient({
-    queryCache: new QueryCache({ onError: (error, query) => handleNoteQueryError(error, query) }),
-    defaultOptions: { queries: { staleTime: Infinity, retry: false } },
-  });
+  client = new QueryClient({ queryCache: new QueryCache({ onError: (error, query) => handleNoteQueryError(error, query) }), defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   setNoteQueryScope({ sourceId: 'github:me/notes', revision: REVISION, drafts: {} });
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 it('sends the workspace revision and asks again when it changes', async () => {
   stubFetch(url => page([url.includes(`revision=${'b'.repeat(40)}`) ? 'notes/life/new.md' : 'notes/life/old.md'], null));
@@ -92,7 +90,10 @@ it('continues with the cursor the previous page returned', async () => {
 it('reports a rejected revision so the workspace can restart from the first page', async () => {
   stubFetch(() => new Response(JSON.stringify({ error: 'The repository changed. Reload to continue from the latest revision.' }), { status: 409 }));
   const stale = vi.fn();
-  function Probe() { useStaleNoteQueries(stale); return createElement(Rows); }
+  function Probe() {
+    useStaleNoteQueries(stale);
+    return createElement(Rows);
+  }
   render(createElement(Probe), { wrapper });
   await waitFor(() => expect(stale).toHaveBeenCalledWith('The repository changed. Reload to continue from the latest revision.'));
 });
@@ -117,7 +118,10 @@ it('restarts a rejected cursor and leaves a malformed first page alone', () => {
   try {
     vi.setSystemTime(start);
     const stale = vi.fn();
-    function Probe() { useStaleNoteQueries(stale); return null; }
+    function Probe() {
+      useStaleNoteQueries(stale);
+      return null;
+    }
     render(createElement(Probe), { wrapper });
     const queryKey = ['notes', 'github:me/notes', REVISION, 'query', {}];
     handleNoteQueryError(new ApiError('Invalid query option.', 400), { queryKey, state: { data: undefined } });
@@ -125,5 +129,7 @@ it('restarts a rejected cursor and leaves a malformed first page alone', () => {
     vi.setSystemTime(start + 10_000);
     handleNoteQueryError(new ApiError('Cursor does not match this query.', 400), { queryKey, state: { data: { pages: [{}] } } });
     expect(stale).toHaveBeenCalledWith('Cursor does not match this query.');
-  } finally { vi.useRealTimers(); }
+  } finally {
+    vi.useRealTimers();
+  }
 });

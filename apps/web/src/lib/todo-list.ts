@@ -15,7 +15,10 @@ export interface TodoGroups {
 export function groupTodoTasks(tasks: TodoTask[], today: string): TodoGroups {
   const groups: TodoGroups = { overdue: [], today: [], upcoming: [], noDate: [], completed: [] };
   for (const task of tasks) {
-    if (task.checked) { groups.completed.push(task); continue; }
+    if (task.checked) {
+      groups.completed.push(task);
+      continue;
+    }
     const group: TodoGroup = classifyDueDate(task.due, today);
     groups[group].push(task);
   }

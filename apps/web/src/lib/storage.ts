@@ -6,19 +6,9 @@ function makeDraftKey(branch: string, notePath: string): string {
   return `${DRAFT_PREFIX}:${branch}:${notePath}`;
 }
 
-export function saveLocalDraft(
-  branch: string,
-  notePath: string,
-  content: string,
-  metadata: Record<string, unknown>
-): void {
+export function saveLocalDraft(branch: string, notePath: string, content: string, metadata: Record<string, unknown>): void {
   try {
-    const draft: LocalDraft = {
-      path: notePath,
-      content,
-      metadata,
-      savedAt: Date.now(),
-    };
+    const draft: LocalDraft = { path: notePath, content, metadata, savedAt: Date.now() };
     localStorage.setItem(makeDraftKey(branch, notePath), JSON.stringify(draft));
   } catch (err) {
     console.error('Failed to save local draft:', err);
@@ -99,7 +89,7 @@ export function adoptGraphDrafts(scope: string): void {
     for (const key of keys) {
       const path = key.slice(prefix.length);
       try {
-        const record = JSON.parse(localStorage.getItem(key) || '') as { base?: { path?: string }; draft?: { content?: unknown; metadata?: unknown } };
+        const record = JSON.parse(localStorage.getItem(key) || '') as { base?: { path?: string; }; draft?: { content?: unknown; metadata?: unknown; }; };
         const metadata = record.draft?.metadata;
         if (record.base?.path === path && typeof record.draft?.content === 'string' && !getLocalDraft(scope, path)) {
           saveLocalDraft(scope, path, record.draft.content, metadata && typeof metadata === 'object' ? metadata as Record<string, unknown> : {});

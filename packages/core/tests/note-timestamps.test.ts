@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { fillMissingTimestamps, stampSaveTimestamps } from '../src/note-timestamps.js';
-import { serializeNoteContent, parseNoteContent, fillMissingNoteTimestamps, replaceNoteStatus } from '../src/frontmatter.js';
+import { fillMissingNoteTimestamps, parseNoteContent, replaceNoteStatus, serializeNoteContent } from '../src/frontmatter.js';
 
 describe('stampSaveTimestamps', () => {
   const now = new Date('2026-09-15T10:00:00.000Z');
@@ -45,22 +45,14 @@ describe('fillMissingTimestamps', () => {
   });
 
   it('never overwrites an existing value', () => {
-    const { metadata, changed } = fillMissingTimestamps(
-      { created: '2015-09-17T16:48:45.115Z', updated: '2015-09-18T00:00:00.000Z' },
-      '2020-01-01T00:00:00.000Z',
-      '2021-01-01T00:00:00.000Z'
-    );
+    const { metadata, changed } = fillMissingTimestamps({ created: '2015-09-17T16:48:45.115Z', updated: '2015-09-18T00:00:00.000Z' }, '2020-01-01T00:00:00.000Z', '2021-01-01T00:00:00.000Z');
     expect(metadata.created).toBe('2015-09-17T16:48:45.115Z');
     expect(metadata.updated).toBe('2015-09-18T00:00:00.000Z');
     expect(changed).toBe(false);
   });
 
   it('fills only the missing field', () => {
-    const { metadata, changed } = fillMissingTimestamps(
-      { created: '2015-09-17T16:48:45.115Z' },
-      '2020-01-01T00:00:00.000Z',
-      '2021-01-01T00:00:00.000Z'
-    );
+    const { metadata, changed } = fillMissingTimestamps({ created: '2015-09-17T16:48:45.115Z' }, '2020-01-01T00:00:00.000Z', '2021-01-01T00:00:00.000Z');
     expect(metadata.created).toBe('2015-09-17T16:48:45.115Z');
     expect(metadata.updated).toBe('2021-01-01T00:00:00.000Z');
     expect(changed).toBe(true);
@@ -87,12 +79,7 @@ describe('serializeNoteContent timestamp stamping', () => {
   });
 
   it('preserves created and only refreshes updated on a resave', () => {
-    const serialized = serializeNoteContent(
-      { title: 'Existing note', created: '2015-09-17T16:48:45.115Z', updated: '2015-09-18T00:00:00.000Z' },
-      'Body.',
-      false,
-      now
-    );
+    const serialized = serializeNoteContent({ title: 'Existing note', created: '2015-09-17T16:48:45.115Z', updated: '2015-09-18T00:00:00.000Z' }, 'Body.', false, now);
     const reparsed = parseNoteContent(serialized);
     expect(reparsed.metadata.created).toBe('2015-09-17T16:48:45.115Z');
     expect(reparsed.metadata.updated).toBe('2026-09-15T10:00:00.000Z');

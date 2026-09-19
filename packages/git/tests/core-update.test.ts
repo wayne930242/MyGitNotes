@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -71,8 +71,6 @@ describe('Core Update Engine Rules', () => {
 
   it('refuses to run update if working tree is dirty without auto-stashing', async () => {
     fs.writeFileSync(path.join(userRepo, 'dirty-note.md'), 'uncommitted content');
-    await expect(updateCore({ repoRoot: userRepo })).rejects.toThrow(
-      /Working tree has uncommitted modifications.*Auto-stash is strictly prohibited/
-    );
+    await expect(updateCore({ repoRoot: userRepo })).rejects.toThrow(/Working tree has uncommitted modifications.*Auto-stash is strictly prohibited/);
   });
 });

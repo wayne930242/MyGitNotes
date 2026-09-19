@@ -1,4 +1,4 @@
-export type { ViewMode, NotebookConfig, WorkspaceConfig, NotebookMetadataField } from '@mygitnotes/core';
+export type { NotebookConfig, NotebookMetadataField, ViewMode, WorkspaceConfig } from '@mygitnotes/core';
 
 export interface NoteItem {
   revision?: string;
@@ -71,6 +71,15 @@ export interface LocalDraft {
   savedAt: number;
 }
 
-export interface FolderItem { notebookId: string; path: string; title: string; order: number; description?: string; }
+export interface FolderItem {
+  notebookId: string;
+  path: string;
+  title: string;
+  order: number;
+  description?: string;
+}
 
-export interface ChangeRequest { action: 'review' | 'commit' | 'restore'; paths: string[]; }
+export interface ChangeRequest {
+  action: 'review' | 'commit' | 'restore';
+  paths: string[];
+}
