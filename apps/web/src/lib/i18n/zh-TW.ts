@@ -1,6 +1,15 @@
 import { TranslationKey } from './en.js';
 
 export const zhTW: Record<TranslationKey, string> = {
+  'youtube.play': '播放 YouTube 影片',
+  'youtube.player': 'YouTube 影片播放器',
+  'youtube.modes': 'YouTube 顯示模式',
+  'youtube.thumbnail': '縮圖',
+  'youtube.medium': '中等',
+  'youtube.theater': '劇院',
+  'youtube.copy': '複製影片網址',
+  'youtube.copied': '已複製影片網址',
+  'youtube.copyFailed': '無法複製影片網址',
   'lightbox.title': '圖片預覽',
   'lightbox.close': '關閉圖片預覽（Esc）',
   'lightbox.zoomIn': '放大（+）',

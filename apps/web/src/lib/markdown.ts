@@ -4,6 +4,7 @@ import { parseYouTubeUrl } from '@mygitnotes/core/screen-page';
 import { parseR2Reference, r2AssetUrl, r2PreviewType } from '@mygitnotes/core/r2-references';
 import { headingSlug, resolveWorkspaceHref } from './workspace-links.js';
 import { stripMdxImports, transformDirectives, transformMdxComponents } from './directives.js';
+import { DEFAULT_YOUTUBE_LABELS, type YouTubeDisplayMode, type YouTubeLabels } from './youtube-embed.js';
 
 export const DOMPURIFY_DIRECTIVE_CONFIG = {
   ADD_TAGS: [
@@ -29,6 +30,14 @@ export const DOMPURIFY_DIRECTIVE_CONFIG = {
     'loading',
     'data-video-id',
     'data-start',
+    'data-youtube-mode',
+    'data-youtube-mode-option',
+    'data-youtube-session',
+    'data-youtube-source-url',
+    'data-youtube-copy',
+    'data-copy-label',
+    'data-copied-label',
+    'data-copy-failed-label',
     'controls',
     'preload',
     'data-type',
@@ -60,7 +69,7 @@ export const DOMPURIFY_DIRECTIVE_CONFIG = {
   ]
 };
 
-export function renderNote(content: string, notePath: string, tableLabel = 'Horizontally scrollable table (Alt + wheel)'): string {
+export function renderNote(content: string, notePath: string, tableLabel = 'Horizontally scrollable table (Alt + wheel)', youtubeLabels: YouTubeLabels = DEFAULT_YOUTUBE_LABELS): string {
   const isMdx = /\.mdx$/i.test(notePath);
   let preprocessed = content;
   if (isMdx) {
@@ -107,10 +116,24 @@ export function renderNote(content: string, notePath: string, tableLabel = 'Hori
         embed.className = 'note-youtube-embed';
         embed.dataset.videoId = video.videoId;
         embed.dataset.start = String(video.start);
-        embed.innerHTML = `<button type="button" class="note-youtube-poster" aria-label="Play YouTube video"><img src="https://img.youtube.com/vi/${encodeURIComponent(video.videoId)}/hqdefault.jpg" alt="" loading="lazy" /><span class="note-youtube-play-btn" aria-hidden="true"><svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span></button>`;
+        embed.dataset.youtubeSourceUrl = href;
         p.replaceWith(embed);
       }
     }
+  }
+  const youtubeEmbeds = [...parsed.querySelectorAll<HTMLElement>('div')].filter(element => element.className.split(/\s+/).includes('note-youtube-embed'));
+  for (const [index, embed] of youtubeEmbeds.entries()) {
+    embed.dataset.youtubeSession = `${notePath}:${index}:${embed.dataset.videoId}:${embed.dataset.start}`;
+    embed.dataset.youtubeMode = 'thumbnail';
+    const toolbar = parsed.createElement('div'); toolbar.className = 'note-youtube-mode-control'; toolbar.setAttribute('role', 'group'); toolbar.setAttribute('aria-label', youtubeLabels.modes);
+    for (const [mode, label] of [['thumbnail', youtubeLabels.thumbnail], ['medium', youtubeLabels.medium], ['theater', youtubeLabels.theater]] as [YouTubeDisplayMode, string][]) {
+      const control = parsed.createElement('button'); control.setAttribute('type', 'button'); control.dataset.youtubeModeOption = mode; control.textContent = label; control.setAttribute('title', label); control.setAttribute('aria-label', label); control.setAttribute('aria-pressed', String(mode === 'thumbnail')); toolbar.append(control);
+    }
+    const copy = parsed.createElement('button'); copy.setAttribute('type', 'button'); copy.className = 'note-youtube-copy'; copy.dataset.youtubeCopy = ''; copy.dataset.copyLabel = youtubeLabels.copy; copy.dataset.copiedLabel = youtubeLabels.copied; copy.dataset.copyFailedLabel = youtubeLabels.copyFailed; copy.setAttribute('aria-label', youtubeLabels.copy); copy.setAttribute('title', youtubeLabels.copy); copy.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>'; toolbar.append(copy);
+    const poster = parsed.createElement('button'); poster.setAttribute('type', 'button'); poster.className = 'note-youtube-poster'; poster.setAttribute('aria-label', youtubeLabels.play); poster.dataset.youtubePlayerLabel = youtubeLabels.player;
+    const image = parsed.createElement('img'); image.setAttribute('src', `https://img.youtube.com/vi/${encodeURIComponent(embed.dataset.videoId || '')}/hqdefault.jpg`); image.setAttribute('alt', ''); image.setAttribute('loading', 'lazy');
+    const play = parsed.createElement('span'); play.className = 'note-youtube-play-btn'; play.setAttribute('aria-hidden', 'true'); play.innerHTML = '<svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>';
+    poster.append(image); poster.append(play); embed.append(toolbar); embed.append(poster);
   }
   for (const link of parsed.querySelectorAll('a')) {
     const href = link.getAttribute('href') || '';

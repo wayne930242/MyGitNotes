@@ -42,8 +42,7 @@ describe('directives and MDX Layer 2 preprocessor', () => {
       expect(output).toContain('class="note-youtube-embed"');
       expect(output).toContain('data-video-id="dQw4w9WgXcQ"');
       expect(output).toContain('data-start="10"');
-      expect(output).toContain('class="note-youtube-poster"');
-      expect(output).toContain('img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg');
+      expect(output).toContain('data-youtube-source-url="https://www.youtube.com/watch?v=dQw4w9WgXcQ&amp;t=10s"');
     });
 
     it('transforms ProtectedContent component', () => {

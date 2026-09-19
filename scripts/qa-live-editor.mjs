@@ -13,7 +13,7 @@ const root=fs.mkdtempSync(path.join(os.tmpdir(),'github-notes-browser-'));
 const write=(p,s)=>{fs.mkdirSync(path.dirname(path.join(root,p)),{recursive:true});fs.writeFileSync(path.join(root,p),s);};
 const git=(...args)=>execFileSync('git',args,{cwd:root,stdio:'pipe'});
 write('notes/.github-notes.yaml','schema_version: 1\nworkspace:\n  title: Folder QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
-write('notes/example/root.md','# Root Note\n\nParagraph **bold** and *italic*.\n\n> Quoted first line.\n> Quoted second line.\nLazy continuation without a marker.\n>\n> > Nested quote line.\n\n- [ ] Task\n\n| A | B |\n| - | - |\n| a | b |\n\n![pixel](assets/pixel.png)\n');
+write('notes/example/root.md','# Root Note\n\nParagraph **bold** and *italic*.\n\n> Quoted first line.\n> Quoted second line.\nLazy continuation without a marker.\n>\n> > Nested quote line.\n\nhttps://youtu.be/dQw4w9WgXcQ?t=45\n\n- [ ] Task\n\n| A | B |\n| - | - |\n| a | b |\n\n![pixel](assets/pixel.png)\n\n'+Array.from({length:160},(_,index)=>`Long reading paragraph ${index+1}.`).join('\n\n')+'\n');
 write('notes/example/projects/_dir.yml','title: Projects\norder: -1\n');
 write('notes/example/projects/deep/_dir.yml','title: Deep work\n');
 write('notes/example/projects/deep/nested.md','# Nested Note\n');
@@ -33,6 +33,27 @@ const click=async text=>{const ok=await page.evaluate(text=>{const buttons=Array
 try {
  await page.goto(base+'/notebooks/example/notes/root.md',{waitUntil:'networkidle0'});
  await page.waitForSelector('.cm-content');
+ await page.waitForSelector('.note-youtube-embed');
+ const defaultMode=await page.$eval('.note-youtube-embed',embed=>embed.dataset.youtubeMode);
+ if(defaultMode!=='thumbnail')throw Error(`YouTube did not default to thumbnail: ${defaultMode}`);
+ await page.evaluate(()=>{window.__youtubeCopied='';Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__youtubeCopied=text;}}});});
+ await page.click('.note-youtube-embed [data-youtube-copy]');await page.waitForFunction(()=>document.querySelector('.note-youtube-embed [data-youtube-copy]')?.dataset.copyState==='copied');
+ if(await page.evaluate(()=>window.__youtubeCopied)!=='https://youtu.be/dQw4w9WgXcQ?t=45')throw Error('YouTube Copy did not preserve the source URL');
+ const geometry=async mode=>{
+  await page.click(`[data-youtube-mode-option="${mode}"]`);await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
+  return page.evaluate(()=>{const embed=document.querySelector('.note-youtube-embed').getBoundingClientRect();const line=[...document.querySelectorAll('.cm-line')].find(line=>line.textContent.includes('Paragraph'));const range=document.createRange();range.setStart(line.firstChild,0);range.setEnd(line.firstChild,1);const glyph=range.getBoundingClientRect();const content=document.querySelector('.cm-content').getBoundingClientRect();const style=getComputedStyle(document.querySelector('.cm-content'));return {left:embed.left,right:embed.right,width:embed.width,glyphLeft:glyph.left,columnRight:content.right-parseFloat(style.paddingRight)};});
+ };
+ const medium=await geometry('medium');if(Math.abs(medium.left-medium.glyphLeft)>1||medium.width>641)throw Error(`YouTube medium alignment failed: ${JSON.stringify(medium)}`);
+ const theater=await geometry('theater');if(Math.abs(theater.left-theater.glyphLeft)>1||Math.abs(theater.right-theater.columnRight)>1)throw Error(`YouTube theater alignment failed: ${JSON.stringify(theater)}`);
+ await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('.note-youtube-embed[data-youtube-mode="theater"]');
+ await page.click('[data-youtube-mode-option="thumbnail"]');await page.click('.note-youtube-poster');await page.waitForSelector('.note-youtube-persistent-player iframe');
+ await page.evaluate(()=>{window.__youtubeQaPlayer=document.querySelector('.note-youtube-persistent-player iframe');const scroller=document.querySelector('.cm-scroller');scroller.scrollTop=scroller.scrollHeight;});
+ await page.waitForFunction(()=>!document.querySelector('.note-youtube-embed'));
+ if(!await page.evaluate(()=>window.__youtubeQaPlayer?.isConnected&&window.__youtubeQaPlayer===document.querySelector('.note-youtube-persistent-player iframe')))throw Error('YouTube playback iframe was replaced when CodeMirror virtualized its widget');
+ await page.focus('.cm-content');await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.type(' playback continues');
+ if(!await page.evaluate(()=>window.__youtubeQaPlayer?.isConnected&&window.__youtubeQaPlayer===document.querySelector('.note-youtube-persistent-player iframe')))throw Error('Editing elsewhere replaced the persistent YouTube iframe');
+ await page.evaluate(()=>{const scroller=document.querySelector('.cm-scroller');scroller.scrollTop=0;});await page.waitForSelector('.note-youtube-embed');
+ console.log('PASS YouTube modes: alignment, persistence, inline playback, and CodeMirror virtualization continuity');
  if(await page.$('[data-live-markdown] .cm-lineNumbers'))throw Error('Live preview line numbers are visible by default');
  if(await page.$eval('button[aria-label="Line Numbers"]',e=>e.getAttribute('aria-pressed'))!=='false')throw Error('Line Numbers toggle does not report unpressed while hidden');
  await click('Source');await page.waitForSelector('textarea[aria-label="Note content"]');

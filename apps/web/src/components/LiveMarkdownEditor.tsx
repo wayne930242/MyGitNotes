@@ -24,6 +24,7 @@ import { noteLinkHref } from '@mygitnotes/core/workspace-links';
 import { formatDateYMD } from '../lib/date-utils.js';
 import { DONE_EMOJI, DUE_EMOJI, START_EMOJI, TIMESTAMP_EMOJI, findToken, isTaskLine, setTaskChecked, setTokenValue } from '../lib/task-tokens.js';
 import { TASK_TOKEN_ICON_SVG } from '../lib/task-icons.js';
+import { activateYouTubeEmbed, populateYouTubeEmbed, type YouTubeLabels } from '../lib/youtube-embed.js';
 
 export interface LiveMarkdownHandle {
   /** Inserts `text` at `at`, or in place of the selection. */
@@ -254,54 +255,30 @@ class BulletMarker extends WidgetType {
   toDOM() { const span=document.createElement('span');span.textContent='•';span.setAttribute('aria-hidden','true');return span; }
 }
 class YouTubeWidget extends WidgetType {
-  constructor(readonly videoId: string, readonly start: number, readonly from: number) { super(); }
-  eq(other: YouTubeWidget) { return this.videoId === other.videoId && this.start === other.start && this.from === other.from; }
+  constructor(readonly videoId: string, readonly start: number, readonly sourceUrl: string, readonly from: number, readonly labels: YouTubeLabels) { super(); }
+  eq(other: YouTubeWidget) { return this.videoId === other.videoId && this.start === other.start && this.sourceUrl === other.sourceUrl && this.from === other.from && this.labels === other.labels; }
   toDOM(view: EditorView) {
     const container = document.createElement('div');
     container.className = 'note-youtube-embed';
     container.dataset.videoId = this.videoId;
     container.dataset.start = String(this.start);
+    container.dataset.youtubeSourceUrl = this.sourceUrl;
+    container.dataset.youtubeSession = `${this.videoId}:${this.start}:${this.from}`;
 
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'note-youtube-poster';
-    button.setAttribute('aria-label', 'Play YouTube video');
-
-    const img = document.createElement('img');
-    img.src = `https://img.youtube.com/vi/${encodeURIComponent(this.videoId)}/hqdefault.jpg`;
-    img.alt = '';
-    img.loading = 'lazy';
+    const { poster: button, image: img } = populateYouTubeEmbed(container, this.labels);
     img.addEventListener('load', () => view.requestMeasure());
-
-    const playBtn = document.createElement('span');
-    playBtn.className = 'note-youtube-play-btn';
-    playBtn.setAttribute('aria-hidden', 'true');
-    playBtn.innerHTML = '<svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-
-    button.appendChild(img);
-    button.appendChild(playBtn);
-    container.appendChild(button);
-
-    const activate = () => {
-      const iframe = document.createElement('iframe');
-      iframe.title = 'YouTube video player';
-      iframe.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(this.videoId)}?start=${this.start}&autoplay=1&playsinline=1&rel=0`;
-      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
-      iframe.allowFullscreen = true;
-      iframe.className = 'note-youtube-iframe';
-      container.replaceChildren(iframe);
-      view.requestMeasure();
-    };
 
     button.addEventListener('mousedown', event => { event.stopPropagation(); });
     button.addEventListener('click', event => {
       event.preventDefault();
       event.stopPropagation();
-      activate();
+      activateYouTubeEmbed(button);
+      view.requestMeasure();
     });
+    for (const modeButton of container.querySelectorAll<HTMLButtonElement>('[data-youtube-mode-option]')) modeButton.addEventListener('mousedown', event => event.stopPropagation());
 
     container.addEventListener('mousedown', event => {
-      if ((event.target as HTMLElement).closest('.note-youtube-poster, iframe')) return;
+      if ((event.target as HTMLElement).closest('.note-youtube-poster, .note-youtube-mode-control, iframe')) return;
       event.preventDefault();
       view.dispatch({ selection: { anchor: this.from } });
       view.focus();
@@ -373,7 +350,11 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
       const video = parseYouTubeUrl(url);
       if (video) {
         if (!editing) {
-          marks.push(Decoration.replace({ widget: new YouTubeWidget(video.videoId, video.start, from), block: true }).range(from, to));
+          marks.push(Decoration.replace({ widget: new YouTubeWidget(video.videoId, video.start, url, from, {
+            play: t('youtube.play'), player: t('youtube.player'), modes: t('youtube.modes'),
+            thumbnail: t('youtube.thumbnail'), medium: t('youtube.medium'), theater: t('youtube.theater'),
+            copy: t('youtube.copy'), copied: t('youtube.copied'), copyFailed: t('youtube.copyFailed'),
+          }), block: true }).range(from, to));
           return false;
         }
       }

@@ -192,6 +192,12 @@ describe('renderNote YouTube embeds', () => {
     expect(html).toContain('https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg');
     expect(html).toContain('note-youtube-poster');
     expect(html).toContain('note-youtube-play-btn');
+    expect(html).toContain('data-youtube-mode="thumbnail"');
+    expect(html).toContain('data-youtube-mode-option="thumbnail"');
+    expect(html).toContain('data-youtube-mode-option="medium"');
+    expect(html).toContain('data-youtube-mode-option="theater"');
+    expect(html).toContain('data-youtube-copy');
+    expect(html).toContain('data-youtube-source-url="https://www.youtube.com/watch?v=dQw4w9WgXcQ"');
   });
 
   it('preserves start timestamp from URL query parameters', () => {
@@ -286,4 +292,3 @@ describe('renderNote generic directives and MDX Layer 2', () => {
     expect(html).toContain('機密內容');
   });
 });
-

@@ -4,6 +4,7 @@ import { undo, redo, isolateHistory } from '@codemirror/commands';
 import { findMarkdownTables, serializeMarkdownTable, tableCellEditorText, type TableAlignment } from '../lib/markdown-tables.js';
 import { renderNote } from '../lib/markdown.js';
 import type { TranslationKey } from '../lib/i18n/en.js';
+import { youtubeLabels } from '../lib/youtube-embed.js';
 
 type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 const icons: Record<string, string> = {
@@ -35,7 +36,7 @@ export class LiveMarkdownTable extends WidgetType {
     root.contentEditable = 'false';
     root.dataset.tableFrom = String(this.from);
     const model = findMarkdownTables(this.text)[0];
-    root.innerHTML = renderNote(this.text, this.path, this.t('preview.scrollableTable'));
+    root.innerHTML = renderNote(this.text, this.path, this.t('preview.scrollableTable'), youtubeLabels(this.t));
     if (!model) return root;
     const scroller = root.querySelector<HTMLElement>('.markdown-table-scroll')!;
     const table = root.querySelector('table')!;

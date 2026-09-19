@@ -6,6 +6,7 @@ import type { AssetItem, NotebookConfig } from '../lib/types.js';
 import { noteSummary } from '../lib/screen-content.js';
 import { renderNote } from '../lib/markdown.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { youtubeLabels } from '../lib/youtube-embed.js';
 import { useNoteList } from '../lib/use-note-queries.js';
 import { NoteListSentinel } from './NoteListSentinel.js';
 
@@ -30,7 +31,7 @@ export function ScreenCard({ item, view, controls, ...content }: ScreenContentPr
   const notebook = item.kind !== 'youtube' ? content.notebooks.find(nb => nb.id === item.notebookId) : undefined;
   const title = screenItemTitle(item, content.notes, content.assets);
   const tableLabel = t('preview.scrollableTable');
-  const html = useMemo(() => note?.content && view !== 'thumbnail' ? renderNote(note.content, note.path, tableLabel) : '', [note?.content, note?.path, view, tableLabel]);
+  const html = useMemo(() => note?.content && view !== 'thumbnail' ? renderNote(note.content, note.path, tableLabel, youtubeLabels(t)) : '', [note?.content, note?.path, view, tableLabel, t]);
   const icon = item.kind === 'note' ? <FileText /> : item.kind === 'folder' ? <Folder /> : item.kind === 'asset' ? <ImageIcon /> : <Youtube />;
   // A pinned folder lists its visible notes straight from the server, a page at a time.
   const folderNotes = useNoteList(item.kind === 'folder' ? { notebookId: item.notebookId, folders: [item.path], descendants: true, sort: 'title', order: 'asc' } : null, { limit: 200 });

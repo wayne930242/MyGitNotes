@@ -111,7 +111,8 @@ export function transformMdxComponents(content: string): string {
       }
       if (!targetId) return '';
       const start = attrs.start || '0';
-      return `<div class="note-youtube-embed" data-video-id="${escapeHtml(targetId)}" data-start="${escapeHtml(start)}"><button type="button" class="note-youtube-poster" aria-label="Play YouTube video"><img src="https://img.youtube.com/vi/${encodeURIComponent(targetId)}/hqdefault.jpg" alt="" loading="lazy" /><span class="note-youtube-play-btn" aria-hidden="true"><svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span></button></div>`;
+      const sourceUrl = url || `https://www.youtube.com/watch?v=${encodeURIComponent(targetId)}${Number(start) ? `&t=${encodeURIComponent(start)}s` : ''}`;
+      return `<div class="note-youtube-embed" data-video-id="${escapeHtml(targetId)}" data-start="${escapeHtml(start)}" data-youtube-source-url="${escapeHtml(sourceUrl)}"></div>`;
     }
   );
 

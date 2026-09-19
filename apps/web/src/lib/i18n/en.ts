@@ -1,4 +1,13 @@
 export const en = {
+  'youtube.play': 'Play YouTube video',
+  'youtube.player': 'YouTube video player',
+  'youtube.modes': 'YouTube display mode',
+  'youtube.thumbnail': 'Thumbnail',
+  'youtube.medium': 'Medium',
+  'youtube.theater': 'Theater',
+  'youtube.copy': 'Copy video URL',
+  'youtube.copied': 'Video URL copied',
+  'youtube.copyFailed': 'Could not copy video URL',
   'lightbox.title': 'Image preview',
   'lightbox.close': 'Close image preview (Esc)',
   'lightbox.zoomIn': 'Zoom in (+)',

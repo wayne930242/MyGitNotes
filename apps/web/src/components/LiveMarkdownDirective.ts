@@ -9,6 +9,7 @@ import {
 } from '../lib/directives.js';
 import { renderNote } from '../lib/markdown.js';
 import type { TranslationKey } from '../lib/i18n/en.js';
+import { DEFAULT_YOUTUBE_LABELS, youtubeLabels } from '../lib/youtube-embed.js';
 
 type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
@@ -46,7 +47,7 @@ export class LiveMarkdownDirective extends WidgetType {
     root.dataset.directiveType = model.type;
 
     if (this.readOnly) {
-      root.innerHTML = renderNote(this.text, this.path);
+      root.innerHTML = renderNote(this.text, this.path, undefined, this.t ? youtubeLabels(this.t) : DEFAULT_YOUTUBE_LABELS);
       return root;
     }
 
@@ -164,7 +165,7 @@ export class LiveMarkdownDirective extends WidgetType {
       // 2. Render Card Content
       const contentContainer = document.createElement('div');
       contentContainer.className = 'live-directive-preview-content';
-      contentContainer.innerHTML = renderNote(this.text, this.path);
+      contentContainer.innerHTML = renderNote(this.text, this.path, undefined, this.t ? youtubeLabels(this.t) : DEFAULT_YOUTUBE_LABELS);
 
       // Double click to enter edit form
       contentContainer.addEventListener('dblclick', event => {

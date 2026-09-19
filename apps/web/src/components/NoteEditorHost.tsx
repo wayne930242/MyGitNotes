@@ -7,6 +7,7 @@ import { useNoteLookup } from '../lib/use-note-queries.js';
 import { renderNote } from '../lib/markdown.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { NoteEditor, type NoteEditorHandle, type NoteEditorProps } from './NoteEditor.js';
+import { youtubeLabels } from '../lib/youtube-embed.js';
 
 export interface HostedNoteEditorProps {
   path: string;
@@ -76,7 +77,7 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ path, frame,
 const NotePreview: React.FC<{ note: NoteItem; onClaim: () => void }> = ({ note, onClaim }) => {
   const { t } = useTranslation();
   const tableLabel = t('preview.scrollableTable');
-  const html = useMemo(() => renderNote(note.content, note.path, tableLabel), [note.content, note.path, tableLabel]);
+  const html = useMemo(() => renderNote(note.content, note.path, tableLabel, youtubeLabels(t)), [note.content, note.path, tableLabel, t]);
   return <div className="note-preview">
     <div className="note-preview-bar">
       <span>{t('editor.editingElsewhere')}</span>

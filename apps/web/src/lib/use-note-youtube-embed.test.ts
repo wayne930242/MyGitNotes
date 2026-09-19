@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('react', () => ({ useEffect: (effect: () => unknown) => effect() }));
 import { useNoteYouTubeEmbed } from './use-note-youtube-embed.js';
+import { stopYouTubePlayback } from './youtube-embed.js';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { stopYouTubePlayback(); vi.unstubAllGlobals(); });
 
 describe('useNoteYouTubeEmbed hook', () => {
   function setup() {
@@ -10,34 +11,49 @@ describe('useNoteYouTubeEmbed hook', () => {
     let keydownListener: (event: KeyboardEvent) => void = () => {};
 
     const iframeElements: any[] = [];
+    const bodyAppend = vi.fn();
     vi.stubGlobal('document', {
+      body: { append: bodyAppend },
+      querySelectorAll: () => [embed],
       createElement: (tag: string) => {
-        const el: any = { tagName: tag.toUpperCase(), title: '', src: '', allow: '', allowFullscreen: false, className: '' };
+        const el: any = { tagName: tag.toUpperCase(), title: '', src: '', allow: '', allowFullscreen: false, className: '', dataset: {}, style: {}, append: vi.fn(), remove: vi.fn() };
         if (tag === 'iframe') iframeElements.push(el);
         return el;
       },
     });
 
     const embed = {
-      dataset: { videoId: 'dQw4w9WgXcQ', start: '45' },
+      dataset: { videoId: 'dQw4w9WgXcQ', start: '45', youtubeMode: 'thumbnail', youtubeSession: `test-${Math.random()}` },
       replaceChildren: vi.fn(),
+      querySelectorAll: () => [],
+      querySelector: () => null,
+      getBoundingClientRect: () => ({ left: 10, top: 20, width: 360, height: 203 }),
     };
 
     const poster = {
+      dataset: { youtubePlayerLabel: 'YouTube video player' },
       closest: (selector: string) => (selector === '.note-youtube-embed' ? embed : null),
+      matches: () => false,
     };
 
     class MockElement {
       closest(selector: string) {
-        if (selector === '.note-youtube-poster') return poster;
+        if (selector.includes('.note-youtube-poster')) return poster;
         if (selector === '.note-youtube-embed') return embed;
         return null;
       }
     }
     vi.stubGlobal('Element', MockElement);
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn() });
+    vi.stubGlobal('CustomEvent', class { constructor(public type: string, public init: unknown) {} });
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() });
+    vi.stubGlobal('location', { pathname: '/notes/test' });
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
 
     const surface = {
       contains: (el: any) => el === poster,
+      querySelectorAll: () => [embed],
       addEventListener: (event: string, fn: any) => {
         if (event === 'click') clickListener = fn;
         if (event === 'keydown') keydownListener = fn;
@@ -51,6 +67,7 @@ describe('useNoteYouTubeEmbed hook', () => {
       embed,
       poster,
       iframeElements,
+      bodyAppend,
       dispatchClick: (target: any) => {
         const event = {
           target,
@@ -74,24 +91,24 @@ describe('useNoteYouTubeEmbed hook', () => {
   }
 
   it('activates and replaces poster with iframe on click', () => {
-    const { embed, iframeElements, dispatchClick } = setup();
+    const { bodyAppend, iframeElements, dispatchClick } = setup();
     const event = dispatchClick(new (globalThis as any).Element());
 
     expect(event.preventDefault).toHaveBeenCalledOnce();
     expect(event.stopPropagation).toHaveBeenCalledOnce();
-    expect(embed.replaceChildren).toHaveBeenCalledOnce();
+    expect(bodyAppend).toHaveBeenCalledOnce();
     expect(iframeElements).toHaveLength(1);
     expect(iframeElements[0].src).toBe('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=45&autoplay=1&playsinline=1&rel=0');
     expect(iframeElements[0].allowFullscreen).toBe(true);
   });
 
   it('activates on Enter or Space keydown', () => {
-    const { embed, iframeElements, dispatchKeydown } = setup();
+    const { bodyAppend, iframeElements, dispatchKeydown } = setup();
     const event = dispatchKeydown('Enter', new (globalThis as any).Element());
 
     expect(event.preventDefault).toHaveBeenCalledOnce();
     expect(event.stopPropagation).toHaveBeenCalledOnce();
-    expect(embed.replaceChildren).toHaveBeenCalledOnce();
+    expect(bodyAppend).toHaveBeenCalledOnce();
     expect(iframeElements[0].src).toContain('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ');
   });
 

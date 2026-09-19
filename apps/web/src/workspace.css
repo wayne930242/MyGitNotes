@@ -355,7 +355,9 @@
   .note-r2-pdf iframe { height: min(60vh, 500px); }
   .note-r2-file-link { width: 100%; justify-content: space-between; }
 }
-.note-youtube-embed { width: 100%; max-width: 640px; margin: 16px 0; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--color-scrim); position: relative; box-shadow: 0 4px 12px color-mix(in srgb, var(--color-scrim) 10%, transparent); }
+.note-youtube-embed { width: min(100%, 360px); margin: 16px 0; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--color-scrim); position: relative; box-shadow: 0 4px 12px color-mix(in srgb, var(--color-scrim) 10%, transparent); }
+.note-youtube-embed[data-youtube-mode="medium"] { width: min(100%, 640px); }
+.note-youtube-embed[data-youtube-mode="theater"] { width: 100%; max-width: none; }
 .note-youtube-poster { width: 100%; height: 100%; border: 0; padding: 0; margin: 0; background: transparent; cursor: pointer; display: block; position: relative; overflow: hidden; }
 .note-youtube-poster img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.88; transition: opacity 150ms ease, transform 150ms ease; }
 .note-youtube-poster:hover img { opacity: 0.98; transform: scale(1.02); }
@@ -363,6 +365,18 @@
 .note-youtube-play-btn svg { width: 56px; height: 56px; color: var(--color-on-scrim); filter: drop-shadow(0 2px 8px color-mix(in srgb, var(--color-scrim) 60%, transparent)); transition: transform 150ms ease, color 150ms ease; }
 .note-youtube-poster:hover .note-youtube-play-btn svg { transform: scale(1.1); color: var(--color-danger); }
 .note-youtube-iframe { width: 100%; height: 100%; border: 0; display: block; }
+.note-youtube-embed[data-youtube-playing="true"] { box-shadow: none; }
+.note-youtube-persistent-player { position: fixed; z-index: 30; left: 0; top: 0; overflow: hidden; border-radius: 8px; background: var(--color-scrim); box-shadow: 0 4px 12px color-mix(in srgb, var(--color-scrim) 10%, transparent); will-change: transform, width, height; }
+.note-youtube-mode-control { position: absolute; z-index: 2; top: 8px; right: 8px; display: flex; gap: 2px; padding: 3px; border-radius: 7px; background: color-mix(in srgb, var(--color-surface) 92%, transparent); box-shadow: 0 2px 8px color-mix(in srgb, var(--color-scrim) 18%, transparent); }
+.note-youtube-mode-control button { min-height: 28px; padding: 3px 7px; border: 0; border-radius: 4px; background: transparent; color: var(--color-muted); font-size: 11px; cursor: pointer; }
+.note-youtube-mode-control .note-youtube-copy { min-width: 28px; display: inline-grid; place-items: center; border-left: 1px solid var(--color-border); border-radius: 0 4px 4px 0; }
+.note-youtube-mode-control button:hover, .note-youtube-mode-control button:focus-visible { background: var(--color-border); color: var(--color-text); }
+.note-youtube-mode-control button[aria-pressed="true"] { background: var(--color-primary-light); color: var(--color-primary); font-weight: 700; }
+@media (max-width: 640px) {
+  .note-youtube-embed { width: 100%; }
+  .note-youtube-mode-control { top: 5px; right: 5px; }
+  .note-youtube-mode-control button { min-height: 32px; padding-inline: 6px; }
+}
 .screen-file { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; justify-content: center; height: 100%; color: var(--color-muted); }
 .screen-file p { overflow-wrap: anywhere; }.screen-file small { font-size: 10px; }
 .screen-missing { color: var(--color-muted); font-size: 12px; }
