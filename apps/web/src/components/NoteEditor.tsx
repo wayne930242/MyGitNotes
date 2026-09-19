@@ -522,9 +522,20 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
         return true;
       } catch (error) { setSaveError((error as Error).message); return false; }
     };
+    // A concurrent operation (e.g. a just-mounted checkRemote) is read-only in effect by the time it
+    // finishes, so navigation/hiding waits it out instead of racing it or dropping the flush entirely.
+    const waitForOperation = async () => { while (operation.current) await new Promise(resolve => setTimeout(resolve, 50)); };
     // Navigation waits for a conflict to be resolved; hiding the editor keeps the preserved draft, as closing zoom does.
-    const beforeNavigate = async () => readOnly || (!operation.current && !current.current.blocked && await persist());
-    const beforeHide = async () => readOnly || current.current.blocked || (!operation.current && await persist());
+    const beforeNavigate = async () => {
+      if (readOnly) return true;
+      await waitForOperation();
+      return !mounted.current || (!current.current.blocked && await persist());
+    };
+    const beforeHide = async () => {
+      if (readOnly) return true;
+      await waitForOperation();
+      return !mounted.current || current.current.blocked || await persist();
+    };
     const unregister = [registerBeforeNavigate(beforeNavigate), registerEditor(note.path, beforeHide)];
     return () => unregister.forEach(release => release());
   }, [registerBeforeNavigate, registerEditor, readOnly, note, onSave, draftScope, branch]);

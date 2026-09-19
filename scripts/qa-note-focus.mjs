@@ -453,7 +453,10 @@ try {
   await waitTabs(device, 1, ['Beta', 'Epsilon']);
   console.log('PASS 8d a browse row for a note open elsewhere opens a fresh copy in the active pane, not a jump to it');
   // A repeat click for a note already open in the SAME pane switches to it instead of adding another copy.
+  // The tab set doesn't change here, so waitTabs alone isn't a signal; wait for the shown tab itself to flip.
   await clickRow(device, 'Delta');
+  await device.waitForFunction(pane => document.querySelector(`[data-focus-pane="${pane}"] .focus-tab [role="tab"][aria-selected="true"]`)?.textContent.trim() === 'Delta',
+    { timeout: 5000 }, 2).catch(() => assert.fail('Pane 2 did not switch to the already-open Delta tab'));
   await waitTabs(device, 2, ['Delta', 'Beta']);
   assert.equal(await shownTab(device, 2), 'Delta');
   console.log('PASS 8d a repeat click for a note already open in the active pane switches to it without duplicating it');
