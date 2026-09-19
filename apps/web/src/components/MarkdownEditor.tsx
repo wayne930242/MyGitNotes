@@ -293,7 +293,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
           </div>
         </div>
       )}
-      {lineCopyFeedback && <div role="status" data-line-copy-feedback data-state={lineCopyFeedback.ok ? 'copied' : 'error'} className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-md bg-fg/90 px-3 py-1.5 text-xs font-medium text-bg shadow-sm">
+      {lineCopyFeedback && <div role="status" data-line-copy-feedback data-state={lineCopyFeedback.ok ? 'copied' : 'error'} className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-md px-3 py-1.5 text-xs font-medium shadow-sm" style={{ backgroundColor: 'var(--color-text)', color: 'var(--color-bg)' }}>
         {lineCopyFeedback.ok
           ? t(lineCopyFeedback.start === lineCopyFeedback.end ? 'editor.lineCopied' : 'editor.linesCopied', { start: lineCopyFeedback.start, end: lineCopyFeedback.end })
           : t('editor.lineCopyFailed')}
