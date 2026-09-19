@@ -61,6 +61,7 @@ export const BatchAddDialog: React.FC<{
 
   return <WorkspaceDialog title={t('focus.batchAdd')} onClose={onClose} className="focus-batch-dialog">
     <form className="screen-form" onSubmit={submit}>
+      {!result && <>
       <label className="focus-batch-folder">{t('focus.batchAddFolder')}
         <Select value={folder} disabled={Boolean(result)} onValueChange={setFolder}
           options={[{ value: '', label: t('folder.allFolders') }, ...folderOptions]} />
@@ -83,8 +84,9 @@ export const BatchAddDialog: React.FC<{
         <Select value={combine} disabled={Boolean(result)} onValueChange={value => setCombine(value as 'or' | 'and')}
           options={[{ value: 'or', label: t('focus.batchAddCombineOr') }, { value: 'and', label: t('focus.batchAddCombineAnd') }]} />
       </label>}
-      {!result && (hasFolder || hasTags) && <p className="filter-results">{t('filters.results', { count: candidatePaths.length })}</p>}
-      {!result && !hasFolder && !hasTags && <p className="filter-empty">{t('focus.batchAddNoFilter')}</p>}
+      {(hasFolder || hasTags) && <p className="filter-results">{t('filters.results', { count: candidatePaths.length })}</p>}
+      {!hasFolder && !hasTags && <p className="filter-empty">{t('focus.batchAddNoFilter')}</p>}
+      </>}
       {result && <p className="focus-batch-result" role="status"><CheckCircle2 aria-hidden="true" />
         <span>{t(result.full > 0 ? 'focus.batchAddResultFull' : 'focus.batchAddResult', result)}</span>
       </p>}
