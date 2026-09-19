@@ -278,6 +278,10 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
     }
     if (hasLocalEdits && (latest.content !== state.baseNote.content || !sameValue(latest.metadata, state.baseNote.metadata))) {
       setRemoteNotice('editor.remoteChangesMerged');
+    } else if (!hasLocalEdits) {
+      // A clean pass-through adoption: the new content is itself already "saved" for this
+      // session, so the debounce below must not mistake it for a fresh edit to persist.
+      lastSaved.current = { content: result.draft.content, metadata: result.draft.metadata };
     }
     current.current = { ...state, ...result.draft, baseNote: latest };
     setBaseNote(latest); setContent(result.draft.content); setMetadata(result.draft.metadata);
@@ -414,7 +418,10 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
     setOutlineIndex(0);
     setIsEditorLeaderOpen(false);
     setCopyState('idle');
-    lastSaved.current = null;
+    // `note` already reflects whatever is durably persisted for this session (the file on disk in
+    // local mode, or the currently staged working draft in draftMode); treat it as already-saved so
+    // opening a note never re-triggers a save of content it did not actually change.
+    lastSaved.current = { content: note.content, metadata: note.metadata || {} };
 
     const draft = readOnly ? null : getLocalDraft(draftScope || branch, note.path);
     if (draft && (draft.content !== note.content || !sameValue(draft.metadata, note.metadata))) {
@@ -427,12 +434,12 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
   // Debounced auto-save directly to disk on edit (Requirement 1)
   useEffect(() => {
     if (readOnly || closing.current) return;
-    // `baseNote` is this session's own merge base, kept current as soon as a remote check
-    // applies; the `note` prop only catches up once the parent re-renders with it.
-    const baseline = baseNote;
+    // `lastSaved` tracks whatever is already durably persisted for this session (synced on note
+    // open, after a successful save, and on a clean remote pass-through); comparing against it
+    // directly - rather than against `baseNote` or the parent's possibly-stale `note` prop - is
+    // what correctly separates a real edit from content that already matches what was saved.
     const saved = lastSaved.current;
-    const isDifferent = !(saved && content === saved.content && sameIgnoringTimestamps(metadata, saved.metadata))
-      && (content !== baseline.content || !sameIgnoringTimestamps(metadata, baseline.metadata));
+    const isDifferent = !(saved && content === saved.content && sameIgnoringTimestamps(metadata, saved.metadata));
 
     if (isDifferent) {
       setHasUnsavedChanges(true);

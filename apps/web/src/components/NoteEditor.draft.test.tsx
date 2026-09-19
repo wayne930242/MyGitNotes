@@ -199,6 +199,33 @@ it('adopts a remote-only change silently when there are no local edits (draft mo
   expect(screen.queryByText(/Remote changes merged/i)).toBeNull();
 });
 
+it('does not re-stage an existing working draft when it is reopened with no new edits', async () => {
+  const base: NoteItem = { ...note, content: '# Alpha\n' };
+  const staged: NoteItem = { ...note, content: '# Alpha\nStaged edit.\n' };
+  const onSave = vi.fn(async ({ content, metadata }: { content: string; metadata?: Record<string, unknown> }) =>
+    ({ ...staged, content, metadata: { ...metadata, updated: 't1' } }));
+  render(editor({ draftMode: true, note: staged, remoteBase: base, onSave }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+
+  expect(onSave).not.toHaveBeenCalled();
+});
+
+it('re-stages the working draft to clear it when the user edits the content back to match the base', async () => {
+  const base: NoteItem = { ...note, content: '# Alpha\n' };
+  const staged: NoteItem = { ...note, content: '# Alpha\nStaged edit.\n' };
+  const onSave = vi.fn(async ({ content, metadata }: { content: string; metadata?: Record<string, unknown> }) =>
+    ({ ...staged, content, metadata: { ...metadata, updated: 't1' } }));
+  render(editor({ draftMode: true, note: staged, remoteBase: base, onSave }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  onSave.mockClear();
+
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: base.content } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+
+  expect(onSave).toHaveBeenCalledTimes(1);
+  expect(onSave.mock.calls[0][0].content).toBe(base.content);
+});
+
 it('dismissing the merged notice hides it', async () => {
   const start: NoteItem = { ...note, content: 'line1\nline2\nline3\n' };
   let resolveRead: ((value: NoteItem) => void) | null = null;
