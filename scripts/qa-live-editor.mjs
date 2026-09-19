@@ -69,10 +69,16 @@ try {
  if(!liveLines.includes('1'))throw Error('Live preview line numbers do not include line 1');
  const liveLineStyle=await page.evaluate(()=>{const gutter=getComputedStyle(document.querySelector('[data-live-markdown] .cm-lineNumbers'));const content=getComputedStyle(document.querySelector('[data-live-markdown] .cm-content'));return {opacity:Number(gutter.opacity),gutterFont:parseFloat(gutter.fontSize),contentFont:parseFloat(content.fontSize)};});
  if(liveLineStyle.opacity>=0.8||liveLineStyle.gutterFont>=liveLineStyle.contentFont)throw Error('Live preview line numbers are not visually subdued');
- await page.focus('.cm-content');await page.keyboard.down('Control');await page.keyboard.press('Home');await page.keyboard.up('Control');
+ await page.waitForSelector('.live-md-heading');await page.waitForSelector('.live-md-rendered table');
+ // The YouTube fixture makes the image fall outside CodeMirror's initial mounted viewport.
+ // Reveal the preceding table before asserting the adjacent rendered image, then return home.
+ await page.$eval('.live-md-rendered table',node=>node.scrollIntoView({block:'start'}));await page.waitForSelector('.live-md-rendered img');
+ await page.$eval('.cm-scroller',node=>{node.scrollTop=0;});
+ await page.waitForFunction(()=>[...document.querySelectorAll('[data-live-markdown] .cm-lineNumbers .cm-gutterElement')].some(node=>node.textContent.trim()==='1'));
+ await page.click('[data-live-markdown] .cm-line');
+ await page.waitForFunction(()=>{const node=document.querySelector('[data-live-markdown] .cm-activeLineGutter');const style=node&&getComputedStyle(node);return node?.textContent.trim()==='1'&&Number(style?.fontWeight)>=600&&style?.transform!=='none'&&style?.transform!=='matrix(1, 0, 0, 1, 0, 0)';});
  const liveActiveLine=await page.$eval('[data-live-markdown] .cm-activeLineGutter',node=>{const style=getComputedStyle(node);return {text:node.textContent.trim(),weight:Number(style.fontWeight),transform:style.transform};});
- if(liveActiveLine.text!=='1'||liveActiveLine.weight<600||liveActiveLine.transform==='none')throw Error('Live preview active line number is not emphasized');
- await page.waitForSelector('.live-md-heading');await page.waitForSelector('.live-md-rendered table');await page.waitForSelector('.live-md-rendered img');
+ if(liveActiveLine.text!=='1'||liveActiveLine.weight<600||liveActiveLine.transform==='none')throw Error(`Live preview active line number is not emphasized: ${JSON.stringify(liveActiveLine)}`);
  // The quote bar and its padding hang in the gutter so a blockquote's own text starts at the
  // same x as a plain paragraph's, with a readable indent step per nesting level.
  const quoteAlign=async()=>page.evaluate(()=>{
