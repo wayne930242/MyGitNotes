@@ -23,18 +23,22 @@ export async function handleGitCommit(
   return { success: true, commit: result };
 }
 
-export async function handleCheckCoreUpdate(ctx: ToolContext) {
-  try {
-    const { stdout: remotes } = await runGit(['remote'], ctx.repoRoot);
-    const remote = remotes.includes('upstream') ? 'upstream' : 'origin';
-    await runGit(['fetch', remote, 'core'], ctx.repoRoot);
+/** A Core checkout serving a separate main worktree updates itself; a fork-model workspace is its own Core. */
+const coreCheckout = (ctx: ToolContext) => ctx.productRoot ?? ctx.repoRoot;
 
-    const { stdout: currentHash } = await runGit(['rev-parse', 'HEAD'], ctx.repoRoot);
-    const { stdout: coreHash } = await runGit(['rev-parse', `${remote}/core`], ctx.repoRoot);
+export async function handleCheckCoreUpdate(ctx: ToolContext) {
+  const checkout = coreCheckout(ctx);
+  try {
+    const { stdout: remotes } = await runGit(['remote'], checkout);
+    const remote = remotes.includes('upstream') ? 'upstream' : 'origin';
+    await runGit(['fetch', remote, 'core'], checkout);
+
+    const { stdout: currentHash } = await runGit(['rev-parse', 'HEAD'], checkout);
+    const { stdout: coreHash } = await runGit(['rev-parse', `${remote}/core`], checkout);
 
     let isUpToDate = false;
     try {
-      await runGit(['merge-base', '--is-ancestor', `${remote}/core`, 'HEAD'], ctx.repoRoot);
+      await runGit(['merge-base', '--is-ancestor', `${remote}/core`, 'HEAD'], checkout);
       isUpToDate = true;
     } catch {
       isUpToDate = false;
@@ -58,8 +62,10 @@ export async function handleUpdateCore(
   if (args.checkOnly) {
     return handleCheckCoreUpdate(ctx);
   }
+  const checkout = coreCheckout(ctx);
   const result = await updateCore({
-    repoRoot: ctx.repoRoot,
+    repoRoot: checkout,
+    workspaceRoot: checkout === ctx.repoRoot ? undefined : ctx.repoRoot,
     autoPush: args.autoPush,
   });
   return { result };

@@ -20,7 +20,7 @@ import {
   resolveWorkspaceConfigPath,
   extractFirstH1,
   parseNoteContent,
-  workspaceAgentKind, workspaceAgentResource, listWorkspaceAgentFiles, resolveWorkspaceAgentPath,
+  workspaceAgentKind, workspaceAgentResource, listWorkspaceAgentFiles, resolveWorkspaceAgentPath, productAgentResources,
   type WorkspaceAgentResource,
   loadNoteTemplate,
   renderNoteTemplate,
@@ -67,7 +67,7 @@ function handlePathValidationError(res: express.Response, error: unknown): void 
   res.status(status).json({ error: (error as Error).message });
 }
 
-export function createLocalApp(repoRoot: string): express.Express {
+export function createLocalApp(repoRoot: string, appRoot = repoRoot): express.Express {
 const app = express();
 app.use(async (req, res, next) => {
   try {
@@ -453,6 +453,7 @@ app.get('/api/agent-resources', async (req: Request, res: Response) => {
       }
       groups[workspaceAgentKind(file)!].push(resource);
     }
+    docs.push(...productAgentResources(appRoot));
 
     res.json({ instructions, skills, docs });
   } catch (err: unknown) {
@@ -721,7 +722,8 @@ app.post('/api/git/sync', async (req, res) => {
 app.post('/api/core/update', async (req: Request, res: Response) => {
   try {
     const { autoPush } = req.body || {};
-    const result = await updateCore({ repoRoot, autoPush: Boolean(autoPush) });
+    // A Core checkout serving a separate main worktree updates itself; a fork-model workspace merges Core into main.
+    const result = await updateCore(appRoot === repoRoot ? { repoRoot, autoPush: Boolean(autoPush) } : { repoRoot: appRoot, workspaceRoot: repoRoot, autoPush: Boolean(autoPush) });
     res.json({ result });
   } catch (err: unknown) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
