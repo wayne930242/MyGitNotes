@@ -1,0 +1,62 @@
+{
+  "lineWidth": 2147483647,
+  "indentWidth": 2,
+  "newLineKind": "lf",
+  "typescript": {
+    "quoteStyle": "preferSingle",
+    "semiColons": "always",
+    "preferSingleLine": true,
+    "arrayExpression.preferSingleLine": true,
+    "arrayPattern.preferSingleLine": true,
+    "arguments.preferSingleLine": true,
+    "binaryExpression.preferSingleLine": true,
+    "computed.preferSingleLine": true,
+    "conditionalExpression.preferSingleLine": true,
+    "conditionalType.preferSingleLine": true,
+    "decorators.preferSingleLine": true,
+    "exportDeclaration.preferSingleLine": true,
+    "forStatement.preferSingleLine": true,
+    "importDeclaration.preferSingleLine": true,
+    "jsxAttributes.preferSingleLine": true,
+    "jsxElement.preferSingleLine": true,
+    "mappedType.preferSingleLine": true,
+    "memberExpression.preferSingleLine": true,
+    "objectExpression.preferSingleLine": true,
+    "objectPattern.preferSingleLine": true,
+    "parameters.preferSingleLine": true,
+    "parentheses.preferSingleLine": true,
+    "tupleType.preferSingleLine": true,
+    "typeLiteral.preferSingleLine": true,
+    "typeParameters.preferSingleLine": true,
+    "unionAndIntersectionType.preferSingleLine": true,
+    "variableStatement.preferSingleLine": true
+  },
+  "malva": {
+    "printWidth": 2147483647,
+    "preferSingleLine": true,
+    "singleLineBlockThreshold": 2147483647,
+    "singleLineTopLevelDeclarations": true,
+    "blockSelectorLinebreak": "wrap",
+    "quotes": "preferSingle"
+  },
+  "includes": [
+    "apps/**/*.{ts,tsx,js,mjs}",
+    "packages/**/*.{ts,tsx,js,mjs}",
+    "scripts/**/*.{ts,tsx,js,mjs}",
+    "apps/web/src/{index,workspace,directives}.css"
+  ],
+  "excludes": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.cache/**",
+    "**/coverage/**",
+    "**/generated/**",
+    "notes/**",
+    "examples/**"
+  ],
+  "plugins": [
+    "https://plugins.dprint.dev/typescript-0.96.1.wasm",
+    "https://plugins.dprint.dev/g-plane/malva-v0.16.0.wasm"
+  ]
+}
