@@ -133,12 +133,13 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
               onDragOver={event => hover(event, slotAt(event, tab))}
               onDrop={event => drop(event, slotAt(event, tab))}>
               <button type="button" role="tab" aria-selected={tab.pane === displayed.pane && tab.key === displayed.key} aria-controls={panelId}
+                aria-label={repeatedLabels.has(tab.label) ? `${tab.label}, ${t('focus.paneNumber', { number: tab.pane + 1 })}` : undefined}
+                data-pane-cue={repeatedLabels.has(tab.label) ? t('focus.paneShort', { number: tab.pane + 1 }) : undefined}
                 tabIndex={(tab.pane === displayed.pane && tab.key === displayed.key) || (!displayed.key && tab === tabs[0]) ? 0 : -1} title={tab.label}
                 onClick={() => void focus.show(tab.pane, tab.key)}
                 onKeyDown={event => { if (editable && event.key === 'Delete') { event.preventDefault(); void focus.close(tab.key, tab.pane).catch(() => {}); } }}>
                 {tab.tab.kind === 'note' ? <FileText aria-hidden="true" /> : <GalleryHorizontalEnd aria-hidden="true" />}
                 <span>{tab.label}</span>
-                {repeatedLabels.has(tab.label) && <small className="focus-tab-pane" aria-hidden="true">{t('focus.paneShort', { number: tab.pane + 1 })}</small>}
               </button>
               {editable && <button type="button" className="focus-tab-close" tabIndex={-1} aria-label={t('focus.closeTab', { name: tab.label })}
                 title={t('focus.closeTab', { name: tab.label })} onClick={() => void focus.close(tab.key, tab.pane).catch(() => {})}><X aria-hidden="true" /></button>}

@@ -70,7 +70,7 @@
 .focus-tab > [role="tab"]:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -3px; }
 .focus-tab > [role="tab"] > svg { width: 14px; height: 14px; flex: none; opacity: .7; }
 .focus-tab > [role="tab"] > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.focus-tab > [role="tab"] > .focus-tab-pane { flex: none; padding: 1px 4px; border-radius: 999px; background: var(--workspace-selection); color: var(--color-muted); font-size: 9px; font-weight: 600; line-height: 14px; }
+.focus-tab > [role="tab"][data-pane-cue]::after { content: attr(data-pane-cue); flex: none; padding: 1px 4px; border-radius: 999px; background: var(--workspace-selection); color: var(--color-muted); font-size: 9px; font-weight: 600; line-height: 14px; }
 .focus-tab[data-drop]::before { content: ''; position: absolute; top: 6px; bottom: 6px; z-index: 1; width: 2px; border-radius: 1px; background: var(--color-primary); pointer-events: none; }
 .focus-tab[data-drop="before"]::before { left: 0; }
 .focus-tab:first-child[data-drop="before"]::before { left: 4px; }
