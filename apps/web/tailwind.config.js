@@ -20,7 +20,7 @@ export default {
       fg: token('text'),
       muted: token('muted'),
       primary: { DEFAULT: token('primary'), hover: token('primary-hover'), soft: token('primary-soft') },
-      'on-primary': token('on-primary'),
+      'on-primary': { DEFAULT: token('on-primary'), hover: token('on-primary-hover') },
       selection: token('selection'),
       code: token('code-bg'),
       danger: { DEFAULT: token('danger'), soft: token('danger-soft') },
@@ -32,6 +32,7 @@ export default {
       info: { DEFAULT: token('info'), soft: token('info-soft') },
       'on-info': token('on-info'),
       scrim: token('scrim'),
+      'on-scrim': token('on-scrim'),
       accent: Object.fromEntries([1, 2, 3, 4, 5, 6].map(index => [index, token(`accent-${index}`)])),
     },
     extend: {

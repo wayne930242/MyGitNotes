@@ -1447,7 +1447,7 @@ const AppContent: React.FC = () => {
             </span>
             <button
               onClick={() => handleRestoreNote(undoToast.note)}
-              className="px-2.5 py-1 bg-warning hover:bg-warning active:scale-95 text-fg font-semibold rounded-md transition"
+              className="px-2.5 py-1 bg-warning hover:bg-warning/90 active:scale-95 text-on-warning font-semibold rounded-md transition"
             >
               {t('common.undo')}
             </button>
@@ -1473,7 +1473,7 @@ const AppContent: React.FC = () => {
               <button
                 autoFocus
                 onClick={() => void handleUndoTagOperation(record.id)}
-                className="px-2.5 py-1 bg-warning hover:bg-warning active:scale-95 text-fg font-semibold rounded-md transition shrink-0"
+                className="px-2.5 py-1 bg-warning hover:bg-warning/90 active:scale-95 text-on-warning font-semibold rounded-md transition shrink-0"
               >
                 {t('common.undo')}
               </button>

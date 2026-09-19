@@ -24,7 +24,7 @@ export const CrashRecoveryBanner: React.FC<CrashRecoveryBannerProps> = ({
         <>
           <button
             onClick={onRestore}
-            className="flex items-center justify-center gap-1.5 px-3 py-1 bg-warning text-on-warning rounded-md text-xs font-medium hover:bg-warning active:scale-95 transition"
+            className="flex items-center justify-center gap-1.5 px-3 py-1 bg-warning text-on-warning rounded-md text-xs font-medium hover:bg-warning/90 active:scale-95 transition"
           >
             <RotateCcw className="w-4 h-4 shrink-0" />
             {t('recovery.restoreDraft')}

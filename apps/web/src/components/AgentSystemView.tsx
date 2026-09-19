@@ -341,7 +341,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, {
               {selectedPath || t('agent.document')}
             </span>
             <span
-              className="text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider text-on-primary"
+              className="text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider"
               style={{
                 backgroundColor: editable ? 'var(--color-primary)' : 'var(--color-muted)',
                 color: editable ? 'var(--color-on-primary)' : 'var(--color-bg)',

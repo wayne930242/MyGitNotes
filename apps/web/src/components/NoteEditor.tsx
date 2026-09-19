@@ -963,7 +963,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
                     setNewFieldKey('');
                   }}
                   disabled={!newFieldKey.trim()}
-                  className="px-2 py-1 text-xs bg-line hover:bg-line rounded disabled:opacity-50 text-fg"
+                  className="px-2 py-1 text-xs bg-line hover:bg-fg/10 rounded disabled:opacity-50 text-fg"
                 >
                   +
                 </button>
