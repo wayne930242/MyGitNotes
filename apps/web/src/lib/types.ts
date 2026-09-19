@@ -10,6 +10,7 @@ export interface NoteItem {
   tags: string[];
   metadata: Record<string, unknown>;
   content: string;
+  lineNumberOffset?: number;
   mtime?: number;
   size?: number;
 }

@@ -57,6 +57,7 @@ export interface NoteItem {
   tags: string[];
   metadata: NoteMetadata;
   content: string;
+  lineNumberOffset?: number;
   mtime?: number;
   size?: number;
 }

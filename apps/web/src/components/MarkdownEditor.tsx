@@ -10,6 +10,7 @@ import { noteLinkHref, noteMarkdownLink } from '@mygitnotes/core/workspace-links
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { DIRECTIVE_TEMPLATES } from '../lib/directives.js';
 import './note-completion.css';
+import { copyLinePrompt } from '../lib/line-prompt-copy.js';
 
 const LiveMarkdownEditor = React.lazy(() => import('./LiveMarkdownEditor.js').then(module => ({ default: module.LiveMarkdownEditor })));
 export type MarkdownEditorMode = 'live' | 'raw';
@@ -32,6 +33,7 @@ interface Props {
   /** A toolbar element that hosts the insert actions; without one they sit in a row above the content. */
   insertSlot?: HTMLElement | null;
   showLineNumbers?: boolean;
+  lineNumberOffset?: number;
 }
 
 export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEditorMode; onChange: (mode: MarkdownEditorMode) => void }) {
@@ -62,7 +64,7 @@ export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEdi
   );
 }
 
-export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, mode, readOnly, onChange, onCaret, compact = false, insertSlot, ariaLabel = 'Document content', showLineNumbers = true }, ref) => {
+export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, mode, readOnly, onChange, onCaret, compact = false, insertSlot, ariaLabel = 'Document content', showLineNumbers = true, lineNumberOffset = 0 }, ref) => {
   const { t } = useTranslation();
   const [caret, setCaret] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -76,8 +78,23 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   const source = useRef<HTMLTextAreaElement>(null);
   const sourceLineNumbers = useRef<HTMLDivElement>(null);
   const [activeSourceLine, setActiveSourceLine] = useState(1);
+  const [draggedSourceRange, setDraggedSourceRange] = useState<[number, number] | null>(null);
+  const sourceDragStart = useRef<number | null>(null);
+  const lastSourceGutterClick = useRef<{ line: number; at: number } | null>(null);
+  const [lineCopyFeedback, setLineCopyFeedback] = useState<{ ok: boolean; start: number; end: number } | null>(null);
+  const lineCopyTimer = useRef<ReturnType<typeof setTimeout>>();
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
   const sourceLineCount = content.split('\n').length;
+
+  const copyLines = async (firstBodyLine: number, lastBodyLine = firstBodyLine) => {
+    const start = Math.min(firstBodyLine, lastBodyLine) + lineNumberOffset;
+    const end = Math.max(firstBodyLine, lastBodyLine) + lineNumberOffset;
+    const ok = await copyLinePrompt(path, start, end);
+    setLineCopyFeedback({ ok, start, end });
+    clearTimeout(lineCopyTimer.current);
+    lineCopyTimer.current = setTimeout(() => setLineCopyFeedback(null), 2000);
+  };
+  useEffect(() => () => clearTimeout(lineCopyTimer.current), []);
 
   useEffect(() => setActiveSourceLine(1), [path, mode]);
   const updateActiveSourceLine = (target: HTMLTextAreaElement) => {
@@ -178,14 +195,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   }), [content, mode, readOnly, isMarkdown, onChange]);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden" data-markdown-editor>
+    <div className="relative flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden" data-markdown-editor>
       {insertActions && (insertSlot ? createPortal(insertActions, insertSlot) : <div className="markdown-insert-toolbar">{insertActions}</div>)}
       {picker && <div className="note-link-picker"><input autoFocus type="search" aria-label={t('graph.findNote')} placeholder={t('graph.findNote')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setPicker(false); }} />
         {pickerCandidates.map(note => <button type="button" key={note.path} onClick={() => insertPicked(note)}>{note.title}<small>{note.notebookId} · {note.path}</small></button>)}
       </div>}
       {mode === 'live' && isMarkdown ? (
         <React.Suspense fallback={<p className="p-6 text-sm text-muted">{t('editor.loadingEditor')}</p>}>
-          <LiveMarkdownEditor key={path} ref={live} content={content} notePath={path} readOnly={readOnly} onChange={onChange} onCaret={onCaret} ariaLabel={ariaLabel} showLineNumbers={showLineNumbers} />
+          <LiveMarkdownEditor key={path} ref={live} content={content} notePath={path} readOnly={readOnly} onChange={onChange} onCaret={onCaret} ariaLabel={ariaLabel} showLineNumbers={showLineNumbers} lineNumberOffset={lineNumberOffset} onCopyLines={copyLines} />
         </React.Suspense>
       ) : (
         <div className="flex-1 flex flex-col min-h-0 bg-surface">
@@ -202,18 +219,49 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
                 data-source-line-numbers
                 aria-hidden="true"
                 className="w-12 shrink-0 overflow-hidden border-r border-line/70 bg-sidebar/60 text-muted/70"
+                onPointerMove={event => {
+                  if (sourceDragStart.current === null) return;
+                  const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-line-number]');
+                  const line = Number(target?.dataset.bodyLine); if (Number.isFinite(line)) setDraggedSourceRange([sourceDragStart.current, line]);
+                }}
+                onPointerUp={event => {
+                  if (sourceDragStart.current === null) return;
+                  event.preventDefault();
+                  const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-line-number]');
+                  const end = Number(target?.dataset.bodyLine); const start = sourceDragStart.current;
+                  sourceDragStart.current = null; setDraggedSourceRange(null);
+                  if (Number.isFinite(end) && start !== end) { lastSourceGutterClick.current = null; void copyLines(start, end); }
+                  else lastSourceGutterClick.current = { line: start, at: performance.now() };
+                }}
+                onPointerCancel={() => { sourceDragStart.current = null; setDraggedSourceRange(null); }}
               >
                 <div ref={sourceLineNumbers} className="py-4 pr-3 text-right font-mono text-xs tabular-nums" style={{ lineHeight: '1.421875rem' }}>
                   {Array.from({ length: sourceLineCount }, (_, index) => {
                     const line = index + 1;
+                    const rangeStart = draggedSourceRange ? Math.min(...draggedSourceRange) : -1;
+                    const rangeEnd = draggedSourceRange ? Math.max(...draggedSourceRange) : -1;
+                    const inDraggedRange = line >= rangeStart && line <= rangeEnd;
                     return (
                       <div
                         key={index}
                         data-line-number
+                        data-body-line={line}
                         data-active-line={line === activeSourceLine ? 'true' : undefined}
-                        className={`origin-right transition-[color,opacity,transform,font-weight] duration-150 ${line === activeSourceLine ? 'scale-[1.08] font-semibold text-muted' : ''}`}
+                        data-line-copy-selected={inDraggedRange ? 'true' : undefined}
+                        onPointerDown={event => {
+                          if (event.pointerType !== 'mouse' || event.button !== 0) return;
+                          event.preventDefault();
+                          const previous = lastSourceGutterClick.current;
+                          if (previous?.line === line && performance.now() - previous.at < 500) {
+                            lastSourceGutterClick.current = null; void copyLines(line); return;
+                          }
+                          sourceDragStart.current = line; setDraggedSourceRange([line, line]);
+                          event.currentTarget.setPointerCapture(event.pointerId);
+                        }}
+                        onDoubleClick={event => { event.preventDefault(); event.stopPropagation(); void copyLines(line); }}
+                        className={`cursor-default select-none origin-right transition-[background-color,color,opacity,transform,font-weight] duration-150 ${inDraggedRange ? 'bg-fg/10 text-fg' : ''} ${line === activeSourceLine ? 'scale-[1.08] font-semibold text-muted' : ''}`}
                       >
-                        {line}
+                        {line + lineNumberOffset}
                       </div>
                     );
                   })}
@@ -245,6 +293,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
           </div>
         </div>
       )}
+      {lineCopyFeedback && <div role="status" data-line-copy-feedback data-state={lineCopyFeedback.ok ? 'copied' : 'error'} className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-md bg-fg/90 px-3 py-1.5 text-xs font-medium text-bg shadow-sm">
+        {lineCopyFeedback.ok
+          ? t(lineCopyFeedback.start === lineCopyFeedback.end ? 'editor.lineCopied' : 'editor.linesCopied', { start: lineCopyFeedback.start, end: lineCopyFeedback.end })
+          : t('editor.lineCopyFailed')}
+      </div>}
     </div>
   );
 });

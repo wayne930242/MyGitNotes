@@ -13,7 +13,8 @@ const root=fs.mkdtempSync(path.join(os.tmpdir(),'github-notes-browser-'));
 const write=(p,s)=>{fs.mkdirSync(path.dirname(path.join(root,p)),{recursive:true});fs.writeFileSync(path.join(root,p),s);};
 const git=(...args)=>execFileSync('git',args,{cwd:root,stdio:'pipe'});
 write('notes/.github-notes.yaml','schema_version: 1\nworkspace:\n  title: Folder QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
-write('notes/example/root.md','# Root Note\n\nParagraph **bold** and *italic*.\n\n> Quoted first line.\n> Quoted second line.\nLazy continuation without a marker.\n>\n> > Nested quote line.\n\nhttps://youtu.be/dQw4w9WgXcQ?t=45\n\n- [ ] Task\n\n| A | B |\n| - | - |\n| a | b |\n\n![pixel](assets/pixel.png)\n\n'+Array.from({length:160},(_,index)=>`Long reading paragraph ${index+1}.`).join('\n\n')+'\n');
+write('notes/example/root.md','---\ntitle: Root Note\ntags:\n  - qa\nstatus: active\n---\n\n# Root Note\n\nParagraph **bold** and *italic*.\n\n> Quoted first line.\n> Quoted second line.\nLazy continuation without a marker.\n>\n> > Nested quote line.\n\nhttps://youtu.be/dQw4w9WgXcQ?t=45\n\n- [ ] Task\n\n| A | B |\n| - | - |\n| a | b |\n\n![pixel](assets/pixel.png)\n\n'+Array.from({length:160},(_,index)=>`Long reading paragraph ${index+1}.`).join('\n\n')+'\n');
+write('notes/example/plain.md','# Plain Note\n\nNo frontmatter here.\n');
 write('notes/example/projects/_dir.yml','title: Projects\norder: -1\n');
 write('notes/example/projects/deep/_dir.yml','title: Deep work\n');
 write('notes/example/projects/deep/nested.md','# Nested Note\n');
@@ -94,7 +95,14 @@ try {
  const pressedStyle=await page.$eval('button[aria-label="Line Numbers"]',e=>{const style=getComputedStyle(e);return {color:style.color,weight:Number(style.fontWeight)};});
  if(pressedStyle.color===unpressedColor||pressedStyle.weight<600)throw Error(`Line Numbers pressed state is not visually distinct: ${JSON.stringify({unpressedColor,pressedStyle})}`);
  const liveLines=await page.$$eval('[data-live-markdown] .cm-lineNumbers .cm-gutterElement',nodes=>nodes.map(node=>node.textContent.trim()).filter(Boolean));
- if(!liveLines.includes('1'))throw Error('Live preview line numbers do not include line 1');
+ if(!liveLines.includes('8'))throw Error(`Live preview did not show the real first body line 8: ${liveLines.slice(0,4)}`);
+ await page.evaluate(()=>{window.__linePrompt='';Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__linePrompt=text;}}});});
+ const liveGutterPoint=async number=>page.$$eval('[data-live-markdown] .cm-lineNumbers .cm-gutterElement',(nodes,number)=>{const node=[...nodes].find(node=>node.textContent.trim()===String(number));if(!node)throw Error(`Missing live gutter line ${number}`);const rect=node.getBoundingClientRect();return{x:rect.left+rect.width/2,y:rect.top+rect.height/2};},number);
+ let from=await liveGutterPoint(8),to=await liveGutterPoint(10);await page.mouse.move(from.x,from.y);await page.mouse.down();await page.mouse.move(to.x,to.y,{steps:5});
+ if(!await page.$('[data-live-markdown] .cm-line-copy-selected'))throw Error('Live preview drag range is not highlighted');
+ await page.mouse.up();await page.waitForFunction(()=>window.__linePrompt==='Regarding lines 8-10 of `notes/example/root.md`: ');
+ await page.waitForSelector('[data-line-copy-feedback][data-state="copied"]');
+ const single=await liveGutterPoint(8);await page.mouse.click(single.x,single.y);await new Promise(resolve=>setTimeout(resolve,80));await page.mouse.click(single.x,single.y);await page.waitForFunction(()=>window.__linePrompt==='Regarding line 8 of `notes/example/root.md`: ');
  const liveLineStyle=await page.evaluate(()=>{const gutter=getComputedStyle(document.querySelector('[data-live-markdown] .cm-lineNumbers'));const content=getComputedStyle(document.querySelector('[data-live-markdown] .cm-content'));return {opacity:Number(gutter.opacity),gutterFont:parseFloat(gutter.fontSize),contentFont:parseFloat(content.fontSize)};});
  if(liveLineStyle.opacity>=0.8||liveLineStyle.gutterFont>=liveLineStyle.contentFont)throw Error('Live preview line numbers are not visually subdued');
  await page.waitForSelector('.live-md-heading');await page.waitForSelector('.live-md-rendered table');
@@ -102,11 +110,11 @@ try {
  // Reveal the preceding table before asserting the adjacent rendered image, then return home.
  await page.$eval('.live-md-rendered table',node=>node.scrollIntoView({block:'start'}));await page.waitForSelector('.live-md-rendered img');
  await page.$eval('.cm-scroller',node=>{node.scrollTop=0;});
- await page.waitForFunction(()=>[...document.querySelectorAll('[data-live-markdown] .cm-lineNumbers .cm-gutterElement')].some(node=>node.textContent.trim()==='1'));
+ await page.waitForFunction(()=>[...document.querySelectorAll('[data-live-markdown] .cm-lineNumbers .cm-gutterElement')].some(node=>node.textContent.trim()==='8'));
  await page.click('[data-live-markdown] .cm-line');
- await page.waitForFunction(()=>{const node=document.querySelector('[data-live-markdown] .cm-activeLineGutter');const style=node&&getComputedStyle(node);return node?.textContent.trim()==='1'&&Number(style?.fontWeight)>=600&&style?.transform!=='none'&&style?.transform!=='matrix(1, 0, 0, 1, 0, 0)';});
+ await page.waitForFunction(()=>{const node=document.querySelector('[data-live-markdown] .cm-activeLineGutter');const style=node&&getComputedStyle(node);return node?.textContent.trim()==='7'&&Number(style?.fontWeight)>=600&&style?.transform!=='none'&&style?.transform!=='matrix(1, 0, 0, 1, 0, 0)';});
  const liveActiveLine=await page.$eval('[data-live-markdown] .cm-activeLineGutter',node=>{const style=getComputedStyle(node);return {text:node.textContent.trim(),weight:Number(style.fontWeight),transform:style.transform};});
- if(liveActiveLine.text!=='1'||liveActiveLine.weight<600||liveActiveLine.transform==='none')throw Error(`Live preview active line number is not emphasized: ${JSON.stringify(liveActiveLine)}`);
+ if(liveActiveLine.text!=='7'||liveActiveLine.weight<600||liveActiveLine.transform==='none')throw Error(`Live preview active line number is not emphasized: ${JSON.stringify(liveActiveLine)}`);
  // The quote bar and its padding hang in the gutter so a blockquote's own text starts at the
  // same x as a plain paragraph's, with a readable indent step per nesting level.
  const quoteAlign=async()=>page.evaluate(()=>{
@@ -138,13 +146,19 @@ try {
  await page.waitForSelector('textarea[aria-label="Note content"]');
  const sourceLines=await page.$$eval('[data-source-line-numbers] [data-line-number]',nodes=>nodes.map(node=>node.textContent.trim()));
  const sourceLineCount=await page.$eval('textarea[aria-label="Note content"]',e=>e.value.split('\n').length);
- if(sourceLines.length!==sourceLineCount||sourceLines[0]!=='1'||sourceLines.at(-1)!==String(sourceLineCount))throw Error('Source line numbers do not match the document');
+ if(sourceLines.length!==sourceLineCount||sourceLines[0]!=='7'||sourceLines.at(-1)!==String(sourceLineCount+6))throw Error('Source line numbers do not match the saved file');
+ const sourceGutterPoint=async number=>page.$$eval('[data-source-line-numbers] [data-line-number]',(nodes,number)=>{const node=[...nodes].find(node=>node.textContent.trim()===String(number));if(!node)throw Error(`Missing source gutter line ${number}`);const rect=node.getBoundingClientRect();return{x:rect.left+rect.width/2,y:rect.top+rect.height/2};},number);
+ from=await sourceGutterPoint(8);to=await sourceGutterPoint(10);await page.mouse.move(from.x,from.y);await page.mouse.down();await page.mouse.move(to.x,to.y,{steps:5});
+ if(!await page.$('[data-source-line-numbers] [data-line-copy-selected="true"]'))throw Error('Source drag range is not highlighted');
+ await page.mouse.up();await page.waitForFunction(()=>window.__linePrompt==='Regarding lines 8-10 of `notes/example/root.md`: ');
+ await page.waitForSelector('[data-line-copy-feedback][data-state="copied"]');
+ const sourceSingle=await sourceGutterPoint(8);await page.mouse.click(sourceSingle.x,sourceSingle.y);await new Promise(resolve=>setTimeout(resolve,80));await page.mouse.click(sourceSingle.x,sourceSingle.y);await page.waitForFunction(()=>window.__linePrompt==='Regarding line 8 of `notes/example/root.md`: ');
  const sourceLineStyle=await page.evaluate(()=>{const gutter=getComputedStyle(document.querySelector('[data-source-line-numbers] > div'));const source=getComputedStyle(document.querySelector('textarea[aria-label="Note content"]'));return {gutterFont:parseFloat(gutter.fontSize),sourceFont:parseFloat(source.fontSize),gutterLineHeight:gutter.lineHeight,sourceLineHeight:source.lineHeight};});
  if(sourceLineStyle.gutterFont>=sourceLineStyle.sourceFont||sourceLineStyle.gutterLineHeight!==sourceLineStyle.sourceLineHeight)throw Error('Source line numbers are not subdued and aligned');
  await page.focus('textarea[aria-label="Note content"]');await page.keyboard.down('Control');await page.keyboard.press('Home');await page.keyboard.up('Control');await page.keyboard.press('ArrowDown');await page.keyboard.press('ArrowDown');
- await page.waitForFunction(()=>{const node=document.querySelector('[data-line-number][data-active-line="true"]');const style=node&&getComputedStyle(node);return node?.textContent.trim()==='3'&&Number(style?.fontWeight)>=600&&style?.transform!=='none'&&style?.transform!=='matrix(1, 0, 0, 1, 0, 0)';});
+ await page.waitForFunction(()=>{const node=document.querySelector('[data-line-number][data-active-line="true"]');const style=node&&getComputedStyle(node);return node?.textContent.trim()==='9'&&Number(style?.fontWeight)>=600&&style?.transform!=='none'&&style?.transform!=='matrix(1, 0, 0, 1, 0, 0)';});
  const sourceActiveLine=await page.evaluate(()=>{const node=document.querySelector('[data-line-number][data-active-line="true"]');const style=node&&getComputedStyle(node);return {text:node?.textContent.trim(),weight:Number(style?.fontWeight),transform:style?.transform};});
- if(sourceActiveLine.text!=='3'||sourceActiveLine.weight<600||sourceActiveLine.transform==='none')throw Error(`Source active line number is not emphasized: ${JSON.stringify(sourceActiveLine)}`);
+ if(sourceActiveLine.text!=='9'||sourceActiveLine.weight<600||sourceActiveLine.transform==='none')throw Error(`Source active line number is not emphasized: ${JSON.stringify(sourceActiveLine)}`);
  fs.mkdirSync(path.join(product,'artifacts/qa'),{recursive:true});
  await page.screenshot({path:product+'/artifacts/qa/source-line-numbers.png',fullPage:true});
  const sourceScroll=await page.evaluate(async()=>{const source=document.querySelector('textarea[aria-label="Note content"]');const frame=source.parentElement;frame.style.flex='none';frame.style.height='100px';source.scrollTop=120;source.dispatchEvent(new Event('scroll',{bubbles:true}));await new Promise(resolve=>requestAnimationFrame(resolve));return {scrollTop:source.scrollTop,transform:document.querySelector('[data-source-line-numbers] > div').style.transform};});
@@ -152,7 +166,7 @@ try {
  if(!await page.$eval('textarea[aria-label="Note content"]',e=>e.value.includes('- [x] Task')))throw Error('Task checkbox did not edit Markdown');
  await click('Live Preview');await page.waitForSelector('.cm-content');
  await page.focus('.cm-content');await page.keyboard.down('Control');await page.keyboard.press('Home');await page.keyboard.up('Control');
- await page.waitForFunction(()=>document.querySelector('.cm-line')?.textContent.startsWith('# Root'));
+ await page.waitForFunction(()=>[...document.querySelectorAll('.cm-line')].some(line=>line.textContent.includes('Root Note')));
  await page.keyboard.down('Control');await page.keyboard.press('End');await page.keyboard.up('Control');await page.keyboard.press('Enter');
  await page.keyboard.type('繁體中文 live edit');
  // Toggling line numbers reconfigures a Compartment; it must not remount the view, so the caret stays put and typing continues in place.
@@ -196,6 +210,13 @@ try {
  await page.waitForFunction(()=>document.body.innerText.includes('Uncommitted Changes'));
  if(errors.length)throw Error(errors.join('; '));
  console.log('PASS live Markdown: formatting, active syntax, images, tables, tasks, Unicode, undo and asset insertion');
+
+ await page.goto(base+'/notebooks/example/notes/plain.md',{waitUntil:'networkidle0'});await page.waitForSelector('.cm-content');
+ if(!await page.$('[data-live-markdown] .cm-lineNumbers'))await click('Line Numbers');
+ await page.waitForFunction(()=>[...document.querySelectorAll('[data-live-markdown] .cm-lineNumbers .cm-gutterElement')].some(node=>node.textContent.trim()==='1'));
+ await click('Source');await page.waitForSelector('[data-source-line-numbers] [data-line-number]');
+ if(await page.$eval('[data-source-line-numbers] [data-line-number]',node=>node.textContent.trim())!=='1')throw Error('A note without frontmatter does not start at line 1 in Source mode');
+ console.log('PASS real line numbers: frontmatter offsets both editors and plain notes start at 1; range and single-line prompt copy work in both modes');
 
  // Local mode: an open note picks up an external file change through the same
  // remote-check machinery (onReadRemote) that remote mode already used.

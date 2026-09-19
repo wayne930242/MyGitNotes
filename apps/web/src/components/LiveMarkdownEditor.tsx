@@ -33,7 +33,7 @@ export interface LiveMarkdownHandle {
   goToLine: (line: number, options?: { focus?: boolean; smooth?: boolean }) => void;
   getCurrentLine: () => number;
 }
-interface Props { content: string; notePath: string; readOnly: boolean; ariaLabel?: string; onChange: (content: string) => void; onCaret?: (position: number) => void; showLineNumbers?: boolean }
+interface Props { content: string; notePath: string; readOnly: boolean; ariaLabel?: string; onChange: (content: string) => void; onCaret?: (position: number) => void; showLineNumbers?: boolean; lineNumberOffset?: number; onCopyLines?: (firstLine: number, lastLine?: number) => void }
 const focusChanged = StateEffect.define<boolean>();
 function externalLinkIcon(href: string, label: string, sourcePath: string): HTMLAnchorElement {
   const anchor = document.createElement('a');
@@ -502,6 +502,8 @@ const theme = EditorView.theme({
   '.cm-gutters':{backgroundColor:'transparent',borderRight:'1px solid var(--color-border)'},
   '.cm-lineNumbers':{color:'var(--color-muted)',fontFamily:'monospace',fontSize:'11px',opacity:'0.55'},
   '.cm-lineNumbers .cm-gutterElement':{paddingLeft:'8px',paddingRight:'10px',transformOrigin:'right center',transition:'color 150ms, transform 150ms, font-weight 150ms'},
+  '.cm-lineNumbers .cm-gutterElement:hover':{backgroundColor:'color-mix(in srgb, var(--color-text) 6%, transparent)',color:'var(--color-text)'},
+  '.cm-lineNumbers .cm-gutterElement.cm-line-copy-selected':{backgroundColor:'color-mix(in srgb, var(--color-text) 12%, transparent)',color:'var(--color-text)'},
   '.cm-lineNumbers .cm-activeLineGutter':{color:'var(--color-primary)',fontWeight:'700',transform:'scale(1.08)'},
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground':{backgroundColor:'var(--color-selection) !important'},
   // CodeMirror's own hideNativeSelection theme makes the native ::selection background
@@ -551,7 +553,7 @@ const theme = EditorView.theme({
   '.cm-tooltip-autocomplete ul li[aria-selected] .live-md-completion-icon':{color:'inherit'},
   '.live-md-due-adder':{display:'inline-flex',alignItems:'center',gap:'2px',marginLeft:'6px',padding:'0 6px',borderRadius:'999px',fontSize:'0.8em',cursor:'pointer',color:'var(--color-muted)',border:'1px dashed var(--color-border)',background:'none'},
 });
-export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content,notePath,readOnly,onChange,onCaret,ariaLabel = 'Note content',showLineNumbers = true},ref) => {
+export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content,notePath,readOnly,onChange,onCaret,ariaLabel = 'Note content',showLineNumbers = true,lineNumberOffset = 0,onCopyLines},ref) => {
   const { t } = useTranslation(); const linkLabel = t('links.open');
   const tableLabel = t('preview.scrollableTable'), pageLabel = t('editor.page');
   const location = useLocation();
@@ -564,6 +566,11 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
   const caretCallback = useRef(onCaret); caretCallback.current = onCaret;
   const permission = useRef(new Compartment());
   const lineNumberGutter = useRef(new Compartment());
+  const copyLinesCallback = useRef(onCopyLines); copyLinesCallback.current = onCopyLines;
+  const lineOffset = useRef(lineNumberOffset); lineOffset.current = lineNumberOffset;
+  const gutterDrag = useRef<{ start: number; current: number } | null>(null);
+  const lastGutterClick = useRef<{ line: number; at: number } | null>(null);
+  const gutterDragCleanup = useRef<(() => void) | null>(null);
   useImperativeHandle(ref, () => ({
     insert(text, at) {
       const view=editor.current;if(!view||view.state.readOnly)return;
@@ -602,7 +609,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
       provide: field => EditorView.decorations.from(field,value=>value.decorations),
     });
     const view = new EditorView({parent:host.current!,state:EditorState.create({doc:content,extensions:[
-      markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),cardBackgroundLayer,lineNumberGutter.current.of(showLineNumbers?[lineNumbers(),highlightActiveLineGutter()]:[]),EditorView.lineWrapping,
+      markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),cardBackgroundLayer,lineNumberGutter.current.of(showLineNumbers?[lineNumbers({formatNumber:number=>String(number+lineOffset.current)}),highlightActiveLineGutter()]:[]),EditorView.lineWrapping,
       syntaxHighlighting(tokenHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'},{tag:tags.contentSeparator,class:'live-md-hr'}])),codeMirrorTokenTheme,theme,tableUIState,chipEditState,field,
       autocompletion({ icons: false, addToOptions: [{ position: 20, render: completion => {
         const icon = completion.type && TASK_TOKEN_ICON_SVG[completion.type];
@@ -626,14 +633,52 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
       EditorView.atomicRanges.of(view => view.state.field(field).decorations.update({ filter: (_from, _to, decoration) => decoration.spec.widget instanceof LiveMarkdownTable })),
       permission.current.of([EditorState.readOnly.of(readOnly),EditorView.editable.of(!readOnly)]),
       EditorView.contentAttributes.of({'aria-label':ariaLabel,'role':'textbox','aria-multiline':'true'}),
-      EditorView.domEventHandlers({focus:(_event,view)=>{view.dispatch({effects:focusChanged.of(true)});},blur:(_event,view)=>{view.dispatch({effects:focusChanged.of(false)});}}),
+      EditorView.domEventHandlers({
+        focus:(_event,view)=>{view.dispatch({effects:focusChanged.of(true)});},
+        blur:(_event,view)=>{view.dispatch({effects:focusChanged.of(false)});},
+      }),
       EditorView.updateListener.of(update=>{if(update.docChanged)callback.current(update.state.doc.toString()); if ((update.selectionSet || update.docChanged || update.focusChanged) && update.view.hasFocus) caretCallback.current?.(update.state.selection.main.head);}),
     ]})});
-    editor.current=view;return()=>{view.destroy();editor.current=undefined;};
+    const clearGutterRange=()=>view.dom.querySelectorAll<HTMLElement>('.cm-lineNumbers .cm-gutterElement').forEach(node=>node.classList.remove('cm-line-copy-selected'));
+    const gutterMouseDown=(event:MouseEvent)=>{
+      if(event.button!==0)return;
+      const target=(event.target as HTMLElement).closest<HTMLElement>('.cm-lineNumbers .cm-gutterElement');
+      const displayed=Number(target?.textContent);if(!target||!Number.isFinite(displayed))return;
+      event.preventDefault();event.stopPropagation();
+      const line=displayed-lineOffset.current;gutterDrag.current={start:line,current:line};target.classList.add('cm-line-copy-selected');
+      const previous=lastGutterClick.current;
+      if(event.detail===2||(previous?.line===line&&performance.now()-previous.at<500)){lastGutterClick.current=null;gutterDrag.current=null;clearGutterRange();copyLinesCallback.current?.(line);return;}
+      const move=(moveEvent:MouseEvent)=>{
+        const drag=gutterDrag.current;if(!drag)return;
+        const hovered=document.elementFromPoint(moveEvent.clientX,moveEvent.clientY)?.closest<HTMLElement>('.cm-lineNumbers .cm-gutterElement');
+        const hoveredNumber=Number(hovered?.textContent);if(!hovered||!Number.isFinite(hoveredNumber))return;
+        drag.current=hoveredNumber-lineOffset.current;
+        view.dom.querySelectorAll<HTMLElement>('.cm-lineNumbers .cm-gutterElement').forEach(node=>{
+          const number=Number(node.textContent)-lineOffset.current;
+          node.classList.toggle('cm-line-copy-selected',number>=Math.min(drag.start,drag.current)&&number<=Math.max(drag.start,drag.current));
+        });
+      };
+      const up=(upEvent:MouseEvent)=>{
+        const drag=gutterDrag.current;if(!drag)return;
+        upEvent.preventDefault();gutterDrag.current=null;gutterDragCleanup.current?.();clearGutterRange();
+        if(drag.start!==drag.current){lastGutterClick.current=null;copyLinesCallback.current?.(drag.start,drag.current);}
+        else lastGutterClick.current={line:drag.start,at:performance.now()};
+      };
+      gutterDragCleanup.current?.();
+      gutterDragCleanup.current=()=>{window.removeEventListener('mousemove',move,true);window.removeEventListener('mouseup',up,true);gutterDragCleanup.current=null;};
+      window.addEventListener('mousemove',move,true);window.addEventListener('mouseup',up,true);
+    };
+    const gutterDoubleClick=(event:MouseEvent)=>{
+      const target=(event.target as HTMLElement).closest<HTMLElement>('.cm-lineNumbers .cm-gutterElement');
+      const displayed=Number(target?.textContent);if(!target||!Number.isFinite(displayed))return;
+      event.preventDefault();event.stopPropagation();copyLinesCallback.current?.(displayed-lineOffset.current);
+    };
+    view.dom.addEventListener('mousedown',gutterMouseDown,true);view.dom.addEventListener('dblclick',gutterDoubleClick,true);
+    editor.current=view;return()=>{gutterDragCleanup.current?.();view.dom.removeEventListener('mousedown',gutterMouseDown,true);view.dom.removeEventListener('dblclick',gutterDoubleClick,true);view.destroy();editor.current=undefined;};
   },[notePath,ariaLabel,linkLabel,tableLabel,pageLabel,t]);
   useEffect(()=>{const view=editor.current;if(view && view.state.doc.toString()!==content)view.dispatch({changes:{from:0,to:view.state.doc.length,insert:content},annotations:Transaction.addToHistory.of(false)});},[content]);
   useEffect(()=>{editor.current?.dispatch({effects:permission.current.reconfigure([EditorState.readOnly.of(readOnly),EditorView.editable.of(!readOnly)])});},[readOnly]);
-  useEffect(()=>{editor.current?.dispatch({effects:lineNumberGutter.current.reconfigure(showLineNumbers?[lineNumbers(),highlightActiveLineGutter()]:[])});},[showLineNumbers]);
+  useEffect(()=>{editor.current?.dispatch({effects:lineNumberGutter.current.reconfigure(showLineNumbers?[lineNumbers({formatNumber:number=>String(number+lineNumberOffset)}),highlightActiveLineGutter()]:[])});},[showLineNumbers,lineNumberOffset]);
   useEffect(() => {
     if (!location.hash) return;
     let anchor: string;

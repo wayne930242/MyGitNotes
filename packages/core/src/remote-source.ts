@@ -137,8 +137,8 @@ export abstract class RemoteSource {
     const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`) && isNotebookContent(file.slice(n.root.length + 1), n));
     if (!nb || !NOTE_FILE.test(file)) throw new SourceError('Path is not a configured note.', 403);
     const raw = (await this.readFile(file)).toString('utf8');
-    const { metadata, content, title } = parseNoteContent(raw, path.posix.basename(file));
-    return { id: typeof metadata.id === 'string' ? metadata.id : file, path: file, notebookId: nb.id, title, metadata, content,
+    const { metadata, content, title, lineNumberOffset } = parseNoteContent(raw, path.posix.basename(file));
+    return { id: typeof metadata.id === 'string' ? metadata.id : file, path: file, notebookId: nb.id, title, metadata, content, lineNumberOffset,
       tags: Array.isArray(metadata.tags) ? metadata.tags.map(String) : [], status: typeof metadata.status === 'string' ? metadata.status : undefined,
       size: Buffer.byteLength(raw), revision: (await this.getSnapshot()).sha };
   }

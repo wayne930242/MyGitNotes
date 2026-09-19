@@ -32,6 +32,7 @@ Body text here.
     expect(parsed.metadata.custom_field).toBe(42);
     expect(parsed.metadata.nested).toEqual({ author: 'Alice' });
     expect(parsed.content.trim()).toBe('# Heading One\n\nBody text here.');
+    expect(parsed.lineNumberOffset).toBe(11);
   });
 
   it('preserves unknown frontmatter keys during round-trip serialization', () => {
@@ -62,6 +63,7 @@ Body text here.
     expect(parsed.title).toBe('Just Markdown');
     expect(parsed.metadata).toEqual({});
     expect(parsed.content).toBe(raw);
+    expect(parsed.lineNumberOffset).toBe(0);
   });
 
   it('falls back to first H1 when title is absent from frontmatter', () => {

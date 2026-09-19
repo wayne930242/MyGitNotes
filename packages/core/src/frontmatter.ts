@@ -9,6 +9,8 @@ export interface ParsedNote {
   content: string;
   title: string;
   hasFrontmatter: boolean;
+  /** Number added to body-relative line numbers to reach the same line in the saved file. */
+  lineNumberOffset: number;
 }
 
 const FRONTMATTER_REGEX = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
@@ -74,6 +76,7 @@ export function parseNoteContent(rawContent: string, fallbackFilename?: string):
     content,
     title,
     hasFrontmatter,
+    lineNumberOffset: hasFrontmatter && match ? (match[0].match(/\n/g) || []).length : 0,
   };
 }
 

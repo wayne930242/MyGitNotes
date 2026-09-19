@@ -19,7 +19,7 @@ export function readNoteFile(
   const stat = fs.statSync(safePath);
   const filename = path.basename(relPath);
 
-  const { metadata, content, title } = parseNoteContent(raw, filename);
+  const { metadata, content, title, lineNumberOffset } = parseNoteContent(raw, filename);
 
   const noteId =
     typeof metadata.id === 'string' && metadata.id.trim()
@@ -38,6 +38,7 @@ export function readNoteFile(
     tags,
     metadata,
     content,
+    lineNumberOffset,
     mtime: stat.mtimeMs,
     size: stat.size,
   };
