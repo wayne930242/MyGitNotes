@@ -12,4 +12,3 @@
 .prose-custom .slide-summary { margin: 0.85rem 0; padding: 0.65rem 0.95rem; border: 1px solid color-mix(in srgb, var(--color-text) 14%, var(--color-border)); border-radius: 6px; background: color-mix(in srgb, var(--color-text) 3%, var(--color-surface)); font-size: 0.85rem; }
 
 .prose-custom hr.vertical-slide-break { margin: 2.5rem 0; border: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--color-primary), transparent); }
-

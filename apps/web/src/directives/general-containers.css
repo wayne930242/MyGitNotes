@@ -72,4 +72,3 @@
 .prose-custom details.optional-directive[open] > summary.optional-summary::after { content: '−'; }
 
 .prose-custom details.optional-directive > .directive-body { padding: 1rem 1.25rem; }
-
