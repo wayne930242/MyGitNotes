@@ -23,6 +23,15 @@ it('fails when the sparse path list or workflow filter misses a product path', (
     for (const entry of topLevel) if (!allowedTopLevel.has(entry)) fs.rmSync(path.join(root, entry), { recursive: true, force: true });
     git('add', '.');
     expect(() => check()).not.toThrow();
+    // Without --core, a product checkout off the `core` branch is still checked; only a workspace checkout skips.
+    const checkWithoutFlag = () => execFileSync(process.execPath, [path.resolve('scripts/check-vercel-sparse-paths.mjs')], { cwd: root, stdio: 'pipe' });
+    fs.writeFileSync(path.join(root, 'stray.json'), '{}');
+    git('add', 'stray.json');
+    expect(() => checkWithoutFlag()).toThrow(/'stray\.json'/);
+    fs.writeFileSync(path.join(root, '.mygitnotes.yaml'), '');
+    git('add', '.mygitnotes.yaml');
+    expect(() => checkWithoutFlag()).not.toThrow();
+    git('rm', '-q', '-f', 'stray.json', '.mygitnotes.yaml');
     edit(listFile, 'apps\n', '');
     expect(() => check()).toThrow(/'apps'/);
     edit(listFile, 'api\n', 'api\napps\n');
