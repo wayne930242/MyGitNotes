@@ -226,6 +226,67 @@ it('re-stages the working draft to clear it when the user edits the content back
   expect(onSave.mock.calls[0][0].content).toBe(base.content);
 });
 
+it('does not re-save the content it just refreshed in on the next debounce tick', async () => {
+  const start: NoteItem = { ...note, content: 'line1\nline2\nline3\n' };
+  let resolveRead: ((value: NoteItem) => void) | null = null;
+  const onReadRemote = vi.fn((): Promise<NoteItem> => new Promise(resolve => { resolveRead = resolve; }));
+  const onSave = vi.fn(async ({ content, metadata }: { content: string; metadata?: Record<string, unknown> }) =>
+    ({ ...start, content, metadata: { ...metadata, updated: 't1' } }));
+  render(editor({ note: start, onReadRemote, onSave }));
+  await act(async () => { resolveRead?.(start); await vi.advanceTimersByTimeAsync(0); }); // the mount's own check resolves
+
+  await act(async () => { await vi.advanceTimersByTimeAsync(61000); }); // past the remote-check throttle
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: 'LOCAL1\nline2\nline3\n' } });
+  window.dispatchEvent(new Event('focus'));
+  await act(async () => { resolveRead?.({ ...start, content: 'REMOTE1\nline2\nline3\n' }); await vi.advanceTimersByTimeAsync(0); });
+  expect(screen.getByText(/conflict/i)).toBeTruthy(); // blocked on the conflict
+
+  const refreshed: NoteItem = { ...start, content: 'REMOTE1\nline2\nline3\n' };
+  onReadRemote.mockImplementation(async () => refreshed);
+  fireEvent.click(screen.getByText('Refresh remote version'));
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe(refreshed.content);
+
+  onSave.mockClear();
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); }); // past the disk-write debounce
+  expect(onSave).not.toHaveBeenCalled();
+});
+
+it('does not flag the note as unsaved again right after an explicit save', async () => {
+  const onSave = vi.fn(async ({ content, metadata }: { content: string; metadata?: Record<string, unknown> }) =>
+    ({ ...note, content, metadata: { ...metadata, updated: 't1' } }));
+  render(editor({ autoSave: false, onSave }));
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: '# Alpha\nMore.' } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+
+  fireEvent.click(screen.getByLabelText('Save to remote repository'));
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  expect(onSave).toHaveBeenCalledTimes(1);
+
+  onSave.mockClear();
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  expect(onSave).not.toHaveBeenCalled();
+  expect((screen.getByLabelText('Save to remote repository') as HTMLButtonElement).disabled).toBe(true);
+});
+
+it('does not write the restored content back to disk with a new timestamp', async () => {
+  const head: NoteItem = { ...note, content: '# Alpha\nHEAD version.\n', metadata: { title: 'Alpha', updated: 'thead' } };
+  const onRestoreFile = vi.fn(async () => head);
+  const onSave = vi.fn(async ({ content, metadata }: { content: string; metadata?: Record<string, unknown> }) =>
+    ({ ...note, content, metadata: { ...metadata, updated: 't1' } }));
+  render(editor({ frame: 'zoom', isDirty: true, onRestoreFile, onSave }));
+
+  fireEvent.click(screen.getByLabelText('File Git status')); // opens the Git panel, which hosts the restore control
+  fireEvent.click(screen.getByLabelText('Restore note'));
+  fireEvent.click(screen.getByLabelText('Confirm restore note'));
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe(head.content);
+
+  onSave.mockClear();
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  expect(onSave).not.toHaveBeenCalled();
+});
+
 it('dismissing the merged notice hides it', async () => {
   const start: NoteItem = { ...note, content: 'line1\nline2\nline3\n' };
   let resolveRead: ((value: NoteItem) => void) | null = null;

@@ -324,6 +324,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
       const latest = draftMode ? await onRestoreFile(note.path) : await onReadRemote(note.path);
       if (!mounted.current || !latest) return;
       setBaseNote(latest); setContent(latest.content); setMetadata(latest.metadata);
+      lastSaved.current = { content: latest.content, metadata: latest.metadata };
       current.current = { ...latest, baseNote: latest, blocked: false };
       clearLocalDraft(draftScope || branch, note.path);
       setRecoveredDraft(null); setBlocked(false); setSaveError(''); setHasUnsavedChanges(false);
@@ -528,6 +529,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
       const saved = await onSave({ path: note.path, ...draft });
       if (!mounted.current) return;
       setBaseNote(saved); setContent(saved.content); setMetadata(saved.metadata);
+      lastSaved.current = { content: saved.content, metadata: saved.metadata };
       current.current = { ...saved, baseNote: saved, blocked: false };
       clearLocalDraft(draftScope || branch, note.path);
       setHasUnsavedChanges(false); setRemoteNotice('');
@@ -703,6 +705,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
         setBaseNote(restored);
         setContent(restored.content);
         setMetadata(restored.metadata || {});
+        lastSaved.current = { content: restored.content, metadata: restored.metadata || {} };
       }
       setHasUnsavedChanges(false);
     } catch (err) {
