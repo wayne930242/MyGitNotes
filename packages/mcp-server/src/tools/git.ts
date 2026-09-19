@@ -2,6 +2,7 @@ import {
   getGitStatus,
   stageAndCommit,
   updateCore,
+  coreUpdateCheckout,
   runGit,
 } from '@mygitnotes/git';
 import { assertSafeRepoPath } from '../guards.js';
@@ -23,11 +24,10 @@ export async function handleGitCommit(
   return { success: true, commit: result };
 }
 
-/** A Core checkout serving a separate main worktree updates itself; a fork-model workspace is its own Core. */
-const coreCheckout = (ctx: ToolContext) => ctx.productRoot ?? ctx.repoRoot;
+const coreCheckout = (ctx: ToolContext) => coreUpdateCheckout(ctx.productRoot ?? ctx.repoRoot, ctx.repoRoot);
 
 export async function handleCheckCoreUpdate(ctx: ToolContext) {
-  const checkout = coreCheckout(ctx);
+  const checkout = await coreCheckout(ctx);
   try {
     const { stdout: remotes } = await runGit(['remote'], checkout);
     const remote = remotes.includes('upstream') ? 'upstream' : 'origin';
@@ -62,11 +62,7 @@ export async function handleUpdateCore(
   if (args.checkOnly) {
     return handleCheckCoreUpdate(ctx);
   }
-  const checkout = coreCheckout(ctx);
-  const result = await updateCore({
-    repoRoot: checkout,
-    workspaceRoot: checkout === ctx.repoRoot ? undefined : ctx.repoRoot,
-    autoPush: args.autoPush,
-  });
+  const checkout = await coreCheckout(ctx);
+  const result = await updateCore({ repoRoot: checkout, autoPush: args.autoPush });
   return { result };
 }

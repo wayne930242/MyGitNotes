@@ -36,6 +36,7 @@ import {
   getRecentCommits,
   generateCommitMessage,
   updateCore,
+  coreUpdateCheckout,
   listChanges, changeFile, fileDiff, commitStagedFiles, commitSelectedFiles,
   syncWorkspace, SyncError,
 } from '@mygitnotes/git';
@@ -722,8 +723,7 @@ app.post('/api/git/sync', async (req, res) => {
 app.post('/api/core/update', async (req: Request, res: Response) => {
   try {
     const { autoPush } = req.body || {};
-    // A Core checkout serving a separate main worktree updates itself; a fork-model workspace merges Core into main.
-    const result = await updateCore(appRoot === repoRoot ? { repoRoot, autoPush: Boolean(autoPush) } : { repoRoot: appRoot, workspaceRoot: repoRoot, autoPush: Boolean(autoPush) });
+    const result = await updateCore({ repoRoot: await coreUpdateCheckout(appRoot, repoRoot), autoPush: Boolean(autoPush) });
     res.json({ result });
   } catch (err: unknown) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });

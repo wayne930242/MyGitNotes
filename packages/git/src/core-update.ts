@@ -37,6 +37,15 @@ const backfillHint = (count: number) => count > 0
   : '';
 
 /**
+ * The checkout a Core update applies to: a `core` app checkout serving a separate workspace updates
+ * itself; otherwise the served workspace is a fork-model `main` that merges Core.
+ */
+export async function coreUpdateCheckout(appRoot: string, workspaceRoot: string): Promise<string> {
+  if (appRoot === workspaceRoot) return workspaceRoot;
+  return (await getCurrentBranch(appRoot)) === 'core' ? appRoot : workspaceRoot;
+}
+
+/**
  * Executes the safe, non-destructive Core update workflow.
  * A `core` checkout fast-forwards; a fork-model `main` that still tracks product files merges Core.
  */
@@ -98,15 +107,13 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
   }
 
   if (isAncestor && currentBranch === 'core') {
-    const migration = options.workspaceRoot && resolveWorkspaceConfigPath(options.workspaceRoot) ? migrateWorkspace(options.workspaceRoot) : undefined;
     return {
       success: true,
       currentHash,
       coreRemoteHash,
       remoteUsed: remote,
       alreadyUpToDate: true,
-      notesMissingTimestamps: migration?.notesMissingTimestamps,
-      message: `Core is already up to date with ${remote}/core (${coreRemoteHash.slice(0, 7)}).${backfillHint(migration?.notesMissingTimestamps ?? 0)}`,
+      message: `Core is already up to date with ${remote}/core (${coreRemoteHash.slice(0, 7)}).`,
     };
   }
 
@@ -119,16 +126,15 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
         'CORE_DIVERGED'
       );
     }
-    const migration = options.workspaceRoot && resolveWorkspaceConfigPath(options.workspaceRoot) ? migrateWorkspace(options.workspaceRoot) : undefined;
     if (autoPush) await runGit(['push', 'origin', 'core'], repoRoot);
+    // This process still runs the previous Core; the new Core migrates the workspace.
     return {
       success: true,
       currentHash,
       coreRemoteHash,
       remoteUsed: remote,
       alreadyUpToDate: false,
-      notesMissingTimestamps: migration?.notesMissingTimestamps,
-      message: `Fast-forwarded core to ${remote}/core (${coreRemoteHash.slice(0, 7)}).${backfillHint(migration?.notesMissingTimestamps ?? 0)}`,
+      message: `Fast-forwarded core to ${remote}/core (${coreRemoteHash.slice(0, 7)}). Run \`pnpm migrate-workspace\` and restart the dev server.`,
     };
   }
 

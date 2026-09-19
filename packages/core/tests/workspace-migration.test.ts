@@ -43,6 +43,15 @@ describe('workspace migration', () => {
     expect(() => assertWorkspaceCompatible(workspace(`schema_version: 1\n${body}`))).not.toThrow();
   });
 
+  it('refuses a schema_version it has no migration step for', () => {
+    for (const version of ['0', '"one"', `${SUPPORTED_SCHEMA_VERSION + 1}`]) {
+      const root = workspace(`schema_version: ${version}\n${body}`);
+      const before = fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8');
+      expect(() => migrateWorkspace(root)).toThrow(WorkspaceCompatibilityError);
+      expect(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8')).toBe(before);
+    }
+  });
+
   it('reports a missing workspace', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-migration-'));
     roots.push(root);

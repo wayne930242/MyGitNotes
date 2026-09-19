@@ -17,7 +17,8 @@ try {
     const remotes = git('remote').split('\n');
     const remote = remotes.includes('upstream') ? 'upstream' : remotes.includes('origin') ? 'origin' : undefined;
     if (!remote) throw Error('No upstream or origin remote. Pass --core <revision>.');
-    git('fetch', remote, 'core');
+    try { git('fetch', remote, 'core'); }
+    catch { throw Error(`Could not fetch ${remote}/core. Add the MyGitNotes remote as upstream or pass --core <revision>.`); }
     coreRevision = `${remote}/core`;
   }
   // The Core revision main last merged decides which shared-namespace files are unmodified product copies.

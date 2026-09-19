@@ -40,8 +40,12 @@ export interface WorkspaceMigrationResult {
 export function migrateWorkspace(root: string): WorkspaceMigrationResult {
   const { file, version } = readSchemaVersion(root);
   if (typeof version === 'number' && version > SUPPORTED_SCHEMA_VERSION) assertWorkspaceCompatible(root);
+  // The only migration step so far versions a manifest that predates schema_version.
+  if (version !== undefined && version !== SUPPORTED_SCHEMA_VERSION) {
+    throw new WorkspaceCompatibilityError(`${file} uses schema_version ${String(version)}; this Core has no migration from it to ${SUPPORTED_SCHEMA_VERSION}.`);
+  }
   let migrated = false;
-  if (version !== SUPPORTED_SCHEMA_VERSION) {
+  if (version === undefined) {
     const document = YAML.parseDocument(fs.readFileSync(file, 'utf8'));
     document.set('schema_version', SUPPORTED_SCHEMA_VERSION);
     const map = document.contents as YAML.YAMLMap;

@@ -79,14 +79,20 @@ async function bootstrapWorkspace() {
   // 2. Find or create the content-only main worktree
   const existing = await mainWorktree(productRoot);
   const hasMain = Boolean(await git(['branch', '--list', 'main'], productRoot));
-  if (hasMain && await git(['ls-tree', '--name-only', 'main', '--', 'pnpm-workspace.yaml'], productRoot)) {
-    throw new Error("Branch 'main' still carries the product. Run `pnpm convert-workspace` in its checkout first.");
+  // A clone of an existing workspace has its content on origin/main; an orphan would split its history.
+  const remoteMain = !hasMain && Boolean(await git(['branch', '--list', '--remotes', 'origin/main'], productRoot));
+  const mainRef = hasMain ? 'main' : remoteMain ? 'origin/main' : undefined;
+  if (mainRef && await git(['ls-tree', '--name-only', mainRef, '--', 'pnpm-workspace.yaml'], productRoot)) {
+    throw new Error(`Branch '${mainRef}' still carries the product. Run \`pnpm convert-workspace\` in its checkout first.`);
   }
   const repoRoot = existing ?? (pathIndex >= 0 ? path.resolve(process.argv[pathIndex + 1]) : path.join(path.dirname(productRoot), `${path.basename(productRoot)}-notes`));
   if (!existing) {
     if (hasMain) {
       console.log(`[bootstrap] Adding a worktree for the existing 'main' at ${repoRoot}...`);
       await runGit(['worktree', 'add', repoRoot, 'main'], productRoot);
+    } else if (remoteMain) {
+      console.log(`[bootstrap] Adding a worktree for 'origin/main' at ${repoRoot}...`);
+      await runGit(['worktree', 'add', '--track', '-b', 'main', repoRoot, 'origin/main'], productRoot);
     } else {
       console.log(`[bootstrap] Creating the content-only 'main' branch in a worktree at ${repoRoot}...`);
       await runGit(['worktree', 'add', '--orphan', '-b', 'main', repoRoot], productRoot);

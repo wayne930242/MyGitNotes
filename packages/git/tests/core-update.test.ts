@@ -4,7 +4,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { runGit, stageAndCommit } from '../src/git-service.js';
-import { updateCore, CoreUpdateError } from '../src/core-update.js';
+import { updateCore, coreUpdateCheckout, CoreUpdateError } from '../src/core-update.js';
 import { WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
 
 describe('Core Update Engine Rules', () => {
@@ -38,19 +38,25 @@ describe('Core Update Engine Rules', () => {
     await expect(updateCore({ repoRoot: userRepo })).rejects.toMatchObject({ code: 'INVALID_BRANCH' });
   });
 
-  it('fast-forwards a core checkout and migrates the configured workspace', async () => {
-    const notes = fs.mkdtempSync(path.join(os.tmpdir(), 'gh-notes-content-'));
+  it('fast-forwards a core checkout and leaves workspace migration to the new Core', async () => {
+    expect((await updateCore({ repoRoot: userRepo })).alreadyUpToDate).toBe(true);
+    fs.writeFileSync(path.join(upstreamRepo, 'NEW_FEATURE.md'), '# New Core Feature');
+    await stageAndCommit(upstreamRepo, ['NEW_FEATURE.md'], 'feat: add new feature');
+    const result = await updateCore({ repoRoot: userRepo });
+    expect(result).toMatchObject({ success: true, alreadyUpToDate: false });
+    expect(result.message).toContain('pnpm migrate-workspace');
+    expect((await runGit(['rev-parse', 'HEAD'], userRepo)).stdout).toBe((await runGit(['rev-parse', 'HEAD'], upstreamRepo)).stdout);
+    expect((await runGit(['log', '--merges', '--oneline'], userRepo)).stdout).toBe('');
+  });
+
+  it('updates the app checkout only when it is a core checkout serving another workspace', async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'gh-notes-served-'));
     try {
-      fs.writeFileSync(path.join(notes, WORKSPACE_CONFIG_FILENAME), 'workspace:\n  title: Notes\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n');
-      expect((await updateCore({ repoRoot: userRepo, workspaceRoot: notes })).alreadyUpToDate).toBe(true);
-      fs.writeFileSync(path.join(upstreamRepo, 'NEW_FEATURE.md'), '# New Core Feature');
-      await stageAndCommit(upstreamRepo, ['NEW_FEATURE.md'], 'feat: add new feature');
-      const result = await updateCore({ repoRoot: userRepo, workspaceRoot: notes });
-      expect(result).toMatchObject({ success: true, alreadyUpToDate: false });
-      expect((await runGit(['rev-parse', 'HEAD'], userRepo)).stdout).toBe((await runGit(['rev-parse', 'HEAD'], upstreamRepo)).stdout);
-      expect((await runGit(['log', '--merges', '--oneline'], userRepo)).stdout).toBe('');
-      expect(fs.readFileSync(path.join(notes, WORKSPACE_CONFIG_FILENAME), 'utf8')).toMatch(/^schema_version: 1$/m);
-    } finally { fs.rmSync(notes, { recursive: true, force: true }); }
+      expect(await coreUpdateCheckout(userRepo, userRepo)).toBe(userRepo);
+      expect(await coreUpdateCheckout(userRepo, workspace)).toBe(userRepo);
+      await runGit(['checkout', '-b', 'main'], userRepo);
+      expect(await coreUpdateCheckout(userRepo, workspace)).toBe(workspace);
+    } finally { fs.rmSync(workspace, { recursive: true, force: true }); }
   });
 
   it('refuses to fast-forward a core checkout with local commits', async () => {

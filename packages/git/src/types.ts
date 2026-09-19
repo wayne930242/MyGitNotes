@@ -20,8 +20,6 @@ export interface GitCommitItem {
 export interface CoreUpdateOptions {
   /** The checkout to update: a `core` checkout, or a fork-model `main` that still tracks product files. */
   repoRoot: string;
-  /** The workspace to migrate after a `core` fast-forward; a fork-model `main` migrates itself. */
-  workspaceRoot?: string;
   autoPush?: boolean;
 }
 

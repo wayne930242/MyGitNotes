@@ -116,6 +116,19 @@ describe('canonical starter workspace CLI', () => {
     expect(fs.existsSync(root)).toBe(false);
   });
 
+  it('tracks the remote main of a cloned workspace instead of creating an orphan', () => {
+    existingMain({ '.mygitnotes.yaml': 'schema_version: 1\nworkspace:\n  title: Mine\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n', 'notes/a/mine.md': '# Mine\n' });
+    const remoteHead = git('rev-parse', 'HEAD');
+    coreGit('worktree', 'remove', root);
+    coreGit('remote', 'add', 'origin', core);
+    coreGit('update-ref', 'refs/remotes/origin/main', 'main');
+    coreGit('branch', '-D', 'main');
+    bootstrap();
+    expect(git('merge-base', '--is-ancestor', remoteHead, 'HEAD')).toBe('');
+    expect(git('rev-parse', '--abbrev-ref', 'main@{upstream}')).toBe('origin/main');
+    expect(fs.readFileSync(path.join(root, 'notes/a/mine.md'), 'utf8')).toBe('# Mine\n');
+  });
+
   it('keeps unrelated .env settings when pointing at the workspace', () => {
     write('.env', 'GEMINI_API_KEY=x\nMYGITNOTES_LOCAL_PATH=.\n', core);
     bootstrap();
