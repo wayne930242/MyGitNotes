@@ -289,6 +289,30 @@ try {
   }
   console.log('PASS 7 narrow widths fold panes for display only and desktops restore the division');
 
+  // 7a. A merged displayed pane (narrow screens folding several stored panes into one tab bar) keeps a duplicate
+  // tab per stored pane when they share a note, marks only the shown one, and closes only the one touched.
+  await device.setViewport({ width: 1440, height: 900 });
+  await dragTo(device, await tabHandle(device, 2, 'Delta'), '[data-focus-pane="1"] .focus-pane-body', { shift: true });
+  await waitTabs(device, 1, ['Beta', 'Epsilon', 'Delta']);
+  await waitTabs(device, 2, ['Delta']);
+  await device.setViewport({ width: 900, height: 900 });
+  await device.waitForFunction(() => document.querySelectorAll('[data-focus-pane]').length === 2);
+  const merged7a = (await device.$$eval('[data-focus-pane]', elements => elements.map(element => Number(element.dataset.focusPane))))[1];
+  await waitTabs(device, merged7a, ['Beta', 'Epsilon', 'Delta', 'Delta']);
+  const deltaPanes = await device.$$eval(`[data-focus-pane="${merged7a}"] .focus-tab`, tabs => tabs
+    .filter(tab => tab.querySelector('[role="tab"]').textContent.trim() === 'Delta').map(tab => tab.dataset.pane));
+  assert.deepEqual(deltaPanes.sort(), ['1', '2'], 'Each duplicate Delta tab keeps its own stored pane');
+  const shownDeltaCount = await device.$$eval(`[data-focus-pane="${merged7a}"] .focus-tab [role="tab"][aria-selected="true"]`,
+    tabs => tabs.filter(tab => tab.textContent.trim() === 'Delta').length);
+  assert.equal(shownDeltaCount, 1, 'Only one of the duplicate Delta tabs is marked shown');
+  await device.click(`[data-focus-pane="${merged7a}"] .focus-tab[data-pane="1"] [aria-label="Close Delta"]`);
+  await waitTabs(device, merged7a, ['Beta', 'Epsilon', 'Delta']);
+  console.log('PASS 7a a merged displayed pane keeps a duplicate tab per stored pane and closes only the one touched');
+  await device.setViewport({ width: 1440, height: 900 });
+  await device.waitForFunction(() => document.querySelectorAll('[data-focus-pane]').length === 3);
+  await waitTabs(device, 1, ['Beta', 'Epsilon']);
+  await waitTabs(device, 2, ['Delta']);
+
   // 8. The rest of the contract on the desktop device.
   const focusUrl = `${base}/notebooks/work?view=list&focus=${focusId}`;
   const workFile = name => fs.readFileSync(path.join(root, `notes/work/${name}.md`), 'utf8');
@@ -467,9 +491,13 @@ try {
   const before = await activePane(device);
   await palette(device, 'Next pane');
   await device.waitForFunction(before => Number(document.querySelector('[data-focus-pane][data-active]')?.dataset.focusPane) === (before + 1) % 3, {}, before);
+  // Delta, shared by pane 1 and pane 2 ahead of the fold, must survive the fold only once.
+  await dragTo(device, await tabHandle(device, 2, 'Delta'), '[data-focus-pane="1"] .focus-pane-body', { shift: true });
+  await waitTabs(device, 1, ['Beta', 'Epsilon', 'Delta']);
   await palette(device, 'Division: Single');
   await device.waitForFunction(() => document.querySelector('.focus-area')?.dataset.division === 'single');
   await waitTabs(device, 0, ['Zeta', 'Alpha', 'Gamma', 'Beta', 'Epsilon', 'Delta']);
+  console.log('PASS 8g1 folding a division dedupes a note shared by two folded panes, keeping the first occurrence');
   await palette(device, 'Division: Large left, two right');
   await device.waitForFunction(() => document.querySelectorAll('[data-focus-pane]').length === 3);
   await waitTabs(device, 0, ['Zeta', 'Alpha', 'Gamma', 'Beta', 'Epsilon', 'Delta']);

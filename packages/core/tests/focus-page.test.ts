@@ -69,6 +69,14 @@ describe('changeDivision', () => {
     const named = focus({ division: 'columns-2', panes: [pane(note('a.md')), pane()] });
     expect(changeDivision(named, 'single')).toMatchObject({ id: 'f1', notebookId: 'nb1', name: 'Work' });
   });
+  it('dedupes a note the kept pane already holds when a removed pane folds onto it, keeping the kept pane\'s own copy', () => {
+    const layout = { division: 'columns-2' as const, panes: [pane(note('a.md'), note('x.md')), pane(note('x.md'))] };
+    expect(changeDivision(layout, 'single')).toEqual({ division: 'single', panes: [pane(note('a.md'), note('x.md'))] });
+  });
+  it('dedupes a note shared between two removed panes when both fold onto the kept pane, keeping the earlier pane\'s copy', () => {
+    const layout = { division: 'major-left' as const, panes: [pane(note('a.md')), pane(note('y.md'), note('b.md')), pane(note('y.md'), note('c.md'))] };
+    expect(changeDivision(layout, 'single')).toEqual({ division: 'single', panes: [pane(note('a.md'), note('y.md'), note('b.md'), note('c.md'))] });
+  });
 });
 
 describe('placeTab', () => {

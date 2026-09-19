@@ -27,8 +27,8 @@ export type FocusPane = z.infer<typeof FocusPaneSchema>;
 
 export function focusTabKey(tab: FocusTab): string { return tab.kind === 'note' ? `note:${tab.path}` : `lane:${tab.id}`; }
 
-/** A note may sit in several panes at once; within one pane a tab key is unique. Drops a later duplicate, keeping the first. Same reference when nothing changes. */
-function dedupePanes<T extends { panes: { tabs: FocusTab[] }[] }>(layout: T): T {
+/** A note may sit in several panes at once; within one pane a tab key is unique. Drops a later duplicate, keeping the first. Same reference when nothing changes. Also used by `changeDivision` to dedupe a fold. */
+export function dedupePanes<T extends { panes: { tabs: FocusTab[] }[] }>(layout: T): T {
   let changed = false;
   const panes = layout.panes.map(pane => {
     const seen = new Set<string>();
@@ -96,7 +96,7 @@ export function findFocusTabInPane(layout: FocusLayout, pane: number, key: strin
 }
 export function focusTabCount(layout: FocusLayout): number { return layout.panes.reduce((total, pane) => total + pane.tabs.length, 0); }
 
-/** Growing a division appends empty panes; shrinking folds every removed pane's tabs, in pane order, onto the end of the last remaining pane. */
+/** Growing a division appends empty panes; shrinking folds every removed pane's tabs, in pane order, onto the end of the last remaining pane, then dedupes: a note the kept pane already held (or shared between two removed panes) survives once, in first-occurrence order. */
 export function changeDivision<T extends FocusLayout>(layout: T, division: FocusDivision): T {
   if (division === layout.division) return layout;
   const count = focusPaneCount(division);
@@ -107,7 +107,7 @@ export function changeDivision<T extends FocusLayout>(layout: T, division: Focus
   const kept = layout.panes.slice(0, count);
   const overflow = layout.panes.slice(count).flatMap(pane => pane.tabs);
   const panes = kept.map((pane, index) => index === kept.length - 1 ? { tabs: [...pane.tabs, ...overflow] } : pane);
-  return { ...layout, division, panes } as T;
+  return dedupePanes({ ...layout, division, panes } as T);
 }
 
 /** Places `tab` in `pane` only: a tab already open in another pane is untouched there, so the same note may end up open in several panes. Already in `pane`, it moves to `index` instead of duplicating. */

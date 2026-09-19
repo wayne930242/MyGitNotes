@@ -46,7 +46,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
     tab, key: focusTabKey(tab), pane, index,
     label: tab.kind === 'note' ? focus.notes.get(tab.path)?.title || tab.path.split('/').pop()!.replace(/\.md$/, '') : lanes.find(row => row.id === tab.id)?.name || tab.id,
   })));
-  const shown = tabs.find(tab => tab.key === displayed.key);
+  const shown = tabs.find(tab => tab.pane === displayed.pane && tab.key === displayed.key);
   const lane = shown?.tab.kind === 'lane' ? lanes.find(row => shown.tab.kind === 'lane' && row.id === shown.tab.id) : undefined;
   const panelId = `focus-pane-${displayed.pane}`;
   const autoHide = entry.autoHide[displayed.pane];
@@ -123,15 +123,16 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
           buttons[(target + buttons.length) % buttons.length].focus();
         }}>
           {tabs.map(tab => (
-            <div key={tab.key} role="presentation" className="focus-tab" data-shown={tab.key === displayed.key || undefined} data-drop={marker(tab)}
+            <div key={`${tab.pane}:${tab.key}`} role="presentation" className="focus-tab" data-pane={tab.pane}
+              data-shown={(tab.pane === displayed.pane && tab.key === displayed.key) || undefined} data-drop={marker(tab)}
               draggable={editable} onDragStart={event => {
                 event.dataTransfer.setData(TAB_DRAG_TYPE, JSON.stringify({ tab: tab.tab, pane: tab.pane }));
                 event.dataTransfer.effectAllowed = 'copyMove';
               }}
               onDragOver={event => hover(event, slotAt(event, tab))}
               onDrop={event => drop(event, slotAt(event, tab))}>
-              <button type="button" role="tab" aria-selected={tab.key === displayed.key} aria-controls={panelId}
-                tabIndex={tab.key === displayed.key || (!displayed.key && tab === tabs[0]) ? 0 : -1} title={tab.label}
+              <button type="button" role="tab" aria-selected={tab.pane === displayed.pane && tab.key === displayed.key} aria-controls={panelId}
+                tabIndex={(tab.pane === displayed.pane && tab.key === displayed.key) || (!displayed.key && tab === tabs[0]) ? 0 : -1} title={tab.label}
                 onClick={() => void focus.show(tab.pane, tab.key)}
                 onKeyDown={event => { if (editable && event.key === 'Delete') { event.preventDefault(); void focus.close(tab.key, tab.pane).catch(() => {}); } }}>
                 {tab.tab.kind === 'note' ? <FileText aria-hidden="true" /> : <GalleryHorizontalEnd aria-hidden="true" />}
@@ -144,7 +145,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
         </div>
         <div className="focus-pane-actions">
           {overflowing && <FocusMenu label={t('focus.allTabs')} icon={<ChevronDown aria-hidden="true" />}
-            items={tabs.map(tab => ({ key: tab.key, label: tab.label, current: tab.key === displayed.key, onSelect: () => void focus.show(tab.pane, tab.key) }))} />}
+            items={tabs.map(tab => ({ key: `${tab.pane}:${tab.key}`, label: tab.label, current: tab.pane === displayed.pane && tab.key === displayed.key, onSelect: () => void focus.show(tab.pane, tab.key) }))} />}
           {editable && <FocusMenu label={t('focus.addLane')} showLabel icon={<Plus aria-hidden="true" />}
             items={lanes.length > 0
               ? lanes.map(row => ({ key: row.id, label: row.name, onSelect: () => { if (focus.shown) void focus.place(focus.shown, { kind: 'lane', id: row.id }, displayed.pane).catch(() => {}); } }))
