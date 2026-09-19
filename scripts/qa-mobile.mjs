@@ -49,9 +49,11 @@ const click = async text => {
   if(mobile&&await mobile.evaluate(e=>e.getBoundingClientRect().width>0)) {await chooseSelect(page, 'button[role="combobox"][aria-label="Editor mode"]',text==='Source'?'raw':'live');return;}
  }
  const buttons=await page.$$('button');
- for(const button of buttons) {
-  if(await button.evaluate((e,text)=>(e.textContent.trim()===text||e.getAttribute('aria-label')===text)&&e.getBoundingClientRect().width>0,text)) {
-   await button.scrollIntoView();const r=await button.boundingBox();await page.touchscreen.tap(r.x+r.width/2,r.y+r.height/2);return;
+ for(const attribute of ['textContent','aria-label']) {
+  for(const button of buttons) {
+   if(await button.evaluate((e,{text,attribute})=>(attribute==='textContent'?e.textContent.trim():e.getAttribute(attribute))===text&&e.getBoundingClientRect().width>0,{text,attribute})) {
+    await button.scrollIntoView();const r=await button.boundingBox();await page.touchscreen.tap(r.x+r.width/2,r.y+r.height/2);return;
+   }
   }
  }
  throw Error('Missing visible button: '+text);
