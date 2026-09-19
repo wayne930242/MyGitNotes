@@ -2,7 +2,7 @@ import { Select } from './Select.js';
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Code2, Eye, Link2, SquarePlus, Table2 } from 'lucide-react';
+import { Code2, Eye, Link2, Square, Table2 } from 'lucide-react';
 import type { LiveMarkdownHandle } from './LiveMarkdownEditor.js';
 import { useTranslation, type TranslationKey } from '../lib/i18n/index.js';
 import { useNoteCandidates, noteCompletionAt } from '../lib/note-completion.js';
@@ -119,11 +119,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
     }
   };
   const insertActions = isMarkdown && !readOnly && !compact ? <>
-    <button type="button" className="ui-icon-button" aria-label={t('graph.insertLink')} title={t('graph.insertLink')} aria-expanded={picker}
-      onMouseDown={event => event.preventDefault()} onClick={() => { setPicker(value => !value); setQuery(''); }}><Link2 size={16} aria-hidden="true" /></button>
-    <button type="button" className="ui-icon-button" aria-label={t('table.insert')} title={t('table.insert')} onClick={insertTable}><Table2 size={16} aria-hidden="true" /></button>
+    <button type="button" className="ui-icon-button toolbar-icon-button insert-icon-button" aria-label={t('graph.insertLink')} title={t('graph.insertLink')} aria-expanded={picker}
+      onMouseDown={event => event.preventDefault()} onClick={() => { setPicker(value => !value); setQuery(''); }}><Link2 aria-hidden="true" /><span className="insert-plus-badge" aria-hidden="true">+</span></button>
+    <button type="button" className="ui-icon-button toolbar-icon-button insert-icon-button" aria-label={t('table.insert')} title={t('table.insert')} onClick={insertTable}><Table2 aria-hidden="true" /><span className="insert-plus-badge" aria-hidden="true">+</span></button>
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger className="ui-icon-button" aria-label={t('directive.insert')} title={t('directive.insert')}><SquarePlus size={16} aria-hidden="true" /></DropdownMenu.Trigger>
+      <DropdownMenu.Trigger className="ui-icon-button toolbar-icon-button insert-icon-button" aria-label={t('directive.insert')} title={t('directive.insert')}><Square aria-hidden="true" /><span className="insert-plus-badge" aria-hidden="true">+</span></DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="markdown-insert-menu" align="end" sideOffset={4} collisionPadding={8} aria-label={t('directive.selectFormat')}
           onEscapeKeyDown={event => event.stopPropagation()}

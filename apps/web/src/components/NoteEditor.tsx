@@ -1132,23 +1132,24 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
             {isMarkdown && <MarkdownEditorModeSwitch mode={editorMode} onChange={setEditorMode} />}
             <button type="button" aria-pressed={showLineNumbers} aria-label={t('editor.lineNumbers')} title={t('editor.lineNumbers')}
               onClick={() => setShowLineNumbers(value => !value)}
-              className="editor-action editor-secondary-action editor-line-numbers-action"><ListOrdered className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('editor.lineNumbers')}</span></button>
-            {frame === 'zoom' && <button type="button" aria-label={t('editor.documentPanel')} title={t('editor.documentPanel')}
-              aria-pressed={Boolean(notePanel)} onClick={() => { if (notePanel) setNotePanel(null); else if (lastNotePanel.current === 'outline') { if (isMarkdown) openOutline(); else openFind(); } else if (lastNotePanel.current === 'find') openFind(); else setNotePanel(lastNotePanel.current); }}
-              className="editor-action editor-secondary-action editor-panel-action"><PanelRight className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('editor.documentPanel')}</span></button>}
+              className="ui-icon-button toolbar-icon-button editor-line-numbers-action"><ListOrdered aria-hidden="true" /></button>
 
             <button type="button" aria-label={t(copyState === 'copied' ? 'editor.noteCopied' : copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')} title={t(copyState === 'copied' ? 'editor.noteCopied' : copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')} onClick={copyNote}
-              className="editor-action editor-secondary-action">{copyState === 'copied' ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : copyState === 'error' ? <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" /> : <Copy className="w-3.5 h-3.5" aria-hidden="true" />}<span>{t(copyState === 'copied' ? 'editor.noteCopied' : copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')}</span></button>
+              className="ui-icon-button toolbar-icon-button">{copyState === 'copied' ? <Check aria-hidden="true" /> : copyState === 'error' ? <AlertTriangle aria-hidden="true" /> : <Copy aria-hidden="true" />}</button>
             {onAddToFocus && <button type="button" aria-label={t('focus.addTo')} title={t('focus.addTo')} onClick={onAddToFocus}
-              className="editor-action editor-secondary-action"><LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('focus.addTo')}</span></button>}
+              className="ui-icon-button toolbar-icon-button"><LayoutGrid aria-hidden="true" /></button>}
             <div ref={setInsertSlot} className="note-insert-actions" />
+            {frame === 'zoom' && <button type="button" aria-label={t('editor.documentPanel')} title={t('editor.documentPanel')}
+              aria-pressed={Boolean(notePanel)} onClick={() => { if (notePanel) setNotePanel(null); else if (lastNotePanel.current === 'outline') { if (isMarkdown) openOutline(); else openFind(); } else if (lastNotePanel.current === 'find') openFind(); else setNotePanel(lastNotePanel.current); }}
+              className="ui-icon-button toolbar-icon-button editor-panel-action"><PanelRight aria-hidden="true" /></button>}
             {/* Close Button */}
             {onClose && <button
               aria-label={t('editor.closeNote')}
+              title={t('editor.closeNote')}
               onClick={close}
-              className="note-close p-1.5 text-muted hover:text-fg hover:bg-sidebar rounded-lg transition ml-1"
+              className="note-close ui-icon-button toolbar-icon-button"
             >
-              <X className="w-5 h-5" />
+              <X aria-hidden="true" />
             </button>}
           </div>
         </div>

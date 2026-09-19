@@ -313,8 +313,12 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   background: var(--color-border);
   color: var(--color-text);
 }
-.note-insert-actions { display: flex; align-items: center; gap: 2px; }
+.note-insert-actions { display: flex; align-items: center; gap: 4px; }
 .note-insert-actions:empty { display: none; }
+.note-controls .toolbar-icon-button { position: relative; width: 32px; min-width: 32px; height: 32px; min-height: 32px; border-radius: var(--radius-control); }
+.note-controls .toolbar-icon-button > svg { width: 16px; height: 16px; flex: none; }
+.note-controls .toolbar-icon-button[aria-pressed="true"] { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface)); font-weight: 600; }
+.insert-plus-badge { position: absolute; right: 2px; bottom: 2px; display: grid; place-items: center; width: 10px; height: 10px; border: 1px solid var(--color-surface); border-radius: 999px; background: var(--color-primary); color: var(--color-on-primary); font-size: 9px; line-height: 1; font-weight: 700; }
 .markdown-insert-menu { z-index: 100; display: grid; min-width: 12rem; max-height: min(70dvh, 28rem); overflow-y: auto; padding: .25rem; border: 1px solid var(--color-border); border-radius: .5rem; background: var(--color-surface); color: var(--color-text); box-shadow: 0 4px 16px color-mix(in srgb, var(--color-scrim) 13%, transparent); }
 .markdown-insert-menu [role="menuitem"] { padding: .4rem .5rem; border-radius: .35rem; font-size: .8rem; cursor: default; outline: none; }
 .markdown-insert-menu [role="menuitem"][data-highlighted] { background: var(--color-sidebar); }
@@ -695,8 +699,6 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   .agent-toolbar > div:last-child { flex-wrap: wrap; gap: 6px; }
   .agent-toolbar [aria-label="Editor mode"] { margin-left: auto; }
   .agent-document-picker { padding: 8px 12px; }
-  .editor-line-numbers-action { padding: 0; width: 32px; justify-content: center; }
-  .editor-line-numbers-action > span { display: none; }
 }
 
 @media (min-width: 768px) and (max-width: 1100px) {
@@ -705,9 +707,6 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   .note-controls .editor-mode-switch { width: 120px; min-width: 120px; }
   .note-controls .editor-mode-button { display: none; }
   .note-controls .editor-mode-select { display: inline-flex; width: 100%; height: 44px; padding: 0 8px; border: 1px solid var(--color-border); border-radius: var(--radius-control); color: var(--color-text); background: var(--color-surface); }
-  .note-controls .editor-action { width: 44px; min-width: 44px; height: 44px; padding: 0; justify-content: center; }
-  .note-controls .editor-action > span { display: none; }
-  .note-close { width: 44px; min-width: 44px; height: 44px; margin-left: 0; }
 }
 
 @media (max-width: 767px) {
@@ -767,6 +766,9 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   .note-heading { min-height: 44px; padding-right: 48px; }
   .note-controls { flex-wrap: nowrap; gap: 6px; height: 44px; }
   .note-controls > button { flex-shrink: 0; }
+  .note-controls .toolbar-icon-button { width: 40px; min-width: 40px; height: 40px; min-height: 40px; }
+  .note-controls .toolbar-icon-button > svg { width: 20px; height: 20px; }
+  .note-controls .insert-plus-badge { right: 3px; bottom: 3px; width: 11px; height: 11px; font-size: 10px; }
   .note-heading:has(+ .note-controls .note-save) { padding-right: 96px; }
   .editor-mode-switch { min-width: 96px; padding: 0; flex: 1; background: transparent; }
   .editor-mode-switch .editor-mode-button { display: none; }
@@ -777,7 +779,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
   .editor-action.editor-confirming { width: auto; padding: 0 6px; }
   .editor-action.editor-confirming::after { content: "Confirm?"; white-space: nowrap; font-size: 11px; }
   .note-save { position: absolute; top: 8px; right: 56px; }
-  .note-close { position: absolute; right: 8px; top: 8px; }
+  .note-close { position: absolute !important; right: 8px; top: 10px; }
   .agent-toolbar { padding: 8px 12px; }
   .agent-toolbar .agent-controls { flex-wrap: nowrap; height: 44px; width: 100%; }
   .agent-controls .editor-mode-switch { order: 0; margin: 0; }
