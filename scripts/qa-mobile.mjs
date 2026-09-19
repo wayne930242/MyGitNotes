@@ -164,7 +164,7 @@ try {
  assert((await bounds('.right-panel-rail')).bottom<=(await bounds('nav')).y,'Changes rail overlaps bottom navigation');
  await tap('button[aria-label="Settings"]');
  await page.waitForSelector('#settings-manifest textarea');
- await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('GitHub Dark')).click());
+ await page.evaluate(()=>[...document.querySelectorAll('#settings-theme [role="radio"]')].find(b=>b.textContent.trim()==='Dark').click());
  await page.waitForFunction(()=>document.documentElement.classList.contains('dark'));
  await click('Notes');
  for(const view of ['list','card']) {

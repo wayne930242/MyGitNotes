@@ -1,4 +1,5 @@
-const token = name => `color-mix(in srgb, var(--color-${name}) calc(<alpha-value> * 100%), transparent)`;
+// Plain classes resolve to the token itself; an opacity modifier (bg-fg/5) mixes it with transparent.
+const token = name => ({ opacityValue }) => opacityValue === undefined ? `var(--color-${name})` : `color-mix(in srgb, var(--color-${name}) calc(${opacityValue} * 100%), transparent)`;
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -51,5 +52,7 @@ export default {
       },
     },
   },
+  // Opacity utilities would route every plain colour class through color-mix(); modifiers cover them.
+  corePlugins: { textOpacity: false, backgroundOpacity: false, borderOpacity: false, divideOpacity: false, placeholderOpacity: false, ringOpacity: false },
   plugins: [],
 };
