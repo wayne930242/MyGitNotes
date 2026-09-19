@@ -333,8 +333,17 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
     }
     const editing = active(from,to);
     if (/^(ATXHeading|SetextHeading)[1-6]$/.test(name)) marks.push(Decoration.line({class:`live-md-heading live-md-h${name.at(-1)}`,attributes:{'data-heading-slug':headingSlug(state.sliceDoc(from,to).split('\n')[0])}}).range(state.doc.lineAt(from).from));
-    if (name === 'Blockquote') for(let line = state.doc.lineAt(from); line.from < to; line = state.doc.line(line.number+1)) {
-      marks.push(Decoration.line({class:'live-md-quote'}).range(line.from)); if(line.number === state.doc.lines)break;
+    if (name === 'Blockquote') {
+      let depth = 1; for(let p = node.node.parent; p; p = p.parent) if (p.name === 'Blockquote') depth++;
+      // Nested Blockquote nodes are visited separately below, each owning their own lines;
+      // skip lines claimed by a nested quote so a line only gets the deepest level's indent.
+      const nestedRanges = node.node.getChildren('Blockquote').map(n => ({from:n.from,to:n.to}));
+      for(let line = state.doc.lineAt(from); line.from < to; line = state.doc.line(line.number+1)) {
+        if (!nestedRanges.some(r => line.from < r.to && line.to > r.from)) {
+          marks.push(Decoration.line({class:'live-md-quote',attributes:{style:`--quote-depth:${depth}`}}).range(line.from));
+        }
+        if(line.number === state.doc.lines)break;
+      }
     }
     if (name === 'FencedCode' || name === 'CodeBlock') for(let line = state.doc.lineAt(from); line.from < to; line = state.doc.line(line.number+1)) {
       marks.push(Decoration.line({class:'live-md-codeblock'}).range(line.from)); if(line.number === state.doc.lines)break;
@@ -398,7 +407,12 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
         }
       }
     }
-    if (!editing && /^(HeaderMark|EmphasisMark|StrikethroughMark|CodeMark|QuoteMark)$/.test(name)) {
+    if (editing && name === 'QuoteMark') {
+      // Reveal the '> ' source on the active line, but take it out of the text flow (see
+      // .live-md-quote-mark-reveal) so it hangs in the gutter instead of shifting the line's text.
+      let end = to; if (state.sliceDoc(to,to+1)===' ')end++;
+      marks.push(Decoration.mark({class:'live-md-quote-mark-reveal'}).range(from,end));
+    } else if (!editing && /^(HeaderMark|EmphasisMark|StrikethroughMark|CodeMark|QuoteMark)$/.test(name)) {
       // Keep fenced code delimiters visible so language and boundaries remain editable.
       if (name === 'CodeMark' && node.node.parent?.name === 'FencedCode') return;
       let end = to; if ((name === 'HeaderMark' || name === 'QuoteMark') && state.sliceDoc(to,to+1)===' ')end++;
@@ -519,7 +533,13 @@ const theme = EditorView.theme({
   // now that .cm-line carries the full 40px card inset (previously .cm-content did), leaving
   // paddingRight unset would collapse only the left side, jamming the block against the card edge.
   '.live-md-codeblock':{fontFamily:'monospace',backgroundColor:'var(--color-code-bg)',paddingLeft:'54px',paddingRight:'42px'},
-  '.live-md-quote':{borderLeft:'2px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border))',paddingLeft:'12px',color:'var(--color-muted)'},
+  // paddingLeft (38px) + borderLeft (2px) = .cm-line's own 40px inset, so the border hangs at
+  // the card's left edge while the quote text lands flush with a plain paragraph line's text.
+  // Nesting adds a readable step per level via --quote-depth (set per line in liveDecorations).
+  '.live-md-quote':{position:'relative',borderLeft:'2px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border))',paddingLeft:'calc(38px + (var(--quote-depth, 1) - 1) * 16px)',color:'var(--color-muted)'},
+  // The revealed '> ' marker on an active quote line is taken out of the text flow so it
+  // doesn't push the line's text further right than the lines around it (see liveDecorations).
+  '.live-md-quote-mark-reveal':{position:'absolute',left:'0'},
   '.live-md-mdx-import-chip':{display:'inline-flex',alignItems:'center',gap:'5px',padding:'1px 8px',borderRadius:'4px',fontSize:'0.78em',fontFamily:'monospace',cursor:'pointer',backgroundColor:'color-mix(in srgb, var(--color-text) 4%, var(--color-surface))',color:'var(--color-muted)',border:'1px solid color-mix(in srgb, var(--color-text) 12%, var(--color-border))',opacity:'0.65',transition:'opacity 120ms ease'},
   '.live-md-mdx-import-chip:hover':{opacity:'1'},
   '.live-md-mdx-import-chip .mdx-chip-badge':{fontSize:'9px',fontWeight:'700',textTransform:'uppercase',color:'var(--color-muted)'},

@@ -216,13 +216,21 @@ input, textarea, [contenteditable="true"] { caret-color: var(--color-text); }
 
 .prose-custom blockquote {
   border-left: 2.5px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border));
-  padding: 0.35rem 0.85rem;
+  padding: 0.35rem 0.85rem 0.35rem 0.5rem;
   font-style: normal;
   color: color-mix(in srgb, var(--color-text) 80%, transparent);
   margin-top: 0.65rem;
   margin-bottom: 0.65rem;
   background-color: color-mix(in srgb, var(--color-text) 2.5%, transparent);
   border-radius: 0 4px 4px 0;
+}
+
+/* Pull the top-level border+padding back into the surrounding container's own gutter so the
+   quote's text lines up with sibling paragraph text; the bar and background hang left of that
+   text column instead. A nested blockquote keeps its own border-left/padding-left as a readable
+   indent step, so deeper levels stay visually distinct from their parent. */
+.prose-custom blockquote:not(blockquote blockquote) {
+  margin-left: calc(-2.5px - 0.5rem);
 }
 
 .prose-custom pre {
