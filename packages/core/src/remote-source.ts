@@ -331,13 +331,20 @@ export abstract class RemoteSource {
     if (!Array.isArray(notes) || !Array.isArray(documents) || !notes.length && !documents.length || notes.length + documents.length > 200) throw new SourceError('Select between 1 and 200 files.');
     if (typeof message !== 'string' || !message.trim() || message.length > 4000) throw new SourceError('A commit message of at most 4000 characters is required.');
     const snapshot = await this.getSnapshot(true);
-    const changes = await Promise.all(notes.map(async note => {
+    for (const note of notes) {
       if (!note || typeof note.path !== 'string' || !NOTE_FILE.test(note.path) || typeof note.content !== 'string' || !note.metadata || typeof note.metadata !== 'object' || Array.isArray(note.metadata)) throw new SourceError('Invalid note change.');
       if (note.createOnly && snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`A note already exists at ${note.path}.`, 409);
       if (!note.createOnly && !snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`Note moved or deleted: ${note.path}.`, 409);
-      const existingRaw = note.createOnly ? undefined : await this.readFile(note.path).then(b => b.toString('utf8')).catch(() => undefined);
-      return { path: note.path, content: serializeNoteContent(note.metadata, note.content, Boolean(note.createOnly), new Date(), existingRaw) };
-    }));
+    }
+    // Bounds concurrent blob reads the same way `contents()` does, so a 200-note batch cannot burst 200 uncached platform reads at once.
+    await this.prefetchFiles(notes.filter(note => !note.createOnly).map(note => note.path));
+    const changes: { path: string; content: string }[] = [];
+    for (let i = 0; i < notes.length; i += 6) {
+      changes.push(...await Promise.all(notes.slice(i, i + 6).map(async note => {
+        const existingRaw = note.createOnly ? undefined : await this.readFile(note.path).then(b => b.toString('utf8')).catch(() => undefined);
+        return { path: note.path, content: serializeNoteContent(note.metadata, note.content, Boolean(note.createOnly), new Date(), existingRaw) };
+      })));
+    }
     const config = documents.length ? await this.config() : null;
     for (const draft of documents) {
       const document = workspaceDocument(draft?.path);
