@@ -48,7 +48,7 @@ export function loadSourceConfig(base: string, env: NodeJS.ProcessEnv = process.
   const type = get('SOURCE');
   if (type) return parseSourceConfig({ source: type === 'local'
     ? { type, path: get('LOCAL_PATH') || env.REPO_ROOT || defaultLocalPath(base) }
-    : { type, repository: get('REPOSITORY'), branch: get('BRANCH'), url: get('GITLAB_URL') ?? env.GITLAB_URL } }, base);
+    : { type, repository: get('REPOSITORY'), branch: get('BRANCH'), url: get('GITLAB_URL') || env.GITLAB_URL || undefined } }, base);
   const configured = get('SERVER_CONFIG');
   const file = path.resolve(base, configured || (fs.existsSync(path.join(base, 'mygitnotes.server.yaml')) ? 'mygitnotes.server.yaml' : SERVER_CONFIG_FILENAME));
   if (fs.existsSync(file)) return parseSourceConfig(YAML.parse(fs.readFileSync(file, 'utf8')), path.dirname(file));

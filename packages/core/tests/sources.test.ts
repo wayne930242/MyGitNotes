@@ -67,6 +67,7 @@ describe('source configuration', () => {
     const notes = path.join(root, 'legacy');
     expect(loadSourceConfig(root, { MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: '', GITHUB_NOTES_LOCAL_PATH: notes })).toEqual({ type: 'local', path: notes });
     expect(loadSourceConfig(root, { MYGITNOTES_SOURCE: '', GITHUB_NOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: '', GITHUB_NOTES_REPOSITORY: 'owner/repo', GITHUB_NOTES_BRANCH: 'main' })).toEqual({ type: 'github', repository: 'owner/repo', branch: 'main' });
+    expect(loadSourceConfig(root, { MYGITNOTES_SOURCE: 'gitlab', MYGITNOTES_REPOSITORY: 'group/project', MYGITNOTES_BRANCH: 'main', MYGITNOTES_GITLAB_URL: '', GITLAB_URL: '' })).toMatchObject({ type: 'gitlab', url: 'https://gitlab.com' });
   });
   it('fills empty or missing environment keys from a .env file without overriding set ones', () => {
     const file = path.join(root, '.env');
