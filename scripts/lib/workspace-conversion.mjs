@@ -1,0 +1,32 @@
+import { execFileSync } from 'node:child_process';
+import { workspaceOwnedRoots } from './workspace-agent-merge.mjs';
+
+const SPARSE_LIST = '.github/vercel-sparse-paths.txt';
+
+/**
+ * Plans which tracked files leave a fork-model main when it becomes content-only.
+ * Product paths (the sparse deploy list, except .github) leave whole.
+ * In every other Core namespace only files byte-identical to the merged Core revision leave,
+ * so workspace-owned files there (docs/specs, an edited docs/CONTEXT.md or .gitignore) stay.
+ */
+export function planWorkspaceConversion(repoRoot, coreRevision) {
+  const git = (...args) => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
+  const listTree = revision => new Map(git('ls-tree', '-r', '-z', '--full-tree', revision).split('\0').filter(Boolean)
+    .map(line => { const [meta, file] = line.split('\t'); return [file, meta.split(' ')[2]]; }));
+  const head = listTree('HEAD');
+  const core = listTree(coreRevision);
+  const sparse = git('show', `${coreRevision}:${SPARSE_LIST}`).split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
+  const productPaths = sparse.filter(entry => entry.split('/')[0] !== '.github');
+  const product = file => productPaths.some(entry => file === entry || file.startsWith(`${entry}/`));
+  const coreRoots = new Set([...core.keys()].map(file => file.split('/')[0]));
+  const owned = file => workspaceOwnedRoots.some(root => file === root || file.startsWith(`${root}/`));
+  const remove = [];
+  const kept = [];
+  for (const [file, blob] of head) {
+    const top = file.split('/')[0];
+    if (owned(file) || !coreRoots.has(top)) continue;
+    if (product(file) || core.get(file) === blob) remove.push(file);
+    else kept.push(file);
+  }
+  return { remove, kept };
+}
