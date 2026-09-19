@@ -67,6 +67,17 @@ try {
  if(align.para==null||align.quote==null||align.lazy==null||align.nested==null)throw Error(`Blockquote alignment check could not find all lines: ${JSON.stringify(align)}`);
  if(Math.abs(align.para-align.quote)>1||Math.abs(align.para-align.lazy)>1)throw Error(`Blockquote text does not align with paragraph text at 1440px: ${JSON.stringify(align)}`);
  if(align.nested-align.quote<8)throw Error(`Nested blockquote lacks a readable indent step at 1440px: ${JSON.stringify(align)}`);
+ // A depth-2 quote line carries two adjacent QuoteMark nodes; their revealed '> > ' source must
+ // merge into one span while the cursor sits on that line, not render as two overlapping markers.
+ const nestedBox=await page.evaluate(()=>{const l=Array.from(document.querySelectorAll('.cm-line')).find(l=>l.textContent.includes('Nested quote line'));const r=l.getBoundingClientRect();return {x:r.left+5,y:r.top+r.height/2};});
+ await page.mouse.click(nestedBox.x,nestedBox.y);
+ const nestedReveal=await page.evaluate(()=>{
+  const line=Array.from(document.querySelectorAll('.cm-line')).find(l=>l.textContent.includes('Nested quote line'));
+  const reveals=Array.from(line?.querySelectorAll('.live-md-quote-mark-reveal')||[]);
+  return {count:reveals.length,text:reveals.map(r=>r.textContent).join('|')};
+ });
+ if(nestedReveal.count!==1||nestedReveal.text!=='> > ')throw Error(`Nested blockquote marker reveal did not merge into one span: ${JSON.stringify(nestedReveal)}`);
+ await page.keyboard.down('Control');await page.keyboard.press('Home');await page.keyboard.up('Control');
  if(await page.$eval('.cm-content',e=>e.innerText.includes('**bold**')))throw Error('Inactive bold markers visible');
  await page.click('input[aria-label="Toggle task"]');await click('Source');
  await page.waitForSelector('textarea[aria-label="Note content"]');

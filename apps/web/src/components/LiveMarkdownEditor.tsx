@@ -325,6 +325,14 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
   const docText = state.doc.toString();
   const directiveBlocks = findDirectiveBlocks(docText);
   const collapsedDirectives = directiveBlocks.filter(b => !active(b.from, b.to));
+  // A nested quote line carries one QuoteMark per level; each reveal is taken out of flow to the
+  // same spot (see .live-md-quote-mark-reveal), so adjacent marks are merged into one span here —
+  // otherwise a depth-2+ line's revealed markers would render on top of each other.
+  let quoteReveal: { from: number; to: number } | null = null;
+  const flushQuoteReveal = () => {
+    if (quoteReveal) marks.push(Decoration.mark({class:'live-md-quote-mark-reveal'}).range(quoteReveal.from, quoteReveal.to));
+    quoteReveal = null;
+  };
 
   syntaxTree(state).iterate({ enter(node) {
     const {from,to,name} = node;
@@ -411,7 +419,8 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
       // Reveal the '> ' source on the active line, but take it out of the text flow (see
       // .live-md-quote-mark-reveal) so it hangs in the gutter instead of shifting the line's text.
       let end = to; if (state.sliceDoc(to,to+1)===' ')end++;
-      marks.push(Decoration.mark({class:'live-md-quote-mark-reveal'}).range(from,end));
+      if (quoteReveal && quoteReveal.to === from) quoteReveal.to = end;
+      else { flushQuoteReveal(); quoteReveal = {from, to: end}; }
     } else if (!editing && /^(HeaderMark|EmphasisMark|StrikethroughMark|CodeMark|QuoteMark)$/.test(name)) {
       // Keep fenced code delimiters visible so language and boundaries remain editable.
       if (name === 'CodeMark' && node.node.parent?.name === 'FencedCode') return;
@@ -419,6 +428,7 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
       hide(from,end);
     }
   }});
+  flushQuoteReveal();
 
   for (const block of collapsedDirectives) {
     marks.push(
