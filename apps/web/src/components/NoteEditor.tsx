@@ -244,6 +244,8 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
   const applyRemote = (latest: NoteItem) => {
     const state = current.current;
     if (state.blocked) return null;
+    // No local edit means nothing of the user's needs merging; adopt the remote version quietly.
+    const hasLocalEdits = state.content !== state.baseNote.content || !sameValue(state.metadata, state.baseNote.metadata);
     const result = mergeNote(state.baseNote, state, latest);
     if (result.conflict) {
       preserveConflict();
@@ -254,7 +256,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
       onMarkConflict?.(reason, { ...note, content: state.content, metadata: state.metadata }, state.baseNote);
       return null;
     }
-    if (latest.content !== state.baseNote.content || !sameValue(latest.metadata, state.baseNote.metadata)) {
+    if (hasLocalEdits && (latest.content !== state.baseNote.content || !sameValue(latest.metadata, state.baseNote.metadata))) {
       setRemoteNotice('Remote changes merged into this draft. Review before saving.');
     }
     current.current = { ...state, ...result.draft, baseNote: latest };
@@ -405,7 +407,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
   // Debounced auto-save directly to disk on edit (Requirement 1)
   useEffect(() => {
     if (readOnly || closing.current) return;
-    const baseline = autoSave ? note : baseNote;
+    // `baseNote` is this session's own merge base, kept current as soon as a remote check
+    // applies; the `note` prop only catches up once the parent re-renders with it.
+    const baseline = baseNote;
     const saved = lastSaved.current;
     const isDifferent = !(saved && content === saved.content && sameIgnoringTimestamps(metadata, saved.metadata))
       && (content !== baseline.content || !sameIgnoringTimestamps(metadata, baseline.metadata));

@@ -186,3 +186,15 @@ it('blocks on an external change that conflicts with the unsaved local edit, pre
   expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('LOCAL1\nline2\nline3\n');
   expect(screen.getByText(/conflict/i)).toBeTruthy();
 });
+
+it('adopts a remote-only change silently when there are no local edits (draft mode), without staging a draft or showing a notice', async () => {
+  const onSave = vi.fn(async ({ content, metadata }: { content: string; metadata?: Record<string, unknown> }) =>
+    ({ ...note, content, metadata: { ...metadata, updated: 't1' } }));
+  const onReadRemote = vi.fn(async () => ({ ...note, content: '# Alpha\nExternal change.\n', metadata: { title: 'Alpha', updated: 't1' } }));
+  render(editor({ draftMode: true, onSave, onReadRemote }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+
+  expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('# Alpha\nExternal change.\n');
+  expect(onSave).not.toHaveBeenCalled();
+  expect(screen.queryByText(/Remote changes merged/i)).toBeNull();
+});
