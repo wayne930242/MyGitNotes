@@ -24,6 +24,13 @@ it('treats a same-origin absolute URL as internal when the current origin is giv
   expect(resolveWorkspaceHref('https://other.example/notebooks/x/notes/y.md', 'notes/a.md', undefined, origin)).toMatchObject({ kind: 'external' });
 });
 
+it('does not let a same-origin URL whose pathname starts with // redirect to another host', () => {
+  const origin = 'https://notes.wayneh.tw';
+  const result = resolveWorkspaceHref(`${origin}//evil.example.com/phish`, 'notes/a.md', undefined, origin);
+  expect(result).not.toMatchObject({ kind: 'external', url: expect.stringContaining('evil.example.com') });
+  expect(result).toEqual({ kind: 'path', path: 'evil.example.com/phish', anchor: '' });
+});
+
 it('resolves alias paths from notebook pathAliases', () => {
   const notebooks = [
     {

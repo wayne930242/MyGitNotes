@@ -55,10 +55,25 @@ export function resolveWorkspaceHref(
       const url = new URL(href.startsWith('//') ? `https:${href}` : href);
       if (url.username || url.password) return null;
       if (currentOrigin && url.origin === currentOrigin) {
-        return resolveWorkspaceHref(`${url.pathname}${url.search}${url.hash}`, sourcePath, aliasesOrNotebooks, currentOrigin);
+        // The stripped pathname can itself start with `//`; resolve it as a path directly
+        // instead of re-running the protocol/`//` check, which would reinterpret it as
+        // protocol-relative and hand navigation to whatever host follows the `//`.
+        return resolveRelativeWorkspaceHref(`${url.pathname}${url.search}${url.hash}`, sourcePath, aliasesOrNotebooks);
       }
       return { kind: 'external', url: url.href };
     }
+    return resolveRelativeWorkspaceHref(href, sourcePath, aliasesOrNotebooks);
+  } catch {
+    return null;
+  }
+}
+
+function resolveRelativeWorkspaceHref(
+  href: string,
+  sourcePath: string,
+  aliasesOrNotebooks?: Record<string, string> | NotebookConfig[]
+): WorkspaceLink | null {
+  try {
     if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return null;
     if (href.startsWith('#')) return { kind: 'anchor', anchor: decodeURIComponent(href.slice(1)) };
     if (/^\/(?:notebooks\/|notes(?:[?#]|$)|assets(?:[?#]|$)|screen(?:[?#]|$)|graph(?:[?#]|$))/.test(href)) {
