@@ -26,6 +26,7 @@ export interface NoteDocumentPanelProps {
   outline: OutlineHeading[];
   outlineIndex: number;
   chooseOutline: (index: number, closeAfter?: boolean) => void;
+  openOutline: () => void;
   metadata: Record<string, unknown>;
   setMetadata: (metadata: Record<string, unknown>) => void;
   statuses: string[];
@@ -47,7 +48,7 @@ export interface NoteDocumentPanelProps {
 }
 
 /** The zoom/pane editor's document panel: its tab strip and the find, outline, frontmatter, asset and git sections it switches between. */
-export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isGitPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, chooseOutline, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, notePath, branch, editorState, editorStatus, autoSave, readOnly, isDirty, canRestore, confirmRestore, onRestoreClick }: NoteDocumentPanelProps) {
+export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isGitPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, chooseOutline, openOutline, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, notePath, branch, editorState, editorStatus, autoSave, readOnly, isDirty, canRestore, confirmRestore, onRestoreClick }: NoteDocumentPanelProps) {
   const { t } = useTranslation();
 
   const sections = (
@@ -168,7 +169,7 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
           <span>{t('editor.find')}</span>
         </Button>
         {isMarkdown && (
-          <Button type='button' role='tab' aria-selected={isOutlineOpen} tabIndex={isOutlineOpen ? 0 : -1} aria-label={t('editor.outline')} title={t('editor.outline')} onClick={() => isOutlineOpen ? setNotePanel(null) : chooseOutline(outlineIndex)}>
+          <Button type='button' role='tab' aria-selected={isOutlineOpen} tabIndex={isOutlineOpen ? 0 : -1} aria-label={t('editor.outline')} title={t('editor.outline')} onClick={() => isOutlineOpen ? setNotePanel(null) : openOutline()}>
             <span>{t('editor.outline')}</span>
           </Button>
         )}
