@@ -98,6 +98,28 @@ it('does not let a concurrent remote check read back its own in-flight autosave 
   expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('# Alpha\nMore.');
 });
 
+it('lets close proceed while a local autosave is still in flight', async () => {
+  let resolveSave: ((value: NoteItem) => void) | null = null;
+  const gate = new Promise<NoteItem>(resolve => { resolveSave = resolve; });
+  const onSave = vi.fn(async ({ content, metadata }: { content: string; metadata?: Record<string, unknown> }) => {
+    await gate;
+    return { ...note, content, metadata: { ...metadata, updated: 't1' } };
+  });
+  const onClose = vi.fn();
+  render(editor({ onSave, onClose }));
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: '# Alpha\nMore.' } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(750); }); // debounce fires; autosave now awaiting the gate
+  expect(onSave).toHaveBeenCalledTimes(1);
+
+  fireEvent.click(screen.getByLabelText('Close note'));
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  // close() proceeded to its own save instead of being blocked by the in-flight autosave.
+  expect(onSave).toHaveBeenCalledTimes(2);
+
+  await act(async () => { resolveSave?.(note); await vi.advanceTimersByTimeAsync(0); });
+  expect(onClose).toHaveBeenCalled();
+});
+
 it('merges a concurrent local edit with an unrelated external change', async () => {
   const start: NoteItem = { ...note, content: 'line1\nline2\nline3\n' };
   let resolveRead: ((value: NoteItem) => void) | null = null;

@@ -224,6 +224,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
   const [remoteNotice, setRemoteNotice] = useState('');
   const [conflictDraft, setConflictDraft] = useState<NoteDraft | null>(() => getLocalDraft(`${draftScope || branch}:conflict`, note.path));
   const operation = useRef(false);
+  // Set only around the debounced disk autosave; kept separate from `operation` so a routine
+  // background save never trips the navigate/close/persist guards that flag was written for.
+  const autosaving = useRef(false);
   // The last autosaved draft: the `note` prop reaches it only after the notes refetch.
   const lastSaved = useRef<{ content: string; metadata: Record<string, unknown> } | null>(null);
   const closing = useRef(false);
@@ -271,7 +274,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
     } else setSaveError((error as Error).message);
   };
   const checkRemote = async () => {
-    if (!onReadRemote || operation.current || current.current.blocked || Date.now() < nextRemoteCheck.current) return;
+    if (!onReadRemote || operation.current || autosaving.current || current.current.blocked || Date.now() < nextRemoteCheck.current) return;
     nextRemoteCheck.current = Date.now() + (readOnly ? 300000 : 60000);
     operation.current = true;
     try { const latest = await onReadRemote(note.path); if (mounted.current) applyRemote(latest); }
@@ -439,10 +442,13 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
 
       // Debounced auto-save to disk
       const timer = setTimeout(async () => {
+        // Defer to an in-flight checkRemote/save/restore rather than racing it.
+        while (operation.current) await new Promise(resolve => setTimeout(resolve, 50));
+        if (!mounted.current) return;
         setIsSaving(true);
         // Held for the save's duration so a concurrent remote check (focus/interval)
         // can't read this same write back mid-flight and mistake it for an external change.
-        operation.current = true;
+        autosaving.current = true;
         try {
           const saved = await onSave({
             path: note.path,
@@ -460,7 +466,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
         } catch (err) {
           setSaveError((err as Error).message);
         } finally {
-          operation.current = false;
+          autosaving.current = false;
           setIsSaving(false);
         }
       }, 750);
