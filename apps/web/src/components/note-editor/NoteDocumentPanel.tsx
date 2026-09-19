@@ -25,6 +25,7 @@ export interface NoteDocumentPanelProps {
   findInputRef: React.RefObject<HTMLInputElement>;
   outline: OutlineHeading[];
   outlineIndex: number;
+  setOutlineIndex: (index: number) => void;
   chooseOutline: (index: number, closeAfter?: boolean) => void;
   openOutline: () => void;
   metadata: Record<string, unknown>;
@@ -37,6 +38,7 @@ export interface NoteDocumentPanelProps {
   onInsertAssetRef: (ref: string) => void;
   notePath: string;
   branch: string;
+  draftScope?: string;
   editorState: 'saving' | 'pending' | 'saved';
   editorStatus: string;
   autoSave: boolean;
@@ -48,7 +50,7 @@ export interface NoteDocumentPanelProps {
 }
 
 /** The zoom/pane editor's document panel: its tab strip and the find, outline, frontmatter, asset and git sections it switches between. */
-export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isGitPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, chooseOutline, openOutline, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, notePath, branch, editorState, editorStatus, autoSave, readOnly, isDirty, canRestore, confirmRestore, onRestoreClick }: NoteDocumentPanelProps) {
+export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isGitPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, openOutline, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, notePath, branch, draftScope, editorState, editorStatus, autoSave, readOnly, isDirty, canRestore, confirmRestore, onRestoreClick }: NoteDocumentPanelProps) {
   const { t } = useTranslation();
 
   const sections = (
@@ -111,7 +113,7 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
                     aria-current={index === outlineIndex ? 'true' : undefined}
                     style={{ paddingInlineStart: `${12 + (heading.depth - 1) * 14}px` }}
                     title={heading.label}
-                    onFocus={() => chooseOutline(index)}
+                    onFocus={() => setOutlineIndex(index)}
                     onClick={() => chooseOutline(index)}
                   >
                     <span>{heading.label}</span>
@@ -123,7 +125,7 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
             : <p>{t('editor.outlineEmpty')}</p>}
         </section>
       )}
-      {showFrontmatter && <NoteFrontmatterPanel metadata={metadata} setMetadata={setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={locked} />}
+      {showFrontmatter && <NoteFrontmatterPanel metadata={metadata} setMetadata={setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={locked} notePath={notePath} branch={branch} draftScope={draftScope} readOnly={readOnly} />}
       {isAssetPickerOpen && <FileManager notebookId={notebookId} writable={false} mode='pick-image' layout='panel' onInsert={locked ? undefined : onInsertAssetRef} />}
       {isGitPanelOpen && (
         <div className='note-git-panel note-panel-scroll'>

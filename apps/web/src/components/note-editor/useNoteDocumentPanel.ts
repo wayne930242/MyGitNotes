@@ -12,10 +12,14 @@ export interface UseNoteDocumentPanelParams {
   documentPanel?: { target: HTMLElement | null; mode: NotePanelMode | null; onChange: (mode: NotePanelMode | null) => void; };
   /** Owned by the host `NoteEditor`, which renders the `MarkdownEditor` this ref points to. */
   editorRef: React.RefObject<MarkdownEditorHandle>;
+  notePath: string;
+  branch: string;
+  draftScope?: string;
+  readOnly: boolean;
 }
 
 /** The document panel's visibility, find/outline navigation, and its keyboard leader menu. */
-export function useNoteDocumentPanel({ frame, active, isMarkdown, content, editorMode, documentPanel, editorRef }: UseNoteDocumentPanelParams) {
+export function useNoteDocumentPanel({ frame, active, isMarkdown, content, editorMode, documentPanel, editorRef, notePath, branch, draftScope, readOnly }: UseNoteDocumentPanelParams) {
   const [ownPanel, updateNotePanel] = useState<NotePanelMode | null>(null);
   const notePanel = frame === 'pane' ? documentPanel?.mode ?? null : ownPanel;
   const lastNotePanel = useRef<NotePanelMode>((() => {
@@ -164,6 +168,17 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
     return () => document.removeEventListener('keydown', onKeyDown, true);
   }, [active]);
 
+  /* eslint-disable react-hooks/exhaustive-deps -- The effect is keyed to editor identity; incoming outline recomputation must not reset the panel's navigation state. */
+  useEffect(() => {
+    /* eslint-disable react/set-state-in-effect -- Document identity and search changes reset editor state; autosave starts from the committed effect snapshot. */
+    setFindQuery('');
+    setFindIndex(0);
+    setOutlineIndex(0);
+    setIsEditorLeaderOpen(false);
+    /* eslint-enable react/set-state-in-effect */
+  }, [notePath, branch, draftScope, readOnly]);
+  /* eslint-enable react-hooks/exhaustive-deps */
+
   useEffect(() => {
     if (!isOutlineOpen || outline.length === 0) return;
     const index = Math.min(outlineIndex, outline.length - 1);
@@ -177,5 +192,5 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
     requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-outline-index="${index}"]`)?.focus());
   }, [isOutlineOpen, outline, outlineIndex]);
 
-  return { editorRef, notePanel, setNotePanel, lastNotePanel, isAssetPickerOpen, isFindOpen, isOutlineOpen, showFrontmatter, isGitPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, chooseOutline, moveOutline, openFind, openOutline, isEditorLeaderOpen, setIsEditorLeaderOpen };
+  return { editorRef, notePanel, setNotePanel, lastNotePanel, isAssetPickerOpen, isFindOpen, isOutlineOpen, showFrontmatter, isGitPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, moveOutline, openFind, openOutline, isEditorLeaderOpen, setIsEditorLeaderOpen };
 }

@@ -236,6 +236,7 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
     setContent(note.content);
     setMetadata(note.metadata || {});
     setHasUnsavedChanges(false);
+    setConfirmRestore(false);
     setCopyState('idle');
     // `note` already reflects whatever is durably persisted for this session (the file on disk in
     // local mode, or the currently staged working draft in draftMode); treat it as already-saved so
