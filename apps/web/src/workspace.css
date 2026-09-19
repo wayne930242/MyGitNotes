@@ -817,6 +817,12 @@
   .cm-line {
     padding: 0 16px !important;
   }
+  /* .cm-line's !important shorthand above would otherwise collapse the quote's own
+     paddingLeft calc (see LiveMarkdownEditor's theme) back to 16px, losing the border-width
+     offset and the nested-depth indent; reassert it against the narrower 16px inset here. */
+  .live-md-quote {
+    padding-left: calc(14px + (var(--quote-depth, 1) - 1) * 16px) !important;
+  }
   [data-live-markdown] .cm-content {
     padding-bottom: 0 !important;
   }

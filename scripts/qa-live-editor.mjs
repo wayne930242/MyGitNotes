@@ -13,7 +13,7 @@ const root=fs.mkdtempSync(path.join(os.tmpdir(),'github-notes-browser-'));
 const write=(p,s)=>{fs.mkdirSync(path.dirname(path.join(root,p)),{recursive:true});fs.writeFileSync(path.join(root,p),s);};
 const git=(...args)=>execFileSync('git',args,{cwd:root,stdio:'pipe'});
 write('notes/.github-notes.yaml','schema_version: 1\nworkspace:\n  title: Folder QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
-write('notes/example/root.md','# Root Note\n\nParagraph **bold** and *italic*.\n\n- [ ] Task\n\n| A | B |\n| - | - |\n| a | b |\n\n![pixel](assets/pixel.png)\n');
+write('notes/example/root.md','# Root Note\n\nParagraph **bold** and *italic*.\n\n> Quoted first line.\n> Quoted second line.\nLazy continuation without a marker.\n>\n> > Nested quote line.\n\n- [ ] Task\n\n| A | B |\n| - | - |\n| a | b |\n\n![pixel](assets/pixel.png)\n');
 write('notes/example/projects/_dir.yml','title: Projects\norder: -1\n');
 write('notes/example/projects/deep/_dir.yml','title: Deep work\n');
 write('notes/example/projects/deep/nested.md','# Nested Note\n');
@@ -52,6 +52,21 @@ try {
  const liveActiveLine=await page.$eval('[data-live-markdown] .cm-activeLineGutter',node=>{const style=getComputedStyle(node);return {text:node.textContent.trim(),weight:Number(style.fontWeight),transform:style.transform};});
  if(liveActiveLine.text!=='1'||liveActiveLine.weight<600||liveActiveLine.transform==='none')throw Error('Live preview active line number is not emphasized');
  await page.waitForSelector('.live-md-heading');await page.waitForSelector('.live-md-rendered table');await page.waitForSelector('.live-md-rendered img');
+ // The quote bar and its padding hang in the gutter so a blockquote's own text starts at the
+ // same x as a plain paragraph's, with a readable indent step per nesting level.
+ const quoteAlign=async()=>page.evaluate(()=>{
+  const firstX=el=>{if(!el)return null;const r=document.createRange();const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.textContent.trim()){r.setStart(n,0);r.setEnd(n,1);const b=r.getBoundingClientRect();if(b.width||b.height)return b.left;}}return null;};
+  const lines=Array.from(document.querySelectorAll('.cm-line'));
+  const para=lines.find(l=>l.textContent.includes('Paragraph')&&!l.className.includes('live-md-quote'));
+  const quote=lines.find(l=>l.textContent.includes('Quoted first line'));
+  const lazy=lines.find(l=>l.textContent.includes('Lazy continuation'));
+  const nested=lines.find(l=>l.textContent.includes('Nested quote line'));
+  return {para:firstX(para),quote:firstX(quote),lazy:firstX(lazy),nested:firstX(nested)};
+ });
+ let align=await quoteAlign();
+ if(align.para==null||align.quote==null||align.lazy==null||align.nested==null)throw Error(`Blockquote alignment check could not find all lines: ${JSON.stringify(align)}`);
+ if(Math.abs(align.para-align.quote)>1||Math.abs(align.para-align.lazy)>1)throw Error(`Blockquote text does not align with paragraph text at 1440px: ${JSON.stringify(align)}`);
+ if(align.nested-align.quote<8)throw Error(`Nested blockquote lacks a readable indent step at 1440px: ${JSON.stringify(align)}`);
  if(await page.$eval('.cm-content',e=>e.innerText.includes('**bold**')))throw Error('Inactive bold markers visible');
  await page.click('input[aria-label="Toggle task"]');await click('Source');
  await page.waitForSelector('textarea[aria-label="Note content"]');
@@ -100,6 +115,14 @@ try {
  await page.waitForFunction(()=>document.querySelector('[data-markdown-editor]')?.clientWidth<=390);
  const mobileLive=await page.$eval('[data-markdown-editor]',editor=>({clientWidth:editor.clientWidth,scrollWidth:editor.scrollWidth,gutterWidth:document.querySelector('[data-live-markdown] .cm-gutters')?.getBoundingClientRect().width}));
  if(mobileLive.scrollWidth>mobileLive.clientWidth||!mobileLive.gutterWidth)throw Error('Live preview line numbers overflow the mobile editor');
+ // A narrow-viewport media query resets .cm-line's own padding; the quote's padding must be
+ // reasserted against it or the alignment and the nested indent step collapse back together.
+ align=await quoteAlign();
+ if(align.para==null||align.quote==null||align.lazy==null||align.nested==null)throw Error(`Blockquote alignment check could not find all lines at 390px: ${JSON.stringify(align)}`);
+ if(Math.abs(align.para-align.quote)>1||Math.abs(align.para-align.lazy)>1)throw Error(`Blockquote text does not align with paragraph text at 390px: ${JSON.stringify(align)}`);
+ if(align.nested-align.quote<8)throw Error(`Nested blockquote lacks a readable indent step at 390px: ${JSON.stringify(align)}`);
+ if(mobileLive.scrollWidth>mobileLive.clientWidth)throw Error('Blockquote bar causes horizontal scroll at 390px');
+ console.log('PASS blockquote alignment: text matches paragraph text at 1440px and 390px, with a readable nested indent step');
  await click('Source');await page.waitForSelector('[data-source-line-numbers]');
  const mobileSource=await page.$eval('[data-markdown-editor]',editor=>({clientWidth:editor.clientWidth,scrollWidth:editor.scrollWidth,gutterWidth:document.querySelector('[data-source-line-numbers]')?.getBoundingClientRect().width,sourceWidth:document.querySelector('textarea[aria-label="Note content"]')?.getBoundingClientRect().width}));
  if(mobileSource.scrollWidth>mobileSource.clientWidth||!mobileSource.gutterWidth||mobileSource.gutterWidth>60||mobileSource.sourceWidth<250)throw Error('Source line numbers crowd or overflow the mobile editor');
