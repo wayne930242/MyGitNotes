@@ -142,6 +142,14 @@ export function populateYouTubeEmbed(embed: HTMLElement, labels: YouTubeLabels =
   return { poster, image };
 }
 
+// The player mounts inside whichever of these owns the target right now, instead of
+// `document.body`, so it inherits that ancestor's stacking context: contained beneath a
+// dialog opened over the note (a sibling stacking context at the same or a higher z-index)
+// instead of racing it on a single global z-index.
+function playerMountRoot(target: HTMLElement): HTMLElement {
+  return target.closest<HTMLElement>('.note-overlay') ?? target.closest<HTMLElement>('.app-shell') ?? document.body;
+}
+
 export function activateYouTubeEmbed(poster: HTMLElement) {
   const embed = poster.closest<HTMLElement>('.note-youtube-embed');
   const videoId = embed?.dataset.videoId;
@@ -159,7 +167,6 @@ export function activateYouTubeEmbed(poster: HTMLElement) {
   const toolbar = embed.querySelector('.note-youtube-mode-control');
   if (toolbar) { bindYouTubeToolbar(toolbar as HTMLElement); host.append(toolbar); }
   host.append(createYouTubeIframe(videoId, start, playerLabel));
-  document.body.append(host);
   embed.dataset.youtubePlaying = 'true';
   const player = { key, host, route: location.pathname, frame: 0, target: embed, surface };
   activePlayer = player;
@@ -171,8 +178,14 @@ export function activateYouTubeEmbed(poster: HTMLElement) {
       : [...player.surface.querySelectorAll<HTMLElement>('.note-youtube-embed')].find(candidate => candidate.dataset.youtubeSession === key);
     if (target) {
       player.target = target;
+      // Re-picked every frame: reparenting here (instead of once at activation) keeps the
+      // host correctly layered when the note itself moves surfaces, e.g. zooming in or out
+      // while the video plays.
+      const root = playerMountRoot(target);
+      if (host.parentElement !== root) root.append(host);
+      const rootBox = root.getBoundingClientRect();
       const box = target.getBoundingClientRect();
-      host.style.transform = `translate(${box.left}px, ${box.top}px)`;
+      host.style.transform = `translate(${box.left - rootBox.left}px, ${box.top - rootBox.top}px)`;
       host.style.width = `${box.width}px`; host.style.height = `${box.height}px`;
       let top = 0; let left = 0; let right = window.innerWidth; let bottom = window.innerHeight;
       for (let ancestor = target.parentElement; ancestor && ancestor !== document.body; ancestor = ancestor.parentElement) {

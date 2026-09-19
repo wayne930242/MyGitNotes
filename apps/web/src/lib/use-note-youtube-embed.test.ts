@@ -13,7 +13,7 @@ describe('useNoteYouTubeEmbed hook', () => {
     const iframeElements: any[] = [];
     const bodyAppend = vi.fn();
     vi.stubGlobal('document', {
-      body: { append: bodyAppend },
+      body: { append: bodyAppend, getBoundingClientRect: () => ({ left: 0, top: 0 }) },
       querySelectorAll: () => [embed],
       createElement: (tag: string) => {
         const el: any = { tagName: tag.toUpperCase(), title: '', src: '', allow: '', allowFullscreen: false, className: '', dataset: {}, style: {}, append: vi.fn(), remove: vi.fn() };

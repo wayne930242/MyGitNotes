@@ -71,6 +71,10 @@ try {
  const theater=await geometry('theater');if(Math.abs(theater.left-theater.glyphLeft)>1||Math.abs(theater.right-theater.columnRight)>1)throw Error(`YouTube theater alignment failed: ${JSON.stringify(theater)}`);
  await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('.note-youtube-embed[data-youtube-mode="theater"]');
  await page.click('[data-youtube-mode-option="thumbnail"]');await page.click('.note-youtube-poster');await page.waitForSelector('.note-youtube-persistent-player iframe');
+ // The note editor here is the zoom overlay (.note-overlay); the player must render above the note
+ // it belongs to, not behind that overlay's own backdrop.
+ const zoomTopmost=await page.evaluate(()=>{const embed=document.querySelector('.note-youtube-embed');const box=embed.getBoundingClientRect();const el=document.elementFromPoint(box.left+box.width/2,box.top+box.height/2);return {isPlayerIframe:el?.tagName==='IFRAME'&&el.classList.contains('note-youtube-iframe'),tag:el?.tagName,cls:el?.className};});
+ if(!zoomTopmost.isPlayerIframe)throw Error(`YouTube player iframe is not the topmost element over its embed in the zoom overlay: ${JSON.stringify(zoomTopmost)}`);
  await page.evaluate(()=>{window.__youtubeQaPlayer=document.querySelector('.note-youtube-persistent-player iframe');const scroller=document.querySelector('.cm-scroller');scroller.scrollTop=scroller.scrollHeight;});
  await page.waitForFunction(()=>!document.querySelector('.note-youtube-embed'));
  if(!await page.evaluate(()=>window.__youtubeQaPlayer?.isConnected&&window.__youtubeQaPlayer===document.querySelector('.note-youtube-persistent-player iframe')))throw Error('YouTube playback iframe was replaced when CodeMirror virtualized its widget');

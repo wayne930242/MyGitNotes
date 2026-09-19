@@ -369,7 +369,10 @@
 .note-youtube-poster:hover .note-youtube-play-btn svg { transform: scale(1.1); color: var(--color-danger); }
 .note-youtube-iframe { width: 100%; height: 100%; border: 0; display: block; }
 .note-youtube-embed[data-youtube-playing="true"] { box-shadow: none; }
-.note-youtube-persistent-player { position: fixed; z-index: 30; left: 0; top: 0; overflow: hidden; border-radius: 8px; background: var(--color-scrim); box-shadow: 0 4px 12px color-mix(in srgb, var(--color-scrim) 10%, transparent); will-change: transform, width, height; }
+/* Mounted inside whichever surface owns the playing note (see playerMountRoot in
+   youtube-embed.ts), never document.body: `absolute` + a modest z-index keeps it above that
+   surface's own note content while staying contained under any dialog layered on top of it. */
+.note-youtube-persistent-player { position: absolute; z-index: 5; left: 0; top: 0; overflow: hidden; border-radius: 8px; background: var(--color-scrim); box-shadow: 0 4px 12px color-mix(in srgb, var(--color-scrim) 10%, transparent); will-change: transform, width, height; }
 .note-youtube-mode-control { position: absolute; z-index: 2; top: 8px; right: 8px; display: flex; gap: 2px; padding: 3px; border-radius: 7px; background: color-mix(in srgb, var(--color-surface) 92%, transparent); box-shadow: 0 2px 8px color-mix(in srgb, var(--color-scrim) 18%, transparent); }
 .note-youtube-mode-control button { min-height: 28px; padding: 3px 7px; border: 0; border-radius: 4px; background: transparent; color: var(--color-muted); font-size: 11px; cursor: pointer; }
 .note-youtube-mode-control .note-youtube-copy { min-width: 28px; display: inline-grid; place-items: center; border-left: 1px solid var(--color-border); border-radius: 0 4px 4px 0; }
@@ -403,6 +406,11 @@
 .screen-item-option small { font-size: 11px; line-height: 16px; color: var(--color-muted); overflow-wrap: anywhere; }
 .screen-error { padding: 14px; margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border: 1px solid var(--color-border); border-radius: 10px; font-size: 12px; }.screen-form-error { color: var(--color-warning); font-size: 12px; }
 .app-shell {
+  /* The persistent YouTube player's fallback mount point (see playerMountRoot in
+     youtube-embed.ts) positions itself against this box when the note isn't inside
+     .note-overlay; this doesn't affect any position: fixed descendant, which keeps
+     tracking the viewport as before. */
+  position: relative;
   --workspace-sidebar-width: 256px;
   --workspace-padding: 32px;
   --workspace-divider: color-mix(in srgb, var(--color-text) 9%, var(--color-surface));
