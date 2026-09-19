@@ -3,7 +3,7 @@ import { LiveMarkdownDirective } from './LiveMarkdownDirective.js';
 import { findDirectiveBlocks, escapeHtml } from '../lib/directives.js';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { Compartment, EditorState, StateEffect, StateField, Transaction, type Range } from '@codemirror/state';
-import { Decoration, EditorView, WidgetType, keymap, drawSelection, highlightActiveLineGutter, lineNumbers, type DecorationSet } from '@codemirror/view';
+import { Decoration, EditorView, WidgetType, keymap, drawSelection, highlightActiveLineGutter, lineNumbers, layer, RectangleMarker, type DecorationSet } from '@codemirror/view';
 import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -464,24 +464,60 @@ function liveDecorations(state: EditorState, focused: boolean, notePath: string,
   }).range(state.doc.length));
   return Decoration.set(marks,true);
 }
+// .cm-content is a non-positioned box, so it always paints above drawSelection()'s
+// negative-z-index selection layer, hiding the tint. This layer paints the "card" background
+// behind the selection layer instead, so .cm-content itself can stay transparent.
+// It must be listed after drawSelection() in the extensions array: CodeMirror z-indexes
+// same-"above" layers by their order (later = more negative), so this needs the later slot
+// to stay behind the selection layer instead of covering it again.
+const cardBackgroundLayer = layer({
+  above: false,
+  class: 'cm-card-background-layer',
+  update: () => true,
+  markers(view) {
+    const contentRect = view.contentDOM.getBoundingClientRect();
+    const scrollerRect = view.scrollDOM.getBoundingClientRect();
+    const left = contentRect.left - scrollerRect.left + view.scrollDOM.scrollLeft;
+    const top = contentRect.top - scrollerRect.top + view.scrollDOM.scrollTop;
+    return [new RectangleMarker('cm-card-background', left, top, contentRect.width, contentRect.height)];
+  },
+});
 const theme = EditorView.theme({
   '&':{height:'100%',color:'var(--color-text)',backgroundColor:'var(--color-bg)'},
   '&.cm-focused':{outline:'none'}, '.cm-scroller':{overflow:'auto',fontFamily:'inherit',lineHeight:'1.8',backgroundColor:'var(--color-bg)',padding:'24px 16px'},
-  '.cm-content':{padding:'32px 40px 0',maxWidth:'880px',margin:'0 auto',minHeight:'calc(100% - 48px)',width:'100%',backgroundColor:'var(--color-surface)',borderRadius:'4px',boxShadow:'0 1px 4px 0 rgba(0,0,0,0.08), 0 0 0 1px var(--workspace-divider)',caretColor:'var(--color-primary)'},
-  '.cm-line':{padding:'0 2px'}, '.cm-cursor':{borderLeftColor:'var(--color-primary)'},
+  // The horizontal inset lives on .cm-line (not .cm-content) because CodeMirror's own
+  // selection-rectangle geometry (rectanglesForRange) reads a line's computed padding to
+  // find the text edge for whole-line selection spans; padding on .cm-content itself is
+  // invisible to that calculation and left the selection tint jutting into the card margin.
+  '.cm-content':{padding:'32px 0 0',maxWidth:'880px',margin:'0 auto',minHeight:'calc(100% - 48px)',width:'100%',caretColor:'var(--color-primary)'},
+  '.cm-card-background':{backgroundColor:'var(--color-surface)',borderRadius:'4px',boxShadow:'0 1px 4px 0 rgba(0,0,0,0.08), 0 0 0 1px var(--workspace-divider)'},
+  '.cm-line':{padding:'0 40px'}, '.cm-cursor':{borderLeftColor:'var(--color-primary)'},
   '.cm-gutters':{backgroundColor:'transparent',borderRight:'1px solid var(--color-border)'},
   '.cm-lineNumbers':{color:'var(--color-muted)',fontFamily:'monospace',fontSize:'11px',opacity:'0.55'},
   '.cm-lineNumbers .cm-gutterElement':{paddingLeft:'8px',paddingRight:'10px',transformOrigin:'right center',transition:'color 150ms, transform 150ms, font-weight 150ms'},
   '.cm-lineNumbers .cm-activeLineGutter':{color:'var(--color-primary)',fontWeight:'700',transform:'scale(1.08)'},
-  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground':{backgroundColor:'var(--color-primary-light)'},
+  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground':{backgroundColor:'var(--color-selection) !important'},
+  // CodeMirror's own hideNativeSelection theme makes the native ::selection background
+  // transparent (so our .cm-selectionBackground layer shows through) but leaves its text
+  // colour alone, which browsers default to a light system colour (e.g. HighlightText) —
+  // illegible against our tint. `::selection` inherits from an ancestor's ::selection rule,
+  // not from the originating element's own `color`, so `color: inherit` would still resolve
+  // to that system default; set the normal text colour explicitly instead, per element type.
+  '.cm-line ::selection, .cm-line::selection':{color:'var(--color-text)'},
+  '.live-md-link::selection, .live-md-link *::selection, .live-md-url::selection':{color:'var(--color-link)'},
+  '.live-md-quote::selection, .live-md-quote *::selection':{color:'var(--color-muted)'},
   '.live-md-heading':{fontWeight:'700',lineHeight:'1.4',paddingTop:'12px',paddingBottom:'8px'},
   '.live-md-heading span':{textDecoration:'none'},
   '.live-md-h1':{fontSize:'1.85em'},'.live-md-h2':{fontSize:'1.5em'},'.live-md-h3':{fontSize:'1.25em'},
   '.live-md-strong':{fontWeight:'700'},'.live-md-emphasis':{fontStyle:'italic'},'.live-md-strike':{textDecoration:'line-through'},
   '.live-md-link, .live-md-link span, .live-md-url':{color:'var(--color-link)',textDecoration:'underline'},
   '.live-md-hr':{color:'var(--color-text)'},
-  '.live-md-code':{fontFamily:'monospace',backgroundColor:'var(--color-sidebar)',borderRadius:'4px'},
-  '.live-md-codeblock':{fontFamily:'monospace',backgroundColor:'var(--color-sidebar)',paddingLeft:'14px'},
+  '.live-md-code':{fontFamily:'monospace',backgroundColor:'color-mix(in srgb, var(--color-sidebar) 80%, transparent)',borderRadius:'4px'},
+  // Both sides are explicit (not just the extra indent) because .live-md-codeblock is a .cm-line
+  // and would otherwise fall back to .cm-line's own padding for whichever side it doesn't set —
+  // now that .cm-line carries the full 40px card inset (previously .cm-content did), leaving
+  // paddingRight unset would collapse only the left side, jamming the block against the card edge.
+  '.live-md-codeblock':{fontFamily:'monospace',backgroundColor:'color-mix(in srgb, var(--color-sidebar) 80%, transparent)',paddingLeft:'54px',paddingRight:'42px'},
   '.live-md-quote':{borderLeft:'2px solid color-mix(in srgb, var(--color-text) 22%, var(--color-border))',paddingLeft:'12px',color:'var(--color-muted)'},
   '.live-md-mdx-import-chip':{display:'inline-flex',alignItems:'center',gap:'5px',padding:'1px 8px',borderRadius:'4px',fontSize:'0.78em',fontFamily:'monospace',cursor:'pointer',backgroundColor:'color-mix(in srgb, var(--color-text) 4%, var(--color-surface))',color:'var(--color-muted)',border:'1px solid color-mix(in srgb, var(--color-text) 12%, var(--color-border))',opacity:'0.65',transition:'opacity 120ms ease'},
   '.live-md-mdx-import-chip:hover':{opacity:'1'},
@@ -550,7 +586,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle,Props>(({content
       provide: field => EditorView.decorations.from(field,value=>value.decorations),
     });
     const view = new EditorView({parent:host.current!,state:EditorState.create({doc:content,extensions:[
-      markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),lineNumbers(),highlightActiveLineGutter(),EditorView.lineWrapping,
+      markdown({base:markdownLanguage}),history(),keymap.of([...defaultKeymap,...historyKeymap]),drawSelection(),cardBackgroundLayer,lineNumbers(),highlightActiveLineGutter(),EditorView.lineWrapping,
       syntaxHighlighting(defaultHighlightStyle),syntaxHighlighting(HighlightStyle.define([{tag:tags.url,class:'live-md-url'},{tag:tags.contentSeparator,class:'live-md-hr'}])),theme,tableUIState,chipEditState,field,
       autocompletion({ icons: false, addToOptions: [{ position: 20, render: completion => {
         const icon = completion.type && TASK_TOKEN_ICON_SVG[completion.type];

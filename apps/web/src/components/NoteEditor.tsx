@@ -21,6 +21,8 @@ import {
   Code2,
   Eye,
   LayoutGrid,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { mergeNote, sameValue, NoteDraft } from '../lib/merge-note.js';
 import { ApiError } from '../lib/api.js';
@@ -29,6 +31,7 @@ import { FileManager } from './FileManager.js';
 import { FileSourceEditor } from './FileSourceEditor.js';
 import { NoteItem, AssetItem, NotebookMetadataField } from '../lib/types.js';
 import { saveLocalDraft, getLocalDraft, clearLocalDraft } from '../lib/storage.js';
+import { copyToClipboard } from '../lib/clipboard.js';
 import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { chooseOutlineHeading, findOutlineIndexForLine, findTextMatches, isEditableTarget, parseMarkdownOutline } from '../lib/note-navigation.js';
@@ -147,6 +150,8 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
 
   // Editor states
   const [content, setContent] = useState(note.content);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const copyResetTimer = useRef<ReturnType<typeof setTimeout>>();
   const [metadata, setMetadata] = useState<Record<string, unknown>>(note.metadata || {});
   const [newFieldKey, setNewFieldKey] = useState('');
   const [frontmatterViewMode, setFrontmatterViewMode] = useState<'form' | 'yaml'>('form');
@@ -381,6 +386,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
     setFindIndex(0);
     setOutlineIndex(0);
     setIsEditorLeaderOpen(false);
+    setCopyState('idle');
     lastSaved.current = null;
 
     const draft = readOnly ? null : getLocalDraft(draftScope || branch, note.path);
@@ -517,6 +523,13 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
     if (!autoSave && !readOnly && hasUnsavedChanges && !window.confirm('Close with unsaved changes? Your local draft will be kept.')) return;
     closing.current = false; setIsSaving(false);
     onClose?.();
+  };
+  const copyNote = async () => {
+    const ok = await copyToClipboard(current.current.content);
+    if (!mounted.current) return;
+    clearTimeout(copyResetTimer.current);
+    setCopyState(ok ? 'copied' : 'error');
+    copyResetTimer.current = setTimeout(() => { if (mounted.current) setCopyState('idle'); }, 2000);
   };
   const escapeAction = useRef<() => boolean>(() => false);
   escapeAction.current = () => {
@@ -1065,6 +1078,8 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
           <div className="note-compact-bar">
             {isMarkdown && <button type="button" className="ui-icon-button" data-mode-toggle={editorMode} title={t(editorMode === 'live' ? 'editor.source' : 'editor.livePreview')} aria-label={t(editorMode === 'live' ? 'editor.source' : 'editor.livePreview')}
               onClick={() => setEditorMode(editorMode === 'live' ? 'raw' : 'live')}>{editorMode === 'live' ? <Code2 size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}</button>}
+            <button type="button" className="ui-icon-button" title={t(copyState === 'copied' ? 'editor.noteCopied' : copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')} aria-label={t(copyState === 'copied' ? 'editor.noteCopied' : copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')}
+              onClick={copyNote}>{copyState === 'copied' ? <Check size={14} aria-hidden="true" /> : copyState === 'error' ? <AlertTriangle size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}</button>
             <span className="note-compact-path" title={note.path}>{note.notebookId} · {note.path.split('/').pop()}</span>
             <span role="status" className="note-compact-status" data-state={editorState}><span className={`note-compact-dot ${editorState === 'saving' ? 'animate-pulse' : ''}`} aria-hidden="true" />{editorStatus}</span>
           </div>
@@ -1098,6 +1113,8 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({
               aria-pressed={Boolean(notePanel)} onClick={() => { if (notePanel) setNotePanel(null); else if (lastNotePanel.current === 'outline') { if (isMarkdown) openOutline(); else openFind(); } else if (lastNotePanel.current === 'find') openFind(); else setNotePanel(lastNotePanel.current); }}
               className="editor-action editor-secondary-action editor-panel-action"><PanelRight className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('editor.documentPanel')}</span></button>}
 
+            <button type="button" aria-label={t(copyState === 'copied' ? 'editor.noteCopied' : copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')} title={t(copyState === 'copied' ? 'editor.noteCopied' : copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')} onClick={copyNote}
+              className="editor-action editor-secondary-action">{copyState === 'copied' ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : copyState === 'error' ? <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" /> : <Copy className="w-3.5 h-3.5" aria-hidden="true" />}<span>{t(copyState === 'copied' ? 'editor.noteCopied' : copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')}</span></button>
             {onAddToFocus && <button type="button" aria-label={t('focus.addTo')} title={t('focus.addTo')} onClick={onAddToFocus}
               className="editor-action editor-secondary-action"><LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" /><span>{t('focus.addTo')}</span></button>}
             <div ref={setInsertSlot} className="note-insert-actions" />

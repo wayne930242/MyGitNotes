@@ -573,6 +573,10 @@
 .agent-toolbar .agent-controls { gap: 8px; }
 .agent-toolbar .font-mono { font-weight: 400; color: var(--color-muted); }
 .agent-content .cm-content { padding-left: var(--workspace-padding); padding-right: var(--workspace-padding); }
+/* The live editor's horizontal inset lives on .cm-line (see LiveMarkdownEditor's theme); zero
+   it out here so the Agent System document view keeps using --workspace-padding alone instead
+   of stacking both insets. */
+.agent-content .cm-line { padding-left: 0 !important; padding-right: 0 !important; }
 .settings-panel { max-width: 980px; display: flex; flex-direction: column; gap: 32px; margin: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; padding: 0; }
 .settings-panel > [id] { scroll-margin-top: 24px; }
 .settings-panel h3 { font-family: var(--font-body); letter-spacing: 0; font-size: 14px; color: var(--color-text); font-weight: 500; }
@@ -719,9 +723,6 @@
 .live-md-page-break {
   display: block;
   position: relative;
-  width: calc(100% + 80px);
-  margin-left: -40px;
-  margin-right: -40px;
   padding-top: 20px;
   padding-bottom: 28px;
   user-select: none;
@@ -768,9 +769,6 @@
 .live-md-page-divider {
   position: relative;
   isolation: isolate;
-  width: calc(100% + 80px) !important;
-  margin-left: -40px !important;
-  margin-right: -40px !important;
   padding: 31px 40px !important;
 }
 .live-md-page-divider::before {
@@ -800,9 +798,6 @@
 .live-md-page-footer {
   display: block;
   position: relative;
-  width: calc(100% + 80px);
-  margin-left: -40px;
-  margin-right: -40px;
   padding-top: 36px;
   user-select: none;
 }
@@ -815,32 +810,24 @@
     padding: 12px 8px !important;
   }
   .cm-content {
-    padding: 20px 16px !important;
+    padding: 20px 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     min-height: 100% !important;
   }
+  .cm-line {
+    padding: 0 16px !important;
+  }
   [data-live-markdown] .cm-content {
     padding-bottom: 0 !important;
-  }
-  .live-md-page-break {
-    width: calc(100% + 32px);
-    margin-left: -16px;
-    margin-right: -16px;
   }
   .live-md-page-break-tag {
     right: 16px;
   }
   .live-md-page-footer {
-    width: calc(100% + 32px);
-    margin-left: -16px;
-    margin-right: -16px;
     padding-top: 24px;
   }
   .live-md-page-divider {
-    width: calc(100% + 32px) !important;
-    margin-left: -16px !important;
-    margin-right: -16px !important;
     padding: 31px 16px !important;
   }
   .live-md-page-divider::after {

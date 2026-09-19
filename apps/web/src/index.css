@@ -14,6 +14,7 @@
   --color-primary-hover: #4338ca;
   --color-link: var(--color-primary);
   --color-primary-light: rgba(79, 70, 229, 0.1);
+  --color-selection: rgba(79, 70, 229, 0.35);
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
   --color-sidebar: #f1f5f9;

@@ -158,6 +158,7 @@ export function applyTheme(theme: ThemeDefinition): void {
   root.style.setProperty('--color-on-primary', buttonTextColor(theme.colors.primary));
   root.style.setProperty('--color-on-primary-hover', buttonTextColor(theme.colors.primaryHover || theme.colors.primary));
   root.style.setProperty('--color-primary-light', `${theme.colors.primary}22`);
+  root.style.setProperty('--color-selection', `${theme.colors.primary}59`);
   root.style.setProperty('--color-bg', theme.colors.background);
   root.style.setProperty('--color-surface', theme.colors.surface);
   root.style.setProperty('--color-sidebar', theme.colors.sidebar);
