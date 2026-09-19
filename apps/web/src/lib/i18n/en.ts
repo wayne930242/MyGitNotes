@@ -1036,6 +1036,7 @@ export const en = {
   "focus.batchAddNoFilter": "Choose a folder or a tag.",
   "focus.batchAddResult": "{added} added, {existing} already present.",
   "focus.batchAddResultFull": "{added} added, {existing} already present, {full} could not fit.",
+  "focus.paneShort": "P{number}",
   "focus.showBrowse": "Show browse panel",
   "focus.showFocus": "Show Focus",
   "focus.open": "Open Focus",

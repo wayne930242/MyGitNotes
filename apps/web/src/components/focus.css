@@ -70,6 +70,7 @@
 .focus-tab > [role="tab"]:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -3px; }
 .focus-tab > [role="tab"] > svg { width: 14px; height: 14px; flex: none; opacity: .7; }
 .focus-tab > [role="tab"] > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.focus-tab > [role="tab"] > .focus-tab-pane { flex: none; padding: 1px 4px; border-radius: 999px; background: var(--workspace-selection); color: var(--color-muted); font-size: 9px; font-weight: 600; line-height: 14px; }
 .focus-tab[data-drop]::before { content: ''; position: absolute; top: 6px; bottom: 6px; z-index: 1; width: 2px; border-radius: 1px; background: var(--color-primary); pointer-events: none; }
 .focus-tab[data-drop="before"]::before { left: 0; }
 .focus-tab:first-child[data-drop="before"]::before { left: 4px; }
@@ -111,6 +112,21 @@
 .focus-add-dialog .focus-division-thumbnail { justify-self: center; }
 .focus-add-item { display: flex; justify-content: center; }
 .focus-add-item > span { display: inline-block; max-width: 100%; padding: 6px 12px; overflow: hidden; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-sidebar); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Batch add keeps filter controls compact inside the shared form/dialog primitives. */
+.focus-batch-dialog .filter-check { flex-direction: row; align-items: flex-start; gap: .5rem; padding: .3rem 0; color: var(--color-text); }
+.focus-batch-dialog .filter-check input { flex: none; margin-top: .15rem; }
+.focus-batch-dialog fieldset { min-width: 0; margin: 0; padding: .65rem .75rem .75rem; border: 1px solid var(--color-border); border-radius: .5rem; }
+.focus-batch-dialog legend { padding: 0 .25rem; color: var(--color-text); font-size: .75rem; font-weight: 600; }
+.focus-batch-dialog .filter-tag-mode { flex-direction: row; align-items: center; justify-content: space-between; gap: .75rem; color: var(--color-muted); }
+.focus-batch-dialog .filter-tag-mode > button { flex: 0 1 15rem; }
+.focus-batch-dialog .filter-options { max-height: 9rem; margin-top: .45rem; padding: .15rem .25rem .25rem; overflow-y: auto; scrollbar-gutter: stable; }
+.focus-batch-result { display: flex; align-items: flex-start; gap: .6rem; padding: .75rem; border-radius: .5rem; background: var(--workspace-selection); color: var(--color-text); line-height: 1.5; }
+.focus-batch-result > svg { flex: none; width: 1rem; height: 1rem; margin-top: .1rem; color: var(--color-primary); }
+@media (max-width: 480px) {
+  .focus-batch-dialog .filter-tag-mode { align-items: stretch; flex-direction: column; }
+  .focus-batch-dialog .filter-tag-mode > button { flex-basis: auto; }
+}
 
 @media (max-width: 767px) {
   .focus-pane-bar { height: 44px; }

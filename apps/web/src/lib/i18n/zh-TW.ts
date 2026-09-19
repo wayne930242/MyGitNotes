@@ -1036,6 +1036,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "focus.batchAddNoFilter": "請選擇資料夾或標籤。",
   "focus.batchAddResult": "已加入 {added} 篇，{existing} 篇已存在。",
   "focus.batchAddResultFull": "已加入 {added} 篇，{existing} 篇已存在，{full} 篇因版面已滿而未加入。",
+  "focus.paneShort": "窗{number}",
   "focus.showBrowse": "顯示瀏覽區",
   "focus.showFocus": "顯示 Focus",
   "focus.open": "開啟 Focus",

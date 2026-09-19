@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { CheckCircle2 } from 'lucide-react';
 import { focusTabKey } from '@mygitnotes/core/focus-page';
 import type { NoteFocus } from '../lib/use-note-focus.js';
 import { useNoteFacets, useNotePaths } from '../lib/use-note-queries.js';
@@ -84,7 +85,9 @@ export const BatchAddDialog: React.FC<{
       </label>}
       {!result && (hasFolder || hasTags) && <p className="filter-results">{t('filters.results', { count: candidatePaths.length })}</p>}
       {!result && !hasFolder && !hasTags && <p className="filter-empty">{t('focus.batchAddNoFilter')}</p>}
-      {result && <p role="status">{t(result.full > 0 ? 'focus.batchAddResultFull' : 'focus.batchAddResult', result)}</p>}
+      {result && <p className="focus-batch-result" role="status"><CheckCircle2 aria-hidden="true" />
+        <span>{t(result.full > 0 ? 'focus.batchAddResultFull' : 'focus.batchAddResult', result)}</span>
+      </p>}
       {error && <p role="alert">{error}</p>}
       <div className="workspace-dialog-actions">
         <Button type="button" onClick={onClose}>{t(result ? 'common.close' : 'common.cancel')}</Button>

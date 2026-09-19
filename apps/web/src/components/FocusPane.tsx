@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, FileText, FolderPlus, GalleryHorizontalEnd, Maximize2, PanelTopDashed, Plus, X } from 'lucide-react';
+import { ChevronDown, FileText, GalleryHorizontalEnd, ListPlus, Maximize2, PanelTopDashed, Plus, X } from 'lucide-react';
 import { findFocusTabInPane, focusTabKey, type FocusTab } from '@mygitnotes/core/focus-page';
 import type { ScreenRow } from '@mygitnotes/core/screen-page';
 import type { NoteFocus } from '../lib/use-note-focus.js';
@@ -46,6 +46,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
     tab, key: focusTabKey(tab), pane, index,
     label: tab.kind === 'note' ? focus.notes.get(tab.path)?.title || tab.path.split('/').pop()!.replace(/\.md$/, '') : lanes.find(row => row.id === tab.id)?.name || tab.id,
   })));
+  const repeatedLabels = new Set(tabs.filter((tab, index) => tabs.findIndex(candidate => candidate.label === tab.label) !== index).map(tab => tab.label));
   const shown = tabs.find(tab => tab.pane === displayed.pane && tab.key === displayed.key);
   const lane = shown?.tab.kind === 'lane' ? lanes.find(row => shown.tab.kind === 'lane' && row.id === shown.tab.id) : undefined;
   const panelId = `focus-pane-${displayed.pane}`;
@@ -137,6 +138,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
                 onKeyDown={event => { if (editable && event.key === 'Delete') { event.preventDefault(); void focus.close(tab.key, tab.pane).catch(() => {}); } }}>
                 {tab.tab.kind === 'note' ? <FileText aria-hidden="true" /> : <GalleryHorizontalEnd aria-hidden="true" />}
                 <span>{tab.label}</span>
+                {repeatedLabels.has(tab.label) && <small className="focus-tab-pane" aria-hidden="true">{t('focus.paneShort', { number: tab.pane + 1 })}</small>}
               </button>
               {editable && <button type="button" className="focus-tab-close" tabIndex={-1} aria-label={t('focus.closeTab', { name: tab.label })}
                 title={t('focus.closeTab', { name: tab.label })} onClick={() => void focus.close(tab.key, tab.pane).catch(() => {})}><X aria-hidden="true" /></button>}
@@ -151,7 +153,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane }
               ? lanes.map(row => ({ key: row.id, label: row.name, onSelect: () => { if (focus.shown) void focus.place(focus.shown, { kind: 'lane', id: row.id }, displayed.pane).catch(() => {}); } }))
               : [{ key: 'screen', label: t('focus.goAddLane'), onSelect: () => navigate(`/screen?notebook=${encodeURIComponent(focus.notebookId)}`) }]} />}
           {editable && <button type="button" className="ui-icon-button" aria-label={t('focus.batchAdd')} title={t('focus.batchAdd')}
-            onClick={() => setBatchAddOpen(true)}><FolderPlus aria-hidden="true" /></button>}
+            onClick={() => setBatchAddOpen(true)}><ListPlus aria-hidden="true" /></button>}
           {shown?.tab.kind === 'note' && <button type="button" className="ui-icon-button" aria-label={t('focus.zoomNote')} title={t('focus.zoomNote')}
             onClick={() => shown.tab.kind === 'note' && onZoomNote(shown.tab.path)}><Maximize2 aria-hidden="true" /></button>}
           <button type="button" className="ui-icon-button focus-pane-autohide" aria-pressed={autoHide} aria-label={t('focus.autoHideTabs')} title={t('focus.autoHideTabs')}
