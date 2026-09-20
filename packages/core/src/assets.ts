@@ -29,12 +29,18 @@ export function isAssetPath(file: string, nb: NotebookConfig) {
   const prefix = assetRoot(nb) + '/';
   return file.startsWith(prefix) && !file.includes('\\') && !file.includes('\0') && file.slice(prefix.length).split('/').every(p => p && !p.startsWith('.'));
 }
-export function decodeAsset(value: unknown): Buffer {
+/** Bytes a repository upload accepts; a Git-bound binary lives in history forever. */
+export const ASSET_SIZE_LIMIT = 3 * 1024 * 1024;
+
+/** Decodes an upload payload, rejecting anything past `limit`; pass Infinity for bucket-bound files. */
+export function decodeAsset(value: unknown, limit = ASSET_SIZE_LIMIT): Buffer {
   if (typeof value !== 'string') throw new Error('base64Content is required.');
   const raw = value.replace(/^data:[^,]*;base64,/, '');
-  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(raw)) throw new Error('Invalid base64 file.');
+  // A quantified group over the whole payload overruns the regex stack on a multi-megabyte upload,
+  // so the quads are counted instead of matched.
+  if (raw.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(raw)) throw new Error('Invalid base64 file.');
   const bytes = Buffer.from(raw, 'base64');
-  if (bytes.length > 3 * 1024 * 1024) throw new Error('Uploads support files up to 3 MiB.');
+  if (bytes.length > limit) throw new Error(`Uploads support files up to ${Math.round(limit / (1024 * 1024))} MiB.`);
   return bytes;
 }
 export function scanAssets(repoRoot: string, nb: NotebookConfig) {

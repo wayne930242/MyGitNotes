@@ -15,9 +15,9 @@ Default transport is **stdio** for local agent integration (e.g. Claude Desktop,
 5. `save_note`: Atomically creates or updates a note file with path traversal and branch checks, and commits to Git. If `content` is omitted, updates frontmatter metadata only. Returns the note `path`.
 6. `delete_note`: Removes a note file and creates a corresponding deletion commit.
 7. `read_agent_resource`: Reads an agent instruction or doc file safely; lists available agent resources (`AGENTS.md`, `docs/agent/**`) if `path` is omitted.
-8. `list_assets`: Lists assets within a notebook's asset directory.
+8. `list_assets`: Lists a notebook's assets. With private R2 storage configured the bucket objects are listed alongside the repository files, and every entry names its `storage` and the `reference` a note links it by.
 9. `add_asset`: Stores an asset file (with optional subfolder directory) and returns the reference a note links it by. With private R2 storage configured the file is uploaded to `<notebookId>/<directory>/<filename>` in the bucket and the response carries `storage: "r2"`, the object `key` and an `r2:<object-key>` `reference`; otherwise it is written into the notebook asset directory, committed, and returned as a notebook-relative path.
-10. `delete_asset`: Safely removes an asset file from a notebook asset directory and creates a Git commit.
+10. `delete_asset`: Removes an asset. A repository path is deleted with a Git commit; an `r2:<object-key>` reference deletes that bucket object, refused while a note still links it unless `force` is true.
 11. `get_git_status`: Returns branch name, clean/dirty state, and recent commit history.
 12. `git_commit`: Creates an atomic commit across staged/modified files.
 13. `update_core`: Performs the guarded Core update workflow, or inspects available updates if `checkOnly: true`.

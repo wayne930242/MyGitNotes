@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { classifyResource, createRemoteSource, FOCUS_DOCUMENT, isProductAgentDoc, loadSourceConfig, loadWorkspaceConfig, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, parseRevision, productAgentResources, queryNotePaths, queryNotes, readProductAgentDoc, RemoteSource, replaceNoteTags, resolveSafePath, SCREEN_DOCUMENT, SourceError, sourceIdentity, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource } from '@mygitnotes/core';
+import { classifyResource, createRemoteSource, FOCUS_DOCUMENT, isProductAgentDoc, loadSourceConfig, loadWorkspaceConfig, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, parseRevision, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceNoteTags, resolveSafePath, SCREEN_DOCUMENT, SourceError, sourceIdentity, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRemoteMCP } from './mcp.js';
 import { createRemoteCoreUpdateRouter } from './remote-core-update.js';
@@ -58,6 +58,9 @@ export function createApp(base: string): express.Express {
     if (origin && origin !== allowed && !isLocalDevOrigin) return res.status(403).json({ error: 'Origin is not allowed.' });
     next();
   });
+  // An MCP asset upload carries its file inside the JSON-RPC body, and a bucket-bound one is not
+  // held to the repository size limit, so the MCP route parses ahead of the shared 8 MiB ceiling.
+  if (r2SettingsFromEnv()) app.use('/mcp', express.json({ limit: '64mb' }));
   app.use(express.json({ limit: '8mb' }));
   app.use('/api/auth', createAuth(base));
   if (source) app.use(createFileManagerRouter(base, source));
