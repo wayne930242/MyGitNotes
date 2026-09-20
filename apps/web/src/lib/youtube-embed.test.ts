@@ -7,6 +7,14 @@ afterEach(() => {
 });
 
 describe('YouTube display mode preference', () => {
+  it('applies a workspace default that arrives after the mode was first read', () => {
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {} });
+    setDefaultYouTubeDisplayMode('thumbnail'); // The workspace config has not loaded yet.
+    expect(readYouTubeDisplayMode()).toBe('thumbnail'); // A note surface reads it, caching the mode for the session.
+    setDefaultYouTubeDisplayMode('theater'); // The config arrives with the user's preference.
+    expect(readYouTubeDisplayMode()).toBe('theater');
+  });
+
   it('defaults invalid storage to thumbnail and persists a selected mode', () => {
     const storage = { getItem: vi.fn(() => 'invalid'), setItem: vi.fn() };
     const embed = { dataset: {}, querySelectorAll: () => [] };

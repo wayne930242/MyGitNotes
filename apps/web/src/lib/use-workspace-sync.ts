@@ -34,10 +34,12 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const [repoRoot, setRepoRoot] = useState<string>('');
   const [branch, setBranch] = useState<string>('core');
   const [config, setConfig] = useState<WorkspaceConfig | null>(null);
+  // Children read these defaults while they render — a `useState` initializer runs before any
+  // effect — so applying them in an effect would hand the first mount the previous default.
+  setDefaultYouTubeDisplayMode(config?.preferences?.defaultYoutubeDisplayMode ?? 'thumbnail');
+  setDefaultShowLineNumbers(config?.preferences?.defaultShowLineNumbers ?? false);
   useEffect(() => {
     setWorkspaceNotebooks(config?.notebooks || []);
-    setDefaultYouTubeDisplayMode(config?.preferences?.defaultYoutubeDisplayMode ?? 'thumbnail');
-    setDefaultShowLineNumbers(config?.preferences?.defaultShowLineNumbers ?? false);
   }, [config]);
   const [serverGitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [assets, setAssets] = useState<AssetItem[]>([]);

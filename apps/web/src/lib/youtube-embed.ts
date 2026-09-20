@@ -17,6 +17,12 @@ export function stopYouTubePlayback() {
 
 export function setDefaultYouTubeDisplayMode(mode: YouTubeDisplayMode) {
   configuredDefaultMode = mode;
+  // A mode remembered before this arrived was derived from the previous default, and the session
+  // cache would otherwise keep serving it. A stored per-device choice still wins, so drop the
+  // cache only when this device has none.
+  try {
+    if (globalThis.localStorage.getItem(YOUTUBE_MODE_STORAGE_KEY) === null) rememberedYouTubeMode = null;
+  } catch { /* Storage unreachable: leave the cache alone rather than discard a session choice. */ }
 }
 
 export type { YouTubeDisplayMode };
