@@ -30,13 +30,10 @@ function crossTable(view: EditorView, backward: boolean) {
     return true;
   }
   const target = backward ? table.from - 1 : table.to + 1;
-  if (target < 0 || target > state.doc.length) {
-    // At a document edge there is no line beyond the widget to move to.
-    const from = backward ? table.from : at, to = backward ? at : table.to;
-    view.dispatch({ changes: { from, to }, selection: { anchor: from }, userEvent: 'delete.table' });
-  } else {
-    view.dispatch({ selection: { anchor: target }, scrollIntoView: true, userEvent: 'select' });
-  }
+  // At a document edge there is no line beyond the widget to move to. Removing a whole table is the
+  // toolbar's confirmed action, so the key stops here rather than taking the table with it.
+  if (target < 0 || target > state.doc.length) return true;
+  view.dispatch({ selection: { anchor: target }, scrollIntoView: true, userEvent: 'select' });
   return true;
 }
 

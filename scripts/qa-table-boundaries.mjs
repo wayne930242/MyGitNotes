@@ -6,7 +6,10 @@ const after = '\nAfter the table.';
 const initial = before + '\n' + table + '\n' + after;
 const above = before + 'new line\n' + table + '\n' + after;
 const below = before + '\n' + table + '\n\nnew line' + after;
-export const tableBoundaryCases = [{ name: 'type-below', at: 'below', text: 'new line', expected: below }, { name: 'type-above', at: 'above', text: 'new line', expected: above }, { name: 'backspace-paragraph', at: 'after', key: 'Backspace', expected: initial }, { name: 'backspace-blank', at: 'below', key: 'Backspace', expected: initial }, { name: 'delete-paragraph', at: 'before', key: 'Delete', expected: initial }, { name: 'delete-blank', at: 'above', key: 'Delete', expected: initial }, { name: 'delete-below-blank', at: 'below', key: 'Delete', expected: initial }, { name: 'backspace-above-blank', at: 'above', key: 'Backspace', expected: initial }, { name: 'backspace-then-type', at: 'after', key: 'Backspace', text: 'new line', expected: above }, { name: 'delete-then-type', at: 'before', key: 'Delete', text: 'new line', expected: below }, { name: 'enter-paragraph', at: 'after', key: 'Enter', expected: before + '\n' + table + '\n\n' + after }, { name: 'table-at-start', at: 'after', key: 'Backspace', initial: table + '\n' + after, expected: 'After the table.', removed: true }, { name: 'table-at-end', at: 'before', key: 'Delete', initial: before + '\n' + table, expected: before.trimEnd(), removed: true }].map(test => ({ initial, ...test }));
+// A table at a document edge has no line beyond it, so the boundary key holds the caret in place.
+const atStart = table + '\n' + after;
+const atEnd = before + '\n' + table;
+export const tableBoundaryCases = [{ name: 'type-below', at: 'below', text: 'new line', expected: below }, { name: 'type-above', at: 'above', text: 'new line', expected: above }, { name: 'backspace-paragraph', at: 'after', key: 'Backspace', expected: initial }, { name: 'backspace-blank', at: 'below', key: 'Backspace', expected: initial }, { name: 'delete-paragraph', at: 'before', key: 'Delete', expected: initial }, { name: 'delete-blank', at: 'above', key: 'Delete', expected: initial }, { name: 'delete-below-blank', at: 'below', key: 'Delete', expected: initial }, { name: 'backspace-above-blank', at: 'above', key: 'Backspace', expected: initial }, { name: 'backspace-then-type', at: 'after', key: 'Backspace', text: 'new line', expected: above }, { name: 'delete-then-type', at: 'before', key: 'Delete', text: 'new line', expected: below }, { name: 'enter-paragraph', at: 'after', key: 'Enter', expected: before + '\n' + table + '\n\n' + after }, { name: 'table-at-start', at: 'after', key: 'Backspace', initial: atStart, expected: atStart }, { name: 'table-at-end', at: 'before', key: 'Delete', initial: atEnd, expected: atEnd }].map(test => ({ initial, ...test }));
 
 export async function verifyTableBoundaries(page, base, click) {
   for (const test of tableBoundaryCases) {
@@ -33,11 +36,8 @@ export async function verifyTableBoundaries(page, base, click) {
         await page.keyboard.press('KeyZ');
         await page.keyboard.up(modifier);
       }
-      const expectedTable = !test.removed || undo;
-      assert.equal(await page.$$eval('.live-md-table', tables => tables.length), expectedTable ? 1 : 0, `${test.name}: table count`);
-      if (expectedTable) {
-        assert.deepEqual(await page.$eval('.live-md-table table', table => [...table.rows].map(row => [...row.cells].map(cell => cell.textContent))), [['A', 'B'], ['a', 'b']], `${test.name}: table content`);
-      }
+      assert.equal(await page.$$eval('.live-md-table', tables => tables.length), 1, `${test.name}: table count`);
+      assert.deepEqual(await page.$eval('.live-md-table table', table => [...table.rows].map(row => [...row.cells].map(cell => cell.textContent))), [['A', 'B'], ['a', 'b']], `${test.name}: table content`);
       await click('Source');
       const source = await page.$eval('textarea[aria-label="Note content"]', textarea => textarea.value);
       assert.equal(source, undo ? test.initial : test.expected, `${test.name}${undo ? ' single undo' : ''}: Source text`);
