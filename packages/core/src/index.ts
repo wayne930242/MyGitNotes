@@ -37,3 +37,5 @@ export * from './note-agenda.js';
 export * from './note-query.js';
 export * from './remote-cache.js';
 export * from './note-catalog.js';
+export * from './core-status.js';
+export * from './github-core-update.js';

@@ -327,7 +327,7 @@ describe('GitHub login and shared agent authorization', () => {
       expect(start.status).toBe(302);
       const location = new URL(start.headers.get('location')!);
       expect(location.searchParams.get('code_challenge_method')).toBe('S256');
-      expect(location.searchParams.get('scope')).toBe('repo');
+      expect(location.searchParams.get('scope')).toBe('repo workflow');
       const oauthCookie = start.headers.get('set-cookie')!.split(';')[0];
       const callback = await fetch(`${base}/api/auth/github/callback?state=${location.searchParams.get('state')}&code=test`, { redirect: 'manual', headers: { Cookie: oauthCookie } });
       expect(callback.status).toBe(302);

@@ -212,13 +212,33 @@ export async function syncGitWorkspace(strategy?: 'remote' | 'local'): Promise<{
   return data.result;
 }
 
-export async function runCoreUpdate(autoPush = false): Promise<{ result: { success: boolean; message: string; }; }> {
-  const res = await fetch(`${API_BASE}/core/update`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoPush }) });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to run core update');
+export class CoreUpdateApiError extends Error {
+  constructor(message: string, public code: string) {
+    super(message);
   }
-  return res.json();
+}
+export async function fetchCoreStatus(): Promise<import('@mygitnotes/core').CoreStatus> {
+  const res = await fetch(`${API_BASE}/core/status`);
+  const data = await res.json();
+  if (!res.ok) throw new CoreUpdateApiError(data.error || 'Failed to check Core status', data.code || 'STATUS_FAILED');
+  return data.status;
+}
+export async function installCoreSyncWorkflow(): Promise<void> {
+  const res = await fetch(`${API_BASE}/core/install`, { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) throw new CoreUpdateApiError(data.error || 'Failed to install Core sync', data.code || 'INSTALL_FAILED');
+}
+export async function fetchCoreUpdateRun(requestId: string): Promise<import('@mygitnotes/core').CoreUpdateRun> {
+  const res = await fetch(`${API_BASE}/core/runs/${encodeURIComponent(requestId)}`);
+  const data = await res.json();
+  if (!res.ok) throw new CoreUpdateApiError(data.error || 'Failed to follow Core update', data.code || 'RUN_STATUS_FAILED');
+  return data.run;
+}
+export async function runCoreUpdate(autoPush = false): Promise<{ result: { success?: boolean; alreadyUpToDate?: boolean; accepted?: boolean; receipt?: import('@mygitnotes/core').CoreUpdateReceipt; }; }> {
+  const res = await fetch(`${API_BASE}/core/update`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoPush }) });
+  const data = await res.json();
+  if (!res.ok) throw new CoreUpdateApiError(data.error || 'Failed to run Core update', data.code || 'UPDATE_FAILED');
+  return data;
 }
 
 export async function fetchFolders(): Promise<FolderItem[]> {

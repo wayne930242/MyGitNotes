@@ -21,6 +21,7 @@ beforeEach(() => {
   core = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-bootstrap-'));
   root = `${core}-notes`;
   write('packages/core/.keep', '', core);
+  write('packages/core/assets/mygitnotes-core-sync.yml', fs.readFileSync(path.join(product, 'packages/core/assets/mygitnotes-core-sync.yml'), 'utf8'), core);
   write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n', core);
   write('examples/workspace-agent-system/AGENTS.md', '# 工作區指引\n', core);
   write('examples/workspace-agent-system/.agents/skills/workspace/SKILL.md', '# 工作區技能\n', core);
@@ -47,6 +48,7 @@ describe('canonical starter workspace CLI', () => {
     const output = bootstrap().toString();
     expect(fs.readFileSync(path.join(core, '.env'), 'utf8')).toBe(`MYGITNOTES_SOURCE=local\nMYGITNOTES_LOCAL_PATH=../${path.basename(root)}\n`);
     expect(coreGit('branch', '--show-current')).toBe('core');
+    expect(fs.readFileSync(path.join(root, '.github/workflows/mygitnotes-core-sync.yml'), 'utf8')).toBe(fs.readFileSync(path.join(product, 'packages/core/assets/mygitnotes-core-sync.yml'), 'utf8'));
     expect(git('ls-files', '--', 'pnpm-workspace.yaml', 'packages', 'examples')).toBe('');
     expect(git('rev-list', '--max-parents=0', 'HEAD')).toBe(git('rev-parse', 'HEAD'));
     for (const step of ['deploy-vercel-sparse.yml', 'Git integration', 'gh variable set VERCEL_ORG_ID', 'gh variable set VERCEL_PROJECT_ID', 'gh secret set VERCEL_TOKEN', 'MYGITNOTES_VERCEL_DEPLOY --body git-integration']) expect(output).toContain(step);

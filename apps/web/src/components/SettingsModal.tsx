@@ -1,10 +1,11 @@
+import { CoreUpdates } from './CoreUpdates.js';
 import { ProductVersion } from './ProductVersion.js';
 import { Button } from './Button.js';
 import { useWorkspaceSidebarDrawer, WorkspaceSidebar, WorkspaceSidebarPortal, WorkspaceSidebarToggle } from './WorkspaceChrome.js';
 import React, { useState } from 'react';
-import { AlertCircle, Check, Globe, Info, Palette, RefreshCw, Save, Shield } from 'lucide-react';
+import { AlertCircle, Check, Globe, Palette, RefreshCw, Save, Shield } from 'lucide-react';
 import { WorkspaceConfig } from '../lib/types.js';
-import { runCoreUpdate, updateWorkspaceConfig } from '../lib/api.js';
+import { updateWorkspaceConfig } from '../lib/api.js';
 import { ThemeChoice } from '../lib/themes.js';
 import { ThemeSelector } from './ThemeSelector.js';
 import { WorkspaceManifestEditor } from './WorkspaceManifestEditor.js';
@@ -28,8 +29,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
   const [yamlContent, setYamlContent] = useState(() => config ? YAML.stringify(config) : '');
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string; } | null>(null);
-  const [isUpdatingCore, setIsUpdatingCore] = useState(false);
-  const [coreUpdateMsg, setCoreUpdateMsg] = useState<string | null>(null);
 
   const [previousConfig, setPreviousConfig] = useState(config);
   if (previousConfig !== config) {
@@ -49,33 +48,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
       setStatusMessage({ type: 'error', text: msg });
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleUpdateCoreClick = async () => {
-    if (!local) {
-      setCoreUpdateMsg(t('settings.coreUpdateLocalOnly'));
-      return;
-    }
-    if (branch === 'core') {
-      setCoreUpdateMsg(t('settings.coreUpdateCoreBranch'));
-      return;
-    }
-    if (branch !== 'main') {
-      setCoreUpdateMsg(t('settings.coreUpdateMainOnly', { branch }));
-      return;
-    }
-    setIsUpdatingCore(true);
-    setCoreUpdateMsg(null);
-    try {
-      const res = await runCoreUpdate(false);
-      setCoreUpdateMsg(res.result.message);
-      await onRefreshWorkspace();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setCoreUpdateMsg(`Error: ${msg}`);
-    } finally {
-      setIsUpdatingCore(false);
     }
   };
 
@@ -160,52 +132,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
             </div>
             <ProductVersion />
             <div id='settings-access'>{accountSettings}</div>
-            {/* Upstream & Core Updates Section */}
-            <div id='settings-updates' className='flex flex-col gap-3 p-4 bg-sidebar border border-line rounded-xl'>
-              <div className='flex items-start sm:items-center justify-between gap-3 flex-wrap sm:flex-nowrap'>
-                <div>
-                  <div className='flex items-center gap-2'>
-                    <h3 className='text-xs font-semibold text-fg uppercase tracking-wider flex items-center gap-1.5'>
-                      <Shield className='w-4 h-4 text-primary' />
-                      {t('settings.coreUpdates')}
-                    </h3>
-                    {branch === 'core' && <span className='text-[11px] px-2 py-0.5 rounded-full bg-warning-soft text-warning font-medium'>{t('settings.coreBranch')}</span>}
-                    {branch === 'main' && <span className='text-[11px] px-2 py-0.5 rounded-full bg-success-soft text-success font-medium'>{t('settings.workspaceBranch')}</span>}
-                  </div>
-                  <p className='text-xs text-muted mt-0.5'>{t('settings.coreUpdatesDesc')}</p>
-                </div>
-                <Button variant='primary' type='button' onClick={handleUpdateCoreClick} disabled={isUpdatingCore} title={branch === 'core' ? t('settings.viewCoreStatusTitle') : t('settings.runCoreUpdateTitle')}>
-                  <RefreshCw className={`w-3.5 h-3.5 ${isUpdatingCore ? 'animate-spin' : ''}`} />
-                  <span>{isUpdatingCore ? t('settings.updating') : branch === 'core' ? t('settings.checkCoreStatus') : t('settings.checkUpdateCore')}</span>
-                </Button>
-              </div>
-              {/* Branch Context Guidance */}
-              {branch === 'core' && (
-                <div className='text-xs bg-warning-soft/80 border border-warning/80 text-warning rounded-lg p-3 flex items-start gap-2.5'>
-                  <Info className='w-4 h-4 shrink-0 mt-0.5 text-warning' />
-                  <div className='space-y-1'>
-                    <p className='font-semibold'>{t('settings.coreBranchNotice')}</p>
-                    <p className='text-warning leading-relaxed text-[11px]'>{t('settings.coreBranchNoticeDesc')}</p>
-                    <p className='text-[11px] text-warning'>
-                      {'💡 '}
-                      {t('settings.coreBranchNoticeCmd')} <code className='font-mono bg-warning-soft/70 px-1 py-0.5 rounded text-warning font-semibold'>pnpm bootstrap-workspace</code>
-                    </p>
-                  </div>
-                </div>
-              )}
-              {!local && (
-                <div className='text-xs bg-sidebar border border-line text-muted rounded-lg p-2.5 flex items-center gap-2'>
-                  <Info className='w-4 h-4 shrink-0 text-muted' />
-                  <span>{t('settings.remoteGitHubMode')}</span>
-                </div>
-              )}
-              {coreUpdateMsg && (
-                <div className={`p-3 rounded-lg text-xs flex items-start gap-2 ${coreUpdateMsg.startsWith('Error:') ? 'bg-danger-soft text-danger border border-danger/40' : 'bg-primary-soft text-primary-hover border border-primary'}`}>
-                  <Info className='w-4 h-4 shrink-0 mt-0.5' />
-                  <span className='leading-relaxed'>{coreUpdateMsg}</span>
-                </div>
-              )}
-            </div>
+            <CoreUpdates local={local} />
             {!local && <p className='text-xs text-muted'>{t('settings.remoteManifestHint')}</p>}
             {/* Manifest YAML Editor */}
             <div id='settings-manifest' className='flex flex-col gap-2'>

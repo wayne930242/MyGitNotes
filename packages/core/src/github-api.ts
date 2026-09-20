@@ -8,7 +8,7 @@ export class SourceError extends Error {
 
 type Cached = { value: any; expires: number; etag?: string; bytes: number; immutable: boolean; };
 type Lane = { tail: Promise<unknown>; queued: number; blockedUntil: number; lastWrite: number; };
-type Runtime = { cache: Map<string, Cached>; pending: Map<string, Promise<any>>; lanes: Map<string, Lane>; bytes: number; generation: Map<string, number>; };
+type Runtime = { cache: Map<string, Cached>; pending: Map<string, Promise<any>>; lanes: Map<string, Lane>; bytes: number; generation: Map<string, number>; oauthScopes: Map<string, string[]>; };
 const runtimes = new WeakMap<typeof fetch, Runtime>();
 const MAX_BYTES = 64 * 1024 * 1024;
 const IMMUTABLE_TTL = 60 * 60 * 1000;
@@ -16,6 +16,9 @@ const FRESH_TTL = 60 * 1000;
 
 /** Process-local optimization. Authorization scopes never share this cache; shared content-addressed reads use RemoteCache. */
 export class GitHubApi {
+  get oauthScopes(): string[] | undefined {
+    return this.runtime.oauthScopes.get(this.scope);
+  }
   private runtime: Runtime;
   private scope: string;
   private prefix: string;
@@ -23,7 +26,7 @@ export class GitHubApi {
   constructor(private repository: string, private token: string | undefined, private request: typeof fetch) {
     let runtime = runtimes.get(request);
     if (!runtime) {
-      runtime = { cache: new Map(), pending: new Map(), lanes: new Map(), bytes: 0, generation: new Map() };
+      runtime = { cache: new Map(), pending: new Map(), lanes: new Map(), bytes: 0, generation: new Map(), oauthScopes: new Map() };
       runtimes.set(request, runtime);
     }
     this.runtime = runtime;
@@ -34,7 +37,10 @@ export class GitHubApi {
       // Drop idle lanes, retaining active cooldowns and queued work.
       if (runtime.lanes.size >= 1000) {
         for (const [key, entry] of runtime.lanes) {
-          if (!entry.queued && entry.blockedUntil < Date.now() && entry.lastWrite < Date.now() - IMMUTABLE_TTL) runtime.lanes.delete(key);
+          if (!entry.queued && entry.blockedUntil < Date.now() && entry.lastWrite < Date.now() - IMMUTABLE_TTL) {
+            runtime.lanes.delete(key);
+            runtime.oauthScopes.delete(key);
+          }
         }
       }
       if (runtime.lanes.size >= 1000) throw new SourceError('GitHub service is busy. Retry later.', 503, 60);
@@ -119,6 +125,8 @@ export class GitHubApi {
         this.lane.lastWrite = Date.now();
       }
       const response = await this.request(url, { ...init, signal: AbortSignal.timeout(20000), headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'GitHub-Notes', ...(credentials && this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...init.headers } });
+      const scopes = response.headers.get('x-oauth-scopes');
+      if (scopes !== null) this.runtime.oauthScopes.set(this.scope, scopes.split(',').map(scope => scope.trim()).filter(Boolean));
       const remaining = response.headers.get('x-ratelimit-remaining');
       const reset = Number(response.headers.get('x-ratelimit-reset')) * 1000;
       if (remaining === '0') this.lane.blockedUntil = Math.max(this.lane.blockedUntil, reset || Date.now() + 60_000);

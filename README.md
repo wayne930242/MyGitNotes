@@ -25,6 +25,16 @@ Core updates fast-forward the product branch and preserve workspace content. The
 
 The Files page manages notebook folders, Markdown notes, text files, and attachments. Uploads support 3 MiB; reads and changed content support 5 MiB, with up to 200 changed files per operation.
 
+## Core updates
+
+Settings checks the repository's Core revision and the running build separately. Local updates require a clean product checkout on `core`; the workspace branch does not control this operation. After updating, run `pnpm migrate-workspace` with the updated Core and restart the server.
+
+For GitHub workspaces, use **Install Core sync** when Settings reports a missing workflow, then **Update Core**. Bootstrap also installs the [canonical workflow](packages/core/assets/mygitnotes-core-sync.yml) as `.github/workflows/mygitnotes-core-sync.yml` on `main`; repositories with another default branch install it there through Settings. The workflow fetches MyGitNotes upstream and pushes a fast-forward of `core`. Settings follows the correlated run and verifies the resulting revision before reporting success. Existing workflow files are preserved.
+
+GitHub OAuth requests `repo workflow`. Older grants show **Re-authorize GitHub**. The app encrypts the user's grant and stores it as the repository Actions secret `MYGITNOTES_CORE_SYNC_TOKEN`, which the runner uses for its push. People who can modify that repository's workflows can use this stored credential through a workflow. The user-token push raises configured deployment events; deployment completion is separate from Core sync completion.
+
+GitHub App installations configure **Contents**, **Workflows**, **Actions**, and **Secrets** write permissions in the App settings; App sign-in does not request OAuth scopes. GitLab Core updates are not supported yet, and GitLab sign-in retains its existing `api` scope.
+
 ## Deploy
 
 Choose one path. Prepare the listed accounts and values first, then follow its numbered steps in order.

@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { runGit, stageAndCommit } from '../src/git-service.js';
+import { getCoreStatus } from '../src/core-status.js';
 import { updateCore } from '../src/core-update.js';
 
 describe('Core Update Engine Rules', () => {
@@ -31,6 +32,24 @@ describe('Core Update Engine Rules', () => {
     if (fs.existsSync(userRepo)) fs.rmSync(userRepo, { recursive: true, force: true });
   });
 
+  it('detects lag without updating and keeps the running build stale after fast-forward', async () => {
+    const running = (await runGit(['rev-parse', 'HEAD'], userRepo)).stdout;
+    fs.writeFileSync(path.join(upstreamRepo, 'FEATURE.md'), 'new');
+    await stageAndCommit(upstreamRepo, ['FEATURE.md'], 'new core');
+    const status = await getCoreStatus(userRepo, running.slice(0, 7));
+    expect(status).toMatchObject({ state: 'update_available', canUpdate: true, current: { behind: 1 }, running: { sha: running, behind: 1 } });
+    expect((await runGit(['rev-parse', 'HEAD'], userRepo)).stdout).toBe(running);
+    await updateCore({ repoRoot: userRepo });
+    expect(await getCoreStatus(userRepo, running.slice(0, 7))).toMatchObject({ state: 'up_to_date', canUpdate: false, current: { behind: 0 }, running: { behind: 1 } });
+  });
+
+  it('reports local eligibility and unknown build identity explicitly', async () => {
+    fs.writeFileSync(path.join(userRepo, 'dirty.txt'), 'work');
+    expect(await getCoreStatus(userRepo, 'unknown')).toMatchObject({ state: 'dirty', running: null, canUpdate: false });
+    await runGit(['checkout', '-b', 'feature'], userRepo);
+    expect(await getCoreStatus(userRepo, 'unknown')).toMatchObject({ state: 'invalid_branch', canUpdate: false });
+  });
+
   it('refuses to run update on a branch other than core', async () => {
     await runGit(['checkout', '-b', 'feature'], userRepo);
     await expect(updateCore({ repoRoot: userRepo })).rejects.toMatchObject({ code: 'INVALID_BRANCH' });
@@ -57,10 +76,10 @@ describe('Core Update Engine Rules', () => {
     expect((await runGit(['rev-parse', 'HEAD'], userRepo)).stdout).toBe(head);
   });
 
-  it('refuses main and points a product-carrying main at convert-workspace', async () => {
+  it('identifies the product checkout precondition on main', async () => {
     await runGit(['checkout', '-b', 'main'], userRepo);
     const head = (await runGit(['rev-parse', 'HEAD'], userRepo)).stdout;
-    await expect(updateCore({ repoRoot: userRepo })).rejects.toMatchObject({ code: 'INVALID_BRANCH', message: expect.stringContaining('pnpm convert-workspace') });
+    await expect(updateCore({ repoRoot: userRepo })).rejects.toMatchObject({ code: 'INVALID_BRANCH', message: expect.stringContaining("product checkout on branch 'core'") });
     expect((await runGit(['rev-parse', 'HEAD'], userRepo)).stdout).toBe(head);
   });
 

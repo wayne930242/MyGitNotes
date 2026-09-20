@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { classifyResource, createRemoteSource, FOCUS_DOCUMENT, isProductAgentDoc, loadSourceConfig, loadWorkspaceConfig, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, parseRevision, productAgentResources, queryNotePaths, queryNotes, readProductAgentDoc, RemoteSource, replaceNoteTags, resolveSafePath, SCREEN_DOCUMENT, SourceError, sourceIdentity, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRemoteMCP } from './mcp.js';
+import { createRemoteCoreUpdateRouter } from './remote-core-update.js';
 import { createLocalApp } from './local-app.js';
 import { authToken, createAuth } from './auth.js';
 import { createStudyRouter } from './study.js';
@@ -99,6 +100,7 @@ export function createApp(base: string): express.Express {
         res.status(401).json({ error: 'Session unavailable. Sign in again.' });
       }
     });
+    if (source) app.use('/api/core', createRemoteCoreUpdateRouter(base, source));
     app.get('/api/workspace', async (req, res) => {
       try {
         const reader: RemoteSource = res.locals.reader;

@@ -293,7 +293,7 @@ export function createAuth(base: string): Router {
       if (provider.type === 'gitlab') {
         params.set('response_type', 'code');
         params.set('scope', 'api');
-      } else if (process.env.GITHUB_APP_TYPE !== 'github-app') params.set('scope', 'repo');
+      } else if (process.env.GITHUB_APP_TYPE !== 'github-app') params.set('scope', 'repo workflow');
       res.redirect(`${provider.authorize}?${params}`);
     } catch (error) {
       res.status(503).json({ error: (error as Error).message });

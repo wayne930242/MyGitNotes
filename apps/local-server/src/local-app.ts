@@ -35,6 +35,8 @@ function handlePathValidationError(res: express.Response, error: unknown): void 
 
 export function createLocalApp(repoRoot: string, appRoot = repoRoot): express.Express {
   const app = express();
+  // Product updates use the Core checkout, independently of workspace write eligibility.
+  app.use('/api/core', express.json({ limit: '8mb' }), createLocalCoreUpdateRouter(appRoot));
   app.use(async (req, res, next) => {
     try {
       if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
@@ -73,7 +75,6 @@ export function createLocalApp(repoRoot: string, appRoot = repoRoot): express.Ex
   app.use('/api/agent-resources', createLocalAgentResourcesRouter(repoRoot, appRoot));
   app.use('/api/assets', createLocalAssetsRouter(repoRoot));
   app.use('/api/git', createLocalGitRouter(repoRoot));
-  app.use('/api/core', createLocalCoreUpdateRouter(appRoot));
 
   // 7. Static Web UI Serving
   const webDist = path.join(repoRoot, 'apps/web/dist');

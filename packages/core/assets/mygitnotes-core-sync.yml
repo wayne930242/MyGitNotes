@@ -1,0 +1,56 @@
+name: MyGitNotes Core sync
+run-name: MyGitNotes Core sync ${{ inputs.request_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: Update request identifier
+        required: true
+        type: string
+      target_sha:
+        description: Immutable upstream Core commit
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: mygitnotes-core-sync
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate request
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          [[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$REQUEST_ID" =~ ^[a-f0-9-]{36}-[a-f0-9]{40}$ ]]
+          [[ "$REQUEST_ID" == *"-$TARGET_SHA" ]]
+      - name: Check workflow permission
+        env:
+          SYNC_TOKEN: ${{ secrets.MYGITNOTES_CORE_SYNC_TOKEN }}
+        run: test -n "$SYNC_TOKEN"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: core
+          fetch-depth: 0
+          token: ${{ secrets.MYGITNOTES_CORE_SYNC_TOKEN }}
+      - name: Fetch upstream Core
+        run: git fetch https://github.com/wayne930242/MyGitNotes.git +refs/heads/core:refs/remotes/mygitnotes/core
+      - name: Verify upstream target
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: git merge-base --is-ancestor "$TARGET_SHA" refs/remotes/mygitnotes/core
+      - name: Check Core ancestry
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: git merge-base --is-ancestor HEAD "$TARGET_SHA"
+      - name: Fast-forward Core
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: git merge --ff-only "$TARGET_SHA"
+      - name: Push Core
+        run: git push origin HEAD:refs/heads/core

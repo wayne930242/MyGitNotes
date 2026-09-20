@@ -40,13 +40,13 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
     throw new CoreUpdateError(`Not a valid Git repository: '${repoRoot}'`, 'NOT_GIT_REPO');
   }
   if (fs.realpathSync(root) !== fs.realpathSync(repoRoot)) {
-    throw new CoreUpdateError('The workspace path must be the repository root.', 'NOT_REPO_ROOT');
+    throw new CoreUpdateError('The product checkout path must be the repository root.', 'NOT_REPO_ROOT');
   }
 
   // 2. Only the 'core' checkout updates; 'main' holds workspace content.
   const currentBranch = await getCurrentBranch(repoRoot);
   if (currentBranch !== 'core') {
-    throw new CoreUpdateError(`Core updates run on the 'core' checkout. Current active branch is '${currentBranch}'. A 'main' that still carries the product converts once with \`pnpm convert-workspace\`.`, 'INVALID_BRANCH');
+    throw new CoreUpdateError(`Core updates require the product checkout on branch 'core'. Current product branch: '${currentBranch}'.`, 'INVALID_BRANCH');
   }
 
   // 3. Refuse to continue with a dirty working tree
@@ -61,7 +61,7 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
 
   // 5. Fetch the remote Core branch
   try {
-    await runGit(['fetch', remote, 'core'], repoRoot);
+    await runGit(['fetch', remote, `+refs/heads/core:refs/remotes/${remote}/core`], repoRoot, { timeout: 30000 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     throw new CoreUpdateError(`Failed to fetch ${remote}/core: ${message}`, 'FETCH_FAILED');
@@ -71,23 +71,19 @@ export async function updateCore(options: CoreUpdateOptions): Promise<CoreUpdate
   const { stdout: currentHash } = await runGit(['rev-parse', 'HEAD'], repoRoot);
   const { stdout: coreRemoteHash } = await runGit(['rev-parse', `${remote}/core`], repoRoot);
 
-  // Check if already up to date
-  let isAncestor = false;
-  try {
-    await runGit(['merge-base', '--is-ancestor', `${remote}/core`, 'HEAD'], repoRoot);
-    isAncestor = true;
-  } catch {
-    isAncestor = false;
-  }
+  const counts = (await runGit(['rev-list', '--left-right', '--count', `${currentHash}...${coreRemoteHash}`], repoRoot)).stdout.split(/\s+/).map(Number);
 
-  if (isAncestor) {
+  if (counts[1] === 0) {
     return { success: true, currentHash, coreRemoteHash, remoteUsed: remote, alreadyUpToDate: true, message: `Core is already up to date with ${remote}/core (${coreRemoteHash.slice(0, 7)}).` };
   }
 
+  if (counts[0] > 0 && counts[1] > 0) {
+    throw new CoreUpdateError('The product core branch and upstream have diverged. Move local product changes to another branch before updating.', 'CORE_DIVERGED');
+  }
   try {
-    await runGit(['merge', '--ff-only', `${remote}/core`], repoRoot);
+    await runGit(['merge', '--ff-only', coreRemoteHash], repoRoot);
   } catch {
-    throw new CoreUpdateError(`Local 'core' has commits that ${remote}/core does not. Core only fast-forwards from upstream; move local work to another branch first.`, 'CORE_DIVERGED');
+    throw new CoreUpdateError('Core could not fast-forward. Check the product checkout for concurrent changes or Git errors, then retry.', 'UPDATE_FAILED');
   }
   if (autoPush) await runGit(['push', 'origin', 'core'], repoRoot);
   // This process still runs the previous Core; the new Core migrates the workspace.

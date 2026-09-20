@@ -130,6 +130,7 @@ async function bootstrapWorkspace() {
     }
   };
   copyDirectory(path.join(productRoot, 'examples/workspace-agent-system'), '');
+  copyMissing(path.join(productRoot, 'packages/core/assets/mygitnotes-core-sync.yml'), '.github/workflows/mygitnotes-core-sync.yml');
   if (withExamples && config.notebooks.some(notebook => notebook.id === 'example' && notebook.root === 'notes/example')) {
     copyDirectory(path.join(template, 'notes/example'), 'notes/example');
     fs.mkdirSync(resolveSafePath(repoRoot, 'notes/example/assets'), { recursive: true });
