@@ -5,6 +5,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { syntaxHighlighting } from '@codemirror/language';
 import { codeMirrorTokenTheme, tokenHighlightStyle } from '../lib/codemirror-theme.js';
 import { markdown } from '@codemirror/lang-markdown';
+import { cjkEmphasis } from './live-markdown/cjk-emphasis.js';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import { css } from '@codemirror/lang-css';
@@ -12,7 +13,7 @@ import { html } from '@codemirror/lang-html';
 import { yaml } from '@codemirror/lang-yaml';
 
 function language(path: string) {
-  if (/\.(md|markdown|mdx)$/i.test(path)) return markdown();
+  if (/\.(md|markdown|mdx)$/i.test(path)) return markdown({ extensions: [cjkEmphasis] });
   if (/\.[cm]?[jt]sx?$/i.test(path)) return javascript({ typescript: /\.[cm]?tsx?$/i.test(path), jsx: /x$/i.test(path) });
   if (/\.json$/i.test(path)) return json();
   if (/\.css$/i.test(path)) return css();
