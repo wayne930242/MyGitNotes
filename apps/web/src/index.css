@@ -445,7 +445,12 @@ input, textarea, [contenteditable='true'] { caret-color: var(--color-text); }
 .changes-dialog > header { flex: none; }
 @media (max-width: 767px) { .workspace-dialog.changes-dialog[open] { width: calc(100vw - 12px); max-height: 96dvh; height: 96dvh; } .changes-tool > .changes-preview { max-height: 260px; } }
 
-.changes-file[aria-pressed='true'] small { color: inherit; opacity: 0.8; }
+/* The row already carries the selection surface, so the file button stays neutral inside it. */
+.changes-file.ui-button[aria-pressed='true'] { --button-bg: transparent; --button-hover-bg: color-mix(in srgb, var(--color-text) 6%, transparent); --button-text: var(--color-text); --button-hover-text: var(--color-text); --button-border: transparent; font-weight: 600; }
+.changes-file.ui-button { --button-bg: transparent; --button-border: transparent; }
+/* Inset notices read as cards, not as a cut-off bar. */
+.changes-preview .editor-notice, .changes-dialog > .editor-notice { border: 1px solid var(--color-warning); border-radius: 10px; }
+.changes-preview .editor-notice-error, .changes-dialog > .editor-notice-error { border-color: var(--color-danger); }
 
 /* Both tool surfaces retain their controls when the mobile drawer is closed. */
 @media (min-width: 768px) { .note-document-panel[data-open='false'] { display: none; } }

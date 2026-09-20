@@ -62,9 +62,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
     /* eslint-enable react/set-state-in-effect */
   }, [value.folders, filters.notebooks]);
   const [folderExpandCommand, setFolderExpandCommand] = useState<{ expanded: boolean; }>();
-  // Collapse all folds every folder but keeps notebooks open, so their first-level folders stay visible.
+  // Both commands reach the notebook level: expanding opens every notebook, collapsing closes them all.
   const expandAll = (expanded: boolean) => {
-    if (expanded) setExpandedNotebooks(new Set(filters.notebooks.map(nb => nb.id)));
+    setExpandedNotebooks(expanded ? new Set(filters.notebooks.map(nb => nb.id)) : new Set());
     setFolderExpandCommand({ expanded });
   };
   const onSelectStatus = (status: string | null) => onChange({ status });

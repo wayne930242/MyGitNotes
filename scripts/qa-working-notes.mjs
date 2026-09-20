@@ -228,6 +228,9 @@ try {
   await submit();
   await page.waitForFunction(() => document.body.innerText.includes('Remote changes conflict'));
   assert(commits.length === 3 && (await pending())['notes/example/welcome.md'].blocked, 'Conflict failed to block commit');
+  await page.evaluate(() => document.querySelector('.changes-file')?.click());
+  fs.mkdirSync(path.join(product, 'artifacts/qa'), { recursive: true });
+  await page.screenshot({ path: product + '/artifacts/qa/changes-dialog.png' });
   await page.click('.changes-dialog .workspace-dialog-heading [aria-label="Close"]');
   await closed();
   await open('welcome');
