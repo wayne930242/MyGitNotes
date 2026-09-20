@@ -23,7 +23,7 @@ export function useLaneSelection({ lane, screen, filters }: { lane?: ScreenRow; 
     setParams(next);
   };
   // A lane belongs to one notebook, so the graph showing it follows that notebook.
-  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Notebook synchronization responds to lane/notebook identity; reacting to the URL object would repeat navigation during its pending update. */
   useEffect(() => {
     if (lane || !activeLane || !filters || graphNotebook === activeLane.notebookId) return;
     const next = new URLSearchParams(params);

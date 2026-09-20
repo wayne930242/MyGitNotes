@@ -14,13 +14,15 @@ import type { GraphPageProps, LayoutNode } from './types.js';
 import type { useGraphNoteSessions } from './useGraphNoteSessions.js';
 export function useGraphData({ notebooks, filters, lane, activeLane, rows, laneIds, laneKey, showOutside, sessions, only, layout, showOrphans, positions, appearance }: Pick<GraphPageProps, 'notebooks' | 'filters' | 'lane'> & { activeLane?: ScreenRow; rows: ScreenRow[]; laneIds: string[]; laneKey: string; showOutside: boolean; sessions: ReturnType<typeof useGraphNoteSessions>['sessions']; only: string[] | null; layout: GraphLayout; showOrphans: boolean; positions: MutableRefObject<Map<string, LayoutNode>>; appearance: GraphAppearance; }) {
   const graphSource = useNoteGraph();
-  const scopeNotebook = activeLane?.notebookId || filters?.value.notebookId || 'all';
-  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
-  const filterQuery = useMemo<Partial<NoteQuery>>(() => (filters ? { notebookId: scopeNotebook, folders: filters.value.folders, descendants: filters.value.descendants, tags: filters.value.tags, tagMode: filters.value.tagMode, status: filters.value.status, showHidden: filters.value.showHidden, q: filters.value.q } : { notebookId: scopeNotebook, showHidden: false }), [filters?.value, scopeNotebook]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  const filterValue = filters?.value;
+  const activeNotebookId = activeLane?.notebookId;
+  const scopeNotebook = activeNotebookId || filterValue?.notebookId || 'all';
+
+  const filterQuery = useMemo<Partial<NoteQuery>>(() => (filterValue ? { notebookId: scopeNotebook, folders: filterValue.folders, descendants: filterValue.descendants, tags: filterValue.tags, tagMode: filterValue.tagMode, status: filterValue.status, showHidden: filterValue.showHidden, q: filterValue.q } : { notebookId: scopeNotebook, showHidden: false }), [filterValue, scopeNotebook]);
+
   const matchingPaths = useNotePaths(filterQuery);
   const visiblePaths = useNotePaths(filters?.value.showHidden ? null : { notebookId: scopeNotebook, showHidden: false });
-  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Lane membership is keyed by laneKey; freshly allocated URL arrays must not invalidate the graph and reset mutable simulation nodes. */
   const shownLanes = useMemo(() => [...rows.filter(row => laneIds.includes(row.id)), ...(lane ? [lane] : [])], [rows, laneKey, lane]);
   /* eslint-enable react-hooks/exhaustive-deps */
   const lanePaths = useLanePaths(shownLanes);
@@ -30,7 +32,7 @@ export function useGraphData({ notebooks, filters, lane, activeLane, rows, laneI
       return session.dirty && node ? [{ path, notebookId: node.notebookId, title: session.title || node.title, status: node.status, tags: node.tags, content: session.content }] : [];
     }), [sessions, graphSource.graph]);
   const graph = useMemo(() => (graphSource.graph ? overlayGraphDrafts(graphSource.graph, editingDrafts) : { nodes: [], links: [] }), [graphSource.graph, editingDrafts]);
-  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Lane-key changes invalidate matching paths; array identity alone must not rebuild simulation nodes for an unchanged selection. */
   const matching = useMemo(() => {
     let matches = matchingPaths.paths;
     if (laneIds.length && !showOutside) {
@@ -41,15 +43,15 @@ export function useGraphData({ notebooks, filters, lane, activeLane, rows, laneI
     return matches;
   }, [matchingPaths.paths, laneKey, shownLanes, only, showOutside, lanePaths.paths]);
   /* eslint-enable react-hooks/exhaustive-deps */
-  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Lane membership uses the semantic laneKey; equivalent URL arrays keep the existing membership projection. */
   const laneMembers = useMemo(() => new Set(rows.filter(row => laneIds.includes(row.id)).flatMap(row => lanePaths.paths.get(row.id) || [])), [rows, laneKey, lanePaths.paths]);
   /* eslint-enable react-hooks/exhaustive-deps */
   const expanded = useMemo(() => new Set(layout.nodes.filter(node => node.expanded).map(node => node.path)), [layout]);
   /* eslint-disable react/refs -- The force-graph adapter keeps imperative graph state and current layout in refs for canvas callbacks. */
-  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
+
   const graphData = useMemo(() => {
     const eligible = new Set(filters?.value.showHidden ? graph.nodes.map(node => node.id) : visiblePaths.paths);
-    const nodes = graph.nodes.filter(node => eligible.has(node.id) && (!activeLane || node.notebookId === activeLane.notebookId));
+    const nodes = graph.nodes.filter(node => eligible.has(node.id) && (activeNotebookId === undefined || node.notebookId === activeNotebookId));
     const ids = new Set(nodes.map(node => node.id));
     const full = { nodes, links: graph.links.filter(link => ids.has(link.source) && ids.has(link.target)) };
     const graphResult = selectFilteredGraph(full, new Set(matching), filters?.neighbors || false);
@@ -67,8 +69,8 @@ export function useGraphData({ notebooks, filters, lane, activeLane, rows, laneI
         return { ...node, x: position.x, y: position.y, fx: position.x, fy: position.y };
       }),
     };
-  }, [graph, matching, visiblePaths.paths, layout, showOrphans, filters?.neighbors, filters?.value.showHidden, activeLane?.notebookId]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  }, [graph, matching, visiblePaths.paths, layout, showOrphans, filters?.neighbors, filters?.value.showHidden, activeNotebookId, positions]);
+
   /* eslint-enable react/refs */
   const colors = useMemo(() => graphColorGroups(graphData.nodes, notebooks, appearance), [graphData, notebooks, appearance]);
   const nodeColor = useCallback((node: NoteGraphNode) => themeColor(colors.find(group => group.key === graphColorGroup(node, notebooks, appearance.mode).key)?.color || 'var(--color-muted)'), [colors, notebooks, appearance]);

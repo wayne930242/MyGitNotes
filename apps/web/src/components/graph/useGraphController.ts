@@ -18,17 +18,18 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
   const [saveLayoutRequested, setSaveLayoutRequested] = useState(false);
   const [closing, setClosing] = useState<Set<string>>(() => new Set());
   const closeTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  /* eslint-disable react-hooks/exhaustive-deps -- Cleanup intentionally reads the latest cancellation or resource ref, including work started after mounting. */
-  useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Lane transitions reset canvas state and layout saves consume an explicit pending request. */
+  const [closingLane, setClosingLane] = useState(laneKey);
+  if (closingLane !== laneKey) {
+    setClosingLane(laneKey);
     setClosing(new Set());
-    /* eslint-enable react/set-state-in-effect */
+  }
+  useEffect(() => {
+    const timers = closeTimers.current;
     return () => {
-      closeTimers.current.forEach(clearTimeout);
-      closeTimers.current.clear();
+      timers.forEach(clearTimeout);
+      timers.clear();
     };
   }, [laneKey]);
-  /* eslint-enable react-hooks/exhaustive-deps */
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>();
   const container = useRef<HTMLDivElement>(null), controls = useRef<HTMLDivElement>(null);
   const fg = useRef<any>();
@@ -51,9 +52,9 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
   /* eslint-disable react/refs -- The force-graph adapter keeps imperative graph state and current layout in refs for canvas callbacks. */
   latest.current = { screen, layout };
   /* eslint-enable react/refs */
-  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Only lane identity resets selection and mutable canvas positions; graph snapshot updates have a separate layout synchronization effect. */
   useLayoutEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Lane transitions reset canvas state and layout saves consume an explicit pending request. */
+    /* eslint-disable react/set-state-in-effect -- Canvas positions, fit flags and React layout must reset together in the layout phase before the new lane is painted. */
     setLayout(activeLane?.graph || { nodes: [] });
     /* eslint-enable react/set-state-in-effect */
     setSelected([]);
@@ -111,15 +112,16 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
     const controller = latest.current.screen;
     if (activeLane && controller?.writable) controller.change({ ...controller.page, rows: controller.page.rows.map(row => row.id === activeLane.id ? { ...row, graph: next } : row) });
   };
-  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
+  const saveLayout = screen?.save, layoutSaving = screen?.saving, layoutPage = screen?.page;
+
   useEffect(() => {
-    if (!saveLayoutRequested || !screen || screen.saving) return;
-    /* eslint-disable react/set-state-in-effect -- Lane transitions reset canvas state and layout saves consume an explicit pending request. */
+    if (!saveLayoutRequested || !saveLayout || layoutSaving) return;
+    /* eslint-disable react/set-state-in-effect -- The queued save waits for the committed screen page and any current save; consuming it in the click handler would save the previous layout. */
     setSaveLayoutRequested(false);
     /* eslint-enable react/set-state-in-effect */
-    void screen.save();
-  }, [saveLayoutRequested, screen?.saving, screen?.page, screen?.save]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+    void saveLayout();
+  }, [saveLayoutRequested, layoutSaving, layoutPage, saveLayout]);
+
   const freeze = () => {
     interacted.current = true;
     for (const node of graphData.nodes as Node[]) {
@@ -205,7 +207,7 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
     setLaneGeometry({ nodes: currentLayout().nodes.filter(node => visible.has(node.path)).map(node => ({ ...node, expanded: node.expanded || closing.has(node.path) })) });
   };
   const laneViewport = graphLaneViewport(laneGeometry, size.width);
-  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
+  /* eslint-disable react-hooks/exhaustive-deps -- The 200 ms measurement reads current simulation coordinates after dragging settles; render-created helper identity must not restart the timer. */
   useEffect(() => {
     if (!lane || cardDragging) return;
     // Wait for pointer movement to settle; resizing the canvas during a drag
@@ -214,17 +216,19 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
     return () => clearTimeout(timer);
   }, [lane, layout, closing, graphData, cardDragging]);
   /* eslint-enable react-hooks/exhaustive-deps */
-  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
+  const isLane = Boolean(lane);
+  const { x: viewportX, y: viewportY, zoom: viewportZoom, height: viewportHeight } = laneViewport;
+
   useEffect(() => {
-    if (!lane || !fg.current) return;
+    if (!isLane || !fg.current) return;
     const timer = setTimeout(() => {
       const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 250;
-      fg.current.centerAt(laneViewport.x, laneViewport.y, duration);
-      fg.current.zoom(laneViewport.zoom, duration);
+      fg.current.centerAt(viewportX, viewportY, duration);
+      fg.current.zoom(viewportZoom, duration);
     }, 30);
     return () => clearTimeout(timer);
-  }, [laneViewport.height, laneViewport.x, laneViewport.y, laneViewport.zoom, size.width, size.height, Boolean(lane)]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  }, [viewportHeight, viewportX, viewportY, viewportZoom, size.width, size.height, isLane]);
+
   const { paintMinimap, minimap } = useGraphMinimap({
     graphRef: fg,
     graphData,
@@ -237,7 +241,7 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
       interacted.current = true;
     },
   });
-  /* eslint-disable react-hooks/exhaustive-deps -- Explicit lane, filter, viewport and layout keys control canvas work; object identity alone must not reset it. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Initial fit runs for node-count, viewport or lane changes; observing every layout/helper recreation would move the camera during interaction. */
   useEffect(() => {
     if (!graphData.nodes.length || fitted.current || interacted.current) return;
     const timer = setTimeout(() => {
