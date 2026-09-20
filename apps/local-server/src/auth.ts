@@ -62,7 +62,16 @@ export class SessionStore {
     }
     const dir = path.join(this.base, '.github-notes-sessions');
     await fs.mkdir(dir, { recursive: true, mode: 0o700 });
-    await fs.writeFile(path.join(dir, digest(id)), record, { mode: 0o600 });
+    // A reader hitting a half-written file would see a valid credential as missing, so the record
+    // lands through a rename: concurrent readers get either the previous record or the new one.
+    const target = path.join(dir, digest(id)), pending = `${target}.${random()}.tmp`;
+    try {
+      await fs.writeFile(pending, record, { mode: 0o600 });
+      await fs.rename(pending, target);
+    } catch (error) {
+      await fs.rm(pending, { force: true });
+      throw error;
+    }
   }
   async get(id: string) {
     const value = await this.readRecord(id);
@@ -156,7 +165,8 @@ export class SessionStore {
     if (this.redis) hashes = await this.command(['SMEMBERS', `${this.prefix}:grants:${ownerId}`]);
     else {
       try {
-        hashes = await fs.readdir(path.join(this.base, '.github-notes-sessions'));
+        // Only sealed records are named after a digest; a record still being written is not one yet.
+        hashes = (await fs.readdir(path.join(this.base, '.github-notes-sessions'))).filter(name => /^[a-f0-9]{64}$/.test(name));
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
         throw error;
