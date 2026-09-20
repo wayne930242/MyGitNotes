@@ -18,8 +18,10 @@ function editor(overrides: { yamlContent?: string; readOnly?: boolean; onChange?
 }
 
 describe('WorkspaceManifestEditor', () => {
-  it('starts in Advanced mode with a focusable raw-YAML textarea', () => {
+  it('starts valid YAML in Form mode and keeps a focusable Advanced editor', () => {
     render(editor());
+    expect(screen.getByRole('tab', { name: 'Form' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('tab', { name: 'Advanced (YAML)' }));
     const textarea = screen.getByRole('textbox', { name: /manifest/i });
     expect(textarea.tagName).toBe('TEXTAREA');
     textarea.focus();
@@ -73,6 +75,7 @@ describe('WorkspaceManifestEditor', () => {
 
   it('shows an inline error in Form mode when the current YAML does not parse, without discarding Advanced mode', () => {
     render(editor({ yamlContent: 'not: [valid' }));
+    expect(screen.getByRole('tab', { name: 'Advanced (YAML)' })).toHaveAttribute('aria-selected', 'true');
     fireEvent.click(screen.getByRole('tab', { name: 'Form' }));
     expect(screen.getByText(/YAML has errors/)).toBeInTheDocument();
   });

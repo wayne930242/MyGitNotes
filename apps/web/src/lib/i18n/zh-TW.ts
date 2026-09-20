@@ -18,6 +18,8 @@ export const zhTW: Record<TranslationKey, string> = {
   'coreUpdate.install': '安裝 Core 同步',
   'coreUpdate.run.workflow_permission_required': '同步憑證無法使用。請重新授權 GitHub，再重試以重新設定憑證。',
   'coreUpdate.description': '檢查產品 Core 版本，與工作區筆記分開管理。',
+  'coreUpdate.repositoryLabel': '儲存庫 Core',
+  'coreUpdate.runningLabel': '目前執行版本',
   'coreUpdate.checking': '正在檢查 Core…',
   'coreUpdate.update_available': 'Core 落後上游 {count} 個提交。',
   'coreUpdate.up_to_date': '儲存庫 Core 已是最新版本。',
@@ -962,6 +964,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'settings.manifestRemove': '移除',
   'settings.manifestMetadataKeyPlaceholder': '鍵值',
   'settings.manifestMetadataLabelPlaceholder': '標籤（選填）',
+  'settings.manifestMetadataType': '欄位類型',
   'settings.manifestPathAliasKeyPlaceholder': '別名',
   'settings.manifestPathAliasTargetPlaceholder': '目標路徑',
 

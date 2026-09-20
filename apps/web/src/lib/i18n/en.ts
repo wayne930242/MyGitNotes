@@ -16,6 +16,8 @@ export const en = {
   'coreUpdate.install': 'Install Core sync',
   'coreUpdate.run.workflow_permission_required': 'The sync credential is unavailable. Re-authorize GitHub and retry to provision it again.',
   'coreUpdate.description': 'Check the product Core separately from your workspace notes.',
+  'coreUpdate.repositoryLabel': 'Repository Core',
+  'coreUpdate.runningLabel': 'Running build',
   'coreUpdate.checking': 'Checking Core…',
   'coreUpdate.update_available': 'Core commits behind upstream: {count}.',
   'coreUpdate.up_to_date': 'The repository Core is up to date.',
@@ -961,6 +963,7 @@ export const en = {
   'settings.manifestRemove': 'Remove',
   'settings.manifestMetadataKeyPlaceholder': 'key',
   'settings.manifestMetadataLabelPlaceholder': 'label (optional)',
+  'settings.manifestMetadataType': 'field type',
   'settings.manifestPathAliasKeyPlaceholder': 'alias',
   'settings.manifestPathAliasTargetPlaceholder': 'target path',
 

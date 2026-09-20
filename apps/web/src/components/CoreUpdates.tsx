@@ -120,7 +120,29 @@ export function CoreUpdates({ local }: { local: boolean; }) {
         {t('settings.coreUpdates')}
       </h3>
       <p className='text-xs text-muted'>{t('coreUpdate.description')}</p>
-      <div role='status' aria-live='polite' className='text-sm text-fg space-y-2' data-core-state={state || 'checking'}>{busy && <p>{t('coreUpdate.checking')}</p>}{run && <p data-core-run={run.state}>{t(`coreUpdate.run.${run.state}`)}</p>}{run?.url && <a className='text-primary underline' href={run.url} target='_blank' rel='noreferrer'>{t('coreUpdate.viewRun')}</a>}{state && <p>{t(`coreUpdate.${state}`, { count: status?.current?.behind || 0 })}</p>}{status?.upstream && <p className='text-xs text-muted break-all'>{status.upstream}</p>}{status && state !== 'unsupported' && <p className='text-xs text-muted' data-core-running-behind={status.running?.behind ?? 'unknown'}>{t('coreUpdate.running', { sha: status.runningBuild })}{' · '}{status.running ? t(status.running.ahead && status.running.behind ? 'coreUpdate.runningDiverged' : status.running.behind ? 'coreUpdate.runningBehind' : status.running.ahead ? 'coreUpdate.runningAhead' : 'coreUpdate.runningCurrent', { count: status.running.behind }) : t('coreUpdate.runningUnknown')}</p>}{notice && <p>{t(`coreUpdate.${notice}`)}</p>}{((notice === 'updated') || (status?.running && status.running.behind > 0 && status.current?.behind === 0)) && <p className='text-xs text-muted'>{t(local ? 'coreUpdate.restartLocal' : 'coreUpdate.restartRemote')}</p>}</div>
+      <div role='status' aria-live='polite' className='text-sm text-fg space-y-3' data-core-state={state || 'checking'}>
+        {busy && <p>{t('coreUpdate.checking')}</p>}
+        {run && <p data-core-run={run.state}>{t(`coreUpdate.run.${run.state}`)}</p>}
+        {run?.url && <a className='text-primary underline' href={run.url} target='_blank' rel='noreferrer'>{t('coreUpdate.viewRun')}</a>}
+        {status && (
+          <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
+            <div className='rounded-lg border border-line bg-surface p-3 space-y-1.5'>
+              <p className='text-[11px] font-semibold uppercase tracking-wider text-muted'>{t('coreUpdate.repositoryLabel')}</p>
+              {state && <p className='font-medium'>{t(`coreUpdate.${state}`, { count: status.current?.behind || 0 })}</p>}
+              {status.upstream && <p className='text-xs text-muted break-all'>{status.upstream}</p>}
+            </div>
+            {state !== 'unsupported' && (
+              <div className='rounded-lg border border-line bg-surface p-3 space-y-1.5'>
+                <p className='text-[11px] font-semibold uppercase tracking-wider text-muted'>{t('coreUpdate.runningLabel')}</p>
+                <p className='font-medium break-all'>{t('coreUpdate.running', { sha: status.runningBuild })}</p>
+                <p className='text-xs text-muted' data-core-running-behind={status.running?.behind ?? 'unknown'}>{status.running ? t(status.running.ahead && status.running.behind ? 'coreUpdate.runningDiverged' : status.running.behind ? 'coreUpdate.runningBehind' : status.running.ahead ? 'coreUpdate.runningAhead' : 'coreUpdate.runningCurrent', { count: status.running.behind }) : t('coreUpdate.runningUnknown')}</p>
+              </div>
+            )}
+          </div>
+        )}
+        {notice && <p>{t(`coreUpdate.${notice}`)}</p>}
+        {((notice === 'updated') || (status?.running && status.running.behind > 0 && status.current?.behind === 0)) && <p className='text-xs text-muted'>{t(local ? 'coreUpdate.restartLocal' : 'coreUpdate.restartRemote')}</p>}
+      </div>
       {error && <p role='alert' className='text-xs text-danger'>{error}</p>}
       <div className='flex flex-wrap gap-2'>
         {state === 'reauthorization_required' && <a className='text-primary underline' href='/api/auth/github'>{t('coreUpdate.reauthorize')}</a>}
