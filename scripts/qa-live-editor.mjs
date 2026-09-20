@@ -192,13 +192,16 @@ try {
       const rect = node.getBoundingClientRect();
       return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     }, number);
+  // The copied prompt quotes the file's own lines, so the expectation reads them from disk.
+  const rootFileLines = fs.readFileSync(path.join(root, 'notes/example/root.md'), 'utf8').split('\n');
+  const expectedLinePrompt = (first, last = first) => `${first === last ? `Below is line ${first}` : `Below are lines ${first}-${last}`} of \`notes/example/root.md\`:\n\n${rootFileLines.slice(first - 1, last).join('\n')}\n`;
   let from = await liveGutterPoint(8), to = await liveGutterPoint(10);
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 5 });
   if (!await page.$('[data-live-markdown] .cm-line-copy-selected')) throw Error('Live preview drag range is not highlighted');
   await page.mouse.up();
-  await page.waitForFunction(() => window.__linePrompt === 'Regarding lines 8-10 of `notes/example/root.md`: ');
+  await page.waitForFunction(expected => window.__linePrompt === expected, {}, expectedLinePrompt(8, 10));
   await page.waitForSelector('[data-line-copy-feedback][data-state="copied"]');
   from = await liveGutterPoint(10);
   to = await liveGutterPoint(8);
@@ -206,7 +209,7 @@ try {
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 5 });
   await page.mouse.up();
-  await page.waitForFunction(() => window.__linePrompt === 'Regarding lines 8-10 of `notes/example/root.md`: ');
+  await page.waitForFunction(expected => window.__linePrompt === expected, {}, expectedLinePrompt(8, 10));
   const liveBefore = await page.evaluate(() => ({ text: document.querySelector('.cm-content')?.textContent, selection: window.getSelection()?.toString() }));
   await page.evaluate(() => {
     window.__linePromptWrites = [];
@@ -215,7 +218,7 @@ try {
   await page.mouse.click(single.x, single.y);
   await new Promise(resolve => setTimeout(resolve, 80));
   await page.mouse.click(single.x, single.y);
-  await page.waitForFunction(() => window.__linePrompt === 'Regarding line 8 of `notes/example/root.md`: ');
+  await page.waitForFunction(expected => window.__linePrompt === expected, {}, expectedLinePrompt(8));
   if (await page.evaluate(() => window.__linePromptWrites.length) !== 1) throw Error('Live preview double-click wrote to the clipboard more than once');
   const liveAfter = await page.evaluate(() => ({ text: document.querySelector('.cm-content')?.textContent, selection: window.getSelection()?.toString() }));
   if (JSON.stringify(liveAfter) !== JSON.stringify(liveBefore)) throw Error('Live preview gutter gestures changed document text or selection');
@@ -315,7 +318,7 @@ try {
   await page.mouse.move(to.x, to.y, { steps: 5 });
   if (!await page.$('[data-source-line-numbers] [data-line-copy-selected="true"]')) throw Error('Source drag range is not highlighted');
   await page.mouse.up();
-  await page.waitForFunction(() => window.__linePrompt === 'Regarding lines 8-10 of `notes/example/root.md`: ');
+  await page.waitForFunction(expected => window.__linePrompt === expected, {}, expectedLinePrompt(8, 10));
   await page.waitForSelector('[data-line-copy-feedback][data-state="copied"]');
   from = await sourceGutterPoint(10);
   to = await sourceGutterPoint(8);
@@ -323,7 +326,7 @@ try {
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 5 });
   await page.mouse.up();
-  await page.waitForFunction(() => window.__linePrompt === 'Regarding lines 8-10 of `notes/example/root.md`: ');
+  await page.waitForFunction(expected => window.__linePrompt === expected, {}, expectedLinePrompt(8, 10));
   await page.evaluate(() => {
     window.__linePromptWrites = [];
   });
@@ -331,7 +334,7 @@ try {
   await page.mouse.click(sourceSingle.x, sourceSingle.y);
   await new Promise(resolve => setTimeout(resolve, 80));
   await page.mouse.click(sourceSingle.x, sourceSingle.y);
-  await page.waitForFunction(() => window.__linePrompt === 'Regarding line 8 of `notes/example/root.md`: ');
+  await page.waitForFunction(expected => window.__linePrompt === expected, {}, expectedLinePrompt(8));
   if (await page.evaluate(() => window.__linePromptWrites.length) !== 1) throw Error('Source double-click wrote to the clipboard more than once');
   const sourceAfter = await page.$eval('textarea[aria-label="Note content"]', e => ({ value: e.value, start: e.selectionStart, end: e.selectionEnd }));
   if (JSON.stringify(sourceAfter) !== JSON.stringify(sourceBefore)) throw Error('Source gutter gestures changed document text or selection');

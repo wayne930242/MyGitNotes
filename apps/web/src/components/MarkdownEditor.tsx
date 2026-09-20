@@ -75,9 +75,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   const sourceLineCount = content.split('\n').length;
 
   const copyLines = async (firstBodyLine: number, lastBodyLine = firstBodyLine) => {
-    const start = Math.min(firstBodyLine, lastBodyLine) + lineNumberOffset;
-    const end = Math.max(firstBodyLine, lastBodyLine) + lineNumberOffset;
-    const ok = await copyLinePrompt(path, start, end);
+    const firstBody = Math.min(firstBodyLine, lastBodyLine), lastBody = Math.max(firstBodyLine, lastBodyLine);
+    const start = firstBody + lineNumberOffset, end = lastBody + lineNumberOffset;
+    const ok = await copyLinePrompt(path, start, end, content.split('\n').slice(firstBody - 1, lastBody).join('\n'));
     setLineCopyFeedback({ ok, start, end });
     clearTimeout(lineCopyTimer.current);
     lineCopyTimer.current = setTimeout(() => setLineCopyFeedback(null), 2000);
