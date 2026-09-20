@@ -334,9 +334,9 @@ try {
     window.__linePromptWrites = [];
   });
   const sourceSingle = await sourceGutterPoint(8);
-  await page.mouse.click(sourceSingle.x, sourceSingle.y);
-  await new Promise(resolve => setTimeout(resolve, 80));
-  await page.mouse.click(sourceSingle.x, sourceSingle.y);
+  // A fixed gap between two separate clicks races the gutter's own <500ms double-click
+  // window under load; `count: 2` drives both mousedown/mouseup pairs in one gesture instead.
+  await page.mouse.click(sourceSingle.x, sourceSingle.y, { count: 2 });
   await page.waitForFunction(expected => window.__linePrompt === expected, {}, expectedLinePrompt(8));
   if (await page.evaluate(() => window.__linePromptWrites.length) !== 1) throw Error('Source double-click wrote to the clipboard more than once');
   const sourceAfter = await page.$eval('textarea[aria-label="Note content"]', e => ({ value: e.value, start: e.selectionStart, end: e.selectionEnd }));
