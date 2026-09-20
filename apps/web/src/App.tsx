@@ -205,6 +205,7 @@ const AppContent: React.FC = () => {
             canDelete={canWrite}
             confirmDelete={remote}
             notes={displayedNotes}
+            loading={listResult.loading}
             uncommitted={listResult.uncommitted}
             hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
             onOpenNote={note => void openFromBrowse(note)}
@@ -225,7 +226,7 @@ const AppContent: React.FC = () => {
       )}
       {viewMode === 'card' && (
         <>
-          <CardView strip={docked && dockHeight < CARD_TWO_ROW_HEIGHT} focusMode={browseFocusMode} statuses={notebookStatuses} readOnly={!canWrite} canDelete={canWrite} confirmDelete={remote} notes={displayedNotes} uncommitted={listResult.uncommitted} hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)} onOpenNote={note => void openFromBrowse(note)} onDeleteNote={handleDeleteNote} onMoveNote={moveNoteAction} onNewNote={() => openNewNote()} onUpdateNoteStatus={handleUpdateNoteStatus} tagActions={noteTagActions} />
+          <CardView strip={docked && dockHeight < CARD_TWO_ROW_HEIGHT} focusMode={browseFocusMode} statuses={notebookStatuses} readOnly={!canWrite} canDelete={canWrite} confirmDelete={remote} notes={displayedNotes} loading={listResult.loading} uncommitted={listResult.uncommitted} hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)} onOpenNote={note => void openFromBrowse(note)} onDeleteNote={handleDeleteNote} onMoveNote={moveNoteAction} onNewNote={() => openNewNote()} onUpdateNoteStatus={handleUpdateNoteStatus} tagActions={noteTagActions} />
           <NoteListSentinel hasMore={listResult.hasMore} loading={listResult.loadingMore} error={listResult.error} onLoadMore={listResult.loadMore} />
         </>
       )}

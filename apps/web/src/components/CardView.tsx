@@ -15,6 +15,8 @@ interface CardViewProps {
   /** Staged drafts the server cannot return yet; shown above the committed cards. */
   uncommitted?: NoteListItem[];
   hasFolderEntries?: boolean;
+  /** The first page is still in flight, so nothing is known to be missing yet. */
+  loading?: boolean;
   statuses: string[];
   readOnly?: boolean;
   canDelete?: boolean;
@@ -31,14 +33,14 @@ interface CardViewProps {
   strip?: boolean;
 }
 
-export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onNewNote, onUpdateNoteStatus, tagActions, focusMode, strip = false }) => {
+export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onNewNote, onUpdateNoteStatus, tagActions, focusMode, strip = false }) => {
   const { t } = useTranslation();
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(confirmDelete, path => {
     const note = [...uncommitted, ...notes].find(n => n.path === path);
     if (note) onDeleteNote(note);
   });
 
-  const isEmpty = notes.length === 0 && uncommitted.length === 0 && !hasFolderEntries;
+  const isEmpty = !loading && notes.length === 0 && uncommitted.length === 0 && !hasFolderEntries;
 
   if (isEmpty) {
     return (

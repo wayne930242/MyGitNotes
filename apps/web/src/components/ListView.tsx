@@ -16,6 +16,8 @@ interface ListViewProps {
   /** Staged drafts the server cannot return yet; listed above the committed rows. */
   uncommitted?: NoteListItem[];
   hasFolderEntries?: boolean;
+  /** The first page is still in flight, so nothing is known to be missing yet. */
+  loading?: boolean;
   statuses: string[];
   readOnly?: boolean;
   canDelete?: boolean;
@@ -112,7 +114,7 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
   );
 });
 
-export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onUpdateNoteStatus, onNewNote, sortField = 'updated', sortOrder = 'desc', onSortChange, showMobileSort = false, tagActions, focusMode, compact = false, leading }) => {
+export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onUpdateNoteStatus, onNewNote, sortField = 'updated', sortOrder = 'desc', onSortChange, showMobileSort = false, tagActions, focusMode, compact = false, leading }) => {
   const { t, language } = useTranslation();
   // Rows retain stable actions while invoking the latest committed callbacks.
   const handlers = useRef({ onOpenNote, onDeleteNote, onUpdateNoteStatus, onMoveNote, focusMode });
@@ -130,7 +132,7 @@ export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], has
   const actions = useMemo<NoteRowActions>(() => ({ open: note => handlers.current.onOpenNote(note), remove: note => requestDelete(note.path), move: note => handlers.current.onMoveNote?.(note), status: (note, status) => handlers.current.onUpdateNoteStatus(note, status), zoom: note => handlers.current.focusMode?.onZoomNote(note) }), [requestDelete]);
   const dates = useMemo(() => ({ short: new Intl.DateTimeFormat(language, { month: '2-digit', day: '2-digit', hour12: false, hour: '2-digit', minute: '2-digit' }), full: new Intl.DateTimeFormat(language, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }) }), [language]);
 
-  const isEmpty = notes.length === 0 && uncommitted.length === 0 && !hasFolderEntries;
+  const isEmpty = !loading && notes.length === 0 && uncommitted.length === 0 && !hasFolderEntries;
 
   if (isEmpty) {
     return (
