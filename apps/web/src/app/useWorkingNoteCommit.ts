@@ -2,7 +2,6 @@ import { clearCommittedNotes, readWorkingNotes, type WorkingNotes } from '../lib
 import { mergeNote, sameValue } from '../lib/merge-note.js';
 import { ApiError, commitRemoteNotes, fetchWorkspace, readNotes } from '../lib/api.js';
 import type { NoteItem } from '../lib/types.js';
-import { type TranslationKey } from '../lib/i18n/index.js';
 import type { I18nContextValue } from '../lib/i18n/index.js';
 import type { WorkspaceState } from './workspace-state.js';
 
@@ -31,7 +30,7 @@ export function useWorkingNoteCommit({ workingScope, documents, sourceId, t, sta
     const latestNotes = existingPaths.length ? await readNotes(existingPaths, expected) : [];
     const latestByPath = new Map(latestNotes.map(note => [note.path, note]));
     for (const entry of selected) {
-      if (entry.blocked) throw new Error(`${entry.note.path}: ${t(entry.blocked as TranslationKey)}`);
+      if (entry.blocked) throw new Error(`${entry.note.path}: ${entry.blocked}`);
       let prepared = entry;
       if (entry.base) {
         let latest: NoteItem;

@@ -2,7 +2,7 @@ import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { Button } from './Button.js';
 import { DiffPreview } from './DiffPreview.js';
 import { EditorNotice } from './EditorNotice.js';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { GitCommit, Minus, Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import type { ChangeRequest, FileChange, GitStatus } from '../lib/types.js';
 import { commitStagedChanges, fetchFileChanges, fetchFileDiff, generateSemanticCommit, manageFileChange } from '../lib/api.js';
@@ -26,8 +26,12 @@ export const CommitModal = (props: Props) => props.isOpen ? <Changes {...props} 
 function Changes({ request, writable, gitStatus, remoteChanges, getPreview, restoreFile, commitFiles, onChanged, onCommitted, onClose }: Props) {
   const { t } = useTranslation();
   const remote = Boolean(commitFiles);
+  /** A remote row is a draft held in this browser, so discarding it needs neither write access nor a committable state. */
+  const canRestore = useCallback((file: FileChange) => remote || Boolean(writable && file.available), [remote, writable]);
   const selectionMode = request?.action === 'commit';
-  const initialSelection = request?.paths || remoteChanges?.map(file => file.path) || [];
+  // A row the remote refuses can never be committed, so it must not arrive selected: it would fail every
+  // commit while its own checkbox stays disabled, leaving no way to commit anything else.
+  const initialSelection = request?.paths || remoteChanges?.filter(file => file.available !== false).map(file => file.path) || [];
   const requestApplied = useRef(false);
   const [restoreFiles, setRestoreFiles] = useState<FileChange[]>();
   const [diffLoading, setDiffLoading] = useState(false);
@@ -83,9 +87,9 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     if (loading || requestApplied.current) return;
     requestApplied.current = true;
     /* eslint-disable react/set-state-in-effect -- The one-shot restore request is applied after the asynchronous file list finishes; applying it during render would precede that lifecycle checkpoint. */
-    if (request?.action === 'restore') setRestoreFiles(changes.filter(file => request.paths.includes(file.path) && file.available));
+    if (request?.action === 'restore') setRestoreFiles(changes.filter(file => request.paths.includes(file.path) && canRestore(file)));
     /* eslint-enable react/set-state-in-effect */
-  }, [loading, fileKey, changes, request]);
+  }, [loading, fileKey, changes, request, canRestore]);
   const remoteDiff = active && getPreview ? getPreview(active.path) : undefined;
   /* eslint-disable react-hooks/exhaustive-deps -- The diff request uses path, side, revision and availability primitives; observing the containing objects would refetch identical previews. */
   useEffect(() => {
@@ -95,11 +99,14 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     /* eslint-enable react/set-state-in-effect */
     setDiffLoading(false);
     setDiffError('');
-    if (!active || !selected?.available) return;
+    if (!active) return;
+    // A remote draft keeps its preview even when the remote refuses it, so its content stays readable
+    // while the only remaining action is to discard it.
     if (remoteDiff !== undefined) {
       setDiff(remoteDiff);
       return;
     }
+    if (!selected?.available) return;
     setDiffLoading(true);
     void fetchFileDiff(active.path, selectionMode ? 'current' : active.side).then(value => {
       if (!cancelled) setDiff(value);
@@ -115,7 +122,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const act = async (file: FileChange, action: 'stage' | 'unstage' | 'restore', confirmed = false) => {
-    if (busy || !writable || !file.available) return;
+    if (busy || (action === 'restore' ? !canRestore(file) : !writable || !file.available)) return;
     if (action === 'restore' && !confirmed) {
       setConfirm(file);
       return;
@@ -174,7 +181,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     }
   };
   const restoreMany = async () => {
-    if (!restoreFiles?.length || busy || !writable) return;
+    if (!restoreFiles?.length || busy) return;
     setBusy(true);
     setError('');
     const backups: string[] = [];
@@ -210,7 +217,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
             <small>{t(`changes.${file.kind}`)}</small>
           </Button>
           {!selectionMode && <Button type='button' size='icon' aria-label={`${t(side === 'working' ? 'changes.stage' : 'changes.unstage')} ${file.path}`} title={t(side === 'working' ? 'changes.stage' : 'changes.unstage')} disabled={busy || !writable || !file.available} onClick={() => void act(file, side === 'working' ? 'stage' : 'unstage')}>{side === 'working' ? <Plus /> : <Minus />}</Button>}
-          <Button type='button' size='icon' aria-label={`${t('common.restore')} ${file.path}`} title={t(file.tracked ? 'common.restore' : 'changes.discardNew')} disabled={busy || !writable || !file.available} onClick={() => void act(file, 'restore')}>
+          <Button type='button' size='icon' aria-label={`${t('common.restore')} ${file.path}`} title={t(file.tracked ? 'common.restore' : 'changes.discardNew')} disabled={busy || !canRestore(file)} onClick={() => void act(file, 'restore')}>
             <RotateCcw />
           </Button>
         </div>

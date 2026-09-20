@@ -8,6 +8,7 @@ export function DiffPreview({ diff, file, loading = false, error = '' }: { diff:
   const { t } = useTranslation();
   const preview = parseDiffPreview(diff);
   const reason = file?.unavailableReason || (file?.kind === 'conflict' ? 'conflict' : 'unsupported');
+  const code = <pre tabIndex={0} className='diff-code'>{preview.lines.filter(line => line.kind !== 'header' || !/^(diff --git |index |--- |\+\+\+ )/.test(line.text)).map((line, index) => <span key={index} className={`diff-line diff-${line.kind}`}><span className="diff-line-number" data-number={line.oldLine} aria-hidden="true" /><span className="diff-line-number" data-number={line.newLine} aria-hidden="true" /><span className="diff-line-text">{line.text}{'\n'}</span></span>)}</pre>;
   return (
     <section className='changes-preview' aria-label={t('commit.diffPreview')} aria-busy={loading}>
       <h4>
@@ -22,10 +23,14 @@ export function DiffPreview({ diff, file, loading = false, error = '' }: { diff:
       </h4>
       {error ? <EditorNotice tone='error'>{error}</EditorNotice> : loading ? <p className='diff-empty' role='status'>{t('agent.loadingDocument')}</p> : file?.available === false
         ? (
-          <EditorNotice>
-            <strong>{t(`changes.reason.${reason}`)}</strong>
-            <p>{t(`changes.help.${reason}`)}</p>
-          </EditorNotice>
+          <>
+            <EditorNotice>
+              <strong>{t(`changes.reason.${reason}`)}</strong>
+              <p>{t(`changes.help.${reason}`)}</p>
+            </EditorNotice>
+            {/* Discarding is the only way out of this state, so show what it would throw away. */}
+            {diff && !preview.notice && code}
+          </>
         )
         : preview.notice
         ? (
@@ -37,7 +42,7 @@ export function DiffPreview({ diff, file, loading = false, error = '' }: { diff:
         )
         : !diff
         ? <p className='diff-empty'>{t(file ? 'changes.identical' : 'changes.noDiff')}</p>
-        : <pre tabIndex={0} className='diff-code'>{preview.lines.filter(line => line.kind !== 'header' || !/^(diff --git |index |--- |\+\+\+ )/.test(line.text)).map((line, index) => <span key={index} className={`diff-line diff-${line.kind}`}><span className="diff-line-number" data-number={line.oldLine} aria-hidden="true" /><span className="diff-line-number" data-number={line.newLine} aria-hidden="true" /><span className="diff-line-text">{line.text}{'\n'}</span></span>)}</pre>}
+        : code}
     </section>
   );
 }
