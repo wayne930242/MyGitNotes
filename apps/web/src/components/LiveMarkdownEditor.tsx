@@ -21,6 +21,7 @@ import { atCompletionSource } from './live-markdown/at-completion-source.js';
 import { liveDecorations } from './live-markdown/decorations.js';
 import { cardBackgroundLayer, theme } from './live-markdown/theme.js';
 import { attachGutterLineCopy } from './live-markdown/gutter-line-copy.js';
+import { tableBoundaries } from './live-markdown/table-boundaries.js';
 
 export interface LiveMarkdownHandle {
   /** Inserts `text` at `at`, or in place of the selection. */
@@ -129,6 +130,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
         extensions: [
           markdown({ base: markdownLanguage }),
           history(),
+          tableBoundaries,
           keymap.of([...defaultKeymap, ...historyKeymap]),
           drawSelection(),
           cardBackgroundLayer,

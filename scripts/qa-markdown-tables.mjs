@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { resolveQaChromePath } from './qa-chrome.mjs';
+import { tableBoundaryCases, verifyTableBoundaries } from './qa-table-boundaries.mjs';
 const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(`${product}/apps/web/package.json`);
 const puppeteer = require('puppeteer-core');
@@ -21,6 +22,9 @@ write('notes/example/projects/_dir.yml', 'title: Projects\norder: -1\n');
 write('notes/example/projects/deep/_dir.yml', 'title: Deep work\n');
 write('notes/example/projects/deep/nested.md', '# Nested Note\n');
 write('notes/example/assets/pixel.png', Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64'));
+for (const test of tableBoundaryCases) {
+  for (const undo of [false, true]) write(`notes/example/edge-${test.name}-${undo}.md`, test.initial);
+}
 git('init', '-b', 'main');
 git('config', 'user.name', 'Browser QA');
 git('config', 'user.email', 'qa@example.com');
@@ -78,6 +82,7 @@ const hoverEdge = async (axis, index) => {
 const count = () => page.$eval(`${tableRoot} table`, e => ({ rows: e.rows.length, columns: e.rows[0].cells.length }));
 const toolbar = label => `${tableRoot} .live-table-toolbar button[aria-label="${label}"]`;
 try {
+  await verifyTableBoundaries(page, base, click);
   await page.goto(base + '/notebooks/example/notes/root.md', { waitUntil: 'networkidle0' });
   await page.waitForSelector(tableRoot);
   await page.mouse.move(0, 0);
@@ -109,18 +114,18 @@ try {
   const remaining = await page.$eval(`${tableRoot} table`, e => [...e.rows[2].cells].map(c => c.textContent));
   if (JSON.stringify(remaining) !== JSON.stringify(['a', 'b'])) throw Error('Column deletion damaged neighboring content');
   await page.waitForFunction(() => document.activeElement?.matches('.live-md-table th, .live-md-table td'));
-  await page.keyboard.down('Control');
+  await page.keyboard.down(process.platform === 'darwin' ? 'Meta' : 'Control');
   await page.keyboard.press('KeyZ');
-  await page.keyboard.up('Control');
+  await page.keyboard.up(process.platform === 'darwin' ? 'Meta' : 'Control');
   await page.waitForFunction(() => document.querySelector('.live-md-table table').rows[0].cells.length === 3);
   if (!await page.$eval(tableRoot, e => e.textContent.includes('new|value'))) throw Error('Undo lost deleted cell content');
   await page.click(bodyCell(1, 1));
   await page.click(toolbar('Delete row'));
   await page.waitForFunction(() => document.querySelector('.live-md-table table').rows.length === 2);
   await page.waitForFunction(() => document.activeElement?.matches('.live-md-table th, .live-md-table td'));
-  await page.keyboard.down('Control');
+  await page.keyboard.down(process.platform === 'darwin' ? 'Meta' : 'Control');
   await page.keyboard.press('KeyZ');
-  await page.keyboard.up('Control');
+  await page.keyboard.up(process.platform === 'darwin' ? 'Meta' : 'Control');
   await page.waitForFunction(() => document.querySelector('.live-md-table table').rows.length === 3);
   await page.click(`${tableRoot} th`);
   if (!await page.$eval(toolbar('Delete row'), e => e.disabled)) throw Error('Header row must stay present');
@@ -211,9 +216,9 @@ try {
   const demo = '# 調查線索\n\n| 調查員 | 目前位置 | 發現的線索 |\n| --- | --- | --- |\n| 艾琳 | 市立圖書館 | 一份缺頁的借閱紀錄 |\n| 里昂 | 舊車站 | 凌晨抵達的神祕訪客 |\n\n';
   await click('Source');
   await page.focus('textarea[aria-label="Note content"]');
-  await page.keyboard.down('Control');
+  await page.keyboard.down(process.platform === 'darwin' ? 'Meta' : 'Control');
   await page.keyboard.press('KeyA');
-  await page.keyboard.up('Control');
+  await page.keyboard.up(process.platform === 'darwin' ? 'Meta' : 'Control');
   await page.keyboard.type(demo);
   for (let attempt = 0; attempt < 50; attempt++) {
     if (fs.readFileSync(path.join(root, 'notes/example/root.md'), 'utf8') === demo) break;
