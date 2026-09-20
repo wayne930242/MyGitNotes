@@ -16,6 +16,7 @@ interface SettingsModalProps {
   local?: boolean;
   canWrite: boolean;
   revision?: string;
+  onRevision: (revision: string) => void;
   accountSettings?: React.ReactNode;
   config: WorkspaceConfig | null;
   branch: string;
@@ -25,7 +26,7 @@ interface SettingsModalProps {
   onSelectTheme: (theme: ThemeChoice) => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = true, canWrite, revision, accountSettings, branch, repoRoot, onRefreshWorkspace, currentTheme, onSelectTheme }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = true, canWrite, revision, onRevision, accountSettings, branch, repoRoot, onRefreshWorkspace, currentTheme, onSelectTheme }) => {
   const { t, language, setLanguage } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
   const [yamlContent, setYamlContent] = useState(() => config ? YAML.stringify(config) : '');
@@ -42,7 +43,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
     setIsSaving(true);
     setStatusMessage(null);
     try {
-      await updateWorkspaceConfig(yamlContent, revision);
+      // The commit result carries the new revision; a refetch may still answer from the previous snapshot.
+      const saved = await updateWorkspaceConfig(yamlContent, revision);
+      if (saved.revision) onRevision(saved.revision);
       await onRefreshWorkspace();
       setStatusMessage({ type: 'success', text: t('settings.saved') });
     } catch (err: unknown) {

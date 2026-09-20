@@ -453,7 +453,7 @@ const AppContent: React.FC = () => {
                 )}
                 {activeTab === 'settings' && (
                   <main className='workspace-route settings-main has-sidebar-drawer'>
-                    <SettingsModal config={config} branch={branch} repoRoot={remote ? sourceId.replace(/^(github|gitlab):/, '') : repoRoot} local={!remote} canWrite={canWrite} revision={revision} accountSettings={<AgentAccessSettings local={!remote} />} onRefreshWorkspace={refreshWorkspace} currentTheme={currentTheme} onSelectTheme={handleSelectTheme} />
+                    <SettingsModal config={config} branch={branch} repoRoot={remote ? sourceId.replace(/^(github|gitlab):/, '') : repoRoot} local={!remote} canWrite={canWrite} revision={revision} onRevision={setRevision} accountSettings={<AgentAccessSettings local={!remote} />} onRefreshWorkspace={refreshWorkspace} currentTheme={currentTheme} onSelectTheme={handleSelectTheme} />
                   </main>
                 )}
               </WorkspaceSplitLayout>
