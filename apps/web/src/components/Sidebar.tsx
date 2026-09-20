@@ -48,19 +48,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
   const { status: selectedStatus, tags: selectedTags } = value;
   const allNotebooks = filters.allNotebooks;
   const [expandedNotebooks, setExpandedNotebooks] = useState<Set<string>>(() => new Set(selectedNotebookId ? [selectedNotebookId] : []));
-  useEffect(() => {
-    if (selectedNotebookId) {
-      /* eslint-disable react/set-state-in-effect -- Notebook and filter navigation expand matching branches and reset the tag query. */
-      setExpandedNotebooks(previous => new Set([...previous, selectedNotebookId]));
-      /* eslint-enable react/set-state-in-effect */
+  const [expansionSelection, setExpansionSelection] = useState<{ notebookId: string; folders: typeof value.folders; notebooks: typeof filters.notebooks; }>();
+  if (!expansionSelection || expansionSelection.notebookId !== selectedNotebookId || expansionSelection.folders !== value.folders || expansionSelection.notebooks !== filters.notebooks) {
+    setExpansionSelection({ notebookId: selectedNotebookId, folders: value.folders, notebooks: filters.notebooks });
+    const next = new Set(expandedNotebooks);
+    if ((!expansionSelection || expansionSelection.notebookId !== selectedNotebookId) && selectedNotebookId) next.add(selectedNotebookId);
+    if (!expansionSelection || expansionSelection.folders !== value.folders || expansionSelection.notebooks !== filters.notebooks) {
+      for (const nb of filters.notebooks) if (value.folders.some(path => path.startsWith(nb.root.replace(/\/$/, '') + '/'))) next.add(nb.id);
     }
-  }, [selectedNotebookId]);
-  useEffect(() => {
-    const selected = filters.notebooks.filter(nb => value.folders.some(path => path.startsWith(nb.root.replace(/\/$/, '') + '/')));
-    /* eslint-disable react/set-state-in-effect -- Notebook and filter navigation expand matching branches and reset the tag query. */
-    if (selected.length) setExpandedNotebooks(previous => new Set([...previous, ...selected.map(nb => nb.id)]));
-    /* eslint-enable react/set-state-in-effect */
-  }, [value.folders, filters.notebooks]);
+    setExpandedNotebooks(next);
+  }
   const [folderExpandCommand, setFolderExpandCommand] = useState<{ expanded: boolean; }>();
   // Both commands reach the notebook level: expanding opens every notebook, collapsing closes them all.
   const expandAll = (expanded: boolean) => {
@@ -107,11 +104,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
   };
   const [tagQuery, setTagQuery] = useState('');
   const [tagSort, setTagSort] = useState<TagSort>(getSavedTagSort);
-  useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Notebook and filter navigation expand matching branches and reset the tag query. */
+  const [tagNotebook, setTagNotebook] = useState(selectedNotebookId);
+  if (tagNotebook !== selectedNotebookId) {
+    setTagNotebook(selectedNotebookId);
     setTagQuery('');
-    /* eslint-enable react/set-state-in-effect */
-  }, [selectedNotebookId]);
+  }
 
   const notebookFacets = mergeNotebookFacets(queryNotebookIds(filters.notebooks, value.notebookId, value.folders).flatMap(id => facets?.[id] || []));
   const statusCounts = notebookFacets.statuses;

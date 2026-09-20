@@ -54,18 +54,16 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
       else next.add(path);
       return next;
     });
-  /* eslint-disable react-hooks/exhaustive-deps -- Notebook, requested path and listing keys drive initialization; current read helpers use sequence refs. */
-  useEffect(() => {
-    if (!listing) return;
-    /* eslint-disable react/set-state-in-effect -- Notebook and path transitions initialize the file browser and expand the loaded directory tree. */
-    setExpanded(previous => {
-      const next = new Set(previous);
-      for (const path of expandedPathsFor(directory, listing.root)) next.add(path);
-      return next;
-    });
-    /* eslint-enable react/set-state-in-effect */
-  }, [directory, listing?.root]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  const listingRoot = listing?.root;
+  const [expansionScope, setExpansionScope] = useState({ directory, root: listingRoot });
+  if (expansionScope.directory !== directory || expansionScope.root !== listingRoot) {
+    setExpansionScope({ directory, root: listingRoot });
+    if (listingRoot !== undefined) {
+      const next = new Set(expanded);
+      for (const path of expandedPathsFor(directory, listingRoot)) next.add(path);
+      setExpanded(next);
+    }
+  }
   useEffect(() => {
     if (operation) operationForm.current?.scrollIntoView({ block: 'nearest' });
   }, [operation]);
@@ -98,10 +96,10 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
       if (sequence === readSequence.current) setReading(false);
     }
   };
-  /* eslint-disable react-hooks/exhaustive-deps -- Cleanup intentionally reads the latest cancellation or resource ref, including work started after mounting. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Notebook/path changes own the fetch; cleanup must cancel reads and resolve the latest leave prompt created after subscription. */
   useEffect(() => {
     let active = true;
-    /* eslint-disable react/set-state-in-effect -- Notebook and path transitions initialize the file browser and expand the loaded directory tree. */
+    /* eslint-disable react/set-state-in-effect -- The cancellable notebook request clears the previous listing and storage scope before loading; moving this to a click handler would miss route changes. */
     setListing(undefined);
     /* eslint-enable react/set-state-in-effect */
     setError('');

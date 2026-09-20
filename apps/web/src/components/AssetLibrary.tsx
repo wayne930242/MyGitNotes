@@ -23,16 +23,6 @@ const imageFile = (name: string) => /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test
 export function AssetLibrary({ assets, initialAssetPath, initialDirectory, onUploadAsset, onDeleteAsset, onMoveAsset, onInsert, renderHeader, renderSidebar, onBusyChange }: AssetLibraryProps) {
   const { t } = useTranslation();
   const [directory, setDirectory] = useState('');
-  useEffect(() => {
-    if (initialDirectory !== undefined) {
-      /* eslint-disable react/set-state-in-effect -- Selection and initial directory transitions reset the asset dialog state. */
-      setDirectory(initialDirectory);
-      /* eslint-enable react/set-state-in-effect */
-      /* eslint-disable react/immutability -- The deferred effect or imperative callback runs after local initialization has completed. */
-      setSelectedPath('');
-      /* eslint-enable react/immutability */
-    }
-  }, [initialDirectory]);
   const [selectedPath, setSelectedPath] = useState('');
   const [destination, setDestination] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -45,16 +35,21 @@ export function AssetLibrary({ assets, initialAssetPath, initialDirectory, onUpl
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<AssetItem | null>(null);
   const folderList = useId();
-  useEffect(() => {
-    if (!initialAssetPath) return;
-    const asset = assets.find(item => item.path === initialAssetPath);
-    if (asset) {
-      /* eslint-disable react/set-state-in-effect -- Selection and initial directory transitions reset the asset dialog state. */
-      setDirectory(asset.directory || '');
-      /* eslint-enable react/set-state-in-effect */
-      setSelectedPath(asset.path);
+  const [selectionInputs, setSelectionInputs] = useState<{ initialDirectory: typeof initialDirectory; initialAssetPath: typeof initialAssetPath; assets: typeof assets; }>();
+  if (!selectionInputs || selectionInputs.initialDirectory !== initialDirectory || selectionInputs.initialAssetPath !== initialAssetPath || selectionInputs.assets !== assets) {
+    setSelectionInputs({ initialDirectory, initialAssetPath, assets });
+    if ((!selectionInputs || selectionInputs.initialDirectory !== initialDirectory) && initialDirectory !== undefined) {
+      setDirectory(initialDirectory);
+      setSelectedPath('');
     }
-  }, [initialAssetPath, assets]);
+    if (!selectionInputs || selectionInputs.initialAssetPath !== initialAssetPath || selectionInputs.assets !== assets) {
+      const asset = initialAssetPath ? assets.find(item => item.path === initialAssetPath) : undefined;
+      if (asset) {
+        setDirectory(asset.directory || '');
+        setSelectedPath(asset.path);
+      }
+    }
+  }
   const selected = assets.find(a => a.path === selectedPath);
   const folders = [
     ...new Set(assets.flatMap(a => {
@@ -63,14 +58,12 @@ export function AssetLibrary({ assets, initialAssetPath, initialDirectory, onUpl
     })),
   ].sort();
   const visible = assets.filter(a => (a.directory || '') === directory);
-  /* eslint-disable react-hooks/exhaustive-deps -- Changing the selected asset initializes the move destination; later edits retain the user choice. */
-  useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Selection and initial directory transitions reset the asset dialog state. */
+  const [destinationPath, setDestinationPath] = useState(selectedPath);
+  if (destinationPath !== selectedPath) {
+    setDestinationPath(selectedPath);
     setConfirmDelete(false);
-    /* eslint-enable react/set-state-in-effect */
     setDestination(selected?.directory || '');
-  }, [selectedPath]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  }
   useEffect(() => {
     if (!confirmDelete) return;
     const timer = setTimeout(() => setConfirmDelete(false), 4000);

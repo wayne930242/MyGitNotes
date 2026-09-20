@@ -1,5 +1,5 @@
 import { ReorderToggle } from './ReorderToggle.js';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import { Check, Folder, FolderPlus, GripVertical, MoreHorizontal } from 'lucide-react';
 import type { FolderCommand } from '@mygitnotes/core';
@@ -111,36 +111,23 @@ export function FolderTree({ showHeading = false, showRoot = false, onManageFile
     return initial;
   });
 
-  useEffect(() => {
-    const targets = selected ? [selected] : selectedPaths || [];
-    if (!targets.length) return;
-    /* eslint-disable react/set-state-in-effect -- Navigation and folder changes synchronize expansion and refresh server revision state. */
-    setExpanded(prev => {
-      const next = new Set(prev);
-      let changed = false;
-      for (const target of targets) {
-        for (const p of expandedPathsForFolder(target)) {
-          if (!next.has(p)) {
-            next.add(p);
-            changed = true;
-          }
-        }
-      }
-      return changed ? next : prev;
-    });
-    /* eslint-enable react/set-state-in-effect */
-  }, [selected, selectedPaths]);
+  const [expansionSelection, setExpansionSelection] = useState({ selected, selectedPaths });
+  if (expansionSelection.selected !== selected || expansionSelection.selectedPaths !== selectedPaths) {
+    setExpansionSelection({ selected, selectedPaths });
+    const next = new Set(expanded);
+    for (const target of selected ? [selected] : selectedPaths || []) {
+      for (const path of expandedPathsForFolder(target)) next.add(path);
+    }
+    if (next.size !== expanded.size) setExpanded(next);
+  }
 
   // A tree mounted after the last command keeps its selection-based expansion.
-  const appliedExpandCommand = useRef(expandCommand);
-  /* eslint-disable react-hooks/exhaustive-deps -- Apply the navigation or folder-refresh command once per explicit key, preserving manual expansion. */
-  useEffect(() => {
-    if (!expandCommand || expandCommand === appliedExpandCommand.current) return;
-    appliedExpandCommand.current = expandCommand;
+  const [appliedExpandCommand, setAppliedExpandCommand] = useState(expandCommand);
+  if (expandCommand && expandCommand !== appliedExpandCommand) {
+    setAppliedExpandCommand(expandCommand);
     const paths = (nodes: FolderTreeNode[]): string[] => nodes.flatMap(node => [node.path, ...paths(node.children)]);
     setExpanded(expandCommand.expanded ? new Set(paths(tree)) : new Set());
-  }, [expandCommand]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  }
 
   const toggleExpand = (path: string, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -167,9 +154,9 @@ export function FolderTree({ showHeading = false, showRoot = false, onManageFile
     return data.revision as string;
   };
 
-  /* eslint-disable react-hooks/exhaustive-deps -- Apply the navigation or folder-refresh command once per explicit key, preserving manual expansion. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Only notebook, folder-list or write-permission changes refresh the server revision; translation helper identity must not issue another request. */
   useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Navigation and folder changes synchronize expansion and refresh server revision state. */
+    /* eslint-disable react/set-state-in-effect -- The revision request clears the previous revision and error before fetching; mutation commands must wait for the new server revision. */
     setError('');
     /* eslint-enable react/set-state-in-effect */
     setRevision('');

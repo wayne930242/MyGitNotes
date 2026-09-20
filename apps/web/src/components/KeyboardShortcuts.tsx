@@ -134,16 +134,10 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
     previousMode.current = mode;
   }, [mode]);
 
-  useEffect(() => {
-    if (mode !== 'palette') return;
-    if (!enabledCommands.some(command => command.id === selectedId)) {
-      const next = enabledCommands[0]?.id || null;
-      selectedIdRef.current = next;
-      /* eslint-disable react/set-state-in-effect -- Refresh the selected command when filtering changes the enabled command list. */
-      setSelectedId(next);
-      /* eslint-enable react/set-state-in-effect */
-    }
-  }, [enabledCommands, mode, selectedId]);
+  if (mode === 'palette' && !enabledCommands.some(command => command.id === selectedId)) {
+    const next = enabledCommands[0]?.id || null;
+    if (next !== selectedId) setSelectedId(next);
+  }
 
   useEffect(() => {
     if (!selectedId || mode !== 'palette') return;
