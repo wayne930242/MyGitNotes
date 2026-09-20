@@ -4,7 +4,7 @@ import { useScreenPage } from './use-screen-page.js';
 import { useFocusPage } from './use-focus-page.js';
 import { AssetItem, FolderItem, GitStatus, NoteItem, WorkspaceConfig } from './types.js';
 import { fetchAssets, fetchFolders, fetchGitStatus, fetchWorkspace } from './api.js';
-import { clearCommittedNotes, readWorkingNotes, updateWorkingNote, WorkingNotes } from './working-notes.js';
+import { readWorkingNotes, updateWorkingNote, WorkingNotes } from './working-notes.js';
 import { sameValue } from './merge-note.js';
 import { invalidateNoteQueries } from './use-note-queries.js';
 import { setWorkspaceNotebooks } from './workspace-links.js';
@@ -167,13 +167,5 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return note;
   };
 
-  const discardWorkingNote = (path: string) => {
-    setWorkingNotes(updateWorkingNote(workingScope, path, null));
-  };
-
-  const clearCommittedWorkingNotes = (sent: WorkingNotes) => {
-    setWorkingNotes(clearCommittedNotes(workingScope, sent));
-  };
-
-  return { selectedNotebookId, folders, setFolders, sourceId, remote, canWrite, revision, setRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, branch, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, setWorkingNotes, workingScope, activeWorkingNotes, screen, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote, discardWorkingNote, clearCommittedWorkingNotes };
+  return { selectedNotebookId, folders, setFolders, sourceId, remote, canWrite, revision, setRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, branch, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, setWorkingNotes, workingScope, activeWorkingNotes, screen, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
 }
