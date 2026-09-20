@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { resolveQaChromePath } from './qa-chrome.mjs';
+import { REMOTE_CHECK_INTERVAL_MS } from '../apps/web/src/lib/remote-check-interval.ts';
 const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(`${product}/apps/web/package.json`);
 const puppeteer = require('puppeteer-core');
@@ -502,7 +503,20 @@ try {
   await page.keyboard.type('\nAutosaved local edit.');
   await new Promise(resolve => setTimeout(resolve, 1200)); // clear the autosave debounce
   if (!fs.readFileSync(path.join(root, 'notes/example/reload.md'), 'utf8').includes('Autosaved local edit.')) throw Error('Autosave did not reach disk before the next remote check');
-  await new Promise(resolve => setTimeout(resolve, 61000)); // clear the remote-check throttle on this mount
+  // checkRemote gates on `Date.now() < nextRemoteCheck.current`; push the page's clock past the
+  // throttle instead of waiting it out in real time, so the dispatch below drives a real check.
+  await page.evaluate(intervalMs => {
+    const RealDate = Date;
+    const offsetMs = intervalMs + 1000;
+    window.Date = class extends RealDate {
+      constructor(...args) {
+        super(...(args.length ? args : [RealDate.now() + offsetMs]));
+      }
+      static now() {
+        return RealDate.now() + offsetMs;
+      }
+    };
+  }, REMOTE_CHECK_INTERVAL_MS);
   await page.evaluate(() => {
     window.dispatchEvent(new Event('focus'));
     document.dispatchEvent(new Event('visibilitychange'));

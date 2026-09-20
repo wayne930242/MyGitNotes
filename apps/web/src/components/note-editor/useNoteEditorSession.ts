@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { mergeNote, NoteDraft, sameValue } from '../../lib/merge-note.js';
 import { ApiError } from '../../lib/api.js';
 import { NoteItem } from '../../lib/types.js';
+import { REMOTE_CHECK_INTERVAL_MS, REMOTE_CHECK_INTERVAL_READONLY_MS } from '../../lib/remote-check-interval.js';
 import { clearLocalDraft, dismissConflictDraftNotice, getDismissedConflictDraftNoticeAt, getLocalDraft, saveLocalDraft } from '../../lib/storage.js';
 import { copyToClipboard } from '../../lib/clipboard.js';
 import { useTranslation } from '../../lib/i18n/index.js';
@@ -142,7 +143,7 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
   };
   const checkRemote = async () => {
     if (!onReadRemote || operation.current || autosaving.current || current.current.blocked || Date.now() < nextRemoteCheck.current) return;
-    nextRemoteCheck.current = Date.now() + (readOnly ? 300000 : 60000);
+    nextRemoteCheck.current = Date.now() + (readOnly ? REMOTE_CHECK_INTERVAL_READONLY_MS : REMOTE_CHECK_INTERVAL_MS);
     operation.current = true;
     try {
       const latest = await onReadRemote(note.path);
@@ -163,7 +164,7 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
     const check = () => {
       if (document.visibilityState === 'visible') void checkRemoteRef.current();
     };
-    const timer = window.setInterval(check, readOnly ? 300000 : 60000);
+    const timer = window.setInterval(check, readOnly ? REMOTE_CHECK_INTERVAL_READONLY_MS : REMOTE_CHECK_INTERVAL_MS);
     window.addEventListener('focus', check);
     document.addEventListener('visibilitychange', check);
     return () => {
