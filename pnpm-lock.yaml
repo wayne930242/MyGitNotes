@@ -172,8 +172,11 @@ importers:
         specifier: ^0.441.0
         version: 0.441.0(react@18.3.1)
       marked:
-        specifier: ^14.1.1
-        version: 14.1.4
+        specifier: ^18.0.13
+        version: 18.0.13
+      marked-cjk-friendly:
+        specifier: ^0.1.2
+        version: 0.1.2(marked@18.0.13)
       node-diff3:
         specifier: ^3.2.1
         version: 3.2.1
@@ -254,8 +257,8 @@ importers:
         specifier: 0.8.4
         version: 0.8.4
       marked:
-        specifier: 14.1.4
-        version: 14.1.4
+        specifier: 18.0.13
+        version: 18.0.13
       picomatch:
         specifier: ^4.0.3
         version: 4.0.7
@@ -3362,20 +3365,26 @@ packages:
     resolution: {integrity: sha512-ayF7iT+44LXdxJLTrTd3TLQpFDDvPCBxXxbv+pMUSuHA5Q8zyAfwkRP6aHHwNVFBUFWtxAHqwNJxF8vMZLAbVg==}
     engines: {node: '>=18'}
 
+  marked-cjk-friendly@0.1.2:
+    resolution: {integrity: sha512-GUj8HjiEbur9yhgUo52FBgKizggF1QtT6gVdrYdWW6ZB4lVVjgS3EyyXPyfyRD0V4ghGRPlO7MO80rgSWbm0eA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      marked: '>=15.0.0'
+
   marked-terminal@7.3.0:
     resolution: {integrity: sha512-t4rBvPsHc57uE/2nJOLmMbZCQ4tgAccAED3ngXQqW6g+TxA488JzJ+FK3lQkzBQOI1mRV/r/Kq+1ZlJ4D0owQw==}
     engines: {node: '>=16.0.0'}
     peerDependencies:
       marked: '>=1 <16'
 
-  marked@14.1.4:
-    resolution: {integrity: sha512-vkVZ8ONmUdPnjCKc5uTRvmkRbx4EAi2OkTOXmfTDhZz3OFqMNBM1oTTWwTr4HY4uAEojhzPf+Fy8F1DWa3Sndg==}
-    engines: {node: '>= 18'}
-    hasBin: true
-
   marked@15.0.12:
     resolution: {integrity: sha512-8dD6FusOQSrpv9Z1rdNMdlSgQOIP880DHqnohobOmYLElGEqAL/JvxvuxZO16r4HtjTlfPRDC1hbvxC9dPN2nA==}
     engines: {node: '>= 18'}
+    hasBin: true
+
+  marked@18.0.13:
+    resolution: {integrity: sha512-xTxVzZsBFwunP6HDmtBkabUQEYArnP7/rMDGmPj9SlrKlQ4i8MdYVow+nJL0eOqwpUqhzBoTBRADGN6uYwPyOw==}
+    engines: {node: '>= 20'}
     hasBin: true
 
   math-intrinsics@1.1.0:
@@ -7540,6 +7549,10 @@ snapshots:
       type-fest: 4.41.0
       web-worker: 1.5.0
 
+  marked-cjk-friendly@0.1.2(marked@18.0.13):
+    dependencies:
+      marked: 18.0.13
+
   marked-terminal@7.3.0(marked@15.0.12):
     dependencies:
       ansi-escapes: 7.3.0
@@ -7551,9 +7564,9 @@ snapshots:
       node-emoji: 2.2.0
       supports-hyperlinks: 3.2.0
 
-  marked@14.1.4: {}
-
   marked@15.0.12: {}
+
+  marked@18.0.13: {}
 
   math-intrinsics@1.1.0: {}
 

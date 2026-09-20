@@ -1,10 +1,15 @@
-import { marked } from 'marked';
+import { Marked } from 'marked';
+import markedCjkFriendly from 'marked-cjk-friendly';
 import DOMPurify from 'dompurify';
 import { parseYouTubeUrl } from '@mygitnotes/core/screen-page';
 import { parseR2Reference, r2AssetUrl, r2PreviewType } from '@mygitnotes/core/r2-references';
 import { headingSlug, resolveWorkspaceHref } from './workspace-links.js';
 import { stripMdxImports, transformDirectives, transformMdxComponents } from './directives.js';
 import { DEFAULT_YOUTUBE_LABELS, type YouTubeDisplayMode, type YouTubeLabels } from './youtube-embed.js';
+
+// CommonMark cannot close emphasis when a full-width punctuation mark sits before the delimiter and
+// a CJK character after it, so `**二口女（ふたくちおんな）**意象` renders as literal asterisks.
+const md = new Marked(markedCjkFriendly());
 
 export const DOMPURIFY_DIRECTIVE_CONFIG = { ADD_TAGS: ['iframe', 'details', 'summary', 'aside', 'section', 'article', 'header', 'footer', 'figure', 'figcaption', 'abbr', 'svg', 'path', 'circle', 'cite'], ADD_ATTR: ['allow', 'allowfullscreen', 'loading', 'data-video-id', 'data-start', 'data-youtube-mode', 'data-youtube-mode-option', 'data-youtube-session', 'data-youtube-source-url', 'data-youtube-copy', 'data-copy-label', 'data-copied-label', 'data-copy-failed-label', 'controls', 'preload', 'data-type', 'data-variant', 'data-stat', 'data-cols', 'data-col-span', 'data-direction', 'data-arrow', 'data-icon', 'data-qrcode', 'data-size', 'data-component-name', 'data-lucide', 'data-slide-index', 'data-vertical', 'data-label', 'data-card-type', 'open', 'aria-label', 'aria-hidden', 'style', 'viewBox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'] };
 
@@ -15,13 +20,13 @@ export function renderNote(content: string, notePath: string, tableLabel = 'Hori
     preprocessed = stripMdxImports(preprocessed);
   }
 
-  preprocessed = transformDirectives(preprocessed, md => marked.parse(md, { gfm: true, breaks: true }) as string);
+  preprocessed = transformDirectives(preprocessed, source => md.parse(source, { gfm: true, breaks: true }) as string);
 
   if (isMdx || /<(?:YouTubeEmbed|YouTube|ProtectedContent|Card|Tag|Badge|[A-Z][a-zA-Z0-9_-]*)\b/.test(preprocessed)) {
     preprocessed = transformMdxComponents(preprocessed);
   }
 
-  const rawHtml = marked.parse(preprocessed, { gfm: true, breaks: true }) as string;
+  const rawHtml = md.parse(preprocessed, { gfm: true, breaks: true }) as string;
   const parsed = new DOMParser().parseFromString(DOMPurify.sanitize(rawHtml, DOMPURIFY_DIRECTIVE_CONFIG), 'text/html');
   for (const table of parsed.querySelectorAll('table')) {
     const scroller = parsed.createElement('div');

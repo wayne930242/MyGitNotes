@@ -78,7 +78,7 @@
   "dependencies": {
     "aws4fetch": "^1.0.20",
     "libsodium-wrappers": "0.8.4",
-    "marked": "14.1.4",
+    "marked": "18.0.13",
     "picomatch": "^4.0.3",
     "tar-stream": "^3.2.1",
     "ts-fsrs": "5.4.2",
