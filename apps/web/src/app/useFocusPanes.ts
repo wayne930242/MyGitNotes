@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNoteEditorRegistry } from '../lib/note-editing.js';
 import { type FocusTab } from '@mygitnotes/core/focus-page';
 import { useNoteFocus } from '../lib/use-note-focus.js';
-import { displayedPanes } from '../lib/focus-view.js';
+import { CURRENT_FOCUS, displayedPanes, hasStoredFocusView } from '../lib/focus-view.js';
 import { usePaneCapacity } from '../components/FocusArea.js';
 import { type DocumentToolId, isDocumentTool, usePanelContext } from '../lib/panel-context.js';
 import type { WorkspaceState } from './workspace-state.js';
@@ -24,9 +24,10 @@ interface Params {
   navigate: ReturnType<typeof useNavigate>;
   loading: WorkspaceState['loading'];
   editorRoute: ReturnType<typeof parseWorkspaceRoute>;
+  config: WorkspaceState['config'];
 }
 
-export function useFocusPanes({ screen, selectedNotebookId, focusPage, remote, sourceId, repoRoot, activeTab, route, canWrite, editorRegistry, location, navigate, loading, editorRoute }: Params) {
+export function useFocusPanes({ screen, selectedNotebookId, focusPage, remote, sourceId, repoRoot, activeTab, route, canWrite, editorRegistry, location, navigate, loading, editorRoute, config }: Params) {
   // Focus: the URL names the displayed one; named Focus sync through their workspace document.
   const focusCapacity = usePaneCapacity();
   const notebookLanes = useMemo(() => screen.loading || screen.error ? undefined : screen.page.rows.filter(row => row.notebookId === selectedNotebookId), [screen.loading, screen.error, screen.page, selectedNotebookId]);
@@ -69,11 +70,13 @@ export function useFocusPanes({ screen, selectedNotebookId, focusPage, remote, s
     const arrival = `${sourceId}:${selectedNotebookId}`;
     if (focusArrival.current === arrival) return;
     focusArrival.current = arrival;
-    if (route.focus || !noteFocus.view.last) return;
+    if (route.focus) return;
+    const target = noteFocus.view.last ?? (config?.preferences?.defaultFocusMode && !hasStoredFocusView(remote ? sourceId : `local:${repoRoot}`, selectedNotebookId) ? CURRENT_FOCUS : null);
+    if (!target) return;
     const query = new URLSearchParams(location.search);
-    query.set('focus', noteFocus.view.last);
+    query.set('focus', target);
     navigate({ pathname: location.pathname, search: query.toString() }, { replace: true });
-  }, [activeTab, loading, editorRoute.note, sourceId, selectedNotebookId, route.focus, noteFocus.view.last, location.search, location.pathname, navigate]);
+  }, [activeTab, loading, editorRoute.note, sourceId, selectedNotebookId, route.focus, noteFocus.view.last, config, remote, repoRoot, location.search, location.pathname, navigate]);
 
   return { focusCapacity, notebookLanes, noteFocus, focusDisplay, focusNarrowView, setFocusNarrowView, addingToFocus, setAddingToFocus, activePaneNote, focusDocumentPanel, setDocumentContainer, showFocus };
 }

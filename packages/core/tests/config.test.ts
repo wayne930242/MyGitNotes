@@ -34,6 +34,7 @@ files:
     expect(config.notebooks[1].id).toBe('work');
     expect(config.notebooks[1].default_view).toBe('kanban');
     expect(config.files?.hide_dotfiles).toBe(true);
+    expect(config.preferences).toEqual({ defaultYoutubeDisplayMode: 'thumbnail', defaultShowLineNumbers: false, defaultFocusMode: false });
   });
 
   it('rejects duplicate notebook IDs', () => {
@@ -153,6 +154,41 @@ notebooks:
 `;
     const config = parseWorkspaceConfig(yaml);
     expect(config.notebooks[0].pathAliases).toEqual({ '@/*': 'src/*' });
+  });
+});
+
+describe('Workspace preferences', () => {
+  const base = `
+schema_version: 1
+workspace:
+  title: "Prefs"
+  default_notebook: nb1
+notebooks:
+  - id: nb1
+    title: "NB 1"
+    root: notes/nb1
+`;
+
+  it('accepts configured preference values', () => {
+    const yaml = `${base}preferences:\n  defaultYoutubeDisplayMode: theater\n  defaultShowLineNumbers: true\n  defaultFocusMode: true\n`;
+    const config = parseWorkspaceConfig(yaml);
+    expect(config.preferences).toEqual({ defaultYoutubeDisplayMode: 'theater', defaultShowLineNumbers: true, defaultFocusMode: true });
+  });
+
+  it('defaults preferences when the block is absent', () => {
+    const config = parseWorkspaceConfig(base);
+    expect(config.preferences).toEqual({ defaultYoutubeDisplayMode: 'thumbnail', defaultShowLineNumbers: false, defaultFocusMode: false });
+  });
+
+  it('falls back to defaults for invalid preference values instead of throwing', () => {
+    const yaml = `${base}preferences:\n  defaultYoutubeDisplayMode: music\n  defaultShowLineNumbers: "yes"\n  defaultFocusMode: 1\n`;
+    const config = parseWorkspaceConfig(yaml);
+    expect(config.preferences).toEqual({ defaultYoutubeDisplayMode: 'thumbnail', defaultShowLineNumbers: false, defaultFocusMode: false });
+  });
+
+  it('does not require a schema_version bump', () => {
+    const config = parseWorkspaceConfig(base);
+    expect(config.schema_version).toBe(1);
   });
 });
 

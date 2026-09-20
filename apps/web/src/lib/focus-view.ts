@@ -25,6 +25,19 @@ export interface FocusViewState {
   dock: { left: number; top: number; collapsed: boolean; };
 }
 
+export function focusViewStorageKey(scope: string, notebookId: string): string {
+  return `github-notes:focus-view:${scope}:${notebookId}`;
+}
+
+/** Whether this device has ever recorded Focus-view state for this notebook: the signal for "has this device already made its own choice." */
+export function hasStoredFocusView(scope: string, notebookId: string): boolean {
+  try {
+    return localStorage.getItem(focusViewStorageKey(scope, notebookId)) !== null;
+  } catch {
+    return false;
+  }
+}
+
 const FOCUS_KEY_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {

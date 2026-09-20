@@ -14,6 +14,7 @@ import { useNoteEditorSession } from './note-editor/useNoteEditorSession.js';
 import { useNoteDocumentPanel } from './note-editor/useNoteDocumentPanel.js';
 import { NoteDocumentPanel } from './note-editor/NoteDocumentPanel.js';
 import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
+import { readShowLineNumbers, writeShowLineNumbers } from '../lib/editor-preferences.js';
 
 export type NotePanelMode = 'find' | 'outline' | 'frontmatter' | 'assets' | 'git';
 export const NOTE_PANEL_MODES: readonly NotePanelMode[] = ['outline', 'find', 'frontmatter', 'assets', 'git'];
@@ -89,7 +90,13 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   }, [frame, setHasOpenNote]);
 
   const [editorMode, setEditorMode] = useState<MarkdownEditorMode>('live');
-  const [showLineNumbers, setShowLineNumbers] = useState(false);
+  const [showLineNumbers, setShowLineNumbers] = useState(() => readShowLineNumbers());
+  const toggleLineNumbers = () =>
+    setShowLineNumbers(value => {
+      const next = !value;
+      writeShowLineNumbers(next);
+      return next;
+    });
   const [insertSlot, setInsertSlot] = useState<HTMLDivElement | null>(null);
   const editorRef = useRef<MarkdownEditorHandle>(null);
 
@@ -141,7 +148,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
             </div>
             <div className='note-compact-bar'>
               {isMarkdown && <button type='button' className='ui-icon-button' data-mode-toggle={editorMode} title={t(editorMode === 'live' ? 'editor.source' : 'editor.livePreview')} aria-label={t(editorMode === 'live' ? 'editor.source' : 'editor.livePreview')} onClick={() => setEditorMode(editorMode === 'live' ? 'raw' : 'live')}>{editorMode === 'live' ? <Code2 size={14} aria-hidden='true' /> : <Eye size={14} aria-hidden='true' />}</button>}
-              <button type='button' className='ui-icon-button' aria-pressed={showLineNumbers} title={t('editor.lineNumbers')} aria-label={t('editor.lineNumbers')} onClick={() => setShowLineNumbers(value => !value)}>
+              <button type='button' className='ui-icon-button' aria-pressed={showLineNumbers} title={t('editor.lineNumbers')} aria-label={t('editor.lineNumbers')} onClick={toggleLineNumbers}>
                 <ListOrdered size={14} aria-hidden='true' />
               </button>
               <button type='button' className='ui-icon-button' title={t(session.copyState === 'copied' ? 'editor.noteCopied' : session.copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')} aria-label={t(session.copyState === 'copied' ? 'editor.noteCopied' : session.copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')} onClick={session.copyNote}>{session.copyState === 'copied' ? <Check size={14} aria-hidden='true' /> : session.copyState === 'error' ? <AlertTriangle size={14} aria-hidden='true' /> : <Copy size={14} aria-hidden='true' />}</button>
@@ -176,7 +183,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
                   </Button>
                 )}
                 {isMarkdown && <MarkdownEditorModeSwitch mode={editorMode} onChange={setEditorMode} />}
-                <button type='button' aria-pressed={showLineNumbers} aria-label={t('editor.lineNumbers')} title={t('editor.lineNumbers')} onClick={() => setShowLineNumbers(value => !value)} className='ui-icon-button toolbar-icon-button editor-line-numbers-action'>
+                <button type='button' aria-pressed={showLineNumbers} aria-label={t('editor.lineNumbers')} title={t('editor.lineNumbers')} onClick={toggleLineNumbers} className='ui-icon-button toolbar-icon-button editor-line-numbers-action'>
                   <ListOrdered aria-hidden='true' />
                 </button>
                 <button type='button' aria-label={t(session.copyState === 'copied' ? 'editor.noteCopied' : session.copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')} title={t(session.copyState === 'copied' ? 'editor.noteCopied' : session.copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')} onClick={session.copyNote} className='ui-icon-button toolbar-icon-button'>{session.copyState === 'copied' ? <Check aria-hidden='true' /> : session.copyState === 'error' ? <AlertTriangle aria-hidden='true' /> : <Copy aria-hidden='true' />}</button>

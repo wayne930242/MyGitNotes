@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FocusLayout, FocusTab } from '@mygitnotes/core/focus-page';
-import { activatePane, browseTarget, CURRENT_FOCUS, displayedPanes, emptyFocusView, entryView, type FocusEntryView, type FocusViewState, groupShown, readFocusView, shownAfterClose, showTab, sideTarget } from './focus-view.js';
+import { activatePane, browseTarget, CURRENT_FOCUS, displayedPanes, emptyFocusView, entryView, type FocusEntryView, type FocusViewState, focusViewStorageKey, groupShown, hasStoredFocusView, readFocusView, shownAfterClose, showTab, sideTarget } from './focus-view.js';
 
 const note = (path: string): FocusTab => ({ kind: 'note', path });
 const lane = (id: string): FocusTab => ({ kind: 'lane', id });
@@ -174,5 +175,25 @@ describe('displayedPanes', () => {
   });
   it('shows one pane on a phone', () => {
     expect(displayedPanes(entry({ shown, activePane: 2 }), grid, 1)).toEqual({ division: 'single', panes: [{ panes: [0, 1, 2, 3], pane: 2, key: 'note:c.md' }] });
+  });
+});
+
+describe('hasStoredFocusView', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => localStorage.clear());
+
+  it('is false when this device has never recorded Focus-view state for the notebook', () => {
+    expect(hasStoredFocusView('local:repo', 'life')).toBe(false);
+  });
+
+  it('is true once any Focus-view state exists for that notebook on this device', () => {
+    localStorage.setItem(focusViewStorageKey('local:repo', 'life'), JSON.stringify(emptyFocusView()));
+    expect(hasStoredFocusView('local:repo', 'life')).toBe(true);
+  });
+
+  it('does not confuse one notebook or scope with another', () => {
+    localStorage.setItem(focusViewStorageKey('local:repo', 'life'), JSON.stringify(emptyFocusView()));
+    expect(hasStoredFocusView('local:repo', 'work')).toBe(false);
+    expect(hasStoredFocusView('local:other', 'life')).toBe(false);
   });
 });

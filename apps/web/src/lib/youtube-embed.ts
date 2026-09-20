@@ -1,7 +1,11 @@
+import type { YouTubeDisplayMode } from '@mygitnotes/core';
+
 export const YOUTUBE_MODE_STORAGE_KEY = 'github-notes:youtube-display-mode';
 export const YOUTUBE_MODE_EVENT = 'github-notes:youtube-display-mode-change';
 let youtubeSessionSequence = 0;
 let rememberedYouTubeMode: YouTubeDisplayMode | null = null;
+/** Workspace-configured default, applied when this device has not made its own choice yet. */
+let configuredDefaultMode: YouTubeDisplayMode = 'thumbnail';
 let activePlayer: { key: string; host: HTMLDivElement; route: string; frame: number; target: HTMLElement; surface: HTMLElement; } | null = null;
 
 export function stopYouTubePlayback() {
@@ -10,7 +14,12 @@ export function stopYouTubePlayback() {
   activePlayer.host.remove();
   activePlayer = null;
 }
-export type YouTubeDisplayMode = 'thumbnail' | 'medium' | 'theater';
+
+export function setDefaultYouTubeDisplayMode(mode: YouTubeDisplayMode) {
+  configuredDefaultMode = mode;
+}
+
+export type { YouTubeDisplayMode };
 export type YouTubeLabels = { play: string; player: string; modes: string; thumbnail: string; medium: string; theater: string; copy: string; copied: string; copyFailed: string; };
 
 export const DEFAULT_YOUTUBE_LABELS: YouTubeLabels = { play: 'Play YouTube video', player: 'YouTube video player', modes: 'YouTube display mode', thumbnail: 'Thumbnail', medium: 'Medium', theater: 'Theater', copy: 'Copy video URL', copied: 'Video URL copied', copyFailed: 'Could not copy video URL' };
@@ -27,11 +36,11 @@ export function readYouTubeDisplayMode(storage?: Pick<Storage, 'getItem'>): YouT
   if (!storage && rememberedYouTubeMode) return rememberedYouTubeMode;
   try {
     const value = (storage ?? globalThis.localStorage).getItem(YOUTUBE_MODE_STORAGE_KEY);
-    const mode = value === 'music' ? 'thumbnail' : isYouTubeDisplayMode(value) ? value : 'thumbnail';
+    const mode = value === 'music' ? 'thumbnail' : isYouTubeDisplayMode(value) ? value : configuredDefaultMode;
     if (!storage) rememberedYouTubeMode = mode;
     return mode;
   } catch {
-    return rememberedYouTubeMode ?? 'thumbnail';
+    return rememberedYouTubeMode ?? configuredDefaultMode;
   }
 }
 

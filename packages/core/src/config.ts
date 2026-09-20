@@ -1,7 +1,7 @@
 import YAML from 'yaml';
 import path from 'node:path';
 import fs from 'node:fs';
-import { NotebookConfig, NotebookMetadataField, NoteTemplate, WorkspaceConfig } from './types.js';
+import { NotebookConfig, NotebookMetadataField, NoteTemplate, WorkspaceConfig, WorkspacePreferences, YouTubeDisplayMode } from './types.js';
 
 export const WORKSPACE_CONFIG_FILENAME = '.mygitnotes.yaml';
 export const LEGACY_WORKSPACE_CONFIG_FILENAME = '.github-notes.yaml';
@@ -18,6 +18,14 @@ export class ConfigValidationError extends Error {
     super(message);
     this.name = 'ConfigValidationError';
   }
+}
+
+const YOUTUBE_DISPLAY_MODES: YouTubeDisplayMode[] = ['thumbnail', 'medium', 'theater'];
+
+/** Normalizes the optional `preferences` block, casting invalid values to their defaults rather than throwing, matching `default_view`'s lenient style. */
+function normalizePreferences(raw: unknown): WorkspacePreferences {
+  const prefs = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+  return { defaultYoutubeDisplayMode: YOUTUBE_DISPLAY_MODES.includes(prefs.defaultYoutubeDisplayMode as YouTubeDisplayMode) ? prefs.defaultYoutubeDisplayMode as YouTubeDisplayMode : 'thumbnail', defaultShowLineNumbers: typeof prefs.defaultShowLineNumbers === 'boolean' ? prefs.defaultShowLineNumbers : false, defaultFocusMode: typeof prefs.defaultFocusMode === 'boolean' ? prefs.defaultFocusMode : false };
 }
 
 /**
@@ -197,7 +205,7 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
     throw new ConfigValidationError(`default_notebook '${ws.default_notebook}' does not match any configured notebook ID`);
   }
 
-  return { schema_version: raw.schema_version as number, workspace: { title: ws.title as string, default_notebook: ws.default_notebook as string }, notebooks: validatedNotebooks, files: { hide_dotfiles: raw.files && typeof raw.files === 'object' && 'hide_dotfiles' in (raw.files as Record<string, unknown>) ? Boolean((raw.files as Record<string, unknown>).hide_dotfiles) : true } };
+  return { schema_version: raw.schema_version as number, workspace: { title: ws.title as string, default_notebook: ws.default_notebook as string }, notebooks: validatedNotebooks, files: { hide_dotfiles: raw.files && typeof raw.files === 'object' && 'hide_dotfiles' in (raw.files as Record<string, unknown>) ? Boolean((raw.files as Record<string, unknown>).hide_dotfiles) : true }, preferences: normalizePreferences(raw.preferences) };
 }
 
 /**

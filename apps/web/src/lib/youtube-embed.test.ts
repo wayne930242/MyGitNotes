@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { applyYouTubeDisplayMode, copyYouTubeUrl, readYouTubeDisplayMode, setYouTubeDisplayMode, YOUTUBE_MODE_EVENT, YOUTUBE_MODE_STORAGE_KEY } from './youtube-embed.js';
+import { applyYouTubeDisplayMode, copyYouTubeUrl, readYouTubeDisplayMode, setDefaultYouTubeDisplayMode, setYouTubeDisplayMode, YOUTUBE_MODE_EVENT, YOUTUBE_MODE_STORAGE_KEY } from './youtube-embed.js';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  setDefaultYouTubeDisplayMode('thumbnail');
+});
 
 describe('YouTube display mode preference', () => {
   it('defaults invalid storage to thumbnail and persists a selected mode', () => {
@@ -23,6 +26,14 @@ describe('YouTube display mode preference', () => {
     expect(storage.setItem).toHaveBeenCalledWith(YOUTUBE_MODE_STORAGE_KEY, 'theater');
     expect(embed.dataset).toEqual({ youtubeMode: 'theater' });
     expect(dispatchEvent.mock.calls[0][0].type).toBe(YOUTUBE_MODE_EVENT);
+  });
+
+  it('falls back to the workspace-configured default, not a hardcoded one, when nothing is stored', () => {
+    const storage = { getItem: vi.fn(() => null) };
+    expect(readYouTubeDisplayMode(storage)).toBe('thumbnail');
+
+    setDefaultYouTubeDisplayMode('theater');
+    expect(readYouTubeDisplayMode(storage)).toBe('theater');
   });
 
   it('keeps the selected mode in memory when storage is unavailable', () => {

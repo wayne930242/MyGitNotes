@@ -26,11 +26,20 @@ export interface NotebookConfig {
   pathAliases?: Record<string, string>;
 }
 
+export type YouTubeDisplayMode = 'thumbnail' | 'medium' | 'theater';
+
+export interface WorkspacePreferences {
+  defaultYoutubeDisplayMode?: YouTubeDisplayMode;
+  defaultShowLineNumbers?: boolean;
+  defaultFocusMode?: boolean;
+}
+
 export interface WorkspaceConfig {
   schema_version: number;
   workspace: { title: string; default_notebook: string; };
   notebooks: NotebookConfig[];
   files?: { hide_dotfiles?: boolean; };
+  preferences?: WorkspacePreferences;
 }
 
 export interface NoteMetadata {

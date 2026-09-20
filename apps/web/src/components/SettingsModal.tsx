@@ -7,6 +7,7 @@ import { WorkspaceConfig } from '../lib/types.js';
 import { runCoreUpdate, updateWorkspaceConfig } from '../lib/api.js';
 import { ThemeChoice } from '../lib/themes.js';
 import { ThemeSelector } from './ThemeSelector.js';
+import { WorkspaceManifestEditor } from './WorkspaceManifestEditor.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import YAML from 'yaml';
 
@@ -219,7 +220,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
                 </Button>
               </div>
               <p className='text-xs text-muted'>{t('settings.manifestHint')}{branch === 'core' && <span className='block mt-1 text-warning text-[11px]'>{t('settings.coreBranchManifestWarning')}</span>}</p>
-              <textarea style={{ caretColor: 'currentColor' }} readOnly={!local || branch === 'core'} aria-label={t('settings.manifest')} value={yamlContent} onChange={(e) => setYamlContent(e.target.value)} rows={12} className='w-full p-4 font-mono text-xs bg-code text-fg rounded-xl focus:outline-none focus:ring-2 focus:ring-primary leading-relaxed border border-line' spellCheck={false} />
+              <WorkspaceManifestEditor yamlContent={yamlContent} onChange={setYamlContent} readOnly={!local || branch === 'core'} />
               {statusMessage && (
                 <div className={`p-3 rounded-lg text-xs flex items-center gap-2 ${statusMessage.type === 'success' ? 'bg-success-soft text-success border border-success/40' : 'bg-danger-soft text-danger border border-danger/40'}`}>
                   {statusMessage.type === 'success' ? <Check className='w-4 h-4 text-success' /> : <AlertCircle className='w-4 h-4 text-danger' />}

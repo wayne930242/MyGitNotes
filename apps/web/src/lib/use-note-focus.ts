@@ -3,7 +3,7 @@ import { changeDivision, closeTab, emptyFocusLayout, findFocusTabInPane, FOCUS_M
 import type { ScreenRow } from '@mygitnotes/core/screen-page';
 import type { FocusPageController } from './use-focus-page.js';
 import { useNoteLookup } from './use-note-queries.js';
-import { activatePane, browseTarget, CURRENT_FOCUS, emptyFocusView, entryView, type FocusEntryView, type FocusViewState, readFocusView, shownAfterClose, showTab, sideTarget } from './focus-view.js';
+import { activatePane, browseTarget, CURRENT_FOCUS, emptyFocusView, entryView, type FocusEntryView, type FocusViewState, focusViewStorageKey, readFocusView, shownAfterClose, showTab, sideTarget } from './focus-view.js';
 
 interface NoteFocusOptions {
   page: FocusPageController;
@@ -22,7 +22,6 @@ interface NoteFocusOptions {
 /** Why a note did not open in the displayed Focus; the caller opens zoom instead. */
 export type OpenResult = 'opened' | 'full' | 'readonly' | 'blocked';
 
-const storageKey = (scope: string, notebookId: string) => `github-notes:focus-view:${scope}:${notebookId}`;
 function loadView(key: string): FocusViewState {
   try {
     const raw = localStorage.getItem(key);
@@ -36,7 +35,7 @@ const notePaths = (keys: (string | null)[]) => keys.map(notePath).filter((path):
 
 /** Named Focus (Git-synced through the Focus workspace document) and this browser's (current) Focus and view state for one notebook. */
 export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lanes, flushEditors }: NoteFocusOptions) {
-  const key = storageKey(scope, notebookId);
+  const key = focusViewStorageKey(scope, notebookId);
   const [stored, setStored] = useState(() => ({ key, view: loadView(key) }));
   const view = stored.key === key ? stored.view : loadView(key);
   const viewRef = useRef(view);

@@ -8,6 +8,8 @@ import { clearCommittedNotes, readWorkingNotes, updateWorkingNote, WorkingNotes 
 import { sameValue } from './merge-note.js';
 import { invalidateNoteQueries } from './use-note-queries.js';
 import { setWorkspaceNotebooks } from './workspace-links.js';
+import { setDefaultShowLineNumbers } from './editor-preferences.js';
+import { setDefaultYouTubeDisplayMode } from './youtube-embed.js';
 
 export interface UseWorkspaceSyncOptions {
   routeNotebook?: string;
@@ -34,6 +36,8 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const [config, setConfig] = useState<WorkspaceConfig | null>(null);
   useEffect(() => {
     setWorkspaceNotebooks(config?.notebooks || []);
+    setDefaultYouTubeDisplayMode(config?.preferences?.defaultYoutubeDisplayMode ?? 'thumbnail');
+    setDefaultShowLineNumbers(config?.preferences?.defaultShowLineNumbers ?? false);
   }, [config]);
   const [serverGitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [assets, setAssets] = useState<AssetItem[]>([]);
