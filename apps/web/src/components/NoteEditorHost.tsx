@@ -8,6 +8,7 @@ import { renderNote } from '../lib/markdown.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { NoteEditor, type NoteEditorHandle, type NoteEditorProps } from './NoteEditor.js';
 import { youtubeLabels } from '../lib/youtube-embed.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 export interface HostedNoteEditorProps {
   path: string;
@@ -63,7 +64,7 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ path, frame,
   }, [zoomSlot, slot, host]);
 
   if (zoom && !lending) return <p className='note-editor-placeholder' role='status'>{t('focus.editingInZoom')}</p>;
-  if (!note) return <p className='note-editor-placeholder' role={lookup.error ? 'alert' : 'status'}>{lookup.error || t('notes.loadingNote')}</p>;
+  if (!note) return lookup.error ? <p className='note-editor-placeholder' role='alert'>{lookup.error}</p> : <LoadingStatus className='note-editor-placeholder'>{t('notes.loadingNote')}</LoadingStatus>;
   if (!owner) return <NotePreview note={note} onClaim={() => void editing.claimEditor(path, id)} />;
   const props = editing.editorProps(note, committed && typeof committed.content === 'string' ? committed as NoteItem : undefined);
   return (

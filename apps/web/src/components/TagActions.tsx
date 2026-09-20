@@ -6,6 +6,7 @@ import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 import { useLongPress } from '../lib/use-long-press.js';
 import { filterTagCandidates } from '../lib/tag-list.js';
 import { Button } from './Button.js';
+import { Spinner } from './Spinner.js';
 
 type Mode = 'closed' | 'rename' | 'merge';
 
@@ -225,7 +226,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, allTags, onPreviewU
           />
           {showSuggestions && <ul className='sidebar-tag-action-suggestions' role='listbox' id={suggestionsId} aria-label={t('sidebar.tagSuggestions')}>{suggestions.map((candidate, index) => <li key={candidate} id={`${suggestionsId}-${index}`} role='option' aria-selected={index === highlight} data-highlighted={index === highlight || undefined} onMouseDown={event => event.preventDefault()} onClick={() => selectSuggestion(candidate)} onTouchEnd={() => selectSuggestion(candidate)}>{candidate}</li>)}</ul>}
         </div>
-        <span className='sidebar-tag-action-count' role='status'>{previewLoading || count === null ? '…' : t('sidebar.tagAffectedCount', { count })}</span>
+        <span className='sidebar-tag-action-count' role='status'>{previewLoading || count === null ? <Spinner /> : t('sidebar.tagAffectedCount', { count })}</span>
         {isNewTarget && !showSuggestions && <p role='status' className='sidebar-tag-action-hint'>{t('sidebar.tagMergeNewTarget', { tag: trimmedTarget })}</p>}
         {sameName && <p role='alert' className='sidebar-tag-action-error'>{t('sidebar.tagSameNameError')}</p>}
         {error && <p role='alert' className='sidebar-tag-action-error'>{t('sidebar.tagOperationFailed', { error })}</p>}

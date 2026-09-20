@@ -5,6 +5,7 @@ import { Code2, Download, Eye, FolderInput, Pencil, Trash2, X } from 'lucide-rea
 import { Preview } from '../FilePreview.js';
 import type { useFileManager } from './useFileManager.js';
 import { FileMetadata } from './FileMetadata.js';
+import { LoadingStatus } from '../LoadingStatus.js';
 const FileSourceEditor = lazy(() => import('../FileSourceEditor.js').then(module => ({ default: module.FileSourceEditor })));
 export function FileDetail({ model }: { model: ReturnType<typeof useFileManager>; }) {
   const { notebookId, mode, onOpenIndex, onInsert, onSelectionChange, t, listing: maybeListing, directory, selected, detail, content, setContent, sourceView, setSourceView, busy, reading, mutable, dirty, selectedEntry, run, save, navigate, openOperation, rawUrl } = model;
@@ -85,7 +86,7 @@ export function FileDetail({ model }: { model: ReturnType<typeof useFileManager>
               </>
             )}
           </div>
-          {reading && <p role='status'>{t('files.loading')}</p>}
+          {reading && <LoadingStatus>{t('files.loading')}</LoadingStatus>}
           {!selectedEntry.directory && detail && (
             <>
               {selectedEntry.presentation !== 'file' && typeof detail.content === 'string' && <button type='button' className='ui-button' onClick={() => setSourceView(!sourceView)}>{sourceView ? <Eye size={15} /> : <Code2 size={15} />}{sourceView ? t('files.preview') : t('files.source')}</button>}
@@ -105,7 +106,7 @@ export function FileDetail({ model }: { model: ReturnType<typeof useFileManager>
                         </Button>
                       )}
                     </div>
-                    <Suspense fallback={<p role='status'>{t('files.loading')}</p>}>
+                    <Suspense fallback={<LoadingStatus>{t('files.loading')}</LoadingStatus>}>
                       <FileSourceEditor key={detail.path} path={detail.path} content={content} readOnly={!mutable || busy} label={t('files.sourceContent')} onChange={setContent} />
                     </Suspense>
                   </>

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ExternalLink, Maximize, Minus, Plus, X } from 'lucide-react';
 import { useTranslation } from '../lib/i18n/index.js';
 import './image-lightbox.css';
+import { LoadingStatus } from './LoadingStatus.js';
 
 type ImageSource = { src: string; alt: string; };
 type Point = { x: number; y: number; };
@@ -143,7 +144,7 @@ function ImagePreview({ image, onClose }: { image: ImageSource; onClose: () => v
           setDragging(false);
         }}
       >
-        {!ready && <p role='status'>{t(failed ? 'lightbox.error' : 'lightbox.loading')}</p>}
+        {!ready && (failed ? <p role='status'>{t('lightbox.error')}</p> : <LoadingStatus>{t('lightbox.loading')}</LoadingStatus>)}
         {!failed && <img src={image.src} alt={image.alt} draggable={false} onLoad={event => setSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => setFailed(true)} style={{ width: ready ? size.width * scale : undefined, height: ready ? size.height * scale : undefined, visibility: ready ? 'visible' : 'hidden', transform: `translate(${offset.x}px, ${offset.y}px)` }} />}
       </div>
       <footer className='image-lightbox-footer'>

@@ -6,6 +6,7 @@ import { CURRENT_FOCUS } from '../lib/focus-view.js';
 import type { NoteFocus } from '../lib/use-note-focus.js';
 import { focusErrorMessage } from '../lib/focus-error-message.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { LoadingStatus } from './LoadingStatus.js';
 import { Button } from './Button.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { DivisionIcon } from './FocusDivision.js';
@@ -50,7 +51,7 @@ export const FocusControls: React.FC<{
                   </DropdownMenu.RadioItem>
                 ))}
               </DropdownMenu.RadioGroup>
-              {focus.loading && <p role='status'>{t('focus.loading')}</p>}
+              {focus.loading && <LoadingStatus>{t('focus.loading')}</LoadingStatus>}
               {focus.error && (
                 <>
                   <p role='alert'>{focus.error}</p>

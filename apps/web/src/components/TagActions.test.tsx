@@ -93,7 +93,7 @@ describe('TagActions cancel during preview', () => {
       first.resolve(42);
       await Promise.resolve();
     });
-    expect(screen.getByRole('status')).toHaveTextContent('…');
+    expect(screen.getByRole('status').querySelector('svg')).toBeTruthy();
 
     await act(async () => {
       second.resolve(7);
@@ -123,7 +123,7 @@ describe('TagActions cancel during preview', () => {
       first.resolve(99);
       await Promise.resolve();
     });
-    expect(screen.getByRole('status', { name: '' })).toHaveTextContent('…');
+    expect(screen.getByRole('status', { name: '' }).querySelector('svg')).toBeTruthy();
 
     await act(async () => {
       second.resolve(3);

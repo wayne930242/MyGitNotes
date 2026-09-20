@@ -6,6 +6,7 @@ import { McpTutorialModal } from './McpTutorialModal.js';
 import { copyToClipboard } from '../lib/clipboard.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import type { TranslationKey } from '../lib/i18n/index.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 class GrantRequestError extends Error {
   constructor(public key: TranslationKey) {
@@ -249,7 +250,7 @@ export function ConnectionState({ loading, error, onRetry }: { loading: boolean;
     <main className='min-h-screen p-8 flex items-center justify-center' style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}>
       <div className='max-w-xl w-full p-8 rounded-2xl border' style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <h1 className='text-2xl font-semibold mb-4'>MyGitNotes</h1>
-        <p role='status' className='mb-6'>{loading ? t('auth.openingWorkspace') : error}</p>
+        {loading ? <LoadingStatus className='mb-6'>{t('auth.openingWorkspace')}</LoadingStatus> : <p role='status' className='mb-6'>{error}</p>}
         {!loading && (
           <div className='flex flex-wrap items-center gap-3'>
             <button onClick={onRetry} className={`${connectionActionClass} border hover:bg-fg/5 transition active:scale-95`}>{t('auth.retry')}</button>

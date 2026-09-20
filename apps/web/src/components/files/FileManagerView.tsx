@@ -12,6 +12,7 @@ import { FileLeaveDialog } from './FileLeaveDialog.js';
 import { useFileManager } from './useFileManager.js';
 import type { FileManagerHandle, FileManagerProps } from './types.js';
 import '../file-manager.css';
+import { LoadingStatus } from '../LoadingStatus.js';
 export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(function FileManager(props, ref) {
   const model = useFileManager(props, ref);
   const { notebookId, writable, mode, layout, beforeChange, onChanged, onInsert, t, sidebar, listing, showHidden, busy, reading, error, r2, r2Directory, setR2Directory, mutable, selectedEntry, refresh, refreshR2, run, navigate, navigateR2 } = model;
@@ -43,7 +44,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
       )}
       <FileToolbar model={model} />
       {error && <p role='alert' className='file-error'>{error}</p>}
-      {!listing ? <p role='status'>{error ? t('files.unavailable') : t('files.loading')}</p> : (
+      {!listing ? error ? <p role='status'>{t('files.unavailable')}</p> : <LoadingStatus>{t('files.loading')}</LoadingStatus> : (
         <>
           <div className='file-manager-body'>
             {layout !== 'page' && <FileTree model={model} />}

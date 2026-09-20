@@ -11,6 +11,7 @@ import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { DIRECTIVE_TEMPLATES } from '../lib/directives.js';
 import './note-completion.css';
 import { copyLinePrompt } from '../lib/line-prompt-copy.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 const LiveMarkdownEditor = React.lazy(() => import('./LiveMarkdownEditor.js').then(module => ({ default: module.LiveMarkdownEditor })));
 export type MarkdownEditorMode = 'live' | 'raw';
@@ -286,7 +287,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
       )}
       {mode === 'live' && isMarkdown
         ? (
-          <React.Suspense fallback={<p className='p-6 text-sm text-muted'>{t('editor.loadingEditor')}</p>}>
+          <React.Suspense fallback={<LoadingStatus className='p-6 text-sm text-muted'>{t('editor.loadingEditor')}</LoadingStatus>}>
             <LiveMarkdownEditor key={path} ref={live} content={content} notePath={path} readOnly={readOnly} onChange={onChange} onCaret={onCaret} ariaLabel={ariaLabel} showLineNumbers={showLineNumbers} lineNumberOffset={lineNumberOffset} onCopyLines={copyLines} />
           </React.Suspense>
         )

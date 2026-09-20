@@ -3,6 +3,7 @@ import { useTranslation } from '../lib/i18n/index.js';
 import { parseDiffPreview } from '../lib/diff-preview.js';
 import type { FileChange } from '../lib/types.js';
 import { EditorNotice } from './EditorNotice.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 export function DiffPreview({ diff, file, loading = false, error = '' }: { diff: string; file?: FileChange; loading?: boolean; error?: string; }) {
   const { t } = useTranslation();
@@ -21,7 +22,7 @@ export function DiffPreview({ diff, file, loading = false, error = '' }: { diff:
           </span>
         )}
       </h4>
-      {error ? <EditorNotice tone='error'>{error}</EditorNotice> : loading ? <p className='diff-empty' role='status'>{t('agent.loadingDocument')}</p> : file?.available === false
+      {error ? <EditorNotice tone='error'>{error}</EditorNotice> : loading ? <LoadingStatus className='diff-empty'>{t('agent.loadingDocument')}</LoadingStatus> : file?.available === false
         ? (
           <>
             <EditorNotice>

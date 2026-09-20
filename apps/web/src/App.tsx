@@ -66,6 +66,7 @@ import { FolderIndex } from './components/FolderIndex.js';
 import { FolderLinks } from './components/FolderLinks.js';
 import { I18nProvider, useTranslation } from './lib/i18n/index.js';
 import { AlertTriangle, X } from 'lucide-react';
+import { LoadingStatus } from './components/LoadingStatus.js';
 
 const ScreenPage = React.lazy(() => import('./components/ScreenPage.js').then(module => ({ default: module.ScreenPage })));
 const GraphPage = React.lazy(() => import('./components/GraphPage.js').then(module => ({ default: module.GraphPage })));
@@ -186,7 +187,7 @@ const AppContent: React.FC = () => {
       {listResult.error && <p role='alert' className='mb-3 text-sm text-danger'>{t('notes.loadFailed', { message: listResult.error })}</p>}
       {facetsQuery.error && <p role='alert' className='mb-3 text-sm text-danger'>{t('notes.countsFailed', { message: facetsQuery.error })}</p>}
       {indexLookup.error && <p role='alert' className='mb-3 text-sm text-danger'>{t('notes.loadFailed', { message: indexLookup.error })}</p>}
-      {listResult.loading && <p role='status' className='mb-3 text-sm text-muted'>{t('notes.loading')}</p>}
+      {listResult.loading && <LoadingStatus className='mb-3 text-sm text-muted'>{t('notes.loading')}</LoadingStatus>}
       {!folderless && (
         <>
           <Breadcrumbs segments={breadcrumbs} currentFolder={selectedFolder} onSelectFolder={setSelectedFolder} subfolderCount={immediateSubfolders.length} noteCount={listResult.total} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} compact={docked && !topDock} />
@@ -424,7 +425,7 @@ const AppContent: React.FC = () => {
                   </main>
                 )}
                 {activeTab === 'screen' && (
-                  <React.Suspense fallback={<p role='status' className='p-8'>{t('screen.loading')}</p>}>
+                  <React.Suspense fallback={<LoadingStatus className='p-8'>{t('screen.loading')}</LoadingStatus>}>
                     <ScreenPage
                       key={remote ? sourceId : repoRoot}
                       screen={screen}

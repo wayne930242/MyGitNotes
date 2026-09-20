@@ -6,6 +6,7 @@ import { Preview } from './FilePreview.js';
 import { copyToClipboard } from '../lib/clipboard.js';
 import { createR2Folder, deleteR2, fetchR2References, moveR2, type R2Listing, r2RawUrl, type R2References, uploadR2 } from '../lib/r2-api.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 export interface R2PanelProps {
   notebookId: string;
@@ -325,7 +326,7 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
                 </ul>
               </>
             )
-            : <p role='status'>{t('files.loading')}</p>)}
+            : <LoadingStatus>{t('files.loading')}</LoadingStatus>)}
           <div className='file-actions'>
             <button type='button' className='ui-button' disabled={busy} onClick={() => setOperation(undefined)}>{t('common.cancel')}</button>
             <Button type='submit' variant={operation === 'delete' ? 'danger' : 'primary'} disabled={busy || operation !== 'mkdir' && !references || operation === 'move' && `${destination}/${name.trim()}` === target}>{operation === 'delete' ? t('files.confirmDelete') : t('common.save')}</Button>

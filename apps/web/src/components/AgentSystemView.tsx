@@ -12,6 +12,7 @@ import { MarkdownEditor, MarkdownEditorMode, MarkdownEditorModeSwitch } from './
 import { AgentResource, GitStatus, NotebookConfig } from '../lib/types.js';
 import { fetchAgentResources, fetchFileChanges, fetchGitStatus, readAgentResource, restoreAgentResource, saveAgentResource } from '../lib/api.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 export interface AgentSystemHandle {
   prepareNotebookChange: (id: string) => Promise<boolean>;
@@ -374,7 +375,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
         )}
         {isProductResource && <div className='px-6 py-2 border-b text-[11px] leading-relaxed text-muted bg-sidebar/50'>{t('agent.systemNotice')}</div>}
         {!editable && !isProductResource && selectedPath && <div className='px-6 py-2 border-b text-[11px] leading-relaxed text-warning bg-warning-soft/50'>{readOnlyNotice || t('agent.workspaceReadOnlyNotice')}</div>}
-        {loading ? <p className='p-6 text-sm text-muted'>{t('agent.loadingDocument')}</p> : selectedPath ? <MarkdownEditor content={content} path={selectedPath} mode={viewMode} readOnly={locked} onChange={setContent} ariaLabel='Agent document content' /> : (
+        {loading ? <LoadingStatus className='p-6 text-sm text-muted'>{t('agent.loadingDocument')}</LoadingStatus> : selectedPath ? <MarkdownEditor content={content} path={selectedPath} mode={viewMode} readOnly={locked} onChange={setContent} ariaLabel='Agent document content' /> : (
           <div className='p-8 flex flex-col items-center justify-center text-center gap-3 my-auto'>
             <Bot className='w-10 h-10 text-muted' />
             <p className='text-sm text-muted'>{t('agent.noDocuments')}</p>

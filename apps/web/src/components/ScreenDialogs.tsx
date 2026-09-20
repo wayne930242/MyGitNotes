@@ -11,6 +11,7 @@ import { useTranslation } from '../lib/i18n/index.js';
 import { screenFolderOptions } from '../lib/screen-content.js';
 import { useNoteFacets, useNoteList } from '../lib/use-note-queries.js';
 import { useDebounced } from '../lib/use-debounced.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 type RowDialogContent = Pick<ScreenContentProps, 'notebooks' | 'assets'> & { folders: FolderItem[]; selectedNotebookId: string; };
 
@@ -210,7 +211,7 @@ export function ScreenAddItem({ rowName, notebookId, notebooks, assets, folders,
             <>
               <input className='ui-control' type='search' aria-label={t('screen.findItem')} placeholder={t('screen.findItem')} value={query} onChange={e => setQuery(e.target.value)} />
               {noteMatches.error && <p role='alert' className='screen-form-error'>{noteMatches.error}</p>}
-              {noteMatches.loading && <p role='status'>{t('notes.loading')}</p>}
+              {noteMatches.loading && <LoadingStatus>{t('notes.loading')}</LoadingStatus>}
               <div className='screen-item-options'>
                 {options.filter(option => kind === 'note' || `${option.title} ${option.path}`.toLowerCase().includes(query.toLowerCase())).map(option => (
                   <Button

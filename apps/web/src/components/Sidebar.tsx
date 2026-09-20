@@ -9,6 +9,7 @@ import { mergeNotebookFacets, queryNotebookIds } from '../lib/note-facets.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { WorkspaceSidebar } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
+import { LoadingStatus } from './LoadingStatus.js';
 import { filterAndSortTags, getSavedTagSort, saveTagSort, TagSort } from '../lib/tag-list.js';
 import { resolveAllNotebooksFolderSelect, resolveEnterTouchMultiSelect } from '../lib/folder-tree.js';
 import { NavTree, NavTreeRow } from './NavTree.js';
@@ -184,8 +185,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
           )}
         </div>
         <div className='sidebar-filter-summary'>
-          <span role='status' data-filter-results={filters.count ?? ''}>{filters.count === null ? t('notes.countsLoading') : t('filters.results', { count: filters.count })}</span>
-          {facetsLoading && <span role='status' className='sidebar-facets-status'>{t('notes.countsLoading')}</span>}
+          {filters.count === null ? <LoadingStatus as='span'>{t('notes.countsLoading')}</LoadingStatus> : <span role='status' data-filter-results={filters.count}>{t('filters.results', { count: filters.count })}</span>}
+          {/* The line above already says the counts are loading, so the facets only speak for themselves once it stops. */}
+          {facetsLoading && filters.count !== null && <LoadingStatus as='span' className='sidebar-facets-status'>{t('notes.countsLoading')}</LoadingStatus>}
           {facetsError && <span role='alert' className='sidebar-facets-status'>{t('notes.countsFailed', { message: facetsError })}</span>}
           <button type='button' className='sidebar-clear-filters' onClick={filters.onClear}>{t('filters.clear')}</button>
         </div>

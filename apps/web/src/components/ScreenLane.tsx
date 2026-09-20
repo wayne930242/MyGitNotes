@@ -16,6 +16,7 @@ import { NoteListSentinel } from './NoteListSentinel.js';
 import { Select } from './Select.js';
 import type { SortConfig } from '../lib/note-sort.js';
 import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 export const screenViewTabs = [{ value: 'thumbnail', icon: LayoutGrid }, { value: 'small', icon: Columns3 }, { value: 'medium', icon: Columns2 }, { value: 'graph', icon: Network }] as const;
 
@@ -191,7 +192,7 @@ export function ScreenLane({ row, graph, reorder, disabled, study, facets, noteb
               </div>
             ))}
             {laneNotes.error && <p role='alert' className='screen-error'>{laneNotes.error}</p>}
-            {laneNotes.loading && <p role='status' className='screen-lane-empty'>{t('notes.loading')}</p>}
+            {laneNotes.loading && <LoadingStatus className='screen-lane-empty'>{t('notes.loading')}</LoadingStatus>}
             <NoteListSentinel hasMore={laneNotes.hasMore} loading={laneNotes.loadingMore} error={laneNotes.error} onLoadMore={laneNotes.loadMore} className='screen-lane-sentinel' />
             {!items.length && !laneNotes.loading && (
               <div className='screen-lane-empty'>

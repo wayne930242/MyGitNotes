@@ -15,6 +15,7 @@ import { useTranslation } from '../lib/i18n/index.js';
 import { Select } from './Select.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { youtubeLabels } from '../lib/youtube-embed.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 export function StudyLaneSettings({ progression, disabled, onChange }: { progression: StudyProgression; disabled: boolean; onChange: (value: StudyProgression) => void; }) {
   const { t } = useTranslation();
@@ -217,7 +218,7 @@ function StudyLaneCard({ note: listed, row, controller, disabled, onDone, onOpen
   const starDisplay = totalStages <= 7 ? `${'★'.repeat(currentStar)}${'☆'.repeat(totalStages - currentStar)}` : `★${currentStar}/${totalStages}`;
 
   if (lookup.error) return <div className='study-alert' role='alert'>{lookup.error}</div>;
-  if (reading) return <p role='status' className='study-lane-empty'>{t('notes.loadingNote')}</p>;
+  if (reading) return <LoadingStatus className='study-lane-empty'>{t('notes.loadingNote')}</LoadingStatus>;
   return (
     <>
       <article className='study-lane-card' data-study-note={note.path}>

@@ -6,6 +6,7 @@ import { GraphSaveDialog } from './graph/GraphSaveDialog.js';
 import { useGraphController } from './graph/useGraphController.js';
 import type { GraphPageProps } from './graph/types.js';
 import './graph/graph-editing.css';
+import { LoadingStatus } from './LoadingStatus.js';
 export type { GraphPageProps } from './graph/types.js';
 export function GraphPage(props: GraphPageProps) {
   const model = useGraphController(props);
@@ -17,7 +18,7 @@ export function GraphPage(props: GraphPageProps) {
       <GraphCards model={model} />
       <GraphGestureLayer model={model} />
       {(graphSource.error || matchingPaths.error || visiblePaths.error || lanePaths.error) && <div role='alert' className='graph-notice'>{graphSource.error || matchingPaths.error || visiblePaths.error || lanePaths.error}</div>}
-      {graphLoading && <p className='graph-empty' role='status'>{t('notes.loading')}</p>}
+      {graphLoading && <LoadingStatus className='graph-empty'>{t('notes.loading')}</LoadingStatus>}
       {!graphLoading && !graphData.nodes.length && <p className='graph-empty' role='status'>{t('filters.graphEmpty')}</p>}
       <div className='graph-minimap-panel'>
         <div className='graph-stats' role='status' data-filter-results={matching.length} data-graph-nodes={graphData.nodes.length} data-graph-links={graphData.links.length}>

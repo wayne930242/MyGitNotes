@@ -7,6 +7,7 @@ import { GitCommit, Minus, Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import type { ChangeRequest, FileChange, GitStatus } from '../lib/types.js';
 import { commitStagedChanges, fetchFileChanges, fetchFileDiff, generateSemanticCommit, manageFileChange } from '../lib/api.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 interface Props {
   isOpen: boolean;
@@ -251,7 +252,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
       {selectionMode && <p className='changes-help'>{t('changes.selectedHint')}</p>}
       {remote && <p className='changes-help'>{t('changes.remoteHint')}</p>}
       <div className='changes-body'>
-        <div className='changes-list'>{loading ? <p role='status'>{t('agent.loadingDocument')}</p> : changes.length ? <>{group('working')}{!selectionMode && group('staged')}</> : <p>{t('commit.cleanWorkingTree')}</p>}</div>
+        <div className='changes-list'>{loading ? <LoadingStatus>{t('agent.loadingDocument')}</LoadingStatus> : changes.length ? <>{group('working')}{!selectionMode && group('staged')}</> : <p>{t('commit.cleanWorkingTree')}</p>}</div>
         <DiffPreview file={selected} diff={diff} loading={diffLoading} error={diffError} />
       </div>
       {restoreFiles && (

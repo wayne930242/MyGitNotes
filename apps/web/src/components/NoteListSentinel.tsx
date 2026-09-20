@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Button } from './Button.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 /** Loads the next page once the end of a note list scrolls into view. */
 export function NoteListSentinel({ hasMore, loading, error, onLoadMore, className = '' }: { hasMore: boolean; loading: boolean; error?: string; onLoadMore: () => void; className?: string; }) {
@@ -31,7 +32,9 @@ export function NoteListSentinel({ hasMore, loading, error, onLoadMore, classNam
             <Button type='button' onClick={onLoadMore} disabled={loading}>{t('notes.retryPage')}</Button>
           </p>
         )
-        : <p role='status'>{loading ? t('notes.loadingMore') : t('notes.moreAvailable')}</p>}
+        : loading
+        ? <LoadingStatus>{t('notes.loadingMore')}</LoadingStatus>
+        : <p role='status'>{t('notes.moreAvailable')}</p>}
     </div>
   );
 }

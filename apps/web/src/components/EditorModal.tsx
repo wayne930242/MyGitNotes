@@ -3,6 +3,7 @@ import { NoteItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useNoteEditing } from '../lib/note-editing.js';
 import { NoteEditor } from './NoteEditor.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 interface EditorModalProps {
   note: NoteItem | null;
@@ -25,7 +26,7 @@ const EditorModalLoading: React.FC = () => {
   const { t } = useTranslation();
   return (
     <div className='viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-4'>
-      <p role='status' className='px-6 py-4 rounded-xl text-sm' style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}>{t('notes.loadingNote')}</p>
+      <LoadingStatus className='px-6 py-4 rounded-xl text-sm' style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}>{t('notes.loadingNote')}</LoadingStatus>
     </div>
   );
 };

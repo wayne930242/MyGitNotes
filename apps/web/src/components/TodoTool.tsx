@@ -13,6 +13,7 @@ import { filterTasksByFolder } from '../lib/folder-filter.js';
 import { groupTodoTasks, type TodoTask } from '../lib/todo-list.js';
 import { effectivePanelScope, getSavedPanelScope, type PanelScope, savePanelScope } from '../lib/panel-scope.js';
 import { useNoteAgenda } from '../lib/use-note-queries.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 const TODO_SCOPE_STORAGE_KEY = 'github-notes:todo-scope';
 
@@ -162,7 +163,7 @@ export function TodoTool({ notebooks, selectedNotebookId, currentFolder, onOpenN
         </div>
       )}
       {agenda.error && <p role='alert' className='todo-task-stale'>{agenda.error}</p>}
-      {agenda.loading && <p role='status' className='todo-empty'>{t('notes.loading')}</p>}
+      {agenda.loading && <LoadingStatus className='todo-empty'>{t('notes.loading')}</LoadingStatus>}
       {!agenda.loading && totalOpen === 0 && groups.completed.length === 0 && <p className='todo-empty'>{t('panel.todoEmpty')}</p>}
       {(totalOpen > 0 || groups.completed.length > 0) && (
         <div className='todo-group-mode-toggle' role='group'>

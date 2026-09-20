@@ -10,6 +10,7 @@ import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 import { useNoteList } from '../lib/use-note-queries.js';
 import { NoteListSentinel } from './NoteListSentinel.js';
 import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 interface KanbanViewProps {
   /** The board's filter; each column adds its own status condition and pages on its own. */
@@ -212,7 +213,7 @@ function KanbanColumn({ col, index, board, query, hiddenNote, sort, onSort }: { 
         {/* Drop Target Guide Indicator */}
         {isColumnDragOver && board.dragged && <div className='border-2 border-dashed rounded-lg p-3 text-center text-xs font-semibold animate-pulse transition my-1' style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', backgroundColor: 'var(--color-primary-light)' }}>{t('kanban.dropNoteInto', { title: col.title })}</div>}
         {result.error && <p role='alert' className='text-xs text-danger'>{result.error}</p>}
-        {result.loading && <p role='status' className='text-xs text-muted'>{t('notes.loading')}</p>}
+        {result.loading && <LoadingStatus className='text-xs text-muted'>{t('notes.loading')}</LoadingStatus>}
         {!result.loading && notes.length === 0 && !isColumnDragOver ? <div className='py-8 text-center text-xs text-muted border border-dashed border-line rounded-lg'>{board.readOnly ? t('kanban.noNotes') : t('kanban.dragNotesHere')}</div> : (notes.map(note => <KanbanCard key={note.path} note={note} board={board} index={index} />))}
         <NoteListSentinel hasMore={result.hasMore} loading={result.loadingMore} error={result.error} onLoadMore={result.loadMore} />
       </div>
@@ -242,7 +243,7 @@ function KanbanUnassignedColumn({ board, query, hiddenNote, sort }: { board: Boa
         </div>
       </div>
       <div className='overflow-y-auto space-y-2.5 flex-1 pr-0.5'>
-        {result.loading && <p role='status' className='text-xs text-muted'>{t('notes.loading')}</p>}
+        {result.loading && <LoadingStatus className='text-xs text-muted'>{t('notes.loading')}</LoadingStatus>}
         {notes.map((note) => {
           const canDragForFocus = !!board.focusMode?.canDrag(note);
           return (

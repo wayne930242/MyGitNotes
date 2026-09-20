@@ -30,6 +30,7 @@ import { useWorkspaceSidebarDrawer, WorkspaceSidebar, WorkspaceSidebarDrawer, Wo
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { ScreenLane } from './ScreenLane.js';
 import { useScreenAssets, useScreenItemOpen } from './useScreenItemOpen.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 export { createLaneNoteContext } from './ScreenLane.js';
 export { screenViewTabs } from './ScreenLane.js';
@@ -202,7 +203,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
               </Button>
             </div>
           )}
-          {screen.loading ? <p role='status'>{t('screen.loading')}</p> : (
+          {screen.loading ? <LoadingStatus>{t('screen.loading')}</LoadingStatus> : (
             <>
               {!focusedLaneId && focusSection}
               {!screen.writable && <p className='screen-dialog-hint'>{t('screen.readOnly')}</p>}
@@ -222,7 +223,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
                   </Button>
                 </div>
               )}
-              {focusedLaneId ? reviewRow && <section id={`screen-lane-${reviewRow.id}`} className='screen-study-session' aria-label={reviewRow.name}>{reviewLane.error && <p role='alert' className='screen-error'>{reviewLane.error}</p>}{reviewLane.loading ? <p role='status'>{t('notes.loading')}</p> : <StudyLane toolbar={studyToolbar} key={reviewRow.id} row={reviewRow} notes={reviewNotes} controller={study} disabled={disabled || screen.dirty || screen.saving} onOpen={onOpenNote} />}</section> : (
+              {focusedLaneId ? reviewRow && <section id={`screen-lane-${reviewRow.id}`} className='screen-study-session' aria-label={reviewRow.name}>{reviewLane.error && <p role='alert' className='screen-error'>{reviewLane.error}</p>}{reviewLane.loading ? <LoadingStatus>{t('notes.loading')}</LoadingStatus> : <StudyLane toolbar={studyToolbar} key={reviewRow.id} row={reviewRow} notes={reviewNotes} controller={study} disabled={disabled || screen.dirty || screen.saving} onOpen={onOpenNote} />}</section> : (
                 <DndContext
                   sensors={sensors}
                   collisionDetection={screenCollision}

@@ -13,6 +13,7 @@ import { buildDayCounts, notesForDay, notesForMonth, tasksForDay, tasksForMonth 
 import { filterNotesByFolder, filterTasksByFolder } from '../lib/folder-filter.js';
 import { effectivePanelScope, getSavedPanelScope, type PanelScope, savePanelScope } from '../lib/panel-scope.js';
 import { useNoteAgenda } from '../lib/use-note-queries.js';
+import { LoadingStatus } from './LoadingStatus.js';
 
 const CALENDAR_SCOPE_STORAGE_KEY = 'github-notes:calendar-scope';
 
@@ -82,7 +83,7 @@ export function CalendarTool({ notebooks, selectedNotebookId, currentFolder, onO
         </div>
       )}
       {agenda.error && <p role='alert' className='calendar-day-empty'>{agenda.error}</p>}
-      {agenda.loading && <p role='status' className='calendar-day-empty'>{t('notes.loading')}</p>}
+      {agenda.loading && <LoadingStatus className='calendar-day-empty'>{t('notes.loading')}</LoadingStatus>}
       <div className='calendar-month-nav'>
         <Button
           type='button'
