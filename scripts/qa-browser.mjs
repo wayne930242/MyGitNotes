@@ -149,6 +149,10 @@ try {
   await page.waitForFunction(() => !document.querySelector('button[aria-label="Close note"]'));
   console.log('PASS readonly asset browser and layered Escape shortcuts');
   await page.click('button[aria-label="Settings"]');
+  // The manifest opens on its form; the raw YAML lives behind the advanced tab.
+  await page.waitForSelector('#settings-manifest [role="tab"]');
+  await page.click('#settings-manifest [role="tab"]:first-child');
+  await page.waitForSelector('#settings-manifest textarea');
   await page.waitForSelector('#settings-manifest textarea');
   if (!await page.$eval('#settings-manifest textarea', e => e.readOnly)) throw Error('Remote manifest editable');
   await page.evaluate(() => Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('GitHub Dark'))?.click());

@@ -92,6 +92,13 @@ const waitDisk = async (file, text) => {
   throw Error(`Missing saved text: ${text}`);
 };
 const manifest = 'schema_version: 1\nworkspace:\n  title: Status QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: research\n    title: Research\n    root: notes/research\n    statuses: [capture, published]\n';
+// Settings opens the manifest on its form; the raw YAML lives behind the advanced tab.
+const editManifest = async text => {
+  await page.waitForSelector('#settings-manifest [role="tab"]');
+  await page.click('#settings-manifest [role="tab"]:first-child');
+  await page.waitForSelector('#settings-manifest textarea');
+  await replace('#settings-manifest textarea', text);
+};
 const replace = async (selector, text) => {
   await page.focus(selector);
   await page.$eval(selector, e => e.select());
@@ -108,7 +115,8 @@ const showFrontmatter = async () => {
 };
 try {
   await page.goto(base + '/settings', { waitUntil: 'networkidle0' });
-  await replace('#settings-manifest textarea', manifest);
+  // The manifest opens on its form; the raw YAML lives behind the advanced tab.
+  await editManifest(manifest);
   await click('Save & Commit');
   await page.waitForFunction(() => document.body.innerText.includes('Workspace configuration saved and committed.'));
   assert(fs.readFileSync(path.join(root, 'notes/.github-notes.yaml'), 'utf8').includes('published'), 'Settings dropped statuses');
@@ -207,7 +215,7 @@ try {
 
   // A removed definition is still offered when a note uses it; config has no inferred writes.
   await page.goto(base + '/settings', { waitUntil: 'networkidle0' });
-  await replace('#settings-manifest textarea', manifest.replace('[capture, published]', '[capture]'));
+  await editManifest(manifest.replace('[capture, published]', '[capture]'));
   await click('Save & Commit');
   await page.waitForFunction(() => document.body.innerText.includes('Workspace configuration saved and committed.'));
   const configBefore = fs.readFileSync(path.join(root, 'notes/.github-notes.yaml'), 'utf8');

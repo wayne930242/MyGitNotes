@@ -255,6 +255,9 @@ try {
   await fits('.right-panel-rail');
   assert((await bounds('.right-panel-rail')).bottom <= (await bounds('nav')).y, 'Changes rail overlaps bottom navigation');
   await tap('button[aria-label="Settings"]');
+  // The manifest opens on its form; the raw YAML lives behind the advanced tab.
+  await page.waitForSelector('#settings-manifest [role="tab"]');
+  await tap('#settings-manifest [role="tab"]:first-child');
   await page.waitForSelector('#settings-manifest textarea');
   await page.evaluate(() => [...document.querySelectorAll('#settings-theme [role="radio"]')].find(b => b.textContent.trim() === 'Dark').click());
   await page.waitForFunction(() => document.documentElement.classList.contains('dark'));
