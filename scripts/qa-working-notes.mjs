@@ -285,6 +285,38 @@ try {
   await close();
   assert((await pending())['notes/example/welcome.md'].note.content === '# Quota draft', 'Retry lost unsaved content');
   console.log('PASS storage failure remains visible and close retries local save');
+
+  // A draft is often blocked because the note vanished from the remote, which is exactly when reading
+  // that note fails. Discarding it must stay a local delete, or the draft can never be dismissed.
+  await page.evaluate(() => localStorage.removeItem('gh_notes_working:github:working/fixture@main:main'));
+  await page.goto(base + '/notebooks/example', { waitUntil: 'networkidle0' });
+  await open('welcome');
+  await edit('# welcome\n\nDraft about to be orphaned\n\nLast line\n');
+  await close();
+  remoteNotes = remoteNotes.filter(note => !note.path.endsWith('/welcome.md'));
+  bump();
+  await openCommit();
+  await submit();
+  await page.waitForFunction(() => document.querySelector('.changes-error'));
+  await page.click('.changes-dialog .workspace-dialog-heading [aria-label="Close"]');
+  await closed();
+  assert((await pending())['notes/example/welcome.md']?.blocked, 'Vanished remote note did not block its draft');
+  await changes();
+  await page.click('[aria-label="Restore notes/example/welcome.md"]');
+  await page.waitForSelector('.changes-dialog');
+  assert(
+    await page.$$eval('.changes-group', groups => {
+      const included = groups.find(group => group.querySelector('h4')?.textContent.includes('Included in commit'));
+      return !included?.querySelector('[data-change-path]');
+    }),
+    'Discarding a draft staged it for commit instead',
+  );
+  await click('Confirm discard');
+  await page.waitForFunction(() => !JSON.parse(localStorage.getItem('gh_notes_working:github:working/fixture@main:main') || '{}')['notes/example/welcome.md']);
+  assert(!await page.$('.changes-error'), 'Discard reported an error');
+  await page.click('.changes-dialog .workspace-dialog-heading [aria-label="Close"]');
+  await closed();
+  console.log('PASS a draft blocked by a vanished remote note is discardable without a commit');
   assert(!errors.length, errors.join('; '));
 } catch (error) {
   console.log(await page.evaluate(() => ({ url: location.href, text: document.body.innerText.slice(-3000) })));

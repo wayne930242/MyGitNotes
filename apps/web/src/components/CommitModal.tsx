@@ -31,8 +31,9 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
   const canRestore = useCallback((file: FileChange) => remote || Boolean(writable && file.available), [remote, writable]);
   const selectionMode = request?.action === 'commit';
   // A row the remote refuses can never be committed, so it must not arrive selected: it would fail every
-  // commit while its own checkbox stays disabled, leaving no way to commit anything else.
-  const initialSelection = request?.paths || remoteChanges?.filter(file => file.available !== false).map(file => file.path) || [];
+  // commit while its own checkbox stays disabled, leaving no way to commit anything else. Only a commit
+  // request names what to commit; a restore asks to throw the draft away and must not stage it.
+  const initialSelection = (selectionMode ? request?.paths : undefined) || remoteChanges?.filter(file => file.available !== false).map(file => file.path) || [];
   const requestApplied = useRef(false);
   const [restoreFiles, setRestoreFiles] = useState<FileChange[]>();
   const [diffLoading, setDiffLoading] = useState(false);

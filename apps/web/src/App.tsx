@@ -528,7 +528,10 @@ const AppContent: React.FC = () => {
                 }
                 const entry = readWorkingNotes(workingScope)[file.path];
                 if (!entry || JSON.stringify(entry) !== file.revision) throw new Error('Draft changed. Review it again.');
-                const latest = entry.base ? await readNote(file.path) : null;
+                // The draft lives in this browser, so discarding it is a local delete. Reading the remote
+                // only refreshes an open editor, and a draft is often blocked precisely because that read
+                // fails, which used to leave the draft undiscardable.
+                const latest = entry.base ? await readNote(file.path).catch(() => null) : null;
                 if (JSON.stringify(readWorkingNotes(workingScope)[file.path]) !== file.revision) throw new Error('Draft changed. Review it again.');
                 setWorkingNotes(updateWorkingNote(workingScope, file.path, null));
                 if (latest && editingNote?.path === file.path) setEditingNote(latest);

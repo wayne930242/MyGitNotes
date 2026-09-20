@@ -13,20 +13,18 @@ const ALPHANUMERIC = /[\p{L}\p{N}]/u;
 // @lezer/markdown keeps private, so a replacement parser has to hand back those exact objects. Read
 // them off a throwaway parse; an unrecognised build leaves the map empty and the built-in stands.
 const delimiters = new Map<number, DelimiterType>();
-parser
-  .configure({
-    parseInline: [{
-      name: 'CjkEmphasisProbe',
-      before: 'Emphasis',
-      parse(cx) {
-        for (const part of (cx as InlineContext & { parts: { type?: DelimiterType; from: number; }[]; }).parts) {
-          if (part?.type?.resolve === 'Emphasis') delimiters.set(cx.char(part.from), part.type);
-        }
-        return -1;
-      },
-    }],
-  })
-  .parse('_a_*b*.');
+parser.configure({
+  parseInline: [{
+    name: 'CjkEmphasisProbe',
+    before: 'Emphasis',
+    parse(cx) {
+      for (const part of (cx as InlineContext & { parts: { type?: DelimiterType; from: number; }[]; }).parts) {
+        if (part?.type?.resolve === 'Emphasis') delimiters.set(cx.char(part.from), part.type);
+      }
+      return -1;
+    },
+  }],
+}).parse('_a_*b*.');
 
 export const cjkEmphasis: MarkdownConfig = {
   parseInline: [{
