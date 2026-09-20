@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useScreenPage } from './use-screen-page.js';
 import { useFocusPage } from './use-focus-page.js';
@@ -69,7 +69,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const activeWorkingNotes = useMemo(() => (remote && canWrite ? workingNotes : {}), [remote, canWrite, workingNotes]);
 
   /* eslint-disable react/use-memo -- The joined pending-document paths intentionally form a stable primitive projection key. */
-  /* eslint-disable react-hooks/exhaustive-deps -- Pending document paths are the status projection key; initial refresh runs once for this workspace instance. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Pending file paths are the status projection key; newly allocated document controllers with the same paths must retain the memoized status identity. */
   const gitStatus = useMemo<GitStatus | null>(() => {
     if (remote) {
       return { branch, isClean: !pendingDocuments.length && Object.keys(activeWorkingNotes).length === 0, staged: [], modified: [...Object.values(activeWorkingNotes).filter((entry) => entry.base).map((entry) => entry.note.path), ...pendingDocuments.map((document) => document.file)], untracked: Object.values(activeWorkingNotes).filter((entry) => !entry.base).map((entry) => entry.note.path) };
@@ -95,7 +95,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
 
   // The workspace answer is applied before folders arrive, so the note queries keyed by source
   // and revision start in parallel with `/api/folders` instead of waiting behind it.
-  const refreshWorkspace = async () => {
+  const refreshWorkspace = useCallback(async () => {
     const request = ++refreshRequest.current;
     try {
       const ws = await fetchWorkspace();
@@ -129,18 +129,15 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     } finally {
       if (request === refreshRequest.current) setLoading(false);
     }
-  };
+  }, [queryClient]);
 
-  /* eslint-disable react-hooks/exhaustive-deps -- Cleanup intentionally reads the latest cancellation or resource ref, including work started after mounting. */
   useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Refresh remote workspace state when this workspace hook mounts. */
     void refreshWorkspace();
-    /* eslint-enable react/set-state-in-effect */
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the latest request, including refreshes started after mounting; this ref is a sequence counter, not a DOM node.
       refreshRequest.current++;
     };
-  }, []);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  }, [refreshWorkspace]);
 
   useEffect(() => {
     if (!sourceId || !config) return;

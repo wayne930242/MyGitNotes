@@ -59,7 +59,7 @@ export function useFocusPanes({ screen, selectedNotebookId, focusPage, remote, s
   };
   // Arriving at a notebook's Notes page shows the Focus it displayed last.
   const focusArrival = useRef('');
-  /* eslint-disable react-hooks/exhaustive-deps -- This effect responds to route arrival; current query and navigation helpers supply the transition snapshot. */
+
   useEffect(() => {
     if (activeTab !== 'notes') {
       focusArrival.current = '';
@@ -73,8 +73,7 @@ export function useFocusPanes({ screen, selectedNotebookId, focusPage, remote, s
     const query = new URLSearchParams(location.search);
     query.set('focus', noteFocus.view.last);
     navigate({ pathname: location.pathname, search: query.toString() }, { replace: true });
-  }, [activeTab, loading, editorRoute.note, sourceId, selectedNotebookId]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  }, [activeTab, loading, editorRoute.note, sourceId, selectedNotebookId, route.focus, noteFocus.view.last, location.search, location.pathname, navigate]);
 
   return { focusCapacity, notebookLanes, noteFocus, focusDisplay, focusNarrowView, setFocusNarrowView, addingToFocus, setAddingToFocus, activePaneNote, focusDocumentPanel, setDocumentContainer, showFocus };
 }

@@ -79,15 +79,14 @@ export interface NoteEditorProps extends NoteEditorSharedProps {
 export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note, frame, active, documentPanel, onClose, onAddToFocus, onSession, onCaret, statuses, metadataFields, readOnly = false, autoSave = true, draftMode = false, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, isDirty: propIsDirty = false, availableTags = [], branch, draftScope }, ref) => {
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(note.path);
   const { t } = useTranslation();
-  const panel = usePanelContext();
+  const { setHasOpenNote } = usePanelContext();
   // The workspace rail hides only behind zoom; a pane editor shares the page with it.
-  /* eslint-disable react-hooks/exhaustive-deps -- The effect is keyed to editor identity; incoming note snapshots must not reset an active draft. */
+
   useEffect(() => {
     if (frame !== 'zoom') return;
-    panel.setHasOpenNote(true);
-    return () => panel.setHasOpenNote(false);
-  }, [frame]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+    setHasOpenNote(true);
+    return () => setHasOpenNote(false);
+  }, [frame, setHasOpenNote]);
 
   const [editorMode, setEditorMode] = useState<MarkdownEditorMode>('live');
   const [showLineNumbers, setShowLineNumbers] = useState(false);
@@ -103,7 +102,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
     },
   }), [session.locked]);
 
-  // Insert markdown asset reference at cursor position or append (Requirement 2)
+  // Insert markdown asset reference at cursor position or append
   const handleInsertAssetRef = (ref: string) => {
     if (session.locked) return;
     editorRef.current?.insert(`\n${ref}\n`);

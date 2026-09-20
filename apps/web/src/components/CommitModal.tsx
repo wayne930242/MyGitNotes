@@ -65,10 +65,10 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     };
   }, [remote]);
   const fileKey = changes.map(file => `${file.path}:${file.revision}:${file.staged}:${file.unstaged}`).join('|');
-  /* eslint-disable react-hooks/exhaustive-deps -- File-list and selection keys trigger initialization; selection edits must not reapply the initial request. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Only file-key changes repair selection; including active or request would reapply initial selection during manual preview changes. */
   useEffect(() => {
     if (!changes.length) {
-      /* eslint-disable react/set-state-in-effect -- Change-list and preview transitions initialize dialog selections and loading state. */
+      /* eslint-disable react/set-state-in-effect -- File-list arrival repairs the selection before the separate diff effect; retaining this commit ordering preserves preview request timing. */
       setActive(undefined);
       /* eslint-enable react/set-state-in-effect */
       return;
@@ -79,20 +79,18 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     }
   }, [fileKey]);
   /* eslint-enable react-hooks/exhaustive-deps */
-  /* eslint-disable react-hooks/exhaustive-deps -- File-list and selection keys trigger initialization; selection edits must not reapply the initial request. */
   useEffect(() => {
     if (loading || requestApplied.current) return;
     requestApplied.current = true;
-    /* eslint-disable react/set-state-in-effect -- Change-list and preview transitions initialize dialog selections and loading state. */
+    /* eslint-disable react/set-state-in-effect -- The one-shot restore request is applied after the asynchronous file list finishes; applying it during render would precede that lifecycle checkpoint. */
     if (request?.action === 'restore') setRestoreFiles(changes.filter(file => request.paths.includes(file.path) && file.available));
     /* eslint-enable react/set-state-in-effect */
-  }, [loading, fileKey]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  }, [loading, fileKey, changes, request]);
   const remoteDiff = active && getPreview ? getPreview(active.path) : undefined;
-  /* eslint-disable react-hooks/exhaustive-deps -- File-list and selection keys trigger initialization; selection edits must not reapply the initial request. */
+  /* eslint-disable react-hooks/exhaustive-deps -- The diff request uses path, side, revision and availability primitives; observing the containing objects would refetch identical previews. */
   useEffect(() => {
     let cancelled = false;
-    /* eslint-disable react/set-state-in-effect -- Change-list and preview transitions initialize dialog selections and loading state. */
+    /* eslint-disable react/set-state-in-effect -- Clear the previous preview when its cancellable diff request starts; preserve the loading and error lifecycle for local and remote changes. */
     setDiff('');
     /* eslint-enable react/set-state-in-effect */
     setDiffLoading(false);

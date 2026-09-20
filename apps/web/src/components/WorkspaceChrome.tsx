@@ -156,7 +156,7 @@ export function WorkspaceSidebarPortal({ children }: { children: React.ReactNode
 
   useEffect(() => {
     if (!context?.target) {
-      /* eslint-disable react/set-state-in-effect -- Resolve the external sidebar portal host after the DOM commits. */
+      /* eslint-disable react/set-state-in-effect -- The portal host exists only after the owner DOM commits, so render-time derivation cannot resolve its initial target. */
       setDomTarget(document.getElementById('workspace-sidebar-slot'));
       /* eslint-enable react/set-state-in-effect */
     }
@@ -199,12 +199,10 @@ export function WorkspaceSplitLayout({ sidebar, children, hasSidebar = true, dra
     document.documentElement.style.setProperty('--workspace-sidebar-width', `${initialWidth}px`);
   }, [initialWidth]);
 
-  /* eslint-disable react-hooks/exhaustive-deps -- The scheduled resize reads the current imperative panel after the next animation frame. */
   useLayoutEffect(() => {
     if (rightPanelWidth === undefined) return;
     return scheduleRightPanelResize(rightPanelWidth, (width) => rightPanelRef.current?.resize(width));
-  }, [rightPanelWidth]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  }, [rightPanelWidth, rightPanelRef]);
 
   // Live visual feedback only, on every resize regardless of cause; persistence happens
   // separately in the Group's onLayoutChanged, gated on user interaction.

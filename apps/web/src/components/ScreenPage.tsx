@@ -39,6 +39,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
   const navigate = useNavigate();
   const location = useLocation();
   const sidebar = useWorkspaceSidebarDrawer();
+  const setSidebarOpen = sidebar.setOpen;
   const [reorder, setReorder] = useState(false);
   const [reorderScope, setReorderScope] = useState({ selectedNotebookId, focusedLaneId });
   if (reorderScope.selectedNotebookId !== selectedNotebookId || reorderScope.focusedLaneId !== focusedLaneId) {
@@ -81,25 +82,25 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
   const draggedLane = screen.page.rows.find(row => row.kind === 'custom' && row.items.some(item => item.id === dragging?.id));
   const draggedNotes = useLaneNotes(dragging ? draggedLane : undefined);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: screenKeyboardCoordinates }));
-  /* eslint-disable react-hooks/exhaustive-deps -- The event subscription depends on the stable sidebar setter, not the surrounding sidebar object. */
+
   useEffect(() => {
     if (focusedLaneId) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === '[' && !event.ctrlKey && !event.metaKey && !event.altKey) {
         if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"], .cm-content')) return;
         event.preventDefault();
-        sidebar.setOpen(open => !open);
+        setSidebarOpen(open => !open);
       }
     };
-    const onToggle = () => sidebar.setOpen(open => !open);
+    const onToggle = () => setSidebarOpen(open => !open);
     window.addEventListener('keydown', onKey);
     window.addEventListener('toggle-screen-sidebar', onToggle);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('toggle-screen-sidebar', onToggle);
     };
-  }, [focusedLaneId, sidebar.setOpen]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  }, [focusedLaneId, setSidebarOpen]);
+
   const disabled = !screen.writable || screen.loading;
   const itemOpen = useScreenItemOpen({ notebooks, assets, onOpenNote, onMissing: () => screen.setError(t('screen.missing')) });
   const content: Omit<ScreenContentProps, 'notes'> = { notebooks, assets, onOpen: itemOpen.open };
@@ -142,7 +143,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
               )}
             </WorkspaceSidebar>
           </WorkspaceSidebarDrawer>
-          <WorkspaceSidebarToggle label={t('screen.controls')} open={sidebar.open} onClick={() => sidebar.setOpen(open => !open)} />
+          <WorkspaceSidebarToggle label={t('screen.controls')} open={sidebar.open} onClick={() => setSidebarOpen(open => !open)} />
         </>
       )}
       <main className='screen-content'>
