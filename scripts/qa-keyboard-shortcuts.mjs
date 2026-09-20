@@ -40,6 +40,8 @@ const chord = async (...keys) => {
   for (const key of keys.slice(0, -1).reverse()) await page.keyboard.up(key);
 };
 const primaryModifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+const helpShortcut = process.platform === 'darwin' ? '⌘+/' : 'Ctrl+/';
+const paletteShortcut = process.platform === 'darwin' ? '⌥+/' : 'Alt+/';
 const palette = '[aria-label="Commands"]';
 const help = '[aria-label="Keyboard shortcuts"]';
 const openPalette = async () => {
@@ -67,7 +69,8 @@ try {
   await focusNav();
   await openPalette();
   assert(await page.$eval(palette, panel => panel.getAttribute('data-mode')) === 'palette', 'Alt+/ did not open command palette mode');
-  assert(await page.$$eval(`${palette} [data-shortcut-key]`, items => items.map(item => item.getAttribute('data-shortcut-key')).join(',')) === '1,2,3,4,N,/,comma,[,?', 'Palette command set is incomplete');
+  assert(await page.$$eval(`${palette} [data-command-id]`, items => items.slice(0, 9).map(item => item.getAttribute('data-command-id')).join(',')) === 'notes,agent,assets,screen,new-note,search,settings,toggle-screen-sidebar,help', 'Palette command set is incomplete');
+  assert(await page.$$eval(`${palette} kbd, ${palette} [data-shortcut-key]`, items => items.length) === 0, 'Palette presents command hints as direct-key shortcuts');
   assert(await page.$eval(`${palette} input`, input => input === document.activeElement), 'Palette search did not receive focus');
   await page.keyboard.press('Escape');
   assert(await page.$eval('.header-nav button[aria-label="Notes"]', button => button === document.activeElement), 'Escape did not restore previous focus');
@@ -114,9 +117,30 @@ try {
   await chord(primaryModifier, 'Slash');
   await page.waitForSelector(help);
   assert(await page.$eval(help, panel => panel.getAttribute('data-mode')) === 'help', `${primaryModifier}+/ did not open keyboard help`);
+  assert(await page.$$eval(`${help} [data-shortcut-key]`, items => items.map(item => item.getAttribute('data-shortcut-key')).join(',')) === `[,${helpShortcut},${paletteShortcut}`, 'Help does not match the real shortcut set');
+  assert(await page.$eval(`${help} [data-command-id="toggle-screen-sidebar"]`, item => item.getAttribute('aria-disabled') === 'true' && item.textContent.includes('Open Screen to use')), 'Unavailable Screen shortcut does not state its requirement');
   await new Promise(resolve => setTimeout(resolve, 2800));
   assert(await page.$(help), 'Keyboard help closed on a timer');
+  await chord('Alt', 'Slash');
+  await page.waitForSelector(palette);
+  assert(!await page.$(help), 'Alt+/ did not switch keyboard help to the command palette');
   await page.keyboard.press('Escape');
+
+  await focusNav('Screen');
+  await page.click('.header-nav button[aria-label="Screen"]');
+  await page.waitForFunction(() => location.pathname === '/screen');
+  await page.waitForFunction(() => document.querySelector('.app-shell')?.getAttribute('data-workspace-tab') === 'screen');
+  await chord(primaryModifier, 'Slash');
+  await page.waitForSelector(help);
+  assert(await page.$eval(`${help} [data-command-id="toggle-screen-sidebar"]`, item => !item.disabled), 'Screen shortcut remains unavailable on Screen');
+  const sidebarWasOpen = await page.$eval('[data-responsive-sidebar]', sidebar => sidebar.classList.contains('is-open'));
+  await page.keyboard.press('[');
+  await page.waitForFunction(wasOpen => document.querySelector('[data-responsive-sidebar]').classList.contains('is-open') !== wasOpen, {}, sidebarWasOpen);
+  await chord(primaryModifier, 'Slash');
+  await page.waitForFunction(selector => !document.querySelector(selector), {}, help);
+  await focusNav('Notes');
+  await page.click('.header-nav button[aria-label="Notes"]');
+  await page.waitForFunction(() => location.pathname.startsWith('/notebooks/'));
 
   await openPalette();
   await page.keyboard.press('ArrowDown');
@@ -125,7 +149,7 @@ try {
 
   await focusNav('Agent System');
   await openPalette();
-  assert(await page.$eval('[data-shortcut-key="/"]', item => item.getAttribute('aria-disabled')) === 'true', 'Search command is not disabled outside Notes');
+  assert(await page.$eval(`${palette} [data-command-id="search"]`, item => item.disabled && item.textContent.includes('Open Notes to use')), 'Search command is not disabled with its Notes requirement outside Notes');
   await page.type(`${palette} input`, 'Focus note search');
   await page.waitForFunction(sel => document.querySelectorAll(`${sel} .keyboard-shortcuts-list [role="option"]`).length === 1, {}, palette);
   assert(!(await page.$(`${palette} .is-active`)), 'A disabled command should not become the active selection');

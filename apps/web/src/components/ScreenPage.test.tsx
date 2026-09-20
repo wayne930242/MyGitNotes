@@ -38,15 +38,20 @@ describe('Screen view icons', () => {
 });
 
 describe('Screen sidebar keyboard shortcuts', () => {
-  it('renders toggle-screen-sidebar enabled when on screen tab', () => {
-    const html = renderToStaticMarkup(createElement(KeyboardShortcuts, { mode: 'palette', onModeChange: () => {}, activeTab: 'screen', canCreateNote: true, onNavigate: () => {}, onCreateNote: () => {}, onFocusSearch: () => {} }));
-    expect(html).toContain('data-command-id="toggle-screen-sidebar"');
-    expect(html).toContain('<kbd>[</kbd>');
+  it('keeps the Screen action keyless in the palette and shows its real shortcut in help', () => {
+    const props = { onModeChange: () => {}, activeTab: 'screen' as const, canCreateNote: true, onNavigate: () => {}, onCreateNote: () => {}, onFocusSearch: () => {} };
+    const palette = renderToStaticMarkup(createElement(KeyboardShortcuts, { ...props, mode: 'palette' }));
+    const help = renderToStaticMarkup(createElement(KeyboardShortcuts, { ...props, mode: 'help' }));
+    expect(palette).toContain('data-command-id="toggle-screen-sidebar"');
+    expect(palette).not.toContain('<kbd>[');
+    expect(help).toContain('data-command-id="toggle-screen-sidebar" data-shortcut-key="["');
+    expect(help).toContain('<kbd>[</kbd>');
   });
 
   it('renders toggle-screen-sidebar disabled when on other tab', () => {
     const html = renderToStaticMarkup(createElement(KeyboardShortcuts, { mode: 'palette', onModeChange: () => {}, activeTab: 'notes', canCreateNote: true, onNavigate: () => {}, onCreateNote: () => {}, onFocusSearch: () => {} }));
     expect(html).toContain('data-command-id="toggle-screen-sidebar"');
     expect(html).toContain('aria-disabled="true"');
+    expect(html).toContain('Open Screen to use');
   });
 });

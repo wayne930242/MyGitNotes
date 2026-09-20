@@ -811,10 +811,11 @@ const AppContent: React.FC = () => {
   };
   const lastFocus = noteFocus.view.last && (noteFocus.view.last === CURRENT_FOCUS || noteFocus.focuses.some(item => item.id === noteFocus.view.last)) ? noteFocus.view.last : CURRENT_FOCUS;
   const zoomablePath = activeFocusPane?.key?.startsWith('note:') ? activeFocusPane.key.slice('note:'.length) : null;
-  const focusCommands: PaletteCommand[] = [{ id: 'focus-toggle', label: t(noteFocus.shown ? 'focus.close' : 'focus.open'), disabled: activeTab !== 'notes', run: () => void showFocus(noteFocus.shown ? null : lastFocus) }, { id: 'focus-next-pane', label: t('focus.nextPane'), disabled: (focusDisplay?.panes.length ?? 0) < 2, run: () => cycleFocusPane(1) }, { id: 'focus-previous-pane', label: t('focus.previousPane'), disabled: (focusDisplay?.panes.length ?? 0) < 2, run: () => cycleFocusPane(-1) }, { id: 'focus-next-tab', label: t('focus.nextTab'), disabled: !activeFocusPane, run: () => cycleFocusTab(1) }, { id: 'focus-previous-tab', label: t('focus.previousTab'), disabled: !activeFocusPane, run: () => cycleFocusTab(-1) }, {
+  const focusCommands: PaletteCommand[] = [{ id: 'focus-toggle', label: t(noteFocus.shown ? 'focus.close' : 'focus.open'), disabled: activeTab !== 'notes', unavailableReason: t('shortcuts.requiresNotes'), run: () => void showFocus(noteFocus.shown ? null : lastFocus) }, { id: 'focus-next-pane', label: t('focus.nextPane'), disabled: (focusDisplay?.panes.length ?? 0) < 2, unavailableReason: t('shortcuts.requiresTwoFocusPanes'), run: () => cycleFocusPane(1) }, { id: 'focus-previous-pane', label: t('focus.previousPane'), disabled: (focusDisplay?.panes.length ?? 0) < 2, unavailableReason: t('shortcuts.requiresTwoFocusPanes'), run: () => cycleFocusPane(-1) }, { id: 'focus-next-tab', label: t('focus.nextTab'), disabled: !activeFocusPane, unavailableReason: t('shortcuts.requiresFocusTab'), run: () => cycleFocusTab(1) }, { id: 'focus-previous-tab', label: t('focus.previousTab'), disabled: !activeFocusPane, unavailableReason: t('shortcuts.requiresFocusTab'), run: () => cycleFocusTab(-1) }, {
     id: 'focus-close-tab',
     label: t('focus.closeCurrentTab'),
     disabled: !noteFocus.editable || !activeFocusPane?.key,
+    unavailableReason: t('shortcuts.requiresEditableFocusTab'),
     run: () => {
       if (activeFocusPane?.key) void noteFocus.close(activeFocusPane.key, activeFocusPane.pane).catch(() => {});
     },
@@ -822,10 +823,11 @@ const AppContent: React.FC = () => {
     id: 'focus-zoom-tab',
     label: t('focus.zoomCurrentTab'),
     disabled: !zoomablePath,
+    unavailableReason: t('shortcuts.requiresFocusNote'),
     run: () => {
       if (zoomablePath) zoomFocusNote(zoomablePath);
     },
-  }, ...FOCUS_DIVISIONS.map(division => ({ id: `focus-division-${division}`, label: t('focus.divisionCommand', { name: t(`focus.division.${division}`) }), disabled: !noteFocus.editable || !noteFocus.layout || noteFocus.layout.division === division, run: () => void noteFocus.setDivision(division).catch(() => {}) }))];
+  }, ...FOCUS_DIVISIONS.map(division => ({ id: `focus-division-${division}`, label: t('focus.divisionCommand', { name: t(`focus.division.${division}`) }), disabled: !noteFocus.editable || !noteFocus.layout || noteFocus.layout.division === division, unavailableReason: t('shortcuts.requiresEditableFocus'), run: () => void noteFocus.setDivision(division).catch(() => {}) }))];
   // With a Focus displayed, the browse region docks beside it (list, flat) or above it (card, kanban).
   const topDock = viewMode === 'card' || viewMode === 'kanban';
   const browseFocusMode = noteFocus.layout ? { onZoomNote: (note: NoteListItem) => void handleOpenNote(note), canDrag: (note: NoteListItem) => noteFocus.editable && note.notebookId === selectedNotebookId } : undefined;

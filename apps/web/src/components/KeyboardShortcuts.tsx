@@ -11,6 +11,7 @@ export interface PaletteCommand {
   id: string;
   label: string;
   disabled: boolean;
+  unavailableReason?: string;
   run: () => void;
 }
 
@@ -29,9 +30,10 @@ interface KeyboardShortcutsProps {
 interface ShortcutCommand {
   id: string;
   accelerator?: string;
-  dataKey?: string;
+  paletteVisible?: boolean;
   label: string;
   disabled: boolean;
+  unavailableReason?: string;
   run: () => void;
 }
 
@@ -68,6 +70,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
   const previousMode = useRef<ShortcutSurfaceMode | null>(null);
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
   const paletteShortcut = isMac ? '⌥+/' : 'Alt+/';
+  const helpShortcut = isMac ? '⌘+/' : 'Ctrl+/';
 
   /** Updates `modeRef` in lockstep with the request, so a keydown listener whose closure hasn't
    *  been re-registered yet still sees the mode we just asked for, not a stale render's value. */
@@ -91,11 +94,12 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [requestMode]);
 
-  const commands = useMemo<ShortcutCommand[]>(() => [{ id: 'notes', accelerator: '1', label: t('nav.notes'), disabled: false, run: () => onNavigate('notes') }, { id: 'agent', accelerator: '2', label: t('nav.agent'), disabled: false, run: () => onNavigate('agent') }, { id: 'assets', accelerator: '3', label: t('nav.assets'), disabled: false, run: () => onNavigate('assets') }, { id: 'screen', accelerator: '4', label: t('nav.screen'), disabled: false, run: () => onNavigate('screen') }, { id: 'new-note', accelerator: 'N', label: t('header.newNote'), disabled: !canCreateNote, run: onCreateNote }, { id: 'search', accelerator: '/', label: t('shortcuts.search'), disabled: activeTab !== 'notes', run: onFocusSearch }, { id: 'settings', accelerator: ',', dataKey: 'comma', label: t('nav.settings'), disabled: false, run: () => onNavigate('settings') }, { id: 'toggle-screen-sidebar', accelerator: '[', label: t('shortcuts.toggleScreenSidebar'), disabled: activeTab !== 'screen', run: () => window.dispatchEvent(new CustomEvent('toggle-screen-sidebar')) }, { id: 'help', accelerator: '?', label: t('shortcuts.help'), disabled: false, run: () => requestMode('help') }, ...pageCommands], [activeTab, canCreateNote, onCreateNote, onFocusSearch, onNavigate, pageCommands, requestMode, t]);
+  const commands = useMemo<ShortcutCommand[]>(() => [{ id: 'notes', label: t('nav.notes'), disabled: false, run: () => onNavigate('notes') }, { id: 'agent', label: t('nav.agent'), disabled: false, run: () => onNavigate('agent') }, { id: 'assets', label: t('nav.assets'), disabled: false, run: () => onNavigate('assets') }, { id: 'screen', label: t('nav.screen'), disabled: false, run: () => onNavigate('screen') }, { id: 'new-note', label: t('header.newNote'), disabled: !canCreateNote, unavailableReason: t('shortcuts.requiresWriteAccess'), run: onCreateNote }, { id: 'search', label: t('shortcuts.search'), disabled: activeTab !== 'notes', unavailableReason: t('shortcuts.requiresNotes'), run: onFocusSearch }, { id: 'settings', label: t('nav.settings'), disabled: false, run: () => onNavigate('settings') }, { id: 'toggle-screen-sidebar', accelerator: '[', label: t('shortcuts.toggleScreenSidebar'), disabled: activeTab !== 'screen', unavailableReason: t('shortcuts.requiresScreen'), run: () => window.dispatchEvent(new CustomEvent('toggle-screen-sidebar')) }, { id: 'help', accelerator: helpShortcut, label: t('shortcuts.help'), disabled: false, run: () => requestMode('help') }, ...pageCommands, { id: 'open-palette', accelerator: paletteShortcut, paletteVisible: false, label: t('shortcuts.open'), disabled: false, run: openPalette }], [activeTab, canCreateNote, helpShortcut, onCreateNote, onFocusSearch, onNavigate, openPalette, pageCommands, paletteShortcut, requestMode, t]);
 
   const normalizedQuery = query.trim().toLocaleLowerCase();
   /* eslint-disable react/refs -- The palette synchronizes its mode and selection before immediate keyboard events can run. */
-  const visibleCommands = useMemo(() => normalizedQuery ? commands.filter(command => `${command.label} ${command.id}`.toLocaleLowerCase().includes(normalizedQuery)) : commands, [commands, normalizedQuery]);
+  const paletteCommands = useMemo(() => commands.filter(command => command.paletteVisible !== false), [commands]);
+  const visibleCommands = useMemo(() => normalizedQuery ? paletteCommands.filter(command => `${command.label} ${command.id}`.toLocaleLowerCase().includes(normalizedQuery)) : paletteCommands, [normalizedQuery, paletteCommands]);
   /* eslint-enable react/refs */
   /* eslint-disable react/refs -- The palette synchronizes its mode and selection before immediate keyboard events can run. */
   const enabledCommands = useMemo(() => visibleCommands.filter(command => !command.disabled), [visibleCommands]);
@@ -241,7 +245,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
             key={command.id}
             id={`shortcut-command-${command.id}`}
             data-command-id={command.id}
-            data-shortcut-key={command.dataKey || command.accelerator}
+            data-shortcut-key={palette ? undefined : command.accelerator}
             className={palette && command.id === selectedId ? 'is-active' : ''}
             role={palette ? 'option' : 'listitem'}
             aria-selected={palette ? command.id === selectedId : undefined}
@@ -255,9 +259,9 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
             }}
             onClick={() => executeCommand(command)}
           >
-            {command.accelerator ? <kbd>{command.accelerator}</kbd> : <i aria-hidden='true' />}
+            {!palette && command.accelerator ? <kbd>{command.accelerator}</kbd> : null}
             <span>{command.label}</span>
-            {command.disabled && <small>{t('shortcuts.unavailable')}</small>}
+            {command.disabled && <small>{command.unavailableReason}</small>}
           </button>
         ))}
         {palette && listedCommands.length === 0 && <p className='keyboard-shortcuts-empty' role='status'>{t('shortcuts.noResults')}</p>}

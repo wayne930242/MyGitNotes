@@ -12,7 +12,8 @@
 .keyboard-shortcuts-search input { flex: 1; min-width: 0; height: 36px; border: 0; outline: 0; padding: 0; background: transparent; color: var(--color-text); font-size: 13px; }
 .keyboard-shortcuts-list { display: flex; flex-direction: column; gap: 2px; max-height: min(420px, calc(100dvh - 220px)); padding: 6px; overflow-y: auto; }
 .keyboard-shortcuts-panel[data-mode='help'] .keyboard-shortcuts-list { display: grid; grid-template-columns: 1fr 1fr; padding: 10px; }
-.keyboard-shortcuts-list button { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 40px; padding: 5px 8px; border-radius: 7px; text-align: left; font-size: 12px; }
+.keyboard-shortcuts-list button { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 40px; padding: 5px 8px; border-radius: 7px; text-align: left; font-size: 12px; }
+.keyboard-shortcuts-panel[data-mode='help'] .keyboard-shortcuts-list button { grid-template-columns: minmax(58px, auto) minmax(0, 1fr) auto; }
 .keyboard-shortcuts-list button:hover:not(:disabled), .keyboard-shortcuts-list button.is-active:not(:disabled) { background: var(--workspace-selection); }
 .keyboard-shortcuts-list button:disabled { opacity: 0.45; }
 .keyboard-shortcuts-list kbd { display: grid; place-items: center; min-width: 26px; height: 24px; padding: 0 5px; border: 1px solid var(--workspace-divider); border-bottom-width: 2px; border-radius: 5px; background: var(--color-bg); font-family: ui-monospace, monospace; font-size: 11px; }
