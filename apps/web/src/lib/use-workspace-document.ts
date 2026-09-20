@@ -82,7 +82,7 @@ export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, scop
     }
   }, [key, enabled, remote, readDraft, t, endpoint, messages, document]);
   useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Begin loading the selected persisted workspace document from an effect. */
+    /* eslint-disable react/set-state-in-effect -- Loading synchronizes a persisted workspace document and its recovery draft; the request lifecycle owns loading, error and conflict state. */
     void load();
     /* eslint-enable react/set-state-in-effect */
   }, [load]);

@@ -113,14 +113,14 @@ export function useWorkspaceNavigation({ location, queryState, selectedFolders, 
   const setViewMode = (mode: ViewMode) => {
     void setFilterQuery({ view: mode });
   };
-  /* eslint-disable react-hooks/exhaustive-deps -- This effect responds to route arrival; current query and navigation helpers supply the transition snapshot. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Canonicalization runs on config or URL arrival; changing the current notebook or navigation helper alone must not replay the redirect. */
   useEffect(() => {
     if (!config) return;
     const canonical = legacyAllNotebooksRoute(location.pathname, location.search, selectedNotebookId);
     if (canonical) navigate(canonical + location.hash, { replace: true });
   }, [config, location.pathname, location.search]);
   /* eslint-enable react-hooks/exhaustive-deps */
-  /* eslint-disable react-hooks/exhaustive-deps -- This effect responds to route arrival; current query and navigation helpers supply the transition snapshot. */
+  /* eslint-disable react-hooks/exhaustive-deps -- The legacy graph-view redirect consumes one route-arrival snapshot; query helpers can change while its asynchronous URL update is still pending. */
   useEffect(() => {
     if (loading || !config || editorRoute.note || route.tab !== 'notes' || route.view !== 'graph') return;
     const query = currentFilterSearch({ view: 'flat' });

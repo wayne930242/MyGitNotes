@@ -89,7 +89,7 @@ export function AgentAccessSettings({ local = false }: { local?: boolean; }) {
     setGrants(data.grants);
   };
   useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Load grants when management permission becomes available. */
+    /* eslint-disable react/set-state-in-effect -- Grant state is written after the permission-triggered request settles; the fetch belongs to the authenticated subscription. */
     if (canManage) void refresh().catch((error: GrantRequestError) => setError(error.key));
     /* eslint-enable react/set-state-in-effect */
   }, [canManage]);

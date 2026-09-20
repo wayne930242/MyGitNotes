@@ -120,7 +120,7 @@ export function NoteFrontmatterPanel({ metadata, setMetadata, statuses, metadata
                 {t('editor.hideNote')}
               </label>
             </div>
-            {/* Tags with Autocomplete (Requirement 4) */}
+            {/* Tags with Autocomplete */}
             <div className='relative'>
               <label className='block text-muted font-semibold mb-1'>{t('editor.tags')}</label>
               <div className='flex flex-wrap items-center gap-1.5 p-1.5 bg-surface border border-line rounded-md min-h-[35px] relative'>

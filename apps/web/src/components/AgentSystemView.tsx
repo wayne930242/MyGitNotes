@@ -86,10 +86,10 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     void load();
   }, []);
 
-  /* eslint-disable react-hooks/exhaustive-deps -- The explicit document, draft and notebook keys drive this transition; recreating local helpers must not restart it. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Only a new selected path starts the read; changing save/status callbacks must not reload and overwrite an active resource draft. */
   useEffect(() => {
     if (!selectedPath) {
-      /* eslint-disable react/set-state-in-effect -- Document and notebook transitions initialize the resource editor and select an available resource. */
+      /* eslint-disable react/set-state-in-effect -- The resource read clears stale content and status before its cancellable request; keep this transition ordered with queued saves. */
       setContent('');
       /* eslint-enable react/set-state-in-effect */
       setSavedContent('');
@@ -139,7 +139,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     }
   };
 
-  /* eslint-disable react-hooks/exhaustive-deps -- The explicit document, draft and notebook keys drive this transition; recreating local helpers must not restart it. */
+  /* eslint-disable react-hooks/exhaustive-deps -- The debounce restarts for draft and lock changes; helper recreation from Git-status responses must not restart its 750 ms deadline. */
   useEffect(() => {
     if (locked || !hasUnsavedChanges) return;
     saveTimer.current = setTimeout(() => {
@@ -232,7 +232,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
       return false;
     }
   };
-  /* eslint-disable react-hooks/exhaustive-deps -- The explicit document, draft and notebook keys drive this transition; recreating local helpers must not restart it. */
+  /* eslint-disable react-hooks/exhaustive-deps -- The leave subscription follows the listed draft and lock values; status helper identity must not replace an in-progress navigation guard. */
   useEffect(() => registerBeforeNavigate(prepareLeave), [registerBeforeNavigate, switching, restoring, loading, hasUnsavedChanges, editable, selectedPath, content]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
@@ -280,11 +280,11 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
   }, [navigationBusy, onBusyChange]);
 
   // Browser history can also change the notebook without remounting the editor.
-  /* eslint-disable react-hooks/exhaustive-deps -- The explicit document, draft and notebook keys drive this transition; recreating local helpers must not restart it. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Notebook or resource-list arrival owns fallback selection; reacting to selection/save helpers can re-enter the queued leave-and-save transition. */
   useEffect(() => {
     if (!instructions.length || visibleResources.some(resource => resource.path === selectedPath)) return;
     const fallback = groups.notebook[0] || groups.skills[0] || groups.shared[0] || groups.product[0];
-    /* eslint-disable react/set-state-in-effect -- Document and notebook transitions initialize the resource editor and select an available resource. */
+    /* eslint-disable react/set-state-in-effect -- Fallback navigation must await selectDocument so pending edits save before a different resource becomes selected. */
     void selectDocument(fallback?.path || '');
     /* eslint-enable react/set-state-in-effect */
   }, [selectedNotebookId, instructions]);

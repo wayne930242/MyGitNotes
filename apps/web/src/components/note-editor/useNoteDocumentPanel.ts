@@ -60,7 +60,7 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
   const [yamlText, setYamlText] = useState(() => YAML.stringify(metadata || {}));
   const [yamlError, setYamlError] = useState('');
 
-  // Tag autocomplete state (Requirement 4)
+  // Tag autocomplete state
   const [tagInput, setTagInput] = useState('');
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const matches = useMemo(() => findTextMatches(content, findQuery), [content, findQuery]);

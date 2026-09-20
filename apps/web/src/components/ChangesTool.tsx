@@ -33,7 +33,7 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
   useEffect(() => {
     if (remoteChanges) return;
     let cancelled = false;
-    /* eslint-disable react/set-state-in-effect -- Refresh change lists and reset stale preview state when the selection changes. */
+    /* eslint-disable react/set-state-in-effect -- Clear the previous request error when the Git-triggered change-list fetch starts; its cancellable response owns the next error. */
     setError('');
     /* eslint-enable react/set-state-in-effect */
     void fetchFileChanges().then(files => {
@@ -48,7 +48,7 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
   const preview = active && getPreview ? getPreview(active.path) : undefined;
   useEffect(() => {
     let cancelled = false;
-    /* eslint-disable react/set-state-in-effect -- Refresh change lists and reset stale preview state when the selection changes. */
+    /* eslint-disable react/set-state-in-effect -- The diff reset and loading flags belong to the selected revision request; preserve their ordering with cancellation and remote previews. */
     setDiff('');
     /* eslint-enable react/set-state-in-effect */
     setDiffError('');

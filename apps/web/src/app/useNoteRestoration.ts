@@ -36,7 +36,7 @@ interface Params {
 }
 
 export function useNoteRestoration({ remote, workingScope, setWorkingNotes, setEditingNote, navigate, returnTo, invalidateNotes, setGitStatus, setActionError, handleSaveNote, readNoteForChange, selectedNotebookId, canWrite, t, config, queryClient, queryScope, stageWorkingNote, revision, location }: Params) {
-  // Restore single note file uncommitted changes from Git HEAD (Requirement 1)
+  // Restore single note file uncommitted changes from Git HEAD
   const handleRestoreNoteFile = async (notePath: string): Promise<NoteItem | null> => {
     try {
       if (remote) {
@@ -65,7 +65,7 @@ export function useNoteRestoration({ remote, workingScope, setWorkingNotes, setE
     }
   };
 
-  // In-table status change without opening note (Requirement 3)
+  // In-table status change without opening note
   const handleUpdateNoteStatus = async (note: NoteListItem, newStatus: string) => {
     setActionError('');
     // The row carries no body; the note is read in full before the status is written.

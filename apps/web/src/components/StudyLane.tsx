@@ -184,7 +184,7 @@ function StudyLaneCard({ note: listed, row, controller, disabled, onDone, onOpen
   const [page, setPage] = useState(0), [revealed, setRevealed] = useState(false);
   const pointer = useRef<{ x: number; y: number; id: number; }>();
   const pageBody = useRef<HTMLDivElement>(null);
-  /* eslint-disable react-hooks/exhaustive-deps -- Study-note creation depends on the listed content and identity fields, not unrelated note metadata. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Study-note creation generates card identity from these content fields; unrelated metadata must not regenerate the unsaved card identity. */
   const fresh = useMemo(() => createStudyNote(note), [note.content, note.path, note.notebookId, note.title]);
   /* eslint-enable react-hooks/exhaustive-deps */
   const stored = findStudyNote(controller.study, note), resolved = stored ? reconcileStudyNote(stored, note) : fresh;

@@ -51,7 +51,7 @@ export function useStudyWorkspace(onSaved: (note?: NoteItem) => void) {
   }, [read]);
   useEffect(() => {
     alive.current = true;
-    /* eslint-disable react/set-state-in-effect -- Load the persisted study state when its source subscription starts. */
+    /* eslint-disable react/set-state-in-effect -- The study subscription starts a persisted-state request and owns its loading indicator; results are applied only while that subscription is alive. */
     void reload();
     /* eslint-enable react/set-state-in-effect */
     return () => {

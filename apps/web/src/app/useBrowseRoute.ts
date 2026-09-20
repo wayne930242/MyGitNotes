@@ -30,12 +30,12 @@ export function useBrowseRoute({ editorRoute, config, location, queryState, setF
   }, [editorRoute, returnTo, queryState]);
   const activeTab = route.tab;
   useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
+    /* eslint-disable react/set-state-in-effect -- Route transitions arrive through browser history as well as handlers; this resets reorder state owned by the calling workspace hook after commit. */
     setFolderReorder(false);
     /* eslint-enable react/set-state-in-effect */
   }, [activeTab, route.notebook, setFolderReorder]);
   useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
+    /* eslint-disable react/set-state-in-effect -- The route hook coordinates metadata visibility owned by the workspace; preserve its post-commit ordering with route changes. */
     setFileMetadataOpen(false);
     /* eslint-enable react/set-state-in-effect */
   }, [activeTab, setFileMetadataOpen]);

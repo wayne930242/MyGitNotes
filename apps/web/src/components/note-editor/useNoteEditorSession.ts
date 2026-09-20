@@ -229,9 +229,9 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
   const [recoveredDraft, setRecoveredDraft] = useState<{ content: string; metadata: Record<string, unknown>; savedAt: number; } | null>(null);
 
   // Check local draft on note open
-  /* eslint-disable react-hooks/exhaustive-deps -- The effect is keyed to editor identity; incoming note snapshots must not reset an active draft. */
+  /* eslint-disable react-hooks/exhaustive-deps -- Only editor identity opens a session; incoming note or base snapshots must not overwrite the active draft or restart crash recovery. */
   useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Document identity and search changes reset editor state; autosave starts from the committed effect snapshot. */
+    /* eslint-disable react/set-state-in-effect -- Session opening reads persisted recovery state and updates the saved baseline before the autosave effect; preserve this ordering. */
     setBaseNote(remoteBase || note);
     /* eslint-enable react/set-state-in-effect */
     setContent(note.content);
@@ -253,7 +253,7 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
   }, [note.path, branch, draftScope, readOnly]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
-  // Debounced auto-save directly to disk on edit (Requirement 1)
+  // Debounced auto-save directly to disk on edit
   useEffect(() => {
     if (readOnly || closing.current) return;
     // `lastSaved` tracks whatever is already durably persisted for this session (synced on note
@@ -277,7 +277,7 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
       const absorbTimestamps = (saved: NoteItem) => setMetadata(current => (current.created === saved.metadata.created && current.updated === saved.metadata.updated ? current : { ...current, created: saved.metadata.created, updated: saved.metadata.updated }));
 
       if (draftMode) {
-        /* eslint-disable react/set-state-in-effect -- Document identity and search changes reset editor state; autosave starts from the committed effect snapshot. */
+        /* eslint-disable react/set-state-in-effect -- The committed draft starts an asynchronous save; its saving indicator must follow the same lifecycle as completion, failure and cancellation. */
         setIsSaving(true);
         /* eslint-enable react/set-state-in-effect */
         void onSave({ path: note.path, content, metadata, baseNote }).then(saved => {
@@ -457,11 +457,11 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
     setRecoveredDraft(null);
   };
 
-  // Two-click confirm single-file restore state (Requirement 3)
+  // Two-click confirm single-file restore state
   const [confirmRestore, setConfirmRestore] = useState(false);
   const restoreTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Two-click confirm single-file restore (Requirement 1 & 3)
+  // Two-click confirm single-file restore
   const handleRestoreClick = async () => {
     if (!canRestore) return;
     if (!confirmRestore) {

@@ -32,7 +32,7 @@ export function useRoutedNote({ config, editorRoute, editorNotebookId, editingNo
   useEffect(() => {
     if (loading || !config) return;
     if (!editorRoute.valid) {
-      /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
+      /* eslint-disable react/set-state-in-effect -- Route resolution waits for configuration and the note query; preserve the previous error during loading and clear the shared editor only after route commit. */
       setRouteError('route.pageNotFound');
       /* eslint-enable react/set-state-in-effect */
       return;

@@ -110,7 +110,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
       return atEnd ? view.state.doc.lines : view.state.doc.lineAt(view.viewport.from).number;
     },
   }), []);
-  /* eslint-disable react-hooks/exhaustive-deps -- Create the CodeMirror view for its identity; separate effects update content, permissions and line numbers. */
+  /* eslint-disable react-hooks/exhaustive-deps -- CodeMirror owns selection, focus and undo history; content, read-only and gutter changes have separate view updates and must not recreate it. */
   useEffect(() => {
     const field = StateField.define<{ decorations: DecorationSet; focused: boolean; }>({
       create(state) {

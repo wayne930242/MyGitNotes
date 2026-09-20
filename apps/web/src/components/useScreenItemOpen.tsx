@@ -56,7 +56,7 @@ export function useScreenAssets(notebooks: NotebookConfig[], notebookId: string)
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
-    /* eslint-disable react/set-state-in-effect -- Start the folder-note fetch when the pinned folder scope changes. */
+    /* eslint-disable react/set-state-in-effect -- The notebook-scoped asset request sets loading before it starts and settles after all sources; preserve cancellation and partial-result fallback. */
     setLoading(true);
     /* eslint-enable react/set-state-in-effect */
     const scoped = notebooks.filter(nb => nb.id === notebookId);

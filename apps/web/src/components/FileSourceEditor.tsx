@@ -28,7 +28,7 @@ export function FileSourceEditor({ path, content, readOnly, label, onChange }: {
   change.current = onChange;
   /* eslint-enable react/refs */
   const initial = useRef(content);
-  /* eslint-disable react-hooks/exhaustive-deps -- Create the CodeMirror view for its file identity; a separate effect reconfigures read-only permissions. */
+  /* eslint-disable react-hooks/exhaustive-deps -- CodeMirror owns selection and undo history; content and permission updates reconfigure the existing view instead of recreating it. */
   useEffect(() => {
     const editor = new EditorView({
       parent: host.current!,

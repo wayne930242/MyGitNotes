@@ -12,7 +12,7 @@ const alpha = { id: 'a', path: 'notes/a.md', notebookId: 'a', title: 'Alpha', ta
 vi.mock('../lib/use-note-queries.js', () => ({ useNoteLookup: () => ({ notes: [{ id: 'a', path: 'notes/a.md', notebookId: 'a', title: 'Alpha', tags: [], metadata: {}, content: '# Alpha\n\nBody.' }], committed: [], loading: false, error: '' }) }));
 vi.mock('./NoteEditor.js', () => ({
   NoteEditor: forwardRef<unknown, NoteEditorProps>(({ frame, note, onSession }, _ref) => {
-    /* eslint-disable react-hooks/exhaustive-deps -- The editor double emits a mount/unmount session; draft updates are exercised separately. */
+    /* eslint-disable react-hooks/exhaustive-deps -- The test double reports one mounted session and its cleanup; prop refreshes are exercised independently of mounting. */
     useEffect(() => {
       onSession?.({ content: note.content, title: note.title, dirty: false, locked: false });
       return () => onSession?.(null);
