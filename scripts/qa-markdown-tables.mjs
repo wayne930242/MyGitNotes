@@ -200,6 +200,8 @@ try {
   if (!await page.$eval(toolbar('Delete column'), e => e.disabled)) throw Error('Last column must stay present');
   const clickInTable = (index, label) => page.evaluate((index, label) => document.querySelectorAll('.live-md-table')[index].querySelector(`.live-table-toolbar button[aria-label="${label}"]`).click(), index, label);
   await clickInTable(1, 'Delete table');
+  if ((await page.$$eval('.live-md-table', nodes => nodes.length)) !== 2) throw Error('The first click on Delete table removed the table instead of arming the confirm');
+  await clickInTable(1, 'Confirm deleting the table?');
   await page.waitForFunction(() => document.querySelectorAll('.live-md-table').length === 1);
   await click('Source');
   const afterDelete = await page.$eval('textarea[aria-label="Note content"]', e => e.value);
@@ -232,7 +234,7 @@ try {
   await page.tap(`${tableRoot} th`);
   await page.screenshot({ path: product + '/artifacts/qa/table-inline-mobile.png', fullPage: true });
   if (errors.length) throw Error(errors.join('; '));
-  console.log('PASS inline tables: hover toolbar; exact edge insertion; cell editing/cancel; alignment; row/column deletion; undo restores data; Markdown fidelity; touch insertion/deletion; fit/expanded; desktop/mobile layout; direct table creation; whole-table deletion');
+  console.log('PASS inline tables: hover toolbar; exact edge insertion; cell editing/cancel; alignment; row/column deletion; undo restores data; Markdown fidelity; touch insertion/deletion; fit/expanded; desktop/mobile layout; direct table creation; whole-table deletion with re-click confirm');
 } catch (error) {
   console.error(await page.evaluate(() => ({ text: document.body.innerText.slice(-1500), tables: Array.from(document.querySelectorAll('.live-md-table')).map(e => ({ hover: e.matches(':hover'), focus: e.matches(':focus-within'), touch: e.dataset.touchActive, buttons: Array.from(e.querySelectorAll('.live-table-insert')).map(b => ({ visible: b.dataset.visible, index: b.dataset.insertIndex, opacity: getComputedStyle(b).opacity, rect: b.getBoundingClientRect().toJSON() })) })) })));
   fs.mkdirSync(path.join(product, 'artifacts/qa'), { recursive: true });

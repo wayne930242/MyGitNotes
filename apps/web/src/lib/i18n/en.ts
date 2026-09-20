@@ -130,6 +130,7 @@ export const en = {
   'table.deleteRow': 'Delete row',
   'table.deleteColumn': 'Delete column',
   'table.deleteTable': 'Delete table',
+  'table.confirmDeleteTable': 'Confirm deleting the table?',
   'table.align': 'Column alignment',
   'table.none': 'Default',
   'table.left': 'Left',

@@ -120,6 +120,8 @@ input, textarea, [contenteditable='true'] { caret-color: var(--color-text); }
 .live-table-toolbar button:hover { background: var(--color-border); }
 .live-table-toolbar button { display: inline-flex; align-items: center; justify-content: center; }
 .live-table-toolbar button:disabled { opacity: 0.3; }
+.live-table-toolbar button[data-confirm='true'] { color: var(--color-on-danger); background: var(--color-danger); }
+.live-table-toolbar button[data-confirm='true']:hover { background: color-mix(in srgb, var(--color-danger) 88%, var(--color-scrim)); }
 .live-md-table th, .live-md-table td { position: relative; touch-action: manipulation; }
 .live-md-table tr { height: 2.75rem; }
 .live-md-table [data-delete-preview] { background-color: color-mix(in srgb, var(--color-danger) 15%, transparent); }

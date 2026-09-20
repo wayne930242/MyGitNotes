@@ -132,6 +132,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'table.deleteRow': '刪除列',
   'table.deleteColumn': '刪除欄',
   'table.deleteTable': '刪除表格',
+  'table.confirmDeleteTable': '確認刪除表格？',
   'table.align': '欄位對齊',
   'table.none': '預設',
   'table.left': '靠左',

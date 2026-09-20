@@ -143,8 +143,27 @@ export class LiveMarkdownTable extends WidgetType {
       column = Math.max(0, column - 1);
       save();
     });
+    // Removing a whole table is a large edit, so the first click only arms the button.
+    let deleteArmed = false;
+    let deleteTimer = 0;
+    const disarmDelete = () => {
+      deleteArmed = false;
+      clearTimeout(deleteTimer);
+      delete deleteTable.dataset.confirm;
+      deleteTable.title = this.t('table.deleteTable');
+      deleteTable.setAttribute('aria-label', this.t('table.deleteTable'));
+    };
     const deleteTable = button(toolbar, this.t('table.deleteTable'), 'trash', () => {
       if (this.readOnly || view.state.readOnly || view.state.sliceDoc(this.from, this.from + this.text.length) !== this.text) return;
+      if (!deleteArmed) {
+        deleteArmed = true;
+        deleteTable.dataset.confirm = 'true';
+        deleteTable.title = this.t('table.confirmDeleteTable');
+        deleteTable.setAttribute('aria-label', this.t('table.confirmDeleteTable'));
+        deleteTimer = window.setTimeout(disarmDelete, 4000);
+        return;
+      }
+      disarmDelete();
       input = null;
       committing = true;
       // Take the table's own line break and the blank line separating it from what follows.
@@ -162,7 +181,10 @@ export class LiveMarkdownTable extends WidgetType {
         const cells = axis === 'row' ? [...table.rows[row].cells] : axis === 'column' ? [...table.rows].map(values => values.cells[column]) : [...table.querySelectorAll<HTMLTableCellElement>('th, td')];
         cells.forEach(cell => cell.setAttribute('data-delete-preview', ''));
       });
-      control.addEventListener('mouseleave', () => table.querySelectorAll('[data-delete-preview]').forEach(cell => cell.removeAttribute('data-delete-preview')));
+      control.addEventListener('mouseleave', () => {
+        table.querySelectorAll('[data-delete-preview]').forEach(cell => cell.removeAttribute('data-delete-preview'));
+        if (axis === 'table') disarmDelete();
+      });
     }
     const selectCell = (nextRow: number, nextColumn: number) => {
       row = nextRow;
