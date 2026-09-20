@@ -32,6 +32,7 @@ jobs:
         run: |
           pnpm check:vercel-sparse-paths --core
           pnpm build
+          pnpm lint
           pnpm test
       - name: Skip demo synchronization
         if: env.HAS_CORE_SYNC_KEY != 'true'

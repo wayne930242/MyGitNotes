@@ -10,7 +10,7 @@
     "convert-workspace": "node scripts/convert-workspace.mjs",
     "backfill-note-timestamps": "tsx scripts/backfill-note-timestamps.ts",
     "build": "pnpm --filter \"@mygitnotes/*\" run build",
-    "test": "pnpm --filter \"./packages/*\" run build && node scripts/check-vercel-sparse-paths.mjs && node scripts/check-theme-colors.mjs && vitest run",
+    "test": "pnpm --filter \"./packages/*\" run build && node scripts/check-vercel-sparse-paths.mjs && vitest run",
     "check:vercel-sparse-paths": "node scripts/check-vercel-sparse-paths.mjs",
     "check:theme-colors": "node scripts/check-theme-colors.mjs",
     "dev": "pnpm --filter \"./packages/*\" run build && pnpm --parallel --filter \"@mygitnotes/local-server\" --filter \"@mygitnotes/web\" dev",
@@ -19,7 +19,7 @@
     "env:vercel": "tsx scripts/vercel-env.ts",
     "format": "node scripts/source-tools.mjs format",
     "format:check": "node scripts/source-tools.mjs format-check",
-    "lint": "node scripts/source-tools.mjs lint",
+    "lint": "node scripts/source-tools.mjs lint && node scripts/check-theme-colors.mjs",
     "lint:fix": "node scripts/source-tools.mjs lint-fix"
   },
   "devDependencies": {
