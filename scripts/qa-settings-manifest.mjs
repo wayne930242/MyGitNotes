@@ -97,8 +97,18 @@ try {
   const screenshot = path.join(os.tmpdir(), 'settings-manifest-390-dark.png');
   await page.$eval('#settings-manifest', node => node.scrollIntoView());
   await page.screenshot({ path: screenshot, fullPage: true });
+  // A fresh visit drops the edits above, then one controlled change exercises the write path the
+  // manifest form now shares with a remote workspace: the editor follows write access, not locality.
+  await page.setViewport({ width: 1440, height: 1000 });
+  await visit('/settings');
+  await page.click('#settings-manifest input[type="text"]', { clickCount: 3 });
+  await page.keyboard.type('Manifest QA Saved');
+  await page.$$eval('#settings-manifest button', buttons => buttons.find(button => button.textContent.includes('Save & Commit'))?.click());
+  await page.waitForFunction(() => document.querySelector('#settings-manifest')?.textContent?.includes('Workspace configuration saved and committed.'), { timeout: 15000 });
+  assert.equal(git('log', '-1', '--pretty=%s').toString().trim(), 'chore(workspace): update configuration');
+  assert(fs.readFileSync(path.join(root, 'notes/.github-notes.yaml'), 'utf8').includes('Manifest QA Saved'), 'Saving must reach the manifest on disk');
   assert.deepEqual(errors, []);
-  console.log(`PASS manifest modes, every field type, and phone geometry; screenshot: ${screenshot}`);
+  console.log(`PASS manifest modes, every field type, phone geometry and a committed save; screenshot: ${screenshot}`);
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));
