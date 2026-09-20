@@ -6,6 +6,12 @@ A local-first workspace for Markdown notes, flashcards, reading screens, and kno
 
 [Live Demo](https://my-gh-core.vercel.app) · [Flashcard Demo](https://my-gh-core.vercel.app/screen/lanes/explore) · [Example Workspace](https://github.com/wayne930242/MyGitNotes/tree/main)
 
+![MyGitNotes architecture](docs/assets/mygitnotes-architecture-en.png)
+
+## Why combine both sides
+
+Local-first tools keep files on your device; cloud-document tools give you a browser and multi-device experience. MyGitNotes points both ways of working at the same Markdown and Git workspace. There is no second cloud copy to export, import, or reconcile.
+
 ## How it works
 
 Markdown is the content source, Git records and publishes changes, and the repository owner controls credentials and access. A local checkout, Docker container, or Vercel deployment provides the interface and MCP endpoint. Remote mode reads and writes the selected GitHub or GitLab repository; Compose can provide Redis for sessions and MCP grants.
@@ -37,6 +43,8 @@ Choose one path. Prepare the listed accounts and values first, then follow its n
 
 The bootstrap command creates or checks out the main branch in a sibling worktree, then records its path in .env. To use an existing workspace instead, set `MYGITNOTES_LOCAL_PATH` in .env to its absolute path before step 6. Local mode does not require GitHub sign-in.
 
+To open a different workspace checkout for local development, run `REPO_ROOT=/absolute/path/to/workspace pnpm dev`.
+
 ### 2. Docker Compose with a remote repository
 
 **Prepare:** Docker with Compose, a public URL or http://localhost:4321, and a session secret. For GitHub sign-in, prepare a GitHub OAuth App: set its Homepage URL to `APP_URL` and callback to `APP_URL`/api/auth/github/callback. For GitLab, prepare the GitLab OAuth App in path 7 instead. Generate `SESSION_SECRET` before step 1 with `openssl rand -hex 32`. Compose supplies Redis in its private network, so no Redis account is needed.
@@ -49,6 +57,8 @@ The bootstrap command creates or checks out the main branch in a sibling worktre
 6. Open `APP_URL`; the Notes view loads and GitHub sign-in opens the OAuth App configured in step 2.
 
 Compose publishes the app on 127.0.0.1:4321 by default and stores Redis data in the redis-data volume. Set `MYGITNOTES_PORT` to change the browser-facing port; use the same URL in `APP_URL`.
+
+After updating the product checkout, rebuild with `docker compose up -d --build`. `docker compose down` preserves the Redis volume; `docker compose down -v` deletes it and invalidates stored sessions and MCP grants.
 
 ### 3. Plain Docker with a remote repository
 
@@ -133,6 +143,12 @@ This path clones the full repository on Vercel. It does not need `VERCEL_TOKEN`,
 4. Open `APP_URL`; GitLab sign-in opens the OAuth application from the preparation step and the Notes view loads.
 
 Keep the GitHub deployment settings from path 5 when using Actions; replace only the note-source and OAuth provider fields. GitLab writes require push access to main; public repositories support anonymous reads.
+
+## Update and migrate
+
+Run `pnpm update-core` from a clean `core` checkout to fast-forward the product branch and migrate its configured workspace; then run `pnpm install && pnpm dev` to restart with the updated Core. Run `pnpm migrate-workspace` from that checkout to migrate the workspace on its own. If `schema_version` is incompatible, the local server stops and its error names `pnpm migrate-workspace` or, when the workspace requires a newer Core, `pnpm update-core`.
+
+To convert an older workspace whose `main` still contains product files, clean the checkout and run `pnpm convert-workspace` on `main` once. Then create a separate Core worktree with `git worktree add --track -b core ../mygitnotes-core origin/core`, set `MYGITNOTES_LOCAL_PATH` in that worktree's .env to the converted checkout, and start from the Core worktree. `pnpm update-core` runs only on `core`.
 
 ## Optional: private R2 assets
 

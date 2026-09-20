@@ -6,6 +6,12 @@
 
 [線上展示](https://my-gh-core.vercel.app) · [單字卡展示](https://my-gh-core.vercel.app/screen/lanes/explore) · [範例工作區](https://github.com/wayne930242/MyGitNotes/tree/main)
 
+![MyGitNotes architecture](docs/assets/mygitnotes-architecture-zh-TW.png)
+
+## 為什麼要把兩邊接起來
+
+本機優先工具讓檔案留在自己的裝置；雲端文件工具則提供瀏覽器與多裝置體驗。MyGitNotes 讓兩種使用方式共用同一個 Markdown 與 Git 工作區。不需要匯出、匯入或對帳第二份雲端副本。
+
 ## 運作方式
 
 Markdown 是內容來源，Git 記錄並發布變更，儲存庫擁有者管理憑證與存取權。介面與 MCP endpoint 可在本機、Docker 容器或 Vercel 執行。遠端模式讀寫指定的 GitHub 或 GitLab 儲存庫；Compose 可提供 Redis 保存 session 與 MCP 授權。
@@ -37,6 +43,8 @@ Core 更新會 fast-forward 產品分支並保留工作區內容；產品程式�
 
 bootstrap 指令會在相鄰 worktree 建立或 checkout main 分支，再把 worktree 路徑寫入 .env。若要改用既有工作區，請在第 6 步前將 .env 的 `MYGITNOTES_LOCAL_PATH` 設為它的絕對路徑。本機模式不需要 GitHub 登入。
 
+要以另一個工作區 checkout 在本機開發，請執行 `REPO_ROOT=/absolute/path/to/workspace pnpm dev`。
+
 ### 2. Docker Compose 連接遠端儲存庫
 
 **準備：** 安裝 Docker 與 Compose，準備公開網址或 http://localhost:4321，並產生 session secret。使用 GitHub 登入時建立 GitHub OAuth App，將 Homepage 設為 `APP_URL`，callback 設為 `APP_URL`/api/auth/github/callback；使用 GitLab 時改為準備路徑 7 所述的 OAuth App。以 `openssl rand -hex 32` 產生 secret。Compose 會在內部網路啟動 Redis，不需要 Redis 帳號。
@@ -49,6 +57,8 @@ bootstrap 指令會在相鄰 worktree 建立或 checkout main 分支，再把 wo
 6. 開啟 `APP_URL` 驗收：筆記檢視成功載入，GitHub 登入會前往第 2 步設定的 OAuth App。
 
 Compose 預設將 app 發布於 127.0.0.1:4321，並以 redis-data volume 保存 Redis 資料。若要更換瀏覽器使用的連接埠，設定 `MYGITNOTES_PORT`，並將相同網址填入 `APP_URL`。
+
+更新產品 checkout 後，執行 `docker compose up -d --build` 重新建置。`docker compose down` 會保留 Redis volume；`docker compose down -v` 會刪除 volume，使已存 session 與 MCP 授權失效。
 
 ### 3. Docker 連接遠端儲存庫
 
@@ -133,6 +143,12 @@ workflow 從 core 部署產品路徑；main 的筆記異動不會觸發 build，
 4. 開啟 `APP_URL` 驗收：GitLab 登入會連往準備步驟建立的 OAuth application，筆記檢視成功載入。
 
 使用 Actions 部署時，保留路徑 5 的 GitHub 部署設定，只替換筆記來源與 OAuth provider 欄位。GitLab 寫入需要 main 的 push 權限；公開儲存庫支援匿名讀取。
+
+## 更新與遷移
+
+在乾淨的 `core` checkout 執行 `pnpm update-core`，將產品分支 fast-forward 並遷移已設定的工作區；接著執行 `pnpm install && pnpm dev`，以更新後的 Core 重新啟動。若要單獨遷移工作區，請在該 checkout 執行 `pnpm migrate-workspace`。若 `schema_version` 不相容，local server 會停止，並在錯誤訊息指出 `pnpm migrate-workspace`；若工作區需要較新的 Core，錯誤訊息會指出 `pnpm update-core`。
+
+若舊工作區的 `main` 仍包含產品檔案，先提交或清除變更，再於 `main` 執行一次 `pnpm convert-workspace`。接著以 `git worktree add --track -b core ../mygitnotes-core origin/core` 建立獨立 Core worktree，在其 .env 將 `MYGITNOTES_LOCAL_PATH` 設為轉換後的 checkout，並從 Core worktree 啟動。`pnpm update-core` 僅能在 `core` 執行。
 
 ## 選用：私有 R2 素材
 
