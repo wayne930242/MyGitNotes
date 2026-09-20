@@ -64,9 +64,12 @@ jobs:
         run: npm install --global pnpm@9.15.9 vercel@59
       - name: Build
         if: steps.settings.outputs.enabled == 'true'
+        # `vercel build` takes no env flag, so the build identity travels in the step environment.
+        env:
+          MYGITNOTES_BUILD_SHA: ${{ github.sha }}
         run: |
           vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-          vercel build --prod --token="$VERCEL_TOKEN" --build-env MYGITNOTES_BUILD_SHA="$GITHUB_SHA"
+          vercel build --prod --token="$VERCEL_TOKEN"
       - name: Deploy production
         if: steps.settings.outputs.enabled == 'true'
         run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
