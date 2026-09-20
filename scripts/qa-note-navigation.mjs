@@ -8,9 +8,11 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { chooseSelect } from './browser-select.mjs';
 import { resolveQaChromePath } from './qa-chrome.mjs';
+import { assertFreshBuild } from './lib/require-fresh-build.mjs';
 
 // The built local server runs against a temporary git workspace; no external requests.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+assertFreshBuild(root);
 const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'qa-note-navigation-'));
 const write = (file, text) => {
   fs.mkdirSync(path.dirname(path.join(workspace, file)), { recursive: true });

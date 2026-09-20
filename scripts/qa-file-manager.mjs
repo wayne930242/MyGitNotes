@@ -7,7 +7,9 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { resolveQaChromePath } from './qa-chrome.mjs';
+import { assertFreshBuild } from './lib/require-fresh-build.mjs';
 const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+assertFreshBuild(product);
 const require = createRequire(`${product}/apps/web/package.json`), puppeteer = require('puppeteer-core');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-file-browser-'));
 const write = (file, content) => {

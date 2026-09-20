@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { resolveQaChromePath } from './qa-chrome.mjs';
+import { assertFreshBuild } from './lib/require-fresh-build.mjs';
 const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(product + '/apps/web/package.json');
 const puppeteer = require('puppeteer-core');
@@ -21,6 +22,7 @@ if (!base) {
   process.env.MYGITNOTES_LOCAL_PATH = root;
   delete process.env.VERCEL;
   delete process.env.APP_URL;
+  assertFreshBuild(product);
   const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
   server = createServer(createApp(product));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
