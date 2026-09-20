@@ -45,6 +45,9 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
       cancelled = true;
     };
   }, [gitStatus, remoteChanges]);
+  const remote = Boolean(remoteChanges);
+  /** A remote row is a draft held in this browser, so discarding it needs neither write access nor a committable state. */
+  const canRestore = (file: FileChange) => remote || (writable && Boolean(file.available));
   const preview = active && getPreview ? getPreview(active.path) : undefined;
   useEffect(() => {
     let cancelled = false;
@@ -53,11 +56,13 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
     /* eslint-enable react/set-state-in-effect */
     setDiffError('');
     setLoading(false);
-    if (!active?.available) return;
+    // A remote draft keeps its preview even when the repository refuses it, so its content stays
+    // readable while the only remaining action is to discard it.
     if (preview !== undefined) {
       setDiff(preview);
       return;
     }
+    if (!active?.available) return;
     setLoading(true);
     void fetchFileDiff(active.path, 'current').then(diff => {
       if (!cancelled) setDiff(diff);
@@ -71,6 +76,7 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
     };
   }, [active?.path, active?.revision, active?.available, preview]);
   const manageable = files.filter(file => file.available);
+  const restorable = files.filter(canRestore);
   const chosen = manageable.filter(file => selected.includes(file.path));
   const request = (action: ChangeRequest['action'], paths: string[]) => onOpenCommitModal({ action, paths });
   return (
@@ -126,7 +132,7 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
                     size='icon'
                     title={t('common.restore')}
                     aria-label={t('changes.restoreFile', { path: file.path })}
-                    disabled={!writable || !file.available}
+                    disabled={!canRestore(file)}
                     onClick={() => request('restore', [file.path])}
                   >
                     <RotateCcw aria-hidden='true' />
@@ -144,7 +150,7 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
               <GitCommit aria-hidden='true' />
               {t('changes.commitSelected', { count: chosen.length })}
             </Button>
-            <Button variant='danger' disabled={!writable || !manageable.length} onClick={() => request('restore', manageable.map(file => file.path))}>
+            <Button variant='danger' disabled={!restorable.length} onClick={() => request('restore', restorable.map(file => file.path))}>
               <RotateCcw aria-hidden='true' />
               {t('changes.restoreAll')}
             </Button>
