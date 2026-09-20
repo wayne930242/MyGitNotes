@@ -129,6 +129,7 @@ export const en = {
   'table.operations': 'Table operations',
   'table.deleteRow': 'Delete row',
   'table.deleteColumn': 'Delete column',
+  'table.deleteTable': 'Delete table',
   'table.align': 'Column alignment',
   'table.none': 'Default',
   'table.left': 'Left',

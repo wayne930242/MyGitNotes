@@ -7,7 +7,7 @@ import type { TranslationKey } from '../lib/i18n/en.js';
 import { youtubeLabels } from '../lib/youtube-embed.js';
 
 type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
-const icons: Record<string, string> = { expand: '<path d="M8 4H4v4m0-4 6 6m6 10h4v-4m0 4-6-6"/>', fit: '<path d="M4 4v16M20 4v16M7 12h10m-7-3-3 3 3 3m4-6 3 3-3 3"/>', row: '<rect x="3" y="3" width="18" height="14" rx="2"/><path d="M3 8h18M3 12h18M8 21h8"/>', column: '<rect x="3" y="3" width="18" height="14" rx="2"/><path d="M9 3v14M15 3v14M8 21h8"/>', edit: '<path d="m15 5 4 4M4 20l4-1L20 7a3 3 0 0 0-4-4L4 15v5Z"/>' };
+const icons: Record<string, string> = { expand: '<path d="M8 4H4v4m0-4 6 6m6 10h4v-4m0 4-6-6"/>', fit: '<path d="M4 4v16M20 4v16M7 12h10m-7-3-3 3 3 3m4-6 3 3-3 3"/>', row: '<rect x="3" y="3" width="18" height="14" rx="2"/><path d="M3 8h18M3 12h18M8 21h8"/>', column: '<rect x="3" y="3" width="18" height="14" rx="2"/><path d="M9 3v14M15 3v14M8 21h8"/>', edit: '<path d="m15 5 4 4M4 20l4-1L20 7a3 3 0 0 0-4-4L4 15v5Z"/>', trash: '<path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v6m4-6v6"/>', plus: '<path d="M12 5v14M5 12h14"/>' };
 interface TableUI {
   row: number;
   column: number;
@@ -36,7 +36,7 @@ export class LiveMarkdownTable extends WidgetType {
     root.contentEditable = 'false';
     root.dataset.tableFrom = String(this.from);
     const model = findMarkdownTables(this.text)[0];
-    root.innerHTML = renderNote(this.text, this.path, this.t('preview.scrollableTable'), youtubeLabels(this.t));
+    root.innerHTML = renderNote(this.text, this.path, this.t('preview.scrollableTable'), youtubeLabels(this.t)).trim();
     if (!model) return root;
     const scroller = root.querySelector<HTMLElement>('.markdown-table-scroll')!;
     const table = root.querySelector('table')!;
@@ -143,10 +143,23 @@ export class LiveMarkdownTable extends WidgetType {
       column = Math.max(0, column - 1);
       save();
     });
-    for (const [control, axis] of [[deleteRow, 'row'], [deleteColumn, 'column']] as const) {
+    const deleteTable = button(toolbar, this.t('table.deleteTable'), 'trash', () => {
+      if (this.readOnly || view.state.readOnly || view.state.sliceDoc(this.from, this.from + this.text.length) !== this.text) return;
+      input = null;
+      committing = true;
+      // Take the table's own line break and the blank line separating it from what follows.
+      const doc = view.state.doc;
+      let to = this.from + this.text.length;
+      if (doc.sliceString(to, to + 1) === '\n') to += 1;
+      const next = to < doc.length ? doc.lineAt(to) : null;
+      if (next && next.text.trim() === '') to = Math.min(next.to + 1, doc.length);
+      view.dispatch({ changes: { from: this.from, to }, annotations: isolateHistory.of('full'), userEvent: 'delete.table' });
+      view.focus();
+    });
+    for (const [control, axis] of [[deleteRow, 'row'], [deleteColumn, 'column'], [deleteTable, 'table']] as const) {
       control.addEventListener('mouseenter', () => {
         if (control.disabled) return;
-        const cells = axis === 'row' ? [...table.rows[row].cells] : [...table.rows].map(values => values.cells[column]);
+        const cells = axis === 'row' ? [...table.rows[row].cells] : axis === 'column' ? [...table.rows].map(values => values.cells[column]) : [...table.querySelectorAll<HTMLTableCellElement>('th, td')];
         cells.forEach(cell => cell.setAttribute('data-delete-preview', ''));
       });
       control.addEventListener('mouseleave', () => table.querySelectorAll('[data-delete-preview]').forEach(cell => cell.removeAttribute('data-delete-preview')));
@@ -268,14 +281,14 @@ export class LiveMarkdownTable extends WidgetType {
     selectCell(row, column);
     // One insertion target per axis follows the nearest visible grid boundary.
     let rowIndex = 1, columnIndex = 0;
-    const addRow = button(root, this.t('table.insertRowHere'), '+', () => {
+    const addRow = button(root, this.t('table.insertRowHere'), 'plus', () => {
       captureInput();
       input = null;
       model.rows.splice(rowIndex, 0, model.alignments.map(() => ''));
       row = rowIndex;
       save();
     }, 'live-table-insert live-table-insert-row');
-    const addColumn = button(root, this.t('table.insertColumnHere'), '+', () => {
+    const addColumn = button(root, this.t('table.insertColumnHere'), 'plus', () => {
       captureInput();
       input = null;
       model.rows.forEach(values => values.splice(columnIndex, 0, ''));
@@ -330,6 +343,6 @@ export class LiveMarkdownTable extends WidgetType {
     return root;
   }
   get estimatedHeight() {
-    return (this.text.split('\n').length - 1) * 40 + 48;
+    return (this.text.split('\n').length - 1) * 40 + 28;
   }
 }

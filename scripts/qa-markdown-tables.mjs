@@ -198,6 +198,14 @@ try {
   await page.click(toolbar('Delete column'));
   await page.waitForFunction(() => document.querySelector('.live-md-table table').rows[0].cells.length === 1);
   if (!await page.$eval(toolbar('Delete column'), e => e.disabled)) throw Error('Last column must stay present');
+  const clickInTable = (index, label) => page.evaluate((index, label) => document.querySelectorAll('.live-md-table')[index].querySelector(`.live-table-toolbar button[aria-label="${label}"]`).click(), index, label);
+  await clickInTable(1, 'Delete table');
+  await page.waitForFunction(() => document.querySelectorAll('.live-md-table').length === 1);
+  await click('Source');
+  const afterDelete = await page.$eval('textarea[aria-label="Note content"]', e => e.value);
+  if (!afterDelete.includes('- [ ] Task\n\n![pixel](assets/pixel.png)')) throw Error('Deleting a table left a gap or damaged its neighbours: ' + JSON.stringify(afterDelete));
+  await click('Live Preview');
+  await page.waitForSelector(tableRoot);
   const demo = '# 調查線索\n\n| 調查員 | 目前位置 | 發現的線索 |\n| --- | --- | --- |\n| 艾琳 | 市立圖書館 | 一份缺頁的借閱紀錄 |\n| 里昂 | 舊車站 | 凌晨抵達的神祕訪客 |\n\n';
   await click('Source');
   await page.focus('textarea[aria-label="Note content"]');
@@ -224,7 +232,7 @@ try {
   await page.tap(`${tableRoot} th`);
   await page.screenshot({ path: product + '/artifacts/qa/table-inline-mobile.png', fullPage: true });
   if (errors.length) throw Error(errors.join('; '));
-  console.log('PASS inline tables: hover toolbar; exact edge insertion; cell editing/cancel; alignment; row/column deletion; undo restores data; Markdown fidelity; touch insertion/deletion; fit/expanded; desktop/mobile layout; direct table creation');
+  console.log('PASS inline tables: hover toolbar; exact edge insertion; cell editing/cancel; alignment; row/column deletion; undo restores data; Markdown fidelity; touch insertion/deletion; fit/expanded; desktop/mobile layout; direct table creation; whole-table deletion');
 } catch (error) {
   console.error(await page.evaluate(() => ({ text: document.body.innerText.slice(-1500), tables: Array.from(document.querySelectorAll('.live-md-table')).map(e => ({ hover: e.matches(':hover'), focus: e.matches(':focus-within'), touch: e.dataset.touchActive, buttons: Array.from(e.querySelectorAll('.live-table-insert')).map(b => ({ visible: b.dataset.visible, index: b.dataset.insertIndex, opacity: getComputedStyle(b).opacity, rect: b.getBoundingClientRect().toJSON() })) })) })));
   fs.mkdirSync(path.join(product, 'artifacts/qa'), { recursive: true });
