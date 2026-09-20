@@ -1,12 +1,11 @@
 import { type NoteListItem } from '@mygitnotes/core/note-query';
 import { useNavigate } from 'react-router-dom';
 import { updateWorkingNote } from '../lib/working-notes.js';
-import React from 'react';
+import React, { useState } from 'react';
 import { deleteNote, fetchGitStatus, restoreNote } from '../lib/api.js';
 import type { NoteItem } from '../lib/types.js';
 import { type FileResult, mutateFile } from '../lib/files-api.js';
 import type { WorkspaceState } from './workspace-state.js';
-import type { useDeletionBuffer } from './useDeletionBuffer.js';
 
 interface Params {
   canWrite: WorkspaceState['canWrite'];
@@ -21,14 +20,14 @@ interface Params {
   remote: WorkspaceState['remote'];
   setActionError: WorkspaceState['setActionError'];
   readNoteForChange: (path: string) => Promise<NoteItem>;
-  setDeletedNotes: ReturnType<typeof useDeletionBuffer>['setDeletedNotes'];
   invalidateNotes: () => void;
   setGitStatus: WorkspaceState['setGitStatus'];
-  undoToast: ReturnType<typeof useDeletionBuffer>['undoToast'];
-  setUndoToast: ReturnType<typeof useDeletionBuffer>['setUndoToast'];
 }
 
-export function useDeletionUndo({ canWrite, revision, setRevision, setWorkingNotes, workingScope, editingNote, setEditingNote, navigate, returnTo, remote, setActionError, readNoteForChange, setDeletedNotes, invalidateNotes, setGitStatus, undoToast, setUndoToast }: Params) {
+export function useDeletionUndo({ canWrite, revision, setRevision, setWorkingNotes, workingScope, editingNote, setEditingNote, navigate, returnTo, remote, setActionError, readNoteForChange, invalidateNotes, setGitStatus }: Params) {
+  const [deletedNotes, setDeletedNotes] = useState<NoteItem[]>([]);
+  const [undoToast, setUndoToast] = useState<{ note: NoteItem; timerId: any; } | null>(null);
+
   // Remote delete: no working tree to trash into, so commit the removal immediately.
   const handleRemoteDeleteNote = async (note: NoteListItem) => {
     if (!canWrite) return;
@@ -49,7 +48,7 @@ export function useDeletionUndo({ canWrite, revision, setRevision, setWorkingNot
     }
   };
 
-  // Trash action: delete without immediate commit, allowing restore (Requirement 2)
+  // Trash action: delete without immediate commit, allowing restore
   const handleDeleteNote = async (note: NoteListItem) => {
     if (!canWrite) return;
     if (remote) return handleRemoteDeleteNote(note);
@@ -81,7 +80,7 @@ export function useDeletionUndo({ canWrite, revision, setRevision, setWorkingNot
     setUndoToast({ note: deleted, timerId });
   };
 
-  // Restore deleted note before commit (Requirement 2)
+  // Restore deleted note before commit
   const handleRestoreNote = async (note: NoteItem) => {
     const res = await restoreNote({ path: note.path, content: note.content, metadata: note.metadata, notebookId: note.notebookId });
     if (!res.note) throw new Error('The deleted note could not be restored.');
@@ -97,5 +96,5 @@ export function useDeletionUndo({ canWrite, revision, setRevision, setWorkingNot
     setGitStatus(statusRes.status);
   };
 
-  return { handleDeleteNote, handleRestoreNote };
+  return { deletedNotes, setDeletedNotes, undoToast, setUndoToast, handleDeleteNote, handleRestoreNote };
 }

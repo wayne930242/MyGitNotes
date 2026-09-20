@@ -1,12 +1,12 @@
 import { type NoteListItem } from '@mygitnotes/core/note-query';
 import React, { useEffect } from 'react';
 import type { WorkspaceState } from './workspace-state.js';
-import type { useDeletionBuffer } from './useDeletionBuffer.js';
+import type { useDeletionUndo } from './useDeletionUndo.js';
 
 interface Params {
   sourceId: WorkspaceState['sourceId'];
   setEditingNote: React.Dispatch<React.SetStateAction<NoteListItem | null>>;
-  setDeletedNotes: ReturnType<typeof useDeletionBuffer>['setDeletedNotes'];
+  setDeletedNotes: ReturnType<typeof useDeletionUndo>['setDeletedNotes'];
 }
 
 export function useSourceReset({ sourceId, setEditingNote, setDeletedNotes }: Params) {
@@ -15,5 +15,5 @@ export function useSourceReset({ sourceId, setEditingNote, setDeletedNotes }: Pa
     setEditingNote(null);
     /* eslint-enable react/set-state-in-effect */
     setDeletedNotes([]);
-  }, [sourceId]);
+  }, [sourceId, setEditingNote, setDeletedNotes]);
 }

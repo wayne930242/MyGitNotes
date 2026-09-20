@@ -1,15 +1,12 @@
 import { useNoteSort } from './app/useNoteSort.js';
 import { useFilterSidebar } from './app/useFilterSidebar.js';
 import { useTheme } from './app/useTheme.js';
-import { useNoteEditing } from './app/useNoteEditing.js';
 import { useFilePanel } from './app/useFilePanel.js';
 import { useWorkspaceNotes } from './app/useWorkspaceNotes.js';
-import { useDeletionBuffer } from './app/useDeletionBuffer.js';
 import { useBrowseRoute } from './app/useBrowseRoute.js';
 import { useBrowseFacets } from './app/useBrowseFacets.js';
 import { useFocusPanes } from './app/useFocusPanes.js';
 import { useWorkspaceNavigation } from './app/useWorkspaceNavigation.js';
-import { useChangeDialogState } from './app/useChangeDialogState.js';
 import { useSourceReset } from './app/useSourceReset.js';
 import { useBrowseNotes } from './app/useBrowseNotes.js';
 import { useNoteActions } from './app/useNoteActions.js';
@@ -30,7 +27,7 @@ import { useNavigate } from 'react-router-dom';
 import { notebookRoute, parseWorkspaceRoute } from './lib/routes.js';
 import { readWorkingNotes, updateWorkingNote } from './lib/working-notes.js';
 import { sameValue } from './lib/merge-note.js';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { fetchGitStatus, readNote } from './lib/api.js';
 import { NoteListSentinel } from './components/NoteListSentinel.js';
 import type { NoteItem } from './lib/types.js';
@@ -82,7 +79,8 @@ const AppContent: React.FC = () => {
 
   const { currentTheme, handleSelectTheme } = useTheme();
 
-  const { editingNote, setEditingNote, fileEditorRevision, setFileEditorRevision } = useNoteEditing();
+  const [editingNote, setEditingNote] = useState<NoteListItem | null>(null);
+  const [fileEditorRevision, setFileEditorRevision] = useState(0);
 
   const { fileDialog, setFileDialog, fileMetadataContainer, setFileMetadataContainer, fileMetadataOpen, setFileMetadataOpen, rightPanelWidth, setRightPanelWidth, selectedFileEntry, setSelectedFileEntry, fileManagerRef } = useFilePanel();
 
@@ -98,8 +96,6 @@ const AppContent: React.FC = () => {
 
   const { queryClient, queryScope, invalidateNotes, refreshNotes, staleNotice, readCommittedNote, readNoteForChange } = useWorkspaceNotes({ sourceId, revision, activeWorkingNotes, remote, refreshWorkspace, workingScope, t });
 
-  const { deletedNotes, setDeletedNotes, undoToast, setUndoToast } = useDeletionBuffer();
-
   // Tag management: rename/merge/delete across the whole workspace, each a single commit
   // with a session-lifetime undo (kept in `tagOperations.history` until page reload).
   const { tagOperations, previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag, handleUndoTagOperation } = useTagWorkspaceOperations({ queryClient, queryScope, revision, remote, canWrite, t, invalidateNotes, setRevision, setActionError });
@@ -112,10 +108,12 @@ const AppContent: React.FC = () => {
 
   const { changeFilters, clearFilters, changeAllNotebooks, setActiveTab, agentSystemRef, resourceNavigationBusy, setResourceNavigationBusy, notebookSwitchBusy, setSelectedNotebookId, setSelectedFolder, setViewMode } = useWorkspaceNavigation({ location, queryState, selectedFolders, setFilterQuery, navigate, route, activeTab, selectedNotebookId, folderRoot, viewMode, selectedFolder, config, editorRegistry, fileManagerRef, loading, editorRoute });
 
-  const { commitRequest, setCommitRequest, isCommitOpen, setIsCommitOpen } = useChangeDialogState();
+  const { commitRequest, isCommitOpen, setIsCommitOpen, openCommitModal, panelRemoteChanges, panelGetPreview } = useChangeDialog({ activeTab, agentSystemRef, remote, documents, setActionError, activeWorkingNotes, pendingDocuments, canWrite });
 
   // Aggregated tags across the workspace for autocomplete
   const availableTags = useMemo(() => Array.from(new Set(workspaceTagNames.map(tag => tag.trim()))).filter(Boolean).sort(), [workspaceTagNames]);
+
+  const { deletedNotes, setDeletedNotes, undoToast, setUndoToast, handleDeleteNote, handleRestoreNote } = useDeletionUndo({ canWrite, revision, setRevision, setWorkingNotes, workingScope, editingNote, setEditingNote, navigate, returnTo, remote, setActionError, readNoteForChange, invalidateNotes, setGitStatus });
 
   useSourceReset({ sourceId, setEditingNote, setDeletedNotes });
 
@@ -128,8 +126,6 @@ const AppContent: React.FC = () => {
   const { openInFocus, openFromBrowse, openLink, zoomFocusNote, addToFocus } = useFocusNoteNavigation({ noteFocus, selectedNotebookId, setFocusNarrowView, handleOpenNote, setAddingToFocus });
 
   const { handleSaveNote } = useNoteSaving({ canWrite, remote, workingScope, readCommittedNote, t, stageWorkingNote, selectedNotebookId, invalidateNotes, setEditingNote, setGitStatus, sourceId, branch });
-
-  const { handleDeleteNote, handleRestoreNote } = useDeletionUndo({ canWrite, revision, setRevision, setWorkingNotes, workingScope, editingNote, setEditingNote, navigate, returnTo, remote, setActionError, readNoteForChange, setDeletedNotes, invalidateNotes, setGitStatus, undoToast, setUndoToast });
 
   const { handleRestoreNoteFile, handleUpdateNoteStatus, handleOpenFolderIndex } = useNoteRestoration({ remote, workingScope, setWorkingNotes, setEditingNote, navigate, returnTo, invalidateNotes, setGitStatus, setActionError, handleSaveNote, readNoteForChange, selectedNotebookId, canWrite, t, config, queryClient, queryScope, stageWorkingNote, revision, location });
 
@@ -144,8 +140,6 @@ const AppContent: React.FC = () => {
   const { beforeFileChange, openFileManager, moveNoteAction, onFilesChanged, openFileIndex } = useFileNavigation({ editorRegistry, workingScope, documents, t, config, setFileDialog, setActionError, refreshWorkspace, refreshDocuments, editorRoute, editorNotebookId, setEditingNote, navigate, location, returnTo, setFileEditorRevision, selectedFolder, folderRoot, changeFilters, handleOpenFolderIndex });
 
   const noteEditorOpen = (Boolean(routedNote) || routedLoading) && !routeError;
-
-  const { openCommitModal, panelRemoteChanges, panelGetPreview } = useChangeDialog({ activeTab, agentSystemRef, remote, documents, setCommitRequest, setIsCommitOpen, setActionError, activeWorkingNotes, pendingDocuments, canWrite });
 
   // Every editor of a note, in zoom or in a Focus pane, is wired to the same handlers and per-path state.
   const editorProps = (note: NoteItem, committed?: NoteItem): NoteEditorSharedProps => ({
@@ -471,7 +465,7 @@ const AppContent: React.FC = () => {
               <button className='ui-button' onClick={() => navigate('/screen')}>{t('nav.screen')}</button>
             </div>
           )}
-          {/* Undo Toast Notification (Requirement 2) */}
+          {/* Undo Toast Notification */}
           {undoToast && (
             <div className='fixed top-20 right-6 z-50 animate-in fade-in slide-in-from-top-3 duration-200'>
               <div className='bg-surface/95 text-fg backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-line/80 flex items-center gap-3 text-xs'>

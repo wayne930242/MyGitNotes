@@ -33,12 +33,12 @@ export function useBrowseRoute({ editorRoute, config, location, queryState, setF
     /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
     setFolderReorder(false);
     /* eslint-enable react/set-state-in-effect */
-  }, [activeTab, route.notebook]);
+  }, [activeTab, route.notebook, setFolderReorder]);
   useEffect(() => {
     /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
     setFileMetadataOpen(false);
     /* eslint-enable react/set-state-in-effect */
-  }, [activeTab]);
+  }, [activeTab, setFileMetadataOpen]);
   const sidebarGestureRef = useSidebarSwipe(activeTab === 'notes' && !loading && !loadError, filtersOpen, setFiltersOpen);
   const selectedFolders = useMemo(() => route.folders.length ? [...new Set(route.folders)] : legacyFolderPaths(config?.notebooks || [], selectedNotebookId, route.folder), [route.folders, route.folder, config, selectedNotebookId]);
   const folderRoot = config?.notebooks.find(nb => nb.id === selectedNotebookId)?.root.replace(/\/$/, '');
