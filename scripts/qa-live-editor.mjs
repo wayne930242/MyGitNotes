@@ -218,9 +218,9 @@ try {
     window.__linePromptWrites = [];
   });
   const single = await liveGutterPoint(8);
-  await page.mouse.click(single.x, single.y);
-  await new Promise(resolve => setTimeout(resolve, 80));
-  await page.mouse.click(single.x, single.y);
+  // A fixed gap between two separate clicks races the gutter's own <500ms double-click
+  // window under load; `count: 2` drives both mousedown/mouseup pairs in one gesture instead.
+  await page.mouse.click(single.x, single.y, { count: 2 });
   await page.waitForFunction(expected => window.__linePrompt === expected, {}, expectedLinePrompt(8));
   if (await page.evaluate(() => window.__linePromptWrites.length) !== 1) throw Error('Live preview double-click wrote to the clipboard more than once');
   const liveAfter = await page.evaluate(() => ({ text: document.querySelector('.cm-content')?.textContent, selection: window.getSelection()?.toString() }));
@@ -334,8 +334,6 @@ try {
     window.__linePromptWrites = [];
   });
   const sourceSingle = await sourceGutterPoint(8);
-  // A fixed gap between two separate clicks races the gutter's own <500ms double-click
-  // window under load; `count: 2` drives both mousedown/mouseup pairs in one gesture instead.
   await page.mouse.click(sourceSingle.x, sourceSingle.y, { count: 2 });
   await page.waitForFunction(expected => window.__linePrompt === expected, {}, expectedLinePrompt(8));
   if (await page.evaluate(() => window.__linePromptWrites.length) !== 1) throw Error('Source double-click wrote to the clipboard more than once');
@@ -351,9 +349,7 @@ try {
       },
     });
   });
-  await page.mouse.click(sourceSingle.x, sourceSingle.y);
-  await new Promise(resolve => setTimeout(resolve, 80));
-  await page.mouse.click(sourceSingle.x, sourceSingle.y);
+  await page.mouse.click(sourceSingle.x, sourceSingle.y, { count: 2 });
   await page.waitForSelector('[data-line-copy-feedback][data-state="error"]');
   if (!await page.$eval('[data-line-copy-feedback]', node => node.textContent.includes('Could not copy'))) throw Error('Clipboard rejection did not show localized failure feedback');
   await page.evaluate(() => {
