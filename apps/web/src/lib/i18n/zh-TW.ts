@@ -942,7 +942,6 @@ export const zhTW: Record<TranslationKey, string> = {
   'settings.viewCoreStatusTitle': '檢視核心分支狀態與工作區說明',
   'settings.runCoreUpdateTitle': '從上游 fast-forward core',
   'settings.remoteGitHubMode': '目前使用遠端工作區。請在本機 checkout 執行核心更新與修改工作區設定。',
-  'settings.remoteManifestHint': '此設定清單來自所選的儲存庫。請直接在儲存庫或本機工作區編輯；核心更新需在本機執行。',
   'settings.coreBranchConfigReadOnlyTitle': '工作區設定僅能在 main 分支上編輯',
   'settings.manifestMode': '設定清單編輯模式',
   'settings.manifestModeAdvanced': '進階（YAML）',

@@ -941,7 +941,6 @@ export const en = {
   'settings.viewCoreStatusTitle': 'View Core branch status and workspace instructions',
   'settings.runCoreUpdateTitle': 'Fast-forward core from upstream',
   'settings.remoteGitHubMode': 'This is a remote workspace. Run Core updates and edit workspace configuration in a local checkout.',
-  'settings.remoteManifestHint': 'This manifest comes from the selected repository. Edit it in that repository or a local checkout. Run Core updates locally.',
   'settings.coreBranchConfigReadOnlyTitle': 'Workspace config can only be edited on the main branch',
   'settings.manifestMode': 'Manifest editor mode',
   'settings.manifestModeAdvanced': 'Advanced (YAML)',

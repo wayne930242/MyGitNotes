@@ -111,6 +111,18 @@ export function createApp(base: string): express.Express {
         fail(res, error);
       }
     });
+    app.put('/api/workspace/config', async (req, res) => {
+      try {
+        if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit the workspace manifest.', 403);
+        const { configYaml, revision } = req.body;
+        if (typeof configYaml !== 'string') throw new SourceError('configYaml is required.');
+        const reader: RemoteSource = res.locals.reader;
+        const result = await reader.saveWorkspaceConfig(configYaml, revision);
+        res.json({ success: true, config: await reader.config(), revision: result.revision });
+      } catch (error) {
+        fail(res, error);
+      }
+    });
     app.get('/api/notes', async (req, res) => {
       try {
         res.json({ notes: await (res.locals.reader as RemoteSource).notes(req.query.notebookId as string) });

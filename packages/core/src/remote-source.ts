@@ -2,7 +2,7 @@ import { STUDY_FILE } from './study.js';
 import { managedNotebook } from './file-manager.js';
 import path from 'node:path';
 import { assetInfo, assetPath, assetRoot, decodeAsset, isAssetPath } from './assets.js';
-import { LEGACY_WORKSPACE_CONFIG_FILENAME, parseWorkspaceConfig, WORKSPACE_CONFIG_FILENAME } from './config.js';
+import { LEGACY_WORKSPACE_CONFIG_FILENAME, parseWorkspaceConfig, serializeWorkspaceConfig, WORKSPACE_CONFIG_FILENAME } from './config.js';
 import { parseNoteContent, serializeNoteContent } from './frontmatter.js';
 import { formatTemplateDate, renderNoteTemplate } from './templates.js';
 import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js';
@@ -43,7 +43,7 @@ export type RemoteChange = { path: string; content?: string; base64?: string; sh
 /** Shared workspace rules, independent of the Git hosting provider. */
 export abstract class RemoteSource {
   private snapshot?: Promise<RemoteSnapshot>;
-  private manifest?: Promise<WorkspaceConfig>;
+  private manifest?: Promise<{ config: WorkspaceConfig; file: string; prefixed: ReadonlySet<string>; }>;
   protected fresh = false;
   /** Blobs loaded from the shared cache or verified platform reads, by sha. */
   private loaded = new Map<string, Buffer>();
@@ -138,16 +138,37 @@ export abstract class RemoteSource {
     return buffer;
   }
 
-  async config(): Promise<WorkspaceConfig> {
+  /** The manifest with the file it came from, so a write lands there and can undo the roots this read rewrote. */
+  private manifestRecord() {
     this.manifest ??= (async () => {
       const { entries } = await this.getSnapshot();
       const location = [`notes/${WORKSPACE_CONFIG_FILENAME}`, `notes/${LEGACY_WORKSPACE_CONFIG_FILENAME}`, WORKSPACE_CONFIG_FILENAME, LEGACY_WORKSPACE_CONFIG_FILENAME].find(p => entries.some(e => e.path === p && e.type === 'blob'));
       if (!location) throw new SourceError('Workspace manifest missing. Run pnpm bootstrap-workspace in the note repository and push its workspace branch.', 422);
       const config = parseWorkspaceConfig((await this.readFile(location)).toString('utf8'));
-      if (location.startsWith('notes/')) config.notebooks = config.notebooks.map(nb => ({ ...nb, root: !nb.root.startsWith('notes/') && nb.root !== 'notes' && entries.some(e => e.path === `notes/${nb.root}` && e.type === 'tree') ? `notes/${nb.root}` : nb.root }));
-      return config;
+      const prefixed = new Set<string>();
+      if (location.startsWith('notes/')) {
+        config.notebooks = config.notebooks.map(nb => {
+          if (nb.root.startsWith('notes/') || nb.root === 'notes' || !entries.some(e => e.path === `notes/${nb.root}` && e.type === 'tree')) return nb;
+          prefixed.add(nb.id);
+          return { ...nb, root: `notes/${nb.root}` };
+        });
+      }
+      return { config, file: location, prefixed };
     })();
     return this.manifest;
+  }
+
+  async config(): Promise<WorkspaceConfig> {
+    return (await this.manifestRecord()).config;
+  }
+
+  /** Writes the manifest back to its own file, restoring every root this reader prefixed with `notes/`. */
+  async saveWorkspaceConfig(configYaml: string, expected: string) {
+    const { file, prefixed } = await this.manifestRecord();
+    const validated = parseWorkspaceConfig(configYaml);
+    if (prefixed.size) validated.notebooks = validated.notebooks.map(nb => prefixed.has(nb.id) && nb.root.startsWith('notes/') ? { ...nb, root: nb.root.slice('notes/'.length) } : nb);
+    // The same commit subject a local checkout writes, so the history reads the same from either side.
+    return this.commitChanges([{ path: file, content: serializeWorkspaceConfig(validated) }], expected, 'save', 'config', 'chore(workspace): update configuration');
   }
 
   async note(file: string): Promise<NoteItem> {
@@ -409,14 +430,15 @@ export abstract class RemoteSource {
     if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
     if (!changes.length || changes.length > 200) throw new SourceError('A mutation requires between 1 and 200 changed files.');
     if (new Set(changes.map(c => c.path)).size !== changes.length) throw new SourceError('Each file may appear only once in a mutation.');
-    const config = await this.config();
+    const manifest = await this.manifestRecord();
+    const config = manifest.config;
     let bytes = 0;
     for (const change of changes) {
       const file = change.path;
       const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
       const document = workspaceDocument(file);
       const documentFile = Boolean(document?.scopes.includes(scope));
-      const allowed = documentFile || !['screen', 'study', 'focus'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_FILE.test(file) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (NOTE_FILE.test(file) || path.posix.basename(file) === '_dir.yml')));
+      const allowed = documentFile || (scope === 'config' ? file === manifest.file : !['screen', 'study', 'focus', 'config'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_FILE.test(file) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (NOTE_FILE.test(file) || path.posix.basename(file) === '_dir.yml'))));
       if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
       if (documentFile) validateWorkspaceDocument(document!, change.content);
       if (snapshot.entries.some(e => (e.path === file || file.startsWith(e.path + '/')) && (e.mode === '120000' || (e.path !== file && e.type !== 'tree')))) throw new SourceError('Path crosses a non-directory or symlink.', 403);

@@ -14,6 +14,8 @@ import YAML from 'yaml';
 
 interface SettingsModalProps {
   local?: boolean;
+  canWrite: boolean;
+  revision?: string;
   accountSettings?: React.ReactNode;
   config: WorkspaceConfig | null;
   branch: string;
@@ -23,7 +25,7 @@ interface SettingsModalProps {
   onSelectTheme: (theme: ThemeChoice) => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = true, accountSettings, branch, repoRoot, onRefreshWorkspace, currentTheme, onSelectTheme }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = true, canWrite, revision, accountSettings, branch, repoRoot, onRefreshWorkspace, currentTheme, onSelectTheme }) => {
   const { t, language, setLanguage } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
   const [yamlContent, setYamlContent] = useState(() => config ? YAML.stringify(config) : '');
@@ -40,7 +42,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
     setIsSaving(true);
     setStatusMessage(null);
     try {
-      await updateWorkspaceConfig(yamlContent);
+      await updateWorkspaceConfig(yamlContent, revision);
       await onRefreshWorkspace();
       setStatusMessage({ type: 'success', text: t('settings.saved') });
     } catch (err: unknown) {
@@ -133,7 +135,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
             <ProductVersion />
             <div id='settings-access'>{accountSettings}</div>
             <CoreUpdates local={local} />
-            {!local && <p className='text-xs text-muted'>{t('settings.remoteManifestHint')}</p>}
             {/* Manifest YAML Editor */}
             <div id='settings-manifest' className='flex flex-col gap-2'>
               <div className='flex items-center justify-between'>
@@ -141,13 +142,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
                   <label className='text-xs font-semibold text-fg uppercase tracking-wider'>{t('settings.manifest')}</label>
                   {branch === 'core' && <span className='text-[11px] px-2 py-0.5 rounded-full bg-sidebar text-muted font-mono'>{t('settings.coreBranchReadOnly')}</span>}
                 </div>
-                <Button variant='primary' type='button' onClick={handleSaveConfig} disabled={!local || isSaving || branch === 'core'} title={branch === 'core' ? t('settings.coreBranchConfigReadOnlyTitle') : t('settings.saveCommit')}>
+                <Button variant='primary' type='button' onClick={handleSaveConfig} disabled={!canWrite || isSaving || branch === 'core'} title={branch === 'core' ? t('settings.coreBranchConfigReadOnlyTitle') : t('settings.saveCommit')}>
                   <Save className='w-3.5 h-3.5' />
                   <span>{isSaving ? t('settings.saving') : t('settings.saveCommit')}</span>
                 </Button>
               </div>
               <p className='text-xs text-muted'>{t('settings.manifestHint')}{branch === 'core' && <span className='block mt-1 text-warning text-[11px]'>{t('settings.coreBranchManifestWarning')}</span>}</p>
-              <WorkspaceManifestEditor yamlContent={yamlContent} onChange={setYamlContent} readOnly={!local || branch === 'core'} />
+              <WorkspaceManifestEditor yamlContent={yamlContent} onChange={setYamlContent} readOnly={!canWrite || branch === 'core'} />
               {statusMessage && (
                 <div className={`p-3 rounded-lg text-xs flex items-center gap-2 ${statusMessage.type === 'success' ? 'bg-success-soft text-success border border-success/40' : 'bg-danger-soft text-danger border border-danger/40'}`}>
                   {statusMessage.type === 'success' ? <Check className='w-4 h-4 text-success' /> : <AlertCircle className='w-4 h-4 text-danger' />}

@@ -25,8 +25,8 @@ export async function fetchWorkspace(fresh = false): Promise<{ repoRoot: string;
   return res.json();
 }
 
-export async function updateWorkspaceConfig(configYaml: string): Promise<{ success: boolean; config: WorkspaceConfig; }> {
-  const res = await fetch(`${API_BASE}/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ configYaml }) });
+export async function updateWorkspaceConfig(configYaml: string, revision?: string): Promise<{ success: boolean; config: WorkspaceConfig; }> {
+  const res = await fetch(`${API_BASE}/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ configYaml, revision }) });
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.error || 'Failed to update workspace configuration');
