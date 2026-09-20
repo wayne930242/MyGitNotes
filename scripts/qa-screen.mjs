@@ -181,7 +181,7 @@ try {
   assert(JSON.stringify(await laneIds()) === JSON.stringify(['screen-lane-mixed-archive']), `Archive notebook shows foreign lanes: ${await laneIds()}`);
   assert(JSON.stringify(await titles('#screen-lane-mixed-archive')) === JSON.stringify(['Archive Note']), 'Split archive lane lost its item');
   await page.click('#screen-lane-mixed-archive button[aria-label="Add item: Mixed"]');
-  await page.waitForSelector('dialog[open] .screen-item-options');
+  await page.waitForSelector('dialog[open] .screen-item-option small');
   assert(!await page.$$eval('dialog[open] label', labels => labels.some(label => label.textContent.trim().startsWith('Notebooks'))), 'Item dialog still offers a notebook picker');
   assert(await page.$$eval('dialog[open] .screen-item-option small', paths => paths.length > 0 && paths.every(item => item.textContent.startsWith('notes/archive/'))), 'Item dialog lists notes from another notebook');
   await page.keyboard.press('Escape');
