@@ -28,7 +28,7 @@ export interface LiveMarkdownHandle {
   /** Inserts `text` at `at`, or in place of the selection. */
   insert: (text: string, at?: number) => void;
   revealRange: (from: number, to: number, focus?: boolean) => void;
-  goToLine: (line: number, options?: { focus?: boolean; smooth?: boolean; }) => void;
+  goToLine: (line: number, options?: { focus?: boolean; }) => void;
   getCurrentLine: () => number;
 }
 interface Props {
@@ -99,9 +99,11 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
       const view = editor.current;
       if (!view) return;
       const target = view.state.doc.line(Math.max(1, Math.min(line, view.state.doc.lines))).from;
-      view.dispatch({ selection: { anchor: target } });
-      if (options.smooth) requestAnimationFrame(() => view.scrollDOM.scrollTo({ top: Math.max(0, view.lineBlockAt(target).top - 20), behavior: 'smooth' }));
-      else view.dispatch({ effects: EditorView.scrollIntoView(target, { y: 'start', yMargin: 20 }) });
+      // CodeMirror only measures the blocks it has rendered, so a scroll offset read from the height map
+      // is an estimate that moves once the target region is measured, and that shift cancels a smooth
+      // scroll mid-flight. Its own scrollIntoView re-applies the offset through the measure cycle until
+      // the line really sits where it was asked to.
+      view.dispatch({ selection: { anchor: target }, effects: EditorView.scrollIntoView(target, { y: 'start', yMargin: 20 }) });
       if (options.focus !== false) view.focus();
     },
     getCurrentLine() {

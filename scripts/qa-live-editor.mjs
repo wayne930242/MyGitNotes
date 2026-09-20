@@ -19,7 +19,7 @@ const write = (p, s) => {
 };
 const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
 write('notes/.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Folder QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
-write('notes/example/root.md', '---\ntitle: Root Note\ntags:\n  - qa\nstatus: active\n---\n\n# Root Note\n\nParagraph **bold** and *italic*.\n\n> Quoted first line.\n> Quoted second line.\nLazy continuation without a marker.\n>\n> > Nested quote line.\n\nhttps://youtu.be/dQw4w9WgXcQ?t=45\n\n- [ ] Task\n\n| A | B |\n| - | - |\n| a | b |\n\n![pixel](assets/pixel.png)\n\n' + Array.from({ length: 160 }, (_, index) => `Long reading paragraph ${index + 1}.`).join('\n\n') + '\n');
+write('notes/example/root.md', '---\ntitle: Root Note\ntags:\n  - qa\nstatus: active\n---\n\n# Root Note\n\nParagraph **bold** and *italic*.\n\n> Quoted first line.\n> Quoted second line.\nLazy continuation without a marker.\n>\n> > Nested quote line.\n\nhttps://youtu.be/dQw4w9WgXcQ?t=45\n\n- [ ] Task\n\n| A | B |\n| - | - |\n| a | b |\n\n![pixel](assets/pixel.png)\n\n' + Array.from({ length: 160 }, (_, index) => (index > 0 && index % 40 === 0 ? `## Long section ${index / 40 + 1}\n\n` : '') + `Long reading paragraph ${index + 1}.`).join('\n\n') + '\n');
 write('notes/example/plain.md', '# Plain Note\n\nNo frontmatter here.\n');
 write('notes/example/projects/_dir.yml', 'title: Projects\norder: -1\n');
 write('notes/example/projects/deep/_dir.yml', 'title: Deep work\n');
@@ -514,6 +514,30 @@ try {
   });
   const realHeadingLine = String(fs.readFileSync(path.join(root, 'notes/example/root.md'), 'utf8').split('\n').indexOf('# Root Note') + 1);
   if (headingLine.outline !== realHeadingLine || headingLine.gutter !== realHeadingLine) throw Error(`The outline and gutter must name the heading's line in the file (${realHeadingLine}): ${JSON.stringify(headingLine)}`);
+
+  // A heading chosen in the outline ends up at the top of the editor. CodeMirror only measures the blocks
+  // it has rendered, so a scroll offset read from its height map is an estimate that moves once the target
+  // region is measured, and the long jump back to the first heading used to strand the reader thousands of
+  // pixels away from it.
+  const outlineJump = async label => {
+    await page.evaluate(label => [...document.querySelectorAll('.note-outline nav button')].find(button => button.querySelector('span').textContent === label).click(), label);
+    let previous = -1;
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const top = await page.$eval('.cm-scroller', scroller => scroller.scrollTop);
+      if (top === previous) break;
+      previous = top;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    return page.evaluate(label => {
+      const box = document.querySelector('.cm-scroller').getBoundingClientRect();
+      const line = [...document.querySelectorAll('.cm-line')].find(node => node.textContent.trim() === label);
+      return line ? Math.round(line.getBoundingClientRect().top - box.top) : null;
+    }, label);
+  };
+  for (const label of ['Long section 2', 'Long section 4', 'Root Note']) {
+    const offset = await outlineJump(label);
+    if (offset === null || offset < 0 || offset > 60) throw Error(`Choosing "${label}" in the outline must leave it at the top of the editor, not ${offset}px from it`);
+  }
 
   await page.goto(base + '/notebooks/example/notes/plain.md', { waitUntil: 'networkidle0' });
   await page.waitForSelector('.cm-content');
