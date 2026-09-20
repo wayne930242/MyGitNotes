@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ChevronRight, FileText, Folder } from 'lucide-react';
 import { type AgentTreeNode, buildAgentTree } from '../lib/agent-tree.js';
 import type { AgentResource } from '../lib/types.js';
@@ -12,11 +12,11 @@ interface NavigationProps {
 function TreeNode({ node, depth, ...navigation }: NavigationProps & { node: AgentTreeNode; depth: number; }) {
   const containsSelection = navigation.selectedPath.startsWith(`${node.path}/`);
   const [expanded, setExpanded] = useState(depth === 0 || containsSelection);
-  useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Navigation to a descendant expands its ancestor branch. */
+  const [selection, setSelection] = useState({ containsSelection, path: navigation.selectedPath });
+  if (selection.containsSelection !== containsSelection || selection.path !== navigation.selectedPath) {
+    setSelection({ containsSelection, path: navigation.selectedPath });
     if (containsSelection) setExpanded(true);
-    /* eslint-enable react/set-state-in-effect */
-  }, [containsSelection, navigation.selectedPath]);
+  }
   if (node.children) {
     return (
       <li>

@@ -66,21 +66,18 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
   const matches = useMemo(() => findTextMatches(content, findQuery), [content, findQuery]);
   const outline = useMemo(() => parseMarkdownOutline(content), [content]);
 
-  /* eslint-disable react/set-state-in-effect -- Document identity and search changes reset editor state; autosave starts from the committed effect snapshot. */
-  useEffect(() => setFindIndex(0), [findQuery]);
-  /* eslint-enable react/set-state-in-effect */
+  const [previousFindQuery, setPreviousFindQuery] = useState(findQuery);
+  if (previousFindQuery !== findQuery) {
+    setPreviousFindQuery(findQuery);
+    setFindIndex(0);
+  }
+  if (isFindOpen && matches.length > 0 && findIndex >= matches.length) setFindIndex(matches.length - 1);
+  if (isOutlineOpen && outline.length > 0 && outlineIndex >= outline.length) setOutlineIndex(outline.length - 1);
   useEffect(() => {
     if (!isFindOpen || matches.length === 0) return;
     const index = Math.min(findIndex, matches.length - 1);
-    if (index !== findIndex) {
-      /* eslint-disable react/set-state-in-effect -- Document identity and search changes reset editor state; autosave starts from the committed effect snapshot. */
-      setFindIndex(index);
-      /* eslint-enable react/set-state-in-effect */
-      return;
-    }
     editorRef.current?.revealRange(matches[index].from, matches[index].to);
-    /* eslint-disable-next-line react-hooks/exhaustive-deps -- editorRef is owned by the host NoteEditor and passed in; its identity is stable and its `.current` is read imperatively, not tracked as reactive state. */
-  }, [editorMode, findIndex, isFindOpen, matches]);
+  }, [editorMode, editorRef, findIndex, isFindOpen, matches]);
 
   const openFind = () => {
     setIsEditorLeaderOpen(false);
@@ -181,28 +178,20 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
     return () => document.removeEventListener('keydown', onKeyDown, true);
   }, [active]);
 
-  /* eslint-disable react-hooks/exhaustive-deps -- The effect is keyed to editor identity; incoming outline recomputation must not reset the panel's navigation state. */
-  useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Document identity and search changes reset editor state; autosave starts from the committed effect snapshot. */
+  const [panelIdentity, setPanelIdentity] = useState({ notePath, branch, draftScope, readOnly });
+  if (panelIdentity.notePath !== notePath || panelIdentity.branch !== branch || panelIdentity.draftScope !== draftScope || panelIdentity.readOnly !== readOnly) {
+    setPanelIdentity({ notePath, branch, draftScope, readOnly });
     setFindQuery('');
     setFindIndex(0);
     setOutlineIndex(0);
     setIsEditorLeaderOpen(false);
     setTagInput('');
     setIsTagDropdownOpen(false);
-    /* eslint-enable react/set-state-in-effect */
-  }, [notePath, branch, draftScope, readOnly]);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  }
 
   useEffect(() => {
     if (!isOutlineOpen || outline.length === 0) return;
     const index = Math.min(outlineIndex, outline.length - 1);
-    if (index !== outlineIndex) {
-      /* eslint-disable react/set-state-in-effect -- Document identity and search changes reset editor state; autosave starts from the committed effect snapshot. */
-      setOutlineIndex(index);
-      /* eslint-enable react/set-state-in-effect */
-      return;
-    }
     if (isEditableTarget(document.activeElement)) return;
     requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-outline-index="${index}"]`)?.focus());
   }, [isOutlineOpen, outline, outlineIndex]);

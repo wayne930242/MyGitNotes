@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import { fetchGitStatus, renderNoteTemplate, saveNote } from '../lib/api.js';
 import { buildNewNoteDraft } from '../lib/new-note.js';
@@ -32,11 +32,11 @@ interface UseNewNoteDialogParams {
 export function useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, workingScope, queryClient, queryScope, stageWorkingNote, revision, invalidateNotes, setGitStatus, newNoteStatuses, sourceId, t, onCreated }: UseNewNoteDialogParams) {
   const [createError, setCreateError] = useState('');
   const [isNewNoteOpen, setIsNewNoteOpen] = useState<boolean>(false);
-  useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
+  const [previousSourceId, setPreviousSourceId] = useState(sourceId);
+  if (previousSourceId !== sourceId) {
+    setPreviousSourceId(sourceId);
     setIsNewNoteOpen(false);
-    /* eslint-enable react/set-state-in-effect */
-  }, [sourceId]);
+  }
   const [newNoteTitle, setNewNoteTitle] = useState<string>('');
   const [newNoteStatus, setNewNoteStatus] = useState<string>('inbox');
   const [newNoteFolder, setNewNoteFolder] = useState<string>('');

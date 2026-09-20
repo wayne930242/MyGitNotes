@@ -40,11 +40,11 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
   const location = useLocation();
   const sidebar = useWorkspaceSidebarDrawer();
   const [reorder, setReorder] = useState(false);
-  useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Changing notebook or focused lane exits the transient reorder mode. */
+  const [reorderScope, setReorderScope] = useState({ selectedNotebookId, focusedLaneId });
+  if (reorderScope.selectedNotebookId !== selectedNotebookId || reorderScope.focusedLaneId !== focusedLaneId) {
+    setReorderScope({ selectedNotebookId, focusedLaneId });
     setReorder(false);
-    /* eslint-enable react/set-state-in-effect */
-  }, [selectedNotebookId, focusedLaneId]);
+  }
   const study = useStudyWorkspace(onStudySaved);
   const { assets, error: assetError, loading: assetsLoading, retry: retryAssets } = useScreenAssets(notebooks, selectedNotebookId);
   const [studyToolbar, setStudyToolbar] = useState<HTMLDivElement | null>(null);

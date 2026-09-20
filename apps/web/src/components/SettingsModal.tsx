@@ -1,6 +1,6 @@
 import { Button } from './Button.js';
 import { useWorkspaceSidebarDrawer, WorkspaceSidebar, WorkspaceSidebarPortal, WorkspaceSidebarToggle } from './WorkspaceChrome.js';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { AlertCircle, Check, Globe, Info, Palette, RefreshCw, Save, Shield } from 'lucide-react';
 import { WorkspaceConfig } from '../lib/types.js';
 import { runCoreUpdate, updateWorkspaceConfig } from '../lib/api.js';
@@ -23,19 +23,17 @@ interface SettingsModalProps {
 export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = true, accountSettings, branch, repoRoot, onRefreshWorkspace, currentTheme, onSelectTheme }) => {
   const { t, language, setLanguage } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
-  const [yamlContent, setYamlContent] = useState('');
+  const [yamlContent, setYamlContent] = useState(() => config ? YAML.stringify(config) : '');
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string; } | null>(null);
   const [isUpdatingCore, setIsUpdatingCore] = useState(false);
   const [coreUpdateMsg, setCoreUpdateMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (config) {
-      /* eslint-disable react/set-state-in-effect -- Initialize the editable YAML buffer when workspace configuration arrives. */
-      setYamlContent(YAML.stringify(config));
-      /* eslint-enable react/set-state-in-effect */
-    }
-  }, [config]);
+  const [previousConfig, setPreviousConfig] = useState(config);
+  if (previousConfig !== config) {
+    setPreviousConfig(config);
+    if (config) setYamlContent(YAML.stringify(config));
+  }
 
   const handleSaveConfig = async () => {
     setIsSaving(true);

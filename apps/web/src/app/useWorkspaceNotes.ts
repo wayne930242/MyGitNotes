@@ -1,5 +1,5 @@
 import { readWorkingNotes } from '../lib/working-notes.js';
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateNoteQueries, NOTE_QUERY_KEY, noteLookupOptions, setNoteQueryScope, useNoteQueryScope, useStaleNoteQueries } from '../lib/use-note-queries.js';
 import type { NoteItem } from '../lib/types.js';
@@ -37,11 +37,11 @@ export function useWorkspaceNotes({ sourceId, revision, activeWorkingNotes, remo
     setStaleNotice(message);
     void refreshWorkspace().then(() => queryClient.resetQueries({ queryKey: NOTE_QUERY_KEY }));
   });
-  useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
+  const [previousRevision, setPreviousRevision] = useState(revision);
+  if (previousRevision !== revision) {
+    setPreviousRevision(revision);
     setStaleNotice('');
-    /* eslint-enable react/set-state-in-effect */
-  }, [revision]);
+  }
   /** The committed note behind a path, ignoring any staged draft, for use as a merge base. */
   const readCommittedNote = async (path: string): Promise<NoteItem> => {
     const result = await queryClient.fetchQuery(noteLookupOptions(queryScope, [path], true));

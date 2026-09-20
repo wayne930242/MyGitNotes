@@ -8,11 +8,11 @@ export function useFilterSidebar() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const location = useLocation();
   const [queryState, setFilterQuery] = useQueryStates(filterParsers, { history: 'push', shallow: false });
-  useEffect(() => {
-    /* eslint-disable react/set-state-in-effect -- Route and source transitions reset transient UI and load the newly selected document. */
+  const [previousPathname, setPreviousPathname] = useState(location.pathname);
+  if (previousPathname !== location.pathname) {
+    setPreviousPathname(location.pathname);
     setFiltersOpen(false);
-    /* eslint-enable react/set-state-in-effect */
-  }, [location.pathname]);
+  }
   useEffect(() => {
     if (!filtersOpen) return;
     const close = (event: KeyboardEvent) => {

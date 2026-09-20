@@ -84,9 +84,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   };
   useEffect(() => () => clearTimeout(lineCopyTimer.current), []);
 
-  /* eslint-disable react/set-state-in-effect -- Changing document or editor mode resets the displayed source line. */
-  useEffect(() => setActiveSourceLine(1), [path, mode]);
-  /* eslint-enable react/set-state-in-effect */
+  const [sourceIdentity, setSourceIdentity] = useState({ path, mode });
+  if (sourceIdentity.path !== path || sourceIdentity.mode !== mode) {
+    setSourceIdentity({ path, mode });
+    setActiveSourceLine(1);
+  }
   const updateActiveSourceLine = (target: HTMLTextAreaElement) => {
     setActiveSourceLine(target.value.slice(0, target.selectionStart).split('\n').length);
     setCaret(target.selectionStart);
