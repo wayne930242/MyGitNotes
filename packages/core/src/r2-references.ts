@@ -81,6 +81,12 @@ export function r2PreviewType(key: string): { kind: R2PreviewKind; contentType: 
   return { kind, contentType };
 }
 
+/** Markdown that embeds a previewable object or links any other one, angle-bracketed so spaces survive. */
+export function r2Reference(key: string): string {
+  const label = (key.split('/').pop() || key).replace(/[\\[\]]/g, '\\$&');
+  return `${r2PreviewType(key).kind === 'file' ? '' : '!'}[${label}](<r2:${key}>)`;
+}
+
 /** Same-origin URL that authorizes the reference against its note before redirecting to the object. */
 export function r2AssetUrl(key: string, notePath: string): string {
   return `/r2-assets/${key.split('/').map(encodeURIComponent).join('/')}?note=${encodeURIComponent(notePath)}`;

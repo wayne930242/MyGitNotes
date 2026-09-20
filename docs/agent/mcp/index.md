@@ -16,7 +16,7 @@ Default transport is **stdio** for local agent integration (e.g. Claude Desktop,
 6. `delete_note`: Removes a note file and creates a corresponding deletion commit.
 7. `read_agent_resource`: Reads an agent instruction or doc file safely; lists available agent resources (`AGENTS.md`, `docs/agent/**`) if `path` is omitted.
 8. `list_assets`: Lists assets within a notebook's asset directory.
-9. `add_asset`: Safely writes an asset file (with optional subfolder directory) and returns the relative Markdown reference link.
+9. `add_asset`: Stores an asset file (with optional subfolder directory) and returns the reference a note links it by. With private R2 storage configured the file is uploaded to `<notebookId>/<directory>/<filename>` in the bucket and the response carries `storage: "r2"`, the object `key` and an `r2:<object-key>` `reference`; otherwise it is written into the notebook asset directory, committed, and returned as a notebook-relative path.
 10. `delete_asset`: Safely removes an asset file from a notebook asset directory and creates a Git commit.
 11. `get_git_status`: Returns branch name, clean/dirty state, and recent commit history.
 12. `git_commit`: Creates an atomic commit across staged/modified files.

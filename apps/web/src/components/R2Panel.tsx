@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Copy, CornerLeftUp, Download, File, Folder, FolderInput, FolderPlus, Trash2, Upload, X } from 'lucide-react';
-import { r2PreviewType } from '@mygitnotes/core/r2-references';
+import { r2PreviewType, r2Reference } from '@mygitnotes/core/r2-references';
 import { Button } from './Button.js';
 import { Preview } from './FilePreview.js';
 import { copyToClipboard } from '../lib/clipboard.js';
@@ -28,12 +28,6 @@ export interface R2PanelProps {
 type Operation = 'mkdir' | 'move' | 'delete';
 const parentOf = (key: string) => key.slice(0, key.lastIndexOf('/'));
 const basename = (key: string) => key.slice(key.lastIndexOf('/') + 1);
-
-/** Markdown for an R2 reference: previewable media embed, anything else links. */
-export function r2Reference(key: string) {
-  const label = basename(key).replace(/[\\[\]]/g, '\\$&');
-  return `${r2PreviewType(key).kind === 'file' ? '' : '!'}[${label}](<r2:${key}>)`;
-}
 
 /** R2 folder listings derived from flat object keys. */
 export function r2Folders(listing: R2Listing, showHidden: boolean) {

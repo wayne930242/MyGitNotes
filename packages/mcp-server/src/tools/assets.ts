@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { assetPath, decodeAsset, isAssetPath, loadWorkspaceConfig, resolveSafePath } from '@mygitnotes/core';
+import { assetPath, assetSubPath, decodeAsset, isAssetPath, loadWorkspaceConfig, putR2Object, r2NotebookPrefix, r2Reference, r2SettingsFromEnv, resolveSafePath } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { assertSafeRepoPath, assertUserWorkspaceBranch } from '../guards.js';
 import type { ToolContext } from './context.js';
@@ -25,14 +25,14 @@ export async function handleListAssets(ctx: ToolContext, args: { notebookId: str
   return { assets: files };
 }
 
-export async function handleAddAsset(ctx: ToolContext, args: { notebookId: string; filename: string; base64Content: string; directory?: string; }) {
-  await assertUserWorkspaceBranch(ctx.repoRoot);
-  const config = loadWorkspaceConfig(ctx.repoRoot);
-  if (!config) return { error: 'Workspace not configured' };
+export interface AssetUpload {
+  filename: string;
+  base64Content: string;
+  directory?: string;
+}
 
-  const nb = config.notebooks.find((n) => n.id === args.notebookId);
-  if (!nb) return { error: `Notebook '${args.notebookId}' not found` };
-
+/** Splits an upload whose `filename` carries folders into the folder and basename the upload uses. */
+function assetTarget(args: AssetUpload) {
   let filename = args.filename;
   let directory = (args.directory || '').trim().replace(/^\/+|\/+$/g, '');
   if (!directory && filename.includes('/')) {
@@ -42,7 +42,36 @@ export async function handleAddAsset(ctx: ToolContext, args: { notebookId: strin
   } else if (filename.includes('/')) {
     filename = path.posix.basename(filename);
   }
+  return { filename, directory };
+}
 
+/**
+ * Stores an asset in the configured private R2 bucket so a binary never enters Git history, and
+ * returns the `r2:` reference a note links it by. Null when R2 is unconfigured, which keeps the
+ * asset in the repository.
+ */
+export async function uploadR2Asset(notebookId: string, args: AssetUpload) {
+  const settings = r2SettingsFromEnv();
+  if (!settings) return null;
+  const { filename, directory } = assetTarget(args);
+  const key = r2NotebookPrefix(notebookId) + assetSubPath(directory, filename);
+  // A create-only PUT reports a taken key instead of replacing an object other notes already link.
+  if (!await putR2Object(settings, key, decodeAsset(args.base64Content))) throw new Error(`R2 object already exists: r2:${key}`);
+  return { success: true as const, storage: 'r2' as const, filename: path.posix.basename(key), key, reference: `r2:${key}`, markdownRef: r2Reference(key) };
+}
+
+export async function handleAddAsset(ctx: ToolContext, args: { notebookId: string; } & AssetUpload) {
+  await assertUserWorkspaceBranch(ctx.repoRoot);
+  const config = loadWorkspaceConfig(ctx.repoRoot);
+  if (!config) return { error: 'Workspace not configured' };
+
+  const nb = config.notebooks.find((n) => n.id === args.notebookId);
+  if (!nb) return { error: `Notebook '${args.notebookId}' not found` };
+
+  const uploaded = await uploadR2Asset(nb.id, args);
+  if (uploaded) return uploaded;
+
+  const { filename, directory } = assetTarget(args);
   const relPath = assetPath(nb, directory, filename);
   const safeFilename = path.posix.basename(relPath);
   const targetPath = resolveSafePath(ctx.repoRoot, relPath);
@@ -54,7 +83,7 @@ export async function handleAddAsset(ctx: ToolContext, args: { notebookId: strin
   const markdownRel = relPath.slice(nb.root.length + 1);
   const commit = await stageAndCommit(ctx.repoRoot, [relPath], `chore(assets): add asset ${safeFilename}`);
 
-  return { success: true, filename: safeFilename, path: relPath, markdownRef: `![${safeFilename}](${markdownRel})`, commit };
+  return { success: true, storage: 'git', filename: safeFilename, path: relPath, reference: markdownRel, markdownRef: `![${safeFilename}](${markdownRel})`, commit };
 }
 
 export async function handleDeleteAsset(ctx: ToolContext, args: { path: string; commitMessage?: string; }) {

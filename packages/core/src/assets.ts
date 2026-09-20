@@ -16,10 +16,14 @@ export function assetInfo(file: string, root: string, hash: string, size: number
 export function assetRoot(nb: NotebookConfig) {
   return `${nb.root}/${nb.assets || 'assets'}`;
 }
-export function assetPath(nb: NotebookConfig, directory: unknown, filename: unknown) {
+/** Validates an upload's folder and filename and joins them into a path relative to the assets root. */
+export function assetSubPath(directory: unknown, filename: unknown) {
   if (typeof directory !== 'string' || directory.includes('\\') || directory.includes('\0') || (directory && directory.split('/').some(p => !p || p.startsWith('.')))) throw new Error('Use a folder path relative to the notebook assets directory.');
   if (typeof filename !== 'string' || !filename || filename.startsWith('.') || /[/\\\0]/.test(filename)) throw new Error('Use a filename without path segments.');
-  return `${assetRoot(nb)}/${directory ? directory + '/' : ''}${sanitizeFilename(filename)}`;
+  return `${directory ? directory + '/' : ''}${sanitizeFilename(filename)}`;
+}
+export function assetPath(nb: NotebookConfig, directory: unknown, filename: unknown) {
+  return `${assetRoot(nb)}/${assetSubPath(directory, filename)}`;
 }
 export function isAssetPath(file: string, nb: NotebookConfig) {
   const prefix = assetRoot(nb) + '/';

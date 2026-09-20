@@ -94,9 +94,15 @@ export async function r2ObjectExists(settings: R2Settings, key: string): Promise
   return (await send(settings, objectUrl(settings, key), { method: 'HEAD' })).ok;
 }
 
+/** Uploads bytes with a create-only PUT; returns false when the key already exists. */
+export async function putR2Object(settings: R2Settings, key: string, body: Uint8Array | string): Promise<boolean> {
+  // `BodyInit` pins its buffer type, while a Node `Buffer` carries the looser `ArrayBufferLike`.
+  return (await send(settings, objectUrl(settings, key), { method: 'PUT', body: body as BodyInit, headers: R2_CREATE_ONLY_HEADERS })).ok;
+}
+
 /** Creates an empty object; returns false when the key already exists. */
-export async function putEmptyR2Object(settings: R2Settings, key: string): Promise<boolean> {
-  return (await send(settings, objectUrl(settings, key), { method: 'PUT', body: '', headers: R2_CREATE_ONLY_HEADERS })).ok;
+export function putEmptyR2Object(settings: R2Settings, key: string): Promise<boolean> {
+  return putR2Object(settings, key, '');
 }
 
 export async function copyR2Object(settings: R2Settings, source: string, destination: string): Promise<void> {
