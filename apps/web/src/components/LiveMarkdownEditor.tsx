@@ -8,6 +8,7 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { codeMirrorTokenTheme, tokenHighlightStyle } from '../lib/codemirror-theme.js';
 import { tags } from '@lezer/highlight';
 import { headingSlug } from '../lib/workspace-links.js';
+import { parseMarkdownOutline } from '../lib/note-navigation.js';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useQueryClient } from '@tanstack/react-query';
@@ -75,6 +76,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
   /* eslint-disable react/refs -- The persistent CodeMirror view reads current callbacks and options through refs. */
   copyLinesCallback.current = onCopyLines;
   /* eslint-enable react/refs */
+  const appliedAnchor = useRef('');
   const lineOffset = useRef(lineNumberOffset);
   /* eslint-disable react/refs -- The persistent CodeMirror view reads current callbacks and options through refs. */
   lineOffset.current = lineNumberOffset;
@@ -213,7 +215,8 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
     editor.current?.dispatch({ effects: lineNumberGutter.current.reconfigure(showLineNumbers ? [lineNumbers({ formatNumber: number => String(number + lineNumberOffset) }), highlightActiveLineGutter()] : []) });
   }, [showLineNumbers, lineNumberOffset]);
   useEffect(() => {
-    if (!location.hash) return;
+    const target = notePath + location.hash;
+    if (!location.hash || appliedAnchor.current === target) return;
     let anchor: string;
     try {
       anchor = headingSlug(decodeURIComponent(location.hash.slice(1)));
@@ -221,8 +224,14 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
       return;
     }
     const frame = requestAnimationFrame(() => {
-      const heading = [...(host.current?.querySelectorAll<HTMLElement>('[data-heading-slug]') || [])].find(node => node.dataset.headingSlug === anchor);
-      heading?.scrollIntoView({ block: 'start' });
+      const view = editor.current;
+      // CodeMirror renders only the lines around the viewport, so a heading below it has no DOM node to
+      // scroll to; the heading is located in the document text and the editor scrolls to its line. The
+      // anchor applies once per note so that later edits leave the reader where they are.
+      const heading = view && parseMarkdownOutline(view.state.doc.toString()).find(entry => headingSlug(entry.label) === anchor);
+      if (!view || !heading) return;
+      appliedAnchor.current = target;
+      view.dispatch({ effects: EditorView.scrollIntoView(heading.from, { y: 'start', yMargin: 20 }) });
     });
     return () => cancelAnimationFrame(frame);
   }, [location.hash, notePath, content]);

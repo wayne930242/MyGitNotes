@@ -539,6 +539,25 @@ try {
     if (offset === null || offset < 0 || offset > 60) throw Error(`Choosing "${label}" in the outline must leave it at the top of the editor, not ${offset}px from it`);
   }
 
+  // Opening a note at a heading anchor reaches a heading CodeMirror has not rendered yet, which has no
+  // DOM node to scroll to.
+  await page.goto(base + '/notebooks/example/notes/root.md#' + encodeURIComponent('Long section 3'), { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.cm-content');
+  let anchoredScroll = -1;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const top = await page.$eval('.cm-scroller', scroller => scroller.scrollTop);
+    if (top === anchoredScroll) break;
+    anchoredScroll = top;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  const anchored = await page.evaluate(() => {
+    const box = document.querySelector('.cm-scroller').getBoundingClientRect();
+    const line = [...document.querySelectorAll('.cm-line')].find(node => node.textContent.trim() === 'Long section 3');
+    return line ? Math.round(line.getBoundingClientRect().top - box.top) : null;
+  });
+  if (anchored === null || anchored < 0 || anchored > 60) throw Error(`Opening a note at a heading anchor must show that heading, not leave it ${anchored}px from the top of the editor`);
+  console.log('PASS outline and anchors: a chosen heading and a note opened at a heading anchor both land at the top of the editor');
+
   await page.goto(base + '/notebooks/example/notes/plain.md', { waitUntil: 'networkidle0' });
   await page.waitForSelector('.cm-content');
   if (!await page.$('[data-live-markdown] .cm-lineNumbers')) await click('Line Numbers');
