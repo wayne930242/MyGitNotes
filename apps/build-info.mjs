@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// This lives under `apps/` rather than `scripts/` because the Vercel sparse checkout lists `apps`
+// and treats `scripts` as a non-deploy path, and `apps/web/vite.config.ts` imports it at build time.
 export const productRoot = fileURLToPath(new URL('../', import.meta.url));
 
 export function readBuildInfo({ root = productRoot, env = process.env } = {}) {

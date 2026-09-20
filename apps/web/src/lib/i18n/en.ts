@@ -884,6 +884,7 @@ export const en = {
   'settings.checkUpdateCore': 'Check & Update Core',
   'settings.updating': 'Updating...',
   'settings.repoRoot': 'Repository Root',
+  'settings.unreleasedBuild': 'unreleased',
   'settings.githubSource': 'Remote source',
   'settings.coreBranch': 'Core Branch',
   'settings.workspaceBranch': 'Workspace Branch',

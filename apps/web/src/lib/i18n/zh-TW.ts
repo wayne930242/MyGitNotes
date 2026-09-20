@@ -885,6 +885,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'settings.checkUpdateCore': '檢查並更新核心',
   'settings.updating': '更新中...',
   'settings.repoRoot': '儲存庫根目錄',
+  'settings.unreleasedBuild': '尚未發布',
   'settings.githubSource': '遠端來源',
   'settings.coreBranch': '核心分支',
   'settings.workspaceBranch': '工作區分支',
