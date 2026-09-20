@@ -57,7 +57,7 @@ import { FocusList } from './components/FocusList.js';
 import { BrowseDock, BrowseDockToggle, CARD_TWO_ROW_HEIGHT } from './components/BrowseDock.js';
 import type { ScreenRow } from '@mygitnotes/core/screen-page';
 import { RightPanel } from './components/RightPanel.js';
-import { FileManager, FileManagerDialog, FileMetadata } from './components/FileManager.js';
+import { FileManager, FileManagerDialog, FileMetadata } from './components/files/index.js';
 import { AgentSystemView } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { CommitModal } from './components/CommitModal.js';

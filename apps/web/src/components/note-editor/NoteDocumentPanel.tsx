@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { AlertTriangle, RotateCcw } from 'lucide-react';
 import { Button } from '../Button.js';
-import { FileManager } from '../FileManager.js';
+import { FileManager } from '../files/index.js';
 import { NoteFrontmatterPanel } from './NoteFrontmatterPanel.js';
 import type { OutlineHeading } from '../../lib/note-navigation.js';
 import type { NotebookMetadataField } from '../../lib/types.js';

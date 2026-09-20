@@ -7,7 +7,7 @@ import { legacyAllNotebooksRoute, notebookRoute, parseWorkspaceRoute, WorkspaceT
 import React, { useEffect, useRef, useState } from 'react';
 import type { ViewMode } from '../lib/types.js';
 import { useNoteEditorRegistry } from '../lib/note-editing.js';
-import { type FileManagerHandle } from '../components/FileManager.js';
+import { type FileManagerHandle } from '../components/files/index.js';
 import { type AgentSystemHandle } from '../components/AgentSystemView.js';
 import type { WorkspaceState } from './workspace-state.js';
 

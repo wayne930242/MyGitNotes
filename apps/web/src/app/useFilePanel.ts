@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { RIGHT_PANEL_RAIL_WIDTH } from '../components/WorkspaceChrome.js';
-import { type FileManagerHandle } from '../components/FileManager.js';
+import { type FileManagerHandle } from '../components/files/index.js';
 import { type FileEntry } from '../lib/files-api.js';
 
 export function useFilePanel() {
