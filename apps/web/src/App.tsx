@@ -24,7 +24,7 @@ import { useWorkspaceSync } from './lib/use-workspace-sync.js';
 import { WorkspaceLinks } from './components/WorkspaceLinks.js';
 import { ImageLightbox } from './components/ImageLightbox.js';
 import { useNavigate } from 'react-router-dom';
-import { notebookRoute, parseWorkspaceRoute } from './lib/routes.js';
+import { notebookRoute, noteTrail, parseWorkspaceRoute } from './lib/routes.js';
 import { readWorkingNotes, updateWorkingNote } from './lib/working-notes.js';
 import { sameValue } from './lib/merge-note.js';
 import React, { useMemo, useState } from 'react';
@@ -170,7 +170,10 @@ const AppContent: React.FC = () => {
   });
   const closeZoom = () => {
     setEditingNote(null);
-    navigate(returnTo, { replace: true });
+    const trail = noteTrail(location.state);
+    const previous = trail[trail.length - 1];
+    if (previous) navigate(previous, { replace: true, state: trail.length > 1 ? { noteTrail: trail.slice(0, -1) } : null });
+    else navigate(returnTo, { replace: true });
   };
 
   const { focusCommands, shortcutMode, setShortcutMode } = useShortcutSurface({ noteFocus, focusDisplay, t, activeTab, showFocus, zoomFocusNote });

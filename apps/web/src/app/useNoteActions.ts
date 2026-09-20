@@ -1,6 +1,6 @@
 import { type NoteListItem } from '@mygitnotes/core/note-query';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { noteRoute, parseWorkspaceRoute, WorkspaceTab } from '../lib/routes.js';
+import { noteRoute, noteTrail, parseWorkspaceRoute, WorkspaceTab } from '../lib/routes.js';
 import React from 'react';
 import { fetchAssets } from '../lib/api.js';
 import { useNoteEditorRegistry } from '../lib/note-editing.js';
@@ -34,7 +34,10 @@ export function useNoteActions({ activeTab, editorRegistry, setEditingNote, conf
       query.set('returnTo', editorRoute.note ? returnTo : location.pathname + location.search + location.hash);
       if (selectedFolder && note.notebookId === selectedNotebookId) query.set('folder', selectedFolder);
       else query.delete('folder');
-      navigate(noteRoute(notebook.id, note.path.slice(notebook.root.length + 1)) + '?' + query.toString() + (anchor ? '#' + encodeURIComponent(anchor) : ''));
+      // `returnTo` stays the browse view behind the editor, so a note reached from another note
+      // stacks that note on the trail instead, and closing walks back the way the reader came.
+      const trail = editorRoute.note ? [...noteTrail(location.state), location.pathname + location.search + location.hash] : [];
+      navigate(noteRoute(notebook.id, note.path.slice(notebook.root.length + 1)) + '?' + query.toString() + (anchor ? '#' + encodeURIComponent(anchor) : ''), { state: trail.length ? { noteTrail: trail } : null });
     }
     const targetNotebook = note.notebookId || selectedNotebookId;
     if (targetNotebook) {

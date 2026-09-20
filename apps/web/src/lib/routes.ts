@@ -85,6 +85,13 @@ export function noteReturnRoute(search: string, notebook: string, folder: string
   return notebookRoute(notebook, folder) + (query.size ? '?' + query.toString() : '');
 }
 
+// The notes a reader opened on the way to the current one, kept in history state so `returnTo` stays
+// the browse view behind the editor; a history entry with no trail closes to `returnTo` as before.
+export function noteTrail(state: unknown): string[] {
+  const trail = (state as { noteTrail?: unknown; } | null)?.noteTrail;
+  return Array.isArray(trail) ? trail.filter((entry): entry is string => typeof entry === 'string' && entry.startsWith('/') && !entry.startsWith('//') && !entry.includes('\\')) : [];
+}
+
 export function screenLaneRoute(laneId: string) {
   return `/screen/lanes/${encodeURIComponent(laneId)}`;
 }

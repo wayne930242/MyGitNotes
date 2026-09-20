@@ -181,6 +181,19 @@ try {
       await page.bringToFront();
       assert.equal(page.url(), internalUrl, `${text}: a modifier click must leave the current tab on the source note`);
     };
+    // Closing a note reached from another note returns to that note, and closing again reaches the browse list.
+    await openInternal();
+    await clickText('Relative note');
+    await page.waitForFunction(() => location.pathname === '/notebooks/example/notes/target.md');
+    await page.waitForSelector('button.note-close');
+    await page.click('button.note-close');
+    await page.waitForFunction(() => location.pathname !== '/notebooks/example/notes/target.md');
+    assert.equal(new URL(page.url()).pathname, '/notebooks/example/notes/internal-links.md', 'Closing a note opened from a note must return to that note');
+    await page.waitForSelector('.live-md-rendered table a');
+    await page.click('button.note-close');
+    await page.waitForFunction(() => !location.pathname.includes('/notes/'));
+    assert.equal(new URL(page.url()).pathname, '/notebooks/example', 'Closing the first note must return to the browse list');
+
     await openInternal();
     await expectPopupFrom('Absolute note', newTabKey, `${base}/notebooks/example/notes/target.md`);
     await expectPopupFrom('Absolute route', newTabKey, `${base}/notes`);
