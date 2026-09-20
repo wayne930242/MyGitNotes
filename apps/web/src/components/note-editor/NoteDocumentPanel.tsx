@@ -24,6 +24,8 @@ export interface NoteDocumentPanelProps {
   stepFind: (delta: number) => void;
   findInputRef: React.RefObject<HTMLInputElement>;
   outline: OutlineHeading[];
+  /** Frontmatter lines, so a heading is listed by its line in the file rather than in the body. */
+  lineNumberOffset: number;
   outlineIndex: number;
   setOutlineIndex: (index: number) => void;
   chooseOutline: (index: number, closeAfter?: boolean) => void;
@@ -61,7 +63,7 @@ export interface NoteDocumentPanelProps {
 }
 
 /** The zoom/pane editor's document panel: its tab strip and the find, outline, frontmatter, asset and git sections it switches between. */
-export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isGitPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, notePath, branch, editorState, editorStatus, autoSave, readOnly, isDirty, canRestore, confirmRestore, onRestoreClick }: NoteDocumentPanelProps) {
+export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isGitPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, notePath, branch, editorState, editorStatus, autoSave, readOnly, isDirty, canRestore, confirmRestore, onRestoreClick }: NoteDocumentPanelProps) {
   const { t } = useTranslation();
 
   const sections = (
@@ -128,7 +130,7 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
                     onClick={() => chooseOutline(index)}
                   >
                     <span>{heading.label}</span>
-                    <small>{heading.line}</small>
+                    <small>{heading.line + lineNumberOffset}</small>
                   </button>
                 ))}
               </nav>

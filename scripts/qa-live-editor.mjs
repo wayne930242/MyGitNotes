@@ -500,6 +500,21 @@ try {
   if (errors.length) throw Error(errors.join('; '));
   console.log('PASS live Markdown: formatting, active syntax, images, tables, tasks, Unicode, undo and asset insertion');
 
+  // The outline lists a heading by its line in the file, the same number the gutter prints, rather
+  // than by its line within the body a note's frontmatter is stripped from.
+  await page.goto(base + '/notebooks/example/notes/root.md', { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.cm-content');
+  if (!await page.$('[data-live-markdown] .cm-lineNumbers')) await click('Line Numbers');
+  await click('Document tools');
+  await page.click('.note-panel-tabs [role="tab"][aria-label="Outline"]');
+  await page.waitForSelector('.note-outline nav button');
+  const headingLine = await page.evaluate(() => {
+    const top = [...document.querySelectorAll('.cm-line')].find(line => line.textContent.trim() === 'Root Note')?.getBoundingClientRect().top;
+    return { outline: document.querySelector('.note-outline nav button small')?.textContent.trim(), gutter: [...document.querySelectorAll('[data-live-markdown] .cm-lineNumbers .cm-gutterElement')].find(node => Math.abs(node.getBoundingClientRect().top - top) < 2)?.textContent.trim() };
+  });
+  const realHeadingLine = String(fs.readFileSync(path.join(root, 'notes/example/root.md'), 'utf8').split('\n').indexOf('# Root Note') + 1);
+  if (headingLine.outline !== realHeadingLine || headingLine.gutter !== realHeadingLine) throw Error(`The outline and gutter must name the heading's line in the file (${realHeadingLine}): ${JSON.stringify(headingLine)}`);
+
   await page.goto(base + '/notebooks/example/notes/plain.md', { waitUntil: 'networkidle0' });
   await page.waitForSelector('.cm-content');
   if (!await page.$('[data-live-markdown] .cm-lineNumbers')) await click('Line Numbers');
