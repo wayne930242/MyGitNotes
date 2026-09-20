@@ -156,7 +156,36 @@ try {
   await page.reload({ waitUntil: 'networkidle0' });
   await page.waitForSelector('.cm-content');
   await page.waitForSelector('.note-youtube-embed');
-  console.log('PASS YouTube modes: alignment, persistence, inline playback, and CodeMirror virtualization continuity');
+  // A block widget's margin never reaches CodeMirror's height map, so a click below the embed lands
+  // short of the line under the pointer; the same drift returns whenever the embed resizes unmeasured.
+  await page.evaluate(() => {
+    const scroller = document.querySelector('.cm-scroller');
+    scroller.scrollTop += document.querySelector('.note-youtube-embed').getBoundingClientRect().top - scroller.getBoundingClientRect().top - 8;
+  });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const belowEmbed = await page.evaluate(() => {
+    const box = document.querySelector('.cm-scroller').getBoundingClientRect();
+    // The medium mode below grows the embed, so the target keeps room to stay on screen without scrolling.
+    return [...document.querySelectorAll('.cm-line')].find(line => /^Long reading paragraph \d+\.$/.test(line.textContent) && line.getBoundingClientRect().top > box.top + 20 && line.getBoundingClientRect().bottom < box.bottom - 220)?.textContent || '';
+  });
+  if (!belowEmbed) throw Error('No reading paragraph is visible below the YouTube embed');
+  const clickLine = async text => {
+    const point = await page.evaluate(text => {
+      const box = [...document.querySelectorAll('.cm-line')].find(line => line.textContent === text)?.getBoundingClientRect();
+      if (!box) throw Error(`Missing line: ${text}`);
+      return { x: box.left + 20, y: box.top + box.height / 2 };
+    }, text);
+    await page.mouse.click(point.x, point.y);
+    return page.evaluate(() => window.getSelection().anchorNode?.textContent || '');
+  };
+  const landed = await clickLine(belowEmbed);
+  if (landed !== belowEmbed) throw Error(`Clicking below a YouTube embed placed the caret in "${landed}" instead of "${belowEmbed}"`);
+  await page.click('[data-youtube-mode-option="medium"]');
+  await new Promise(resolve => setTimeout(resolve, 200));
+  const afterResize = await clickLine(belowEmbed);
+  if (afterResize !== belowEmbed) throw Error(`After the embed grew, clicking placed the caret in "${afterResize}" instead of "${belowEmbed}"`);
+  await page.click('[data-youtube-mode-option="thumbnail"]');
+  console.log('PASS YouTube modes: alignment, persistence, inline playback, CodeMirror virtualization continuity, and click mapping below the embed');
   if (await page.$('[data-live-markdown] .cm-lineNumbers')) throw Error('Live preview line numbers are visible by default');
   if (await page.$eval('button[aria-label="Line Numbers"]', e => e.getAttribute('aria-pressed')) !== 'false') throw Error('Line Numbers toggle does not report unpressed while hidden');
   await click('Source');

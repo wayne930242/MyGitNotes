@@ -289,6 +289,11 @@ export class YouTubeWidget extends WidgetType {
     return this.owner === other.owner && this.videoId === other.videoId && this.start === other.start && this.sourceUrl === other.sourceUrl && this.from === other.from && this.labels === other.labels;
   }
   toDOM(view: EditorView) {
+    // CodeMirror measures a block widget's own box, which excludes its margins, so the spacing
+    // around the embed lives on this wrapper as padding; a margin here would shift every click
+    // below it by the margin CodeMirror never counted.
+    const wrapper = document.createElement('div');
+    wrapper.className = 'note-youtube-block';
     const container = document.createElement('div');
     container.className = 'note-youtube-embed';
     container.dataset.videoId = this.videoId;
@@ -317,7 +322,8 @@ export class YouTubeWidget extends WidgetType {
       view.focus();
     });
 
-    return container;
+    wrapper.appendChild(container);
+    return wrapper;
   }
   get estimatedHeight() {
     return 280;
