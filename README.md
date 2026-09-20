@@ -1,316 +1,150 @@
 # MyGitNotes
 
-A high-density, local-first workspace for Markdown notes, flashcard learning, reading screens, and knowledge graphs. Keep your data in Git and deploy with Docker, Docker Compose, or Vercel.
-
-Your Markdown, repository, deployment, commit history, and agent access remain under your control.
+A local-first workspace for Markdown notes, flashcards, reading screens, and knowledge graphs. Your content stays in Git; run the interface locally or deploy with Docker, Docker Compose, or Vercel.
 
 [English](README.md) · [繁體中文](README.zh-TW.md)
 
-[Live Demo](https://my-gh-core.vercel.app) · [Flashcard Learning Demo](https://my-gh-core.vercel.app/screen/lanes/explore) · [Example Repository](https://github.com/wayne930242/MyGitNotes/tree/main)
+[Live Demo](https://my-gh-core.vercel.app) · [Flashcard Demo](https://my-gh-core.vercel.app/screen/lanes/explore) · [Example Workspace](https://github.com/wayne930242/MyGitNotes/tree/main)
 
-## Design logic
+## How it works
 
-![MyGitNotes architecture](docs/assets/mygitnotes-architecture-en.png)
+Markdown is the content source, Git records and publishes changes, and the repository owner controls credentials and access. A local checkout, Docker container, or Vercel deployment provides the interface and MCP endpoint. Remote mode reads and writes the selected GitHub or GitLab repository; Compose can provide Redis for sessions and MCP grants.
 
-The boundaries are intentional:
+One repository uses two branches in separate worktrees:
 
-- **Markdown owns the content.** There is no proprietary note database to export from.
-- **Git owns history and publication.** You choose what to commit and can inspect or revert every change.
-- **GitHub or GitLab owns remote persistence.** Docker / Compose or Vercel provides the interface and MCP transport. Compose runs its own Redis with a persistent volume for encrypted sessions and MCP grants. Docker alone can use native Redis or a session volume; Vercel uses Redis REST. Notes stay in Git.
-- **You own the system boundary.** You choose the repository, branch, deployment, credentials, Core updates, and every agent grant.
-- **The UI and agents share the same rules.** Path guards, branch guards, revision checks, and repository permissions apply to both.
+- **core** contains product source, packages, tests, scripts, and documentation.
+- **main** contains workspace configuration, notebooks, assets, and workspace Agent settings.
 
-## Why combine both sides
+Core updates fast-forward the product branch and preserve workspace content. The product source does not store personal notes.
 
-The market usually treats these as separate product models:
+The Files page manages notebook folders, Markdown notes, text files, and attachments. Uploads support 3 MiB; reads and changed content support 5 MiB, with up to 200 changed files per operation.
 
-- **Local-first, like [Obsidian](https://obsidian.md/blog/free-your-notes/):** ordinary files on your device, offline access, and direct editing from an IDE, CLI, or local agent.
-- **Cloud-document, like [Craft](https://support.craft.do/en/account-and-subscription/data-and-security/data-storage) or [Notion](https://www.notion.com/help/notion-for-web):** a polished browser and multi-device experience with automatic sync, sharing, and remote collaboration.
+## Deploy
 
-Even products that support both models often present them as alternatives. Craft, for example, supports local [External Locations](https://support.craft.do/en/account-and-subscription/storage-and-recovery/external-locations), but sharing and collaboration are unavailable there.
+Choose one path. Prepare the listed accounts and values first, then follow its numbered steps in order.
 
-MyGitNotes connects both interfaces to the same Markdown and Git workspace. The local UI and local agents edit the files directly; Git syncs them to GitHub or GitLab; a self-hosted container or Vercel exposes the same repository through a high-density remote note UI and HTTP MCP. There is no second cloud copy to export, import, or reconcile.
+### 1. Local development with a workspace checkout
 
-## What it is
+**Prepare:** Node.js 22+, pnpm 9+, Git 2.42+, and a GitHub checkout of MyGitNotes Core. No OAuth account is needed for local mode.
 
-MyGitNotes turns a Git repository into a focused workspace for notes, documents, assets, and AI agents. You work through a purpose-built note UI while Markdown files, Git history, and repository permissions remain the source of truth.
+1. Clone the product repository: `git clone --branch core --single-branch https://github.com/wayne930242/MyGitNotes.git mygitnotes`
+2. Enter the Core checkout: `cd mygitnotes`
+3. Install dependencies: `pnpm install`
+4. Build the product packages needed by the bootstrap script: `pnpm build`
+5. Create a local workspace checkout and set `MYGITNOTES_LOCAL_PATH` in .env: `pnpm bootstrap-workspace`
+6. Start the local server and web app: `pnpm dev`
+7. Open http://localhost:5173; the workspace created in step 5 appears in the Notes view.
 
-It runs in two modes:
+The bootstrap command creates or checks out the main branch in a sibling worktree, then records its path in .env. To use an existing workspace instead, set `MYGITNOTES_LOCAL_PATH` in .env to its absolute path before step 6. Local mode does not require GitHub sign-in.
 
-- **Local:** the UI reads and writes your local repository directly.
-- **Remote:** Docker / Docker Compose or Vercel serves the UI and an HTTP MCP endpoint; GitHub or GitLab stores the files and commit history.
+### 2. Docker Compose with a remote repository
 
-The same workspace can stay fully local, travel through Git, or be accessed from a browser and MCP clients. Choose a self-hosted Node.js container or a serverless deployment to suit your infrastructure.
+**Prepare:** Docker with Compose, a public URL or http://localhost:4321, and a session secret. For GitHub sign-in, prepare a GitHub OAuth App: set its Homepage URL to `APP_URL` and callback to `APP_URL`/api/auth/github/callback. For GitLab, prepare the GitLab OAuth App in path 7 instead. Generate `SESSION_SECRET` before step 1 with `openssl rand -hex 32`. Compose supplies Redis in its private network, so no Redis account is needed.
 
-## Repository model
+1. Copy the environment template: `cp docker.env.example .env.docker`
+2. In .env.docker, set `MYGITNOTES_SOURCE=github`, `MYGITNOTES_REPOSITORY=owner/repo`, `MYGITNOTES_BRANCH=main`, `APP_URL`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_APP_TYPE=oauth-app`.
+3. Fill `SESSION_SECRET` with the value generated in Prepare.
+4. Check the resolved Compose configuration: `docker compose -f compose.yaml config --quiet`
+5. Build and start MyGitNotes and Redis: `docker compose -f compose.yaml up -d --build`
+6. Open `APP_URL`; the Notes view loads and GitHub sign-in opens the OAuth App configured in step 2.
 
-One repository holds two unrelated branches, each checked out in its own worktree:
+Compose publishes the app on 127.0.0.1:4321 by default and stores Redis data in the redis-data volume. Set `MYGITNOTES_PORT` to change the browser-facing port; use the same URL in `APP_URL`.
 
-- **`core`** — product source, packages, tests, scripts, and documentation. It contains no personal notes. A workspace only fast-forwards it from upstream.
-- **`main`** — workspace content only: `.mygitnotes.yaml`, notebook roots such as `notes/**`, assets, and workspace Agent settings (`AGENTS.md`, `CLAUDE.md`, `.agents/`, `.claude/`, `.codex/`, `.github-notes-*.yaml`). It never merges `core`.
+### 3. Plain Docker with a remote repository
 
-`pnpm dev` runs from the `core` worktree and edits the `main` worktree named by `MYGITNOTES_LOCAL_PATH` in `.env`. This separation lets the application evolve without taking ownership of your content.
+**Prepare:** Docker, `APP_URL` as http://localhost:4321 or a public HTTPS origin, and a persistent Docker volume for encrypted sessions and MCP grants. For GitHub sign-in, set the OAuth App Homepage URL to `APP_URL` and callback to `APP_URL`/api/auth/github/callback; for GitLab, prepare the OAuth App in path 7 instead. Generate `SESSION_SECRET` before step 1 with `openssl rand -hex 32`.
 
-A `main` created before this split that still carries the product converts once; see [Converting an older workspace](#converting-an-older-workspace).
+1. Copy the environment template: `cp docker.env.example .env.docker`
+2. In .env.docker, set `MYGITNOTES_SOURCE=github`, `MYGITNOTES_REPOSITORY=owner/repo`, `MYGITNOTES_BRANCH=main`, `APP_URL`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_APP_TYPE=oauth-app`; set `REDIS_URL` here only when using your own Redis.
+3. Fill `SESSION_SECRET` with the value generated in Prepare.
+4. Build the image: `docker build -t mygitnotes:local .`
+5. Create persistent session storage: `docker volume create mygitnotes-sessions`
+6. Start the container:
+   `docker run -d --name mygitnotes --init --restart unless-stopped -p 127.0.0.1:4321:4321 --env-file .env.docker --mount type=volume,source=mygitnotes-sessions,target=/app/.github-notes-sessions mygitnotes:local`
+7. Open `APP_URL`; the Notes view loads and GitHub sign-in opens the OAuth App configured in step 2.
 
-## Files
+The volume in step 5 preserves sessions, provider credentials, and MCP grants across container replacements. When `REDIS_URL` is set in step 2, native Redis takes precedence over Redis REST.
 
-The **Files** page and file manager dialog manage directories, Markdown notes, UTF-8 text files, and attachments within the selected notebook. Create empty text files, edit source with syntax highlighting, upload and preview attachments, or rename, move, and delete files. Hidden files are off by default. Folder information and the `index.md` entry point share this interface.
+For public access from paths 2 or 3, set `APP_URL` to the HTTPS origin and route the reverse proxy to 127.0.0.1:4321. Preserve the public Host header, forward /api/*, /mcp/*, /raw-assets/*, and /r2-assets/*, and allow streamed MCP responses. A proxy in another container must share the app network and forward to mygitnotes:4321.
 
-Notes have a **Move** action in list, card, kanban, and editor views. **Insert image** opens the same browser in read-only selection mode. Moves update Markdown links and Screen / Study references while retaining attachment hashes and study identities.
+### 4. Local checkout inside a container
 
-Local changes remain in the working tree until you use Commit. GitHub and GitLab operations create revision-checked atomic commits. Uploads support 3 MiB; file reads and changed content support 5 MiB, with up to 200 changed files per operation. Operations load at most 32 MiB of affected files and reference documents; browsing does not load every file's contents.
+**Prepare:** Docker, Git, and an existing workspace checkout on main with .mygitnotes.yaml and your notes. On Linux, give UID/GID 1000:1000 read/write access to the checkout.
 
-## Quick start
+1. Set `WORKSPACE_PATH` to the absolute workspace path: `export WORKSPACE_PATH=/absolute/path/to/workspace`
+2. Set the workspace commit author: `git -C "$WORKSPACE_PATH" config user.name "Your Name"`
+3. Set the workspace commit email: `git -C "$WORKSPACE_PATH" config user.email you@example.com`
+4. Check the bind mount and Compose settings: `docker compose -f compose.local.yaml config --quiet`
+5. Build and start the container: `docker compose -f compose.local.yaml up -d --build`
+6. Open http://localhost:4321; the mounted workspace appears in the Notes view.
 
-Requires Node.js 22+, pnpm 9+, and Git 2.42+. (On pnpm 10+, dependency build scripts are configured via `allowBuilds` in `pnpm-workspace.yaml` or `pnpm approve-builds`).
+This mode is an anonymous desktop workflow restricted to loopback hosts. Local edits and Screen / Study YAML files persist in the mounted checkout. Configure remote Git credentials there to commit and sync.
 
-```bash
-git clone <repository-url> mygitnotes   # checks out core
-cd mygitnotes
-pnpm install
-pnpm bootstrap-workspace  # Creates main in ../mygitnotes-notes and points .env at it; --path <dir>, --no-examples
-pnpm dev                 # Compiles @mygitnotes packages, then starts local-server and web
-```
+### 5. Vercel through GitHub Actions sparse checkout (default)
 
-`bootstrap-workspace` creates `main` as an orphan branch in a sibling worktree, fills it from the Core templates in one commit, and writes `MYGITNOTES_LOCAL_PATH` into `.env`. To deploy the workspace to Vercel, follow the steps it prints or [Vercel deployment](#vercel-deployment-optional).
+**Prepare:** A Vercel project, GitHub repository containing the core and main branches, and an Upstash Redis database. For GitHub sign-in, prepare a GitHub OAuth App; for GitLab sign-in, prepare the GitLab OAuth App in path 7. For GitHub sign-in, set the OAuth callback to https://<your-project>.vercel.app/api/auth/github/callback; for GitLab, use the callback in path 7. Generate `SESSION_SECRET` before step 1 with `openssl rand -hex 32`. Install the Vercel and GitHub CLIs. Create `VERCEL_TOKEN` in Vercel Account Settings → Tokens before step 1, scoped to the team that owns this project; save its value.
 
-Open [http://localhost:5173](http://localhost:5173); set `MYGITNOTES_WEB_PORT` in `.env` to use a different port. The development commands use the local repository and do not require GitHub sign-in. Edits write to the `main` worktree on disk; commit and sync them there or from the Changes panel.
+1. Authenticate the Vercel CLI: `vercel login`
+2. Authenticate the GitHub CLI: `gh auth login`
+3. Link the Vercel project from the Core checkout: `vercel link`. Read orgId and projectId from the resulting .vercel/project.json for steps 10 and 11.
+4. Copy the environment template: `cp .env.example .env`
+5. Fill .env with the runtime fields below. Use the workspace repository and main branch, the callback URL and `SESSION_SECRET` from Prepare, and the Redis REST URL and token from Upstash.
+6. Import those values into Vercel production: `pnpm env:vercel production`
+7. In Vercel, open **Settings → Git** and disconnect the Git integration so it does not start a second, full-repository deployment.
+8. Set the default GitHub repository for gh to the repository that contains this workflow; replace OWNER/WORKSPACE_REPO with its owner and name: `gh repo set-default OWNER/WORKSPACE_REPO`
+9. Store the token prepared above as a GitHub Actions secret: `gh secret set VERCEL_TOKEN` (paste it when prompted)
+10. Replace ORG_ID with orgId from step 3 and add it as a GitHub Actions variable: `gh variable set VERCEL_ORG_ID --body ORG_ID`
+11. Replace PROJECT_ID with projectId from step 3 and add it as a GitHub Actions variable: `gh variable set VERCEL_PROJECT_ID --body PROJECT_ID`
+12. Run the production workflow from core: `gh workflow run deploy-vercel-sparse.yml --ref core`
+13. Wait with `gh run watch`; then confirm the deployment is Ready in `vercel ls --prod` and the domain serves the Notes view.
 
-To open another checkout:
-
-```bash
-REPO_ROOT=/absolute/path/to/workspace pnpm dev
-```
-
-To update Core, run in the `core` worktree:
-
-```bash
-git remote add upstream <product-repository-url>   # when you cloned your own fork
-pnpm update-core      # fast-forwards core, then migrates the configured workspace
-pnpm install && pnpm build
-```
-
-`pnpm migrate-workspace` runs the workspace schema migration on its own. The local server refuses to start when the workspace `schema_version` does not match the one this Core supports and names the command that fixes it.
-
-### Converting an older workspace
-
-A workspace whose `main` still carries the product converts once:
-
-```bash
-# in the workspace checkout on a clean main
-pnpm convert-workspace     # one commit that removes the product paths from main
-git worktree add --track -b core ../mygitnotes-core origin/core   # use upstream/core when you cloned your own fork
-```
-
-`convert-workspace` fetches the current `core`, removes its product paths and every file identical to the Core revision `main` last merged. Workspace Agent settings and workspace-owned files inside shared folders, such as `docs/specs/**` or an edited `.gitignore`, stay; the command lists them. History is not rewritten. Then set `MYGITNOTES_LOCAL_PATH` in the `core` worktree's `.env` to this checkout and run `pnpm install && pnpm dev` there. `update-core` runs only on `core`. Move a Vercel deployment to `core` as described in [Vercel deployment](#vercel-deployment-optional).
-
-## Docker and Docker Compose deployment
-
-The container serves the built web UI, API, assets, and Streamable HTTP MCP on port `4321`. It supports local, GitHub, and GitLab sources. Build from the product checkout; remote notes stay in your selected workspace repository and branch.
-
-### Remote repository with Docker Compose
-
-```bash
-cp docker.env.example .env.docker
-# Edit .env.docker: repository, APP_URL, OAuth credentials, SESSION_SECRET.
-# Generate SESSION_SECRET once with: openssl rand -hex 32
-
-docker compose up -d --build
-docker compose logs -f mygitnotes
-```
-
-Compose starts both MyGitNotes and Redis, waits for Redis health, and connects over an internal network using `REDIS_URL=redis://redis:6379`. Redis uses append-only persistence on the `redis-data` volume and has no published host port. This deployment needs no Upstash account.
-
-Open [http://localhost:4321](http://localhost:4321). For public access, route your HTTPS reverse proxy to `127.0.0.1:4321`, preserve the public Host header, and set `APP_URL=https://notes.example.com`. Register `${APP_URL}/api/auth/github/callback` with your GitHub OAuth App, or use the [GitLab settings](#gitlab-deployment) below. Forward all paths, including `/api/*`, `/mcp/*`, `/raw-assets/*`, and `/r2-assets/*`, and allow streamed MCP responses. A proxy running in another container should share the application network and forward to `mygitnotes:4321`.
-
-Compose publishes the port on localhost. Set `MYGITNOTES_PORT` to change the host port and update `APP_URL` to the URL used by your browser. Set `MYGITNOTES_ENV_FILE` to use a different environment file. Sign in and create a connection under **Settings → MCP Access Control** to use `${APP_URL}/mcp/<token>`.
-
-### Remote repository with Docker
-
-Use the same `.env.docker` file:
-
-```bash
-docker build -t mygitnotes:local .
-docker volume create mygitnotes-sessions
-docker run -d --name mygitnotes --init --restart unless-stopped \
-  -p 127.0.0.1:4321:4321 \
-  --env-file .env.docker \
-  --mount type=volume,source=mygitnotes-sessions,target=/app/.github-notes-sessions \
-  mygitnotes:local
-```
-
-### Local checkout in a container
-
-Use an existing workspace checkout on `main`, with `.mygitnotes.yaml` and your notes. The container runs as UID/GID `1000:1000`; give that user read/write access to the mounted checkout on Linux and configure a Git author in the workspace for commits (`git config user.name` and `git config user.email`).
-
-```bash
-WORKSPACE_PATH=/absolute/path/to/workspace \
-  docker compose -f compose.local.yaml up -d --build
-```
-
-Or run the image directly:
-
-```bash
-docker run -d --name mygitnotes-local --init --restart unless-stopped \
-  -p 127.0.0.1:4321:4321 \
-  -e MYGITNOTES_SOURCE=local -e MYGITNOTES_LOCAL_PATH=/workspace \
-  -e APP_URL=http://localhost:4321 \
-  --mount type=bind,source=/absolute/path/to/workspace,target=/workspace \
-  mygitnotes:local
-```
-
-Open `http://localhost:4321`. Local mode is an anonymous desktop workflow restricted to loopback hosts; for an internet-facing site, select GitHub or GitLab with OAuth. Local edits and Screen/Study YAML files persist in the mounted checkout. Commit and sync (pull with rebase, then push) from the Changes panel; configure remote Git credentials separately when needed.
-
-### Persistence and updates
-
-Compose stores encrypted sessions, provider credentials, and MCP grants in its own Redis. Back up the `redis-data` volume and retain the same `SESSION_SECRET` when replacing containers. The plain Docker example uses the `mygitnotes-sessions` volume instead; set `REDIS_URL=redis://...` or `rediss://...` to connect to your own Redis. Native Redis takes precedence over REST settings. Instances in one deployment share the store and secret; separate deployments use separate stores or unique Redis namespaces via `MYGITNOTES_SESSION_NAMESPACE`, and at most one deployment on a shared store leaves it empty. Vercel uses Redis REST because its filesystem is ephemeral.
-
-After updating the product checkout, run `docker compose up -d --build`. `docker compose down` preserves the Redis volume; `docker compose down -v` deletes it and invalidates stored sessions and grants. For local mode, use `-f compose.local.yaml` for update and stop commands. The image healthcheck checks HTTP liveness; verify `/api/workspace` separately for source access.
-
-See the [Compose files](compose.yaml), [local configuration](compose.local.yaml), [environment template](docker.env.example), and [Docker Compose reference](https://docs.docker.com/reference/compose-file/services/).
-
-## Private R2 assets (optional)
-
-R2 is optional. Recommend it only when a workspace has large files, such as scanned PDFs, recordings, or videos, that would bloat the repository or push a hosted repository archive past its size limit; ordinary images and attachments belong in the notebook. Store those large files in a private Cloudflare R2 bucket and reference the object key from a note:
-
-```markdown
-![Core rules](<r2:trpg/Tales from the old west/Core_Rules.pdf>)
-[Download the map](r2:maps/region.webp)
-```
-
-An image reference to a PDF, image, video, or audio file previews inline; other files and plain links open in a new tab. Wrap keys containing spaces in `<...>` or percent-encode them.
-
-Set `MYGITNOTES_R2_ACCOUNT_ID`, `MYGITNOTES_R2_ACCESS_KEY_ID`, `MYGITNOTES_R2_SECRET_ACCESS_KEY`, and `MYGITNOTES_R2_BUCKET` in the deployment environment (Vercel, Docker, or the local server's shell) with an R2 token scoped to the bucket. A read-only token only previews referenced objects; managing objects from the Files page requires Object Read & Write. `/r2-assets/<key>?note=<note path>` reads that note with the requester's workspace permission and confirms it references the key; it then redirects to a presigned URL valid for 5 minutes, so the browser downloads the object directly from R2 without the serverless response size limit. Anyone who cannot read the note, or requests a key the note does not reference, receives 404. Set `MYGITNOTES_R2_ENDPOINT` only to point at an S3-compatible stand-in such as a local MinIO during development.
-
-Users with workspace write access manage R2 from the Files page: the **R2** section below the notebook folders lists objects under `<notebook id>/` in the bucket. Upload sends the file from the browser to R2 through a 15-minute presigned PUT URL, so large files never pass through the server. New folder, Move / rename, and Delete work like repository files; Move / rename rewrites every `r2:` reference in workspace notes in the same operation, and Delete lists the notes that still reference the object. In the note editor, **Insert image → R2** inserts `![name](<r2:key>)` for previewable media and `[name](<r2:key>)` for other files. Listing, preview from the Files page, upload, and every change require the same write permission as file changes; read-only sessions and MCP grants cannot reach them. The tutorial note `getting-started/large-files-r2.md` in the demo workspace walks through the flow.
-
-Browser uploads need a bucket CORS rule that allows `PUT` (plus `GET` and `HEAD`) from the application origin with any request header, for example:
-
-```json
-[{ "AllowedOrigins": ["https://notes.example.com"], "AllowedMethods": ["GET", "HEAD", "PUT"], "AllowedHeaders": ["*"], "ExposeHeaders": ["ETag"], "MaxAgeSeconds": 3600 }]
-```
-
-You can still upload objects with `wrangler r2 object put` or the Cloudflare dashboard.
-
-## Vercel deployment (optional)
-
-Deploy the `core` branch to your own Vercel project; the deployment reads notes from `main` at runtime through the GitHub or GitLab source. The included [`vercel.json`](vercel.json) builds the web app and routes `/api/*`, `/mcp/*`, `/raw-assets/*`, and `/r2-assets/*` to the serverless API.
-
-### Default: GitHub Actions with sparse checkout
-
-[`deploy-vercel-sparse.yml`](.github/workflows/deploy-vercel-sparse.yml) checks out only the product paths in [`.github/vercel-sparse-paths.txt`](.github/vercel-sparse-paths.txt), builds with the Vercel CLI, and deploys production. Notes, images, and fonts are never downloaded, so deploy time does not grow with the workspace. The workflow runs on pushes to `core`; the optional `MYGITNOTES_DEPLOY_BRANCH` repository variable names a different deploy branch. Pushes that change product paths deploy; note-only pushes do not. Updating Core keeps the path list current, and `pnpm check:vercel-sparse-paths --core` fails when Core adds a build or runtime path the list misses.
-
-Until the settings below exist, the workflow skips with a notice and never fails. `pnpm bootstrap-workspace` prints the same steps.
-
-1. Run `vercel link` and read `orgId` and `projectId` from `.vercel/project.json`.
-2. Disconnect the project's Git integration in Vercel (**Settings → Git**) so pushes do not also trigger a full-clone deployment.
-3. Set the runtime environment variables below, for example with `pnpm env:vercel production`.
-4. Create `VERCEL_TOKEN` in the Vercel dashboard (**Account Settings → Tokens**) with **Scope** set to the team that owns the project. The Vercel CLI login cannot create tokens through the API.
-5. Configure the GitHub workspace repository. A workspace with an `upstream` remote can make `gh` target MyGitNotes, so set the default repository first:
-
-```bash
-gh repo set-default <owner>/<workspace-repo>
-gh variable set VERCEL_ORG_ID --body <orgId>
-gh variable set VERCEL_PROJECT_ID --body <projectId>
-gh secret set VERCEL_TOKEN   # paste the token at the prompt
-```
-
-6. Deploy and verify: run `gh workflow run deploy-vercel-sparse.yml --ref core`, wait with `gh run watch`, then confirm `vercel ls --prod` shows the new deployment as Ready and your domain serves it.
-
-### Opt out: Vercel Git integration
-
-Keep the Git integration connected and run `gh variable set MYGITNOTES_VERCEL_DEPLOY --body git-integration`; the workflow then skips. Set the Vercel production branch to the deploy branch (`core` for a content-only workspace); `git.deploymentEnabled` in [`vercel.json`](vercel.json) must allow that branch. Vercel clones the whole repository on every deploy, so choose this for small workspaces. Trade-offs of the default Actions mode:
-
-- **Actions minutes:** each deploy installs and builds on a GitHub runner and uses your Actions quota; Git integration builds on Vercel.
-- **No automatic preview deployments:** only the deploy branch deploys to production; branches and pull requests get no preview URLs.
-- **Token handling:** `VERCEL_TOKEN` grants access to your Vercel account. Store it only as a repository secret, scope it to the team that owns the project, set an expiry, and rotate it if it leaks. Git integration needs no token.
-
-### Runtime settings
-
-You need:
-
-1. A GitHub OAuth App with callback URL `https://<your-project>.vercel.app/api/auth/github/callback`.
-2. An Upstash Redis database for encrypted browser sessions and persistent MCP grants.
-3. These Vercel environment variables:
-
-```bash
+~~~bash
 MYGITNOTES_SOURCE=github
-MYGITNOTES_REPOSITORY=your-username/your-repository
+MYGITNOTES_REPOSITORY=owner/workspace-repo
 MYGITNOTES_BRANCH=main
-
 APP_URL=https://<your-project>.vercel.app
 GITHUB_CLIENT_ID=your_oauth_client_id
 GITHUB_CLIENT_SECRET=your_oauth_client_secret
 GITHUB_APP_TYPE=oauth-app
-SESSION_SECRET=your_random_secret_of_at_least_32_characters
-
+SESSION_SECRET=<output of openssl rand -hex 32>
 UPSTASH_REDIS_REST_URL=https://...upstash.io
 UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_token
-# Optional for a new deployment sharing Redis
-MYGITNOTES_SESSION_NAMESPACE=your_unique_deployment_name
-```
+~~~
 
-After deployment, sign in with GitHub. Under **Settings → MCP Access Control**, create a read-only or write grant and paste the generated `/mcp/<token>` URL into ChatGPT, Claude, Cursor, Windsurf, or another MCP client.
+The workflow deploys product paths from core; note-only changes on main do not trigger a build. The app reads workspace content from main at runtime. The workflow deploys from core by default; set the `MYGITNOTES_DEPLOY_BRANCH` repository variable only for another deploy branch. Set `MYGITNOTES_SESSION_NAMESPACE` only when deployments share one Redis database; use a unique value per deployment.
 
-Standard GitHub OAuth Apps request the `repo` scope so authenticated owners can read and write private repositories. MCP grants remain scoped to the configured repository and can be revoked individually.
+### 6. Vercel through Git integration (opt out of Actions deployment)
 
-## GitLab deployment
+**Prepare:** Complete path 5 steps 1–6, including CLI authentication, Vercel project linking, GitHub OAuth App, Upstash Redis, and runtime fields. Skip the `VERCEL_TOKEN` preparation in path 5. Keep the Vercel Git integration connected and set the Vercel production branch to core.
 
-Each deployment selects one provider, site, project and branch. For Docker, put the following values in `.env.docker`; for Vercel, set them in the project environment. Keep the hosting and session-storage settings for your chosen deployment:
+1. In GitHub, set the workflow opt-out variable: `gh variable set MYGITNOTES_VERCEL_DEPLOY --body git-integration`
+2. In Vercel **Settings → Git**, confirm the production branch is core; vercel.json enables deployments from core.
+3. In Vercel **Deployments**, confirm the latest core deployment is Ready and the domain serves the Notes view.
 
-```bash
-MYGITNOTES_SOURCE=gitlab
-MYGITNOTES_REPOSITORY=group/subgroup/project
-MYGITNOTES_BRANCH=main
-MYGITNOTES_GITLAB_URL=https://gitlab.com
-GITLAB_CLIENT_ID=your_application_id
-GITLAB_CLIENT_SECRET=your_application_secret
-```
+This path clones the full repository on Vercel. It does not need `VERCEL_TOKEN`, `VERCEL_ORG_ID`, or `VERCEL_PROJECT_ID`.
 
-For self-managed GitLab, set `MYGITNOTES_GITLAB_URL` to its HTTPS base URL, including an installation subpath when applicable. The deployment must be able to reach that site and trust its TLS certificate. Register an OAuth application on the selected site with the `api` scope and callback `${APP_URL}/api/auth/gitlab/callback`. The UI uses GitLab sign-in automatically. Access and refresh tokens remain encrypted on the server; persistent MCP grants share the refreshed credential.
+### 7. GitLab source overlay for paths 2, 3, and 5
 
-Authenticated writes require push permission on `main`. GitLab batches all changed files into one commit and supplies each existing file's last commit ID to detect concurrent edits. Public repositories support anonymous reads. GitLab instances with private network access require a deployment with network access to that instance.
+**Prepare:** Create a GitLab OAuth application on the selected GitLab site with the api scope and callback `APP_URL`/api/auth/gitlab/callback. For self-managed GitLab, use its HTTPS base URL, including an installation subpath, and ensure the deployment can reach and trust it. Keep `APP_URL`, `SESSION_SECRET`, and session storage from the selected base path.
 
-The product is now **MyGitNotes**. Existing `.github-notes.yaml`, Screen/Study sidecars, `@mygitnotes/*` packages, GitHub OAuth callbacks and MCP grants remain compatible. New `MYGITNOTES_*` source settings take precedence over corresponding `GITHUB_NOTES_*` settings. `.mygitnotes.yaml` is the new workspace manifest filename; `.github-notes.yaml` remains supported. `mygitnotes.server.yaml` is the new server configuration filename; `github-notes.server.yaml` remains supported. The canonical repository is `wayne930242/MyGitNotes`; deployment URLs are unchanged. Update configured repository paths directly after a rename. MCP grants bound to a previous repository path require a new grant.
+1. In .env.docker for Docker, or .env for Vercel, set `MYGITNOTES_SOURCE=gitlab`, `MYGITNOTES_REPOSITORY=group/subgroup/project`, `MYGITNOTES_BRANCH=main`, `MYGITNOTES_GITLAB_URL=https://gitlab.com`, `GITLAB_CLIENT_ID`, and `GITLAB_CLIENT_SECRET`.
+2. For Vercel path 5, import the updated .env fields with `pnpm env:vercel production`; Docker paths 2 and 3 use the .env.docker from step 1.
+3. For Compose path 2, continue at step 5; for Docker path 3, continue at steps 4–6; for Vercel path 5, run `gh workflow run deploy-vercel-sparse.yml --ref core`.
+4. Open `APP_URL`; GitLab sign-in opens the OAuth application from the preparation step and the Notes view loads.
 
-See [GitLab OAuth](https://docs.gitlab.com/api/oauth2/) and [commit actions](https://docs.gitlab.com/api/commits/).
+Keep the GitHub deployment settings from path 5 when using Actions; replace only the note-source and OAuth provider fields. GitLab writes require push access to main; public repositories support anonymous reads.
 
-## Core features
+## Optional: private R2 assets
 
-- **High-density note UI:** List, Card, and Kanban views; full-text search; tags and statuses; nested folders; folder index cards; Markdown editing with live preview; asset management; responsive desktop and mobile layouts.
-- **Six themes:** choose from three light and three dark palettes, including paper tones, forest greens, and GitHub Dark. Your selection is saved in the browser.
-- **Flashcard learning:** turn Markdown notes into question-and-answer cards for vocabulary or any subject. Reveal multi-page answers, rate recall, and review by due date. Configure status stages and intervals per lane; switch to free reading, postpone a card, or undo the latest action.
-- **Screen:** arrange a notebook's notes, folders, images, and YouTube videos into reading lanes. Pin and reorder content, or build dynamic lanes from tags and folders with independent sorting and card sizes.
-- **Knowledge graph:** explore links between notes on an interactive graph. Zoom, pan, drag nodes, inspect connected notes, and open a note from the graph; color nodes by folder, notebook, or status.
-- **Pure Markdown:** notes remain ordinary `.md` files with optional YAML frontmatter. Existing Markdown and unknown metadata survive round trips.
-- **Git-native workflow:** local edits save to disk; selected changes are committed explicitly. Remote writes use revision checks and non-forced commits to reject stale updates.
-- **Local and remote sources:** open a local checkout or a configured GitHub or GitLab repository through the same interface.
-- **Local and hosted MCP:** connect agents through local stdio or self-hosted / Vercel-hosted Streamable HTTP to list, read, search, create, edit, move, and commit workspace content.
-- **Controlled agent access:** create named read-only or write grants, copy the connection URL once, and revoke each grant at any time.
-- **Safe product updates:** product code lives on `core`; personal workspace content lives on `main`. Core updates preserve `notes/**` and workspace-owned Agent settings.
+Store large files in a private Cloudflare R2 bucket and reference them in notes as `r2:<object-key>`. Set `MYGITNOTES_R2_ACCOUNT_ID`, `MYGITNOTES_R2_ACCESS_KEY_ID`, `MYGITNOTES_R2_SECRET_ACCESS_KEY`, and `MYGITNOTES_R2_BUCKET` in the deployment environment. Browser uploads also require a bucket CORS rule allowing PUT, GET, and HEAD from `APP_URL`. A read-only R2 token supports previews; Files-page management needs Object Read & Write. See [Cloudflare R2 CORS](https://developers.cloudflare.com/r2/buckets/cors/) and [R2 object access](https://developers.cloudflare.com/r2/api/s3/api/).
 
-## Feature tour
+## Features
 
-### Flashcards and reading mode
-
-Try the [live flashcard demo](https://my-gh-core.vercel.app/screen/lanes/explore) directly in your browser. Start learning from any Screen lane. The first Markdown page is the question and the remaining pages are the answer; separate pages with a standalone `---` surrounded by blank lines. A note without page breaks uses its title as the question and its body as the answer.
-
-Reveal the answer, then choose **Again**, **Hard**, **Good**, or **Easy**. Lane settings map each stage to a note status and an interval; successful ratings save the status, due date, and study history together. Filter all, due, future, or suspended cards, switch to reading mode, and use touch gestures on mobile. Screen layouts and learning progress live in workspace YAML files and travel with Git.
-
-![Flashcard learning with a revealed vocabulary answer](docs/assets/feature-study.png)
-
-### Screen: a reading desk for each notebook
-
-Keep related notes and resources side by side. Each notebook has its own lanes, and a lane shows only that notebook's content. Custom lanes hold pinned content; dynamic lanes gather content by tag or folder. Choose thumbnail, small, or medium cards, sort each lane independently, and enter its dedicated learning page. Images keep their proportions, and YouTube cards load the embedded player on demand.
-
-![Screen with reading and learning lanes](docs/assets/feature-screen.png)
-
-### Knowledge graph
-
-Open **Graph** to see how Markdown links connect your notes. Explore the canvas with zoom, pan, and node dragging, highlight neighboring notes, and open a linked note for reading or editing. On mobile, choose Graph from the Notes view selector. Search notes, filter by tag, choose colors by folder, notebook, or status, and navigate with the minimap. The graph is derived from your notes and links.
-
-![Interactive note relationship graph](docs/assets/feature-graph.png)
+- Notes use ordinary Markdown with optional YAML frontmatter; Git preserves history and records explicit commits.
+- Browse notes in List, Card, or Kanban views; search full text, manage folders and files, and explore a knowledge graph.
+- Screen lanes organize notebook content; Markdown pages can also become flashcards.
+- Choose from **nine palette families**, each with light and dark variants. **Flexoki** is the default; choices are saved in the browser.
+- Connect local agents through stdio or remote agents through Streamable HTTP MCP with named read-only or write grants.
 
 ## Documentation
 
