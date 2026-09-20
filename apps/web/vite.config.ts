@@ -1,3 +1,4 @@
+import { readBuildInfo } from '../build-info.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -86,5 +87,5 @@ function recordWebPort(): Plugin {
 export default defineConfig(async ({ command }) => {
   const apiTarget = `http://127.0.0.1:${command === 'serve' ? await resolveApiPort() : 4321}`;
 
-  return { plugins: [react(), recordWebPort()], server: { port: toPort(Number(webPort)) ?? 5173, proxy: { '/api': { target: apiTarget, changeOrigin: true }, '/raw-assets': { target: apiTarget, changeOrigin: true }, '/r2-assets': { target: apiTarget, changeOrigin: true } } } };
+  return { define: { __PRODUCT_BUILD__: JSON.stringify(readBuildInfo()) }, plugins: [react(), recordWebPort()], server: { port: toPort(Number(webPort)) ?? 5173, proxy: { '/api': { target: apiTarget, changeOrigin: true }, '/raw-assets': { target: apiTarget, changeOrigin: true }, '/r2-assets': { target: apiTarget, changeOrigin: true } } } };
 });

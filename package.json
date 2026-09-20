@@ -9,7 +9,7 @@
     "migrate-workspace": "tsx scripts/migrate-workspace.ts",
     "convert-workspace": "node scripts/convert-workspace.mjs",
     "backfill-note-timestamps": "tsx scripts/backfill-note-timestamps.ts",
-    "build": "pnpm --filter \"@mygitnotes/*\" run build",
+    "build": "node apps/check-version.mjs && pnpm --filter \"@mygitnotes/*\" run build",
     "test": "pnpm --filter \"./packages/*\" run build && node scripts/check-vercel-sparse-paths.mjs && vitest run",
     "check:vercel-sparse-paths": "node scripts/check-vercel-sparse-paths.mjs",
     "check:theme-colors": "node scripts/check-theme-colors.mjs",
@@ -20,16 +20,23 @@
     "format": "node scripts/source-tools.mjs format",
     "format:check": "node scripts/source-tools.mjs format-check",
     "lint": "node scripts/source-tools.mjs lint && node scripts/check-theme-colors.mjs",
-    "lint:fix": "node scripts/source-tools.mjs lint-fix"
+    "lint:fix": "node scripts/source-tools.mjs lint-fix",
+    "check:version": "node apps/check-version.mjs",
+    "release": "semantic-release --extends ./.github/release.config.cjs"
   },
   "devDependencies": {
     "@dprint/typescript": "^0.96.1",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^11.0.1",
+    "@semantic-release/npm": "^13.1.5",
+    "@semantic-release/release-notes-generator": "^14.1.1",
     "@types/node": "^22.5.4",
     "dprint": "^0.57.4",
     "dprint-plugin-malva": "^0.16.0",
     "esbuild": "^0.21.5",
     "oxc-parser": "^0.150.0",
     "oxlint": "^1.83.0",
+    "semantic-release": "^25.0.9",
     "tsx": "^4.19.1",
     "typescript": "7.0.2",
     "vitest": "^2.1.1"

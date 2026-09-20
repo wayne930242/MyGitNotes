@@ -6,7 +6,7 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node ../write-build-info.mjs",
     "dev": "tsx src/index.ts --local",
     "start": "tsx src/index.ts"
   },

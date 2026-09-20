@@ -1,0 +1,38 @@
+name: Product release
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+concurrency:
+  group: product-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.ref == 'refs/heads/core' || github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - run: npm install --global pnpm@9.15.9
+      - run: pnpm install --frozen-lockfile
+      - name: Verify input revision
+        run: pnpm build && pnpm lint && pnpm format:check && pnpm test
+      - name: Release from core
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm release
+      # GITHUB_TOKEN-created tags do not start another workflow. Verify the new
+      # tagged HEAD here as well as handling independently pushed tags above.
+      - name: Build tagged release revision
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          export MYGITNOTES_BUILD_SHA="$(git rev-parse HEAD)"
+          export MYGITNOTES_BUILD_TAG="$(git tag --points-at HEAD --list 'v*' | head -1)"
+          pnpm build

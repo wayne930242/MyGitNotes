@@ -1,3 +1,4 @@
+import { ProductVersion } from './ProductVersion.js';
 import { Button } from './Button.js';
 import { useWorkspaceSidebarDrawer, WorkspaceSidebar, WorkspaceSidebarPortal, WorkspaceSidebarToggle } from './WorkspaceChrome.js';
 import React, { useState } from 'react';
@@ -156,6 +157,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
               </div>
               <ThemeSelector value={currentTheme} onChange={onSelectTheme} />
             </div>
+            <ProductVersion />
             <div id='settings-access'>{accountSettings}</div>
             {/* Upstream & Core Updates Section */}
             <div id='settings-updates' className='flex flex-col gap-3 p-4 bg-sidebar border border-line rounded-xl'>
