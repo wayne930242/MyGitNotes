@@ -37,86 +37,35 @@ GitHub App installations configure **Contents**, **Workflows**, **Actions**, and
 
 ## Deploy
 
-Choose one path. Prepare the listed accounts and values first, then follow its numbered steps in order.
+Choose the deployment path that matches your hosting setup.
 
-### 1. Local development with a workspace checkout
+### Vercel through GitHub Actions sparse checkout (default)
 
-**Prepare:** Node.js 22+, pnpm 9+, Git 2.42+, and a GitHub checkout of MyGitNotes Core. No OAuth account is needed for local mode.
+#### Vercel preparation
 
-1. Clone the product repository: `git clone --branch core --single-branch https://github.com/wayne930242/MyGitNotes.git mygitnotes`
-2. Enter the Core checkout: `cd mygitnotes`
-3. Install dependencies: `pnpm install`
-4. Build the product packages needed by the bootstrap script: `pnpm build`
-5. Create a local workspace checkout and set `MYGITNOTES_LOCAL_PATH` in .env: `pnpm bootstrap-workspace`
-6. Start the local server and web app: `pnpm dev`
-7. Open http://localhost:5173; the workspace created in step 5 appears in the Notes view.
+**Accounts and services**
 
-The bootstrap command creates or checks out the main branch in a sibling worktree, then records its path in .env. To use an existing workspace instead, set `MYGITNOTES_LOCAL_PATH` in .env to its absolute path before step 6. Local mode does not require GitHub sign-in.
+- A Vercel project, GitHub repository containing the core and main branches, and an Upstash Redis database.
+- For GitHub sign-in, prepare a GitHub OAuth App and set the OAuth callback to `https://<your-project>.vercel.app/api/auth/github/callback`.
+- For GitLab sign-in, prepare the GitLab OAuth App described in [GitLab source overlay](#gitlab-source-overlay).
 
-To open a different workspace checkout for local development, run `REPO_ROOT=/absolute/path/to/workspace pnpm dev`.
+**Values to generate**
 
-### 2. Docker Compose with a remote repository
+- Generate `SESSION_SECRET` before the first phase with `openssl rand -hex 32`.
+- Create `VERCEL_TOKEN` in Vercel Account Settings → Tokens before the first phase, scoped to the team that owns this project; save its value.
 
-**Prepare:** Docker with Compose, a public URL or http://localhost:4321, and a session secret. For GitHub sign-in, prepare a GitHub OAuth App: set its Homepage URL to `APP_URL` and callback to `APP_URL`/api/auth/github/callback. For GitLab, prepare the GitLab OAuth App in path 7 instead. Generate `SESSION_SECRET` before step 1 with `openssl rand -hex 32`. Compose supplies Redis in its private network, so no Redis account is needed.
+**Tools to install**
 
-1. Copy the environment template: `cp docker.env.example .env.docker`
-2. In .env.docker, set `MYGITNOTES_SOURCE=github`, `MYGITNOTES_REPOSITORY=owner/repo`, `MYGITNOTES_BRANCH=main`, `APP_URL`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_APP_TYPE=oauth-app`.
-3. Fill `SESSION_SECRET` with the value generated in Prepare.
-4. Check the resolved Compose configuration: `docker compose -f compose.yaml config --quiet`
-5. Build and start MyGitNotes and Redis: `docker compose -f compose.yaml up -d --build`
-6. Open `APP_URL`; the Notes view loads and GitHub sign-in opens the OAuth App configured in step 2.
+- Install the Vercel and GitHub CLIs.
 
-Compose publishes the app on 127.0.0.1:4321 by default and stores Redis data in the redis-data volume. Set `MYGITNOTES_PORT` to change the browser-facing port; use the same URL in `APP_URL`.
-
-After updating the product checkout, rebuild with `docker compose up -d --build`. `docker compose down` preserves the Redis volume; `docker compose down -v` deletes it and invalidates stored sessions and MCP grants.
-
-### 3. Plain Docker with a remote repository
-
-**Prepare:** Docker, `APP_URL` as http://localhost:4321 or a public HTTPS origin, and a persistent Docker volume for encrypted sessions and MCP grants. For GitHub sign-in, set the OAuth App Homepage URL to `APP_URL` and callback to `APP_URL`/api/auth/github/callback; for GitLab, prepare the OAuth App in path 7 instead. Generate `SESSION_SECRET` before step 1 with `openssl rand -hex 32`.
-
-1. Copy the environment template: `cp docker.env.example .env.docker`
-2. In .env.docker, set `MYGITNOTES_SOURCE=github`, `MYGITNOTES_REPOSITORY=owner/repo`, `MYGITNOTES_BRANCH=main`, `APP_URL`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_APP_TYPE=oauth-app`; set `REDIS_URL` here only when using your own Redis.
-3. Fill `SESSION_SECRET` with the value generated in Prepare.
-4. Build the image: `docker build -t mygitnotes:local .`
-5. Create persistent session storage: `docker volume create mygitnotes-sessions`
-6. Start the container:
-   `docker run -d --name mygitnotes --init --restart unless-stopped -p 127.0.0.1:4321:4321 --env-file .env.docker --mount type=volume,source=mygitnotes-sessions,target=/app/.github-notes-sessions mygitnotes:local`
-7. Open `APP_URL`; the Notes view loads and GitHub sign-in opens the OAuth App configured in step 2.
-
-The volume in step 5 preserves sessions, provider credentials, and MCP grants across container replacements. When `REDIS_URL` is set in step 2, native Redis takes precedence over Redis REST.
-
-For public access from paths 2 or 3, set `APP_URL` to the HTTPS origin and route the reverse proxy to 127.0.0.1:4321. Preserve the public Host header, forward /api/*, /mcp/*, /raw-assets/*, and /r2-assets/*, and allow streamed MCP responses. A proxy in another container must share the app network and forward to mygitnotes:4321.
-
-### 4. Local checkout inside a container
-
-**Prepare:** Docker, Git, and an existing workspace checkout on main with .mygitnotes.yaml and your notes. On Linux, give UID/GID 1000:1000 read/write access to the checkout.
-
-1. Set `WORKSPACE_PATH` to the absolute workspace path: `export WORKSPACE_PATH=/absolute/path/to/workspace`
-2. Set the workspace commit author: `git -C "$WORKSPACE_PATH" config user.name "Your Name"`
-3. Set the workspace commit email: `git -C "$WORKSPACE_PATH" config user.email you@example.com`
-4. Check the bind mount and Compose settings: `docker compose -f compose.local.yaml config --quiet`
-5. Build and start the container: `docker compose -f compose.local.yaml up -d --build`
-6. Open http://localhost:4321; the mounted workspace appears in the Notes view.
-
-This mode is an anonymous desktop workflow restricted to loopback hosts. Local edits and Screen / Study YAML files persist in the mounted checkout. Configure remote Git credentials there to commit and sync.
-
-### 5. Vercel through GitHub Actions sparse checkout (default)
-
-**Prepare:** A Vercel project, GitHub repository containing the core and main branches, and an Upstash Redis database. For GitHub sign-in, prepare a GitHub OAuth App; for GitLab sign-in, prepare the GitLab OAuth App in path 7. For GitHub sign-in, set the OAuth callback to https://<your-project>.vercel.app/api/auth/github/callback; for GitLab, use the callback in path 7. Generate `SESSION_SECRET` before step 1 with `openssl rand -hex 32`. Install the Vercel and GitHub CLIs. Create `VERCEL_TOKEN` in Vercel Account Settings → Tokens before step 1, scoped to the team that owns this project; save its value.
+#### Set runtime values
 
 1. Authenticate the Vercel CLI: `vercel login`
 2. Authenticate the GitHub CLI: `gh auth login`
-3. Link the Vercel project from the Core checkout: `vercel link`. Read orgId and projectId from the resulting .vercel/project.json for steps 10 and 11.
+3. Link the Vercel project from the Core checkout: `vercel link`. Read orgId and projectId from the resulting .vercel/project.json for the [GitHub Actions configuration phase](#connect-github-actions).
 4. Copy the environment template: `cp .env.example .env`
-5. Fill .env with the runtime fields below. Use the workspace repository and main branch, the callback URL and `SESSION_SECRET` from Prepare, and the Redis REST URL and token from Upstash.
+5. Fill .env with the runtime fields below. Use the workspace repository and main branch, the callback URL and `SESSION_SECRET` from [Vercel preparation](#vercel-preparation), and the Redis REST URL and token from Upstash.
 6. Import those values into Vercel production: `pnpm env:vercel production`
-7. In Vercel, open **Settings → Git** and disconnect the Git integration so it does not start a second, full-repository deployment.
-8. Set the default GitHub repository for gh to the repository that contains this workflow; replace OWNER/WORKSPACE_REPO with its owner and name: `gh repo set-default OWNER/WORKSPACE_REPO`
-9. Store the token prepared above as a GitHub Actions secret: `gh secret set VERCEL_TOKEN` (paste it when prompted)
-10. Replace ORG_ID with orgId from step 3 and add it as a GitHub Actions variable: `gh variable set VERCEL_ORG_ID --body ORG_ID`
-11. Replace PROJECT_ID with projectId from step 3 and add it as a GitHub Actions variable: `gh variable set VERCEL_PROJECT_ID --body PROJECT_ID`
-12. Run the production workflow from core: `gh workflow run deploy-vercel-sparse.yml --ref core`
-13. Wait with `gh run watch`; then confirm the deployment is Ready in `vercel ls --prod` and the domain serves the Notes view.
 
 ~~~bash
 MYGITNOTES_SOURCE=github
@@ -131,11 +80,35 @@ UPSTASH_REDIS_REST_URL=https://...upstash.io
 UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_token
 ~~~
 
+#### Connect GitHub Actions
+
+1. In Vercel, open **Settings → Git** and disconnect the Git integration so it does not start a second, full-repository deployment.
+2. Set the default GitHub repository for gh to the repository that contains this workflow; replace OWNER/WORKSPACE_REPO with its owner and name: `gh repo set-default OWNER/WORKSPACE_REPO`
+3. Store the token prepared above as a GitHub Actions secret: `gh secret set VERCEL_TOKEN` (paste it when prompted)
+4. Replace ORG_ID with orgId from the [linking step](#set-runtime-values) and add it as a GitHub Actions variable: `gh variable set VERCEL_ORG_ID --body ORG_ID`
+5. Replace PROJECT_ID with projectId from the [linking step](#set-runtime-values) and add it as a GitHub Actions variable: `gh variable set VERCEL_PROJECT_ID --body PROJECT_ID`
+
+#### Deploy and verify
+
+1. Run the production workflow from core: `gh workflow run deploy-vercel-sparse.yml --ref core`
+2. Wait with `gh run watch`; then confirm the deployment is Ready in `vercel ls --prod` and the domain serves the Notes view.
+
 The workflow deploys product paths from core; note-only changes on main do not trigger a build. The app reads workspace content from main at runtime. The workflow deploys from core by default; set the `MYGITNOTES_DEPLOY_BRANCH` repository variable only for another deploy branch. Set `MYGITNOTES_SESSION_NAMESPACE` only when deployments share one Redis database; use a unique value per deployment.
 
-### 6. Vercel through Git integration (opt out of Actions deployment)
+#### Alternative: Vercel through Git integration (opt out of Actions deployment)
 
-**Prepare:** Complete path 5 steps 1–6, including CLI authentication, Vercel project linking, GitHub OAuth App, Upstash Redis, and runtime fields. Skip the `VERCEL_TOKEN` preparation in path 5. Keep the Vercel Git integration connected and set the Vercel production branch to core.
+**Accounts and services**
+
+- Complete the [runtime values phase](#set-runtime-values), including CLI authentication, Vercel project linking, GitHub OAuth App, Upstash Redis, and runtime fields.
+- Keep the Vercel Git integration connected and set the Vercel production branch to core.
+
+**Values to generate**
+
+- Skip the `VERCEL_TOKEN` preparation described in [Vercel preparation](#vercel-preparation).
+
+**Tools to install**
+
+- Use the Vercel and GitHub CLIs from the default Vercel path.
 
 1. In GitHub, set the workflow opt-out variable: `gh variable set MYGITNOTES_VERCEL_DEPLOY --body git-integration`
 2. In Vercel **Settings → Git**, confirm the production branch is core; vercel.json enables deployments from core.
@@ -143,16 +116,147 @@ The workflow deploys product paths from core; note-only changes on main do not t
 
 This path clones the full repository on Vercel. It does not need `VERCEL_TOKEN`, `VERCEL_ORG_ID`, or `VERCEL_PROJECT_ID`.
 
-### 7. GitLab source overlay for paths 2, 3, and 5
+### Docker Compose with a remote repository
 
-**Prepare:** Create a GitLab OAuth application on the selected GitLab site with the api scope and callback `APP_URL`/api/auth/gitlab/callback. For self-managed GitLab, use its HTTPS base URL, including an installation subpath, and ensure the deployment can reach and trust it. Keep `APP_URL`, `SESSION_SECRET`, and session storage from the selected base path.
+#### Docker Compose preparation
+
+**Accounts and services**
+
+- Docker with Compose, a public URL or http://localhost:4321, and Compose's private Redis network. No Redis account is needed.
+- For GitHub sign-in, prepare a GitHub OAuth App: set its Homepage URL to `APP_URL` and callback to `APP_URL`/api/auth/github/callback.
+- For GitLab sign-in, use the [GitLab source overlay](#gitlab-source-overlay).
+
+**Values to generate**
+
+- Generate `SESSION_SECRET` before the [Docker Compose deployment](#docker-compose-with-a-remote-repository) with `openssl rand -hex 32`.
+
+**Tools to install**
+
+- Install Docker with Compose.
+
+1. Copy the environment template: `cp docker.env.example .env.docker`
+2. In .env.docker, set `MYGITNOTES_SOURCE=github`, `MYGITNOTES_REPOSITORY=owner/repo`, `MYGITNOTES_BRANCH=main`, `APP_URL`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_APP_TYPE=oauth-app`.
+3. Fill `SESSION_SECRET` with the value generated in [Docker Compose preparation](#docker-compose-preparation).
+4. Check the resolved Compose configuration: `docker compose -f compose.yaml config --quiet`
+5. Build and start MyGitNotes and Redis: `docker compose -f compose.yaml up -d --build`
+6. Open `APP_URL`; the Notes view loads and GitHub sign-in opens the OAuth App configured in the environment configuration step.
+
+Compose publishes the app on 127.0.0.1:4321 by default and stores Redis data in the redis-data volume. Set `MYGITNOTES_PORT` to change the browser-facing port; use the same URL in `APP_URL`.
+
+After updating the product checkout, rebuild with `docker compose up -d --build`. `docker compose down` preserves the Redis volume; `docker compose down -v` deletes it and invalidates stored sessions and MCP grants.
+
+### Plain Docker with a remote repository
+
+#### Plain Docker preparation
+
+**Accounts and services**
+
+- Docker, `APP_URL` as http://localhost:4321 or a public HTTPS origin, and a persistent Docker volume for encrypted sessions and MCP grants.
+- For GitHub sign-in, set the OAuth App Homepage URL to `APP_URL` and callback to `APP_URL`/api/auth/github/callback.
+- For GitLab sign-in, use the [GitLab source overlay](#gitlab-source-overlay).
+
+**Values to generate**
+
+- Generate `SESSION_SECRET` before the [plain Docker deployment](#plain-docker-with-a-remote-repository) with `openssl rand -hex 32`.
+
+**Tools to install**
+
+- Install Docker.
+
+1. Copy the environment template: `cp docker.env.example .env.docker`
+2. In .env.docker, set `MYGITNOTES_SOURCE=github`, `MYGITNOTES_REPOSITORY=owner/repo`, `MYGITNOTES_BRANCH=main`, `APP_URL`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_APP_TYPE=oauth-app`; set `REDIS_URL` here only when using your own Redis.
+3. Fill `SESSION_SECRET` with the value generated in [Plain Docker preparation](#plain-docker-preparation).
+4. Build the image: `docker build -t mygitnotes:local .`
+5. Create persistent session storage: `docker volume create mygitnotes-sessions`
+6. Start the container:
+   `docker run -d --name mygitnotes --init --restart unless-stopped -p 127.0.0.1:4321:4321 --env-file .env.docker --mount type=volume,source=mygitnotes-sessions,target=/app/.github-notes-sessions mygitnotes:local`
+7. Open `APP_URL`; the Notes view loads and GitHub sign-in opens the OAuth App configured in the environment configuration step.
+
+The volume created by the [persistent session storage step](#plain-docker-with-a-remote-repository) preserves sessions, provider credentials, and MCP grants across container replacements. When `REDIS_URL` is set in the environment configuration, native Redis takes precedence over Redis REST.
+
+### Public access behind a reverse proxy
+
+This subsection applies to [Docker Compose](#docker-compose-with-a-remote-repository) and [plain Docker](#plain-docker-with-a-remote-repository). Set `APP_URL` to the HTTPS origin and route the reverse proxy to 127.0.0.1:4321. Preserve the public Host header, forward /api/*, /mcp/*, /raw-assets/*, and /r2-assets/*, and allow streamed MCP responses. A proxy in another container must share the app network and forward to mygitnotes:4321.
+
+### Local development with a workspace checkout
+
+#### Local development preparation
+
+**Accounts and services**
+
+- A GitHub checkout of MyGitNotes Core. No OAuth account is needed for local mode.
+
+**Values to generate**
+
+- None.
+
+**Tools to install**
+
+- Node.js 22+, pnpm 9+, and Git 2.42+.
+
+1. Clone the product repository: `git clone --branch core --single-branch https://github.com/wayne930242/MyGitNotes.git mygitnotes`
+2. Enter the Core checkout: `cd mygitnotes`
+3. Install dependencies: `pnpm install`
+4. Build the product packages needed by the bootstrap script: `pnpm build`
+5. Create a local workspace checkout and set `MYGITNOTES_LOCAL_PATH` in .env: `pnpm bootstrap-workspace`
+6. Start the local server and web app: `pnpm dev`
+7. Open http://localhost:5173; the workspace created in the [workspace bootstrap step](#local-development-with-a-workspace-checkout) appears in the Notes view.
+
+The bootstrap command creates or checks out the main branch in a sibling worktree, then records its path in .env. To use an existing workspace instead, set `MYGITNOTES_LOCAL_PATH` in .env to its absolute path before starting the local server. Local mode does not require GitHub sign-in.
+
+To open a different workspace checkout for local development, run `REPO_ROOT=/absolute/path/to/workspace pnpm dev`.
+
+### Local checkout inside a container
+
+#### Local checkout preparation
+
+**Accounts and services**
+
+- An existing workspace checkout on main with .mygitnotes.yaml and your notes. On Linux, give UID/GID 1000:1000 read/write access to the checkout.
+
+**Values to generate**
+
+- None.
+
+**Tools to install**
+
+- Docker and Git.
+
+1. Set `WORKSPACE_PATH` to the absolute workspace path: `export WORKSPACE_PATH=/absolute/path/to/workspace`
+2. Set the workspace commit author: `git -C "$WORKSPACE_PATH" config user.name "Your Name"`
+3. Set the workspace commit email: `git -C "$WORKSPACE_PATH" config user.email you@example.com`
+4. Check the bind mount and Compose settings: `docker compose -f compose.local.yaml config --quiet`
+5. Build and start the container: `docker compose -f compose.local.yaml up -d --build`
+6. Open http://localhost:4321; the mounted workspace appears in the Notes view.
+
+This mode is an anonymous desktop workflow restricted to loopback hosts. Local edits and Screen / Study YAML files persist in the mounted checkout. Configure remote Git credentials there to commit and sync.
+
+### GitLab source overlay
+
+This subsection applies on top of [Vercel through GitHub Actions sparse checkout](#vercel-through-github-actions-sparse-checkout-default), [Docker Compose](#docker-compose-with-a-remote-repository), or [plain Docker](#plain-docker-with-a-remote-repository).
+
+#### GitLab preparation
+
+**Accounts and services**
+
+- Create a GitLab OAuth application on the selected GitLab site with the api scope and callback `APP_URL`/api/auth/gitlab/callback.
+- For self-managed GitLab, use its HTTPS base URL, including an installation subpath, and ensure the deployment can reach and trust it.
+- Keep `APP_URL`, `SESSION_SECRET`, and session storage from the selected base path.
+
+**Values to generate**
+
+- None beyond the selected base path.
+
+**Tools to install**
+
+- Use the tools from the selected base path.
 
 1. In .env.docker for Docker, or .env for Vercel, set `MYGITNOTES_SOURCE=gitlab`, `MYGITNOTES_REPOSITORY=group/subgroup/project`, `MYGITNOTES_BRANCH=main`, `MYGITNOTES_GITLAB_URL=https://gitlab.com`, `GITLAB_CLIENT_ID`, and `GITLAB_CLIENT_SECRET`.
-2. For Vercel path 5, import the updated .env fields with `pnpm env:vercel production`; Docker paths 2 and 3 use the .env.docker from step 1.
-3. For Compose path 2, continue at step 5; for Docker path 3, continue at steps 4–6; for Vercel path 5, run `gh workflow run deploy-vercel-sparse.yml --ref core`.
-4. Open `APP_URL`; GitLab sign-in opens the OAuth application from the preparation step and the Notes view loads.
+2. For Vercel, import the updated .env fields with `pnpm env:vercel production`; Docker uses the .env.docker from the source configuration step.
+3. For Compose, continue at the build and start step; for plain Docker, continue at the image build and container start steps; for Vercel, run `gh workflow run deploy-vercel-sparse.yml --ref core`.
+4. Open `APP_URL`; GitLab sign-in opens the OAuth application from the preparation phase and the Notes view loads.
 
-Keep the GitHub deployment settings from path 5 when using Actions; replace only the note-source and OAuth provider fields. GitLab writes require push access to main; public repositories support anonymous reads.
+Keep the GitHub deployment settings from [Vercel through GitHub Actions sparse checkout](#vercel-through-github-actions-sparse-checkout-default) when using Actions; replace only the note-source and OAuth provider fields. GitLab writes require push access to main; public repositories support anonymous reads.
 
 ## Update and migrate
 
