@@ -2,8 +2,9 @@ import { EditorNotice } from './EditorNotice.js';
 import { EditorFooter } from './EditorFooter.js';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Check, Code2, Copy, Eye, FileText, LayoutGrid, ListOrdered, PanelRight, Save, X } from 'lucide-react';
+import { Code2, Eye, FileText, LayoutGrid, ListOrdered, PanelRight, Save, X } from 'lucide-react';
 import { Button } from './Button.js';
+import { NoteExportMenu } from './NoteExportMenu.js';
 import { MarkdownEditor, MarkdownEditorMode, MarkdownEditorModeSwitch } from './MarkdownEditor.js';
 import type { MarkdownEditorHandle } from './MarkdownEditor.js';
 import { AssetItem, NotebookMetadataField, NoteItem } from '../lib/types.js';
@@ -151,7 +152,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
               <button type='button' className='ui-icon-button' aria-pressed={showLineNumbers} title={t('editor.lineNumbers')} aria-label={t('editor.lineNumbers')} onClick={toggleLineNumbers}>
                 <ListOrdered size={14} aria-hidden='true' />
               </button>
-              <button type='button' className='ui-icon-button' title={t(session.copyState === 'copied' ? 'editor.noteCopied' : session.copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')} aria-label={t(session.copyState === 'copied' ? 'editor.noteCopied' : session.copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')} onClick={session.copyNote}>{session.copyState === 'copied' ? <Check size={14} aria-hidden='true' /> : session.copyState === 'error' ? <AlertTriangle size={14} aria-hidden='true' /> : <Copy size={14} aria-hidden='true' />}</button>
+              <NoteExportMenu className='ui-icon-button' iconSize={14} path={note.path} title={session.title} content={session.content} copyState={session.copyState} onCopy={session.copyNote} />
               <span className='note-compact-path' title={note.path}>{note.notebookId}{' · '}{note.path.split('/').pop()}</span>
               <span role='status' className='note-compact-status' data-state={session.editorState}>
                 <span className={`note-compact-dot ${session.editorState === 'saving' ? 'animate-pulse' : ''}`} aria-hidden='true' />
@@ -186,7 +187,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
                 <button type='button' aria-pressed={showLineNumbers} aria-label={t('editor.lineNumbers')} title={t('editor.lineNumbers')} onClick={toggleLineNumbers} className='ui-icon-button toolbar-icon-button editor-line-numbers-action'>
                   <ListOrdered aria-hidden='true' />
                 </button>
-                <button type='button' aria-label={t(session.copyState === 'copied' ? 'editor.noteCopied' : session.copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')} title={t(session.copyState === 'copied' ? 'editor.noteCopied' : session.copyState === 'error' ? 'editor.noteCopyFailed' : 'editor.copyNote')} onClick={session.copyNote} className='ui-icon-button toolbar-icon-button'>{session.copyState === 'copied' ? <Check aria-hidden='true' /> : session.copyState === 'error' ? <AlertTriangle aria-hidden='true' /> : <Copy aria-hidden='true' />}</button>
+                <NoteExportMenu className='ui-icon-button toolbar-icon-button' path={note.path} title={session.title} content={session.content} copyState={session.copyState} onCopy={session.copyNote} />
                 {onAddToFocus && (
                   <button type='button' aria-label={t('focus.addTo')} title={t('focus.addTo')} onClick={onAddToFocus} className='ui-icon-button toolbar-icon-button'>
                     <LayoutGrid aria-hidden='true' />

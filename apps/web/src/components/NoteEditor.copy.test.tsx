@@ -28,14 +28,23 @@ function stubClipboard(writeText: (text: string) => Promise<void>) {
   vi.stubGlobal('navigator', { ...globalThis.navigator, clipboard: { writeText: vi.fn(writeText) } });
 }
 
-it('copies the note body only, in compact mode, and reports success', async () => {
+async function copyFromExportMenu() {
+  const trigger = screen.getByRole('button', { name: 'Export' });
+  trigger.focus();
+  await act(async () => {
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy' }));
+  });
+}
+
+it('copies the note body only from the Export menu, in compact mode, and reports success', async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   stubClipboard(writeText);
   render(editor({}));
 
-  await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Copy note' }));
-  });
+  await copyFromExportMenu();
   expect(writeText).toHaveBeenCalledWith('# Alpha\n\nBody text.');
   expect(screen.getByRole('button', { name: 'Note copied' })).toBeInTheDocument();
 });
@@ -45,9 +54,7 @@ it('reports failure when the clipboard write fails, in compact mode', async () =
   document.execCommand = vi.fn().mockReturnValue(false);
   render(editor({}));
 
-  await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Copy note' }));
-  });
+  await copyFromExportMenu();
   expect(screen.getByRole('button', { name: 'Copy failed' })).toBeInTheDocument();
 });
 
@@ -56,9 +63,7 @@ it('copies the note body from the toolbar button outside compact mode', async ()
   stubClipboard(writeText);
   render(editor({ frame: 'pane' }));
 
-  await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Copy note' }));
-  });
+  await copyFromExportMenu();
   expect(writeText).toHaveBeenCalledWith('# Alpha\n\nBody text.');
   expect(screen.getByRole('button', { name: 'Note copied' })).toBeInTheDocument();
 });

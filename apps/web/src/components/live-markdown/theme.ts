@@ -30,7 +30,7 @@ export const theme = EditorView.theme({
   '.cm-card-background': { backgroundColor: 'var(--color-surface)', borderRadius: '4px', boxShadow: '0 1px 4px 0 color-mix(in srgb, var(--color-scrim) 8%, transparent), 0 0 0 1px var(--workspace-divider)' },
   '.cm-line': { padding: '0 40px' },
   '.cm-cursor': { borderLeftColor: 'var(--color-primary)' },
-  '.cm-gutters': { backgroundColor: 'transparent', borderRight: '1px solid var(--color-border)' },
+  '.cm-gutters': { backgroundColor: 'transparent', borderRight: '1px solid var(--color-border)', touchAction: 'none', WebkitTouchCallout: 'none' },
   '.cm-lineNumbers': { color: 'var(--color-muted)', fontFamily: 'monospace', fontSize: '11px', opacity: '0.55' },
   '.cm-lineNumbers .cm-gutterElement': { paddingLeft: '8px', paddingRight: '10px', transformOrigin: 'right center', transition: 'color 150ms, transform 150ms, font-weight 150ms' },
   '.cm-lineNumbers .cm-gutterElement:hover': { backgroundColor: 'color-mix(in srgb, var(--color-text) 6%, transparent)', color: 'var(--color-text)' },

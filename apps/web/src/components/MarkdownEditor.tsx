@@ -11,6 +11,7 @@ import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { DIRECTIVE_TEMPLATES } from '../lib/directives.js';
 import './note-completion.css';
 import { copyLinePrompt } from '../lib/line-prompt-copy.js';
+import { attachLineGutterGesture } from '../lib/line-gutter-gesture.js';
 import { LoadingStatus } from './LoadingStatus.js';
 
 const LiveMarkdownEditor = React.lazy(() => import('./LiveMarkdownEditor.js').then(module => ({ default: module.LiveMarkdownEditor })));
@@ -67,9 +68,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   const sourceLineNumbers = useRef<HTMLDivElement>(null);
   const [activeSourceLine, setActiveSourceLine] = useState(1);
   const [draggedSourceRange, setDraggedSourceRange] = useState<[number, number] | null>(null);
-  const sourceDragStart = useRef<number | null>(null);
-  const lastSourceGutterClick = useRef<{ line: number; at: number; } | null>(null);
-  const lastSourceGutterCopy = useRef<{ line: number; at: number; } | null>(null);
+  const [sourceGutter, setSourceGutter] = useState<HTMLDivElement | null>(null);
   const [lineCopyFeedback, setLineCopyFeedback] = useState<{ ok: boolean; start: number; end: number; } | null>(null);
   const lineCopyTimer = useRef<ReturnType<typeof setTimeout>>();
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
@@ -84,6 +83,30 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
     lineCopyTimer.current = setTimeout(() => setLineCopyFeedback(null), 2000);
   };
   useEffect(() => () => clearTimeout(lineCopyTimer.current), []);
+  const copyLinesRef = useRef(copyLines);
+  // eslint-disable-next-line react-hooks/refs -- The gesture is attached once per gutter element and must call the latest copy handler.
+  copyLinesRef.current = copyLines;
+  useEffect(() => {
+    const textarea = source.current;
+    if (!sourceGutter || !textarea) return;
+    return attachLineGutterGesture({
+      gutter: sourceGutter,
+      scroller: textarea,
+      lineFromTarget: target => {
+        const line = Number(target.closest<HTMLElement>('[data-line-number]')?.dataset.bodyLine);
+        return Number.isFinite(line) ? line : null;
+      },
+      lineAtY: y => {
+        const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 22.75;
+        const top = textarea.getBoundingClientRect().top + (parseFloat(getComputedStyle(textarea).paddingTop) || 0);
+        return Math.min(Math.max(Math.floor((y - top + textarea.scrollTop) / lineHeight) + 1, 1), textarea.value.split('\n').length);
+      },
+      lineHeight: () => parseFloat(getComputedStyle(textarea).lineHeight) || 22.75,
+      // Scrolling repeats the same range every frame; returning the previous state skips the re-render.
+      onPreview: range => setDraggedSourceRange(previous => previous?.[0] === range?.[0] && previous?.[1] === range?.[1] ? previous : range),
+      onCopy: (first, last) => void copyLinesRef.current(first, last),
+    });
+  }, [sourceGutter]);
 
   const [sourceIdentity, setSourceIdentity] = useState({ path, mode });
   if (sourceIdentity.path !== path || sourceIdentity.mode !== mode) {
@@ -318,76 +341,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
                 </div>
               )}
               {showLineNumbers && (
-                <div
-                  data-source-line-numbers
-                  aria-hidden='true'
-                  className='w-12 shrink-0 overflow-hidden border-r border-line/70 bg-sidebar/60 text-muted/70'
-                  onPointerMove={event => {
-                    if (sourceDragStart.current === null) return;
-                    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-line-number]');
-                    const line = Number(target?.dataset.bodyLine);
-                    if (Number.isFinite(line)) setDraggedSourceRange([sourceDragStart.current, line]);
-                  }}
-                  onPointerUp={event => {
-                    if (sourceDragStart.current === null) return;
-                    event.preventDefault();
-                    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-line-number]');
-                    const end = Number(target?.dataset.bodyLine);
-                    const start = sourceDragStart.current;
-                    sourceDragStart.current = null;
-                    setDraggedSourceRange(null);
-                    /* eslint-disable react/purity -- Read the event timestamp inside the pointer callback, after rendering. */
-                    if (Number.isFinite(end) && start !== end) {
-                      lastSourceGutterClick.current = null;
-                      void copyLines(start, end);
-                    } else lastSourceGutterClick.current = { line: start, at: performance.now() };
-                    /* eslint-enable react/purity */
-                  }}
-                  onPointerCancel={() => {
-                    sourceDragStart.current = null;
-                    setDraggedSourceRange(null);
-                  }}
-                >
+                <div ref={setSourceGutter} data-source-line-numbers aria-hidden='true' className='w-12 shrink-0 overflow-hidden border-r border-line/70 bg-sidebar/60 text-muted/70 touch-none'>
                   <div ref={sourceLineNumbers} className='py-4 pr-3 text-right font-mono text-xs tabular-nums' style={{ lineHeight: '1.421875rem' }}>
                     {Array.from({ length: sourceLineCount }, (_, index) => {
                       const line = index + 1;
                       const rangeStart = draggedSourceRange ? Math.min(...draggedSourceRange) : -1;
                       const rangeEnd = draggedSourceRange ? Math.max(...draggedSourceRange) : -1;
                       const inDraggedRange = line >= rangeStart && line <= rangeEnd;
-                      return (
-                        <div
-                          key={index}
-                          data-line-number
-                          data-body-line={line}
-                          data-active-line={line === activeSourceLine ? 'true' : undefined}
-                          data-line-copy-selected={inDraggedRange ? 'true' : undefined}
-                          onPointerDown={event => {
-                            if (event.pointerType !== 'mouse' || event.button !== 0) return;
-                            event.preventDefault();
-                            const previous = lastSourceGutterClick.current;
-                            if (previous?.line === line && performance.now() - previous.at < 500) {
-                              lastSourceGutterClick.current = null;
-                              lastSourceGutterCopy.current = { line, at: performance.now() };
-                              void copyLines(line);
-                              return;
-                            }
-                            sourceDragStart.current = line;
-                            setDraggedSourceRange([line, line]);
-                            event.currentTarget.setPointerCapture(event.pointerId);
-                          }}
-                          onDoubleClick={event => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            const recent = lastSourceGutterCopy.current;
-                            if (recent?.line === line && performance.now() - recent.at < 500) return;
-                            lastSourceGutterCopy.current = { line, at: performance.now() };
-                            void copyLines(line);
-                          }}
-                          className={`cursor-default select-none origin-right transition-[background-color,color,opacity,transform,font-weight] duration-150 ${inDraggedRange ? 'bg-fg/10 text-fg' : ''} ${line === activeSourceLine ? 'scale-[1.08] font-semibold text-muted' : ''}`}
-                        >
-                          {line + lineNumberOffset}
-                        </div>
-                      );
+                      return <div key={index} data-line-number data-body-line={line} data-active-line={line === activeSourceLine ? 'true' : undefined} data-line-copy-selected={inDraggedRange ? 'true' : undefined} className={`cursor-default select-none origin-right transition-[background-color,color,opacity,transform,font-weight] duration-150 ${inDraggedRange ? 'bg-fg/10 text-fg' : ''} ${line === activeSourceLine ? 'scale-[1.08] font-semibold text-muted' : ''}`}>{line + lineNumberOffset}</div>;
                     })}
                   </div>
                 </div>
