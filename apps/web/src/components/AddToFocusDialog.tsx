@@ -13,7 +13,7 @@ import { DivisionThumbnail } from './FocusDivision.js';
  * Picks a Focus and one of its panes for a note or lane. Confirming leaves the caller where it is:
  * the item shrinks into the chosen pane of the thumbnail, or a static notice replaces the motion.
  */
-export const AddToFocusDialog: React.FC<{ focus: NoteFocus; tab: FocusTab; label: string; onClose: () => void; }> = ({ focus, tab, label, onClose }) => {
+export const AddToFocusDialog: React.FC<{ focus: NoteFocus; tab: FocusTab; label: string; onClose: () => void; onPlaced?: (target: string) => void; }> = ({ focus, tab, label, onClose, onPlaced }) => {
   const { t } = useTranslation();
   const key = focusTabKey(tab);
   // A target needs room for one more tab unless it already holds this one; a named Focus also needs a writable source.
@@ -62,6 +62,7 @@ export const AddToFocusDialog: React.FC<{ focus: NoteFocus; tab: FocusTab; label
             return;
           }
           setPlaced(true);
+          onPlaced?.(target);
           requestAnimationFrame(land);
         }}
       >

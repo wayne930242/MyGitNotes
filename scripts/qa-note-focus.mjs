@@ -277,7 +277,7 @@ try {
   await waitTabs(device, 2, ['Delta']);
   console.log('PASS 5 a named Focus is written to the workspace and restores from Screen on another device');
 
-  // 6. Zoom opened from Graph adds a note to the named Focus's left pane and stays open.
+  // 6. Zoom opened from Graph adds a note to the named Focus's left pane, closes the zoom and switches to Focus mode.
   await device.goto(`${base}/notebooks/work/notes/zeta.md?returnTo=${encodeURIComponent('/graph?notebook=work')}`, { waitUntil: 'networkidle0' });
   await device.waitForSelector('.note-editor[data-frame="zoom"]');
   await device.click('.note-editor[data-frame="zoom"] [aria-label="Add to Focus"]');
@@ -285,14 +285,37 @@ try {
   await chooseSelect(device, '.focus-add-dialog .select-trigger', focusId);
   await device.click('.focus-add-dialog .focus-division-thumbnail > button:nth-child(1)');
   await device.click('.focus-add-dialog button[type="submit"]');
-  await device.waitForSelector('.focus-add-dialog [role="status"]');
-  await device.waitForFunction(() => !document.querySelector('.focus-add-dialog'), { timeout: 3000 });
-  assert(await device.$('.note-editor[data-frame="zoom"]'), 'Zoom must stay open after adding to Focus');
+  await device.waitForFunction(() => !document.querySelector('.note-editor[data-frame="zoom"]'), { timeout: 3000 });
+  await device.waitForSelector('.focus-area');
+  assert.equal(new URL(device.url()).searchParams.get('focus'), focusId, 'Adding to Focus from a zoomed note must switch to that Focus');
+  await waitTabs(device, 0, ['Alpha', 'Gamma', 'Zeta']);
   await saved('notes/work/zeta.md');
-  console.log('PASS 6 Add to Focus from a Graph zoom places the note in the chosen pane and zoom stays open');
+  console.log('PASS 6 Add to Focus from a Graph zoom places the note in the chosen pane, closes the zoom and switches to Focus mode');
+
+  // 6a. The same close-and-switch behavior holds at a phone-width viewport.
+  await device.setViewport({ width: 412, height: 900 });
+  await device.goto(`${base}/notebooks/work/notes/sub/omega.md?returnTo=${encodeURIComponent('/notebooks/work?view=list')}`, { waitUntil: 'networkidle0' });
+  await device.waitForSelector('.note-editor[data-frame="zoom"]');
+  await shot(device, 'phone-zoom-open');
+  await device.click('.note-editor[data-frame="zoom"] [aria-label="Add to Focus"]');
+  await device.waitForSelector('.focus-add-dialog .focus-division-thumbnail');
+  await chooseSelect(device, '.focus-add-dialog .select-trigger', focusId);
+  await device.click('.focus-add-dialog .focus-division-thumbnail > button:nth-child(1)');
+  await device.click('.focus-add-dialog button[type="submit"]');
+  await device.waitForFunction(() => !document.querySelector('.note-editor[data-frame="zoom"]'), { timeout: 3000 });
+  await device.waitForSelector('.focus-area');
+  assert.equal(new URL(device.url()).searchParams.get('focus'), focusId, 'Phone-width add to Focus must also switch to Focus mode');
+  await device.waitForFunction(() => !document.querySelector('.focus-add-dialog'), { timeout: 3000 });
+  await shot(device, 'phone-focus-mode');
+  await saved('notes/work/sub/omega.md');
+  await device.setViewport({ width: 1440, height: 900 });
+  await waitTabs(device, 0, ['Alpha', 'Gamma', 'Zeta', 'Omega']);
+  // A direct DOM click, not page.click(), because the close button's hover-only opacity leaves it unclickable by Puppeteer's pointer coordinates.
+  await device.evaluate(() => document.querySelector('[data-focus-pane="0"] [aria-label="Close Omega"]').click());
+  await waitTabs(device, 0, ['Alpha', 'Gamma', 'Zeta']);
+  console.log('PASS 6a the same close-and-switch behavior holds at a phone-width viewport');
 
   // 7. Phones show one pane whose tab list holds every pane's tabs; tablets two; desktops restore all three.
-  await device.click('[aria-label="Close note"]');
   const widths = { 412: [['Alpha', 'Gamma', 'Zeta', 'Beta', 'Epsilon', 'Delta']], 900: [['Alpha', 'Gamma', 'Zeta'], ['Beta', 'Epsilon', 'Delta']], 1440: [['Alpha', 'Gamma', 'Zeta'], ['Beta', 'Epsilon'], ['Delta']] };
   for (const [width, panes] of Object.entries(widths)) {
     await device.setViewport({ width: Number(width), height: 900 });

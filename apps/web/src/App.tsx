@@ -514,7 +514,21 @@ const AppContent: React.FC = () => {
           {fileDialog && <FileManagerDialog notebookId={fileDialog.notebookId} notebooks={config?.notebooks || []} writable={canWrite} initialPath={fileDialog.path} movePath={fileDialog.movePath} beforeChange={beforeFileChange} onChanged={onFilesChanged} onOpenIndex={openFileIndex} onClose={() => setFileDialog(undefined)} />}
           {/* Note Editor Modal */}
           <EditorModal key={fileEditorRevision} note={routedNote} committed={routedCommitted && typeof routedCommitted.content === 'string' ? routedCommitted as NoteItem : undefined} loading={routedLoading} isOpen={noteEditorOpen} />
-          {addingToFocus && <AddToFocusDialog focus={noteFocus} tab={addingToFocus.tab} label={addingToFocus.label} onClose={() => setAddingToFocus(null)} />}
+          {addingToFocus && (
+            <AddToFocusDialog
+              focus={noteFocus}
+              tab={addingToFocus.tab}
+              label={addingToFocus.label}
+              onClose={() => setAddingToFocus(null)}
+              onPlaced={addingToFocus.tab.kind === 'note'
+                ? target => {
+                  setEditingNote(null);
+                  setFocusNarrowView('focus');
+                  navigate(`${notebookRoute(selectedNotebookId)}?${new URLSearchParams({ focus: target })}`, { replace: true });
+                }
+                : undefined}
+            />
+          )}
           {/* Commit Modal */}
           <CommitModal
             writable={canWrite}
