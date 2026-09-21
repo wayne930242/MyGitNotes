@@ -231,7 +231,10 @@ describe('agent system over the note tree', () => {
     const note: any = await callAgentSystem(f.reader(), 'get_system_prompt', { path: 'notes/ex/work/b.md' });
     expect(note.files.map((file: any) => file.path)).toEqual(['AGENTS.md', 'notes/AGENTS.md', 'notes/ex/AGENTS.md', 'notes/ex/work/AGENTS.md']);
     expect(await callAgentSystem(f.reader(), 'get_system_prompt', { path: 'notes/ex/work' })).toMatchObject({ target: 'notes/ex/work' });
+    expect(await callAgentSystem(f.reader(), 'get_system_prompt', { path: 'notes/ex/work/' })).toMatchObject({ target: 'notes/ex/work' });
     expect(await callAgentSystem(f.reader(), 'get_system_prompt', { path: 'notes/ex/later.md' })).toMatchObject({ target: 'notes/ex' });
+    await expect(callAgentSystem(f.reader(), 'get_system_prompt', { path: 'notes/ex//work' })).rejects.toThrow(/traversal/);
+    await expect(callAgentSystem(f.reader(), 'get_system_prompt', { path: '/' })).rejects.toThrow(/traversal/);
     await expect(callAgentSystem(f.reader(), 'get_system_prompt', { notebookId: 'ex', path: 'notes/ex/a.md' })).rejects.toThrow(/not both/);
     await expect(callAgentSystem(f.reader(), 'get_system_prompt', { notebookId: 'missing' })).rejects.toMatchObject({ status: 404 });
     await expect(callAgentSystem(f.reader(), 'get_system_prompt', { path: 'tools/x.md' })).rejects.toMatchObject({ status: 403 });

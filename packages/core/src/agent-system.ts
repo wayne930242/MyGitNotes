@@ -48,7 +48,7 @@ function chain(dir: string) {
   return ['', ...parts.map((_, i) => parts.slice(0, i + 1).join('/'))];
 }
 
-/** A notebook root, or the folder of a note or folder path inside a notebook; a missing path names a file to create. */
+/** A notebook root, or the folder of a note or folder path inside a notebook, which may end in one slash; a missing path names a file to create. */
 function target(args: Args, notebooks: NotebookConfig[], entries: RemoteEntry[]): string | undefined {
   if (args.notebookId !== undefined && args.path !== undefined) throw new SourceError('Pass notebookId or path, not both.');
   if (args.notebookId !== undefined) {
@@ -57,7 +57,7 @@ function target(args: Args, notebooks: NotebookConfig[], entries: RemoteEntry[])
     return notebook.root;
   }
   if (args.path === undefined) return;
-  const file = args.path;
+  const file = typeof args.path === 'string' ? args.path.replace(/\/$/, '') : args.path;
   if (typeof file !== 'string' || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Use a repository-relative path with no traversal segments.');
   const dir = entries.some(e => e.path === file && e.type === 'tree') ? file : path.posix.dirname(file);
   if (!insideNotebook(dir, notebooks)) throw new SourceError('Target a notebook, or a note or folder inside one.', 403);
