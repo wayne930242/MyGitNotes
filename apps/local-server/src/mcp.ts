@@ -34,7 +34,7 @@ export function createRemoteMCP(base: string, source: SourceConfig | undefined, 
         return res.status(error instanceof SourceError ? error.status : 503).json({ error: error instanceof SourceError ? error.message : 'Agent authorization service unavailable. Retry later.' });
       }
       const reader = createRemoteSource(source, token, fetch, cache);
-      const server = new Server({ name: 'mygitnotes', version: buildInfo.version }, { capabilities: { tools: {} }, instructions: 'Operate on the configured note repository. Use ls or glob to locate paths, read or find to inspect complete files, then pass the returned revision to a write operation. Each successful mutation creates one atomic remote commit with a program-generated message. Respect read-only grants. Use Settings to revoke persistent connector URLs.' });
+      const server = new Server({ name: 'mygitnotes', version: buildInfo.version }, { capabilities: { tools: {} }, instructions: 'Operate on the configured note repository. Use ls or glob to locate paths, read or find to inspect complete files, then pass the returned revision to a write operation. Before creating or editing notes, read the agent system of the notebook or note with get_system_prompt and list_skills; invoke_skill loads a skill, and read, write, append, edit and rm also work on skill files. Each successful mutation creates one atomic remote commit with a program-generated message. Respect read-only grants. Use Settings to revoke persistent connector URLs.' });
       server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: remoteTools.filter(t => grant.write || !isMutationTool(t.name)) }));
       server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
         try {

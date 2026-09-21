@@ -9,6 +9,7 @@ import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js'
 import { FolderItem, NotebookConfig, NoteItem, NoteMetadata, WorkspaceConfig } from './types.js';
 import { SourceError } from './github-api.js';
 import { workspaceAgentKind } from './workspace-agent.js';
+import { skillFile } from './agent-system.js';
 import { type CommitScope, readWorkspaceDocument, serializeWorkspaceDocument, validateWorkspaceDocument, type WorkspaceDocument, workspaceDocument } from './workspace-documents.js';
 import { gitBlobId, hashJson, REMOTE_CACHE_BATCH_BYTES, REMOTE_CACHE_MAX_VALUE, REMOTE_CACHE_TTL, type RemoteCache } from './remote-cache.js';
 import type { NoteCatalog } from './note-catalog.js';
@@ -438,7 +439,7 @@ export abstract class RemoteSource {
       const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
       const document = workspaceDocument(file);
       const documentFile = Boolean(document?.scopes.includes(scope));
-      const allowed = documentFile || (scope === 'config' ? file === manifest.file : !['screen', 'study', 'focus', 'config'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_FILE.test(file) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (NOTE_FILE.test(file) || path.posix.basename(file) === '_dir.yml'))));
+      const allowed = documentFile || (scope === 'config' ? file === manifest.file : !['screen', 'study', 'focus', 'config'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_FILE.test(file) : scope === 'skills' ? Boolean(skillFile(file, config.notebooks)) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (NOTE_FILE.test(file) || path.posix.basename(file) === '_dir.yml'))));
       if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
       if (documentFile) validateWorkspaceDocument(document!, change.content);
       if (snapshot.entries.some(e => (e.path === file || file.startsWith(e.path + '/')) && (e.mode === '120000' || (e.path !== file && e.type !== 'tree')))) throw new SourceError('Path crosses a non-directory or symlink.', 403);

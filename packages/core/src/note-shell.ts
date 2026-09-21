@@ -3,6 +3,8 @@ import picomatch from 'picomatch';
 import { RemoteEntry, RemoteSource, SourceError } from './remote-source.js';
 import { isNotebookContent, serializeFolderConfig } from './folders.js';
 import { NotebookConfig } from './types.js';
+import { skillFile } from './agent-system.js';
+import type { CommitScope } from './workspace-documents.js';
 import YAML from 'yaml';
 
 type Args = Record<string, unknown>;
@@ -44,35 +46,36 @@ function noteFile(file: string, notebooks: NotebookConfig[]) {
   return Boolean(inNotebook(file, notebooks) && (/\.(md|markdown|mdx|txt)$/i.test(file) || path.posix.basename(file) === '_dir.yml'));
 }
 
-/** Shell-shaped operations over the configured note tree, pinned to one commit. */
+/** Shell-shaped operations over the configured note tree and its skill files, pinned to one commit. */
 export async function callNoteShell(reader: RemoteSource, operation: string, args: Args, write: boolean): Promise<Record<string, unknown>> {
   if (mutating.has(operation) && !write) throw new SourceError('This agent grant is read-only.', 403);
   const [config, snapshot] = await Promise.all([reader.config(), reader.getSnapshot()]);
   const notebooks = config.notebooks;
   const blobs = snapshot.entries.filter(e => e.type === 'blob' && e.mode !== '120000' && noteFile(e.path, notebooks)).sort((a, b) => a.path.localeCompare(b.path));
+  const skills = snapshot.entries.filter(e => e.type === 'blob' && e.mode !== '120000' && skillFile(e.path, notebooks));
   const revision = snapshot.sha;
   const read = async (file: string) => {
     relative(file);
-    if (!blobs.some(e => e.path === file)) throw new SourceError('File is not a configured note or folder metadata file.', 404);
+    if (!blobs.some(e => e.path === file) && !skills.some(e => e.path === file)) throw new SourceError('File is not a configured note, folder metadata or skill file.', 404);
     return (await reader.readFile(file)).toString('utf8');
   };
-  const selected = (file: string, recursive: boolean) => {
+  const selected = (file: string, recursive: boolean, pool = blobs) => {
     relative(file);
-    if (!inNotebook(file, notebooks)) throw new SourceError('Notebook roots and files outside note directories are protected.', 403);
+    if (pool === blobs && !inNotebook(file, notebooks)) throw new SourceError('Notebook roots and files outside note directories are protected.', 403);
     const exact = snapshot.entries.find(e => e.path === file);
     if (exact?.type === 'blob') {
-      if (!blobs.includes(exact)) throw new SourceError('Path is not a regular note file.', 403);
+      if (!pool.includes(exact)) throw new SourceError(pool === blobs ? 'Path is not a regular note file.' : 'Path is not a skill file.', 403);
       return [exact];
     }
     const children = snapshot.entries.filter(e => e.path.startsWith(file + '/') && e.type !== 'tree');
     if (!children.length) throw new SourceError('Source does not exist.', 404);
     if (!recursive) throw new SourceError('Directory operations require recursive: true.');
-    if (children.some(e => !blobs.includes(e))) throw new SourceError('Directory contains protected files or assets. Select note files explicitly.', 403);
+    if (children.some(e => !pool.includes(e))) throw new SourceError('Directory contains protected files or assets. Select note files explicitly.', 403);
     return children;
   };
-  const receipt = async (changes: { path: string; content?: string; sha?: string | null; }[]) => {
+  const receipt = async (changes: { path: string; content?: string; sha?: string | null; }[], scope: CommitScope = 'notes') => {
     const expected = string(args, 'revision');
-    return reader.commitChanges(changes, expected, operation);
+    return reader.commitChanges(changes, expected, operation, scope);
   };
   if (operation === 'ls') {
     const dir = string(args, 'path', '.');
@@ -140,8 +143,9 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
   }
   if (operation === 'write' || operation === 'append' || operation === 'edit') {
     const file = relative(string(args, 'path'));
-    if (!noteFile(file, notebooks)) throw new SourceError('Target must be a note or folder metadata file.', 403);
-    const exists = blobs.some(e => e.path === file);
+    const skill = Boolean(skillFile(file, notebooks));
+    if (!skill && !noteFile(file, notebooks)) throw new SourceError('Target must be a note, folder metadata or skill file.', 403);
+    const exists = (skill ? skills : blobs).some(e => e.path === file);
     if (args.createOnly === true && snapshot.entries.some(e => e.path === file)) throw new SourceError('Target already exists.', 409);
     const original = exists ? await read(file) : '';
     let content = string(args, 'content');
@@ -151,7 +155,7 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
       content = replaceNoteLines(original, integer(args, 'startLine', 1, 1, 1000000), integer(args, 'endLine', 1, 0, 1000000), content);
     }
     if (exists && content === original) throw new SourceError('No content change to commit.');
-    return receipt([{ path: file, content }]);
+    return receipt([{ path: file, content }], skill ? 'skills' : 'notes');
   }
   if (operation === 'mkdir') {
     const dir = relative(string(args, 'path')).replace(/\/(_dir\.yml)?$/, '');
@@ -195,8 +199,11 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
   if (operation === 'rm') {
     if (!Array.isArray(args.paths) || !args.paths.length || args.paths.length > 200 || args.paths.some(p => typeof p !== 'string')) throw new SourceError('paths must be an explicit list of 1 to 200 paths.');
     const files = new Map<string, RemoteEntry>();
-    for (const file of args.paths as string[]) for (const entry of selected(file, args.recursive === true)) files.set(entry.path, entry);
-    return receipt([...files.keys()].map(file => ({ path: file, sha: null })));
+    const scopes = new Set<CommitScope>((args.paths as string[]).map(file => /(^|\/)\.agents(\/|$)/.test(file) ? 'skills' : 'notes'));
+    if (scopes.size > 1) throw new SourceError('Remove notes and skill files in separate calls.');
+    const [scope] = scopes;
+    for (const file of args.paths as string[]) for (const entry of selected(file, args.recursive === true, scope === 'skills' ? skills : blobs)) files.set(entry.path, entry);
+    return receipt([...files.keys()].map(file => ({ path: file, sha: null })), scope);
   }
   if (operation === 'mv' || operation === 'cp') {
     const from = relative(string(args, 'source'));

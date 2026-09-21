@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GitHubSource } from '../src/github-source.js';
 import { callNoteShell, matchNoteGlob, replaceNoteLines } from '../src/note-shell.js';
+import { agentSystemHint, callAgentSystem } from '../src/agent-system.js';
 import { SCREEN_PAGE_FILE } from '../src/screen-page.js';
 import { FOCUS_PAGE_FILE } from '../src/focus-page.js';
 
@@ -217,5 +218,75 @@ describe('shell-shaped note operations', () => {
     expect(replaceNoteLines('a\nb\nc', 2, 2, '')).toBe('a\nc');
     expect(() => replaceNoteLines('a', 3, 3, 'x')).toThrow(/line range/);
     expect(() => matchNoteGlob('../*')).toThrow(/relative glob/);
+  });
+});
+
+describe('agent system over the note tree', () => {
+  const agentFiles = { 'AGENTS.md': '# Root\n', 'notes/AGENTS.md': '# Notes\n', 'notes/ex/AGENTS.md': '# Example\n', 'notes/ex/work/AGENTS.md': '# Work\n', '.agents/skills/shared/SKILL.md': '---\nname: shared\ndescription: Root shared\n---\n# Root shared\n', '.agents/skills/solo/SKILL.md': '---\ndescription: Solo\n---\nSolo body\n', '.agents/skills/empty/references/x.md': 'no entry file', 'notes/.agents/skills/shared/SKILL.md': '---\ndescription: Notes shared\n---\n# Notes shared body\n', 'notes/.agents/skills/shared/references/guide.md': 'guide', 'notes/.agents/skills/shared/agents/openai.yaml': 'interface: {}\n', 'notes/.agents/skills/shared/scripts/run.py': 'print(1)\n', '.claude/skills/claude-only/SKILL.md': '---\ndescription: Claude copy\n---\n', 'tools/.agents/skills/unrelated/SKILL.md': '---\ndescription: Unrelated\n---\n' };
+  it('reads the AGENTS.md chain of a notebook, a note folder and a note that does not exist yet', async () => {
+    const f = fixture(agentFiles);
+    const notebook: any = await callAgentSystem(f.reader(), 'get_system_prompt', { notebookId: 'ex' });
+    expect(notebook).toMatchObject({ revision: 'head0', target: 'notes/ex', content: '# Root\n\n# Notes\n\n# Example' });
+    expect(notebook.files.map((file: any) => file.path)).toEqual(['AGENTS.md', 'notes/AGENTS.md', 'notes/ex/AGENTS.md']);
+    const note: any = await callAgentSystem(f.reader(), 'get_system_prompt', { path: 'notes/ex/work/b.md' });
+    expect(note.files.map((file: any) => file.path)).toEqual(['AGENTS.md', 'notes/AGENTS.md', 'notes/ex/AGENTS.md', 'notes/ex/work/AGENTS.md']);
+    expect(await callAgentSystem(f.reader(), 'get_system_prompt', { path: 'notes/ex/work' })).toMatchObject({ target: 'notes/ex/work' });
+    expect(await callAgentSystem(f.reader(), 'get_system_prompt', { path: 'notes/ex/later.md' })).toMatchObject({ target: 'notes/ex' });
+    await expect(callAgentSystem(f.reader(), 'get_system_prompt', { notebookId: 'ex', path: 'notes/ex/a.md' })).rejects.toThrow(/not both/);
+    await expect(callAgentSystem(f.reader(), 'get_system_prompt', { notebookId: 'missing' })).rejects.toMatchObject({ status: 404 });
+    await expect(callAgentSystem(f.reader(), 'get_system_prompt', { path: 'tools/x.md' })).rejects.toMatchObject({ status: 403 });
+    await expect(callAgentSystem(f.reader(), 'get_system_prompt', { path: 'notes/ex/../../x.md' })).rejects.toThrow(/traversal/);
+    await expect(callAgentSystem(f.reader(), 'get_system_prompt', {})).rejects.toThrow(/notebookId or path/);
+  });
+  it('lists the nearest skills for a target and every allowed skill without one', async () => {
+    const f = fixture(agentFiles);
+    const scoped: any = await callAgentSystem(f.reader(), 'list_skills', { notebookId: 'ex' });
+    expect(scoped.skills).toEqual([{ name: 'shared', description: 'Notes shared', path: 'notes/.agents/skills/shared/SKILL.md', directory: 'notes/.agents/skills/shared' }, { name: 'solo', description: 'Solo', path: '.agents/skills/solo/SKILL.md', directory: '.agents/skills/solo' }]);
+    const all: any = await callAgentSystem(f.reader(), 'list_skills', {});
+    expect(all.target).toBeNull();
+    expect(all.skills.map((skill: any) => skill.path)).toEqual(['.agents/skills/shared/SKILL.md', '.agents/skills/solo/SKILL.md', 'notes/.agents/skills/shared/SKILL.md']);
+  });
+  it('invokes the nearest skill with its body and readable supporting files', async () => {
+    const f = fixture(agentFiles);
+    expect(await callAgentSystem(f.reader(), 'invoke_skill', { name: 'shared', path: 'notes/ex/a.md' })).toEqual({ revision: 'head0', name: 'shared', description: 'Notes shared', path: 'notes/.agents/skills/shared/SKILL.md', directory: 'notes/.agents/skills/shared', content: '# Notes shared body\n', files: ['notes/.agents/skills/shared/agents/openai.yaml', 'notes/.agents/skills/shared/references/guide.md'] });
+    expect(await callAgentSystem(f.reader(), 'invoke_skill', { name: 'solo' })).toMatchObject({ content: 'Solo body\n', files: [] });
+    await expect(callAgentSystem(f.reader(), 'invoke_skill', { name: 'shared' })).rejects.toMatchObject({ status: 409, message: expect.stringContaining('.agents/skills/shared, notes/.agents/skills/shared') });
+    await expect(callAgentSystem(f.reader(), 'invoke_skill', { name: 'empty' })).rejects.toMatchObject({ status: 404 });
+    await expect(callAgentSystem(f.reader(), 'invoke_skill', { name: 'claude-only' })).rejects.toMatchObject({ status: 404 });
+    await expect(callAgentSystem(f.reader(), 'invoke_skill', { name: 'unrelated' })).rejects.toMatchObject({ status: 404 });
+  });
+  it('creates, edits and removes skill files through the note shell with skills commits', async () => {
+    const f = fixture(agentFiles);
+    const created: any = await callNoteShell(f.reader(), 'write', { path: 'notes/ex/.agents/skills/local/SKILL.md', content: '---\ndescription: Local\n---\nLocal body\n', createOnly: true, revision: f.head() }, true);
+    expect(created.commit.message).toBe('docs(skills): write SKILL.md');
+    expect(await callAgentSystem(f.reader(), 'invoke_skill', { name: 'local', notebookId: 'ex' })).toMatchObject({ directory: 'notes/ex/.agents/skills/local', content: 'Local body\n' });
+    const read: any = await callNoteShell(f.reader(), 'read', { path: 'notes/.agents/skills/shared/SKILL.md', startLine: 4 }, false);
+    expect(read.content).toBe('# Notes shared body\n');
+    await callNoteShell(f.reader(), 'edit', { path: 'notes/.agents/skills/shared/SKILL.md', startLine: 4, endLine: 4, content: '# Edited', revision: f.head() }, true);
+    await callNoteShell(f.reader(), 'append', { path: 'notes/.agents/skills/shared/references/guide.md', content: '\nmore', revision: f.head() }, true);
+    expect(f.text('notes/.agents/skills/shared/SKILL.md')).toContain('# Edited\n');
+    expect(f.text('notes/.agents/skills/shared/references/guide.md')).toBe('guide\nmore');
+    await callNoteShell(f.reader(), 'rm', { paths: ['notes/ex/.agents/skills/local'], recursive: true, revision: f.head() }, true);
+    expect(f.files()).not.toContain('notes/ex/.agents/skills/local/SKILL.md');
+    expect(f.calls.filter(c => c.endpoint === '/git/commits').map(c => c.body.message)).toEqual(['docs(skills): write SKILL.md', 'docs(skills): edit SKILL.md', 'docs(skills): append guide.md', 'docs(skills): rm SKILL.md']);
+  });
+  it('rejects skill writes outside allowed skill files, mixed removals and read-only grants', async () => {
+    const f = fixture(agentFiles);
+    const write = (file: string) => callNoteShell(f.reader(), 'write', { path: file, content: 'x', revision: f.head() }, true);
+    await expect(write('.claude/skills/claude-only/SKILL.md')).rejects.toMatchObject({ status: 403 });
+    await expect(write('tools/.agents/skills/unrelated/SKILL.md')).rejects.toMatchObject({ status: 403 });
+    await expect(write('notes/.agents/skills/shared/scripts/run.py')).rejects.toMatchObject({ status: 403 });
+    await expect(write('notes/.agents/skills/shared/.hidden/x.md')).rejects.toMatchObject({ status: 403 });
+    await expect(write('notes/ex/assets/.agents/skills/x/SKILL.md')).rejects.toMatchObject({ status: 403 });
+    await expect(callNoteShell(f.reader(), 'rm', { paths: ['notes/.agents/skills/shared'], recursive: true, revision: f.head() }, true)).rejects.toMatchObject({ status: 403 });
+    await expect(callNoteShell(f.reader(), 'rm', { paths: ['notes/ex/a.md', '.agents/skills/solo/SKILL.md'], revision: f.head() }, true)).rejects.toThrow(/separate calls/);
+    await expect(callNoteShell(f.reader(), 'write', { path: '.agents/skills/solo/SKILL.md', content: 'x', revision: f.head() }, false)).rejects.toMatchObject({ status: 403 });
+    await expect(f.reader().commitChanges([{ path: 'notes/ex/a.md', content: 'x' }], f.head(), 'write', 'skills')).rejects.toMatchObject({ status: 403 });
+    expect(f.calls.some(c => c.method)).toBe(false);
+  });
+  it('hints at the agent system only when a note has one', async () => {
+    expect(await agentSystemHint(fixture(agentFiles).reader(), 'notes/ex/a.md')).toBe('Before creating or editing notes here, read the agent system: call get_system_prompt and list_skills with path "notes/ex/a.md".');
+    expect(await agentSystemHint(fixture({ 'notes/.agents/skills/solo/SKILL.md': '---\ndescription: Solo\n---\n' }).reader(), 'notes/ex/a.md')).toContain('get_system_prompt');
+    expect(await agentSystemHint(fixture().reader(), 'notes/ex/a.md')).toBeUndefined();
   });
 });

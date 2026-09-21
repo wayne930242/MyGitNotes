@@ -18,6 +18,16 @@ MyGitNotes 是以 Git 保存的個人筆記與文件工作區。平台指 GitHub
 
 **產品參考**：Core 的 `docs/agent/**`，在 Agents 頁唯讀顯示，不屬於工作區。
 
+# Agent system
+
+筆記本或筆記的 agent system 由系統指令與 skill 組成。範圍從目標所在資料夾往上到儲存庫根目錄；筆記本以根目錄為目標。
+
+## 用語
+
+**系統指令**：從儲存庫根目錄到目標資料夾，每層 `AGENTS.md` 依序組成的指令。避免稱為：CLAUDE.md（Claude 專用副本）、Agent 文件（泛指 Agents 頁內容）。
+
+**skill**：`.agents/skills/<name>/` 裡以 `SKILL.md` 為入口的指令與參考資料，名稱等於資料夾名。目標可用的 skill 來自範圍內每層的 `.agents/skills`，同名時較近的一層優先。避免稱為：`.claude/skills`（客戶端專用副本）。
+
 # 工作區呈現
 
 Screen Page 是筆記本的閱讀空間，以河道組織內容。每條河道屬於一個筆記本，只收該筆記本的內容；Screen 只顯示目前筆記本的河道。自訂河道持有項目參照；動態河道持有 tag 或 folder 查詢。河道採用縮圖、小、中版型，另以獨立按鈕進入學習頁，卡片可以獨立捲動，需要修改時開啟原本編輯器。

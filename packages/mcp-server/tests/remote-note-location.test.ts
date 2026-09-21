@@ -25,3 +25,17 @@ it('reports only the path without a known app origin or for folder metadata', as
   expect(folder.path).toBe('notes/ex/folder/_dir.yml');
   expect(folder).not.toHaveProperty('url');
 });
+
+it('points a note read to its agent system and reports a skill write without a web page', async () => {
+  const f = gitlabFixture();
+  const app = 'https://notes.example.test';
+  expect(await callRemoteTool(reader(f), 'read', { path: 'notes/ex/a.md' }, false, app)).toMatchObject({ hint: 'Before creating or editing notes here, read the agent system: call get_system_prompt and list_skills with path "notes/ex/a.md".' });
+  expect(await callRemoteTool(reader(f), 'read_note', { path: 'notes/ex/a.md' }, false, app)).toMatchObject({ note: { path: 'notes/ex/a.md' }, hint: expect.stringContaining('notes/ex/a.md') });
+  const skill = await callRemoteTool(reader(f), 'write', { path: 'notes/ex/.agents/skills/demo/SKILL.md', content: '---\ndescription: Demo\n---\nDemo body\n', revision: f.head }, true, app);
+  expect(skill).toMatchObject({ path: 'notes/ex/.agents/skills/demo/SKILL.md', commit: { message: 'docs(skills): write SKILL.md' } });
+  expect(skill).not.toHaveProperty('url');
+  expect(await callRemoteTool(reader(f), 'read', { path: 'notes/ex/.agents/skills/demo/SKILL.md' }, false, app)).not.toHaveProperty('hint');
+  expect(await callRemoteTool(reader(f), 'list_skills', { path: 'notes/ex/a.md' }, false, app)).toMatchObject({ target: 'notes/ex', skills: [{ name: 'demo', description: 'Demo', path: 'notes/ex/.agents/skills/demo/SKILL.md' }] });
+  expect(await callRemoteTool(reader(f), 'get_system_prompt', { notebookId: 'ex' }, false, app)).toMatchObject({ files: [{ path: 'AGENTS.md', content: '# Workspace\n' }] });
+  await expect(callRemoteTool(reader(f), 'write', { path: '.agents/skills/demo/SKILL.md', content: 'x', revision: f.head }, false, app)).rejects.toThrow(/read-only/);
+});

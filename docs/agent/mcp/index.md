@@ -66,6 +66,23 @@ text, including relative links.
 Note writes (`write`, `append`, `edit`, `save_note`, `update_note_metadata`)
 also return the note `path` and, when `APP_URL` is configured, the note's web page `url`.
 
+Hosted agent-system tools read what governs a notebook or note. A target is a
+`notebookId` or a note or folder `path` inside a notebook; a note path works
+before the note exists. `get_system_prompt` returns every `AGENTS.md` from the
+repository root down to the target, root first, and their joined `content`.
+`list_skills` returns the `.agents/skills/<name>/SKILL.md` skills of each
+directory from the target up to the root, the nearest winning a shared name, or
+every workspace skill without a target. `invoke_skill` returns a skill's
+`SKILL.md` body, description and readable supporting files. Skills may live in
+the repository root, notebook roots and their ancestors, and folders inside
+notebooks; their Markdown and text files and `agents/openai.yaml` are readable.
+`read`, `write`, `append`, `edit` and `rm` accept those skill files, so writing
+`SKILL.md` creates a skill and a recursive `rm` of its directory deletes it.
+Skill mutations commit as `docs(skills): …`, return no web `url`, and cannot
+share an `rm` call with notes. `read` and `read_note` on a note return a `hint`
+to read the agent system before creating or editing notes when the note has
+one.
+
 Every hosted tool declares input and output schemas, structured content and
 readOnly/destructive/idempotent/openWorld annotations. Read-only grants omit all
 mutation tools. Automatic MCP OAuth discovery is not provided. See the

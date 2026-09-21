@@ -315,8 +315,8 @@ describe('GitHub login and shared agent authorization', () => {
         const endpoint = url.replace('https://api.github.com/repos/owner/repo', '');
         if (!endpoint) return json({ private: true, permissions: { push: true } });
         if (endpoint.startsWith('/commits/')) return json({ sha: 'head', commit: { tree: { sha: 'tree' } } });
-        if (endpoint.startsWith('/git/trees/')) return json({ truncated: false, tree: [{ path: 'notes/.github-notes.yaml', sha: 'manifest', type: 'blob', mode: '100644' }, { path: 'notes/ex/private.md', sha: 'note', type: 'blob', mode: '100644' }] });
-        if (endpoint.startsWith('/git/blobs/')) return json({ encoding: 'base64', content: Buffer.from(endpoint.endsWith('manifest') ? manifest : '# Private Note').toString('base64') });
+        if (endpoint.startsWith('/git/trees/')) return json({ truncated: false, tree: [{ path: 'notes/.github-notes.yaml', sha: 'manifest', type: 'blob', mode: '100644' }, { path: 'notes/ex/private.md', sha: 'note', type: 'blob', mode: '100644' }, { path: 'AGENTS.md', sha: 'agents', type: 'blob', mode: '100644' }, { path: '.agents/skills/demo/SKILL.md', sha: 'skill', type: 'blob', mode: '100644' }] });
+        if (endpoint.startsWith('/git/blobs/')) return json({ encoding: 'base64', content: Buffer.from(endpoint.endsWith('manifest') ? manifest : endpoint.endsWith('agents') ? '# Workspace rules' : endpoint.endsWith('skill') ? '---\ndescription: Demo skill\n---\nDemo body' : '# Private Note').toString('base64') });
       }
       return nativeFetch(input, init);
     });
@@ -361,11 +361,16 @@ describe('GitHub login and shared agent authorization', () => {
         expect(tools.every(t => t.annotations?.readOnlyHint === true && t.inputSchema && t.outputSchema)).toBe(true);
         for (const name of ['write', 'append', 'edit', 'mkdir', 'cp', 'mv', 'rm', 'save_note', 'delete_note', 'add_asset', 'delete_asset', 'replace_notes', 'update_note_metadata']) expect(tools.some(t => t.name === name)).toBe(false);
         // The SDK validates structuredContent against each advertised output schema.
-        for (const [name, args] of [['read', { path: 'notes/ex/private.md' }], ['glob', {}], ['find', { query: 'Private' }], ['read_note', { path: 'notes/ex/private.md' }], ['get_statuses', {}], ['get_note_metadata', { path: 'notes/ex/private.md' }], ['search_notes', { query: 'Private' }]] as const) {
+        for (const [name, args] of [['read', { path: 'notes/ex/private.md' }], ['glob', {}], ['find', { query: 'Private' }], ['read_note', { path: 'notes/ex/private.md' }], ['get_statuses', {}], ['get_note_metadata', { path: 'notes/ex/private.md' }], ['search_notes', { query: 'Private' }], ['get_system_prompt', { notebookId: 'ex' }], ['list_skills', {}], ['invoke_skill', { name: 'demo' }], ['read', { path: '.agents/skills/demo/SKILL.md' }]] as const) {
           const result = await client.callTool({ name, arguments: args });
           expect(result.isError).not.toBe(true);
           expect(result.structuredContent).toBeDefined();
         }
+        expect((await client.callTool({ name: 'read', arguments: { path: 'notes/ex/private.md' } })).structuredContent).toMatchObject({ hint: expect.stringContaining('get_system_prompt') });
+        expect((await client.callTool({ name: 'read_note', arguments: { path: 'notes/ex/private.md' } })).structuredContent).toMatchObject({ hint: expect.stringContaining('list_skills') });
+        expect((await client.callTool({ name: 'read', arguments: { path: '.agents/skills/demo/SKILL.md' } })).structuredContent).not.toHaveProperty('hint');
+        expect((await client.callTool({ name: 'get_system_prompt', arguments: { path: 'notes/ex/private.md' } })).structuredContent).toMatchObject({ target: 'notes/ex', content: '# Workspace rules' });
+        expect((await client.callTool({ name: 'invoke_skill', arguments: { name: 'demo' } })).structuredContent).toMatchObject({ description: 'Demo skill', content: 'Demo body', files: [] });
       } finally {
         await client.close();
       }

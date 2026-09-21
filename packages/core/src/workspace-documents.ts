@@ -5,7 +5,7 @@ import { SCREEN_DOCUMENT, type ScreenNotebookConfig, type ScreenPage } from './s
 import { STUDY_DOCUMENT } from './study.js';
 import { FOCUS_DOCUMENT } from './focus-page.js';
 
-export type CommitScope = 'notes' | 'assets' | 'agents' | 'screen' | 'folders' | 'study' | 'study-transition' | 'files' | 'focus' | 'config';
+export type CommitScope = 'notes' | 'assets' | 'agents' | 'skills' | 'screen' | 'folders' | 'study' | 'study-transition' | 'files' | 'focus' | 'config';
 
 /** A Git-tracked YAML file at the workspace root that the app reads and writes as a whole. */
 export interface WorkspaceDocument<T = unknown> {
