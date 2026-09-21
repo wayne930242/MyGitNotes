@@ -11,6 +11,7 @@ import { headingSlug, resolveWorkspaceHref } from '../lib/workspace-links.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
+import { linkedNotePath, useLinkedNotePreload } from '../lib/use-linked-note-preload.js';
 import { useNoteYouTubeEmbed } from '../lib/use-note-youtube-embed.js';
 
 type BeforeNavigate = () => Promise<boolean>;
@@ -32,6 +33,7 @@ export function WorkspaceLinks({ notebooks, folders, children, onOpenNote }: {
   const surfaceRef = useRef<HTMLDivElement>(null);
   useAltWheelHorizontalScroll(surfaceRef, surfaceRef, '.markdown-table-scroll');
   useNoteYouTubeEmbed(surfaceRef);
+  useLinkedNotePreload(surfaceRef, notebooks);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<{ asset: AssetItem; notebookId: string; } | null>(null);
   const registerBeforeNavigate = useCallback((handler: BeforeNavigate) => {
@@ -66,14 +68,25 @@ export function WorkspaceLinks({ notebooks, folders, children, onOpenNote }: {
     }
     if (link.kind === 'route') {
       if (newTab) window.open(link.url, '_blank', 'noopener,noreferrer');
-      else if (await ready()) navigate(link.url);
+      else {
+        const path = linkedNotePath(href, sourcePath, notebooks, window.location.origin);
+        if (path) {
+          try {
+            await queryClient.fetchQuery(noteLookupOptions(scope, [path], true));
+          } catch (error) {
+            setError((error as Error).message);
+            return;
+          }
+        }
+        if (await ready()) navigate(link.url);
+      }
       return;
     }
     // A link target is read by path instead of being looked up in a client-side note list.
     let note: NoteListItem | undefined;
     if (link.kind === 'path') {
       try {
-        note = (await queryClient.fetchQuery(noteLookupOptions(scope, [link.path], false))).notes[0];
+        note = (await queryClient.fetchQuery(noteLookupOptions(scope, [link.path], !newTab))).notes[0];
       } catch (error) {
         setError((error as Error).message);
         return;
@@ -82,7 +95,11 @@ export function WorkspaceLinks({ notebooks, folders, children, onOpenNote }: {
     const notebook = link.kind === 'path' ? [...notebooks].sort((a, b) => b.root.length - a.root.length).find(nb => link.path === nb.root || link.path.startsWith(`${nb.root}/`)) : undefined;
     if (note && notebook && link.kind === 'path') {
       if (newTab) window.open(`${noteRoute(notebook.id, note.path.slice(notebook.root.length + 1))}${link.anchor ? `#${encodeURIComponent(link.anchor)}` : ''}`, '_blank', 'noopener,noreferrer');
-      else if (await ready()) onOpenNote(note, link.anchor, element);
+      else if (await ready()) {
+        // The destination reads the body from the shared cache and overlays its latest local draft.
+        // Passing a committed body here would pin it ahead of that draft in the routed editor.
+        onOpenNote({ ...note, content: undefined }, link.anchor, element);
+      }
       return;
     }
     if (link.kind === 'path' && notebook) {

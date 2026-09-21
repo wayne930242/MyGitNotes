@@ -56,3 +56,46 @@ it('opens a same-origin absolute URL in a new tab on a modifier click', async ()
   expect(windowOpen).toHaveBeenCalledWith('/notebooks/nb1/notes/a.md', '_blank', 'noopener,noreferrer');
   expect(navigate).not.toHaveBeenCalled();
 });
+
+/* eslint-disable react/no-children-prop -- Required children are explicit in createElement component props. */
+it('keeps the source in place until a cold note body arrives, then reuses that body cache', async () => {
+  const { setNoteQueryScope, noteLookupOptions } = await import('../lib/use-note-queries.js');
+  const scope = { sourceId: 'test:links', revision: '', drafts: {} };
+  setNoteQueryScope(scope);
+  let release!: () => void;
+  const fetcher = vi.fn((_url: string, _init: RequestInit) =>
+    new Promise(resolve => {
+      release = () => resolve({ ok: true, json: async () => ({ revision: '', notes: [{ path: 'notes/b.md', notebookId: 'n', title: 'Target', content: '# Body' }] }) });
+    })
+  );
+  vi.stubGlobal('fetch', fetcher);
+  const onOpenNote = vi.fn();
+  const { getByTestId } = render(createElement(WorkspaceLinks, { notebooks: [{ id: 'n', title: 'Notes', root: 'notes' }], folders: [], onOpenNote, children: link('b.md#heading') }), { wrapper });
+  await act(async () => {
+    fireEvent.click(getByTestId('link'));
+  });
+  expect(onOpenNote).not.toHaveBeenCalled();
+  expect(JSON.parse(fetcher.mock.calls[0][1].body as string)).toMatchObject({ paths: ['notes/b.md'], content: true });
+  await act(async () => release());
+  expect(onOpenNote).toHaveBeenCalledWith(expect.objectContaining({ path: 'notes/b.md', content: undefined }), 'heading', getByTestId('link'));
+  expect(client.getQueryData(noteLookupOptions(scope, ['notes/b.md'], true).queryKey)).toMatchObject({ notes: [{ content: '# Body' }] });
+});
+
+it('opens a preloaded link without another read and leaves draft selection to the destination', async () => {
+  const { setNoteQueryScope, noteLookupOptions } = await import('../lib/use-note-queries.js');
+  const scope = { sourceId: 'test:cached', revision: '', drafts: {} };
+  setNoteQueryScope(scope);
+  client.setDefaultOptions({ queries: { staleTime: Infinity, retry: false } });
+  client.setQueryData(noteLookupOptions(scope, ['notes/b.md'], true).queryKey, { revision: '', notes: [{ path: 'notes/b.md', content: '# Committed' }] });
+  const fetcher = vi.fn();
+  vi.stubGlobal('fetch', fetcher);
+  const onOpenNote = vi.fn();
+  const { getByTestId } = render(createElement(WorkspaceLinks, { notebooks: [{ id: 'n', title: 'Notes', root: 'notes' }], folders: [], onOpenNote, children: link('b.md') }), { wrapper });
+  await act(async () => {
+    fireEvent.click(getByTestId('link'));
+  });
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(onOpenNote).toHaveBeenCalledWith(expect.objectContaining({ path: 'notes/b.md', content: undefined }), '', getByTestId('link'));
+});
+
+/* eslint-enable react/no-children-prop */
