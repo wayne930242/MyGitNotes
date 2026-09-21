@@ -351,7 +351,8 @@ export class MermaidDiagram extends WidgetType {
     // CodeMirror measures a block widget's own box, so spacing lives on this wrapper as padding.
     const wrapper = document.createElement('div');
     wrapper.className = 'live-md-mermaid';
-    wrapper.append(createMermaidBlock(this.source));
+    const diagram = createMermaidBlock(this.source);
+    wrapper.append(diagram);
     this.stop = hydrateMermaid(wrapper, { errorLabel: this.labels.error, onSettled: () => view.requestMeasure() });
     wrapper.addEventListener('mousedown', event => {
       if ((event.target as HTMLElement).closest('button')) return;
@@ -360,6 +361,8 @@ export class MermaidDiagram extends WidgetType {
       view.focus();
     });
     if (!this.readOnly) {
+      const toolbar = document.createElement('div');
+      toolbar.className = 'live-md-mermaid-toolbar';
       const edit = document.createElement('button');
       edit.type = 'button';
       edit.className = 'live-md-mermaid-edit ui-button ui-button-small';
@@ -374,7 +377,8 @@ export class MermaidDiagram extends WidgetType {
         event.stopPropagation();
         this.edit(view, view.posAtDOM(wrapper));
       });
-      wrapper.append(edit);
+      toolbar.append(edit);
+      wrapper.prepend(toolbar);
     }
     return wrapper;
   }

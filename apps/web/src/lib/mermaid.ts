@@ -107,7 +107,7 @@ export function renderMermaid(source: string, appearance: MermaidAppearance): Pr
       // Labels are sized from measured text, so the font faces covering this diagram's characters load first.
       await document.fonts?.load(`16px ${fontFamily}`, source);
       const { default: mermaid } = await import('mermaid');
-      mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true, theme: 'base', look: 'classic', fontFamily, flowchart: { wrappingWidth: 400 }, themeVariables: mermaidThemeVariables(getFamily(appearance.familyId).variants[appearance.mode], fontFamily) });
+      mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true, theme: 'base', look: 'classic', fontFamily, flowchart: { wrappingWidth: 400, useMaxWidth: false }, themeVariables: mermaidThemeVariables(getFamily(appearance.familyId).variants[appearance.mode], fontFamily) });
       const { svg } = await mermaid.render(id, source);
       return { ok: true, svg };
     } catch (error) {

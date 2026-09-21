@@ -1,14 +1,15 @@
 /* Mermaid diagrams: the placeholder `renderNote` emits, the live editor widget and the split-view editor. */
 .note-mermaid { margin: 0 0 1rem; }
 .note-mermaid > pre { margin: 0; }
-.note-mermaid-canvas { display: flex; justify-content: center; overflow-x: auto; }
-.note-mermaid-canvas svg { max-width: 100%; height: auto; }
+.note-mermaid-canvas { display: flex; justify-content: safe center; overflow-x: auto; }
+.note-mermaid-canvas svg { flex: 0 0 auto; height: auto; }
 .note-mermaid-error { border: 1px solid var(--color-danger); border-radius: var(--radius-panel); background: var(--color-danger-soft); color: var(--color-text); padding: 10px 12px; font-size: 13px; }
 .note-mermaid-error strong { color: var(--color-danger); display: block; margin-bottom: 4px; }
 .note-mermaid-error pre { margin: 0; padding: 0; background: none; border: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 ui-monospace, Menlo, monospace; }
-.live-md-mermaid { position: relative; padding: 8px 40px; cursor: text; }
+.live-md-mermaid { padding: 8px 40px; cursor: text; }
 .live-md-mermaid .note-mermaid { margin: 0; }
-.live-md-mermaid-edit { position: absolute; top: 12px; right: 44px; opacity: 0; }
+.live-md-mermaid-toolbar { display: flex; justify-content: flex-end; min-height: 28px; margin-bottom: 4px; }
+.live-md-mermaid-edit { opacity: 0; }
 .live-md-mermaid:hover .live-md-mermaid-edit, .live-md-mermaid-edit:focus-visible { opacity: 1; }
 @media (hover: none) { .live-md-mermaid-edit { opacity: 1; } }
 .mermaid-editor-overlay { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; padding: 16px; background: color-mix(in srgb, var(--color-scrim) 60%, transparent); }
