@@ -39,6 +39,10 @@ function relative(file: string) {
   if (!file || file.startsWith('/') || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Use a repository-relative path with no traversal segments.');
   return file;
 }
+/** A path that may name a directory, accepting one trailing slash. */
+function directoryPath(file: string) {
+  return relative(file.replace(/\/$/, ''));
+}
 function inNotebook(file: string, notebooks: NotebookConfig[]) {
   return notebooks.find(nb => file.startsWith(nb.root + '/') && isNotebookContent(file.slice(nb.root.length + 1), nb));
 }
@@ -59,8 +63,8 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
     if (!blobs.some(e => e.path === file) && !skills.some(e => e.path === file)) throw new SourceError('File is not a configured note, folder metadata or skill file.', 404);
     return (await reader.readFile(file)).toString('utf8');
   };
-  const selected = (file: string, recursive: boolean, pool = blobs) => {
-    relative(file);
+  const selected = (input: string, recursive: boolean, pool = blobs) => {
+    const file = directoryPath(input);
     if (pool === blobs && !inNotebook(file, notebooks)) throw new SourceError('Notebook roots and files outside note directories are protected.', 403);
     const exact = snapshot.entries.find(e => e.path === file);
     if (exact?.type === 'blob') {
@@ -78,8 +82,9 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
     return reader.commitChanges(changes, expected, operation, scope);
   };
   if (operation === 'ls') {
-    const dir = string(args, 'path', '.');
-    if (dir !== '.' && !notebooks.some(nb => nb.root === dir) && !inNotebook(relative(dir), notebooks)) throw new SourceError('List a configured notebook directory.', 403);
+    const input = string(args, 'path', '.');
+    const dir = input === '.' ? input : directoryPath(input);
+    if (dir !== '.' && !notebooks.some(nb => nb.root === dir) && !inNotebook(dir, notebooks)) throw new SourceError('List a configured notebook directory.', 403);
     if (dir !== '.' && !snapshot.entries.some(e => e.path === dir && e.type === 'tree') && !blobs.some(e => e.path.startsWith(dir + '/'))) throw new SourceError('Directory not found.', 404);
     const all = new Map<string, { path: string; type: string; size?: number; }>();
     if (dir === '.') { for (const nb of notebooks) all.set(nb.root, { path: nb.root, type: 'directory' }); }
@@ -158,7 +163,7 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
     return receipt([{ path: file, content }], skill ? 'skills' : 'notes');
   }
   if (operation === 'mkdir') {
-    const dir = relative(string(args, 'path')).replace(/\/(_dir\.yml)?$/, '');
+    const dir = directoryPath(string(args, 'path')).replace(/\/_dir\.yml$/, '');
     if (!inNotebook(dir, notebooks)) throw new SourceError('Create a folder inside a notebook.', 403);
     const exists = snapshot.entries.some((e) => e.path === dir || e.path.startsWith(dir + '/'));
     if (exists && args.overwrite !== true) throw new SourceError('Target already exists.', 409);
@@ -170,7 +175,7 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
     return receipt([{ path: dir + '/_dir.yml', content }]);
   }
   if (operation === 'update_folder_metadata') {
-    const dir = relative(string(args, 'path')).replace(/\/(_dir\.yml)?$/, '');
+    const dir = directoryPath(string(args, 'path')).replace(/\/_dir\.yml$/, '');
     if (!inNotebook(dir, notebooks)) throw new SourceError('Target must be inside a configured notebook.', 403);
     const exists = snapshot.entries.some((e) => e.path === dir || e.path.startsWith(dir + '/'));
     if (!exists) throw new SourceError('Folder does not exist.', 404);
@@ -206,8 +211,8 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
     return receipt([...files.keys()].map(file => ({ path: file, sha: null })), scope);
   }
   if (operation === 'mv' || operation === 'cp') {
-    const from = relative(string(args, 'source'));
-    let to = relative(string(args, 'destination'));
+    const from = directoryPath(string(args, 'source'));
+    let to = directoryPath(string(args, 'destination'));
     const files = selected(from, args.recursive === true);
     if (snapshot.entries.some(e => e.path === to && e.type === 'tree')) to = to + '/' + path.posix.basename(from);
     if (to === from || to.startsWith(from + '/') || from.startsWith(to + '/')) throw new SourceError('Source and destination must be separate paths.');

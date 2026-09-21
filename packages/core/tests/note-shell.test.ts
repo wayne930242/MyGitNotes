@@ -196,6 +196,22 @@ describe('shell-shaped note operations', () => {
     expect(move.body.tree).toHaveLength(4);
     expect(move.body.tree.filter((c: any) => c.sha === null)).toHaveLength(2);
   });
+  it('accepts one trailing slash on directory paths', async () => {
+    const f = fixture();
+    expect(await callNoteShell(f.reader(), 'ls', { path: 'notes/ex/' }, false)).toMatchObject({ path: 'notes/ex', entries: expect.arrayContaining([{ path: 'notes/ex/work', type: 'directory' }]) });
+    await callNoteShell(f.reader(), 'cp', { source: 'notes/ex/work/', destination: 'notes/ex/copied/', recursive: true, revision: f.head() }, true);
+    expect(f.text('notes/ex/copied/b.md')).toBe(f.text('notes/ex/work/b.md'));
+    await callNoteShell(f.reader(), 'mv', { source: 'notes/ex/a.md', destination: 'notes/ex/work/', revision: f.head() }, true);
+    expect(f.files()).toContain('notes/ex/work/a.md');
+    await callNoteShell(f.reader(), 'rm', { paths: ['notes/ex/copied/'], recursive: true, revision: f.head() }, true);
+    expect(f.files().some(p => p.startsWith('notes/ex/copied/'))).toBe(false);
+    await callNoteShell(f.reader(), 'mkdir', { path: 'notes/ex/new/', revision: f.head() }, true);
+    expect(f.text('notes/ex/new/_dir.yml')).toContain('title: new');
+    await callNoteShell(f.reader(), 'update_folder_metadata', { path: 'notes/ex/new/', order: 2, revision: f.head() }, true);
+    expect(f.text('notes/ex/new/_dir.yml')).toContain('order: 2');
+    await expect(callNoteShell(f.reader(), 'ls', { path: 'notes/ex//' }, false)).rejects.toThrow(/traversal/);
+    await expect(callNoteShell(f.reader(), 'ls', { path: '/' }, false)).rejects.toThrow(/traversal/);
+  });
   it('appends and creates notes with one commit each', async () => {
     const f = fixture();
     await callNoteShell(f.reader(), 'write', { path: 'notes/ex/new.md', content: '# New\n', createOnly: true, revision: f.head() }, true);
