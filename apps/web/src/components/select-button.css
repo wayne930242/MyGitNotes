@@ -1,0 +1,8 @@
+/* A primary action joined to its dropdown chevron as one control: square inner corners, a tight seam, no gap. */
+.select-button { display: inline-flex; flex: none; align-items: stretch; }
+.select-button > .ui-button.select-button-primary { min-width: 0; gap: 6px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.select-button > .ui-button.select-button-primary > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.select-button > .ui-button.select-button-primary > svg { width: 16px; height: 16px; flex: none; }
+.select-button > .ui-button.select-button-trigger { flex: none; margin-left: -1px; padding: 0 6px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.select-button > .ui-button.select-button-trigger > svg { width: 14px; height: 14px; color: var(--color-muted); }
+.select-button[data-active] > .ui-button { background: var(--workspace-selection); }

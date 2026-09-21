@@ -10,6 +10,7 @@ import { LoadingStatus } from './LoadingStatus.js';
 import { Button } from './Button.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { DivisionIcon } from './FocusDivision.js';
+import { SelectButtonGroup, SelectButtonPrimary, SelectButtonTrigger } from './SelectButton.js';
 
 type Dialog = { kind: 'name'; } | { kind: 'rename'; id: string; name: string; } | { kind: 'delete'; id: string; name: string; };
 
@@ -31,15 +32,15 @@ export const FocusControls: React.FC<{
   return (
     <>
       {/* A split button: the main part opens the Scratch (or leaves the shown Focus), the chevron lists every Focus. */}
-      <div className='focus-switcher' data-shown={focus.shown ? true : undefined}>
-        <button type='button' className='ui-button focus-switcher-main' title={t(focus.shown ? 'focus.close' : 'focus.openCurrent')} onClick={() => onShow(focus.shown ? null : CURRENT_FOCUS)}>
+      <SelectButtonGroup className='focus-switcher' active={Boolean(focus.shown)}>
+        <SelectButtonPrimary title={t(focus.shown ? 'focus.close' : 'focus.openCurrent')} onClick={() => onShow(focus.shown ? null : CURRENT_FOCUS)}>
           <PanelsTopLeft aria-hidden='true' />
           <span>{label}</span>
-        </button>
+        </SelectButtonPrimary>
         <DropdownMenu.Root>
-          <DropdownMenu.Trigger className='ui-button focus-switcher-menu' aria-label={t('focus.switch')} title={t('focus.switch')}>
+          <SelectButtonTrigger aria-label={t('focus.switch')} title={t('focus.switch')}>
             <ChevronDown aria-hidden='true' />
-          </DropdownMenu.Trigger>
+          </SelectButtonTrigger>
           <DropdownMenu.Portal>
             <DropdownMenu.Content className='focus-menu' align='end' sideOffset={4} collisionPadding={8} aria-label={t('focus.switch')} onEscapeKeyDown={event => event.stopPropagation()}>
               <DropdownMenu.RadioGroup value={focus.shown ?? ''} onValueChange={onShow}>
@@ -70,7 +71,7 @@ export const FocusControls: React.FC<{
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
-      </div>
+      </SelectButtonGroup>
       {focus.mutationError && (
         <p role='alert' className='focus-mutation-error' title={focusErrorMessage(t, focus.mutationError)}>
           <span>{focusErrorMessage(t, focus.mutationError)}</span>

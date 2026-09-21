@@ -19,13 +19,7 @@
 .focus-division-thumbnail small { color: var(--color-muted); font-size: 10px; font-weight: 500; }
 
 /* Toolbar controls and menus. */
-.focus-switcher { display: inline-flex; flex: none; align-items: stretch; max-width: 14rem; }
-.focus-switcher-main { min-width: 0; gap: 6px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.focus-switcher-main > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.focus-switcher-main > svg { width: 16px; height: 16px; flex: none; }
-.focus-switcher-menu { flex: none; margin-left: -1px; padding: 0 6px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.focus-switcher-menu > svg { width: 14px; height: 14px; color: var(--color-muted); }
-.focus-switcher[data-shown] > .ui-button { background: var(--workspace-selection); }
+.focus-switcher { max-width: 14rem; }
 .focus-division-trigger { color: var(--color-text); }
 .focus-mutation-error { display: inline-flex; flex: 0 1 auto; align-items: center; gap: 4px; min-width: 0; max-width: 16rem; margin: 0; color: var(--color-danger); font-size: 12px; }
 .focus-mutation-error > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
