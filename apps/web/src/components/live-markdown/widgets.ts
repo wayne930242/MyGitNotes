@@ -1,10 +1,14 @@
 import { escapeHtml } from '../../lib/directives.js';
 import { EditorView, WidgetType } from '@codemirror/view';
+import { isolateHistory } from '@codemirror/commands';
+import { syntaxTree } from '@codemirror/language';
 import { renderNote } from '../../lib/markdown.js';
 import { formatDateYMD } from '../../lib/date-utils.js';
 import { setTaskChecked, setTokenValue } from '../../lib/task-tokens.js';
 import { TASK_TOKEN_ICON_SVG } from '../../lib/task-icons.js';
 import { activateYouTubeEmbed, populateYouTubeEmbed, type YouTubeLabels } from '../../lib/youtube-embed.js';
+import { createMermaidBlock, hydrateMermaid, replaceMermaidSource } from '../../lib/mermaid.js';
+import { type MermaidEditorLabels, openMermaidEditor } from '../../lib/mermaid-editor.js';
 import { chipEditChanged } from './chip-editing.js';
 
 function externalLinkIcon(href: string, label: string, sourcePath: string): HTMLAnchorElement {
@@ -327,5 +331,76 @@ export class YouTubeWidget extends WidgetType {
   }
   get estimatedHeight() {
     return 280;
+  }
+}
+
+export interface MermaidLabels extends MermaidEditorLabels {
+  edit: string;
+}
+/** A top-level ```mermaid fence drawn as its diagram; the raw source returns when the cursor enters the fence. */
+export class MermaidDiagram extends WidgetType {
+  private stop = () => {};
+  constructor(readonly source: string, readonly readOnly: boolean, readonly labels: MermaidLabels) {
+    super();
+  }
+  // Position is left out on purpose: an edit above the fence must keep the drawn diagram instead of redrawing it.
+  eq(other: MermaidDiagram) {
+    return this.source === other.source && this.readOnly === other.readOnly && (Object.keys(this.labels) as (keyof MermaidLabels)[]).every(key => this.labels[key] === other.labels[key]);
+  }
+  toDOM(view: EditorView) {
+    // CodeMirror measures a block widget's own box, so spacing lives on this wrapper as padding.
+    const wrapper = document.createElement('div');
+    wrapper.className = 'live-md-mermaid';
+    wrapper.append(createMermaidBlock(this.source));
+    this.stop = hydrateMermaid(wrapper, { errorLabel: this.labels.error, onSettled: () => view.requestMeasure() });
+    wrapper.addEventListener('mousedown', event => {
+      if ((event.target as HTMLElement).closest('button')) return;
+      event.preventDefault();
+      view.dispatch({ selection: { anchor: view.posAtDOM(wrapper) } });
+      view.focus();
+    });
+    if (!this.readOnly) {
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'live-md-mermaid-edit ui-button ui-button-small';
+      edit.textContent = this.labels.edit;
+      edit.setAttribute('aria-label', this.labels.edit);
+      edit.addEventListener('mousedown', event => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      edit.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.edit(view, view.posAtDOM(wrapper));
+      });
+      wrapper.append(edit);
+    }
+    return wrapper;
+  }
+  private edit(view: EditorView, pos: number) {
+    let node: ReturnType<ReturnType<typeof syntaxTree>['resolveInner']> | null = syntaxTree(view.state).resolveInner(pos, 1);
+    while (node && node.name !== 'FencedCode') node = node.parent;
+    if (!node) return;
+    const { from, to } = node;
+    const fence = view.state.sliceDoc(from, to);
+    openMermaidEditor({
+      source: this.source,
+      labels: this.labels,
+      onSave: source => {
+        const text = replaceMermaidSource(fence, source);
+        if (text !== fence) view.dispatch({ changes: { from, to, insert: text }, annotations: isolateHistory.of('full'), userEvent: 'input' });
+      },
+      onClose: () => view.focus(),
+    });
+  }
+  destroy() {
+    this.stop();
+  }
+  ignoreEvent() {
+    return true;
+  }
+  get estimatedHeight() {
+    return 240;
   }
 }

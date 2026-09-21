@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { NoteExportMenu } from './NoteExportMenu.js';
@@ -43,6 +43,8 @@ it('prints the rendered note from a hidden frame for PDF export', async () => {
   render(<NoteExportMenu className='x' path='notes/a/a.md' title='Alpha' content={'# Alpha\n\n![Diagram](attachments/diagram.png)'} copyState='idle' onCopy={vi.fn()} />);
   await open();
   fireEvent.click(screen.getByRole('menuitem', { name: 'Download (PDF)' }));
+  // The frame appears once the note's diagrams have been drawn.
+  await waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
   const frame = document.querySelector('iframe');
   expect(frame?.srcdoc).toContain('<title>Alpha</title>');
   expect(frame?.srcdoc).toContain('<h1');

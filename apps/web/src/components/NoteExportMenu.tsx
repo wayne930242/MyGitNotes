@@ -29,7 +29,7 @@ export function NoteExportMenu({ path, title, content, copyState, onCopy, iconSi
         <DropdownMenu.Content className='focus-menu' align='end' sideOffset={4} collisionPadding={8} aria-label={t('editor.export')} onEscapeKeyDown={event => event.stopPropagation()}>
           <DropdownMenu.Item onSelect={onCopy}><Copy size={14} aria-hidden='true' /><span>{t('editor.exportCopy')}</span></DropdownMenu.Item>
           <DropdownMenu.Item onSelect={() => downloadTextFile(filename, content, 'text/markdown;charset=utf-8')}><FileText size={14} aria-hidden='true' /><span>{t('editor.exportMarkdown')}</span></DropdownMenu.Item>
-          <DropdownMenu.Item onSelect={() => printNoteAsPdf(title || filename, content, path)}><Printer size={14} aria-hidden='true' /><span>{t('editor.exportPdf')}</span></DropdownMenu.Item>
+          <DropdownMenu.Item onSelect={() => void printNoteAsPdf(title || filename, content, path, t('mermaid.error'))}><Printer size={14} aria-hidden='true' /><span>{t('editor.exportPdf')}</span></DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

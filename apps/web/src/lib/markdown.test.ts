@@ -281,3 +281,22 @@ describe('renderNote generic directives and MDX Layer 2', () => {
     expect(html).toContain('機密內容');
   });
 });
+
+describe('renderNote mermaid diagrams', () => {
+  it('turns a mermaid fence into a placeholder that holds the diagram source as text', () => {
+    const html = renderNote('# Plan\n\n```mermaid\nflowchart TB\n  A["起點 & <終點>"] --> B\n```\n', 'notes/demo/n.md');
+    expect(html).toContain('class="note-mermaid"');
+    expect(html).toContain('<pre>flowchart TB\n  A[&quot;起點 &amp; &lt;終點&gt;&quot;] --&gt; B</pre>');
+    expect(html).not.toContain('language-mermaid');
+  });
+
+  it('recognises the tilde fence and a case-insensitive info string', () => {
+    expect(renderNote('~~~Mermaid\ngraph LR\n~~~\n', 'n.md')).toContain('class="note-mermaid"');
+  });
+
+  it('leaves other fenced blocks as code', () => {
+    const html = renderNote('```js\nconst a = 1;\n```\n', 'n.md');
+    expect(html).not.toContain('note-mermaid');
+    expect(html).toContain('language-js');
+  });
+});

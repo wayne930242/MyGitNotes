@@ -16,6 +16,7 @@ import { Select } from './Select.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { youtubeLabels } from '../lib/youtube-embed.js';
 import { LoadingStatus } from './LoadingStatus.js';
+import { NoteHtml } from './NoteHtml.js';
 
 export function StudyLaneSettings({ progression, disabled, onChange }: { progression: StudyProgression; disabled: boolean; onChange: (value: StudyProgression) => void; }) {
   const { t } = useTranslation();
@@ -256,7 +257,7 @@ function StudyLaneCard({ note: listed, row, controller, disabled, onDone, onOpen
             if (Math.abs(dx) >= 75 && Math.abs(dx) >= Math.abs(dy) * 1.5) turnPage(index + (dx < 0 ? 1 : -1));
           }}
         >
-          <div className='prose-custom' data-markdown-view dangerouslySetInnerHTML={{ __html: renderNote(pages[index], note.path, t('preview.scrollableTable'), youtubeLabels(t)) }} />
+          <NoteHtml className='prose-custom' html={renderNote(pages[index], note.path, t('preview.scrollableTable'), youtubeLabels(t))} />
         </div>
       </article>
       <StudyFooter progression={row.progression!} status={note.status} pageCount={pages.length} page={index} revealed={revealed} canRate={canRate} disabled={disabled} previous={previous} next={next} onMove={onMove} onPage={turnPage} onRate={rate} onDone={onDone} more={more} remaining={remaining} />

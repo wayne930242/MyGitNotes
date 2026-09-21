@@ -9,7 +9,8 @@ import { DONE_EMOJI, DUE_EMOJI, findToken, isTaskLine, START_EMOJI, TIMESTAMP_EM
 import type { I18nContextValue } from '../../lib/i18n/index.js';
 import { LiveMarkdownDirective } from '../LiveMarkdownDirective.js';
 import { LiveMarkdownTable, tableUIState } from '../LiveMarkdownTable.js';
-import { BulletMarker, DateAdder, ExternalLink, MdxImportWidget, PageBreak, PageFooter, RenderedMarkdown, TaskCheckbox, TokenChip, TokenEditor, YouTubeWidget } from './widgets.js';
+import { isMermaidInfo, parseMermaidFence } from '../../lib/mermaid.js';
+import { BulletMarker, DateAdder, ExternalLink, MdxImportWidget, MermaidDiagram, PageBreak, PageFooter, RenderedMarkdown, TaskCheckbox, TokenChip, TokenEditor, YouTubeWidget } from './widgets.js';
 import { chipEditState } from './chip-editing.js';
 
 export function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string, pageLabel: string, youtubeOwner: string, t: I18nContextValue['t']): DecorationSet {
@@ -56,6 +57,14 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
             marks.push(Decoration.line({ class: 'live-md-quote', attributes: { style: `--quote-depth:${depth}` } }).range(line.from));
           }
           if (line.number === state.doc.lines) break;
+        }
+      }
+      if (name === 'FencedCode' && !editing && node.node.parent?.name === 'Document') {
+        const info = node.node.getChild('CodeInfo');
+        if (info && isMermaidInfo(state.sliceDoc(info.from, info.to))) {
+          const labels = { edit: t('mermaid.edit'), error: t('mermaid.error'), title: t('mermaid.editorTitle'), source: t('mermaid.source'), preview: t('mermaid.preview'), save: t('common.save'), cancel: t('common.cancel') };
+          marks.push(Decoration.replace({ widget: new MermaidDiagram(parseMermaidFence(state.sliceDoc(from, to)).source, state.readOnly, labels), block: true }).range(from, to));
+          return false;
         }
       }
       if (name === 'FencedCode' || name === 'CodeBlock') {

@@ -4,12 +4,18 @@ import DOMPurify from 'dompurify';
 import { parseYouTubeUrl } from '@mygitnotes/core/screen-page';
 import { parseR2Reference, r2AssetUrl, r2PreviewType } from '@mygitnotes/core/r2-references';
 import { headingSlug, resolveWorkspaceHref } from './workspace-links.js';
-import { stripMdxImports, transformDirectives, transformMdxComponents } from './directives.js';
+import { escapeHtml, stripMdxImports, transformDirectives, transformMdxComponents } from './directives.js';
+import { isMermaidInfo } from './mermaid.js';
 import { DEFAULT_YOUTUBE_LABELS, type YouTubeDisplayMode, type YouTubeLabels } from './youtube-embed.js';
 
 // CommonMark cannot close emphasis when a full-width punctuation mark sits before the delimiter and
 // a CJK character after it, so `**二口女（ふたくちおんな）**意象` renders as literal asterisks.
 const md = new Marked(markedCjkFriendly());
+
+// A mermaid fence renders to a placeholder holding its source as text; sanitized HTML cannot carry the SVG, so each
+// surface draws the diagram once the HTML is mounted (see hydrateMermaid). The source stays in the <pre> because
+// DOMPurify drops an attribute value containing `-->`, which every flowchart edge does.
+md.use({ renderer: { code: ({ text, lang }) => isMermaidInfo(lang ?? '') ? `<div class="note-mermaid"><pre>${escapeHtml(text)}</pre></div>\n` : false } });
 
 export const DOMPURIFY_DIRECTIVE_CONFIG = { ADD_TAGS: ['iframe', 'details', 'summary', 'aside', 'section', 'article', 'header', 'footer', 'figure', 'figcaption', 'abbr', 'svg', 'path', 'circle', 'cite'], ADD_ATTR: ['allow', 'allowfullscreen', 'loading', 'data-video-id', 'data-start', 'data-youtube-mode', 'data-youtube-mode-option', 'data-youtube-session', 'data-youtube-source-url', 'data-youtube-copy', 'data-copy-label', 'data-copied-label', 'data-copy-failed-label', 'controls', 'preload', 'data-type', 'data-variant', 'data-stat', 'data-cols', 'data-col-span', 'data-direction', 'data-arrow', 'data-icon', 'data-qrcode', 'data-size', 'data-component-name', 'data-lucide', 'data-slide-index', 'data-vertical', 'data-label', 'data-card-type', 'open', 'aria-label', 'aria-hidden', 'style', 'viewBox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'] };
 

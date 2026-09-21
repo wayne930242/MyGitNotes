@@ -1,4 +1,5 @@
 import { renderNote } from './markdown.js';
+import { currentAppearance, renderMermaidBlocks } from './mermaid.js';
 
 const PRINT_STYLE = `
   body { margin: 0; padding: 0; font: 11pt/1.6 -apple-system, 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; color: CanvasText; }
@@ -11,6 +12,9 @@ const PRINT_STYLE = `
   table { border-collapse: collapse; width: 100%; }
   th, td { border: 1px solid color-mix(in srgb, currentColor 35%, transparent); padding: 0.3em 0.6em; text-align: left; }
   a { color: inherit; }
+  .note-mermaid { margin: 0 0 1em; text-align: center; break-inside: avoid; }
+  .note-mermaid-error { text-align: left; border: 1px solid currentColor; border-radius: 4px; padding: 0.5em 0.8em; }
+  .note-mermaid-error pre { margin: 0.4em 0 0; background: none; padding: 0; }
   .markdown-table-scroll { overflow: visible; }
   @page { margin: 18mm; }
 `;
@@ -25,16 +29,23 @@ export function downloadTextFile(filename: string, text: string, type: string): 
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** The note's printable body: `renderNote` HTML with its diagrams drawn, on the light variant since paper is white. */
+export async function renderPrintableNote(content: string, notePath: string, errorLabel?: string): Promise<string> {
+  const printable = new DOMParser().parseFromString(renderNote(content, notePath), 'text/html');
+  // The print frame has no viewport, so lazy images never approach an intersection threshold.
+  for (const image of printable.images) image.removeAttribute('loading');
+  await renderMermaidBlocks(printable.body, { ...currentAppearance(), mode: 'light' }, { errorLabel });
+  return printable.body.innerHTML;
+}
+
 /** Opens the browser's print dialog on the rendered note, where "Save as PDF" produces the file. */
-export function printNoteAsPdf(title: string, content: string, notePath: string): void {
+export async function printNoteAsPdf(title: string, content: string, notePath: string, errorLabel?: string): Promise<void> {
   const frame = document.createElement('iframe');
   frame.setAttribute('aria-hidden', 'true');
   frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
   const escapedTitle = title.replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char] ?? char);
-  const printable = new DOMParser().parseFromString(renderNote(content, notePath), 'text/html');
-  // The print frame has no viewport, so lazy images never approach an intersection threshold.
-  for (const image of printable.images) image.removeAttribute('loading');
-  frame.srcdoc = `<!doctype html><html><head><meta charset='utf-8'><title>${escapedTitle}</title><style>${PRINT_STYLE}</style></head><body>${printable.body.innerHTML}</body></html>`;
+  const body = await renderPrintableNote(content, notePath, errorLabel);
+  frame.srcdoc = `<!doctype html><html><head><meta charset='utf-8'><title>${escapedTitle}</title><style>${PRINT_STYLE}</style></head><body>${body}</body></html>`;
   const remove = () => frame.remove();
   frame.addEventListener('load', async () => {
     const view = frame.contentWindow;

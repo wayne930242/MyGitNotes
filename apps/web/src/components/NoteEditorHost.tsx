@@ -9,6 +9,7 @@ import { useTranslation } from '../lib/i18n/index.js';
 import { NoteEditor, type NoteEditorHandle, type NoteEditorProps } from './NoteEditor.js';
 import { youtubeLabels } from '../lib/youtube-embed.js';
 import { LoadingStatus } from './LoadingStatus.js';
+import { NoteHtml } from './NoteHtml.js';
 
 export interface HostedNoteEditorProps {
   path: string;
@@ -111,7 +112,7 @@ const NotePreview: React.FC<{ note: NoteItem; onClaim: () => void; }> = ({ note,
         </button>
       </div>
       <div className='note-preview-body'>
-        <div className='prose-custom screen-markdown' data-markdown-view dangerouslySetInnerHTML={{ __html: html }} />
+        <NoteHtml className='prose-custom screen-markdown' html={html} />
       </div>
     </div>
   );

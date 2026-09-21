@@ -10,6 +10,7 @@ import { youtubeLabels } from '../lib/youtube-embed.js';
 import { useNoteList } from '../lib/use-note-queries.js';
 import { NoteListSentinel } from './NoteListSentinel.js';
 import { LoadingStatus } from './LoadingStatus.js';
+import { NoteHtml } from './NoteHtml.js';
 
 export type ScreenAsset = AssetItem & { notebookId: string; };
 export interface ScreenContentProps {
@@ -58,7 +59,7 @@ export function ScreenCard({ item, view, controls, ...content }: ScreenContentPr
         )}
       </header>
       <div className='screen-card-content' tabIndex={0} aria-label={title}>
-        {note ? typeof note.content !== 'string' ? <LoadingStatus className='screen-summary'>{t('notes.loading')}</LoadingStatus> : view === 'thumbnail' ? <p className='screen-summary'>{noteSummary(note.content)}</p> : <div className='prose-custom screen-markdown' data-markdown-view dangerouslySetInnerHTML={{ __html: html }} /> : item.kind === 'folder'
+        {note ? typeof note.content !== 'string' ? <LoadingStatus className='screen-summary'>{t('notes.loading')}</LoadingStatus> : view === 'thumbnail' ? <p className='screen-summary'>{noteSummary(note.content)}</p> : <NoteHtml className='prose-custom screen-markdown' html={html} /> : item.kind === 'folder'
           ? (
             <div className='screen-folder-list'>
               {folderNotes.error && <p role='alert' className='screen-missing'>{folderNotes.error}</p>}

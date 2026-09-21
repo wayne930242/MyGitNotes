@@ -42,6 +42,11 @@ export const zhTW: Record<TranslationKey, string> = {
   'coreUpdate.update': '更新 Core',
   'coreUpdate.check': '重新檢查',
 
+  'mermaid.error': '無法繪製圖表',
+  'mermaid.edit': '編輯圖表',
+  'mermaid.editorTitle': '編輯 Mermaid 圖表',
+  'mermaid.source': '圖表原始碼',
+  'mermaid.preview': '預覽',
   'youtube.play': '播放 YouTube 影片',
   'youtube.player': 'YouTube 影片播放器',
   'youtube.modes': 'YouTube 顯示模式',

@@ -40,6 +40,11 @@ export const en = {
   'coreUpdate.update': 'Update Core',
   'coreUpdate.check': 'Check again',
 
+  'mermaid.error': 'Diagram could not be rendered',
+  'mermaid.edit': 'Edit diagram',
+  'mermaid.editorTitle': 'Edit Mermaid diagram',
+  'mermaid.source': 'Diagram source',
+  'mermaid.preview': 'Preview',
   'youtube.play': 'Play YouTube video',
   'youtube.player': 'YouTube video player',
   'youtube.modes': 'YouTube display mode',

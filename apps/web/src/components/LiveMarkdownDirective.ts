@@ -2,6 +2,7 @@ import { EditorView, WidgetType } from '@codemirror/view';
 import { isolateHistory } from '@codemirror/commands';
 import { DIRECTIVE_TEMPLATES, type DirectiveModel, HANDOUT_VARIANTS, parseDirectiveModel, serializeDirectiveModel } from '../lib/directives.js';
 import { renderNote } from '../lib/markdown.js';
+import { hydrateMermaid } from '../lib/mermaid.js';
 import type { TranslationKey } from '../lib/i18n/en.js';
 import { DEFAULT_YOUTUBE_LABELS, youtubeLabels } from '../lib/youtube-embed.js';
 
@@ -16,6 +17,18 @@ export class LiveMarkdownDirective extends WidgetType {
     return (this.text === other.text && this.path === other.path && this.from === other.from && this.readOnly === other.readOnly && this.currentType === other.currentType && this.currentVariant === other.currentVariant);
   }
 
+  private stopMermaid = () => {};
+
+  /** Draws the mermaid diagrams a directive's body holds, replacing the redraw watch of any earlier body. */
+  private hydrateDiagrams(view: EditorView, body: HTMLElement) {
+    this.stopMermaid();
+    this.stopMermaid = hydrateMermaid(body, { errorLabel: this.t?.('mermaid.error'), onSettled: () => view.requestMeasure() });
+  }
+
+  destroy() {
+    this.stopMermaid();
+  }
+
   toDOM(view: EditorView) {
     const model: DirectiveModel = parseDirectiveModel(this.text);
 
@@ -27,6 +40,7 @@ export class LiveMarkdownDirective extends WidgetType {
 
     if (this.readOnly) {
       root.innerHTML = renderNote(this.text, this.path, undefined, this.t ? youtubeLabels(this.t) : DEFAULT_YOUTUBE_LABELS);
+      this.hydrateDiagrams(view, root);
       return root;
     }
 
@@ -40,6 +54,7 @@ export class LiveMarkdownDirective extends WidgetType {
 
     // Render Preview Mode (Default)
     const renderPreview = () => {
+      this.stopMermaid();
       root.innerHTML = '';
       root.classList?.remove('live-directive-editing');
 
@@ -150,6 +165,7 @@ export class LiveMarkdownDirective extends WidgetType {
       });
 
       root.append(toolbar, contentContainer);
+      this.hydrateDiagrams(view, contentContainer);
     };
 
     // Render Full Inline Form Editor
