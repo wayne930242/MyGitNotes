@@ -36,14 +36,24 @@ function measureFences(view: EditorView): FenceBox[] {
 }
 
 const HOLD_FRAMES = 30;
+const holds = new WeakMap<EditorView, () => void>();
+let placing = false;
 const USER_SCROLL_EVENTS = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
 
 /**
  * Puts the line at `pos` at `top` and keeps it there while block heights above it settle (an unmeasured
- * diagram is estimated until drawn, so the first placement can land off). The user's own scroll input ends the hold.
+ * diagram is estimated until drawn, so the first placement can land off). The user's own scroll input, any
+ * later transaction that is not the hold's own placement, and the view going away end the hold.
  */
-function holdTop(view: EditorView, pos: number, top: number) {
-  const place = () => view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: 'start', yMargin: top }) });
+export function holdTop(view: EditorView, pos: number, top: number) {
+  const place = () => {
+    placing = true;
+    try {
+      view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: 'start', yMargin: top }) });
+    } finally {
+      placing = false;
+    }
+  };
   place();
   if (typeof requestAnimationFrame === 'undefined') return;
   const scroller = view.scrollDOM;
@@ -52,8 +62,11 @@ function holdTop(view: EditorView, pos: number, top: number) {
   const stop = () => {
     cancelAnimationFrame(frame);
     for (const type of USER_SCROLL_EVENTS) scroller.removeEventListener(type, stop);
+    if (holds.get(view) === stop) holds.delete(view);
   };
+  holds.set(view, stop);
   const check = () => {
+    if (!view.dom.isConnected) return stop();
     const current = view.documentTop + view.lineBlockAt(pos).top - scroller.getBoundingClientRect().top;
     if (Math.abs(current - top) > 1) place();
     if (++frames < HOLD_FRAMES) frame = requestAnimationFrame(check);
@@ -69,6 +82,8 @@ function holdTop(view: EditorView, pos: number, top: number) {
  * lands in view; leaving keeps the cursor's line where it was, so what the user is reading stays put.
  */
 export function anchorMermaidSwap(trs: readonly Transaction[], view: EditorView) {
+  if (placing) return view.update(trs);
+  holds.get(view)?.();
   if (trs.some(tr => tr.docChanged)) return view.update(trs);
   const before = measureFences(view);
   const head = trs[trs.length - 1].newSelection.main.head;
