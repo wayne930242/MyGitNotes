@@ -79,8 +79,8 @@ it.each([['a newer schema_version', 2, /requires a newer Core/], ['no workspace'
   if (version) writeWorkspace(root, version);
   const env: NodeJS.ProcessEnv = { ...process.env, PORT: '0', HOST: '127.0.0.1', APP_URL: '', VERCEL: '', MYGITNOTES_DEV_PORTS_FILE: path.join(root, '.mygitnotes-dev-ports.json') };
   for (const key of ['REPO_ROOT', 'MYGITNOTES_LOCAL_PATH', 'GITHUB_NOTES_LOCAL_PATH', 'MYGITNOTES_SOURCE', 'GITHUB_NOTES_SOURCE']) delete env[key];
-  if (version) env.MYGITNOTES_LOCAL_PATH = root;
-  // Without a local path the server reads the application root, which on Core holds no workspace.
+  // An explicit path keeps a local .env from filling in a real workspace; the empty directory holds none.
+  env.MYGITNOTES_LOCAL_PATH = root;
   child = spawn(process.execPath, ['--import', 'tsx', 'apps/local-server/src/index.ts', '--local'], { cwd: path.resolve('.'), env, stdio: ['ignore', 'pipe', 'pipe'] });
   let stderr = '';
   child.stderr!.on('data', data => {
