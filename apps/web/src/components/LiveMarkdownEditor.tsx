@@ -20,6 +20,7 @@ import { LiveMarkdownTable, tableUIState } from './LiveMarkdownTable.js';
 import { chipEditState } from './live-markdown/chip-editing.js';
 import { atCompletionSource } from './live-markdown/at-completion-source.js';
 import { cjkEmphasis } from './live-markdown/cjk-emphasis.js';
+import { anchorMermaidSwap } from './live-markdown/mermaid-scroll.js';
 import { liveDecorations } from './live-markdown/decorations.js';
 import { cardBackgroundLayer, theme } from './live-markdown/theme.js';
 import { attachGutterLineCopy } from './live-markdown/gutter-line-copy.js';
@@ -130,6 +131,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
     });
     const view = new EditorView({
       parent: host.current!,
+      dispatchTransactions: anchorMermaidSwap,
       state: EditorState.create({
         doc: content,
         extensions: [
