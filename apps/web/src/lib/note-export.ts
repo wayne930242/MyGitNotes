@@ -31,11 +31,20 @@ export function printNoteAsPdf(title: string, content: string, notePath: string)
   frame.setAttribute('aria-hidden', 'true');
   frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
   const escapedTitle = title.replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char] ?? char);
-  frame.srcdoc = `<!doctype html><html><head><meta charset='utf-8'><title>${escapedTitle}</title><style>${PRINT_STYLE}</style></head><body>${renderNote(content, notePath)}</body></html>`;
+  const printable = new DOMParser().parseFromString(renderNote(content, notePath), 'text/html');
+  // The print frame has no viewport, so lazy images never approach an intersection threshold.
+  for (const image of printable.images) image.removeAttribute('loading');
+  frame.srcdoc = `<!doctype html><html><head><meta charset='utf-8'><title>${escapedTitle}</title><style>${PRINT_STYLE}</style></head><body>${printable.body.innerHTML}</body></html>`;
   const remove = () => frame.remove();
-  frame.addEventListener('load', () => {
+  frame.addEventListener('load', async () => {
     const view = frame.contentWindow;
     if (!view) return remove();
+    await Promise.all([...view.document.images].map(image => image.complete
+      ? image.decode?.().catch(() => undefined)
+      : new Promise<void>(resolve => {
+          image.addEventListener('load', () => resolve(), { once: true });
+          image.addEventListener('error', () => resolve(), { once: true });
+        })));
     view.addEventListener('afterprint', remove);
     view.focus();
     view.print();

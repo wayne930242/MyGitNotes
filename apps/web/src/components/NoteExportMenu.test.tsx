@@ -40,11 +40,12 @@ it('downloads the note content as a markdown file named after the note', async (
 });
 
 it('prints the rendered note from a hidden frame for PDF export', async () => {
-  menu();
+  render(<NoteExportMenu className='x' path='notes/a/a.md' title='Alpha' content={'# Alpha\n\n![Diagram](attachments/diagram.png)'} copyState='idle' onCopy={vi.fn()} />);
   await open();
   fireEvent.click(screen.getByRole('menuitem', { name: 'Download (PDF)' }));
   const frame = document.querySelector('iframe');
   expect(frame?.srcdoc).toContain('<title>Alpha</title>');
   expect(frame?.srcdoc).toContain('<h1');
-  expect(frame?.srcdoc).toContain('Body text.');
+  expect(frame?.srcdoc).toContain('/raw-assets/notes/a/attachments/diagram.png');
+  expect(frame?.srcdoc).not.toContain('loading="lazy"');
 });
