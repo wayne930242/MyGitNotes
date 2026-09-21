@@ -9,12 +9,13 @@ import { DONE_EMOJI, DUE_EMOJI, findToken, isTaskLine, START_EMOJI, TIMESTAMP_EM
 import type { I18nContextValue } from '../../lib/i18n/index.js';
 import { LiveMarkdownDirective } from '../LiveMarkdownDirective.js';
 import { LiveMarkdownTable, tableUIState } from '../LiveMarkdownTable.js';
-import { isMermaidInfo, parseMermaidFence } from '../../lib/mermaid.js';
 import { BulletMarker, DateAdder, ExternalLink, MdxImportWidget, MermaidDiagram, PageBreak, PageFooter, RenderedMarkdown, TaskCheckbox, TokenChip, TokenEditor, YouTubeWidget } from './widgets.js';
 import { chipEditState } from './chip-editing.js';
+import { mermaidFenceAt } from './mermaid-fence.js';
 
 export function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string, pageLabel: string, youtubeOwner: string, t: I18nContextValue['t']): DecorationSet {
   const marks: Range<Decoration>[] = [];
+  const mermaidRanges: { from: number; to: number; }[] = [];
   let pageNumber = 1;
   const references = marked.lexer(state.doc.toString()).links;
   const active = (from: number, to: number) => focused && !state.readOnly && state.selection.ranges.some(range => state.doc.lineAt(range.from).from <= to && state.doc.lineAt(range.to).to >= from);
@@ -59,11 +60,14 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
           if (line.number === state.doc.lines) break;
         }
       }
-      if (name === 'FencedCode' && !editing && node.node.parent?.name === 'Document') {
-        const info = node.node.getChild('CodeInfo');
-        if (info && isMermaidInfo(state.sliceDoc(info.from, info.to))) {
-          const labels = { edit: t('mermaid.edit'), error: t('mermaid.error'), title: t('mermaid.editorTitle'), source: t('mermaid.source'), preview: t('mermaid.preview'), save: t('common.save'), cancel: t('common.cancel') };
-          marks.push(Decoration.replace({ widget: new MermaidDiagram(parseMermaidFence(state.sliceDoc(from, to)).source, state.readOnly, labels), block: true }).range(from, to));
+      if (name === 'FencedCode' && !editing) {
+        const fence = mermaidFenceAt(state, node.node);
+        if (fence) {
+          const labels = { edit: t('mermaid.edit'), error: t('mermaid.error'), title: t('mermaid.editorTitle'), source: t('mermaid.source'), preview: t('mermaid.preview'), save: t('common.save'), cancel: t('common.cancel'), conflict: t('mermaid.saveConflict') };
+          // Inside a quote or list item the widget takes the opening line's prefix with it, so no half line is left behind.
+          const start = state.doc.lineAt(from).from;
+          mermaidRanges.push({ from: start, to });
+          marks.push(Decoration.replace({ widget: new MermaidDiagram(fence.source, state.readOnly, labels), block: true }).range(start, to));
           return false;
         }
       }
@@ -166,6 +170,11 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
     },
   });
   flushQuoteReveal();
+  // The prefix hiding and list bullet decorations of a drawn fence's opening line sit inside its widget's range.
+  for (let i = marks.length - 1; i >= 0; i--) {
+    const { from, to, value } = marks[i];
+    if (!(value.spec.widget instanceof MermaidDiagram) && mermaidRanges.some(range => from >= range.from && to <= range.to)) marks.splice(i, 1);
+  }
 
   for (const block of collapsedDirectives) {
     marks.push(Decoration.replace({ widget: new LiveMarkdownDirective(block.rawText, notePath, block.from, state.readOnly, block.type, block.attrs.variant, t), block: true }).range(block.from, block.to));

@@ -1,15 +1,15 @@
 import { escapeHtml } from '../../lib/directives.js';
 import { EditorView, WidgetType } from '@codemirror/view';
 import { isolateHistory } from '@codemirror/commands';
-import { syntaxTree } from '@codemirror/language';
 import { renderNote } from '../../lib/markdown.js';
 import { formatDateYMD } from '../../lib/date-utils.js';
 import { setTaskChecked, setTokenValue } from '../../lib/task-tokens.js';
 import { TASK_TOKEN_ICON_SVG } from '../../lib/task-icons.js';
 import { activateYouTubeEmbed, populateYouTubeEmbed, type YouTubeLabels } from '../../lib/youtube-embed.js';
-import { createMermaidBlock, hydrateMermaid, replaceMermaidSource } from '../../lib/mermaid.js';
+import { createMermaidBlock, hydrateMermaid } from '../../lib/mermaid.js';
 import { type MermaidEditorLabels, openMermaidEditor } from '../../lib/mermaid-editor.js';
 import { chipEditChanged } from './chip-editing.js';
+import { findMermaidFences, relocateMermaidFence } from './mermaid-fence.js';
 
 function externalLinkIcon(href: string, label: string, sourcePath: string): HTMLAnchorElement {
   const anchor = document.createElement('a');
@@ -336,8 +336,10 @@ export class YouTubeWidget extends WidgetType {
 
 export interface MermaidLabels extends MermaidEditorLabels {
   edit: string;
+  /** Shown when the fence being edited can no longer be found in the document. */
+  conflict: string;
 }
-/** A top-level ```mermaid fence drawn as its diagram; the raw source returns when the cursor enters the fence. */
+/** A ```mermaid fence drawn as its diagram; the raw source returns when the cursor enters the fence. */
 export class MermaidDiagram extends WidgetType {
   private stop = () => {};
   constructor(readonly source: string, readonly readOnly: boolean, readonly labels: MermaidLabels) {
@@ -383,17 +385,17 @@ export class MermaidDiagram extends WidgetType {
     return wrapper;
   }
   private edit(view: EditorView, pos: number) {
-    let node: ReturnType<ReturnType<typeof syntaxTree>['resolveInner']> | null = syntaxTree(view.state).resolveInner(pos, 1);
-    while (node && node.name !== 'FencedCode') node = node.parent;
-    if (!node) return;
-    const { from, to } = node;
-    const fence = view.state.sliceDoc(from, to);
+    const opened = findMermaidFences(view.state).find(fence => view.state.doc.lineAt(fence.from).from === pos);
+    if (!opened) return;
     openMermaidEditor({
       source: this.source,
       labels: this.labels,
+      // The document may change while the editor is open, so the fence is found again at save time.
       onSave: source => {
-        const text = replaceMermaidSource(fence, source);
-        if (text !== fence) view.dispatch({ changes: { from, to, insert: text }, annotations: isolateHistory.of('full'), userEvent: 'input' });
+        const fence = relocateMermaidFence(view.state, opened);
+        if (!fence) return this.labels.conflict;
+        const text = fence.withSource(source);
+        if (text !== fence.text) view.dispatch({ changes: { from: fence.from, to: fence.to, insert: text }, annotations: isolateHistory.of('full'), userEvent: 'input' });
       },
       onClose: () => view.focus(),
     });

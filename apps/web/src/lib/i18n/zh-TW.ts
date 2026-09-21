@@ -47,6 +47,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'mermaid.editorTitle': '編輯 Mermaid 圖表',
   'mermaid.source': '圖表原始碼',
   'mermaid.preview': '預覽',
+  'mermaid.saveConflict': '編輯期間文件已變動，找不到原本的圖表，因此未儲存。請先複製原始碼，關閉後重新編輯。',
   'youtube.play': '播放 YouTube 影片',
   'youtube.player': 'YouTube 影片播放器',
   'youtube.modes': 'YouTube 顯示模式',

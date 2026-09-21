@@ -16,6 +16,8 @@
 .mermaid-editor { display: flex; flex-direction: column; width: min(1200px, 100%); height: min(760px, 100%); overflow: hidden; box-shadow: 0 10px 30px color-mix(in srgb, var(--color-scrim) 30%, transparent); }
 .mermaid-editor > header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--color-border); }
 .mermaid-editor > header h2 { flex: 1; margin: 0; font-size: 14px; font-weight: 600; }
+.mermaid-editor-notice { margin: 0; padding: 8px 14px; font-size: 12px; color: var(--color-danger); border-bottom: 1px solid var(--color-border); }
+.mermaid-editor-notice[hidden] { display: none; }
 .mermaid-editor-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .mermaid-editor-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .mermaid-editor-pane + .mermaid-editor-pane { border-left: 1px solid var(--color-border); }

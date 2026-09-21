@@ -12,7 +12,8 @@ export interface MermaidEditorLabels {
 export interface MermaidEditorOptions {
   source: string;
   labels: MermaidEditorLabels;
-  onSave: (source: string) => void;
+  /** Returns a message to keep the dialog open with the write refused. */
+  onSave: (source: string) => string | void;
   /** Runs after the dialog closes, whether the diagram was saved or not. */
   onClose: () => void;
 }
@@ -64,7 +65,11 @@ export function openMermaidEditor({ source, labels, onSave, onClose }: MermaidEd
   preview.append(block);
   previewPane.append(previewHeading, preview);
   body.append(sourcePane, previewPane);
-  dialog.append(header, body);
+  const notice = document.createElement('p');
+  notice.className = 'mermaid-editor-notice';
+  notice.setAttribute('role', 'alert');
+  notice.hidden = true;
+  dialog.append(header, notice, body);
   overlay.append(dialog);
 
   const options = { errorLabel: labels.error };
@@ -86,7 +91,12 @@ export function openMermaidEditor({ source, labels, onSave, onClose }: MermaidEd
     onClose();
   };
   const commit = () => {
-    onSave(textarea.value);
+    const refusal = onSave(textarea.value);
+    if (refusal) {
+      notice.textContent = refusal;
+      notice.hidden = false;
+      return;
+    }
     close();
   };
   function onKeyDown(event: KeyboardEvent) {

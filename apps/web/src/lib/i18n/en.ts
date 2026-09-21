@@ -45,6 +45,7 @@ export const en = {
   'mermaid.editorTitle': 'Edit Mermaid diagram',
   'mermaid.source': 'Diagram source',
   'mermaid.preview': 'Preview',
+  'mermaid.saveConflict': 'The diagram changed while you were editing, so it was not saved. Copy your source, close this dialog and edit it again.',
   'youtube.play': 'Play YouTube video',
   'youtube.player': 'YouTube video player',
   'youtube.modes': 'YouTube display mode',

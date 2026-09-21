@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE_FAMILIES } from './palettes.js';
-import { isMermaidInfo, mermaidThemeVariables, parseMermaidFence, replaceMermaidSource } from './mermaid.js';
+import { isMermaidInfo, mermaidThemeVariables } from './mermaid.js';
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -33,22 +33,5 @@ describe('mermaid fences', () => {
     expect(isMermaidInfo(' Mermaid title')).toBe(true);
     expect(isMermaidInfo('js')).toBe(false);
     expect(isMermaidInfo('')).toBe(false);
-  });
-
-  it('splits a closed fence into opener, source and closer', () => {
-    expect(parseMermaidFence('```mermaid\ngraph LR\n  A --> B\n```')).toEqual({ open: '```mermaid', source: 'graph LR\n  A --> B', close: '```' });
-  });
-
-  it('keeps a longer or tilde fence marker on write-back', () => {
-    expect(replaceMermaidSource('~~~~mermaid\ngraph LR\n~~~~', 'graph TB\n  X --> Y\n')).toBe('~~~~mermaid\ngraph TB\n  X --> Y\n~~~~');
-  });
-
-  it('closes an unterminated fence when writing back', () => {
-    expect(parseMermaidFence('```mermaid\ngraph LR')).toEqual({ open: '```mermaid', source: 'graph LR', close: '```' });
-    expect(replaceMermaidSource('```mermaid\ngraph LR', 'graph TB')).toBe('```mermaid\ngraph TB\n```');
-  });
-
-  it('writes an emptied diagram as an empty fence', () => {
-    expect(replaceMermaidSource('```mermaid\ngraph LR\n```', '\n')).toBe('```mermaid\n```');
   });
 });

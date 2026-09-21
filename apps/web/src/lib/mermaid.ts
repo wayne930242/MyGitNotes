@@ -17,12 +17,6 @@ export interface MermaidOptions {
   onSettled?: () => void;
 }
 
-export interface MermaidFence {
-  open: string;
-  source: string;
-  close: string;
-}
-
 /** Blends an `#rrggbbaa` palette colour over its backdrop; Mermaid derives shades with colour maths that expect opaque hex. */
 function opaque(color: string, backdrop: string): string {
   if (color.length !== 9) return color;
@@ -44,22 +38,6 @@ export function currentAppearance(): MermaidAppearance {
   const root = document.documentElement;
   const mode = root.getAttribute('data-theme-mode');
   return { familyId: getFamily(root.getAttribute('data-theme') ?? '').id, mode: mode === 'light' || mode === 'dark' ? mode : resolveMode('system') };
-}
-
-/** Splits a fenced code block into its opening line, body and closing line. */
-export function parseMermaidFence(text: string): MermaidFence {
-  const lines = text.split('\n');
-  const open = lines[0];
-  const marker = /^\s*(`{3,}|~{3,})/.exec(open)?.[1];
-  const last = lines.length > 1 ? lines[lines.length - 1] : '';
-  const closed = Boolean(marker) && new RegExp(`^\\s*\\${marker![0]}{${marker!.length},}\\s*$`).test(last);
-  return { open, source: lines.slice(1, closed ? -1 : undefined).join('\n'), close: closed ? last : marker ?? '```' };
-}
-
-/** Writes a diagram's new source back between the fence's opening and closing lines. */
-export function replaceMermaidSource(fenceText: string, source: string): string {
-  const fence = parseMermaidFence(fenceText);
-  return [fence.open, ...(source.replace(/\n+$/, '') ? [source.replace(/\n+$/, '')] : []), fence.close].join('\n');
 }
 
 export function isMermaidInfo(info: string): boolean {
