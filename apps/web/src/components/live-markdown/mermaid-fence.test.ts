@@ -146,4 +146,15 @@ describe('split-view save after the document changed underneath', () => {
     expect(view.state.doc.toString()).toBe(`x\n\n${fence}\n\n${fence}\n`);
     expect(document.querySelector('.mermaid-editor-overlay [role="alert"]')).not.toBeNull();
   });
+
+  it('refuses the write when a deleted identical fence lets its twin shift into the opened position', () => {
+    const view = editor(`${fence}\n\n${fence}\n`);
+    view.dom.querySelector<HTMLButtonElement>('.live-md-mermaid-edit')!.click();
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: `${fence}\n` } });
+    const overlay = document.querySelector('.mermaid-editor-overlay')!;
+    overlay.querySelector('textarea')!.value = 'graph TB';
+    overlay.querySelector<HTMLButtonElement>('header .ui-button-primary')!.click();
+    expect(view.state.doc.toString()).toBe(`${fence}\n`);
+    expect(document.querySelector('.mermaid-editor-overlay [role="alert"]')).not.toBeNull();
+  });
 });

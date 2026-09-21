@@ -9,7 +9,7 @@ import { activateYouTubeEmbed, populateYouTubeEmbed, type YouTubeLabels } from '
 import { createMermaidBlock, hydrateMermaid } from '../../lib/mermaid.js';
 import { type MermaidEditorLabels, openMermaidEditor } from '../../lib/mermaid-editor.js';
 import { chipEditChanged } from './chip-editing.js';
-import { findMermaidFences, relocateMermaidFence } from './mermaid-fence.js';
+import { countMermaidTwins, findMermaidFences, relocateMermaidFence } from './mermaid-fence.js';
 
 function externalLinkIcon(href: string, label: string, sourcePath: string): HTMLAnchorElement {
   const anchor = document.createElement('a');
@@ -387,12 +387,13 @@ export class MermaidDiagram extends WidgetType {
   private edit(view: EditorView, pos: number) {
     const opened = findMermaidFences(view.state).find(fence => view.state.doc.lineAt(fence.from).from === pos);
     if (!opened) return;
+    const twins = countMermaidTwins(view.state, opened);
     openMermaidEditor({
       source: this.source,
       labels: this.labels,
       // The document may change while the editor is open, so the fence is found again at save time.
       onSave: source => {
-        const fence = relocateMermaidFence(view.state, opened);
+        const fence = relocateMermaidFence(view.state, opened, twins);
         if (!fence) return this.labels.conflict;
         const text = fence.withSource(source);
         if (text !== fence.text) view.dispatch({ changes: { from: fence.from, to: fence.to, insert: text }, annotations: isolateHistory.of('full'), userEvent: 'input' });

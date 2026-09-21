@@ -81,8 +81,18 @@ export function mermaidFenceAt(state: EditorState, node: SyntaxNode): MermaidFen
   return node.name === 'FencedCode' ? readFence(state, node) : null;
 }
 
-/** Finds the opened fence again: the one still at its position, else the only fence with the same text. */
-export function relocateMermaidFence(state: EditorState, opened: MermaidFence): MermaidFence | null {
+/** How many fences share the opened fence's text; pass it back to relocateMermaidFence when saving. */
+export function countMermaidTwins(state: EditorState, opened: MermaidFence): number {
+  return findMermaidFences(state).filter(fence => fence.text === opened.text).length;
+}
+
+/**
+ * Finds the opened fence again. Identical fences cannot be told apart by text, so the target is
+ * only identified while the number of copies is unchanged: a lone copy is found wherever it moved,
+ * several copies must still sit at the opened position.
+ */
+export function relocateMermaidFence(state: EditorState, opened: MermaidFence, twins: number): MermaidFence | null {
   const same = findMermaidFences(state).filter(fence => fence.text === opened.text);
-  return same.find(fence => fence.from === opened.from) ?? (same.length === 1 ? same[0] : null);
+  if (same.length !== twins) return null;
+  return twins === 1 ? same[0] : same.find(fence => fence.from === opened.from) ?? null;
 }
