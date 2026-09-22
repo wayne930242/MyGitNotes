@@ -18,6 +18,10 @@
       "types": "./dist/agent-skill-metadata.d.ts",
       "import": "./dist/agent-skill-metadata.js"
     },
+    "./frontmatter-patch": {
+      "types": "./dist/frontmatter-patch.d.ts",
+      "import": "./dist/frontmatter-patch.js"
+    },
     "./screen-page": {
       "types": "./dist/screen-page.d.ts",
       "import": "./dist/screen-page.js"

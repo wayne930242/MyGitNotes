@@ -337,8 +337,8 @@ export function createApp(base: string): express.Express {
     app.post('/api/agent-resources/save', async (req, res) => {
       try {
         if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit Agent documents.', 403);
-        const { path: file, content, revision } = req.body;
-        const result = await (res.locals.reader as RemoteSource).saveAgentResource(file, content, revision);
+        const { path: file, content, revision, create } = req.body;
+        const result = await (res.locals.reader as RemoteSource).saveAgentResource(file, content, revision, create);
         res.json({ ...result, path: file });
       } catch (error) {
         fail(res, error);

@@ -9,7 +9,7 @@ import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js'
 import { FolderItem, NotebookConfig, NoteItem, NoteMetadata, WorkspaceConfig } from './types.js';
 import { SourceError } from './github-api.js';
 import { workspaceAgentKind } from './workspace-agent.js';
-import { agentSkillLocation, renamedAgentSkillPath, renameAgentSkillEntryContent, rewriteAgentSkillReferences } from './agent-skill-metadata.js';
+import { agentSkillLocation, renameAgentSkillEntryContent, renamedAgentSkillPath, rewriteAgentSkillReferences } from './agent-skill-metadata.js';
 import { skillFile } from './agent-system.js';
 import { type CommitScope, readWorkspaceDocument, serializeWorkspaceDocument, validateWorkspaceDocument, type WorkspaceDocument, workspaceDocument } from './workspace-documents.js';
 import { gitBlobId, hashJson, REMOTE_CACHE_BATCH_BYTES, REMOTE_CACHE_MAX_VALUE, REMOTE_CACHE_TTL, type RemoteCache } from './remote-cache.js';
@@ -414,9 +414,15 @@ export abstract class RemoteSource {
   }
 
   /** One Git tree, commit and non-force ref update for the entire mutation. */
-  async saveAgentResource(file: string, content: string, expected: string) {
+  async saveAgentResource(file: string, content: string, expected: string, create?: boolean) {
     if (typeof file !== 'string' || !workspaceAgentKind(file)) throw new SourceError('Path is not a workspace Agent document.', 403);
     if (typeof content !== 'string') throw new SourceError('Agent document content is required.');
+    const location = create ? agentSkillLocation(file) : null;
+    if (location) {
+      const snapshot = await this.getSnapshot(true);
+      if (snapshot.entries.some(entry => entry.path === location.directory || entry.path.startsWith(`${location.directory}/`))) throw new SourceError(`A skill named ${location.slug} already exists.`, 409);
+      return this.commitChanges([{ path: file, content }], expected, 'write', 'agents', undefined, snapshot);
+    }
     return this.commitChanges([{ path: file, content }], expected, 'write', 'agents');
   }
 

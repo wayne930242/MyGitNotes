@@ -233,9 +233,12 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
 
   const handleCreateSkill = async (slug: string) => {
     if (readOnly || isCreating || renamingSkill) return;
+    clearTimeout(saveTimer.current);
     setIsCreating(true);
     setError('');
     try {
+      if (hasUnsavedChanges && editable) await saveDocument(selectedPath, content);
+      else await saveQueue.current;
       const path = newAgentSkillEntryPath(slug);
       const skillContent = newAgentSkillEntryContent(slug);
       const receipt = await saveAgentResource({ path, content: skillContent, revision: revision.current, create: true });
@@ -487,7 +490,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
             )}
           </div>
         )}
-        {selectedPath && <EditorFooter content={loading ? '' : content} path={selectedPath} state={loading ? 'loading' : isSaving ? 'saving' : hasUnsavedChanges ? 'pending' : 'saved'} status={t(loading ? 'agent.loading' : isSaving ? 'editor.saving' : hasUnsavedChanges ? 'editor.unsavedChanges' : editable ? 'agent.saved' : 'editor.readOnly')} />}
+        {selectedPath && <EditorFooter content={loading ? '' : bodyContent} path={selectedPath} state={loading ? 'loading' : isSaving ? 'saving' : hasUnsavedChanges ? 'pending' : 'saved'} status={t(loading ? 'agent.loading' : isSaving ? 'editor.saving' : hasUnsavedChanges ? 'editor.unsavedChanges' : editable ? 'agent.saved' : 'editor.readOnly')} />}
       </div>
     </div>
   );

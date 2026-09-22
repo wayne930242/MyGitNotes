@@ -67,4 +67,18 @@ describe('workspace Agent documents', () => {
     expect(request.mock.calls.some(([, init]) => init?.method)).toBe(false);
     await expect(remote('fixture', true, 'main', true).source.saveAgentResource('.codex/agents/reviewer.toml', 'bad', 'before')).rejects.toMatchObject({ status: 403 });
   });
+
+  it('rejects creating a skill whose slug already exists instead of overwriting it', async () => {
+    const { source, request } = remote();
+    await expect(source.saveAgentResource('.agents/skills/custom/SKILL.md', '---\nname: custom\n---\n# New\n', 'before', true)).rejects.toMatchObject({ status: 409 });
+    expect(request.mock.calls.some(([, init]) => init?.method)).toBe(false);
+  });
+
+  it('creates a brand-new skill when its slug does not collide with an existing one', async () => {
+    const { source, request } = remote();
+    const content = "---\nname: fresh\ndescription: ''\n---\n\n# fresh\n";
+    expect(await source.saveAgentResource('.agents/skills/fresh/SKILL.md', content, 'before', true)).toMatchObject({ revision: 'after', committed: true, pushed: true });
+    const tree = request.mock.calls.find(([url, init]) => url.endsWith('/git/trees') && init?.method === 'POST')!;
+    expect(JSON.parse(String(tree[1]?.body)).tree).toEqual([{ path: '.agents/skills/fresh/SKILL.md', mode: '100644', type: 'blob', content }]);
+  });
 });

@@ -24,4 +24,16 @@ describe('AgentSkillMetadataPanel metadata helpers', () => {
     expect(readSkillMetadata(malformed)).toEqual({ title: '', description: '' });
     expect(updateSkillMetadata(malformed, 'name', 'skill')).toBe(malformed);
   });
+
+  it('preserves a hidden flow-mapping key byte-for-byte when editing an exposed field', () => {
+    const original = '---\nname: review\ndescription: Review prose\ncustom: {x: 1,y: 2}\n---\n# Review\n';
+    const updated = updateSkillMetadata(original, 'description', 'Review clear prose');
+    expect(updated).toBe('---\nname: review\ndescription: Review clear prose\ncustom: {x: 1,y: 2}\n---\n# Review\n');
+  });
+
+  it('preserves CRLF line endings on every untouched line when editing an exposed field', () => {
+    const original = '---\r\nname: review\r\ndescription: Review prose\r\ncustom: keep\r\n---\r\n# Review\r\nBody.\r\n';
+    const updated = updateSkillMetadata(original, 'description', 'Review clear prose');
+    expect(updated).toBe('---\r\nname: review\r\ndescription: Review clear prose\r\ncustom: keep\r\n---\r\n# Review\r\nBody.\r\n');
+  });
 });

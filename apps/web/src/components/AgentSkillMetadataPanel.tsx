@@ -1,6 +1,7 @@
 import YAML from 'yaml';
 import { useState } from 'react';
 import { useTranslation } from '../lib/i18n/index.js';
+import { patchFrontmatterField } from '@mygitnotes/core/frontmatter-patch';
 
 interface AgentSkillMetadataPanelProps {
   content: string;
@@ -29,8 +30,7 @@ export function updateSkillMetadata(content: string, key: 'name' | 'description'
   if (!match) return `---\n${YAML.stringify({ [key]: value }).trim()}\n---\n\n${content}`;
   const document = YAML.parseDocument(match[1]);
   if (document.errors.length || !YAML.isMap(document.contents)) return content;
-  document.set(key, value);
-  return `---\n${document.toString({ lineWidth: 0 }).trimEnd()}\n---\n${content.slice(match[0].length)}`;
+  return patchFrontmatterField(content, key, value);
 }
 
 export function AgentSkillMetadataPanel({ content, disabled, path, renaming, onChange, onRename }: AgentSkillMetadataPanelProps) {
@@ -54,12 +54,18 @@ export function AgentSkillMetadataPanel({ content, disabled, path, renaming, onC
         <label className='min-w-0 text-xs font-semibold text-muted'>
           <span className='mb-1 block'>{t('agent.skillSlug')}</span>
           <div className='flex gap-2'>
-            <input aria-label={t('agent.skillSlug')} className='ui-control min-w-0 flex-1 font-mono text-fg' value={slugDraft} onChange={event => setSlugDraft(event.target.value)} onKeyDown={event => {
-              if (event.key === 'Enter' && slugDraft !== slug) {
-                event.preventDefault();
-                void onRename(slugDraft);
-              }
-            }} />
+            <input
+              aria-label={t('agent.skillSlug')}
+              className='ui-control min-w-0 flex-1 font-mono text-fg'
+              value={slugDraft}
+              onChange={event => setSlugDraft(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter' && slugDraft !== slug) {
+                  event.preventDefault();
+                  void onRename(slugDraft);
+                }
+              }}
+            />
             <button type='button' className='editor-action rounded-md border border-line bg-surface px-3 text-xs font-semibold text-fg hover:bg-fg/5 disabled:opacity-40' disabled={slugDraft === slug || !slugDraft.trim()} onClick={() => void onRename(slugDraft)}>{renaming ? t('agent.renamingSkill') : t('agent.renameSkill')}</button>
           </div>
           <span className='mt-1 block text-[10px] font-normal text-muted'>{t('agent.skillSlugHint')}</span>
