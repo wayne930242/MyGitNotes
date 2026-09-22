@@ -9,7 +9,7 @@ import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js'
 import { FolderItem, NotebookConfig, NoteItem, NoteMetadata, WorkspaceConfig } from './types.js';
 import { SourceError } from './github-api.js';
 import { workspaceAgentKind } from './workspace-agent.js';
-import { agentSkillLocation, renamedAgentSkillPath, rewriteAgentSkillReferences } from './agent-skill-metadata.js';
+import { agentSkillLocation, renamedAgentSkillPath, renameAgentSkillEntryContent, rewriteAgentSkillReferences } from './agent-skill-metadata.js';
 import { skillFile } from './agent-system.js';
 import { type CommitScope, readWorkspaceDocument, serializeWorkspaceDocument, validateWorkspaceDocument, type WorkspaceDocument, workspaceDocument } from './workspace-documents.js';
 import { gitBlobId, hashJson, REMOTE_CACHE_BATCH_BYTES, REMOTE_CACHE_MAX_VALUE, REMOTE_CACHE_TTL, type RemoteCache } from './remote-cache.js';
@@ -446,12 +446,12 @@ export abstract class RemoteSource {
       const destination = `${nextLocation.directory}${entry.path.slice(location.directory.length)}`;
       changes.set(destination, { path: destination, sha: entry.sha });
     }
-    changes.set(nextPath, { path: nextPath, content: rewriteAgentSkillReferences(content, location.directory, nextLocation.directory, location.slug, nextLocation.slug) });
+    changes.set(nextPath, { path: nextPath, content: renameAgentSkillEntryContent(content, location.directory, nextLocation.directory, nextLocation.slug) });
 
     const references = snapshot.entries.filter(entry => entry.type === 'blob' && entry.mode !== '120000' && workspaceAgentKind(entry.path) && !entry.path.startsWith(`${location.directory}/`));
     for (const entry of references) {
       const original = (await this.readFile(entry.path)).toString('utf8');
-      const updated = rewriteAgentSkillReferences(original, location.directory, nextLocation.directory, location.slug, nextLocation.slug);
+      const updated = rewriteAgentSkillReferences(original, location.directory, nextLocation.directory);
       if (updated !== original) changes.set(entry.path, { path: entry.path, content: updated });
     }
     if (changes.size > 200) throw new SourceError('Skill rename affects more than 200 files.', 413);

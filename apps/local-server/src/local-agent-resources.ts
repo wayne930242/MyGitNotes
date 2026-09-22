@@ -1,7 +1,7 @@
 import { Request, Response, Router } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
-import { agentSkillLocation, extractFirstH1, listWorkspaceAgentFiles, parseNoteContent, productAgentResources, renamedAgentSkillPath, resolveWorkspaceAgentPath, rewriteAgentSkillReferences, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource } from '@mygitnotes/core';
+import { agentSkillLocation, extractFirstH1, listWorkspaceAgentFiles, parseNoteContent, productAgentResources, renamedAgentSkillPath, renameAgentSkillEntryContent, resolveWorkspaceAgentPath, rewriteAgentSkillReferences, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource } from '@mygitnotes/core';
 import { changeFile, getCurrentBranch, listChanges } from '@mygitnotes/git';
 
 export function createLocalAgentResourcesRouter(repoRoot: string, appRoot: string): Router {
@@ -72,6 +72,7 @@ export function createLocalAgentResourcesRouter(repoRoot: string, appRoot: strin
         return res.status(400).json({ error: 'path and content are required' });
       }
       const safePath = resolveWorkspaceAgentPath(repoRoot, relPath);
+      if (agentSkillLocation(relPath) && !fs.existsSync(safePath)) return res.status(409).json({ error: 'Skill moved or deleted. Reload before saving.' });
       const dir = path.dirname(safePath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
@@ -113,22 +114,35 @@ export function createLocalAgentResourcesRouter(repoRoot: string, appRoot: strin
 
       const agentFiles = listWorkspaceAgentFiles(repoRoot);
       for (const file of agentFiles) originals.set(file, fs.readFileSync(resolveWorkspaceAgentPath(repoRoot, file), 'utf-8'));
-      originals.set(relPath, content);
-      const updates = [...originals].map(([file, raw]) => {
+      const updates = [...originals].map(([file, original]) => {
         const destination = file === relPath || file.startsWith(`${location.directory}/`) ? `${nextLocation.directory}${file.slice(location.directory.length)}` : file;
-        return [destination, rewriteAgentSkillReferences(raw, location.directory, nextLocation.directory, location.slug, nextLocation.slug)] as const;
-      });
+        const source = file === relPath ? content : original;
+        const updated = file === relPath ? renameAgentSkillEntryContent(source, location.directory, nextLocation.directory, nextLocation.slug) : rewriteAgentSkillReferences(source, location.directory, nextLocation.directory);
+        return { destination, file, original, updated };
+      }).filter(update => update.file.startsWith(`${location.directory}/`) || update.updated !== update.original);
 
       fs.renameSync(oldDirectoryPath, newDirectoryPath);
       moved = true;
-      for (const [file, raw] of updates) fs.writeFileSync(resolveWorkspaceAgentPath(repoRoot, file), raw, 'utf-8');
-      res.json({ success: true, path: nextPath, changedPaths: updates.filter(([file, raw]) => originals.get(file.replace(nextLocation.directory, location.directory)) !== raw).map(([file]) => file) });
+      for (const update of updates) if (update.updated !== update.original || update.file === relPath) fs.writeFileSync(resolveWorkspaceAgentPath(repoRoot, update.destination), update.updated, 'utf-8');
+      res.json({ success: true, path: nextPath, changedPaths: updates.map(update => update.destination) });
     } catch (err: unknown) {
-      try {
-        if (moved && fs.existsSync(newDirectoryPath) && !fs.existsSync(oldDirectoryPath)) fs.renameSync(newDirectoryPath, oldDirectoryPath);
-        for (const [file, raw] of originals) fs.writeFileSync(resolveWorkspaceAgentPath(repoRoot, file), raw, 'utf-8');
-      } catch {}
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+      const rollbackErrors: string[] = [];
+      if (moved && fs.existsSync(newDirectoryPath) && !fs.existsSync(oldDirectoryPath)) {
+        try {
+          fs.renameSync(newDirectoryPath, oldDirectoryPath);
+        } catch (error) {
+          rollbackErrors.push(error instanceof Error ? error.message : String(error));
+        }
+      }
+      for (const [file, raw] of originals) {
+        try {
+          fs.writeFileSync(resolveWorkspaceAgentPath(repoRoot, file), raw, 'utf-8');
+        } catch (error) {
+          rollbackErrors.push(error instanceof Error ? error.message : String(error));
+        }
+      }
+      const failure = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: rollbackErrors.length ? `${failure} Rollback failed: ${rollbackErrors.join('; ')}` : failure, rollbackFailed: rollbackErrors.length > 0 });
     }
   });
 

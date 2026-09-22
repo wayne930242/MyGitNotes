@@ -10,12 +10,11 @@ import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { AlertTriangle, Bot, Plus, RotateCcw } from 'lucide-react';
 import { MarkdownEditor, MarkdownEditorMode, MarkdownEditorModeSwitch } from './MarkdownEditor.js';
 import { AgentResource, GitStatus, NotebookConfig } from '../lib/types.js';
-import { fetchAgentResources, fetchFileChanges, fetchGitStatus, readAgentResource, restoreAgentResource, saveAgentResource } from '../lib/api.js';
+import { fetchAgentResources, fetchFileChanges, fetchGitStatus, readAgentResource, renameAgentSkill, restoreAgentResource, saveAgentResource } from '../lib/api.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { LoadingStatus } from './LoadingStatus.js';
 import { AgentSkillMetadataPanel } from './AgentSkillMetadataPanel.js';
 import { agentSkillLocation } from '@mygitnotes/core/agent-skill-metadata';
-import { renameAgentSkill } from '../lib/api.js';
 
 export interface AgentSystemHandle {
   prepareNotebookChange: (id: string) => Promise<boolean>;
@@ -54,12 +53,13 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
   const currentResource = instructions.find((resource) => resource.path === selectedPath);
   const isProductResource = currentResource?.scope === 'product';
   const editable = !readOnly && !isProductResource && currentResource?.editable !== false;
-  const locked = !editable || loading || switching || restoring;
+  const locked = !editable || loading || switching || restoring || renamingSkill;
   const isSkillEntry = Boolean(agentSkillLocation(selectedPath));
   const [confirmRestore, setConfirmRestore] = useState<boolean>(false);
   const [fileStatus, setFileStatus] = useState<GitStatus | null>(null);
   const [restorableFiles, setRestorableFiles] = useState<Record<string, string>>({});
   const canRestore = !remote && !locked && !isSaving && Boolean(fileStatus && (fileStatus.modified.includes(selectedPath) || fileStatus.staged.includes(selectedPath)) && restorableFiles[selectedPath]);
+  const showRestore = !remote && !(isSkillEntry && fileStatus?.untracked.includes(selectedPath));
   const refreshGitStatus = async () => {
     if (remote) return;
     const { status } = await fetchGitStatus();
@@ -156,7 +156,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const selectDocument = async (file: string) => {
-    if (switching || restoring) return false;
+    if (switching || restoring || renamingSkill) return false;
     if (file === selectedPath) return true;
     clearTimeout(saveTimer.current);
     setSwitching(true);
@@ -204,7 +204,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
   }, []);
 
   const handleCreateWorkspaceGuidelines = async () => {
-    if (readOnly || isCreating) return;
+    if (readOnly || isCreating || renamingSkill) return;
     const path = 'AGENTS.md';
     const defaultContent = `# Notes Workspace Guidelines\n\nOperational guidelines for AI agents working within this note repository.\n`;
     setIsCreating(true);
@@ -231,7 +231,8 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     setRenamingSkill(true);
     setError('');
     try {
-      await saveQueue.current;
+      if (hasUnsavedChanges && editable) await saveDocument(selectedPath, content);
+      else await saveQueue.current;
       const receipt = await renameAgentSkill({ path: selectedPath, slug, content, revision: revision.current });
       revision.current = receipt.revision;
       const listing = await fetchAgentResources();
@@ -249,7 +250,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
 
   const { registerBeforeNavigate } = useWorkspaceLinks();
   const prepareLeave = async () => {
-    if (switching || restoring || loading) return false;
+    if (switching || restoring || loading || renamingSkill) return false;
     try {
       clearTimeout(saveTimer.current);
       if (hasUnsavedChanges && editable) await saveDocument(selectedPath, content);
@@ -261,12 +262,12 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     }
   };
   /* eslint-disable react-hooks/exhaustive-deps -- The leave subscription follows the listed draft and lock values; status helper identity must not replace an in-progress navigation guard. */
-  useEffect(() => registerBeforeNavigate(prepareLeave), [registerBeforeNavigate, switching, restoring, loading, hasUnsavedChanges, editable, selectedPath, content]);
+  useEffect(() => registerBeforeNavigate(prepareLeave), [registerBeforeNavigate, switching, restoring, loading, renamingSkill, hasUnsavedChanges, editable, selectedPath, content]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const groups = groupAgentResources(instructions, notebooks, selectedNotebookId);
   const visibleResources = [...groups.skills, ...groups.shared, ...groups.notebook, ...groups.product];
-  const treeNavigation = { selectedPath, disabled: switching || restoring, onSelect: (path: string) => void selectDocument(path) };
+  const treeNavigation = { selectedPath, disabled: switching || restoring || renamingSkill, onSelect: (path: string) => void selectDocument(path) };
   const drawerTreeNavigation = {
     ...treeNavigation,
     onSelect: (path: string) => {
@@ -275,7 +276,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     },
   };
   const prepareNotebookChange = async (id: string) => {
-    if (loading || switching || restoring || isCreating) return false;
+    if (loading || switching || restoring || isCreating || renamingSkill) return false;
     const next = groupAgentResources(instructions, notebooks, id);
     const visible = [...next.skills, ...next.shared, ...next.notebook, ...next.product];
     const path = visible.some(resource => resource.path === selectedPath) ? selectedPath : (next.notebook[0] || next.skills[0] || next.shared[0] || next.product[0])?.path || '';
@@ -374,7 +375,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
           </div>
           <div className='agent-controls flex items-center gap-3'>
             {/* Single-file restore applies to uncommitted local edits. */}
-            {!remote && (
+            {showRestore && (
               <button disabled={!canRestore} aria-label={confirmRestore ? t('agent.confirmRestore') : t('agent.restore')} onClick={handleRestoreClick} className={`editor-action ${confirmRestore ? 'editor-confirming' : ''} flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed ${confirmRestore ? 'bg-danger hover:bg-danger/90 text-on-danger shadow-md animate-pulse' : 'bg-fg/5 border border-line text-fg hover:bg-fg/10'}`} title={confirmRestore ? t('editor.confirmRestoreTooltip') : t('editor.restoreTooltip')}>
                 {confirmRestore
                   ? (
@@ -400,7 +401,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
             <EditorNotice tone='error'>{error}</EditorNotice>
           </div>
         )}
-        {selectedPath && isSkillEntry && !loading && <AgentSkillMetadataPanel content={content} disabled={locked} path={selectedPath} renaming={renamingSkill} onChange={setContent} onRename={handleRenameSkill} />}
+        {selectedPath && isSkillEntry && !loading && <AgentSkillMetadataPanel key={selectedPath} content={content} disabled={locked} path={selectedPath} renaming={renamingSkill} onChange={setContent} onRename={handleRenameSkill} />}
         {isProductResource && <div className='px-6 py-2 border-b text-[11px] leading-relaxed text-muted bg-sidebar/50'>{t('agent.systemNotice')}</div>}
         {!editable && !isProductResource && selectedPath && <div className='px-6 py-2 border-b text-[11px] leading-relaxed text-warning bg-warning-soft/50'>{readOnlyNotice || t('agent.workspaceReadOnlyNotice')}</div>}
         {loading ? <LoadingStatus className='p-6 text-sm text-muted'>{t('agent.loadingDocument')}</LoadingStatus> : selectedPath ? <MarkdownEditor content={content} path={selectedPath} mode={viewMode} readOnly={locked} onChange={setContent} ariaLabel='Agent document content' /> : (

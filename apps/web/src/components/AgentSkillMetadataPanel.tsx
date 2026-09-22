@@ -1,5 +1,5 @@
 import YAML from 'yaml';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from '../lib/i18n/index.js';
 
 interface AgentSkillMetadataPanelProps {
@@ -38,8 +38,6 @@ export function AgentSkillMetadataPanel({ content, disabled, path, renaming, onC
   const metadata = readSkillMetadata(content);
   const slug = path.split('/').at(-2) || '';
   const [slugDraft, setSlugDraft] = useState(slug);
-
-  useEffect(() => setSlugDraft(slug), [slug]);
 
   return (
     <fieldset disabled={disabled || renaming} className='border-b border-line bg-sidebar/40 px-4 py-3 md:px-6'>

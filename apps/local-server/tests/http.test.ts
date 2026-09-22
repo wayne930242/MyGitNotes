@@ -205,8 +205,64 @@ describe('real HTTP local boundaries', () => {
     expect(fs.existsSync(skill)).toBe(false);
     expect(fs.readFileSync(path.join(root, '.agents/skills/new-name/scripts/run.sh'), 'utf8')).toBe('#!/bin/sh\n');
     expect(fs.readFileSync(path.join(root, '.agents/skills/new-name/SKILL.md'), 'utf8')).toContain('name: new-name');
-    expect(fs.readFileSync(path.join(root, '.agents/skills/new-name/SKILL.md'), 'utf8')).toContain('$new-name');
-    expect(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')).toBe('Read `.agents/skills/new-name/SKILL.md` and use $new-name.\n');
+    expect(fs.readFileSync(path.join(root, '.agents/skills/new-name/SKILL.md'), 'utf8')).toContain('$old-name');
+    expect(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')).toBe('Read `.agents/skills/new-name/SKILL.md` and use $old-name.\n');
+    const staleSave = await fetch(`${base}/api/agent-resources/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: '.agents/skills/old-name/SKILL.md', content: 'stale' }) });
+    expect(staleSave.status).toBe(409);
+    expect(fs.existsSync(skill)).toBe(false);
+  });
+  it('rejects a skill rename when the destination directory exists', async () => {
+    const oldSkill = path.join(root, '.agents/skills/old-name');
+    const newSkill = path.join(root, '.agents/skills/new-name');
+    fs.mkdirSync(oldSkill, { recursive: true });
+    fs.mkdirSync(newSkill, { recursive: true });
+    fs.writeFileSync(path.join(oldSkill, 'SKILL.md'), '---\nname: old-name\n---\nOld\n');
+    fs.writeFileSync(path.join(newSkill, 'SKILL.md'), '---\nname: new-name\n---\nExisting\n');
+    const response = await fetch(`${base}/api/agent-resources/rename-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: '.agents/skills/old-name/SKILL.md', slug: 'new-name', content: '---\nname: new-name\n---\nChanged\n' }) });
+    expect(response.status).toBe(409);
+    expect(fs.readFileSync(path.join(oldSkill, 'SKILL.md'), 'utf8')).toContain('Old');
+    expect(fs.readFileSync(path.join(newSkill, 'SKILL.md'), 'utf8')).toContain('Existing');
+  });
+  it('restores the old directory and files when writing a renamed skill fails', async () => {
+    const oldSkill = path.join(root, '.agents/skills/old-name');
+    fs.mkdirSync(oldSkill, { recursive: true });
+    const originalSkill = '---\nname: old-name\n---\nOld\n';
+    const originalAgents = 'Read `.agents/skills/old-name/SKILL.md`.\n';
+    fs.writeFileSync(path.join(oldSkill, 'SKILL.md'), originalSkill);
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), originalAgents);
+    const writeFileSync = fs.writeFileSync.bind(fs);
+    vi.spyOn(fs, 'writeFileSync').mockImplementation(((file: fs.PathOrFileDescriptor, data: string | NodeJS.ArrayBufferView, options?: fs.WriteFileOptions) => {
+      if (String(file).endsWith('/.agents/skills/new-name/SKILL.md')) throw new Error('injected write failure');
+      return writeFileSync(file, data, options);
+    }) as typeof fs.writeFileSync);
+    const response = await fetch(`${base}/api/agent-resources/rename-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: '.agents/skills/old-name/SKILL.md', slug: 'new-name', content: '---\nname: new-name\n---\nChanged\n' }) });
+    expect(response.status).toBe(500);
+    expect(await response.json()).toMatchObject({ error: 'injected write failure' });
+    expect(fs.existsSync(oldSkill)).toBe(true);
+    expect(fs.existsSync(path.join(root, '.agents/skills/new-name'))).toBe(false);
+    expect(fs.readFileSync(path.join(oldSkill, 'SKILL.md'), 'utf8')).toBe(originalSkill);
+    expect(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')).toBe(originalAgents);
+  });
+  it('reports both the primary rename failure and a rollback failure', async () => {
+    const oldSkill = path.join(root, '.agents/skills/old-name');
+    fs.mkdirSync(oldSkill, { recursive: true });
+    fs.writeFileSync(path.join(oldSkill, 'SKILL.md'), '---\nname: old-name\n---\nOld\n');
+    const writeFileSync = fs.writeFileSync.bind(fs);
+    vi.spyOn(fs, 'writeFileSync').mockImplementation(((file: fs.PathOrFileDescriptor, data: string | NodeJS.ArrayBufferView, options?: fs.WriteFileOptions) => {
+      if (String(file).endsWith('/.agents/skills/new-name/SKILL.md')) throw new Error('injected write failure');
+      return writeFileSync(file, data, options);
+    }) as typeof fs.writeFileSync);
+    const renameSync = fs.renameSync.bind(fs);
+    let renameCalls = 0;
+    vi.spyOn(fs, 'renameSync').mockImplementation(((oldPath: fs.PathLike, newPath: fs.PathLike) => {
+      renameCalls++;
+      if (renameCalls === 2) throw new Error('injected rollback failure');
+      return renameSync(oldPath, newPath);
+    }) as typeof fs.renameSync);
+    const response = await fetch(`${base}/api/agent-resources/rename-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: '.agents/skills/old-name/SKILL.md', slug: 'new-name', content: '---\nname: new-name\n---\nChanged\n' }) });
+    expect(response.status).toBe(500);
+    expect(await response.json()).toMatchObject({ rollbackFailed: true, error: expect.stringContaining('injected write failure') });
+    expect(renameCalls).toBe(2);
   });
   it('uploads into directories, keeps hash URLs after moves, and restricts deletion to assets', async () => {
     const request = (method: string, body: unknown) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

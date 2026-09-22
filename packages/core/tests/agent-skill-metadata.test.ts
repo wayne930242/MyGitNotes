@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agentSkillLocation, renamedAgentSkillPath, rewriteAgentSkillReferences, validateAgentSkillSlug } from '../src/agent-skill-metadata.js';
+import { agentSkillLocation, renamedAgentSkillPath, renameAgentSkillEntryContent, rewriteAgentSkillReferences, validateAgentSkillSlug } from '../src/agent-skill-metadata.js';
 
 describe('agent skill metadata', () => {
   it('recognizes native directory-backed SKILL.md files', () => {
@@ -14,8 +14,13 @@ describe('agent skill metadata', () => {
     for (const value of ['Daily-writing', 'daily_writing', '../daily', 'daily--writing', '']) expect(() => validateAgentSkillSlug(value)).toThrow();
   });
 
-  it('builds the renamed entry path and rewrites exact references', () => {
+  it('builds the renamed entry path and rewrites only path-shaped references', () => {
     expect(renamedAgentSkillPath('.agents/skills/old-name/SKILL.md', 'new-name')).toBe('.agents/skills/new-name/SKILL.md');
-    expect(rewriteAgentSkillReferences('Use $old-name at `.agents/skills/old-name/SKILL.md`; keep old-name-extra.', '.agents/skills/old-name', '.agents/skills/new-name', 'old-name', 'new-name')).toBe('Use $new-name at `.agents/skills/new-name/SKILL.md`; keep old-name-extra.');
+    expect(rewriteAgentSkillReferences('Run the tests, then run lint. Use $run at `.agents/skills/run/SKILL.md`.', '.agents/skills/run', '.agents/skills/execute')).toBe('Run the tests, then run lint. Use $run at `.agents/skills/execute/SKILL.md`.');
+  });
+
+  it('updates only the renamed skill entry frontmatter name and path references', () => {
+    const content = '---\nname: run\ndescription: Run the tests, then run lint.\ncustom: keep\n---\nUse $run at `.agents/skills/run/SKILL.md`.\n';
+    expect(renameAgentSkillEntryContent(content, '.agents/skills/run', '.agents/skills/execute', 'execute')).toBe('---\nname: execute\ndescription: Run the tests, then run lint.\ncustom: keep\n---\nUse $run at `.agents/skills/execute/SKILL.md`.\n');
   });
 });

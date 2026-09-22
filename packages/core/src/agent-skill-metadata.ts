@@ -1,5 +1,8 @@
+import YAML from 'yaml';
+
 const SKILL_ENTRY = /^(.*\/(?:\.agents|\.codex|\.claude|\.agent)\/skills|(?:\.agents|\.codex|\.claude|\.agent)\/skills)\/([^/]+)\/SKILL\.md$/;
 const VALID_SKILL_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
 export interface AgentSkillLocation {
   directory: string;
@@ -27,11 +30,19 @@ export function renamedAgentSkillPath(file: string, slug: string): string {
   return `${location.parent}/${validateAgentSkillSlug(slug)}/SKILL.md`;
 }
 
-/** Rewrites exact skill-path and slug tokens while leaving longer identifiers untouched. */
-export function rewriteAgentSkillReferences(content: string, oldDirectory: string, newDirectory: string, oldSlug: string, newSlug: string): string {
+/** Rewrites only references containing the skill's directory path; ordinary prose stays byte-identical. */
+export function rewriteAgentSkillReferences(content: string, oldDirectory: string, newDirectory: string): string {
   const escapedDirectory = oldDirectory.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const escapedSlug = oldSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return content
-    .replace(new RegExp(escapedDirectory, 'g'), newDirectory)
-    .replace(new RegExp(`(?<![A-Za-z0-9_-])${escapedSlug}(?![A-Za-z0-9_-])`, 'g'), newSlug);
+  return content.replace(new RegExp(escapedDirectory, 'g'), newDirectory);
+}
+
+/** Updates a renamed skill's own path references and canonical frontmatter name. */
+export function renameAgentSkillEntryContent(content: string, oldDirectory: string, newDirectory: string, newSlug: string): string {
+  const rewritten = rewriteAgentSkillReferences(content, oldDirectory, newDirectory);
+  const match = rewritten.match(FRONTMATTER);
+  if (!match) return `---\nname: ${newSlug}\n---\n\n${rewritten}`;
+  const document = YAML.parseDocument(match[1]);
+  if (document.errors.length || !YAML.isMap(document.contents)) throw new Error('Fix the SKILL.md frontmatter before renaming this skill.');
+  document.set('name', newSlug);
+  return `---\n${document.toString({ lineWidth: 0 }).trimEnd()}\n---\n${rewritten.slice(match[0].length)}`;
 }
