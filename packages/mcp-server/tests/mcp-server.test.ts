@@ -4,7 +4,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { runGit, stageAndCommit } from '@mygitnotes/git';
 import { WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
-import { handleAddAsset, handleDeleteAsset, handleGetFolderMetadata, handleGetNoteMetadata, handleGetStatuses, handleGetWorkspaceConfig, handleListFolders, handleMkdir, handleReadAgentResource, handleReadNote, handleReplaceNotes, handleSaveNote, handleSearchNotes, handleUpdateCore, handleUpdateFolderMetadata, handleUpdateNoteMetadata } from '../src/tools.js';
+import { handleAddAsset, handleDeleteAsset, handleGetFolderMetadata, handleGetNoteMetadata, handleGetStatuses, handleGetWorkspaceConfig, handleListFolders, handleListNotes, handleMkdir, handleReadAgentResource, handleReadNote, handleReplaceNotes, handleSaveNote, handleSearchNotes, handleUpdateCore, handleUpdateFolderMetadata, handleUpdateNoteMetadata } from '../src/tools.js';
 import { localTools } from '../src/local-tools.js';
 import { createMCPServer } from '../src/server.js';
 
@@ -26,6 +26,41 @@ describe('MCP Server Safe Tools & Boundaries', () => {
     if (fs.existsSync(testRepo)) {
       fs.rmSync(testRepo, { recursive: true, force: true });
     }
+  });
+
+  it('pages local list_notes over summaries that replace the note body with a bounded description', async () => {
+    await runGit(['checkout', '-b', 'main'], testRepo);
+    fs.writeFileSync(
+      path.join(testRepo, WORKSPACE_CONFIG_FILENAME),
+      `schema_version: 1
+workspace:
+  title: "Test Workspace"
+  default_notebook: example
+notebooks:
+  - id: example
+    title: "Example Notebook"
+    root: notes/example
+`,
+    );
+    await stageAndCommit(testRepo, [WORKSPACE_CONFIG_FILENAME], 'add workspace config');
+    fs.mkdirSync(path.join(testRepo, 'notes/example'), { recursive: true });
+    fs.writeFileSync(path.join(testRepo, 'notes/example/a-stated.md'), '---\ndescription: A stated summary\n---\n# Stated\n\nBody text that must never be listed.\n');
+    fs.writeFileSync(path.join(testRepo, 'notes/example/b-long.md'), `---\ntags: [x]\n---\n# Long\n\n${'x'.repeat(400)}\n`);
+    fs.writeFileSync(path.join(testRepo, 'notes/example/c-third.md'), '---\ntitle: Third\n---\n# Third\n\nThird body.\n');
+
+    const head = await handleListNotes({ repoRoot: testRepo }, { notebookId: 'example', limit: 2 }) as any;
+    expect(head.total).toBe(3);
+    expect(head.count).toBe(2);
+    expect(head.nextOffset).toBe(2);
+    expect(head.notes.every((note: Record<string, unknown>) => !('content' in note))).toBe(true);
+    expect(JSON.stringify(head)).not.toContain('Body text that must never be listed');
+    expect(head.notes[0].description).toBe('A stated summary');
+    expect(head.notes[1].description).toBe('x'.repeat(240));
+
+    const tail = await handleListNotes({ repoRoot: testRepo }, { notebookId: 'example', offset: 2, limit: 2 }) as any;
+    expect(tail.count).toBe(1);
+    expect(tail.nextOffset).toBe(null);
+    expect(tail.notes[0].description).toBe('Third body.');
   });
 
   it('rejects user note mutation on the core branch', async () => {

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { DEFAULT_NOTE_STATUSES, deleteNoteFile, loadWorkspaceConfig, NoteItem, NoteMetadata, readNoteFile, resolveNoteStatuses, resolveSafePath, scanNotebookNotes, withNoteStatus, writeNoteFile } from '@mygitnotes/core';
+import { DEFAULT_NOTE_STATUSES, deleteNoteFile, loadWorkspaceConfig, NoteItem, NoteMetadata, noteSummary, readNoteFile, resolveNoteStatuses, resolveSafePath, scanNotebookNotes, withNoteStatus, writeNoteFile } from '@mygitnotes/core';
 import { generateCommitMessage, stageAndCommit } from '@mygitnotes/git';
 import { assertSafeRepoPath, assertUserWorkspaceBranch } from '../guards.js';
 import type { ToolContext } from './context.js';
@@ -21,20 +21,24 @@ export async function handleListNotebooks(ctx: ToolContext) {
   return { notebooks: config.notebooks };
 }
 
-export async function handleListNotes(ctx: ToolContext, args: { notebookId?: string; }) {
+export async function handleListNotes(ctx: ToolContext, args: { notebookId?: string; offset?: number; limit?: number; }) {
   const config = loadWorkspaceConfig(ctx.repoRoot);
   if (!config) {
     return { error: 'Workspace not initialized.' };
   }
 
   const notebooks = args.notebookId ? config.notebooks.filter((nb) => nb.id === args.notebookId) : config.notebooks;
+  const offset = args.offset === undefined ? 0 : Number(args.offset);
+  const limit = args.limit === undefined ? 100 : Number(args.limit);
 
-  const notes: NoteItem[] = [];
+  const all: NoteItem[] = [];
   for (const nb of notebooks) {
-    notes.push(...scanNotebookNotes(ctx.repoRoot, nb));
+    all.push(...scanNotebookNotes(ctx.repoRoot, nb).sort((a, b) => a.path.localeCompare(b.path)));
   }
 
-  return { count: notes.length, notes };
+  const notes = all.slice(offset, offset + limit).map(noteSummary);
+  const next = offset + notes.length;
+  return { count: notes.length, total: all.length, nextOffset: next < all.length ? next : null, notes };
 }
 
 export async function handleReadNote(ctx: ToolContext, args: { path: string; notebookId?: string; metadataOnly?: boolean; }) {

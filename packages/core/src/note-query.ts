@@ -1,8 +1,22 @@
-import type { NotebookConfig } from './types.js';
+import type { NotebookConfig, NoteItem } from './types.js';
 import type { SortField, SortOrder } from './note-sort.js';
 import type { TodoTask } from './note-agenda.js';
 import type { NoteGraphData } from './note-graph.js';
 import { isNoteHidden, resolveNoteStatuses } from './note-status.js';
+
+export const NOTE_DESCRIPTION_LIMIT = 240;
+
+/** Frontmatter description, else the opening body line, bounded so a listing never carries a note body. */
+export function noteDescription(note: { metadata: Record<string, unknown>; content: string; }): string {
+  const stated = note.metadata.description;
+  if (typeof stated === 'string' && stated.trim()) return stated.trim().slice(0, NOTE_DESCRIPTION_LIMIT);
+  return (note.content.split('\n').map(line => line.trim()).find(line => line && !line.startsWith('#')) || '').slice(0, NOTE_DESCRIPTION_LIMIT);
+}
+
+/** A listing entry: identity, frontmatter and a bounded description in place of the body. */
+export function noteSummary(note: NoteItem) {
+  return { id: note.id, path: note.path, notebookId: note.notebookId, title: note.title, description: noteDescription(note), status: note.status ?? null, tags: note.tags, metadata: note.metadata, size: note.size };
+}
 
 /** A note as returned by list queries; `content` is present only when requested. */
 export interface NoteListItem {

@@ -69,3 +69,44 @@ it('renders a configured notebook template through the read-only MCP tool withou
     await server.close();
   }
 });
+it('pages list_notes over bounded summaries that carry a description instead of the note body', async () => {
+  vi.stubEnv('GITHUB_NOTES_SOURCE', 'gitlab');
+  vi.stubEnv('GITHUB_NOTES_REPOSITORY', 'group/subgroup/project');
+  vi.stubEnv('GITHUB_NOTES_BRANCH', 'main');
+  vi.stubEnv('GITLAB_URL', 'https://gitlab.example.test/gitlab');
+  const fixture = gitlabFixture();
+  fixture.public();
+  fixture.files.set('notes/ex/described.md', '---\ndescription: A stated summary\n---\n# Described\n\nBody text that must never be listed.\n');
+  fixture.files.set('notes/ex/long.md', `---\ntags: [x]\n---\n# Long\n\n${'x'.repeat(400)}\n`);
+  vi.spyOn(globalThis, 'fetch').mockImplementation(fixture.request);
+  const server = createMCPServer('/tmp');
+  const client = new Client({ name: 'test', version: '1.0.0' });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  try {
+    const blobReads = () => fixture.calls.filter(call => call.url.includes('/repository/blobs/')).length;
+    const before = blobReads();
+    const first = await client.callTool({ name: 'list_notes', arguments: { notebookId: 'ex', limit: 2 } });
+    // A page of 2 reads the manifest and those 2 notes; the other notebook files are never fetched.
+    expect(blobReads() - before).toBeLessThanOrEqual(3);
+    expect(first.isError).not.toBe(true);
+    const head = JSON.parse((first.content as { type: string; text: string; }[])[0].text);
+    expect(head.total).toBe(4);
+    expect(head.count).toBe(2);
+    expect(head.nextOffset).toBe(2);
+    expect(head.notes.map((note: { path: string; }) => note.path)).toEqual(['notes/ex/a.md', 'notes/ex/described.md']);
+    expect(head.notes.every((note: Record<string, unknown>) => !('content' in note))).toBe(true);
+    expect(JSON.stringify(head)).not.toContain('Body text that must never be listed');
+    expect(head.notes[1].description).toBe('A stated summary');
+
+    const rest = await client.callTool({ name: 'list_notes', arguments: { notebookId: 'ex', offset: 2, limit: 2 } });
+    const tail = JSON.parse((rest.content as { type: string; text: string; }[])[0].text);
+    expect(tail.nextOffset).toBe(null);
+    expect(tail.notes.map((note: { path: string; }) => note.path)).toEqual(['notes/ex/folder/b.md', 'notes/ex/long.md']);
+    expect(tail.notes[1].description).toBe('x'.repeat(240));
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});

@@ -186,6 +186,12 @@ export abstract class RemoteSource {
     return entries.filter(e => e.type === 'blob' && e.mode !== '120000' && e.path.startsWith(`${nb.root}/`) && isNotebookContent(e.path.slice(nb.root.length + 1), nb) && !templateFiles.has(e.path.slice(nb.root.length + 1)) && NOTE_FILE.test(e.path));
   }
 
+  /** Note paths of one notebook, taken from the snapshot tree without reading any file. */
+  async notePaths(nb: NotebookConfig): Promise<string[]> {
+    const { entries } = await this.getSnapshot();
+    return this.notebookFiles(nb, entries).map(entry => entry.path);
+  }
+
   private notebookKey(kind: string, notebooks: NotebookConfig[], entries: RemoteEntry[]) {
     return `mgn:${kind}:${INDEX_VERSION}:${this.repository.toLowerCase()}:${hashJson(notebooks.map(nb => [nb.id, nb.root, nb.assets || 'assets', (nb.templates || []).map(t => t.file), entries.find(entry => entry.type === 'tree' && entry.path === nb.root)?.sha || null]))}`;
   }

@@ -10,7 +10,7 @@ Default transport is **stdio** for local agent integration (e.g. Claude Desktop,
 
 1. `get_workspace_config`: Returns parsed `.mygitnotes.yaml` (or legacy `.github-notes.yaml`) workspace manifest.
 2. `list_notebooks`: Lists all configured notebooks and their root directories.
-3. `list_notes`: Lists all notes within a notebook, returning metadata and file paths.
+3. `list_notes`: Lists note summaries within a notebook, paged by `offset` and `limit` (default 100), returning `total` and `nextOffset`. Each entry carries frontmatter, a file path and a bounded `description` in place of the Markdown body.
 4. `read_note`: Reads a note file and parses its frontmatter and raw Markdown body (supports `metadataOnly: true` to return metadata without the markdown body).
 5. `save_note`: Atomically creates or updates a note file with path traversal and branch checks, and commits to Git. If `content` is omitted, updates frontmatter metadata only. Returns the note `path`.
 6. `delete_note`: Removes a note file and creates a corresponding deletion commit.
@@ -55,7 +55,10 @@ lookups: space-separated words match independently across title, path,
 frontmatter and body, Chinese phrases also match through bigrams, and
 `notebookId`, `status`, `tags` and `pattern` filter before ranking (filters alone
 list notes). Each match carries status, tags, matched terms and a snippet;
-`limit` defaults to 20. Listing and reading return a revision.
+`limit` defaults to 20. Hosted `list_notes` pages note summaries with `offset`
+and `limit` (default 100, maximum 500) and returns `total` and `nextOffset`; each
+entry carries the frontmatter `description`, or the opening body line, capped at
+240 characters, in place of the Markdown body. Listing and reading return a revision.
 All writes require that revision, push permission and the `main` branch. Each
 successful mutation creates one program-named commit and updates the remote
 branch without force. Multi-file changes share one commit; GitLab uses batch actions with per-file version checks. Stale
