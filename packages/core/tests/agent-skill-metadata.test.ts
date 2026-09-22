@@ -28,6 +28,26 @@ describe('agent skill metadata', () => {
     expect(rewriteAgentSkillReferences(nonDescendantReferences, oldDirectory, newDirectory)).toBe(nonDescendantReferences);
   });
 
+  it('rewrites only complete path tokens for the renamed skill scope', () => {
+    const rootDirectory = '.agents/skills/run';
+    const notebookDirectory = `my-notes/${rootDirectory}`;
+    const rootReference = `${rootDirectory}/SKILL.md`;
+    const notebookReference = `${notebookDirectory}/SKILL.md`;
+
+    expect(rewriteAgentSkillReferences(notebookReference, rootDirectory, '.agents/skills/execute')).toBe(notebookReference);
+    expect(rewriteAgentSkillReferences(`${notebookReference} ${rootReference}`, notebookDirectory, 'my-notes/.agents/skills/execute')).toBe(
+      `my-notes/.agents/skills/execute/SKILL.md ${rootReference}`,
+    );
+    expect(rewriteAgentSkillReferences(`[x](${notebookReference})`, notebookDirectory, 'my-notes/.agents/skills/execute')).toBe(
+      '[x](my-notes/.agents/skills/execute/SKILL.md)',
+    );
+    for (const delimiter of [' ', '"', "'", '`', '(', ')', '[', ']', '{', '}', '<', '>', ',', ';', '|']) {
+      expect(rewriteAgentSkillReferences(`${delimiter}${rootReference}`, rootDirectory, '.agents/skills/execute')).toBe(
+        `${delimiter}.agents/skills/execute/SKILL.md`,
+      );
+    }
+  });
+
   it('updates only the renamed skill entry frontmatter name and path references', () => {
     const content = '---\nname: run\ndescription: Run the tests, then run lint.\ncustom: keep\n---\nUse $run at `.agents/skills/run/SKILL.md`.\n';
     expect(renameAgentSkillEntryContent(content, '.agents/skills/run', '.agents/skills/execute', 'execute')).toBe('---\nname: execute\ndescription: Run the tests, then run lint.\ncustom: keep\n---\nUse $run at `.agents/skills/execute/SKILL.md`.\n');
