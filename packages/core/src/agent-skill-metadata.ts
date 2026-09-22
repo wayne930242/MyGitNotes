@@ -33,7 +33,8 @@ export function renamedAgentSkillPath(file: string, slug: string): string {
 /** Rewrites only references containing the skill's directory path; ordinary prose stays byte-identical. */
 export function rewriteAgentSkillReferences(content: string, oldDirectory: string, newDirectory: string): string {
   const escapedDirectory = oldDirectory.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return content.replace(new RegExp(`${escapedDirectory}(?![A-Za-z0-9-])`, 'g'), newDirectory);
+  const segmentTerminator = /(?=$|[/\s"'`,)])/.source;
+  return content.replace(new RegExp(escapedDirectory + segmentTerminator, 'g'), newDirectory);
 }
 
 /** Updates a renamed skill's own path references and canonical frontmatter name. */
