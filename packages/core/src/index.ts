@@ -21,6 +21,7 @@ export * from './note-search.js';
 export * from './assets.js';
 export * from './workspace-agent.js';
 export * from './agent-system.js';
+export * from './agent-skill-metadata.js';
 export * from './workspace-links.js';
 export * from './note-graph.js';
 export * from './note-pages.js';

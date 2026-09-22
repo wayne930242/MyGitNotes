@@ -822,6 +822,13 @@ export const en = {
   'agent.restore': 'Restore',
   'agent.loadingDocument': 'Loading document…',
   'agent.noDocuments': 'No agent documents in this workspace.',
+  'agent.skillMetadata': 'Skill metadata',
+  'agent.skillTitle': 'Title',
+  'agent.skillDescription': 'Description',
+  'agent.skillSlug': 'Slug',
+  'agent.skillSlugHint': 'Lowercase letters, numbers, and hyphens.',
+  'agent.renameSkill': 'Rename',
+  'agent.renamingSkill': 'Renaming…',
 
   // Theme Picker
   'theme.dark': 'Dark',

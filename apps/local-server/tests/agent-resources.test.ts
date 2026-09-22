@@ -59,6 +59,15 @@ it('serves workspace Agent settings with revision and enforces login for remote 
   expect(writes.find(w => w.endpoint === '/git/trees')?.body.tree).toEqual([{ path: 'AGENTS.md', mode: '100644', type: 'blob', content: '# Updated\n' }]);
 });
 
+it('renames a remote skill directory and preserves every skill resource in one commit', async () => {
+  const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
+  const response = await fetch(`${base}/api/agent-resources/rename-skill`, { method: 'POST', headers, body: JSON.stringify({ path: '.agents/skills/custom/SKILL.md', slug: 'renamed', content: '---\nname: renamed\ndescription: Updated\n---\n', revision: 'before' }) });
+  const result = await response.json();
+  expect({ status: response.status, result }).toMatchObject({ status: 200, result: { path: '.agents/skills/renamed/SKILL.md', revision: 'after' } });
+  const tree = writes.find(w => w.endpoint === '/git/trees')?.body.tree;
+  expect(tree).toEqual(expect.arrayContaining([expect.objectContaining({ path: '.agents/skills/custom/SKILL.md', sha: null }), expect.objectContaining({ path: '.agents/skills/custom/agents/openai.yaml', sha: null }), expect.objectContaining({ path: '.agents/skills/renamed/SKILL.md', content: expect.stringContaining('name: renamed') }), expect.objectContaining({ path: '.agents/skills/renamed/agents/openai.yaml', sha: '.agents/skills/custom/agents/openai.yaml' })]));
+});
+
 it.each(['.agents/skills/custom/agents/openai.yaml', 'CLAUDE.md', '.claude/CLAUDE.md', '.claude/skills/review/SKILL.md', 'GEMINI.md', '.agent/skills/review/SKILL.md', '.agents/skills/format-tests.md'])('reads and saves native Agent settings at their original Git path: %s', async (path) => {
   const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
   const original = files[path];

@@ -110,6 +110,15 @@ export async function saveAgentResource(params: { path: string; content: string;
   return res.json();
 }
 
+export async function renameAgentSkill(params: { path: string; slug: string; content: string; revision?: string; }): Promise<{ success: boolean; path: string; changedPaths?: string[]; revision?: string; }> {
+  const res = await fetch(`${API_BASE}/agent-resources/rename-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Failed to rename skill');
+  }
+  return res.json();
+}
+
 export async function restoreAgentResource(path: string, revision?: string): Promise<{ success: boolean; path: string; content: string; }> {
   const res = await fetch(`${API_BASE}/agent-resources/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, revision }) });
   if (!res.ok) {

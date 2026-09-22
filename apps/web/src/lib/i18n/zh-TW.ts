@@ -823,6 +823,13 @@ export const zhTW: Record<TranslationKey, string> = {
   'agent.restore': '還原',
   'agent.loadingDocument': '文件載入中…',
   'agent.noDocuments': '此工作區中沒有 Agent 指引文件。',
+  'agent.skillMetadata': '技能中繼資料',
+  'agent.skillTitle': '標題',
+  'agent.skillDescription': '描述',
+  'agent.skillSlug': 'Slug',
+  'agent.skillSlugHint': '使用小寫英文字母、數字與連字號。',
+  'agent.renameSkill': '重新命名',
+  'agent.renamingSkill': '重新命名中…',
 
   // Theme Picker
   'theme.dark': '深色',

@@ -191,6 +191,23 @@ describe('real HTTP local boundaries', () => {
     git('checkout', '-b', 'core');
     expect((await fetch(`${base}/api/agent-resources/save`, request({ path: 'AGENTS.md', content: 'bad' }))).status).toBe(403);
   });
+  it('renames a skill directory, preserves its files and updates Agent document references', async () => {
+    const skill = path.join(root, '.agents/skills/old-name');
+    fs.mkdirSync(path.join(skill, 'scripts'), { recursive: true });
+    fs.writeFileSync(path.join(skill, 'SKILL.md'), '---\nname: old-name\ndescription: Old\n---\nUse $old-name.\n');
+    fs.writeFileSync(path.join(skill, 'scripts/run.sh'), '#!/bin/sh\n');
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), 'Read `.agents/skills/old-name/SKILL.md` and use $old-name.\n');
+    expect((await fetch(`${base}/api/agent-resources/rename-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: '.agents/skills/old-name/SKILL.md', slug: '../unsafe', content: 'unchanged' }) })).status).toBe(400);
+    expect(fs.existsSync(skill)).toBe(true);
+    const response = await fetch(`${base}/api/agent-resources/rename-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: '.agents/skills/old-name/SKILL.md', slug: 'new-name', content: '---\nname: new-name\ndescription: New\n---\nUse $old-name.\n' }) });
+    const result = await response.json();
+    expect({ status: response.status, result }).toMatchObject({ status: 200, result: { path: '.agents/skills/new-name/SKILL.md' } });
+    expect(fs.existsSync(skill)).toBe(false);
+    expect(fs.readFileSync(path.join(root, '.agents/skills/new-name/scripts/run.sh'), 'utf8')).toBe('#!/bin/sh\n');
+    expect(fs.readFileSync(path.join(root, '.agents/skills/new-name/SKILL.md'), 'utf8')).toContain('name: new-name');
+    expect(fs.readFileSync(path.join(root, '.agents/skills/new-name/SKILL.md'), 'utf8')).toContain('$new-name');
+    expect(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')).toBe('Read `.agents/skills/new-name/SKILL.md` and use $new-name.\n');
+  });
   it('uploads into directories, keeps hash URLs after moves, and restricts deletion to assets', async () => {
     const request = (method: string, body: unknown) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const uploaded = await fetch(`${base}/api/assets`, request('POST', { notebookId: 'example', filename: 'test.txt', directory: 'projects/images', base64Content: Buffer.from('asset bytes').toString('base64') })).then(r => r.json());

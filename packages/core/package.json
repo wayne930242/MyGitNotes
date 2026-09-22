@@ -14,6 +14,10 @@
       "types": "./dist/note-status.d.ts",
       "import": "./dist/note-status.js"
     },
+    "./agent-skill-metadata": {
+      "types": "./dist/agent-skill-metadata.d.ts",
+      "import": "./dist/agent-skill-metadata.js"
+    },
     "./screen-page": {
       "types": "./dist/screen-page.d.ts",
       "import": "./dist/screen-page.js"

@@ -344,6 +344,16 @@ export function createApp(base: string): express.Express {
         fail(res, error);
       }
     });
+    app.post('/api/agent-resources/rename-skill', async (req, res) => {
+      try {
+        if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit Agent documents.', 403);
+        const { path: file, slug, content, revision } = req.body;
+        const result = await (res.locals.reader as RemoteSource).renameAgentSkill(file, slug, content, revision);
+        res.json(result);
+      } catch (error) {
+        fail(res, error);
+      }
+    });
     app.use('/api', (req, res) => res.status(403).json({ error: 'This operation is available only in a local workspace.' }));
   }
   const web = path.join(base, 'apps/web/dist');

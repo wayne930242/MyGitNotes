@@ -9,6 +9,7 @@ import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js'
 import { FolderItem, NotebookConfig, NoteItem, NoteMetadata, WorkspaceConfig } from './types.js';
 import { SourceError } from './github-api.js';
 import { workspaceAgentKind } from './workspace-agent.js';
+import { agentSkillLocation, renamedAgentSkillPath, rewriteAgentSkillReferences } from './agent-skill-metadata.js';
 import { skillFile } from './agent-system.js';
 import { type CommitScope, readWorkspaceDocument, serializeWorkspaceDocument, validateWorkspaceDocument, type WorkspaceDocument, workspaceDocument } from './workspace-documents.js';
 import { gitBlobId, hashJson, REMOTE_CACHE_BATCH_BYTES, REMOTE_CACHE_MAX_VALUE, REMOTE_CACHE_TTL, type RemoteCache } from './remote-cache.js';
@@ -417,6 +418,53 @@ export abstract class RemoteSource {
     if (typeof file !== 'string' || !workspaceAgentKind(file)) throw new SourceError('Path is not a workspace Agent document.', 403);
     if (typeof content !== 'string') throw new SourceError('Agent document content is required.');
     return this.commitChanges([{ path: file, content }], expected, 'write', 'agents');
+  }
+
+  /** Moves every blob in a skill directory and updates textual Agent-document references in one commit. */
+  async renameAgentSkill(file: string, slug: string, content: string, expected: string) {
+    const location = agentSkillLocation(file);
+    if (!location || typeof content !== 'string') throw new SourceError('A directory-backed SKILL.md path and content are required.');
+    let nextPath: string;
+    try {
+      nextPath = renamedAgentSkillPath(file, slug);
+    } catch (error) {
+      throw new SourceError((error as Error).message, 400);
+    }
+    if (nextPath === file) return this.saveAgentResource(file, content, expected);
+    const nextLocation = agentSkillLocation(nextPath)!;
+    const snapshot = await this.getSnapshot(true);
+    if (!this.token || !snapshot.info.permissions?.push || this.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
+    if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
+    if (snapshot.entries.some(entry => entry.path === nextLocation.directory || entry.path.startsWith(`${nextLocation.directory}/`))) throw new SourceError(`A skill named ${nextLocation.slug} already exists.`, 409);
+
+    const skillEntries = snapshot.entries.filter(entry => entry.type === 'blob' && (entry.path === location.directory || entry.path.startsWith(`${location.directory}/`)));
+    if (!skillEntries.some(entry => entry.path === file)) throw new SourceError('Skill moved or deleted.', 409);
+    if (skillEntries.some(entry => entry.mode === '120000')) throw new SourceError('Skill directories cannot contain symlinks.', 403);
+    const changes = new Map<string, RemoteChange>();
+    for (const entry of skillEntries) {
+      changes.set(entry.path, { path: entry.path, sha: null });
+      const destination = `${nextLocation.directory}${entry.path.slice(location.directory.length)}`;
+      changes.set(destination, { path: destination, sha: entry.sha });
+    }
+    changes.set(nextPath, { path: nextPath, content: rewriteAgentSkillReferences(content, location.directory, nextLocation.directory, location.slug, nextLocation.slug) });
+
+    const references = snapshot.entries.filter(entry => entry.type === 'blob' && entry.mode !== '120000' && workspaceAgentKind(entry.path) && !entry.path.startsWith(`${location.directory}/`));
+    for (const entry of references) {
+      const original = (await this.readFile(entry.path)).toString('utf8');
+      const updated = rewriteAgentSkillReferences(original, location.directory, nextLocation.directory, location.slug, nextLocation.slug);
+      if (updated !== original) changes.set(entry.path, { path: entry.path, content: updated });
+    }
+    if (changes.size > 200) throw new SourceError('Skill rename affects more than 200 files.', 413);
+    let revision: string;
+    try {
+      revision = await this.publishChanges([...changes.values()], snapshot, `docs(agents): rename ${location.slug} to ${nextLocation.slug}`);
+    } finally {
+      this.invalidate();
+      this.snapshot = undefined;
+      this.manifest = undefined;
+      this.fresh = false;
+    }
+    return { success: true, committed: true, pushed: true, repository: this.repository, branch: this.branch, revision, changedPaths: [...changes.keys()].sort(), path: nextPath, commit: { commitHash: revision, message: `docs(agents): rename ${location.slug} to ${nextLocation.slug}` } };
   }
 
   async saveStudyTransition(content: string, note: { path: string; content: string; }, expected: string) {

@@ -1,7 +1,7 @@
 import { Request, Response, Router } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
-import { extractFirstH1, listWorkspaceAgentFiles, parseNoteContent, productAgentResources, resolveWorkspaceAgentPath, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource } from '@mygitnotes/core';
+import { agentSkillLocation, extractFirstH1, listWorkspaceAgentFiles, parseNoteContent, productAgentResources, renamedAgentSkillPath, resolveWorkspaceAgentPath, rewriteAgentSkillReferences, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource } from '@mygitnotes/core';
 import { changeFile, getCurrentBranch, listChanges } from '@mygitnotes/git';
 
 export function createLocalAgentResourcesRouter(repoRoot: string, appRoot: string): Router {
@@ -79,6 +79,55 @@ export function createLocalAgentResourcesRouter(repoRoot: string, appRoot: strin
       fs.writeFileSync(safePath, content, 'utf-8');
       res.json({ success: true, path: relPath });
     } catch (err: unknown) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  // Rename a directory-backed skill and update references in editable Agent documents as one rollback-safe operation.
+  router.post('/rename-skill', (req: Request, res: Response) => {
+    const originals = new Map<string, string>();
+    let oldDirectoryPath = '';
+    let newDirectoryPath = '';
+    let moved = false;
+    try {
+      const { path: relPath, slug, content } = req.body;
+      if (typeof relPath !== 'string' || typeof slug !== 'string' || typeof content !== 'string') return res.status(400).json({ error: 'path, slug and content are required' });
+      const location = agentSkillLocation(relPath);
+      if (!location) return res.status(400).json({ error: 'Only a directory-backed SKILL.md file can rename a skill.' });
+      let nextPath: string;
+      try {
+        nextPath = renamedAgentSkillPath(relPath, slug);
+      } catch (error) {
+        return res.status(400).json({ error: (error as Error).message });
+      }
+      const nextLocation = agentSkillLocation(nextPath)!;
+      const safePath = resolveWorkspaceAgentPath(repoRoot, relPath);
+      oldDirectoryPath = path.dirname(safePath);
+      newDirectoryPath = path.dirname(resolveWorkspaceAgentPath(repoRoot, nextPath));
+
+      if (nextPath === relPath) {
+        fs.writeFileSync(safePath, content, 'utf-8');
+        return res.json({ success: true, path: relPath, changedPaths: [relPath] });
+      }
+      if (fs.existsSync(newDirectoryPath)) return res.status(409).json({ error: `A skill named ${nextLocation.slug} already exists.` });
+
+      const agentFiles = listWorkspaceAgentFiles(repoRoot);
+      for (const file of agentFiles) originals.set(file, fs.readFileSync(resolveWorkspaceAgentPath(repoRoot, file), 'utf-8'));
+      originals.set(relPath, content);
+      const updates = [...originals].map(([file, raw]) => {
+        const destination = file === relPath || file.startsWith(`${location.directory}/`) ? `${nextLocation.directory}${file.slice(location.directory.length)}` : file;
+        return [destination, rewriteAgentSkillReferences(raw, location.directory, nextLocation.directory, location.slug, nextLocation.slug)] as const;
+      });
+
+      fs.renameSync(oldDirectoryPath, newDirectoryPath);
+      moved = true;
+      for (const [file, raw] of updates) fs.writeFileSync(resolveWorkspaceAgentPath(repoRoot, file), raw, 'utf-8');
+      res.json({ success: true, path: nextPath, changedPaths: updates.filter(([file, raw]) => originals.get(file.replace(nextLocation.directory, location.directory)) !== raw).map(([file]) => file) });
+    } catch (err: unknown) {
+      try {
+        if (moved && fs.existsSync(newDirectoryPath) && !fs.existsSync(oldDirectoryPath)) fs.renameSync(newDirectoryPath, oldDirectoryPath);
+        for (const [file, raw] of originals) fs.writeFileSync(resolveWorkspaceAgentPath(repoRoot, file), raw, 'utf-8');
+      } catch {}
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
