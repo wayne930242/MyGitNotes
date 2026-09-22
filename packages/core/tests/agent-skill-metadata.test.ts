@@ -18,18 +18,14 @@ describe('agent skill metadata', () => {
     expect(renamedAgentSkillPath('.agents/skills/old-name/SKILL.md', 'new-name')).toBe('.agents/skills/new-name/SKILL.md');
     const oldDirectory = '.agents/skills/run';
     const newDirectory = '.agents/skills/execute';
-    const legitimateReferences = [
-      `${oldDirectory}\n`,
-      `${oldDirectory}"`,
-      `${oldDirectory}\``,
-      `${oldDirectory},`,
-      `${oldDirectory})`,
-      `${oldDirectory}/SKILL.md`,
-    ].join(' ');
-    expect(rewriteAgentSkillReferences(legitimateReferences, oldDirectory, newDirectory)).toBe(legitimateReferences.replaceAll(oldDirectory, newDirectory));
+    const descendantReferences = [`${oldDirectory}/SKILL.md`, `${oldDirectory}/nested/file.md`, `${oldDirectory}/`].join(' ');
+    expect(rewriteAgentSkillReferences(descendantReferences, oldDirectory, newDirectory)).toBe(descendantReferences.replaceAll(oldDirectory, newDirectory));
 
-    const adjacentDirectories = ['runner', 'run-extra', 'run_legacy', 'run.old'].map(slug => `.agents/skills/${slug}/SKILL.md`).join(' ');
-    expect(rewriteAgentSkillReferences(adjacentDirectories, oldDirectory, newDirectory)).toBe(adjacentDirectories);
+    const nonDescendantReferences = [
+      ...['runner', 'run-extra', 'run_legacy', 'run.old', 'run legacy'].map(slug => `.agents/skills/${slug}/SKILL.md`),
+      oldDirectory,
+    ].join(' ');
+    expect(rewriteAgentSkillReferences(nonDescendantReferences, oldDirectory, newDirectory)).toBe(nonDescendantReferences);
   });
 
   it('updates only the renamed skill entry frontmatter name and path references', () => {
