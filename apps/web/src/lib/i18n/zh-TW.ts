@@ -831,6 +831,9 @@ export const zhTW: Record<TranslationKey, string> = {
   'agent.renameSkill': '重新命名',
   'agent.renamingSkill': '重新命名中…',
   'agent.renameRestoreNotice': '技能重新命名無法在此還原；請用 Git 一併還原目錄與更新過的引用。',
+  'agent.createSkill': '新增技能',
+  'agent.creatingSkill': '建立中…',
+  'agent.newSkillSlug': '新技能 slug',
 
   // Theme Picker
   'theme.dark': '深色',

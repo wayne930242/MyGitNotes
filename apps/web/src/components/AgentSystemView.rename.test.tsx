@@ -6,42 +6,28 @@ import type { ReactNode } from 'react';
 import { I18nProvider } from '../lib/i18n/index.js';
 import { AgentSystemView } from './AgentSystemView.js';
 
-const api = vi.hoisted(() => ({
-  fetchAgentResources: vi.fn(),
-  fetchFileChanges: vi.fn(),
-  fetchGitStatus: vi.fn(),
-  readAgentResource: vi.fn(),
-  renameAgentSkill: vi.fn(),
-  restoreAgentResource: vi.fn(),
-  saveAgentResource: vi.fn(),
-}));
+const api = vi.hoisted(() => ({ fetchAgentResources: vi.fn(), fetchFileChanges: vi.fn(), fetchGitStatus: vi.fn(), readAgentResource: vi.fn(), renameAgentSkill: vi.fn(), restoreAgentResource: vi.fn(), saveAgentResource: vi.fn() }));
 
 vi.mock('../lib/api.js', () => api);
-vi.mock('./MarkdownEditor.js', () => ({
-  MarkdownEditor: ({ content, onChange, readOnly }: { content: string; onChange: (value: string) => void; readOnly: boolean; }) => <textarea aria-label='Agent document content' readOnly={readOnly} value={content} onChange={event => onChange(event.target.value)} />,
-  MarkdownEditorModeSwitch: () => null,
-}));
-vi.mock('./AgentFileTree.js', () => ({
-  AgentFileTree: ({ resources, onSelect, disabled }: { resources: Array<{ path: string; }>; onSelect: (path: string) => void; disabled: boolean; }) => <>{resources.map(resource => <button type='button' key={resource.path} disabled={disabled} onClick={() => onSelect(resource.path)}>{resource.path}</button>)}</>,
-}));
-vi.mock('./WorkspaceChrome.js', () => ({
-  useWorkspaceSidebarDrawer: () => ({ open: false, setOpen: vi.fn() }),
-  WorkspaceSidebarPortal: ({ children }: { children: ReactNode; }) => children,
-  WorkspaceSidebar: ({ children }: { children: ReactNode; }) => <aside>{children}</aside>,
-  WorkspaceSidebarToggle: () => null,
-}));
+vi.mock('./MarkdownEditor.js', () => ({ MarkdownEditor: ({ content, onChange, readOnly }: { content: string; onChange: (value: string) => void; readOnly: boolean; }) => <textarea aria-label='Agent document content' readOnly={readOnly} value={content} onChange={event => onChange(event.target.value)} />, MarkdownEditorModeSwitch: () => null }));
+vi.mock('./AgentFileTree.js', () => ({ AgentFileTree: ({ resources, onSelect, disabled }: { resources: Array<{ path: string; }>; onSelect: (path: string) => void; disabled: boolean; }) => <>{resources.map(resource => <button type='button' key={resource.path} disabled={disabled} onClick={() => onSelect(resource.path)}>{resource.path}</button>)}</> }));
+vi.mock('./WorkspaceChrome.js', () => ({ useWorkspaceSidebarDrawer: () => ({ open: false, setOpen: vi.fn() }), WorkspaceSidebarPortal: ({ children }: { children: ReactNode; }) => children, WorkspaceSidebar: ({ children }: { children: ReactNode; }) => <aside>{children}</aside>, WorkspaceSidebarToggle: () => null }));
 vi.mock('./EditorFooter.js', () => ({ EditorFooter: () => null }));
 
 const oldPath = '.agents/skills/old-name/SKILL.md';
 const newPath = '.agents/skills/new-name/SKILL.md';
 const otherPath = 'notes/AGENTS.md';
 const oldContent = '---\nname: old-name\ndescription: Old\n---\nBody\n';
-const newContent = '---\nname: old-name\ndescription: Changed\n---\nBody\n';
+const oldBody = 'Body\n';
+const newBody = 'Body changed\n';
+const newContent = '---\nname: old-name\ndescription: Old\n---\nBody changed\n';
 const status = (untracked: string[] = []) => ({ branch: 'main', isClean: untracked.length === 0, modified: [], staged: [], untracked, ahead: 0, behind: 0 });
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>(done => { resolve = done; });
+  const promise = new Promise<T>(done => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
@@ -63,11 +49,15 @@ describe('Agent skill rename sequencing', () => {
     api.saveAgentResource.mockReturnValue(save.promise);
     api.renameAgentSkill.mockReturnValue(rename.promise);
 
-    render(<I18nProvider><AgentSystemView notebooks={[]} selectedNotebookId='' onBusyChange={() => {}} /></I18nProvider>);
+    render(
+      <I18nProvider>
+        <AgentSystemView notebooks={[]} selectedNotebookId='' onBusyChange={() => {}} />
+      </I18nProvider>,
+    );
     fireEvent.click(await screen.findByRole('button', { name: oldPath }));
-    await waitFor(() => expect(screen.getByLabelText('Agent document content')).toHaveValue(oldContent));
+    await waitFor(() => expect(screen.getByLabelText('Agent document content')).toHaveValue(oldBody));
     const editor = screen.getByLabelText('Agent document content');
-    fireEvent.change(editor, { target: { value: newContent } });
+    fireEvent.change(editor, { target: { value: newBody } });
     fireEvent.change(screen.getByLabelText('Slug'), { target: { value: 'new-name' } });
     fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
 

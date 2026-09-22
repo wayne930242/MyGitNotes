@@ -1,7 +1,7 @@
 import { Request, Response, Router } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
-import { agentSkillLocation, extractFirstH1, listWorkspaceAgentFiles, parseNoteContent, productAgentResources, renamedAgentSkillPath, renameAgentSkillEntryContent, resolveWorkspaceAgentPath, rewriteAgentSkillReferences, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource } from '@mygitnotes/core';
+import { agentSkillLocation, extractFirstH1, listWorkspaceAgentFiles, parseNoteContent, productAgentResources, renameAgentSkillEntryContent, renamedAgentSkillPath, resolveWorkspaceAgentPath, rewriteAgentSkillReferences, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource } from '@mygitnotes/core';
 import { changeFile, getCurrentBranch, listChanges } from '@mygitnotes/git';
 
 export function createLocalAgentResourcesRouter(repoRoot: string, appRoot: string): Router {
@@ -67,12 +67,21 @@ export function createLocalAgentResourcesRouter(repoRoot: string, appRoot: strin
   // Save agent resource file (workspace Agent documents)
   router.post('/save', async (req: Request, res: Response) => {
     try {
-      const { path: relPath, content } = req.body;
+      const { path: relPath, content, create } = req.body;
       if (!relPath || typeof content !== 'string') {
         return res.status(400).json({ error: 'path and content are required' });
       }
       const safePath = resolveWorkspaceAgentPath(repoRoot, relPath);
-      if (agentSkillLocation(relPath) && !fs.existsSync(safePath)) return res.status(409).json({ error: 'Skill moved or deleted. Reload before saving.' });
+      const skillLocation = agentSkillLocation(relPath);
+      if (skillLocation) {
+        // `create` starts a brand-new skill, so its directory must not exist yet; without it, a
+        // missing file means the skill was moved or deleted elsewhere and this save is stale.
+        if (create) {
+          if (fs.existsSync(path.dirname(safePath))) return res.status(409).json({ error: `A skill named ${skillLocation.slug} already exists.` });
+        } else if (!fs.existsSync(safePath)) {
+          return res.status(409).json({ error: 'Skill moved or deleted. Reload before saving.' });
+        }
+      }
       const dir = path.dirname(safePath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });

@@ -14,7 +14,7 @@ import { fetchAgentResources, fetchFileChanges, fetchGitStatus, readAgentResourc
 import { useTranslation } from '../lib/i18n/index.js';
 import { LoadingStatus } from './LoadingStatus.js';
 import { AgentSkillMetadataPanel } from './AgentSkillMetadataPanel.js';
-import { agentSkillLocation } from '@mygitnotes/core/agent-skill-metadata';
+import { agentSkillLocation, newAgentSkillEntryContent, newAgentSkillEntryPath, splitAgentSkillContent } from '@mygitnotes/core/agent-skill-metadata';
 
 export interface AgentSystemHandle {
   prepareNotebookChange: (id: string) => Promise<boolean>;
@@ -55,6 +55,11 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
   const editable = !readOnly && !isProductResource && currentResource?.editable !== false;
   const locked = !editable || loading || switching || restoring || renamingSkill;
   const isSkillEntry = Boolean(agentSkillLocation(selectedPath));
+  const skillSplit = isSkillEntry ? splitAgentSkillContent(content) : null;
+  const bodyContent = skillSplit ? skillSplit.body : content;
+  const handleBodyChange = (nextBody: string) => setContent(skillSplit ? skillSplit.frontmatter + nextBody : nextBody);
+  const [creatingSkill, setCreatingSkill] = useState(false);
+  const [newSkillSlug, setNewSkillSlug] = useState('');
   const [confirmRestore, setConfirmRestore] = useState<boolean>(false);
   const [fileStatus, setFileStatus] = useState<GitStatus | null>(null);
   const [restorableFiles, setRestorableFiles] = useState<Record<string, string>>({});
@@ -226,6 +231,30 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     }
   };
 
+  const handleCreateSkill = async (slug: string) => {
+    if (readOnly || isCreating || renamingSkill) return;
+    setIsCreating(true);
+    setError('');
+    try {
+      const path = newAgentSkillEntryPath(slug);
+      const skillContent = newAgentSkillEntryContent(slug);
+      const receipt = await saveAgentResource({ path, content: skillContent, revision: revision.current, create: true });
+      revision.current = receipt.revision;
+      const newResource: AgentResource = { path, name: slug, editable: true, scope: 'workspace' };
+      setInstructions((prev) => [newResource, ...prev.filter((i) => i.path !== path)]);
+      setCreatingSkill(false);
+      setNewSkillSlug('');
+      setSelectedPath(path);
+      setContent(skillContent);
+      setSavedContent(skillContent);
+      setLoadedPath(path);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const handleRenameSkill = async (slug: string) => {
     if (!isSkillEntry || locked || renamingSkill) return;
     clearTimeout(saveTimer.current);
@@ -329,6 +358,51 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
             <div className='sidebar-section-label'>{t('agent.workspaceSkills')}</div>
             <AgentFileTree resources={groups.skills} {...drawerTreeNavigation} />
             {!groups.skills.length && <p className='agent-empty-scope'>{t('agent.noWorkspaceSkills')}</p>}
+            {!readOnly && (creatingSkill
+              ? (
+                <form
+                  className='flex flex-col gap-1.5 px-2.5 py-1'
+                  onSubmit={event => {
+                    event.preventDefault();
+                    void handleCreateSkill(newSkillSlug);
+                  }}
+                >
+                  <input
+                    autoFocus
+                    aria-label={t('agent.newSkillSlug')}
+                    placeholder={t('agent.skillSlugHint')}
+                    className='ui-control w-full font-mono text-xs'
+                    value={newSkillSlug}
+                    onChange={event => setNewSkillSlug(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key === 'Escape') {
+                        setCreatingSkill(false);
+                        setNewSkillSlug('');
+                      }
+                    }}
+                  />
+                  <div className='flex gap-2'>
+                    <button type='submit' disabled={isCreating || !newSkillSlug.trim()} className='editor-action flex-1 rounded-md border border-line bg-surface px-2 py-1 text-xs font-semibold text-fg hover:bg-fg/5 disabled:opacity-40'>{isCreating ? t('agent.creatingSkill') : t('agent.createSkill')}</button>
+                    <button
+                      type='button'
+                      disabled={isCreating}
+                      onClick={() => {
+                        setCreatingSkill(false);
+                        setNewSkillSlug('');
+                      }}
+                      className='rounded-md border border-line px-2 py-1 text-xs text-muted hover:bg-fg/5 disabled:opacity-40'
+                    >
+                      {t('common.cancel')}
+                    </button>
+                  </div>
+                </form>
+              )
+              : (
+                <button disabled={isCreating || switching || restoring} onClick={() => setCreatingSkill(true)} className='sidebar-link'>
+                  <Plus aria-hidden='true' />
+                  <span>{t('agent.createSkill')}</span>
+                </button>
+              ))}
           </section>
           <section aria-label={t('agent.sharedDocuments')}>
             <div className='sidebar-section-label'>{t('agent.sharedDocuments')}</div>
@@ -397,16 +471,11 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
           </div>
         </div>
         {/* Notices */}
-        {(error || renameRestoreLimited) && (
-          <div className='editor-notices'>
-            {error && <EditorNotice tone='error'>{error}</EditorNotice>}
-            {renameRestoreLimited && <EditorNotice>{t('agent.renameRestoreNotice')}</EditorNotice>}
-          </div>
-        )}
+        {(error || renameRestoreLimited) && <div className='editor-notices'>{error && <EditorNotice tone='error'>{error}</EditorNotice>}{renameRestoreLimited && <EditorNotice>{t('agent.renameRestoreNotice')}</EditorNotice>}</div>}
         {selectedPath && isSkillEntry && !loading && <AgentSkillMetadataPanel key={selectedPath} content={content} disabled={locked} path={selectedPath} renaming={renamingSkill} onChange={setContent} onRename={handleRenameSkill} />}
         {isProductResource && <div className='px-6 py-2 border-b text-[11px] leading-relaxed text-muted bg-sidebar/50'>{t('agent.systemNotice')}</div>}
         {!editable && !isProductResource && selectedPath && <div className='px-6 py-2 border-b text-[11px] leading-relaxed text-warning bg-warning-soft/50'>{readOnlyNotice || t('agent.workspaceReadOnlyNotice')}</div>}
-        {loading ? <LoadingStatus className='p-6 text-sm text-muted'>{t('agent.loadingDocument')}</LoadingStatus> : selectedPath ? <MarkdownEditor content={content} path={selectedPath} mode={viewMode} readOnly={locked} onChange={setContent} ariaLabel='Agent document content' /> : (
+        {loading ? <LoadingStatus className='p-6 text-sm text-muted'>{t('agent.loadingDocument')}</LoadingStatus> : selectedPath ? <MarkdownEditor content={bodyContent} path={selectedPath} mode={viewMode} readOnly={locked} onChange={handleBodyChange} ariaLabel='Agent document content' lineNumberOffset={skillSplit?.lineNumberOffset || 0} /> : (
           <div className='p-8 flex flex-col items-center justify-center text-center gap-3 my-auto'>
             <Bot className='w-10 h-10 text-muted' />
             <p className='text-sm text-muted'>{t('agent.noDocuments')}</p>

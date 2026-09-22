@@ -830,6 +830,9 @@ export const en = {
   'agent.renameSkill': 'Rename',
   'agent.renamingSkill': 'Renaming…',
   'agent.renameRestoreNotice': 'Skill renames cannot be undone here. Use Git to restore the directory and updated references together.',
+  'agent.createSkill': 'New Skill',
+  'agent.creatingSkill': 'Creating…',
+  'agent.newSkillSlug': 'New skill slug',
 
   // Theme Picker
   'theme.dark': 'Dark',

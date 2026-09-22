@@ -101,7 +101,7 @@ export async function readAgentResource(path: string): Promise<{ path: string; c
   return res.json();
 }
 
-export async function saveAgentResource(params: { path: string; content: string; revision?: string; }): Promise<{ success: boolean; path: string; revision?: string; }> {
+export async function saveAgentResource(params: { path: string; content: string; revision?: string; create?: boolean; }): Promise<{ success: boolean; path: string; revision?: string; }> {
   const res = await fetch(`${API_BASE}/agent-resources/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) });
   if (!res.ok) {
     const err = await res.json();

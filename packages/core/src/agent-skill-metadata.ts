@@ -10,6 +10,15 @@ export interface AgentSkillLocation {
   slug: string;
 }
 
+export interface AgentSkillContentSplit {
+  /** The raw `---\n...\n---\n` block, including delimiters; empty when the file has no frontmatter. */
+  frontmatter: string;
+  /** Everything after the frontmatter block; the whole file when there is none. */
+  body: string;
+  /** Number added to body-relative line numbers to reach the same line in the saved file. */
+  lineNumberOffset: number;
+}
+
 /** Returns the directory-backed identity for a native SKILL.md entry file. */
 export function agentSkillLocation(file: string): AgentSkillLocation | undefined {
   const match = file.match(SKILL_ENTRY);
@@ -22,6 +31,25 @@ export function validateAgentSkillSlug(slug: string): string {
   const value = slug.trim();
   if (!VALID_SKILL_SLUG.test(value)) throw new Error('Use lowercase letters, numbers, and single hyphens between words.');
   return value;
+}
+
+/** Splits a SKILL.md file into its frontmatter block and body, so an editor can show only the body. */
+export function splitAgentSkillContent(content: string): AgentSkillContentSplit {
+  const match = content.match(FRONTMATTER);
+  if (!match) return { frontmatter: '', body: content, lineNumberOffset: 0 };
+  return { frontmatter: match[0], body: content.slice(match[0].length), lineNumberOffset: (match[0].match(/\n/g) || []).length };
+}
+
+/** The canonical entry path for a brand-new directory-backed skill. */
+export function newAgentSkillEntryPath(slug: string): string {
+  return `.agents/skills/${validateAgentSkillSlug(slug)}/SKILL.md`;
+}
+
+/** A minimal, immediately valid SKILL.md: frontmatter with a name and empty description, plus a heading. */
+export function newAgentSkillEntryContent(slug: string): string {
+  const value = validateAgentSkillSlug(slug);
+  const yaml = YAML.stringify({ name: value, description: '' }).trim();
+  return `---\n${yaml}\n---\n\n# ${value}\n`;
 }
 
 export function renamedAgentSkillPath(file: string, slug: string): string {
