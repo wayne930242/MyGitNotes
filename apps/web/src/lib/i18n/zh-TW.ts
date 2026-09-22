@@ -830,6 +830,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'agent.skillSlugHint': '使用小寫英文字母、數字與連字號。',
   'agent.renameSkill': '重新命名',
   'agent.renamingSkill': '重新命名中…',
+  'agent.renameRestoreNotice': '技能重新命名無法在此還原；請用 Git 一併還原目錄與更新過的引用。',
 
   // Theme Picker
   'theme.dark': '深色',

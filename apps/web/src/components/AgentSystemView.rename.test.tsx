@@ -74,6 +74,7 @@ describe('Agent skill rename sequencing', () => {
     await waitFor(() => expect(api.saveAgentResource).toHaveBeenCalledWith(expect.objectContaining({ path: oldPath, content: newContent })));
     expect(api.renameAgentSkill).not.toHaveBeenCalled();
     expect(editor).toHaveAttribute('readonly');
+    expect(screen.getByRole('combobox', { name: 'Agent document' })).toBeDisabled();
     const other = screen.getByRole('button', { name: otherPath });
     const otherReads = api.readAgentResource.mock.calls.filter(([path]) => path === otherPath).length;
     expect(other).toBeDisabled();
@@ -87,6 +88,7 @@ describe('Agent skill rename sequencing', () => {
 
     await screen.findAllByText(newPath);
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Restore' })).not.toBeInTheDocument());
+    expect(screen.getByRole('status')).toHaveTextContent('Skill renames cannot be undone here. Use Git to restore the directory and updated references together.');
     expect(api.saveAgentResource).toHaveBeenCalledTimes(1);
   });
 });

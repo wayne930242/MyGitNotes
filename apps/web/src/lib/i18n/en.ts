@@ -829,6 +829,7 @@ export const en = {
   'agent.skillSlugHint': 'Lowercase letters, numbers, and hyphens.',
   'agent.renameSkill': 'Rename',
   'agent.renamingSkill': 'Renaming…',
+  'agent.renameRestoreNotice': 'Skill renames cannot be undone here. Use Git to restore the directory and updated references together.',
 
   // Theme Picker
   'theme.dark': 'Dark',

@@ -59,7 +59,8 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
   const [fileStatus, setFileStatus] = useState<GitStatus | null>(null);
   const [restorableFiles, setRestorableFiles] = useState<Record<string, string>>({});
   const canRestore = !remote && !locked && !isSaving && Boolean(fileStatus && (fileStatus.modified.includes(selectedPath) || fileStatus.staged.includes(selectedPath)) && restorableFiles[selectedPath]);
-  const showRestore = !remote && !(isSkillEntry && fileStatus?.untracked.includes(selectedPath));
+  const renameRestoreLimited = !remote && isSkillEntry && Boolean(fileStatus?.untracked.includes(selectedPath));
+  const showRestore = !remote && !renameRestoreLimited;
   const refreshGitStatus = async () => {
     if (remote) return;
     const { status } = await fetchGitStatus();
@@ -365,7 +366,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
       <div className='workspace-content agent-content'>
         <label className='agent-document-picker mobile-only flex-col gap-1 p-3 border-b text-xs' style={{ borderColor: 'var(--color-border)' }}>
           {t('agent.document')}
-          <Select aria-label={t('agent.document')} value={selectedPath} disabled={switching || restoring || !visibleResources.length} onValueChange={(value) => void selectDocument(value)} options={visibleResources.map((resource) => ({ value: resource.path, label: `${resource.scope === 'product' ? `[${t('agent.systemGuidelines')}] ` : ''}${resource.path}` }))} className='w-full' />
+          <Select aria-label={t('agent.document')} value={selectedPath} disabled={switching || restoring || renamingSkill || !visibleResources.length} onValueChange={(value) => void selectDocument(value)} options={visibleResources.map((resource) => ({ value: resource.path, label: `${resource.scope === 'product' ? `[${t('agent.systemGuidelines')}] ` : ''}${resource.path}` }))} className='w-full' />
         </label>
         {/* Top Bar */}
         <div className='agent-toolbar shrink-0 px-6 py-3 border-b flex items-center justify-between gap-4' style={{ backgroundColor: 'var(--color-sidebar)', borderColor: 'var(--color-border)' }}>
@@ -396,9 +397,10 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
           </div>
         </div>
         {/* Notices */}
-        {error && (
+        {(error || renameRestoreLimited) && (
           <div className='editor-notices'>
-            <EditorNotice tone='error'>{error}</EditorNotice>
+            {error && <EditorNotice tone='error'>{error}</EditorNotice>}
+            {renameRestoreLimited && <EditorNotice>{t('agent.renameRestoreNotice')}</EditorNotice>}
           </div>
         )}
         {selectedPath && isSkillEntry && !loading && <AgentSkillMetadataPanel key={selectedPath} content={content} disabled={locked} path={selectedPath} renaming={renamingSkill} onChange={setContent} onRename={handleRenameSkill} />}
