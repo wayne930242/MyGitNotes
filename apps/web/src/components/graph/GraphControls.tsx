@@ -2,7 +2,7 @@ import './graph-controls.css';
 import type { ReactNode, RefObject } from 'react';
 import { Select } from '../Select.js';
 import { useTranslation } from '../../lib/i18n/index.js';
-import { GRAPH_COLOR_MODES, GRAPH_PALETTES, type GraphAppearance } from '../../lib/graph-colors.js';
+import { GRAPH_COLOR_MODES, GRAPH_LABEL_MODES, GRAPH_PALETTES, type GraphAppearance } from '../../lib/graph-colors.js';
 
 interface GraphControlsProps {
   controlsRef: RefObject<HTMLDivElement>;
@@ -25,6 +25,8 @@ export function GraphControls({ controlsRef, filterPanel, appearance, onAppearan
           <Select aria-label={t('graph.colorBy')} value={appearance.mode} onValueChange={mode => onAppearanceChange({ ...appearance, mode: mode as GraphAppearance['mode'] })} options={GRAPH_COLOR_MODES.map(mode => ({ value: mode, label: t(`graph.color.${mode}`) }))} className='mb-3 w-full' />
           <label className='mb-1 block text-muted'>{t('graph.palette')}</label>
           <Select aria-label={t('graph.palette')} value={appearance.palette} onValueChange={palette => onAppearanceChange({ ...appearance, palette: palette as GraphAppearance['palette'] })} options={GRAPH_PALETTES.map(palette => ({ value: palette, label: t(`graph.palette.${palette}`) }))} className='mb-3 w-full' />
+          <label className='mb-1 block text-muted'>{t('graph.labelMode')}</label>
+          <Select aria-label={t('graph.labelMode')} value={appearance.labels} onValueChange={labels => onAppearanceChange({ ...appearance, labels: labels as GraphAppearance['labels'] })} options={GRAPH_LABEL_MODES.map(labels => ({ value: labels, label: t(`graph.labelMode.${labels}`) }))} className='mb-3 w-full' />
           <p className='mb-2 text-[11px] text-muted'>{t('graph.appearanceHint')}</p>
           <ul aria-label={t('graph.legend')} className='max-h-40 space-y-2 overflow-y-auto border-t border-line pt-2'>
             {visibleColorGroups.map(group => (

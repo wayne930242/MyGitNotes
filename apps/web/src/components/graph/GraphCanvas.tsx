@@ -2,8 +2,11 @@ import ForceGraph2D from 'react-force-graph-2d';
 import { themeColor, tokenAlpha } from '../../lib/theme-color.js';
 import type { useGraphController } from './useGraphController.js';
 import type { Node } from './types.js';
+// Above fitView's 1.4x default-fit cap, so "zoom" mode only reveals labels once the
+// viewer has deliberately zoomed in past the initial overview.
+const LABEL_ZOOM_THRESHOLD = 1.8;
 export function GraphCanvas({ model }: { model: ReturnType<typeof useGraphController>; }) {
-  const { laneIds, showOutside, closing, fg, size, selected, setSelected, layout, hover, sessions, laneMembers, expanded, graphData, nodeColor, currentLayout, persistLayout, freeze, additive, select, frame, onEngineStop, onNodeHover } = model;
+  const { laneIds, showOutside, closing, fg, size, selected, setSelected, layout, hover, sessions, laneMembers, expanded, graphData, nodeColor, currentLayout, persistLayout, freeze, additive, select, frame, onEngineStop, onNodeHover, appearance } = model;
 
   return (
     <>
@@ -40,10 +43,12 @@ export function GraphCanvas({ model }: { model: ReturnType<typeof useGraphContro
             ctx.lineWidth = 2 / scale;
             ctx.stroke();
           }
-          ctx.font = `${12 / scale}px sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.fillStyle = themeColor('var(--color-muted)');
-          ctx.fillText(node.title, x, y + radius + 15 / scale);
+          if (appearance.labels === 'all' || scale >= LABEL_ZOOM_THRESHOLD || selected.includes(node.id) || hover === node.id) {
+            ctx.font = `${12 / scale}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = themeColor('var(--color-muted)');
+            ctx.fillText(node.title, x, y + radius + 15 / scale);
+          }
           ctx.globalAlpha = 1;
         }}
         nodePointerAreaPaint={(node: Node, color, ctx) => {

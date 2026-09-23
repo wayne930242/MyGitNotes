@@ -21,9 +21,9 @@ describe('graph colors', () => {
     expect(graphColorGroups(nodes, notebooks, { ...appearance, palette: 'vivid' })[0].color).not.toBe(graphColorGroups(nodes, notebooks, appearance)[0].color);
   });
   it('restores valid preferences and defaults invalid saved fields', () => {
-    expect(parseGraphAppearance('{"mode":"status","palette":"warm"}')).toEqual({ mode: 'status', palette: 'warm' });
-    for (const raw of [null, 'null', '{broken', '{"mode":"unknown","palette":"unknown"}']) {
-      expect(parseGraphAppearance(raw)).toEqual({ mode: 'folder', palette: 'soft' });
+    expect(parseGraphAppearance('{"mode":"status","palette":"warm","labels":"zoom"}')).toEqual({ mode: 'status', palette: 'warm', labels: 'zoom' });
+    for (const raw of [null, 'null', '{broken', '{"mode":"unknown","palette":"unknown","labels":"unknown"}']) {
+      expect(parseGraphAppearance(raw)).toEqual({ mode: 'folder', palette: 'soft', labels: 'all' });
     }
   });
 });
