@@ -1,19 +1,26 @@
 import { useCallback, useState } from 'react';
 import type { TagOperationPlan } from '@mygitnotes/core/tag-ops';
+import type { TranslationKey } from './i18n/index.js';
 
 export type TagOperationKind = 'rename' | 'merge' | 'delete' | 'add' | 'remove';
+
+/** A toast label kept untranslated so it renders in the language active when it is shown. */
+export interface TagOperationLabel {
+  key: TranslationKey;
+  params: Record<string, string | number>;
+}
 
 export interface TagOperationRecord {
   id: string;
   kind: TagOperationKind;
-  label: string;
+  label: TagOperationLabel;
   plan: TagOperationPlan;
 }
 
 let nextRecordId = 0;
 
 /** Prepend a record built from a just-applied plan. Pure, so it is easy to test without React. */
-export function pushTagOperationRecord(history: TagOperationRecord[], kind: TagOperationKind, label: string, plan: TagOperationPlan): TagOperationRecord[] {
+export function pushTagOperationRecord(history: TagOperationRecord[], kind: TagOperationKind, label: TagOperationLabel, plan: TagOperationPlan): TagOperationRecord[] {
   return [{ id: `tag-op-${++nextRecordId}`, kind, label, plan }, ...history];
 }
 
@@ -25,7 +32,7 @@ export function pushTagOperationRecord(history: TagOperationRecord[], kind: TagO
 export function useTagOperations() {
   const [history, setHistory] = useState<TagOperationRecord[]>([]);
 
-  const record = useCallback((kind: TagOperationKind, label: string, plan: TagOperationPlan) => {
+  const record = useCallback((kind: TagOperationKind, label: TagOperationLabel, plan: TagOperationPlan) => {
     setHistory(previous => pushTagOperationRecord(previous, kind, label, plan));
   }, []);
 

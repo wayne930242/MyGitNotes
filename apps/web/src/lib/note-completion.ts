@@ -38,8 +38,13 @@ export async function fetchNoteCandidates(client: QueryClient, scope: NoteQueryS
 
 /** Link candidates for `query`, matched by the server against title, path and notebook. */
 export function useNoteCandidates(query: string | null, source: string): NoteListItem[] {
+  return useNoteCandidateResults(query, source).notes;
+}
+
+/** Link candidates plus whether the first answer for them is still on its way. */
+export function useNoteCandidateResults(query: string | null, source: string): { notes: NoteListItem[]; loading: boolean; } {
   const settled = useDebounced(query ?? '');
   const result = useNoteList(query === null ? null : candidateQuery(settled, source), { limit: NOTE_COMPLETION_LIMIT });
   // A note staged but not committed is still a link target.
-  return [...result.uncommitted, ...result.notes].slice(0, NOTE_COMPLETION_LIMIT);
+  return { notes: [...result.uncommitted, ...result.notes].slice(0, NOTE_COMPLETION_LIMIT), loading: result.loading };
 }

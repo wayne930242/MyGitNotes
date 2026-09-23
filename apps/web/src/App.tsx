@@ -498,7 +498,7 @@ const AppContent: React.FC = () => {
             <section className='fixed top-28 sm:top-auto sm:bottom-6 right-4 sm:right-16 left-4 sm:left-auto z-50 flex flex-col gap-2 items-end' aria-label={t('sidebar.recentTagChanges')}>
               {tagOperations.history.map(record => (
                 <div key={record.id} className='bg-surface/95 text-fg backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-line/80 flex items-center gap-3 text-xs max-w-sm'>
-                  <span>{record.label}</span>
+                  <span>{t(record.label.key, record.label.params)}</span>
                   <button
                     autoFocus
                     onClick={() => void handleUndoTagOperation(record.id)}

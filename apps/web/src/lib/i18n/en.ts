@@ -445,6 +445,7 @@ export const en = {
   'shortcuts.notesPlaceholder': 'Search notes… type > for commands',
   'shortcuts.noResults': 'No matching commands',
   'shortcuts.noNoteResults': 'No matching notes',
+  'shortcuts.loadingNotes': 'Loading notes…',
   'shortcuts.notesModeHint': 'Notes · type > or / for commands',
   'shortcuts.commandsModeHint': 'Commands · Backspace for notes',
   'shortcuts.search': 'Focus note search',

@@ -67,6 +67,25 @@ it('a leading / also reaches the command list', async () => {
   await waitFor(() => expect(document.querySelector('[data-command-id="notes"]')).not.toBeNull());
 });
 
+it('shows a loading status instead of "no matching notes" while note candidates are still loading', async () => {
+  let answer: (response: Response) => void = () => {};
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      new Promise<Response>(resolve => {
+        answer = resolve;
+      })
+    ),
+  );
+  setNoteQueryScope({ sourceId: 'github:me/notes', revision: REVISION, drafts: {} });
+  render(createElement(Harness), { wrapper });
+  await openPalette();
+  await waitFor(() => expect(document.querySelector('.keyboard-shortcuts-empty')).toHaveTextContent('Loading notes'));
+  answer(new Response(JSON.stringify({ revision: REVISION, total: 1, nextCursor: null, notes: [{ id: 'notes/life/plan.md', path: 'notes/life/plan.md', notebookId: 'life', title: 'Weekend plan', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } }));
+  await waitFor(() => expect(document.querySelector('[data-command-id="notes/life/plan.md"]')).not.toBeNull());
+  expect(document.querySelector('.keyboard-shortcuts-empty')).toBeNull();
+});
+
 it('searches notes by title and path, opening the selected one on Enter the same way a click would', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ revision: REVISION, total: 1, nextCursor: null, notes: [{ id: 'notes/life/plan.md', path: 'notes/life/plan.md', notebookId: 'life', title: 'Weekend plan', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } })));
   setNoteQueryScope({ sourceId: 'github:me/notes', revision: REVISION, drafts: {} });

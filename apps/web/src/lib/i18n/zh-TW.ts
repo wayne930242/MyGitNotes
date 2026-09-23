@@ -446,6 +446,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'shortcuts.notesPlaceholder': '搜尋筆記…輸入 > 開啟指令',
   'shortcuts.noResults': '找不到符合的動作',
   'shortcuts.noNoteResults': '找不到符合的筆記',
+  'shortcuts.loadingNotes': '正在載入筆記…',
   'shortcuts.notesModeHint': '筆記 · 輸入 > 或 / 切換至指令',
   'shortcuts.commandsModeHint': '指令 · 按 Backspace 回到筆記',
   'shortcuts.search': '聚焦筆記搜尋',

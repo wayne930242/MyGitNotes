@@ -55,8 +55,8 @@ export function useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNote
       const plan = kind === 'add' ? planTagAdd(selectedNotes, tag) : planTagDelete(selectedNotes, tag);
       if (plan.affected.length === 0) return;
       const entries = plan.affected.map(({ path, notebookId, nextTags }) => ({ path, notebookId, tags: nextTags }));
-      const label = t(kind === 'add' ? 'bulk.tagAddedLabel' : 'bulk.tagRemovedLabel', { tag, count: plan.affected.length });
-      const result = await applyTagChange(entries, revision, label);
+      const label = { key: kind === 'add' ? 'bulk.tagAddedLabel' as const : 'bulk.tagRemovedLabel' as const, params: { tag, count: plan.affected.length } };
+      const result = await applyTagChange(entries, revision, t(label.key, label.params));
       if (remote) setRevision(result.revision || revision);
       else invalidateNotes();
       tagOperations.record(kind, label, plan);

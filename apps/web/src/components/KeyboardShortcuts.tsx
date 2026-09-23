@@ -4,7 +4,7 @@ import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { WorkspaceTab } from '../lib/routes.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { isEditableTarget } from '../lib/note-navigation.js';
-import { useNoteCandidates } from '../lib/note-completion.js';
+import { useNoteCandidateResults } from '../lib/note-completion.js';
 
 export type ShortcutSurfaceMode = 'palette' | 'help';
 
@@ -119,7 +119,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
   /* eslint-enable react/refs */
 
   // Notes are searched by title, path and notebook, matching a note the same way clicking it in the list would open it.
-  const noteCandidates = useNoteCandidates(palette && paletteKind === 'notes' ? noteSearchText : null, '');
+  const { notes: noteCandidates, loading: noteCandidatesLoading } = useNoteCandidateResults(palette && paletteKind === 'notes' ? noteSearchText : null, '');
   const sortedNoteCandidates = useMemo(() => {
     if (noteCandidates.length < 2) return noteCandidates;
     const current = noteCandidates.filter(note => note.notebookId === selectedNotebookId);
@@ -247,7 +247,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
   const modeHintKey = paletteKind === 'commands' ? 'shortcuts.commandsModeHint' : 'shortcuts.notesModeHint';
   const searchLabelKey = paletteKind === 'commands' ? 'shortcuts.searchCommands' : 'shortcuts.searchNotes';
   const placeholderKey = paletteKind === 'commands' ? 'shortcuts.searchPlaceholder' : 'shortcuts.notesPlaceholder';
-  const noResultsKey = paletteKind === 'commands' ? 'shortcuts.noResults' : 'shortcuts.noNoteResults';
+  const noResultsKey = paletteKind === 'commands' ? 'shortcuts.noResults' : noteCandidatesLoading ? 'shortcuts.loadingNotes' : 'shortcuts.noNoteResults';
   const footerKey = paletteKind === 'commands' ? 'shortcuts.paletteFooter' : 'shortcuts.paletteFooterNotes';
   /* eslint-disable react/refs -- The palette synchronizes its mode and selection before immediate keyboard events can run. */
   return (
