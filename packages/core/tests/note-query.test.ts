@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_NOTE_QUERY, type NoteListItem, noteMatchesQuery, noteQuerySearch, noteQueryStatuses } from '../src/note-query.js';
+import { DEFAULT_NOTE_QUERY, noteContentSnippet, type NoteListItem, noteMatchesQuery, noteQuerySearch, noteQueryStatuses } from '../src/note-query.js';
 import { filterNotes } from '../src/note-filters.js';
 import type { NotebookConfig, NoteItem } from '../src/types.js';
 
@@ -26,6 +26,17 @@ describe('note query matching', () => {
     expect(noteMatchesQuery(withoutContent, query({ q: 'alpha', match: 'title' }))).toBe(true);
     expect(noteMatchesQuery(withoutContent, query({ q: 'body', match: 'title' }))).toBe(false);
     expect(noteMatchesQuery(withoutContent, query({ q: 'body' }))).toBe(false);
+  });
+});
+
+describe('note content snippet', () => {
+  it('excerpts around the first case-insensitive match, with ellipses only where content is cut', () => {
+    expect(noteContentSnippet('AAAAAneedleBBBBB', 'needle', 3)).toBe('…AAAneedleBBB…');
+    expect(noteContentSnippet('before NEEDLE after', 'needle', 3)).toBe('…re NEEDLE af…');
+    expect(noteContentSnippet('short', 'short', 5)).toBe('short');
+    expect(noteContentSnippet('no match here', 'missing')).toBeUndefined();
+    expect(noteContentSnippet('anything', '')).toBeUndefined();
+    expect(noteContentSnippet('line one\n\n  KEYWORD  \nline two', 'keyword', 20)).toMatch(/^…?[^\n]*KEYWORD[^\n]*…?$/);
   });
 });
 

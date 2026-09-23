@@ -10,6 +10,7 @@ import { noteUpdatedTime, SortField, SortOrder } from '../lib/note-sort.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
+import { HighlightText } from './HighlightText.js';
 
 interface ListViewProps {
   notes: NoteListItem[];
@@ -38,6 +39,8 @@ interface ListViewProps {
   compact?: boolean;
   /** An entry listed as the first row, such as the folder index in the flat view. */
   leading?: React.ReactNode;
+  /** Active search text: highlights matches in the title and shows a matched-content snippet. */
+  highlightQuery?: string;
 }
 
 interface NoteRowActions {
@@ -48,7 +51,7 @@ interface NoteRowActions {
   zoom: (note: NoteListItem) => void;
 }
 
-const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelete, isPendingDelete, actions, dates, tagActions, showZoom, canDrag }: { note: NoteListItem; tagActions?: NoteTagActions; statuses: string[]; readOnly: boolean; canDelete: boolean; isPendingDelete: boolean; actions: NoteRowActions; dates: { short: Intl.DateTimeFormat; full: Intl.DateTimeFormat; }; showZoom?: boolean; canDrag?: boolean; }) {
+const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelete, isPendingDelete, actions, dates, tagActions, showZoom, canDrag, highlightQuery = '' }: { note: NoteListItem; tagActions?: NoteTagActions; statuses: string[]; readOnly: boolean; canDelete: boolean; isPendingDelete: boolean; actions: NoteRowActions; dates: { short: Intl.DateTimeFormat; full: Intl.DateTimeFormat; }; showZoom?: boolean; canDrag?: boolean; highlightQuery?: string; }) {
   const { t } = useTranslation();
   const updated = noteUpdatedTime(note);
   const formattedDate = updated ? dates.short.format(updated) : '—';
@@ -70,10 +73,17 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
           <FileText className='w-4 h-4 text-primary shrink-0' />
           <div>
             <div className='font-medium text-fg transition flex items-center gap-1.5'>
-              <span>{note.title}</span>
+              <span>
+                <HighlightText text={note.title} query={highlightQuery} />
+              </span>
               {note.path.endsWith('.mdx') && <span className='text-[10px] font-semibold font-mono px-1.5 py-0.5 rounded bg-warning-soft text-warning border border-warning/40 leading-none'>MDX</span>}
             </div>
             <div className='text-xs text-muted font-mono'>{note.path}</div>
+            {note.matchSnippet && (
+              <div className='text-xs text-muted mt-0.5 line-clamp-2'>
+                <HighlightText text={note.matchSnippet} query={highlightQuery} />
+              </div>
+            )}
           </div>
         </div>
       </td>
@@ -114,7 +124,7 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
   );
 });
 
-export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onUpdateNoteStatus, onNewNote, sortField = 'updated', sortOrder = 'desc', onSortChange, showMobileSort = false, tagActions, focusMode, compact = false, leading }) => {
+export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onUpdateNoteStatus, onNewNote, sortField = 'updated', sortOrder = 'desc', onSortChange, showMobileSort = false, tagActions, focusMode, compact = false, leading, highlightQuery = '' }) => {
   const { t, language } = useTranslation();
   // Rows retain stable actions while invoking the latest committed callbacks.
   const handlers = useRef({ onOpenNote, onDeleteNote, onUpdateNoteStatus, onMoveNote, focusMode });
@@ -203,7 +213,7 @@ export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], has
                   <tr>
                     <th colSpan={5} scope='colgroup' className='py-2 px-4 text-left text-xs uppercase font-semibold text-warning'>{t('notes.uncommitted')}</th>
                   </tr>
-                  {uncommitted.map(note => <NoteRow key={note.path} note={note} statuses={statuses} readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} tagActions={tagActions} showZoom={!!focusMode} canDrag={!!focusMode?.canDrag(note)} />)}
+                  {uncommitted.map(note => <NoteRow key={note.path} note={note} statuses={statuses} readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} tagActions={tagActions} showZoom={!!focusMode} canDrag={!!focusMode?.canDrag(note)} highlightQuery={highlightQuery} />)}
                 </tbody>
               )}
               <tbody className='divide-y' style={{ borderColor: 'var(--color-border)' }}>
@@ -213,7 +223,7 @@ export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], has
                   </tr>
                 )}
                 {/* Notes row rendering */}
-                {notes.map(note => <NoteRow key={note.path} note={note} statuses={statuses} readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} tagActions={tagActions} showZoom={!!focusMode} canDrag={!!focusMode?.canDrag(note)} />)}
+                {notes.map(note => <NoteRow key={note.path} note={note} statuses={statuses} readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} tagActions={tagActions} showZoom={!!focusMode} canDrag={!!focusMode?.canDrag(note)} highlightQuery={highlightQuery} />)}
               </tbody>
             </table>
           </div>

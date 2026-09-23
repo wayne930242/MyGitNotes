@@ -31,6 +31,8 @@ export interface NoteListItem {
   mtime?: number;
   size?: number;
   content?: string;
+  /** Body excerpt around a search query's match, present only when the query matched inside content. */
+  matchSnippet?: string;
 }
 
 export interface NoteQuery {
@@ -105,6 +107,20 @@ export function noteMatchesQuery(note: NoteListItem, query: NoteQuery): boolean 
   if (!q.trim()) return true;
   const fields = query.match === 'title' ? [note.title, note.path, note.notebookId] : [note.title, note.path, note.content ?? '', note.status || '', ...note.tags];
   return fields.some(text => text.toLowerCase().includes(q));
+}
+
+export const NOTE_SNIPPET_CONTEXT = 60;
+
+/** Body excerpt around the first case-insensitive match of `query` in `content`, or undefined when it does not occur there. */
+export function noteContentSnippet(content: string, query: string, context = NOTE_SNIPPET_CONTEXT): string | undefined {
+  const needle = query.trim();
+  if (!needle) return undefined;
+  const index = content.toLowerCase().indexOf(needle.toLowerCase());
+  if (index === -1) return undefined;
+  const start = Math.max(0, index - context);
+  const end = Math.min(content.length, index + needle.length + context);
+  const excerpt = content.slice(start, end).replace(/\s+/g, ' ').trim();
+  return (start > 0 ? '…' : '') + excerpt + (end < content.length ? '…' : '');
 }
 
 /** Status order used for sorting, matching the notes page. */

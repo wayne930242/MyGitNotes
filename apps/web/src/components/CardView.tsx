@@ -9,6 +9,7 @@ import { useTranslation } from '../lib/i18n/index.js';
 import { noteUpdatedTime } from '../lib/note-sort.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
+import { HighlightText } from './HighlightText.js';
 
 interface CardViewProps {
   notes: NoteListItem[];
@@ -31,9 +32,11 @@ interface CardViewProps {
   focusMode?: NoteBrowseFocusMode;
   /** Single horizontally scrolling row, for a docked top panel too short for the grid. */
   strip?: boolean;
+  /** Active search text: highlights matches in the title, and swaps the excerpt for a matched-content snippet when present. */
+  highlightQuery?: string;
 }
 
-export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onNewNote, onUpdateNoteStatus, tagActions, focusMode, strip = false }) => {
+export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onNewNote, onUpdateNoteStatus, tagActions, focusMode, strip = false, highlightQuery = '' }) => {
   const { t } = useTranslation();
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(confirmDelete, path => {
     const note = [...uncommitted, ...notes].find(n => n.path === path);
@@ -69,6 +72,7 @@ export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], has
     const updated = noteUpdatedTime(note);
     const formattedDate = updated ? new Date(updated).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
     const canDrag = !!focusMode?.canDrag(note);
+    const excerpt = note.matchSnippet || getExcerpt(note.content || '');
 
     return (
       <div
@@ -88,12 +92,14 @@ export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], has
         <div>
           <div className='flex items-start justify-between gap-2 mb-2'>
             <h3 className='font-semibold text-fg text-base line-clamp-1 transition flex items-center gap-1.5'>
-              <span className='truncate'>{note.title}</span>
+              <span className='truncate'>
+                <HighlightText text={note.title} query={highlightQuery} />
+              </span>
               {note.path.endsWith('.mdx') && <span className='shrink-0 text-[10px] font-semibold font-mono px-1.5 py-0.5 rounded bg-warning-soft text-warning border border-warning/40 leading-none'>MDX</span>}
             </h3>
             <NoteStatusSelect statuses={statuses} status={note.status} readOnly={readOnly} label={t('notes.statusFor', { title: note.title })} onChange={(status) => onUpdateNoteStatus(note, status)} />
           </div>
-          <p className='text-xs text-muted line-clamp-3 mb-4 leading-relaxed'>{getExcerpt(note.content || '') || <span className='italic text-muted'>{t('notes.noContent')}</span>}</p>
+          <p className='text-xs text-muted line-clamp-3 mb-4 leading-relaxed'>{excerpt ? <HighlightText text={excerpt} query={highlightQuery} /> : <span className='italic text-muted'>{t('notes.noContent')}</span>}</p>
         </div>
         <div className='note-card-footer pt-3 border-t flex items-center justify-between gap-2 text-xs text-muted' style={{ borderColor: 'var(--color-border)' }}>
           <NoteTags tags={note.tags.slice(0, 2)} chipClassName='px-1.5 py-0.5 text-[11px]' tagActions={tagActions} className='note-card-tags max-w-[65%] min-w-0'>{note.tags.length > 2 && <span className='text-[10px] text-muted self-center'>+{note.tags.length - 2}</span>}</NoteTags>
