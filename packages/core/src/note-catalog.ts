@@ -76,12 +76,10 @@ async function matching(catalog: NoteCatalog, query: NoteQuery) {
   let matches = notes.filter(note => noteMatchesQuery(note, { ...query, q: '' }));
   if (query.q.trim() && query.match === 'all') {
     const contents = await catalog.contents(matches);
-    matches = matches
-      .filter(note => noteMatchesQuery({ ...note, content: contents.get(note.path) ?? '' }, query))
-      .map(note => {
-        const matchSnippet = noteContentSnippet(contents.get(note.path) ?? '', query.q);
-        return matchSnippet ? { ...note, matchSnippet } : note;
-      });
+    matches = matches.filter(note => noteMatchesQuery({ ...note, content: contents.get(note.path) ?? '' }, query)).map(note => {
+      const matchSnippet = noteContentSnippet(contents.get(note.path) ?? '', query.q);
+      return matchSnippet ? { ...note, matchSnippet } : note;
+    });
   } else if (query.q.trim()) {
     matches = matches.filter(note => noteMatchesQuery(note, query));
   }

@@ -39,22 +39,15 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({ count, s
       <span className='font-semibold text-fg shrink-0'>{t('bulk.selectedCount', { count })}</span>
       {!readOnly && (
         <>
-          <Select
-            aria-label={t('bulk.setStatus')}
-            value=''
-            disabled={busy}
-            onValueChange={onSetStatus}
-            options={[{ value: '', label: t('bulk.setStatus') }, ...statuses.map(status => ({ value: status, label: status }))]}
-            className='min-h-7 px-2 py-1 text-xs'
-          />
-          <div className='flex items-center gap-1'>
+          <Select aria-label={t('bulk.setStatus')} value='' disabled={busy} onValueChange={onSetStatus} options={[{ value: '', label: t('bulk.setStatus') }, ...statuses.map(status => ({ value: status, label: status }))]} className='w-full sm:w-40 min-h-7 px-2 py-1 text-xs' />
+          <div className='flex w-full flex-wrap items-center gap-1 sm:w-auto'>
             <input
               type='text'
               value={tagInput}
               disabled={busy}
               onChange={event => setTagInput(event.target.value)}
               onKeyDown={event => {
-                if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) {
                   event.preventDefault();
                   submitTag(onAddTag);
                 }
@@ -62,11 +55,9 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({ count, s
               placeholder={t('bulk.tagPlaceholder')}
               aria-label={t('bulk.tagPlaceholder')}
               list='bulk-tag-suggestions'
-              className='ui-control min-h-7 px-2 py-1 text-xs w-32'
+              className='ui-control min-h-7 px-2 py-1 text-xs w-full sm:w-32'
             />
-            <datalist id='bulk-tag-suggestions'>
-              {availableTags.map(tag => <option key={tag} value={tag} />)}
-            </datalist>
+            <datalist id='bulk-tag-suggestions'>{availableTags.map(tag => <option key={tag} value={tag} />)}</datalist>
             <Button type='button' size='small' disabled={busy || !tagInput.trim()} onClick={() => submitTag(onAddTag)}>{t('bulk.addTag')}</Button>
             <Button type='button' size='small' disabled={busy || !tagInput.trim()} onClick={() => submitTag(onRemoveTag)}>{t('bulk.removeTag')}</Button>
           </div>

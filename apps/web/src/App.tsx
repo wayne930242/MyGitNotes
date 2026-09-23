@@ -135,8 +135,7 @@ const AppContent: React.FC = () => {
   const { handleRestoreNoteFile, handleUpdateNoteStatus, handleOpenFolderIndex } = useNoteRestoration({ remote, workingScope, setWorkingNotes, setEditingNote, navigate, returnTo, invalidateNotes, setGitStatus, setActionError, handleSaveNote, readNoteForChange, selectedNotebookId, canWrite, t, config, queryClient, queryScope, stageWorkingNote, revision, location });
 
   // Multi-select and bulk actions (set status, add/remove tag, move to folder) for the browse views.
-  const { selectedNotes, selectedPathSet, toggleSelect, clearSelection } = useNoteSelection({ displayedNotes, viewMode, selectedNotebookId });
-  const { bulkBusy, runBulkStatus, runBulkTag, runBulkMove } = useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNoteStatus: handleUpdateNoteStatus, revision, remote, canWrite, t, invalidateNotes, setRevision, setActionError, tagOperations, config });
+  const { selectedNotes, selectedPathSet, toggleSelect, clearSelection } = useNoteSelection({ displayedNotes, viewMode, selectedNotebookId, scopeKey: location.pathname + location.search });
   const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
   const bulkMoveNotebookId = selectedNotes.length > 0 && selectedNotes.every(note => note.notebookId === selectedNotes[0].notebookId) ? selectedNotes[0].notebookId : undefined;
   const bulkMoveNotebook = config?.notebooks.find(nb => nb.id === bulkMoveNotebookId);
@@ -150,6 +149,7 @@ const AppContent: React.FC = () => {
   const { handleUploadAsset, handleDeleteAsset, handleMoveAsset } = useAssetOperations({ editingNote, selectedNotebookId, remote, setAssets, setGitStatus });
 
   const { beforeFileChange, openFileManager, moveNoteAction, onFilesChanged, openFileIndex } = useFileNavigation({ editorRegistry, workingScope, documents, t, config, setFileDialog, setActionError, refreshWorkspace, refreshDocuments, editorRoute, editorNotebookId, setEditingNote, navigate, location, returnTo, setFileEditorRevision, selectedFolder, folderRoot, changeFilters, handleOpenFolderIndex });
+  const { bulkBusy, runBulkStatus, runBulkTag, runBulkMove } = useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNoteStatus: handleUpdateNoteStatus, beforeFileChange, onFilesChanged, revision, remote, canWrite, t, invalidateNotes, setRevision, setActionError, tagOperations, config });
 
   const noteEditorOpen = (Boolean(routedNote) || routedLoading) && !routeError;
 
@@ -225,34 +225,7 @@ const AppContent: React.FC = () => {
       )}
       {(viewMode === 'list' || viewMode === 'flat') && (
         <>
-          <ListView
-            showMobileSort={false}
-            compact={docked}
-            focusMode={browseFocusMode}
-            statuses={notebookStatuses}
-            readOnly={!canWrite}
-            canDelete={canWrite}
-            confirmDelete={remote}
-            notes={displayedNotes}
-            loading={listResult.loading}
-            uncommitted={listResult.uncommitted}
-            hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)}
-            onOpenNote={note => void openFromBrowse(note)}
-            onDeleteNote={handleDeleteNote}
-            onMoveNote={moveNoteAction}
-            onUpdateNoteStatus={handleUpdateNoteStatus}
-            onNewNote={() => openNewNote()}
-            sortField={sortField}
-            sortOrder={sortOrder}
-            onSortChange={handleSortChange}
-            tagActions={noteTagActions}
-            leading={viewMode === 'flat' && folderIndex
-              ? <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} />
-              : undefined}
-            highlightQuery={debouncedSearch}
-            selectedPaths={selectedPathSet}
-            onToggleSelect={toggleSelect}
-          />
+          <ListView showMobileSort={false} compact={docked} focusMode={browseFocusMode} statuses={notebookStatuses} readOnly={!canWrite} canDelete={canWrite} confirmDelete={remote} notes={displayedNotes} loading={listResult.loading} uncommitted={listResult.uncommitted} hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)} onOpenNote={note => void openFromBrowse(note)} onDeleteNote={handleDeleteNote} onMoveNote={moveNoteAction} onUpdateNoteStatus={handleUpdateNoteStatus} onNewNote={() => openNewNote()} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} tagActions={noteTagActions} leading={viewMode === 'flat' && folderIndex ? <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} /> : undefined} highlightQuery={debouncedSearch} selectedPaths={selectedPathSet} onToggleSelect={toggleSelect} />
           <NoteListSentinel hasMore={listResult.hasMore} loading={listResult.loadingMore} error={listResult.error} onLoadMore={listResult.loadMore} />
         </>
       )}

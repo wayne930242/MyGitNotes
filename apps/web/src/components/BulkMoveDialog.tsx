@@ -23,16 +23,7 @@ export const BulkMoveDialog: React.FC<BulkMoveDialogProps> = ({ notebook, folder
 
   return (
     <WorkspaceDialog title={t('bulk.moveDialogTitle', { count })} onClose={onClose}>
-      <FolderTree
-        showRoot
-        folders={folders}
-        notebookId={notebook.id}
-        selected={destination}
-        onSelect={setDestination}
-        writable={false}
-        onManageFiles={() => {}}
-        onChanged={async () => {}}
-      />
+      <FolderTree showRoot folders={folders} notebookId={notebook.id} selected={destination} onSelect={setDestination} writable={false} onManageFiles={() => {}} onChanged={async () => {}} />
       <div className='workspace-dialog-actions'>
         <Button type='button' onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
         <Button type='button' variant='primary' disabled={busy} onClick={() => onConfirm(destination)}>{t('bulk.moveConfirm')}</Button>

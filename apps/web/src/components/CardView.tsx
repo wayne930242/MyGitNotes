@@ -11,6 +11,7 @@ import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
 import { HighlightText } from './HighlightText.js';
 import { isSelectionClick } from '../lib/note-selection.js';
+import { useNoteTouchSelection } from '../lib/use-note-touch-selection.js';
 
 interface CardViewProps {
   notes: NoteListItem[];
@@ -43,6 +44,7 @@ interface CardViewProps {
 
 export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onNewNote, onUpdateNoteStatus, tagActions, focusMode, strip = false, highlightQuery = '', selectedPaths, onToggleSelect }) => {
   const { t } = useTranslation();
+  const touchSelection = useNoteTouchSelection(onToggleSelect);
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(confirmDelete, path => {
     const note = [...uncommitted, ...notes].find(n => n.path === path);
     if (note) onDeleteNote(note);
@@ -84,7 +86,14 @@ export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], has
     return (
       <div
         key={note.path}
-        onClick={event => !draft && isSelectionClick(event) ? onToggleSelect?.(note) : onOpenNote(note)}
+        onClick={event => touchSelection.consumeClick(note) ? event.preventDefault() : !draft && isSelectionClick(event) ? onToggleSelect?.(note) : onOpenNote(note)}
+        onTouchStart={event => {
+          if (!draft) touchSelection.onTouchStart(note, event);
+        }}
+        onTouchMove={touchSelection.onTouchMove}
+        onTouchEnd={touchSelection.onTouchEnd}
+        onTouchCancel={touchSelection.onTouchCancel}
+        onContextMenu={touchSelection.onContextMenu}
         title={draft || selectionActive ? undefined : t('notes.multiSelectHint')}
         draggable={canDrag}
         onDragStart={canDrag

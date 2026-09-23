@@ -2,7 +2,7 @@ import { type NoteListItem } from '@mygitnotes/core/note-query';
 import { planTagAdd, planTagDelete } from '@mygitnotes/core/tag-ops';
 import { useState } from 'react';
 import { applyTagChange } from '../lib/api.js';
-import { fetchFiles, mutateFile } from '../lib/files-api.js';
+import { fetchFiles, type FileResult, mutateFile } from '../lib/files-api.js';
 import type { I18nContextValue } from '../lib/i18n/index.js';
 import type { useTagOperations } from '../lib/use-tag-operations.js';
 import type { WorkspaceState } from './workspace-state.js';
@@ -12,7 +12,9 @@ const basename = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 interface Params {
   selectedNotes: NoteListItem[];
   clearSelection: () => void;
-  onUpdateNoteStatus: (note: NoteListItem, newStatus: string) => Promise<void>;
+  onUpdateNoteStatus: (note: NoteListItem, newStatus: string) => Promise<boolean>;
+  beforeFileChange: () => Promise<void>;
+  onFilesChanged: (result: FileResult) => Promise<void>;
   revision: string;
   remote: boolean;
   canWrite: boolean;
@@ -28,7 +30,7 @@ interface Params {
  * through the exact same APIs a single-note edit uses (`onUpdateNoteStatus`, `/api/tags/apply`,
  * `/api/files`), just looped or batched across the selection, so both local and remote workspaces
  * work without any new endpoint. */
-export function useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNoteStatus, revision, remote, canWrite, t, invalidateNotes, setRevision, setActionError, tagOperations, config }: Params) {
+export function useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNoteStatus, beforeFileChange, onFilesChanged, revision, remote, canWrite, t, invalidateNotes, setRevision, setActionError, tagOperations, config }: Params) {
   const [bulkBusy, setBulkBusy] = useState(false);
 
   const runBulkStatus = async (status: string) => {
@@ -36,7 +38,9 @@ export function useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNote
     setActionError('');
     setBulkBusy(true);
     try {
-      for (const note of selectedNotes) await onUpdateNoteStatus(note, status);
+      for (const note of selectedNotes) {
+        if (!(await onUpdateNoteStatus(note, status))) return;
+      }
       clearSelection();
     } finally {
       setBulkBusy(false);
@@ -70,7 +74,10 @@ export function useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNote
     if (!notebook) return;
     setActionError('');
     setBulkBusy(true);
+    let changed: FileResult | undefined;
+    let operationError: Error | undefined;
     try {
+      await beforeFileChange();
       const root = notebook.root.replace(/\/$/, '');
       const targetDir = destinationFolder ? `${root}/${destinationFolder}` : root;
       let currentRevision = (await fetchFiles(notebookId)).revision;
@@ -79,14 +86,20 @@ export function useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNote
         if (destination === note.path) continue;
         const result = await mutateFile({ kind: 'move', notebookId, path: note.path, destination }, currentRevision);
         currentRevision = result.revision;
+        changed = changed ? { ...result, pathMap: { ...changed.pathMap, ...result.pathMap }, deletedPaths: [...changed.deletedPaths, ...result.deletedPaths] } : result;
       }
-      invalidateNotes();
-      clearSelection();
     } catch (error) {
-      setActionError((error as Error).message);
+      operationError = error as Error;
+    }
+    try {
+      if (changed) await onFilesChanged(changed);
+    } catch (error) {
+      operationError = operationError ? new Error(`${operationError.message}; ${(error as Error).message}`) : error as Error;
     } finally {
       setBulkBusy(false);
     }
+    if (operationError) setActionError(operationError.message);
+    else clearSelection();
   };
 
   return { bulkBusy, runBulkStatus, runBulkTag, runBulkMove };

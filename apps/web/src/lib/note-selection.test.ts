@@ -8,7 +8,7 @@ describe('isSelectionClick', () => {
     expect(isSelectionClick({ metaKey: true })).toBe(true);
   });
 
-  it('is false for a plain click, so it never changes today\'s open-note behavior', () => {
+  it("is false for a plain click, so it never changes today's open-note behavior", () => {
     expect(isSelectionClick({})).toBe(false);
     expect(isSelectionClick({ shiftKey: false, ctrlKey: false, metaKey: false })).toBe(false);
   });

@@ -12,6 +12,7 @@ import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
 import { HighlightText } from './HighlightText.js';
 import { isSelectionClick } from '../lib/note-selection.js';
+import { useNoteTouchSelection } from '../lib/use-note-touch-selection.js';
 
 interface ListViewProps {
   notes: NoteListItem[];
@@ -59,11 +60,17 @@ interface NoteRowActions {
 
 const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelete, isPendingDelete, actions, dates, tagActions, showZoom, canDrag, highlightQuery = '', selected, selectionActive }: { note: NoteListItem; tagActions?: NoteTagActions; statuses: string[]; readOnly: boolean; canDelete: boolean; isPendingDelete: boolean; actions: NoteRowActions; dates: { short: Intl.DateTimeFormat; full: Intl.DateTimeFormat; }; showZoom?: boolean; canDrag?: boolean; highlightQuery?: string; selected: boolean; selectionActive: boolean; }) {
   const { t } = useTranslation();
+  const touchSelection = useNoteTouchSelection(actions.toggleSelect);
   const updated = noteUpdatedTime(note);
   const formattedDate = updated ? dates.short.format(updated) : '—';
   return (
     <tr
-      onClick={event => isSelectionClick(event) ? actions.toggleSelect(note) : actions.open(note)}
+      onClick={event => touchSelection.consumeClick(note) ? event.preventDefault() : isSelectionClick(event) ? actions.toggleSelect(note) : actions.open(note)}
+      onTouchStart={event => touchSelection.onTouchStart(note, event)}
+      onTouchMove={touchSelection.onTouchMove}
+      onTouchEnd={touchSelection.onTouchEnd}
+      onTouchCancel={touchSelection.onTouchCancel}
+      onContextMenu={touchSelection.onContextMenu}
       title={selectionActive ? undefined : t('notes.multiSelectHint')}
       draggable={canDrag}
       onDragStart={canDrag
@@ -77,16 +84,7 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
     >
       <td className='py-3 px-4'>
         <div className='flex items-center gap-2.5'>
-          {selectionActive && (
-            <input
-              type='checkbox'
-              checked={selected}
-              onChange={() => actions.toggleSelect(note)}
-              onClick={event => event.stopPropagation()}
-              aria-label={t('notes.selectFor', { title: note.title })}
-              className='w-4 h-4 shrink-0 accent-primary'
-            />
-          )}
+          {selectionActive && <input type='checkbox' checked={selected} onChange={() => actions.toggleSelect(note)} onClick={event => event.stopPropagation()} aria-label={t('notes.selectFor', { title: note.title })} className='w-4 h-4 shrink-0 accent-primary' />}
           <FileText className='w-4 h-4 text-primary shrink-0' />
           <div>
             <div className='font-medium text-fg transition flex items-center gap-1.5'>

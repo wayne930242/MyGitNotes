@@ -12,6 +12,7 @@ import { NoteListSentinel } from './NoteListSentinel.js';
 import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
 import { LoadingStatus } from './LoadingStatus.js';
 import { isSelectionClick } from '../lib/note-selection.js';
+import { useNoteTouchSelection } from '../lib/use-note-touch-selection.js';
 
 interface KanbanViewProps {
   /** The board's filter; each column adds its own status condition and pages on its own. */
@@ -92,6 +93,7 @@ function useColumnDrag(board: BoardContext, columnId: string) {
 
 function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardContext; index: number; }) {
   const { t } = useTranslation();
+  const touchSelection = useNoteTouchSelection(board.onToggleSelect);
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(board.confirmDelete, () => board.onDeleteNote(note));
   const isBeingDragged = board.dragged?.path === note.path;
   const canDragForFocus = !!board.focusMode?.canDrag(note);
@@ -114,23 +116,19 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
         board.setDragged(null);
         board.setDragOverColumnId(null);
       }}
-      onClick={event => isSelectionClick(event) ? board.onToggleSelect?.(note) : board.onOpenNote(note)}
+      onClick={event => touchSelection.consumeClick(note) ? event.preventDefault() : isSelectionClick(event) ? board.onToggleSelect?.(note) : board.onOpenNote(note)}
+      onTouchStart={event => touchSelection.onTouchStart(note, event)}
+      onTouchMove={touchSelection.onTouchMove}
+      onTouchEnd={touchSelection.onTouchEnd}
+      onTouchCancel={touchSelection.onTouchCancel}
+      onContextMenu={touchSelection.onContextMenu}
       title={selectionActive ? undefined : t('notes.multiSelectHint')}
       className={`p-3 rounded-lg border transition-all cursor-grab active:cursor-grabbing group shadow-xs ${isBeingDragged ? 'opacity-40 scale-[0.98] border-primary shadow-inner' : 'hover:shadow-sm hover:border-muted'}`}
       style={{ backgroundColor: 'var(--color-surface)', borderColor: isBeingDragged ? 'var(--color-primary)' : 'var(--color-border)' }}
     >
       <div className='flex items-start justify-between gap-1 mb-1.5'>
         <div className='flex items-start gap-1.5 min-w-0 flex-1'>
-          {selectionActive && (
-            <input
-              type='checkbox'
-              checked={selected}
-              onChange={() => board.onToggleSelect?.(note)}
-              onClick={event => event.stopPropagation()}
-              aria-label={t('notes.selectFor', { title: note.title })}
-              className='w-4 h-4 shrink-0 accent-primary mt-0.5'
-            />
-          )}
+          {selectionActive && <input type='checkbox' checked={selected} onChange={() => board.onToggleSelect?.(note)} onClick={event => event.stopPropagation()} aria-label={t('notes.selectFor', { title: note.title })} className='w-4 h-4 shrink-0 accent-primary mt-0.5' />}
           <div className='font-medium text-fg text-sm line-clamp-2 transition min-w-0'>{note.title}</div>
         </div>
         <GripVertical className='w-3.5 h-3.5 text-muted shrink-0 opacity-0 group-hover:opacity-100 transition' />
@@ -246,6 +244,7 @@ function KanbanColumn({ col, index, board, query, hiddenNote, sort, onSort }: { 
 /** Notes the board's filter matches that carry no status; the server answers this column too. */
 function KanbanUnassignedColumn({ board, query, hiddenNote, sort }: { board: BoardContext; query: Partial<NoteQuery>; hiddenNote?: NoteListItem; sort: { field: SortField; order: SortOrder; }; }) {
   const { t } = useTranslation();
+  const touchSelection = useNoteTouchSelection(board.onToggleSelect);
   const hide = hiddenNote && !hiddenNote.status ? hiddenNote.path : undefined;
   const result = useNoteList(query.status ? null : { ...query, withoutStatus: true, sort: sort.field, order: sort.order }, { hide });
   const notes = [...result.uncommitted, ...result.notes];
@@ -285,22 +284,18 @@ function KanbanUnassignedColumn({ board, query, hiddenNote, sort }: { board: Boa
                 board.setDragged(null);
                 board.setDragOverColumnId(null);
               }}
-              onClick={event => isSelectionClick(event) ? board.onToggleSelect?.(note) : board.onOpenNote(note)}
+              onClick={event => touchSelection.consumeClick(note) ? event.preventDefault() : isSelectionClick(event) ? board.onToggleSelect?.(note) : board.onOpenNote(note)}
+              onTouchStart={event => touchSelection.onTouchStart(note, event)}
+              onTouchMove={touchSelection.onTouchMove}
+              onTouchEnd={touchSelection.onTouchEnd}
+              onTouchCancel={touchSelection.onTouchCancel}
+              onContextMenu={touchSelection.onContextMenu}
               title={selectionActive ? undefined : t('notes.multiSelectHint')}
               className='p-3 rounded-lg border hover:shadow-xs transition cursor-grab active:cursor-grabbing'
               style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
             >
               <div className='flex items-start gap-1.5 mb-1 min-w-0'>
-                {selectionActive && (
-                  <input
-                    type='checkbox'
-                    checked={selected}
-                    onChange={() => board.onToggleSelect?.(note)}
-                    onClick={event => event.stopPropagation()}
-                    aria-label={t('notes.selectFor', { title: note.title })}
-                    className='w-4 h-4 shrink-0 accent-primary mt-0.5'
-                  />
-                )}
+                {selectionActive && <input type='checkbox' checked={selected} onChange={() => board.onToggleSelect?.(note)} onClick={event => event.stopPropagation()} aria-label={t('notes.selectFor', { title: note.title })} className='w-4 h-4 shrink-0 accent-primary mt-0.5' />}
                 <div className='font-medium text-fg text-sm line-clamp-2 min-w-0'>{note.title}</div>
               </div>
               {(board.focusMode || (!board.readOnly && board.onMoveNote)) && (

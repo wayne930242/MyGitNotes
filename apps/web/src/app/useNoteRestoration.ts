@@ -71,8 +71,10 @@ export function useNoteRestoration({ remote, workingScope, setWorkingNotes, setE
     // The row carries no body; the note is read in full before the status is written.
     try {
       await handleSaveNote(await noteStatusChange(readNoteForChange, note, newStatus));
+      return true;
     } catch (error) {
       setActionError((error as Error).message);
+      return false;
     }
   };
 

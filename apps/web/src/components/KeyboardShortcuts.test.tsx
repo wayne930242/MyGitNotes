@@ -86,8 +86,22 @@ it('never opens a note or runs a command while an IME composition is active', as
   fireEvent.change(input, { target: { value: 'plan' } });
   await waitFor(() => expect(document.querySelector('[data-command-id="notes/life/plan.md"]')).not.toBeNull());
   fireEvent.keyDown(document, { key: 'Enter', isComposing: true });
+  fireEvent.keyDown(document, { key: 'Escape', isComposing: true });
   expect(openedNotes).toEqual([]);
   expect(document.querySelector('.keyboard-shortcuts-panel')).not.toBeNull();
+});
+
+it('uses a valid option id for a note path containing spaces', async () => {
+  const path = 'notes/life/weekend plan.md';
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ revision: REVISION, total: 1, nextCursor: null, notes: [{ id: path, path, notebookId: 'life', title: 'Weekend plan', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } })));
+  setNoteQueryScope({ sourceId: 'github:me/notes', revision: REVISION, drafts: {} });
+  render(createElement(Harness), { wrapper });
+  const input = await openPalette();
+  fireEvent.change(input, { target: { value: 'plan' } });
+  await waitFor(() => expect(document.querySelector(`[data-command-id="${path}"]`)).not.toBeNull());
+  const option = document.querySelector(`[data-command-id="${path}"]`)!;
+  expect(option.id).not.toMatch(/\s/);
+  expect(input.getAttribute('aria-activedescendant')).toBe(option.id);
 });
 
 it('reopening right after a normal close resets the query and focuses the input', async () => {

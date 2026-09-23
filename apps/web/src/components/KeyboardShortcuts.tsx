@@ -45,6 +45,7 @@ interface ShortcutCommand {
 type PaletteEntry = { kind: 'command'; command: ShortcutCommand; } | { kind: 'note'; note: NoteListItem; };
 
 const paletteEntryId = (entry: PaletteEntry) => entry.kind === 'command' ? entry.command.id : entry.note.path;
+const paletteOptionId = (id: string) => `shortcut-command-${encodeURIComponent(id)}`;
 const isComposingKey = (event: KeyboardEvent) => event.isComposing || event.keyCode === 229;
 
 export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activeTab, canCreateNote, selectedNotebookId, onNavigate, onCreateNote, onFocusSearch, onOpenNote, pageCommands = [] }: KeyboardShortcutsProps) {
@@ -211,6 +212,8 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
         return;
       }
       if (!mode) return;
+      // IME owns Enter, arrows and Escape while choosing or cancelling a candidate.
+      if (mode === 'palette' && isComposingKey(event)) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -218,8 +221,6 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
         return;
       }
       if (mode !== 'palette') return;
-      // A composing IME uses its own Enter/Arrow handling to pick a candidate; the palette must not intercept it.
-      if (isComposingKey(event)) return;
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
         event.stopPropagation();
@@ -266,7 +267,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
       {palette && (
         <div className='keyboard-shortcuts-search'>
           <Search aria-hidden='true' />
-          <input ref={inputRef} type='text' role='combobox' aria-expanded='true' aria-controls='shortcut-command-list' aria-activedescendant={selectedId ? `shortcut-command-${selectedId}` : undefined} aria-label={t(searchLabelKey)} placeholder={t(placeholderKey)} value={query} onChange={event => setQuery(event.target.value)} autoComplete='off' />
+          <input ref={inputRef} type='text' role='combobox' aria-expanded='true' aria-controls='shortcut-command-list' aria-activedescendant={selectedId ? paletteOptionId(selectedId) : undefined} aria-label={t(searchLabelKey)} placeholder={t(placeholderKey)} value={query} onChange={event => setQuery(event.target.value)} autoComplete='off' />
         </div>
       )}
       <div id='shortcut-command-list' className='keyboard-shortcuts-list' role={palette ? 'listbox' : 'list'}>
@@ -279,7 +280,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
               <button
                 type='button'
                 key={id}
-                id={`shortcut-command-${id}`}
+                id={paletteOptionId(id)}
                 data-command-id={id}
                 className={id === selectedId ? 'is-active' : ''}
                 role='option'

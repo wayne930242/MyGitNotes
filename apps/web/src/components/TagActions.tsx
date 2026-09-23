@@ -194,6 +194,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, allTags, onPreviewU
             }}
             placeholder={mode === 'rename' ? t('sidebar.tagNewNamePlaceholder') : t('sidebar.tagMergeTargetPlaceholder')}
             onKeyDown={event => {
+              if (event.nativeEvent.isComposing || event.keyCode === 229) return;
               if (event.key === 'Escape') {
                 event.stopPropagation();
                 if (showSuggestions) {
@@ -204,7 +205,6 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, allTags, onPreviewU
                 close(true);
                 return;
               }
-              if (event.nativeEvent.isComposing || event.keyCode === 229) return;
               if (showSuggestions) {
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();
