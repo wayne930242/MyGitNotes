@@ -3,6 +3,15 @@ import YAML from 'yaml';
 const FRONTMATTER_REGEX = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
 /**
+ * Length of a single-key document's rendered key, e.g. `2` for `a: 1\n` but `6` for a quoted
+ * `"a: b": 1\n` — `key.length` alone is wrong whenever the key needs quoting or escaping.
+ */
+function renderedKeyEnd(rendered: string): number {
+  const reparsed = YAML.parseDocument(rendered);
+  return ((reparsed.contents as YAML.YAMLMap).items[0].key as YAML.Node).range![1];
+}
+
+/**
  * Sets, replaces or removes one frontmatter key in place: the key's own quoting, flow/block
  * style and surrounding comments are kept, and every other key and the Markdown body are left
  * untouched. `value === undefined` removes the key. Shared by note frontmatter patching and the
@@ -70,7 +79,7 @@ export function patchFrontmatterField(raw: string, key: string, value: unknown):
       if (YAML.isSeq(newNode) || YAML.isMap(newNode)) newNode.flow = true;
     }
     const rendered = newDocument.toString({ lineWidth: 0, flowCollectionPadding: false });
-    const withoutKey = rendered.slice(key.length);
+    const withoutKey = rendered.slice(renderedKeyEnd(rendered));
     const [vStart, vEnd] = oldValue.range!;
     const hadTrailingNewline = yaml.slice(vStart, vEnd).endsWith('\n');
     let replacement = !hadTrailingNewline && withoutKey.endsWith('\n') ? withoutKey.slice(0, -1) : withoutKey;
@@ -78,16 +87,21 @@ export function patchFrontmatterField(raw: string, key: string, value: unknown):
     return patch((pair.key as YAML.Node).range![1], vEnd, replacement);
   }
 
-  const [start, end, cstEnd] = oldValue.range!;
+  const [, , cstEnd] = oldValue.range!;
+  const isLastField = cstEnd === yaml.length;
+  // The extracted YAML omits the newline before the closing delimiter, same as the deletion branch above.
+  const consumeEnd = isLastField ? cstEnd + newline.length : cstEnd;
   const node = new YAML.Scalar(value);
   if (YAML.isScalar(oldValue) && ['QUOTE_SINGLE', 'QUOTE_DOUBLE'].includes(oldValue.type || '')) node.type = oldValue.type;
   if (typeof oldValue.comment === 'string') node.comment = oldValue.comment;
   // Rendered inside its own key so a multiline value gets a block-scalar indicator with
   // correctly indented content, matching where it would sit under the real key.
   const rendered = new YAML.Document({ [key]: node }).toString({ lineWidth: 0 });
-  const withoutKey = rendered.slice(key.length);
-  const keepTrailingNewline = cstEnd > end || yaml.slice(start, end).endsWith('\n');
-  let replacement = keepTrailingNewline ? withoutKey : withoutKey.replace(/\n$/, '');
+  let replacement = rendered.slice(renderedKeyEnd(rendered));
+  // As the last field, a value ending in a blank line is ambiguous with the closing `---`
+  // delimiter's own separator: the shared frontmatter boundary match always attributes that one
+  // newline to the delimiter, so a keep-chomped ("|+") value needs one extra newline of padding.
+  if (isLastField && typeof value === 'string' && value.endsWith('\n\n')) replacement += '\n';
   if (match[0].includes('\r\n')) replacement = replacement.replace(/\n/g, '\r\n');
-  return patch((pair.key as YAML.Node).range![1], cstEnd, replacement);
+  return patch((pair.key as YAML.Node).range![1], consumeEnd, replacement);
 }
