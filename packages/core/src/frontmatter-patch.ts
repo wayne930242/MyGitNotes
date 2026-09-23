@@ -25,7 +25,9 @@ export function patchFrontmatterField(raw: string, key: string, value: unknown):
   const document = YAML.parseDocument(yaml);
   if (!YAML.isMap(document.contents)) return raw;
   const map = document.contents;
-  const index = map.items.findIndex(item => YAML.isScalar(item.key) && item.key.value === key);
+  // A YAML key parses to its resolved type (true, null, 42, ...), not the string form callers
+  // pass in, so match on the stringified value rather than strict equality.
+  const index = map.items.findIndex(item => YAML.isScalar(item.key) && String(item.key.value) === key);
   const pair = map.items[index];
   const newline = match[0].includes('\r\n') ? '\r\n' : '\n';
   const offset = raw.indexOf('\n') + 1;
