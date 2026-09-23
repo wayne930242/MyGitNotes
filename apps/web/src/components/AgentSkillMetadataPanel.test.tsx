@@ -36,4 +36,18 @@ describe('AgentSkillMetadataPanel metadata helpers', () => {
     const updated = updateSkillMetadata(original, 'description', 'Review clear prose');
     expect(updated).toBe('---\r\nname: review\r\ndescription: Review clear prose\r\ncustom: keep\r\n---\r\n# Review\r\nBody.\r\n');
   });
+
+  it('emits valid, indented YAML when a textarea edit turns the description multiline', () => {
+    const original = '---\nname: review\ndescription: Review prose\ncustom: keep\n---\n# Review\n';
+    const updated = updateSkillMetadata(original, 'description', 'Line one\nLine two');
+    expect(updated).toBe('---\nname: review\ndescription: |-\n  Line one\n  Line two\ncustom: keep\n---\n# Review\n');
+    expect(readSkillMetadata(updated)).toEqual({ title: 'review', description: 'Line one\nLine two' });
+  });
+
+  it('keeps a trailing comment attached to its own header line, not folded into the new multiline content', () => {
+    const original = '---\nname: review\ndescription: Review prose # keep\ncustom: keep\n---\n# Review\n';
+    const updated = updateSkillMetadata(original, 'description', 'Line one\nLine two');
+    expect(updated).toBe('---\nname: review\ndescription: |- # keep\n  Line one\n  Line two\ncustom: keep\n---\n# Review\n');
+    expect(readSkillMetadata(updated)).toEqual({ title: 'review', description: 'Line one\nLine two' });
+  });
 });

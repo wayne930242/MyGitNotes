@@ -85,6 +85,28 @@ Just a plain paragraph without headers.
     expect(parsed.title).toBe('Untitled');
   });
 
+  it('patches an existing scalar field to a multiline value with valid, indented YAML', () => {
+    const raw = '---\nid: note-1\ntitle: My Note\nsummary: one line\ncustom: keep\n---\n\nBody text.\n';
+    const existing = parseNoteContent(raw);
+    const serialized = serializeNoteContent({ ...existing.metadata, summary: 'line1\nline2' }, existing.content, false, new Date('2026-01-01T00:00:00.000Z'), raw);
+
+    expect(serialized).toContain('summary: |-\n  line1\n  line2\n');
+    const reparsed = parseNoteContent(serialized);
+    expect(reparsed.metadata.summary).toBe('line1\nline2');
+    expect(reparsed.metadata.custom).toBe('keep');
+    expect(reparsed.content.trim()).toBe('Body text.');
+  });
+
+  it('keeps a trailing inline comment attached when a commented field becomes multiline', () => {
+    const raw = '---\nid: note-1\ntitle: My Note\nsummary: one line # keep this\n---\n\nBody text.\n';
+    const existing = parseNoteContent(raw);
+    const serialized = serializeNoteContent({ ...existing.metadata, summary: 'line1\nline2' }, existing.content, false, new Date('2026-01-01T00:00:00.000Z'), raw);
+
+    expect(serialized).toContain('summary: |- # keep this\n  line1\n  line2\n');
+    const reparsed = parseNoteContent(serialized);
+    expect(reparsed.metadata.summary).toBe('line1\nline2');
+  });
+
   it('does not throw when status is missing', () => {
     const raw = `---
 title: Note without status

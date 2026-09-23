@@ -78,11 +78,16 @@ export function patchFrontmatterField(raw: string, key: string, value: unknown):
     return patch((pair.key as YAML.Node).range![1], vEnd, replacement);
   }
 
-  const [start, end] = oldValue.range!;
-  const trailingNewline = yaml.slice(start, end).endsWith('\n') ? newline : '';
-  const spacing = start === end && !/\s/.test(yaml[start - 1]) ? ' ' : '';
+  const [start, end, cstEnd] = oldValue.range!;
   const node = new YAML.Scalar(value);
   if (YAML.isScalar(oldValue) && ['QUOTE_SINGLE', 'QUOTE_DOUBLE'].includes(oldValue.type || '')) node.type = oldValue.type;
-  const rendered = new YAML.Document(node).toString({ lineWidth: 0 }).trimEnd();
-  return patch(start, end, spacing + rendered + trailingNewline);
+  if (typeof oldValue.comment === 'string') node.comment = oldValue.comment;
+  // Rendered inside its own key so a multiline value gets a block-scalar indicator with
+  // correctly indented content, matching where it would sit under the real key.
+  const rendered = new YAML.Document({ [key]: node }).toString({ lineWidth: 0 });
+  const withoutKey = rendered.slice(key.length);
+  const keepTrailingNewline = cstEnd > end || yaml.slice(start, end).endsWith('\n');
+  let replacement = keepTrailingNewline ? withoutKey : withoutKey.replace(/\n$/, '');
+  if (match[0].includes('\r\n')) replacement = replacement.replace(/\n/g, '\r\n');
+  return patch((pair.key as YAML.Node).range![1], cstEnd, replacement);
 }
