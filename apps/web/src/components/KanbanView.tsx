@@ -11,6 +11,7 @@ import { useNoteList } from '../lib/use-note-queries.js';
 import { NoteListSentinel } from './NoteListSentinel.js';
 import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
 import { LoadingStatus } from './LoadingStatus.js';
+import { isSelectionClick } from '../lib/note-selection.js';
 
 interface KanbanViewProps {
   /** The board's filter; each column adds its own status condition and pages on its own. */
@@ -33,6 +34,10 @@ interface KanbanViewProps {
   onSortChange?: (field: SortField, order?: SortOrder) => void;
   /** Present while a Focus is displayed: cards get a zoom button and can be dragged into a pane. */
   focusMode?: NoteBrowseFocusMode;
+  /** Paths currently selected for bulk actions; a checkbox only appears on cards while this is non-empty. */
+  selectedPaths?: Set<string>;
+  /** Modifier-click (or the checkbox, once shown) toggles a card's membership; a plain click still opens it. */
+  onToggleSelect?: (note: NoteListItem) => void;
 }
 
 interface Column {
@@ -57,6 +62,8 @@ interface BoardContext {
   setDragOverColumnId: (id: string | null) => void;
   onTotal: (columnId: string, total: number) => void;
   focusMode?: NoteBrowseFocusMode;
+  selectedPaths?: Set<string>;
+  onToggleSelect?: (note: NoteListItem) => void;
 }
 
 function useColumnDrag(board: BoardContext, columnId: string) {
@@ -90,6 +97,8 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
   const canDragForFocus = !!board.focusMode?.canDrag(note);
   const updated = noteUpdatedTime(note);
   const formattedDate = updated ? new Date(updated).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
+  const selectionActive = Boolean(board.selectedPaths?.size);
+  const selected = board.selectedPaths?.has(note.path) ?? false;
   return (
     <div
       data-notepath={note.path}
@@ -105,12 +114,25 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
         board.setDragged(null);
         board.setDragOverColumnId(null);
       }}
-      onClick={() => board.onOpenNote(note)}
+      onClick={event => isSelectionClick(event) ? board.onToggleSelect?.(note) : board.onOpenNote(note)}
+      title={selectionActive ? undefined : t('notes.multiSelectHint')}
       className={`p-3 rounded-lg border transition-all cursor-grab active:cursor-grabbing group shadow-xs ${isBeingDragged ? 'opacity-40 scale-[0.98] border-primary shadow-inner' : 'hover:shadow-sm hover:border-muted'}`}
       style={{ backgroundColor: 'var(--color-surface)', borderColor: isBeingDragged ? 'var(--color-primary)' : 'var(--color-border)' }}
     >
       <div className='flex items-start justify-between gap-1 mb-1.5'>
-        <div className='font-medium text-fg text-sm line-clamp-2 transition'>{note.title}</div>
+        <div className='flex items-start gap-1.5 min-w-0 flex-1'>
+          {selectionActive && (
+            <input
+              type='checkbox'
+              checked={selected}
+              onChange={() => board.onToggleSelect?.(note)}
+              onClick={event => event.stopPropagation()}
+              aria-label={t('notes.selectFor', { title: note.title })}
+              className='w-4 h-4 shrink-0 accent-primary mt-0.5'
+            />
+          )}
+          <div className='font-medium text-fg text-sm line-clamp-2 transition min-w-0'>{note.title}</div>
+        </div>
         <GripVertical className='w-3.5 h-3.5 text-muted shrink-0 opacity-0 group-hover:opacity-100 transition' />
       </div>
       {note.tags.length > 0 && (
@@ -246,6 +268,8 @@ function KanbanUnassignedColumn({ board, query, hiddenNote, sort }: { board: Boa
         {result.loading && <LoadingStatus className='text-xs text-muted'>{t('notes.loading')}</LoadingStatus>}
         {notes.map((note) => {
           const canDragForFocus = !!board.focusMode?.canDrag(note);
+          const selectionActive = Boolean(board.selectedPaths?.size);
+          const selected = board.selectedPaths?.has(note.path) ?? false;
           return (
             <div
               key={note.path}
@@ -261,11 +285,24 @@ function KanbanUnassignedColumn({ board, query, hiddenNote, sort }: { board: Boa
                 board.setDragged(null);
                 board.setDragOverColumnId(null);
               }}
-              onClick={() => board.onOpenNote(note)}
+              onClick={event => isSelectionClick(event) ? board.onToggleSelect?.(note) : board.onOpenNote(note)}
+              title={selectionActive ? undefined : t('notes.multiSelectHint')}
               className='p-3 rounded-lg border hover:shadow-xs transition cursor-grab active:cursor-grabbing'
               style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
             >
-              <div className='font-medium text-fg text-sm mb-1 line-clamp-2'>{note.title}</div>
+              <div className='flex items-start gap-1.5 mb-1 min-w-0'>
+                {selectionActive && (
+                  <input
+                    type='checkbox'
+                    checked={selected}
+                    onChange={() => board.onToggleSelect?.(note)}
+                    onClick={event => event.stopPropagation()}
+                    aria-label={t('notes.selectFor', { title: note.title })}
+                    className='w-4 h-4 shrink-0 accent-primary mt-0.5'
+                  />
+                )}
+                <div className='font-medium text-fg text-sm line-clamp-2 min-w-0'>{note.title}</div>
+              </div>
               {(board.focusMode || (!board.readOnly && board.onMoveNote)) && (
                 <div className='flex justify-end items-center gap-1' onClick={event => event.stopPropagation()}>
                   {board.focusMode && (
@@ -291,7 +328,7 @@ function KanbanUnassignedColumn({ board, query, hiddenNote, sort }: { board: Boa
   );
 }
 
-export const KanbanView: React.FC<KanbanViewProps> = ({ query, hiddenNote, leading, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onUpdateNoteStatus, onDeleteNote, onMoveNote, onNewNoteWithStatus, sortField = 'updated', sortOrder = 'desc', onSortChange, focusMode }) => {
+export const KanbanView: React.FC<KanbanViewProps> = ({ query, hiddenNote, leading, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onUpdateNoteStatus, onDeleteNote, onMoveNote, onNewNoteWithStatus, sortField = 'updated', sortOrder = 'desc', onSortChange, focusMode, selectedPaths, onToggleSelect }) => {
   const { t } = useTranslation();
   const [dragged, setDragged] = useState<NoteListItem | null>(null);
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
@@ -310,7 +347,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({ query, hiddenNote, leadi
 
   const boardSortOptions = [{ value: 'updated:desc', label: t('sort.updatedDesc') }, { value: 'updated:asc', label: t('sort.updatedAsc') }, { value: 'created:desc', label: t('sort.createdDesc') }, { value: 'created:asc', label: t('sort.createdAsc') }, { value: 'title:asc', label: t('sort.titleAsc') }, { value: 'title:desc', label: t('sort.titleDesc') }];
 
-  const board: BoardContext = { columns, readOnly, canDelete, confirmDelete, onOpenNote, onUpdateNoteStatus, onDeleteNote, onMoveNote, onNewNoteWithStatus, dragged, setDragged, dragOverColumnId, setDragOverColumnId, focusMode, onTotal: (columnId, total) => setTotals(previous => (previous[columnId] === total ? previous : { ...previous, [columnId]: total })) };
+  const board: BoardContext = { columns, readOnly, canDelete, confirmDelete, onOpenNote, onUpdateNoteStatus, onDeleteNote, onMoveNote, onNewNoteWithStatus, dragged, setDragged, dragOverColumnId, setDragOverColumnId, focusMode, selectedPaths, onToggleSelect, onTotal: (columnId, total) => setTotals(previous => (previous[columnId] === total ? previous : { ...previous, [columnId]: total })) };
   // Only the columns on the board count, so a status that disappeared leaves no stale total.
   const boardTotal = [...columns.map(col => col.id), ''].reduce((sum, id) => sum + (totals[id] || 0), 0);
 
