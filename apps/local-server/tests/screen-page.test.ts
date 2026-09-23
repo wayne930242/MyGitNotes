@@ -19,8 +19,8 @@ beforeEach(async () => {
   url = `http://127.0.0.1:${(server.address() as { port: number; }).port}/api/screen-page`;
 });
 afterEach(async () => {
-  await new Promise<void>(resolve => server.close(() => resolve()));
-  await rm(root, { recursive: true, force: true });
+  if (server) await new Promise<void>(resolve => server.close(() => resolve()));
+  if (root) await rm(root, { recursive: true, force: true });
   vi.unstubAllEnvs();
 });
 const put = (value: unknown, revision = 'missing') => fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: value, revision }) });

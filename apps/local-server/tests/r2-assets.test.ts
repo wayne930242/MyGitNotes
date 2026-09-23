@@ -27,8 +27,8 @@ async function start(env: Record<string, string>) {
 }
 const get = (url: string, headers: Record<string, string> = {}) => fetch(`${base}${url}`, { redirect: 'manual', headers });
 afterEach(async () => {
-  await new Promise<void>(resolve => server.close(() => resolve()));
-  fs.rmSync(root, { recursive: true, force: true });
+  if (server) await new Promise<void>(resolve => server.close(() => resolve()));
+  if (root) fs.rmSync(root, { recursive: true, force: true });
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });

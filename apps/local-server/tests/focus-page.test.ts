@@ -20,8 +20,8 @@ beforeEach(async () => {
   url = `${base}/focus-page`;
 });
 afterEach(async () => {
-  await new Promise<void>(resolve => server.close(() => resolve()));
-  await rm(root, { recursive: true, force: true });
+  if (server) await new Promise<void>(resolve => server.close(() => resolve()));
+  if (root) await rm(root, { recursive: true, force: true });
   vi.unstubAllEnvs();
 });
 const put = (value: unknown, revision = 'missing') => fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: value, revision }) });

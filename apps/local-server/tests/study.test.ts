@@ -23,8 +23,8 @@ beforeEach(async () => {
   url = `http://127.0.0.1:${(server.address() as { port: number; }).port}/api/study`;
 });
 afterEach(async () => {
-  await new Promise<void>(resolve => server.close(() => resolve()));
-  await rm(root, { recursive: true, force: true });
+  if (server) await new Promise<void>(resolve => server.close(() => resolve()));
+  if (root) await rm(root, { recursive: true, force: true });
   vi.unstubAllEnvs();
   vi.useRealTimers();
 });

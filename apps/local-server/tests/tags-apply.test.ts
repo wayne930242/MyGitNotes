@@ -42,8 +42,8 @@ describe('local /api/tags/apply', () => {
   });
 
   afterEach(async () => {
-    await new Promise<void>(resolve => server.close(() => resolve()));
-    fs.rmSync(root, { recursive: true, force: true });
+    if (server) await new Promise<void>(resolve => server.close(() => resolve()));
+    if (root) fs.rmSync(root, { recursive: true, force: true });
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });

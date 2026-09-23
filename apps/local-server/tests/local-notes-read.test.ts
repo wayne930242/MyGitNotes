@@ -32,9 +32,9 @@ beforeEach(async () => {
   base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
 });
 afterEach(async () => {
-  await new Promise<void>(resolve => server.close(() => resolve()));
+  if (server) await new Promise<void>(resolve => server.close(() => resolve()));
   vi.unstubAllEnvs();
-  fs.rmSync(root, { recursive: true, force: true });
+  if (root) fs.rmSync(root, { recursive: true, force: true });
 });
 
 it('reads a note without a notebookId query, inferring it from the path', async () => {

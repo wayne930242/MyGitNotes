@@ -95,8 +95,8 @@ const call = (method: string, url: string, body?: unknown, headers: Record<strin
 const operations = (notebookId = 'ex') => [() => call('GET', `/api/r2?notebookId=${notebookId}`), () => call('GET', `/api/r2/raw?notebookId=${notebookId}&key=ex/keep.pdf`), () => call('GET', `/api/r2/references?notebookId=${notebookId}&key=ex/keep.pdf`), () => call('POST', '/api/r2/upload', { notebookId, key: 'ex/new.pdf' }), () => call('POST', '/api/r2/mkdir', { notebookId, key: 'ex/folder' }), () => call('POST', '/api/r2/move', { notebookId, key: 'ex/keep.pdf', destination: 'ex/moved.pdf' }), () => call('POST', '/api/r2/delete', { notebookId, key: 'ex/keep.pdf' })];
 
 afterEach(async () => {
-  await new Promise<void>(resolve => app.close(() => resolve()));
-  await new Promise<void>(resolve => bucket.server.close(() => resolve()));
+  if (app) await new Promise<void>(resolve => app.close(() => resolve()));
+  if (bucket) await new Promise<void>(resolve => bucket.server.close(() => resolve()));
   if (root) fs.rmSync(root, { recursive: true, force: true });
   vi.restoreAllMocks();
   vi.unstubAllEnvs();

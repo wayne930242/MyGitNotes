@@ -35,10 +35,10 @@ beforeEach(async () => {
   base = `http://127.0.0.1:${(server.address() as any).port}`;
 });
 afterEach(async () => {
-  await new Promise<void>(resolve => server.close(() => resolve()));
+  if (server) await new Promise<void>(resolve => server.close(() => resolve()));
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
-  fs.rmSync(root, { recursive: true, force: true });
+  if (root) fs.rmSync(root, { recursive: true, force: true });
 });
 const list = () => fetch(base + '/api/files?notebookId=a').then(r => r.json());
 const post = async (command: Record<string, unknown>, revision?: string) => fetch(base + '/api/files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: { notebookId: 'a', ...command }, revision: revision || (await list()).revision }) });

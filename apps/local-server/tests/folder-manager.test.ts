@@ -31,9 +31,9 @@ beforeEach(async () => {
   base = `http://127.0.0.1:${(server.address() as any).port}`;
 });
 afterEach(async () => {
-  await new Promise<void>(resolve => server.close(() => resolve()));
+  if (server) await new Promise<void>(resolve => server.close(() => resolve()));
   vi.restoreAllMocks();
-  fs.rmSync(root, { recursive: true, force: true });
+  if (root) fs.rmSync(root, { recursive: true, force: true });
   vi.unstubAllEnvs();
 });
 const getRevision = () => fetch(`${base}/api/folder-manager`).then(r => r.json()).then(data => data.revision);
