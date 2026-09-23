@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { DIRECTIVE_TEMPLATES, findDirectiveBlocks, parseDirectiveAttributes, parseDirectiveModel, parseDirectiveTitle, stripMdxImports, transformDirectives, transformMdxComponents, updateDirectiveType, updateDirectiveVariant } from './directives.js';
+import { DIRECTIVE_TEMPLATES, findDirectiveBlocks, localizedDirectiveLabel, localizedDirectiveSnippet, localizedHandoutVariants, parseDirectiveAttributes, parseDirectiveModel, parseDirectiveTitle, stripMdxImports, transformDirectives, transformMdxComponents, updateDirectiveType, updateDirectiveVariant } from './directives.js';
+import { en, type TranslationKey } from './i18n/en.js';
+
+const enT = (key: TranslationKey): string => en[key] ?? key;
 
 describe('directive templates', () => {
   it('uses domain-neutral labels and starter content in the notes editor', () => {
@@ -8,6 +11,23 @@ describe('directive templates', () => {
     expect(visibleCopy).toContain('文件卡片 (Document)');
     expect(visibleCopy).toContain('屬性資料卡 (Stats)');
     expect(visibleCopy).not.toMatch(/TRPG|CoC|調查員|守密人|道具/);
+  });
+
+  it('keeps every default snippet in zh-TW when no translator is supplied', () => {
+    expect(localizedDirectiveSnippet('info')).toBe(DIRECTIVE_TEMPLATES[0].defaultSnippet);
+    expect(localizedDirectiveLabel('info')).toBe('資訊 (Info)');
+    expect(localizedHandoutVariants()).toEqual({ report: '文件', newspaper: '剪報', letter: '信件', journal: '日誌', note: '紙條', scripture: '經文' });
+  });
+
+  it('inserts the info block placeholder in English under the English locale', () => {
+    const snippet = localizedDirectiveSnippet('info', enT);
+    expect(snippet).toContain('Enter your info content here');
+    expect(snippet).not.toContain('在此輸入資訊內容');
+  });
+
+  it('labels the type select and handout variant select in English under the English locale', () => {
+    expect(localizedDirectiveLabel('info', enT)).toBe('Info');
+    expect(localizedHandoutVariants(enT).report).toBe('Document');
   });
 });
 

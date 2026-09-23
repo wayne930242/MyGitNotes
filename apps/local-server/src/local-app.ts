@@ -77,7 +77,7 @@ export function createLocalApp(repoRoot: string, appRoot = repoRoot): express.Ex
   app.use('/api/git', createLocalGitRouter(repoRoot));
 
   // 7. Static Web UI Serving
-  const webDist = path.join(repoRoot, 'apps/web/dist');
+  const webDist = path.join(appRoot, 'apps/web/dist');
   if (fs.existsSync(webDist)) {
     app.use(express.static(webDist, { redirect: false }));
     app.get('*', (req: Request, res: Response, next) => {

@@ -1,6 +1,6 @@
 import { EditorView, WidgetType } from '@codemirror/view';
 import { isolateHistory } from '@codemirror/commands';
-import { DIRECTIVE_TEMPLATES, type DirectiveModel, HANDOUT_VARIANTS, parseDirectiveModel, serializeDirectiveModel } from '../lib/directives.js';
+import { DIRECTIVE_TEMPLATES, type DirectiveModel, localizedDirectiveLabel, localizedHandoutVariants, parseDirectiveModel, serializeDirectiveModel } from '../lib/directives.js';
 import { renderNote } from '../lib/markdown.js';
 import { hydrateMermaid } from '../lib/mermaid.js';
 import type { TranslationKey } from '../lib/i18n/en.js';
@@ -18,6 +18,11 @@ export class LiveMarkdownDirective extends WidgetType {
   }
 
   private stopMermaid = () => {};
+
+  /** `this.t`, falling back to the given zh-TW string when no translator was supplied. */
+  private tt(key: TranslationKey, fallback: string, params?: Record<string, string | number>): string {
+    return this.t?.(key, params) ?? fallback;
+  }
 
   /** Draws the mermaid diagrams a directive's body holds, replacing the redraw watch of any earlier body. */
   private hydrateDiagrams(view: EditorView, body: HTMLElement) {
@@ -62,17 +67,17 @@ export class LiveMarkdownDirective extends WidgetType {
       const toolbar = document.createElement('div');
       toolbar.className = 'live-directive-toolbar';
       toolbar.setAttribute('role', 'toolbar');
-      toolbar.setAttribute('aria-label', 'Directive 區塊操作列');
+      toolbar.setAttribute('aria-label', this.tt('directive.editor.toolbarLabel', 'Directive 區塊操作列'));
 
       // Format Select
       const typeSelect = document.createElement('select');
       typeSelect.className = 'live-directive-type-select';
-      typeSelect.title = '更換區塊格式';
-      typeSelect.setAttribute('aria-label', '更換區塊格式');
+      typeSelect.title = this.tt('directive.editor.changeFormat', '更換區塊格式');
+      typeSelect.setAttribute('aria-label', this.tt('directive.editor.changeFormat', '更換區塊格式'));
       for (const tpl of DIRECTIVE_TEMPLATES) {
         const option = document.createElement('option');
         option.value = tpl.type;
-        option.textContent = tpl.label;
+        option.textContent = localizedDirectiveLabel(tpl.type, this.t);
         if (tpl.type === model.type) option.selected = true;
         typeSelect.append(option);
       }
@@ -88,9 +93,9 @@ export class LiveMarkdownDirective extends WidgetType {
       if (model.type === 'handout') {
         const variantSelect = document.createElement('select');
         variantSelect.className = 'live-directive-variant-select';
-        variantSelect.title = '更換文件樣式';
-        variantSelect.setAttribute('aria-label', '更換文件樣式');
-        for (const [vKey, vLabel] of Object.entries(HANDOUT_VARIANTS)) {
+        variantSelect.title = this.tt('directive.editor.changeVariant', '更換文件樣式');
+        variantSelect.setAttribute('aria-label', this.tt('directive.editor.changeVariant', '更換文件樣式'));
+        for (const [vKey, vLabel] of Object.entries(localizedHandoutVariants(this.t))) {
           const option = document.createElement('option');
           option.value = vKey;
           option.textContent = vLabel;
@@ -110,10 +115,10 @@ export class LiveMarkdownDirective extends WidgetType {
       const titleInput = document.createElement('input');
       titleInput.type = 'text';
       titleInput.className = 'live-directive-title-input';
-      titleInput.placeholder = model.type === 'coc-stat' ? '人物名稱...' : '自訂標題...';
-      titleInput.title = '自訂標題';
+      titleInput.placeholder = model.type === 'coc-stat' ? this.tt('directive.editor.namePlaceholder', '人物名稱...') : this.tt('directive.editor.titlePlaceholder', '自訂標題...');
+      titleInput.title = this.tt('directive.editor.customTitle', '自訂標題');
       titleInput.value = model.title;
-      titleInput.setAttribute('aria-label', '自訂標題');
+      titleInput.setAttribute('aria-label', this.tt('directive.editor.customTitle', '自訂標題'));
 
       titleInput.addEventListener('mousedown', event => event.stopPropagation());
       const commitTitle = () => {
@@ -140,9 +145,9 @@ export class LiveMarkdownDirective extends WidgetType {
       const editBtn = document.createElement('button');
       editBtn.type = 'button';
       editBtn.className = 'live-directive-edit-btn';
-      editBtn.textContent = '編輯內文';
-      editBtn.title = '開啟完整編輯表單';
-      editBtn.setAttribute('aria-label', '開啟完整編輯表單');
+      editBtn.textContent = this.tt('directive.editor.editBody', '編輯內文');
+      editBtn.title = this.tt('directive.editor.openEditForm', '開啟完整編輯表單');
+      editBtn.setAttribute('aria-label', this.tt('directive.editor.openEditForm', '開啟完整編輯表單'));
 
       editBtn.addEventListener('mousedown', event => event.preventDefault());
       editBtn.addEventListener('click', event => {
@@ -181,7 +186,7 @@ export class LiveMarkdownDirective extends WidgetType {
       header.className = 'live-directive-editor-header';
       const badge = document.createElement('span');
       badge.className = 'live-directive-editor-badge';
-      badge.textContent = `編輯區塊：${model.type.toUpperCase()}`;
+      badge.textContent = this.tt('directive.editor.editingBadge', `編輯區塊：${model.type.toUpperCase()}`, { type: model.type.toUpperCase() });
       header.append(badge);
 
       // Form Row 1: Type & Title
@@ -191,12 +196,12 @@ export class LiveMarkdownDirective extends WidgetType {
       const typeField = document.createElement('div');
       typeField.className = 'live-directive-form-field';
       const typeLabel = document.createElement('label');
-      typeLabel.textContent = '區塊格式';
+      typeLabel.textContent = this.tt('directive.editor.blockFormat', '區塊格式');
       const formTypeSelect = document.createElement('select');
       for (const tpl of DIRECTIVE_TEMPLATES) {
         const option = document.createElement('option');
         option.value = tpl.type;
-        option.textContent = tpl.label;
+        option.textContent = localizedDirectiveLabel(tpl.type, this.t);
         if (tpl.type === model.type) option.selected = true;
         formTypeSelect.append(option);
       }
@@ -206,11 +211,11 @@ export class LiveMarkdownDirective extends WidgetType {
       const titleField = document.createElement('div');
       titleField.className = 'live-directive-form-field';
       const titleLabel = document.createElement('label');
-      titleLabel.textContent = model.type === 'coc-stat' ? '人物名稱 (Name)' : '區塊標題 (Title)';
+      titleLabel.textContent = model.type === 'coc-stat' ? this.tt('directive.editor.nameFieldLabel', '人物名稱 (Name)') : this.tt('directive.editor.titleFieldLabel', '區塊標題 (Title)');
       const formTitleInput = document.createElement('input');
       formTitleInput.type = 'text';
       formTitleInput.value = model.title;
-      formTitleInput.placeholder = '輸入標題...';
+      formTitleInput.placeholder = this.tt('directive.editor.titleInputPlaceholder', '輸入標題...');
       titleField.append(titleLabel, formTitleInput);
 
       row1.append(typeField, titleField);
@@ -229,7 +234,7 @@ export class LiveMarkdownDirective extends WidgetType {
         const idField = document.createElement('div');
         idField.className = 'live-directive-form-field';
         const idLabel = document.createElement('label');
-        idLabel.textContent = '文件編號 (ID)';
+        idLabel.textContent = this.tt('directive.editor.handoutId', '文件編號 (ID)');
         handoutIdInput = document.createElement('input');
         handoutIdInput.type = 'text';
         handoutIdInput.value = model.attrs.id || 'DOC-01';
@@ -238,9 +243,9 @@ export class LiveMarkdownDirective extends WidgetType {
         const variantField = document.createElement('div');
         variantField.className = 'live-directive-form-field';
         const variantLabel = document.createElement('label');
-        variantLabel.textContent = '文件樣式 (Variant)';
+        variantLabel.textContent = this.tt('directive.editor.handoutVariant', '文件樣式 (Variant)');
         handoutVariantSelect = document.createElement('select');
-        for (const [k, v] of Object.entries(HANDOUT_VARIANTS)) {
+        for (const [k, v] of Object.entries(localizedHandoutVariants(this.t))) {
           const opt = document.createElement('option');
           opt.value = k;
           opt.textContent = v;
@@ -253,11 +258,11 @@ export class LiveMarkdownDirective extends WidgetType {
         const keeperField = document.createElement('div');
         keeperField.className = 'live-directive-form-field';
         const keeperLabel = document.createElement('label');
-        keeperLabel.textContent = '編輯備註 (Editor Note)';
+        keeperLabel.textContent = this.tt('directive.editor.handoutKeeper', '編輯備註 (Editor Note)');
         handoutKeeperInput = document.createElement('input');
         handoutKeeperInput.type = 'text';
         handoutKeeperInput.value = model.attrs.keeper || '';
-        handoutKeeperInput.placeholder = '例如：來源、使用時機或編輯說明...';
+        handoutKeeperInput.placeholder = this.tt('directive.editor.handoutKeeperPlaceholder', '例如：來源、使用時機或編輯說明...');
         keeperField.append(keeperLabel, handoutKeeperInput);
 
         row2.append(idField, variantField, keeperField);
@@ -268,11 +273,11 @@ export class LiveMarkdownDirective extends WidgetType {
         const roleField = document.createElement('div');
         roleField.className = 'live-directive-form-field';
         const roleLabel = document.createElement('label');
-        roleLabel.textContent = '身分／類別 (Role)';
+        roleLabel.textContent = this.tt('directive.editor.cocRole', '身分／類別 (Role)');
         cocRoleInput = document.createElement('input');
         cocRoleInput.type = 'text';
         cocRoleInput.value = model.attrs.role || '';
-        cocRoleInput.placeholder = '例如：研究者、講者、專案負責人...';
+        cocRoleInput.placeholder = this.tt('directive.editor.cocRolePlaceholder', '例如：研究者、講者、專案負責人...');
         roleField.append(roleLabel, cocRoleInput);
 
         row2.append(roleField);
@@ -281,12 +286,12 @@ export class LiveMarkdownDirective extends WidgetType {
       // Body editor
       const bodyLabel = document.createElement('label');
       bodyLabel.className = 'live-directive-body-label';
-      bodyLabel.textContent = '區塊正文內容 (支援 Markdown)';
+      bodyLabel.textContent = this.tt('directive.editor.bodyLabel', '區塊正文內容 (支援 Markdown)');
 
       const bodyTextarea = document.createElement('textarea');
       bodyTextarea.className = 'live-directive-body-editor';
       bodyTextarea.value = model.body;
-      bodyTextarea.placeholder = '在此輸入內容...';
+      bodyTextarea.placeholder = this.tt('directive.editor.bodyPlaceholder', '在此輸入內容...');
 
       // Footer Actions
       const footer = document.createElement('div');
@@ -294,7 +299,7 @@ export class LiveMarkdownDirective extends WidgetType {
 
       const hint = document.createElement('span');
       hint.className = 'live-directive-editor-hint';
-      hint.textContent = 'Enter 換行 · ⌘/Ctrl+Enter 完成儲存 · Esc 取消';
+      hint.textContent = this.tt('directive.editor.hint', 'Enter 換行 · ⌘/Ctrl+Enter 完成儲存 · Esc 取消');
 
       const actions = document.createElement('div');
       actions.className = 'live-directive-editor-actions';
@@ -302,13 +307,13 @@ export class LiveMarkdownDirective extends WidgetType {
       const cancelBtn = document.createElement('button');
       cancelBtn.type = 'button';
       cancelBtn.className = 'live-directive-btn-cancel';
-      cancelBtn.textContent = '取消';
+      cancelBtn.textContent = this.tt('directive.editor.cancel', '取消');
       cancelBtn.addEventListener('click', () => renderPreview());
 
       const saveBtn = document.createElement('button');
       saveBtn.type = 'button';
       saveBtn.className = 'live-directive-btn-save';
-      saveBtn.textContent = '完成儲存';
+      saveBtn.textContent = this.tt('directive.editor.save', '完成儲存');
 
       const commitForm = () => {
         model.type = formTypeSelect.value;

@@ -4,6 +4,10 @@
  * matching the user's blog specifications and editorial design.
  */
 
+import type { TranslationKey } from './i18n/en.js';
+
+export type DirectiveTranslate = (key: TranslationKey, params?: Record<string, string | number>) => string;
+
 export interface DirectiveTitle {
   label: string;
   isDefault: boolean;
@@ -43,6 +47,16 @@ export function parseDirectiveTitle(attrs: Record<string, string>, label: string
 }
 
 export const HANDOUT_VARIANTS: Record<string, string> = { report: '文件', newspaper: '剪報', letter: '信件', journal: '日誌', note: '紙條', scripture: '經文' };
+
+const HANDOUT_VARIANT_KEYS: Record<string, TranslationKey> = { report: 'directive.editor.variant.report', newspaper: 'directive.editor.variant.newspaper', letter: 'directive.editor.variant.letter', journal: 'directive.editor.variant.journal', note: 'directive.editor.variant.note', scripture: 'directive.editor.variant.scripture' };
+
+/** HANDOUT_VARIANTS labels for the document-style editor control, in the given locale. Note content rendering keeps HANDOUT_VARIANTS as-is. */
+export function localizedHandoutVariants(t?: DirectiveTranslate): Record<string, string> {
+  if (!t) return HANDOUT_VARIANTS;
+  const result: Record<string, string> = {};
+  for (const [variant, key] of Object.entries(HANDOUT_VARIANT_KEYS)) result[variant] = t(key);
+  return result;
+}
 
 const COC_CHARACTERISTICS = [{ key: 'str', code: 'STR', label: '力量' }, { key: 'con', code: 'CON', label: '體質' }, { key: 'siz', code: 'SIZ', label: '體型' }, { key: 'dex', code: 'DEX', label: '敏捷' }, { key: 'int', code: 'INT', label: '智力' }, { key: 'app', code: 'APP', label: '外貌' }, { key: 'pow', code: 'POW', label: '意志' }, { key: 'edu', code: 'EDU', label: '教育' }, { key: 'san', code: 'SAN', label: '理智' }, { key: 'hp', code: 'HP', label: '耐久' }];
 
@@ -369,6 +383,28 @@ export interface DirectiveTemplate {
 }
 
 export const DIRECTIVE_TEMPLATES: DirectiveTemplate[] = [{ type: 'info', label: '資訊 (Info)', defaultSnippet: ':::info\n在此輸入資訊內容\n:::\n' }, { type: 'sidebar', label: '重點區塊 (Sidebar)', defaultSnippet: ':::sidebar[重要提示]\n在此輸入重點內容\n:::\n' }, { type: 'optional', label: '摺疊細節 (Optional)', defaultSnippet: ':::optional[點擊展開詳細內容]\n收合的細節說明...\n:::\n' }, { type: 'comment', label: '旁註 (Comment)', defaultSnippet: ':::comment\n在此輸入補充註記\n:::\n' }, { type: 'handout', label: '文件卡片 (Document)', defaultSnippet: ':::handout{id="DOC-01" title="文件標題" variant="report" keeper="編輯備註"}\n在此輸入文件內容。\n:::\n' }, { type: 'coc-stat', label: '屬性資料卡 (Stats)', defaultSnippet: ':::coc-stat{name="人物名稱" str=50 con=60 siz=65 dex=70 int=75 app=50 pow=60 edu=80 san=60 hp=12 db="0" build=0 move=8}\n在此輸入人物備註。\n:::\n' }, { type: 'parallel-quote', label: '雙語對照 (Quote)', defaultSnippet: ':::parallel-quote{author="哲學家" source="著作名稱" cite="[@citationKey]"}\n:::original\nOriginal quotation text here.\n:::\n:::translation\n在此輸入繁體中文譯文。\n:::\n:::\n' }, { type: 'github-repo', label: 'GitHub 專案卡片', defaultSnippet: ':::github-repo{url="https://github.com/user/repo" title="專案名稱"}\n專案簡介與特色說明\n:::\n' }, { type: 'x-post', label: 'X (Twitter) 卡片', defaultSnippet: ':::x-post{url="https://x.com/user/status/123" title="貼文標題"}\n貼文摘錄或討論重點\n:::\n' }, { type: 'reddit-post', label: 'Reddit 卡片', defaultSnippet: ':::reddit-post{url="https://reddit.com/r/..." title="討論串"}\n討論摘要\n:::\n' }, { type: 'grid', label: '雙欄網格 (Grid)', defaultSnippet: '::::grid{cols="2" gap="1rem"}\n:::cell\n左側內容\n:::\n:::cell\n右側內容\n:::\n::::\n' }];
+
+// The Chinese instructional placeholders each defaultSnippet carries, keyed to their i18n
+// translations. English-locale editors get the inserted snippet in English; the source
+// DIRECTIVE_TEMPLATES above (and any note content already written with it) is untouched.
+const DEFAULT_SNIPPET_PLACEHOLDERS: Partial<Record<string, [string, TranslationKey][]>> = { info: [['在此輸入資訊內容', 'directive.info.body']], sidebar: [['重要提示', 'directive.sidebar.label'], ['在此輸入重點內容', 'directive.sidebar.body']], optional: [['點擊展開詳細內容', 'directive.optional.label'], ['收合的細節說明...', 'directive.optional.body']], comment: [['在此輸入補充註記', 'directive.comment.body']], handout: [['文件標題', 'directive.handout.title'], ['編輯備註', 'directive.handout.keeper'], ['在此輸入文件內容。', 'directive.handout.body']], 'coc-stat': [['人物名稱', 'directive.cocStat.name'], ['在此輸入人物備註。', 'directive.cocStat.body']], 'parallel-quote': [['哲學家', 'directive.parallelQuote.author'], ['著作名稱', 'directive.parallelQuote.source'], ['在此輸入繁體中文譯文。', 'directive.parallelQuote.translationBody']], 'github-repo': [['專案名稱', 'directive.githubRepo.title'], ['專案簡介與特色說明', 'directive.githubRepo.body']], 'x-post': [['貼文標題', 'directive.xPost.title'], ['貼文摘錄或討論重點', 'directive.xPost.body']], 'reddit-post': [['討論串', 'directive.redditPost.title'], ['討論摘要', 'directive.redditPost.body']], grid: [['左側內容', 'directive.grid.cellLeft'], ['右側內容', 'directive.grid.cellRight']] };
+
+/** The markdown to insert for a new directive of `type`, with its instructional placeholder text in the given locale. */
+export function localizedDirectiveSnippet(type: string, t?: DirectiveTranslate): string {
+  const tpl = DIRECTIVE_TEMPLATES.find(d => d.type === type) ?? DIRECTIVE_TEMPLATES[0];
+  if (!t) return tpl.defaultSnippet;
+  let snippet = tpl.defaultSnippet;
+  for (const [chinese, key] of DEFAULT_SNIPPET_PLACEHOLDERS[tpl.type] ?? []) {
+    snippet = snippet.replaceAll(chinese, t(key));
+  }
+  return snippet;
+}
+
+/** DIRECTIVE_TEMPLATES[type].label in the given locale, via the existing `directive.<type>` keys. */
+export function localizedDirectiveLabel(type: string, t?: DirectiveTranslate): string {
+  const tpl = DIRECTIVE_TEMPLATES.find(d => d.type === type) ?? DIRECTIVE_TEMPLATES[0];
+  return t ? t(`directive.${tpl.type}` as TranslationKey) : tpl.label;
+}
 
 export interface ParsedDirectiveBlock {
   from: number;
