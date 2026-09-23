@@ -4,6 +4,13 @@ vi.mock('../lib/markdown.js', () => ({ renderNote: (text: string) => `<div class
 
 import { LiveMarkdownDirective } from './LiveMarkdownDirective.js';
 import type { EditorView } from '@codemirror/view';
+import { en, type TranslationKey } from '../lib/i18n/en.js';
+
+const enT = (key: TranslationKey, params?: Record<string, string | number>): string => {
+  let text = en[key] ?? key;
+  if (params) { for (const [k, v] of Object.entries(params)) text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v)); }
+  return text;
+};
 
 class MockDomNode {
   tagName: string;
@@ -195,5 +202,30 @@ describe('LiveMarkdownDirective widget', () => {
     const dom = directive.toDOM(mockView);
 
     expect(dom.querySelector('.live-directive-toolbar')).toBeNull();
+  });
+
+  it('shows the toolbar and edit form in English when a translator is supplied', () => {
+    const text = ':::handout{id="H-01" variant="newspaper"}\ncontent\n:::';
+    const directive = new LiveMarkdownDirective(text, 'note.md', 0, false, 'handout', 'newspaper', enT);
+
+    const mockView = { dispatch: vi.fn(), requestMeasure: vi.fn(), focus: vi.fn() } as unknown as EditorView;
+    const dom = directive.toDOM(mockView);
+
+    const toolbar = dom.querySelector<HTMLElement>('.live-directive-toolbar')!;
+    expect(toolbar.getAttribute('aria-label')).toBe('Block toolbar');
+
+    const typeSelect = toolbar.querySelector<HTMLSelectElement & { children: HTMLOptionElement[]; }>('.live-directive-type-select')!;
+    expect(typeSelect.children[0].textContent).toBe('Info');
+
+    const variantSelect = toolbar.querySelector<HTMLSelectElement & { children: HTMLOptionElement[]; }>('.live-directive-variant-select')!;
+    expect(variantSelect.children[0].textContent).toBe('Document');
+
+    const editBtn = toolbar.querySelector<HTMLButtonElement>('.live-directive-edit-btn')!;
+    expect(editBtn.textContent).toBe('Edit content');
+
+    editBtn.dispatchEvent(new Event('click'));
+    const panel = dom.querySelector<HTMLElement>('.live-directive-editor-panel')!;
+    expect(panel.querySelector('.live-directive-editor-badge')?.textContent).toBe('Editing block: HANDOUT');
+    expect(panel.querySelector('.live-directive-btn-save')?.textContent).toBe('Save');
   });
 });

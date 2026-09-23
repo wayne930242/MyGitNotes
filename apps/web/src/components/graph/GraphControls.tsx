@@ -1,6 +1,5 @@
 import './graph-controls.css';
 import type { ReactNode, RefObject } from 'react';
-import { Eye, EyeOff, RotateCcw } from 'lucide-react';
 import { Select } from '../Select.js';
 import { useTranslation } from '../../lib/i18n/index.js';
 import { GRAPH_COLOR_MODES, GRAPH_PALETTES, type GraphAppearance } from '../../lib/graph-colors.js';
@@ -12,12 +11,9 @@ interface GraphControlsProps {
   onAppearanceChange: (appearance: GraphAppearance) => void;
   visibleColorGroups: { key: string; label: string; color: string; }[];
   appearanceSaveError: boolean;
-  showOrphans?: boolean;
-  onToggleOrphans?: () => void;
-  onReset?: () => void;
 }
 
-export function GraphControls({ controlsRef, filterPanel, appearance, onAppearanceChange, visibleColorGroups, appearanceSaveError, showOrphans, onToggleOrphans, onReset }: GraphControlsProps) {
+export function GraphControls({ controlsRef, filterPanel, appearance, onAppearanceChange, visibleColorGroups, appearanceSaveError }: GraphControlsProps) {
   const { t } = useTranslation();
   return (
     <div ref={controlsRef} className='graph-controls'>
@@ -41,19 +37,6 @@ export function GraphControls({ controlsRef, filterPanel, appearance, onAppearan
           {appearanceSaveError && <p role='status' className='mt-2 text-warning'>{t('graph.appearanceSaveError')}</p>}
         </div>
       </details>
-      {onToggleOrphans && (
-        <div className='graph-view-actions'>
-          <button type='button' onClick={onToggleOrphans} title={t('graph.showOrphans')} aria-pressed={showOrphans} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition ${showOrphans ? 'bg-primary-soft text-primary font-medium' : 'text-muted hover:text-fg'}`}>
-            {showOrphans ? <Eye size={13} /> : <EyeOff size={13} />}
-            <span>{t('graph.showOrphans')}</span>
-          </button>
-          {/* Reset Zoom */}
-          <button type='button' onClick={onReset} title={t('graph.resetZoom')} className='flex items-center gap-1 px-2.5 py-1 rounded-md text-muted hover:text-fg hover:bg-fg/5 transition'>
-            <RotateCcw size={13} />
-            <span>{t('graph.resetZoom')}</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 }

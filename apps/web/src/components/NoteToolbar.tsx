@@ -32,9 +32,9 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
   const { t } = useTranslation();
   return (
     <div className='header-note-actions flex items-center gap-2.5 flex-1 min-w-0 justify-end'>
-      <WorkspaceSidebarToggle label='Notebooks and filters' open={filtersOpen} controlsId='notebook-panel' onClick={onToggleFilters} />
+      <WorkspaceSidebarToggle label={t('filters.notebookPanel')} open={filtersOpen} controlsId='notebook-panel' onClick={onToggleFilters} />
       {/* View Switcher Mobile */}
-      <Select aria-label='Note view' value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)} options={[{ value: 'flat', label: t('view.flat') }, { value: 'list', label: t('layout.list') }, { value: 'card', label: t('layout.card') }, { value: 'kanban', label: t('layout.kanban') }]} className='mobile-only note-view-select px-1' />
+      <Select aria-label={t('filters.noteView')} value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)} options={[{ value: 'flat', label: t('view.flat') }, { value: 'list', label: t('layout.list') }, { value: 'card', label: t('layout.card') }, { value: 'kanban', label: t('layout.kanban') }]} className='mobile-only note-view-select px-1' />
       {viewMode === 'flat' && (
         <Select
           className='mobile-only note-toolbar-sort'

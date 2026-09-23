@@ -8,7 +8,7 @@ import { type TranslationKey, useTranslation } from '../lib/i18n/index.js';
 import { noteCompletionAt, useNoteCandidates } from '../lib/note-completion.js';
 import { noteLinkHref, noteMarkdownLink } from '@mygitnotes/core/workspace-links';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
-import { DIRECTIVE_TEMPLATES } from '../lib/directives.js';
+import { DIRECTIVE_TEMPLATES, localizedDirectiveSnippet } from '../lib/directives.js';
 import './note-completion.css';
 import { copyLinePrompt } from '../lib/line-prompt-copy.js';
 import { attachLineGutterGesture } from '../lib/line-gutter-gesture.js';
@@ -143,8 +143,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   };
 
   const insertDirective = (type = 'info') => {
-    const tpl = DIRECTIVE_TEMPLATES.find(t => t.type === type) ?? DIRECTIVE_TEMPLATES[0];
-    const text = `\n\n${tpl.defaultSnippet}\n`;
+    const text = `\n\n${localizedDirectiveSnippet(type, t)}\n`;
     if (mode === 'live') live.current?.insert(text);
     else {
       const position = source.current?.selectionStart ?? content.length;
