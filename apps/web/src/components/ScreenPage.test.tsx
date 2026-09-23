@@ -1,11 +1,20 @@
-import { describe, expect, it } from 'vitest';
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createElement, type ReactNode } from 'react';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Network } from 'lucide-react';
 import type { ScreenRow } from '@mygitnotes/core/screen-page';
 import type { NotebookConfig } from '../lib/types.js';
 import { createLaneNoteContext, screenViewTabs } from './ScreenPage.js';
 import { KeyboardShortcuts } from './KeyboardShortcuts.js';
+
+beforeEach(() => {
+  Element.prototype.scrollIntoView = () => {};
+});
+afterEach(() => cleanup());
+
+const queryClientWrapper = ({ children }: { children: ReactNode; }) => createElement(QueryClientProvider, { client: new QueryClient({ defaultOptions: { queries: { retry: false } } }) }, children);
 
 describe('createLaneNoteContext', () => {
   const notebooks: NotebookConfig[] = [{ id: 'nb-1', title: 'Main Notebook', root: 'notes/main' }, { id: 'nb-2', title: 'Second Notebook', root: 'notes/secondary' }];
@@ -38,20 +47,25 @@ describe('Screen view icons', () => {
 });
 
 describe('Screen sidebar keyboard shortcuts', () => {
-  it('keeps the Screen action keyless in the palette and shows its real shortcut in help', () => {
-    const props = { onModeChange: () => {}, activeTab: 'screen' as const, canCreateNote: true, onNavigate: () => {}, onCreateNote: () => {}, onFocusSearch: () => {} };
-    const palette = renderToStaticMarkup(createElement(KeyboardShortcuts, { ...props, mode: 'palette' }));
-    const help = renderToStaticMarkup(createElement(KeyboardShortcuts, { ...props, mode: 'help' }));
-    expect(palette).toContain('data-command-id="toggle-screen-sidebar"');
-    expect(palette).not.toContain('<kbd>[');
-    expect(help).toContain('data-command-id="toggle-screen-sidebar" data-shortcut-key="["');
-    expect(help).toContain('<kbd>[</kbd>');
+  const props = { onModeChange: () => {}, activeTab: 'screen' as const, canCreateNote: true, selectedNotebookId: 'nb-1', onNavigate: () => {}, onCreateNote: () => {}, onFocusSearch: () => {}, onOpenNote: () => {} };
+
+  it('keeps the Screen action keyless in the palette and shows its real shortcut in help', async () => {
+    // A leading '>' reaches the unchanged command list; the id contains "screen" so the filter finds it without typing its full label.
+    const { container: paletteContainer } = render(createElement(KeyboardShortcuts, { ...props, mode: 'palette' }), { wrapper: queryClientWrapper });
+    fireEvent.change(paletteContainer.querySelector('input')!, { target: { value: '>screen' } });
+    await waitFor(() => expect(paletteContainer.innerHTML).toContain('data-command-id="toggle-screen-sidebar"'));
+    expect(paletteContainer.innerHTML).not.toContain('<kbd>[');
+
+    const { container: helpContainer } = render(createElement(KeyboardShortcuts, { ...props, mode: 'help' }), { wrapper: queryClientWrapper });
+    expect(helpContainer.innerHTML).toContain('data-command-id="toggle-screen-sidebar" data-shortcut-key="["');
+    expect(helpContainer.innerHTML).toContain('<kbd>[</kbd>');
   });
 
-  it('renders toggle-screen-sidebar disabled when on other tab', () => {
-    const html = renderToStaticMarkup(createElement(KeyboardShortcuts, { mode: 'palette', onModeChange: () => {}, activeTab: 'notes', canCreateNote: true, onNavigate: () => {}, onCreateNote: () => {}, onFocusSearch: () => {} }));
-    expect(html).toContain('data-command-id="toggle-screen-sidebar"');
-    expect(html).toContain('aria-disabled="true"');
-    expect(html).toContain('Open Screen to use');
+  it('renders toggle-screen-sidebar disabled when on other tab', async () => {
+    const { container } = render(createElement(KeyboardShortcuts, { ...props, mode: 'palette', activeTab: 'notes' }), { wrapper: queryClientWrapper });
+    fireEvent.change(container.querySelector('input')!, { target: { value: '>screen' } });
+    await waitFor(() => expect(container.innerHTML).toContain('data-command-id="toggle-screen-sidebar"'));
+    expect(container.innerHTML).toContain('aria-disabled="true"');
+    expect(container.innerHTML).toContain('Open Screen to use');
   });
 });

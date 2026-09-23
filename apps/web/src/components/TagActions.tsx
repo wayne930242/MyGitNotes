@@ -204,6 +204,7 @@ export const TagActions: React.FC<TagActionsProps> = ({ tag, allTags, onPreviewU
                 close(true);
                 return;
               }
+              if (event.nativeEvent.isComposing || event.keyCode === 229) return;
               if (showSuggestions) {
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();

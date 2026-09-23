@@ -311,12 +311,14 @@ const AppContent: React.FC = () => {
             suspended={noteEditorOpen || isCommitOpen}
             activeTab={activeTab}
             canCreateNote={canWrite}
+            selectedNotebookId={selectedNotebookId}
             onNavigate={tab => void setActiveTab(tab)}
             onCreateNote={() => openNewNote()}
             onFocusSearch={() => {
               if (activeTab === 'notes') setFiltersOpen(true);
               requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.header-search input')?.focus());
             }}
+            onOpenNote={note => void handleOpenNote(note)}
             pageCommands={focusCommands}
           />
           {routeError && (
