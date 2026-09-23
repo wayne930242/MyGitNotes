@@ -81,6 +81,19 @@ describe('note queries', () => {
     expect(withContent.notes[0].content).toBe(bodies['notes/life/gamma.md']);
   });
 
+  it('attaches a matched-content snippet when the search hits the body, even without requesting content', async () => {
+    const contentMatch = await queryNotes(catalog(), query({ notebookId: 'all', q: 'keyword' }), { limit: 50, content: false });
+    const alpha = contentMatch.notes.find(note => note.path === 'notes/work/alpha.md')!;
+    expect(alpha.matchSnippet).toContain('keyword');
+    expect(alpha.content).toBeUndefined();
+
+    const titleMatch = await queryNotes(catalog(), query({ notebookId: 'work', q: 'alpha', match: 'title' }), { limit: 50, content: false });
+    expect(titleMatch.notes[0].matchSnippet).toBeUndefined();
+
+    const pathOnlyMatch = await queryNotes(catalog(), query({ notebookId: 'work', q: 'deep/beta' }), { limit: 50, content: false });
+    expect(pathOnlyMatch.notes[0].matchSnippet).toBeUndefined();
+  });
+
   it('returns every matching path for path selection', async () => {
     const paths = await queryNotePaths(catalog(), query({ notebookId: 'all', tags: ['b'] }));
     expect(paths).toMatchObject({ revision: 'rev1', total: 2 });

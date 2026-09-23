@@ -582,6 +582,23 @@ export const en = {
   'notes.loadingNote': 'Loading note…',
   'notes.readFailed': 'The full note could not be read ({path}); nothing was changed.',
   'notes.unavailable': 'This note is unavailable in this workspace.',
+  'notes.multiSelectHint': 'Shift/Ctrl/Cmd+click to add or remove from selection',
+  'notes.selectFor': 'Select {title}',
+
+  // Bulk actions (multi-select in the browse views)
+  'bulk.toolbarLabel': 'Bulk actions',
+  'bulk.selectedCount': '{count} selected',
+  'bulk.setStatus': 'Set status…',
+  'bulk.tagPlaceholder': 'Tag…',
+  'bulk.addTag': 'Add tag',
+  'bulk.removeTag': 'Remove tag',
+  'bulk.moveToFolder': 'Move to folder…',
+  'bulk.moveRequiresSingleNotebook': 'Select notes from a single notebook to move them.',
+  'bulk.clearSelection': 'Clear selection',
+  'bulk.tagAddedLabel': 'Added #{tag} to {count} notes',
+  'bulk.tagRemovedLabel': 'Removed #{tag} from {count} notes',
+  'bulk.moveDialogTitle': 'Move {count} notes',
+  'bulk.moveConfirm': 'Move',
 
   // Common actions & labels
   'common.cancel': 'Cancel',

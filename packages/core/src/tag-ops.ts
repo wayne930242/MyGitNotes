@@ -47,7 +47,17 @@ export function planTagMerge(notes: TaggedNote[], from: string, into: string): T
   return planRetag(notes, from, into);
 }
 
-/** Remove `tag` from every note that carries it. */
+/** Add `tag` to every note that doesn't already carry it. */
+export function planTagAdd(notes: TaggedNote[], tag: string): TagOperationPlan {
+  const affected: TagOperationEntry[] = [];
+  for (const note of notes) {
+    if (note.tags.includes(tag)) continue;
+    affected.push({ path: note.path, notebookId: note.notebookId, previousTags: note.tags, nextTags: [...note.tags, tag] });
+  }
+  return { affected };
+}
+
+/** Remove `tag` from every note in the given list that carries it. */
 export function planTagDelete(notes: TaggedNote[], tag: string): TagOperationPlan {
   const affected: TagOperationEntry[] = [];
   for (const note of notes) {

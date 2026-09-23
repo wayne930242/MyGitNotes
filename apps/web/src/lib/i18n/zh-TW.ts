@@ -583,6 +583,23 @@ export const zhTW: Record<TranslationKey, string> = {
   'notes.loadingNote': '正在載入筆記…',
   'notes.readFailed': '無法讀取完整筆記（{path}），未變更任何內容。',
   'notes.unavailable': '此工作區沒有這篇筆記。',
+  'notes.multiSelectHint': '按住 Shift/Ctrl/Cmd 點擊以加入或移出選取',
+  'notes.selectFor': '選取 {title}',
+
+  // Bulk actions (multi-select in the browse views)
+  'bulk.toolbarLabel': '批次操作',
+  'bulk.selectedCount': '已選取 {count} 筆',
+  'bulk.setStatus': '設定狀態…',
+  'bulk.tagPlaceholder': '標籤…',
+  'bulk.addTag': '加入標籤',
+  'bulk.removeTag': '移除標籤',
+  'bulk.moveToFolder': '移動到資料夾…',
+  'bulk.moveRequiresSingleNotebook': '請選取同一個筆記本內的筆記才能移動。',
+  'bulk.clearSelection': '清除選取',
+  'bulk.tagAddedLabel': '已將 #{tag} 加入 {count} 篇筆記',
+  'bulk.tagRemovedLabel': '已從 {count} 篇筆記移除 #{tag}',
+  'bulk.moveDialogTitle': '移動 {count} 篇筆記',
+  'bulk.moveConfirm': '移動',
 
   // Common actions & labels
   'common.cancel': '取消',

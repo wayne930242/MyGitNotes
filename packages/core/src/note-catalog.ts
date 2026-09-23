@@ -6,7 +6,7 @@ import { type SortField, sortNotes, type SortOrder } from './note-sort.js';
 import { extractTodoTasks } from './note-agenda.js';
 import { buildNoteGraph } from './note-graph.js';
 import { hashJson } from './remote-cache.js';
-import { DEFAULT_NOTE_QUERY, type NoteAgenda, type NotebookFacets, noteDirectory, type NoteFacets, type NoteGraph, type NoteListItem, type NoteLookup, noteMatchesQuery, type NotePaths, type NoteQuery, type NoteQueryPage, noteQueryStatuses } from './note-query.js';
+import { DEFAULT_NOTE_QUERY, type NoteAgenda, type NotebookFacets, noteContentSnippet, noteDirectory, type NoteFacets, type NoteGraph, type NoteListItem, type NoteLookup, noteMatchesQuery, type NotePaths, type NoteQuery, type NoteQueryPage, noteQueryStatuses } from './note-query.js';
 
 /** Read model behind the note query routes, implemented by remote and local sources. */
 export interface NoteCatalog {
@@ -76,7 +76,12 @@ async function matching(catalog: NoteCatalog, query: NoteQuery) {
   let matches = notes.filter(note => noteMatchesQuery(note, { ...query, q: '' }));
   if (query.q.trim() && query.match === 'all') {
     const contents = await catalog.contents(matches);
-    matches = matches.filter(note => noteMatchesQuery({ ...note, content: contents.get(note.path) ?? '' }, query));
+    matches = matches
+      .filter(note => noteMatchesQuery({ ...note, content: contents.get(note.path) ?? '' }, query))
+      .map(note => {
+        const matchSnippet = noteContentSnippet(contents.get(note.path) ?? '', query.q);
+        return matchSnippet ? { ...note, matchSnippet } : note;
+      });
   } else if (query.q.trim()) {
     matches = matches.filter(note => noteMatchesQuery(note, query));
   }

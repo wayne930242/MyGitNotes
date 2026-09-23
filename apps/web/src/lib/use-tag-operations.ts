@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { TagOperationPlan } from '@mygitnotes/core/tag-ops';
 
-export type TagOperationKind = 'rename' | 'merge' | 'delete';
+export type TagOperationKind = 'rename' | 'merge' | 'delete' | 'add' | 'remove';
 
 export interface TagOperationRecord {
   id: string;

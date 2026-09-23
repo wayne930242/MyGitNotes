@@ -81,5 +81,5 @@ export function useBrowseNotes({ scopeNotebookId, selectedFolders, selectedTags,
     return getBreadcrumbs(selectedFolder, folders, selectedNotebookId, t('folder.allFolders'));
   }, [selectedFolder, folders, selectedNotebookId, t]);
 
-  return { notebookRoot, folderIndex, baseQuery, listResult, displayedNotes, filterProps, immediateSubfolders, breadcrumbs, indexLookup };
+  return { notebookRoot, folderIndex, baseQuery, listResult, displayedNotes, filterProps, immediateSubfolders, breadcrumbs, indexLookup, debouncedSearch };
 }

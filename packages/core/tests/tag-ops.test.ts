@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { invertTagOperationPlan, planTagDelete, planTagMerge, planTagRename, retagList } from '../src/tag-ops.js';
+import { invertTagOperationPlan, planTagAdd, planTagDelete, planTagMerge, planTagRename, retagList } from '../src/tag-ops.js';
 import { NoteItem } from '../src/types.js';
 
 function note(path: string, tags: string[], notebookId = 'nb'): NoteItem {
@@ -67,6 +67,21 @@ describe('planTagDelete', () => {
   it('excludes notes that never carried the tag', () => {
     const notes = [note('a.md', ['y'])];
     expect(planTagDelete(notes, 'x').affected).toEqual([]);
+  });
+});
+
+describe('planTagAdd', () => {
+  it('adds the tag to notes that lack it, leaving its position for notes that already carry it out of the plan', () => {
+    const notes = [note('a.md', ['x']), note('b.md', ['x', 'y']), note('c.md', [])];
+    const plan = planTagAdd(notes, 'y');
+    expect(plan.affected.map(e => e.path)).toEqual(['a.md', 'c.md']);
+    expect(plan.affected.find(e => e.path === 'a.md')).toMatchObject({ previousTags: ['x'], nextTags: ['x', 'y'] });
+    expect(plan.affected.find(e => e.path === 'c.md')).toMatchObject({ previousTags: [], nextTags: ['y'] });
+  });
+
+  it('excludes notes that already carry the tag', () => {
+    const notes = [note('a.md', ['y'])];
+    expect(planTagAdd(notes, 'y').affected).toEqual([]);
   });
 });
 
