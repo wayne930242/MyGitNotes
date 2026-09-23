@@ -3,8 +3,9 @@ import type { NotebookConfig } from './types.js';
 
 export const GRAPH_COLOR_MODES = ['folder', 'notebook', 'status'] as const;
 export const GRAPH_PALETTES = ['soft', 'vivid', 'warm'] as const;
-export type GraphAppearance = { mode: typeof GRAPH_COLOR_MODES[number]; palette: typeof GRAPH_PALETTES[number]; };
-export const DEFAULT_GRAPH_APPEARANCE: GraphAppearance = { mode: 'folder', palette: 'soft' };
+export const GRAPH_LABEL_MODES = ['all', 'zoom'] as const;
+export type GraphAppearance = { mode: typeof GRAPH_COLOR_MODES[number]; palette: typeof GRAPH_PALETTES[number]; labels: typeof GRAPH_LABEL_MODES[number]; };
+export const DEFAULT_GRAPH_APPEARANCE: GraphAppearance = { mode: 'folder', palette: 'soft', labels: 'all' };
 export const GRAPH_APPEARANCE_KEY = 'github-notes:graph-appearance';
 // Graph groups cycle through the active theme's accents; each scheme is a token expression.
 const accentTokens = ['accent-1', 'accent-2', 'accent-3', 'accent-4', 'accent-5', 'accent-6', 'primary', 'info'];
@@ -13,7 +14,7 @@ const palettes = { soft: accentTokens.map(token => `color-mix(in srgb, var(--col
 export function parseGraphAppearance(raw: string | null): GraphAppearance {
   try {
     const value = JSON.parse(raw || 'null');
-    return { mode: GRAPH_COLOR_MODES.includes(value?.mode) ? value.mode : DEFAULT_GRAPH_APPEARANCE.mode, palette: GRAPH_PALETTES.includes(value?.palette) ? value.palette : DEFAULT_GRAPH_APPEARANCE.palette };
+    return { mode: GRAPH_COLOR_MODES.includes(value?.mode) ? value.mode : DEFAULT_GRAPH_APPEARANCE.mode, palette: GRAPH_PALETTES.includes(value?.palette) ? value.palette : DEFAULT_GRAPH_APPEARANCE.palette, labels: GRAPH_LABEL_MODES.includes(value?.labels) ? value.labels : DEFAULT_GRAPH_APPEARANCE.labels };
   } catch {
     return { ...DEFAULT_GRAPH_APPEARANCE };
   }
@@ -40,7 +41,7 @@ export function graphColorGroup(node: ColorNode, notebooks: NotebookConfig[], mo
 }
 
 // Use the complete note collection so filtering leaves category colors unchanged.
-export function graphColorGroups(nodes: ColorNode[], notebooks: NotebookConfig[], appearance: GraphAppearance) {
+export function graphColorGroups(nodes: ColorNode[], notebooks: NotebookConfig[], appearance: Pick<GraphAppearance, 'mode' | 'palette'>) {
   const groups = new Map(nodes.map(node => {
     const group = graphColorGroup(node, notebooks, appearance.mode);
     return [group.key, group];
