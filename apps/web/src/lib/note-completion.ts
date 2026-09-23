@@ -26,7 +26,7 @@ export function noteCompletionAt(text: string, position: number) {
   if ((prefix.match(/`/g) || []).length % 2) return null;
   return { from: before.length - match[2].length, to: before.length, query: match[2] };
 }
-const candidateQuery = (query: string, source: string) => ({ notebookId: 'all', q: query, match: 'title' as const, showHidden: false, exclude: [source] });
+const candidateQuery = (query: string, source: string) => ({ notebookId: 'all', q: query, match: 'title' as const, showHidden: false, exclude: source ? [source] : [] });
 
 /** Link candidates for an editor that completes outside React rendering (CodeMirror). */
 export async function fetchNoteCandidates(client: QueryClient, scope: NoteQueryScope, query: string, source: string): Promise<NoteListItem[]> {

@@ -58,3 +58,14 @@ it('offers the same staged note to the CodeMirror editor', async () => {
   const notes = await fetchNoteCandidates(client, { sourceId: 'github:me/notes', revision: REVISION, drafts }, 'note', 'notes/life/source.md');
   expect(notes.map(note => note.title)).toEqual(['Staged note', 'Committed note']);
 });
+
+it('sends no exclude param when searching with no source note, unlike the empty-string param the server rejects', async () => {
+  render(createElement(Candidates2, { query: 'note' }), { wrapper });
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(requests[0]).not.toContain('exclude');
+});
+
+function Candidates2({ query }: { query: string | null; }) {
+  const notes = useNoteCandidates(query, '');
+  return createElement('p', { 'data-testid': 'candidates' }, notes.map(note => note.title).join(','));
+}

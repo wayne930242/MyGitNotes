@@ -209,6 +209,24 @@ describe('TagActions merge target autocomplete', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 
+  it('ignores ArrowDown and Enter while an IME composition is active', async () => {
+    const onMerge = vi.fn().mockResolvedValue(undefined);
+    renderTagActions({ onPreviewUsage: vi.fn().mockResolvedValue(5), onMerge, allTags: ['beta', 'betting'] });
+    await openMenu();
+    await act(async () => {
+      fireEvent.click(screen.getByText('Merge into…'));
+    });
+
+    const input = screen.getByPlaceholderText('Target tag');
+    fireEvent.change(input, { target: { value: 'bet' } });
+    fireEvent.keyDown(input, { key: 'ArrowDown', isComposing: true });
+    expect(screen.getByRole('option', { name: 'beta' })).not.toHaveAttribute('data-highlighted');
+
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    expect(onMerge).not.toHaveBeenCalled();
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+  });
+
   it('submits on Enter without hijacking it when no suggestion has been arrow-selected yet', async () => {
     const onMerge = vi.fn().mockResolvedValue(undefined);
     renderTagActions({ onPreviewUsage: vi.fn().mockResolvedValue(5), onMerge, allTags: ['beta', 'betting'] });

@@ -141,6 +141,7 @@ export function NoteFrontmatterPanel({ metadata, setMetadata, statuses, metadata
                     onFocus={() => setIsTagDropdownOpen(true)}
                     onBlur={() => setTimeout(() => setIsTagDropdownOpen(false), 250)}
                     onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing || e.keyCode === 229) return;
                       if (e.key === 'Enter' || e.key === ',') {
                         e.preventDefault();
                         handleAddTag(tagInput);
