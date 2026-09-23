@@ -43,7 +43,7 @@ const Harness = ({ noteEditorOpen = false }: { noteEditorOpen?: boolean; }) => {
 };
 
 const openPalette = async () => {
-  fireEvent.keyDown(document, { key: '/', code: 'Slash', altKey: true });
+  fireEvent.keyDown(document, { key: 'F', code: 'KeyF', ctrlKey: true, shiftKey: true });
   return waitFor(() => document.querySelector<HTMLInputElement>('.keyboard-shortcuts-panel input')!);
 };
 
@@ -141,13 +141,13 @@ it('reopening before the previous close has been picked up by the listener still
   const input = await openPalette();
   fireEvent.change(input, { target: { value: '>notes' } });
 
-  // Dispatch the closing Enter and the reopening Alt+/ inside one batch, so the keydown
-  // listener's closure has not yet been re-registered with mode=null when Alt+/ fires -
+  // Dispatch the closing Enter and the reopening Ctrl+Shift+F inside one batch, so the keydown
+  // listener's closure has not yet been re-registered with mode=null when Ctrl+Shift+F fires -
   // this is what the real repro looks like when the two key presses land only a few
   // milliseconds apart in a real browser.
   act(() => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: '/', code: 'Slash', altKey: true, bubbles: true, cancelable: true }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F', code: 'KeyF', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
   });
 
   const input2 = await waitFor(() => document.querySelector<HTMLInputElement>('.keyboard-shortcuts-panel input')!);
@@ -194,12 +194,44 @@ it('the header button still opens note search after Ctrl+Shift+P was used', asyn
   expect(input.value).toBe('');
 });
 
-it('inside the note editor Ctrl+Shift+P opens the palette while Alt+/ stays with the editor', async () => {
-  render(createElement(Harness, { noteEditorOpen: true }), { wrapper });
-  fireEvent.keyDown(document, { key: '/', code: 'Slash', altKey: true });
+it('Alt+/ no longer opens the palette', () => {
+  render(createElement(Harness), { wrapper });
+  const event = new KeyboardEvent('keydown', { key: '/', code: 'Slash', altKey: true, bubbles: true, cancelable: true });
+  document.dispatchEvent(event);
   expect(document.querySelector('.keyboard-shortcuts-panel')).toBeNull();
+  expect(event.defaultPrevented).toBe(false);
+});
+
+it('inside the note editor both Ctrl+Shift+P and Ctrl+Shift+F open the palette', async () => {
+  render(createElement(Harness, { noteEditorOpen: true }), { wrapper });
   const input = await openCommandPalette();
   expect(input.value).toBe('>');
+  fireEvent.keyDown(document, { key: 'Escape' });
+  await waitFor(() => expect(document.querySelector('.keyboard-shortcuts-panel')).toBeNull());
+  const notes = await openPalette();
+  expect(notes.value).toBe('');
+});
+
+it('Ctrl+Shift+F while the palette is in command mode switches it to note search', async () => {
+  render(createElement(Harness), { wrapper });
+  const input = await openCommandPalette();
+  fireEvent.keyDown(document, { key: 'F', code: 'KeyF', ctrlKey: true, shiftKey: true });
+  await waitFor(() => expect(input.value).toBe(''));
+});
+
+it('each command row shows the id you can type and what the command does', async () => {
+  render(createElement(Harness), { wrapper });
+  await openCommandPalette();
+  const row = await waitFor(() => document.querySelector('[data-command-id="new-note"]')!);
+  expect(row).toHaveTextContent('new-note');
+  expect(row.querySelector('.keyboard-shortcuts-description')?.textContent).toBeTruthy();
+});
+
+it('commands are also found by their description', async () => {
+  render(createElement(Harness), { wrapper });
+  const input = await openCommandPalette();
+  fireEvent.change(input, { target: { value: '>current notebook' } });
+  await waitFor(() => expect(document.querySelector('[data-command-id="new-note"]')).not.toBeNull());
 });
 
 it('inside the note editor, commands that leave the note are unavailable and notes still open', async () => {

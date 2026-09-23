@@ -124,8 +124,9 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
   /* eslint-disable react/refs -- The editor keeps current draft and event callbacks in refs for async saves and imperative keyboard handlers. */
   shortcutAction.current = event => {
     const slashKey = event.code === 'Slash' || event.key === '/';
-    // Outside zoom, Alt+/ belongs to the command palette.
-    if (slashKey && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+    const primary = /Mac|iPhone|iPad/.test(navigator.platform) ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+    // Cmd/Ctrl+Shift+E opens the note commands leader in zoom only.
+    if ((event.code === 'KeyE' || event.key.toLowerCase() === 'e') && primary && event.shiftKey && !event.altKey) {
       if (frame !== 'zoom') return false;
       setIsEditorLeaderOpen(open => !open);
       return true;

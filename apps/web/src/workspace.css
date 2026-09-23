@@ -19,6 +19,10 @@
 .keyboard-shortcuts-list kbd { display: grid; place-items: center; min-width: 26px; height: 24px; padding: 0 5px; border: 1px solid var(--workspace-divider); border-bottom-width: 2px; border-radius: 5px; background: var(--color-bg); font-family: ui-monospace, monospace; font-size: 11px; }
 .keyboard-shortcuts-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .keyboard-shortcuts-list small { color: var(--color-muted); font-size: 9px; }
+.keyboard-shortcuts-command { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.keyboard-shortcuts-command-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.keyboard-shortcuts-command-title code { flex: none; font-family: ui-monospace, monospace; font-size: 10px; color: var(--color-muted); }
+.keyboard-shortcuts-list .keyboard-shortcuts-description { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .keyboard-shortcuts-empty { padding: 28px 14px; text-align: center; color: var(--color-muted); font-size: 12px; }
 .keyboard-shortcuts-footer { padding: 9px 14px; border-top: 1px solid var(--workspace-divider); text-align: center; }
 .ui-control { min-height: 36px; width: 100%; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); padding: 8px 10px; color: var(--color-text); font-size: 13px; }

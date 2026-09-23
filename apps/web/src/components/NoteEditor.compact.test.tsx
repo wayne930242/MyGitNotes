@@ -64,10 +64,10 @@ it('refuses handle inserts while read-only', () => {
   expect(screen.getByLabelText('Note content')).toHaveValue('# Alpha\n');
 });
 
-it('opens the note commands leader on Alt+/ only in zoom, leaving other frames to the command palette', () => {
+it('opens the note commands leader on Ctrl+Shift+E only in zoom', () => {
   for (const frame of ['pane', 'zoom'] as const) {
     render(createElement(PanelProvider, null, createElement(NoteEditor, { note, frame, active: true, statuses: [], onSave: async () => note, onRestoreFile: async () => null, branch: 'main', draftScope: 'src:main' })));
-    const event = new KeyboardEvent('keydown', { key: '/', code: 'Slash', altKey: true, bubbles: true, cancelable: true });
+    const event = new KeyboardEvent('keydown', { key: 'E', code: 'KeyE', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true });
     act(() => {
       document.dispatchEvent(event);
     });
