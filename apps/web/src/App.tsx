@@ -312,7 +312,8 @@ const AppContent: React.FC = () => {
           <KeyboardShortcuts
             mode={shortcutMode}
             onModeChange={setShortcutMode}
-            suspended={noteEditorOpen || isCommitOpen}
+            suspended={isCommitOpen}
+            noteEditorOpen={noteEditorOpen}
             activeTab={activeTab}
             canCreateNote={canWrite}
             selectedNotebookId={selectedNotebookId}

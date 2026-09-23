@@ -21,6 +21,8 @@ interface KeyboardShortcutsProps {
   mode: ShortcutSurfaceMode | null;
   onModeChange: (mode: ShortcutSurfaceMode | null) => void;
   suspended?: boolean;
+  /** The note editor owns Alt+/ and the page stays put, so only Cmd/Ctrl+Shift+P reaches the palette and notes. */
+  noteEditorOpen?: boolean;
   activeTab: WorkspaceTab;
   canCreateNote: boolean;
   selectedNotebookId: string;
@@ -48,7 +50,7 @@ const paletteEntryId = (entry: PaletteEntry) => entry.kind === 'command' ? entry
 const paletteOptionId = (id: string) => `shortcut-command-${encodeURIComponent(id)}`;
 const isComposingKey = (event: KeyboardEvent) => event.isComposing || event.keyCode === 229;
 
-export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activeTab, canCreateNote, selectedNotebookId, onNavigate, onCreateNote, onFocusSearch, onOpenNote, pageCommands = [] }: KeyboardShortcutsProps) {
+export function KeyboardShortcuts({ mode, onModeChange, suspended = false, noteEditorOpen = false, activeTab, canCreateNote, selectedNotebookId, onNavigate, onCreateNote, onFocusSearch, onOpenNote, pageCommands = [] }: KeyboardShortcutsProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -57,6 +59,8 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
   selectedIdRef.current = selectedId;
   /* eslint-enable react/refs */
   const modeRef = useRef<ShortcutSurfaceMode | null>(null);
+  /** The query a keyboard opening asks for (`>` from Cmd/Ctrl+Shift+P); the header button and Alt+/ leave it empty. */
+  const openingQuery = useRef('');
   /* eslint-disable react/refs -- The palette synchronizes its mode and selection before immediate keyboard events can run. */
   modeRef.current = mode;
   /* eslint-enable react/refs */
@@ -68,7 +72,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
   if (syncedMode.current !== mode) {
     syncedMode.current = mode;
     if (mode === 'palette') {
-      setQuery('');
+      setQuery(openingQuery.current);
       selectedIdRef.current = null;
       setSelectedId(null);
     }
@@ -81,6 +85,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
   const previousMode = useRef<ShortcutSurfaceMode | null>(null);
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
   const paletteShortcut = isMac ? '⌥+/' : 'Alt+/';
+  const commandPaletteShortcut = isMac ? '⌘+⇧+P' : 'Ctrl+Shift+P';
   const helpShortcut = isMac ? '⌘+/' : 'Ctrl+/';
 
   /** Updates `modeRef` in lockstep with the request, so a keydown listener whose closure hasn't
@@ -97,15 +102,16 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
 
   /** Opens the palette and resets its query/selection/focus immediately, instead of waiting on
    *  the `[mode]` effect below - which a same-batch close+reopen can cause React to skip. */
-  const openPalette = useCallback(() => {
+  const openPalette = useCallback((initialQuery = '') => {
+    openingQuery.current = initialQuery;
     requestMode('palette');
-    setQuery('');
+    setQuery(initialQuery);
     selectedIdRef.current = null;
     setSelectedId(null);
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [requestMode]);
 
-  const commands = useMemo<ShortcutCommand[]>(() => [{ id: 'notes', label: t('nav.notes'), disabled: false, run: () => onNavigate('notes') }, { id: 'agent', label: t('nav.agent'), disabled: false, run: () => onNavigate('agent') }, { id: 'assets', label: t('nav.assets'), disabled: false, run: () => onNavigate('assets') }, { id: 'screen', label: t('nav.screen'), disabled: false, run: () => onNavigate('screen') }, { id: 'new-note', label: t('header.newNote'), disabled: !canCreateNote, unavailableReason: t('shortcuts.requiresWriteAccess'), run: onCreateNote }, { id: 'search', label: t('shortcuts.search'), disabled: activeTab !== 'notes', unavailableReason: t('shortcuts.requiresNotes'), run: onFocusSearch }, { id: 'settings', label: t('nav.settings'), disabled: false, run: () => onNavigate('settings') }, { id: 'toggle-screen-sidebar', accelerator: '[', label: t('shortcuts.toggleScreenSidebar'), disabled: activeTab !== 'screen', unavailableReason: t('shortcuts.requiresScreen'), run: () => window.dispatchEvent(new CustomEvent('toggle-screen-sidebar')) }, { id: 'help', accelerator: helpShortcut, label: t('shortcuts.help'), disabled: false, run: () => requestMode('help') }, ...pageCommands, { id: 'open-palette', accelerator: paletteShortcut, paletteVisible: false, label: t('shortcuts.open'), disabled: false, run: openPalette }], [activeTab, canCreateNote, helpShortcut, onCreateNote, onFocusSearch, onNavigate, openPalette, pageCommands, paletteShortcut, requestMode, t]);
+  const commands = useMemo<ShortcutCommand[]>(() => [...[{ id: 'notes', label: t('nav.notes'), disabled: false, run: () => onNavigate('notes') }, { id: 'agent', label: t('nav.agent'), disabled: false, run: () => onNavigate('agent') }, { id: 'assets', label: t('nav.assets'), disabled: false, run: () => onNavigate('assets') }, { id: 'screen', label: t('nav.screen'), disabled: false, run: () => onNavigate('screen') }, { id: 'new-note', label: t('header.newNote'), disabled: !canCreateNote, unavailableReason: t('shortcuts.requiresWriteAccess'), run: onCreateNote }, { id: 'search', label: t('shortcuts.search'), disabled: activeTab !== 'notes', unavailableReason: t('shortcuts.requiresNotes'), run: onFocusSearch }, { id: 'settings', label: t('nav.settings'), disabled: false, run: () => onNavigate('settings') }, { id: 'toggle-screen-sidebar', accelerator: '[', label: t('shortcuts.toggleScreenSidebar'), disabled: activeTab !== 'screen', unavailableReason: t('shortcuts.requiresScreen'), run: () => window.dispatchEvent(new CustomEvent('toggle-screen-sidebar')) }, ...pageCommands].map(command => noteEditorOpen && !command.disabled ? { ...command, disabled: true, unavailableReason: t('shortcuts.requiresClosedNote') } : command), { id: 'help', accelerator: helpShortcut, label: t('shortcuts.help'), disabled: false, run: () => requestMode('help') }, { id: 'open-palette', accelerator: paletteShortcut, paletteVisible: false, label: t('shortcuts.open'), disabled: false, run: () => openPalette() }, { id: 'open-command-palette', accelerator: commandPaletteShortcut, paletteVisible: false, label: t('shortcuts.openCommands'), disabled: false, run: () => openPalette('>') }], [activeTab, canCreateNote, commandPaletteShortcut, helpShortcut, noteEditorOpen, onCreateNote, onFocusSearch, onNavigate, openPalette, pageCommands, paletteShortcut, requestMode, t]);
 
   const palette = mode === 'palette';
   /** VS Code-style mode switch: a leading `>` or `/` reaches the unchanged command list; any other query searches notes. */
@@ -157,7 +163,8 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
       restoreFocus.current = true;
     }
     if (mode === 'palette' && priorMode !== 'palette') {
-      setQuery('');
+      setQuery(openingQuery.current);
+      openingQuery.current = '';
       selectedIdRef.current = null;
       setSelectedId(null);
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -197,6 +204,16 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
       if (suspended) return;
       const slashKey = event.code === 'Slash' || event.key === '/';
       const primary = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+      if ((event.code === 'KeyP' || event.key.toLowerCase() === 'p') && primary && event.shiftKey && !event.altKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (modeRef.current === 'palette') {
+          setQuery('>');
+          requestAnimationFrame(() => inputRef.current?.focus());
+        } else openPalette('>');
+        return;
+      }
+      if (noteEditorOpen && !mode) return;
       if (slashKey && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
         event.preventDefault();
         event.stopPropagation();
@@ -241,7 +258,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, activ
     };
     document.addEventListener('keydown', keydown, true);
     return () => document.removeEventListener('keydown', keydown, true);
-  }, [dismiss, enabledEntries, executeEntry, isMac, mode, openPalette, requestMode, suspended]);
+  }, [dismiss, enabledEntries, executeEntry, isMac, mode, noteEditorOpen, openPalette, requestMode, suspended]);
 
   if (!mode) return null;
   const modeHintKey = paletteKind === 'commands' ? 'shortcuts.commandsModeHint' : 'shortcuts.notesModeHint';

@@ -439,6 +439,8 @@ export const zhTW: Record<TranslationKey, string> = {
   'shortcuts.title': '鍵盤快速鍵',
   'shortcuts.paletteTitle': '快速開啟',
   'shortcuts.open': '快速開啟',
+  'shortcuts.openCommands': '快速開啟指令',
+  'shortcuts.requiresClosedNote': '請先關閉筆記',
   'shortcuts.openHint': '{shortcut}',
   'shortcuts.searchCommands': '搜尋指令',
   'shortcuts.searchNotes': '搜尋筆記',

@@ -438,6 +438,8 @@ export const en = {
   'shortcuts.title': 'Keyboard shortcuts',
   'shortcuts.paletteTitle': 'Quick Open',
   'shortcuts.open': 'Quick open',
+  'shortcuts.openCommands': 'Quick open commands',
+  'shortcuts.requiresClosedNote': 'Close the note first',
   'shortcuts.openHint': '{shortcut}',
   'shortcuts.searchCommands': 'Search commands',
   'shortcuts.searchNotes': 'Search notes',

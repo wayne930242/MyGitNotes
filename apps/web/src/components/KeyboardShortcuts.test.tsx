@@ -24,11 +24,12 @@ afterEach(() => {
 
 const wrapper = ({ children }: { children: ReactNode; }) => createElement(QueryClientProvider, { client }, children);
 
-const Harness = () => {
+const Harness = ({ noteEditorOpen = false }: { noteEditorOpen?: boolean; }) => {
   const [mode, setMode] = useState<ShortcutSurfaceMode | null>(null);
   return createElement(KeyboardShortcuts, {
     mode,
     onModeChange: setMode,
+    noteEditorOpen,
     activeTab: 'notes',
     canCreateNote: true,
     selectedNotebookId: 'life',
@@ -161,4 +162,55 @@ it('typing a command name that starts with an accelerator letter reaches the que
   fireEvent.change(input, { target: { value: 'N' } });
   expect(document.querySelector('.keyboard-shortcuts-panel')).not.toBeNull();
   expect(input.value).toBe('N');
+});
+
+const openCommandPalette = async () => {
+  fireEvent.keyDown(document, { key: 'P', code: 'KeyP', ctrlKey: true, shiftKey: true });
+  return waitFor(() => document.querySelector<HTMLInputElement>('.keyboard-shortcuts-panel input')!);
+};
+
+it('Ctrl+Shift+P opens the palette in command mode with > already typed', async () => {
+  render(createElement(Harness), { wrapper });
+  const input = await openCommandPalette();
+  expect(input.value).toBe('>');
+  await waitFor(() => expect(document.querySelector('[data-command-id="notes"]')).not.toBeNull());
+  await waitFor(() => expect(document.activeElement).toBe(input));
+});
+
+it('Ctrl+Shift+P while the palette is in note mode switches it to command mode', async () => {
+  render(createElement(Harness), { wrapper });
+  const input = await openPalette();
+  fireEvent.change(input, { target: { value: 'plan' } });
+  fireEvent.keyDown(document, { key: 'P', code: 'KeyP', ctrlKey: true, shiftKey: true });
+  await waitFor(() => expect(input.value).toBe('>'));
+});
+
+it('the header button still opens note search after Ctrl+Shift+P was used', async () => {
+  render(createElement(Harness), { wrapper });
+  await openCommandPalette();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  await waitFor(() => expect(document.querySelector('.keyboard-shortcuts-panel')).toBeNull());
+  const input = await openPalette();
+  expect(input.value).toBe('');
+});
+
+it('inside the note editor Ctrl+Shift+P opens the palette while Alt+/ stays with the editor', async () => {
+  render(createElement(Harness, { noteEditorOpen: true }), { wrapper });
+  fireEvent.keyDown(document, { key: '/', code: 'Slash', altKey: true });
+  expect(document.querySelector('.keyboard-shortcuts-panel')).toBeNull();
+  const input = await openCommandPalette();
+  expect(input.value).toBe('>');
+});
+
+it('inside the note editor, commands that leave the note are unavailable and notes still open', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ revision: REVISION, total: 1, nextCursor: null, notes: [{ id: 'notes/life/plan.md', path: 'notes/life/plan.md', notebookId: 'life', title: 'Weekend plan', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } })));
+  setNoteQueryScope({ sourceId: 'github:me/notes', revision: REVISION, drafts: {} });
+  render(createElement(Harness, { noteEditorOpen: true }), { wrapper });
+  const input = await openCommandPalette();
+  await waitFor(() => expect(document.querySelector('[data-command-id="settings"]')).toBeDisabled());
+  expect(document.querySelector('[data-command-id="help"]')).not.toBeDisabled();
+  fireEvent.change(input, { target: { value: 'plan' } });
+  await waitFor(() => expect(document.querySelector('[data-command-id="notes/life/plan.md"]')).not.toBeNull());
+  fireEvent.keyDown(document, { key: 'Enter' });
+  await waitFor(() => expect(openedNotes).toEqual(['notes/life/plan.md']));
 });
