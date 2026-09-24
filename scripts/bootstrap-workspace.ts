@@ -42,14 +42,17 @@ async function mainWorktree(productRoot: string): Promise<string | undefined> {
   return block?.split('\n').find(line => line.startsWith('worktree '))?.slice('worktree '.length);
 }
 
-/** A clone of the MyGitNotes product keeps it as 'upstream', leaving 'origin' for the user's own repository. */
-async function adoptCoreUpstream(productRoot: string): Promise<boolean> {
+/** Core updates fetch MyGitNotes as 'upstream', leaving 'origin' for the user's own repository. */
+async function adoptCoreUpstream(productRoot: string): Promise<'renamed' | 'added' | undefined> {
   const remotes = (await git(['remote'], productRoot)).split('\n');
-  if (remotes.includes('upstream') || !remotes.includes('origin')) return false;
-  const url = (await git(['config', '--get', 'remote.origin.url'], productRoot)).toLowerCase().replace(/\/$/, '').replace(/\.git$/, '');
-  if (!['/', ':'].some(separator => url.endsWith(`github.com${separator}${CORE_UPSTREAM_REPOSITORY.toLowerCase()}`))) return false;
-  await runGit(['remote', 'rename', 'origin', 'upstream'], productRoot);
-  return true;
+  if (remotes.includes('upstream')) return undefined;
+  const url = remotes.includes('origin') ? (await git(['config', '--get', 'remote.origin.url'], productRoot)).toLowerCase().replace(/\/$/, '').replace(/\.git$/, '') : '';
+  if (['/', ':'].some(separator => url.endsWith(`github.com${separator}${CORE_UPSTREAM_REPOSITORY.toLowerCase()}`))) {
+    await runGit(['remote', 'rename', 'origin', 'upstream'], productRoot);
+    return 'renamed';
+  }
+  await runGit(['remote', 'add', '-t', 'core', 'upstream', `https://github.com/${CORE_UPSTREAM_REPOSITORY}.git`], productRoot);
+  return 'added';
 }
 
 /** Points the Core checkout's local server at the workspace worktree, keeping the rest of .env. */
@@ -87,7 +90,8 @@ async function bootstrapWorkspace() {
 
   // The upstream product's own 'main' is its demo workspace, so the rename precedes the origin/main lookup.
   const adoptedUpstream = await adoptCoreUpstream(productRoot);
-  if (adoptedUpstream) console.log(`[bootstrap] Renamed remote 'origin' (${CORE_UPSTREAM_REPOSITORY}) to 'upstream'; \`pnpm update-core\` fetches Core from it.`);
+  if (adoptedUpstream === 'renamed') console.log(`[bootstrap] Renamed remote 'origin' (${CORE_UPSTREAM_REPOSITORY}) to 'upstream'; \`pnpm update-core\` fetches Core from it.`);
+  if (adoptedUpstream === 'added') console.log(`[bootstrap] Added remote 'upstream' (${CORE_UPSTREAM_REPOSITORY}); \`pnpm update-core\` fetches Core from it.`);
 
   // 2. Find or create the content-only main worktree
   const existing = await mainWorktree(productRoot);
@@ -181,7 +185,7 @@ async function bootstrapWorkspace() {
   console.log(`   - Config: ${WORKSPACE_CONFIG_FILENAME}`);
   console.log(`   - Default Notebook: ${config.workspace.default_notebook}`);
   console.log(`   - Next steps: Run 'pnpm dev' here (the Core checkout) to launch the application.`);
-  if (adoptedUpstream) console.log(`   - Your repository: create an empty repository, then run\n       git remote add origin <your-repository-url>\n       git push -u origin core main\n     Core updates keep coming from 'upstream' through \`pnpm update-core\`.`);
+  if (adoptedUpstream === 'renamed') console.log(`   - Your repository: create an empty repository, then run\n       git remote add origin <your-repository-url>\n       git push -u origin core main\n     Core updates keep coming from 'upstream' through \`pnpm update-core\`.`);
   console.log(VERCEL_DEPLOY_STEPS);
   console.log(`======================================================\n`);
 }

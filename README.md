@@ -30,11 +30,11 @@ git clone --branch core --single-branch https://github.com/wayne930242/MyGitNote
 cd mygitnotes
 pnpm install
 pnpm build                 # builds the packages the bootstrap script needs
-pnpm bootstrap-workspace   # creates the main worktree in ./workspace (ignored by Git), writes MYGITNOTES_LOCAL_PATH to .env, and renames origin to upstream
+pnpm bootstrap-workspace   # creates the main worktree in ./workspace (ignored by Git), writes MYGITNOTES_LOCAL_PATH to .env, and sets up the upstream remote
 pnpm dev
 ~~~
 
-Bootstrap renames the MyGitNotes remote from `origin` to `upstream`, so `origin` can be your own repository while `pnpm update-core` keeps fetching Core from `upstream`. To keep your notes in your repository, create an empty one and push both branches:
+Bootstrap renames the MyGitNotes remote from `origin` to `upstream` (or adds `upstream` when `origin` is already your repository), so `origin` can be your own repository while `pnpm update-core` keeps fetching Core from `upstream`. To keep your notes in your repository, create an empty one and push both branches:
 
 ~~~bash
 git remote add origin <your-repository-url>

@@ -160,10 +160,22 @@ describe('canonical starter workspace CLI', () => {
     expect(coreGit('remote').split('\n').sort()).toEqual(['origin', 'upstream']);
   });
 
-  it('keeps an origin that is not the MyGitNotes product', () => {
-    coreGit('remote', 'add', 'origin', 'git@github.com:someone/MyGitNotes-fork.git');
+  it('adds a MyGitNotes upstream beside an origin that is the user repository', () => {
+    coreGit('remote', 'add', 'origin', 'git@github.com:someone/notes.git');
+    const output = bootstrap().toString();
+    expect(coreGit('remote').split('\n').sort()).toEqual(['origin', 'upstream']);
+    expect(coreGit('remote', 'get-url', 'origin')).toBe('git@github.com:someone/notes.git');
+    expect(coreGit('config', '--get', 'remote.upstream.url')).toBe('https://github.com/wayne930242/MyGitNotes.git');
+    expect(coreGit('config', '--get', 'remote.upstream.fetch')).toBe('+refs/heads/core:refs/remotes/upstream/core');
+    expect(output).toContain("Added remote 'upstream'");
+    expect(output).not.toContain('git remote add origin');
+  });
+
+  it('keeps an existing upstream remote', () => {
+    coreGit('remote', 'add', 'upstream', 'git@github.com:someone/fork.git');
     bootstrap();
-    expect(coreGit('remote')).toBe('origin');
+    expect(coreGit('remote')).toBe('upstream');
+    expect(coreGit('remote', 'get-url', 'upstream')).toBe('git@github.com:someone/fork.git');
   });
 
   it('keeps unrelated .env settings when pointing at the workspace', () => {

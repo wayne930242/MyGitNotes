@@ -30,11 +30,11 @@ git clone --branch core --single-branch https://github.com/wayne930242/MyGitNote
 cd mygitnotes
 pnpm install
 pnpm build                 # 建置 bootstrap 指令所需的套件
-pnpm bootstrap-workspace   # 在 ./workspace 建立 main worktree（已被 Git 忽略）、將 MYGITNOTES_LOCAL_PATH 寫入 .env，並將 origin 改名為 upstream
+pnpm bootstrap-workspace   # 在 ./workspace 建立 main worktree（已被 Git 忽略）、將 MYGITNOTES_LOCAL_PATH 寫入 .env，並設定 upstream remote
 pnpm dev
 ~~~
 
-Bootstrap 會把 MyGitNotes 的 remote 從 `origin` 改名為 `upstream`，讓 `origin` 留給你自己的儲存庫，`pnpm update-core` 則持續從 `upstream` 取得 Core。若要把筆記放在自己的儲存庫，建立一個空儲存庫並推送兩個分支：
+Bootstrap 會把 MyGitNotes 的 remote 從 `origin` 改名為 `upstream`（若 `origin` 已是你的儲存庫，則另外新增 `upstream`），讓 `origin` 留給你自己的儲存庫，`pnpm update-core` 則持續從 `upstream` 取得 Core。若要把筆記放在自己的儲存庫，建立一個空儲存庫並推送兩個分支：
 
 ~~~bash
 git remote add origin <your-repository-url>
