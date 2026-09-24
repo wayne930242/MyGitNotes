@@ -37,6 +37,8 @@ export const en = {
   'coreUpdate.alreadyCurrent': 'No Core branch update was needed.',
   'coreUpdate.restartLocal': 'Run pnpm migrate-workspace with the updated Core and restart the server to use the new build.',
   'coreUpdate.restartRemote': 'Deploy the updated core branch to run the new build.',
+  'coreUpdate.reloadRemote': 'Core is updated. Reload the page once the deployment finishes to run the new build.',
+  'coreUpdate.reload': 'Reload page',
   'coreUpdate.update': 'Update Core',
   'coreUpdate.check': 'Check again',
 

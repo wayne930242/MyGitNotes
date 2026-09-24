@@ -39,6 +39,8 @@ export const zhTW: Record<TranslationKey, string> = {
   'coreUpdate.alreadyCurrent': 'Core 分支無需更新。',
   'coreUpdate.restartLocal': '請使用更新後的 Core 執行 pnpm migrate-workspace，並重新啟動伺服器以使用新版本。',
   'coreUpdate.restartRemote': '請部署更新後的 core 分支，以執行新版本。',
+  'coreUpdate.reloadRemote': 'Core 已更新。部署完成後重新整理頁面，即可使用新版本。',
+  'coreUpdate.reload': '重新整理頁面',
   'coreUpdate.update': '更新 Core',
   'coreUpdate.check': '重新檢查',
 

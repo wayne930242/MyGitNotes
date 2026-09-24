@@ -141,7 +141,7 @@ export function CoreUpdates({ local }: { local: boolean; }) {
           </div>
         )}
         {notice && <p>{t(`coreUpdate.${notice}`)}</p>}
-        {((notice === 'updated') || (status?.running && status.running.behind > 0 && status.current?.behind === 0)) && <p className='text-xs text-muted'>{t(local ? 'coreUpdate.restartLocal' : 'coreUpdate.restartRemote')}</p>}
+        {notice === 'updated' && !local ? <p className='text-xs text-muted'>{t('coreUpdate.reloadRemote')}</p> : (notice === 'updated' || (status?.running && status.running.behind > 0 && status.current?.behind === 0)) && <p className='text-xs text-muted'>{t(local ? 'coreUpdate.restartLocal' : 'coreUpdate.restartRemote')}</p>}
       </div>
       {error && <p role='alert' className='text-xs text-danger'>{error}</p>}
       <div className='flex flex-wrap gap-2'>
@@ -152,6 +152,7 @@ export function CoreUpdates({ local }: { local: boolean; }) {
           {t('coreUpdate.update')}
         </Button>
         <Button type='button' onClick={check} disabled={working}>{t('coreUpdate.check')}</Button>
+        {notice === 'updated' && !local && <Button type='button' onClick={() => window.location.reload()} data-core-reload>{t('coreUpdate.reload')}</Button>}
       </div>
     </section>
   );
