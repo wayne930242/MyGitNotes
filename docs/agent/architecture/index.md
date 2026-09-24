@@ -25,7 +25,7 @@ MyGitNotes is structured as a TypeScript monorepo using pnpm workspaces.
 
 OAuth follows the selected provider. Encrypted server records isolate site and account identity. GitLab refresh tokens are rotated under a credential lock and shared by browser sessions and persistent MCP grants. GitHub keeps its existing credential and grant identifiers; short-lived GitHub OAuth app tokens rotate under the same credential lock for persistent MCP grants, while GitHub browser sessions end with their access token.
 
-See the [deployment guide](../../../README.md).
+See the [deployment guide](../../deploy.md).
 
 ## Self-hosted runtime
 
@@ -37,7 +37,7 @@ Remote readers cache notes and their per-notebook indexes in the session Redis, 
 
 `compose.yaml` runs the remote-source application with its own Redis service on an internal network. Redis persists AOF data in `redis-data`; only the application HTTP port is published. `SessionStore` chooses native Redis via `REDIS_URL`, then the existing Redis REST configuration, then a local encrypted session directory outside Vercel. Native Redis reuses connections, bounds connection/command waits, and propagates errors; a later request reconnects after a failure. Session/grant keys, encryption, TTLs, indexes, and credential refresh locks use the same operations across both Redis transports.
 
-See the [deployment guide](../../../README.md#docker-and-docker-compose-deployment) for volumes, OAuth callbacks, reverse proxies, and updates.
+See the [deployment guide](../../deploy.md#docker-compose-with-a-remote-repository) for volumes, OAuth callbacks, reverse proxies, and updates.
 
 ## Notebook statuses and visibility
 
