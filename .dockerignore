@@ -11,6 +11,7 @@ docs
 examples
 artifacts
 scratch
+workspace
 .vercel
 .github-notes.yaml
 .mygitnotes.yaml

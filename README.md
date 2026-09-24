@@ -30,8 +30,15 @@ git clone --branch core --single-branch https://github.com/wayne930242/MyGitNote
 cd mygitnotes
 pnpm install
 pnpm build                 # builds the packages the bootstrap script needs
-pnpm bootstrap-workspace   # creates the main worktree and writes MYGITNOTES_LOCAL_PATH to .env
+pnpm bootstrap-workspace   # creates the main worktree in ./workspace (ignored by Git), writes MYGITNOTES_LOCAL_PATH to .env, and renames origin to upstream
 pnpm dev
+~~~
+
+Bootstrap renames the MyGitNotes remote from `origin` to `upstream`, so `origin` can be your own repository while `pnpm update-core` keeps fetching Core from `upstream`. To keep your notes in your repository, create an empty one and push both branches:
+
+~~~bash
+git remote add origin <your-repository-url>
+git push -u origin core main
 ~~~
 
 Open http://localhost:5173; the new workspace appears in the Notes view. To use an existing workspace, set `MYGITNOTES_LOCAL_PATH` in .env to its absolute path, or run `REPO_ROOT=/absolute/path/to/workspace pnpm dev`.
@@ -48,7 +55,7 @@ The [deployment guide](docs/deploy.md) covers each path step by step:
 
 ## Update
 
-Run `pnpm update-core` from a clean `core` checkout, then `pnpm install && pnpm dev`. Hosted GitHub workspaces update from Settings. See [Core updates](docs/deploy.md#core-updates) and [Update and migrate](docs/deploy.md#update-and-migrate).
+Run `pnpm update-core` from a clean `core` checkout; it fast-forwards `core` from `upstream/core`. Then `pnpm install && pnpm dev`. Hosted GitHub workspaces update from Settings. See [Core updates](docs/deploy.md#core-updates) and [Update and migrate](docs/deploy.md#update-and-migrate).
 
 ## Features
 

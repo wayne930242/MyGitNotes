@@ -207,7 +207,7 @@ GitHub App installations configure **Contents**, **Workflows**, **Actions**, and
 
 ## Update and migrate
 
-Run `pnpm update-core` from a clean `core` checkout to fast-forward the product branch and migrate its configured workspace; then run `pnpm install && pnpm dev` to restart with the updated Core. Run `pnpm migrate-workspace` from that checkout to migrate the workspace on its own. If `schema_version` is incompatible, the local server stops and its error names `pnpm migrate-workspace` or, when the workspace requires a newer Core, `pnpm update-core`.
+Run `pnpm update-core` from a clean `core` checkout to fast-forward the product branch from `upstream/core` (or `origin/core` when no `upstream` remote exists) and migrate its configured workspace; then run `pnpm install && pnpm dev` to restart with the updated Core. Run `pnpm migrate-workspace` from that checkout to migrate the workspace on its own. If `schema_version` is incompatible, the local server stops and its error names `pnpm migrate-workspace` or, when the workspace requires a newer Core, `pnpm update-core`.
 
 To convert an older workspace whose `main` still contains product files, clean the checkout and run `pnpm convert-workspace` on `main` once. Then create a separate Core worktree with `git worktree add --track -b core ../mygitnotes-core origin/core`, set `MYGITNOTES_LOCAL_PATH` in that worktree's .env to the converted checkout, and start from the Core worktree. `pnpm update-core` runs only on `core`.
 

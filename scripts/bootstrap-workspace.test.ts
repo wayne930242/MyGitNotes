@@ -19,7 +19,8 @@ const write = (name: string, content: string, base = root) => {
 const files = (directory: string): string[] => fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? files(path.join(directory, entry.name)) : [path.join(directory, entry.name)]);
 beforeEach(() => {
   core = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-bootstrap-'));
-  root = `${core}-notes`;
+  root = path.join(core, 'workspace');
+  write('.gitignore', fs.readFileSync(path.join(product, '.gitignore'), 'utf8'), core);
   write('packages/core/.keep', '', core);
   write('packages/core/assets/mygitnotes-core-sync.yml', fs.readFileSync(path.join(product, 'packages/core/assets/mygitnotes-core-sync.yml'), 'utf8'), core);
   write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n', core);
@@ -46,7 +47,8 @@ const existingMain = (files: Record<string, string>) => {
 describe('canonical starter workspace CLI', () => {
   it('creates an orphan content-only main worktree from Core examples in one commit and preserves edits on rerun', () => {
     const output = bootstrap().toString();
-    expect(fs.readFileSync(path.join(core, '.env'), 'utf8')).toBe(`MYGITNOTES_SOURCE=local\nMYGITNOTES_LOCAL_PATH=../${path.basename(root)}\n`);
+    expect(fs.readFileSync(path.join(core, '.env'), 'utf8')).toBe(`MYGITNOTES_SOURCE=local\nMYGITNOTES_LOCAL_PATH=workspace\n`);
+    expect(coreGit('status', '--porcelain')).toBe('');
     expect(coreGit('branch', '--show-current')).toBe('core');
     expect(fs.readFileSync(path.join(root, '.github/workflows/mygitnotes-core-sync.yml'), 'utf8')).toBe(fs.readFileSync(path.join(product, 'packages/core/assets/mygitnotes-core-sync.yml'), 'utf8'));
     expect(git('ls-files', '--', 'pnpm-workspace.yaml', 'packages', 'examples')).toBe('');
@@ -145,10 +147,29 @@ describe('canonical starter workspace CLI', () => {
     expect(fs.readFileSync(path.join(root, 'notes/a/mine.md'), 'utf8')).toBe('# Mine\n');
   });
 
+  it('renames a MyGitNotes origin to upstream so origin is free for the user repository', () => {
+    coreGit('remote', 'add', 'origin', 'https://github.com/wayne930242/MyGitNotes.git');
+    coreGit('update-ref', 'refs/remotes/origin/main', 'HEAD');
+    const output = bootstrap().toString();
+    expect(coreGit('remote')).toBe('upstream');
+    expect(coreGit('remote', 'get-url', 'upstream')).toBe('https://github.com/wayne930242/MyGitNotes.git');
+    expect(git('rev-list', '--max-parents=0', 'HEAD')).toBe(git('rev-parse', 'HEAD'));
+    expect(output).toContain('git remote add origin <your-repository-url>');
+    coreGit('remote', 'add', 'origin', 'git@github.com:someone/notes.git');
+    bootstrap();
+    expect(coreGit('remote').split('\n').sort()).toEqual(['origin', 'upstream']);
+  });
+
+  it('keeps an origin that is not the MyGitNotes product', () => {
+    coreGit('remote', 'add', 'origin', 'git@github.com:someone/MyGitNotes-fork.git');
+    bootstrap();
+    expect(coreGit('remote')).toBe('origin');
+  });
+
   it('keeps unrelated .env settings when pointing at the workspace', () => {
     write('.env', 'GEMINI_API_KEY=x\nMYGITNOTES_LOCAL_PATH=.\n', core);
     bootstrap();
-    expect(fs.readFileSync(path.join(core, '.env'), 'utf8')).toBe(`GEMINI_API_KEY=x\nMYGITNOTES_LOCAL_PATH=../${path.basename(root)}\nMYGITNOTES_SOURCE=local\n`);
+    expect(fs.readFileSync(path.join(core, '.env'), 'utf8')).toBe(`GEMINI_API_KEY=x\nMYGITNOTES_LOCAL_PATH=workspace\nMYGITNOTES_SOURCE=local\n`);
   });
 
   it('uses exactly the default statuses and valid relative tutorial links', () => {

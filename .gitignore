@@ -32,6 +32,8 @@ github-notes.server.yaml
 artifacts/
 
 mygitnotes.server.yaml
+# The bootstrap main worktree
+/workspace/
 .mygitnotes-dev-ports.json
 
 # Specs

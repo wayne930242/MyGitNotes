@@ -30,8 +30,15 @@ git clone --branch core --single-branch https://github.com/wayne930242/MyGitNote
 cd mygitnotes
 pnpm install
 pnpm build                 # 建置 bootstrap 指令所需的套件
-pnpm bootstrap-workspace   # 建立 main worktree，並將 MYGITNOTES_LOCAL_PATH 寫入 .env
+pnpm bootstrap-workspace   # 在 ./workspace 建立 main worktree（已被 Git 忽略）、將 MYGITNOTES_LOCAL_PATH 寫入 .env，並將 origin 改名為 upstream
 pnpm dev
+~~~
+
+Bootstrap 會把 MyGitNotes 的 remote 從 `origin` 改名為 `upstream`，讓 `origin` 留給你自己的儲存庫，`pnpm update-core` 則持續從 `upstream` 取得 Core。若要把筆記放在自己的儲存庫，建立一個空儲存庫並推送兩個分支：
+
+~~~bash
+git remote add origin <your-repository-url>
+git push -u origin core main
 ~~~
 
 開啟 http://localhost:5173，新建立的工作區會出現在筆記檢視。若要改用既有工作區，將 .env 的 `MYGITNOTES_LOCAL_PATH` 設為它的絕對路徑，或執行 `REPO_ROOT=/absolute/path/to/workspace pnpm dev`。
@@ -48,7 +55,7 @@ pnpm dev
 
 ## 更新
 
-在乾淨的 `core` checkout 執行 `pnpm update-core`，再執行 `pnpm install && pnpm dev`。部署在遠端的 GitHub 工作區可從「設定」頁更新。詳見 [Core 更新](docs/deploy.zh-TW.md#core-更新)與[更新與遷移](docs/deploy.zh-TW.md#更新與遷移)。
+在乾淨的 `core` checkout 執行 `pnpm update-core`，它會從 `upstream/core` fast-forward `core`；再執行 `pnpm install && pnpm dev`。部署在遠端的 GitHub 工作區可從「設定」頁更新。詳見 [Core 更新](docs/deploy.zh-TW.md#core-更新)與[更新與遷移](docs/deploy.zh-TW.md#更新與遷移)。
 
 ## 功能
 

@@ -4,7 +4,7 @@
 
 ## 新工作區
 
-在 `core` checkout 執行 `pnpm bootstrap-workspace`：以 orphan 分支在相鄰 worktree 建立 `main`，從 `examples/workspace-agent-system/` 複製缺少的初始指引與技能並提交，再把 `MYGITNOTES_LOCAL_PATH` 寫入 core 的 `.env`。之後可自行新增技能、Agent 角色及規則，照常透過 Git 管理。重複初始化不會覆蓋已存在的檔案。
+在 `core` checkout 執行 `pnpm bootstrap-workspace`：以 orphan 分支在 core checkout 內、由 `.gitignore` 忽略的 `workspace/` worktree 建立 `main`（`--path` 可指定其他位置），從 `examples/workspace-agent-system/` 複製缺少的初始指引與技能並提交，再把 `MYGITNOTES_LOCAL_PATH` 寫入 core 的 `.env`。之後可自行新增技能、Agent 角色及規則，照常透過 Git 管理。重複初始化不會覆蓋已存在的檔案。
 
 ## Core 更新
 

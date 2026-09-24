@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { getCurrentBranch, runGit, stageAndCommit } from '../packages/git/src/index.js';
-import { loadWorkspaceConfig, resolveSafePath, resolveWorkspaceConfigPath, WORKSPACE_CONFIG_FILENAME } from '../packages/core/src/index.js';
+import { CORE_UPSTREAM_REPOSITORY, loadWorkspaceConfig, resolveSafePath, resolveWorkspaceConfigPath, WORKSPACE_CONFIG_FILENAME } from '../packages/core/src/index.js';
 
 const EMPTY_WORKSPACE_CONFIG = `schema_version: 1
 workspace:
@@ -42,6 +42,16 @@ async function mainWorktree(productRoot: string): Promise<string | undefined> {
   return block?.split('\n').find(line => line.startsWith('worktree '))?.slice('worktree '.length);
 }
 
+/** A clone of the MyGitNotes product keeps it as 'upstream', leaving 'origin' for the user's own repository. */
+async function adoptCoreUpstream(productRoot: string): Promise<boolean> {
+  const remotes = (await git(['remote'], productRoot)).split('\n');
+  if (remotes.includes('upstream') || !remotes.includes('origin')) return false;
+  const url = (await git(['config', '--get', 'remote.origin.url'], productRoot)).toLowerCase().replace(/\/$/, '').replace(/\.git$/, '');
+  if (!['/', ':'].some(separator => url.endsWith(`github.com${separator}${CORE_UPSTREAM_REPOSITORY.toLowerCase()}`))) return false;
+  await runGit(['remote', 'rename', 'origin', 'upstream'], productRoot);
+  return true;
+}
+
 /** Points the Core checkout's local server at the workspace worktree, keeping the rest of .env. */
 function writeLocalPath(productRoot: string, workspace: string) {
   const envFile = path.join(productRoot, '.env');
@@ -75,6 +85,10 @@ async function bootstrapWorkspace() {
     throw new Error("This checkout is a fork-model 'main' that carries the product. Run `pnpm convert-workspace` to make 'main' content-only, then bootstrap from a 'core' checkout.");
   }
 
+  // The upstream product's own 'main' is its demo workspace, so the rename precedes the origin/main lookup.
+  const adoptedUpstream = await adoptCoreUpstream(productRoot);
+  if (adoptedUpstream) console.log(`[bootstrap] Renamed remote 'origin' (${CORE_UPSTREAM_REPOSITORY}) to 'upstream'; \`pnpm update-core\` fetches Core from it.`);
+
   // 2. Find or create the content-only main worktree
   const existing = await mainWorktree(productRoot);
   const hasMain = Boolean(await git(['branch', '--list', 'main'], productRoot));
@@ -84,7 +98,7 @@ async function bootstrapWorkspace() {
   if (mainRef && await git(['ls-tree', '--name-only', mainRef, '--', 'pnpm-workspace.yaml'], productRoot)) {
     throw new Error(`Branch '${mainRef}' still carries the product. Run \`pnpm convert-workspace\` in its checkout first.`);
   }
-  const repoRoot = existing ?? (pathIndex >= 0 ? path.resolve(process.argv[pathIndex + 1]) : path.join(path.dirname(productRoot), `${path.basename(productRoot)}-notes`));
+  const repoRoot = existing ?? (pathIndex >= 0 ? path.resolve(process.argv[pathIndex + 1]) : path.join(productRoot, 'workspace'));
   if (!existing) {
     if (hasMain) {
       console.log(`[bootstrap] Adding a worktree for the existing 'main' at ${repoRoot}...`);
@@ -167,6 +181,7 @@ async function bootstrapWorkspace() {
   console.log(`   - Config: ${WORKSPACE_CONFIG_FILENAME}`);
   console.log(`   - Default Notebook: ${config.workspace.default_notebook}`);
   console.log(`   - Next steps: Run 'pnpm dev' here (the Core checkout) to launch the application.`);
+  if (adoptedUpstream) console.log(`   - Your repository: create an empty repository, then run\n       git remote add origin <your-repository-url>\n       git push -u origin core main\n     Core updates keep coming from 'upstream' through \`pnpm update-core\`.`);
   console.log(VERCEL_DEPLOY_STEPS);
   console.log(`======================================================\n`);
 }
