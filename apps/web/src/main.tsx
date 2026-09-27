@@ -10,6 +10,8 @@ import './index.css';
 import './workspace.css';
 import './ui-buttons.css';
 import './mermaid.css';
+import 'katex/dist/katex.min.css';
+import './math.css';
 import './directives/general-containers.css';
 import './directives/character-stat-blocks.css';
 import './directives/document-cards.css';

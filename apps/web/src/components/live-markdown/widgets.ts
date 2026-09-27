@@ -7,6 +7,7 @@ import { setTaskChecked, setTokenValue } from '../../lib/task-tokens.js';
 import { TASK_TOKEN_ICON_SVG } from '../../lib/task-icons.js';
 import { activateYouTubeEmbed, populateYouTubeEmbed, type YouTubeLabels } from '../../lib/youtube-embed.js';
 import { createMermaidBlock, hydrateMermaid } from '../../lib/mermaid.js';
+import { drawMath } from '../../lib/math.js';
 import { type MermaidEditorLabels, openMermaidEditor } from '../../lib/mermaid-editor.js';
 import { chipEditChanged } from './chip-editing.js';
 import { countMermaidTwins, findMermaidFences, relocateMermaidFence } from './mermaid-fence.js';
@@ -66,6 +67,26 @@ export class RenderedMarkdown extends WidgetType {
   }
   get estimatedHeight() {
     return this.block ? 100 : 160;
+  }
+}
+/** A `$…$` or `$$…$$` formula drawn by KaTeX; the source returns when the cursor enters its lines. */
+export class MathFormula extends WidgetType {
+  constructor(readonly tex: string, readonly display: boolean, readonly block: boolean) {
+    super();
+  }
+  eq(other: MathFormula) {
+    return this.tex === other.tex && this.display === other.display && this.block === other.block;
+  }
+  toDOM(view: EditorView) {
+    const dom = document.createElement(this.block ? 'div' : 'span');
+    dom.className = this.block ? 'live-md-math live-md-math-block' : 'live-md-math';
+    drawMath(dom, this.tex, this.display);
+    dom.addEventListener('mousedown', event => {
+      event.preventDefault();
+      view.dispatch({ selection: { anchor: view.posAtDOM(dom) } });
+      view.focus();
+    });
+    return dom;
   }
 }
 export class PageBreak extends WidgetType {

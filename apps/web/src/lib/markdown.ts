@@ -6,11 +6,12 @@ import { parseR2Reference, r2AssetUrl, r2PreviewType } from '@mygitnotes/core/r2
 import { headingSlug, resolveWorkspaceHref } from './workspace-links.js';
 import { escapeHtml, stripMdxImports, transformDirectives, transformMdxComponents } from './directives.js';
 import { isMermaidInfo } from './mermaid.js';
+import { markedMath } from './math.js';
 import { DEFAULT_YOUTUBE_LABELS, type YouTubeDisplayMode, type YouTubeLabels } from './youtube-embed.js';
 
 // CommonMark cannot close emphasis when a full-width punctuation mark sits before the delimiter and
 // a CJK character after it, so `**二口女（ふたくちおんな）**意象` renders as literal asterisks.
-const md = new Marked(markedCjkFriendly());
+const md = new Marked(markedCjkFriendly(), markedMath);
 
 // A mermaid fence renders to a placeholder holding its source as text; sanitized HTML cannot carry the SVG, so each
 // surface draws the diagram once the HTML is mounted (see hydrateMermaid). The source stays in the <pre> because

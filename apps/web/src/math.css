@@ -1,0 +1,4 @@
+/* KaTeX's own stylesheet lays out the formulas; these rules fit them into notes and the live editor. */
+.note-math .katex-display { overflow-x: auto; overflow-y: hidden; }
+.live-md-math { cursor: text; }
+.live-md-math-block { display: flow-root; }
