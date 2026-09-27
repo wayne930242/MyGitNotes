@@ -34,6 +34,7 @@
     "graphology": "^0.26.0",
     "graphology-communities-louvain": "^2.0.2",
     "graphology-layout-forceatlas2": "^0.10.1",
+    "katex": "^0.16.47",
     "lucide-react": "^0.441.0",
     "marked": "^18.0.13",
     "marked-cjk-friendly": "^0.1.2",

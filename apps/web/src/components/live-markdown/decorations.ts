@@ -9,13 +9,16 @@ import { DONE_EMOJI, DUE_EMOJI, findToken, isTaskLine, START_EMOJI, TIMESTAMP_EM
 import type { I18nContextValue } from '../../lib/i18n/index.js';
 import { LiveMarkdownDirective } from '../LiveMarkdownDirective.js';
 import { LiveMarkdownTable, tableUIState } from '../LiveMarkdownTable.js';
-import { BulletMarker, DateAdder, ExternalLink, MdxImportWidget, MermaidDiagram, PageBreak, PageFooter, RenderedMarkdown, TaskCheckbox, TokenChip, TokenEditor, YouTubeWidget } from './widgets.js';
+import { findMath } from '../../lib/math.js';
+import { BulletMarker, DateAdder, ExternalLink, MathFormula, MdxImportWidget, MermaidDiagram, PageBreak, PageFooter, RenderedMarkdown, TaskCheckbox, TokenChip, TokenEditor, YouTubeWidget } from './widgets.js';
 import { chipEditState } from './chip-editing.js';
 import { mermaidFenceAt } from './mermaid-fence.js';
 
 export function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string, pageLabel: string, youtubeOwner: string, t: I18nContextValue['t']): DecorationSet {
   const marks: Range<Decoration>[] = [];
   const mermaidRanges: { from: number; to: number; }[] = [];
+  // Source the math scan must not read: code keeps its dollars, and tables and directives render their own math.
+  const nonMath: { from: number; to: number; }[] = [];
   let pageNumber = 1;
   const references = marked.lexer(state.doc.toString()).links;
   const active = (from: number, to: number) => focused && !state.readOnly && state.selection.ranges.some(range => state.doc.lineAt(range.from).from <= to && state.doc.lineAt(range.to).to >= from);
@@ -71,6 +74,7 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
           return false;
         }
       }
+      if (name === 'FencedCode' || name === 'CodeBlock' || name === 'InlineCode' || name === 'HTMLBlock' || name === 'CommentBlock') nonMath.push({ from, to });
       if (name === 'FencedCode' || name === 'CodeBlock') {
         for (let line = state.doc.lineAt(from); line.from < to; line = state.doc.line(line.number + 1)) {
           marks.push(Decoration.line({ class: 'live-md-codeblock' }).range(line.from));
@@ -100,6 +104,7 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
         }
       }
       if (name === 'Table' && node.node.parent?.name === 'Document') {
+        nonMath.push({ from, to });
         marks.push(Decoration.replace({ widget: new LiveMarkdownTable(state.sliceDoc(from, to), notePath, from, state.readOnly, t, state.field(tableUIState).get(from)), block: true }).range(from, to));
         return false;
       }
@@ -170,10 +175,22 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
     },
   });
   flushQuoteReveal();
-  // The prefix hiding and list bullet decorations of a drawn fence's opening line sit inside its widget's range.
+  const mathRanges: { from: number; to: number; }[] = [];
+  for (const span of findMath(maskRanges(docText, [...nonMath, ...mermaidRanges, ...collapsedDirectives]))) {
+    if (active(span.from, span.to)) continue;
+    const first = state.doc.lineAt(span.from), last = state.doc.lineAt(span.to);
+    // A display formula alone on its lines is drawn as a block in their place; any other formula stays in the text flow.
+    const block = span.display && !first.text.slice(0, span.from - first.from).trim() && !last.text.slice(span.to - last.from).trim();
+    const from = block ? first.from : span.from, to = block ? last.to : span.to;
+    mathRanges.push({ from, to });
+    marks.push(Decoration.replace({ widget: new MathFormula(span.tex, span.display, block), block }).range(from, to));
+  }
+  // The prefix hiding and list bullet decorations of a drawn fence's opening line sit inside its widget's range, and so
+  // do the emphasis or escape marks the Markdown parser finds inside a formula's TeX.
   for (let i = marks.length - 1; i >= 0; i--) {
     const { from, to, value } = marks[i];
     if (!(value.spec.widget instanceof MermaidDiagram) && mermaidRanges.some(range => from >= range.from && to <= range.to)) marks.splice(i, 1);
+    else if (!(value.spec.widget instanceof MathFormula) && mathRanges.some(range => from < to ? from >= range.from && to <= range.to : from > range.from && from < range.to)) marks.splice(i, 1);
   }
 
   for (const block of collapsedDirectives) {
@@ -217,4 +234,18 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
   const lastPageLabel = `${pageLabel} ${pageNumber}`;
   marks.push(Decoration.widget({ widget: new PageFooter(pageNumber, lastPageLabel), side: 1, block: true }).range(state.doc.length));
   return Decoration.set(marks, true);
+}
+
+/** `text` with every character in `ranges` except line breaks turned into a space, so positions stay the same. */
+function maskRanges(text: string, ranges: { from: number; to: number; }[]): string {
+  const parts: string[] = [];
+  let pos = 0;
+  for (const { from, to } of [...ranges].sort((a, b) => a.from - b.from)) {
+    if (to <= pos) continue;
+    const start = Math.max(from, pos);
+    parts.push(text.slice(pos, start), text.slice(start, to).replace(/[^\n]/g, ' '));
+    pos = to;
+  }
+  parts.push(text.slice(pos));
+  return parts.join('');
 }
