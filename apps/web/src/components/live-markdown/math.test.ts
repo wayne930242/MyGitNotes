@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { EditorState, StateField } from '@codemirror/state';
 import { Decoration, type DecorationSet, EditorView } from '@codemirror/view';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import { ensureSyntaxTree } from '@codemirror/language';
 import { cjkEmphasis } from './cjk-emphasis.js';
 import { chipEditState } from './chip-editing.js';
 import { tableUIState } from '../LiveMarkdownTable.js';
@@ -17,6 +18,10 @@ const views: EditorView[] = [];
 function editor(doc: string, cursor = doc.length) {
   const view = new EditorView({ parent: document.body, state: EditorState.create({ doc, selection: { anchor: cursor }, extensions: [markdown({ base: markdownLanguage, extensions: [cjkEmphasis] }), chipEditState, tableUIState, decorations] }) });
   views.push(view);
+  // The first parse runs on a time budget, so under load a code block late in the note can still be unparsed;
+  // finish the parse and let the decorations recompute, as the editor does once its parser catches up.
+  ensureSyntaxTree(view.state, view.state.doc.length, 5000);
+  view.dispatch({});
   return view;
 }
 afterEach(() => {
