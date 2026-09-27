@@ -1,5 +1,8 @@
 import { renderNote } from './markdown.js';
 import { currentAppearance, renderMermaidBlocks } from './mermaid.js';
+// Inlined because the print frame loads none of the app's stylesheets; Vite rewrites its font url()s to the served
+// asset paths, which the srcdoc frame resolves against the app's own URL.
+import KATEX_STYLE from 'katex/dist/katex.min.css?inline';
 
 const PRINT_STYLE = `
   body { margin: 0; padding: 0; font: 11pt/1.6 -apple-system, 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; color: CanvasText; }
@@ -16,6 +19,7 @@ const PRINT_STYLE = `
   .note-mermaid-error { text-align: left; border: 1px solid currentColor; border-radius: 4px; padding: 0.5em 0.8em; }
   .note-mermaid-error pre { margin: 0.4em 0 0; background: none; padding: 0; }
   .markdown-table-scroll { overflow: visible; }
+  .katex-display { break-inside: avoid; }
   @page { margin: 18mm; }
 `;
 
@@ -38,14 +42,18 @@ export async function renderPrintableNote(content: string, notePath: string, err
   return printable.body.innerHTML;
 }
 
+/** The standalone HTML document the print frame shows for a rendered note body. */
+export function printDocument(title: string, body: string): string {
+  const escapedTitle = title.replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char] ?? char);
+  return `<!doctype html><html><head><meta charset='utf-8'><title>${escapedTitle}</title><style>${KATEX_STYLE}</style><style>${PRINT_STYLE}</style></head><body>${body}</body></html>`;
+}
+
 /** Opens the browser's print dialog on the rendered note, where "Save as PDF" produces the file. */
 export async function printNoteAsPdf(title: string, content: string, notePath: string, errorLabel?: string): Promise<void> {
   const frame = document.createElement('iframe');
   frame.setAttribute('aria-hidden', 'true');
   frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-  const escapedTitle = title.replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char] ?? char);
-  const body = await renderPrintableNote(content, notePath, errorLabel);
-  frame.srcdoc = `<!doctype html><html><head><meta charset='utf-8'><title>${escapedTitle}</title><style>${PRINT_STYLE}</style></head><body>${body}</body></html>`;
+  frame.srcdoc = printDocument(title, await renderPrintableNote(content, notePath, errorLabel));
   const remove = () => frame.remove();
   frame.addEventListener('load', async () => {
     const view = frame.contentWindow;
@@ -56,6 +64,8 @@ export async function printNoteAsPdf(title: string, content: string, notePath: s
           image.addEventListener('load', () => resolve(), { once: true });
           image.addEventListener('error', () => resolve(), { once: true });
         })));
+    // KaTeX fonts load on first use; printing before they arrive lays formulas out in fallback fonts.
+    await view.document.fonts?.ready;
     view.addEventListener('afterprint', remove);
     view.focus();
     view.print();
