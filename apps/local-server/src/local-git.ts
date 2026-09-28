@@ -1,13 +1,14 @@
 import { Request, Response, Router } from 'express';
 import fs from 'node:fs';
-import { classifyResource, loadWorkspaceConfig, managedNotebook, resolveSafePath, resolveWorkspaceAgentPath, WORKSPACE_DOCUMENTS, workspaceAgentKind, workspaceDocument } from '@mygitnotes/core';
+import { classifyResource, managedNotebook, resolveSafePath, resolveWorkspaceAgentPath, WORKSPACE_DOCUMENTS, workspaceAgentKind, type WorkspaceConfig, workspaceDocument } from '@mygitnotes/core';
 import { changeFile, commitSelectedFiles, commitStagedFiles, fileDiff, generateCommitMessage, getDiff, getGitStatus, getRecentCommits, listChanges, stageAndCommit, SyncError, syncWorkspace } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
+import { localHome, localRepository } from './request-workspace.js';
 
-export function createLocalGitRouter(repoRoot: string): Router {
+export function createLocalGitRouter(): Router {
   const router = Router();
 
-  const canManageChange = (file: string) => {
+  const canManageChange = (repoRoot: string, config: WorkspaceConfig, file: string) => {
     try {
       const target = resolveSafePath(repoRoot, file);
       if (fs.existsSync(target) && !fs.lstatSync(target).isFile()) return false;
@@ -15,24 +16,25 @@ export function createLocalGitRouter(repoRoot: string): Router {
         resolveWorkspaceAgentPath(repoRoot, file);
         return true;
       }
-      const config = loadWorkspaceConfig(repoRoot);
       const resource = classifyResource(file, config);
-      return Boolean(config && managedNotebook(file, config.notebooks)) || Boolean(workspaceDocument(file)) || resource.type === 'workspace_config' || file.startsWith('notes/') && ['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type);
+      return Boolean(managedNotebook(file, config.notebooks)) || Boolean(workspaceDocument(file)) || resource.type === 'workspace_config' || file.startsWith('notes/') && ['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type);
     } catch {
       return false;
     }
   };
   router.get('/changes', async (_req, res) => {
     try {
-      res.json({ changes: (await listChanges(repoRoot)).map(file => ({ ...file, available: file.available && canManageChange(file.path), unavailableReason: file.kind === 'conflict' ? 'conflict' : !canManageChange(file.path) ? 'protected' : !file.available ? 'unsupported' : undefined })) });
+      const { root: repoRoot, config } = await localRepository(res);
+      res.json({ changes: (await listChanges(repoRoot)).map(file => ({ ...file, available: file.available && canManageChange(repoRoot, config, file.path), unavailableReason: file.kind === 'conflict' ? 'conflict' : !canManageChange(repoRoot, config, file.path) ? 'protected' : !file.available ? 'unsupported' : undefined })) });
     } catch (error) {
       res.status(400).json({ error: (error as Error).message });
     }
   });
   router.get('/file-diff', async (req, res) => {
     try {
+      const { root: repoRoot, config } = await localRepository(res);
       const file = String(req.query.path || '');
-      if (!canManageChange(file)) return res.status(403).json({ error: 'This file is outside workspace resources.' });
+      if (!canManageChange(repoRoot, config, file)) return res.status(403).json({ error: 'This file is outside workspace resources.' });
       res.json({ diff: await fileDiff(repoRoot, file, req.query.side === 'staged' ? 'staged' : req.query.side === 'current' ? 'current' : 'working') });
     } catch (error) {
       res.status(400).json({ error: (error as Error).message });
@@ -40,9 +42,10 @@ export function createLocalGitRouter(repoRoot: string): Router {
   });
   router.post('/change', async (req, res) => {
     try {
+      const { root: repoRoot, config } = await localRepository(res);
       const { path: file, action, revision } = req.body;
       if (!['stage', 'unstage', 'restore'].includes(action) || typeof revision !== 'string') return res.status(400).json({ error: 'An action and reviewed revision are required.' });
-      if (!canManageChange(file)) return res.status(403).json({ error: 'This file is outside workspace resources.' });
+      if (!canManageChange(repoRoot, config, file)) return res.status(403).json({ error: 'This file is outside workspace resources.' });
       res.json({ success: true, ...await changeFile(repoRoot, file, action, revision) });
     } catch (error) {
       res.status(409).json({ error: (error as Error).message });
@@ -50,8 +53,9 @@ export function createLocalGitRouter(repoRoot: string): Router {
   });
   router.post('/commit-staged', async (req, res) => {
     try {
+      const { root: repoRoot, config } = await localRepository(res);
       const { files, revisions, message, selected } = req.body;
-      if (!Array.isArray(files) || !files.length || files.some(file => !canManageChange(file)) || typeof message !== 'string') return res.status(400).json({ error: 'Select writable workspace files and provide a message.' });
+      if (!Array.isArray(files) || !files.length || files.some(file => !canManageChange(repoRoot, config, file)) || typeof message !== 'string') return res.status(400).json({ error: 'Select writable workspace files and provide a message.' });
       const commit = await (selected === true ? commitSelectedFiles : commitStagedFiles)(repoRoot, files.map(file => ({ path: file, revision: revisions?.[file] })), message);
       res.json({ success: true, commit });
     } catch (error) {
@@ -60,6 +64,7 @@ export function createLocalGitRouter(repoRoot: string): Router {
   });
   router.get('/status', async (req: Request, res: Response) => {
     try {
+      const { root: repoRoot } = localHome(res);
       const status = await getGitStatus(repoRoot);
       const commits = await getRecentCommits(repoRoot, 10);
       res.json({ status, commits });
@@ -70,6 +75,7 @@ export function createLocalGitRouter(repoRoot: string): Router {
 
   router.get('/diff', async (req: Request, res: Response) => {
     try {
+      const { root: repoRoot } = localHome(res);
       const filePath = req.query.path as string | undefined;
       let diff = await getDiff(repoRoot, filePath);
       // New workspace documents have no Git diff until tracked; still make them reviewable.
@@ -102,6 +108,7 @@ export function createLocalGitRouter(repoRoot: string): Router {
 
   router.post('/commit', async (req: Request, res: Response) => {
     try {
+      const { root: repoRoot } = localHome(res);
       const { files, message } = req.body;
       if (!files || !Array.isArray(files) || files.length === 0 || !message) {
         return res.status(400).json({ error: 'files (array) and message (string) required' });
@@ -117,6 +124,7 @@ export function createLocalGitRouter(repoRoot: string): Router {
     const strategy = req.body?.strategy;
     if (strategy !== undefined && strategy !== 'remote' && strategy !== 'local') return res.status(400).json({ error: 'Unknown sync strategy.' });
     try {
+      const { root: repoRoot } = localHome(res);
       res.json({ result: await serializeWorkspaceMutation(repoRoot, () => syncWorkspace(repoRoot, strategy)) });
     } catch (error) {
       if (!(error instanceof SyncError)) return res.status(500).json({ error: (error as Error).message });

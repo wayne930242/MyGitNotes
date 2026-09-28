@@ -2,7 +2,8 @@ import { STUDY_FILE } from './study.js';
 import { managedNotebook } from './file-manager.js';
 import path from 'node:path';
 import { assetInfo, assetPath, assetRoot, decodeAsset, isAssetPath } from './assets.js';
-import { LEGACY_WORKSPACE_CONFIG_FILENAME, parseWorkspaceConfig, serializeWorkspaceConfig, WORKSPACE_CONFIG_FILENAME } from './config.js';
+import { MANIFEST_FILES } from './remote-manifest.js';
+import type { RepositoryScope } from './repository.js';
 import { parseNoteContent, serializeNoteContent } from './frontmatter.js';
 import { formatTemplateDate, renderNoteTemplate } from './templates.js';
 import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js';
@@ -45,13 +46,13 @@ export type RemoteChange = { path: string; content?: string; base64?: string; sh
 /** Shared workspace rules, independent of the Git hosting provider. */
 export abstract class RemoteSource {
   private snapshot?: Promise<RemoteSnapshot>;
-  private manifest?: Promise<{ config: WorkspaceConfig; file: string; prefixed: ReadonlySet<string>; }>;
   protected fresh = false;
   /** Blobs loaded from the shared cache or verified platform reads, by sha. */
   private loaded = new Map<string, Buffer>();
   private loadedBytes = 0;
   private cacheChecked = new Set<string>();
-  constructor(public repository: string, public branch: string, protected token?: string, protected cache?: RemoteCache) {}
+  /** `scope` supplies the notebooks this repository serves; the workspace manifest is never read from here. */
+  constructor(public repository: string, public branch: string, protected token: string | undefined, protected cache: RemoteCache | undefined, private readonly scope: RepositoryScope) {}
   protected abstract loadSnapshot(): Promise<RemoteSnapshot>;
   protected abstract readBlob(sha: string): Promise<Buffer>;
   protected abstract publishChanges(changes: RemoteChange[], snapshot: RemoteSnapshot, message: string): Promise<string>;
@@ -119,7 +120,6 @@ export abstract class RemoteSource {
   async getSnapshot(fresh = false): Promise<RemoteSnapshot> {
     if (fresh) {
       this.snapshot = undefined;
-      this.manifest = undefined;
       this.fresh = true;
     }
     this.snapshot ??= this.loadSnapshot();
@@ -149,37 +149,16 @@ export abstract class RemoteSource {
     return buffer;
   }
 
-  /** The manifest with the file it came from, so a write lands there and can undo the roots this read rewrote. */
-  private manifestRecord() {
-    this.manifest ??= (async () => {
-      const { entries } = await this.getSnapshot();
-      const location = [`notes/${WORKSPACE_CONFIG_FILENAME}`, `notes/${LEGACY_WORKSPACE_CONFIG_FILENAME}`, WORKSPACE_CONFIG_FILENAME, LEGACY_WORKSPACE_CONFIG_FILENAME].find(p => entries.some(e => e.path === p && e.type === 'blob'));
-      if (!location) throw new SourceError('Workspace manifest missing. Run pnpm bootstrap-workspace in the note repository and push its workspace branch.', 422);
-      const config = parseWorkspaceConfig((await this.readFile(location)).toString('utf8'));
-      const prefixed = new Set<string>();
-      if (location.startsWith('notes/')) {
-        config.notebooks = config.notebooks.map(nb => {
-          if (nb.root.startsWith('notes/') || nb.root === 'notes' || !entries.some(e => e.path === `notes/${nb.root}` && e.type === 'tree')) return nb;
-          prefixed.add(nb.id);
-          return { ...nb, root: `notes/${nb.root}` };
-        });
-      }
-      return { config, file: location, prefixed };
-    })();
-    return this.manifest;
-  }
-
+  /** The workspace manifest restricted to the notebooks this repository serves. */
   async config(): Promise<WorkspaceConfig> {
-    return (await this.manifestRecord()).config;
+    return this.scope();
   }
 
-  /** Writes the manifest back to its own file, restoring every root this reader prefixed with `notes/`. */
-  async saveWorkspaceConfig(configYaml: string, expected: string) {
-    const { file, prefixed } = await this.manifestRecord();
-    const validated = parseWorkspaceConfig(configYaml);
-    if (prefixed.size) validated.notebooks = validated.notebooks.map(nb => prefixed.has(nb.id) && nb.root.startsWith('notes/') ? { ...nb, root: nb.root.slice('notes/'.length) } : nb);
+  /** Commits a serialized manifest to one of the manifest locations. */
+  async commitManifest(file: string, content: string, expected: string) {
+    if (!MANIFEST_FILES.includes(file)) throw new SourceError('Path is not a workspace manifest.', 403);
     // The same commit subject a local checkout writes, so the history reads the same from either side.
-    return this.commitChanges([{ path: file, content: serializeWorkspaceConfig(validated) }], expected, 'save', 'config', 'chore(workspace): update configuration');
+    return this.commitChanges([{ path: file, content }], expected, 'save', 'config', 'chore(workspace): update configuration');
   }
 
   async note(file: string): Promise<NoteItem> {
@@ -470,7 +449,6 @@ export abstract class RemoteSource {
     } finally {
       this.invalidate();
       this.snapshot = undefined;
-      this.manifest = undefined;
       this.fresh = false;
     }
     return { success: true, committed: true, pushed: true, repository: this.repository, branch: this.branch, revision, changedPaths: [...changes.keys()].sort(), path: nextPath, commit: { commitHash: revision, message: `docs(agents): rename ${location.slug} to ${nextLocation.slug}` } };
@@ -493,15 +471,14 @@ export abstract class RemoteSource {
     this.assertMutable(snapshot, expected);
     if (!changes.length || changes.length > 200) throw new SourceError('A mutation requires between 1 and 200 changed files.');
     if (new Set(changes.map(c => c.path)).size !== changes.length) throw new SourceError('Each file may appear only once in a mutation.');
-    const manifest = await this.manifestRecord();
-    const config = manifest.config;
+    const config = await this.config();
     let bytes = 0;
     for (const change of changes) {
       const file = change.path;
       const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
       const document = workspaceDocument(file);
       const documentFile = Boolean(document?.scopes.includes(scope));
-      const allowed = documentFile || (scope === 'config' ? file === manifest.file : !['screen', 'study', 'focus', 'config'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_FILE.test(file) : scope === 'skills' ? Boolean(skillFile(file, config.notebooks)) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (NOTE_FILE.test(file) || path.posix.basename(file) === '_dir.yml'))));
+      const allowed = documentFile || (scope === 'config' ? MANIFEST_FILES.includes(file) : !['screen', 'study', 'focus', 'config'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_FILE.test(file) : scope === 'skills' ? Boolean(skillFile(file, config.notebooks)) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (NOTE_FILE.test(file) || path.posix.basename(file) === '_dir.yml'))));
       if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
       if (documentFile) validateWorkspaceDocument(document!, change.content);
       if (snapshot.entries.some(e => (e.path === file || file.startsWith(e.path + '/')) && (e.mode === '120000' || (e.path !== file && e.type !== 'tree')))) throw new SourceError('Path crosses a non-directory or symlink.', 403);
@@ -530,7 +507,6 @@ export abstract class RemoteSource {
     } finally {
       this.invalidate();
       this.snapshot = undefined;
-      this.manifest = undefined;
       this.fresh = false;
     }
     return { success: true, committed: true, pushed: true, repository: this.repository, branch: this.branch, revision: revision, changedPaths, commit: { commitHash: revision, message } };

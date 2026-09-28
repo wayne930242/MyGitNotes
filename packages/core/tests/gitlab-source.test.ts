@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { GitLabSource } from '../src/gitlab-source.js';
-import { createRemoteSource } from '../src/remote-factory.js';
+import { openRemoteHome } from '../src/remote-factory.js';
 import { loadSourceConfig, parseSourceConfig, sourceIdentity } from '../src/source-config.js';
 import { callNoteShell } from '../src/note-shell.js';
 import { gitlabFixture } from './fixtures/gitlab.js';
 const site = 'https://gitlab.example.test/gitlab';
 const source = { type: 'gitlab' as const, url: site, repository: 'group/subgroup/project', branch: 'main' };
-const reader = (f: ReturnType<typeof gitlabFixture>, token: string | undefined = 'fixture-token', branch = 'main') => new GitLabSource(site, source.repository, branch, token, f.request);
+const reader = (f: ReturnType<typeof gitlabFixture>, token: string | undefined = 'fixture-token', branch = 'main') => openRemoteHome({ type: 'gitlab', url: site, repository: source.repository, branch: branch }, token, f.request).reader;
 
 describe('GitLab source configuration', () => {
   it('prefers MyGitNotes environment values while retaining legacy fallbacks', () => {
@@ -29,7 +28,7 @@ describe('GitLab remote contract', () => {
   it('reads notes, folders and assets at one revision through the factory and paginates the complete tree', async () => {
     const f = gitlabFixture();
     for (let i = 0; i < 110; i++) f.files.set(`notes/ex/item-${i}.md`, `# Item ${i}`);
-    const r = createRemoteSource(source, 'fixture-token', f.request);
+    const r = openRemoteHome(source, 'fixture-token', f.request).reader;
     const notes = await r.notes('ex');
     expect(notes).toHaveLength(112);
     expect(notes.find(n => n.title === 'Alpha')?.metadata.custom).toBe('preserved');
@@ -41,9 +40,9 @@ describe('GitLab remote contract', () => {
   });
   it('allows anonymous public reads and denies private reads and read-only or core writes', async () => {
     const f = gitlabFixture();
-    await expect(new GitLabSource(site, source.repository, 'main', undefined, f.request).notes()).rejects.toMatchObject({ status: 404 });
+    await expect(openRemoteHome({ type: 'gitlab', url: site, repository: source.repository, branch: 'main' }, undefined, f.request).reader.notes()).rejects.toMatchObject({ status: 404 });
     f.public();
-    expect((await new GitLabSource(site, source.repository, 'main', undefined, f.request).notes()).length).toBe(2);
+    expect((await openRemoteHome({ type: 'gitlab', url: site, repository: source.repository, branch: 'main' }, undefined, f.request).reader.notes()).length).toBe(2);
     f.readOnly();
     await expect(reader(f).save('notes/ex/a.md', '# changed', {}, f.head)).rejects.toMatchObject({ status: 403 });
     await expect(reader(gitlabFixture(), 'fixture-token', 'core').save('notes/ex/a.md', '# changed', {}, f.head)).rejects.toMatchObject({ status: 403 });
@@ -86,10 +85,10 @@ describe('GitLab remote contract', () => {
   });
   it('returns rate limiting without retrying a mutation and rejects a redirected endpoint', async () => {
     const request = (async () => new Response('{}', { status: 429, headers: { 'Retry-After': '12' } })) as typeof fetch;
-    await expect(new GitLabSource(site, source.repository, 'main', 'token', request).notes()).rejects.toMatchObject({ status: 429, retryAfter: 12 });
+    await expect(openRemoteHome({ type: 'gitlab', url: site, repository: source.repository, branch: 'main' }, 'token', request).reader.notes()).rejects.toMatchObject({ status: 429, retryAfter: 12 });
     const redirected = (async () => {
       throw new TypeError('redirect');
     }) as typeof fetch;
-    await expect(new GitLabSource(site, source.repository, 'main', 'token', redirected).notes()).rejects.toMatchObject({ status: 502 });
+    await expect(openRemoteHome({ type: 'gitlab', url: site, repository: source.repository, branch: 'main' }, 'token', redirected).reader.notes()).rejects.toMatchObject({ status: 502 });
   });
 });

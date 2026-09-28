@@ -1,7 +1,7 @@
 import type { AddressInfo } from 'node:net';
 import { applicationRoot, createApp } from './app.js';
 import { writeDevPorts } from './dev-ports.js';
-import { assertWorkspaceCompatible, loadEnvDefaults, loadSourceConfig } from '@mygitnotes/core';
+import { assertWorkspaceCompatible, deploymentConfigSource, loadEnvDefaults } from '@mygitnotes/core';
 
 loadEnvDefaults(`${applicationRoot()}/.env`);
 const desiredPort = Number(process.env.PORT || 4321);
@@ -13,11 +13,14 @@ if (isLocal) {
   process.env.MYGITNOTES_SOURCE = 'local';
   const localPath = process.env.REPO_ROOT || process.env.MYGITNOTES_LOCAL_PATH || process.env.GITHUB_NOTES_LOCAL_PATH;
   if (localPath) process.env.MYGITNOTES_LOCAL_PATH = localPath;
-  // Fail fast: a missing workspace or a schema this Core cannot serve stops the dev server.
-  const source = loadSourceConfig(repoRoot);
-  if (source.type === 'local') assertWorkspaceCompatible(source.path);
 }
-const app = createApp(repoRoot);
+const configSource = deploymentConfigSource(repoRoot);
+if (isLocal) {
+  // Fail fast: a missing workspace or a schema this Core cannot serve stops the dev server.
+  const { home } = await configSource.settings({ headers: {} });
+  if (home.source.type === 'local') assertWorkspaceCompatible(home.source.path);
+}
+const app = createApp(repoRoot, configSource);
 
 function listen(port: number, attemptsLeft: number): Promise<AddressInfo> {
   return new Promise((resolve, reject) => {

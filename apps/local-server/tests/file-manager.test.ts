@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
 import { applyLocalFilePlan, localFileSnapshot } from '../src/file-manager.js';
-import { assetHash, planFileChange } from '@mygitnotes/core';
+import { assetHash, loadWorkspaceConfig, planFileChange } from '@mygitnotes/core';
 let root: string, server: Server, base: string;
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
 const write = (file: string, content: string | Buffer) => {
@@ -80,7 +80,7 @@ it('rejects stale revisions, cross-notebook paths, symlinks, overwrite and read-
   expect((await post({ kind: 'create', path: 'notes/a/no.txt' })).status).toBe(403);
 });
 it('restores the original binary and text snapshot after a write fails', () => {
-  const before = localFileSnapshot(root), after = planFileChange(before, { kind: 'move', notebookId: 'a', path: 'notes/a/one', destination: 'notes/a/two/one' });
+  const before = localFileSnapshot(root, loadWorkspaceConfig(root)!.notebooks), after = planFileChange(before, { kind: 'move', notebookId: 'a', path: 'notes/a/one', destination: 'notes/a/two/one' });
   const rename = fs.renameSync.bind(fs);
   let calls = 0;
   vi.spyOn(fs, 'renameSync').mockImplementation((...args) => {
@@ -88,7 +88,7 @@ it('restores the original binary and text snapshot after a write fails', () => {
     return rename(...args);
   });
   expect(() => applyLocalFilePlan(root, before, after)).toThrow('Injected failure');
-  expect(localFileSnapshot(root)).toEqual(before);
+  expect(localFileSnapshot(root, loadWorkspaceConfig(root)!.notebooks)).toEqual(before);
 });
 it('browses large binary files without loading their contents and reports the read limit separately', async () => {
   write('notes/a/large.bin', Buffer.alloc(6 * 1024 * 1024));

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { GitHubSource } from '../src/github-source.js';
+import { openRemoteHome } from '../src/remote-factory.js';
 import { callNoteShell, matchNoteGlob, replaceNoteLines } from '../src/note-shell.js';
 import { agentSystemHint, callAgentSystem } from '../src/agent-system.js';
 import { SCREEN_PAGE_FILE } from '../src/screen-page.js';
@@ -76,7 +76,7 @@ function fixture(extra: Record<string, string> = {}) {
     } else return new Response('{}', { status: 404 });
     return new Response(JSON.stringify(result));
   };
-  return { reader: () => new GitHubSource('owner/repo', 'main', 'test-token', request), calls, head: () => head, text: (file: string) => objects.get(files.get(file)!), files: () => [...files.keys()] };
+  return { reader: () => openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request).reader, calls, head: () => head, text: (file: string) => objects.get(files.get(file)!), files: () => [...files.keys()] };
 }
 
 describe('shell-shaped note operations', () => {

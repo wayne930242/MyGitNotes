@@ -3,8 +3,9 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { agentSkillLocation, extractFirstH1, listWorkspaceAgentFiles, parseNoteContent, productAgentResources, renameAgentSkillEntryContent, renamedAgentSkillPath, resolveWorkspaceAgentPath, rewriteAgentSkillReferences, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource } from '@mygitnotes/core';
 import { changeFile, getCurrentBranch, listChanges } from '@mygitnotes/git';
+import { localHome } from './request-workspace.js';
 
-export function createLocalAgentResourcesRouter(repoRoot: string, appRoot: string): Router {
+export function createLocalAgentResourcesRouter(appRoot: string): Router {
   const router = Router();
 
   // Helper to extract first heading, skill name, or clean folder title
@@ -32,6 +33,7 @@ export function createLocalAgentResourcesRouter(repoRoot: string, appRoot: strin
 
   router.get('/', async (req: Request, res: Response) => {
     try {
+      const { root: repoRoot } = localHome(res);
       const branch = await getCurrentBranch(repoRoot);
       const instructions: WorkspaceAgentResource[] = [];
       const skills: WorkspaceAgentResource[] = [];
@@ -52,8 +54,9 @@ export function createLocalAgentResourcesRouter(repoRoot: string, appRoot: strin
     }
   });
 
-  router.get('/read', (req: Request, res: Response) => {
+  router.get('/read', async (req: Request, res: Response) => {
     try {
+      const { root: repoRoot } = localHome(res);
       const targetPath = req.query.path as string;
       if (!targetPath) return res.status(400).json({ error: 'path query required' });
       const safePath = resolveWorkspaceAgentPath(repoRoot, targetPath);
@@ -67,6 +70,7 @@ export function createLocalAgentResourcesRouter(repoRoot: string, appRoot: strin
   // Save agent resource file (workspace Agent documents)
   router.post('/save', async (req: Request, res: Response) => {
     try {
+      const { root: repoRoot } = localHome(res);
       const { path: relPath, content, create } = req.body;
       if (!relPath || typeof content !== 'string') {
         return res.status(400).json({ error: 'path and content are required' });
@@ -94,11 +98,13 @@ export function createLocalAgentResourcesRouter(repoRoot: string, appRoot: strin
   });
 
   // Rename a directory-backed skill and update references in editable Agent documents as one rollback-safe operation.
-  router.post('/rename-skill', (req: Request, res: Response) => {
+  router.post('/rename-skill', async (req: Request, res: Response) => {
     const originals = new Map<string, string>();
     let oldDirectoryPath = '';
     let newDirectoryPath = '';
     let moved = false;
+    // Resolved before the try block because the rollback below restores files in this worktree.
+    const { root: repoRoot } = localHome(res);
     try {
       const { path: relPath, slug, content } = req.body;
       if (typeof relPath !== 'string' || typeof slug !== 'string' || typeof content !== 'string') return res.status(400).json({ error: 'path, slug and content are required' });
@@ -158,6 +164,7 @@ export function createLocalAgentResourcesRouter(repoRoot: string, appRoot: strin
   // Restore agent resource from Git HEAD (workspace Agent documents)
   router.post('/restore', async (req: Request, res: Response) => {
     try {
+      const { root: repoRoot } = localHome(res);
       const { path: relPath } = req.body;
       if (!relPath) {
         return res.status(400).json({ error: 'path is required' });

@@ -1,4 +1,4 @@
-import { loadSourceConfig, SourceError, sourceIdentity } from '@mygitnotes/core';
+import { type SourceConfig, SourceError, sourceIdentity, type WorkspaceConfigSource } from '@mygitnotes/core';
 import { Request, Router } from 'express';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs/promises';
@@ -196,8 +196,8 @@ export class CredentialRejected extends SourceError {
 }
 type Provider = { type: 'github' | 'gitlab'; site: string; realm: string; clientId?: string; clientSecret?: string; authorize: string; token: string; user: string; };
 const credentialLocks = new Map<string, Promise<void>>();
-function providerFor(base: string): Provider {
-  const source = loadSourceConfig(base);
+/** The sign-in provider follows the home repository's platform and site. */
+function providerFor(source: SourceConfig): Provider {
   const type = source.type === 'gitlab' ? 'gitlab' : 'github';
   const site = source.type === 'gitlab' ? source.url : 'https://github.com';
   const clientId = process.env[type === 'gitlab' ? 'GITLAB_CLIENT_ID' : 'GITHUB_CLIENT_ID'];
@@ -238,8 +238,8 @@ async function tokenRequest(provider: Provider, body: Record<string, unknown>) {
   }
   return data;
 }
-export async function credentialToken(base: string, id: string): Promise<string> {
-  const provider = providerFor(base), store = new SessionStore(base);
+export async function credentialToken(base: string, id: string, home: SourceConfig): Promise<string> {
+  const provider = providerFor(home), store = new SessionStore(base);
   // GitHub OAuth apps with short-lived tokens return a refresh token; long-lived GitHub tokens carry neither.
   const refreshable = (record: any) => (provider.type === 'gitlab' || Boolean(record?.refreshToken)) && record?.upstreamExpiresAt <= Date.now() + 60000;
   const reject = (reason: string, message: string) => {
@@ -265,17 +265,18 @@ export async function credentialToken(base: string, id: string): Promise<string>
   if (provider.type === 'gitlab' || refreshable(record)) return store.withCredentialLock(id, async () => resolve(await store.readRecord(id)));
   return resolve(record);
 }
-export async function authToken(req: Request, base: string): Promise<string | undefined> {
-  const provider = providerFor(base), store = new SessionStore(base);
+export async function authToken(req: Request, base: string, home: SourceConfig): Promise<string | undefined> {
+  const provider = providerFor(home), store = new SessionStore(base);
   const session = await getSession(req, store, provider);
   if (!session) return undefined;
-  return session.credential ? credentialToken(base, session.credential) : session.token;
+  return session.credential ? credentialToken(base, session.credential, home) : session.token;
 }
-export function createAuth(base: string): Router {
+export function createAuth(base: string, configSource: WorkspaceConfigSource): Router {
   const router = Router(), store = new SessionStore(base);
+  const homeSource = async (req: Request) => (await configSource.settings(req)).home.source;
   router.get('/session', async (req, res) => {
     try {
-      const provider = providerFor(base), session = await getSession(req, store, provider);
+      const provider = providerFor(await homeSource(req)), session = await getSession(req, store, provider);
       res.json({ authenticated: Boolean(session), login: session?.login, provider: provider.type, loginUrl: `/api/auth/${provider.type}`, configured: Boolean(provider.clientId && provider.clientSecret && process.env.SESSION_SECRET && (!process.env.VERCEL || (redisConnection().url && redisConnection().token))) });
     } catch {
       res.status(503).json({ error: 'Session store or source configuration unavailable.' });
@@ -283,7 +284,7 @@ export function createAuth(base: string): Router {
   });
   router.get('/:provider(github|gitlab)', async (req, res) => {
     try {
-      const provider = providerFor(base);
+      const provider = providerFor(await homeSource(req));
       if (req.params.provider !== provider.type) return res.status(404).json({ error: 'This login provider is not configured.' });
       if (!provider.clientId || !provider.clientSecret || !process.env.APP_URL) throw new Error(`Configure ${provider.type.toUpperCase()}_CLIENT_ID, ${provider.type.toUpperCase()}_CLIENT_SECRET, APP_URL and SESSION_SECRET.`);
       const state = random(), verifier = random();
@@ -301,7 +302,7 @@ export function createAuth(base: string): Router {
   });
   router.get('/:provider(github|gitlab)/callback', async (req, res) => {
     try {
-      const provider = providerFor(base);
+      const provider = providerFor(await homeSource(req));
       if (req.params.provider !== provider.type) throw new Error('This login provider is not configured.');
       const state = String(req.query.state || ''), browserState = cookies(req).gh_notes_oauth || '';
       if (!/^[A-Za-z0-9_-]{43}$/.test(state) || state.length !== browserState.length || !timingSafeEqual(Buffer.from(state), Buffer.from(browserState))) throw new Error('Invalid OAuth state. Start sign-in again.');
@@ -329,9 +330,9 @@ export function createAuth(base: string): Router {
   });
   router.post('/agent-token', async (req, res) => {
     try {
-      const provider = providerFor(base), session = await getSession(req, store, provider);
+      const provider = providerFor(await homeSource(req)), session = await getSession(req, store, provider);
       if (!session) return res.status(401).json({ error: 'Sign in before creating an agent grant.' });
-      const source = loadSourceConfig(base);
+      const source = await homeSource(req);
       if (source.type === 'local' || !process.env.APP_URL) return res.status(400).json({ error: 'A remote source and APP_URL are required.' });
       const token = random(), credential = await saveCredential(store, session, provider), ownerId = ownerOf(session, provider);
       const name = typeof req.body.name === 'string' ? req.body.name.trim().slice(0, 80) : '';
@@ -349,7 +350,7 @@ export function createAuth(base: string): Router {
   });
   router.get('/agent-tokens', async (req, res) => {
     try {
-      const provider = providerFor(base), session = await getSession(req, store, provider);
+      const provider = providerFor(await homeSource(req)), session = await getSession(req, store, provider);
       if (!session) return res.status(401).json({ error: 'Sign in to manage agent access.' });
       res.json({ grants: await store.listGrants(ownerOf(session, provider)) });
     } catch {
@@ -358,7 +359,7 @@ export function createAuth(base: string): Router {
   });
   router.delete('/agent-tokens/:id', async (req, res) => {
     try {
-      const provider = providerFor(base), session = await getSession(req, store, provider);
+      const provider = providerFor(await homeSource(req)), session = await getSession(req, store, provider);
       if (!session) return res.status(401).json({ error: 'Sign in to manage agent access.' });
       if (!await store.revokeGrant(String(req.params.id), ownerOf(session, provider))) return res.status(404).json({ error: 'Agent grant not found.' });
       res.json({ success: true });

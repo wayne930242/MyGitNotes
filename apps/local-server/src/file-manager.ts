@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { getCurrentBranch } from '@mygitnotes/git';
-import { assetHash, assetInfo, assetRoot, createRemoteSource, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isNotebookContent, loadWorkspaceConfig, managedNotebook, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSource, type SourceConfig, SourceError, withinPath, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
-import { authToken } from './auth.js';
+import { assetHash, assetInfo, assetRoot, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isNotebookContent, managedNotebook, type NotebookConfig, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSource, SourceError, withinPath, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
+import { homeRepository, workspaceOf } from './request-workspace.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { regularPath, writeFileAtomicSync } from './workspace-files.js';
 
@@ -21,10 +21,8 @@ interface FileCatalog {
   protectedPaths: string[];
   files: Map<string, CatalogFile>;
 }
-export function localFileCatalog(root: string): FileCatalog {
-  const config = loadWorkspaceConfig(root);
-  if (!config) throw new SourceError('Workspace configuration is missing.', 400);
-  const catalog: FileCatalog = { notebooks: config.notebooks, directories: [], protectedPaths: [], files: new Map() };
+export function localFileCatalog(root: string, notebooks: NotebookConfig[]): FileCatalog {
+  const catalog: FileCatalog = { notebooks, directories: [], protectedPaths: [], files: new Map() };
   const add = (file: string) => {
     const stat = fs.statSync(regularPath(root, file), { bigint: true });
     if (!stat.isFile()) throw new SourceError('Expected a regular file.', 400);
@@ -35,12 +33,12 @@ export function localFileCatalog(root: string): FileCatalog {
     catalog.directories.push(dir);
     for (const entry of fs.readdirSync(regularPath(root, dir), { withFileTypes: true })) {
       const file = dir + '/' + entry.name;
-      if (!managedNotebook(file, config.notebooks) || entry.isSymbolicLink() || !entry.isFile() && !entry.isDirectory()) catalog.protectedPaths.push(file);
+      if (!managedNotebook(file, notebooks) || entry.isSymbolicLink() || !entry.isFile() && !entry.isDirectory()) catalog.protectedPaths.push(file);
       else if (entry.isDirectory()) visit(file);
       else add(file);
     }
   };
-  for (const nb of config.notebooks) {
+  for (const nb of notebooks) {
     if (fs.existsSync(regularPath(root, nb.root))) visit(nb.root);
     if (nb.pathAliases) {
       for (const target of Object.values(nb.pathAliases)) {
@@ -69,8 +67,8 @@ function needsContent(file: string, command?: FileCommand) {
   if (command.kind === 'move' || command.kind === 'remove-directory') return withinPath(file, command.path) || /\.(md|markdown)$/i.test(file) || auxiliary.includes(file);
   return file === command.path || command.kind === 'metadata' && file === command.path + '/_dir.yml';
 }
-export function localFileSnapshot(root: string, command?: FileCommand): FileSnapshot {
-  const catalog = localFileCatalog(root);
+export function localFileSnapshot(root: string, notebooks: NotebookConfig[], command?: FileCommand): FileSnapshot {
+  const catalog = localFileCatalog(root, notebooks);
   let total = 0;
   const files = new Map<string, Buffer>();
   for (const [file, entry] of catalog.files) {
@@ -146,31 +144,33 @@ export function applyLocalFilePlan(root: string, before: FileSnapshot, after: Re
   }
 }
 
-export function createFileManagerRouter(base: string, source: SourceConfig): Router {
+export function createFileManagerRouter(): Router {
   const router = Router();
-  const load = async (req: import('express').Request, command: FileCommand) => {
-    if (source.type === 'local') {
-      const snapshot = localFileSnapshot(source.path, command);
-      return { snapshot, revision: catalogRevision(localFileCatalog(source.path)), writable: await getCurrentBranch(source.path) === 'main', reader: undefined };
+  const load = async (res: Response, command: FileCommand) => {
+    const { handle, config } = await homeRepository(res);
+    if (handle.kind === 'local') {
+      const snapshot = localFileSnapshot(handle.root, config.notebooks, command);
+      return { snapshot, revision: catalogRevision(localFileCatalog(handle.root, config.notebooks)), writable: await getCurrentBranch(handle.root) === 'main', reader: undefined, local: handle.root, notebooks: config.notebooks };
     }
-    const token = await authToken(req, base), reader = createRemoteSource(source, token);
+    const { reader } = handle;
     const snapshot = await remoteFiles(reader, command), state = await reader.getSnapshot();
-    return { snapshot, revision: state.sha, writable: reader.canWrite(state), reader };
+    return { snapshot, revision: state.sha, writable: reader.canWrite(state), reader, local: undefined, notebooks: config.notebooks };
   };
-  const catalog = async (req: import('express').Request) => {
-    if (source.type === 'local') {
-      const index = localFileCatalog(source.path);
-      return { index, revision: catalogRevision(index), writable: await getCurrentBranch(source.path) === 'main', read: async (file: string) => localRead(source.path, file) };
+  const catalog = async (res: Response) => {
+    const { handle, config } = await homeRepository(res);
+    if (handle.kind === 'local') {
+      const index = localFileCatalog(handle.root, config.notebooks);
+      return { index, revision: catalogRevision(index), writable: await getCurrentBranch(handle.root) === 'main', read: async (file: string) => localRead(handle.root, file), local: handle.root };
     }
-    const token = await authToken(req, base), reader = createRemoteSource(source, token);
-    const state = await reader.getSnapshot(true), config = await reader.config();
+    const { reader } = handle;
+    const state = await reader.getSnapshot(true);
     const index: FileCatalog = { notebooks: config.notebooks, directories: [], protectedPaths: [], files: new Map() };
     for (const entry of state.entries) {
       if (entry.mode === '120000' || !managedNotebook(entry.path, config.notebooks)) continue;
       if (entry.type === 'tree') index.directories.push(entry.path);
       else if (entry.type === 'blob') index.files.set(entry.path, { size: entry.size || 0, stamp: entry.sha, hash: entry.sha });
     }
-    return { index, revision: state.sha, writable: reader.canWrite(state), read: (file: string) => reader.readFile(file) };
+    return { index, revision: state.sha, writable: reader.canWrite(state), read: (file: string) => reader.readFile(file), local: undefined };
   };
   const notebook = (snapshot: Pick<FileSnapshot, 'notebooks'>, id: unknown) => {
     const nb = snapshot.notebooks.find(nb => nb.id === id);
@@ -179,16 +179,16 @@ export function createFileManagerRouter(base: string, source: SourceConfig): Rou
   };
   router.get('/api/files', async (req, res) => {
     try {
-      const state = await catalog(req), nb = notebook(state.index, req.query.notebookId);
+      const state = await catalog(res), nb = notebook(state.index, req.query.notebookId);
       const entries = [...state.index.directories.map(file => ({ path: file, directory: true, size: 0 })), ...[...state.index.files].map(([file, info]) => ({ path: file, directory: false, size: info.size }))].filter(entry => managedNotebook(entry.path, state.index.notebooks)?.id === nb.id && entry.path !== nb.root).map(entry => ({ ...entry, noteDirectory: entry.directory && isNotebookContent(entry.path.slice(nb.root.length + 1), nb), name: path.posix.basename(entry.path), hidden: entry.path.slice(nb.root.length + 1).split('/').some(p => p.startsWith('.')), presentation: filePresentation(entry.path) }));
-      res.json({ root: nb.root, entries, revision: state.revision, writable: state.writable, remote: source.type !== 'local' });
+      res.json({ root: nb.root, entries, revision: state.revision, writable: state.writable, remote: state.local === undefined });
     } catch (error) {
       fail(res, error);
     }
   });
   router.get('/api/files/read', async (req, res) => {
     try {
-      const state = await catalog(req), nb = notebook(state.index, req.query.notebookId), file = String(req.query.path || '');
+      const state = await catalog(res), nb = notebook(state.index, req.query.notebookId), file = String(req.query.path || '');
       if (managedNotebook(file, state.index.notebooks)?.id !== nb.id) throw new SourceError('Path is outside this notebook.', 403);
       if (state.index.directories.includes(file)) {
         const raw = state.index.files.has(file + '/_dir.yml') ? (await state.read(file + '/_dir.yml')).toString('utf8') : '';
@@ -203,12 +203,12 @@ export function createFileManagerRouter(base: string, source: SourceConfig): Rou
   });
   router.get('/api/assets', async (req, res) => {
     try {
-      const state = await catalog(req), nb = notebook(state.index, req.query.notebookId || state.index.notebooks[0]?.id);
+      const state = await catalog(res), nb = notebook(state.index, req.query.notebookId || state.index.notebooks[0]?.id);
       const root = assetRoot(nb), assets = [];
       for (const [file, info] of state.index.files) {
         if (managedNotebook(file, state.index.notebooks)?.id !== nb.id || file.slice(nb.root.length + 1).split('/').some(part => part.startsWith('.'))) continue;
         if (!withinPath(file, root) && filePresentation(file) === 'file' && !/\.(bin|zip|gz|7z|rar|woff2?|ttf|otf)$/i.test(file)) continue;
-        const hash = info.hash || (source.type === 'local' ? await localHash(source.path, file, info.size) : assetHash(await state.read(file)));
+        const hash = info.hash || (state.local !== undefined ? await localHash(state.local, file, info.size) : assetHash(await state.read(file)));
         assets.push({ ...assetInfo(file, withinPath(file, root) ? root : nb.root, hash, info.size, info.mtime), revision: state.revision });
       }
       res.json({ assets });
@@ -218,7 +218,7 @@ export function createFileManagerRouter(base: string, source: SourceConfig): Rou
   });
   router.get(['/api/files/raw', '/raw-assets/by-hash/:hash', '/raw-assets/*'], async (req, res) => {
     try {
-      const state = await catalog(req);
+      const state = await catalog(res);
       let file = String(req.query.path || '');
       let bytes: Buffer | undefined;
       if (req.params.hash) {
@@ -260,14 +260,14 @@ export function createFileManagerRouter(base: string, source: SourceConfig): Rou
   });
   router.post('/api/files', async (req, res) => {
     const execute = async () => {
-      const command = FileCommandSchema.parse(req.body?.command), state = await load(req, command);
+      const command = FileCommandSchema.parse(req.body?.command), state = await load(res, command);
       if (!state.writable) throw new SourceError('Write access on the main workspace branch is required.', 403);
       if (!req.body.revision || req.body.revision !== state.revision) throw new SourceError('The workspace changed. Reload before saving.', 409);
       const after = planFileChange(state.snapshot, command), paths = changedFiles(state.snapshot, after);
       let nextRevision: string;
-      if (source.type === 'local') {
-        applyLocalFilePlan(source.path, state.snapshot, after);
-        nextRevision = catalogRevision(localFileCatalog(source.path));
+      if (state.local !== undefined) {
+        applyLocalFilePlan(state.local, state.snapshot, after);
+        nextRevision = catalogRevision(localFileCatalog(state.local, state.notebooks));
       } else {
         const entries = (await state.reader!.getSnapshot()).entries;
         const changes: RemoteChange[] = paths.map(file => {
@@ -283,7 +283,8 @@ export function createFileManagerRouter(base: string, source: SourceConfig): Rou
       res.json({ revision: nextRevision, selectedPath: after.selectedPath, pathMap: after.pathMap, deletedPaths: paths.filter(file => !after.files.has(file)) });
     };
     try {
-      if (source.type === 'local') await serializeWorkspaceMutation(source.path, execute);
+      const { handle } = workspaceOf(res).home;
+      if (handle.kind === 'local') await serializeWorkspaceMutation(handle.root, execute);
       else await execute();
     } catch (error) {
       fail(res, error);

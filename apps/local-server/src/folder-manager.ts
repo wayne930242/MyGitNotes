@@ -2,19 +2,17 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { createRemoteSource, FolderCommandSchema, type FolderSnapshot, isNotebookContent, loadWorkspaceConfig, planFolderChange, RemoteSource, type SourceConfig, SourceError, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
+import { FolderCommandSchema, type FolderSnapshot, isNotebookContent, type NotebookConfig, planFolderChange, RemoteSource, SourceError, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
-import { authToken } from './auth.js';
+import { homeRepository } from './request-workspace.js';
 import { regularPath, writeFileAtomicSync } from './workspace-files.js';
 
 const documents = WORKSPACE_DOCUMENTS.map(document => document.file);
 
 const isText = (file: string) => /\.(md|markdown|txt)$/i.test(file) || path.posix.basename(file) === '_dir.yml';
-export function localFolderSnapshot(root: string): FolderSnapshot {
-  const config = loadWorkspaceConfig(root);
-  if (!config) throw new SourceError('Workspace configuration is missing.', 400);
-  const snapshot: FolderSnapshot = { notebooks: config.notebooks, directories: [], protectedPaths: [], files: new Map() };
+export function localFolderSnapshot(root: string, notebooks: NotebookConfig[]): FolderSnapshot {
+  const snapshot: FolderSnapshot = { notebooks, directories: [], protectedPaths: [], files: new Map() };
   let bytes = 0;
   const read = (file: string) => {
     const full = regularPath(root, file);
@@ -24,7 +22,7 @@ export function localFolderSnapshot(root: string): FolderSnapshot {
     if (bytes > 32 * 1024 * 1024) throw new SourceError('Folder operations currently support up to 32 MiB of notebook text.', 413);
     snapshot.files.set(file, fs.readFileSync(full, 'utf8'));
   };
-  for (const nb of config.notebooks) {
+  for (const nb of notebooks) {
     const rootPath = regularPath(root, nb.root);
     if (!fs.existsSync(rootPath)) continue;
     const visit = (directory: string) => {
@@ -109,12 +107,13 @@ async function remoteSnapshot(reader: RemoteSource): Promise<FolderSnapshot> {
   return snapshot;
 }
 
-export function createFolderManagerRouter(base: string, source: SourceConfig): Router {
+export function createFolderManagerRouter(): Router {
   const router = Router();
-  router.get('/', async (req, res) => {
+  router.get('/', async (_req, res) => {
     try {
-      if (source.type === 'local') return res.json({ revision: revision(localFolderSnapshot(source.path)), writable: await getCurrentBranch(source.path) === 'main' });
-      const reader = createRemoteSource(source, await authToken(req, base));
+      const { handle, config } = await homeRepository(res);
+      if (handle.kind === 'local') return res.json({ revision: revision(localFolderSnapshot(handle.root, config.notebooks)), writable: await getCurrentBranch(handle.root) === 'main' });
+      const { reader } = handle;
       const snapshot = await reader.getSnapshot(true);
       res.json({ revision: snapshot.sha, writable: reader.canWrite(snapshot) });
     } catch (error) {
@@ -125,19 +124,20 @@ export function createFolderManagerRouter(base: string, source: SourceConfig): R
     try {
       const command = FolderCommandSchema.safeParse(req.body?.command);
       if (!command.success || typeof req.body?.revision !== 'string') throw new SourceError('Invalid folder request.', 400);
-      if (source.type === 'local') {
-        return await serializeWorkspaceMutation(source.path, async () => {
-          if (await getCurrentBranch(source.path) !== 'main') throw new SourceError('Folder changes require the main workspace branch.', 403);
-          const before = localFolderSnapshot(source.path);
+      const { handle, config } = await homeRepository(res);
+      if (handle.kind === 'local') {
+        const { root } = handle;
+        return await serializeWorkspaceMutation(root, async () => {
+          if (await getCurrentBranch(root) !== 'main') throw new SourceError('Folder changes require the main workspace branch.', 403);
+          const before = localFolderSnapshot(root, config.notebooks);
           if (revision(before) !== req.body.revision) throw new SourceError('The workspace changed. Reload the folders and try again.', 409);
           const after = planFolderChange(before, command.data);
-          applyLocalFolderPlan(source.path, before, after);
-          return res.json({ selectedPath: after.selectedPath, revision: revision(localFolderSnapshot(source.path)) });
+          applyLocalFolderPlan(root, before, after);
+          return res.json({ selectedPath: after.selectedPath, revision: revision(localFolderSnapshot(root, config.notebooks)) });
         });
       }
-      const token = await authToken(req, base);
-      if (!token) throw new SourceError('Sign in with write access to manage folders.', 403);
-      const reader = createRemoteSource(source, token);
+      if (!handle.authenticated) throw new SourceError('Sign in with write access to manage folders.', 403);
+      const { reader } = handle;
       const before = await remoteSnapshot(reader);
       const current = await reader.getSnapshot();
       if (current.sha !== req.body.revision) throw new SourceError('The workspace changed. Reload the folders and try again.', 409);

@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
 import { applyLocalFolderPlan, localFolderSnapshot } from '../src/folder-manager.js';
-import { planFolderChange } from '@mygitnotes/core';
+import { loadWorkspaceConfig, planFolderChange } from '@mygitnotes/core';
 
 let root: string, server: Server, base: string;
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
@@ -64,7 +64,7 @@ it('rejects stale revisions, collisions, protected descendants and non-main writ
   expect((await post({ kind: 'create', notebookId: 'a', parent: '', name: 'forbidden' })).status).toBe(403);
 });
 it('rolls back completed writes when a later write fails', () => {
-  const before = localFolderSnapshot(root);
+  const before = localFolderSnapshot(root, loadWorkspaceConfig(root)!.notebooks);
   const after = planFolderChange(before, { kind: 'move', notebookId: 'a', path: 'one', parent: 'two' });
   const rename = fs.renameSync.bind(fs);
   let calls = 0;
@@ -73,7 +73,7 @@ it('rolls back completed writes when a later write fails', () => {
     return rename(...args);
   });
   expect(() => applyLocalFolderPlan(root, before, after)).toThrow('Injected disk failure');
-  expect(localFolderSnapshot(root)).toEqual(before);
+  expect(localFolderSnapshot(root, loadWorkspaceConfig(root)!.notebooks)).toEqual(before);
 });
 
 it.each(['', 'two'])('moving contents on deletion preserves destination metadata and nested metadata: %s', async destination => {

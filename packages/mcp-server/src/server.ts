@@ -1,18 +1,27 @@
-import { createRemoteSource, loadSourceConfig } from '@mygitnotes/core';
+import { createRemoteSource, createWorkspaceRepositories, deploymentConfigSource, RemoteManifest, type RemoteSource, type WorkspaceConfigSource, type WorkspaceSettings } from '@mygitnotes/core';
 import { callRemoteTool, isMutationTool, remoteTools } from './remote-tools.js';
 import { localTools } from './local-tools.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { handleAddAsset, handleCheckCoreUpdate, handleDeleteAsset, handleDeleteNote, handleGetFolderMetadata, handleGetGitStatus, handleGetNoteMetadata, handleGetStatuses, handleGetWorkspaceConfig, handleGitCommit, handleListAgentResources, handleListAssets, handleListFolders, handleListNotebooks, handleListNotes, handleMkdir, handleReadAgentResource, handleReadNote, handleReplaceNotes, handleSaveNote, handleSearchNotes, handleUpdateCore, handleUpdateFolderMetadata, handleUpdateNoteMetadata, ToolContext } from './tools/index.js';
 
-export function createMCPServer(repoRoot: string): Server {
-  const source = loadSourceConfig(repoRoot);
-  const ctx: ToolContext = { repoRoot: source.type === 'local' ? source.path : repoRoot, productRoot: repoRoot };
+/** A stdio session has no request of its own; adapters that select a workspace per request see no headers. */
+const STDIO_REQUEST = { headers: {} };
 
+/** The home repository read without a credential, with the manifest where the settings keep it. */
+function openRemoteHome(settings: WorkspaceSettings): RemoteSource {
+  const source = settings.home.source;
+  if (source.type === 'local') throw new Error('A remote home repository is required.');
+  return createWorkspaceRepositories<RemoteSource>({ home: settings.home, openHome: scope => createRemoteSource(source, undefined, fetch, undefined, scope), manifest: reader => settings.manifest(() => new RemoteManifest(reader)) }).home.handle;
+}
+
+/** `productRoot` is the Core checkout that ships product documents; the workspace comes from `configSource`. */
+export function createMCPServer(productRoot: string, configSource: WorkspaceConfigSource = deploymentConfigSource(productRoot)): Server {
   const server = new Server({ name: 'mygitnotes-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    if (source.type !== 'local') {
+    const { home } = await configSource.settings(STDIO_REQUEST);
+    if (home.source.type !== 'local') {
       return { tools: remoteTools.filter((t) => !isMutationTool(t.name)) };
     }
     return { tools: localTools };
@@ -23,10 +32,11 @@ export function createMCPServer(repoRoot: string): Server {
 
     try {
       let result: unknown;
-
-      if (source.type !== 'local') {
-        result = await callRemoteTool(createRemoteSource(source), name, args, false);
+      const settings = await configSource.settings(STDIO_REQUEST);
+      if (settings.home.source.type !== 'local') {
+        result = await callRemoteTool(openRemoteHome(settings), name, args, false);
       } else {
+        const ctx: ToolContext = { repoRoot: settings.home.source.path, productRoot };
         result = await dispatchLocalTool(ctx, name, args);
       }
 

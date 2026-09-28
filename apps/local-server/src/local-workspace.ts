@@ -1,18 +1,23 @@
 import { Request, Response, Router } from 'express';
-import path from 'node:path';
-import fs from 'node:fs';
-import { loadWorkspaceConfig, parseWorkspaceConfig, resolveWorkspaceConfigPath, serializeWorkspaceConfig, WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
-import { getCurrentBranch, getGitStatus, stageAndCommit } from '@mygitnotes/git';
+import { SourceError } from '@mygitnotes/core';
+import { getCurrentBranch, getGitStatus } from '@mygitnotes/git';
+import { localHome, workspaceOf } from './request-workspace.js';
 
-export function createLocalWorkspaceRouter(repoRoot: string): Router {
+export function createLocalWorkspaceRouter(): Router {
   const router = Router();
 
-  router.get('/', async (req: Request, res: Response) => {
+  router.get('/', async (_req: Request, res: Response) => {
     try {
-      const config = loadWorkspaceConfig(repoRoot);
-      const branch = await getCurrentBranch(repoRoot);
-      const gitStatus = await getGitStatus(repoRoot);
-      res.json({ repoRoot, branch, config, gitStatus, isCoreBranch: branch === 'core', source: { type: 'local', identity: `local:${repoRoot}` }, capabilities: { write: branch === 'main', local: true } });
+      const workspace = workspaceOf(res);
+      const { root } = localHome(res);
+      // A worktree before its first manifest reports no configuration, so Settings can create one.
+      const config = await workspace.manifest().then(manifest => manifest.config, (error: unknown) => {
+        if (error instanceof SourceError && error.status === 422) return null;
+        throw error;
+      });
+      const branch = await getCurrentBranch(root);
+      const gitStatus = await getGitStatus(root);
+      res.json({ repoRoot: root, branch, config, gitStatus, isCoreBranch: branch === 'core', source: { type: 'local', identity: workspace.home.ref.id }, capabilities: { write: branch === 'main', local: true } });
     } catch (err: unknown) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -22,17 +27,8 @@ export function createLocalWorkspaceRouter(repoRoot: string): Router {
   router.put('/config', async (req: Request, res: Response) => {
     try {
       const { configYaml } = req.body;
-      const validated = parseWorkspaceConfig(configYaml);
-      const configRel = resolveWorkspaceConfigPath(repoRoot) ?? path.posix.join('notes', WORKSPACE_CONFIG_FILENAME);
-      const configPath = path.join(repoRoot, configRel);
-      const configDir = path.dirname(configPath);
-      if (!fs.existsSync(configDir)) {
-        fs.mkdirSync(configDir, { recursive: true });
-      }
-      fs.writeFileSync(configPath, serializeWorkspaceConfig(validated), 'utf-8');
-
-      await stageAndCommit(repoRoot, [configRel], 'chore(workspace): update configuration');
-      res.json({ success: true, config: validated });
+      const { config } = await workspaceOf(res).saveManifest(configYaml, '');
+      res.json({ success: true, config });
     } catch (err: unknown) {
       res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { type RemoteSnapshot, RemoteSource } from '../src/remote-source.js';
+import { RemoteManifest } from '../src/remote-manifest.js';
 
 // A 200-note batch commit previously fired one readFile per note inside a single Promise.all,
 // which could burst up to 200 concurrent uncached blob reads at the GitHub/GitLab API. commitNotes
@@ -35,7 +36,8 @@ describe('RemoteSource.commitNotes bounds concurrent blob reads', () => {
       }
     }
 
-    const source = new FakeSource('owner/repo', 'main', 'token');
+    const source = new FakeSource('owner/repo', 'main', 'token', undefined, async () => (await manifestStore.load()).config);
+    const manifestStore = new RemoteManifest(source);
     const prefetchSpy = vi.spyOn(source, 'prefetchFiles');
     const notes = paths.map(path => ({ path, content: 'Body.', metadata: { title: 'Note' } }));
 

@@ -273,6 +273,8 @@ describe('R2 management on a hosted workspace', () => {
     expect(prefetch).toHaveBeenCalledWith(expect.arrayContaining(['notes/ex/rules.md', 'notes/ex/note-199.md']));
     expect(peak).toBe(1);
     read.mockRejectedValue(new SourceError('GitHub API is temporarily rate limited. Retry in 7 seconds.', 429, 7));
+    // Blobs read above are now in the shared cache; a new note forces an uncached platform read.
+    files.set('notes/ex/note-new.md', Buffer.from('# New\n\n[map](r2:ex/old/map.webp)\n'));
     const limited = await call('GET', '/api/r2/references?notebookId=ex&key=ex/old&directory=1');
     expect(limited.status).toBe(429);
     expect(limited.headers.get('Retry-After')).toBe('7');

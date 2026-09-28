@@ -5,6 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, Server } from 'node:http';
 import { createApp } from '../src/app.js';
+import { loadSourceConfig } from '@mygitnotes/core';
 import { credentialToken, seal, SessionStore, unseal } from '../src/auth.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -537,7 +538,7 @@ describe('GitHub login and shared agent authorization', () => {
     const { credential } = await store.get(grant.token);
     const issued = await store.get(credential);
     expect(issued).toMatchObject({ token: 'short-lived-token', refreshToken: 'github-refresh' });
-    expect(await credentialToken(root, credential)).toBe('short-lived-token');
+    expect(await credentialToken(root, credential, loadSourceConfig(root))).toBe('short-lived-token');
     expect(refreshes).toBe(0);
     await store.set(credential, { ...issued, upstreamExpiresAt: Date.now() - 1000 }, null);
     const read = (id: number) => fetch(grant.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Connection: 'close' }, body: JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'read_note', arguments: { path: 'notes/ex/private.md' } } }) });
@@ -555,7 +556,7 @@ describe('GitHub login and shared agent authorization', () => {
     expect(expired.status).toBe(401);
     expect((await expired.json()).error).toContain('Authorization expired');
     await store.set(credential, { ...issued, refreshToken: undefined, upstreamExpiresAt: undefined }, null);
-    expect(await credentialToken(root, credential)).toBe('short-lived-token');
+    expect(await credentialToken(root, credential, loadSourceConfig(root))).toBe('short-lived-token');
     expect(refreshes).toBe(1);
   });
 

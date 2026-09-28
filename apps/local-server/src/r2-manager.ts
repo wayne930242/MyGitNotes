@@ -1,8 +1,8 @@
 import { type Request, type Response, Router } from 'express';
 import fs from 'node:fs';
 import { getCurrentBranch } from '@mygitnotes/git';
-import { copyR2Object, createRemoteSource, deleteR2Object, isValidR2Key, listR2Objects, loadWorkspaceConfig, managedNotebook, type NotebookConfig, presignR2Object, presignR2Upload, putEmptyR2Object, r2ObjectExists, r2ReferenceKeys, type R2Settings, r2SettingsFromEnv, resolveSafePath, rewriteR2References, type SourceConfig, SourceError, withinPath } from '@mygitnotes/core';
-import { authToken } from './auth.js';
+import { copyR2Object, deleteR2Object, isValidR2Key, listR2Objects, managedNotebook, type NotebookConfig, presignR2Object, presignR2Upload, putEmptyR2Object, r2ObjectExists, r2ReferenceKeys, type R2Settings, r2SettingsFromEnv, resolveSafePath, rewriteR2References, SourceError, withinPath } from '@mygitnotes/core';
+import { homeRepository } from './request-workspace.js';
 import { localFileCatalog } from './file-manager.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { writeFileAtomicSync } from './workspace-files.js';
@@ -21,16 +21,16 @@ interface Workspace {
  * Manages every object in the configured R2 bucket; notes may reference any key, so the manager is not
  * confined to a notebook prefix. Every route requires the same workspace write capability as file-manager mutations.
  */
-export function createR2ManagerRouter(base: string, source: SourceConfig): Router {
+export function createR2ManagerRouter(): Router {
   const router = Router();
-  const workspace = async (req: Request): Promise<Workspace> => {
-    if (source.type === 'local') {
-      if (await getCurrentBranch(source.path) !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
-      const root = source.path, config = loadWorkspaceConfig(root);
-      if (!config) throw new SourceError('Workspace configuration is missing.', 400);
+  const workspace = async (res: Response): Promise<Workspace> => {
+    const { handle, config } = await homeRepository(res);
+    if (handle.kind === 'local') {
+      const { root } = handle;
+      if (await getCurrentBranch(root) !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
       return {
         notebooks: config.notebooks,
-        notes: async () => new Map([...localFileCatalog(root).files.keys()].filter(markdown).map(file => [file, fs.readFileSync(resolveSafePath(root, file), 'utf8')])),
+        notes: async () => new Map([...localFileCatalog(root, config.notebooks).files.keys()].filter(markdown).map(file => [file, fs.readFileSync(resolveSafePath(root, file), 'utf8')])),
         commit: (changes, read) =>
           serializeWorkspaceMutation(root, async () => {
             for (const file of changes.keys()) if (fs.readFileSync(resolveSafePath(root, file), 'utf8') !== read.get(file)) throw new SourceError('A note changed during the move. Reload and try again.', 409);
@@ -41,10 +41,9 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
           }),
       };
     }
-    const token = await authToken(req, base), reader = createRemoteSource(source, token);
-    const snapshot = token ? await reader.getSnapshot(true) : undefined;
+    const { reader } = handle;
+    const snapshot = handle.authenticated ? await reader.getSnapshot(true) : undefined;
     if (!snapshot || !reader.canWrite(snapshot)) throw new SourceError('Write access on the main workspace branch is required.', 403);
-    const config = await reader.config();
     return {
       notebooks: config.notebooks,
       notes: async () => {
@@ -63,8 +62,8 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
       },
     };
   };
-  const context = async (req: Request, input: Record<string, unknown>) => {
-    const space = await workspace(req);
+  const context = async (res: Response, input: Record<string, unknown>) => {
+    const space = await workspace(res);
     const notebook = space.notebooks.find(nb => nb.id === input.notebookId);
     if (!notebook) throw new SourceError('Choose a notebook.', 400);
     const settings = r2SettingsFromEnv();
@@ -97,21 +96,21 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
   router.get(
     '/api/r2',
     handle(async (req, res) => {
-      const { settings } = await context(req, req.query);
+      const { settings } = await context(res, req.query);
       res.json({ prefix: '', objects: (await listR2Objects(settings, '')).filter(object => isValidR2Key(object.key)) });
     }),
   );
   router.get(
     '/api/r2/raw',
     handle(async (req, res) => {
-      const { settings } = await context(req, req.query);
+      const { settings } = await context(res, req.query);
       res.redirect(302, await presignR2Object(settings, bucketKey(req.query.key), 300, req.query.download === '1'));
     }),
   );
   router.post(
     '/api/r2/upload',
     handle(async (req, res) => {
-      const { settings } = await context(req, req.body);
+      const { settings } = await context(res, req.body);
       const key = bucketKey(req.body.key);
       if (await r2ObjectExists(settings, key)) throw new SourceError('Destination already exists.', 409);
       res.json({ key, url: await presignR2Upload(settings, key) });
@@ -120,7 +119,7 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
   router.post(
     '/api/r2/mkdir',
     handle(async (req, res) => {
-      const { settings } = await context(req, req.body);
+      const { settings } = await context(res, req.body);
       const key = bucketKey(`${bucketKey(req.body.key)}/.keep`);
       if ((await listR2Objects(settings, `${req.body.key}/`)).length || await r2ObjectExists(settings, req.body.key) || !await putEmptyR2Object(settings, key)) throw new SourceError('Destination already exists.', 409);
       res.json({ key });
@@ -129,7 +128,7 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
   router.get(
     '/api/r2/references',
     handle(async (req, res) => {
-      const { space, settings } = await context(req, req.query);
+      const { space, settings } = await context(res, req.query);
       const objects = await affected(settings, bucketKey(req.query.key), req.query.directory === '1');
       res.json({ objects, notes: referencing(await space.notes(), objects) });
     }),
@@ -137,7 +136,7 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
   router.post(
     '/api/r2/move',
     handle(async (req, res) => {
-      const { space, settings } = await context(req, req.body);
+      const { space, settings } = await context(res, req.body);
       const key = bucketKey(req.body.key), destination = bucketKey(req.body.destination);
       if (withinPath(destination, key)) throw new SourceError('Choose a destination outside the moved item.', 400);
       const objects = await affected(settings, key, req.body.directory === true);
@@ -164,7 +163,7 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
   router.post(
     '/api/r2/delete',
     handle(async (req, res) => {
-      const { settings } = await context(req, req.body);
+      const { settings } = await context(res, req.body);
       const objects = await affected(settings, bucketKey(req.body.key), req.body.directory === true);
       for (const object of objects) await deleteR2Object(settings, object);
       res.json({ deleted: objects });

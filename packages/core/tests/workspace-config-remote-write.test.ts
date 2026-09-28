@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 import { type RemoteChange, type RemoteSnapshot, RemoteSource } from '../src/remote-source.js';
+import { RemoteManifest } from '../src/remote-manifest.js';
 
 const manifest = (root: string) => `schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: ${root}\n`;
 
@@ -21,19 +22,21 @@ function sourceWith(location: string, root: string) {
       return 'c'.repeat(40);
     }
   }
-  return { source: new FakeSource('owner/repo', 'main', 'token'), published };
+  const source = new FakeSource('owner/repo', 'main', 'token', undefined, async () => (await store.load()).config);
+  const store = new RemoteManifest(source);
+  return { source, store, published };
 }
 describe('A remote workspace manifest written from the browser', () => {
   it('commits to the file it was read from', async () => {
-    const { source, published } = sourceWith('.mygitnotes.yaml', 'posts');
-    await source.saveWorkspaceConfig(manifest('posts').replace('title: Test', 'title: Renamed'), 'a'.repeat(40));
+    const { store, published } = sourceWith('.mygitnotes.yaml', 'posts');
+    await store.save(manifest('posts').replace('title: Test', 'title: Renamed'), 'a'.repeat(40));
     expect(published).toHaveLength(1);
     expect(published[0][0].path).toBe('.mygitnotes.yaml');
     expect(parseYaml(published[0][0].content!).workspace.title).toBe('Renamed');
   });
   it('refuses a revision that no longer matches the repository', async () => {
-    const { source, published } = sourceWith('.mygitnotes.yaml', 'posts');
-    await expect(source.saveWorkspaceConfig(manifest('posts'), 'd'.repeat(40))).rejects.toThrow(/Reload before saving/);
+    const { store, published } = sourceWith('.mygitnotes.yaml', 'posts');
+    await expect(store.save(manifest('posts'), 'd'.repeat(40))).rejects.toThrow(/Reload before saving/);
     expect(published).toHaveLength(0);
   });
   it('confines the manifest scope to the manifest itself', async () => {
@@ -42,10 +45,10 @@ describe('A remote workspace manifest written from the browser', () => {
     expect(published).toHaveLength(0);
   });
   it('stores the roots as written, not the notes/ prefix the reader adds to a legacy layout', async () => {
-    const { source, published } = sourceWith('notes/.mygitnotes.yaml', 'ex');
+    const { source, store, published } = sourceWith('notes/.mygitnotes.yaml', 'ex');
     // The reader resolves `ex` to `notes/ex` for the app; writing that back would move the notebook.
     expect((await source.config()).notebooks[0].root).toBe('notes/ex');
-    await source.saveWorkspaceConfig(`schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n`, 'a'.repeat(40));
+    await store.save(`schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n`, 'a'.repeat(40));
     expect(parseYaml(published[0][0].content!).notebooks[0].root).toBe('ex');
   });
 });

@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import fs from 'node:fs';
-import { classifyResource, loadWorkspaceConfig, replaceNoteTags, resolveSafePath } from '@mygitnotes/core';
+import { classifyResource, replaceNoteTags, resolveSafePath } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
+import { localRepository } from './request-workspace.js';
 
-export function createLocalTagsRouter(repoRoot: string): Router {
+export function createLocalTagsRouter(): Router {
   const router = Router();
 
   // Apply an explicit tags array to each of the given notes and create one commit for the
@@ -21,8 +22,7 @@ export function createLocalTagsRouter(repoRoot: string): Router {
           return res.status(400).json({ error: 'Each entry requires a path and a tags array of strings.' });
         }
       }
-      const config = loadWorkspaceConfig(repoRoot);
-      if (!config) return res.status(400).json({ error: 'Workspace not configured.' });
+      const { root: repoRoot, config } = await localRepository(res);
 
       const result = await serializeWorkspaceMutation(repoRoot, async () => {
         // Validate and compute every entry's patched content before writing any of them, so a

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { GitHubSource } from '../src/github-source.js';
+import { openRemoteHome } from '../src/remote-factory.js';
 import { gitBlobId, MemoryRemoteCache, type RemoteCache } from '../src/remote-cache.js';
 
 const manifest = 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n';
@@ -39,7 +39,7 @@ function github(options: { corrupt?: boolean; } = {}) {
   });
 }
 
-const reader = (request: ReturnType<typeof github>, cache?: RemoteCache) => new GitHubSource('owner/repo', 'main', 'token', request as unknown as typeof fetch, cache);
+const reader = (request: ReturnType<typeof github>, cache?: RemoteCache) => openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'token', request as unknown as typeof fetch, cache).reader;
 const blobRequests = (request: ReturnType<typeof github>) => request.mock.calls.filter(([url]) => String(url).includes('/git/blobs/') || String(url) === 'https://api.github.com/graphql').length;
 
 describe('shared remote cache', () => {

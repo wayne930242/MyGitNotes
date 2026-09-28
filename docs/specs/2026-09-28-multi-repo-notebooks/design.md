@@ -92,8 +92,8 @@ Cross-repository orchestration of drafts and tag edits runs in the browser, one 
 
 Each step ends with `pnpm test`, `pnpm lint` and `pnpm build` passing, then a commit.
 
-1. **Core seams and server wiring.** Configuration source with the deployment adapter and a two-workspace test adapter; manifest stores; `RemoteSource` scope injection; credentials seam; `WorkspaceRepositories`; request workspace middleware; every router and both MCP servers converted. HTTP contract unchanged.
-2. **Per-repository contract.** Composite catalog and `RevisionSet`; the HTTP contract above; browser repositories state, query scope, per-repository drafts and grouped commit orchestration.
+1. **Core seams and server wiring.** Configuration source with the deployment adapter and a two-workspace test adapter; manifest stores; `RemoteSource` scope injection; `WorkspaceRepositories`; request workspace middleware; every router, local route and both MCP servers take their repository and manifest scope from the request workspace. HTTP contract unchanged. Routes, remote tools and stdio MCP tool internals still act on the home handle (`workspace.home`); resolving them per notebook belongs to step 2, where the contract gains `notebookId` and `repository`.
+2. **Per-repository contract.** Composite catalog and `RevisionSet`; the HTTP contract above; per-notebook resolution in HTTP routes, remote tools and stdio MCP tools (`ToolContext.repoRoot` becomes `ToolContext.workspace`); the credentials seam `RepositoryCredentials.tokenFor`; browser repositories state, query scope, per-repository drafts and grouped commit orchestration.
 3. **Notebook-qualified identity.** `NoteRef` through lookup, graph, selection, editor and list keys.
 4. **Stage 1 verification** (below), then report to the user.
 
@@ -126,4 +126,17 @@ Stage 2 gets its own step list in this file after the checkpoint.
 - Regression: full test suite, lint, build, and the existing QA scripts `qa-mobile`, `qa-live-editor`, `qa-note-focus`, `qa-file-manager`, `qa-note-navigation` against the demo workspace.
 - Browser anchor for stage 1: local demo workspace at 390 px and 1440 px — browse, edit, draft, commit, Screen, Focus, Study, file moves and Settings save behave as before.
 
+## Implementation notes
+
+- The deployment adapter reads the environment on every `settings()` call, matching the previous per-call `loadSourceConfig` in authentication; the mode chosen at startup stays fixed, and a later switch between local and remote fails with a restart message.
+- Independent routers (file manager, folder manager, R2, Study, Screen, Focus) now read through the request's shared cache like the other remote routes. The R2 rate-limit test adds an uncached note so it still exercises a platform read.
+- A local worktree without a manifest still answers `GET /api/workspace` with `config: null` and accepts its first manifest; path validation loads the manifest only when a request names a path.
+
 ## Friction Notes
+
+- Tried: Trust pi-lens LSP diagnostics after rebuilding `@mygitnotes/core`.
+  Found: The LSP kept the pre-build type declarations and reported missing exports that `tsc` and Vitest resolved; `tsc --noEmit` is the reliable check after a core rebuild.
+  Led by: pi-lens automated check
+- Tried: Compare format-check output against a `git stash` baseline, then run a browser QA script.
+  Found: Stash and pop refresh source modification times, so the QA freshness guard rejects the existing build until `pnpm build` runs again.
+  Led by: AAAAV Verify evidence-first loop

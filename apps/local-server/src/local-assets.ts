@@ -1,16 +1,16 @@
 import { Request, Response, Router } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
-import { assetHash, assetInfo, assetPath, assetRoot, decodeAsset, isAssetPath, loadWorkspaceConfig, resolveSafePath, scanAssets } from '@mygitnotes/core';
+import { assetHash, assetInfo, assetPath, assetRoot, decodeAsset, isAssetPath, resolveSafePath, scanAssets } from '@mygitnotes/core';
+import { localRepository } from './request-workspace.js';
 import { stageAndCommit } from '@mygitnotes/git';
 
-export function createLocalAssetsRouter(repoRoot: string): Router {
+export function createLocalAssetsRouter(): Router {
   const router = Router();
 
-  router.get('/', (req: Request, res: Response) => {
+  router.get('/', async (req: Request, res: Response) => {
     try {
-      const config = loadWorkspaceConfig(repoRoot);
-      if (!config) return res.json({ assets: [] });
+      const { root: repoRoot, config } = await localRepository(res);
 
       const notebookId = req.query.notebookId as string;
       const nb = config.notebooks.find((n) => n.id === notebookId) || config.notebooks[0];
@@ -26,13 +26,11 @@ export function createLocalAssetsRouter(repoRoot: string): Router {
 
   router.post('/', async (req: Request, res: Response) => {
     try {
+      const { root: repoRoot, config } = await localRepository(res);
       const { notebookId, filename, base64Content, directory = '' } = req.body;
       if (!notebookId || !filename || !base64Content) {
         return res.status(400).json({ error: 'notebookId, filename, base64Content required' });
       }
-
-      const config = loadWorkspaceConfig(repoRoot);
-      if (!config) return res.status(400).json({ error: 'Workspace not configured' });
 
       const nb = config.notebooks.find((n) => n.id === notebookId);
       if (!nb) return res.status(404).json({ error: `Notebook ${notebookId} not found` });
@@ -55,9 +53,9 @@ export function createLocalAssetsRouter(repoRoot: string): Router {
 
   router.patch('/', async (req, res) => {
     try {
-      const config = loadWorkspaceConfig(repoRoot);
+      const { root: repoRoot, config } = await localRepository(res);
       const { path: file, directory = '', filename } = req.body;
-      const nb = config?.notebooks.find(nb => typeof file === 'string' && isAssetPath(file, nb));
+      const nb = config.notebooks.find(nb => typeof file === 'string' && isAssetPath(file, nb));
       if (!nb) return res.status(403).json({ error: 'Path is not a workspace asset.' });
       const destination = assetPath(nb, directory, filename || path.posix.basename(file));
       const from = resolveSafePath(repoRoot, file);
@@ -83,13 +81,13 @@ export function createLocalAssetsRouter(repoRoot: string): Router {
   // Delete asset file
   router.delete('/', async (req: Request, res: Response) => {
     try {
+      const { root: repoRoot, config } = await localRepository(res);
       const assetPath = req.query.path as string;
       const noCommit = req.query.noCommit === 'true' || req.body?.noCommit === true;
       if (!assetPath) {
         return res.status(400).json({ error: 'path query parameter is required' });
       }
-      const config = loadWorkspaceConfig(repoRoot);
-      if (!config?.notebooks.some(nb => isAssetPath(assetPath, nb))) return res.status(403).json({ error: 'Path is not a workspace asset.' });
+      if (!config.notebooks.some(nb => isAssetPath(assetPath, nb))) return res.status(403).json({ error: 'Path is not a workspace asset.' });
       const safePath = resolveSafePath(repoRoot, assetPath);
       if (fs.existsSync(safePath)) {
         fs.unlinkSync(safePath);

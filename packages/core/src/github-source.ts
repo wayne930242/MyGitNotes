@@ -3,6 +3,7 @@ import { GitHubApi, SourceError } from './github-api.js';
 import { readGitHubArchive } from './github-archive.js';
 import { type RemoteChange, type RemoteEntry, type RemoteSnapshot, RemoteSource, type RepositoryInfo } from './remote-source.js';
 import { hashJson, type RemoteCache } from './remote-cache.js';
+import type { RepositoryScope } from './repository.js';
 export { SourceError } from './github-api.js';
 export type { RepositoryInfo } from './remote-source.js';
 export type GitHubEntry = RemoteEntry;
@@ -10,8 +11,8 @@ export type GitHubEntry = RemoteEntry;
 /** GitHub transport with its existing authorization-scoped cache. */
 export class GitHubSource extends RemoteSource {
   private client: GitHubApi;
-  constructor(repository: string, branch: string, token?: string, request: typeof fetch = fetch, cache?: RemoteCache) {
-    super(repository, branch, token, cache);
+  constructor(repository: string, branch: string, token: string | undefined, request: typeof fetch, cache: RemoteCache | undefined, scope: RepositoryScope) {
+    super(repository, branch, token, cache, scope);
     this.client = new GitHubApi(repository, token, request);
   }
   async api(endpoint: string, init: RequestInit = {}): Promise<any> {

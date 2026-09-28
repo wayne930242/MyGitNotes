@@ -2,12 +2,13 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { classifyResource, createRemoteSource, FOCUS_DOCUMENT, isProductAgentDoc, loadSourceConfig, loadWorkspaceConfig, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, parseRevision, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceNoteTags, resolveSafePath, SCREEN_DOCUMENT, SourceError, sourceIdentity, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource } from '@mygitnotes/core';
+import { classifyResource, deploymentConfigSource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, parseRevision, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceNoteTags, resolveSafePath, SCREEN_DOCUMENT, SourceError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRemoteMCP } from './mcp.js';
 import { createRemoteCoreUpdateRouter } from './remote-core-update.js';
 import { createLocalApp } from './local-app.js';
-import { authToken, createAuth } from './auth.js';
+import { createAuth } from './auth.js';
+import { localHome, remoteHome, requestWorkspace, workspaceOf } from './request-workspace.js';
 import { createStudyRouter } from './study.js';
 import { createWorkspaceDocumentRouter } from './workspace-document.js';
 import { createFolderManagerRouter } from './folder-manager.js';
@@ -31,30 +32,23 @@ export function applicationRoot() {
   return dir;
 }
 
-export function createApp(base: string): express.Express {
+/** `configSource` decides, per request, which workspace a request serves; it defaults to the deployment's environment and server configuration. */
+export function createApp(base: string, configSource: WorkspaceConfigSource = deploymentConfigSource(base)): express.Express {
   const app = express();
   app.disable('x-powered-by');
-  let source: ReturnType<typeof loadSourceConfig> | undefined;
-  let setupError = '';
-  try {
-    source = loadSourceConfig(base);
-    if (process.env.VERCEL && source.type === 'local') throw new Error('Vercel requires a GitHub or GitLab source. Configure MYGITNOTES_SOURCE, MYGITNOTES_REPOSITORY and MYGITNOTES_BRANCH.');
-  } catch (error) {
-    setupError = (error as Error).message;
-    source = undefined;
-  }
+  const local = configSource.mode === 'local';
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('X-Frame-Options', 'DENY');
     if (req.path.startsWith('/api') || req.path.startsWith('/raw-assets') || req.path.startsWith('/r2-assets') || (req.path === '/mcp' || req.path.startsWith('/mcp/'))) res.setHeader('Cache-Control', 'private, no-store');
-    if (source?.type === 'local') {
+    if (local) {
       const hostname = req.hostname;
       if (!['localhost', '127.0.0.1', '[::1]'].includes(hostname)) return res.status(403).json({ error: 'Local workspace access requires a loopback host.' });
     }
     const origin = req.headers.origin;
     const allowed = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
-    const isLocalDevOrigin = source?.type === 'local' && isLoopbackHttpOrigin(origin);
+    const isLocalDevOrigin = local && isLoopbackHttpOrigin(origin);
     if (origin && origin !== allowed && !isLocalDevOrigin) return res.status(403).json({ error: 'Origin is not allowed.' });
     next();
   });
@@ -62,13 +56,7 @@ export function createApp(base: string): express.Express {
   // held to the repository size limit, so the MCP route parses ahead of the shared 8 MiB ceiling.
   if (r2SettingsFromEnv()) app.use('/mcp', express.json({ limit: '64mb' }));
   app.use(express.json({ limit: '8mb' }));
-  app.use('/api/auth', createAuth(base));
-  if (source) app.use(createFileManagerRouter(base, source));
-  if (source) app.use(createR2ManagerRouter(base, source));
-  if (source) app.use('/api/study', createStudyRouter(base, source));
-  if (source) app.use('/api/screen-page', createWorkspaceDocumentRouter(base, source, SCREEN_DOCUMENT));
-  if (source) app.use('/api/focus-page', createWorkspaceDocumentRouter(base, source, FOCUS_DOCUMENT));
-  if (source) app.use('/api/folder-manager', createFolderManagerRouter(base, source));
+  app.use('/api/auth', createAuth(base, configSource));
   // Product reference documents come from this Core checkout, not from the workspace being served.
   app.get('/api/agent-resources/read', (req, res, next) => {
     const file = req.query.path;
@@ -79,37 +67,45 @@ export function createApp(base: string): express.Express {
       res.status(404).json({ error: (error as Error).message });
     }
   });
-  const cache = source && source.type !== 'local' ? createRemoteCache() : undefined;
-  app.use('/mcp', createRemoteMCP(base, source, cache));
-  if (source?.type === 'local') {
-    const root = source.path;
+  const cache = local ? undefined : createRemoteCache();
+  app.use('/mcp', createRemoteMCP(base, configSource, cache));
+  app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace(base, configSource, cache));
+  app.use(createFileManagerRouter());
+  app.use(createR2ManagerRouter());
+  app.use('/api/study', createStudyRouter());
+  app.use('/api/screen-page', createWorkspaceDocumentRouter(SCREEN_DOCUMENT));
+  app.use('/api/focus-page', createWorkspaceDocumentRouter(FOCUS_DOCUMENT));
+  app.use('/api/folder-manager', createFolderManagerRouter());
+  if (local) {
     app.get(
       '/r2-assets/*',
-      createR2AssetHandler(async (_res, notePath) => {
-        if (classifyResource(notePath, loadWorkspaceConfig(root)).type !== 'note') throw new Error('Path is not a configured note.');
+      createR2AssetHandler(async (res, notePath) => {
+        const { root } = localHome(res);
+        if (classifyResource(notePath, (await workspaceOf(res).manifest()).config).type !== 'note') throw new Error('Path is not a configured note.');
         return fs.readFileSync(resolveSafePath(root, notePath), 'utf8');
       }),
     );
-    app.use(createLocalApp(root, base));
+    app.use(createLocalApp(base));
   } else {
-    app.use(['/api', '/raw-assets', '/r2-assets'], async (req, res, next) => {
-      if (!source) return res.status(503).json({ error: setupError, setupRequired: true });
+    // Remote routes below still act on the home repository; per-notebook resolution replaces this in the per-repository contract step.
+    app.use(['/api', '/raw-assets', '/r2-assets'], (req, res, next) => {
       try {
-        const token = await authToken(req, base);
-        res.locals.reader = createRemoteSource(source, token, fetch, cache);
-        res.locals.authenticated = Boolean(token);
+        const home = remoteHome(res);
+        res.locals.reader = home.reader;
+        res.locals.authenticated = home.authenticated;
         next();
-      } catch {
-        res.status(401).json({ error: 'Session unavailable. Sign in again.' });
+      } catch (error) {
+        fail(res, error);
       }
     });
-    if (source) app.use('/api/core', createRemoteCoreUpdateRouter(base, source));
+    app.use('/api/core', createRemoteCoreUpdateRouter(base));
     app.get('/api/workspace', async (req, res) => {
       try {
+        const workspace = workspaceOf(res);
         const reader: RemoteSource = res.locals.reader;
         const snapshot = await reader.getSnapshot(req.query.fresh === '1');
-        const config = await reader.config();
-        res.json({ repoRoot: '', branch: reader.branch, config, gitStatus: { branch: reader.branch, isClean: true, staged: [], modified: [], untracked: [] }, isCoreBranch: reader.branch === 'core', source: { type: source!.type, identity: sourceIdentity(source!), repository: reader.repository }, revision: snapshot.sha, capabilities: { write: Boolean(res.locals.authenticated && snapshot.info.permissions?.push && reader.branch === 'main'), local: false } });
+        const { config } = await workspace.manifest();
+        res.json({ repoRoot: '', branch: reader.branch, config, gitStatus: { branch: reader.branch, isClean: true, staged: [], modified: [], untracked: [] }, isCoreBranch: reader.branch === 'core', source: { type: workspace.home.ref.source.type, identity: workspace.home.ref.id, repository: reader.repository }, revision: snapshot.sha, capabilities: { write: Boolean(res.locals.authenticated && snapshot.info.permissions?.push && reader.branch === 'main'), local: false } });
       } catch (error) {
         fail(res, error);
       }
@@ -119,9 +115,8 @@ export function createApp(base: string): express.Express {
         if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit the workspace manifest.', 403);
         const { configYaml, revision } = req.body;
         if (typeof configYaml !== 'string') throw new SourceError('configYaml is required.');
-        const reader: RemoteSource = res.locals.reader;
-        const result = await reader.saveWorkspaceConfig(configYaml, revision);
-        res.json({ success: true, config: await reader.config(), revision: result.revision });
+        const saved = await workspaceOf(res).saveManifest(configYaml, revision);
+        res.json({ success: true, config: saved.config, revision: saved.revision });
       } catch (error) {
         fail(res, error);
       }
@@ -304,7 +299,7 @@ export function createApp(base: string): express.Express {
         fail(res, error);
       }
     });
-    app.get('/api/git/status', (req, res) => res.json({ status: { branch: source?.branch || '', isClean: true, staged: [], modified: [], untracked: [] }, commits: [] }));
+    app.get('/api/git/status', (req, res) => res.json({ status: { branch: (res.locals.reader as RemoteSource).branch, isClean: true, staged: [], modified: [], untracked: [] }, commits: [] }));
     app.get('/api/agent-resources', async (req, res) => {
       try {
         const reader: RemoteSource = res.locals.reader;
