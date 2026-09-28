@@ -2,7 +2,6 @@
 title: Reading List
 tags: [inspiration]
 status: inbox
-updated: "2026-09-28T11:10:38.533Z"
 ---
 # Reading List
 
