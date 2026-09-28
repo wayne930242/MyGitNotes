@@ -8,7 +8,7 @@ import { type TranslationKey, useTranslation } from '../lib/i18n/index.js';
 import { noteCompletionAt, useNoteCandidates } from '../lib/note-completion.js';
 import { noteLinkHref, noteMarkdownLink } from '@mygitnotes/core/workspace-links';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
-import { DIRECTIVE_TEMPLATES, localizedDirectiveSnippet } from '../lib/directives.js';
+import { DIRECTIVE_TEMPLATES, localizedDirectiveSnippet } from '../lib/directive-editing.js';
 import './note-completion.css';
 import { copyLinePrompt } from '../lib/line-prompt-copy.js';
 import { attachLineGutterGesture } from '../lib/line-gutter-gesture.js';

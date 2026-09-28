@@ -2,7 +2,7 @@ import { Decoration, type DecorationSet } from '@codemirror/view';
 import type { EditorState, Range } from '@codemirror/state';
 import { syntaxTree } from '@codemirror/language';
 import { marked } from 'marked';
-import { findDirectiveBlocks } from '../../lib/directives.js';
+import { findDirectiveBlocks } from '../../lib/directive-editing.js';
 import { headingSlug, resolveWorkspaceHref } from '../../lib/workspace-links.js';
 import { parseYouTubeUrl } from '@mygitnotes/core/screen-page';
 import { DONE_EMOJI, DUE_EMOJI, findToken, isTaskLine, START_EMOJI, TIMESTAMP_EMOJI } from '../../lib/task-tokens.js';

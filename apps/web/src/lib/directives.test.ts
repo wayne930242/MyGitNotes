@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DIRECTIVE_TEMPLATES, findDirectiveBlocks, localizedDirectiveLabel, localizedDirectiveSnippet, localizedHandoutVariants, parseDirectiveAttributes, parseDirectiveModel, parseDirectiveTitle, stripMdxImports, transformDirectives, transformMdxComponents, updateDirectiveType, updateDirectiveVariant } from './directives.js';
+import { DIRECTIVE_TEMPLATES, findDirectiveBlocks, localizedDirectiveLabel, localizedDirectiveSnippet, parseDirectiveModel, updateDirectiveType, updateDirectiveVariant } from './directive-editing.js';
+import { localizedHandoutVariants, parseDirectiveAttributes, parseDirectiveTitle, stripMdxImports, transformDirectives, transformMdxComponents } from './directives.js';
 import { en, type TranslationKey } from './i18n/en.js';
 
 const enT = (key: TranslationKey): string => en[key] ?? key;

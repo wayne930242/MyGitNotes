@@ -1,6 +1,7 @@
 import { EditorView, WidgetType } from '@codemirror/view';
 import { isolateHistory } from '@codemirror/commands';
-import { DIRECTIVE_TEMPLATES, type DirectiveModel, localizedDirectiveLabel, localizedHandoutVariants, parseDirectiveModel, serializeDirectiveModel } from '../lib/directives.js';
+import { DIRECTIVE_TEMPLATES, type DirectiveModel, localizedDirectiveLabel, parseDirectiveModel, serializeDirectiveModel } from '../lib/directive-editing.js';
+import { localizedHandoutVariants } from '../lib/directives.js';
 import { renderNote } from '../lib/markdown.js';
 import { hydrateMermaid } from '../lib/mermaid.js';
 import type { TranslationKey } from '../lib/i18n/en.js';
