@@ -166,6 +166,9 @@ Each step ends with `pnpm test`, `pnpm lint` and `pnpm build` passing, then a co
 - The local write guard resolves each named path through the request's `notebookId` when present, since equal paths in two repositories cannot be told apart by path alone.
 - Notebook repositories do not get tsconfig path alias discovery; manifest `pathAliases` still apply.
 - Until step 5, both MCP servers act on the home repository and its notebooks only.
+- Screen, Focus and Study routes take `repository` (the home repository when absent) and answer with it; a Study action resolves the repository of its note's notebook, so the note and the Study record change in one commit there. The Focus ownership check leaves a Focus of a notebook the repository does not serve exactly as stored.
+- In the browser, Screen and Focus follow the open notebook's repository, and each repository's document draft is stored under `github-notes:<document>-draft:<repository id>` (the home repository's key is the earlier key, so drafts carry over). Pending documents are read from storage for every writable repository, so a draft stays in Changes after switching notebooks; a commit reads the draft from storage, settles it, and refreshes the open document when it belongs to that repository. A stored draft that cannot be read is listed as not committable and can be discarded.
+- Changes entries carry their repository and are keyed by `changeKey` (repository and path); `ChangeRequest.keys` names them, and a commit groups entries by their repository instead of searching repositories by path.
 
 ## Friction Notes
 

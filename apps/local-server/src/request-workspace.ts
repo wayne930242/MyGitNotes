@@ -112,6 +112,14 @@ export async function requestCatalog(res: express.Response, revisions: unknown, 
   return workspaceCatalog(config, available.map(repository => ({ id: repository.ref.id, notebooks: repository.notebooks, catalog: open(repository.handle, repository.notebooks) })), expected);
 }
 
+/** The repository a workspace-level request names, or the home repository when it names none; with the manifest scope that repository serves. */
+export async function repositoryOrHome(res: express.Response, id: unknown): Promise<{ id: RepositoryId; handle: RepositoryHandle; config: WorkspaceConfig; }> {
+  const workspace = workspaceOf(res);
+  if (id !== undefined && typeof id !== 'string') throw new SourceError('repository must be a string.');
+  const { ref, handle } = id ? await workspace.byId(id) : { ref: workspace.home.ref, handle: workspace.home.handle };
+  return { id: ref.id, handle, config: await workspace.scope(ref.id) };
+}
+
 /** The repository a request names in its `repository` field. */
 export async function namedRepository(res: express.Response, id: unknown): Promise<AvailableRepository<RepositoryHandle>> {
   if (typeof id !== 'string' || !id) throw new SourceError('repository is required.');

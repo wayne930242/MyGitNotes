@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FileDiff, GitCommit, RotateCcw } from 'lucide-react';
 import type { ChangeRequest, FileChange, GitStatus, NoteItem } from '../lib/types.js';
 import { fetchFileChanges, fetchFileDiff } from '../lib/api.js';
+import { changeKey } from '../lib/file-changes.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { Button } from './Button.js';
 import { DiffPreview } from './DiffPreview.js';
@@ -14,7 +15,7 @@ interface ChangesToolProps {
   onRestoreNote: (note: NoteItem) => void;
   onOpenCommitModal: (request?: ChangeRequest) => void;
   remoteChanges?: FileChange[];
-  getPreview?: (file: string) => string;
+  getPreview?: (file: FileChange) => string;
   writable: boolean;
   onSynced?: () => void;
 }
@@ -23,13 +24,13 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
   const { t } = useTranslation();
   const [localFiles, setFiles] = useState<FileChange[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [activePath, setActivePath] = useState<string>();
+  const [activeKey, setActiveKey] = useState<string>();
   const [diff, setDiff] = useState('');
   const [error, setError] = useState('');
   const [diffError, setDiffError] = useState('');
   const [loading, setLoading] = useState(false);
   const files = remoteChanges || localFiles;
-  const active = files.find(file => file.path === activePath);
+  const active = files.find(file => changeKey(file) === activeKey);
   useEffect(() => {
     if (remoteChanges) return;
     let cancelled = false;
@@ -48,7 +49,7 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
   const remote = Boolean(remoteChanges);
   /** A remote row is a draft held in this browser, so discarding it needs neither write access nor a committable state. */
   const canRestore = (file: FileChange) => remote || (writable && Boolean(file.available));
-  const preview = active && getPreview ? getPreview(active.path) : undefined;
+  const preview = active && getPreview ? getPreview(active) : undefined;
   useEffect(() => {
     let cancelled = false;
     /* eslint-disable react/set-state-in-effect -- The diff reset and loading flags belong to the selected revision request; preserve their ordering with cancellation and remote previews. */
@@ -77,8 +78,8 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
   }, [active?.path, active?.revision, active?.available, preview]);
   const manageable = files.filter(file => file.available);
   const restorable = files.filter(canRestore);
-  const chosen = manageable.filter(file => selected.includes(file.path));
-  const request = (action: ChangeRequest['action'], paths: string[]) => onOpenCommitModal({ action, paths });
+  const chosen = manageable.filter(file => selected.includes(changeKey(file)));
+  const request = (action: ChangeRequest['action'], keys: string[]) => onOpenCommitModal({ action, keys });
   return (
     <div className='panel-tool changes-tool'>
       {error && <EditorNotice tone='error'>{error}</EditorNotice>}
@@ -90,31 +91,26 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
               type='checkbox'
               checked={!!manageable.length && chosen.length === manageable.length}
               disabled={!writable || !manageable.length}
-              onChange={event =>
-                setSelected(
-                  event.target.checked
-                    ? manageable.map(file => file.path)
-                    : [],
-                )}
+              onChange={event => setSelected(event.target.checked ? manageable.map(changeKey) : [])}
             />
             {t('changes.selectAll')}
           </label>
           <ul className='changes-file-list'>
             {files.map(file => (
-              <li key={file.path} className='panel-change' data-change-path={file.path}>
+              <li key={changeKey(file)} className='panel-change' data-change-path={file.path}>
                 <div className='panel-change-heading'>
                   <input
                     type='checkbox'
                     aria-label={t('changes.selectFile', { path: file.path })}
-                    checked={selected.includes(file.path)}
+                    checked={selected.includes(changeKey(file))}
                     disabled={!writable || !file.available}
-                    onChange={event => setSelected(old => event.target.checked ? [...old, file.path] : old.filter(path => path !== file.path))}
+                    onChange={event => setSelected(old => event.target.checked ? [...old, changeKey(file)] : old.filter(key => key !== changeKey(file)))}
                   />
                   <Button
                     className='panel-file-title'
                     title={file.path}
-                    aria-pressed={activePath === file.path}
-                    onClick={() => setActivePath(old => old === file.path ? undefined : file.path)}
+                    aria-pressed={activeKey === changeKey(file)}
+                    onClick={() => setActiveKey(old => old === changeKey(file) ? undefined : changeKey(file))}
                   >
                     <FileDiff aria-hidden='true' />
                     <span>
@@ -125,7 +121,12 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
                 </div>
                 <div className='panel-change-actions'>
                   <span className='change-kind' data-kind={file.kind}>{t(`changes.${file.kind}`)}</span>
-                  <Button size='icon' title={t('changes.viewFile')} aria-label={t('panel.changesViewDiff', { path: file.path })} onClick={() => request('review', [file.path])}>
+                  <Button
+                    size='icon'
+                    title={t('changes.viewFile')}
+                    aria-label={t('panel.changesViewDiff', { path: file.path })}
+                    onClick={() => request('review', [changeKey(file)])}
+                  >
                     <FileDiff aria-hidden='true' />
                   </Button>
                   <Button
@@ -133,11 +134,11 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
                     title={t('common.restore')}
                     aria-label={t('changes.restoreFile', { path: file.path })}
                     disabled={!canRestore(file)}
-                    onClick={() => request('restore', [file.path])}
+                    onClick={() => request('restore', [changeKey(file)])}
                   >
                     <RotateCcw aria-hidden='true' />
                   </Button>
-                  <Button size='icon' title={t('changes.commitFile', { path: file.path })} aria-label={t('changes.commitFile', { path: file.path })} disabled={!writable || !file.available} onClick={() => request('commit', [file.path])}>
+                  <Button size='icon' title={t('changes.commitFile', { path: file.path })} aria-label={t('changes.commitFile', { path: file.path })} disabled={!writable || !file.available} onClick={() => request('commit', [changeKey(file)])}>
                     <GitCommit aria-hidden='true' />
                   </Button>
                 </div>
@@ -146,11 +147,11 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
           </ul>
           {active && <DiffPreview file={active} diff={diff} loading={loading} error={diffError} />}
           <div className='panel-bulk-actions'>
-            <Button variant='primary' disabled={!writable || !chosen.length} onClick={() => request('commit', chosen.map(file => file.path))}>
+            <Button variant='primary' disabled={!writable || !chosen.length} onClick={() => request('commit', chosen.map(changeKey))}>
               <GitCommit aria-hidden='true' />
               {t('changes.commitSelected', { count: chosen.length })}
             </Button>
-            <Button variant='danger' disabled={!restorable.length} onClick={() => request('restore', restorable.map(file => file.path))}>
+            <Button variant='danger' disabled={!restorable.length} onClick={() => request('restore', restorable.map(changeKey))}>
               <RotateCcw aria-hidden='true' />
               {t('changes.restoreAll')}
             </Button>

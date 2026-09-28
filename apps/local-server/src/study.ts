@@ -8,7 +8,7 @@ import { emptyStudyWorkspace, SourceError, STUDY_FILE, STUDY_MAX_BYTES, StudyWor
 import { applyStageAction, createStudyNote, defaultStudyProgression, findStudyNote, isNotebookContent, parseNoteContent, readNoteFile, readScreenPage, reconcileStudyNote, replaceNoteStatus, resolveSafePath, SCREEN_PAGE_FILE, StudyLaneActionSchema, studyLaneStatuses, undoStudyAction } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
-import { homeRepository, workspaceOf } from './request-workspace.js';
+import { notebookRepository, repositoryOrHome } from './request-workspace.js';
 import { readBoundedFile, readSnapshotText, revisionOf, writeFileAtomic } from './workspace-files.js';
 
 const readLocal = (root: string) => readBoundedFile(root, STUDY_FILE, STUDY_MAX_BYTES, 'Study data');
@@ -26,17 +26,17 @@ function fail(res: import('express').Response, error: unknown) {
 
 export function createStudyRouter(): Router {
   const router = Router();
-  router.get('/', async (_req, res) => {
+  router.get('/', async (req, res) => {
     try {
-      const { handle } = workspaceOf(res).home;
+      const { id, handle } = await repositoryOrHome(res, req.query.repository);
       if (handle.kind === 'local') {
         const raw = await readLocal(handle.root);
-        return res.json({ study: decode(raw), revision: revisionOf(raw), path: STUDY_FILE, writable: await getCurrentBranch(handle.root) === 'main' });
+        return res.json({ study: decode(raw), revision: revisionOf(raw), path: STUDY_FILE, writable: await getCurrentBranch(handle.root) === 'main', repository: id });
       }
       const { reader } = handle;
       const snapshot = await reader.getSnapshot();
       const raw = await readSnapshotText(reader, snapshot, STUDY_FILE);
-      res.json({ study: decode(raw), revision: snapshot.sha, path: STUDY_FILE, writable: reader.canWrite(snapshot) });
+      res.json({ study: decode(raw), revision: snapshot.sha, path: STUDY_FILE, writable: reader.canWrite(snapshot), repository: id });
     } catch (error) {
       fail(res, error);
     }
@@ -46,7 +46,8 @@ export function createStudyRouter(): Router {
       const validation = StudyLaneActionSchema.safeParse(req.body);
       if (!validation.success) throw new SourceError('Invalid review action.', 400);
       const body = validation.data;
-      const { handle, config } = await homeRepository(res);
+      // The note and its Study record live in the notebook's repository and change in one commit there.
+      const { handle, config } = await notebookRepository(res, body.notebookId);
       const execute = async () => {
         if (handle.kind === 'remote' && !handle.authenticated) throw new SourceError('Sign in with write access.', 403);
         const reader = handle.kind === 'remote' ? handle.reader : undefined;
@@ -101,10 +102,10 @@ export function createStudyRouter(): Router {
     try {
       const value = StudyWorkspaceSchema.safeParse(req.body?.study);
       const revision = req.body?.revision;
-      if (!value.success || typeof revision !== 'string' || !revision || Object.keys(req.body).some(key => !['study', 'revision'].includes(key))) throw new SourceError('Invalid study workspace configuration.', 400);
+      if (!value.success || typeof revision !== 'string' || !revision || Object.keys(req.body).some(key => !['study', 'revision', 'repository'].includes(key))) throw new SourceError('Invalid study workspace configuration.', 400);
       const yaml = stringify(value.data, { lineWidth: 0 });
       if (Buffer.byteLength(yaml) > STUDY_MAX_BYTES) throw new SourceError('Study data is too large.', 413);
-      const { handle } = workspaceOf(res).home;
+      const { id, handle } = await repositoryOrHome(res, req.body.repository);
       if (handle.kind === 'local') {
         const { root } = handle;
         return await serializeWorkspaceMutation(root, async () => {
@@ -112,12 +113,12 @@ export function createStudyRouter(): Router {
           const raw = await readLocal(root);
           if (revisionOf(raw) !== revision) throw new SourceError('The study workspace changed. Reload it before saving your draft.', 409);
           await writeFileAtomic(path.join(root, STUDY_FILE), yaml);
-          res.json({ study: value.data, revision: revisionOf(yaml), path: STUDY_FILE, writable: true });
+          res.json({ study: value.data, revision: revisionOf(yaml), path: STUDY_FILE, writable: true, repository: id });
         });
       }
       if (!handle.authenticated) throw new SourceError('Sign in with write access to save the study workspace.', 403);
       const saved = await handle.reader.saveStudyWorkspace(yaml, revision);
-      res.json({ study: value.data, revision: saved.revision, path: STUDY_FILE, writable: true });
+      res.json({ study: value.data, revision: saved.revision, path: STUDY_FILE, writable: true, repository: id });
     } catch (error) {
       fail(res, error);
     }

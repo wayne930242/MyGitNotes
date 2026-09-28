@@ -13,7 +13,8 @@ interface Snapshot {
   commit?: string;
 }
 const same = (a: StudyWorkspace, b: StudyWorkspace) => JSON.stringify(a) === JSON.stringify(b);
-export function useStudyWorkspace(onSaved: (note?: NoteItem) => void) {
+/** Study data of `repository`, the repository of the lanes' notebook; each notebook repository keeps its own. */
+export function useStudyWorkspace(repository: string | undefined, onSaved: (note?: NoteItem) => void) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const scope = useNoteQueryScope();
@@ -25,11 +26,12 @@ export function useStudyWorkspace(onSaved: (note?: NoteItem) => void) {
   saved.current = onSaved;
   /* eslint-enable react/refs */
   const read = useCallback(async (): Promise<Snapshot> => {
-    const response = await fetch('/api/study');
+    if (!repository) throw new Error(t('study.loadError'));
+    const response = await fetch(`/api/study?repository=${encodeURIComponent(repository)}`);
     if (!response.ok) throw new Error(t('study.loadError'));
     const value = await response.json();
     return { ...value, study: StudyWorkspaceSchema.parse(value.study) };
-  }, [t]);
+  }, [t, repository]);
   const reload = useCallback(async () => {
     if (busy.current) return;
     busy.current = true;
@@ -69,7 +71,7 @@ export function useStudyWorkspace(onSaved: (note?: NoteItem) => void) {
       // A GitHub commit to another file can advance HEAD without changing study data.
       const latest = await read();
       if (!same(latest.study, base.study)) throw new Error(t('study.conflict'));
-      const response = await fetch('/api/study', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ study: next, revision: latest.revision }) });
+      const response = await fetch('/api/study', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ study: next, revision: latest.revision, repository }) });
       if (!response.ok) throw new Error(t(response.status === 409 ? 'study.conflict' : 'study.saveError'));
       const result = await response.json();
       result.study = StudyWorkspaceSchema.parse(result.study);

@@ -47,6 +47,8 @@ export interface GitStatus {
 
 export interface FileChange {
   path: string;
+  /** The repository holding the change; two repositories can hold the same path. */
+  repository?: string;
   staged: boolean;
   unstaged: boolean;
   kind: 'added' | 'modified' | 'deleted' | 'conflict';
@@ -81,5 +83,6 @@ export interface FolderItem {
 
 export interface ChangeRequest {
   action: 'review' | 'commit' | 'restore';
-  paths: string[];
+  /** Changes named by `changeKey`. */
+  keys: string[];
 }

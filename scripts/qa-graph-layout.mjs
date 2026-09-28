@@ -45,7 +45,7 @@ try {
   await page.click('button[aria-label="Arrange notes"]');
   const elapsedMs = performance.now() - start;
   await page.click('button[aria-label="Choose or edit a swimlane"]');
-  const saved = page.waitForResponse(response => response.url().endsWith('/api/screen-page') && response.request().method() === 'PUT');
+  const saved = page.waitForResponse(response => new URL(response.url()).pathname === '/api/screen-page' && response.request().method() === 'PUT');
   await page.click('.graph-save-lane');
   await saved;
   const arranged = read(), before = metrics(nodes), after = metrics(arranged);
@@ -74,7 +74,7 @@ try {
       if (row) return row.graph.nodes;
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-    throw Error('Initial layout was not saved');
+    throw new Error('Initial layout was not saved');
   };
   const initial = await saveInitial('首次排列');
   assert(metrics(initial).meanWithinGroup < 200);

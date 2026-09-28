@@ -307,4 +307,8 @@ describe('Focus notebook ownership', () => {
     expect(owned.page.focuses[0].panes[0].tabs).toEqual([note('notes/work/a.md')]);
     expect(ownFocusPage(owned.page, notebooks, screen)).toEqual({ page: owned.page, foreign: false });
   });
+  it('keeps a Focus of a notebook another repository serves exactly as stored', () => {
+    const page = FocusPageSchema.parse({ version: 1, focuses: [focus({ notebookId: 'elsewhere', panes: [pane(note('notes/work/a.md'), note('anything/b.md'))] })] });
+    expect(ownFocusPage(page, notebooks, screen)).toEqual({ page, foreign: false });
+  });
 });

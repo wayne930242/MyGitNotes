@@ -254,11 +254,14 @@ export function foreignFocusTab(tab: FocusTab, notebookId: string, notebooks: re
   return owner?.id !== notebookId;
 }
 
-/** Drops every tab that belongs to another notebook and reports whether any was dropped. */
+/**
+ * Drops every tab that belongs to another notebook and reports whether any was dropped. `notebooks` are
+ * those this document's repository serves; a Focus of any other notebook is kept unchanged.
+ */
 export function ownFocusPage(page: FocusPage, notebooks: readonly { id: string; root: string; }[], screen: ScreenPage): { page: FocusPage; foreign: boolean; } {
   let foreign = false;
   const focuses = page.focuses.map(focus =>
-    pruneFocus(focus, tab => {
+    !notebooks.some(notebook => notebook.id === focus.notebookId) ? focus : pruneFocus(focus, tab => {
       const outside = foreignFocusTab(tab, focus.notebookId, notebooks, screen);
       if (outside) foreign = true;
       return !outside;

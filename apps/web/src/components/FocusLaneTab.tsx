@@ -12,14 +12,16 @@ const ignoreSaved = () => {};
 /** A lane shown read-only in a Focus tab: it keeps its own view, and its items open as they do on Screen. */
 export const FocusLaneTab: React.FC<{
   row: ScreenRow;
+  /** The repository of the lane's notebook, which keeps its Study data. */
+  repository: string | undefined;
   notebooks: NotebookConfig[];
   graph?: ReactNode;
   onOpenNote: (note: NoteListItem) => void;
   /** Opens a folder item without leaving the Notes page; false falls back to the Screen behavior. */
   onOpenFolder: (item: Extract<ScreenItem, { kind: 'folder'; }>) => boolean;
-}> = ({ row, notebooks, graph, onOpenNote, onOpenFolder }) => {
+}> = ({ row, repository, notebooks, graph, onOpenNote, onOpenFolder }) => {
   const { t } = useTranslation();
-  const study = useStudyWorkspace(ignoreSaved);
+  const study = useStudyWorkspace(repository, ignoreSaved);
   const { assets, error } = useScreenAssets(notebooks, row.notebookId);
   const [missing, setMissing] = React.useState(false);
   const itemOpen = useScreenItemOpen({ notebooks, assets, onOpenNote, onMissing: () => setMissing(true) });

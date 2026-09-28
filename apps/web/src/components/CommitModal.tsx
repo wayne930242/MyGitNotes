@@ -7,6 +7,7 @@ import { GitCommit, Minus, Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import type { ChangeRequest, FileChange, GitStatus } from '../lib/types.js';
 import { commitStagedChanges, fetchFileChanges, fetchFileDiff, generateSemanticCommit, manageFileChange } from '../lib/api.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { changeKey } from '../lib/file-changes.js';
 import { LoadingStatus } from './LoadingStatus.js';
 
 interface Props {
@@ -15,9 +16,9 @@ interface Props {
   writable: boolean;
   gitStatus: GitStatus | null;
   remoteChanges?: FileChange[];
-  getPreview?: (file: string) => string;
+  getPreview?: (file: FileChange) => string;
   restoreFile?: (file: FileChange) => Promise<void>;
-  commitFiles?: (files: string[], message: string) => Promise<void>;
+  commitFiles?: (files: FileChange[], message: string) => Promise<void>;
   onChanged: () => Promise<void>;
   onCommitted: () => Promise<void>;
   onClose: () => void;
@@ -33,15 +34,15 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
   // A row the remote refuses can never be committed, so it must not arrive selected: it would fail every
   // commit while its own checkbox stays disabled, leaving no way to commit anything else. Only a commit
   // request names what to commit; a restore asks to throw the draft away and must not stage it.
-  const initialSelection = (selectionMode ? request?.paths : undefined) || remoteChanges?.filter(file => file.available !== false).map(file => file.path) || [];
+  const initialSelection = (selectionMode ? request?.keys : undefined) || remoteChanges?.filter(file => file.available !== false).map(changeKey) || [];
   const requestApplied = useRef(false);
   const [restoreFiles, setRestoreFiles] = useState<FileChange[]>();
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState('');
   const [localChanges, setChanges] = useState<FileChange[]>([]);
   const [included, setIncluded] = useState<string[]>(initialSelection);
-  const changes = remoteChanges ? remoteChanges.map(file => ({ ...file, staged: included.includes(file.path), unstaged: !included.includes(file.path) })) : localChanges;
-  const [active, setActive] = useState<{ path: string; side: 'working' | 'staged'; }>();
+  const changes = remoteChanges ? remoteChanges.map(file => ({ ...file, staged: included.includes(changeKey(file)), unstaged: !included.includes(changeKey(file)) })) : localChanges;
+  const [active, setActive] = useState<{ key: string; side: 'working' | 'staged'; }>();
   const [diff, setDiff] = useState('');
   const [loading, setLoading] = useState(!remote);
   const [busy, setBusy] = useState(false);
@@ -49,8 +50,8 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
   const [notice, setNotice] = useState('');
   const [confirm, setConfirm] = useState<FileChange>();
   const [message, setMessage] = useState(remote ? `docs(notes): update ${remoteChanges?.length || 0} notes` : '');
-  const staged = changes.filter(file => selectionMode ? included.includes(file.path) : file.staged);
-  const selected = changes.find(file => file.path === active?.path);
+  const staged = changes.filter(file => selectionMode ? included.includes(changeKey(file)) : file.staged);
+  const selected = changes.find(file => changeKey(file) === active?.key);
   const refresh = async () => {
     if (!remote) setChanges(await fetchFileChanges());
     await onChanged();
@@ -70,7 +71,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
       cancelled = true;
     };
   }, [remote]);
-  const fileKey = changes.map(file => `${file.path}:${file.revision}:${file.staged}:${file.unstaged}`).join('|');
+  const fileKey = changes.map(file => `${changeKey(file)}:${file.revision}:${file.staged}:${file.unstaged}`).join('|');
   /* eslint-disable react-hooks/exhaustive-deps -- Only file-key changes repair selection; including active or request would reapply initial selection during manual preview changes. */
   useEffect(() => {
     if (!changes.length) {
@@ -80,8 +81,8 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
       return;
     }
     if (!selected || !selectionMode && (active?.side === 'staged' && !selected.staged || active?.side === 'working' && !selected.unstaged)) {
-      const file = selected || changes.find(file => file.path === request?.paths[0]) || changes[0];
-      setActive({ path: file.path, side: selectionMode || file.unstaged ? 'working' : 'staged' });
+      const file = selected || changes.find(file => changeKey(file) === request?.keys[0]) || changes[0];
+      setActive({ key: changeKey(file), side: selectionMode || file.unstaged ? 'working' : 'staged' });
     }
   }, [fileKey]);
   /* eslint-enable react-hooks/exhaustive-deps */
@@ -89,10 +90,10 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     if (loading || requestApplied.current) return;
     requestApplied.current = true;
     /* eslint-disable react/set-state-in-effect -- The one-shot restore request is applied after the asynchronous file list finishes; applying it during render would precede that lifecycle checkpoint. */
-    if (request?.action === 'restore') setRestoreFiles(changes.filter(file => request.paths.includes(file.path) && canRestore(file)));
+    if (request?.action === 'restore') setRestoreFiles(changes.filter(file => request.keys.includes(changeKey(file)) && canRestore(file)));
     /* eslint-enable react/set-state-in-effect */
   }, [loading, fileKey, changes, request, canRestore]);
-  const remoteDiff = active && getPreview ? getPreview(active.path) : undefined;
+  const remoteDiff = selected && getPreview ? getPreview(selected) : undefined;
   /* eslint-disable react-hooks/exhaustive-deps -- The diff request uses path, side, revision and availability primitives; observing the containing objects would refetch identical previews. */
   useEffect(() => {
     let cancelled = false;
@@ -101,7 +102,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     /* eslint-enable react/set-state-in-effect */
     setDiffLoading(false);
     setDiffError('');
-    if (!active) return;
+    if (!active || !selected) return;
     // A remote draft keeps its preview even when the remote refuses it, so its content stays readable
     // while the only remaining action is to discard it.
     if (remoteDiff !== undefined) {
@@ -110,7 +111,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     }
     if (!selected?.available) return;
     setDiffLoading(true);
-    void fetchFileDiff(active.path, selectionMode ? 'current' : active.side).then(value => {
+    void fetchFileDiff(selected.path, selectionMode ? 'current' : active.side).then(value => {
       if (!cancelled) setDiff(value);
     }).catch(error => {
       if (!cancelled) setDiffError(error.message);
@@ -120,7 +121,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     return () => {
       cancelled = true;
     };
-  }, [active?.path, active?.side, selected?.revision, selected?.available, remoteDiff, selectionMode]);
+  }, [active?.key, active?.side, selected?.revision, selected?.available, remoteDiff, selectionMode]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const act = async (file: FileChange, action: 'stage' | 'unstage' | 'restore', confirmed = false) => {
@@ -133,7 +134,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     setError('');
     setNotice('');
     try {
-      if (remote && action !== 'restore') setIncluded(previous => action === 'stage' ? [...new Set([...previous, file.path])] : previous.filter(path => path !== file.path));
+      if (remote && action !== 'restore') setIncluded(previous => action === 'stage' ? [...new Set([...previous, changeKey(file)])] : previous.filter(key => key !== changeKey(file)));
       else {
         if (remote) await restoreFile?.(file);
         else {
@@ -160,7 +161,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     setBusy(true);
     setError('');
     try {
-      if (commitFiles) await commitFiles(staged.map(file => file.path), message.trim());
+      if (commitFiles) await commitFiles(staged, message.trim());
       else await commitStagedChanges(staged, message.trim(), selectionMode);
       await onCommitted();
       onClose();
@@ -212,9 +213,9 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
         {t(selectionMode ? 'panel.changesFiles' : side === 'working' ? 'changes.unstaged' : remote ? 'changes.included' : 'changes.staged')} <small>{changes.filter(file => selectionMode || (side === 'working' ? file.unstaged : file.staged)).length}</small>
       </h4>
       {changes.filter(file => selectionMode || (side === 'working' ? file.unstaged : file.staged)).map(file => (
-        <div className='changes-row' key={file.path} data-change-path={file.path} data-side={side}>
-          <input type='checkbox' aria-label={t('changes.selectFile', { path: file.path })} checked={selectionMode ? included.includes(file.path) : file.staged} disabled={busy || !writable || !file.available} onChange={() => selectionMode ? setIncluded(old => old.includes(file.path) ? old.filter(path => path !== file.path) : [...old, file.path]) : void act(file, file.staged ? 'unstage' : 'stage')} />
-          <Button type='button' className='changes-file' aria-pressed={active?.path === file.path && active.side === side} onClick={() => setActive({ path: file.path, side })} title={file.path}>
+        <div className='changes-row' key={changeKey(file)} data-change-path={file.path} data-side={side}>
+          <input type='checkbox' aria-label={t('changes.selectFile', { path: file.path })} checked={selectionMode ? included.includes(changeKey(file)) : file.staged} disabled={busy || !writable || !file.available} onChange={() => selectionMode ? setIncluded(old => old.includes(changeKey(file)) ? old.filter(key => key !== changeKey(file)) : [...old, changeKey(file)]) : void act(file, file.staged ? 'unstage' : 'stage')} />
+          <Button type='button' className='changes-file' aria-pressed={active?.key === changeKey(file) && active.side === side} onClick={() => setActive({ key: changeKey(file), side })} title={file.path}>
             <span>{file.path}</span>
             <small>{t(`changes.${file.kind}`)}</small>
           </Button>

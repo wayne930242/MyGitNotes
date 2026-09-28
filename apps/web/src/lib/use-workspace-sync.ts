@@ -3,6 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { RepositoryId } from '@mygitnotes/core/repository';
 import { useScreenPage } from './use-screen-page.js';
 import { useFocusPage } from './use-focus-page.js';
+import { pendingDocumentDrafts } from './use-workspace-document.js';
+import { WORKSPACE_DOCUMENT_CLIENTS } from './workspace-document-clients.js';
 import { AssetItem, FolderItem, GitStatus, NoteItem, WorkspaceConfig } from './types.js';
 import { fetchAssets, fetchFolders, fetchGitStatus, fetchWorkspace } from './api.js';
 import { clearCommittedNotes, readWorkingNotes, updateWorkingNote, type WorkingNote, type WorkingNotes } from './working-notes.js';
@@ -71,13 +73,10 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return { repository, scope: draftScope(repository) };
   };
   const readDraft = (notebookId: string, path: string): WorkingNote | undefined => readWorkingNotes(draftScopeFor(notebookId).scope)[path];
-  /** The draft at a path in any repository; the Changes dialog names files by path until it groups them by repository. */
-  const readDraftAtPath = (path: string): WorkingNote | undefined => {
-    for (const repository of available) {
-      const entry = readWorkingNotes(draftScope(repository))[path];
-      if (entry) return entry;
-    }
-    return undefined;
+  /** The draft at a path of one repository, as the Changes dialog names it. */
+  const readDraftIn = (repositoryId: RepositoryId, path: string): WorkingNote | undefined => {
+    const repository = available.find(candidate => candidate.id === repositoryId);
+    return repository ? readWorkingNotes(draftScope(repository))[path] : undefined;
   };
   const updateDraft = (notebookId: string, path: string, entry: WorkingNote | null) => {
     const { repository, scope } = draftScopeFor(notebookId);
@@ -92,42 +91,30 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   /** Whether any repository holds staged drafts or unsaved editor drafts. */
   const hasPendingDrafts = () => available.some(repository => Object.keys(readWorkingNotes(draftScope(repository))).length || listLocalDrafts(draftScope(repository)).length);
 
-  const screen = useScreenPage(
-    remote ? sourceId : `local:${repoRoot}`,
-    () => {
-      void fetchGitStatus().then((result) => setGitStatus(result.status));
-    },
-    remote,
-    Boolean(config && sourceId),
-    config,
-  );
-
-  const focus = useFocusPage(
-    remote ? sourceId : `local:${repoRoot}`,
-    () => {
-      void fetchGitStatus().then((result) => setGitStatus(result.status));
-    },
-    remote,
-    Boolean(config && sourceId),
-    config,
-  );
+  // Workspace documents live in each notebook repository; the open notebook's repository serves Screen and Focus.
+  const documentRepository = repositoryFor(selectedNotebookId);
+  const documentRepositoryId = documentRepository && !documentRepository.unavailable ? documentRepository.id : undefined;
+  const refreshGitStatus = () => {
+    void fetchGitStatus().then((result) => setGitStatus(result.status));
+  };
+  const screen = useScreenPage(documentRepositoryId, refreshGitStatus, remote, Boolean(config && sourceId), config);
+  const focus = useFocusPage(documentRepositoryId, refreshGitStatus, remote, Boolean(config && sourceId), config);
 
   const documents = [screen, focus];
-  // Remote drafts wait in Changes until committed; local ones autosave to the working tree.
-  // Workspace documents live in the home repository.
-  const pendingDocuments = remote && homeRepository?.write ? documents.filter((document) => document.dirty) : [];
+  // Remote drafts wait in Changes until committed, whichever notebook is open; local ones autosave to the working tree.
+  const pendingDocuments = remote ? pendingDocumentDrafts(WORKSPACE_DOCUMENT_CLIENTS, repositories.filter(repository => repository.write).map(repository => repository.id), config) : [];
   const writable = repositories.filter(repository => repository.write).map(repository => repository.id).join('\n');
   /** Drafts of the repositories this requester may commit to, by `noteRefKey`: two repositories can hold the same path. */
   const activeWorkingNotes = useMemo<WorkingNotes>(() => (remote ? Object.fromEntries(writable.split('\n').filter(Boolean).flatMap(id => Object.values(workingNotes[id] ?? {})).map(entry => [noteRefKey(entry.note), entry])) : {}), [remote, writable, workingNotes]);
 
-  /* eslint-disable react/use-memo -- The joined pending-document paths intentionally form a stable primitive projection key. */
+  /* eslint-disable react/use-memo -- The joined pending-document repositories and paths intentionally form a stable primitive projection key. */
   /* eslint-disable react-hooks/exhaustive-deps -- Pending file paths are the status projection key; newly allocated document controllers with the same paths must retain the memoized status identity. */
   const gitStatus = useMemo<GitStatus | null>(() => {
     if (remote) {
       return { branch: homeBranch, isClean: !pendingDocuments.length && Object.keys(activeWorkingNotes).length === 0, staged: [], modified: [...Object.values(activeWorkingNotes).filter((entry) => entry.base).map((entry) => entry.note.path), ...pendingDocuments.map((document) => document.file)], untracked: Object.values(activeWorkingNotes).filter((entry) => !entry.base).map((entry) => entry.note.path) };
     }
     return serverGitStatus;
-  }, [remote, homeBranch, serverGitStatus, pendingDocuments.map((document) => document.file).join('\n'), activeWorkingNotes]);
+  }, [remote, homeBranch, serverGitStatus, pendingDocuments.map((document) => `${document.repository}\t${document.file}`).join('\n'), activeWorkingNotes]);
   /* eslint-enable react-hooks/exhaustive-deps */
   /* eslint-enable react/use-memo */
 
@@ -213,5 +200,5 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return note;
   };
 
-  return { selectedNotebookId, folders, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftAtPath, updateDraft, clearCommittedDrafts, hasPendingDrafts, screen, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
+  return { selectedNotebookId, folders, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, screen, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
 }

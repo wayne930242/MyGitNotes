@@ -25,7 +25,7 @@ await page.setViewport({ width: 1440, height: 1000 });
 const errors = collectPageErrors(page);
 const click = text => clickButton(page, text);
 const assert = (condition, message) => {
-  if (!condition) throw Error(message);
+  if (!condition) throw new Error(message);
 };
 const _selector = title => `button[role="combobox"][aria-label="Status for ${title}"]`;
 const _options = async selector => {
@@ -49,7 +49,7 @@ const _waitDisk = async (file, text) => {
     if (fs.existsSync(path.join(root, file)) && fs.readFileSync(path.join(root, file), 'utf8').includes(text)) return;
     await new Promise(r => setTimeout(r, 50));
   }
-  throw Error(`Missing saved text: ${text}`);
+  throw new Error(`Missing saved text: ${text}`);
 };
 const _manifest = 'schema_version: 1\nworkspace:\n  title: Status QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: research\n    title: Research\n    root: notes/research\n    statuses: [capture, published]\n';
 const replace = async (selector, text) => {
@@ -69,60 +69,76 @@ const hostedConfig = { schema_version: 1, workspace: { title: 'Working notes QA'
 const hostedRepository = { revision: async () => String(rev), index: async notebook => remoteNotes.filter(note => note.notebookId === notebook.id), contents: async notes => new Map(notes.map(note => [note.path, note.content])), memo: (kind, notebooks, compute) => compute() };
 const hostedCatalog = () => workspaceCatalog(hostedConfig, [{ id: 'github:working/fixture@main', notebooks: hostedConfig.notebooks, catalog: hostedRepository }]);
 page.on('request', async request => {
-  const url = new URL(request.url());
-  let body, status = 200;
-  if (url.pathname === '/api/workspace') body = { config: hostedConfig, configRevision: String(rev), local: false, home: 'github:working/fixture@main', repositories: [{ id: 'github:working/fixture@main', type: 'github', repository: 'working/fixture', branch: 'main', revision: String(rev), write: true, notebooks: ['example'] }] };
-  if (url.pathname === '/api/notes') {
-    assert(request.method() === 'GET', 'Edit used immediate remote save');
-    body = { notes: remoteNotes };
-  }
-  // Lists, lookups and counts come from server queries; answer them with the core catalog rules.
-  if (url.pathname === '/api/notes/query') {
-    const { query, options } = parseNoteQuery(Object.fromEntries(url.searchParams));
-    body = options.select ? await queryNotePaths(await hostedCatalog(), query) : await queryNotes(await hostedCatalog(), query, options);
-  }
-  if (url.pathname === '/api/notes/lookup') {
-    const lookup = JSON.parse(request.postData());
-    lookups.push(...lookup.notes.map(note => note.path));
-    body = await lookupNotes(await hostedCatalog(), lookup.notes, lookup.content === true);
-  }
-  if (url.pathname === '/api/notes/facets') body = await noteFacets(await hostedCatalog(), url.searchParams.get('showHidden') === '1');
-  if (url.pathname === '/api/notes/read') {
-    const file = url.searchParams.get('path');
-    reads.push(file);
-    const note = remoteNotes.find(n => n.path === file);
-    body = note ? { note } : { error: 'Missing' };
-    status = note ? 200 : 404;
-  }
-  if (url.pathname === '/api/notes/read-batch') {
-    const payload = JSON.parse(request.postData());
-    reads.push(...payload.paths);
-    body = { notes: payload.paths.map(file => remoteNotes.find(n => n.path === file)).filter(Boolean) };
-  }
-  if (url.pathname === '/api/notes/commit') {
-    const payload = JSON.parse(request.postData());
-    if (failCommit || payload.revision !== String(rev)) {
-      status = 409;
-      body = { error: 'Remote revision changed. Retry Commit.' };
-    } else {
-      commits.push(payload);
-      for (const note of payload.notes) {
-        const previous = remoteNotes.find(n => n.path === note.path) || makeNote(note.path.split('/').pop().slice(0, -3));
-        remoteNotes = remoteNotes.filter(n => n.path !== note.path);
-        remoteNotes.push({ ...previous, ...note, status: note.metadata.status });
-      }
-      bump();
-      body = { revision: String(rev), commit: { commitHash: String(rev) } };
+  // A failing mock must fail the run, not leave the request hanging until a navigation times out.
+  try {
+    const url = new URL(request.url());
+    let body, status = 200;
+    if (url.pathname === '/api/workspace') body = { config: hostedConfig, configRevision: String(rev), local: false, home: 'github:working/fixture@main', repositories: [{ id: 'github:working/fixture@main', type: 'github', repository: 'working/fixture', branch: 'main', revision: String(rev), write: true, notebooks: ['example'] }] };
+    if (url.pathname === '/api/notes') {
+      assert(request.method() === 'GET', 'Edit used immediate remote save');
+      body = { notes: remoteNotes };
     }
+    // Lists, lookups and counts come from server queries; answer them with the core catalog rules.
+    if (url.pathname === '/api/notes/query') {
+      const { query, options } = parseNoteQuery(Object.fromEntries(url.searchParams));
+      body = options.select ? await queryNotePaths(await hostedCatalog(), query) : await queryNotes(await hostedCatalog(), query, options);
+    }
+    if (url.pathname === '/api/notes/lookup') {
+      const lookup = JSON.parse(request.postData());
+      lookups.push(...lookup.notes.map(note => note.path));
+      body = await lookupNotes(await hostedCatalog(), lookup.notes, lookup.content === true);
+    }
+    if (url.pathname === '/api/notes/facets') body = await noteFacets(await hostedCatalog(), url.searchParams.get('showHidden') === '1');
+    if (url.pathname === '/api/notes/read') {
+      const file = url.searchParams.get('path');
+      reads.push(file);
+      const note = remoteNotes.find(n => n.path === file);
+      body = note ? { note } : { error: 'Missing' };
+      status = note ? 200 : 404;
+    }
+    if (url.pathname === '/api/notes/read-batch') {
+      const payload = JSON.parse(request.postData());
+      reads.push(...payload.paths);
+      body = { notes: payload.paths.map(file => remoteNotes.find(n => n.path === file)).filter(Boolean) };
+    }
+    if (url.pathname === '/api/notes/commit') {
+      const payload = JSON.parse(request.postData());
+      if (failCommit || payload.revision !== String(rev)) {
+        status = 409;
+        body = { error: 'Remote revision changed. Retry Commit.' };
+      } else {
+        commits.push(payload);
+        for (const note of payload.notes) {
+          const previous = remoteNotes.find(n => n.path === note.path) || makeNote(note.path.split('/').pop().slice(0, -3));
+          remoteNotes = remoteNotes.filter(n => n.path !== note.path);
+          remoteNotes.push({ ...previous, ...note, status: note.metadata.status });
+        }
+        bump();
+        body = { revision: String(rev), commit: { commitHash: String(rev) } };
+      }
+    }
+    if (url.pathname === '/api/auth/session') body = { authenticated: true, login: 'fixture', configured: true };
+    if (url.pathname === '/api/folders') body = { folders: [] };
+    if (url.pathname === '/api/assets') body = { assets: [] };
+    // The hosted workspace keeps its Screen and Focus documents in its own repository, not in the local QA server's.
+    if (url.pathname === '/api/screen-page' && request.method() === 'GET') body = { page: { version: 2, rows: [] }, revision: String(rev), path: '.github-notes-screen.yaml', writable: true, repository: url.searchParams.get('repository') };
+    if (url.pathname === '/api/focus-page' && request.method() === 'GET') body = { page: { version: 1, focuses: [] }, revision: String(rev), path: '.github-notes-focus.yaml', writable: true, repository: url.searchParams.get('repository') };
+    if (url.pathname === '/api/git/status') body = { status: { branch: 'main', isClean: true, staged: [], modified: [], untracked: [] }, commits: [] };
+    if (body) void request.respond({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    else void request.continue();
+  } catch (error) {
+    errors.push(`QA mock failed for ${request.url()}: ${error.message}`);
+    void request.respond({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: error.message }) });
   }
-  if (url.pathname === '/api/auth/session') body = { authenticated: true, login: 'fixture', configured: true };
-  if (url.pathname === '/api/folders') body = { folders: [] };
-  if (url.pathname === '/api/assets') body = { assets: [] };
-  if (url.pathname === '/api/git/status') body = { status: { branch: 'main', isClean: true, staged: [], modified: [], untracked: [] }, commits: [] };
-  if (body) void request.respond({ status, contentType: 'application/json', body: JSON.stringify(body) });
-  else void request.continue();
 });
-const pending = () => page.evaluate(() => JSON.parse(localStorage.getItem('gh_notes_working:github:working/fixture@main:main') || '{}'));
+const pending = () =>
+  page.evaluate(() => {
+    try {
+      return JSON.parse(localStorage.getItem('gh_notes_working:github:working/fixture@main:main') || '{}');
+    } catch (error) {
+      throw new Error(`Stored working notes are unreadable: ${error.message}`);
+    }
+  });
 const open = async (name) => {
   await page.goto(base + `/notebooks/example/notes/${name}.md`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('[aria-label="Close note"]');
@@ -243,7 +259,7 @@ try {
   await page.evaluate(() => {
     window.originalStorageSet = Storage.prototype.setItem;
     Storage.prototype.setItem = function(key, value) {
-      if (key.startsWith('gh_notes_working:')) throw Error('Storage full');
+      if (key.startsWith('gh_notes_working:')) throw new Error('Storage full');
       return window.originalStorageSet.call(this, key, value);
     };
   });

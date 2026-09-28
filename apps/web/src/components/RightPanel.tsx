@@ -31,7 +31,7 @@ interface RightPanelProps {
   onRestoreNote: (note: NoteItem) => void;
   onOpenCommitModal: (request?: ChangeRequest) => void;
   remoteChanges?: FileChange[];
-  getPreview?: (file: string) => string;
+  getPreview?: (file: FileChange) => string;
   writable: boolean;
   /** Present only for a local workspace, which syncs with its Git upstream. */
   onSynced?: () => void;

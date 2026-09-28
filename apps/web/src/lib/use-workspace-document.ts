@@ -8,7 +8,7 @@ import { createUnifiedDiff } from './unified-diff.js';
 export interface WorkspaceDocumentClient<T> {
   document: Pick<WorkspaceDocument<T>, 'file' | 'schema' | 'empty' | 'read'>;
   endpoint: string;
-  /** Local storage key prefix for the device draft, scoped by source. */
+  /** Local storage key prefix for the device draft, scoped by repository. */
   draftKey: string;
   messages: Record<'load' | 'conflict' | 'limit' | 'draft' | 'save' | 'loading', TranslationKey>;
 }
@@ -18,7 +18,7 @@ interface Snapshot<T> {
   writable: boolean;
   path: string;
 }
-interface WorkspaceDocumentDraft<T> {
+export interface WorkspaceDocumentDraft<T> {
   page: T;
   base: T;
   revision: string;
@@ -26,8 +26,60 @@ interface WorkspaceDocumentDraft<T> {
 }
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
-/** Device draft, autosave on local main, and commit handoff for one workspace document. */
-export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, scope: string, onSaved: () => void, remote = false, enabled = true, config: ScreenNotebookConfig | null = null) {
+/** Where one repository's draft of a document is stored; for the home repository this is the key drafts used before documents moved per repository. */
+export const documentDraftKey = (client: Pick<WorkspaceDocumentClient<unknown>, 'draftKey'>, repository: string) => `github-notes:${client.draftKey}:${repository}`;
+
+/** A stored draft; drafts saved before a format change migrate the same way as the stored file. */
+export function readDocumentDraft<T>(client: WorkspaceDocumentClient<T>, repository: string, config: ScreenNotebookConfig | null, fallbackBase: T): WorkspaceDocumentDraft<T> | undefined {
+  const raw = localStorage.getItem(documentDraftKey(client, repository));
+  if (!raw) return;
+  const value = JSON.parse(raw);
+  return { page: client.document.read(value.page, config), base: value.base ? client.document.read(value.base, config) : fallbackBase, revision: String(value.revision), legacy: !value.base };
+}
+
+/** A document draft of one repository, waiting in Changes for a remote commit. */
+export interface PendingDocument {
+  repository: string;
+  file: string;
+  page: unknown;
+  base: unknown;
+  diff: string;
+  /** Set when the stored draft cannot be read; such a draft can only be discarded. */
+  error?: string;
+}
+const documentDiff = (file: string, base: unknown, page: unknown) => createUnifiedDiff(file, file, stringify(base), stringify(page));
+
+/** Every stored document draft of the given repositories, whichever notebook is open. */
+export function pendingDocumentDrafts(clients: WorkspaceDocumentClient<unknown>[], repositories: string[], config: ScreenNotebookConfig | null): PendingDocument[] {
+  return repositories.flatMap(repository =>
+    clients.flatMap(client => {
+      let draft;
+      try {
+        draft = readDocumentDraft(client, repository, config, client.document.empty());
+      } catch (error) {
+        return [{ repository, file: client.document.file, page: undefined, base: undefined, diff: '', error: (error as Error).message }];
+      }
+      return draft ? [{ repository, file: client.document.file, page: draft.page, base: draft.base, diff: documentDiff(client.document.file, draft.base, draft.page) }] : [];
+    })
+  );
+}
+
+/** Discards one repository's draft of a document. */
+export const discardDocumentDraft = (client: Pick<WorkspaceDocumentClient<unknown>, 'draftKey'>, repository: string) => localStorage.removeItem(documentDraftKey(client, repository));
+
+/** Settles a committed draft: clears it, or keeps later edits on top of the committed page. */
+export function settleDocumentDraft(client: WorkspaceDocumentClient<unknown>, repository: string, sent: { page: unknown; }, revision: string, config: ScreenNotebookConfig | null) {
+  const key = documentDraftKey(client, repository);
+  const latest = readDocumentDraft(client, repository, config, sent.page);
+  if (!latest || same(latest.page, sent.page)) localStorage.removeItem(key);
+  else localStorage.setItem(key, JSON.stringify({ page: latest.page, base: sent.page, revision }));
+}
+
+/**
+ * Device draft, autosave on local main, and commit handoff for one workspace document of `repository`,
+ * the repository of the open notebook.
+ */
+export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, repository: string | undefined, onSaved: () => void, remote = false, enabled = true, config: ScreenNotebookConfig | null = null) {
   const { t } = useTranslation();
   const { document, endpoint, messages } = client;
   const [page, setPage] = useState<T>(document.empty);
@@ -43,24 +95,19 @@ export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, scop
   /* eslint-disable react/refs -- Document callbacks and the saved comparison baseline remain current without restarting loads. */
   notebooks.current = config;
   /* eslint-enable react/refs */
-  const key = `github-notes:${client.draftKey}:${scope}`;
+  const key = documentDraftKey(client, repository ?? '');
+  const target = repository ? `${endpoint}?repository=${encodeURIComponent(repository)}` : endpoint;
   const currentKey = useRef(key);
   /* eslint-disable react/refs -- Document callbacks and the saved comparison baseline remain current without restarting loads. */
   currentKey.current = key;
   /* eslint-enable react/refs */
-  const readDraft = useCallback((): WorkspaceDocumentDraft<T> | undefined => {
-    const raw = localStorage.getItem(key);
-    if (!raw) return;
-    const value = JSON.parse(raw);
-    // Drafts saved before a format change migrate the same way as the stored file.
-    return { page: document.read(value.page, notebooks.current), base: value.base ? document.read(value.base, notebooks.current) : base.current, revision: String(value.revision), legacy: !value.base };
-  }, [key, document]);
+  const readDraft = useCallback((): WorkspaceDocumentDraft<T> | undefined => readDocumentDraft(client, repository ?? '', notebooks.current, base.current), [client, repository]);
   const load = useCallback(async (discard = false) => {
-    if (!enabled) return;
+    if (!enabled || !repository) return;
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(endpoint);
+      const response = await fetch(target);
       if (!response.ok) throw new Error(t(messages.load));
       const record: Snapshot<T> = await response.json();
       record.page = document.schema.parse(record.page);
@@ -80,7 +127,7 @@ export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, scop
     } finally {
       if (currentKey.current === key) setLoading(false);
     }
-  }, [key, enabled, remote, readDraft, t, endpoint, messages, document]);
+  }, [key, enabled, repository, remote, readDraft, t, target, messages, document]);
   useEffect(() => {
     /* eslint-disable react/set-state-in-effect -- Loading synchronizes a persisted workspace document and its recovery draft; the request lifecycle owns loading, error and conflict state. */
     void load();
@@ -114,7 +161,7 @@ export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, scop
     const sent = current.current;
     setSaving(true);
     try {
-      const response = await fetch(endpoint, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: sent, revision: revision.current }) });
+      const response = await fetch(target, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: sent, revision: revision.current, repository }) });
       if (!response.ok) throw new Error(t(response.status === 409 ? messages.conflict : messages.save));
       const record: Snapshot<T> = await response.json();
       if (currentKey.current !== key) return;
@@ -135,41 +182,15 @@ export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, scop
     } finally {
       setSaving(false);
     }
-  }, [remote, saving, snapshot, dirty, key, readDraft, t, endpoint, messages]);
+  }, [remote, saving, snapshot, dirty, key, readDraft, t, target, repository, messages]);
   useEffect(() => {
     if (!enabled || loading || remote || !dirty || saving || error) return;
     const timer = setTimeout(() => void save(), 350);
     return () => clearTimeout(timer);
   }, [page, enabled, loading, remote, dirty, saving, error, save]);
-  const commitDraft = () => {
-    if (error || loading) throw new Error(error || t(messages.loading));
-    const draft = readDraft();
-    if (!draft || !same(draft.page, current.current)) throw new Error(t(messages.conflict));
-    return draft;
-  };
-  /** Captures the draft for a remote commit; `committed` settles it after the commit lands. */
-  const prepareCommit = () => {
-    const draft = commitDraft();
-    return { path: document.file, page: draft.page, base: draft.base, committed: (nextRevision: string) => committed(draft, nextRevision) };
-  };
-  const committed = (sent: WorkspaceDocumentDraft<T>, nextRevision: string) => {
-    const latest = readDraft();
-    base.current = sent.page;
-    revision.current = nextRevision;
-    setSnapshot(record => record && { ...record, page: sent.page, revision: nextRevision });
-    if (!latest || same(latest.page, sent.page)) {
-      localStorage.removeItem(key);
-      setDirty(false);
-    } else {
-      current.current = latest.page;
-      setPage(latest.page);
-      setDirty(true);
-      localStorage.setItem(key, JSON.stringify({ page: latest.page, base: sent.page, revision: nextRevision }));
-    }
-  };
   /* eslint-disable react/refs -- Document callbacks and the saved comparison baseline remain current without restarting loads. */
-  const diff = dirty ? createUnifiedDiff(document.file, document.file, stringify(base.current), stringify(page)) : '';
+  const diff = dirty ? documentDiff(document.file, base.current, page) : '';
   /* eslint-enable react/refs */
-  return { file: document.file, page, change, save, reload: () => load(true), refresh: () => load(), loading, saving, dirty, error, writable: Boolean(snapshot?.writable), setError, prepareCommit, diff };
+  return { client: client as WorkspaceDocumentClient<unknown>, repository, file: document.file, page, change, save, reload: () => load(true), refresh: () => load(), loading, saving, dirty, error, writable: Boolean(snapshot?.writable), setError, diff };
 }
 export type WorkspaceDocumentController<T> = ReturnType<typeof useWorkspaceDocument<T>>;

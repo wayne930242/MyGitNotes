@@ -7,30 +7,14 @@ import { emptyFocusPage, FOCUS_MAX_TABS, FocusError, type FocusLayout } from '@m
 import type { ScreenRow } from '@mygitnotes/core/screen-page';
 import { useNoteFocus } from './use-note-focus.js';
 import { CURRENT_FOCUS } from './focus-view.js';
-import type { FocusPageController } from './use-focus-page.js';
+import { focusDocumentClient, type FocusPageController } from './use-focus-page.js';
+import type { WorkspaceDocumentClient } from './use-workspace-document.js';
 
 const SCOPE = 'use-note-focus-test', NOTEBOOK = 'life';
 const storageKey = `github-notes:focus-view:${SCOPE}:${NOTEBOOK}`;
 
 function fakeController(): FocusPageController {
-  return {
-    file: '.github-notes-focus.yaml',
-    page: emptyFocusPage(),
-    change: () => {},
-    save: async () => {},
-    reload: async () => {},
-    refresh: async () => {},
-    loading: false,
-    saving: false,
-    dirty: false,
-    error: '',
-    writable: true,
-    setError: () => {},
-    prepareCommit: () => {
-      throw new Error('unused');
-    },
-    diff: '',
-  };
+  return { client: focusDocumentClient as WorkspaceDocumentClient<unknown>, repository: 'local:/workspace', file: '.github-notes-focus.yaml', page: emptyFocusPage(), change: () => {}, save: async () => {}, reload: async () => {}, refresh: async () => {}, loading: false, saving: false, dirty: false, error: '', writable: true, setError: () => {}, diff: '' };
 }
 const lane = (id: string): ScreenRow => ({ id, notebookId: NOTEBOOK, kind: 'custom', name: id, view: 'small', items: [] });
 

@@ -33,7 +33,7 @@ try {
   await page.waitForFunction(() => document.body.innerText.includes('created-nested.md'));
   await page.waitForSelector('[data-live-markdown] .cm-content');
   await click('Source');
-  if (!fs.existsSync(path.join(root, 'notes/example/projects/deep/created-nested.md'))) throw Error('Created note missing from selected folder');
+  if (!fs.existsSync(path.join(root, 'notes/example/projects/deep/created-nested.md'))) throw new Error('Created note missing from selected folder');
   console.log('PASS nested note creation');
   await page.waitForSelector('button[aria-label="Document tools"]');
   await page.click('button[aria-label="Document tools"]');
@@ -80,6 +80,9 @@ try {
     if (u.pathname === '/api/folders') body = { folders: [] };
     if (u.pathname === '/api/assets') body = { assets: [] };
     if (u.pathname === '/api/agent-resources') body = { instructions: [], skills: [], docs: [] };
+    // The hosted workspace keeps its Screen and Focus documents in its own repository, not in the local QA server's.
+    if (u.pathname === '/api/screen-page' && req.method() === 'GET') body = { page: { version: 2, rows: [] }, revision: 'r1', path: '.github-notes-screen.yaml', writable: true, repository: u.searchParams.get('repository') };
+    if (u.pathname === '/api/focus-page' && req.method() === 'GET') body = { page: { version: 1, focuses: [] }, revision: 'r1', path: '.github-notes-focus.yaml', writable: true, repository: u.searchParams.get('repository') };
     if (u.pathname === '/api/git/status') body = { status: { branch: 'main', isClean: true, staged: [], modified: [], untracked: [] }, commits: [] };
     if (u.pathname === '/api/auth/session') body = { authenticated: signedIn, login: signedIn ? 'test-owner' : undefined, configured: true };
     if (u.pathname === '/api/auth/agent-tokens') body = { grants };
@@ -97,25 +100,25 @@ try {
   });
   await page.goto(base + '/notes', { waitUntil: 'networkidle0' });
   await page.waitForSelector('table');
-  if (!await page.$('button[title="Card View"]') || !await page.$('button[title="Kanban View"]')) throw Error('Original view controls missing');
-  if (await page.$eval('tbody button[role="combobox"]', e => !e.disabled)) throw Error('Public status control editable');
-  if (await page.evaluate(() => Array.from(document.querySelectorAll('button')).some(b => ['New Note', 'Create Note'].includes(b.textContent.trim()) && !b.disabled))) throw Error('Public new note action enabled');
+  if (!await page.$('button[title="Card View"]') || !await page.$('button[title="Kanban View"]')) throw new Error('Original view controls missing');
+  if (await page.$eval('tbody button[role="combobox"]', e => !e.disabled)) throw new Error('Public status control editable');
+  if (await page.evaluate(() => Array.from(document.querySelectorAll('button')).some(b => ['New Note', 'Create Note'].includes(b.textContent.trim()) && !b.disabled))) throw new Error('Public new note action enabled');
   await page.click('tbody tr');
   await page.waitForSelector('[data-live-markdown]');
-  if (await page.evaluate(() => window.__xss)) throw Error('Unsafe Markdown');
+  if (await page.evaluate(() => window.__xss)) throw new Error('Unsafe Markdown');
   await click('Source');
-  if (!await page.$eval('textarea[aria-label="Note content"]', e => e.readOnly)) throw Error('Public editor not readonly');
+  if (!await page.$eval('textarea[aria-label="Note content"]', e => e.readOnly)) throw new Error('Public editor not readonly');
   await page.click('button[aria-label="Document tools"]');
   // The panel reopens on the last used tool, which is already Image here.
   await page.waitForSelector('.note-panel-tabs [role="tab"][aria-label="Insert image"]');
   if (!await page.$('.note-panel-tabs [role="tab"][aria-label="Insert image"][aria-selected="true"]')) await page.click('.note-panel-tabs [role="tab"][aria-label="Insert image"]');
   await page.waitForSelector('.note-document-panel[data-panel="assets"]');
   await page.keyboard.press('Escape');
-  if (!await page.$('button[aria-label="Close note"]')) throw Error('Asset Escape closed entire note');
+  if (!await page.$('button[aria-label="Close note"]')) throw new Error('Asset Escape closed entire note');
   await page.waitForFunction(() => !document.querySelector('.note-document-panel[data-open="true"]'));
   // Esc closes panels only; the zoomed note closes through its Close button.
   await page.keyboard.press('Escape');
-  if (!await page.$('button[aria-label="Close note"]')) throw Error('Escape closed the zoomed note');
+  if (!await page.$('button[aria-label="Close note"]')) throw new Error('Escape closed the zoomed note');
   await page.click('button[aria-label="Close note"]');
   await page.waitForFunction(() => !document.querySelector('button[aria-label="Close note"]'));
   console.log('PASS readonly asset browser and layered Escape shortcuts');
@@ -125,12 +128,12 @@ try {
   await page.click('#settings-manifest [role="tab"]:first-child');
   await page.waitForSelector('#settings-manifest textarea');
   await page.waitForSelector('#settings-manifest textarea');
-  if (!await page.$eval('#settings-manifest textarea', e => e.readOnly)) throw Error('Remote manifest editable');
+  if (!await page.$eval('#settings-manifest textarea', e => e.readOnly)) throw new Error('Remote manifest editable');
   await page.evaluate(() => Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('GitHub Dark'))?.click());
   await page.waitForFunction(() => document.documentElement.classList.contains('dark'));
   await page.screenshot({ path: `${product}/artifacts/qa/restored-settings-dark.png`, fullPage: true });
   await page.reload({ waitUntil: 'networkidle0' });
-  if (!await page.evaluate(() => document.documentElement.classList.contains('dark'))) throw Error('Theme lost on reload');
+  if (!await page.evaluate(() => document.documentElement.classList.contains('dark'))) throw new Error('Theme lost on reload');
   await click('Notes');
   await page.waitForSelector('table');
   await page.screenshot({ path: `${product}/artifacts/qa/restored-list-dark.png`, fullPage: true });
@@ -139,7 +142,7 @@ try {
   await page.screenshot({ path: `${product}/artifacts/qa/restored-cards-dark.png`, fullPage: true });
   await page.click('button[title="Kanban View"]');
   await page.waitForSelector('[data-notepath]');
-  if (await page.$eval('[data-notepath]', e => e.draggable)) throw Error('Public Kanban draggable');
+  if (await page.$eval('[data-notepath]', e => e.draggable)) throw new Error('Public Kanban draggable');
   console.log('PASS restored navigation, table/cards/Kanban, Settings palettes, theme persistence and readonly controls');
   signedIn = true;
   await page.goto(base + '/settings', { waitUntil: 'networkidle0' });
@@ -148,14 +151,14 @@ try {
   await page.type('input[aria-label="MCP client name"]', 'ChatGPT UAT');
   await click('Create grant');
   await page.waitForSelector('input[aria-label="MCP connection URL"]');
-  if (await page.$eval('input[aria-label="MCP connection URL"]', e => e.value) !== base + '/mcp/' + demoToken) throw Error('Connector URL missing token');
+  if (await page.$eval('input[aria-label="MCP connection URL"]', e => e.value) !== base + '/mcp/' + demoToken) throw new Error('Connector URL missing token');
   await click('Dismiss');
   await page.screenshot({ path: `${product}/artifacts/qa/restored-access-control.png`, fullPage: true });
   await click('Revoke');
   await click('Confirm revoke');
   await page.waitForFunction(() => document.body.innerText.includes('No persistent agent grants yet'));
   console.log('PASS connector URL and manual revoke UI');
-  if (errors.length) throw Error(`Browser errors: ${errors.join('; ')}`);
+  if (errors.length) throw new Error(`Browser errors: ${errors.join('; ')}`);
   console.log('PASS no browser runtime errors');
 } catch (error) {
   console.log('UI failure state', await page.evaluate(() => ({ alerts: Array.from(document.querySelectorAll('[role="alert"]')).map(e => e.textContent), buttons: Array.from(document.querySelectorAll('button')).map(e => ({ text: e.textContent, disabled: e.disabled })), url: location.pathname, inputs: Array.from(document.querySelectorAll('input')).map(e => ({ label: e.getAttribute('aria-label'), value: e.getAttribute('aria-label')?.includes('URL') ? 'redacted' : e.type === 'file' ? 'file' : e.value })), text: document.body.innerText.slice(-2500) })));

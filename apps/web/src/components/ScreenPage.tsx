@@ -47,7 +47,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
     setReorderScope({ selectedNotebookId, focusedLaneId });
     setReorder(false);
   }
-  const study = useStudyWorkspace(onStudySaved);
+  const study = useStudyWorkspace(screen.repository, onStudySaved);
   const { assets, error: assetError, loading: assetsLoading, retry: retryAssets } = useScreenAssets(notebooks, selectedNotebookId);
   const [studyToolbar, setStudyToolbar] = useState<HTMLDivElement | null>(null);
   const [editing, setEditing] = useState<string>();

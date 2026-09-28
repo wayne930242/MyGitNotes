@@ -25,7 +25,7 @@ const click = async (text, within = '') => {
       return;
     }
   }
-  throw Error('Missing button ' + text);
+  throw new Error('Missing button ' + text);
 };
 const cardA = '[data-graph-note="notes/a/a.md"]', cardB = '[data-graph-note="notes/a/b.md"]';
 const setMode = async (card, mode) => {
@@ -42,7 +42,7 @@ const waitFile = async (file, text, present = true) => {
     if (fs.readFileSync(path.join(root, file), 'utf8').includes(text) === present) return;
     await pause(100);
   }
-  throw Error(`${present ? 'Missing' : 'Lingering'} saved content ${file}: ${text}`);
+  throw new Error(`${present ? 'Missing' : 'Lingering'} saved content ${file}: ${text}`);
 };
 // The editor's own undo binds Mod-z, which is Command on macOS.
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
@@ -317,7 +317,7 @@ try {
     }),
   );
   await page.click('.graph-lane-label');
-  const savedLayoutResponse = page.waitForResponse(response => response.url().endsWith('/api/screen-page') && response.request().method() === 'PUT');
+  const savedLayoutResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/screen-page' && response.request().method() === 'PUT');
   await click('Save swimlane', '.graph-lane-panel');
   const savedLayoutRecord = await (await savedLayoutResponse).json();
   const savedLayoutRow = savedLayoutRecord.page.rows.find(row => row.id === saved.id);

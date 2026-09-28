@@ -2,12 +2,15 @@ import { readWorkingNotes, type WorkingNote, type WorkingNotes } from '../lib/wo
 import { mergeNote, sameValue } from '../lib/merge-note.js';
 import { ApiError, commitRemoteNotes, fetchWorkspace, readNotes } from '../lib/api.js';
 import { draftScope, type WorkspaceRepository } from '../lib/workspace-repositories.js';
-import type { NoteItem } from '../lib/types.js';
+import { readDocumentDraft, settleDocumentDraft, type WorkspaceDocumentClient } from '../lib/use-workspace-document.js';
+import { documentClientOf } from '../lib/workspace-document-clients.js';
+import type { FileChange, NoteItem } from '../lib/types.js';
 import type { I18nContextValue } from '../lib/i18n/index.js';
 import type { WorkspaceState } from './workspace-state.js';
 
 interface Params {
   documents: WorkspaceState['documents'];
+  config: WorkspaceState['config'];
   sourceId: WorkspaceState['sourceId'];
   t: I18nContextValue['t'];
   stageWorkingNote: WorkspaceState['stageWorkingNote'];
@@ -15,7 +18,13 @@ interface Params {
   setRepositoryRevision: WorkspaceState['setRepositoryRevision'];
 }
 
-type PreparedDocument = ReturnType<WorkspaceState['documents'][number]['prepareCommit']>;
+/** A document draft read from one repository's storage for its commit. */
+interface PreparedDocument {
+  client: WorkspaceDocumentClient<unknown>;
+  path: string;
+  page: unknown;
+  base: unknown;
+}
 interface CommitGroup {
   repository: WorkspaceRepository;
   entries: WorkingNote[];
@@ -23,7 +32,7 @@ interface CommitGroup {
 }
 
 /** Commits selected drafts one repository at a time, one commit each, stopping at the first repository that fails. */
-export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision }: Params) {
+export function useWorkingNoteCommit({ documents, config, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision }: Params) {
   /** One repository's drafts, merged onto its latest revision and committed as one commit. */
   const commitGroup = async ({ repository, entries, documents: sentDocuments }: CommitGroup, message: string) => {
     if (!repository.write) throw new Error('Sign in with write access to this workspace before committing.');
@@ -68,32 +77,36 @@ export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote,
     if (reviewRequired) throw new Error(t('changes.reviewRequired'));
     if (!Object.keys(sent).length && !sentDocuments.length) return;
     const result = await commitRemoteNotes(repository.id, Object.values(sent).map(entry => ({ path: entry.note.path, content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base })), expected, message, sentDocuments.map(({ path, page, base }) => ({ path, page, base })));
-    for (const document of sentDocuments) document.committed(result.revision);
+    for (const document of sentDocuments) {
+      settleDocumentDraft(document.client, repository.id, document, result.revision, config);
+      // The open notebook's document shows the committed page and any edit made meanwhile.
+      documents.find(live => live.client === document.client && live.repository === repository.id)?.refresh();
+    }
     clearCommittedDrafts(repository, sent);
     setRepositoryRevision(repository.id, result.revision);
   };
 
-  const commitWorkingNotes = async (files: string[], message: string) => {
-    const sentDocuments = documents.filter(document => files.includes(document.file)).map(document => document.prepareCommit());
+  /** Commits the selected changes, each named by its repository and path. */
+  const commitWorkingNotes = async (files: FileChange[], message: string) => {
     const workspace = await fetchWorkspace(true);
     if (workspace.home !== sourceId) throw new Error('Sign in with write access to this workspace before committing.');
     const repositories = workspace.repositories.filter(repository => !repository.unavailable);
     const groups = new Map<string, CommitGroup>();
-    const groupOf = (repository: WorkspaceRepository) => {
+    for (const file of files) {
+      const repository = repositories.find(candidate => candidate.id === file.repository);
+      if (!repository) throw new Error('Pending files changed. Review the selection again.');
       const group = groups.get(repository.id) ?? { repository, entries: [], documents: [] };
       groups.set(repository.id, group);
-      return group;
-    };
-    for (const file of files.filter(file => !sentDocuments.some(document => document.path === file))) {
-      const found = repositories.map(repository => ({ repository, entry: readWorkingNotes(draftScope(repository))[file] })).find(item => item.entry);
-      if (!found) throw new Error('Pending files changed. Review the selection again.');
-      groupOf(found.repository).entries.push(found.entry);
-    }
-    // Workspace documents live in the home repository.
-    if (sentDocuments.length) {
-      const home = repositories.find(repository => repository.id === workspace.home);
-      if (!home) throw new Error('Sign in with write access to this workspace before committing.');
-      groupOf(home).documents.push(...sentDocuments);
+      const client = documentClientOf(file.path);
+      if (client) {
+        const draft = readDocumentDraft(client, repository.id, config, client.document.empty());
+        if (!draft) throw new Error('Pending files changed. Review the selection again.');
+        group.documents.push({ client, path: file.path, page: draft.page, base: draft.base });
+        continue;
+      }
+      const entry = readWorkingNotes(draftScope(repository))[file.path];
+      if (!entry) throw new Error('Pending files changed. Review the selection again.');
+      group.entries.push(entry);
     }
     const committed: string[] = [];
     for (const group of groups.values()) {

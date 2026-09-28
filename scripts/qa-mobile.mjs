@@ -21,7 +21,7 @@ await page.setViewport({ width: 1440, height: 1000 });
 const errors = collectPageErrors(page);
 
 const assert = (condition, message) => {
-  if (!condition) throw Error(message);
+  if (!condition) throw new Error(message);
 };
 const bounds = async selector =>
   page.$eval(selector, element => {
@@ -58,14 +58,14 @@ const click = async text => {
       }
     }
   }
-  throw Error('Missing visible button: ' + text);
+  throw new Error('Missing visible button: ' + text);
 };
 const waitDisk = async (relative, text) => {
   for (let i = 0; i < 50; i++) {
     if (fs.readFileSync(path.join(root, relative), 'utf8').includes(text)) return;
     await new Promise(r => setTimeout(r, 100));
   }
-  throw Error('Content not saved: ' + relative);
+  throw new Error('Content not saved: ' + relative);
 };
 const touchClient = await page.createCDPSession();
 const swipe = async (from, to, cancel = false) => {
@@ -396,6 +396,9 @@ try {
     if (url.pathname === '/api/assets') body = { assets: [] };
     if (url.pathname === '/api/auth/session') body = { authenticated: true, login: 'mobile-owner', configured: true, provider: 'github' };
     if (url.pathname === '/api/auth/agent-tokens') body = { grants: [] };
+    // The hosted workspace keeps its Screen and Focus documents in its own repository, not in the local QA server's.
+    if (url.pathname === '/api/screen-page' && request.method() === 'GET') body = { page: { version: 2, rows: [] }, revision: 'r1', path: '.github-notes-screen.yaml', writable: true, repository: url.searchParams.get('repository') };
+    if (url.pathname === '/api/focus-page' && request.method() === 'GET') body = { page: { version: 1, focuses: [] }, revision: 'r1', path: '.github-notes-focus.yaml', writable: true, repository: url.searchParams.get('repository') };
     if (url.pathname === '/api/git/status') body = { status: { branch: 'main', isClean: true, staged: [], modified: [], untracked: [] }, commits: [] };
     if (body) void request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     else void request.continue();

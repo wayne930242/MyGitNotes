@@ -20,6 +20,8 @@ import { useChangeDialog } from './app/useChangeDialog.js';
 import { useShortcutSurface } from './app/useShortcutSurface.js';
 import { type NoteListItem, noteQueryStatuses, noteRefKey, sameNote } from '@mygitnotes/core/note-query';
 import { useWorkspaceSync } from './lib/use-workspace-sync.js';
+import { discardDocumentDraft } from './lib/use-workspace-document.js';
+import { documentClientOf } from './lib/workspace-document-clients.js';
 import { WorkspaceLinks } from './components/WorkspaceLinks.js';
 import { ImageLightbox } from './components/ImageLightbox.js';
 import { useNavigate } from 'react-router-dom';
@@ -92,7 +94,7 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const editorRoute = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
 
-  const { selectedNotebookId, folders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, actionError, setActionError, repoRoot, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftAtPath, updateDraft, clearCommittedDrafts, hasPendingDrafts, screen, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
+  const { selectedNotebookId, folders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, actionError, setActionError, repoRoot, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, screen, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
   const refreshDocuments = async () => {
     await Promise.all(documents.map(document => document.refresh()));
   };
@@ -100,7 +102,8 @@ const AppContent: React.FC = () => {
   const canWrite = canWriteNotebook(selectedNotebookId);
   const branch = repositoryFor(selectedNotebookId)?.branch ?? homeBranch;
   // Workspace documents and the manifest live in the home repository.
-  const documentsWritable = Boolean(homeRepository?.write);
+  /** The manifest lives in the home repository. */
+  const manifestWritable = Boolean(homeRepository?.write);
   // A workspace-wide tag change commits to every repository that serves a notebook.
   const canManageTags = repositories.some(repository => repository.notebooks.length) && repositories.every(repository => repository.write || !repository.notebooks.length);
   const editorRegistry = useNoteEditorRegistry();
@@ -115,11 +118,11 @@ const AppContent: React.FC = () => {
 
   const { facetsQuery, notebookFacets, notebookStatuses, newNoteStatuses, selectedTags, workspaceTagNames, noteTagActions, searchQuery, viewMode, folderless } = useBrowseFacets({ showHidden, config, scopeNotebookId, selectedFolders, selectedNotebookId, route, canManageTags, previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag });
 
-  const { focusCapacity, notebookLanes, noteFocus, focusDisplay, focusNarrowView, setFocusNarrowView, addingToFocus, setAddingToFocus, activePaneNote, focusDocumentPanel, setDocumentContainer, showFocus } = useFocusPanes({ screen, selectedNotebookId, focusPage, remote, sourceId, repoRoot, activeTab, route, canWrite: documentsWritable, editorRegistry, location, navigate, loading, editorRoute, config });
+  const { focusCapacity, notebookLanes, noteFocus, focusDisplay, focusNarrowView, setFocusNarrowView, addingToFocus, setAddingToFocus, activePaneNote, focusDocumentPanel, setDocumentContainer, showFocus } = useFocusPanes({ screen, selectedNotebookId, focusPage, remote, sourceId, repoRoot, activeTab, route, canWrite: canWriteNotebook(selectedNotebookId), editorRegistry, location, navigate, loading, editorRoute, config });
 
   const { changeFilters, clearFilters, changeAllNotebooks, setActiveTab, agentSystemRef, resourceNavigationBusy, setResourceNavigationBusy, notebookSwitchBusy, setSelectedNotebookId, setSelectedFolder, setViewMode } = useWorkspaceNavigation({ location, queryState, selectedFolders, setFilterQuery, navigate, route, activeTab, selectedNotebookId, folderRoot, viewMode, selectedFolder, config, editorRegistry, fileManagerRef, loading, editorRoute });
 
-  const { commitRequest, isCommitOpen, setIsCommitOpen, openCommitModal, panelRemoteChanges, panelGetPreview } = useChangeDialog({ activeTab, agentSystemRef, remote, documents, setActionError, activeWorkingNotes, pendingDocuments, canWriteNotebook, documentsWritable });
+  const { commitRequest, isCommitOpen, setIsCommitOpen, openCommitModal, panelRemoteChanges, panelGetPreview } = useChangeDialog({ activeTab, agentSystemRef, remote, documents, setActionError, activeWorkingNotes, pendingDocuments, canWriteNotebook, repositoryFor });
 
   // Aggregated tags across the workspace for autocomplete
   const availableTags = useMemo(() => Array.from(new Set(workspaceTagNames.map(tag => tag.trim()))).filter(Boolean).sort(), [workspaceTagNames]);
@@ -149,7 +152,7 @@ const AppContent: React.FC = () => {
   // Create New Note dialog: its form state and the handlers that render or persist a new note draft.
   const { createError, isNewNoteOpen, setIsNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteFolder, setNewNoteFolder, newNoteTags, setNewNoteTags, newNoteTemplateId, setNewNoteTemplateId, newNoteFolders, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote } = useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, sourceId, newNoteStatuses, t, onCreated: handleOpenNote });
 
-  const { commitWorkingNotes } = useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision });
+  const { commitWorkingNotes } = useWorkingNoteCommit({ documents, config, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision });
 
   // Assets are scoped to whichever notebook the open note (or the selected browse notebook) belongs to.
   const { handleUploadAsset, handleDeleteAsset, handleMoveAsset } = useAssetOperations({ editingNote, selectedNotebookId, remote, setAssets, setGitStatus });
@@ -281,6 +284,7 @@ const AppContent: React.FC = () => {
     <FocusLaneTab
       key={row.id}
       row={row}
+      repository={repositoryFor(row.notebookId)?.id}
       notebooks={config?.notebooks || []}
       graph={row.view === 'graph'
         ? (
@@ -479,7 +483,7 @@ const AppContent: React.FC = () => {
                 )}
                 {activeTab === 'settings' && (
                   <main className='workspace-route settings-main has-sidebar-drawer'>
-                    <SettingsModal config={config} branch={homeBranch} repoRoot={remote ? sourceId.replace(/^(github|gitlab):/, '') : repoRoot} local={!remote} canWrite={documentsWritable} configRevision={configRevision} onConfigRevision={setConfigRevision} accountSettings={<AgentAccessSettings local={!remote} />} onRefreshWorkspace={refreshWorkspace} currentTheme={currentTheme} onSelectTheme={handleSelectTheme} />
+                    <SettingsModal config={config} branch={homeBranch} repoRoot={remote ? sourceId.replace(/^(github|gitlab):/, '') : repoRoot} local={!remote} canWrite={manifestWritable} configRevision={configRevision} onConfigRevision={setConfigRevision} accountSettings={<AgentAccessSettings local={!remote} />} onRefreshWorkspace={refreshWorkspace} currentTheme={currentTheme} onSelectTheme={handleSelectTheme} />
                   </main>
                 )}
               </WorkspaceSplitLayout>
@@ -571,13 +575,15 @@ const AppContent: React.FC = () => {
             request={commitRequest}
             restoreFile={remote
               ? async file => {
-                const pendingDocument = documents.find(document => document.file === file.path);
+                const pendingDocument = pendingDocuments.find(document => document.repository === file.repository && document.file === file.path);
                 if (pendingDocument) {
                   if (file.revision !== pendingDocument.diff) throw new Error('Draft changed. Review it again.');
-                  await pendingDocument.reload();
+                  discardDocumentDraft(documentClientOf(file.path)!, pendingDocument.repository);
+                  const live = documents.find(document => document.file === file.path && document.repository === pendingDocument.repository);
+                  if (live) await live.reload();
                   return;
                 }
-                const entry = readDraftAtPath(file.path);
+                const entry = file.repository ? readDraftIn(file.repository, file.path) : undefined;
                 if (!entry || JSON.stringify(entry) !== file.revision) throw new Error('Draft changed. Review it again.');
                 // The draft lives in this browser, so discarding it is a local delete. Reading the remote
                 // only refreshes an open editor, and a draft is often blocked precisely because that read

@@ -3,10 +3,10 @@ import path from 'node:path';
 import { readWorkspaceDocument, SCREEN_DOCUMENT, serializeWorkspaceDocument, SourceError, type WorkspaceConfig, type WorkspaceDocument } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
-import { homeRepository } from './request-workspace.js';
+import { repositoryOrHome as documentRepository } from './request-workspace.js';
 import { readBoundedFile, readSnapshotText, revisionOf, writeFileAtomic } from './workspace-files.js';
 
-/** Reads and writes one workspace document as `{ page, revision, path, writable }`. */
+/** Reads and writes one workspace document of one repository as `{ page, revision, path, writable, repository }`. */
 export function createWorkspaceDocumentRouter(document: WorkspaceDocument): Router {
   const { file, label, maxBytes } = document;
   const readLocal = (root: string, name = file) => readBoundedFile(root, name, maxBytes, `${label} configuration`);
@@ -32,19 +32,19 @@ export function createWorkspaceDocumentRouter(document: WorkspaceDocument): Rout
     res.status(error instanceof SourceError ? error.status : 500).json({ error: error instanceof SourceError ? error.message : `${label} configuration could not be saved. Your draft is preserved.` });
   }
   const router = Router();
-  router.get('/', async (_req, res) => {
+  router.get('/', async (req, res) => {
     try {
-      const { handle, config } = await homeRepository(res);
+      const { id, handle, config } = await documentRepository(res, req.query.repository);
       if (handle.kind === 'local') {
         const raw = await readLocal(handle.root);
         const { page } = await own(decode(raw, config), config, () => readLocal(handle.root, SCREEN_DOCUMENT.file));
-        return res.json({ page, revision: revisionOf(raw), path: file, writable: await getCurrentBranch(handle.root) === 'main' });
+        return res.json({ page, revision: revisionOf(raw), path: file, writable: await getCurrentBranch(handle.root) === 'main', repository: id });
       }
       const { reader } = handle;
       const snapshot = await reader.getSnapshot();
       const raw = await readSnapshotText(reader, snapshot, file);
       const { page } = await own(decode(raw, config), config, () => readSnapshotText(reader, snapshot, SCREEN_DOCUMENT.file));
-      res.json({ page, revision: snapshot.sha, path: file, writable: reader.canWrite(snapshot) });
+      res.json({ page, revision: snapshot.sha, path: file, writable: reader.canWrite(snapshot), repository: id });
     } catch (error) {
       fail(res, error);
     }
@@ -53,11 +53,11 @@ export function createWorkspaceDocumentRouter(document: WorkspaceDocument): Rout
     try {
       const value = document.schema.safeParse(req.body?.page);
       const revision = req.body?.revision;
-      if (!value.success || typeof revision !== 'string' || !revision || Object.keys(req.body).some(key => !['page', 'revision'].includes(key))) throw new SourceError(`Invalid ${label} configuration.`, 400);
+      if (!value.success || typeof revision !== 'string' || !revision || Object.keys(req.body).some(key => !['page', 'revision', 'repository'].includes(key))) throw new SourceError(`Invalid ${label} configuration.`, 400);
       const yaml = serializeWorkspaceDocument(value.data);
       if (Buffer.byteLength(yaml) > maxBytes) throw new SourceError(`${label} configuration is too large.`, 413);
       const foreign = () => new SourceError(`${label} content must belong to its notebook.`, 400);
-      const { handle, config } = await homeRepository(res);
+      const { id, handle, config } = await documentRepository(res, req.body.repository);
       if (handle.kind === 'local') {
         const { root } = handle;
         return await serializeWorkspaceMutation(root, async () => {
@@ -66,7 +66,7 @@ export function createWorkspaceDocumentRouter(document: WorkspaceDocument): Rout
           const raw = await readLocal(root);
           if (revisionOf(raw) !== revision) throw new SourceError(`The ${label} configuration changed. Reload it before saving your draft.`, 409);
           await writeFileAtomic(path.join(root, file), yaml);
-          res.json({ page: value.data, revision: revisionOf(yaml), path: file, writable: true });
+          res.json({ page: value.data, revision: revisionOf(yaml), path: file, writable: true, repository: id });
         });
       }
       if (!handle.authenticated) throw new SourceError(`Sign in with write access to save the ${label} configuration.`, 403);
@@ -74,7 +74,7 @@ export function createWorkspaceDocumentRouter(document: WorkspaceDocument): Rout
       const snapshot = await reader.getSnapshot();
       if ((await own(value.data, config, () => readSnapshotText(reader, snapshot, SCREEN_DOCUMENT.file))).foreign) throw foreign();
       const saved = await reader.saveWorkspaceDocument(document, yaml, revision);
-      res.json({ page: value.data, revision: saved.revision, path: file, writable: true });
+      res.json({ page: value.data, revision: saved.revision, path: file, writable: true, repository: id });
     } catch (error) {
       fail(res, error);
     }

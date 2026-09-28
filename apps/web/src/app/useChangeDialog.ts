@@ -1,4 +1,4 @@
-import type { ChangeRequest } from '../lib/types.js';
+import type { ChangeRequest, FileChange } from '../lib/types.js';
 import { WorkspaceTab } from '../lib/routes.js';
 import { workingDiff } from '../lib/working-notes.js';
 import React, { useState } from 'react';
@@ -14,11 +14,10 @@ interface Params {
   activeWorkingNotes: WorkspaceState['activeWorkingNotes'];
   pendingDocuments: WorkspaceState['pendingDocuments'];
   canWriteNotebook: WorkspaceState['canWriteNotebook'];
-  /** Whether workspace documents, kept in the home repository, may be committed. */
-  documentsWritable: boolean;
+  repositoryFor: WorkspaceState['repositoryFor'];
 }
 
-export function useChangeDialog({ activeTab, agentSystemRef, remote, documents, setActionError, activeWorkingNotes, pendingDocuments, canWriteNotebook, documentsWritable }: Params) {
+export function useChangeDialog({ activeTab, agentSystemRef, remote, documents, setActionError, activeWorkingNotes, pendingDocuments, canWriteNotebook, repositoryFor }: Params) {
   const [commitRequest, setCommitRequest] = useState<ChangeRequest>();
   const [isCommitOpen, setIsCommitOpen] = useState<boolean>(false);
 
@@ -31,10 +30,24 @@ export function useChangeDialog({ activeTab, agentSystemRef, remote, documents, 
     })().catch(error => setActionError(error.message));
   };
 
-  const panelRemoteChanges = remote ? [...Object.values(activeWorkingNotes).map(entry => ({ path: entry.note.path, kind: entry.blocked ? 'conflict' as const : entry.base ? 'modified' as const : 'added' as const, tracked: Boolean(entry.base), revision: JSON.stringify(entry), available: canWriteNotebook(entry.note.notebookId) && !entry.blocked, staged: false, unstaged: true })), ...pendingDocuments.map(document => ({ path: document.file, kind: 'modified' as const, tracked: true, revision: document.diff, available: documentsWritable && !document.error, staged: false, unstaged: true }))] : undefined;
-  // The Changes dialog names a draft by its path until it groups changes by repository.
-  const draftAt = (file: string) => Object.values(activeWorkingNotes).find(entry => entry.note.path === file);
-  const panelGetPreview = remote ? (file: string) => documents.find(document => document.file === file)?.diff ?? (draftAt(file) ? workingDiff({ [file]: draftAt(file)! }) : '') : undefined;
+  /** A document draft of the open notebook's repository reports its load failure; drafts of other repositories were loaded when they were written. */
+  const documentError = (repository: string, file: string) => documents.find(document => document.repository === repository && document.file === file)?.error;
+  const panelRemoteChanges: FileChange[] | undefined = remote
+    ? [
+      ...Object.values(activeWorkingNotes).map(entry => ({ path: entry.note.path, repository: repositoryFor(entry.note.notebookId)?.id, kind: entry.blocked ? 'conflict' as const : entry.base ? 'modified' as const : 'added' as const, tracked: Boolean(entry.base), revision: JSON.stringify(entry), available: canWriteNotebook(entry.note.notebookId) && !entry.blocked, staged: false, unstaged: true })),
+      // Pending documents are listed only for repositories this requester may commit to.
+      ...pendingDocuments.map(document => ({ path: document.file, repository: document.repository, kind: 'modified' as const, tracked: true, revision: document.diff, available: !document.error && !documentError(document.repository, document.file), staged: false, unstaged: true })),
+    ]
+    : undefined;
+  const draftOf = (file: FileChange) => Object.values(activeWorkingNotes).find(entry => entry.note.path === file.path && repositoryFor(entry.note.notebookId)?.id === file.repository);
+  const panelGetPreview = remote
+    ? (file: FileChange) => {
+      const document = pendingDocuments.find(pending => pending.repository === file.repository && pending.file === file.path);
+      if (document) return document.diff;
+      const draft = draftOf(file);
+      return draft ? workingDiff({ [file.path]: draft }) : '';
+    }
+    : undefined;
 
   return { commitRequest, isCommitOpen, setIsCommitOpen, openCommitModal, panelRemoteChanges, panelGetPreview };
 }
