@@ -391,6 +391,7 @@ const AppContent: React.FC = () => {
                       await refreshWorkspace();
                       await refreshDocuments();
                     }}
+                    syncTargets={remote ? undefined : repositories.filter(repository => !repository.unavailable).map(repository => ({ id: repository.id, label: repository.repository ?? repository.id.replace(/^local:/, ''), gitStatus: repository.id === sourceId ? gitStatus : repository.gitStatus ?? null }))}
                     onWidthChange={setRightPanelWidth}
                   />
                 }

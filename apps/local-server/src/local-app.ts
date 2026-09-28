@@ -12,7 +12,7 @@ import { createLocalAssetsRouter } from './local-assets.js';
 import { createLocalGitRouter } from './local-git.js';
 import { createLocalCoreUpdateRouter } from './local-core-update.js';
 import { createLocalRawAssetsRouter } from './local-raw-assets.js';
-import { asLocal, localHome, localRepository, noteRepository } from './request-workspace.js';
+import { asLocal, localHome, localRepository, noteRepository, repositoryOrHome } from './request-workspace.js';
 
 function validateWorkspacePath(repoRoot: string, reqPath: string, candidate: unknown, config: WorkspaceConfig): void {
   if (typeof candidate !== 'string') throw new Error('Paths must be strings.');
@@ -32,8 +32,15 @@ function validateWorkspacePath(repoRoot: string, reqPath: string, candidate: unk
 /** Requests that act on the workspace; static web files pass through untouched. */
 const workspaceRequest = (requestPath: string) => ['/api/', '/raw-assets/', '/r2-assets/'].some(prefix => requestPath.startsWith(prefix));
 
-/** The worktree a path belongs to: the named notebook's repository, the repository of the notebook containing it, or the home repository for workspace-level files. */
-async function worktreeOf(res: express.Response, candidate: string, notebookId: unknown): Promise<{ root: string; config: WorkspaceConfig; }> {
+/**
+ * The worktree a path belongs to: the repository the request names, the named notebook's repository,
+ * the repository of the notebook containing it, or the home repository for workspace-level files.
+ */
+async function worktreeOf(res: express.Response, candidate: string, notebookId: unknown, repository: unknown): Promise<{ root: string; config: WorkspaceConfig; }> {
+  if (repository !== undefined && repository !== '') {
+    const { handle, config } = await repositoryOrHome(res, repository);
+    return { root: asLocal(handle).root, config };
+  }
   const resolved = await noteRepository(res, candidate, notebookId).catch((error: unknown) => {
     if (error instanceof SourceError && error.status === 403) return undefined;
     throw error;
@@ -60,10 +67,11 @@ export function createLocalApp(appRoot: string): express.Express {
       // A request without paths needs no manifest, so a workspace can save its first manifest.
       const candidates = [req.query.path, req.body?.path, ...(Array.isArray(req.body?.files) ? req.body.files : [])].filter(p => p !== undefined);
       const notebookId = req.query.notebookId ?? req.body?.notebookId;
+      const repository = req.query.repository ?? req.body?.repository;
       const roots = new Set<string>();
       for (const candidate of candidates) {
         if (typeof candidate !== 'string') throw new Error('Paths must be strings.');
-        const { root, config } = await worktreeOf(res, candidate, notebookId);
+        const { root, config } = await worktreeOf(res, candidate, notebookId, repository);
         validateWorkspacePath(root, req.path, candidate, config);
         roots.add(root);
       }

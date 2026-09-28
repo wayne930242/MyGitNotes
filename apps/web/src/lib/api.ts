@@ -171,22 +171,36 @@ export async function fetchFileChanges(): Promise<import('./types.js').FileChang
   if (!response.ok) throw new Error(data.error || 'Failed to read changes');
   return data.changes;
 }
-export async function fetchFileDiff(file: string, side: 'working' | 'staged' | 'current'): Promise<string> {
-  const response = await fetch(`${API_BASE}/git/file-diff?path=${encodeURIComponent(file)}&side=${side}`);
+const repositoryParam = (repository?: string) => repository ? `&repository=${encodeURIComponent(repository)}` : '';
+export async function fetchFileDiff(file: Pick<import('./types.js').FileChange, 'path' | 'repository'>, side: 'working' | 'staged' | 'current'): Promise<string> {
+  const response = await fetch(`${API_BASE}/git/file-diff?path=${encodeURIComponent(file.path)}&side=${side}${repositoryParam(file.repository)}`);
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Failed to read diff');
   return data.diff;
 }
 export async function manageFileChange(file: import('./types.js').FileChange, action: 'stage' | 'unstage' | 'restore'): Promise<{ backup?: string; }> {
-  const response = await fetch(`${API_BASE}/git/change`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: file.path, revision: file.revision, action }) });
+  const response = await fetch(`${API_BASE}/git/change`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: file.path, revision: file.revision, action, repository: file.repository }) });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'File operation failed');
   return data;
 }
+/** A commit run that stopped at a repository; `committed` names the repositories already committed. */
+export class PartialCommitError extends Error {
+  constructor(message: string, public committed: string[]) {
+    super(message);
+  }
+}
+/** Commits each worktree's files in turn, one commit per worktree, stopping at the first that fails. */
 export async function commitStagedChanges(files: import('./types.js').FileChange[], message: string, selected = false) {
-  const response = await fetch(`${API_BASE}/git/commit-staged`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: files.map(file => file.path), revisions: Object.fromEntries(files.map(file => [file.path, file.revision])), message, selected }) });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Commit failed');
+  const groups = new Map<string | undefined, import('./types.js').FileChange[]>();
+  for (const file of files) groups.set(file.repository, [...groups.get(file.repository) ?? [], file]);
+  const committed: string[] = [];
+  for (const [repository, group] of groups) {
+    const response = await fetch(`${API_BASE}/git/commit-staged`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, files: group.map(file => file.path), revisions: Object.fromEntries(group.map(file => [file.path, file.revision])), message, selected }) });
+    const data = await response.json();
+    if (!response.ok) throw new PartialCommitError(data.error || 'Commit failed', committed);
+    if (repository) committed.push(repository);
+  }
 }
 
 export async function fetchGitDiff(path?: string): Promise<string> {
@@ -219,8 +233,9 @@ export class GitSyncError extends Error {
   }
 }
 
-export async function syncGitWorkspace(strategy?: 'remote' | 'local'): Promise<{ upstream: string; pulled: number; pushed: number; backup?: string; }> {
-  const res = await fetch(`${API_BASE}/git/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(strategy ? { strategy } : {}) });
+/** Pulls and pushes one worktree, the home worktree when `repository` is absent. */
+export async function syncGitWorkspace(strategy?: 'remote' | 'local', repository?: string): Promise<{ upstream: string; pulled: number; pushed: number; backup?: string; }> {
+  const res = await fetch(`${API_BASE}/git/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(strategy ? { strategy } : {}), ...(repository ? { repository } : {}) }) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new GitSyncError(data.error || 'Sync failed', data.code || 'FAILED', data.files || []);
   return data.result;

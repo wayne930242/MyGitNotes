@@ -10,8 +10,8 @@ interface Conflict {
   unresolved: boolean;
 }
 
-/** Pull --rebase and push for a local workspace; conflicts are aborted and offered as explicit choices. */
-export function GitSyncSection({ gitStatus, onSynced }: { gitStatus: GitStatus | null; onSynced: () => void; }) {
+/** Pull --rebase and push for one local worktree (the home worktree without `repository`); conflicts are aborted and offered as explicit choices. */
+export function GitSyncSection({ gitStatus, onSynced, repository, label }: { gitStatus: GitStatus | null; onSynced: () => void; repository?: string; label?: string; }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(''), [error, setError] = useState('');
@@ -25,7 +25,7 @@ export function GitSyncSection({ gitStatus, onSynced }: { gitStatus: GitStatus |
     setError('');
     setConflict(undefined);
     try {
-      const result = await syncGitWorkspace(strategy);
+      const result = await syncGitWorkspace(strategy, repository);
       const summary = result.pulled || result.pushed ? t('panel.syncDone', { pulled: result.pulled, pushed: result.pushed }) : t('panel.syncUpToDate');
       setNotice(result.backup ? `${summary} ${t('panel.syncBackup', { ref: result.backup })}` : summary);
     } catch (failure) {
@@ -39,8 +39,8 @@ export function GitSyncSection({ gitStatus, onSynced }: { gitStatus: GitStatus |
   };
 
   return (
-    <section className='todo-group git-sync' aria-label={t('panel.sync')}>
-      <h4>{t('panel.sync')}</h4>
+    <section className='todo-group git-sync' aria-label={label ? `${t('panel.sync')} ${label}` : t('panel.sync')}>
+      <h4>{t('panel.sync')}{label && <small className='git-sync-repository'>{label}</small>}</h4>
       {upstream ? <p className='git-sync-status' title={t('panel.syncStatusHint')}>{t('panel.syncStatus', { upstream, ahead: gitStatus?.ahead ?? 0, behind: gitStatus?.behind ?? 0 })}</p> : <p className='changes-help'>{t('panel.syncNoUpstream')}</p>}
       {upstream && dirty && <p className='changes-help'>{t('panel.syncDirty')}</p>}
       <Button className='git-sync-button' disabled={busy || !upstream || dirty} onClick={() => void sync()}>

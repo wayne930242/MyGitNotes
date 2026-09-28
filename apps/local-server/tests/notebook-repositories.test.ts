@@ -110,3 +110,23 @@ describe('workspace documents in notebook repositories', () => {
     expect((await get('/api/study?repository=github%3Aowner%2Flost%40main')).status).toBe(503);
   });
 });
+
+describe('Git changes in each worktree', () => {
+  it('lists changes by repository and commits each worktree on its own', async () => {
+    const { home, trpg } = await serve();
+    fs.writeFileSync(path.join(home, 'notes/life/note.md'), '# Home changed\n');
+    fs.writeFileSync(path.join(trpg, 'notes/life/note.md'), '# TRPG changed\n');
+    const { changes } = (await get('/api/git/changes')).body;
+    const trpgId = 'github:owner/trpg@main';
+    expect(changes.map((change: { repository: string; path: string; }) => [change.repository.startsWith('local:') ? 'home' : change.repository, change.path]).sort()).toEqual([[trpgId, 'notes/life/note.md'], ['home', 'notes/life/note.md']]);
+    const trpgChange = changes.find((change: { repository: string; }) => change.repository === trpgId);
+    const diff = (await get(`/api/git/file-diff?path=notes/life/note.md&side=working&repository=${encodeURIComponent(trpgId)}`)).body.diff;
+    expect(diff).toContain('TRPG changed');
+    const committed = await fetch(`${base}/api/git/commit-staged`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository: trpgId, files: ['notes/life/note.md'], revisions: { 'notes/life/note.md': trpgChange.revision }, message: 'docs: trpg only', selected: true }) });
+    expect(committed.status).toBe(200);
+    expect(execFileSync('git', ['log', '--format=%s', '-1'], { cwd: trpg, encoding: 'utf8' }).trim()).toBe('docs: trpg only');
+    expect(execFileSync('git', ['status', '--short'], { cwd: home, encoding: 'utf8' })).toContain('notes/life/note.md');
+    const sync = await fetch(`${base}/api/git/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository: trpgId }) });
+    expect(sync.status).toBe(409);
+  });
+});

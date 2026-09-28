@@ -18,9 +18,16 @@ interface ChangesToolProps {
   getPreview?: (file: FileChange) => string;
   writable: boolean;
   onSynced?: () => void;
+  /** Worktrees to sync; with more than one, each gets its own section. */
+  syncTargets?: SyncTarget[];
+}
+export interface SyncTarget {
+  id: string;
+  label: string;
+  gitStatus: GitStatus | null;
 }
 
-export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced }: ChangesToolProps) {
+export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, syncTargets }: ChangesToolProps) {
   const { t } = useTranslation();
   const [localFiles, setFiles] = useState<FileChange[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -50,6 +57,7 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
   /** A remote row is a draft held in this browser, so discarding it needs neither write access nor a committable state. */
   const canRestore = (file: FileChange) => remote || (writable && Boolean(file.available));
   const preview = active && getPreview ? getPreview(active) : undefined;
+  const activePath = active?.path, activeRepository = active?.repository, activeRevision = active?.revision, activeAvailable = active?.available;
   useEffect(() => {
     let cancelled = false;
     /* eslint-disable react/set-state-in-effect -- The diff reset and loading flags belong to the selected revision request; preserve their ordering with cancellation and remote previews. */
@@ -63,9 +71,9 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
       setDiff(preview);
       return;
     }
-    if (!active?.available) return;
+    if (!activeAvailable || !activePath) return;
     setLoading(true);
-    void fetchFileDiff(active.path, 'current').then(diff => {
+    void fetchFileDiff({ path: activePath, repository: activeRepository }, 'current').then(diff => {
       if (!cancelled) setDiff(diff);
     }).catch(error => {
       if (!cancelled) setDiffError(error.message);
@@ -75,7 +83,7 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
     return () => {
       cancelled = true;
     };
-  }, [active?.path, active?.revision, active?.available, preview]);
+  }, [activePath, activeRepository, activeRevision, activeAvailable, preview]);
   const manageable = files.filter(file => file.available);
   const restorable = files.filter(canRestore);
   const chosen = manageable.filter(file => selected.includes(changeKey(file)));
@@ -179,7 +187,7 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
           </ul>
         </section>
       )}
-      {onSynced && <GitSyncSection gitStatus={gitStatus} onSynced={onSynced} />}
+      {onSynced && (syncTargets && syncTargets.length > 1 ? syncTargets.map(target => <GitSyncSection key={target.id} repository={target.id} label={target.label} gitStatus={target.gitStatus} onSynced={onSynced} />) : <GitSyncSection gitStatus={gitStatus} onSynced={onSynced} />)}
     </div>
   );
 }

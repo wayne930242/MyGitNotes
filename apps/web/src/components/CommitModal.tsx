@@ -5,7 +5,7 @@ import { EditorNotice } from './EditorNotice.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GitCommit, Minus, Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import type { ChangeRequest, FileChange, GitStatus } from '../lib/types.js';
-import { commitStagedChanges, fetchFileChanges, fetchFileDiff, generateSemanticCommit, manageFileChange } from '../lib/api.js';
+import { commitStagedChanges, fetchFileChanges, fetchFileDiff, generateSemanticCommit, manageFileChange, PartialCommitError } from '../lib/api.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { changeKey } from '../lib/file-changes.js';
 import { LoadingStatus } from './LoadingStatus.js';
@@ -111,7 +111,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     }
     if (!selected?.available) return;
     setDiffLoading(true);
-    void fetchFileDiff(selected.path, selectionMode ? 'current' : active.side).then(value => {
+    void fetchFileDiff(selected, selectionMode ? 'current' : active.side).then(value => {
       if (!cancelled) setDiff(value);
     }).catch(error => {
       if (!cancelled) setDiffError(error.message);
@@ -166,7 +166,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
       await onCommitted();
       onClose();
     } catch (error) {
-      setError((error as Error).message);
+      setError(error instanceof PartialCommitError && error.committed.length ? t('changes.partialCommit', { repositories: error.committed.join(', '), error: error.message }) : (error as Error).message);
       await refresh().catch(() => {});
     } finally {
       setBusy(false);
@@ -176,7 +176,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     setBusy(true);
     setError('');
     try {
-      setMessage(remote ? `docs(notes): update ${staged.length} files` : await generateSemanticCommit((await Promise.all(staged.map(file => fetchFileDiff(file.path, selectionMode ? 'current' : 'staged')))).join('\n'), staged[0]?.path));
+      setMessage(remote ? `docs(notes): update ${staged.length} files` : await generateSemanticCommit((await Promise.all(staged.map(file => fetchFileDiff(file, selectionMode ? 'current' : 'staged')))).join('\n'), staged[0]?.path));
     } catch (error) {
       setError((error as Error).message);
     } finally {
