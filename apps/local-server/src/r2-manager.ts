@@ -1,7 +1,7 @@
 import { type Request, type Response, Router } from 'express';
 import fs from 'node:fs';
 import { getCurrentBranch } from '@mygitnotes/git';
-import { copyR2Object, createRemoteSource, deleteR2Object, isNotebookR2Key, listR2Objects, loadWorkspaceConfig, managedNotebook, type NotebookConfig, presignR2Object, presignR2Upload, putEmptyR2Object, r2NotebookPrefix, r2ObjectExists, r2ReferenceKeys, type R2Settings, r2SettingsFromEnv, resolveSafePath, rewriteR2References, type SourceConfig, SourceError, withinPath } from '@mygitnotes/core';
+import { copyR2Object, createRemoteSource, deleteR2Object, isValidR2Key, listR2Objects, loadWorkspaceConfig, managedNotebook, type NotebookConfig, presignR2Object, presignR2Upload, putEmptyR2Object, r2ObjectExists, r2ReferenceKeys, type R2Settings, r2SettingsFromEnv, resolveSafePath, rewriteR2References, type SourceConfig, SourceError, withinPath } from '@mygitnotes/core';
 import { authToken } from './auth.js';
 import { localFileCatalog } from './file-manager.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
@@ -18,8 +18,8 @@ interface Workspace {
 }
 
 /**
- * Manages a notebook's objects under `<notebookId>/` in the configured R2 bucket.
- * Every route requires the same workspace write capability as file-manager mutations.
+ * Manages every object in the configured R2 bucket; notes may reference any key, so the manager is not
+ * confined to a notebook prefix. Every route requires the same workspace write capability as file-manager mutations.
  */
 export function createR2ManagerRouter(base: string, source: SourceConfig): Router {
   const router = Router();
@@ -71,8 +71,8 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
     if (!settings) throw new SourceError('R2 storage is not configured.', 404);
     return { space, notebook, settings };
   };
-  const notebookKey = (value: unknown, notebookId: string) => {
-    if (typeof value !== 'string' || !isNotebookR2Key(value, notebookId)) throw new SourceError('R2 key is outside this notebook.', 403);
+  const bucketKey = (value: unknown) => {
+    if (typeof value !== 'string' || !isValidR2Key(value)) throw new SourceError('R2 key is invalid.', 403);
     return value;
   };
   /** Resolves a file key or every object under a folder key. */
@@ -97,23 +97,22 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
   router.get(
     '/api/r2',
     handle(async (req, res) => {
-      const { notebook, settings } = await context(req, req.query);
-      const prefix = r2NotebookPrefix(notebook.id);
-      res.json({ prefix, objects: (await listR2Objects(settings, prefix)).filter(object => isNotebookR2Key(object.key, notebook.id)) });
+      const { settings } = await context(req, req.query);
+      res.json({ prefix: '', objects: (await listR2Objects(settings, '')).filter(object => isValidR2Key(object.key)) });
     }),
   );
   router.get(
     '/api/r2/raw',
     handle(async (req, res) => {
-      const { notebook, settings } = await context(req, req.query);
-      res.redirect(302, await presignR2Object(settings, notebookKey(req.query.key, notebook.id), 300, req.query.download === '1'));
+      const { settings } = await context(req, req.query);
+      res.redirect(302, await presignR2Object(settings, bucketKey(req.query.key), 300, req.query.download === '1'));
     }),
   );
   router.post(
     '/api/r2/upload',
     handle(async (req, res) => {
-      const { notebook, settings } = await context(req, req.body);
-      const key = notebookKey(req.body.key, notebook.id);
+      const { settings } = await context(req, req.body);
+      const key = bucketKey(req.body.key);
       if (await r2ObjectExists(settings, key)) throw new SourceError('Destination already exists.', 409);
       res.json({ key, url: await presignR2Upload(settings, key) });
     }),
@@ -121,8 +120,8 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
   router.post(
     '/api/r2/mkdir',
     handle(async (req, res) => {
-      const { notebook, settings } = await context(req, req.body);
-      const key = notebookKey(`${req.body.key}/.keep`, notebook.id);
+      const { settings } = await context(req, req.body);
+      const key = bucketKey(`${bucketKey(req.body.key)}/.keep`);
       if ((await listR2Objects(settings, `${req.body.key}/`)).length || await r2ObjectExists(settings, req.body.key) || !await putEmptyR2Object(settings, key)) throw new SourceError('Destination already exists.', 409);
       res.json({ key });
     }),
@@ -130,16 +129,16 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
   router.get(
     '/api/r2/references',
     handle(async (req, res) => {
-      const { space, notebook, settings } = await context(req, req.query);
-      const objects = await affected(settings, notebookKey(req.query.key, notebook.id), req.query.directory === '1');
+      const { space, settings } = await context(req, req.query);
+      const objects = await affected(settings, bucketKey(req.query.key), req.query.directory === '1');
       res.json({ objects, notes: referencing(await space.notes(), objects) });
     }),
   );
   router.post(
     '/api/r2/move',
     handle(async (req, res) => {
-      const { space, notebook, settings } = await context(req, req.body);
-      const key = notebookKey(req.body.key, notebook.id), destination = notebookKey(req.body.destination, notebook.id);
+      const { space, settings } = await context(req, req.body);
+      const key = bucketKey(req.body.key), destination = bucketKey(req.body.destination);
       if (withinPath(destination, key)) throw new SourceError('Choose a destination outside the moved item.', 400);
       const objects = await affected(settings, key, req.body.directory === true);
       // CopyObject has no destination precondition on R2, so this check stays check-then-act.
@@ -165,8 +164,8 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
   router.post(
     '/api/r2/delete',
     handle(async (req, res) => {
-      const { notebook, settings } = await context(req, req.body);
-      const objects = await affected(settings, notebookKey(req.body.key, notebook.id), req.body.directory === true);
+      const { settings } = await context(req, req.body);
+      const objects = await affected(settings, bucketKey(req.body.key), req.body.directory === true);
       for (const object of objects) await deleteR2Object(settings, object);
       res.json({ deleted: objects });
     }),

@@ -43,7 +43,7 @@ export function FileToolbar({ model }: { model: ReturnType<typeof useFileManager
         {r2 && r2Directory !== undefined && (layout === 'panel' || r2Directory !== r2.prefix.slice(0, -1)) && (
           <nav aria-label={t('files.location')} className='file-breadcrumbs'>
             <button type='button' disabled={busy} onClick={() => setR2Directory(r2.prefix.slice(0, -1))}>R2</button>
-            {r2Directory.slice(r2.prefix.length).split('/').map((part, index, parts) => (
+            {r2Directory.slice(r2.prefix.length).split('/').filter(Boolean).map((part, index, parts) => (
               <span key={index}>
                 {' / '}
                 <button type='button' disabled={busy} onClick={() => setR2Directory(r2.prefix + parts.slice(0, index + 1).join('/'))}>{part}</button>

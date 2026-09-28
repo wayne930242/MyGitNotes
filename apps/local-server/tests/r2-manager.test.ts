@@ -103,11 +103,12 @@ afterEach(async () => {
 });
 
 describe('R2 management on a local workspace', () => {
-  it('lists only the notebook prefix and previews through a presigned redirect', async () => {
+  it('lists the whole bucket and previews through a presigned redirect', async () => {
     await startLocal();
+    bucket.objects.set('top.pdf', Buffer.from('top'));
     const listing = await call('GET', '/api/r2?notebookId=ex').then(r => r.json());
-    expect(listing.prefix).toBe('ex/');
-    expect(listing.objects.map((object: any) => object.key).sort()).toEqual(['ex/keep.pdf', 'ex/old/Core Rules.pdf', 'ex/old/map.webp']);
+    expect(listing.prefix).toBe('');
+    expect(listing.objects.map((object: any) => object.key).sort()).toEqual(['ex/keep.pdf', 'ex/old/Core Rules.pdf', 'ex/old/map.webp', 'other/secret.pdf', 'top.pdf']);
     const raw = await call('GET', '/api/r2/raw?notebookId=ex&key=ex/keep.pdf&download=1');
     expect(raw.status).toBe(302);
     const location = new URL(raw.headers.get('location')!);
@@ -172,13 +173,28 @@ describe('R2 management on a local workspace', () => {
     expect((await call('POST', '/api/r2/delete', { notebookId: 'ex', key: 'ex/keep.pdf' })).status).toBe(404);
   });
 
-  it('rejects keys outside the notebook prefix or escaping the bucket', async () => {
+  it('manages keys outside notebook prefixes, including the bucket root', async () => {
     await startLocal();
-    expect((await call('GET', '/api/r2/raw?notebookId=ex&key=other/secret.pdf')).status).toBe(403);
+    expect((await call('GET', '/api/r2/raw?notebookId=ex&key=other/secret.pdf')).status).toBe(302);
+    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'top.pdf' })).status).toBe(200);
+    expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: 'trpg' })).status).toBe(200);
+    expect(bucket.objects.has('trpg/.keep')).toBe(true);
+    const moved = await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old/map.webp', destination: 'trpg/map.webp' });
+    expect(moved.status).toBe(200);
+    expect(fs.readFileSync(path.join(root, 'notes/other/cross.md'), 'utf8')).toBe('![x](r2:trpg/map.webp)\n');
+    expect((await call('POST', '/api/r2/delete', { notebookId: 'ex', key: 'other/secret.pdf' })).status).toBe(200);
+    expect(bucket.objects.has('other/secret.pdf')).toBe(false);
+  });
+
+  it('rejects keys escaping the bucket', async () => {
+    await startLocal();
+    expect((await call('GET', '/api/r2/raw?notebookId=ex&key=/other/secret.pdf')).status).toBe(403);
     expect((await call('POST', '/api/r2/delete', { notebookId: 'ex', key: 'ex/../other/secret.pdf' })).status).toBe(403);
-    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/keep.pdf', destination: 'other/stolen.pdf' })).status).toBe(403);
-    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'other/new.pdf' })).status).toBe(403);
+    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/keep.pdf', destination: '../stolen.pdf' })).status).toBe(403);
+    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex//new.pdf' })).status).toBe(403);
+    expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: '../escape' })).status).toBe(403);
     expect(bucket.objects.has('other/secret.pdf')).toBe(true);
+    expect(bucket.objects.has('ex/keep.pdf')).toBe(true);
   });
 
   it('denies every operation off the main branch without contacting the bucket', async () => {

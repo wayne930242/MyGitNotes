@@ -54,7 +54,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
                   notebookId={notebookId}
                   listing={r2}
                   directory={r2Directory}
-                  mutable={mode === 'manage' && writable}
+                  mutable={writable}
                   showHidden={showHidden}
                   busy={busy}
                   run={run}

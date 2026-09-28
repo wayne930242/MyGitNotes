@@ -28,13 +28,16 @@ export interface R2PanelProps {
 }
 type Operation = 'mkdir' | 'move' | 'delete';
 
-/** R2 folder listings derived from flat object keys. */
+/** Key of `name` inside `directory`, where the empty directory is the bucket root. */
+const r2Join = (directory: string, name: string) => directory ? `${directory}/${name}` : name;
+
+/** R2 folder listings derived from flat object keys; the root is the listing prefix without its slash, empty for the whole bucket. */
 export function r2Folders(listing: R2Listing, showHidden: boolean) {
-  const root = listing.prefix.slice(0, -1), folders = new Set<string>();
+  const root = listing.prefix.replace(/\/$/, ''), folders = new Set<string>();
   for (const { key } of listing.objects) {
-    const parts = key.split('/');
-    for (let index = 2; index < parts.length; index++) {
-      const folder = parts.slice(0, index).join('/');
+    const parts = key.slice(listing.prefix.length).split('/');
+    for (let index = 1; index < parts.length; index++) {
+      const folder = listing.prefix + parts.slice(0, index).join('/');
       if (showHidden || !baseName(folder).startsWith('.')) folders.add(folder);
     }
   }
@@ -48,7 +51,8 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
   const [copied, setCopied] = useState(false);
   const operationForm = useRef<HTMLFormElement>(null), pendingSelection = useRef('');
   const { root, folders } = r2Folders(listing, showHidden);
-  const visible = (key: string) => showHidden || !key.slice(root.length + 1).split('/').some(part => part.startsWith('.'));
+  const inRoot = (key: string) => key.slice(listing.prefix.length);
+  const visible = (key: string) => showHidden || !inRoot(key).split('/').some(part => part.startsWith('.'));
   const selectedObject = listing.objects.find(object => object.key === selected);
   const target = selectedObject ? selected : directory, directoryTarget = !selectedObject;
   const childFolders = folders.filter(folder => parentPath(folder) === directory);
@@ -81,11 +85,11 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
   const submit = () =>
     void run(async () => {
       if (operation === 'mkdir') {
-        const folder = `${directory}/${name.trim()}`;
+        const folder = r2Join(directory, name.trim());
         await createR2Folder(notebookId, folder);
         await finish(folder);
       } else if (operation === 'move') {
-        const moved = `${destination}/${name.trim()}`;
+        const moved = r2Join(destination, name.trim());
         await beforeChange?.();
         const result = await moveR2(notebookId, target, moved, directoryTarget);
         if (result.notes.length) await onNotesChanged();
@@ -97,12 +101,12 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
     });
   const upload = (file?: globalThis.File) =>
     file && void run(async () => {
-      const key = `${directory}/${file.name}`;
+      const key = r2Join(directory, file.name);
       await uploadR2(notebookId, key, file);
       await onRefresh();
       setSelected(key);
     });
-  const relative = (key: string) => key === root ? 'R2' : `R2/${key.slice(root.length + 1)}`;
+  const relative = (key: string) => key === root ? 'R2' : `R2/${inRoot(key)}`;
   const destinations = [root, ...folders].filter(folder => !directoryTarget || folder !== target && !folder.startsWith(target + '/'));
   const rawUrl = selectedObject ? r2RawUrl(notebookId, selectedObject.key) : '';
   const presentation = selectedObject ? r2PreviewType(selectedObject.key).kind : 'file';
@@ -290,7 +294,7 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
               <p className='file-destination'>
                 {t('files.newPath')}
                 {': '}
-                <code>{relative(destination)}/{name}</code>
+                <code>{relative(r2Join(destination, name))}</code>
               </p>
             </>
           )}
@@ -322,7 +326,7 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
             : <LoadingStatus>{t('files.loading')}</LoadingStatus>)}
           <div className='file-actions'>
             <button type='button' className='ui-button' disabled={busy} onClick={() => setOperation(undefined)}>{t('common.cancel')}</button>
-            <Button type='submit' variant={operation === 'delete' ? 'danger' : 'primary'} disabled={busy || operation !== 'mkdir' && !references || operation === 'move' && `${destination}/${name.trim()}` === target}>{operation === 'delete' ? t('files.confirmDelete') : t('common.save')}</Button>
+            <Button type='submit' variant={operation === 'delete' ? 'danger' : 'primary'} disabled={busy || operation !== 'mkdir' && !references || operation === 'move' && r2Join(destination, name.trim()) === target}>{operation === 'delete' ? t('files.confirmDelete') : t('common.save')}</Button>
           </div>
         </form>
       )}
