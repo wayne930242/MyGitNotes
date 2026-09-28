@@ -6,12 +6,12 @@ import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { AssetItem, FolderItem, NotebookConfig } from '../lib/types.js';
 import { fetchAssets } from '../lib/api.js';
 import { noteLookupOptions, notePathsOptions, useNoteQueryScope } from '../lib/use-note-queries.js';
-import { notebookRoute, noteRoute } from '../lib/routes.js';
+import { notebookRoute, noteRoute, parseWorkspaceRoute } from '../lib/routes.js';
 import { headingSlug, notebookOfPath, resolveWorkspaceHref } from '../lib/workspace-links.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
-import { linkedNotePath, useLinkedNotePreload } from '../lib/use-linked-note-preload.js';
+import { linkAliases, linkedNote, linkScope, useLinkedNotePreload } from '../lib/use-linked-note-preload.js';
 import { useNoteYouTubeEmbed } from '../lib/use-note-youtube-embed.js';
 
 type BeforeNavigate = () => Promise<boolean>;
@@ -49,7 +49,9 @@ export function WorkspaceLinks({ notebooks, folders, children, onOpenNote }: {
   const open = async (element: HTMLElement, newTab: boolean) => {
     const href = element.dataset.workspaceLink || '';
     const sourcePath = element.dataset.sourcePath || '';
-    const link = resolveWorkspaceHref(href, sourcePath, undefined, window.location.origin);
+    // A link reaches only the notebooks in its note's repository; a target elsewhere is missing.
+    const reach = linkScope(element, notebooks, scope.repositories);
+    const link = resolveWorkspaceHref(href, sourcePath, linkAliases(reach), window.location.origin);
     setError('');
     if (!link) {
       setError(t('links.invalid'));
@@ -67,13 +69,18 @@ export function WorkspaceLinks({ notebooks, folders, children, onOpenNote }: {
       return;
     }
     if (link.kind === 'route') {
+      const url = new URL(link.url, window.location.origin);
+      const routed = parseWorkspaceRoute(url.pathname, url.search);
+      if (routed.note && notebooks.some(nb => nb.id === routed.notebook) && !reach.notebooks.some(nb => nb.id === routed.notebook)) {
+        setError(t('links.missing'));
+        return;
+      }
       if (newTab) window.open(link.url, '_blank', 'noopener,noreferrer');
       else {
-        const path = linkedNotePath(href, sourcePath, notebooks, window.location.origin);
-        const target = path ? notebookOfPath(path, notebooks) : undefined;
-        if (path && target) {
+        const target = linkedNote(href, sourcePath, reach, window.location.origin);
+        if (target) {
           try {
-            await queryClient.fetchQuery(noteLookupOptions(scope, [{ notebookId: target.id, path }], true));
+            await queryClient.fetchQuery(noteLookupOptions(scope, [target], true));
           } catch (error) {
             setError((error as Error).message);
             return;
@@ -84,7 +91,7 @@ export function WorkspaceLinks({ notebooks, folders, children, onOpenNote }: {
       return;
     }
     // A link target is read by notebook and path instead of being looked up in a client-side note list.
-    const notebook = link.kind === 'path' ? notebookOfPath(link.path, notebooks) : undefined;
+    const notebook = link.kind === 'path' ? notebookOfPath(link.path, reach.notebooks) : undefined;
     let note: NoteListItem | undefined;
     if (link.kind === 'path' && notebook) {
       try {
@@ -129,7 +136,7 @@ export function WorkspaceLinks({ notebooks, folders, children, onOpenNote }: {
       return;
     }
     try {
-      const candidates = notebook ? [notebook] : notebooks;
+      const candidates = notebook ? [notebook] : reach.notebooks;
       const lists = await Promise.all(candidates.map(async nb => ({ notebookId: nb.id, assets: await fetchAssets(nb.id) })));
       for (const list of lists) {
         const asset = list.assets.find(asset => link.kind === 'asset-hash' ? asset.hash === link.hash : asset.path === link.path);

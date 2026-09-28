@@ -1,6 +1,11 @@
 import type { GraphLayout } from '@mygitnotes/core/screen-page';
 
-export function arrangeGraphLayout(layout: GraphLayout, { compact = false }: { compact?: boolean; } = {}): GraphLayout {
+/** Canvas placement uses graph ids; Screen persists only repository-relative paths for one notebook. */
+export interface GraphPlacement {
+  nodes: (Omit<GraphLayout['nodes'][number], 'path'> & { id: string; })[];
+}
+
+export function arrangeGraphLayout(layout: GraphPlacement, { compact = false }: { compact?: boolean; } = {}): GraphPlacement {
   const nodes = layout.nodes.map(node => ({ ...node }));
   const dimensions = nodes.map(node => node.expanded ? [node.width || 360, node.height || 300] : [32, 32]);
   if (compact && nodes.length) {
@@ -56,7 +61,7 @@ export function arrangeGraphLayout(layout: GraphLayout, { compact = false }: { c
 const MIN_LANE_ZOOM = .75;
 
 /** Lane height follows graph-space bounds, never the user's camera transform. */
-export function graphLaneViewport(layout: GraphLayout, width: number) {
+export function graphLaneViewport(layout: GraphPlacement, width: number) {
   const bounds = layout.nodes.filter(n => Number.isFinite(n.x) && Number.isFinite(n.y)).map(n => ({ x: n.x, y: n.y, w: n.expanded ? n.width || 360 : 32, h: n.expanded ? n.height || 300 : 32 }));
   if (!bounds.length) return { height: 300, zoom: 1, x: 0, y: 0 };
   const left = Math.min(...bounds.map(n => n.x - n.w / 2)), right = Math.max(...bounds.map(n => n.x + n.w / 2));

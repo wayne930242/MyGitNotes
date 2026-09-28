@@ -216,6 +216,6 @@ export function useNoteAgenda(notebookId: string, showHidden = false): { agenda:
 export function useNoteGraph(enabled = true): { graph: NoteGraphData | undefined; loading: boolean; error: string; } {
   const scope = useNoteQueryScope();
   const result = useQuery({ queryKey: queryKey(scope, scope.revisions, 'graph', {}), queryFn: () => fetchNoteGraph(scope.revisions), enabled: enabled && Boolean(scope.sourceId), placeholderData: keepPreviousData });
-  const graph = useMemo(() => (enabled && result.data ? overlayGraphDrafts({ nodes: result.data.nodes, links: result.data.links }, draftGraphNotes(scope.drafts)) : undefined), [enabled, result.data, scope.drafts]);
+  const graph = useMemo(() => (enabled && result.data ? overlayGraphDrafts({ nodes: result.data.nodes, links: result.data.links }, draftGraphNotes(scope.drafts), scope.repositories) : undefined), [enabled, result.data, scope.drafts, scope.repositories]);
   return { graph, loading: enabled && result.isPending, error: errorText(result.error) };
 }

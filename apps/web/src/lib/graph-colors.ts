@@ -28,14 +28,14 @@ export function readGraphAppearance(): GraphAppearance {
   }
 }
 
-type ColorNode = Pick<NoteGraphNode, 'id' | 'notebookId' | 'status'>;
+type ColorNode = Pick<NoteGraphNode, 'path' | 'notebookId' | 'status'>;
 export function graphColorGroup(node: ColorNode, notebooks: NotebookConfig[], mode: GraphAppearance['mode']) {
   if (mode === 'status') return { key: node.status || '', label: node.status || '' };
   const notebook = notebooks.find(nb => nb.id === node.notebookId);
   const title = notebook?.title || node.notebookId;
   if (mode === 'notebook') return { key: node.notebookId, label: title };
   const root = notebook?.root.replace(/\/$/, '') || '';
-  const relative = root && node.id.startsWith(root + '/') ? node.id.slice(root.length + 1) : node.id;
+  const relative = root && node.path.startsWith(root + '/') ? node.path.slice(root.length + 1) : node.path;
   const folder = relative.includes('/') ? relative.split('/')[0] : '';
   return { key: JSON.stringify([node.notebookId, folder]), label: folder ? `${title} / ${folder}` : title };
 }

@@ -30,6 +30,32 @@ const link = (href: string) => createElement('span', { tabIndex: 0, 'data-testid
 const workspace = (href: string) => createElement(WorkspaceLinks, { notebooks: [], folders: [], onOpenNote: () => {}, children: link(href) });
 /* eslint-enable react/no-children-prop */
 
+it('reads an equal-root target only from the source repository and rejects a foreign note route', async () => {
+  const { setNoteQueryScope } = await import('../lib/use-note-queries.js');
+  setNoteQueryScope({ sourceId: 'test:two-repos', revisions: {}, repositories: { one: 'repo-one', two: 'repo-two' }, drafts: {} });
+  const fetcher = vi.fn(async (_url: string, _init: RequestInit) => ({ ok: true, json: async () => ({ revisions: {}, notes: [{ notebookId: 'one', path: 'notes/b.md', title: 'B', content: '# B' }] }) }));
+  vi.stubGlobal('fetch', fetcher);
+  const onOpenNote = vi.fn();
+  const notebooks = [{ id: 'one', title: 'One', root: 'notes' }, { id: 'two', title: 'Two', root: 'notes' }];
+  const view = render(
+    <WorkspaceLinks notebooks={notebooks} folders={[]} onOpenNote={onOpenNote}>
+      <div data-source-notebook='one'>{link('b.md')}</div>
+    </WorkspaceLinks>,
+    { wrapper },
+  );
+  await act(async () => fireEvent.click(view.getByTestId('link')));
+  expect(JSON.parse(fetcher.mock.calls[0][1].body as string).notes).toEqual([{ notebookId: 'one', path: 'notes/b.md' }]);
+  expect(onOpenNote).toHaveBeenCalledWith(expect.objectContaining({ notebookId: 'one' }), '', view.getByTestId('link'));
+  view.rerender(
+    <WorkspaceLinks notebooks={notebooks} folders={[]} onOpenNote={onOpenNote}>
+      <div data-source-notebook='one'>{link('/notebooks/two/notes/b.md')}</div>
+    </WorkspaceLinks>,
+  );
+  await act(async () => fireEvent.click(view.getByTestId('link'), { ctrlKey: true }));
+  expect(windowOpen).not.toHaveBeenCalled();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
 it('routes a same-origin absolute URL through the router instead of opening a new window', async () => {
   const { getByTestId } = render(workspace(`${window.location.origin}/notebooks/nb1/notes/a.md`), { wrapper });
   await act(async () => {

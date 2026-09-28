@@ -1,5 +1,5 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react';
-import type { GraphLayout } from '@mygitnotes/core/screen-page';
+import type { GraphPlacement } from '../../lib/graph-layout.js';
 import type { GraphGesture, Node } from './types.js';
 import type { useGraphData } from './useGraphData.js';
 import type { useGraphNoteSessions } from './useGraphNoteSessions.js';
@@ -16,10 +16,10 @@ interface GraphInteractionOptions {
   maximized: string | null;
   freeze: () => void;
   setCardDragging: Dispatch<SetStateAction<boolean>>;
-  currentLayout: () => GraphLayout;
-  persistLayout: (next: GraphLayout) => void;
-  setLayout: Dispatch<SetStateAction<GraphLayout>>;
-  reflow: (next: GraphLayout, topology?: boolean) => GraphLayout;
+  currentLayout: () => GraphPlacement;
+  persistLayout: (next: GraphPlacement) => void;
+  setLayout: Dispatch<SetStateAction<GraphPlacement>>;
+  reflow: (next: GraphPlacement, topology?: boolean) => GraphPlacement;
   sessions: ReturnType<typeof useGraphNoteSessions>['sessions'];
   link: ReturnType<typeof useGraphNoteSessions>['link'];
 }
@@ -62,12 +62,12 @@ export function createGraphInteractions({ container, fg, graphData, transform, e
     event.stopPropagation();
     freeze();
     setCardDragging(true);
-    const initial = currentLayout(), saved = initial.nodes.find(node => node.path === path)!;
+    const initial = currentLayout(), saved = initial.nodes.find(node => node.id === path)!;
     let draggedLayout = initial;
     const start = point(event), k = transform.k;
     const move = (e: PointerEvent) => {
       const p = point(e), dx = (p.x - start.x) / k, dy = (p.y - start.y) / k;
-      draggedLayout = { nodes: initial.nodes.map(node => node.path === path ? { ...node, pinned: true, ...(kind === 'move' ? { x: saved.x + dx, y: saved.y + dy } : { width: Math.max(240, Math.min(1600, (saved.width || 360) + dx)), height: Math.max(180, Math.min(1400, (saved.height || 300) + dy)) }) } : node) };
+      draggedLayout = { nodes: initial.nodes.map(node => node.id === path ? { ...node, pinned: true, ...(kind === 'move' ? { x: saved.x + dx, y: saved.y + dy } : { width: Math.max(240, Math.min(1600, (saved.width || 360) + dx)), height: Math.max(180, Math.min(1400, (saved.height || 300) + dy)) }) } : node) };
       setLayout(draggedLayout);
     };
     const end = () => {
@@ -102,7 +102,10 @@ export function createGraphInteractions({ container, fg, graphData, transform, e
         target = nearest?.id;
       }
       const node = graphData.nodes.find(n => n.id === target);
-      if (node) link(source, { path: node.id, title: node.title });
+      if (node) {
+        const sourceNode = graphData.nodes.find(n => n.id === source)!;
+        link(source, sourceNode.path, { path: node.path, title: node.title });
+      }
     };
     const cancel = () => {
       window.removeEventListener('pointermove', move);

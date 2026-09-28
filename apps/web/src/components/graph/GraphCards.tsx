@@ -7,7 +7,7 @@ export function GraphCards({ model }: { model: ReturnType<typeof useGraphControl
   return (
     <>
       {graphData.nodes.filter(node => expanded.has(node.id) || closing.has(node.id)).map(node => {
-        const card = layout.nodes.find(n => n.path === node.id)!;
+        const card = layout.nodes.find(n => n.id === node.id)!;
         const large = maximized === node.id, w = card.width || 360, h = card.height || 300;
         return (
           <div
@@ -18,7 +18,7 @@ export function GraphCards({ model }: { model: ReturnType<typeof useGraphControl
             className={`graph-card-position ${closing.has(node.id) ? 'is-closing' : ''} ${large ? 'is-maximized' : ''} ${showOutside && laneIds.length && !laneMembers.has(node.id) ? 'is-outside-lane' : ''}`}
             style={large ? { inset: 8, zIndex: 80 } : { left: (node.x || 0) * transform.k + transform.x - w * transform.k / 2, top: (node.y || 0) * transform.k + transform.y - h * transform.k / 2, width: w, height: h, transform: `scale(${transform.k})`, zIndex: selected.includes(node.id) ? 24 : 20 }}
           >
-            <GraphNoteCard node={node} color={nodeColor(node)} session={sessions.get(node.id)} editorRef={editorRef(node.id)} onSession={session => updateSession(node.id, session)} selected={selected.includes(node.id)} maximized={large} onSelect={event => select(node.id, event)} onCaret={position => carets.current.set(node.id, position)} onMove={event => drag(event, node.id, 'move')} onResize={event => drag(event, node.id, 'resize')} onConnect={event => startLink(event, node.id)} onLink={target => link(node.id, target)} onCollapse={() => void setExpanded([node.id], false)} onMaximize={() => setMaximized(large ? null : node.id)} />
+            <GraphNoteCard node={node} color={nodeColor(node)} session={sessions.get(node.id)} editorRef={editorRef(node.id)} onSession={session => updateSession(node.id, session)} selected={selected.includes(node.id)} maximized={large} onSelect={event => select(node.id, event)} onCaret={position => carets.current.set(node.id, position)} onMove={event => drag(event, node.id, 'move')} onResize={event => drag(event, node.id, 'resize')} onConnect={event => startLink(event, node.id)} onLink={target => link(node.id, node.path, target)} onCollapse={() => void setExpanded([node.id], false)} onMaximize={() => setMaximized(large ? null : node.id)} />
           </div>
         );
       })}

@@ -1,21 +1,47 @@
 import { type RefObject, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { type NoteRef, noteRefKey } from '@mygitnotes/core/note-query';
+import type { RepositoryId } from '@mygitnotes/core/repository';
 import type { NotebookConfig } from './types.js';
 import { noteLookupOptions, useNoteQueryScope } from './use-note-queries.js';
 import { parseWorkspaceRoute } from './routes.js';
 import { notebookOfPath, resolveWorkspaceHref } from './workspace-links.js';
 
+/** What a link can reach: the notebooks in its source note's repository, and the source notebook when known. */
+export interface LinkScope {
+  source?: NotebookConfig;
+  notebooks: NotebookConfig[];
+}
+
+/**
+ * A link resolves within its source note's repository. The source notebook is the nearest
+ * `data-source-notebook`, since notebook roots may repeat across repositories; without one it
+ * is the notebook whose root holds the source path.
+ */
+export function linkScope(element: HTMLElement, notebooks: NotebookConfig[], repositories: Record<string, RepositoryId>): LinkScope {
+  const sourceId = element.closest<HTMLElement>('[data-source-notebook]')?.dataset.sourceNotebook;
+  const source = notebooks.find(nb => nb.id === sourceId) ?? notebookOfPath(element.dataset.sourcePath || '', notebooks);
+  const repository = source && repositories[source.id];
+  return { source, notebooks: source ? notebooks.filter(nb => (repositories[nb.id] ?? '') === (repository ?? '')) : [] };
+}
+
+/** Path aliases come from the source notebook when known. */
+export const linkAliases = (scope: LinkScope) => scope.source ? scope.source.pathAliases ?? {} : scope.notebooks;
+
 /** Resolve only note candidates; folders, assets, anchors and external URLs need no speculative reads. */
-export function linkedNotePath(href: string, source: string, notebooks: NotebookConfig[], origin: string): string | null {
-  const link = resolveWorkspaceHref(href, source, notebooks, origin);
-  if (link?.kind === 'path' && /\.md$/i.test(link.path) && link.path !== source && notebooks.some(nb => link.path.startsWith(`${nb.root}/`))) return link.path;
+export function linkedNote(href: string, source: string, scope: LinkScope, origin: string): NoteRef | null {
+  const link = resolveWorkspaceHref(href, source, linkAliases(scope), origin);
+  if (link?.kind === 'path' && /\.md$/i.test(link.path) && link.path !== source) {
+    const notebook = notebookOfPath(link.path, scope.notebooks);
+    return notebook ? { notebookId: notebook.id, path: link.path } : null;
+  }
   if (link?.kind === 'route') {
     const url = new URL(link.url, origin);
     const route = parseWorkspaceRoute(url.pathname, url.search);
-    const notebook = notebooks.find(nb => nb.id === route.notebook);
+    const notebook = scope.notebooks.find(nb => nb.id === route.notebook);
     if (route.valid && route.note && notebook) {
       const path = `${notebook.root}/${route.note}`;
-      return path !== source && /\.md$/i.test(path) ? path : null;
+      return path !== source && /\.md$/i.test(path) ? { notebookId: notebook.id, path } : null;
     }
   }
   return null;
@@ -63,19 +89,22 @@ export function useLinkedNotePreload(surface: RefObject<HTMLElement>, notebooks:
       const candidates: { source: string; path: string; notebookId: string; }[] = [];
       for (let index = 0; index < Math.min(elements.length, SCAN_LIMIT); index++) {
         const element = elements[index];
-        const source = element.dataset.sourcePath!;
+        const sourcePath = element.dataset.sourcePath!;
+        const reach = linkScope(element, notebooks, repositories);
+        if (!reach.source) continue;
+        const source = noteRefKey({ notebookId: reach.source.id, path: sourcePath });
         if (!sources.has(source) && sources.size >= SOURCE_LIMIT) continue;
         sources.add(source);
-        const path = linkedNotePath(element.dataset.workspaceLink!, source, notebooks, window.location.origin);
-        const notebook = path ? notebookOfPath(path, notebooks) : undefined;
-        if (path && notebook) candidates.push({ source, path, notebookId: notebook.id });
+        const target = linkedNote(element.dataset.workspaceLink!, sourcePath, reach, window.location.origin);
+        if (target) candidates.push({ source, ...target });
       }
       for (const source of attempted.keys()) if (!sources.has(source)) attempted.delete(source);
       for (const { source, path, notebookId } of candidates) {
         const paths = attempted.get(source) || new Set<string>();
         attempted.set(source, paths);
-        if (paths.size >= PRELOAD_LIMIT || paths.has(path)) continue;
-        paths.add(path);
+        const key = noteRefKey({ notebookId, path });
+        if (paths.size >= PRELOAD_LIMIT || paths.has(key)) continue;
+        paths.add(key);
         const options = noteLookupOptions(scope, [{ notebookId, path }], true);
         const query = client.getQueryState(options.queryKey);
         if (query?.data && !query.isInvalidated) continue;

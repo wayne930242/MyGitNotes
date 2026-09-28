@@ -27,7 +27,7 @@ const click = async (text, within = '') => {
   }
   throw new Error('Missing button ' + text);
 };
-const cardA = '[data-graph-note="notes/a/a.md"]', cardB = '[data-graph-note="notes/a/b.md"]';
+const cardA = '[data-graph-note="a:notes/a/a.md"]', cardB = '[data-graph-note="a:notes/a/b.md"]';
 const setMode = async (card, mode) => {
   const toggle = await page.$(card + ' [data-mode-toggle]');
   if (await toggle.evaluate(el => el.dataset.modeToggle) !== mode) await toggle.click();
@@ -185,7 +185,7 @@ try {
   // Items 36–37: a graph card, a Focus pane and zoom edit one note through one mounted editor and one draft.
   // The lane keeps the saved layout, so Beta is the card still expanded inside the pane.
   await page.goto(base + '/notebooks/a?view=list', { waitUntil: 'networkidle0' });
-  await page.click('.focus-switcher-main');
+  await page.click('.focus-switcher .select-button-primary');
   await page.waitForSelector('.focus-area');
   await page.click('.focus-division-trigger');
   await menuItem('Left and right');

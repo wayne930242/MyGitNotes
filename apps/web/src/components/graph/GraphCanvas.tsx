@@ -22,7 +22,7 @@ export function GraphCanvas({ model }: { model: ReturnType<typeof useGraphContro
         onNodeDragEnd={node => {
           freeze();
           const next = currentLayout();
-          const saved = next.nodes.find(n => n.path === node.id);
+          const saved = next.nodes.find(n => n.id === node.id);
           if (saved) saved.pinned = true;
           persistLayout(next);
         }}
@@ -63,7 +63,7 @@ export function GraphCanvas({ model }: { model: ReturnType<typeof useGraphContro
           const a = edge.source as Node, b = edge.target as Node;
           if (a.x === undefined || b.x === undefined) return;
           const end = (from: Node, to: Node) => {
-            const card = layout.nodes.find(n => n.path === from.id && n.expanded);
+            const card = layout.nodes.find(n => n.id === from.id && n.expanded);
             const dx = to.x! - from.x!, dy = to.y! - from.y!;
             const factor = card ? Math.min((card.width || 360) / 2 / (Math.abs(dx) || 1e-9), (card.height || 300) / 2 / (Math.abs(dy) || 1e-9)) : 8 / Math.max(1, Math.hypot(dx, dy));
             return { x: from.x! + dx * Math.min(.49, factor), y: from.y! + dy * Math.min(.49, factor) };

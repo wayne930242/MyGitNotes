@@ -26,15 +26,16 @@ describe('shared note filters', () => {
   it('keeps hidden eligibility separate from the graph expansion and expands only one hop', () => {
     const eligible = filterNotes(notes, { ...base, notebookId: 'all' });
     const graph = buildNoteGraph(eligible, { includeHidden: true });
-    const matches = new Set([notes[1].path]);
-    expect(selectFilteredGraph(graph, matches, false).nodes.map(n => n.id)).toEqual([notes[1].path]);
+    const key = (item: NoteItem) => `${item.notebookId}:${item.path}`;
+    const matches = new Set([key(notes[1])]);
+    expect(selectFilteredGraph(graph, matches, false).nodes.map(n => n.id)).toEqual([key(notes[1])]);
     const expanded = selectFilteredGraph(graph, matches, true);
-    expect(expanded.nodes.map(n => n.id)).toEqual(notes.slice(0, 3).map(n => n.path));
+    expect(expanded.nodes.map(n => n.id)).toEqual(notes.slice(0, 3).map(key));
     expect(expanded.nodes.map(n => n.external)).toEqual([true, false, true]);
     expect(expanded.links).toHaveLength(2);
     expect(expanded.links[0]).not.toBe(graph.links[0]);
     expanded.links[0].source = 'mutated-by-renderer';
-    expect(selectFilteredGraph(graph, matches, true).links[0].source).toBe(notes[0].path);
+    expect(selectFilteredGraph(graph, matches, true).links[0].source).toBe(key(notes[0]));
     expect(selectFilteredGraph(graph, new Set(), true).nodes).toEqual([]);
     expect(graph.nodes.every(n => n.external === undefined)).toBe(true);
   });

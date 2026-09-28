@@ -139,8 +139,8 @@ describe('facets, lookup, agenda and graph', () => {
   it('builds the workspace graph from note links', async () => {
     const graph = await noteGraph(await catalog());
     expect(graph.revisions).toEqual(revisions);
-    expect(graph.links).toEqual([{ source: 'notes/work/deep/beta.md', target: 'notes/work/alpha.md' }]);
-    expect(graph.nodes.map(node => node.id)).toContain('notes/work/archived.md');
+    expect(graph.links).toEqual([{ source: 'work:notes/work/deep/beta.md', target: 'work:notes/work/alpha.md' }]);
+    expect(graph.nodes.find(node => node.id === 'work:notes/work/archived.md')?.path).toBe('notes/work/archived.md');
   });
 });
 
@@ -201,5 +201,17 @@ describe('notes with the same path in two repositories', () => {
     const bodies = await lookupNotes(catalog, [{ notebookId: 'one', path: 'notes/shared/a.md' }, { notebookId: 'two', path: 'notes/shared/a.md' }], true);
     expect(bodies.notes.map(n => n.content)).toEqual(['one', 'two']);
     expect((await queryNotePaths(catalog, query({ notebookId: 'all', sort: 'title', order: 'asc' }))).notes).toEqual([{ notebookId: 'one', path: 'notes/shared/a.md' }, { notebookId: 'two', path: 'notes/shared/a.md' }]);
+  });
+
+  it('stay distinct in the graph, whose links resolve within their repository', async () => {
+    const shared = [{ id: 'one', title: 'One', root: 'notes/shared' }, { id: 'two', title: 'Two', root: 'notes/shared' }] as NotebookConfig[];
+    const notes: Record<string, NoteListItem[]> = { one: [item('notes/shared/a.md', 'one'), item('notes/shared/b.md', 'one')], two: [item('notes/shared/a.md', 'two'), item('notes/shared/only-two.md', 'two')] };
+    const text: Record<string, string> = { 'one:notes/shared/a.md': '[b](b.md) [elsewhere](only-two.md)', 'two:notes/shared/a.md': '[b](b.md) [here](only-two.md)' };
+    const repository = (id: string, notebook: NotebookConfig): CatalogRepository => ({ id, notebooks: [notebook], catalog: { revision: async () => 'f'.repeat(40), index: async nb => notes[nb.id], contents: async list => new Map(list.map(n => [n.path, text[`${n.notebookId}:${n.path}`] ?? ''])), memo: (_kind, _notebooks, compute) => compute() } });
+    const catalog = await workspaceCatalog({ ...config, notebooks: shared }, [repository('github:o/one@main', shared[0]), repository('github:o/two@main', shared[1])]);
+    expect(catalog.repository('two')).toBe('github:o/two@main');
+    const graph = await noteGraph(catalog);
+    expect(graph.nodes.map(node => [node.id, node.path])).toEqual([['one:notes/shared/a.md', 'notes/shared/a.md'], ['one:notes/shared/b.md', 'notes/shared/b.md'], ['two:notes/shared/a.md', 'notes/shared/a.md'], ['two:notes/shared/only-two.md', 'notes/shared/only-two.md']]);
+    expect(graph.links).toEqual([{ source: 'one:notes/shared/a.md', target: 'one:notes/shared/b.md' }, { source: 'two:notes/shared/a.md', target: 'two:notes/shared/only-two.md' }]);
   });
 });

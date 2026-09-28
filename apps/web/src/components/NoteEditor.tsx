@@ -124,7 +124,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   };
 
   return (
-    <div className='note-editor' data-frame={frame} style={frame === 'compact' ? undefined : noteViewStyle(viewPreferences)}>
+    <div className='note-editor' data-frame={frame} data-source-notebook={note.notebookId} style={frame === 'compact' ? undefined : noteViewStyle(viewPreferences)}>
       <div className='editor-notices'>
         {/* Crash recovery banner if draft differs from disk */}
         {session.recoveredDraft && !session.blocked && <CrashRecoveryBanner draft={{ path: note.path, content: session.recoveredDraft.content, metadata: session.recoveredDraft.metadata, savedAt: session.recoveredDraft.savedAt }} onRestore={session.handleRestoreDraft} onDiscard={session.handleDiscardDraft} />}

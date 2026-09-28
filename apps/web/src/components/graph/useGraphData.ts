@@ -1,45 +1,50 @@
 import { useCallback, useMemo } from 'react';
 import type { NoteGraphNode } from '@mygitnotes/core/note-graph';
 import { selectFilteredGraph } from '@mygitnotes/core/note-filters';
-import { type GraphLayout, type ScreenRow } from '@mygitnotes/core/screen-page';
+import type { ScreenRow } from '@mygitnotes/core/screen-page';
+import { noteRefKey } from '@mygitnotes/core/note-query';
 import type { NoteQuery } from '@mygitnotes/core/note-query';
 import { useNoteGraph, useNotePaths } from '../../lib/use-note-queries.js';
 import { overlayGraphDrafts } from '../../lib/draft-overlay.js';
 import { useLanePaths } from '../../lib/screen-queries.js';
 import { initializeGraphLayout } from '../../lib/graph-initial-layout.js';
+import type { GraphPlacement } from '../../lib/graph-layout.js';
+import { useNoteQueryScope } from '../../lib/use-note-queries.js';
 import { type GraphAppearance, graphColorGroup, graphColorGroups } from '../../lib/graph-colors.js';
 import { themeColor } from '../../lib/theme-color.js';
 import type { MutableRefObject } from 'react';
 import type { GraphPageProps, LayoutNode } from './types.js';
 import type { useGraphNoteSessions } from './useGraphNoteSessions.js';
-export function useGraphData({ notebooks, filters, lane, activeLane, rows, laneIds, laneKey, showOutside, sessions, only, layout, showOrphans, positions, appearance }: Pick<GraphPageProps, 'notebooks' | 'filters' | 'lane'> & { activeLane?: ScreenRow; rows: ScreenRow[]; laneIds: string[]; laneKey: string; showOutside: boolean; sessions: ReturnType<typeof useGraphNoteSessions>['sessions']; only: string[] | null; layout: GraphLayout; showOrphans: boolean; positions: MutableRefObject<Map<string, LayoutNode>>; appearance: GraphAppearance; }) {
+export function useGraphData({ notebooks, filters, lane, activeLane, rows, laneIds, laneKey, showOutside, sessions, only, layout, showOrphans, positions, appearance }: Pick<GraphPageProps, 'notebooks' | 'filters' | 'lane'> & { activeLane?: ScreenRow; rows: ScreenRow[]; laneIds: string[]; laneKey: string; showOutside: boolean; sessions: ReturnType<typeof useGraphNoteSessions>['sessions']; only: string[] | null; layout: GraphPlacement; showOrphans: boolean; positions: MutableRefObject<Map<string, LayoutNode>>; appearance: GraphAppearance; }) {
   const graphSource = useNoteGraph();
+  const { repositories } = useNoteQueryScope();
   const filterValue = filters?.value;
   const activeNotebookId = activeLane?.notebookId;
   const scopeNotebook = activeNotebookId || filterValue?.notebookId || 'all';
 
   const filterQuery = useMemo<Partial<NoteQuery>>(() => (filterValue ? { notebookId: scopeNotebook, folders: filterValue.folders, descendants: filterValue.descendants, tags: filterValue.tags, tagMode: filterValue.tagMode, status: filterValue.status, showHidden: filterValue.showHidden, q: filterValue.q } : { notebookId: scopeNotebook, showHidden: false }), [filterValue, scopeNotebook]);
 
-  // Graph nodes are identified by path until they carry their notebook.
+  // Query results carry notebook-qualified references; GraphLayout is converted at the Screen boundary.
   const matchingNotes = useNotePaths(filterQuery);
   const visibleNotes = useNotePaths(filters?.value.showHidden ? null : { notebookId: scopeNotebook, showHidden: false });
-  const matchingPaths = useMemo(() => ({ ...matchingNotes, paths: matchingNotes.notes.map(note => note.path) }), [matchingNotes]);
-  const visiblePaths = useMemo(() => ({ ...visibleNotes, paths: visibleNotes.notes.map(note => note.path) }), [visibleNotes]);
+  const matchingPaths = useMemo(() => ({ ...matchingNotes, paths: matchingNotes.notes.map(noteRefKey) }), [matchingNotes]);
+  const visiblePaths = useMemo(() => ({ ...visibleNotes, paths: visibleNotes.notes.map(noteRefKey) }), [visibleNotes]);
   /* eslint-disable react-hooks/exhaustive-deps -- Lane membership is keyed by laneKey; freshly allocated URL arrays must not invalidate the graph and reset mutable simulation nodes. */
   const shownLanes = useMemo(() => [...rows.filter(row => laneIds.includes(row.id)), ...(lane ? [lane] : [])], [rows, laneKey, lane]);
   /* eslint-enable react-hooks/exhaustive-deps */
   const lanePaths = useLanePaths(shownLanes);
+  const laneNodeIds = new Map(shownLanes.map(row => [row.id, (lanePaths.paths.get(row.id) || []).map(path => noteRefKey({ notebookId: row.notebookId, path }))]));
   const editingDrafts = useMemo(() =>
     [...sessions].flatMap(([path, session]) => {
       const node = graphSource.graph?.nodes.find(node => node.id === path);
-      return session.dirty && node ? [{ path, notebookId: node.notebookId, title: session.title || node.title, status: node.status, tags: node.tags, content: session.content }] : [];
+      return session.dirty && node ? [{ path: node.path, notebookId: node.notebookId, title: session.title || node.title, status: node.status, tags: node.tags, content: session.content }] : [];
     }), [sessions, graphSource.graph]);
-  const graph = useMemo(() => (graphSource.graph ? overlayGraphDrafts(graphSource.graph, editingDrafts) : { nodes: [], links: [] }), [graphSource.graph, editingDrafts]);
+  const graph = useMemo(() => (graphSource.graph ? overlayGraphDrafts(graphSource.graph, editingDrafts, repositories) : { nodes: [], links: [] }), [graphSource.graph, editingDrafts, repositories]);
   /* eslint-disable react-hooks/exhaustive-deps -- Lane-key changes invalidate matching paths; array identity alone must not rebuild simulation nodes for an unchanged selection. */
   const matching = useMemo(() => {
     let matches = matchingPaths.paths;
     if (laneIds.length && !showOutside) {
-      const included = new Set(shownLanes.flatMap(row => lanePaths.paths.get(row.id) || []));
+      const included = new Set(shownLanes.flatMap(row => laneNodeIds.get(row.id) || []));
       matches = matches.filter(path => included.has(path));
     }
     if (only) matches = matches.filter(path => only.includes(path));
@@ -47,9 +52,9 @@ export function useGraphData({ notebooks, filters, lane, activeLane, rows, laneI
   }, [matchingPaths.paths, laneKey, shownLanes, only, showOutside, lanePaths.paths]);
   /* eslint-enable react-hooks/exhaustive-deps */
   /* eslint-disable react-hooks/exhaustive-deps -- Lane membership uses the semantic laneKey; equivalent URL arrays keep the existing membership projection. */
-  const laneMembers = useMemo(() => new Set(rows.filter(row => laneIds.includes(row.id)).flatMap(row => lanePaths.paths.get(row.id) || [])), [rows, laneKey, lanePaths.paths]);
+  const laneMembers = useMemo(() => new Set(rows.filter(row => laneIds.includes(row.id)).flatMap(row => laneNodeIds.get(row.id) || [])), [rows, laneKey, lanePaths.paths]);
   /* eslint-enable react-hooks/exhaustive-deps */
-  const expanded = useMemo(() => new Set(layout.nodes.filter(node => node.expanded).map(node => node.path)), [layout]);
+  const expanded = useMemo(() => new Set(layout.nodes.filter(node => node.expanded).map(node => node.id)), [layout]);
   /* eslint-disable react/refs -- The force-graph adapter keeps imperative graph state and current layout in refs for canvas callbacks. */
 
   const graphData = useMemo(() => {
@@ -61,10 +66,10 @@ export function useGraphData({ notebooks, filters, lane, activeLane, rows, laneI
     const graph2 = graphResult;
     const connected = new Set(graph2.links.flatMap(link => [link.source, link.target]));
     const visible = graph2.nodes.filter(node => showOrphans || connected.has(node.id));
-    const saved = new Map([...positions.current, ...layout.nodes.map(node => [node.path, node] as const)]);
+    const saved = new Map([...positions.current, ...layout.nodes.map(node => [node.id, node] as const)]);
     const initial = initializeGraphLayout({ nodes: visible, links: graph2.links }, { nodes: [...saved.values()] });
-    const initialized = new Map(initial.nodes.map(node => [node.path, node]));
-    for (const node of initial.nodes) positions.current.set(node.path, node);
+    const initialized = new Map(initial.nodes.map(node => [node.id, node]));
+    for (const node of initial.nodes) positions.current.set(node.id, node);
     return {
       links: graph2.links,
       nodes: visible.map(node => {

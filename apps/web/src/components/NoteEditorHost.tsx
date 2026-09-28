@@ -115,7 +115,7 @@ const NotePreview: React.FC<{ note: NoteItem; onClaim: () => void; }> = ({ note,
         </button>
       </div>
       <div className='note-preview-body'>
-        <NoteHtml className='prose-custom screen-markdown' html={html} />
+        <NoteHtml className='prose-custom screen-markdown' html={html} notebookId={note.notebookId} />
       </div>
     </div>
   );

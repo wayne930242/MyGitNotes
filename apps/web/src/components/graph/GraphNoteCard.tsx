@@ -25,7 +25,7 @@ export function GraphNoteCard({ node, session, editorRef, onSession, onCollapse,
 }) {
   const { t } = useTranslation();
   const [linking, setLinking] = useState(false), [query, setQuery] = useState('');
-  const candidates = useNoteCandidates(linking ? query : null, node.id);
+  const candidates = useNoteCandidates(linking ? query : null, node.path);
   return (
     <article className={`graph-note-card ${selected ? 'is-selected' : ''}`} style={{ borderColor: color, '--graph-node-color': color } as React.CSSProperties} data-graph-note={node.id} aria-label={node.title}>
       <header
@@ -66,7 +66,7 @@ export function GraphNoteCard({ node, session, editorRef, onSession, onCollapse,
           ))}
         </div>
       )}
-      <HostedNoteEditor notebookId={node.notebookId} path={node.id} frame='compact' active={false} editorRef={editorRef} onSession={onSession} onCaret={onCaret} />
+      <HostedNoteEditor notebookId={node.notebookId} path={node.path} frame='compact' active={false} editorRef={editorRef} onSession={onSession} onCaret={onCaret} />
       {!maximized && <button type='button' className='graph-card-resize' aria-label={t('graph.resize')} onPointerDown={onResize}>◢</button>}
     </article>
   );

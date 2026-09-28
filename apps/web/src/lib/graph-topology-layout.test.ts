@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest';
 import { optimizeGraphLayout } from './graph-topology-layout.js';
-import type { GraphLayout } from '@mygitnotes/core/screen-page';
+import type { GraphPlacement } from './graph-layout.js';
 
-const nodes = Array.from({ length: 8 }, (_, i) => ({ path: `${i}`, x: (i % 2) * 800, y: Math.floor(i / 2) * 300 }));
+const nodes = Array.from({ length: 8 }, (_, i) => ({ id: `${i}`, x: (i % 2) * 800, y: Math.floor(i / 2) * 300 }));
 const links = [0, 4].flatMap(start => Array.from({ length: 4 }, (_, i) => Array.from({ length: i }, (_, j) => ({ source: `${start + i}`, target: `${start + j}` }))).flat());
 links.push({ source: '3', target: '4' });
 it('brings two interleaved dense communities together without mutating inputs', () => {
@@ -10,7 +10,7 @@ it('brings two interleaved dense communities together without mutating inputs', 
   const result = optimizeGraphLayout(input, links);
   const mean = (layout: typeof input) =>
     links.slice(0, -1).reduce((sum, link) => {
-      const a = layout.nodes.find(n => n.path === link.source)!, b = layout.nodes.find(n => n.path === link.target)!;
+      const a = layout.nodes.find(n => n.id === link.source)!, b = layout.nodes.find(n => n.id === link.target)!;
       return sum + Math.hypot(a.x - b.x, a.y - b.y);
     }, 0) / (links.length - 1);
   expect(mean(result)).toBeLessThan(mean(input) * .6);
@@ -18,7 +18,7 @@ it('brings two interleaved dense communities together without mutating inputs', 
   expect(result).toEqual(optimizeGraphLayout(input, links));
 });
 it('untangles a crossed path and preserves pinned positions', () => {
-  const input = { nodes: [{ path: 'a', x: 0, y: 0, pinned: true }, { path: 'b', x: 400, y: 400 }, { path: 'c', x: 0, y: 400 }, { path: 'd', x: 400, y: 0 }] };
+  const input = { nodes: [{ id: 'a', x: 0, y: 0, pinned: true }, { id: 'b', x: 400, y: 400 }, { id: 'c', x: 0, y: 400 }, { id: 'd', x: 400, y: 0 }] };
   const result = optimizeGraphLayout(input, [{ source: 'a', target: 'b' }, { source: 'b', target: 'c' }, { source: 'c', target: 'd' }]);
   expect(result.nodes[0]).toEqual(input.nodes[0]);
   const [a, b, c, d] = result.nodes;
@@ -27,7 +27,7 @@ it('untangles a crossed path and preserves pinned positions', () => {
 });
 
 it('respects full card bounds, coincident starts, and multiple fixed anchors', () => {
-  const input: GraphLayout = { nodes: nodes.map((n, i) => ({ ...n, x: i === 7 ? 900 : 0, y: 0, expanded: true, width: 360 + i * 30, height: 300, pinned: i === 0 || i === 7 })) };
+  const input: GraphPlacement = { nodes: nodes.map((n, i) => ({ ...n, x: i === 7 ? 900 : 0, y: 0, expanded: true, width: 360 + i * 30, height: 300, pinned: i === 0 || i === 7 })) };
   const result = optimizeGraphLayout(input, links);
   for (const i of [0, 7]) expect(result.nodes[i]).toEqual(input.nodes[i]);
   for (let i = 0; i < result.nodes.length; i++) {
@@ -48,9 +48,9 @@ it('accepts renderer endpoints, filters missing nodes, and ignores duplicate or 
 
 it('handles empty graphs and retains isolated nodes and metadata', () => {
   expect(optimizeGraphLayout({ nodes: [] }, [])).toEqual({ nodes: [] });
-  const input = { nodes: [{ path: 'only', x: 2, y: 3, pinned: true }] };
+  const input = { nodes: [{ id: 'only', x: 2, y: 3, pinned: true }] };
   expect(optimizeGraphLayout(input, [])).toEqual(input);
-  const result = optimizeGraphLayout({ nodes: [...nodes, { path: 'orphan', x: 0, y: 0 }] }, links);
-  expect(result.nodes.map(n => n.path)).toEqual([...nodes.map(n => n.path), 'orphan']);
+  const result = optimizeGraphLayout({ nodes: [...nodes, { id: 'orphan', x: 0, y: 0 }] }, links);
+  expect(result.nodes.map(n => n.id)).toEqual([...nodes.map(n => n.id), 'orphan']);
   expect(result.nodes.every(n => Number.isFinite(n.x) && Number.isFinite(n.y))).toBe(true);
 });

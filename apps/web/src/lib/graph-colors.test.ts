@@ -3,13 +3,13 @@ import { graphColorGroup, graphColorGroups, parseGraphAppearance } from './graph
 import type { NotebookConfig } from './types.js';
 
 const notebooks = [{ id: 'rules', title: 'Rules', root: 'notes/rules' }, { id: 'campaign', title: 'Campaign', root: 'notes/campaign' }] as NotebookConfig[];
-const nodes = [{ id: 'notes/rules/combat/attacks.md', notebookId: 'rules', status: 'done' }, { id: 'notes/rules/combat/damage/table.md', notebookId: 'rules', status: 'done' }, { id: 'notes/rules/magic/spells.md', notebookId: 'rules', status: 'done' }, { id: 'notes/campaign/combat/encounter.md', notebookId: 'campaign', status: 'working' }];
+const nodes = [{ path: 'notes/rules/combat/attacks.md', notebookId: 'rules', status: 'done' }, { path: 'notes/rules/combat/damage/table.md', notebookId: 'rules', status: 'done' }, { path: 'notes/rules/magic/spells.md', notebookId: 'rules', status: 'done' }, { path: 'notes/campaign/combat/encounter.md', notebookId: 'campaign', status: 'working' }];
 
 describe('graph colors', () => {
   it('groups nested notes by the first folder and distinguishes notebooks', () => {
     expect(graphColorGroup(nodes[0], notebooks, 'folder')).toEqual(graphColorGroup(nodes[1], notebooks, 'folder'));
     expect(new Set(graphColorGroups(nodes, notebooks, { mode: 'folder', palette: 'soft' }).map(group => group.color)).size).toBe(3);
-    expect(graphColorGroup({ ...nodes[0], id: 'notes/rules/index.md' }, notebooks, 'folder').label).toBe('Rules');
+    expect(graphColorGroup({ ...nodes[0], path: 'notes/rules/index.md' }, notebooks, 'folder').label).toBe('Rules');
   });
   it('supports status and notebook coloring independently of folders', () => {
     expect(graphColorGroups(nodes, notebooks, { mode: 'status', palette: 'soft' })).toHaveLength(2);

@@ -4,7 +4,7 @@ import { act, cleanup, render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { NotebookConfig } from './types.js';
-import { linkedNotePath, useLinkedNotePreload } from './use-linked-note-preload.js';
+import { linkedNote, linkScope, useLinkedNotePreload } from './use-linked-note-preload.js';
 import { noteLookupOptions, setNoteQueryScope } from './use-note-queries.js';
 
 const notebooks: NotebookConfig[] = [{ id: 'n', title: 'Notes', root: 'notes' }];
@@ -45,11 +45,27 @@ const tick = async () => {
 };
 
 it('resolves note paths, aliases and same-origin note routes while excluding other destinations', () => {
-  expect(linkedNotePath('target.md#heading', 'notes/source.md', notebooks, 'https://notes.test')).toBe('notes/target.md');
-  expect(linkedNotePath('https://notes.test/notebooks/n/notes/target.md', 'notes/source.md', notebooks, 'https://notes.test')).toBe('notes/target.md');
+  const source = document.createElement('a');
+  source.dataset.sourcePath = 'notes/source.md';
+  const reach = linkScope(source, notebooks, {});
+  const target = { notebookId: 'n', path: 'notes/target.md' };
+  expect(linkedNote('target.md#heading', 'notes/source.md', reach, 'https://notes.test')).toEqual(target);
+  expect(linkedNote('https://notes.test/notebooks/n/notes/target.md', 'notes/source.md', reach, 'https://notes.test')).toEqual(target);
   const aliased = [{ ...notebooks[0], pathAliases: { '@/*': 'notes/*' } }];
-  expect(linkedNotePath('@/target.md', 'notes/source.md', aliased, 'https://notes.test')).toBe('notes/target.md');
-  for (const href of ['#heading', 'source.md', 'image.png', 'folder', 'https://other.test/a.md', '../../outside.md', '/graph']) expect(linkedNotePath(href, 'notes/source.md', notebooks, 'https://notes.test')).toBeNull();
+  expect(linkedNote('@/target.md', 'notes/source.md', linkScope(source, aliased, {}), 'https://notes.test')).toEqual(target);
+  for (const href of ['#heading', 'source.md', 'image.png', 'folder', 'https://other.test/a.md', '../../outside.md', '/graph']) expect(linkedNote(href, 'notes/source.md', reach, 'https://notes.test')).toBeNull();
+});
+
+it('keeps equal roots and note paths in the source repository and never preloads a foreign route', () => {
+  const shared = [{ id: 'home', root: 'notes', title: 'Home' }, { id: 'other', root: 'notes', title: 'Other' }] as NotebookConfig[];
+  const source = document.createElement('div');
+  source.dataset.sourceNotebook = 'home';
+  const element = document.createElement('a');
+  element.dataset.sourcePath = 'notes/source.md';
+  source.append(element);
+  const reach = linkScope(element, shared, { home: 'repo-home', other: 'repo-other' });
+  expect(linkedNote('target.md', 'notes/source.md', reach, 'https://notes.test')).toEqual({ notebookId: 'home', path: 'notes/target.md' });
+  expect(linkedNote('/notebooks/other/notes/target.md', 'notes/source.md', reach, 'https://notes.test')).toBeNull();
 });
 
 it('waits for idle, bounds reads to eight and shares the editor body cache', async () => {

@@ -3,7 +3,7 @@ import { createGraphInteractions } from './createGraphInteractions.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { type GraphLayout, ScreenPageSchema, type ScreenRow } from '@mygitnotes/core/screen-page';
-import { arrangeGraphLayout, graphLaneViewport } from '../../lib/graph-layout.js';
+import { arrangeGraphLayout, graphLaneViewport, type GraphPlacement } from '../../lib/graph-layout.js';
 import { optimizeGraphLayout } from '../../lib/graph-topology-layout.js';
 import { useTranslation } from '../../lib/i18n/index.js';
 import { GRAPH_APPEARANCE_KEY, type GraphAppearance, readGraphAppearance } from '../../lib/graph-colors.js';
@@ -12,6 +12,14 @@ import { useGraphNoteSessions } from './useGraphNoteSessions.js';
 import { useLaneSelection } from './useLaneSelection.js';
 import type { GraphGesture, GraphPageProps, LayoutNode, Node } from './types.js';
 import { useGraphData } from './useGraphData.js';
+// Screen owns one notebook and persists paths; the canvas owns notebook-qualified ids.
+function lanePlacement(lane?: ScreenRow): GraphPlacement {
+  return { nodes: (lane?.graph?.nodes ?? []).map(({ path, ...node }) => ({ ...node, id: noteRefKey({ notebookId: lane!.notebookId, path }) })) };
+}
+function persistedLayout(placement: GraphPlacement, notebookId: string): GraphLayout {
+  const prefix = `${notebookId}:`;
+  return { nodes: placement.nodes.filter(node => node.id.startsWith(prefix)).map(({ id, ...node }) => ({ ...node, path: id.slice(prefix.length) })) };
+}
 export function useGraphController({ notebooks, filters, screen, lane, folders = [] }: GraphPageProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -35,12 +43,12 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
   const container = useRef<HTMLDivElement>(null), controls = useRef<HTMLDivElement>(null);
   const fg = useRef<any>();
   const [cardDragging, setCardDragging] = useState(false);
-  const [laneGeometry, setLaneGeometry] = useState<GraphLayout>({ nodes: [] });
+  const [laneGeometry, setLaneGeometry] = useState<GraphPlacement>({ nodes: [] });
   const [size, setSize] = useState({ width: 800, height: 600 });
   const [transform, setTransform] = useState({ x: 400, y: 300, k: 1 });
   const [, redraw] = useState(0);
   const [selected, setSelected] = useState<string[]>([]), [only, setOnly] = useState<string[] | null>(null);
-  const [layout, setLayout] = useState<GraphLayout>(activeLane?.graph || { nodes: [] });
+  const [layout, setLayout] = useState<GraphPlacement>(() => lanePlacement(activeLane));
   const [showOrphans, setShowOrphans] = useState(true), [boxMode, setBoxMode] = useState(false);
   const [maximized, setMaximized] = useState<string | null>(null), [hover, setHover] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false), [name, setName] = useState(''), [notice, setNotice] = useState('');
@@ -56,7 +64,7 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
   /* eslint-disable react-hooks/exhaustive-deps -- Only lane identity resets selection and mutable canvas positions; graph snapshot updates have a separate layout synchronization effect. */
   useLayoutEffect(() => {
     /* eslint-disable react/set-state-in-effect -- Canvas positions, fit flags and React layout must reset together in the layout phase before the new lane is painted. */
-    setLayout(activeLane?.graph || { nodes: [] });
+    setLayout(lanePlacement(activeLane));
     /* eslint-enable react/set-state-in-effect */
     setSelected([]);
     setOnly(null);
@@ -67,8 +75,8 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
   }, [laneKey]);
   /* eslint-enable react-hooks/exhaustive-deps */
   useLayoutEffect(() => {
-    if (activeLane?.graph && JSON.stringify(activeLane.graph) !== JSON.stringify(latest.current.layout)) setLayout(activeLane.graph);
-  }, [activeLane?.graph]);
+    if (activeLane?.graph && JSON.stringify(lanePlacement(activeLane)) !== JSON.stringify(latest.current.layout)) setLayout(lanePlacement(activeLane));
+  }, [activeLane]);
   useEffect(() => {
     const host = container.current;
     if (!host) return;
@@ -103,15 +111,15 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
     }
   };
   const isDark = document.documentElement.classList.contains('dark');
-  const currentLayout = (): GraphLayout => {
-    const merged = new Map(latest.current.layout.nodes.map(node => [node.path, node]));
-    for (const node of graphData.nodes as Node[]) if (node.x !== undefined && node.y !== undefined) merged.set(node.id, { ...merged.get(node.id), path: node.id, x: node.x, y: node.y });
+  const currentLayout = (): GraphPlacement => {
+    const merged = new Map(latest.current.layout.nodes.map(node => [node.id, node]));
+    for (const node of graphData.nodes as Node[]) if (node.x !== undefined && node.y !== undefined) merged.set(node.id, { ...merged.get(node.id), id: node.id, x: node.x, y: node.y });
     return { nodes: [...merged.values()] };
   };
-  const persistLayout = (next: GraphLayout) => {
+  const persistLayout = (next: GraphPlacement) => {
     setLayout(next);
     const controller = latest.current.screen;
-    if (activeLane && controller?.writable) controller.change({ ...controller.page, rows: controller.page.rows.map(row => row.id === activeLane.id ? { ...row, graph: next } : row) });
+    if (activeLane && controller?.writable) controller.change({ ...controller.page, rows: controller.page.rows.map(row => row.id === activeLane.id ? { ...row, graph: persistedLayout(next, row.notebookId) } : row) });
   };
   const saveLayout = screen?.save, layoutSaving = screen?.saving, layoutPage = screen?.page;
 
@@ -132,12 +140,12 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
       node.fy = node.y;
     }
   };
-  const reflow = (next: GraphLayout, topology = false) => {
+  const reflow = (next: GraphPlacement, topology = false) => {
     const visible = new Set(graphData.nodes.map(node => node.id));
-    const visibleLayout = { nodes: next.nodes.filter(node => visible.has(node.path)) };
+    const visibleLayout = { nodes: next.nodes.filter(node => visible.has(node.id)) };
     const arranged = topology ? optimizeGraphLayout(visibleLayout, graphData.links) : arrangeGraphLayout(visibleLayout, { compact: true });
-    const byPath = new Map(arranged.nodes.map(node => [node.path, node]));
-    return { nodes: next.nodes.map(node => byPath.get(node.path) || node) };
+    const byId = new Map(arranged.nodes.map(node => [node.id, node]));
+    return { nodes: next.nodes.map(node => byId.get(node.id) || node) };
   };
   const finishClosing = (path: string) => {
     clearTimeout(closeTimers.current.get(path));
@@ -151,8 +159,7 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
   };
   // Collapsing unmounts the card's editor, so its pending edits are saved first and a failed save keeps the card open.
   const setExpanded = async (paths: string[], value: boolean) => {
-    // Graph nodes are identified by path; their editors are registered by notebook and path.
-    const editorKeys = paths.flatMap(path => graph.nodes.filter(node => node.id === path).map(node => noteRefKey({ notebookId: node.notebookId, path })));
+    const editorKeys = paths.filter(id => graph.nodes.some(node => node.id === id));
     if (!value && !await editing.flushEditors(editorKeys)) return;
     freeze();
     const next = currentLayout();
@@ -169,9 +176,9 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
           next.delete(path);
           return next;
         });}
-      let node = next.nodes.find(node => node.path === path);
+      let node = next.nodes.find(node => node.id === path);
       if (!node) {
-        node = { path, x: 0, y: 0 };
+        node = { id: path, x: 0, y: 0 };
         next.nodes.push(node);
       }
       node.expanded = value;
@@ -185,17 +192,17 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
   };
   const additive = (event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; }) => Boolean(event.shiftKey || event.ctrlKey || event.metaKey);
   const select = (path: string, event: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; }) => setSelected(previous => additive(event) ? previous.includes(path) ? previous.filter(id => id !== path) : [...previous, path] : [path]);
-  const fitView = (next: GraphLayout) => {
+  const fitView = (next: GraphPlacement) => {
     if (!fg.current) return;
     const visible = new Set(graphData.nodes.map(node => node.id));
     if (lane) {
-      const view = graphLaneViewport({ nodes: next.nodes.filter(node => visible.has(node.path)) }, size.width);
+      const view = graphLaneViewport({ nodes: next.nodes.filter(node => visible.has(node.id)) }, size.width);
       const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 250;
       fg.current.centerAt(view.x, view.y, duration);
       fg.current.zoom(view.zoom, duration);
       return;
     }
-    const bounds = next.nodes.filter(node => visible.has(node.path)).map(node => ({ x: node.x, y: node.y, w: node.expanded ? node.width || 360 : 32, h: node.expanded ? node.height || 300 : 32 }));
+    const bounds = next.nodes.filter(node => visible.has(node.id)).map(node => ({ x: node.x, y: node.y, w: node.expanded ? node.width || 360 : 32, h: node.expanded ? node.height || 300 : 32 }));
     if (!bounds.length) return;
     const left = Math.min(...bounds.map(n => n.x - n.w / 2)), right = Math.max(...bounds.map(n => n.x + n.w / 2));
     const top = Math.min(...bounds.map(n => n.y - n.h / 2)), bottom = Math.max(...bounds.map(n => n.y + n.h / 2));
@@ -207,7 +214,7 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
   const captureLaneGeometry = () => {
     if (!lane) return;
     const visible = new Set(graphData.nodes.map(node => node.id));
-    setLaneGeometry({ nodes: currentLayout().nodes.filter(node => visible.has(node.path)).map(node => ({ ...node, expanded: node.expanded || closing.has(node.path) })) });
+    setLaneGeometry({ nodes: currentLayout().nodes.filter(node => visible.has(node.id)).map(node => ({ ...node, expanded: node.expanded || closing.has(node.id) })) });
   };
   const laneViewport = graphLaneViewport(laneGeometry, size.width);
   /* eslint-disable react-hooks/exhaustive-deps -- The 200 ms measurement reads current simulation coordinates after dragging settles; render-created helper identity must not restart the timer. */
@@ -260,7 +267,7 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
   const frame = () => {
     paintMinimap();
     if (!fg.current) return;
-    for (const node of graphData.nodes as Node[]) if (node.x !== undefined && node.y !== undefined) positions.current.set(node.id, { path: node.id, x: node.x, y: node.y });
+    for (const node of graphData.nodes as Node[]) if (node.x !== undefined && node.y !== undefined) positions.current.set(node.id, { id: node.id, x: node.x, y: node.y });
     const origin = fg.current.graph2ScreenCoords(0, 0), k = fg.current.zoom();
     const signature = `${origin.x},${origin.y},${k}:` + graphData.nodes.filter(n => expanded.has(n.id)).map(n => `${n.x},${n.y}`).join(';');
     if (frameSignature.current !== signature) {
@@ -275,7 +282,7 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
   const changeMembership = (add: boolean) => {
     if (!screen?.writable || activeLane?.kind !== 'custom') return;
     const selectedSet = new Set(visibleSelected);
-    const items = add ? [...activeLane.items, ...graphData.nodes.filter(node => selectedSet.has(node.id) && !activeLane.items.some(item => item.kind === 'note' && item.path === node.id && item.notebookId === node.notebookId)).map(node => ({ id: crypto.randomUUID(), kind: 'note' as const, path: node.id, notebookId: node.notebookId }))] : activeLane.items.filter(item => item.kind !== 'note' || !selectedSet.has(item.path));
+    const items = add ? [...activeLane.items, ...graphData.nodes.filter(node => selectedSet.has(node.id) && !activeLane.items.some(item => item.kind === 'note' && item.path === node.path && item.notebookId === node.notebookId)).map(node => ({ id: crypto.randomUUID(), kind: 'note' as const, path: node.path, notebookId: node.notebookId }))] : activeLane.items.filter(item => item.kind !== 'note' || !selectedSet.has(noteRefKey(item)));
     screen.change({ ...screen.page, rows: screen.page.rows.map(row => row.id === activeLane.id ? { ...activeLane, items } : row) });
   };
   const openFullGraph = async () => {
@@ -287,7 +294,7 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
   const saveLane = () => {
     if (!screen?.writable || !name.trim() || !saveNotebook) return;
     const id = crypto.randomUUID(), current = currentLayout();
-    const row: ScreenRow = { id, kind: 'custom', name: name.trim(), view: 'graph', notebookId: saveNotebook, items: visibleSelected.map(path => ({ id: crypto.randomUUID(), kind: 'note', notebookId: saveNotebook, path })), graph: { nodes: current.nodes.filter(n => visibleSelected.includes(n.path)) } };
+    const row: ScreenRow = { id, kind: 'custom', name: name.trim(), view: 'graph', notebookId: saveNotebook, items: graphData.nodes.filter(node => visibleSelected.includes(node.id)).map(node => ({ id: crypto.randomUUID(), kind: 'note', notebookId: saveNotebook, path: node.path })), graph: persistedLayout({ nodes: current.nodes.filter(n => visibleSelected.includes(n.id)) }, saveNotebook) };
     const next = ScreenPageSchema.safeParse({ ...screen.page, rows: [...screen.page.rows, row] });
     if (!next.success) {
       setNotice(t('screen.limit'));

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { NoteGraphLink, NoteGraphNode } from '@mygitnotes/core/note-graph';
 import { expandGraphFocus } from './graph-focus-layout.js';
 
-const data = { nodes: ['a', 'b', 'c', 'd'].map((id, i) => ({ id, title: id, notebookId: 'test', tags: [], inDegree: 0, outDegree: 0, val: 1, x: 10 + i, y: 20 + i })), links: [{ source: 'a', target: 'b' }] as NoteGraphLink[] };
+const data = { nodes: ['a', 'b', 'c', 'd'].map((id, i) => ({ id, path: `${id}.md`, title: id, notebookId: 'test', tags: [], inDegree: 0, outDegree: 0, val: 1, x: 10 + i, y: 20 + i })), links: [{ source: 'a', target: 'b' }] as NoteGraphLink[] };
 
 describe('temporary local graph expansion', () => {
   it('keeps the center and unrelated nodes fixed while spreading direct neighbors', () => {

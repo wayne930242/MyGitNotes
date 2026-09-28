@@ -39,7 +39,7 @@ export function legacyFolderPaths(notebooks: NotebookConfig[], notebookId: strin
   return notebook && folder ? [notebook.root.replace(/\/$/, '') + '/' + folder] : [];
 }
 
-/** Expand from the original matches once; external nodes never become new seeds. */
+/** Expand from the original matches (node ids) once; external nodes never become new seeds. */
 export function selectFilteredGraph(graph: NoteGraphData, matchingIds: Set<string>, includeNeighbors: boolean): NoteGraphData {
   const included = new Set(matchingIds);
   if (includeNeighbors) {

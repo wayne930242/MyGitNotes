@@ -89,7 +89,7 @@ describe('note query routes', () => {
     expect((await json('/api/notes/agenda')).status).toBe(400);
 
     const graph = (await json('/api/notes/graph')).body;
-    expect(graph.links).toEqual([{ source: 'notes/example/deep/beta.md', target: 'notes/example/alpha.md' }]);
-    expect(graph.nodes.map((node: any) => node.id)).toContain('notes/example/hidden.md');
+    expect(graph.links).toEqual([{ source: 'example:notes/example/deep/beta.md', target: 'example:notes/example/alpha.md' }]);
+    expect(graph.nodes.map((node: any) => node.id)).toContain('example:notes/example/hidden.md');
   });
 });

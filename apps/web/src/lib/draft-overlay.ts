@@ -4,6 +4,8 @@ import type { NoteAgenda, NotebookFacets, NoteListItem, NoteQuery } from '@mygit
 import { extractTodoTasks } from '@mygitnotes/core/note-agenda';
 import { extractNoteLinks } from '@mygitnotes/core/note-graph';
 import type { NoteGraphData } from '@mygitnotes/core/note-graph';
+import type { RepositoryId } from '@mygitnotes/core/repository';
+import { getWorkspaceNotebooks } from '@mygitnotes/core/workspace-links';
 import type { WorkingNotes } from './working-notes.js';
 
 /**
@@ -108,20 +110,34 @@ export interface GraphDraftNote {
   content: string;
 }
 
-/** Replaces a drafted note's outgoing links with the ones its unsaved content carries, and adds nodes for drafts the server has never seen. */
-export function overlayGraphDrafts(graph: NoteGraphData, drafts: GraphDraftNote[]): NoteGraphData {
+/**
+ * Replaces a drafted note's outgoing links with the ones its unsaved content carries, and adds nodes for drafts the server has never seen.
+ * `repositories` maps each notebook to its repository: a link resolves only among the notes of its note's repository.
+ */
+export function overlayGraphDrafts(graph: NoteGraphData, drafts: GraphDraftNote[], repositories: Record<string, RepositoryId> = {}): NoteGraphData {
   if (!drafts.length) return graph;
   const nodes = [...graph.nodes];
   const ids = new Set(nodes.map(node => node.id));
   for (const draft of drafts) {
-    if (ids.has(draft.path)) continue;
-    ids.add(draft.path);
-    nodes.push({ id: draft.path, title: draft.title || draft.path.split('/').pop() || draft.path, notebookId: draft.notebookId, status: draft.status, tags: draft.tags, inDegree: 0, outDegree: 0, val: 3 });
+    const id = noteRefKey(draft);
+    if (ids.has(id)) continue;
+    ids.add(id);
+    nodes.push({ id, path: draft.path, title: draft.title || draft.path.split('/').pop() || draft.path, notebookId: draft.notebookId, status: draft.status, tags: draft.tags, inDegree: 0, outDegree: 0, val: 3 });
   }
-  const drafted = new Set(drafts.map(draft => draft.path));
+  const repositoryOf = (notebookId: string) => repositories[notebookId] ?? '';
+  const scopes = new Map<string, Map<string, string>>();
+  for (const node of nodes) {
+    const repository = repositoryOf(node.notebookId);
+    if (!scopes.has(repository)) scopes.set(repository, new Map());
+    scopes.get(repository)!.set(node.path, node.id);
+  }
+  const drafted = new Set(drafts.map(noteRefKey));
   const links = graph.links.filter(link => !drafted.has(link.source));
   for (const draft of drafts) {
-    for (const target of extractNoteLinks(draft.content, draft.path, ids)) links.push({ source: draft.path, target });
+    const scope = scopes.get(repositoryOf(draft.notebookId))!;
+    // The source notebook is known, so its own aliases apply; roots may repeat across repositories.
+    const aliases = getWorkspaceNotebooks().find(notebook => notebook.id === draft.notebookId)?.pathAliases ?? {};
+    for (const target of extractNoteLinks(draft.content, draft.path, new Set(scope.keys()), aliases)) links.push({ source: noteRefKey(draft), target: scope.get(target)! });
   }
   return { nodes, links };
 }

@@ -93,9 +93,18 @@ describe('draft paths, lookups and graph', () => {
   });
 
   it("replaces a drafted note's links and adds a node for a note the server has never seen", () => {
-    const graph = { nodes: [{ id: 'notes/life/a.md', title: 'A', notebookId: 'life', tags: [], inDegree: 0, outDegree: 1, val: 3 }], links: [{ source: 'notes/life/a.md', target: 'notes/life/gone.md' }] };
+    const graph = { nodes: [{ id: 'life:notes/life/a.md', path: 'notes/life/a.md', title: 'A', notebookId: 'life', tags: [], inDegree: 0, outDegree: 1, val: 3 }], links: [{ source: 'life:notes/life/a.md', target: 'life:notes/life/gone.md' }] };
     const result = overlayGraphDrafts(graph, [{ path: 'notes/life/a.md', notebookId: 'life', title: 'A', tags: [], content: '[b](../life/b.md)' }, { path: 'notes/life/b.md', notebookId: 'life', title: 'B', tags: [], content: '' }]);
-    expect(result.nodes.map(node => node.id)).toEqual(['notes/life/a.md', 'notes/life/b.md']);
-    expect(result.links).toEqual([{ source: 'notes/life/a.md', target: 'notes/life/b.md' }]);
+    expect(result.nodes.map(node => [node.id, node.path])).toEqual([['life:notes/life/a.md', 'notes/life/a.md'], ['life:notes/life/b.md', 'notes/life/b.md']]);
+    expect(result.links).toEqual([{ source: 'life:notes/life/a.md', target: 'life:notes/life/b.md' }]);
+  });
+
+  it('keys drafts with the same path apart and resolves their links within their repository', () => {
+    const node = (notebookId: string, path: string) => ({ id: `${notebookId}:${path}`, path, title: path, notebookId, tags: [], inDegree: 0, outDegree: 0, val: 3 });
+    const graph = { nodes: [node('one', 'notes/shared/a.md'), node('one', 'notes/shared/b.md'), node('two', 'notes/shared/a.md'), node('two', 'notes/shared/only-two.md')], links: [] };
+    const draft = (notebookId: string, content: string) => ({ path: 'notes/shared/a.md', notebookId, title: 'A', tags: [], content });
+    const result = overlayGraphDrafts(graph, [draft('one', '[b](b.md) [elsewhere](only-two.md)'), draft('two', '[b](b.md) [here](only-two.md)')], { one: 'first', two: 'second' });
+    expect(result.nodes).toHaveLength(4);
+    expect(result.links).toEqual([{ source: 'one:notes/shared/a.md', target: 'one:notes/shared/b.md' }, { source: 'two:notes/shared/a.md', target: 'two:notes/shared/only-two.md' }]);
   });
 });

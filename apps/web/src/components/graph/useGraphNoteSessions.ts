@@ -28,10 +28,10 @@ export function useGraphNoteSessions({ t, onNotice }: { t: I18nContextValue['t']
     return ref;
   };
   const carets = useRef(new Map<string, number>());
-  const link = (source: string, target: { path: string; title: string; }) => {
+  const link = (source: string, sourcePath: string, target: { path: string; title: string; }) => {
     const session = sessions.get(source), handle = handles.current.get(source);
     if (!session || session.locked || !handle) return;
-    const result = insertNoteLink(session.content, source, target.path, target.title, carets.current.get(source));
+    const result = insertNoteLink(session.content, sourcePath, target.path, target.title, carets.current.get(source));
     if (result.content === session.content) {
       onNotice(t('graph.linkExists'));
       return;

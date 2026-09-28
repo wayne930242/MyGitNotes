@@ -25,6 +25,8 @@ export interface RepositoryCatalog {
 export interface NoteCatalog {
   /** The manifest restricted to the notebooks whose repositories this catalog reads. */
   config(): Promise<WorkspaceConfig>;
+  /** The repository serving a notebook. */
+  repository(notebookId: string): RepositoryId;
   /** Revisions of the repositories serving `notebooks`; repositories without one are omitted. */
   revisions(notebooks: NotebookConfig[]): Promise<RevisionSet>;
   /** Notes of one notebook without content. */
@@ -101,6 +103,7 @@ export async function workspaceCatalog(config: WorkspaceConfig, repositories: Ca
   };
   return {
     config: async () => served,
+    repository: notebookId => repositoryOf(notebookId).id,
     revisions: async notebooks => {
       const involved = new Set(notebooks.map(notebook => repositoryOf(notebook.id)));
       const entries = await Promise.all([...involved].map(async repository => [repository.id, await repository.catalog.revision()] as const));
@@ -254,7 +257,7 @@ export async function noteGraph(catalog: NoteCatalog): Promise<NoteGraph> {
   const graph = await catalog.memo(`graph:${hashJson(config.notebooks.map(notebook => notebook.pathAliases || null))}`, notebooks, async () => {
     const notes = (await Promise.all(notebooks.map(notebook => catalog.index(notebook)))).flat();
     const contents = await catalog.contents(notes);
-    return buildNoteGraph(notes.map(note => ({ ...note, content: contents.get(noteRefKey(note)) ?? '' })), { includeHidden: true, notebooks: config.notebooks });
+    return buildNoteGraph(notes.map(note => ({ ...note, content: contents.get(noteRefKey(note)) ?? '' })), { includeHidden: true, notebooks: config.notebooks, repositoryOf: catalog.repository });
   });
   return { revisions: await catalog.revisions(notebooks), ...graph };
 }
