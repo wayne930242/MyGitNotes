@@ -1,41 +1,15 @@
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
-import { createRequire } from 'node:module';
-import { createServer } from 'node:http';
-import { resolveQaChromePath } from './qa-chrome.mjs';
-import { assertFreshBuild } from './lib/require-fresh-build.mjs';
+import { createQaWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
 
-const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-assertFreshBuild(product);
-const require = createRequire(`${product}/apps/web/package.json`);
-const puppeteer = require('puppeteer-core');
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-shortcuts-'));
-const write = (file, content) => {
-  fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
-  fs.writeFileSync(path.join(root, file), content);
-};
-const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+const require = qaRequire();
+const { root, write, commitFixture } = createQaWorkspace('github-notes-shortcuts-');
 write('.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Shortcut QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
 write('notes/example/example.md', ['# Example', '', 'Alpha needle.', '', '## Section Two', '', 'Second needle.', ...Array.from({ length: 50 }, (_, index) => `Filler line ${index + 1}`), '', '## Final Section', '', 'Last line.'].join('\n'));
-git('init', '-b', 'main');
-git('config', 'user.name', 'QA');
-git('config', 'user.email', 'qa@example.com');
-git('add', '.');
-git('commit', '-m', 'fixture');
-process.env.MYGITNOTES_SOURCE = 'local';
-process.env.MYGITNOTES_LOCAL_PATH = root;
-delete process.env.VERCEL;
-delete process.env.APP_URL;
-const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
-const server = createServer(createApp(product));
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, pipe: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+commitFixture('QA');
+const { server, base } = await startQaServer(root);
+const browser = await launchQaBrowser(require);
 const page = await browser.newPage();
 await page.setViewport({ width: 1440, height: 1000 });
-const base = `http://127.0.0.1:${server.address().port}`;
 const chord = async (...keys) => {
   for (const key of keys.slice(0, -1)) await page.keyboard.down(key);
   await page.keyboard.press(keys.at(-1));

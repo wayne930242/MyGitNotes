@@ -1,34 +1,23 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
-import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { createServer } from 'node:http';
-import { resolveQaChromePath } from './qa-chrome.mjs';
 import { assertFreshBuild } from './lib/require-fresh-build.mjs';
-const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+import { createQaWorkspace, launchQaBrowser, product, startQaServer } from './lib/qa-harness.mjs';
+// A deployed URL needs no local build, so the freshness check runs only for the local server below.
 const require = createRequire(product + '/apps/web/package.json');
-const puppeteer = require('puppeteer-core');
 let base = process.argv[2];
 let root, server;
 if (!base) {
   // No deployed URL given: smoke-test a local server over the committed demo workspace instead.
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-release-'));
+  const fixture = createQaWorkspace('github-notes-release-');
+  root = fixture.root;
   fs.cpSync(path.join(product, 'examples/demo-workspace'), root, { recursive: true });
-  for (const args of [['init', '-b', 'main'], ['config', 'user.name', 'Browser QA'], ['config', 'user.email', 'qa@example.com'], ['add', '.'], ['commit', '-m', 'fixture']]) execFileSync('git', args, { cwd: root, stdio: 'pipe' });
-  process.env.MYGITNOTES_SOURCE = 'local';
-  process.env.MYGITNOTES_LOCAL_PATH = root;
-  delete process.env.VERCEL;
-  delete process.env.APP_URL;
+  fixture.commitFixture();
   assertFreshBuild(product);
-  const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
-  server = createServer(createApp(product));
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  base = `http://127.0.0.1:${server.address().port}`;
+  ({ server, base } = await startQaServer(root));
 }
-const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, pipe: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const browser = await launchQaBrowser(require);
 const page = await browser.newPage();
 const errors = [];
 const statuses = {};

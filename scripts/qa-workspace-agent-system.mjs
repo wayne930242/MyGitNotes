@@ -1,22 +1,10 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { createRequire } from 'node:module';
-import { createServer } from 'node:http';
-import { resolveQaChromePath } from './qa-chrome.mjs';
-import { assertFreshBuild } from './lib/require-fresh-build.mjs';
+import { createQaWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
 
-const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-assertFreshBuild(product);
-const require = createRequire(`${product}/apps/web/package.json`);
-const puppeteer = require('puppeteer-core');
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-agent-qa-'));
-const write = (file, content) => {
-  fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
-  fs.writeFileSync(path.join(root, file), content);
-};
+const require = qaRequire();
+const { root, write, commitFixture } = createQaWorkspace('github-notes-agent-qa-');
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim();
 write('.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Agent workspace\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
 write('notes/example/intro.md', '# Example\n');
@@ -30,20 +18,9 @@ for (const [file, content] of Object.entries(nativeDocuments)) write(file, conte
 write('.claude/settings.local.json', '{"secret":"fixture-only"}');
 write('.codex/agents/reviewer.toml', 'description = "Reviewer"\n');
 write('.codex/auth.json', '{"token":"fixture-only"}');
-git('init', '-b', 'main');
-git('config', 'user.name', 'QA');
-git('config', 'user.email', 'qa@example.com');
-git('add', '.');
-git('commit', '-m', 'fixture');
-process.env.MYGITNOTES_SOURCE = 'local';
-process.env.MYGITNOTES_LOCAL_PATH = root;
-delete process.env.VERCEL;
-delete process.env.APP_URL;
-const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
-const server = createServer(createApp(product));
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const base = `http://127.0.0.1:${server.address().port}`;
-const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, pipe: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+commitFixture('QA');
+const { server, base } = await startQaServer(root);
+const browser = await launchQaBrowser(require);
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 1000 });

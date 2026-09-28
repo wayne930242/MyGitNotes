@@ -1,41 +1,17 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
-import { createRequire } from 'node:module';
-import { createServer } from 'node:http';
-import { resolveQaChromePath } from './qa-chrome.mjs';
-import { assertFreshBuild } from './lib/require-fresh-build.mjs';
+import { createQaWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
 
-const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-assertFreshBuild(product);
-const require = createRequire(`${product}/apps/web/package.json`);
-const puppeteer = require('puppeteer-core');
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-screen-qa-'));
-const write = (file, content) => {
-  fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
-  fs.writeFileSync(path.join(root, file), content);
-};
-const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+const require = qaRequire();
+const { root, write, commitFixture } = createQaWorkspace('github-notes-screen-qa-');
 write('.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Screen QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: archive\n    title: Archive\n    root: notes/archive\n');
 for (let i = 0; i < 6; i++) write(`notes/example/note-${i}.md`, `---\ntags: [example-tag]\n---\n# Note ${i}\n\n${'A long paragraph for native vertical scrolling.\n\n'.repeat(40)}`);
 write('notes/archive/archive-note.md', '---\ntags: [archive-only]\n---\n# Archive Note\n');
 // A version 1 layout exercises migration into notebook-owned lanes.
 write('.github-notes-screen.yaml', JSON.stringify({ version: 1, rows: [{ id: 'reading', name: 'Reading', kind: 'dynamic', view: 'medium', source: { kind: 'folder', notebookId: 'example', path: 'notes/example', recursive: true } }, { id: 'pins', name: 'Pins', kind: 'custom', view: 'small', items: [] }, { id: 'mixed', name: 'Mixed', kind: 'custom', view: 'small', items: [{ id: 'pin-example', kind: 'note', notebookId: 'example', path: 'notes/example/note-0.md' }, { id: 'pin-archive', kind: 'note', notebookId: 'archive', path: 'notes/archive/archive-note.md' }] }, { id: 'every', name: 'Every notebook', kind: 'dynamic', view: 'small', source: { kind: 'tag', tag: 'archive-only' } }] }));
-git('init', '-b', 'main');
-git('config', 'user.name', 'QA');
-git('config', 'user.email', 'qa@example.com');
-git('add', '.');
-git('commit', '-m', 'fixture');
-process.env.MYGITNOTES_SOURCE = 'local';
-process.env.MYGITNOTES_LOCAL_PATH = root;
-delete process.env.VERCEL;
-delete process.env.APP_URL;
-const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
-const server = createServer(createApp(product));
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, pipe: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+commitFixture('QA');
+const { server } = await startQaServer(root);
+const browser = await launchQaBrowser(require);
 const assert = (value, message) => {
   if (!value) throw Error(message);
 };

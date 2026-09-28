@@ -1,25 +1,10 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
-import { createRequire } from 'node:module';
-import { createServer } from 'node:http';
 import { chooseSelect } from './browser-select.mjs';
-import { resolveQaChromePath } from './qa-chrome.mjs';
-import { assertFreshBuild } from './lib/require-fresh-build.mjs';
+import { collectPageErrors, createQaWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
 
-const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-assertFreshBuild(product);
-const require = createRequire(`${product}/apps/web/package.json`);
-const puppeteer = require('puppeteer-core');
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-index-'));
-const write = (file, content) => {
-  fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
-  fs.writeFileSync(path.join(root, file), content);
-};
-const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+const require = qaRequire();
+const { root, write, git, commitFixture } = createQaWorkspace('github-notes-index-');
 // The index card belongs to a notebook root, so each index case gets its own notebook.
 write('notes/.github-notes.yaml', `schema_version: 1\nworkspace:\n  title: Folder Index QA\n  default_notebook: example\nnotebooks:\n${['example', 'other', 'hidden', 'blank'].map(id => `  - id: ${id}\n    title: ${id}\n    root: notes/${id}\n`).join('')}`);
 write('notes/example/index.md', '---\ntitle: Notebook introduction\ncustom: preserve\n---\n# 根目錄介紹\n\n這是 **索引內容**。\n\n[進入資料夾](projects/)\n\n[開啟筆記](regular.md)\n\n<img src="bad" onerror="window.indexUnsafe=true">\n<script>window.indexUnsafe=true</script>\n');
@@ -31,23 +16,11 @@ write('notes/other/README.md', '# 其他筆記本\n');
 write('notes/hidden/index.md', '---\nhiden: true\n---\n# 隱藏介紹\n');
 write('notes/hidden/README.md', '# Visible fallback\n');
 write('notes/blank/index.md', '');
-git('init', '-b', 'main');
-git('config', 'user.name', 'Browser QA');
-git('config', 'user.email', 'qa@example.com');
-git('add', '.');
-git('commit', '-m', 'fixture');
-process.env.MYGITNOTES_SOURCE = 'local';
-process.env.MYGITNOTES_LOCAL_PATH = root;
-delete process.env.VERCEL;
-delete process.env.APP_URL;
-const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
-const server = createServer(createApp(product));
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const base = `http://127.0.0.1:${server.address().port}`;
-const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, pipe: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+commitFixture();
+const { server, base } = await startQaServer(root);
+const browser = await launchQaBrowser(require);
 const page = await browser.newPage();
-const errors = [];
-page.on('pageerror', error => errors.push(error.message));
+const errors = collectPageErrors(page);
 const visit = route => page.goto(base + route, { waitUntil: 'networkidle0' });
 const openIndex = async (relativePath = 'index.md') => {
   await page.click('button[data-folder-index]');

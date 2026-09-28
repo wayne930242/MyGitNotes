@@ -1,23 +1,9 @@
-import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
-import { createRequire } from 'node:module';
-import { createServer } from 'node:http';
-import { resolveQaChromePath } from './qa-chrome.mjs';
 import { tableBoundaryCases, verifyTableBoundaries } from './qa-table-boundaries.mjs';
-import { assertFreshBuild } from './lib/require-fresh-build.mjs';
-const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-assertFreshBuild(product);
-const require = createRequire(`${product}/apps/web/package.json`);
-const puppeteer = require('puppeteer-core');
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-browser-'));
-const write = (p, s) => {
-  fs.mkdirSync(path.dirname(path.join(root, p)), { recursive: true });
-  fs.writeFileSync(path.join(root, p), s);
-};
-const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+import { createQaWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
+const require = qaRequire();
+const { root, write, commitFixture } = createQaWorkspace('github-notes-browser-');
 write('notes/.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Folder QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
 write('notes/example/root.md', '# Root Note\n\nParagraph **bold** and *italic*.\n\n- [ ] Task\n\n| A | B |\n| - | - |\n| a | b |\n\n![pixel](assets/pixel.png)\n');
 write('notes/example/projects/_dir.yml', 'title: Projects\norder: -1\n');
@@ -27,20 +13,9 @@ write('notes/example/assets/pixel.png', Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAE
 for (const test of tableBoundaryCases) {
   for (const undo of [false, true]) write(`notes/example/edge-${test.name}-${undo}.md`, test.initial);
 }
-git('init', '-b', 'main');
-git('config', 'user.name', 'Browser QA');
-git('config', 'user.email', 'qa@example.com');
-git('add', '.');
-git('commit', '-m', 'fixture');
-process.env.MYGITNOTES_SOURCE = 'local';
-process.env.MYGITNOTES_LOCAL_PATH = root;
-delete process.env.VERCEL;
-delete process.env.APP_URL;
-const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
-const server = createServer(createApp(product));
-await new Promise(r => server.listen(0, '127.0.0.1', r));
-const base = `http://127.0.0.1:${server.address().port}`;
-const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, pipe: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+commitFixture();
+const { server, base } = await startQaServer(root);
+const browser = await launchQaBrowser(require);
 const page = await browser.newPage();
 await page.setViewport({ width: 1440, height: 1000 });
 const errors = [];

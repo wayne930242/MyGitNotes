@@ -1,25 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
-import { createRequire } from 'node:module';
-import { createServer } from 'node:http';
 import { chooseSelect } from './browser-select.mjs';
-import { resolveQaChromePath } from './qa-chrome.mjs';
-import { assertFreshBuild } from './lib/require-fresh-build.mjs';
+import { createQaWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
 
-const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-assertFreshBuild(product);
-const require = createRequire(`${product}/apps/web/package.json`);
-const puppeteer = require('puppeteer-core');
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-focus-qa-'));
-const write = (file, content) => {
-  fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
-  fs.writeFileSync(path.join(root, file), content);
-};
-const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+const require = qaRequire();
+const { root, write, commitFixture } = createQaWorkspace('github-notes-focus-qa-');
 write('.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Focus QA\n  default_notebook: work\nnotebooks:\n  - id: work\n    title: Work\n    root: notes/work\n  - id: other\n    title: Other\n    root: notes/other\n');
 const notes = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta'];
 const tags = { Alpha: ['project'], Gamma: ['project'], Beta: ['personal'] };
@@ -28,20 +14,9 @@ write('notes/work/sub/omega.md', '---\ntitle: Omega\nstatus: todo\nupdated: 2026
 write('notes/work/sub/nested/deep.md', '---\ntitle: Deep\nstatus: todo\nupdated: 2026-09-17\n---\n# Deep\n\nDeep body.\n');
 write('notes/other/outside.md', '---\ntitle: Outside\n---\n# Outside\n');
 write('.github-notes-screen.yaml', JSON.stringify({ version: 2, rows: [{ id: 'pins', name: 'Pins', kind: 'custom', view: 'small', notebookId: 'work', items: [{ id: 'pin-gamma', kind: 'note', notebookId: 'work', path: 'notes/work/gamma.md' }] }] }));
-git('init', '-b', 'main');
-git('config', 'user.name', 'Browser QA');
-git('config', 'user.email', 'qa@example.com');
-git('add', '.');
-git('commit', '-m', 'fixture');
-process.env.MYGITNOTES_SOURCE = 'local';
-process.env.MYGITNOTES_LOCAL_PATH = root;
-delete process.env.VERCEL;
-delete process.env.APP_URL;
-const { createApp } = await import(`${product}/apps/local-server/dist/app.js`);
-const server = createServer(createApp(product));
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const base = `http://127.0.0.1:${server.address().port}`;
-const browser = await puppeteer.launch({ executablePath: resolveQaChromePath(), headless: true, pipe: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+commitFixture();
+const { server, base } = await startQaServer(root);
+const browser = await launchQaBrowser(require);
 const shots = path.join(product, 'artifacts/qa');
 fs.mkdirSync(shots, { recursive: true });
 
