@@ -8,7 +8,7 @@ import { createRemoteMCP } from './mcp.js';
 import { createRemoteCoreUpdateRouter } from './remote-core-update.js';
 import { createLocalApp } from './local-app.js';
 import { createAuth } from './auth.js';
-import { asLocal, asRemote, eachRepository, namedRemote, notebookRepository, noteRepository, type RemoteHandle, remoteHome, requestCatalog, requestWorkspace, workspaceOf } from './request-workspace.js';
+import { asLocal, asRemote, eachRepository, namedRemote, notebookRepository, noteRepository, type RemoteHandle, remoteHome, repositoryOrHome, requestCatalog, requestWorkspace, workspaceOf } from './request-workspace.js';
 import { createStudyRouter } from './study.js';
 import { createWorkspaceDocumentRouter } from './workspace-document.js';
 import { createFolderManagerRouter } from './folder-manager.js';
@@ -310,11 +310,11 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
         fail(res, error);
       }
     });
-    // Workspace-level routes below act on the home repository until workspace agent files are grouped by repository.
+    // Agent routes act on the repository a request names, the home repository by default.
     app.get('/api/git/status', (req, res) => res.json({ status: { branch: remoteHome(res).reader.branch, isClean: true, staged: [], modified: [], untracked: [] }, commits: [] }));
     app.get('/api/agent-resources', async (req, res) => {
       try {
-        const { reader, authenticated } = remoteHome(res);
+        const { reader, authenticated } = asRemote((await repositoryOrHome(res, req.query.repository)).handle);
         const snapshot = await reader.getSnapshot();
         const entries = snapshot.entries;
         const groups: { instructions: WorkspaceAgentResource[]; skills: WorkspaceAgentResource[]; docs: WorkspaceAgentResource[]; } = { instructions: [], skills: [], docs: [] };
@@ -334,7 +334,7 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
         const targetPath = req.query.path as string;
         if (!targetPath) throw new SourceError('path query required', 400);
         if (!workspaceAgentKind(targetPath)) throw new SourceError('Path is not a workspace Agent document.', 403);
-        const { reader } = remoteHome(res);
+        const { reader } = asRemote((await repositoryOrHome(res, req.query.repository)).handle);
         const buf = await reader.readFile(targetPath);
         res.json({ path: targetPath, content: buf.toString('utf8'), revision: (await reader.getSnapshot()).sha });
       } catch (error) {
@@ -344,8 +344,8 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     app.post('/api/agent-resources/save', async (req, res) => {
       try {
         if (!signedIn(res)) throw new SourceError('Sign in with write permission to edit Agent documents.', 403);
-        const { path: file, content, revision, create } = req.body;
-        const result = await remoteHome(res).reader.saveAgentResource(file, content, revision, create);
+        const { path: file, content, revision, create, repository } = req.body;
+        const result = await asRemote((await repositoryOrHome(res, repository)).handle).reader.saveAgentResource(file, content, revision, create);
         res.json({ ...result, path: file });
       } catch (error) {
         fail(res, error);
@@ -354,8 +354,8 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     app.post('/api/agent-resources/rename-skill', async (req, res) => {
       try {
         if (!signedIn(res)) throw new SourceError('Sign in with write permission to edit Agent documents.', 403);
-        const { path: file, slug, content, revision } = req.body;
-        const result = await remoteHome(res).reader.renameAgentSkill(file, slug, content, revision);
+        const { path: file, slug, content, revision, repository } = req.body;
+        const result = await asRemote((await repositoryOrHome(res, repository)).handle).reader.renameAgentSkill(file, slug, content, revision);
         res.json(result);
       } catch (error) {
         fail(res, error);

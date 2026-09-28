@@ -3,10 +3,12 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { agentSkillLocation, extractFirstH1, listWorkspaceAgentFiles, parseNoteContent, productAgentResources, renameAgentSkillEntryContent, renamedAgentSkillPath, resolveWorkspaceAgentPath, rewriteAgentSkillReferences, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource } from '@mygitnotes/core';
 import { changeFile, getCurrentBranch, listChanges } from '@mygitnotes/git';
-import { localHome } from './request-workspace.js';
+import { asLocal, repositoryOrHome } from './request-workspace.js';
 
 export function createLocalAgentResourcesRouter(appRoot: string): Router {
   const router = Router();
+  /** The worktree a request names in `repository`, or the home worktree: each repository keeps its own Agent files. */
+  const worktreeRoot = async (res: Response, id: unknown) => asLocal((await repositoryOrHome(res, id)).handle).root;
 
   // Helper to extract first heading, skill name, or clean folder title
   function extractResourceTitle(fullPath: string, relPath: string): string {
@@ -33,7 +35,7 @@ export function createLocalAgentResourcesRouter(appRoot: string): Router {
 
   router.get('/', async (req: Request, res: Response) => {
     try {
-      const { root: repoRoot } = localHome(res);
+      const repoRoot = await worktreeRoot(res, req.query.repository);
       const branch = await getCurrentBranch(repoRoot);
       const instructions: WorkspaceAgentResource[] = [];
       const skills: WorkspaceAgentResource[] = [];
@@ -56,7 +58,7 @@ export function createLocalAgentResourcesRouter(appRoot: string): Router {
 
   router.get('/read', async (req: Request, res: Response) => {
     try {
-      const { root: repoRoot } = localHome(res);
+      const repoRoot = await worktreeRoot(res, req.query.repository);
       const targetPath = req.query.path as string;
       if (!targetPath) return res.status(400).json({ error: 'path query required' });
       const safePath = resolveWorkspaceAgentPath(repoRoot, targetPath);
@@ -70,7 +72,7 @@ export function createLocalAgentResourcesRouter(appRoot: string): Router {
   // Save agent resource file (workspace Agent documents)
   router.post('/save', async (req: Request, res: Response) => {
     try {
-      const { root: repoRoot } = localHome(res);
+      const repoRoot = await worktreeRoot(res, req.body?.repository);
       const { path: relPath, content, create } = req.body;
       if (!relPath || typeof content !== 'string') {
         return res.status(400).json({ error: 'path and content are required' });
@@ -104,7 +106,7 @@ export function createLocalAgentResourcesRouter(appRoot: string): Router {
     let newDirectoryPath = '';
     let moved = false;
     // Resolved before the try block because the rollback below restores files in this worktree.
-    const { root: repoRoot } = localHome(res);
+    const repoRoot = await worktreeRoot(res, req.body?.repository);
     try {
       const { path: relPath, slug, content } = req.body;
       if (typeof relPath !== 'string' || typeof slug !== 'string' || typeof content !== 'string') return res.status(400).json({ error: 'path, slug and content are required' });
@@ -164,7 +166,7 @@ export function createLocalAgentResourcesRouter(appRoot: string): Router {
   // Restore agent resource from Git HEAD (workspace Agent documents)
   router.post('/restore', async (req: Request, res: Response) => {
     try {
-      const { root: repoRoot } = localHome(res);
+      const repoRoot = await worktreeRoot(res, req.body?.repository);
       const { path: relPath } = req.body;
       if (!relPath) {
         return res.status(400).json({ error: 'path is required' });

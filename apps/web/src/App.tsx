@@ -102,6 +102,8 @@ const AppContent: React.FC = () => {
   const canWrite = canWriteNotebook(selectedNotebookId);
   const branch = repositoryFor(selectedNotebookId)?.branch ?? homeBranch;
   // Workspace documents and the manifest live in the home repository.
+  /** The Agents page edits the Agent files of the selected notebook's repository; the app-wide Git status is the home worktree's. */
+  const agentRepository = repositoryFor(selectedNotebookId)?.id;
   /** The manifest lives in the home repository. */
   const manifestWritable = Boolean(homeRepository?.write);
   // A workspace-wide tag change commits to every repository that serves a notebook.
@@ -446,7 +448,7 @@ const AppContent: React.FC = () => {
                 )}
                 {activeTab === 'agent' && (
                   <main className='workspace-route agent-main'>
-                    <AgentSystemView notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} ref={agentSystemRef} onBusyChange={setResourceNavigationBusy} readOnly={!canWrite} remote={remote} onGitStatus={setGitStatus} readOnlyNotice={t(remote ? 'agent.remoteReadOnlyNotice' : branch === 'core' ? 'agent.coreBranchNotice' : 'agent.workspaceReadOnlyNotice')} />
+                    <AgentSystemView key={agentRepository} repository={agentRepository} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} ref={agentSystemRef} onBusyChange={setResourceNavigationBusy} readOnly={!canWrite} remote={remote} onGitStatus={agentRepository === sourceId ? setGitStatus : undefined} readOnlyNotice={t(remote ? 'agent.remoteReadOnlyNotice' : branch === 'core' ? 'agent.coreBranchNotice' : 'agent.workspaceReadOnlyNotice')} />
                   </main>
                 )}
                 {activeTab === 'assets' && (

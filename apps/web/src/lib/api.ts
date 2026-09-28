@@ -94,19 +94,20 @@ export async function restoreNote(params: { path: string; content?: string; meta
   return res.json();
 }
 
-export async function fetchAgentResources(): Promise<{ instructions: AgentResource[]; skills: AgentResource[]; docs: AgentResource[]; revision?: string; }> {
-  const res = await fetch(`${API_BASE}/agent-resources`);
+/** Agent files of one repository (the home repository without `repository`); each repository keeps its own. */
+export async function fetchAgentResources(repository?: string): Promise<{ instructions: AgentResource[]; skills: AgentResource[]; docs: AgentResource[]; revision?: string; }> {
+  const res = await fetch(`${API_BASE}/agent-resources${repository ? `?repository=${encodeURIComponent(repository)}` : ''}`);
   if (!res.ok) throw new Error('Failed to fetch agent resources');
   return res.json();
 }
 
-export async function readAgentResource(path: string): Promise<{ path: string; content: string; revision?: string; }> {
-  const res = await fetch(`${API_BASE}/agent-resources/read?path=${encodeURIComponent(path)}`);
+export async function readAgentResource(path: string, repository?: string): Promise<{ path: string; content: string; revision?: string; }> {
+  const res = await fetch(`${API_BASE}/agent-resources/read?path=${encodeURIComponent(path)}${repository ? `&repository=${encodeURIComponent(repository)}` : ''}`);
   if (!res.ok) throw new Error('Failed to read agent resource');
   return res.json();
 }
 
-export async function saveAgentResource(params: { path: string; content: string; revision?: string; create?: boolean; }): Promise<{ success: boolean; path: string; revision?: string; }> {
+export async function saveAgentResource(params: { path: string; content: string; revision?: string; create?: boolean; repository?: string; }): Promise<{ success: boolean; path: string; revision?: string; }> {
   const res = await fetch(`${API_BASE}/agent-resources/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) });
   if (!res.ok) {
     const err = await res.json();
@@ -115,7 +116,7 @@ export async function saveAgentResource(params: { path: string; content: string;
   return res.json();
 }
 
-export async function renameAgentSkill(params: { path: string; slug: string; content: string; revision?: string; }): Promise<{ success: boolean; path: string; changedPaths?: string[]; revision?: string; }> {
+export async function renameAgentSkill(params: { path: string; slug: string; content: string; revision?: string; repository?: string; }): Promise<{ success: boolean; path: string; changedPaths?: string[]; revision?: string; }> {
   const res = await fetch(`${API_BASE}/agent-resources/rename-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) });
   if (!res.ok) {
     const err = await res.json();
@@ -124,8 +125,8 @@ export async function renameAgentSkill(params: { path: string; slug: string; con
   return res.json();
 }
 
-export async function restoreAgentResource(path: string, revision?: string): Promise<{ success: boolean; path: string; content: string; }> {
-  const res = await fetch(`${API_BASE}/agent-resources/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, revision }) });
+export async function restoreAgentResource(path: string, revision?: string, repository?: string): Promise<{ success: boolean; path: string; content: string; }> {
+  const res = await fetch(`${API_BASE}/agent-resources/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, revision, repository }) });
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.error || 'Failed to restore agent resource');
@@ -159,8 +160,9 @@ export async function deleteAsset(path: string, options?: { noCommit?: boolean; 
   return res.json();
 }
 
-export async function fetchGitStatus(): Promise<{ status: GitStatus; commits: GitCommit[]; }> {
-  const res = await fetch(`${API_BASE}/git/status`);
+/** Git status of one worktree, the home worktree without `repository`. */
+export async function fetchGitStatus(repository?: string): Promise<{ status: GitStatus; commits: GitCommit[]; }> {
+  const res = await fetch(`${API_BASE}/git/status${repository ? `?repository=${encodeURIComponent(repository)}` : ''}`);
   if (!res.ok) throw new Error('Failed to fetch git status');
   return res.json();
 }

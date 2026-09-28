@@ -134,10 +134,10 @@ describe('R2 management on a local workspace', () => {
     await startLocal();
     const references = await call('GET', '/api/r2/references?notebookId=ex&key=ex/old&directory=1').then(r => r.json());
     expect(references.objects.sort()).toEqual(['ex/old/Core Rules.pdf', 'ex/old/map.webp']);
-    expect(references.notes).toEqual(['notes/ex/rules.md', 'notes/other/cross.md']);
+    expect(references.notes).toEqual([{ notebookId: 'ex', path: 'notes/ex/rules.md' }, { notebookId: 'other', path: 'notes/other/cross.md' }]);
     const moved = await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old', destination: 'ex/archive/2026', directory: true });
     expect(moved.status).toBe(200);
-    expect((await moved.json()).notes).toEqual(['notes/ex/rules.md', 'notes/other/cross.md']);
+    expect((await moved.json()).notes).toEqual([{ notebookId: 'ex', path: 'notes/ex/rules.md' }, { notebookId: 'other', path: 'notes/other/cross.md' }]);
     expect([...bucket.objects.keys()].sort()).toEqual(['ex/archive/2026/Core Rules.pdf', 'ex/archive/2026/map.webp', 'ex/keep.pdf', 'other/secret.pdf']);
     expect(fs.readFileSync(path.join(root, 'notes/ex/rules.md'), 'utf8')).toBe('# Rules\n\n![Core](<r2:ex/archive/2026/Core Rules.pdf>)\n[map](r2:ex/archive/2026/map.webp) [keep](r2:ex/keep.pdf)\n');
     expect(fs.readFileSync(path.join(root, 'notes/other/cross.md'), 'utf8')).toBe('![x](r2:ex/archive/2026/map.webp)\n');
@@ -305,5 +305,46 @@ describe('R2 management on a hosted workspace', () => {
     for (const operation of operations()) expect((await operation()).status).toBe(403);
     expect(bucket.requests).toEqual([]);
     expect(published).toEqual([]);
+  });
+});
+
+describe('R2 references across notebook repositories', () => {
+  let second: string;
+  async function startTwoRepositories(secondBranch = 'main') {
+    await startLocal();
+    second = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-r2-second-'));
+    const run = (...args: string[]) => execFileSync('git', args, { cwd: second, stdio: 'pipe' });
+    fs.mkdirSync(path.join(second, 'notes/ex'), { recursive: true });
+    fs.writeFileSync(path.join(second, 'notes/ex/rules.md'), '![same path](r2:ex/old/map.webp)\n');
+    run('init', '-b', secondBranch);
+    run('config', 'user.name', 'Test');
+    run('config', 'user.email', 'test@example.com');
+    run('add', '.');
+    run('commit', '-m', 'fixture');
+    fs.writeFileSync(path.join(root, '.github-notes.yaml'), MANIFEST.replace('schema_version: 1', 'schema_version: 2') + '  - id: trpg\n    title: TRPG\n    root: notes/ex\n    source: { type: github, repository: owner/trpg }\n');
+    fs.writeFileSync(path.join(root, 'mygitnotes.server.yaml'), `repositories:\n  - type: github\n    repository: owner/trpg\n    path: ${second}\n`);
+  }
+  afterEach(() => {
+    if (second) fs.rmSync(second, { recursive: true, force: true });
+  });
+
+  it('lists references of every repository and rewrites each on a move', async () => {
+    await startTwoRepositories();
+    const references = await call('GET', '/api/r2/references?notebookId=ex&key=ex/old/map.webp').then(r => r.json());
+    expect(references.notes).toEqual([{ notebookId: 'ex', path: 'notes/ex/rules.md' }, { notebookId: 'trpg', path: 'notes/ex/rules.md' }, { notebookId: 'other', path: 'notes/other/cross.md' }]);
+    const moved = await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old/map.webp', destination: 'ex/new.webp' });
+    expect(moved.status).toBe(200);
+    expect(fs.readFileSync(path.join(second, 'notes/ex/rules.md'), 'utf8')).toBe('![same path](r2:ex/new.webp)\n');
+    expect(fs.readFileSync(path.join(root, 'notes/other/cross.md'), 'utf8')).toBe('![x](r2:ex/new.webp)\n');
+    expect(bucket.objects.has('ex/old/map.webp')).toBe(false);
+  });
+
+  it('refuses a move before copying when a repository whose notes it rewrites is read-only', async () => {
+    await startTwoRepositories('draft');
+    const moved = await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old/map.webp', destination: 'ex/new.webp' });
+    expect(moved.status).toBe(403);
+    expect((await moved.json()).error).toMatch(/owner\/trpg/);
+    expect(bucket.objects.has('ex/new.webp')).toBe(false);
+    expect(fs.readFileSync(path.join(root, 'notes/other/cross.md'), 'utf8')).toBe('![x](r2:ex/old/map.webp)\n');
   });
 });

@@ -4,6 +4,7 @@ import { r2PreviewType, r2Reference } from '@mygitnotes/core/r2-references';
 import { Button } from './Button.js';
 import { Preview } from './FilePreview.js';
 import { copyToClipboard } from '../lib/clipboard.js';
+import { noteRefKey } from '@mygitnotes/core/note-query';
 import { createR2Folder, deleteR2, fetchR2References, moveR2, type R2Listing, r2RawUrl, type R2References, uploadR2 } from '../lib/r2-api.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { LoadingStatus } from './LoadingStatus.js';
@@ -316,8 +317,8 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
                 <p>{t(operation === 'move' ? 'files.r2MoveReferences' : 'files.r2DeleteReferences', { count: references.notes.length })}</p>
                 <ul className='file-affected'>
                   {references.notes.map(note => (
-                    <li key={note}>
-                      <code>{note}</code>
+                    <li key={noteRefKey(note)}>
+                      <code>{note.notebookId}: {note.path}</code>
                     </li>
                   ))}
                 </ul>

@@ -22,7 +22,7 @@ export interface AgentSystemHandle {
   refresh: () => Promise<void>;
 }
 
-export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: boolean; readOnlyNotice?: string; remote?: boolean; onGitStatus?: (status: GitStatus) => void; notebooks: NotebookConfig[]; selectedNotebookId: string; onBusyChange: (busy: boolean) => void; }>(({ readOnly = false, readOnlyNotice, remote = false, notebooks, selectedNotebookId, onBusyChange, onGitStatus }, ref) => {
+export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: boolean; readOnlyNotice?: string; remote?: boolean; onGitStatus?: (status: GitStatus) => void; notebooks: NotebookConfig[]; selectedNotebookId: string; onBusyChange: (busy: boolean) => void; /** The repository of the selected notebook, whose Agent files the view edits. */ repository?: string; }>(({ readOnly = false, readOnlyNotice, remote = false, notebooks, selectedNotebookId, onBusyChange, onGitStatus, repository }, ref) => {
   const { t } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
   const [instructions, setInstructions] = useState<AgentResource[]>([]);
@@ -68,8 +68,8 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
   const showRestore = !remote && !renameRestoreLimited;
   const refreshGitStatus = async () => {
     if (remote) return;
-    const { status } = await fetchGitStatus();
-    const changes = await fetchFileChanges();
+    const { status } = await fetchGitStatus(repository);
+    const changes = (await fetchFileChanges()).filter(file => !repository || file.repository === repository);
     setRestorableFiles(Object.fromEntries(changes.filter(file => file.available && file.tracked).map(file => [file.path, file.revision])));
     setFileStatus(status);
     onGitStatus?.(status);
@@ -80,7 +80,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     async function load() {
       setInitialLoading(true);
       try {
-        const res = await fetchAgentResources();
+        const res = await fetchAgentResources(repository);
         const all = [...(res.instructions || []), ...(res.skills || []), ...(res.docs || [])];
         revision.current = res.revision;
         setInstructions(all);
@@ -96,7 +96,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
       }
     }
     void load();
-  }, []);
+  }, [repository]);
 
   /* eslint-disable react-hooks/exhaustive-deps -- Only a new selected path starts the read; changing save/status callbacks must not reload and overwrite an active resource draft. */
   useEffect(() => {
@@ -116,7 +116,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     setLoadedPath('');
     setConfirmRestore(false);
     if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
-    void readAgentResource(selectedPath).then((resource) => {
+    void readAgentResource(selectedPath, repository).then((resource) => {
       if (cancelled) return;
       revision.current = resource.revision;
       setContent(resource.content);
@@ -137,7 +137,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     pendingSaves.current++;
     setIsSaving(true);
     const request = saveQueue.current.catch(() => {}).then(async () => {
-      const receipt = await saveAgentResource({ path: file, content: snapshot, revision: revision.current });
+      const receipt = await saveAgentResource({ path: file, content: snapshot, revision: revision.current, repository });
       revision.current = receipt.revision;
       if (current.current.path === file) setSavedContent(snapshot);
       await refreshGitStatus();
@@ -195,7 +195,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     setError('');
     try {
       await saveQueue.current.catch(() => {});
-      const resource = await restoreAgentResource(selectedPath, restorableFiles[selectedPath]);
+      const resource = await restoreAgentResource(selectedPath, restorableFiles[selectedPath], repository);
       setContent(resource.content);
       setSavedContent(resource.content);
       await refreshGitStatus();
@@ -216,7 +216,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     setIsCreating(true);
     setError('');
     try {
-      const receipt = await saveAgentResource({ path, content: defaultContent, revision: revision.current });
+      const receipt = await saveAgentResource({ path, content: defaultContent, revision: revision.current, repository });
       revision.current = receipt.revision;
       const newResource: AgentResource = { path, name: t('agent.workspaceGuidelines'), editable: true, scope: 'workspace' };
       setInstructions((prev) => [newResource, ...prev.filter((i) => i.path !== path)]);
@@ -241,7 +241,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
       else await saveQueue.current;
       const path = newAgentSkillEntryPath(slug);
       const skillContent = newAgentSkillEntryContent(slug);
-      const receipt = await saveAgentResource({ path, content: skillContent, revision: revision.current, create: true });
+      const receipt = await saveAgentResource({ path, content: skillContent, revision: revision.current, create: true, repository });
       revision.current = receipt.revision;
       const newResource: AgentResource = { path, name: slug, editable: true, scope: 'workspace' };
       setInstructions((prev) => [newResource, ...prev.filter((i) => i.path !== path)]);
@@ -266,9 +266,9 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     try {
       if (hasUnsavedChanges && editable) await saveDocument(selectedPath, content);
       else await saveQueue.current;
-      const receipt = await renameAgentSkill({ path: selectedPath, slug, content, revision: revision.current });
+      const receipt = await renameAgentSkill({ path: selectedPath, slug, content, revision: revision.current, repository });
       revision.current = receipt.revision;
-      const listing = await fetchAgentResources();
+      const listing = await fetchAgentResources(repository);
       setInstructions([...(listing.instructions || []), ...(listing.skills || []), ...(listing.docs || [])]);
       setSelectedPath(receipt.path);
       setLoadedPath(receipt.path);
@@ -322,14 +322,14 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, { readOnly?: 
     refresh: async () => {
       await refreshGitStatus();
       if (!selectedPath || hasUnsavedChanges) return;
-      const listing = await fetchAgentResources();
+      const listing = await fetchAgentResources(repository);
       const resources = [...listing.instructions, ...listing.skills, ...listing.docs];
       setInstructions(resources);
       if (!resources.some(resource => resource.path === selectedPath)) {
         setSelectedPath(resources[0]?.path || '');
         return;
       }
-      const resource = await readAgentResource(selectedPath);
+      const resource = await readAgentResource(selectedPath, repository);
       revision.current = resource.revision;
       setContent(resource.content);
       setSavedContent(resource.content);

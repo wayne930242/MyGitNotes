@@ -130,3 +130,18 @@ describe('Git changes in each worktree', () => {
     expect(sync.status).toBe(409);
   });
 });
+
+describe('Agent files in each repository', () => {
+  it('lists, reads and saves the Agent files of the repository a request names', async () => {
+    const { home, trpg } = await serve();
+    fs.writeFileSync(path.join(trpg, 'AGENTS.md'), '# TRPG rules\n');
+    const trpgId = encodeURIComponent('github:owner/trpg@main');
+    const listing = (await get(`/api/agent-resources?repository=${trpgId}`)).body;
+    expect(listing.instructions.map((resource: { path: string; }) => resource.path)).toContain('AGENTS.md');
+    expect((await get(`/api/agent-resources/read?path=AGENTS.md&repository=${trpgId}`)).body.content).toBe('# TRPG rules\n');
+    const saved = await fetch(`${base}/api/agent-resources/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'AGENTS.md', content: '# TRPG rules v2\n', repository: 'github:owner/trpg@main' }) });
+    expect(saved.status).toBe(200);
+    expect(fs.readFileSync(path.join(trpg, 'AGENTS.md'), 'utf8')).toBe('# TRPG rules v2\n');
+    expect(fs.existsSync(path.join(home, 'AGENTS.md'))).toBe(false);
+  });
+});
