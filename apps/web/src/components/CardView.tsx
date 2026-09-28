@@ -1,7 +1,6 @@
 import { NoteMoveButton } from './NoteMoveButton.js';
-import { Button } from './Button.js';
 import React from 'react';
-import { Clock, FileText, Maximize2, Plus, Trash2 } from 'lucide-react';
+import { Clock, Trash2 } from 'lucide-react';
 import { NoteTagActions, NoteTags } from './NoteTags.js';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
@@ -10,7 +9,9 @@ import { noteUpdatedTime } from '../lib/note-sort.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
 import { HighlightText } from './HighlightText.js';
-import { isSelectionClick } from '../lib/note-selection.js';
+import { NotesEmptyState } from './NotesEmptyState.js';
+import { NoteSelectBox } from './NoteSelectBox.js';
+import { NoteZoomButton } from './NoteZoomButton.js';
 import { useNoteTouchSelection } from '../lib/use-note-touch-selection.js';
 
 interface CardViewProps {
@@ -53,21 +54,7 @@ export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], has
   const isEmpty = !loading && notes.length === 0 && uncommitted.length === 0 && !hasFolderEntries;
 
   if (isEmpty) {
-    return (
-      <div className='flex flex-col items-center justify-center h-96 text-center px-4'>
-        <div className='w-12 h-12 rounded-full bg-sidebar flex items-center justify-center text-muted mb-3'>
-          <FileText className='w-6 h-6' />
-        </div>
-        <h3 className='text-base font-medium text-fg mb-1'>{t('notes.emptyTitle')}</h3>
-        <p className='text-sm text-muted max-w-sm mb-4'>{t('notes.emptyDescription')}</p>
-        {!readOnly && (
-          <Button variant='primary' onClick={onNewNote}>
-            <Plus className='w-4 h-4' />
-            {t('notes.createNote')}
-          </Button>
-        )}
-      </div>
-    );
+    return <NotesEmptyState readOnly={readOnly} onNewNote={onNewNote} />;
   }
 
   const getExcerpt = (content: string) => {
@@ -86,14 +73,7 @@ export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], has
     return (
       <div
         key={note.path}
-        onClick={event => touchSelection.consumeClick(note) ? event.preventDefault() : !draft && isSelectionClick(event) ? onToggleSelect?.(note) : onOpenNote(note)}
-        onTouchStart={event => {
-          if (!draft) touchSelection.onTouchStart(note, event);
-        }}
-        onTouchMove={touchSelection.onTouchMove}
-        onTouchEnd={touchSelection.onTouchEnd}
-        onTouchCancel={touchSelection.onTouchCancel}
-        onContextMenu={touchSelection.onContextMenu}
+        {...touchSelection.itemProps(note, onOpenNote, !draft)}
         title={draft || selectionActive ? undefined : t('notes.multiSelectHint')}
         draggable={canDrag}
         onDragStart={canDrag
@@ -109,7 +89,7 @@ export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], has
         <div>
           <div className='flex items-start justify-between gap-2 mb-2'>
             <h3 className='font-semibold text-fg text-base line-clamp-1 transition flex items-center gap-1.5 min-w-0'>
-              {selectionActive && <input type='checkbox' checked={selected} onChange={() => onToggleSelect?.(note)} onClick={event => event.stopPropagation()} aria-label={t('notes.selectFor', { title: note.title })} className='w-4 h-4 shrink-0 accent-primary' />}
+              {selectionActive && <NoteSelectBox title={note.title} checked={selected} onToggle={() => onToggleSelect?.(note)} />}
               <span className='truncate'>
                 <HighlightText text={note.title} query={highlightQuery} />
               </span>
@@ -127,20 +107,15 @@ export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], has
               {formattedDate}
             </span>
             <div className='flex items-center gap-1' onClick={(e) => e.stopPropagation()}>
-              {focusMode && (
-                <button
-                  type='button'
-                  onClick={() => focusMode.onZoomNote(note)}
-                  title={t('focus.zoomNote')}
-                  aria-label={t('focus.zoomNote')}
-                  className='ui-icon-button'
-                >
-                  <Maximize2 className='w-3.5 h-3.5' />
-                </button>
-              )}
+              {focusMode && <NoteZoomButton onClick={() => focusMode.onZoomNote(note)} />}
               {!readOnly && onMoveNote && <NoteMoveButton onClick={() => onMoveNote(note)} />}
               {!readOnly && canDelete && (
-                <button type='button' onClick={() => requestDelete(note.path)} title={pendingDeletePath === note.path ? t('notes.confirmDelete') : t('notes.delete')} className={pendingDeletePath === note.path ? 'p-1 text-on-danger bg-danger hover:bg-danger/90 transition rounded' : 'p-1 text-muted hover:text-danger transition rounded'}>
+                <button
+                  type='button'
+                  onClick={() => requestDelete(note.path)}
+                  title={pendingDeletePath === note.path ? t('notes.confirmDelete') : t('notes.delete')}
+                  className={pendingDeletePath === note.path ? 'p-1 text-on-danger bg-danger hover:bg-danger/90 transition rounded' : 'p-1 text-muted hover:text-danger transition rounded'}
+                >
                   <Trash2 className='w-3.5 h-3.5' />
                 </button>
               )}

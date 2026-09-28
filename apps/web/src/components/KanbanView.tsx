@@ -1,6 +1,6 @@
 import { NoteMoveButton } from './NoteMoveButton.js';
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Clock, GripVertical, Kanban as KanbanIcon, Maximize2, Plus, Tag, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Clock, GripVertical, Kanban as KanbanIcon, Plus, Tag, Trash2 } from 'lucide-react';
 import type { NoteListItem, NoteQuery } from '@mygitnotes/core/note-query';
 import { noteUpdatedTime, SortField, SortOrder } from '../lib/note-sort.js';
 import { Select } from './Select.js';
@@ -11,8 +11,9 @@ import { useNoteList } from '../lib/use-note-queries.js';
 import { NoteListSentinel } from './NoteListSentinel.js';
 import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
 import { LoadingStatus } from './LoadingStatus.js';
-import { isSelectionClick } from '../lib/note-selection.js';
 import { useNoteTouchSelection } from '../lib/use-note-touch-selection.js';
+import { NoteSelectBox } from './NoteSelectBox.js';
+import { NoteZoomButton } from './NoteZoomButton.js';
 
 interface KanbanViewProps {
   /** The board's filter; each column adds its own status condition and pages on its own. */
@@ -91,44 +92,39 @@ function useColumnDrag(board: BoardContext, columnId: string) {
   };
 }
 
+/** A card moves between columns when the board is writable and drags into a Focus pane when the Focus accepts it. */
+function cardDragProps(board: BoardContext, note: NoteListItem) {
+  const canDragForFocus = !!board.focusMode?.canDrag(note);
+  return {
+    draggable: !board.readOnly || canDragForFocus,
+    onDragStart: (event: React.DragEvent<HTMLDivElement>) => {
+      if (board.readOnly && !canDragForFocus) return;
+      event.dataTransfer.setData('text/plain', note.path);
+      if (board.focusMode) event.dataTransfer.setData(NOTE_DRAG_TYPE, note.path);
+      event.dataTransfer.effectAllowed = board.readOnly ? 'copy' : 'move';
+      board.setDragged(note);
+    },
+    onDragEnd: () => {
+      board.setDragged(null);
+      board.setDragOverColumnId(null);
+    },
+  };
+}
+
 function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardContext; index: number; }) {
   const { t } = useTranslation();
   const touchSelection = useNoteTouchSelection(board.onToggleSelect);
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(board.confirmDelete, () => board.onDeleteNote(note));
   const isBeingDragged = board.dragged?.path === note.path;
-  const canDragForFocus = !!board.focusMode?.canDrag(note);
   const updated = noteUpdatedTime(note);
   const formattedDate = updated ? new Date(updated).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
   const selectionActive = Boolean(board.selectedPaths?.size);
   const selected = board.selectedPaths?.has(note.path) ?? false;
   return (
-    <div
-      data-notepath={note.path}
-      draggable={!board.readOnly || canDragForFocus}
-      onDragStart={event => {
-        if (board.readOnly && !canDragForFocus) return;
-        event.dataTransfer.setData('text/plain', note.path);
-        if (board.focusMode) event.dataTransfer.setData(NOTE_DRAG_TYPE, note.path);
-        event.dataTransfer.effectAllowed = board.readOnly ? 'copy' : 'move';
-        board.setDragged(note);
-      }}
-      onDragEnd={() => {
-        board.setDragged(null);
-        board.setDragOverColumnId(null);
-      }}
-      onClick={event => touchSelection.consumeClick(note) ? event.preventDefault() : isSelectionClick(event) ? board.onToggleSelect?.(note) : board.onOpenNote(note)}
-      onTouchStart={event => touchSelection.onTouchStart(note, event)}
-      onTouchMove={touchSelection.onTouchMove}
-      onTouchEnd={touchSelection.onTouchEnd}
-      onTouchCancel={touchSelection.onTouchCancel}
-      onContextMenu={touchSelection.onContextMenu}
-      title={selectionActive ? undefined : t('notes.multiSelectHint')}
-      className={`p-3 rounded-lg border transition-all cursor-grab active:cursor-grabbing group shadow-xs ${isBeingDragged ? 'opacity-40 scale-[0.98] border-primary shadow-inner' : 'hover:shadow-sm hover:border-muted'}`}
-      style={{ backgroundColor: 'var(--color-surface)', borderColor: isBeingDragged ? 'var(--color-primary)' : 'var(--color-border)' }}
-    >
+    <div data-notepath={note.path} {...cardDragProps(board, note)} {...touchSelection.itemProps(note, board.onOpenNote)} title={selectionActive ? undefined : t('notes.multiSelectHint')} className={`p-3 rounded-lg border transition-all cursor-grab active:cursor-grabbing group shadow-xs ${isBeingDragged ? 'opacity-40 scale-[0.98] border-primary shadow-inner' : 'hover:shadow-sm hover:border-muted'}`} style={{ backgroundColor: 'var(--color-surface)', borderColor: isBeingDragged ? 'var(--color-primary)' : 'var(--color-border)' }}>
       <div className='flex items-start justify-between gap-1 mb-1.5'>
         <div className='flex items-start gap-1.5 min-w-0 flex-1'>
-          {selectionActive && <input type='checkbox' checked={selected} onChange={() => board.onToggleSelect?.(note)} onClick={event => event.stopPropagation()} aria-label={t('notes.selectFor', { title: note.title })} className='w-4 h-4 shrink-0 accent-primary mt-0.5' />}
+          {selectionActive && <NoteSelectBox title={note.title} checked={selected} onToggle={() => board.onToggleSelect?.(note)} className='mt-0.5' />}
           <div className='font-medium text-fg text-sm line-clamp-2 transition min-w-0'>{note.title}</div>
         </div>
         <GripVertical className='w-3.5 h-3.5 text-muted shrink-0 opacity-0 group-hover:opacity-100 transition' />
@@ -152,20 +148,15 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
           </span>
         </div>
         <div className='flex items-center gap-1'>
-          {board.focusMode && (
-            <button
-              type='button'
-              onClick={() => board.focusMode?.onZoomNote(note)}
-              title={t('focus.zoomNote')}
-              aria-label={t('focus.zoomNote')}
-              className='ui-icon-button'
-            >
-              <Maximize2 className='w-3.5 h-3.5' />
-            </button>
-          )}
+          {board.focusMode && <NoteZoomButton onClick={() => board.focusMode?.onZoomNote(note)} />}
           {!board.readOnly && board.onMoveNote && <NoteMoveButton onClick={() => board.onMoveNote?.(note)} />}
           {!board.readOnly && index > 0 && (
-            <button type='button' onClick={() => board.onUpdateNoteStatus(note, board.columns[index - 1].id)} title={t('kanban.moveTo', { title: board.columns[index - 1].title })} className='p-1 hover:text-primary rounded hover:bg-fg/5 transition'>
+            <button
+              type='button'
+              onClick={() => board.onUpdateNoteStatus(note, board.columns[index - 1].id)}
+              title={t('kanban.moveTo', { title: board.columns[index - 1].title })}
+              className='p-1 hover:text-primary rounded hover:bg-fg/5 transition'
+            >
               <ArrowLeft className='w-3.5 h-3.5' />
             </button>
           )}
@@ -266,54 +257,15 @@ function KanbanUnassignedColumn({ board, query, hiddenNote, sort }: { board: Boa
       <div className='overflow-y-auto space-y-2.5 flex-1 pr-0.5'>
         {result.loading && <LoadingStatus className='text-xs text-muted'>{t('notes.loading')}</LoadingStatus>}
         {notes.map((note) => {
-          const canDragForFocus = !!board.focusMode?.canDrag(note);
           const selectionActive = Boolean(board.selectedPaths?.size);
           const selected = board.selectedPaths?.has(note.path) ?? false;
           return (
-            <div
-              key={note.path}
-              draggable={!board.readOnly || canDragForFocus}
-              onDragStart={event => {
-                if (board.readOnly && !canDragForFocus) return;
-                event.dataTransfer.setData('text/plain', note.path);
-                if (board.focusMode) event.dataTransfer.setData(NOTE_DRAG_TYPE, note.path);
-                event.dataTransfer.effectAllowed = board.readOnly ? 'copy' : 'move';
-                board.setDragged(note);
-              }}
-              onDragEnd={() => {
-                board.setDragged(null);
-                board.setDragOverColumnId(null);
-              }}
-              onClick={event => touchSelection.consumeClick(note) ? event.preventDefault() : isSelectionClick(event) ? board.onToggleSelect?.(note) : board.onOpenNote(note)}
-              onTouchStart={event => touchSelection.onTouchStart(note, event)}
-              onTouchMove={touchSelection.onTouchMove}
-              onTouchEnd={touchSelection.onTouchEnd}
-              onTouchCancel={touchSelection.onTouchCancel}
-              onContextMenu={touchSelection.onContextMenu}
-              title={selectionActive ? undefined : t('notes.multiSelectHint')}
-              className='p-3 rounded-lg border hover:shadow-xs transition cursor-grab active:cursor-grabbing'
-              style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-            >
+            <div key={note.path} {...cardDragProps(board, note)} {...touchSelection.itemProps(note, board.onOpenNote)} title={selectionActive ? undefined : t('notes.multiSelectHint')} className='p-3 rounded-lg border hover:shadow-xs transition cursor-grab active:cursor-grabbing' style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
               <div className='flex items-start gap-1.5 mb-1 min-w-0'>
-                {selectionActive && <input type='checkbox' checked={selected} onChange={() => board.onToggleSelect?.(note)} onClick={event => event.stopPropagation()} aria-label={t('notes.selectFor', { title: note.title })} className='w-4 h-4 shrink-0 accent-primary mt-0.5' />}
+                {selectionActive && <NoteSelectBox title={note.title} checked={selected} onToggle={() => board.onToggleSelect?.(note)} className='mt-0.5' />}
                 <div className='font-medium text-fg text-sm line-clamp-2 min-w-0'>{note.title}</div>
               </div>
-              {(board.focusMode || (!board.readOnly && board.onMoveNote)) && (
-                <div className='flex justify-end items-center gap-1' onClick={event => event.stopPropagation()}>
-                  {board.focusMode && (
-                    <button
-                      type='button'
-                      onClick={() => board.focusMode?.onZoomNote(note)}
-                      title={t('focus.zoomNote')}
-                      aria-label={t('focus.zoomNote')}
-                      className='ui-icon-button'
-                    >
-                      <Maximize2 className='w-3.5 h-3.5' />
-                    </button>
-                  )}
-                  {!board.readOnly && board.onMoveNote && <NoteMoveButton onClick={() => board.onMoveNote?.(note)} />}
-                </div>
-              )}
+              {(board.focusMode || (!board.readOnly && board.onMoveNote)) && <div className='flex justify-end items-center gap-1' onClick={event => event.stopPropagation()}>{board.focusMode && <NoteZoomButton onClick={() => board.focusMode?.onZoomNote(note)} />} {!board.readOnly && board.onMoveNote && <NoteMoveButton onClick={() => board.onMoveNote?.(note)} />}</div>}
             </div>
           );
         })}

@@ -1,7 +1,6 @@
 import { NoteMoveButton } from './NoteMoveButton.js';
-import { Button } from './Button.js';
 import React, { useLayoutEffect, useMemo, useRef } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Clock, FileText, Maximize2, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Clock, FileText, Trash2 } from 'lucide-react';
 import { NoteTagActions, NoteTags } from './NoteTags.js';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import { Select } from './Select.js';
@@ -11,7 +10,9 @@ import { useTranslation } from '../lib/i18n/index.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
 import { HighlightText } from './HighlightText.js';
-import { isSelectionClick } from '../lib/note-selection.js';
+import { NotesEmptyState } from './NotesEmptyState.js';
+import { NoteSelectBox } from './NoteSelectBox.js';
+import { NoteZoomButton } from './NoteZoomButton.js';
 import { useNoteTouchSelection } from '../lib/use-note-touch-selection.js';
 
 interface ListViewProps {
@@ -65,12 +66,7 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
   const formattedDate = updated ? dates.short.format(updated) : '—';
   return (
     <tr
-      onClick={event => touchSelection.consumeClick(note) ? event.preventDefault() : isSelectionClick(event) ? actions.toggleSelect(note) : actions.open(note)}
-      onTouchStart={event => touchSelection.onTouchStart(note, event)}
-      onTouchMove={touchSelection.onTouchMove}
-      onTouchEnd={touchSelection.onTouchEnd}
-      onTouchCancel={touchSelection.onTouchCancel}
-      onContextMenu={touchSelection.onContextMenu}
+      {...touchSelection.itemProps(note, actions.open)}
       title={selectionActive ? undefined : t('notes.multiSelectHint')}
       draggable={canDrag}
       onDragStart={canDrag
@@ -84,7 +80,7 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
     >
       <td className='py-3 px-4'>
         <div className='flex items-center gap-2.5'>
-          {selectionActive && <input type='checkbox' checked={selected} onChange={() => actions.toggleSelect(note)} onClick={event => event.stopPropagation()} aria-label={t('notes.selectFor', { title: note.title })} className='w-4 h-4 shrink-0 accent-primary' />}
+          {selectionActive && <NoteSelectBox title={note.title} checked={selected} onToggle={() => actions.toggleSelect(note)} />}
           <FileText className='w-4 h-4 text-primary shrink-0' />
           <div>
             <div className='font-medium text-fg transition flex items-center gap-1.5'>
@@ -116,20 +112,15 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
       {/* Actions Column */}
       <td className='py-3 px-4 text-right'>
         <div className='flex items-center justify-end opacity-40 hover:opacity-100 group-hover:opacity-100 transition' onClick={(e) => e.stopPropagation()}>
-          {showZoom && (
-            <button
-              type='button'
-              onClick={() => actions.zoom(note)}
-              title={t('focus.zoomNote')}
-              aria-label={t('focus.zoomNote')}
-              className='ui-icon-button'
-            >
-              <Maximize2 className='w-4 h-4' />
-            </button>
-          )}
+          {showZoom && <NoteZoomButton onClick={() => actions.zoom(note)} iconClassName='w-4 h-4' />}
           {!readOnly && <NoteMoveButton onClick={() => actions.move(note)} />}
           {!readOnly && canDelete && (
-            <button type='button' onClick={() => actions.remove(note)} title={isPendingDelete ? t('notes.confirmDelete') : t('notes.delete')} className={isPendingDelete ? 'p-1.5 text-on-danger bg-danger hover:bg-danger/90 rounded-lg transition' : 'p-1.5 text-muted hover:text-danger hover:bg-danger-soft rounded-lg transition'}>
+            <button
+              type='button'
+              onClick={() => actions.remove(note)}
+              title={isPendingDelete ? t('notes.confirmDelete') : t('notes.delete')}
+              className={isPendingDelete ? 'p-1.5 text-on-danger bg-danger hover:bg-danger/90 rounded-lg transition' : 'p-1.5 text-muted hover:text-danger hover:bg-danger-soft rounded-lg transition'}
+            >
               <Trash2 className='w-4 h-4' />
             </button>
           )}
@@ -160,21 +151,7 @@ export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], has
   const isEmpty = !loading && notes.length === 0 && uncommitted.length === 0 && !hasFolderEntries;
 
   if (isEmpty) {
-    return (
-      <div className='flex flex-col items-center justify-center h-96 text-center px-4'>
-        <div className='w-12 h-12 rounded-full bg-sidebar flex items-center justify-center text-muted mb-3'>
-          <FileText className='w-6 h-6' />
-        </div>
-        <h3 className='text-base font-medium text-fg mb-1'>{t('notes.emptyTitle')}</h3>
-        <p className='text-sm text-muted max-w-sm mb-4'>{t('notes.emptyDescription')}</p>
-        {!readOnly && (
-          <Button variant='primary' onClick={onNewNote}>
-            <Plus className='w-4 h-4' />
-            {t('notes.createNote')}
-          </Button>
-        )}
-      </div>
-    );
+    return <NotesEmptyState readOnly={readOnly} onNewNote={onNewNote} />;
   }
 
   const renderSortHeader = (field: SortField, label: string, className = '') => {

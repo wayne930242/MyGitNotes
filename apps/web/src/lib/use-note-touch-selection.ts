@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { MouseEvent, TouchEvent } from 'react';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { LONG_PRESS_MS, shouldCancelLongPress } from './use-long-press.js';
+import { isSelectionClick } from './note-selection.js';
 
 /** Long-press a browse note to start selection, following FolderTree's touch convention. */
 export function useNoteTouchSelection(onToggleSelect?: (note: NoteListItem) => void) {
@@ -66,5 +67,17 @@ export function useNoteTouchSelection(onToggleSelect?: (note: NoteListItem) => v
     if (timer.current || suppressedPath.current) event.preventDefault();
   };
 
-  return { onTouchStart, onTouchMove, onTouchEnd: cancel, onTouchCancel: cancel, consumeClick, onContextMenu };
+  /** Pointer handlers for one browse item: a plain click opens it, a modifier click or long press toggles its selection unless `selectable` is false. */
+  const itemProps = (note: NoteListItem, onOpen: (note: NoteListItem) => void, selectable = true) => ({
+    onClick: (event: MouseEvent) => consumeClick(note) ? event.preventDefault() : selectable && isSelectionClick(event) ? onToggleSelect?.(note) : onOpen(note),
+    onTouchStart: (event: TouchEvent) => {
+      if (selectable) onTouchStart(note, event);
+    },
+    onTouchMove,
+    onTouchEnd: cancel,
+    onTouchCancel: cancel,
+    onContextMenu,
+  });
+
+  return { onTouchStart, onTouchMove, onTouchEnd: cancel, onTouchCancel: cancel, consumeClick, onContextMenu, itemProps };
 }
