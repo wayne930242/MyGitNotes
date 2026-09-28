@@ -171,6 +171,9 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
         let end = to;
         if ((name === 'HeaderMark' || name === 'QuoteMark') && state.sliceDoc(to, to + 1) === ' ') end++;
         hide(from, end);
+      } else if (!editing && name === 'Escape') {
+        // `\*` reads as a literal `*`, as the rendered note shows it.
+        hide(from, from + 1);
       }
     },
   });
