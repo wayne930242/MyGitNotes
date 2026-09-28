@@ -2,13 +2,13 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { classifyResource, deploymentConfigSource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceNoteTags, resolveSafePath, SCREEN_DOCUMENT, SourceError, StaleRevisionError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource } from '@mygitnotes/core';
+import { classifyResource, deploymentConfigSource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceNoteTags, type RepositoryStatus, resolveSafePath, SCREEN_DOCUMENT, SourceError, StaleRevisionError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRemoteMCP } from './mcp.js';
 import { createRemoteCoreUpdateRouter } from './remote-core-update.js';
 import { createLocalApp } from './local-app.js';
 import { createAuth } from './auth.js';
-import { localHome, type RemoteHandle, remoteHome, requestCatalog, requestWorkspace, workspaceOf } from './request-workspace.js';
+import { localHome, namedRemote, type RemoteHandle, remoteHome, requestCatalog, requestWorkspace, workspaceOf } from './request-workspace.js';
 import { createStudyRouter } from './study.js';
 import { createWorkspaceDocumentRouter } from './workspace-document.js';
 import { createFolderManagerRouter } from './folder-manager.js';
@@ -102,10 +102,19 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     app.get('/api/workspace', async (req, res) => {
       try {
         const workspace = workspaceOf(res);
-        const reader: RemoteSource = res.locals.reader;
-        const snapshot = await reader.getSnapshot(req.query.fresh === '1');
-        const { config } = await workspace.manifest();
-        res.json({ repoRoot: '', branch: reader.branch, config, gitStatus: { branch: reader.branch, isClean: true, staged: [], modified: [], untracked: [] }, isCoreBranch: reader.branch === 'core', source: { type: workspace.home.ref.source.type, identity: workspace.home.ref.id, repository: reader.repository }, revision: snapshot.sha, capabilities: { write: Boolean(res.locals.authenticated && snapshot.info.permissions?.push && reader.branch === 'main'), local: false } });
+        const fresh = req.query.fresh === '1';
+        // The manifest is read from the home repository, so a fresh answer reloads it first.
+        if (fresh) await remoteHome(res).reader.getSnapshot(true);
+        const [{ config, revision: configRevision }, entries] = await Promise.all([workspace.manifest(), workspace.all()]);
+        const repositories = await Promise.all(entries.map(async (entry): Promise<RepositoryStatus> => {
+          const base = { id: entry.ref.id, type: entry.ref.source.type, repository: entry.ref.source.type === 'local' ? undefined : entry.ref.source.repository, notebooks: entry.notebooks.map(notebook => notebook.id) };
+          if (!('handle' in entry)) return { ...base, branch: entry.ref.source.type === 'local' ? '' : entry.ref.source.branch, revision: '', write: false, unavailable: entry.unavailable };
+          const handle = entry.handle as RemoteHandle;
+          const snapshot = await handle.reader.getSnapshot(fresh && entry.ref.id !== workspace.home.ref.id);
+          return { ...base, branch: handle.reader.branch, revision: snapshot.sha, write: handle.authenticated && handle.reader.canWrite(snapshot) };
+        }));
+        const body: WorkspaceStatus = { config, configRevision, local: false, home: workspace.home.ref.id, repositories };
+        res.json(body);
       } catch (error) {
         fail(res, error);
       }
@@ -113,10 +122,10 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     app.put('/api/workspace/config', async (req, res) => {
       try {
         if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit the workspace manifest.', 403);
-        const { configYaml, revision } = req.body;
+        const { configYaml, configRevision } = req.body;
         if (typeof configYaml !== 'string') throw new SourceError('configYaml is required.');
-        const saved = await workspaceOf(res).saveManifest(configYaml, revision);
-        res.json({ success: true, config: saved.config, revision: saved.revision });
+        const saved = await workspaceOf(res).saveManifest(configYaml, String(configRevision || ''));
+        res.json({ success: true, config: saved.config, configRevision: saved.revision });
       } catch (error) {
         fail(res, error);
       }
@@ -192,7 +201,7 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     });
     app.post('/api/notes/read-batch', async (req, res) => {
       try {
-        res.json({ notes: await (res.locals.reader as RemoteSource).readNotes(req.body.paths, req.body.revision) });
+        res.json({ notes: await (await namedRemote(res, req.body?.repository)).reader.readNotes(req.body.paths, req.body.revision) });
       } catch (error) {
         fail(res, error);
       }
@@ -244,9 +253,12 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     });
     app.post('/api/notes/commit', async (req, res) => {
       try {
+        // An anonymous request is refused before its body is read.
         if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to commit notes.', 403);
-        const { notes, revision, message, documents } = req.body;
-        res.json(await (res.locals.reader as RemoteSource).commitNotes(notes, revision, message, documents));
+        const { repository, notes, revision, message, documents } = req.body;
+        const target = await namedRemote(res, repository);
+        if (!target.authenticated) throw new SourceError('Sign in with write permission to commit notes.', 403);
+        res.json(await target.reader.commitNotes(notes, revision, message, documents));
       } catch (error) {
         fail(res, error);
       }
@@ -267,12 +279,14 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     app.post('/api/tags/apply', async (req, res) => {
       try {
         if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit notes.', 403);
+        const target = await namedRemote(res, req.body?.repository);
+        if (!target.authenticated) throw new SourceError('Sign in with write permission to edit notes.', 403);
         const entries = req.body?.entries;
         if (!Array.isArray(entries) || entries.length === 0 || entries.length > 500) throw new SourceError('entries must be an array of 1 to 500 items.');
         for (const entry of entries) {
           if (typeof entry?.path !== 'string' || !Array.isArray(entry.tags) || entry.tags.some((tag: unknown) => typeof tag !== 'string')) throw new SourceError('Each entry requires a path and a tags array of strings.');
         }
-        const reader = res.locals.reader as RemoteSource;
+        const { reader } = target;
         // Confirm write access before reading any blob content, matching commitChanges' own
         // gate, so a session without push permission can't use this route to probe arbitrary
         // repository paths ahead of the write-scope check that would otherwise reject them.

@@ -11,6 +11,9 @@ function sourceWith(location: string, root: string) {
   const entries = [...Object.keys(files).map(path => ({ path, type: 'blob', mode: '100644', sha: `sha-${path}` })), { path: location.startsWith('notes/') ? `notes/${root}` : root, type: 'tree', mode: '040000', sha: 'sha-tree' }];
   const published: RemoteChange[][] = [];
   class FakeSource extends RemoteSource {
+    get id() {
+      return 'github:owner/repo@main';
+    }
     protected async loadSnapshot(): Promise<RemoteSnapshot> {
       return { sha: 'a'.repeat(40), treeSha: 'b'.repeat(40), entries, info: { private: false, permissions: { push: true }, default_branch: 'main' } };
     }

@@ -372,7 +372,7 @@ try {
   page.on('request', request => {
     const url = new URL(request.url());
     let body;
-    if (url.pathname === '/api/workspace') body = { config: { schema_version: 1, workspace: { title: 'Mobile GitHub', default_notebook: 'example' }, notebooks: [{ id: 'example', title: 'Example', root: 'notes/example' }] }, branch: 'main', repoRoot: '', gitStatus: { branch: 'main', isClean: true, staged: [], modified: [], untracked: [] }, source: { type: 'github', identity: 'github:owner/repo@main' }, capabilities: { write: true, local: false }, revision: remoteNote.revision };
+    if (url.pathname === '/api/workspace') body = { config: { schema_version: 1, workspace: { title: 'Mobile GitHub', default_notebook: 'example' }, notebooks: [{ id: 'example', title: 'Example', root: 'notes/example' }] }, configRevision: remoteNote.revision, local: false, home: 'github:owner/repo@main', repositories: [{ id: 'github:owner/repo@main', type: 'github', repository: 'owner/repo', branch: 'main', revision: remoteNote.revision, write: true, notebooks: ['example'] }] };
     if (url.pathname === '/api/notes') {
       if (request.method() === 'POST') {
         saved = JSON.parse(request.postData());

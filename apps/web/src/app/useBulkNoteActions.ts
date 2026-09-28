@@ -1,7 +1,8 @@
 import { type NoteListItem } from '@mygitnotes/core/note-query';
 import { planTagAdd, planTagDelete } from '@mygitnotes/core/tag-ops';
 import { useState } from 'react';
-import { applyTagChange } from '../lib/api.js';
+import { applyTagEntries, PartialTagChangeError } from '../lib/tag-changes.js';
+import { repositoryOf } from '../lib/workspace-repositories.js';
 import { fetchFiles, type FileResult, mutateFile } from '../lib/files-api.js';
 import type { I18nContextValue } from '../lib/i18n/index.js';
 import type { useTagOperations } from '../lib/use-tag-operations.js';
@@ -14,12 +15,12 @@ interface Params {
   onUpdateNoteStatus: (note: NoteListItem, newStatus: string) => Promise<boolean>;
   beforeFileChange: () => Promise<void>;
   onFilesChanged: (result: FileResult) => Promise<void>;
-  revision: string;
+  repositories: WorkspaceState['repositories'];
   remote: boolean;
   canWrite: boolean;
   t: I18nContextValue['t'];
   invalidateNotes: () => void;
-  setRevision: WorkspaceState['setRevision'];
+  setRepositoryRevision: WorkspaceState['setRepositoryRevision'];
   setActionError: WorkspaceState['setActionError'];
   tagOperations: ReturnType<typeof useTagOperations>;
   config: WorkspaceState['config'];
@@ -29,7 +30,7 @@ interface Params {
  * through the exact same APIs a single-note edit uses (`onUpdateNoteStatus`, `/api/tags/apply`,
  * `/api/files`), just looped or batched across the selection, so both local and remote workspaces
  * work without any new endpoint. */
-export function useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNoteStatus, beforeFileChange, onFilesChanged, revision, remote, canWrite, t, invalidateNotes, setRevision, setActionError, tagOperations, config }: Params) {
+export function useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNoteStatus, beforeFileChange, onFilesChanged, repositories, remote, canWrite, t, invalidateNotes, setRepositoryRevision, setActionError, tagOperations, config }: Params) {
   const [bulkBusy, setBulkBusy] = useState(false);
 
   const runBulkStatus = async (status: string) => {
@@ -55,9 +56,17 @@ export function useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNote
       if (plan.affected.length === 0) return;
       const entries = plan.affected.map(({ path, notebookId, nextTags }) => ({ path, notebookId, tags: nextTags }));
       const label = { key: kind === 'add' ? 'bulk.tagAddedLabel' as const : 'bulk.tagRemovedLabel' as const, params: { tag, count: plan.affected.length } };
-      const result = await applyTagChange(entries, revision, t(label.key, label.params));
-      if (remote) setRevision(result.revision || revision);
-      else invalidateNotes();
+      try {
+        await applyTagEntries(repositories, entries, t(label.key, label.params), (repository, revision) => {
+          if (remote && revision) setRepositoryRevision(repository.id, revision);
+        });
+      } catch (error) {
+        // Repositories committed before the failure keep their change, so their part stays undoable.
+        if (error instanceof PartialTagChangeError) tagOperations.record(kind, label, { ...plan, affected: plan.affected.filter(entry => error.committed.includes(repositoryOf(repositories, entry.notebookId)?.id ?? '')) });
+        throw error;
+      } finally {
+        if (!remote) invalidateNotes();
+      }
       tagOperations.record(kind, label, plan);
       clearSelection();
     } catch (error) {

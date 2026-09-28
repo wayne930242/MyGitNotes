@@ -37,7 +37,7 @@ beforeEach(() => {
     }),
   );
   client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, drafts: {} });
+  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, repositories: {}, drafts: {} });
 });
 afterEach(() => {
   cleanup();

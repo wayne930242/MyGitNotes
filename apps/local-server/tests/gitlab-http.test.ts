@@ -84,11 +84,12 @@ describe('GitLab HTTP and MCP integration', () => {
     expect((await fetch(`${base}/api/notes`)).status).toBe(404);
     await login();
     const workspace = await fetch(`${base}/api/workspace`, { headers: { Cookie: cookie } }).then(r => r.json());
-    expect(workspace).toMatchObject({ source: { type: 'gitlab' }, capabilities: { write: true, local: false } });
+    expect(workspace).toMatchObject({ local: false, repositories: [{ id: workspace.home, type: 'gitlab', branch: 'main', revision: fixture.head, write: true, notebooks: ['ex'] }] });
+    expect(workspace.configRevision).toBe(fixture.head);
     const notes = await fetch(`${base}/api/notes`, { headers: { Cookie: cookie } }).then(r => r.json());
     expect(notes.notes).toHaveLength(2);
     const note = notes.notes.find((n: any) => n.title === 'Alpha');
-    const saved = await fetch(`${base}/api/notes/commit`, post({ notes: [{ ...note, content: '# Updated' }], revision: fixture.head, message: 'docs: edit note' }));
+    const saved = await fetch(`${base}/api/notes/commit`, post({ repository: workspace.home, notes: [{ ...note, content: '# Updated' }], revision: fixture.head, message: 'docs: edit note' }));
     expect(saved.status).toBe(200);
     expect(fixture.writes).toBe(1);
     expect(await fetch(`${base}/api/screen-page`, { headers: { Cookie: cookie } }).then(r => r.json())).toMatchObject({ writable: true, page: { version: 2 } });

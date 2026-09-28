@@ -131,6 +131,12 @@ Stage 2 gets its own step list in this file after the checkpoint.
 - The deployment adapter reads the environment on every `settings()` call, matching the previous per-call `loadSourceConfig` in authentication; the mode chosen at startup stays fixed, and a later switch between local and remote fails with a restart message.
 - Independent routers (file manager, folder manager, R2, Study, Screen, Focus) now read through the request's shared cache like the other remote routes. The R2 rate-limit test adds an uncached note so it still exercises a platform read.
 - A local worktree without a manifest still answers `GET /api/workspace` with `config: null` and accepts its first manifest; path validation loads the manifest only when a request names a path.
+- `RepositoryCatalog` is the per-repository read model (`RemoteSource.catalog()` and the local scan); `workspaceCatalog` joins them into the `NoteCatalog` the query functions use and checks the caller's `RevisionSet`. A remembered result spanning several repositories is recomputed, because no single content key covers it.
+- `RemoteSource.id` is the repository's `sourceIdentity`, so its stale-revision errors name the repository (`StaleRevisionError`).
+- Until workspace documents move to notebook repositories in stage 2, Screen and Focus drafts commit with the home repository's group, and Settings, the Focus document and the core-branch banner follow the home repository. Browse, create and file views follow the selected notebook's repository; each editor follows its note's repository.
+- Query keys carry only the revisions of the repositories a query reads (the notebook's repository, or every repository for `all`, lookups, facets and graph), and a 409 resets only the queries of the repositories it names.
+- A workspace-wide tag change that stops part way records the committed repositories' part as undoable, so the landed commits can still be reverted.
+- Anonymous commit and tag requests are refused before the request body is read, as before the change.
 
 ## Friction Notes
 

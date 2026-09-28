@@ -14,9 +14,11 @@ import YAML from 'yaml';
 
 interface SettingsModalProps {
   local?: boolean;
+  /** Whether the home repository, which keeps the manifest, may be written. */
   canWrite: boolean;
-  revision?: string;
-  onRevision: (revision: string) => void;
+  /** The manifest's revision the editor started from. */
+  configRevision: string;
+  onConfigRevision: (revision: string) => void;
   accountSettings?: React.ReactNode;
   config: WorkspaceConfig | null;
   branch: string;
@@ -26,7 +28,7 @@ interface SettingsModalProps {
   onSelectTheme: (theme: ThemeChoice) => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = true, canWrite, revision, onRevision, accountSettings, branch, repoRoot, onRefreshWorkspace, currentTheme, onSelectTheme }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = true, canWrite, configRevision, onConfigRevision, accountSettings, branch, repoRoot, onRefreshWorkspace, currentTheme, onSelectTheme }) => {
   const { t, language, setLanguage } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
   const [yamlContent, setYamlContent] = useState(() => config ? YAML.stringify(config) : '');
@@ -44,8 +46,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
     setStatusMessage(null);
     try {
       // The commit result carries the new revision; a refetch may still answer from the previous snapshot.
-      const saved = await updateWorkspaceConfig(yamlContent, revision);
-      if (saved.revision) onRevision(saved.revision);
+      const saved = await updateWorkspaceConfig(yamlContent, configRevision);
+      if (saved.configRevision) onConfigRevision(saved.configRevision);
       await onRefreshWorkspace();
       setStatusMessage({ type: 'success', text: t('settings.saved') });
     } catch (err: unknown) {

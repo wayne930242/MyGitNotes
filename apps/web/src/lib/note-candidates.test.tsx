@@ -26,12 +26,12 @@ beforeEach(() => {
     }),
   );
   client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, drafts });
+  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, repositories: {}, drafts });
 });
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  setNoteQueryScope({ sourceId: '', revisions: {}, drafts: {} });
+  setNoteQueryScope({ sourceId: '', revisions: {}, repositories: {}, drafts: {} });
 });
 
 const wrapper = ({ children }: { children: ReactNode; }) => createElement(QueryClientProvider, { client }, children);
@@ -55,7 +55,7 @@ it('asks for nothing while no link is being completed', () => {
 });
 
 it('offers the same staged note to the CodeMirror editor', async () => {
-  const notes = await fetchNoteCandidates(client, { sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, drafts }, 'note', 'notes/life/source.md');
+  const notes = await fetchNoteCandidates(client, { sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, repositories: {}, drafts }, 'note', 'notes/life/source.md');
   expect(notes.map(note => note.title)).toEqual(['Staged note', 'Committed note']);
 });
 

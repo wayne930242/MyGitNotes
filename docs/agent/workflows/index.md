@@ -31,7 +31,7 @@ When an update is released to the canonical product branch `core`:
 ## 3. Git Save and Semantic Commits
 
 Local UI edits auto-save to the working tree. The Changes manager reviews each file, stages or unstages its snapshot, and commits the reviewed index. Later working edits remain uncommitted. Single-file restore resets that file to HEAD; discarded local working content is copied into the Git directory for recovery. Other selected-file save/commit operations preserve unrelated pre-staged files.
-Local MCP saves create a Git commit. Remote UI edits persist as browser working drafts; the Changes panel publishes selected notes together with a revision check. MCP mutations create a commit immediately.
+Local MCP saves create a Git commit. Remote UI edits persist as browser working drafts, kept per repository; the Changes panel publishes the selected notes of each repository as one commit on it, with a revision check, one repository after another, and stops at the first repository that fails. MCP mutations create a commit immediately.
 - A remote save advances the branch without force; concurrent changes return a conflict.
 - Semantic commit messages are generated:
   - If `GEMINI_API_KEY` is provided, requests a concise conventional commit message from Gemini Flash-Lite.

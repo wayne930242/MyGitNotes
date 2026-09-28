@@ -21,6 +21,6 @@ it('requests a fresh commit base and reads selected notes together at that revis
     }),
   );
   await fetchWorkspace(true);
-  await readNotes(['notes/ex/a.md', 'notes/ex/b.md'], 'a'.repeat(40));
-  expect(requests).toEqual([{ url: '/api/workspace?fresh=1', body: undefined }, { url: '/api/notes/read-batch', body: { paths: ['notes/ex/a.md', 'notes/ex/b.md'], revision: 'a'.repeat(40) } }]);
+  await readNotes('github:owner/repo@main', ['notes/ex/a.md', 'notes/ex/b.md'], 'a'.repeat(40));
+  expect(requests).toEqual([{ url: '/api/workspace?fresh=1', body: undefined }, { url: '/api/notes/read-batch', body: { repository: 'github:owner/repo@main', paths: ['notes/ex/a.md', 'notes/ex/b.md'], revision: 'a'.repeat(40) } }]);
 });

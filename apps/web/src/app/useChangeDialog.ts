@@ -13,10 +13,12 @@ interface Params {
   setActionError: WorkspaceState['setActionError'];
   activeWorkingNotes: WorkspaceState['activeWorkingNotes'];
   pendingDocuments: WorkspaceState['pendingDocuments'];
-  canWrite: WorkspaceState['canWrite'];
+  canWriteNotebook: WorkspaceState['canWriteNotebook'];
+  /** Whether workspace documents, kept in the home repository, may be committed. */
+  documentsWritable: boolean;
 }
 
-export function useChangeDialog({ activeTab, agentSystemRef, remote, documents, setActionError, activeWorkingNotes, pendingDocuments, canWrite }: Params) {
+export function useChangeDialog({ activeTab, agentSystemRef, remote, documents, setActionError, activeWorkingNotes, pendingDocuments, canWriteNotebook, documentsWritable }: Params) {
   const [commitRequest, setCommitRequest] = useState<ChangeRequest>();
   const [isCommitOpen, setIsCommitOpen] = useState<boolean>(false);
 
@@ -29,7 +31,7 @@ export function useChangeDialog({ activeTab, agentSystemRef, remote, documents, 
     })().catch(error => setActionError(error.message));
   };
 
-  const panelRemoteChanges = remote ? [...Object.values(activeWorkingNotes).map(entry => ({ path: entry.note.path, kind: entry.blocked ? 'conflict' as const : entry.base ? 'modified' as const : 'added' as const, tracked: Boolean(entry.base), revision: JSON.stringify(entry), available: canWrite && !entry.blocked, staged: false, unstaged: true })), ...pendingDocuments.map(document => ({ path: document.file, kind: 'modified' as const, tracked: true, revision: document.diff, available: canWrite && !document.error, staged: false, unstaged: true }))] : undefined;
+  const panelRemoteChanges = remote ? [...Object.values(activeWorkingNotes).map(entry => ({ path: entry.note.path, kind: entry.blocked ? 'conflict' as const : entry.base ? 'modified' as const : 'added' as const, tracked: Boolean(entry.base), revision: JSON.stringify(entry), available: canWriteNotebook(entry.note.notebookId) && !entry.blocked, staged: false, unstaged: true })), ...pendingDocuments.map(document => ({ path: document.file, kind: 'modified' as const, tracked: true, revision: document.diff, available: documentsWritable && !document.error, staged: false, unstaged: true }))] : undefined;
   const panelGetPreview = remote ? (file: string) => documents.find(document => document.file === file)?.diff ?? (activeWorkingNotes[file] ? workingDiff({ [file]: activeWorkingNotes[file] }) : '') : undefined;
 
   return { commitRequest, isCommitOpen, setIsCommitOpen, openCommitModal, panelRemoteChanges, panelGetPreview };

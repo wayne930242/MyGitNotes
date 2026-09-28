@@ -19,13 +19,12 @@ import { useFileNavigation } from './app/useFileNavigation.js';
 import { useChangeDialog } from './app/useChangeDialog.js';
 import { useShortcutSurface } from './app/useShortcutSurface.js';
 import { type NoteListItem, noteQueryStatuses } from '@mygitnotes/core/note-query';
-import { listLocalDrafts } from './lib/storage.js';
 import { useWorkspaceSync } from './lib/use-workspace-sync.js';
 import { WorkspaceLinks } from './components/WorkspaceLinks.js';
 import { ImageLightbox } from './components/ImageLightbox.js';
 import { useNavigate } from 'react-router-dom';
 import { notebookRoute, noteTrail, parseWorkspaceRoute } from './lib/routes.js';
-import { readWorkingNotes, updateWorkingNote } from './lib/working-notes.js';
+import { draftScope } from './lib/workspace-repositories.js';
 import { sameValue } from './lib/merge-note.js';
 import React, { useMemo, useState } from 'react';
 import { fetchGitStatus, readNote } from './lib/api.js';
@@ -93,32 +92,39 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const editorRoute = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
 
-  const { selectedNotebookId, folders, sourceId, remote, canWrite, revision, setRevision, loadError, loading, actionError, setActionError, repoRoot, branch, config, gitStatus, setGitStatus, assets, setAssets, setWorkingNotes, workingScope, activeWorkingNotes, screen, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current?.path === note.path && !sameValue(current, note) ? note : current) });
+  const { selectedNotebookId, folders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, actionError, setActionError, repoRoot, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftAtPath, updateDraft, clearCommittedDrafts, hasPendingDrafts, screen, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current?.path === note.path && !sameValue(current, note) ? note : current) });
   const refreshDocuments = async () => {
     await Promise.all(documents.map(document => document.refresh()));
   };
+  // The selected notebook's repository decides what the browse, create and file views may write.
+  const canWrite = canWriteNotebook(selectedNotebookId);
+  const branch = repositoryFor(selectedNotebookId)?.branch ?? homeBranch;
+  // Workspace documents and the manifest live in the home repository.
+  const documentsWritable = Boolean(homeRepository?.write);
+  // A workspace-wide tag change commits to every repository that serves a notebook.
+  const canManageTags = repositories.some(repository => repository.notebooks.length) && repositories.every(repository => repository.write || !repository.notebooks.length);
   const editorRegistry = useNoteEditorRegistry();
 
-  const { queryClient, queryScope, invalidateNotes, refreshNotes, staleNotice, readCommittedNote, readNoteForChange } = useWorkspaceNotes({ sourceId, revision, activeWorkingNotes, remote, refreshWorkspace, workingScope, t });
+  const { queryClient, queryScope, invalidateNotes, refreshNotes, staleNotice, readCommittedNote, readNoteForChange } = useWorkspaceNotes({ sourceId, repositories, activeWorkingNotes, remote, refreshWorkspace, readDraftAtPath, t });
 
-  // Tag management: rename/merge/delete across the whole workspace, each a single commit
+  // Tag management: rename/merge/delete across the whole workspace, one commit per repository,
   // with a session-lifetime undo (kept in `tagOperations.history` until page reload).
-  const { tagOperations, previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag, handleUndoTagOperation } = useTagWorkspaceOperations({ queryClient, queryScope, revision, remote, canWrite, t, invalidateNotes, setRevision, setActionError });
+  const { tagOperations, previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag, handleUndoTagOperation } = useTagWorkspaceOperations({ queryClient, queryScope, repositories, remote, canWrite: canManageTags, t, invalidateNotes, setRepositoryRevision, setActionError });
 
   const { editorNotebookId, returnTo, route, activeTab, sidebarGestureRef, selectedFolders, folderRoot, selectedFolder, scopeNotebookId, selectedStatus, showHidden } = useBrowseRoute({ editorRoute, config, location, queryState, setFolderReorder, setFileMetadataOpen, loading, loadError, filtersOpen, setFiltersOpen, selectedNotebookId });
 
-  const { facetsQuery, notebookFacets, notebookStatuses, newNoteStatuses, selectedTags, workspaceTagNames, noteTagActions, searchQuery, viewMode, folderless } = useBrowseFacets({ showHidden, config, scopeNotebookId, selectedFolders, selectedNotebookId, route, canWrite, previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag });
+  const { facetsQuery, notebookFacets, notebookStatuses, newNoteStatuses, selectedTags, workspaceTagNames, noteTagActions, searchQuery, viewMode, folderless } = useBrowseFacets({ showHidden, config, scopeNotebookId, selectedFolders, selectedNotebookId, route, canManageTags, previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag });
 
-  const { focusCapacity, notebookLanes, noteFocus, focusDisplay, focusNarrowView, setFocusNarrowView, addingToFocus, setAddingToFocus, activePaneNote, focusDocumentPanel, setDocumentContainer, showFocus } = useFocusPanes({ screen, selectedNotebookId, focusPage, remote, sourceId, repoRoot, activeTab, route, canWrite, editorRegistry, location, navigate, loading, editorRoute, config });
+  const { focusCapacity, notebookLanes, noteFocus, focusDisplay, focusNarrowView, setFocusNarrowView, addingToFocus, setAddingToFocus, activePaneNote, focusDocumentPanel, setDocumentContainer, showFocus } = useFocusPanes({ screen, selectedNotebookId, focusPage, remote, sourceId, repoRoot, activeTab, route, canWrite: documentsWritable, editorRegistry, location, navigate, loading, editorRoute, config });
 
   const { changeFilters, clearFilters, changeAllNotebooks, setActiveTab, agentSystemRef, resourceNavigationBusy, setResourceNavigationBusy, notebookSwitchBusy, setSelectedNotebookId, setSelectedFolder, setViewMode } = useWorkspaceNavigation({ location, queryState, selectedFolders, setFilterQuery, navigate, route, activeTab, selectedNotebookId, folderRoot, viewMode, selectedFolder, config, editorRegistry, fileManagerRef, loading, editorRoute });
 
-  const { commitRequest, isCommitOpen, setIsCommitOpen, openCommitModal, panelRemoteChanges, panelGetPreview } = useChangeDialog({ activeTab, agentSystemRef, remote, documents, setActionError, activeWorkingNotes, pendingDocuments, canWrite });
+  const { commitRequest, isCommitOpen, setIsCommitOpen, openCommitModal, panelRemoteChanges, panelGetPreview } = useChangeDialog({ activeTab, agentSystemRef, remote, documents, setActionError, activeWorkingNotes, pendingDocuments, canWriteNotebook, documentsWritable });
 
   // Aggregated tags across the workspace for autocomplete
   const availableTags = useMemo(() => Array.from(new Set(workspaceTagNames.map(tag => tag.trim()))).filter(Boolean).sort(), [workspaceTagNames]);
 
-  const { deletedNotes, setDeletedNotes, undoToast, setUndoToast, handleDeleteNote, handleRestoreNote } = useDeletionUndo({ canWrite, revision, setRevision, setWorkingNotes, workingScope, editingNote, setEditingNote, navigate, returnTo, remote, setActionError, readNoteForChange, invalidateNotes, setGitStatus });
+  const { deletedNotes, setDeletedNotes, undoToast, setUndoToast, handleDeleteNote, handleRestoreNote } = useDeletionUndo({ canWriteNotebook, revisionFor, setNotebookRevision, updateDraft, editingNote, setEditingNote, navigate, returnTo, remote, setActionError, readNoteForChange, invalidateNotes, setGitStatus });
 
   useSourceReset({ sourceId, setEditingNote, setDeletedNotes });
 
@@ -130,9 +136,9 @@ const AppContent: React.FC = () => {
 
   const { openInFocus, openFromBrowse, openLink, zoomFocusNote, addToFocus } = useFocusNoteNavigation({ noteFocus, selectedNotebookId, setFocusNarrowView, handleOpenNote, setAddingToFocus });
 
-  const { handleSaveNote } = useNoteSaving({ canWrite, remote, workingScope, readCommittedNote, t, stageWorkingNote, selectedNotebookId, invalidateNotes, setEditingNote, setGitStatus, sourceId, branch });
+  const { handleSaveNote } = useNoteSaving({ canWriteNotebook, remote, readDraft, readCommittedNote, t, stageWorkingNote, invalidateNotes, setEditingNote, setGitStatus, homeDraftScope: homeRepository ? draftScope(homeRepository) : '' });
 
-  const { handleRestoreNoteFile, handleUpdateNoteStatus, handleOpenFolderIndex } = useNoteRestoration({ remote, workingScope, setWorkingNotes, setEditingNote, navigate, returnTo, invalidateNotes, setGitStatus, setActionError, handleSaveNote, readNoteForChange, selectedNotebookId, canWrite, t, config, queryClient, queryScope, stageWorkingNote, revision, location });
+  const { handleRestoreNoteFile, handleUpdateNoteStatus, handleOpenFolderIndex } = useNoteRestoration({ remote, readDraft, updateDraft, setEditingNote, navigate, returnTo, invalidateNotes, setGitStatus, setActionError, handleSaveNote, readNoteForChange, selectedNotebookId, canWriteNotebook, t, config, queryClient, queryScope, stageWorkingNote, revisionFor, location });
 
   // Multi-select and bulk actions (set status, add/remove tag, move to folder) for the browse views.
   const { selectedNotes, selectedPathSet, toggleSelect, clearSelection } = useNoteSelection({ displayedNotes, viewMode, selectedNotebookId, scopeKey: location.pathname + location.search });
@@ -141,46 +147,51 @@ const AppContent: React.FC = () => {
   const bulkMoveNotebook = config?.notebooks.find(nb => nb.id === bulkMoveNotebookId);
 
   // Create New Note dialog: its form state and the handlers that render or persist a new note draft.
-  const { createError, isNewNoteOpen, setIsNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteFolder, setNewNoteFolder, newNoteTags, setNewNoteTags, newNoteTemplateId, setNewNoteTemplateId, newNoteFolders, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote } = useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, workingScope, queryClient, queryScope, stageWorkingNote, revision, invalidateNotes, setGitStatus, sourceId, newNoteStatuses, t, onCreated: handleOpenNote });
+  const { createError, isNewNoteOpen, setIsNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteFolder, setNewNoteFolder, newNoteTags, setNewNoteTags, newNoteTemplateId, setNewNoteTemplateId, newNoteFolders, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote } = useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, sourceId, newNoteStatuses, t, onCreated: handleOpenNote });
 
-  const { commitWorkingNotes } = useWorkingNoteCommit({ workingScope, documents, sourceId, t, stageWorkingNote, setWorkingNotes, setRevision });
+  const { commitWorkingNotes } = useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision });
 
   // Assets are scoped to whichever notebook the open note (or the selected browse notebook) belongs to.
   const { handleUploadAsset, handleDeleteAsset, handleMoveAsset } = useAssetOperations({ editingNote, selectedNotebookId, remote, setAssets, setGitStatus });
 
-  const { beforeFileChange, openFileManager, moveNoteAction, onFilesChanged, openFileIndex } = useFileNavigation({ editorRegistry, workingScope, documents, t, config, setFileDialog, setActionError, refreshWorkspace, refreshDocuments, editorRoute, editorNotebookId, setEditingNote, navigate, location, returnTo, setFileEditorRevision, selectedFolder, folderRoot, changeFilters, handleOpenFolderIndex });
-  const { bulkBusy, runBulkStatus, runBulkTag, runBulkMove } = useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNoteStatus: handleUpdateNoteStatus, beforeFileChange, onFilesChanged, revision, remote, canWrite, t, invalidateNotes, setRevision, setActionError, tagOperations, config });
+  const { beforeFileChange, openFileManager, moveNoteAction, onFilesChanged, openFileIndex } = useFileNavigation({ editorRegistry, hasPendingDrafts, documents, t, config, setFileDialog, setActionError, refreshWorkspace, refreshDocuments, editorRoute, editorNotebookId, setEditingNote, navigate, location, returnTo, setFileEditorRevision, selectedFolder, folderRoot, changeFilters, handleOpenFolderIndex });
+  const { bulkBusy, runBulkStatus, runBulkTag, runBulkMove } = useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNoteStatus: handleUpdateNoteStatus, beforeFileChange, onFilesChanged, repositories, remote, canWrite, t, invalidateNotes, setRepositoryRevision, setActionError, tagOperations, config });
 
   const noteEditorOpen = (Boolean(routedNote) || routedLoading) && !routeError;
 
   // Every editor of a note, in zoom or in a Focus pane, is wired to the same handlers and per-path state.
-  const editorProps = (note: NoteItem, committed?: NoteItem): NoteEditorSharedProps => ({
-    statuses: noteQueryStatuses(config?.notebooks || [], note.notebookId, Object.keys(facetsQuery.facets?.[note.notebookId]?.statuses || {})),
-    metadataFields: config?.notebooks.find(nb => nb.id === note.notebookId)?.metadata,
-    onSave: handleSaveNote,
-    onRestoreFile: handleRestoreNoteFile,
-    isDirty: Boolean(gitStatus && [...gitStatus.modified, ...gitStatus.staged, ...gitStatus.untracked].includes(note.path)),
-    availableTags,
-    assets,
-    onUploadAsset: !canWrite ? undefined : handleUploadAsset,
-    onDeleteAsset: !canWrite ? undefined : handleDeleteAsset,
-    onMoveAsset: !canWrite ? undefined : handleMoveAsset,
-    beforeFileChange: !canWrite ? undefined : beforeFileChange,
-    onFilesChanged: !canWrite ? undefined : onFilesChanged,
-    readOnly: !canWrite,
-    autoSave: true,
-    draftMode: remote,
-    remoteBase: activeWorkingNotes[note.path]?.base || (committed && typeof committed.content === 'string' ? committed : undefined),
-    conflictReason: activeWorkingNotes[note.path]?.blocked,
-    onMarkConflict: remote
-      ? (reason, draft, base) => {
-        stageWorkingNote(draft, base, reason);
-      }
-      : undefined,
-    onReadRemote: remote ? (activeWorkingNotes[note.path]?.base !== null ? readNote : undefined) : readNote,
-    branch,
-    draftScope: `${sourceId}:${branch}`,
-  });
+  const editorProps = (note: NoteItem, committed?: NoteItem): NoteEditorSharedProps => {
+    // The note's repository decides whether it may be written and where its drafts are kept.
+    const repository = repositoryFor(note.notebookId);
+    const writable = Boolean(repository?.write);
+    return {
+      statuses: noteQueryStatuses(config?.notebooks || [], note.notebookId, Object.keys(facetsQuery.facets?.[note.notebookId]?.statuses || {})),
+      metadataFields: config?.notebooks.find(nb => nb.id === note.notebookId)?.metadata,
+      onSave: params => handleSaveNote({ ...params, notebookId: note.notebookId }),
+      onRestoreFile: path => handleRestoreNoteFile(path, note.notebookId),
+      isDirty: Boolean(gitStatus && [...gitStatus.modified, ...gitStatus.staged, ...gitStatus.untracked].includes(note.path)),
+      availableTags,
+      assets,
+      onUploadAsset: !writable ? undefined : handleUploadAsset,
+      onDeleteAsset: !writable ? undefined : handleDeleteAsset,
+      onMoveAsset: !writable ? undefined : handleMoveAsset,
+      beforeFileChange: !writable ? undefined : beforeFileChange,
+      onFilesChanged: !writable ? undefined : onFilesChanged,
+      readOnly: !writable,
+      autoSave: true,
+      draftMode: remote,
+      remoteBase: activeWorkingNotes[note.path]?.base || (committed && typeof committed.content === 'string' ? committed : undefined),
+      conflictReason: activeWorkingNotes[note.path]?.blocked,
+      onMarkConflict: remote
+        ? (reason, draft, base) => {
+          stageWorkingNote(draft, base, reason);
+        }
+        : undefined,
+      onReadRemote: remote ? (activeWorkingNotes[note.path]?.base !== null ? readNote : undefined) : readNote,
+      branch: repository?.branch ?? '',
+      draftScope: repository ? draftScope(repository) : '',
+    };
+  };
   const closeZoom = () => {
     setEditingNote(null);
     const trail = noteTrail(location.state);
@@ -300,7 +311,7 @@ const AppContent: React.FC = () => {
       <NoteEditingProvider register={editorRegistry.register} editorProps={editorProps} flushEditors={editorRegistry.flushEditors} refreshNotes={refreshNotes} closeZoom={closeZoom} addToFocus={addToFocus}>
         <div className='app-shell h-dvh w-full overflow-hidden flex flex-col font-sans transition-colors duration-200' data-workspace-tab={activeTab} data-screen-focus={activeTab === 'screen' && Boolean(route.lane)} style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}>
           {/* Core Branch User Guidance Banner (Theme-aware, harmonized with active palette) */}
-          {!remote && branch === 'core' && (
+          {!remote && homeBranch === 'core' && (
             <div className='shrink-0 flex-none px-4 py-2 text-xs flex items-center justify-between font-medium border-b transition-colors' style={{ backgroundColor: 'var(--color-sidebar)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
               <div className='flex items-center gap-2.5'>
                 <AlertTriangle className='w-4 h-4 text-warning shrink-0' />
@@ -395,7 +406,7 @@ const AppContent: React.FC = () => {
                         facetsError={facetsQuery.error}
                         workspaceTagNames={workspaceTagNames}
                         beforeFolderChange={() => {
-                          if (Object.keys(activeWorkingNotes).length || listLocalDrafts(workingScope).length || documents.some(document => document.dirty)) throw new Error(t('folder.draftsHint'));
+                          if (hasPendingDrafts() || documents.some(document => document.dirty)) throw new Error(t('folder.draftsHint'));
                         }}
                         onFoldersChanged={async () => {
                           await refreshWorkspace();
@@ -467,7 +478,7 @@ const AppContent: React.FC = () => {
                 )}
                 {activeTab === 'settings' && (
                   <main className='workspace-route settings-main has-sidebar-drawer'>
-                    <SettingsModal config={config} branch={branch} repoRoot={remote ? sourceId.replace(/^(github|gitlab):/, '') : repoRoot} local={!remote} canWrite={canWrite} revision={revision} onRevision={setRevision} accountSettings={<AgentAccessSettings local={!remote} />} onRefreshWorkspace={refreshWorkspace} currentTheme={currentTheme} onSelectTheme={handleSelectTheme} />
+                    <SettingsModal config={config} branch={homeBranch} repoRoot={remote ? sourceId.replace(/^(github|gitlab):/, '') : repoRoot} local={!remote} canWrite={documentsWritable} configRevision={configRevision} onConfigRevision={setConfigRevision} accountSettings={<AgentAccessSettings local={!remote} />} onRefreshWorkspace={refreshWorkspace} currentTheme={currentTheme} onSelectTheme={handleSelectTheme} />
                   </main>
                 )}
               </WorkspaceSplitLayout>
@@ -553,7 +564,7 @@ const AppContent: React.FC = () => {
           )}
           {/* Commit Modal */}
           <CommitModal
-            writable={canWrite}
+            writable={repositories.some(repository => repository.write)}
             remoteChanges={panelRemoteChanges}
             getPreview={panelGetPreview}
             request={commitRequest}
@@ -565,14 +576,14 @@ const AppContent: React.FC = () => {
                   await pendingDocument.reload();
                   return;
                 }
-                const entry = readWorkingNotes(workingScope)[file.path];
+                const entry = readDraftAtPath(file.path);
                 if (!entry || JSON.stringify(entry) !== file.revision) throw new Error('Draft changed. Review it again.');
                 // The draft lives in this browser, so discarding it is a local delete. Reading the remote
                 // only refreshes an open editor, and a draft is often blocked precisely because that read
                 // fails, which used to leave the draft undiscardable.
                 const latest = entry.base ? await readNote(file.path).catch(() => null) : null;
-                if (JSON.stringify(readWorkingNotes(workingScope)[file.path]) !== file.revision) throw new Error('Draft changed. Review it again.');
-                setWorkingNotes(updateWorkingNote(workingScope, file.path, null));
+                if (JSON.stringify(readDraft(entry.note.notebookId, file.path)) !== file.revision) throw new Error('Draft changed. Review it again.');
+                updateDraft(entry.note.notebookId, file.path, null);
                 if (latest && editingNote?.path === file.path) setEditingNote(latest);
               }
               : undefined}

@@ -1,6 +1,7 @@
 import { deleteAsset, fetchAssets, fetchGitStatus, fetchWorkspace, moveAsset, uploadAsset } from '../lib/api.js';
 import type { AssetItem, GitStatus } from '../lib/types.js';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
+import { repositoryOf } from '../lib/workspace-repositories.js';
 
 interface UseAssetOperationsParams {
   editingNote: NoteListItem | null;
@@ -19,7 +20,7 @@ export function useAssetOperations({ editingNote, selectedNotebookId, remote, se
         try {
           const base64 = reader.result as string;
           const targetNotebookId = editingNote?.notebookId || selectedNotebookId;
-          const currentRevision = remote ? (await fetchWorkspace()).revision : undefined;
+          const currentRevision = remote ? repositoryOf((await fetchWorkspace()).repositories, targetNotebookId)?.revision : undefined;
           const uploaded = await uploadAsset(targetNotebookId, file.name, base64, { directory, revision: currentRevision });
           const assetList = await fetchAssets(targetNotebookId);
           setAssets(assetList);

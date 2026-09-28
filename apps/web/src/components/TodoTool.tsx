@@ -35,7 +35,7 @@ interface TodoToolProps {
   /** The folder currently browsed (repo-root-relative), or undefined at the notebook root. */
   currentFolder?: string;
   onOpenNote: (note: NoteListItem) => void;
-  onSaveNote: (params: { path: string; content: string; metadata?: Record<string, unknown>; notebookId?: string; }) => Promise<NoteItem>;
+  onSaveNote: (params: { path: string; content: string; metadata?: Record<string, unknown>; notebookId: string; }) => Promise<NoteItem>;
   onReadNote: (path: string) => Promise<NoteItem>;
 }
 

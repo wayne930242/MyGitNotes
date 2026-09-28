@@ -1,6 +1,5 @@
 import { type NoteListItem } from '@mygitnotes/core/note-query';
 import { useNavigate } from 'react-router-dom';
-import { updateWorkingNote } from '../lib/working-notes.js';
 import React, { useState } from 'react';
 import { deleteNote, fetchGitStatus, restoreNote } from '../lib/api.js';
 import type { NoteItem } from '../lib/types.js';
@@ -8,11 +7,10 @@ import { type FileResult, mutateFile } from '../lib/files-api.js';
 import type { WorkspaceState } from './workspace-state.js';
 
 interface Params {
-  canWrite: WorkspaceState['canWrite'];
-  revision: WorkspaceState['revision'];
-  setRevision: WorkspaceState['setRevision'];
-  setWorkingNotes: WorkspaceState['setWorkingNotes'];
-  workingScope: WorkspaceState['workingScope'];
+  canWriteNotebook: WorkspaceState['canWriteNotebook'];
+  revisionFor: WorkspaceState['revisionFor'];
+  setNotebookRevision: WorkspaceState['setNotebookRevision'];
+  updateDraft: WorkspaceState['updateDraft'];
   editingNote: NoteListItem | null;
   setEditingNote: React.Dispatch<React.SetStateAction<NoteListItem | null>>;
   navigate: ReturnType<typeof useNavigate>;
@@ -24,24 +22,24 @@ interface Params {
   setGitStatus: WorkspaceState['setGitStatus'];
 }
 
-export function useDeletionUndo({ canWrite, revision, setRevision, setWorkingNotes, workingScope, editingNote, setEditingNote, navigate, returnTo, remote, setActionError, readNoteForChange, invalidateNotes, setGitStatus }: Params) {
+export function useDeletionUndo({ canWriteNotebook, revisionFor, setNotebookRevision, updateDraft, editingNote, setEditingNote, navigate, returnTo, remote, setActionError, readNoteForChange, invalidateNotes, setGitStatus }: Params) {
   const [deletedNotes, setDeletedNotes] = useState<NoteItem[]>([]);
   const [undoToast, setUndoToast] = useState<{ note: NoteItem; timerId: any; } | null>(null);
 
   // Remote delete: no working tree to trash into, so commit the removal immediately.
   const handleRemoteDeleteNote = async (note: NoteListItem) => {
-    if (!canWrite) return;
+    if (!canWriteNotebook(note.notebookId)) return;
     let result: FileResult;
     try {
-      result = await mutateFile({ kind: 'delete', notebookId: note.notebookId, path: note.path }, note.revision || revision);
+      result = await mutateFile({ kind: 'delete', notebookId: note.notebookId, path: note.path }, note.revision || revisionFor(note.notebookId));
     } catch (error) {
       setActionError((error as Error).message);
       throw error;
     }
     // Apply everything in one synchronous batch: the still-mounted editor must not re-stage a
     // phantom draft for the path we just deleted while the new revision is being queried.
-    setRevision(result.revision);
-    setWorkingNotes(updateWorkingNote(workingScope, note.path, null));
+    setNotebookRevision(note.notebookId, result.revision);
+    updateDraft(note.notebookId, note.path, null);
     if (editingNote?.path === note.path) {
       setEditingNote(null);
       navigate(returnTo, { replace: true });
@@ -50,7 +48,7 @@ export function useDeletionUndo({ canWrite, revision, setRevision, setWorkingNot
 
   // Trash action: delete without immediate commit, allowing restore
   const handleDeleteNote = async (note: NoteListItem) => {
-    if (!canWrite) return;
+    if (!canWriteNotebook(note.notebookId)) return;
     if (remote) return handleRemoteDeleteNote(note);
     // 1. Read the full note first; Undo restores it from this buffer.
     let deleted: NoteItem;

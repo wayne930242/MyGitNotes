@@ -4,7 +4,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { handleNoteQueryError, invalidateNoteQueries, setNoteQueryScope, useNoteList, useStaleNoteQueries } from './use-note-queries.js';
+import { handleNoteQueryError, invalidateNoteQueries, resetStaleNoteQueries, scopedRevisions, setNoteQueryScope, useNoteList, useStaleNoteQueries } from './use-note-queries.js';
 import { ApiError } from './api.js';
 
 const REVISION = 'a'.repeat(40);
@@ -38,7 +38,7 @@ function Rows({ notebookId = 'life' }: { notebookId?: string; }) {
 beforeEach(() => {
   requests = [];
   client = new QueryClient({ queryCache: new QueryCache({ onError: (error, query) => handleNoteQueryError(error, query) }), defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, drafts: {} });
+  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, repositories: {}, drafts: {} });
 });
 afterEach(() => {
   cleanup();
@@ -51,7 +51,7 @@ it('sends the repository revisions and asks again when they change', async () =>
   await waitFor(() => expect(screen.getByTestId('rows')).toHaveTextContent('notes/life/old.md'));
   expect(JSON.parse(new URL(requests[0], 'http://test').searchParams.get('revisions')!)).toEqual({ 'github:me/notes': REVISION });
 
-  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': 'b'.repeat(40) }, drafts: {} });
+  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': 'b'.repeat(40) }, repositories: {}, drafts: {} });
   await waitFor(() => expect(screen.getByTestId('rows')).toHaveTextContent('notes/life/new.md'));
   expect(requests).toHaveLength(2);
 });
@@ -87,21 +87,37 @@ it('continues with the cursor the previous page returned', async () => {
   expect(requests[1]).toContain('cursor=second');
 });
 
-it('reports a rejected revision so the workspace can restart from the first page', async () => {
-  stubFetch(() => new Response(JSON.stringify({ error: 'The repository changed. Reload to continue from the latest revision.' }), { status: 409 }));
+it('reports a rejected revision with the repositories that moved on', async () => {
+  stubFetch(() => new Response(JSON.stringify({ error: 'The repository changed. Reload to continue from the latest revision.', staleRepositories: ['github:me/notes'] }), { status: 409 }));
   const stale = vi.fn();
   function Probe() {
     useStaleNoteQueries(stale);
     return createElement(Rows);
   }
   render(createElement(Probe), { wrapper });
-  await waitFor(() => expect(stale).toHaveBeenCalledWith('The repository changed. Reload to continue from the latest revision.'));
+  await waitFor(() => expect(stale).toHaveBeenCalledWith('The repository changed. Reload to continue from the latest revision.', ['github:me/notes']));
+});
+
+it('sends and keys a notebook query by its own repository revision only', () => {
+  const scope = { sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION, 'github:me/other@main': 'c'.repeat(40) }, repositories: { life: 'github:me/notes', work: 'github:me/other@main' }, drafts: {} };
+  expect(scopedRevisions(scope, 'life')).toEqual({ 'github:me/notes': REVISION });
+  expect(scopedRevisions(scope, 'all')).toEqual(scope.revisions);
+  expect(scopedRevisions({ ...scope, revisions: {} }, 'life')).toEqual({});
+});
+
+it('restarts only the queries that read a stale repository', async () => {
+  const fresh = { pages: [{ notes: [] }], pageParams: [undefined] };
+  client.setQueryData(['notes', 'home', [['github:me/notes', REVISION]], 'query', { a: 1 }], fresh);
+  client.setQueryData(['notes', 'home', [['github:me/other@main', 'c'.repeat(40)]], 'query', { b: 1 }], fresh);
+  await resetStaleNoteQueries(client, ['github:me/other@main']);
+  expect(client.getQueryData(['notes', 'home', [['github:me/notes', REVISION]], 'query', { a: 1 }])).toEqual(fresh);
+  expect(client.getQueryData(['notes', 'home', [['github:me/other@main', 'c'.repeat(40)]], 'query', { b: 1 }])).toBeUndefined();
 });
 
 it('holds no drafts for a view that asked for no notes', async () => {
   stubFetch(() => page(['notes/life/a.md'], null));
   const draft = { id: 'notes/life/new.md', path: 'notes/life/new.md', notebookId: 'life', title: 'New', tags: [], metadata: {}, content: '' };
-  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, drafts: { [draft.path]: { note: draft, base: null } } });
+  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, repositories: {}, drafts: { [draft.path]: { note: draft, base: null } } });
   function Disabled() {
     const result = useNoteList(null);
     return createElement('p', { 'data-testid': 'rows' }, `${result.notes.length}/${result.uncommitted.length}/${result.total}`);
@@ -123,12 +139,12 @@ it('restarts a rejected cursor and leaves a malformed first page alone', () => {
       return null;
     }
     render(createElement(Probe), { wrapper });
-    const queryKey = ['notes', 'github:me/notes', REVISION, 'query', {}];
+    const queryKey = ['notes', 'github:me/notes', [['github:me/notes', REVISION]], 'query', {}];
     handleNoteQueryError(new ApiError('Invalid query option.', 400), { queryKey, state: { data: undefined } });
     expect(stale).not.toHaveBeenCalled();
     vi.setSystemTime(start + 10_000);
     handleNoteQueryError(new ApiError('Cursor does not match this query.', 400), { queryKey, state: { data: { pages: [{}] } } });
-    expect(stale).toHaveBeenCalledWith('Cursor does not match this query.');
+    expect(stale).toHaveBeenCalledWith('Cursor does not match this query.', undefined);
   } finally {
     vi.useRealTimers();
   }

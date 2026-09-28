@@ -37,7 +37,7 @@ it.each(['127.0.0.1', '0.0.0.0'])('local development supports HOST=%s and opens 
   });
   const response = await fetch(`http://127.0.0.1:${port}/api/workspace`);
   expect(response.status).toBe(200);
-  expect(await response.json()).toMatchObject({ repoRoot: root, branch: 'main', source: { type: 'local' }, capabilities: { write: true, local: true } });
+  expect(await response.json()).toMatchObject({ repoRoot: root, local: true, repositories: [{ type: 'local', branch: 'main', write: true }] });
   expect((await fetch(`http://127.0.0.1:${port}/api/workspace`, { headers: { Origin: 'https://deployment.example' } })).status).toBe(403);
   const externalHostStatus = await new Promise<number | undefined>((resolve, reject) => {
     get(`http://127.0.0.1:${port}/api/workspace`, { headers: { Host: 'public.example' } }, response => {

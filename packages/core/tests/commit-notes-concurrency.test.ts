@@ -16,6 +16,9 @@ describe('RemoteSource.commitNotes bounds concurrent blob reads', () => {
     let concurrent = 0, maxConcurrent = 0, noteReads = 0;
     const notePaths = new Set(paths);
     class FakeSource extends RemoteSource {
+      get id() {
+        return 'github:owner/repo@main';
+      }
       protected async loadSnapshot(): Promise<RemoteSnapshot> {
         return { sha: 'a'.repeat(40), treeSha: 'b'.repeat(40), entries, info: { private: false, permissions: { push: true }, default_branch: 'main' } };
       }

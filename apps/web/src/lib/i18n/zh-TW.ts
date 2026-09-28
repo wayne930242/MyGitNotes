@@ -786,6 +786,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'changes.unavailable': '此檔案受保護或有衝突，請在儲存庫中處理。',
   'changes.noDiff': '選擇一項變更以檢視差異。',
   'changes.backup': '已保留可復原的副本：{path}',
+  'changes.partialCommit': '已提交到 {repositories}，在下一個儲存庫停止：{error}',
   'changes.reviewRequired': '遠端變更已併入本機草稿，請檢查更新後的差異，再重新提交。',
   'commit.branch': '分支：{branch}',
   'commit.close': '關閉提交',

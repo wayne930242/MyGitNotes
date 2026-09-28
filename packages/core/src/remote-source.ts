@@ -3,7 +3,7 @@ import { managedNotebook } from './file-manager.js';
 import path from 'node:path';
 import { assetInfo, assetPath, assetRoot, decodeAsset, isAssetPath } from './assets.js';
 import { MANIFEST_FILES } from './remote-manifest.js';
-import type { RepositoryScope } from './repository.js';
+import { type RepositoryId, type RepositoryScope, StaleRevisionError } from './repository.js';
 import { parseNoteContent, serializeNoteContent } from './frontmatter.js';
 import { formatTemplateDate, renderNoteTemplate } from './templates.js';
 import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js';
@@ -53,6 +53,8 @@ export abstract class RemoteSource {
   private cacheChecked = new Set<string>();
   /** `scope` supplies the notebooks this repository serves; the workspace manifest is never read from here. */
   constructor(public repository: string, public branch: string, protected token: string | undefined, protected cache: RemoteCache | undefined, private readonly scope: RepositoryScope) {}
+  /** The repository's identity within a workspace, as `sourceIdentity` spells it. */
+  abstract get id(): RepositoryId;
   protected abstract loadSnapshot(): Promise<RemoteSnapshot>;
   protected abstract readBlob(sha: string): Promise<Buffer>;
   protected abstract publishChanges(changes: RemoteChange[], snapshot: RemoteSnapshot, message: string): Promise<string>;
@@ -132,7 +134,7 @@ export abstract class RemoteSource {
   /** Rejects a mutation without write access or against a revision other than `snapshot`. */
   private assertMutable(snapshot: RemoteSnapshot, expected: string) {
     if (!this.canWrite(snapshot)) throw new SourceError('Write access on the main workspace branch is required.', 403);
-    if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
+    if (!expected || expected !== snapshot.sha) throw new StaleRevisionError([this.id], 'The repository changed. Reload before saving.');
   }
   async readFile(file: string): Promise<Buffer> {
     if (file.startsWith('/') || file.includes('\\') || file.split('/').some(p => p === '..' || p === '.' || !p) || file.includes('\0')) throw new SourceError('Invalid repository path.');
@@ -285,7 +287,7 @@ export abstract class RemoteSource {
       throw new SourceError('Select between 1 and 200 note paths.');
     }
     const snapshot = await this.getSnapshot(true);
-    if (!expected || snapshot.sha !== expected) throw new SourceError('The repository changed. Review the latest version before committing.', 409);
+    if (!expected || snapshot.sha !== expected) throw new StaleRevisionError([this.id], 'The repository changed. Review the latest version before committing.');
     await this.prefetchFiles(files);
     const notes: NoteItem[] = [];
     for (const file of files) {

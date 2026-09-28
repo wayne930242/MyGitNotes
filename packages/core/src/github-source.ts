@@ -4,6 +4,7 @@ import { readGitHubArchive } from './github-archive.js';
 import { type RemoteChange, type RemoteEntry, type RemoteSnapshot, RemoteSource, type RepositoryInfo } from './remote-source.js';
 import { hashJson, type RemoteCache } from './remote-cache.js';
 import type { RepositoryScope } from './repository.js';
+import { sourceIdentity } from './source-config.js';
 export { SourceError } from './github-api.js';
 export type { RepositoryInfo } from './remote-source.js';
 export type GitHubEntry = RemoteEntry;
@@ -14,6 +15,9 @@ export class GitHubSource extends RemoteSource {
   constructor(repository: string, branch: string, token: string | undefined, request: typeof fetch, cache: RemoteCache | undefined, scope: RepositoryScope) {
     super(repository, branch, token, cache, scope);
     this.client = new GitHubApi(repository, token, request);
+  }
+  get id() {
+    return sourceIdentity({ type: 'github', repository: this.repository, branch: this.branch });
   }
   async api(endpoint: string, init: RequestInit = {}): Promise<any> {
     return this.client.json(endpoint, init, this.fresh && (endpoint === '' || endpoint.startsWith('/commits/')));

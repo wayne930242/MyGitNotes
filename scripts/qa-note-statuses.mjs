@@ -19,7 +19,7 @@ write('notes/example/hidden.md', '---\nstatus: working\nhiden: true\n---\n# Hidd
 write('notes/example/visible-archive.md', '---\nstatus: archived\nhiden: false\n---\n# Visible Archive\n');
 commitFixture();
 const { server, base } = await startQaServer(root);
-const { parseNoteQuery, queryNotes, queryNotePaths, noteFacets, lookupNotes } = await import(`${product}/packages/core/dist/index.js`);
+const { parseNoteQuery, queryNotes, queryNotePaths, noteFacets, lookupNotes, workspaceCatalog } = await import(`${product}/packages/core/dist/index.js`);
 const browser = await launchQaBrowser(require);
 const page = await browser.newPage();
 await page.setViewport({ width: 1440, height: 1000 });
@@ -209,11 +209,12 @@ try {
   let saved;
   await page.setRequestInterception(true);
   const hostedConfig = { schema_version: 1, workspace: { title: 'Hosted', default_notebook: 'research' }, notebooks: [{ id: 'research', title: 'Research', root: 'notes/research', statuses: ['capture', 'published', 'archived'] }] };
-  const hostedCatalog = { revision: async () => remoteNote.revision, config: async () => hostedConfig, index: async notebook => [remoteNote].filter(note => note.notebookId === notebook.id), contents: async notes => new Map(notes.map(note => [note.path, note.content])), memo: (kind, notebooks, compute) => compute() };
+  const hostedRepository = { revision: async () => remoteNote.revision, index: async notebook => [remoteNote].filter(note => note.notebookId === notebook.id), contents: async notes => new Map(notes.map(note => [note.path, note.content])), memo: (kind, notebooks, compute) => compute() };
+  const hostedCatalog = () => workspaceCatalog(hostedConfig, [{ id: 'github:fixture/repo@main', notebooks: hostedConfig.notebooks, catalog: hostedRepository }]);
   page.on('request', async request => {
     const url = new URL(request.url());
     let body;
-    if (url.pathname === '/api/workspace') body = { config: hostedConfig, branch: 'main', repoRoot: '', gitStatus: { branch: 'main', isClean: true, staged: [], modified: [], untracked: [] }, source: { type: 'github', identity: 'github:fixture/repo@main' }, capabilities: { write: true, local: false }, revision: remoteNote.revision };
+    if (url.pathname === '/api/workspace') body = { config: hostedConfig, configRevision: remoteNote.revision, local: false, home: 'github:fixture/repo@main', repositories: [{ id: 'github:fixture/repo@main', type: 'github', repository: 'fixture/repo', branch: 'main', revision: remoteNote.revision, write: true, notebooks: ['research'] }] };
     if (url.pathname === '/api/notes/commit') {
       const payload = JSON.parse(request.postData());
       saved = { ...payload.notes[0], revision: payload.revision };
@@ -230,13 +231,13 @@ try {
     // Lists and counts come from server queries; answer them with the core catalog rules.
     if (url.pathname === '/api/notes/query') {
       const { query, options } = parseNoteQuery(Object.fromEntries(url.searchParams));
-      body = options.select ? await queryNotePaths(hostedCatalog, query) : await queryNotes(hostedCatalog, query, options);
+      body = options.select ? await queryNotePaths(await hostedCatalog(), query) : await queryNotes(await hostedCatalog(), query, options);
     }
     if (url.pathname === '/api/notes/lookup') {
       const lookup = JSON.parse(request.postData());
-      body = await lookupNotes(hostedCatalog, lookup.paths, lookup.content === true);
+      body = await lookupNotes(await hostedCatalog(), lookup.paths, lookup.content === true);
     }
-    if (url.pathname === '/api/notes/facets') body = await noteFacets(hostedCatalog, url.searchParams.get('showHidden') === '1');
+    if (url.pathname === '/api/notes/facets') body = await noteFacets(await hostedCatalog(), url.searchParams.get('showHidden') === '1');
     if (url.pathname === '/api/notes/read') body = { note: remoteNote };
     if (url.pathname === '/api/notes/read-batch') body = { notes: [remoteNote] };
     if (url.pathname === '/api/auth/session') body = { authenticated: true, user: { login: 'fixture' } };

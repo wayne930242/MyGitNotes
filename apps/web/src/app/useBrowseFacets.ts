@@ -13,14 +13,15 @@ interface Params {
   selectedFolders: string[];
   selectedNotebookId: WorkspaceState['selectedNotebookId'];
   route: ReturnType<typeof parseWorkspaceRoute>;
-  canWrite: WorkspaceState['canWrite'];
+  /** Whether every repository may take a workspace-wide tag change. */
+  canManageTags: boolean;
   previewTagUsage: ReturnType<typeof useTagWorkspaceOperations>['previewTagUsage'];
   handleRenameTag: ReturnType<typeof useTagWorkspaceOperations>['handleRenameTag'];
   handleMergeTag: ReturnType<typeof useTagWorkspaceOperations>['handleMergeTag'];
   handleDeleteTag: ReturnType<typeof useTagWorkspaceOperations>['handleDeleteTag'];
 }
 
-export function useBrowseFacets({ showHidden, config, scopeNotebookId, selectedFolders, selectedNotebookId, route, canWrite, previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag }: Params) {
+export function useBrowseFacets({ showHidden, config, scopeNotebookId, selectedFolders, selectedNotebookId, route, canManageTags, previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag }: Params) {
   // Counts, status options, tag lists and subfolder counts all come from one facet answer.
   const facetsQuery = useNoteFacets(showHidden);
   const facetNotebookIds = useMemo(() => queryNotebookIds(config?.notebooks || [], scopeNotebookId, selectedFolders), [config, scopeNotebookId, selectedFolders]);
@@ -37,7 +38,7 @@ export function useBrowseFacets({ showHidden, config, scopeNotebookId, selectedF
   // The tag vocabulary spans hidden notes too, so it has its own facet answer.
   const tagFacets = useNoteFacets(true);
   const workspaceTagNames = useMemo(() => Array.from(new Set(Object.values(tagFacets.facets || {}).flatMap(facets => Object.keys(facets.tags)))), [tagFacets.facets]);
-  const noteTagActions = useMemo(() => canWrite ? { allTags: workspaceTagNames, onPreviewUsage: (tag: string) => tagHandlers.current.previewTagUsage(tag), onRename: (from: string, to: string) => tagHandlers.current.handleRenameTag(from, to), onMerge: (from: string, into: string) => tagHandlers.current.handleMergeTag(from, into), onDelete: (tag: string) => tagHandlers.current.handleDeleteTag(tag) } : undefined, [canWrite, workspaceTagNames]);
+  const noteTagActions = useMemo(() => canManageTags ? { allTags: workspaceTagNames, onPreviewUsage: (tag: string) => tagHandlers.current.previewTagUsage(tag), onRename: (from: string, to: string) => tagHandlers.current.handleRenameTag(from, to), onMerge: (from: string, into: string) => tagHandlers.current.handleMergeTag(from, into), onDelete: (tag: string) => tagHandlers.current.handleDeleteTag(tag) } : undefined, [canManageTags, workspaceTagNames]);
   const searchQuery = route.q;
   const viewMode = route.view;
   // Flat and Kanban list the whole notebook, without folder navigation.

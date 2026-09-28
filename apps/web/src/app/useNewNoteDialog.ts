@@ -4,9 +4,9 @@ import { fetchGitStatus, renderNoteTemplate, saveNote } from '../lib/api.js';
 import { buildNewNoteDraft } from '../lib/new-note.js';
 import { withNoteStatus } from '@mygitnotes/core/note-status';
 import { noteLookupOptions, type NoteQueryScope } from '../lib/use-note-queries.js';
-import { readWorkingNotes } from '../lib/working-notes.js';
 import type { FolderItem, GitStatus, NotebookConfig, NoteItem } from '../lib/types.js';
 import type { I18nContextValue } from '../lib/i18n/index.js';
+import type { WorkspaceState } from './workspace-state.js';
 
 interface UseNewNoteDialogParams {
   config: { notebooks: NotebookConfig[]; } | null;
@@ -15,11 +15,11 @@ interface UseNewNoteDialogParams {
   folders: FolderItem[];
   remote: boolean;
   canWrite: boolean;
-  workingScope: string;
+  readDraft: WorkspaceState['readDraft'];
   queryClient: QueryClient;
   queryScope: NoteQueryScope;
   stageWorkingNote: (note: NoteItem, base: NoteItem | null) => NoteItem;
-  revision: string;
+  revisionFor: WorkspaceState['revisionFor'];
   invalidateNotes: () => void;
   setGitStatus: (status: GitStatus) => void;
   newNoteStatuses: string[];
@@ -29,7 +29,7 @@ interface UseNewNoteDialogParams {
 }
 
 /** Create New Note dialog: its form state, and the handlers that render or persist a new note draft. */
-export function useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, workingScope, queryClient, queryScope, stageWorkingNote, revision, invalidateNotes, setGitStatus, newNoteStatuses, sourceId, t, onCreated }: UseNewNoteDialogParams) {
+export function useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, newNoteStatuses, sourceId, t, onCreated }: UseNewNoteDialogParams) {
   const [createError, setCreateError] = useState('');
   const [isNewNoteOpen, setIsNewNoteOpen] = useState<boolean>(false);
   const [previousSourceId, setPreviousSourceId] = useState(sourceId);
@@ -86,7 +86,7 @@ export function useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebo
       const folder = newNoteFolder.trim().replace(/^\/+|\/+$/g, '');
       if (folder && !newNoteFolders.includes(folder)) throw new Error(t('createNote.invalidFolder'));
       const notePath = [root, folder, `${slug}.md`].filter(Boolean).join('/');
-      const taken = Boolean(remote && readWorkingNotes(workingScope)[notePath]) || (await queryClient.fetchQuery(noteLookupOptions(queryScope, [notePath], false))).notes.length > 0;
+      const taken = Boolean(remote && currentNotebook && readDraft(currentNotebook.id, notePath)) || (await queryClient.fetchQuery(noteLookupOptions(queryScope, [notePath], false))).notes.length > 0;
       if (taken) throw new Error('A note with this filename already exists in this folder. Choose another title.');
 
       const status = statusOverride || newNoteStatus;
@@ -96,7 +96,7 @@ export function useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebo
       const finalStatus = draft.status;
       const initialMetadata = withNoteStatus(draft.metadata, finalStatus);
 
-      const res = remote ? { note: stageWorkingNote({ id: slug, path: notePath, notebookId: currentNotebook!.id, title, content: initialContent, metadata: initialMetadata, status: finalStatus, tags: Array.isArray(initialMetadata.tags) ? initialMetadata.tags.map(String) : [], revision }, null) } : await saveNote({ path: notePath, notebookId: currentNotebook?.id, createOnly: true, content: initialContent, metadata: initialMetadata, noCommit: true });
+      const res = remote ? { note: stageWorkingNote({ id: slug, path: notePath, notebookId: currentNotebook!.id, title, content: initialContent, metadata: initialMetadata, status: finalStatus, tags: Array.isArray(initialMetadata.tags) ? initialMetadata.tags.map(String) : [], revision: revisionFor(currentNotebook!.id) }, null) } : await saveNote({ path: notePath, notebookId: currentNotebook?.id, createOnly: true, content: initialContent, metadata: initialMetadata, noCommit: true });
       if (!remote) invalidateNotes();
 
       setIsNewNoteOpen(false);

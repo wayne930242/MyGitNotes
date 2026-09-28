@@ -19,7 +19,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  setNoteQueryScope({ sourceId: '', revisions: {}, drafts: {} });
+  setNoteQueryScope({ sourceId: '', revisions: {}, repositories: {}, drafts: {} });
 });
 
 const wrapper = ({ children }: { children: ReactNode; }) => createElement(QueryClientProvider, { client }, children);
@@ -78,7 +78,7 @@ it('shows a loading status instead of "no matching notes" while note candidates 
       })
     ),
   );
-  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, drafts: {} });
+  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, repositories: {}, drafts: {} });
   render(createElement(Harness), { wrapper });
   await openPalette();
   await waitFor(() => expect(document.querySelector('.keyboard-shortcuts-empty')).toHaveTextContent('Loading notes'));
@@ -89,7 +89,7 @@ it('shows a loading status instead of "no matching notes" while note candidates 
 
 it('searches notes by title and path, opening the selected one on Enter the same way a click would', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ revision: REVISION, total: 1, nextCursor: null, notes: [{ id: 'notes/life/plan.md', path: 'notes/life/plan.md', notebookId: 'life', title: 'Weekend plan', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } })));
-  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, drafts: {} });
+  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, repositories: {}, drafts: {} });
   render(createElement(Harness), { wrapper });
   const input = await openPalette();
   fireEvent.change(input, { target: { value: 'plan' } });
@@ -100,7 +100,7 @@ it('searches notes by title and path, opening the selected one on Enter the same
 
 it('never opens a note or runs a command while an IME composition is active', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ revision: REVISION, total: 1, nextCursor: null, notes: [{ id: 'notes/life/plan.md', path: 'notes/life/plan.md', notebookId: 'life', title: 'Weekend plan', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } })));
-  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, drafts: {} });
+  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, repositories: {}, drafts: {} });
   render(createElement(Harness), { wrapper });
   const input = await openPalette();
   fireEvent.change(input, { target: { value: 'plan' } });
@@ -114,7 +114,7 @@ it('never opens a note or runs a command while an IME composition is active', as
 it('uses a valid option id for a note path containing spaces', async () => {
   const path = 'notes/life/weekend plan.md';
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ revision: REVISION, total: 1, nextCursor: null, notes: [{ id: path, path, notebookId: 'life', title: 'Weekend plan', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } })));
-  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, drafts: {} });
+  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, repositories: {}, drafts: {} });
   render(createElement(Harness), { wrapper });
   const input = await openPalette();
   fireEvent.change(input, { target: { value: 'plan' } });
@@ -236,7 +236,7 @@ it('commands are also found by their description', async () => {
 
 it('inside the note editor, commands that leave the note are unavailable and notes still open', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ revision: REVISION, total: 1, nextCursor: null, notes: [{ id: 'notes/life/plan.md', path: 'notes/life/plan.md', notebookId: 'life', title: 'Weekend plan', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } })));
-  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, drafts: {} });
+  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, repositories: {}, drafts: {} });
   render(createElement(Harness, { noteEditorOpen: true }), { wrapper });
   const input = await openCommandPalette();
   await waitFor(() => expect(document.querySelector('[data-command-id="settings"]')).toBeDisabled());

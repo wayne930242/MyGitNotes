@@ -1,6 +1,6 @@
 import { type RemoteChange, type RemoteEntry, type RemoteSnapshot, RemoteSource } from './remote-source.js';
 import { SourceError } from './github-api.js';
-import { normalizeGitLabUrl } from './source-config.js';
+import { normalizeGitLabUrl, sourceIdentity } from './source-config.js';
 import type { RemoteCache } from './remote-cache.js';
 import type { RepositoryScope } from './repository.js';
 
@@ -11,6 +11,9 @@ export class GitLabSource extends RemoteSource {
   constructor(url: string, repository: string, branch: string, token: string | undefined, private request: typeof fetch, cache: RemoteCache | undefined, scope: RepositoryScope) {
     super(repository, branch, token, cache, scope);
     this.url = normalizeGitLabUrl(url);
+  }
+  get id() {
+    return sourceIdentity({ type: 'gitlab', url: this.url, repository: this.repository, branch: this.branch });
   }
   private async response(endpoint: string, init: RequestInit = {}): Promise<Response> {
     let response: Response;

@@ -1,14 +1,17 @@
 import { AgentResource, AssetItem, FolderItem, GitCommit, GitStatus, NoteItem, WorkspaceConfig } from './types.js';
+import type { RepositoryId } from '@mygitnotes/core/repository';
+import type { WorkspaceAnswer } from './workspace-repositories.js';
 
 const API_BASE = '/api';
-export async function commitRemoteNotes(notes: { path: string; content: string; metadata: Record<string, unknown>; createOnly?: boolean; }[], revision: string, message: string, documents: { path: string; page: unknown; base: unknown; }[] = []): Promise<{ revision: string; commit: { commitHash: string; }; }> {
-  const res = await fetch(`${API_BASE}/notes/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes, revision, message, documents }) });
-  const data = await res.json();
-  if (!res.ok) throw new ApiError(data.error || 'Failed to commit notes', res.status);
-  return data;
+/** Commits drafts of one repository as one commit on it. */
+export async function commitRemoteNotes(repository: RepositoryId, notes: { path: string; content: string; metadata: Record<string, unknown>; createOnly?: boolean; }[], revision: string, message: string, documents: { path: string; page: unknown; base: unknown; }[] = []): Promise<{ revision: string; commit: { commitHash: string; }; }> {
+  const res = await fetch(`${API_BASE}/notes/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, notes, revision, message, documents }) });
+  if (!res.ok) throw await responseError(res, 'Failed to commit notes');
+  return res.json();
 }
 export class ApiError extends Error {
-  constructor(message: string, public status: number, public retryAfter?: number) {
+  /** `staleRepositories` names the repositories whose revision a 409 rejected. */
+  constructor(message: string, public status: number, public retryAfter?: number, public staleRepositories?: RepositoryId[]) {
     super(message);
   }
 }
@@ -16,17 +19,17 @@ export class ApiError extends Error {
 export async function responseError(res: Response, fallback: string): Promise<ApiError> {
   const data = await res.json().catch(() => ({}));
   const seconds = Number(res.headers.get('Retry-After') || data.retryAfter);
-  return new ApiError(data.error || fallback, res.status, Number.isFinite(seconds) && seconds > 0 ? seconds : undefined);
+  return new ApiError(data.error || fallback, res.status, Number.isFinite(seconds) && seconds > 0 ? seconds : undefined, Array.isArray(data.staleRepositories) ? data.staleRepositories : undefined);
 }
 
-export async function fetchWorkspace(fresh = false): Promise<{ repoRoot: string; branch: string; config: WorkspaceConfig | null; gitStatus: GitStatus; isCoreBranch: boolean; source: { type: 'local' | 'github' | 'gitlab'; identity: string; repository?: string; }; capabilities: { write: boolean; local: boolean; }; revision?: string; }> {
+export async function fetchWorkspace(fresh = false): Promise<WorkspaceAnswer> {
   const res = await fetch(`${API_BASE}/workspace${fresh ? '?fresh=1' : ''}`);
   if (!res.ok) throw await responseError(res, 'Failed to fetch workspace');
   return res.json();
 }
 
-export async function updateWorkspaceConfig(configYaml: string, revision?: string): Promise<{ success: boolean; config: WorkspaceConfig; revision?: string; }> {
-  const res = await fetch(`${API_BASE}/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ configYaml, revision }) });
+export async function updateWorkspaceConfig(configYaml: string, configRevision: string): Promise<{ success: boolean; config: WorkspaceConfig; configRevision: string; }> {
+  const res = await fetch(`${API_BASE}/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ configYaml, configRevision }) });
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.error || 'Failed to update workspace configuration');
@@ -49,8 +52,9 @@ export async function readNote(path: string, notebookId?: string): Promise<NoteI
   return data.note;
 }
 
-export async function readNotes(paths: string[], revision: string): Promise<NoteItem[]> {
-  const res = await fetch(`${API_BASE}/notes/read-batch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paths, revision }) });
+/** Reads notes of one repository at the revision the caller reviewed. */
+export async function readNotes(repository: RepositoryId, paths: string[], revision: string): Promise<NoteItem[]> {
+  const res = await fetch(`${API_BASE}/notes/read-batch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, paths, revision }) });
   if (!res.ok) throw await responseError(res, 'Failed to review notes');
   return (await res.json()).notes;
 }
@@ -77,8 +81,9 @@ export async function deleteNote(path: string, options?: { noCommit?: boolean; }
  * (see `@mygitnotes/core`'s `planTagRename`/`planTagMerge`/`planTagDelete`/
  * `invertTagOperationPlan`); this endpoint only writes and commits.
  */
-export async function applyTagChange(entries: { path: string; notebookId: string; tags: string[]; }[], revision: string, message?: string): Promise<{ success: boolean; changedPaths: string[]; commit?: { commitHash: string; }; revision?: string; }> {
-  const res = await fetch(`${API_BASE}/tags/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries, revision, message }) });
+/** Rewrites the tags of notes in one repository as one commit on it. */
+export async function applyTagChange(repository: RepositoryId, entries: { path: string; notebookId: string; tags: string[]; }[], revision: string, message?: string): Promise<{ success: boolean; changedPaths: string[]; commit?: { commitHash: string; }; revision?: string; }> {
+  const res = await fetch(`${API_BASE}/tags/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, entries, revision, message }) });
   if (!res.ok) throw await responseError(res, 'Failed to update tags');
   return res.json();
 }

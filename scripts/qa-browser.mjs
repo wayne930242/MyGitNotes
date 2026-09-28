@@ -63,7 +63,7 @@ try {
     const u = new URL(req.url());
     let body;
     let status = 200;
-    if (u.pathname === '/api/workspace') body = { config: { schema_version: 1, workspace: { title: 'Public GitHub QA', default_notebook: 'example' }, notebooks: [{ id: 'example', title: 'Example', root: 'notes/example' }] }, branch: 'main', repoRoot: '', gitStatus: { branch: 'main', isClean: true, staged: [], modified: [], untracked: [] }, source: { type: 'github', identity: 'github:owner/repo@main' }, capabilities: { write: signedIn, local: false }, revision: remoteNotes[0].revision };
+    if (u.pathname === '/api/workspace') body = { config: { schema_version: 1, workspace: { title: 'Public GitHub QA', default_notebook: 'example' }, notebooks: [{ id: 'example', title: 'Example', root: 'notes/example' }] }, configRevision: remoteNotes[0].revision, local: false, home: 'github:owner/repo@main', repositories: [{ id: 'github:owner/repo@main', type: 'github', repository: 'owner/repo', branch: 'main', revision: remoteNotes[0].revision, write: signedIn, notebooks: ['example'] }] };
     if (u.pathname === '/api/notes') {
       if (req.method() === 'POST') {
         savedPayload = JSON.parse(req.postData());

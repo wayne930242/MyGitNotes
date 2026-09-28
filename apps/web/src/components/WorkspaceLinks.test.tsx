@@ -60,7 +60,7 @@ it('opens a same-origin absolute URL in a new tab on a modifier click', async ()
 /* eslint-disable react/no-children-prop -- Required children are explicit in createElement component props. */
 it('keeps the source in place until a cold note body arrives, then reuses that body cache', async () => {
   const { setNoteQueryScope, noteLookupOptions } = await import('../lib/use-note-queries.js');
-  const scope = { sourceId: 'test:links', revisions: {}, drafts: {} };
+  const scope = { sourceId: 'test:links', revisions: {}, repositories: {}, drafts: {} };
   setNoteQueryScope(scope);
   let release!: () => void;
   const fetcher = vi.fn((_url: string, _init: RequestInit) =>
@@ -83,10 +83,10 @@ it('keeps the source in place until a cold note body arrives, then reuses that b
 
 it('opens a preloaded link without another read and leaves draft selection to the destination', async () => {
   const { setNoteQueryScope, noteLookupOptions } = await import('../lib/use-note-queries.js');
-  const scope = { sourceId: 'test:cached', revisions: {}, drafts: {} };
+  const scope = { sourceId: 'test:cached', revisions: {}, repositories: {}, drafts: {} };
   setNoteQueryScope(scope);
   client.setDefaultOptions({ queries: { staleTime: Infinity, retry: false } });
-  client.setQueryData(noteLookupOptions(scope, ['notes/b.md'], true).queryKey, { revisions: {}, notes: [{ path: 'notes/b.md', content: '# Committed' }] });
+  client.setQueryData(noteLookupOptions(scope, ['notes/b.md'], true).queryKey, { revisions: {}, repositories: {}, notes: [{ path: 'notes/b.md', content: '# Committed' }] });
   const fetcher = vi.fn();
   vi.stubGlobal('fetch', fetcher);
   const onOpenNote = vi.fn();

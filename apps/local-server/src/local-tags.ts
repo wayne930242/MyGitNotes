@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { classifyResource, replaceNoteTags, resolveSafePath } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
-import { localRepository } from './request-workspace.js';
+import { namedLocal } from './request-workspace.js';
 
 export function createLocalTagsRouter(): Router {
   const router = Router();
@@ -22,7 +22,7 @@ export function createLocalTagsRouter(): Router {
           return res.status(400).json({ error: 'Each entry requires a path and a tags array of strings.' });
         }
       }
-      const { root: repoRoot, config } = await localRepository(res);
+      const { root: repoRoot, config } = await namedLocal(res, req.body?.repository);
 
       const result = await serializeWorkspaceMutation(repoRoot, async () => {
         // Validate and compute every entry's patched content before writing any of them, so a

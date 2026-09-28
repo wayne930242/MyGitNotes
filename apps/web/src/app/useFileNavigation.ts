@@ -1,9 +1,7 @@
 import { type NoteListItem } from '@mygitnotes/core/note-query';
 import type { FilterControls } from '../lib/filter-controls.js';
-import { listLocalDrafts } from '../lib/storage.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { noteRoute, parseWorkspaceRoute } from '../lib/routes.js';
-import { readWorkingNotes } from '../lib/working-notes.js';
 import React from 'react';
 import { readNote } from '../lib/api.js';
 import { useNoteEditorRegistry } from '../lib/note-editing.js';
@@ -14,7 +12,7 @@ import type { useNoteRestoration } from './useNoteRestoration.js';
 
 interface Params {
   editorRegistry: ReturnType<typeof useNoteEditorRegistry>;
-  workingScope: WorkspaceState['workingScope'];
+  hasPendingDrafts: WorkspaceState['hasPendingDrafts'];
   documents: WorkspaceState['documents'];
   t: I18nContextValue['t'];
   config: WorkspaceState['config'];
@@ -35,10 +33,10 @@ interface Params {
   handleOpenFolderIndex: ReturnType<typeof useNoteRestoration>['handleOpenFolderIndex'];
 }
 
-export function useFileNavigation({ editorRegistry, workingScope, documents, t, config, setFileDialog, setActionError, refreshWorkspace, refreshDocuments, editorRoute, editorNotebookId, setEditingNote, navigate, location, returnTo, setFileEditorRevision, selectedFolder, folderRoot, changeFilters, handleOpenFolderIndex }: Params) {
+export function useFileNavigation({ editorRegistry, hasPendingDrafts, documents, t, config, setFileDialog, setActionError, refreshWorkspace, refreshDocuments, editorRoute, editorNotebookId, setEditingNote, navigate, location, returnTo, setFileEditorRevision, selectedFolder, folderRoot, changeFilters, handleOpenFolderIndex }: Params) {
   const beforeFileChange = async () => {
     await editorRegistry.flushEditors();
-    if (Object.keys(readWorkingNotes(workingScope)).length || listLocalDrafts(workingScope).length || documents.some(document => document.dirty)) throw new Error(t('folder.draftsHint'));
+    if (hasPendingDrafts() || documents.some(document => document.dirty)) throw new Error(t('folder.draftsHint'));
   };
   const openFileManager = (notebookId: string, relativePath = '') => {
     const notebook = config?.notebooks.find(nb => nb.id === notebookId);

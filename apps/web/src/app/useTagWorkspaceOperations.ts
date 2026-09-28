@@ -1,25 +1,26 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { invertTagOperationPlan, planTagDelete, planTagMerge, planTagRename } from '@mygitnotes/core/tag-ops';
 import { type TagOperationKind, type TagOperationLabel, useTagOperations } from '../lib/use-tag-operations.js';
-import { applyTagChange } from '../lib/api.js';
+import { applyTagEntries, PartialTagChangeError } from '../lib/tag-changes.js';
+import { repositoryOf, type WorkspaceRepository } from '../lib/workspace-repositories.js';
 import { noteLookupOptions, notePathsOptions, type NoteQueryScope } from '../lib/use-note-queries.js';
 import type { I18nContextValue } from '../lib/i18n/index.js';
 
 interface UseTagWorkspaceOperationsParams {
   queryClient: QueryClient;
   queryScope: NoteQueryScope;
-  revision: string;
+  repositories: WorkspaceRepository[];
   remote: boolean;
   canWrite: boolean;
   t: I18nContextValue['t'];
   invalidateNotes: () => void;
-  setRevision: (revision: string) => void;
+  setRepositoryRevision: (id: string, revision: string) => void;
   setActionError: (message: string) => void;
 }
 
-/** Tag management: rename/merge/delete across the whole workspace, each a single commit
+/** Tag management: rename/merge/delete across the whole workspace, one commit per repository,
  * with a session-lifetime undo (kept in `tagOperations.history` until page reload). */
-export function useTagWorkspaceOperations({ queryClient, queryScope, revision, remote, canWrite, t, invalidateNotes, setRevision, setActionError }: UseTagWorkspaceOperationsParams) {
+export function useTagWorkspaceOperations({ queryClient, queryScope, repositories, remote, canWrite, t, invalidateNotes, setRepositoryRevision, setActionError }: UseTagWorkspaceOperationsParams) {
   const tagOperations = useTagOperations();
   const readNotePaths = async (query: Parameters<typeof notePathsOptions>[1]): Promise<string[]> => (await queryClient.fetchQuery(notePathsOptions(queryScope, query))).paths;
   /** Every note carrying `tag`, in every notebook, hidden ones included: the exact set the server will rewrite. */
@@ -30,12 +31,22 @@ export function useTagWorkspaceOperations({ queryClient, queryScope, revision, r
     return result.notes;
   };
   const previewTagUsage = async (tag: string): Promise<number> => (await readNotePaths({ notebookId: 'all', tags: [tag], showHidden: true })).length;
+  const applyEntries = (entries: { path: string; notebookId: string; tags: string[]; }[], message: string) =>
+    applyTagEntries(repositories, entries, message, (repository, revision) => {
+      if (remote && revision) setRepositoryRevision(repository.id, revision);
+    });
   const runTagOperation = async (kind: TagOperationKind, plan: ReturnType<typeof planTagDelete>, label: TagOperationLabel) => {
     if (plan.affected.length === 0) throw new Error(t('sidebar.tagNoNotesAffected'));
     const entries = plan.affected.map(({ path, notebookId, nextTags }) => ({ path, notebookId, tags: nextTags }));
-    const result = await applyTagChange(entries, revision, t(label.key, label.params));
-    if (remote) setRevision(result.revision || revision);
-    else invalidateNotes();
+    try {
+      await applyEntries(entries, t(label.key, label.params));
+    } catch (error) {
+      // Repositories committed before the failure keep their change, so their part stays undoable.
+      if (error instanceof PartialTagChangeError) tagOperations.record(kind, label, { ...plan, affected: plan.affected.filter(entry => error.committed.includes(repositoryOf(repositories, entry.notebookId)?.id ?? '')) });
+      throw error;
+    } finally {
+      if (!remote) invalidateNotes();
+    }
     tagOperations.record(kind, label, plan);
   };
   const handleRenameTag = async (from: string, to: string) => {
@@ -65,9 +76,11 @@ export function useTagWorkspaceOperations({ queryClient, queryScope, revision, r
         return;
       }
       const entries = validEntries.map(({ path, notebookId, nextTags }) => ({ path, notebookId, tags: nextTags }));
-      const result = await applyTagChange(entries, revision, `${t('common.undo')}: ${t(record.label.key, record.label.params)}`);
-      if (remote) setRevision(result.revision || revision);
-      else invalidateNotes();
+      try {
+        await applyEntries(entries, `${t('common.undo')}: ${t(record.label.key, record.label.params)}`);
+      } finally {
+        if (!remote) invalidateNotes();
+      }
       tagOperations.dismiss(id);
     } catch (error) {
       // Keep the record so the user can retry; a silently vanished undo with no feedback

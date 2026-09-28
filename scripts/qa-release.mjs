@@ -77,11 +77,11 @@ try {
   await page.waitForFunction(() => document.querySelector('nav').getBoundingClientRect().width <= 320);
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   assert.equal(await page.$$eval('nav button:not(.mobile-nav-create)', buttons => buttons.length), 4);
-  const screenshot = product + '/artifacts/qa/' + (workspace.capabilities.local ? 'local' : 'production') + '-status-settings.png';
+  const screenshot = product + '/artifacts/qa/' + (workspace.local ? 'local' : 'production') + '-status-settings.png';
   fs.mkdirSync(path.dirname(screenshot), { recursive: true });
   await page.screenshot({ path: screenshot, fullPage: true });
   console.log('PASS mobile Settings, persistent grant information and four-way navigation');
-  if (!workspace.capabilities.local) {
+  if (!workspace.local) {
     const oauth = await fetch(base + '/api/auth/github', { redirect: 'manual', signal: AbortSignal.timeout(20000) });
     assert.equal(oauth.status, 302);
     const location = new URL(oauth.headers.get('location'));

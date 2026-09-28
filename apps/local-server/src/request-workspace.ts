@@ -73,6 +73,26 @@ export async function requestCatalog(res: express.Response, revisions: unknown, 
   return workspaceCatalog(config, available.map(repository => ({ id: repository.ref.id, notebooks: repository.notebooks, catalog: open(repository.handle, repository.notebooks) })), expected);
 }
 
+/** The repository a request names in its `repository` field. */
+export async function namedRepository(res: express.Response, id: unknown): Promise<AvailableRepository<RepositoryHandle>> {
+  if (typeof id !== 'string' || !id) throw new SourceError('repository is required.');
+  return workspaceOf(res).byId(id);
+}
+
+/** The remote repository a request names, with its handle. */
+export async function namedRemote(res: express.Response, id: unknown): Promise<RemoteHandle> {
+  const { handle } = await namedRepository(res, id);
+  if (handle.kind !== 'remote') throw new SourceError('This operation requires a remote source.', 400);
+  return handle;
+}
+
+/** The local worktree a request names, with the manifest scope it serves. */
+export async function namedLocal(res: express.Response, id: unknown): Promise<{ root: string; config: WorkspaceConfig; }> {
+  const { ref, handle } = await namedRepository(res, id);
+  if (handle.kind !== 'local') throw new SourceError('This operation requires a local workspace.', 400);
+  return { root: handle.root, config: await workspaceOf(res).scope(ref.id) };
+}
+
 /** The local home worktree with the manifest scope it serves. */
 export async function localRepository(res: express.Response): Promise<{ root: string; config: WorkspaceConfig; }> {
   const { root } = localHome(res);

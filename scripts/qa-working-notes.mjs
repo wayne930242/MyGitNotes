@@ -18,7 +18,7 @@ write('notes/example/hidden.md', '---\nstatus: working\nhiden: true\n---\n# Hidd
 write('notes/example/visible-archive.md', '---\nstatus: archived\nhiden: false\n---\n# Visible Archive\n');
 commitFixture();
 const { server, base } = await startQaServer(root);
-const { parseNoteQuery, queryNotes, queryNotePaths, noteFacets, lookupNotes } = await import(`${product}/packages/core/dist/index.js`);
+const { parseNoteQuery, queryNotes, queryNotePaths, noteFacets, lookupNotes, workspaceCatalog } = await import(`${product}/packages/core/dist/index.js`);
 const browser = await launchQaBrowser(require);
 const page = await browser.newPage();
 await page.setViewport({ width: 1440, height: 1000 });
@@ -66,11 +66,12 @@ const bump = () => {
 };
 await page.setRequestInterception(true);
 const hostedConfig = { schema_version: 1, workspace: { title: 'Working notes QA', default_notebook: 'example' }, notebooks: [{ id: 'example', title: 'Example', root: 'notes/example' }] };
-const hostedCatalog = { revision: async () => String(rev), config: async () => hostedConfig, index: async notebook => remoteNotes.filter(note => note.notebookId === notebook.id), contents: async notes => new Map(notes.map(note => [note.path, note.content])), memo: (kind, notebooks, compute) => compute() };
+const hostedRepository = { revision: async () => String(rev), index: async notebook => remoteNotes.filter(note => note.notebookId === notebook.id), contents: async notes => new Map(notes.map(note => [note.path, note.content])), memo: (kind, notebooks, compute) => compute() };
+const hostedCatalog = () => workspaceCatalog(hostedConfig, [{ id: 'github:working/fixture@main', notebooks: hostedConfig.notebooks, catalog: hostedRepository }]);
 page.on('request', async request => {
   const url = new URL(request.url());
   let body, status = 200;
-  if (url.pathname === '/api/workspace') body = { config: hostedConfig, branch: 'main', repoRoot: '', gitStatus: { branch: 'main', isClean: true, staged: [], modified: [], untracked: [] }, source: { type: 'github', identity: 'github:working/fixture@main' }, capabilities: { write: true, local: false }, revision: String(rev) };
+  if (url.pathname === '/api/workspace') body = { config: hostedConfig, configRevision: String(rev), local: false, home: 'github:working/fixture@main', repositories: [{ id: 'github:working/fixture@main', type: 'github', repository: 'working/fixture', branch: 'main', revision: String(rev), write: true, notebooks: ['example'] }] };
   if (url.pathname === '/api/notes') {
     assert(request.method() === 'GET', 'Edit used immediate remote save');
     body = { notes: remoteNotes };
@@ -78,14 +79,14 @@ page.on('request', async request => {
   // Lists, lookups and counts come from server queries; answer them with the core catalog rules.
   if (url.pathname === '/api/notes/query') {
     const { query, options } = parseNoteQuery(Object.fromEntries(url.searchParams));
-    body = options.select ? await queryNotePaths(hostedCatalog, query) : await queryNotes(hostedCatalog, query, options);
+    body = options.select ? await queryNotePaths(await hostedCatalog(), query) : await queryNotes(await hostedCatalog(), query, options);
   }
   if (url.pathname === '/api/notes/lookup') {
     const lookup = JSON.parse(request.postData());
     lookups.push(...lookup.paths);
-    body = await lookupNotes(hostedCatalog, lookup.paths, lookup.content === true);
+    body = await lookupNotes(await hostedCatalog(), lookup.paths, lookup.content === true);
   }
-  if (url.pathname === '/api/notes/facets') body = await noteFacets(hostedCatalog, url.searchParams.get('showHidden') === '1');
+  if (url.pathname === '/api/notes/facets') body = await noteFacets(await hostedCatalog(), url.searchParams.get('showHidden') === '1');
   if (url.pathname === '/api/notes/read') {
     const file = url.searchParams.get('path');
     reads.push(file);

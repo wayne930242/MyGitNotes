@@ -785,6 +785,7 @@ export const en = {
   'changes.unavailable': 'This file is protected or conflicted. Manage it in your repository.',
   'changes.noDiff': 'Select a change to review its diff.',
   'changes.backup': 'A recovery copy was saved at {path}',
+  'changes.partialCommit': 'Committed to {repositories}. Stopped at the next repository: {error}',
   'changes.reviewRequired': 'Remote changes merged into local drafts. Review the updated diff, then Commit again.',
   'commit.branch': 'Branch: {branch}',
   'commit.close': 'Close commit',

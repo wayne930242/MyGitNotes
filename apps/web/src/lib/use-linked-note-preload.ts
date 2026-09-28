@@ -29,11 +29,11 @@ type Connection = { saveData?: boolean; effectiveType?: string; };
 /** Preload rendered links one at a time, sharing the exact body query used by every note editor. */
 export function useLinkedNotePreload(surface: RefObject<HTMLElement>, notebooks: NotebookConfig[]): void {
   const client = useQueryClient();
-  const { sourceId, revisions } = useNoteQueryScope();
+  const { sourceId, revisions, repositories } = useNoteQueryScope();
   useEffect(() => {
     const root = surface.current;
     if (!root || !sourceId) return;
-    const scope = { sourceId, revisions, drafts: {} };
+    const scope = { sourceId, revisions, repositories, drafts: {} };
     const attempted = new Map<string, Set<string>>();
     let stopped = false;
     let busy = false;
@@ -96,5 +96,5 @@ export function useLinkedNotePreload(surface: RefObject<HTMLElement>, notebooks:
       observer.disconnect();
       document.removeEventListener('visibilitychange', schedule);
     };
-  }, [surface, notebooks, client, sourceId, revisions]);
+  }, [surface, notebooks, client, sourceId, revisions, repositories]);
 }

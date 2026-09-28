@@ -8,7 +8,7 @@ import { linkedNotePath, useLinkedNotePreload } from './use-linked-note-preload.
 import { noteLookupOptions, setNoteQueryScope } from './use-note-queries.js';
 
 const notebooks: NotebookConfig[] = [{ id: 'n', title: 'Notes', root: 'notes' }];
-const scope = { sourceId: 'local:test', revisions: {}, drafts: {} };
+const scope = { sourceId: 'local:test', revisions: {}, repositories: {}, drafts: {} };
 let client: QueryClient;
 let idle: Map<number, IdleRequestCallback>;
 let fetcher: ReturnType<typeof vi.fn>;
