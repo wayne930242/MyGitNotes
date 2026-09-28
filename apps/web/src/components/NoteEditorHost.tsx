@@ -104,7 +104,7 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ notebookId, 
 const NotePreview: React.FC<{ note: NoteItem; onClaim: () => void; }> = ({ note, onClaim }) => {
   const { t } = useTranslation();
   const tableLabel = t('preview.scrollableTable');
-  const html = useMemo(() => renderNote(note.content, note.path, tableLabel, youtubeLabels(t)), [note.content, note.path, tableLabel, t]);
+  const html = useMemo(() => renderNote(note.content, note.path, tableLabel, youtubeLabels(t), note.notebookId), [note.content, note.path, note.notebookId, tableLabel, t]);
   return (
     <div className='note-preview'>
       <div className='note-preview-bar'>

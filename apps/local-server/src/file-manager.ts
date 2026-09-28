@@ -252,7 +252,8 @@ export function createFileManagerRouter(): Router {
         }
       } else if (req.path.startsWith('/raw-assets/')) {
         file = (req.params as Record<string, string>)[0];
-        const resolved = await noteRepository(res, file).catch((error: unknown) => {
+        // `notebook` names the asset's notebook, since notebook roots may repeat across repositories.
+        const resolved = await noteRepository(res, file, req.query.notebook).catch((error: unknown) => {
           if (error instanceof SourceError && error.status === 403) throw new SourceError('Path is outside the notebooks.', 403);
           throw error;
         });

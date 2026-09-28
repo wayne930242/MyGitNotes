@@ -40,7 +40,8 @@ export function GitSyncSection({ gitStatus, onSynced, repository, label }: { git
 
   return (
     <section className='todo-group git-sync' aria-label={label ? `${t('panel.sync')} ${label}` : t('panel.sync')}>
-      <h4>{t('panel.sync')}{label && <small className='git-sync-repository'>{label}</small>}</h4>
+      <h4>{t('panel.sync')}</h4>
+      {label && <p className='git-sync-repository' title={label}>{label}</p>}
       {upstream ? <p className='git-sync-status' title={t('panel.syncStatusHint')}>{t('panel.syncStatus', { upstream, ahead: gitStatus?.ahead ?? 0, behind: gitStatus?.behind ?? 0 })}</p> : <p className='changes-help'>{t('panel.syncNoUpstream')}</p>}
       {upstream && dirty && <p className='changes-help'>{t('panel.syncDirty')}</p>}
       <Button className='git-sync-button' disabled={busy || !upstream || dirty} onClick={() => void sync()}>

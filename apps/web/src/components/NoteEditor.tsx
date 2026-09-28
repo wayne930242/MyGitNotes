@@ -151,14 +151,14 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
         ? (
           <>
             <div className='note-editor-body'>
-              <MarkdownEditor ref={editorRef} compact content={session.content} path={note.path} mode={editorMode} readOnly={session.locked} onChange={session.setContent} onCaret={onCaret} ariaLabel='Note content' showLineNumbers={showLineNumbers} lineNumberOffset={session.baseNote.lineNumberOffset} />
+              <MarkdownEditor ref={editorRef} compact content={session.content} path={note.path} notebookId={note.notebookId} mode={editorMode} readOnly={session.locked} onChange={session.setContent} onCaret={onCaret} ariaLabel='Note content' showLineNumbers={showLineNumbers} lineNumberOffset={session.baseNote.lineNumberOffset} />
             </div>
             <div className='note-compact-bar'>
               {isMarkdown && <button type='button' className='ui-icon-button' data-mode-toggle={editorMode} title={t(editorMode === 'live' ? 'editor.source' : 'editor.livePreview')} aria-label={t(editorMode === 'live' ? 'editor.source' : 'editor.livePreview')} onClick={() => setEditorMode(editorMode === 'live' ? 'raw' : 'live')}>{editorMode === 'live' ? <Code2 size={14} aria-hidden='true' /> : <Eye size={14} aria-hidden='true' />}</button>}
               <button type='button' className='ui-icon-button' aria-pressed={showLineNumbers} title={t('editor.lineNumbers')} aria-label={t('editor.lineNumbers')} onClick={toggleLineNumbers}>
                 <ListOrdered size={14} aria-hidden='true' />
               </button>
-              <NoteExportMenu className='ui-icon-button' iconSize={14} path={note.path} title={session.title} content={session.content} copyState={session.copyState} onCopy={session.copyNote} />
+              <NoteExportMenu className='ui-icon-button' iconSize={14} path={note.path} notebookId={note.notebookId} title={session.title} content={session.content} copyState={session.copyState} onCopy={session.copyNote} />
               <span className='note-compact-path' title={note.path}>{note.notebookId}{' · '}{note.path.split('/').pop()}</span>
               <span role='status' className='note-compact-status' data-state={session.editorState}>
                 <span className={`note-compact-dot ${session.editorState === 'saving' ? 'animate-pulse' : ''}`} aria-hidden='true' />
@@ -193,7 +193,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
                 <button type='button' aria-pressed={showLineNumbers} aria-label={t('editor.lineNumbers')} title={t('editor.lineNumbers')} onClick={toggleLineNumbers} className='ui-icon-button toolbar-icon-button editor-line-numbers-action'>
                   <ListOrdered aria-hidden='true' />
                 </button>
-                <NoteExportMenu className='ui-icon-button toolbar-icon-button' path={note.path} title={session.title} content={session.content} copyState={session.copyState} onCopy={session.copyNote} />
+                <NoteExportMenu className='ui-icon-button toolbar-icon-button' path={note.path} notebookId={note.notebookId} title={session.title} content={session.content} copyState={session.copyState} onCopy={session.copyNote} />
                 {onAddToFocus && (
                   <button type='button' aria-label={t('focus.addTo')} title={t('focus.addTo')} onClick={onAddToFocus} className='ui-icon-button toolbar-icon-button'>
                     <LayoutGrid aria-hidden='true' />
@@ -228,7 +228,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
               </div>
             </div>
             <div className='note-editor-body'>
-              <MarkdownEditor ref={editorRef} content={session.content} path={note.path} mode={editorMode} readOnly={session.locked} onChange={session.setContent} onCaret={onCaret} insertSlot={insertSlot} ariaLabel='Note content' showLineNumbers={showLineNumbers} lineNumberOffset={session.baseNote.lineNumberOffset} />
+              <MarkdownEditor ref={editorRef} content={session.content} path={note.path} notebookId={note.notebookId} mode={editorMode} readOnly={session.locked} onChange={session.setContent} onCaret={onCaret} insertSlot={insertSlot} ariaLabel='Note content' showLineNumbers={showLineNumbers} lineNumberOffset={session.baseNote.lineNumberOffset} />
               {frame === 'zoom'
                 ? (
                   <aside className='note-document-panel' data-open={Boolean(docPanel.notePanel)} data-panel={docPanel.notePanel || undefined} aria-label={t('editor.documentPanel')}>

@@ -22,7 +22,8 @@ export function createLocalRawAssetsRouter(): Router {
   router.use(async (req, res) => {
     try {
       const relPath = decodeURIComponent(req.path.replace(/^\//, ''));
-      const resolved = await noteRepository(res, relPath).catch((error: unknown) => {
+      // `notebook` names the asset's notebook, since notebook roots may repeat across repositories.
+      const resolved = await noteRepository(res, relPath, req.query.notebook).catch((error: unknown) => {
         if (error instanceof SourceError && error.status === 403) return undefined;
         throw error;
       });

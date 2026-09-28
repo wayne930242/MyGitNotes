@@ -45,12 +45,12 @@ export function useNoteRestoration({ remote, readDraft, updateDraft, setEditingN
           navigate(returnTo, { replace: true });
           return null;
         }
-        const latest = await readNote(notePath);
+        const latest = await readNote(notePath, notebookId);
         updateDraft(notebookId, notePath, null);
         setEditingNote(latest);
         return latest;
       }
-      const res = await restoreNote({ path: notePath });
+      const res = await restoreNote({ path: notePath, notebookId });
       const restored = res.note;
       invalidateNotes();
       setEditingNote(res.note);

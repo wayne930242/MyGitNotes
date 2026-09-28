@@ -61,7 +61,7 @@ export function useDeletionUndo({ canWriteNotebook, revisionFor, setNotebookRevi
     setDeletedNotes((prev) => [deleted, ...prev.filter((n) => !sameNote(n, note))]);
 
     // 2. Delete from disk without committing to git
-    await deleteNote(note.path, { noCommit: true });
+    await deleteNote(note.path, { noCommit: true, notebookId: note.notebookId });
     invalidateNotes();
     const statusRes = await fetchGitStatus();
     setGitStatus(statusRes.status);

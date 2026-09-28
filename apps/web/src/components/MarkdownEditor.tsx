@@ -26,6 +26,8 @@ export interface MarkdownEditorHandle {
 interface Props {
   content: string;
   path: string;
+  /** The note's notebook, so rendered assets reach its repository. */
+  notebookId?: string;
   mode: MarkdownEditorMode;
   readOnly: boolean;
   onChange: (content: string) => void;
@@ -54,7 +56,7 @@ export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEdi
   );
 }
 
-export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, mode, readOnly, onChange, onCaret, compact = false, insertSlot, ariaLabel = 'Document content', showLineNumbers = true, lineNumberOffset = 0 }, ref) => {
+export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, notebookId, mode, readOnly, onChange, onCaret, compact = false, insertSlot, ariaLabel = 'Document content', showLineNumbers = true, lineNumberOffset = 0 }, ref) => {
   const { t } = useTranslation();
   const [caret, setCaret] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -310,7 +312,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
       {mode === 'live' && isMarkdown
         ? (
           <React.Suspense fallback={<LoadingStatus className='p-6 text-sm text-muted'>{t('editor.loadingEditor')}</LoadingStatus>}>
-            <LiveMarkdownEditor key={path} ref={live} content={content} notePath={path} readOnly={readOnly} onChange={onChange} onCaret={onCaret} ariaLabel={ariaLabel} showLineNumbers={showLineNumbers} lineNumberOffset={lineNumberOffset} onCopyLines={copyLines} />
+            <LiveMarkdownEditor key={path} ref={live} content={content} notePath={path} notebookId={notebookId} readOnly={readOnly} onChange={onChange} onCaret={onCaret} ariaLabel={ariaLabel} showLineNumbers={showLineNumbers} lineNumberOffset={lineNumberOffset} onCopyLines={copyLines} />
           </React.Suspense>
         )
         : (

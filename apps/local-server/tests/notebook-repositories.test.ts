@@ -145,3 +145,21 @@ describe('Agent files in each repository', () => {
     expect(fs.existsSync(path.join(home, 'AGENTS.md'))).toBe(false);
   });
 });
+
+describe('assets and edits named by notebook', () => {
+  it('serves the asset of the named notebook and deletes the note of the named notebook', async () => {
+    const { home, trpg } = await serve();
+    for (const [root, body] of [[home, 'home-png'], [trpg, 'trpg-png']] as const) {
+      fs.mkdirSync(path.join(root, 'notes/life/assets'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'notes/life/assets/map.png'), body);
+    }
+    const asset = (notebook: string) => fetch(`${base}/raw-assets/notes/life/assets/map.png?notebook=${notebook}`).then(async response => ({ status: response.status, body: await response.text() }));
+    expect(await asset('trpg')).toEqual({ status: 200, body: 'trpg-png' });
+    expect(await asset('life')).toEqual({ status: 200, body: 'home-png' });
+    expect((await fetch(`${base}/raw-assets/notes/life/assets/map.png`)).status).toBe(400);
+    const deleted = await fetch(`${base}/api/notes?path=notes/life/note.md&notebookId=trpg&noCommit=true`, { method: 'DELETE' });
+    expect(deleted.status).toBe(200);
+    expect(fs.existsSync(path.join(trpg, 'notes/life/note.md'))).toBe(false);
+    expect(fs.existsSync(path.join(home, 'notes/life/note.md'))).toBe(true);
+  });
+});

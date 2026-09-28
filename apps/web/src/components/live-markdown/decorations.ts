@@ -14,7 +14,7 @@ import { BulletMarker, DateAdder, ExternalLink, MathFormula, MdxImportWidget, Me
 import { chipEditState } from './chip-editing.js';
 import { mermaidFenceAt } from './mermaid-fence.js';
 
-export function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string, pageLabel: string, youtubeOwner: string, t: I18nContextValue['t']): DecorationSet {
+export function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string, pageLabel: string, youtubeOwner: string, t: I18nContextValue['t'], notebookId?: string): DecorationSet {
   const marks: Range<Decoration>[] = [];
   const mermaidRanges: { from: number; to: number; }[] = [];
   // Source the math scan must not read: code keeps its dollars, and tables and directives render their own math.
@@ -105,7 +105,7 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
       }
       if (name === 'Table' && node.node.parent?.name === 'Document') {
         nonMath.push({ from, to });
-        marks.push(Decoration.replace({ widget: new LiveMarkdownTable(state.sliceDoc(from, to), notePath, from, state.readOnly, t, state.field(tableUIState).get(from)), block: true }).range(from, to));
+        marks.push(Decoration.replace({ widget: new LiveMarkdownTable(state.sliceDoc(from, to), notePath, from, state.readOnly, t, state.field(tableUIState).get(from), notebookId), block: true }).range(from, to));
         return false;
       }
       if (!editing && (name === 'Image' || name === 'Table' || name === 'HorizontalRule')) {
@@ -115,7 +115,7 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
             marks.push(Decoration.line({ class: 'live-md-image-line' }).range(line.from));
           }
         }
-        marks.push(Decoration.replace({ widget: new RenderedMarkdown(state.sliceDoc(from, to), notePath, from, name !== 'Image', linkLabel, tableLabel), block: name !== 'Image' }).range(from, to));
+        marks.push(Decoration.replace({ widget: new RenderedMarkdown(state.sliceDoc(from, to), notePath, from, name !== 'Image', linkLabel, tableLabel, notebookId), block: name !== 'Image' }).range(from, to));
         return false;
       }
       if (!editing && name === 'TaskMarker') {
@@ -197,7 +197,7 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
   }
 
   for (const block of collapsedDirectives) {
-    marks.push(Decoration.replace({ widget: new LiveMarkdownDirective(block.rawText, notePath, block.from, state.readOnly, block.type, block.attrs.variant, t), block: true }).range(block.from, block.to));
+    marks.push(Decoration.replace({ widget: new LiveMarkdownDirective(block.rawText, notePath, block.from, state.readOnly, block.type, block.attrs.variant, t, notebookId), block: true }).range(block.from, block.to));
   }
 
   const editingChips = state.field(chipEditState);

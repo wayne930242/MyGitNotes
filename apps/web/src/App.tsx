@@ -23,7 +23,6 @@ import { useWorkspaceSync } from './lib/use-workspace-sync.js';
 import { discardDocumentDraft } from './lib/use-workspace-document.js';
 import { documentClientOf } from './lib/workspace-document-clients.js';
 import { WorkspaceLinks } from './components/WorkspaceLinks.js';
-import { EditorNotice } from './components/EditorNotice.js';
 import { type NoteLocation, NoteLocationProvider, readOnlyReason } from './lib/note-location.js';
 import { ImageLightbox } from './components/ImageLightbox.js';
 import { useNavigate } from 'react-router-dom';
@@ -72,7 +71,7 @@ import { Breadcrumbs } from './components/Breadcrumbs.js';
 import { FolderIndex } from './components/FolderIndex.js';
 import { FolderLinks } from './components/FolderLinks.js';
 import { I18nProvider, useTranslation } from './lib/i18n/index.js';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, X } from 'lucide-react';
 import { LoadingStatus } from './components/LoadingStatus.js';
 
 const ScreenPage = React.lazy(() => import('./components/ScreenPage.js').then(module => ({ default: module.ScreenPage })));
@@ -112,6 +111,11 @@ const AppContent: React.FC = () => {
     const name = repository?.repository ?? (repository?.id.startsWith('local:') ? repository.id.slice('local:'.length) : repository?.id ?? '');
     return { notebook: notebook.title, repository: name, branch: repository?.branch ?? '', path: note.path, readOnly: readOnlyReason(repository) };
   };
+  /** Pending changes across repositories; a path names a file only within its repository, so each repository counts its own. */
+  const changeCount = remote ? Object.keys(activeWorkingNotes).length + pendingDocuments.length : repositories.filter(repository => !repository.unavailable).reduce((sum, repository) => {
+    const status = repository.id === sourceId ? gitStatus : repository.gitStatus;
+    return sum + (status ? new Set([...status.staged, ...status.modified, ...status.untracked]).size : 0);
+  }, 0);
   /** With several repositories, Changes groups entries under each repository and its branch. */
   const repositoryHeading = repositories.length > 1
     ? (id: string | undefined) => {
@@ -190,12 +194,14 @@ const AppContent: React.FC = () => {
     const repository = repositoryFor(note.notebookId);
     const writable = Boolean(repository?.write);
     const draft = activeWorkingNotes[noteRefKey(note)];
+    const repositoryStatus = repository?.id === sourceId ? gitStatus : repository?.gitStatus ?? null;
     return {
       statuses: noteQueryStatuses(config?.notebooks || [], note.notebookId, Object.keys(facetsQuery.facets?.[note.notebookId]?.statuses || {})),
       metadataFields: config?.notebooks.find(nb => nb.id === note.notebookId)?.metadata,
       onSave: params => handleSaveNote({ ...params, notebookId: note.notebookId }),
       onRestoreFile: path => handleRestoreNoteFile(path, note.notebookId),
-      isDirty: Boolean(gitStatus && [...gitStatus.modified, ...gitStatus.staged, ...gitStatus.untracked].includes(note.path)),
+      // A path names a file only within its repository: a remote note is dirty when it holds a draft, a local one when its worktree reports it.
+      isDirty: remote ? Boolean(draft) : Boolean(repositoryStatus && [...repositoryStatus.modified, ...repositoryStatus.staged, ...repositoryStatus.untracked].includes(note.path)),
       availableTags,
       assets,
       onUploadAsset: !writable ? undefined : handleUploadAsset,
@@ -213,7 +219,7 @@ const AppContent: React.FC = () => {
           stageWorkingNote(draft, base, reason);
         }
         : undefined,
-      onReadRemote: remote ? (draft?.base !== null ? readNote : undefined) : readNote,
+      onReadRemote: remote && draft?.base === null ? undefined : (path: string) => readNote(path, note.notebookId),
       branch: repository?.branch ?? '',
       draftScope: repository ? draftScope(repository) : '',
     };
@@ -404,6 +410,7 @@ const AppContent: React.FC = () => {
                       onSaveNote={handleSaveNote}
                       onReadNote={readNoteForChange}
                       gitStatus={gitStatus}
+                      changeCount={changeCount}
                       deletedNotes={deletedNotes}
                       onRestoreNote={handleRestoreNote}
                       onOpenCommitModal={openCommitModal}
@@ -421,10 +428,15 @@ const AppContent: React.FC = () => {
                   }
                 >
                   {notebookUnavailable && ['notes', 'assets', 'screen', 'graph'].includes(activeTab) && (
-                    <main className='workspace-route p-6'>
-                      <EditorNotice tone='error'>
-                        <strong>{t('notebook.unavailableTitle', { title: config?.notebooks.find(nb => nb.id === selectedNotebookId)?.title ?? selectedNotebookId })}</strong> {t(`notebook.unavailable.${notebookUnavailable.reason}`)} <small className='block mt-1 text-muted'>{notebookUnavailable.message}</small>
-                      </EditorNotice>
+                    <main className='workspace-route notebook-unavailable'>
+                      <section role='alert' className='notebook-unavailable-card'>
+                        <AlertCircle aria-hidden='true' />
+                        <div>
+                          <h2>{t('notebook.unavailableTitle', { title: config?.notebooks.find(nb => nb.id === selectedNotebookId)?.title ?? selectedNotebookId })}</h2>
+                          <p>{t(`notebook.unavailable.${notebookUnavailable.reason}`)}</p>
+                          <p className='notebook-unavailable-detail'>{notebookUnavailable.message}</p>
+                        </div>
+                      </section>
                     </main>
                   )}
                   {!notebookUnavailable && activeTab === 'notes' && (
@@ -451,7 +463,7 @@ const AppContent: React.FC = () => {
                           }}
                           selectedFolder={selectedFolder}
                           onSelectFolder={setSelectedFolder}
-                          gitStatus={gitStatus}
+                          changeCount={changeCount}
                           canManageTags={canWrite}
                           onPreviewTagUsage={previewTagUsage}
                           onRenameTag={handleRenameTag}

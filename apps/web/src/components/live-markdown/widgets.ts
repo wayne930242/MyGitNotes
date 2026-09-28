@@ -37,11 +37,11 @@ export class ExternalLink extends WidgetType {
   }
 }
 export class RenderedMarkdown extends WidgetType {
-  constructor(readonly text: string, readonly path: string, readonly from: number, readonly block: boolean, readonly linkLabel: string, readonly tableLabel: string) {
+  constructor(readonly text: string, readonly path: string, readonly from: number, readonly block: boolean, readonly linkLabel: string, readonly tableLabel: string, readonly notebookId?: string) {
     super();
   }
   eq(other: RenderedMarkdown) {
-    return this.text === other.text && this.path === other.path && this.from === other.from && this.linkLabel === other.linkLabel && this.tableLabel === other.tableLabel;
+    return this.text === other.text && this.path === other.path && this.from === other.from && this.linkLabel === other.linkLabel && this.tableLabel === other.tableLabel && this.notebookId === other.notebookId;
   }
   toDOM(view: EditorView) {
     const isImageOnly = /^\s*!\[.*?\]\(.*?\)\s*$/.test(this.text);
@@ -52,7 +52,7 @@ export class RenderedMarkdown extends WidgetType {
       dom.style.display = 'flow-root';
       dom.style.width = '100%';
     }
-    dom.innerHTML = renderNote(this.text, this.path, this.tableLabel);
+    dom.innerHTML = renderNote(this.text, this.path, this.tableLabel, undefined, this.notebookId);
     dom.setAttribute('aria-label', 'Rendered Markdown; click to edit');
     dom.addEventListener('mousedown', event => {
       if ((event.target as HTMLElement).closest('a, [data-workspace-link]')) return;

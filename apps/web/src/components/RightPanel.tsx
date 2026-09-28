@@ -27,6 +27,8 @@ interface RightPanelProps {
   /** Reads a note in full before a panel action rewrites it. */
   onReadNote: (note: NoteRef) => Promise<NoteItem>;
   gitStatus: GitStatus | null;
+  /** Pending changes across the workspace's repositories. */
+  changeCount: number;
   deletedNotes: NoteItem[];
   onRestoreNote: (note: NoteItem) => void;
   onOpenCommitModal: (request?: ChangeRequest) => void;
@@ -49,7 +51,7 @@ const DOCUMENT_TOOL_ICONS: Record<DocumentToolId, typeof CalendarDays> = { outli
 const DOCUMENT_TOOL_LABELS: Record<DocumentToolId, 'editor.outline' | 'editor.findInNote' | 'editor.frontmatter' | 'editor.notebookAssets' | 'editor.viewSettings' | 'editor.info'> = { outline: 'editor.outline', find: 'editor.findInNote', frontmatter: 'editor.frontmatter', assets: 'editor.notebookAssets', view: 'editor.viewSettings', info: 'editor.info' };
 
 /** The workspace-level Calendar/Todo/Changes panel. Hidden while a note is open — the editor has its own document panel. */
-export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpenNote, onSaveNote, onReadNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, syncTargets, repositoryHeading, fileMode = false, fileMetadata, onFileMetadataContainer, metadataOpen = false, onMetadataOpenChange, onWidthChange, documentPanel }: RightPanelProps) {
+export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpenNote, onSaveNote, onReadNote, gitStatus, changeCount, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, syncTargets, repositoryHeading, fileMode = false, fileMetadata, onFileMetadataContainer, metadataOpen = false, onMetadataOpenChange, onWidthChange, documentPanel }: RightPanelProps) {
   const { t } = useTranslation();
   const panel = usePanelContext();
   const visible = !panel.hasOpenNote;
@@ -75,7 +77,7 @@ export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpe
 
   if (!visible) return null;
 
-  const changesCount = new Set([...(gitStatus?.staged || []), ...(gitStatus?.modified || []), ...(gitStatus?.untracked || [])]).size + deletedNotes.length;
+  const changesCount = changeCount + deletedNotes.length;
 
   return (
     <aside className='right-panel' data-open={isOpen}>

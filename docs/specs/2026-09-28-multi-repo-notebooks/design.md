@@ -175,6 +175,7 @@ Each step ends with `pnpm test`, `pnpm lint` and `pnpm build` passing, then a co
 - The header, editor footer, sidebar and Settings no longer show the repository or branch. The note document panel has an Info tab (`NoteLocationProvider` in the app answers where a note lives, so every editor host shows it without new props) with the notebook, repository, branch, path and the read-only reason: unavailable, `core` branch, another branch, or no push access.
 - The notebook switcher marks notebooks of unavailable repositories; opening one shows the reason (translated by reason code, with the server's detail) in place of the Notes, Graph, Files and Screen views.
 - With more than one repository, the Changes rail and dialog group entries under the repository and its branch; a workspace with one repository keeps the single list and the dialog's branch line.
+- Anything the browser sends by path alone names the note's notebook too: remote-version reads, restores and deletions carry `notebookId`, and rendered asset URLs carry `?notebook=`, which the raw-asset routes use, because notebook roots may repeat across repositories. The live editor's widgets, previews and print export receive the notebook for that. An editor's dirty mark reads its own repository's Git status (or, remotely, its own draft), and the change counts add each repository's changes.
 
 ## Friction Notes
 

@@ -4,7 +4,7 @@ import { FolderTree } from './FolderTree.js';
 import React, { useEffect, useState } from 'react';
 import { BookOpen, CheckCircle2, CheckSquare, ChevronsDownUp, ChevronsUpDown, Filter, GitBranch, Library, MoreHorizontal, Search, Tag, X } from 'lucide-react';
 import type { NotebookFacets } from '@mygitnotes/core/note-query';
-import { FolderItem, GitStatus } from '../lib/types.js';
+import { FolderItem } from '../lib/types.js';
 import { mergeNotebookFacets, queryNotebookIds } from '../lib/note-facets.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { WorkspaceSidebar } from './WorkspaceChrome.js';
@@ -35,7 +35,8 @@ interface SidebarProps {
   facetsLoading?: boolean;
   facetsError?: string;
   workspaceTagNames: string[];
-  gitStatus: GitStatus | null;
+  /** Pending changes across the workspace's repositories. */
+  changeCount: number;
   canManageTags?: boolean;
   onPreviewTagUsage?: (tag: string) => Promise<number>;
   onRenameTag?: (from: string, to: string) => Promise<void>;
@@ -43,7 +44,7 @@ interface SidebarProps {
   onDeleteTag?: (tag: string) => Promise<void>;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, foldersWritable = false, beforeFolderChange, onFoldersChanged, selectedFolder = null, onSelectFolder, selectedNotebookId, facets, facetsLoading = false, facetsError = '', workspaceTagNames, filters, reorder, onToggleReorder, gitStatus, canManageTags = false, onPreviewTagUsage, onRenameTag, onMergeTag, onDeleteTag }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, foldersWritable = false, beforeFolderChange, onFoldersChanged, selectedFolder = null, onSelectFolder, selectedNotebookId, facets, facetsLoading = false, facetsError = '', workspaceTagNames, filters, reorder, onToggleReorder, changeCount, canManageTags = false, onPreviewTagUsage, onRenameTag, onMergeTag, onDeleteTag }) => {
   const { t, language } = useTranslation();
   const { value, statuses, onChange } = filters;
   const { status: selectedStatus, tags: selectedTags } = value;
@@ -118,10 +119,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
   const allTags = Object.keys(tagCounts);
   const visibleTags = filterAndSortTags(tagCounts, tagQuery, tagSort, language);
 
-  const modifiedCount = gitStatus?.modified.length || 0;
-  const untrackedCount = gitStatus?.untracked.length || 0;
-  const stagedCount = gitStatus?.staged.length || 0;
-  const dirtyCount = modifiedCount + untrackedCount + stagedCount;
+  const dirtyCount = changeCount;
 
   return (
     <WorkspaceSidebar

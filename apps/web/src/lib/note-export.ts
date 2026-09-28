@@ -34,8 +34,8 @@ export function downloadTextFile(filename: string, text: string, type: string): 
 }
 
 /** The note's printable body: `renderNote` HTML with its diagrams drawn, on the light variant since paper is white. */
-export async function renderPrintableNote(content: string, notePath: string, errorLabel?: string): Promise<string> {
-  const printable = new DOMParser().parseFromString(renderNote(content, notePath), 'text/html');
+export async function renderPrintableNote(content: string, notePath: string, errorLabel?: string, notebookId?: string): Promise<string> {
+  const printable = new DOMParser().parseFromString(renderNote(content, notePath, undefined, undefined, notebookId), 'text/html');
   // The print frame has no viewport, so lazy images never approach an intersection threshold.
   for (const image of printable.images) image.removeAttribute('loading');
   await renderMermaidBlocks(printable.body, { ...currentAppearance(), mode: 'light' }, { errorLabel });
@@ -49,11 +49,11 @@ export function printDocument(title: string, body: string): string {
 }
 
 /** Opens the browser's print dialog on the rendered note, where "Save as PDF" produces the file. */
-export async function printNoteAsPdf(title: string, content: string, notePath: string, errorLabel?: string): Promise<void> {
+export async function printNoteAsPdf(title: string, content: string, notePath: string, errorLabel?: string, notebookId?: string): Promise<void> {
   const frame = document.createElement('iframe');
   frame.setAttribute('aria-hidden', 'true');
   frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-  frame.srcdoc = printDocument(title, await renderPrintableNote(content, notePath, errorLabel));
+  frame.srcdoc = printDocument(title, await renderPrintableNote(content, notePath, errorLabel, notebookId));
   const remove = () => frame.remove();
   frame.addEventListener('load', async () => {
     const view = frame.contentWindow;

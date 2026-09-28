@@ -24,11 +24,11 @@ export const tableUIState = StateField.define<Map<number, TableUI>>({
 });
 
 export class LiveMarkdownTable extends WidgetType {
-  constructor(readonly text: string, readonly path: string, readonly from: number, readonly readOnly: boolean, readonly t: Translate, readonly ui?: TableUI) {
+  constructor(readonly text: string, readonly path: string, readonly from: number, readonly readOnly: boolean, readonly t: Translate, readonly ui?: TableUI, readonly notebookId?: string) {
     super();
   }
   eq(other: LiveMarkdownTable) {
-    return this.text === other.text && this.path === other.path && this.from === other.from && this.readOnly === other.readOnly && this.t === other.t && this.ui === other.ui;
+    return this.text === other.text && this.path === other.path && this.from === other.from && this.readOnly === other.readOnly && this.t === other.t && this.ui === other.ui && this.notebookId === other.notebookId;
   }
   toDOM(view: EditorView) {
     const root = document.createElement('div');
@@ -36,7 +36,7 @@ export class LiveMarkdownTable extends WidgetType {
     root.contentEditable = 'false';
     root.dataset.tableFrom = String(this.from);
     const model = findMarkdownTables(this.text)[0];
-    root.innerHTML = renderNote(this.text, this.path, this.t('preview.scrollableTable'), youtubeLabels(this.t)).trim();
+    root.innerHTML = renderNote(this.text, this.path, this.t('preview.scrollableTable'), youtubeLabels(this.t), this.notebookId).trim();
     if (!model) return root;
     const scroller = root.querySelector<HTMLElement>('.markdown-table-scroll')!;
     const table = root.querySelector('table')!;

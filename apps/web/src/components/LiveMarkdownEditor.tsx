@@ -37,6 +37,8 @@ export interface LiveMarkdownHandle {
 interface Props {
   content: string;
   notePath: string;
+  /** The note's notebook, so rendered assets reach its repository. */
+  notebookId?: string;
   readOnly: boolean;
   ariaLabel?: string;
   onChange: (content: string) => void;
@@ -47,7 +49,7 @@ interface Props {
 }
 const focusChanged = StateEffect.define<boolean>();
 let youtubeEditorSequence = 0;
-export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ content, notePath, readOnly, onChange, onCaret, ariaLabel = 'Note content', showLineNumbers = true, lineNumberOffset = 0, onCopyLines }, ref) => {
+export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ content, notePath, notebookId, readOnly, onChange, onCaret, ariaLabel = 'Note content', showLineNumbers = true, lineNumberOffset = 0, onCopyLines }, ref) => {
   const { t } = useTranslation();
   const linkLabel = t('links.open');
   const tableLabel = t('preview.scrollableTable'), pageLabel = t('editor.page');
@@ -121,12 +123,12 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
   useEffect(() => {
     const field = StateField.define<{ decorations: DecorationSet; focused: boolean; }>({
       create(state) {
-        return { decorations: liveDecorations(state, false, notePath, linkLabel, tableLabel, pageLabel, youtubeOwner.current, t), focused: false };
+        return { decorations: liveDecorations(state, false, notePath, linkLabel, tableLabel, pageLabel, youtubeOwner.current, t, notebookId), focused: false };
       },
       update(value, tr) {
         let focused = value.focused;
         for (const effect of tr.effects) if (effect.is(focusChanged)) focused = effect.value;
-        return { focused, decorations: liveDecorations(tr.state, focused, notePath, linkLabel, tableLabel, pageLabel, youtubeOwner.current, t) };
+        return { focused, decorations: liveDecorations(tr.state, focused, notePath, linkLabel, tableLabel, pageLabel, youtubeOwner.current, t, notebookId) };
       },
       provide: field => EditorView.decorations.from(field, value => value.decorations),
     });
@@ -205,7 +207,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
       view.destroy();
       editor.current = undefined;
     };
-  }, [notePath, ariaLabel, linkLabel, tableLabel, pageLabel, t]);
+  }, [notePath, notebookId, ariaLabel, linkLabel, tableLabel, pageLabel, t]);
   /* eslint-enable react-hooks/exhaustive-deps */
   useEffect(() => {
     const view = editor.current;

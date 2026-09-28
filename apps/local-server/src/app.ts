@@ -244,7 +244,8 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     app.get('/raw-assets/*', async (req, res) => {
       try {
         const file = (req.params as Record<string, string>)[0];
-        const { reader } = await remoteNote(res, file);
+        // `notebook` names the asset's notebook, since notebook roots may repeat across repositories.
+        const { reader } = await remoteNote(res, file, req.query.notebook);
         const config = await reader.config();
         const assetLists = await Promise.all(config.notebooks.map(nb => reader.assets(nb.id)));
         if (!assetLists.flat().some(asset => asset.path === file)) throw new SourceError('Path is not a workspace asset.', 403);

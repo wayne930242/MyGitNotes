@@ -257,7 +257,7 @@ function StudyLaneCard({ note: listed, row, controller, disabled, onDone, onOpen
             if (Math.abs(dx) >= 75 && Math.abs(dx) >= Math.abs(dy) * 1.5) turnPage(index + (dx < 0 ? 1 : -1));
           }}
         >
-          <NoteHtml className='prose-custom' html={renderNote(pages[index], note.path, t('preview.scrollableTable'), youtubeLabels(t))} notebookId={note.notebookId} />
+          <NoteHtml className='prose-custom' html={renderNote(pages[index], note.path, t('preview.scrollableTable'), youtubeLabels(t), note.notebookId)} notebookId={note.notebookId} />
         </div>
       </article>
       <StudyFooter progression={row.progression!} status={note.status} pageCount={pages.length} page={index} revealed={revealed} canRate={canRate} disabled={disabled} previous={previous} next={next} onMove={onMove} onPage={turnPage} onRate={rate} onDone={onDone} more={more} remaining={remaining} />

@@ -132,7 +132,7 @@ export function createLocalNotesRouter(): Router {
       if (!notePath) {
         return res.status(400).json({ error: 'path is required' });
       }
-      const repoRoot = asLocal((await noteRepository(res, notePath)).handle).root;
+      const repoRoot = asLocal((await noteRepository(res, notePath, req.query.notebookId)).handle).root;
 
       deleteNoteFile(repoRoot, notePath);
       if (noCommit) {

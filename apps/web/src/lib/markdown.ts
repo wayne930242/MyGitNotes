@@ -20,7 +20,8 @@ md.use({ renderer: { code: ({ text, lang }) => isMermaidInfo(lang ?? '') ? `<div
 
 export const DOMPURIFY_DIRECTIVE_CONFIG = { ADD_TAGS: ['iframe', 'details', 'summary', 'aside', 'section', 'article', 'header', 'footer', 'figure', 'figcaption', 'abbr', 'svg', 'path', 'circle', 'cite'], ADD_ATTR: ['allow', 'allowfullscreen', 'loading', 'data-video-id', 'data-start', 'data-youtube-mode', 'data-youtube-mode-option', 'data-youtube-session', 'data-youtube-source-url', 'data-youtube-copy', 'data-copy-label', 'data-copied-label', 'data-copy-failed-label', 'controls', 'preload', 'data-type', 'data-variant', 'data-stat', 'data-cols', 'data-col-span', 'data-direction', 'data-arrow', 'data-icon', 'data-qrcode', 'data-size', 'data-component-name', 'data-lucide', 'data-slide-index', 'data-vertical', 'data-label', 'data-card-type', 'open', 'aria-label', 'aria-hidden', 'style', 'viewBox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'] };
 
-export function renderNote(content: string, notePath: string, tableLabel = 'Horizontally scrollable table (Alt + wheel)', youtubeLabels: YouTubeLabels = DEFAULT_YOUTUBE_LABELS): string {
+/** `notebookId` names the note's notebook, so an asset URL reaches the right repository when notebook roots repeat across repositories. */
+export function renderNote(content: string, notePath: string, tableLabel = 'Horizontally scrollable table (Alt + wheel)', youtubeLabels: YouTubeLabels = DEFAULT_YOUTUBE_LABELS, notebookId?: string): string {
   const isMdx = /\.mdx$/i.test(notePath);
   let preprocessed = content;
   if (isMdx) {
@@ -58,7 +59,7 @@ export function renderNote(content: string, notePath: string, tableLabel = 'Hori
       image.tabIndex = 0;
       image.setAttribute('role', 'button');
     }
-    if (target?.kind === 'path') image.setAttribute('src', `/raw-assets/${target.path.split('/').map(encodeURIComponent).join('/')}`);
+    if (target?.kind === 'path') image.setAttribute('src', `/raw-assets/${target.path.split('/').map(encodeURIComponent).join('/')}${notebookId ? `?notebook=${encodeURIComponent(notebookId)}` : ''}`);
     else if (!target && !/^data:image\//i.test(src)) image.remove();
   }
   for (const heading of parsed.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6')) heading.dataset.headingSlug = headingSlug(heading.textContent || '');

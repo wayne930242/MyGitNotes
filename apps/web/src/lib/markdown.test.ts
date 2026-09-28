@@ -257,6 +257,11 @@ describe('renderNote R2 assets', () => {
     expect(html).toContain('src="/raw-assets/blog/src/assets/images/diag.png"');
     expect(html).toContain('alt="Diagram"');
   });
+
+  it('names the note notebook in asset URLs, since notebook roots may repeat across repositories', () => {
+    const html = renderNote('![Map](assets/map.png)', 'notes/life/note.md', undefined, undefined, 'trpg');
+    expect(html).toContain('src="/raw-assets/notes/life/assets/map.png?notebook=trpg"');
+  });
 });
 
 describe('renderNote generic directives and MDX Layer 2', () => {
