@@ -23,6 +23,12 @@ export function repositoryRef(source: SourceConfig): RepositoryRef {
   return { id: sourceIdentity(source), source };
 }
 
+/** Whether the credential signed in for `home` also reaches `other`: the same platform and site. */
+export function sharesCredential(home: SourceConfig, other: SourceConfig): boolean {
+  if (home.type !== other.type) return false;
+  return home.type !== 'gitlab' || (other.type === 'gitlab' && home.url === other.url);
+}
+
 /** A read or write named revisions that some repositories no longer hold. */
 export class StaleRevisionError extends SourceError {
   constructor(readonly repositories: RepositoryId[], message = 'The repository changed. Reload to continue from the latest revision.') {

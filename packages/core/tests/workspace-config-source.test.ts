@@ -75,3 +75,27 @@ describe('a local manifest store', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 });
+
+describe('repositories by path and shared credentials', () => {
+  const config: WorkspaceConfig = { schema_version: 1, workspace: { title: 'Test', default_notebook: 'ex' }, notebooks: [{ id: 'ex', title: 'Example', root: 'notes/ex' }, { id: 'deep', title: 'Deep', root: 'notes/ex-deep' }] };
+  const home = repositoryRef({ type: 'github', repository: 'owner/repo', branch: 'main' });
+  const repositories = createWorkspaceRepositories({ home, openHome: scope => ({ scope }), manifest: () => ({ load: async () => ({ config, revision: 'a'.repeat(40) }), save: vi.fn() }) });
+
+  it('finds the notebook whose root contains a path', async () => {
+    const { forPath } = repositories;
+    expect((await forPath('notes/ex/a.md')).notebook.id).toBe('ex');
+    expect((await forPath('notes/ex-deep/a.md')).notebook.id).toBe('deep');
+    await expect(forPath('notes/other/a.md')).rejects.toMatchObject({ status: 403 });
+    await expect(forPath('notes/ex')).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('shares a credential only within one platform and site', async () => {
+    const { sharesCredential } = await import('../src/repository.js');
+    const github = { type: 'github' as const, repository: 'a/b', branch: 'main' };
+    const gitlab = { type: 'gitlab' as const, url: 'https://gitlab.com', repository: 'a/b', branch: 'main' };
+    expect(sharesCredential(github, { ...github, repository: 'c/d' })).toBe(true);
+    expect(sharesCredential(github, gitlab)).toBe(false);
+    expect(sharesCredential(gitlab, { ...gitlab, repository: 'c/d' })).toBe(true);
+    expect(sharesCredential(gitlab, { ...gitlab, url: 'https://gitlab.example.com' })).toBe(false);
+  });
+});
