@@ -38,7 +38,7 @@ export function useWorkspaceNotes({ sourceId, repositories, activeWorkingNotes, 
   const [staleNotice, setStaleNotice] = useState('');
   useStaleNoteQueries((message, stale) => {
     setStaleNotice(message);
-    void refreshWorkspace().then(() => resetStaleNoteQueries(queryClient, stale));
+    void refreshWorkspace(true).then(() => resetStaleNoteQueries(queryClient, stale));
   });
   const revisionKey = JSON.stringify(revisions);
   const [previousRevisions, setPreviousRevisions] = useState(revisionKey);

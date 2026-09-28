@@ -459,7 +459,7 @@ const AppContent: React.FC = () => {
                             if (hasPendingDrafts() || documents.some(document => document.dirty)) throw new Error(t('folder.draftsHint'));
                           }}
                           onFoldersChanged={async () => {
-                            await refreshWorkspace();
+                            await refreshWorkspace(remote);
                             await refreshDocuments();
                           }}
                           selectedFolder={selectedFolder}
@@ -505,7 +505,7 @@ const AppContent: React.FC = () => {
                         screen={screen}
                         focusedLaneId={route.lane}
                         onStudySaved={() => {
-                          if (remote) void refreshWorkspace();
+                          if (remote) void refreshWorkspace(true);
                           else invalidateNotes();
                           void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message));
                         }}
@@ -652,7 +652,8 @@ const AppContent: React.FC = () => {
                 }
               }}
               onCommitted={async () => {
-                await refreshWorkspace();
+                // Another server instance may still cache the head from before this commit.
+                await refreshWorkspace(true);
                 if (!remote) {
                   await refreshDocuments();
                   await agentSystemRef.current?.refresh();

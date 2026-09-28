@@ -55,7 +55,8 @@ export function useFileNavigation({ editorRegistry, hasPendingDrafts, documents,
     void handleMoveNote(note).catch(() => {});
   };
   const onFilesChanged = async (result: FileResult) => {
-    await refreshWorkspace();
+    // A file action commits in a remote workspace; read the head past the server's cache.
+    await refreshWorkspace(true);
     await refreshDocuments();
     if (editorRoute.note) {
       const nb = config?.notebooks.find(nb => nb.id === editorNotebookId);

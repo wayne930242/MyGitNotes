@@ -137,10 +137,12 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
 
   // The workspace answer is applied before folders arrive, so the note queries keyed by source
   // and revision start in parallel with `/api/folders` instead of waiting behind it.
-  const refreshWorkspace = useCallback(async () => {
+  // `fresh` reads each branch head past the server's cache, which may still hold a head from
+  // before a commit when another server instance answers.
+  const refreshWorkspace = useCallback(async (fresh?: boolean) => {
     const request = ++refreshRequest.current;
     try {
-      const ws = await fetchWorkspace();
+      const ws = await fetchWorkspace(fresh === true);
       if (request !== refreshRequest.current) return;
       const folderRequest = fetchFolders();
       const workspace = JSON.stringify([ws.home, ws.repositories.map((repository) => [repository.id, repository.branch]), ws.config?.notebooks.map((nb) => [nb.id, nb.root])]);

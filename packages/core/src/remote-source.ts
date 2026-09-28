@@ -191,7 +191,7 @@ export abstract class RemoteSource {
   catalog(): RepositoryCatalog {
     const local = new Map<string, Promise<NoteListItem[]>>();
     return {
-      revision: async () => (await this.getSnapshot()).sha,
+      revision: async (fresh = false) => (await this.getSnapshot(fresh)).sha,
       index: nb => {
         let pending = local.get(nb.id);
         if (!pending) {

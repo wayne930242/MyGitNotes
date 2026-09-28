@@ -11,8 +11,8 @@ import { DEFAULT_NOTE_QUERY, type NoteAgenda, type NotebookFacets, noteContentSn
 
 /** Read model of the notebooks one repository serves, implemented by remote and local sources. */
 export interface RepositoryCatalog {
-  /** The repository's commit identity, or an empty string for a worktree, which has none. */
-  revision(): Promise<string>;
+  /** The repository's commit identity, or an empty string for a worktree, which has none; `fresh` reads the branch head past any cache. */
+  revision(fresh?: boolean): Promise<string>;
   /** Notes of one notebook without content. */
   index(notebook: NotebookConfig): Promise<NoteListItem[]>;
   /** Note bodies (without frontmatter) by path. */
@@ -86,12 +86,14 @@ export interface CatalogRepository {
 /**
  * Joins the catalogs of a workspace's repositories. `expected` holds the revisions the caller
  * works from; a repository that moved on, or is no longer part of the workspace, is stale.
+ * A cached branch head may lag a commit another server instance made, so a mismatch is
+ * checked against the uncached head before the caller is told it is behind.
  */
 export async function workspaceCatalog(config: WorkspaceConfig, repositories: CatalogRepository[], expected: RevisionSet = {}): Promise<NoteCatalog> {
   const stale: RepositoryId[] = [];
   for (const [id, revision] of Object.entries(expected)) {
     const repository = repositories.find(item => item.id === id);
-    if (!repository || await repository.catalog.revision() !== revision) stale.push(id);
+    if (!repository || await repository.catalog.revision() !== revision && await repository.catalog.revision(true) !== revision) stale.push(id);
   }
   if (stale.length) throw new StaleRevisionError(stale);
   const owner = new Map(repositories.flatMap(repository => repository.notebooks.map(notebook => [notebook.id, repository] as const)));
