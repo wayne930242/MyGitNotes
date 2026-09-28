@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import tar from 'tar-stream';
+import type { GitHubSource } from '../src/github-source.js';
 import { openRemoteHome } from '../src/remote-factory.js';
 
 const manifest = 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n';
@@ -13,7 +14,7 @@ async function fixture(count = 100) {
   const pack = tar.pack();
   const chunks: Buffer[] = [];
   const finished = new Promise<Buffer>((resolve, reject) => {
-    pack.on('data', chunk => chunks.push(chunk));
+    pack.on('data', chunk => chunks.push(chunk as Buffer));
     pack.on('end', () => resolve(gzipSync(Buffer.concat(chunks))));
     pack.on('error', reject);
   });
@@ -30,7 +31,7 @@ async function fixture(count = 100) {
     const headers = new Headers(init.headers);
     const json = (data: unknown, etag?: string) => etag && headers.get('if-none-match') === etag ? new Response(null, { status: 304 }) : new Response(JSON.stringify(data), { headers: etag ? { etag } : {} });
     if (headers.get('Authorization') === 'Bearer denied' || !permitted) return new Response('{}', { status: 404 });
-    if (url.startsWith('https://codeload.github.com/')) return new Response(archive);
+    if (url.startsWith('https://codeload.github.com/')) return new Response(new Uint8Array(archive));
     if (url === 'https://api.github.com/graphql') {
       const texts = new Map(Object.values(files).map(text => [blobSha(text), text]));
       const repository = Object.fromEntries([...JSON.parse(String(init.body)).query.matchAll(/(b\d+): object\(oid: "([a-f0-9]+)"\)/g)].map(([, alias, sha]: string[]) => [alias, { isBinary: false, isTruncated: false, text: altered.get(sha) ?? texts.get(sha) }]));
@@ -188,7 +189,7 @@ describe('GitHub request budgets', () => {
   });
   it('keeps ordinary permission errors separate from quota errors and rechecks revoked cached access immediately', async () => {
     const denied = vi.fn(async () => new Response('{"message":"Resource not accessible"}', { status: 403 }));
-    const source = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'one', denied).reader;
+    const source = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'one', denied).reader as GitHubSource;
     await expect(source.api('')).rejects.toMatchObject({ status: 403, retryAfter: undefined });
     await expect(source.api('')).rejects.toMatchObject({ status: 403 });
     expect(denied).toHaveBeenCalledTimes(2);

@@ -164,7 +164,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
                 if (!icon) return null;
                 const span = document.createElement('span');
                 span.className = 'live-md-completion-icon';
-                span.innerHTML = icon;
+                span.replaceChildren(new DOMParser().parseFromString(icon, 'image/svg+xml').documentElement);
                 return span;
               },
             }],

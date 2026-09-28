@@ -5,6 +5,7 @@ MyGitNotes handles local filesystem and Git operations with defense-in-depth bou
 ## 1. Path Traversal & Symlink Guards
 
 All file paths received by the MCP server or local API bridge are validated through `packages/core/src/path-guard.ts`:
+
 - All relative paths are normalized and resolved against the repository root.
 - Paths containing `..` or attempting to escape the repository root are rejected with an explicit error.
 - Symlinks pointing outside the repository root are forbidden.
