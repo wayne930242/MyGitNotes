@@ -2,8 +2,7 @@
 title: Reading List
 tags: [inspiration]
 status: inbox
-gist: 9a3d316a730006cd1a2e9ab854858ef2
-updated: "2026-09-28T11:34:32.266Z"
+updated: "2026-09-28T11:35:15.943Z"
 ---
 # Reading List
 
