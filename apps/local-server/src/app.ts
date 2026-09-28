@@ -15,6 +15,7 @@ import { createFolderManagerRouter } from './folder-manager.js';
 import { createR2AssetHandler } from './r2-assets.js';
 import { createR2ManagerRouter } from './r2-manager.js';
 import { createFileManagerRouter } from './file-manager.js';
+import { createGistRouter, gistToken, noteGist, syncGists } from './gists.js';
 
 function isLoopbackHttpOrigin(origin: string | undefined): boolean {
   if (!origin) return false;
@@ -93,6 +94,12 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     const remoteNote = async (res: express.Response, file: unknown, notebookId?: unknown) => asRemote((await noteRepository(res, file, notebookId)).handle);
     const remoteRepositories = async (res: express.Response) => (await eachRepository(res)).map(({ handle }) => asRemote(handle));
     app.use('/api/core', createRemoteCoreUpdateRouter(base));
+    app.use(createGistRouter());
+    /** Pushes committed notes that name a Gist to it; notes that name none cost nothing. */
+    const publishedGists = async (res: express.Response, notes: { path: string; content: string; metadata: Record<string, unknown>; }[]) => {
+      const token = gistToken(res);
+      return token && notes.some(note => noteGist(note.metadata)) ? { gists: await syncGists(token, notes) } : {};
+    };
     app.get('/api/workspace', async (req, res) => {
       try {
         const workspace = workspaceOf(res);
@@ -262,7 +269,8 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
         const { repository, notes, revision, message, documents } = req.body;
         const target = await namedRemote(res, repository);
         if (!target.authenticated) throw new SourceError('Sign in with write permission to commit notes.', 403);
-        res.json(await target.reader.commitNotes(notes, revision, message, documents));
+        const receipt = await target.reader.commitNotes(notes, revision, message, documents);
+        res.json({ ...receipt, ...await publishedGists(res, notes) });
       } catch (error) {
         fail(res, error);
       }
@@ -272,7 +280,8 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
         if (!signedIn(res)) throw new SourceError('Sign in with write permission to edit notes.', 403);
         const { path: file, content, metadata, revision, createOnly, notebookId } = req.body;
         if (typeof file !== 'string' || typeof content !== 'string') throw new SourceError('path and content are required.');
-        res.json(await (await remoteNote(res, file, notebookId)).reader.save(file, content, metadata, revision, createOnly));
+        const saved = await (await remoteNote(res, file, notebookId)).reader.save(file, content, metadata, revision, createOnly);
+        res.json({ ...saved, ...await publishedGists(res, [saved.note]) });
       } catch (error) {
         fail(res, error);
       }

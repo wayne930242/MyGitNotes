@@ -41,7 +41,7 @@ function commitHook() {
   };
   const clearCommittedDrafts = vi.fn();
   const setRepositoryRevision = vi.fn();
-  const { result } = renderHook(() => useWorkingNoteCommit({ documents: [], config: null, sourceId: home.id, t: ((key: string, params?: Record<string, string>) => `${key} ${JSON.stringify(params ?? {})}`) as never, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision }));
+  const { result } = renderHook(() => useWorkingNoteCommit({ documents: [], config: null, sourceId: home.id, t: ((key: string, params?: Record<string, string>) => `${key} ${JSON.stringify(params ?? {})}`) as never, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError: vi.fn() }));
   return { ...result.current, clearCommittedDrafts, setRepositoryRevision };
 }
 

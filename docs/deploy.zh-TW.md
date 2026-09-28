@@ -201,7 +201,7 @@ Compose 預設將 app 發布於 127.0.0.1:4321，並以 redis-data volume 保存
 
 GitHub 工作區在「設定」頁提示缺少 workflow 時，先按 **Install Core sync**，再按 **Update Core**。bootstrap 也會把 [canonical workflow](../packages/core/assets/mygitnotes-core-sync.yml) 安裝到 `main` 的 `.github/workflows/mygitnotes-core-sync.yml`；預設分支不是 `main` 的儲存庫，可透過「設定」頁安裝到該分支。workflow 會抓取 MyGitNotes upstream，並 push `core` 的 fast-forward。「設定」頁會追蹤對應的 run，確認更新後的 revision 才回報成功。既有 workflow 檔案會保留。
 
-GitHub OAuth 需要 `repo workflow` scope；較舊的授權會顯示 **Re-authorize GitHub**。app 會加密使用者的授權，存成儲存庫 Actions secret `MYGITNOTES_CORE_SYNC_TOKEN`，供 runner push 使用。能修改該儲存庫 workflow 的人，都能透過 workflow 使用這份憑證。以使用者 token push 會觸發已設定的部署事件；部署完成與 Core sync 完成是兩件事。
+GitHub OAuth 需要 `repo workflow gist` scope；`gist` 讓筆記的「資訊」分頁能把本文發佈成 secret Gist。較舊的授權會顯示 **Re-authorize GitHub**，用這類授權發佈時會要求重新登入。app 會加密使用者的授權，存成儲存庫 Actions secret `MYGITNOTES_CORE_SYNC_TOKEN`，供 runner push 使用。能修改該儲存庫 workflow 的人，都能透過 workflow 使用這份憑證。以使用者 token push 會觸發已設定的部署事件；部署完成與 Core sync 完成是兩件事。
 
 GitHub App 安裝需在 App 設定開啟 **Contents**、**Workflows**、**Actions** 與 **Secrets** 的寫入權限；App 登入不會要求 OAuth scope。GitLab 目前不支援 Core 更新，GitLab 登入維持既有的 `api` scope。
 

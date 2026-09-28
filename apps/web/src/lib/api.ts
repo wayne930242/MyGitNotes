@@ -3,15 +3,23 @@ import type { RepositoryId } from '@mygitnotes/core/repository';
 import type { WorkspaceAnswer } from './workspace-repositories.js';
 
 const API_BASE = '/api';
-/** Commits drafts of one repository as one commit on it. */
-export async function commitRemoteNotes(repository: RepositoryId, notes: { path: string; content: string; metadata: Record<string, unknown>; createOnly?: boolean; }[], revision: string, message: string, documents: { path: string; page: unknown; base: unknown; }[] = []): Promise<{ revision: string; commit: { commitHash: string; }; }> {
+/** The outcome of pushing one committed note to the Gist its `gist` frontmatter names. */
+export interface GistSync {
+  path: string;
+  gist: string;
+  error?: string;
+  reauthorize?: boolean;
+}
+
+/** Commits drafts of one repository as one commit on it; `gists` reports the published notes it pushed to their Gists. */
+export async function commitRemoteNotes(repository: RepositoryId, notes: { path: string; content: string; metadata: Record<string, unknown>; createOnly?: boolean; }[], revision: string, message: string, documents: { path: string; page: unknown; base: unknown; }[] = []): Promise<{ revision: string; commit: { commitHash: string; }; gists?: GistSync[]; }> {
   const res = await fetch(`${API_BASE}/notes/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, notes, revision, message, documents }) });
   if (!res.ok) throw await responseError(res, 'Failed to commit notes');
   return res.json();
 }
 export class ApiError extends Error {
-  /** `staleRepositories` names the repositories whose revision a 409 rejected. */
-  constructor(message: string, public status: number, public retryAfter?: number, public staleRepositories?: RepositoryId[]) {
+  /** `staleRepositories` names the repositories whose revision a 409 rejected; `reauthorize` means signing in again grants what the request lacked. */
+  constructor(message: string, public status: number, public retryAfter?: number, public staleRepositories?: RepositoryId[], public reauthorize = false) {
     super(message);
   }
 }
@@ -19,7 +27,20 @@ export class ApiError extends Error {
 export async function responseError(res: Response, fallback: string): Promise<ApiError> {
   const data = await res.json().catch(() => ({}));
   const seconds = Number(res.headers.get('Retry-After') || data.retryAfter);
-  return new ApiError(data.error || fallback, res.status, Number.isFinite(seconds) && seconds > 0 ? seconds : undefined, Array.isArray(data.staleRepositories) ? data.staleRepositories : undefined);
+  return new ApiError(data.error || fallback, res.status, Number.isFinite(seconds) && seconds > 0 ? seconds : undefined, Array.isArray(data.staleRepositories) ? data.staleRepositories : undefined, data.reauthorize === true);
+}
+
+/** Publishes a note body as a secret Gist of the signed-in GitHub account. */
+export async function publishGist(note: { path: string; content: string; metadata: Record<string, unknown>; }): Promise<{ id: string; url: string; }> {
+  const res = await fetch(`${API_BASE}/gists`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(note) });
+  if (!res.ok) throw await responseError(res, 'Failed to publish the Gist');
+  return res.json();
+}
+
+/** Deletes a published Gist; one already gone counts as deleted. */
+export async function unpublishGist(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/gists/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok) throw await responseError(res, 'Failed to delete the Gist');
 }
 
 export async function fetchWorkspace(fresh = false): Promise<WorkspaceAnswer> {

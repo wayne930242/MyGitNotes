@@ -12,6 +12,8 @@ export interface NoteLocation {
   branch: string;
   path: string;
   readOnly?: ReadOnlyReason;
+  /** Whether the note may be published as a Gist: a writable note of a GitHub repository. */
+  gists: boolean;
 }
 
 const NoteLocationContext = createContext<(note: NoteRef) => NoteLocation | undefined>(() => undefined);

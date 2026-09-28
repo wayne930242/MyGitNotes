@@ -87,8 +87,14 @@ export function requestWorkspace(base: string, configSource: WorkspaceConfigSour
       }
     }
     res.locals.workspace = openWorkspace(settings, token, cache);
+    res.locals.token = token;
     next();
   };
+}
+
+/** The signed-in platform token of the request, for calls outside its repositories such as Gists. */
+export function requestToken(res: express.Response): string | undefined {
+  return res.locals.token as string | undefined;
 }
 
 export function workspaceOf(res: express.Response): RequestWorkspace {

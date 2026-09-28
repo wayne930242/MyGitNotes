@@ -29,7 +29,7 @@ async function start(type: 'github' | 'gitlab') {
   return `http://127.0.0.1:${address.port}`;
 }
 describe('remote Core HTTP routes', () => {
-  it.each([['github', '', 'repo workflow'], ['github', 'github-app', null], ['gitlab', '', 'api']] as const)('requests the agreed OAuth scope for %s %s', async (provider, appType, scope) => {
+  it.each([['github', '', 'repo workflow gist'], ['github', 'github-app', null], ['gitlab', '', 'api']] as const)('requests the agreed OAuth scope for %s %s', async (provider, appType, scope) => {
     const base = await start(provider);
     vi.stubEnv('SESSION_SECRET', 'test-session-secret-with-at-least-32-characters');
     vi.stubEnv('GITHUB_CLIENT_ID', 'test-client');

@@ -109,7 +109,8 @@ const AppContent: React.FC = () => {
     const notebook = config?.notebooks.find(nb => nb.id === note.notebookId);
     if (!notebook) return undefined;
     const name = repository?.repository ?? (repository?.id.startsWith('local:') ? repository.id.slice('local:'.length) : repository?.id ?? '');
-    return { notebook: notebook.title, repository: name, branch: repository?.branch ?? '', path: note.path, readOnly: readOnlyReason(repository) };
+    const readOnly = readOnlyReason(repository);
+    return { notebook: notebook.title, repository: name, branch: repository?.branch ?? '', path: note.path, readOnly, gists: repository?.type === 'github' && !readOnly };
   };
   /** Pending changes across repositories; a path names a file only within its repository, so each repository counts its own. */
   const changeCount = remote ? Object.keys(activeWorkingNotes).length + pendingDocuments.length : repositories.filter(repository => !repository.unavailable).reduce((sum, repository) => {
@@ -178,7 +179,7 @@ const AppContent: React.FC = () => {
   // Create New Note dialog: its form state and the handlers that render or persist a new note draft.
   const { createError, isNewNoteOpen, setIsNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteFolder, setNewNoteFolder, newNoteTags, setNewNoteTags, newNoteTemplateId, setNewNoteTemplateId, newNoteFolders, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote } = useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, sourceId, newNoteStatuses, t, onCreated: handleOpenNote });
 
-  const { commitWorkingNotes } = useWorkingNoteCommit({ documents, config, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision });
+  const { commitWorkingNotes } = useWorkingNoteCommit({ documents, config, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError });
 
   // Assets are scoped to whichever notebook the open note (or the selected browse notebook) belongs to.
   const { handleUploadAsset, handleDeleteAsset, handleMoveAsset } = useAssetOperations({ editingNote, selectedNotebookId, remote, setAssets, setGitStatus });

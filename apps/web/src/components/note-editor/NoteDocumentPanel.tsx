@@ -22,6 +22,8 @@ export interface NoteDocumentPanelProps {
   isInfoPanelOpen: boolean;
   /** The note's repository-relative path, for the Info tab. */
   notePath: string;
+  /** The editor's current body, which the Info tab publishes as a Gist. */
+  content: string;
   findQuery: string;
   setFindQuery: (value: string) => void;
   findIndex: number;
@@ -63,7 +65,7 @@ export interface NoteDocumentPanelProps {
 }
 
 /** The zoom/pane editor's document panel: its tab strip and the find, outline, frontmatter, asset and view sections it switches between. */
-export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isViewPanelOpen, isInfoPanelOpen, notePath, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, readOnly, beforeFileChange, onFilesChanged }: NoteDocumentPanelProps) {
+export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isViewPanelOpen, isInfoPanelOpen, notePath, content, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, readOnly, beforeFileChange, onFilesChanged }: NoteDocumentPanelProps) {
   const { t } = useTranslation();
 
   const sections = (
@@ -141,7 +143,7 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
       {showFrontmatter && <NoteFrontmatterPanel metadata={metadata} setMetadata={setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={locked} newFieldKey={newFieldKey} setNewFieldKey={setNewFieldKey} frontmatterViewMode={frontmatterViewMode} setFrontmatterViewMode={setFrontmatterViewMode} yamlText={yamlText} setYamlText={setYamlText} yamlError={yamlError} setYamlError={setYamlError} tagInput={tagInput} setTagInput={setTagInput} isTagDropdownOpen={isTagDropdownOpen} setIsTagDropdownOpen={setIsTagDropdownOpen} />}
       {isAssetPickerOpen && <FileManager notebookId={notebookId} writable={!readOnly} mode='pick-image' layout='panel' onInsert={locked ? undefined : onInsertAssetRef} beforeChange={beforeFileChange} onChanged={onFilesChanged} />}
       {isViewPanelOpen && <NoteViewPanel />}
-      {isInfoPanelOpen && <NoteInfoPanel note={{ notebookId, path: notePath }} />}
+      {isInfoPanelOpen && <NoteInfoPanel note={{ notebookId, path: notePath }} content={content} metadata={metadata} setMetadata={setMetadata} locked={locked || readOnly} />}
     </>
   );
 
