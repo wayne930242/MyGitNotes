@@ -1,29 +1,15 @@
 import { Router } from 'express';
-import fs from 'node:fs/promises';
 import path from 'node:path';
-import { createHash, randomUUID } from 'node:crypto';
 import { createRemoteSource, loadWorkspaceConfig, readWorkspaceDocument, SCREEN_DOCUMENT, serializeWorkspaceDocument, type SourceConfig, SourceError, type WorkspaceConfig, type WorkspaceDocument } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
-
-const revisionOf = (text: string | null) => text === null ? 'missing' : createHash('sha256').update(text).digest('hex');
+import { readBoundedFile, readSnapshotText, revisionOf, writeFileAtomic } from './workspace-files.js';
 
 /** Reads and writes one workspace document as `{ page, revision, path, writable }`. */
 export function createWorkspaceDocumentRouter(base: string, source: SourceConfig, document: WorkspaceDocument): Router {
   const { file, label, maxBytes } = document;
-  async function readLocal(root: string, name = file) {
-    const target = path.join(root, name);
-    try {
-      const stat = await fs.lstat(target);
-      if (!stat.isFile() || stat.isSymbolicLink()) throw new SourceError(`${label} configuration must be a regular file.`, 403);
-      if (stat.size > maxBytes) throw new SourceError(`${label} configuration is too large.`, 413);
-      return await fs.readFile(target, 'utf8');
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-      throw error;
-    }
-  }
+  const readLocal = (root: string, name = file) => readBoundedFile(root, name, maxBytes, `${label} configuration`);
   function decode(raw: string | null, config: WorkspaceConfig | null) {
     try {
       return readWorkspaceDocument(document, raw, config);
@@ -57,11 +43,10 @@ export function createWorkspaceDocumentRouter(base: string, source: SourceConfig
       const token = await authToken(req, base);
       const reader = createRemoteSource(source, token);
       const snapshot = await reader.getSnapshot();
-      const exists = snapshot.entries.some(entry => entry.path === file);
-      const raw = exists ? (await reader.readFile(file)).toString('utf8') : null;
+      const raw = await readSnapshotText(reader, snapshot, file);
       const config = await reader.config();
-      const { page } = await own(decode(raw, config), config, async () => snapshot.entries.some(entry => entry.path === SCREEN_DOCUMENT.file) ? (await reader.readFile(SCREEN_DOCUMENT.file)).toString('utf8') : null);
-      res.json({ page, revision: snapshot.sha, path: file, writable: Boolean(token && snapshot.info.permissions?.push && source.branch === 'main') });
+      const { page } = await own(decode(raw, config), config, () => readSnapshotText(reader, snapshot, SCREEN_DOCUMENT.file));
+      res.json({ page, revision: snapshot.sha, path: file, writable: reader.canWrite(snapshot) });
     } catch (error) {
       fail(res, error);
     }
@@ -80,14 +65,7 @@ export function createWorkspaceDocumentRouter(base: string, source: SourceConfig
           if ((await own(value.data, loadWorkspaceConfig(source.path), () => readLocal(source.path, SCREEN_DOCUMENT.file))).foreign) throw foreign();
           const raw = await readLocal(source.path);
           if (revisionOf(raw) !== revision) throw new SourceError(`The ${label} configuration changed. Reload it before saving your draft.`, 409);
-          const target = path.join(source.path, file);
-          const temporary = `${target}.${randomUUID()}.tmp`;
-          try {
-            await fs.writeFile(temporary, yaml, { flag: 'wx', mode: 0o600 });
-            await fs.rename(temporary, target);
-          } finally {
-            await fs.rm(temporary, { force: true });
-          }
+          await writeFileAtomic(path.join(source.path, file), yaml);
           res.json({ page: value.data, revision: revisionOf(yaml), path: file, writable: true });
         });
       }
@@ -95,8 +73,7 @@ export function createWorkspaceDocumentRouter(base: string, source: SourceConfig
       if (!token) throw new SourceError(`Sign in with write access to save the ${label} configuration.`, 403);
       const reader = createRemoteSource(source, token);
       const snapshot = await reader.getSnapshot();
-      const screen = async () => snapshot.entries.some(entry => entry.path === SCREEN_DOCUMENT.file) ? (await reader.readFile(SCREEN_DOCUMENT.file)).toString('utf8') : null;
-      if ((await own(value.data, await reader.config(), screen)).foreign) throw foreign();
+      if ((await own(value.data, await reader.config(), () => readSnapshotText(reader, snapshot, SCREEN_DOCUMENT.file))).foreign) throw foreign();
       const saved = await reader.saveWorkspaceDocument(document, yaml, revision);
       res.json({ page: value.data, revision: saved.revision, path: file, writable: true });
     } catch (error) {

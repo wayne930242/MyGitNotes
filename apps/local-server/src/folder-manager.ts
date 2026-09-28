@@ -1,28 +1,16 @@
 import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
-import { createHash, randomUUID } from 'node:crypto';
-import { createRemoteSource, FolderCommandSchema, type FolderSnapshot, isNotebookContent, loadWorkspaceConfig, planFolderChange, RemoteSource, resolveSafePath, type SourceConfig, SourceError, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
+import { createHash } from 'node:crypto';
+import { createRemoteSource, FolderCommandSchema, type FolderSnapshot, isNotebookContent, loadWorkspaceConfig, planFolderChange, RemoteSource, type SourceConfig, SourceError, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
+import { regularPath, writeFileAtomicSync } from './workspace-files.js';
 
 const documents = WORKSPACE_DOCUMENTS.map(document => document.file);
 
 const isText = (file: string) => /\.(md|markdown|txt)$/i.test(file) || path.posix.basename(file) === '_dir.yml';
-function regularPath(root: string, relative: string) {
-  const full = resolveSafePath(root, relative);
-  let current = root;
-  for (const part of relative.split('/')) {
-    current = path.join(current, part);
-    try {
-      if (fs.lstatSync(current).isSymbolicLink()) throw new SourceError('Symlinks are protected.', 403);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-  }
-  return full;
-}
 export function localFolderSnapshot(root: string): FolderSnapshot {
   const config = loadWorkspaceConfig(root);
   if (!config) throw new SourceError('Workspace configuration is missing.', 400);
@@ -74,16 +62,7 @@ export function applyLocalFolderPlan(root: string, before: FolderSnapshot, after
   const newDirs = after.directories.filter(dir => !before.directories.includes(dir)).sort((a, b) => a.length - b.length);
   const removedDirs = before.directories.filter(dir => !after.directories.includes(dir)).sort((a, b) => b.length - a.length);
   const applied: string[] = [];
-  const write = (file: string, content: string) => {
-    const target = regularPath(root, file);
-    const temporary = `${target}.${randomUUID()}.tmp`;
-    try {
-      fs.writeFileSync(temporary, content, { flag: 'wx', mode: modes.get(file) || 0o600 });
-      fs.renameSync(temporary, target);
-    } finally {
-      if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
-    }
-  };
+  const write = (file: string, content: string) => writeFileAtomicSync(regularPath(root, file), content, modes.get(file) || 0o600);
   try {
     for (const dir of newDirs) fs.mkdirSync(regularPath(root, dir), { recursive: true });
     for (const change of changes.filter(c => c.content !== undefined)) {
@@ -135,9 +114,9 @@ export function createFolderManagerRouter(base: string, source: SourceConfig): R
   router.get('/', async (req, res) => {
     try {
       if (source.type === 'local') return res.json({ revision: revision(localFolderSnapshot(source.path)), writable: await getCurrentBranch(source.path) === 'main' });
-      const token = await authToken(req, base);
-      const snapshot = await createRemoteSource(source, token).getSnapshot(true);
-      res.json({ revision: snapshot.sha, writable: Boolean(token && snapshot.info.permissions?.push && source.branch === 'main') });
+      const reader = createRemoteSource(source, await authToken(req, base));
+      const snapshot = await reader.getSnapshot(true);
+      res.json({ revision: snapshot.sha, writable: reader.canWrite(snapshot) });
     } catch (error) {
       fail(res, error);
     }

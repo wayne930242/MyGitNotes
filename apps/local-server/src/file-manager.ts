@@ -1,26 +1,14 @@
 import { type Response, Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { getCurrentBranch } from '@mygitnotes/git';
-import { assetHash, assetInfo, assetRoot, createRemoteSource, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isNotebookContent, loadWorkspaceConfig, managedNotebook, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSource, resolveSafePath, type SourceConfig, SourceError, withinPath, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
+import { assetHash, assetInfo, assetRoot, createRemoteSource, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isNotebookContent, loadWorkspaceConfig, managedNotebook, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSource, type SourceConfig, SourceError, withinPath, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
 import { authToken } from './auth.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
+import { regularPath, writeFileAtomicSync } from './workspace-files.js';
 
 const auxiliary = WORKSPACE_DOCUMENTS.map(document => document.file);
-function regularPath(root: string, file: string) {
-  const full = resolveSafePath(root, file);
-  let cursor = root;
-  for (const part of file.split('/')) {
-    cursor = path.join(cursor, part);
-    try {
-      if (fs.lstatSync(cursor).isSymbolicLink()) throw new SourceError('Symlinks are protected.', 403);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-  }
-  return full;
-}
 interface CatalogFile {
   size: number;
   stamp: string;
@@ -136,15 +124,7 @@ export function applyLocalFilePlan(root: string, before: FileSnapshot, after: Re
   const removedDirs = before.directories.filter(dir => !after.directories.includes(dir)).sort((a, b) => b.length - a.length);
   const modes = new Map([...before.files.keys()].map(file => [file, fs.statSync(regularPath(root, file)).mode]));
   for (const file of [...changes, ...addedDirs, ...removedDirs]) regularPath(root, file);
-  const write = (file: string, bytes: Buffer, mode?: number) => {
-    const target = regularPath(root, file), temp = target + '.' + randomUUID() + '.tmp';
-    try {
-      fs.writeFileSync(temp, bytes, { flag: 'wx', mode: mode ?? 0o600 });
-      fs.renameSync(temp, target);
-    } finally {
-      if (fs.existsSync(temp)) fs.unlinkSync(temp);
-    }
-  };
+  const write = (file: string, bytes: Buffer, mode?: number) => writeFileAtomicSync(regularPath(root, file), bytes, mode);
   try {
     for (const dir of addedDirs) fs.mkdirSync(regularPath(root, dir), { recursive: true });
     for (const file of changes) {
@@ -175,7 +155,7 @@ export function createFileManagerRouter(base: string, source: SourceConfig): Rou
     }
     const token = await authToken(req, base), reader = createRemoteSource(source, token);
     const snapshot = await remoteFiles(reader, command), state = await reader.getSnapshot();
-    return { snapshot, revision: state.sha, writable: Boolean(token && state.info.permissions?.push && source.branch === 'main'), reader };
+    return { snapshot, revision: state.sha, writable: reader.canWrite(state), reader };
   };
   const catalog = async (req: import('express').Request) => {
     if (source.type === 'local') {
@@ -190,7 +170,7 @@ export function createFileManagerRouter(base: string, source: SourceConfig): Rou
       if (entry.type === 'tree') index.directories.push(entry.path);
       else if (entry.type === 'blob') index.files.set(entry.path, { size: entry.size || 0, stamp: entry.sha, hash: entry.sha });
     }
-    return { index, revision: state.sha, writable: Boolean(token && state.info.permissions?.push && source.branch === 'main'), read: (file: string) => reader.readFile(file) };
+    return { index, revision: state.sha, writable: reader.canWrite(state), read: (file: string) => reader.readFile(file) };
   };
   const notebook = (snapshot: Pick<FileSnapshot, 'notebooks'>, id: unknown) => {
     const nb = snapshot.notebooks.find(nb => nb.id === id);

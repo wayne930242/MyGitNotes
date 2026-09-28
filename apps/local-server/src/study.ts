@@ -1,29 +1,17 @@
 import { Router } from 'express';
-import fs from 'node:fs/promises';
 import syncFs from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import path from 'node:path';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { parse, stringify } from 'yaml';
 import { createRemoteSource, emptyStudyWorkspace, type SourceConfig, SourceError, STUDY_FILE, STUDY_MAX_BYTES, StudyWorkspaceSchema } from '@mygitnotes/core';
 import { applyStageAction, createStudyNote, defaultStudyProgression, findStudyNote, isNotebookContent, loadWorkspaceConfig, parseNoteContent, readNoteFile, readScreenPage, reconcileStudyNote, replaceNoteStatus, resolveSafePath, SCREEN_PAGE_FILE, StudyLaneActionSchema, studyLaneStatuses, undoStudyAction } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { authToken } from './auth.js';
+import { readBoundedFile, readSnapshotText, revisionOf, writeFileAtomic } from './workspace-files.js';
 
-const revisionOf = (text: string | null) => text === null ? 'missing' : createHash('sha256').update(text).digest('hex');
-async function readLocal(root: string) {
-  const file = path.join(root, STUDY_FILE);
-  try {
-    const stat = await fs.lstat(file);
-    if (!stat.isFile() || stat.isSymbolicLink()) throw new SourceError('Study data must be a regular file.', 403);
-    if (stat.size > STUDY_MAX_BYTES) throw new SourceError('Study data is too large.', 413);
-    return await fs.readFile(file, 'utf8');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw error;
-  }
-}
+const readLocal = (root: string) => readBoundedFile(root, STUDY_FILE, STUDY_MAX_BYTES, 'Study data');
 function decode(raw: string | null) {
   if (raw !== null && Buffer.byteLength(raw) > STUDY_MAX_BYTES) throw new SourceError('Study data is too large.', 413);
   try {
@@ -47,9 +35,8 @@ export function createStudyRouter(base: string, source: SourceConfig): Router {
       const token = await authToken(req, base);
       const reader = createRemoteSource(source, token);
       const snapshot = await reader.getSnapshot();
-      const exists = snapshot.entries.some(entry => entry.path === STUDY_FILE);
-      const raw = exists ? (await reader.readFile(STUDY_FILE)).toString('utf8') : null;
-      res.json({ study: decode(raw), revision: snapshot.sha, path: STUDY_FILE, writable: Boolean(token && snapshot.info.permissions?.push && source.branch === 'main') });
+      const raw = await readSnapshotText(reader, snapshot, STUDY_FILE);
+      res.json({ study: decode(raw), revision: snapshot.sha, path: STUDY_FILE, writable: reader.canWrite(snapshot) });
     } catch (error) {
       fail(res, error);
     }
@@ -70,7 +57,7 @@ export function createStudyRouter(base: string, source: SourceConfig): Router {
         if (!notebook || !isNotebookContent(body.path.slice(notebook.root.length + 1), notebook) || !/\.(md|markdown|txt)$/i.test(body.path)) throw new SourceError('Path is not a configured note.', 403);
         const root = source.type === 'local' ? source.path : '';
         const read = async (file: string) => reader ? (await reader.readFile(file)).toString('utf8') : readRegular(root, file);
-        const rawStudy = reader ? snapshot!.entries.some(entry => entry.path === STUDY_FILE) ? await read(STUDY_FILE) : null : await readLocal(root);
+        const rawStudy = reader ? await readSnapshotText(reader, snapshot!, STUDY_FILE) : await readLocal(root);
         if ((snapshot?.sha || revisionOf(rawStudy)) !== body.revision) throw new SourceError('Study data changed. Reload before reviewing.', 409);
         const currentStudy = decode(rawStudy), rawNote = await read(body.path);
         const currentNote = reader ? await reader.note(body.path) : readNoteFile(root, body.path, body.notebookId);
@@ -123,14 +110,7 @@ export function createStudyRouter(base: string, source: SourceConfig): Router {
           if (await getCurrentBranch(source.path) !== 'main') throw new SourceError('Switch to main to save the study workspace.', 403);
           const raw = await readLocal(source.path);
           if (revisionOf(raw) !== revision) throw new SourceError('The study workspace changed. Reload it before saving your draft.', 409);
-          const target = path.join(source.path, STUDY_FILE);
-          const temporary = `${target}.${randomUUID()}.tmp`;
-          try {
-            await fs.writeFile(temporary, yaml, { flag: 'wx', mode: 0o600 });
-            await fs.rename(temporary, target);
-          } finally {
-            await fs.rm(temporary, { force: true });
-          }
+          await writeFileAtomic(path.join(source.path, STUDY_FILE), yaml);
           res.json({ study: value.data, revision: revisionOf(yaml), path: STUDY_FILE, writable: true });
         });
       }

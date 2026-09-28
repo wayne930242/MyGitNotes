@@ -1,11 +1,11 @@
 import { type Request, type Response, Router } from 'express';
 import fs from 'node:fs';
-import { randomUUID } from 'node:crypto';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { copyR2Object, createRemoteSource, deleteR2Object, isNotebookR2Key, listR2Objects, loadWorkspaceConfig, managedNotebook, type NotebookConfig, presignR2Object, presignR2Upload, putEmptyR2Object, r2NotebookPrefix, r2ObjectExists, r2ReferenceKeys, type R2Settings, r2SettingsFromEnv, resolveSafePath, rewriteR2References, type SourceConfig, SourceError, withinPath } from '@mygitnotes/core';
 import { authToken } from './auth.js';
 import { localFileCatalog } from './file-manager.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
+import { writeFileAtomicSync } from './workspace-files.js';
 
 const markdown = (file: string) => /\.(md|markdown)$/i.test(file);
 
@@ -35,20 +35,15 @@ export function createR2ManagerRouter(base: string, source: SourceConfig): Route
           serializeWorkspaceMutation(root, async () => {
             for (const file of changes.keys()) if (fs.readFileSync(resolveSafePath(root, file), 'utf8') !== read.get(file)) throw new SourceError('A note changed during the move. Reload and try again.', 409);
             for (const [file, content] of changes) {
-              const target = resolveSafePath(root, file), temp = `${target}.${randomUUID()}.tmp`;
-              try {
-                fs.writeFileSync(temp, content, { flag: 'wx', mode: fs.statSync(target).mode });
-                fs.renameSync(temp, target);
-              } finally {
-                if (fs.existsSync(temp)) fs.unlinkSync(temp);
-              }
+              const target = resolveSafePath(root, file);
+              writeFileAtomicSync(target, content, fs.statSync(target).mode);
             }
           }),
       };
     }
     const token = await authToken(req, base), reader = createRemoteSource(source, token);
     const snapshot = token ? await reader.getSnapshot(true) : undefined;
-    if (!token || !snapshot?.info.permissions?.push || source.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
+    if (!snapshot || !reader.canWrite(snapshot)) throw new SourceError('Write access on the main workspace branch is required.', 403);
     const config = await reader.config();
     return {
       notebooks: config.notebooks,

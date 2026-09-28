@@ -125,6 +125,15 @@ export abstract class RemoteSource {
     this.snapshot ??= this.loadSnapshot();
     return this.snapshot;
   }
+  /** Whether this reader's credential may commit to the main workspace branch as of `snapshot`. */
+  canWrite(snapshot: RemoteSnapshot) {
+    return Boolean(this.token && snapshot.info.permissions?.push && this.branch === 'main');
+  }
+  /** Rejects a mutation without write access or against a revision other than `snapshot`. */
+  private assertMutable(snapshot: RemoteSnapshot, expected: string) {
+    if (!this.canWrite(snapshot)) throw new SourceError('Write access on the main workspace branch is required.', 403);
+    if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
+  }
   async readFile(file: string): Promise<Buffer> {
     if (file.startsWith('/') || file.includes('\\') || file.split('/').some(p => p === '..' || p === '.' || !p) || file.includes('\0')) throw new SourceError('Invalid repository path.');
     const { entries } = await this.getSnapshot();
@@ -215,11 +224,7 @@ export abstract class RemoteSource {
         await this.prefetchFiles(notes.map(note => note.path));
         const result = new Map<string, string>();
         for (let i = 0; i < notes.length; i += 6) {
-          await Promise.all(
-            notes.slice(i, i + 6).map(async note => {
-              result.set(note.path, parseNoteContent((await this.readFile(note.path)).toString('utf8'), path.posix.basename(note.path)).content);
-            }),
-          );
+          await Promise.all(notes.slice(i, i + 6).map(async note => result.set(note.path, parseNoteContent((await this.readFile(note.path)).toString('utf8'), path.posix.basename(note.path)).content)));
         }
         return result;
       },
@@ -360,8 +365,7 @@ export abstract class RemoteSource {
 
   async save(file: string, content: string, metadata: NoteMetadata | undefined, expected: string, createOnly = false) {
     const snapshot = await this.getSnapshot(true);
-    if (!this.token || !snapshot.info.permissions?.push || this.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
-    if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
+    this.assertMutable(snapshot, expected);
     const config = await this.config();
     const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
     if (!nb || !isNotebookContent(file.slice(nb.root.length + 1), nb) || !NOTE_FILE.test(file) || file.includes('\\') || file.split('/').some(p => p === '..' || p === '.' || !p)) throw new SourceError('Path is not a configured note.', 403);
@@ -439,8 +443,7 @@ export abstract class RemoteSource {
     if (nextPath === file) return this.saveAgentResource(file, content, expected);
     const nextLocation = agentSkillLocation(nextPath)!;
     const snapshot = await this.getSnapshot(true);
-    if (!this.token || !snapshot.info.permissions?.push || this.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
-    if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
+    this.assertMutable(snapshot, expected);
     if (snapshot.entries.some(entry => entry.path === nextLocation.directory || entry.path.startsWith(`${nextLocation.directory}/`))) throw new SourceError(`A skill named ${nextLocation.slug} already exists.`, 409);
 
     const skillEntries = snapshot.entries.filter(entry => entry.type === 'blob' && (entry.path === location.directory || entry.path.startsWith(`${location.directory}/`)));
@@ -487,8 +490,7 @@ export abstract class RemoteSource {
 
   async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null; }[], expected: string, operation: string, scope: CommitScope = 'notes', requestedMessage?: string, knownSnapshot?: RemoteSnapshot) {
     const snapshot = knownSnapshot || await this.getSnapshot(true);
-    if (!this.token || !snapshot.info.permissions?.push || this.branch !== 'main') throw new SourceError('Write access on the main workspace branch is required.', 403);
-    if (!expected || expected !== snapshot.sha) throw new SourceError('The repository changed. Reload before saving.', 409);
+    this.assertMutable(snapshot, expected);
     if (!changes.length || changes.length > 200) throw new SourceError('A mutation requires between 1 and 200 changed files.');
     if (new Set(changes.map(c => c.path)).size !== changes.length) throw new SourceError('Each file may appear only once in a mutation.');
     const manifest = await this.manifestRecord();
