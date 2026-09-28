@@ -36,7 +36,7 @@ afterEach(async () => {
   if (root) fs.rmSync(root, { recursive: true, force: true });
   vi.unstubAllEnvs();
 });
-const getRevision = () => fetch(`${base}/api/folder-manager`).then(r => r.json()).then(data => data.revision);
+const getRevision = () => fetch(`${base}/api/folder-manager?notebookId=a`).then(r => r.json()).then(data => data.revision);
 const post = async (command: unknown, revision?: string) => fetch(`${base}/api/folder-manager`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, revision: revision || await getRevision() }) });
 
 it('creates, nests, reorders and removes folders without deleting notes or staging unrelated work', async () => {

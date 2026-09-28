@@ -44,6 +44,14 @@ afterEach(async () => {
 });
 
 describe('real HTTP local boundaries', () => {
+  it('reads through the notebook a request names and requires one for notebook-scoped state', async () => {
+    const file = 'notes/example/projects/deep/note.md';
+    expect((await fetch(`${base}/api/notes/read?path=${file}&notebookId=example`)).status).toBe(200);
+    expect((await fetch(`${base}/api/notes/read?path=${file}`)).status).toBe(200);
+    expect((await fetch(`${base}/api/notes/read?path=${file}&notebookId=missing`)).status).toBe(404);
+    expect((await fetch(`${base}/api/folder-manager`)).status).toBe(400);
+    expect((await fetch(`${base}/api/folder-manager?notebookId=example`)).status).toBe(200);
+  });
   it('serves product reference documents read-only from the Core checkout, not the workspace', async () => {
     const product = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-product-'));
     fs.mkdirSync(path.join(product, 'docs/agent/product'), { recursive: true });

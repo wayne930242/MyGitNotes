@@ -8,7 +8,7 @@ import { createRemoteMCP } from './mcp.js';
 import { createRemoteCoreUpdateRouter } from './remote-core-update.js';
 import { createLocalApp } from './local-app.js';
 import { createAuth } from './auth.js';
-import { localHome, namedRemote, type RemoteHandle, remoteHome, requestCatalog, requestWorkspace, workspaceOf } from './request-workspace.js';
+import { asLocal, asRemote, eachRepository, namedRemote, notebookRepository, noteRepository, type RemoteHandle, remoteHome, requestCatalog, requestWorkspace, workspaceOf } from './request-workspace.js';
 import { createStudyRouter } from './study.js';
 import { createWorkspaceDocumentRouter } from './workspace-document.js';
 import { createFolderManagerRouter } from './folder-manager.js';
@@ -80,24 +80,18 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     app.get(
       '/r2-assets/*',
       createR2AssetHandler(async (res, notePath) => {
-        const { root } = localHome(res);
-        if (classifyResource(notePath, (await workspaceOf(res).manifest()).config).type !== 'note') throw new Error('Path is not a configured note.');
-        return fs.readFileSync(resolveSafePath(root, notePath), 'utf8');
+        const { handle, config } = await noteRepository(res, notePath);
+        if (classifyResource(notePath, config).type !== 'note') throw new Error('Path is not a configured note.');
+        return fs.readFileSync(resolveSafePath(asLocal(handle).root, notePath), 'utf8');
       }),
     );
     app.use(createLocalApp(base));
   } else {
-    // Remote routes below still act on the home repository; per-notebook resolution replaces this in the per-repository contract step.
-    app.use(['/api', '/raw-assets', '/r2-assets'], (req, res, next) => {
-      try {
-        const home = remoteHome(res);
-        res.locals.reader = home.reader;
-        res.locals.authenticated = home.authenticated;
-        next();
-      } catch (error) {
-        fail(res, error);
-      }
-    });
+    /** Whether the request carries a signed-in session; each repository still checks its own access. */
+    const signedIn = (res: express.Response) => remoteHome(res).authenticated;
+    const remoteNotebook = async (res: express.Response, notebookId: unknown) => asRemote((await notebookRepository(res, notebookId)).handle);
+    const remoteNote = async (res: express.Response, file: unknown, notebookId?: unknown) => asRemote((await noteRepository(res, file, notebookId)).handle);
+    const remoteRepositories = async (res: express.Response) => (await eachRepository(res)).map(({ handle }) => asRemote(handle));
     app.use('/api/core', createRemoteCoreUpdateRouter(base));
     app.get('/api/workspace', async (req, res) => {
       try {
@@ -121,7 +115,7 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     });
     app.put('/api/workspace/config', async (req, res) => {
       try {
-        if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit the workspace manifest.', 403);
+        if (!signedIn(res)) throw new SourceError('Sign in with write permission to edit the workspace manifest.', 403);
         const { configYaml, configRevision } = req.body;
         if (typeof configYaml !== 'string') throw new SourceError('configYaml is required.');
         const saved = await workspaceOf(res).saveManifest(configYaml, String(configRevision || ''));
@@ -132,7 +126,9 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     });
     app.get('/api/notes', async (req, res) => {
       try {
-        res.json({ notes: await (res.locals.reader as RemoteSource).notes(req.query.notebookId as string) });
+        const { notebookId } = req.query;
+        const readers = notebookId ? [await remoteNotebook(res, notebookId)] : await remoteRepositories(res);
+        res.json({ notes: (await Promise.all(readers.map(({ reader }) => reader.notes(notebookId as string | undefined)))).flat() });
       } catch (error) {
         fail(res, error);
       }
@@ -179,7 +175,7 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     });
     app.get('/api/folders', async (req, res) => {
       try {
-        res.json({ folders: await (res.locals.reader as RemoteSource).folders() });
+        res.json({ folders: (await Promise.all((await remoteRepositories(res)).map(({ reader }) => reader.folders()))).flat() });
       } catch (error) {
         fail(res, error);
       }
@@ -187,14 +183,14 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     app.get('/api/templates/render', async (req, res) => {
       try {
         const { notebookId, templateId, title } = req.query;
-        res.json(await (res.locals.reader as RemoteSource).renderTemplate(String(notebookId || ''), String(templateId || ''), String(title || '')));
+        res.json(await (await remoteNotebook(res, notebookId)).reader.renderTemplate(String(notebookId || ''), String(templateId || ''), String(title || '')));
       } catch (error) {
         fail(res, error);
       }
     });
     app.get('/api/notes/read', async (req, res) => {
       try {
-        res.json({ note: await (res.locals.reader as RemoteSource).note(String(req.query.path || '')) });
+        res.json({ note: await (await remoteNote(res, req.query.path, req.query.notebookId)).reader.note(String(req.query.path)) });
       } catch (error) {
         fail(res, error);
       }
@@ -208,7 +204,9 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     });
     app.get('/api/assets', async (req, res) => {
       try {
-        res.json({ assets: await (res.locals.reader as RemoteSource).assets(req.query.notebookId as string) });
+        // Without a notebook the listing covers the manifest's first notebook.
+        const notebookId = req.query.notebookId || (await workspaceOf(res).manifest()).config.notebooks[0]?.id;
+        res.json({ assets: await (await remoteNotebook(res, notebookId)).reader.assets(notebookId as string) });
       } catch (error) {
         fail(res, error);
       }
@@ -216,32 +214,37 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     for (const [method, operation] of [['post', 'upload'], ['patch', 'move'], ['delete', 'delete']] as const) {
       app[method]('/api/assets', async (req, res) => {
         try {
-          if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to manage assets.', 403);
-          res.json(await (res.locals.reader as RemoteSource).mutateAsset(operation, { ...req.query, ...req.body }));
+          if (!signedIn(res)) throw new SourceError('Sign in with write permission to manage assets.', 403);
+          const args = { ...req.query, ...req.body };
+          const target = operation === 'upload' ? await remoteNotebook(res, args.notebookId) : await remoteNote(res, args.path);
+          res.json(await target.reader.mutateAsset(operation, args));
         } catch (error) {
           fail(res, error);
         }
       });
     }
-    app.get('/r2-assets/*', createR2AssetHandler(async (res, notePath) => (await (res.locals.reader as RemoteSource).note(notePath)).content));
+    app.get('/r2-assets/*', createR2AssetHandler(async (res, notePath) => (await (await remoteNote(res, notePath)).reader.note(notePath)).content));
     app.get('/raw-assets/by-hash/:hash', async (req, res) => {
       try {
         if (!/^[a-f0-9]{40}$/.test(req.params.hash)) throw new SourceError('Invalid asset hash.');
-        const reader: RemoteSource = res.locals.reader;
-        const config = await reader.config();
-        const assets = (await Promise.all(config.notebooks.map(nb => reader.assets(nb.id)))).flat();
-        const asset = assets.find(a => a.hash === req.params.hash);
-        if (!asset) throw new SourceError('Asset not found.', 404);
+        let found: { reader: RemoteSource; path: string; name: string; } | undefined;
+        for (const { reader } of await remoteRepositories(res)) {
+          const config = await reader.config();
+          const asset = (await Promise.all(config.notebooks.map(nb => reader.assets(nb.id)))).flat().find(a => a.hash === req.params.hash);
+          if (asset) found = { reader, path: asset.path, name: asset.name };
+          if (found) break;
+        }
+        if (!found) throw new SourceError('Asset not found.', 404);
         res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
-        res.type(path.extname(asset.name)).send(await reader.readFile(asset.path));
+        res.type(path.extname(found.name)).send(await found.reader.readFile(found.path));
       } catch (error) {
         fail(res, error);
       }
     });
     app.get('/raw-assets/*', async (req, res) => {
       try {
-        const reader: RemoteSource = res.locals.reader;
         const file = (req.params as Record<string, string>)[0];
+        const { reader } = await remoteNote(res, file);
         const config = await reader.config();
         const assetLists = await Promise.all(config.notebooks.map(nb => reader.assets(nb.id)));
         if (!assetLists.flat().some(asset => asset.path === file)) throw new SourceError('Path is not a workspace asset.', 403);
@@ -254,7 +257,7 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     app.post('/api/notes/commit', async (req, res) => {
       try {
         // An anonymous request is refused before its body is read.
-        if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to commit notes.', 403);
+        if (!signedIn(res)) throw new SourceError('Sign in with write permission to commit notes.', 403);
         const { repository, notes, revision, message, documents } = req.body;
         const target = await namedRemote(res, repository);
         if (!target.authenticated) throw new SourceError('Sign in with write permission to commit notes.', 403);
@@ -265,10 +268,10 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     });
     app.post('/api/notes', async (req, res) => {
       try {
-        if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit notes.', 403);
-        const { path: file, content, metadata, revision, createOnly } = req.body;
+        if (!signedIn(res)) throw new SourceError('Sign in with write permission to edit notes.', 403);
+        const { path: file, content, metadata, revision, createOnly, notebookId } = req.body;
         if (typeof file !== 'string' || typeof content !== 'string') throw new SourceError('path and content are required.');
-        res.json(await (res.locals.reader as RemoteSource).save(file, content, metadata, revision, createOnly));
+        res.json(await (await remoteNote(res, file, notebookId)).reader.save(file, content, metadata, revision, createOnly));
       } catch (error) {
         fail(res, error);
       }
@@ -278,7 +281,7 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     // caller computes the target `tags` per note; this endpoint only writes and commits).
     app.post('/api/tags/apply', async (req, res) => {
       try {
-        if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit notes.', 403);
+        if (!signedIn(res)) throw new SourceError('Sign in with write permission to edit notes.', 403);
         const target = await namedRemote(res, req.body?.repository);
         if (!target.authenticated) throw new SourceError('Sign in with write permission to edit notes.', 403);
         const entries = req.body?.entries;
@@ -307,14 +310,15 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
         fail(res, error);
       }
     });
-    app.get('/api/git/status', (req, res) => res.json({ status: { branch: (res.locals.reader as RemoteSource).branch, isClean: true, staged: [], modified: [], untracked: [] }, commits: [] }));
+    // Workspace-level routes below act on the home repository until workspace agent files are grouped by repository.
+    app.get('/api/git/status', (req, res) => res.json({ status: { branch: remoteHome(res).reader.branch, isClean: true, staged: [], modified: [], untracked: [] }, commits: [] }));
     app.get('/api/agent-resources', async (req, res) => {
       try {
-        const reader: RemoteSource = res.locals.reader;
+        const { reader, authenticated } = remoteHome(res);
         const snapshot = await reader.getSnapshot();
         const entries = snapshot.entries;
         const groups: { instructions: WorkspaceAgentResource[]; skills: WorkspaceAgentResource[]; docs: WorkspaceAgentResource[]; } = { instructions: [], skills: [], docs: [] };
-        const editable = Boolean(res.locals.authenticated && snapshot.info.permissions?.push && reader.branch === 'main');
+        const editable = Boolean(authenticated && snapshot.info.permissions?.push && reader.branch === 'main');
         for (const entry of entries) {
           const kind = workspaceAgentKind(entry.path);
           if (kind && entry.type === 'blob' && entry.mode !== '120000') groups[kind].push(workspaceAgentResource(entry.path, editable));
@@ -330,7 +334,7 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
         const targetPath = req.query.path as string;
         if (!targetPath) throw new SourceError('path query required', 400);
         if (!workspaceAgentKind(targetPath)) throw new SourceError('Path is not a workspace Agent document.', 403);
-        const reader: RemoteSource = res.locals.reader;
+        const { reader } = remoteHome(res);
         const buf = await reader.readFile(targetPath);
         res.json({ path: targetPath, content: buf.toString('utf8'), revision: (await reader.getSnapshot()).sha });
       } catch (error) {
@@ -339,9 +343,9 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     });
     app.post('/api/agent-resources/save', async (req, res) => {
       try {
-        if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit Agent documents.', 403);
+        if (!signedIn(res)) throw new SourceError('Sign in with write permission to edit Agent documents.', 403);
         const { path: file, content, revision, create } = req.body;
-        const result = await (res.locals.reader as RemoteSource).saveAgentResource(file, content, revision, create);
+        const result = await remoteHome(res).reader.saveAgentResource(file, content, revision, create);
         res.json({ ...result, path: file });
       } catch (error) {
         fail(res, error);
@@ -349,9 +353,9 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     });
     app.post('/api/agent-resources/rename-skill', async (req, res) => {
       try {
-        if (!res.locals.authenticated) throw new SourceError('Sign in with write permission to edit Agent documents.', 403);
+        if (!signedIn(res)) throw new SourceError('Sign in with write permission to edit Agent documents.', 403);
         const { path: file, slug, content, revision } = req.body;
-        const result = await (res.locals.reader as RemoteSource).renameAgentSkill(file, slug, content, revision);
+        const result = await remoteHome(res).reader.renameAgentSkill(file, slug, content, revision);
         res.json(result);
       } catch (error) {
         fail(res, error);

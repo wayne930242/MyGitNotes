@@ -1,4 +1,4 @@
-import { classifyResource, managedNotebook, resolveSafePath, resolveWorkspaceAgentPath, workspaceAgentKind, type WorkspaceConfig, workspaceDocument } from '@mygitnotes/core';
+import { classifyResource, managedNotebook, resolveSafePath, resolveWorkspaceAgentPath, SourceError, workspaceAgentKind, type WorkspaceConfig, workspaceDocument } from '@mygitnotes/core';
 import express, { Request, Response } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -12,7 +12,7 @@ import { createLocalAssetsRouter } from './local-assets.js';
 import { createLocalGitRouter } from './local-git.js';
 import { createLocalCoreUpdateRouter } from './local-core-update.js';
 import { createLocalRawAssetsRouter } from './local-raw-assets.js';
-import { localHome, localRepository } from './request-workspace.js';
+import { asLocal, localHome, localRepository, noteRepository } from './request-workspace.js';
 
 function validateWorkspacePath(repoRoot: string, reqPath: string, candidate: unknown, config: WorkspaceConfig): void {
   if (typeof candidate !== 'string') throw new Error('Paths must be strings.');
@@ -32,6 +32,15 @@ function validateWorkspacePath(repoRoot: string, reqPath: string, candidate: unk
 /** Requests that act on the workspace; static web files pass through untouched. */
 const workspaceRequest = (requestPath: string) => ['/api/', '/raw-assets/', '/r2-assets/'].some(prefix => requestPath.startsWith(prefix));
 
+/** The worktree a path belongs to: its notebook's repository, or the home repository for workspace-level files. */
+async function worktreeOf(res: express.Response, candidate: string): Promise<{ root: string; config: WorkspaceConfig; }> {
+  const resolved = await noteRepository(res, candidate).catch((error: unknown) => {
+    if (error instanceof SourceError && error.status === 403) return undefined;
+    throw error;
+  });
+  return resolved ? { root: asLocal(resolved.handle).root, config: resolved.config } : localRepository(res);
+}
+
 function handlePathValidationError(res: express.Response, error: unknown): void {
   const status = (error as { status?: number; }).status || 400;
   res.status(status).json({ error: (error as Error).message });
@@ -42,31 +51,26 @@ export function createLocalApp(appRoot: string): express.Express {
   const app = express();
   // Product updates use the Core checkout, independently of workspace write eligibility.
   app.use('/api/core', express.json({ limit: '8mb' }), createLocalCoreUpdateRouter(appRoot));
-  app.use(async (req, res, next) => {
-    if (!workspaceRequest(req.path)) return next();
-    try {
-      const { root } = localHome(res);
-      if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-        if (await getCurrentBranch(root) !== 'main') return res.status(403).json({ error: 'Switch to the main workspace branch to edit notes.' });
-      }
-      const candidate = req.query.path;
-      if (typeof candidate === 'string') {
-        validateWorkspacePath(root, req.path, candidate, (await localRepository(res)).config);
-      }
-      next();
-    } catch (error) {
-      handlePathValidationError(res, error);
-    }
-  });
   app.use(express.json({ limit: '8mb' }));
+  // Every path a request names is checked against the worktree it belongs to, and a write needs
+  // each of those worktrees on `main`.
   app.use(async (req, res, next) => {
     if (!workspaceRequest(req.path)) return next();
     try {
       // A request without paths needs no manifest, so a workspace can save its first manifest.
-      const candidates = [req.body?.path, ...(Array.isArray(req.body?.files) ? req.body.files : [])].filter(p => p !== undefined);
-      if (candidates.length) {
-        const { root, config } = await localRepository(res);
-        for (const candidate of candidates) validateWorkspacePath(root, req.path, candidate, config);
+      const candidates = [req.query.path, req.body?.path, ...(Array.isArray(req.body?.files) ? req.body.files : [])].filter(p => p !== undefined);
+      const roots = new Set<string>();
+      for (const candidate of candidates) {
+        if (typeof candidate !== 'string') throw new Error('Paths must be strings.');
+        const { root, config } = await worktreeOf(res, candidate);
+        validateWorkspacePath(root, req.path, candidate, config);
+        roots.add(root);
+      }
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+        if (!roots.size) roots.add(localHome(res).root);
+        for (const root of roots) {
+          if (await getCurrentBranch(root) !== 'main') return res.status(403).json({ error: 'Switch to the main workspace branch to edit notes.' });
+        }
       }
       next();
     } catch (error) {

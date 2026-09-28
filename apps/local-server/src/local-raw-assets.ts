@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import fs from 'node:fs';
-import { classifyResource, resolveSafePath, scanAssets } from '@mygitnotes/core';
-import { localRepository } from './request-workspace.js';
+import { classifyResource, resolveSafePath, scanAssets, SourceError } from '@mygitnotes/core';
+import { asLocal, eachRepository, noteRepository } from './request-workspace.js';
 
 export function createLocalRawAssetsRouter(): Router {
   const router = Router();
@@ -9,11 +9,10 @@ export function createLocalRawAssetsRouter(): Router {
   router.get('/by-hash/:hash', async (req, res) => {
     try {
       if (!/^[a-f0-9]{40}$/.test(req.params.hash)) return res.status(400).json({ error: 'Invalid asset hash.' });
-      const { root, config } = await localRepository(res);
-      const asset = config.notebooks.flatMap(nb => scanAssets(root, nb)).find(a => a.hash === req.params.hash);
-      if (!asset) return res.status(404).json({ error: 'Asset not found.' });
+      const found = (await eachRepository(res)).flatMap(({ handle, config }) => config.notebooks.flatMap(nb => scanAssets(asLocal(handle).root, nb).map(asset => ({ root: asLocal(handle).root, asset })))).find(({ asset }) => asset.hash === req.params.hash);
+      if (!found) return res.status(404).json({ error: 'Asset not found.' });
       res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
-      res.sendFile(resolveSafePath(root, asset.path));
+      res.sendFile(resolveSafePath(found.root, found.asset.path));
     } catch (error) {
       res.status(400).json({ error: (error as Error).message });
     }
@@ -23,9 +22,13 @@ export function createLocalRawAssetsRouter(): Router {
   router.use(async (req, res) => {
     try {
       const relPath = decodeURIComponent(req.path.replace(/^\//, ''));
-      const { root, config } = await localRepository(res);
-      if (classifyResource(relPath, config).type !== 'asset') return res.status(403).send('Path is not a workspace asset');
-      const safePath = resolveSafePath(root, relPath);
+      const resolved = await noteRepository(res, relPath).catch((error: unknown) => {
+        if (error instanceof SourceError && error.status === 403) return undefined;
+        throw error;
+      });
+      if (!resolved || classifyResource(relPath, resolved.config).type !== 'asset') return res.status(403).send('Path is not a workspace asset');
+      const { handle } = resolved;
+      const safePath = resolveSafePath(asLocal(handle).root, relPath);
       res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
       if (fs.existsSync(safePath)) {
         res.sendFile(safePath);

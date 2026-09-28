@@ -137,6 +137,10 @@ Stage 2 gets its own step list in this file after the checkpoint.
 - Query keys carry only the revisions of the repositories a query reads (the notebook's repository, or every repository for `all`, lookups, facets and graph), and a 409 resets only the queries of the repositories it names.
 - A workspace-wide tag change that stops part way records the committed repositories' part as undoable, so the landed commits can still be reverted.
 - Anonymous commit and tag requests are refused before the request body is read, as before the change.
+- Notebook-scoped HTTP routes resolve their repository through `notebookRepository` (a named notebook) or `noteRepository` (a named notebook that must contain the path, else the notebook whose root contains it); `WorkspaceRepositories.forPath` rejects a path that lies in notebooks of more than one repository. Listings without a notebook (notes, folders, assets by hash) cover every available repository. The local write guard checks each named path against its own worktree and requires each written worktree on `main`; paths outside every notebook belong to the home repository. The folder manager takes `notebookId` on reads as well as writes.
+- Workspace-level routes (Git status and changes, agent resources, Screen, Focus, Study, R2, Core update) still act on the home repository; stage 2 moves them per repository together with the workspace documents, agent grouping and R2 behavior it specifies.
+- The MCP servers keep one repository per session in stage 1. Their tools return and accept a single `revision` and `glob` and `ls` span every notebook, so per-notebook resolution needs a contract decision on revisions across repositories; it moves to stage 2 with the MCP behavior, instead of a `ToolContext` rename that would still act on the home repository.
+- `sharesCredential` is the credentials seam: a notebook repository opened in stage 2 reuses the signed-in credential only on the home repository's platform and site, and is otherwise `unsupported-platform`.
 
 ## Friction Notes
 
@@ -145,4 +149,7 @@ Stage 2 gets its own step list in this file after the checkpoint.
   Led by: pi-lens automated check
 - Tried: Compare format-check output against a `git stash` baseline, then run a browser QA script.
   Found: Stash and pop refresh source modification times, so the QA freshness guard rejects the existing build until `pnpm build` runs again.
+  Led by: AAAAV Verify evidence-first loop
+- Tried: Format every file in the diff with `dprint fmt` before committing.
+  Found: A file that was already unformatted on the base picks up unrelated reformatting; compare `format:check` against the base list and restore such files to the base plus the intended change.
   Led by: AAAAV Verify evidence-first loop

@@ -147,7 +147,7 @@ export function FolderTree({ showHeading = false, showRoot = false, onManageFile
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const refresh = async () => {
-    const response = await fetch('/api/folder-manager');
+    const response = await fetch(`/api/folder-manager?notebookId=${encodeURIComponent(notebookId)}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || t('folder.failed'));
     setRevision(data.revision);

@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { FolderCommandSchema, type FolderSnapshot, isNotebookContent, type NotebookConfig, planFolderChange, RemoteSource, SourceError, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
-import { homeRepository } from './request-workspace.js';
+import { notebookRepository } from './request-workspace.js';
 import { regularPath, writeFileAtomicSync } from './workspace-files.js';
 
 const documents = WORKSPACE_DOCUMENTS.map(document => document.file);
@@ -109,9 +109,10 @@ async function remoteSnapshot(reader: RemoteSource): Promise<FolderSnapshot> {
 
 export function createFolderManagerRouter(): Router {
   const router = Router();
-  router.get('/', async (_req, res) => {
+  router.get('/', async (req, res) => {
     try {
-      const { handle, config } = await homeRepository(res);
+      // Folder changes stay inside one notebook, so the revision is its repository's.
+      const { handle, config } = await notebookRepository(res, req.query.notebookId);
       if (handle.kind === 'local') return res.json({ revision: revision(localFolderSnapshot(handle.root, config.notebooks)), writable: await getCurrentBranch(handle.root) === 'main' });
       const { reader } = handle;
       const snapshot = await reader.getSnapshot(true);
@@ -124,7 +125,7 @@ export function createFolderManagerRouter(): Router {
     try {
       const command = FolderCommandSchema.safeParse(req.body?.command);
       if (!command.success || typeof req.body?.revision !== 'string') throw new SourceError('Invalid folder request.', 400);
-      const { handle, config } = await homeRepository(res);
+      const { handle, config } = await notebookRepository(res, command.data.notebookId);
       if (handle.kind === 'local') {
         const { root } = handle;
         return await serializeWorkspaceMutation(root, async () => {

@@ -1,9 +1,9 @@
 import { Request, Response, Router } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
-import { classifyResource, deleteNoteFile, lookupNotes, noteAgenda, noteFacets, noteGraph, type NoteItem, parseNoteQuery, queryNotePaths, queryNotes, readNoteFile, type RepositoryCatalog, resolveSafePath, scanNotebookNotes, SourceError, StaleRevisionError, writeNoteFile } from '@mygitnotes/core';
+import { deleteNoteFile, lookupNotes, noteAgenda, noteFacets, noteGraph, type NoteItem, parseNoteQuery, queryNotePaths, queryNotes, readNoteFile, type RepositoryCatalog, resolveSafePath, scanNotebookNotes, SourceError, StaleRevisionError, writeNoteFile } from '@mygitnotes/core';
 import { changeFile, generateCommitMessage, listChanges, stageAndCommit } from '@mygitnotes/git';
-import { type LocalHandle, localHome, localRepository, requestCatalog } from './request-workspace.js';
+import { asLocal, eachRepository, type LocalHandle, notebookRepository, noteRepository, requestCatalog } from './request-workspace.js';
 
 export function createLocalNotesRouter(): Router {
   const router = Router();
@@ -69,19 +69,11 @@ export function createLocalNotesRouter(): Router {
 
   router.get('/', async (req: Request, res: Response) => {
     try {
-      const { root: repoRoot, config } = await localRepository(res);
-
-      const notebookId = req.query.notebookId as string | undefined;
-      const notebooks = notebookId ? config.notebooks.filter((nb) => nb.id === notebookId) : config.notebooks;
-
-      const allNotes = [];
-      for (const nb of notebooks) {
-        allNotes.push(...scanNotebookNotes(repoRoot, nb));
-      }
-
-      res.json({ notes: allNotes });
+      const notebookId = req.query.notebookId;
+      const repositories = notebookId ? [await notebookRepository(res, notebookId)].map(({ handle, notebook }) => ({ handle, notebooks: [notebook] })) : (await eachRepository(res)).map(({ handle, config }) => ({ handle, notebooks: config.notebooks }));
+      res.json({ notes: repositories.flatMap(({ handle, notebooks }) => notebooks.flatMap(notebook => scanNotebookNotes(asLocal(handle).root, notebook))) });
     } catch (err: unknown) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+      res.status(err instanceof SourceError ? err.status : 500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -92,13 +84,12 @@ export function createLocalNotesRouter(): Router {
       if (!relPath) {
         return res.status(400).json({ error: 'path query parameter is required' });
       }
-      const { root: repoRoot, config } = await localRepository(res);
-      const notebookId = (req.query.notebookId as string) || classifyResource(relPath, config).notebookId || 'default';
-      const note = readNoteFile(repoRoot, relPath, notebookId);
+      const { handle, notebook } = await noteRepository(res, relPath, req.query.notebookId);
+      const note = readNoteFile(asLocal(handle).root, relPath, notebook.id);
       res.json({ note });
     } catch (err: unknown) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') return res.status(404).json({ error: 'Note not found.' });
-      res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+      res.status(err instanceof SourceError ? err.status : 400).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -109,10 +100,11 @@ export function createLocalNotesRouter(): Router {
       if (!notePath || typeof content !== 'string') {
         return res.status(400).json({ error: 'path and content are required' });
       }
-      const { root: repoRoot } = localHome(res);
+      const { handle, notebook } = await noteRepository(res, notePath, notebookId);
+      const repoRoot = asLocal(handle).root;
 
       if (req.body.createOnly && fs.existsSync(resolveSafePath(repoRoot, notePath))) return res.status(409).json({ error: 'A note already exists at this path.' });
-      const saved = writeNoteFile(repoRoot, notePath, content, metadata, notebookId);
+      const saved = writeNoteFile(repoRoot, notePath, content, metadata, notebook.id);
 
       // If noCommit is requested or commit is false, write file and leave working tree dirty
       if (req.body.noCommit === true || req.body.commit === false) {
@@ -128,7 +120,7 @@ export function createLocalNotesRouter(): Router {
       const commit = await stageAndCommit(repoRoot, [notePath], message);
       res.json({ success: true, note: saved, commit, committed: true });
     } catch (err: unknown) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+      res.status(err instanceof SourceError ? err.status : 500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -140,7 +132,7 @@ export function createLocalNotesRouter(): Router {
       if (!notePath) {
         return res.status(400).json({ error: 'path is required' });
       }
-      const { root: repoRoot } = localHome(res);
+      const repoRoot = asLocal((await noteRepository(res, notePath)).handle).root;
 
       deleteNoteFile(repoRoot, notePath);
       if (noCommit) {
@@ -150,7 +142,7 @@ export function createLocalNotesRouter(): Router {
       const commit = await stageAndCommit(repoRoot, [notePath], `docs(notes): delete ${path.basename(notePath)}`);
       res.json({ success: true, commit, committed: true });
     } catch (err: unknown) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+      res.status(err instanceof SourceError ? err.status : 500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
@@ -161,10 +153,11 @@ export function createLocalNotesRouter(): Router {
       if (!notePath) {
         return res.status(400).json({ error: 'path is required' });
       }
-      const { root: repoRoot, config } = await localRepository(res);
+      const { handle, notebook } = await noteRepository(res, notePath, notebookId);
+      const repoRoot = asLocal(handle).root;
 
       if (typeof content === 'string') {
-        const restored = writeNoteFile(repoRoot, notePath, content, metadata, notebookId);
+        const restored = writeNoteFile(repoRoot, notePath, content, metadata, notebook.id);
         return res.json({ success: true, note: restored });
       }
 
@@ -172,18 +165,10 @@ export function createLocalNotesRouter(): Router {
       if (!change) return res.status(409).json({ error: 'This note has no changes to restore.' });
       const restored = await changeFile(repoRoot, notePath, 'restore', req.body.revision || change.revision);
       if (!change.tracked) return res.json({ success: true, note: null, ...restored });
-      let resolvedNb = notebookId;
-      if (!resolvedNb) {
-        const matched = config.notebooks.find((nb) => {
-          const rootRel = nb.root.replace(/\\/g, '/');
-          return notePath === rootRel || notePath.startsWith(`${rootRel}/`);
-        });
-        if (matched) resolvedNb = matched.id;
-      }
-      const restoredNote = readNoteFile(repoRoot, notePath, resolvedNb || 'default');
+      const restoredNote = readNoteFile(repoRoot, notePath, notebook.id);
       res.json({ success: true, note: restoredNote });
     } catch (err: unknown) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+      res.status(err instanceof SourceError ? err.status : 500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 

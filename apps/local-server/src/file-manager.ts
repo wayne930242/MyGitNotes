@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { getCurrentBranch } from '@mygitnotes/git';
-import { assetHash, assetInfo, assetRoot, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isNotebookContent, managedNotebook, type NotebookConfig, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSource, SourceError, withinPath, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
-import { homeRepository, workspaceOf } from './request-workspace.js';
+import { assetHash, assetInfo, assetRoot, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isNotebookContent, managedNotebook, type NotebookConfig, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSource, SourceError, withinPath, WORKSPACE_DOCUMENTS, type WorkspaceConfig } from '@mygitnotes/core';
+import { eachRepository, notebookRepository, noteRepository, type RepositoryHandle } from './request-workspace.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { regularPath, writeFileAtomicSync } from './workspace-files.js';
 
@@ -146,8 +146,9 @@ export function applyLocalFilePlan(root: string, before: FileSnapshot, after: Re
 
 export function createFileManagerRouter(): Router {
   const router = Router();
+  /** The snapshot of the repository serving the command's notebook; a command never leaves its notebook. */
   const load = async (res: Response, command: FileCommand) => {
-    const { handle, config } = await homeRepository(res);
+    const { handle, config } = await notebookRepository(res, command.notebookId);
     if (handle.kind === 'local') {
       const snapshot = localFileSnapshot(handle.root, config.notebooks, command);
       return { snapshot, revision: catalogRevision(localFileCatalog(handle.root, config.notebooks)), writable: await getCurrentBranch(handle.root) === 'main', reader: undefined, local: handle.root, notebooks: config.notebooks };
@@ -156,8 +157,7 @@ export function createFileManagerRouter(): Router {
     const snapshot = await remoteFiles(reader, command), state = await reader.getSnapshot();
     return { snapshot, revision: state.sha, writable: reader.canWrite(state), reader, local: undefined, notebooks: config.notebooks };
   };
-  const catalog = async (res: Response) => {
-    const { handle, config } = await homeRepository(res);
+  const catalogOf = async (handle: RepositoryHandle, config: WorkspaceConfig) => {
     if (handle.kind === 'local') {
       const index = localFileCatalog(handle.root, config.notebooks);
       return { index, revision: catalogRevision(index), writable: await getCurrentBranch(handle.root) === 'main', read: async (file: string) => localRead(handle.root, file), local: handle.root };
@@ -172,6 +172,11 @@ export function createFileManagerRouter(): Router {
     }
     return { index, revision: state.sha, writable: reader.canWrite(state), read: (file: string) => reader.readFile(file), local: undefined };
   };
+  /** The catalog of the repository serving a notebook, which lists every notebook of that repository. */
+  const catalog = async (res: Response, notebookId: unknown) => {
+    const { handle, config } = await notebookRepository(res, notebookId);
+    return catalogOf(handle, config);
+  };
   const notebook = (snapshot: Pick<FileSnapshot, 'notebooks'>, id: unknown) => {
     const nb = snapshot.notebooks.find(nb => nb.id === id);
     if (!nb) throw new SourceError('Choose a notebook.', 400);
@@ -179,7 +184,7 @@ export function createFileManagerRouter(): Router {
   };
   router.get('/api/files', async (req, res) => {
     try {
-      const state = await catalog(res), nb = notebook(state.index, req.query.notebookId);
+      const state = await catalog(res, req.query.notebookId), nb = notebook(state.index, req.query.notebookId);
       const entries = [...state.index.directories.map(file => ({ path: file, directory: true, size: 0 })), ...[...state.index.files].map(([file, info]) => ({ path: file, directory: false, size: info.size }))].filter(entry => managedNotebook(entry.path, state.index.notebooks)?.id === nb.id && entry.path !== nb.root).map(entry => ({ ...entry, noteDirectory: entry.directory && isNotebookContent(entry.path.slice(nb.root.length + 1), nb), name: path.posix.basename(entry.path), hidden: entry.path.slice(nb.root.length + 1).split('/').some(p => p.startsWith('.')), presentation: filePresentation(entry.path) }));
       res.json({ root: nb.root, entries, revision: state.revision, writable: state.writable, remote: state.local === undefined });
     } catch (error) {
@@ -188,7 +193,7 @@ export function createFileManagerRouter(): Router {
   });
   router.get('/api/files/read', async (req, res) => {
     try {
-      const state = await catalog(res), nb = notebook(state.index, req.query.notebookId), file = String(req.query.path || '');
+      const state = await catalog(res, req.query.notebookId), nb = notebook(state.index, req.query.notebookId), file = String(req.query.path || '');
       if (managedNotebook(file, state.index.notebooks)?.id !== nb.id) throw new SourceError('Path is outside this notebook.', 403);
       if (state.index.directories.includes(file)) {
         const raw = state.index.files.has(file + '/_dir.yml') ? (await state.read(file + '/_dir.yml')).toString('utf8') : '';
@@ -203,7 +208,9 @@ export function createFileManagerRouter(): Router {
   });
   router.get('/api/assets', async (req, res) => {
     try {
-      const state = await catalog(res), nb = notebook(state.index, req.query.notebookId || state.index.notebooks[0]?.id);
+      // Without a notebook the listing covers the manifest's first notebook.
+      const notebookId = req.query.notebookId || (await eachRepository(res))[0]?.config.notebooks[0]?.id;
+      const state = await catalog(res, notebookId), nb = notebook(state.index, notebookId);
       const root = assetRoot(nb), assets = [];
       for (const [file, info] of state.index.files) {
         if (managedNotebook(file, state.index.notebooks)?.id !== nb.id || file.slice(nb.root.length + 1).split('/').some(part => part.startsWith('.'))) continue;
@@ -218,35 +225,44 @@ export function createFileManagerRouter(): Router {
   });
   router.get(['/api/files/raw', '/raw-assets/by-hash/:hash', '/raw-assets/*'], async (req, res) => {
     try {
-      const state = await catalog(res);
+      let state: Awaited<ReturnType<typeof catalogOf>> | undefined;
       let file = String(req.query.path || '');
       let bytes: Buffer | undefined;
       if (req.params.hash) {
         if (!/^[a-f0-9]{40}$/.test(req.params.hash)) throw new SourceError('Invalid file hash.', 400);
         file = '';
-        for (const [candidate, info] of state.index.files) {
-          if (!managedNotebook(candidate, state.index.notebooks) || info.size > 5 * 1024 * 1024) continue;
-          if (info.hash) {
-            if (info.hash === req.params.hash) {
-              file = candidate;
-              break;
-            }
-          } else {
-            const content = await state.read(candidate);
-            if (assetHash(content) === req.params.hash) {
-              file = candidate;
-              bytes = content;
-              break;
+        search: for (const { handle, config } of await eachRepository(res)) {
+          state = await catalogOf(handle, config);
+          for (const [candidate, info] of state.index.files) {
+            if (!managedNotebook(candidate, state.index.notebooks) || info.size > 5 * 1024 * 1024) continue;
+            if (info.hash) {
+              if (info.hash === req.params.hash) {
+                file = candidate;
+                break search;
+              }
+            } else {
+              const content = await state.read(candidate);
+              if (assetHash(content) === req.params.hash) {
+                file = candidate;
+                bytes = content;
+                break search;
+              }
             }
           }
         }
       } else if (req.path.startsWith('/raw-assets/')) {
         file = (req.params as Record<string, string>)[0];
-        if (!managedNotebook(file, state.index.notebooks)) throw new SourceError('Path is outside the notebooks.', 403);
+        const resolved = await noteRepository(res, file).catch((error: unknown) => {
+          if (error instanceof SourceError && error.status === 403) throw new SourceError('Path is outside the notebooks.', 403);
+          throw error;
+        });
+        state = await catalogOf(resolved.handle, resolved.config);
       } else {
+        state = await catalog(res, req.query.notebookId);
         const nb = notebook(state.index, req.query.notebookId);
         if (managedNotebook(file, state.index.notebooks)?.id !== nb.id) throw new SourceError('Path is outside this notebook.', 403);
       }
+      if (!state) throw new SourceError('File unavailable.', 404);
       if (!state.index.files.has(file)) throw new SourceError('File unavailable.', 404);
       bytes ??= await state.read(file);
       res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
@@ -283,8 +299,10 @@ export function createFileManagerRouter(): Router {
       res.json({ revision: nextRevision, selectedPath: after.selectedPath, pathMap: after.pathMap, deletedPaths: paths.filter(file => !after.files.has(file)) });
     };
     try {
-      const { handle } = workspaceOf(res).home;
-      if (handle.kind === 'local') await serializeWorkspaceMutation(handle.root, execute);
+      // A local mutation is serialized on the worktree it changes.
+      const command = FileCommandSchema.safeParse(req.body?.command);
+      const { handle } = command.success ? await notebookRepository(res, command.data.notebookId) : { handle: undefined };
+      if (handle?.kind === 'local') await serializeWorkspaceMutation(handle.root, execute);
       else await execute();
     } catch (error) {
       fail(res, error);

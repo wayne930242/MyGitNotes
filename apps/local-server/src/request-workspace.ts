@@ -93,6 +93,56 @@ export async function namedLocal(res: express.Response, id: unknown): Promise<{ 
   return { root: handle.root, config: await workspaceOf(res).scope(ref.id) };
 }
 
+/** A repository with the manifest scope it serves and, when one was named or found, the notebook. */
+export interface ResolvedRepository {
+  handle: RepositoryHandle;
+  config: WorkspaceConfig;
+  notebook: NotebookConfig;
+}
+
+/** The repository of the notebook a request names. */
+export async function notebookRepository(res: express.Response, notebookId: unknown): Promise<ResolvedRepository> {
+  if (typeof notebookId !== 'string' || !notebookId) throw new SourceError('notebookId is required.');
+  const workspace = workspaceOf(res);
+  const entry = await workspace.forNotebook(notebookId);
+  return { handle: entry.handle, config: await workspace.scope(entry.ref.id), notebook: entry.notebooks.find(notebook => notebook.id === notebookId)! };
+}
+
+/**
+ * The repository of a note or asset path: through the notebook the request names, which must
+ * contain the path, or else through the notebook whose root contains it.
+ */
+export async function noteRepository(res: express.Response, file: unknown, notebookId?: unknown): Promise<ResolvedRepository> {
+  if (typeof file !== 'string' || !file) throw new SourceError('path is required.');
+  if (notebookId !== undefined && notebookId !== '') {
+    const resolved = await notebookRepository(res, notebookId);
+    if (!file.startsWith(`${resolved.notebook.root}/`)) throw new SourceError('Path is not in the named notebook.', 403);
+    return resolved;
+  }
+  const workspace = workspaceOf(res);
+  const entry = await workspace.forPath(file);
+  return { handle: entry.handle, config: await workspace.scope(entry.ref.id), notebook: entry.notebook };
+}
+
+/** Every available repository of the request's workspace with the manifest scope it serves. */
+export async function eachRepository(res: express.Response): Promise<{ handle: RepositoryHandle; config: WorkspaceConfig; }[]> {
+  const workspace = workspaceOf(res);
+  const entries = (await workspace.all()).filter((entry): entry is AvailableRepository<RepositoryHandle> => 'handle' in entry);
+  return Promise.all(entries.map(async entry => ({ handle: entry.handle, config: await workspace.scope(entry.ref.id) })));
+}
+
+/** A local handle, for routes that exist only in a local workspace. */
+export function asLocal(handle: RepositoryHandle): LocalHandle {
+  if (handle.kind !== 'local') throw new SourceError('This operation requires a local workspace.', 400);
+  return handle;
+}
+
+/** A remote handle, for routes that exist only for remote sources. */
+export function asRemote(handle: RepositoryHandle): RemoteHandle {
+  if (handle.kind !== 'remote') throw new SourceError('This operation requires a remote source.', 400);
+  return handle;
+}
+
 /** The local home worktree with the manifest scope it serves. */
 export async function localRepository(res: express.Response): Promise<{ root: string; config: WorkspaceConfig; }> {
   const { root } = localHome(res);
