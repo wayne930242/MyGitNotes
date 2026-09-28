@@ -33,7 +33,7 @@ Out: moving notes or folders between repositories (no such move exists today); a
 ## Decision tree
 
 | Question | Answer | Basis | Status |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Which repository holds the workspace manifest? | The deployment-configured source, called the home repository, through the configuration seam's current adapter. The manifest is never read from a notebook repository. | User request: env source is the default; Q9 | grounded |
 | How does a notebook declare its repository? | Optional `source` on the notebook entry in the home manifest. Omitted means the home repository. `root` stays relative to the notebook's own repository. | User request; `NotebookConfig.root` semantics | grounded |
 | What is a note's identity inside the app? | Notebook id plus repository-relative path. Notebook ids are unique, and a notebook lives in exactly one repository, so the pair never collides even when two repositories share a path. Markdown still stores plain paths. | config.ts uniqueness; web recon §4 | grounded |

@@ -70,7 +70,7 @@ interface WorkspaceRepositories<H> {
 ### HTTP contract
 
 | Area | Contract |
-|---|---|
+| --- | --- |
 | `GET /api/workspace` | `{ config, configRevision, local, home, repositories: [{ id, type, repository?, branch, revision, write, notebooks, unavailable?, gitStatus? }], repoRoot? }`. Top-level `revision`, `branch`, `source` and `capabilities.write` are removed. |
 | `PUT /api/workspace/config` | Takes `configRevision`; returns the new `config` and `configRevision`. |
 | Note queries, facets, agenda, graph, lookup | Take `revisions` (JSON `RevisionSet`, only for repositories the caller holds) and return `revisions` for the repositories involved. |
