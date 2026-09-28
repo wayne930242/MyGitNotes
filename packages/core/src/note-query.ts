@@ -1,3 +1,4 @@
+import type { RevisionSet } from './repository.js';
 import type { NotebookConfig, NoteItem } from './types.js';
 import type { SortField, SortOrder } from './note-sort.js';
 import type { TodoTask } from './note-agenda.js';
@@ -55,13 +56,13 @@ export interface NoteQuery {
 export const DEFAULT_NOTE_QUERY: NoteQuery = { notebookId: 'all', folders: [], descendants: true, tags: [], tagMode: 'any', status: null, withoutStatus: false, showHidden: false, q: '', match: 'all', exclude: [], sort: 'updated', order: 'desc' };
 
 export interface NoteQueryPage {
-  revision: string;
+  revisions: RevisionSet;
   notes: NoteListItem[];
   total: number;
   nextCursor: string | null;
 }
 export interface NotePaths {
-  revision: string;
+  revisions: RevisionSet;
   paths: string[];
   total: number;
 }
@@ -73,19 +74,19 @@ export interface NotebookFacets {
   directories: Record<string, number>;
 }
 export interface NoteFacets {
-  revision: string;
+  revisions: RevisionSet;
   notebooks: Record<string, NotebookFacets>;
 }
 export interface NoteAgenda {
-  revision: string;
+  revisions: RevisionSet;
   tasks: TodoTask[];
   dated: NoteListItem[];
 }
 export interface NoteLookup {
-  revision: string;
+  revisions: RevisionSet;
   notes: NoteListItem[];
 }
-export type NoteGraph = NoteGraphData & { revision: string; };
+export type NoteGraph = NoteGraphData & { revisions: RevisionSet; };
 
 export const noteDirectory = (path: string) => path.slice(0, path.lastIndexOf('/'));
 
@@ -129,7 +130,7 @@ export function noteQueryStatuses(notebooks: NotebookConfig[], notebookId: strin
 }
 
 /** Serializes a query for `GET /api/notes/query`; defaults are omitted. */
-export function noteQuerySearch(query: Partial<NoteQuery>, extra: { revision?: string; cursor?: string; limit?: number; content?: boolean; select?: 'paths'; } = {}): URLSearchParams {
+export function noteQuerySearch(query: Partial<NoteQuery>, extra: { revisions?: RevisionSet; cursor?: string; limit?: number; content?: boolean; select?: 'paths'; } = {}): URLSearchParams {
   const value = { ...DEFAULT_NOTE_QUERY, ...query };
   const params = new URLSearchParams({ notebookId: value.notebookId });
   for (const folder of value.folders) params.append('folder', folder);
@@ -144,7 +145,7 @@ export function noteQuerySearch(query: Partial<NoteQuery>, extra: { revision?: s
   for (const path of value.exclude) params.append('exclude', path);
   if (value.sort !== DEFAULT_NOTE_QUERY.sort) params.set('sort', value.sort);
   if (value.order !== DEFAULT_NOTE_QUERY.order) params.set('order', value.order);
-  if (extra.revision) params.set('revision', extra.revision);
+  if (extra.revisions && Object.keys(extra.revisions).length) params.set('revisions', JSON.stringify(extra.revisions));
   if (extra.cursor) params.set('cursor', extra.cursor);
   if (extra.limit !== undefined) params.set('limit', String(extra.limit));
   if (extra.content) params.set('content', '1');

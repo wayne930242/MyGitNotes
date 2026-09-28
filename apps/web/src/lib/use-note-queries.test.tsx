@@ -38,20 +38,20 @@ function Rows({ notebookId = 'life' }: { notebookId?: string; }) {
 beforeEach(() => {
   requests = [];
   client = new QueryClient({ queryCache: new QueryCache({ onError: (error, query) => handleNoteQueryError(error, query) }), defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  setNoteQueryScope({ sourceId: 'github:me/notes', revision: REVISION, drafts: {} });
+  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, drafts: {} });
 });
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
 
-it('sends the workspace revision and asks again when it changes', async () => {
-  stubFetch(url => page([url.includes(`revision=${'b'.repeat(40)}`) ? 'notes/life/new.md' : 'notes/life/old.md'], null));
+it('sends the repository revisions and asks again when they change', async () => {
+  stubFetch(url => page([new URL(url, 'http://test').searchParams.get('revisions')?.includes('b'.repeat(40)) ? 'notes/life/new.md' : 'notes/life/old.md'], null));
   render(createElement(Rows), { wrapper });
   await waitFor(() => expect(screen.getByTestId('rows')).toHaveTextContent('notes/life/old.md'));
-  expect(requests[0]).toContain(`revision=${REVISION}`);
+  expect(JSON.parse(new URL(requests[0], 'http://test').searchParams.get('revisions')!)).toEqual({ 'github:me/notes': REVISION });
 
-  setNoteQueryScope({ sourceId: 'github:me/notes', revision: 'b'.repeat(40), drafts: {} });
+  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': 'b'.repeat(40) }, drafts: {} });
   await waitFor(() => expect(screen.getByTestId('rows')).toHaveTextContent('notes/life/new.md'));
   expect(requests).toHaveLength(2);
 });
@@ -101,7 +101,7 @@ it('reports a rejected revision so the workspace can restart from the first page
 it('holds no drafts for a view that asked for no notes', async () => {
   stubFetch(() => page(['notes/life/a.md'], null));
   const draft = { id: 'notes/life/new.md', path: 'notes/life/new.md', notebookId: 'life', title: 'New', tags: [], metadata: {}, content: '' };
-  setNoteQueryScope({ sourceId: 'github:me/notes', revision: REVISION, drafts: { [draft.path]: { note: draft, base: null } } });
+  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, drafts: { [draft.path]: { note: draft, base: null } } });
   function Disabled() {
     const result = useNoteList(null);
     return createElement('p', { 'data-testid': 'rows' }, `${result.notes.length}/${result.uncommitted.length}/${result.total}`);

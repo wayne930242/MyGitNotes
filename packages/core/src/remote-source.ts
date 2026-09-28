@@ -14,7 +14,7 @@ import { agentSkillLocation, renameAgentSkillEntryContent, renamedAgentSkillPath
 import { skillFile } from './agent-system.js';
 import { type CommitScope, readWorkspaceDocument, serializeWorkspaceDocument, validateWorkspaceDocument, type WorkspaceDocument, workspaceDocument } from './workspace-documents.js';
 import { gitBlobId, hashJson, REMOTE_CACHE_BATCH_BYTES, REMOTE_CACHE_MAX_VALUE, REMOTE_CACHE_TTL, type RemoteCache } from './remote-cache.js';
-import type { NoteCatalog } from './note-catalog.js';
+import type { RepositoryCatalog } from './note-catalog.js';
 import type { NoteListItem } from './note-query.js';
 
 export { SourceError } from './github-api.js';
@@ -186,11 +186,10 @@ export abstract class RemoteSource {
   }
 
   /** Query read model over this reader's snapshot. Notebook indexes and derived results are cached by notebook content. */
-  catalog(): NoteCatalog {
+  catalog(): RepositoryCatalog {
     const local = new Map<string, Promise<NoteListItem[]>>();
     return {
       revision: async () => (await this.getSnapshot()).sha,
-      config: () => this.config(),
       index: nb => {
         let pending = local.get(nb.id);
         if (!pending) {

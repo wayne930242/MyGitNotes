@@ -1,5 +1,5 @@
 import { readWorkingNotes } from '../lib/working-notes.js';
-import { useLayoutEffect, useState } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateNoteQueries, NOTE_QUERY_KEY, noteLookupOptions, setNoteQueryScope, useNoteQueryScope, useStaleNoteQueries } from '../lib/use-note-queries.js';
 import type { NoteItem } from '../lib/types.js';
@@ -19,9 +19,11 @@ interface Params {
 export function useWorkspaceNotes({ sourceId, revision, activeWorkingNotes, remote, refreshWorkspace, workingScope, t }: Params) {
   // Every note query is answered for this source and revision; staged drafts are overlaid on top.
   const queryClient = useQueryClient();
+  // The workspace serves every notebook from its home repository, whose identity is the source identity.
+  const revisions = useMemo(() => (revision ? { [sourceId]: revision } : {}), [sourceId, revision]);
   useLayoutEffect(() => {
-    setNoteQueryScope({ sourceId, revision, drafts: activeWorkingNotes });
-  }, [sourceId, revision, activeWorkingNotes]);
+    setNoteQueryScope({ sourceId, revisions, drafts: activeWorkingNotes });
+  }, [sourceId, revisions, activeWorkingNotes]);
   const queryScope = useNoteQueryScope();
   const invalidateNotes = () => {
     void invalidateNoteQueries(queryClient);

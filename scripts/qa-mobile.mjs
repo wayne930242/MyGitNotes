@@ -366,6 +366,7 @@ try {
   console.log('PASS mobile create, Live/Source, reduced-height editing, image insert, Agent save and Files navigation');
   // Hosted saving and access settings use fixture credentials and intercepted API calls.
   let saved;
+  const REPOSITORY = 'github:owner/repo@main';
   const remoteNote = { path: 'notes/example/remote.md', title: 'Remote note', content: '# Remote note\n', metadata: { title: 'Remote note' }, status: 'inbox', tags: [], notebookId: 'example', revision: 'one' };
   await page.setRequestInterception(true);
   page.on('request', request => {
@@ -387,10 +388,10 @@ try {
     }
     if (url.pathname === '/api/notes/read') body = { note: remoteNote };
     if (url.pathname === '/api/notes/read-batch') body = { notes: [remoteNote] };
-    if (url.pathname === '/api/notes/query') body = url.searchParams.get('select') === 'paths' ? { revision: remoteNote.revision, paths: [remoteNote.path], total: 1 } : { revision: remoteNote.revision, notes: [remoteNote], total: 1, nextCursor: null };
-    if (url.pathname === '/api/notes/lookup') body = { revision: remoteNote.revision, notes: [remoteNote] };
-    if (url.pathname === '/api/notes/facets') body = { revision: remoteNote.revision, notebooks: { example: { total: 1, hidden: 0, statuses: { inbox: 1 }, tags: {}, directories: { 'notes/example': 1 } } } };
-    if (url.pathname === '/api/notes/agenda') body = { revision: remoteNote.revision, tasks: [], dated: [] };
+    if (url.pathname === '/api/notes/query') body = url.searchParams.get('select') === 'paths' ? { revisions: { [REPOSITORY]: remoteNote.revision }, paths: [remoteNote.path], total: 1 } : { revisions: { [REPOSITORY]: remoteNote.revision }, notes: [remoteNote], total: 1, nextCursor: null };
+    if (url.pathname === '/api/notes/lookup') body = { revisions: { [REPOSITORY]: remoteNote.revision }, notes: [remoteNote] };
+    if (url.pathname === '/api/notes/facets') body = { revisions: { [REPOSITORY]: remoteNote.revision }, notebooks: { example: { total: 1, hidden: 0, statuses: { inbox: 1 }, tags: {}, directories: { 'notes/example': 1 } } } };
+    if (url.pathname === '/api/notes/agenda') body = { revisions: { [REPOSITORY]: remoteNote.revision }, tasks: [], dated: [] };
     if (url.pathname === '/api/folders') body = { folders: [] };
     if (url.pathname === '/api/assets') body = { assets: [] };
     if (url.pathname === '/api/auth/session') body = { authenticated: true, login: 'mobile-owner', configured: true, provider: 'github' };

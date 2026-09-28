@@ -1,3 +1,4 @@
+import { SourceError } from './github-api.js';
 import { type SourceConfig, sourceIdentity } from './source-config.js';
 import type { WorkspaceConfig } from './types.js';
 
@@ -19,4 +20,11 @@ export interface LocalRepository {
 
 export function repositoryRef(source: SourceConfig): RepositoryRef {
   return { id: sourceIdentity(source), source };
+}
+
+/** A read or write named revisions that some repositories no longer hold. */
+export class StaleRevisionError extends SourceError {
+  constructor(readonly repositories: RepositoryId[], message = 'The repository changed. Reload to continue from the latest revision.') {
+    super(message, 409);
+  }
 }

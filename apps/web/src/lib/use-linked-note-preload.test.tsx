@@ -8,7 +8,7 @@ import { linkedNotePath, useLinkedNotePreload } from './use-linked-note-preload.
 import { noteLookupOptions, setNoteQueryScope } from './use-note-queries.js';
 
 const notebooks: NotebookConfig[] = [{ id: 'n', title: 'Notes', root: 'notes' }];
-const scope = { sourceId: 'local:test', revision: '', drafts: {} };
+const scope = { sourceId: 'local:test', revisions: {}, drafts: {} };
 let client: QueryClient;
 let idle: Map<number, IdleRequestCallback>;
 let fetcher: ReturnType<typeof vi.fn>;
@@ -103,12 +103,12 @@ it('leaves a failed speculative read retryable by an explicit open', async () =>
 it('separates preloaded bodies by workspace revision', async () => {
   mount(1);
   await tick();
-  await act(async () => setNoteQueryScope({ ...scope, revision: 'next' }));
+  await act(async () => setNoteQueryScope({ ...scope, revisions: { 'github:me/notes': 'next' } }));
   await tick();
   expect(fetcher).toHaveBeenCalledTimes(2);
-  expect(JSON.parse(fetcher.mock.calls[1][1].body as string).revision).toBe('next');
+  expect(JSON.parse(fetcher.mock.calls[1][1].body as string).revisions).toEqual({ 'github:me/notes': 'next' });
   expect(client.getQueryData(noteLookupOptions(scope, ['notes/target-0.md'], true).queryKey)).toBeDefined();
-  expect(client.getQueryData(noteLookupOptions({ ...scope, revision: 'next' }, ['notes/target-0.md'], true).queryKey)).toBeDefined();
+  expect(client.getQueryData(noteLookupOptions({ ...scope, revisions: { 'github:me/notes': 'next' } }, ['notes/target-0.md'], true).queryKey)).toBeDefined();
 });
 
 it('pauses idle reads in hidden tabs and resumes when visible', async () => {

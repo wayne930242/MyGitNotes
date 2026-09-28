@@ -1,15 +1,15 @@
 import { Request, Response, Router } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
-import { classifyResource, deleteNoteFile, lookupNotes, noteAgenda, type NoteCatalog, noteFacets, noteGraph, type NoteItem, parseNoteQuery, queryNotePaths, queryNotes, readNoteFile, resolveSafePath, scanNotebookNotes, SourceError, type WorkspaceConfig, writeNoteFile } from '@mygitnotes/core';
+import { classifyResource, deleteNoteFile, lookupNotes, noteAgenda, noteFacets, noteGraph, type NoteItem, parseNoteQuery, queryNotePaths, queryNotes, readNoteFile, type RepositoryCatalog, resolveSafePath, scanNotebookNotes, SourceError, StaleRevisionError, writeNoteFile } from '@mygitnotes/core';
 import { changeFile, generateCommitMessage, listChanges, stageAndCommit } from '@mygitnotes/git';
-import { localHome, localRepository } from './request-workspace.js';
+import { type LocalHandle, localHome, localRepository, requestCatalog } from './request-workspace.js';
 
 export function createLocalNotesRouter(): Router {
   const router = Router();
 
   /** Per-request read model over the working tree; local reads are not cached. */
-  function localCatalog(repoRoot: string, workspace: WorkspaceConfig): NoteCatalog {
+  function localCatalog(repoRoot: string): RepositoryCatalog {
     const scans = new Map<string, NoteItem[]>();
     const scan = (notebook: Parameters<typeof scanNotebookNotes>[1]) => {
       let notes = scans.get(notebook.id);
@@ -19,16 +19,13 @@ export function createLocalNotesRouter(): Router {
       }
       return notes;
     };
-    return { revision: async () => '', config: async () => workspace, index: async notebook => scan(notebook).map(({ content: _content, ...note }) => note), contents: async notes => new Map(notes.map(note => [note.path, scans.get(note.notebookId)?.find(item => item.path === note.path)?.content ?? ''])), memo: (_kind, _notebooks, compute) => compute() };
+    return { revision: async () => '', index: async notebook => scan(notebook).map(({ content: _content, ...note }) => note), contents: async notes => new Map(notes.map(note => [note.path, scans.get(note.notebookId)?.find(item => item.path === note.path)?.content ?? ''])), memo: (_kind, _notebooks, compute) => compute() };
   }
 
-  async function catalogOf(res: Response) {
-    const { root, config } = await localRepository(res);
-    return localCatalog(root, config);
-  }
+  const catalogOf = (res: Response) => requestCatalog(res, undefined, handle => localCatalog((handle as LocalHandle).root));
 
   function queryError(res: Response, error: unknown) {
-    res.status(error instanceof SourceError ? error.status : 500).json({ error: error instanceof Error ? error.message : String(error) });
+    res.status(error instanceof SourceError ? error.status : 500).json({ error: error instanceof Error ? error.message : String(error), ...(error instanceof StaleRevisionError ? { staleRepositories: error.repositories } : {}) });
   }
 
   router.get('/query', async (req: Request, res: Response) => {

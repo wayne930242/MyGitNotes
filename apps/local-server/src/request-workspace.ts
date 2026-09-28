@@ -1,5 +1,5 @@
 import type express from 'express';
-import { createRemoteSource, createWorkspaceRepositories, localManifest, RemoteManifest, type RemoteCache, type RemoteSource, type RepositoryId, SourceError, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
+import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, localManifest, type NotebookConfig, type NoteCatalog, parseRevisions, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { authToken } from './auth.js';
 
@@ -23,18 +23,10 @@ export function openWorkspace(settings: WorkspaceSettings, token: string | undef
   const { home } = settings;
   if (home.source.type === 'local') {
     const root = home.source.path;
-    return createWorkspaceRepositories<RepositoryHandle>({
-      home,
-      openHome: () => ({ kind: 'local', id: home.id, root }),
-      manifest: () => settings.manifest(() => localManifest(root, stageAndCommit)),
-    });
+    return createWorkspaceRepositories<RepositoryHandle>({ home, openHome: () => ({ kind: 'local', id: home.id, root }), manifest: () => settings.manifest(() => localManifest(root, stageAndCommit)) });
   }
   const source = home.source;
-  return createWorkspaceRepositories<RepositoryHandle>({
-    home,
-    openHome: scope => ({ kind: 'remote', id: home.id, reader: createRemoteSource(source, token, fetch, cache, scope), authenticated: Boolean(token) }),
-    manifest: handle => settings.manifest(() => new RemoteManifest((handle as RemoteHandle).reader)),
-  });
+  return createWorkspaceRepositories<RepositoryHandle>({ home, openHome: scope => ({ kind: 'remote', id: home.id, reader: createRemoteSource(source, token, fetch, cache, scope), authenticated: Boolean(token) }), manifest: handle => settings.manifest(() => new RemoteManifest((handle as RemoteHandle).reader)) });
 }
 
 /** Resolves the request's workspace once and stores it in `res.locals.workspace`. */
@@ -70,6 +62,15 @@ export function workspaceOf(res: express.Response): RequestWorkspace {
 export async function homeRepository(res: express.Response): Promise<{ handle: RepositoryHandle; config: WorkspaceConfig; }> {
   const workspace = workspaceOf(res);
   return { handle: workspace.home.handle, config: await workspace.scope(workspace.home.ref.id) };
+}
+
+/** The note catalog over every available repository of the request's workspace, checked against the `revisions` the caller works from. */
+export async function requestCatalog(res: express.Response, revisions: unknown, open: (handle: RepositoryHandle, notebooks: NotebookConfig[]) => RepositoryCatalog): Promise<NoteCatalog> {
+  const expected = parseRevisions(revisions);
+  const workspace = workspaceOf(res);
+  const [{ config }, repositories] = await Promise.all([workspace.manifest(), workspace.all()]);
+  const available = repositories.filter((repository): repository is AvailableRepository<RepositoryHandle> => 'handle' in repository);
+  return workspaceCatalog(config, available.map(repository => ({ id: repository.ref.id, notebooks: repository.notebooks, catalog: open(repository.handle, repository.notebooks) })), expected);
 }
 
 /** The local home worktree with the manifest scope it serves. */

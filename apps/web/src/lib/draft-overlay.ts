@@ -95,7 +95,7 @@ export function overlayDraftAgenda(agenda: NoteAgenda, drafts: WorkingNotes, opt
   const drafted = new Set(Object.keys(drafts));
   const tasks = [...agenda.tasks.filter(task => !drafted.has(task.notePath)), ...extractTodoTasks(entries.map(entry => entry.note))];
   const dated = [...agenda.dated.filter(note => !drafted.has(note.path)), ...entries.filter(entry => entry.note.metadata.created !== undefined || entry.note.metadata.updated !== undefined).map(entry => entry.note)];
-  return { revision: agenda.revision, tasks, dated };
+  return { revisions: agenda.revisions, tasks, dated };
 }
 
 export interface GraphDraftNote {

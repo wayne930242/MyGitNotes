@@ -3,6 +3,7 @@ import { keepPreviousData, type QueryClient, useInfiniteQuery, useQuery } from '
 import { DEFAULT_NOTE_QUERY } from '@mygitnotes/core/note-query';
 import type { NoteAgenda, NotebookFacets, NoteFacets, NoteListItem, NoteQuery, NoteQueryPage } from '@mygitnotes/core/note-query';
 import type { NoteGraphData } from '@mygitnotes/core/note-graph';
+import type { RevisionSet } from '@mygitnotes/core/repository';
 import { ApiError } from './api.js';
 import { fetchNoteAgenda, fetchNoteFacets, fetchNoteGraph, fetchNotePaths, fetchNoteQuery, lookupNotes } from './notes-api.js';
 import { draftGraphNotes, overlayDraftAgenda, overlayDraftFacets, overlayDraftLookup, overlayDraftPaths, overlayDraftRows, overlayGraphDrafts } from './draft-overlay.js';
@@ -10,24 +11,25 @@ import { sameValue } from './merge-note.js';
 import type { WorkingNotes } from './working-notes.js';
 
 /**
- * Every note query is answered by the server for one workspace revision, so the source and
- * revision belong in each key: a commit or refresh changes them and the views refetch, while
- * local drafts are overlaid on the answers instead of invalidating them.
+ * Every note query is answered by the server for the revisions of the workspace's repositories,
+ * so the workspace and those revisions belong in each key: a commit or refresh changes them and
+ * the views refetch, while local drafts are overlaid on the answers instead of invalidating them.
+ * A local workspace has no revisions.
  */
 export interface NoteQueryScope {
   sourceId: string;
-  revision: string;
+  revisions: RevisionSet;
   drafts: WorkingNotes;
 }
 
 const EMPTY_DRAFTS: WorkingNotes = {};
-let currentScope: NoteQueryScope = { sourceId: '', revision: '', drafts: EMPTY_DRAFTS };
+let currentScope: NoteQueryScope = { sourceId: '', revisions: {}, drafts: EMPTY_DRAFTS };
 const listeners = new Set<() => void>();
 const readScope = () => currentScope;
 
 /** Publishes the workspace identity every note query runs against; components read it through `useNoteQueryScope`. */
 export function setNoteQueryScope(next: NoteQueryScope): void {
-  if (currentScope.sourceId === next.sourceId && currentScope.revision === next.revision && currentScope.drafts === next.drafts) return;
+  if (currentScope.sourceId === next.sourceId && sameValue(currentScope.revisions, next.revisions) && currentScope.drafts === next.drafts) return;
   currentScope = next;
   /* eslint-disable unicorn/no-useless-spread -- Snapshot the collection because callbacks may mutate subscriptions or editors during iteration. */
   for (const listener of [...listeners]) listener();
@@ -48,7 +50,7 @@ export function useNoteQueryScope(): NoteQueryScope {
 }
 
 /**
- * `revision` is a consistency token: the server answers from the branch head and rejects a
+ * `revisions` are consistency tokens: the server answers from each branch head and rejects a
  * request that names another one (409), as it rejects a cursor from another query (400).
  * Both mean the same thing here — refresh the workspace and restart the lists from page one.
  */
@@ -90,9 +92,8 @@ export const NOTE_PAGE_SIZE = 50;
 export const invalidateNoteQueries = (client: QueryClient) => client.invalidateQueries({ queryKey: NOTE_QUERY_KEY });
 
 export const noteQueryInput = (query: Partial<NoteQuery>): NoteQuery => ({ ...DEFAULT_NOTE_QUERY, ...query });
-const queryKey = (scope: NoteQueryScope, kind: string, params: unknown) => [...NOTE_QUERY_KEY, scope.sourceId, scope.revision, kind, params];
+const queryKey = (scope: NoteQueryScope, kind: string, params: unknown) => [...NOTE_QUERY_KEY, scope.sourceId, Object.entries(scope.revisions).sort(([a], [b]) => a.localeCompare(b)), kind, params];
 const errorText = (error: unknown) => error instanceof Error ? error.message : error ? String(error) : '';
-const revisionOf = (scope: NoteQueryScope) => scope.revision || undefined;
 
 /** Keeps a deeply equal value identical across renders, so inline query objects do not restart queries. */
 function useStable<T>(value: T): T {
@@ -107,18 +108,18 @@ function useStable<T>(value: T): T {
 
 export function noteLookupOptions(scope: NoteQueryScope, paths: string[], content: boolean) {
   const unique = [...new Set(paths)];
-  return { queryKey: queryKey(scope, 'lookup', { paths: unique, content }), queryFn: () => lookupNotes(unique, { content, revision: revisionOf(scope) }), enabled: unique.length > 0 && Boolean(scope.sourceId) };
+  return { queryKey: queryKey(scope, 'lookup', { paths: unique, content }), queryFn: () => lookupNotes(unique, { content, revisions: scope.revisions }), enabled: unique.length > 0 && Boolean(scope.sourceId) };
 }
 
 /** One page of a query, for callers that read outside React rendering. */
 export function notePageOptions(scope: NoteQueryScope, query: Partial<NoteQuery>, options: { limit?: number; content?: boolean; } = {}) {
   const input = noteQueryInput(query);
-  return { queryKey: queryKey(scope, 'page', { query: input, limit: options.limit ?? NOTE_PAGE_SIZE, content: Boolean(options.content) }), queryFn: () => fetchNoteQuery(input, { limit: options.limit ?? NOTE_PAGE_SIZE, content: options.content, revision: revisionOf(scope) }) };
+  return { queryKey: queryKey(scope, 'page', { query: input, limit: options.limit ?? NOTE_PAGE_SIZE, content: Boolean(options.content) }), queryFn: () => fetchNoteQuery(input, { limit: options.limit ?? NOTE_PAGE_SIZE, content: options.content, revisions: scope.revisions }) };
 }
 
 export function notePathsOptions(scope: NoteQueryScope, query: Partial<NoteQuery>) {
   const input = noteQueryInput(query);
-  return { queryKey: queryKey(scope, 'paths', input), queryFn: () => fetchNotePaths(input, revisionOf(scope)), enabled: Boolean(scope.sourceId) };
+  return { queryKey: queryKey(scope, 'paths', input), queryFn: () => fetchNotePaths(input, scope.revisions), enabled: Boolean(scope.sourceId) };
 }
 
 export interface NoteListResult {
@@ -144,7 +145,7 @@ export function useNoteList(query: Partial<NoteQuery> | null, options: NoteListO
   const limit = options.limit ?? NOTE_PAGE_SIZE;
   const content = Boolean(options.content);
   const input = useStable(query ? noteQueryInput(query) : null);
-  const result = useInfiniteQuery({ queryKey: queryKey(scope, 'query', { query: input, limit, content }), queryFn: ({ pageParam }) => fetchNoteQuery(input!, { revision: revisionOf(scope), cursor: pageParam, limit, content }), initialPageParam: undefined as string | undefined, getNextPageParam: (page: NoteQueryPage) => page.nextCursor ?? undefined, enabled: Boolean(input) && Boolean(scope.sourceId), placeholderData: keepPreviousData });
+  const result = useInfiniteQuery({ queryKey: queryKey(scope, 'query', { query: input, limit, content }), queryFn: ({ pageParam }) => fetchNoteQuery(input!, { revisions: scope.revisions, cursor: pageParam, limit, content }), initialPageParam: undefined as string | undefined, getNextPageParam: (page: NoteQueryPage) => page.nextCursor ?? undefined, enabled: Boolean(input) && Boolean(scope.sourceId), placeholderData: keepPreviousData });
   // A disabled query keeps the previous answer as placeholder data; a view that asked for
   // nothing must still see nothing.
   const rows = useMemo(() => (input ? result.data?.pages.flatMap(page => page.notes) ?? [] : []), [result.data, input]);
@@ -169,7 +170,7 @@ export function useNotePaths(query: Partial<NoteQuery> | null): { paths: string[
 
 export function useNoteFacets(showHidden: boolean): { facets: Record<string, NotebookFacets> | undefined; loading: boolean; error: string; } {
   const scope = useNoteQueryScope();
-  const result = useQuery({ queryKey: queryKey(scope, 'facets', { showHidden }), queryFn: () => fetchNoteFacets(showHidden, revisionOf(scope)), enabled: Boolean(scope.sourceId), placeholderData: keepPreviousData });
+  const result = useQuery({ queryKey: queryKey(scope, 'facets', { showHidden }), queryFn: () => fetchNoteFacets(showHidden, scope.revisions), enabled: Boolean(scope.sourceId), placeholderData: keepPreviousData });
   const facets = useMemo(() => result.data ? overlayDraftFacets((result.data as NoteFacets).notebooks, scope.drafts, showHidden) : undefined, [result.data, scope.drafts, showHidden]);
   return { facets, loading: result.isPending, error: errorText(result.error) };
 }
@@ -187,14 +188,14 @@ export function useNoteLookup(paths: string[], content: boolean): { notes: NoteL
 
 export function useNoteAgenda(notebookId: string, showHidden = false): { agenda: NoteAgenda | undefined; loading: boolean; error: string; } {
   const scope = useNoteQueryScope();
-  const result = useQuery({ queryKey: queryKey(scope, 'agenda', { notebookId, showHidden }), queryFn: () => fetchNoteAgenda(notebookId, { showHidden, revision: revisionOf(scope) }), enabled: Boolean(scope.sourceId) && Boolean(notebookId), placeholderData: keepPreviousData });
+  const result = useQuery({ queryKey: queryKey(scope, 'agenda', { notebookId, showHidden }), queryFn: () => fetchNoteAgenda(notebookId, { showHidden, revisions: scope.revisions }), enabled: Boolean(scope.sourceId) && Boolean(notebookId), placeholderData: keepPreviousData });
   const agenda = useMemo(() => result.data ? overlayDraftAgenda(result.data, scope.drafts, { notebookId, showHidden }) : undefined, [result.data, scope.drafts, notebookId, showHidden]);
   return { agenda, loading: result.isPending, error: errorText(result.error) };
 }
 
 export function useNoteGraph(enabled = true): { graph: NoteGraphData | undefined; loading: boolean; error: string; } {
   const scope = useNoteQueryScope();
-  const result = useQuery({ queryKey: queryKey(scope, 'graph', {}), queryFn: () => fetchNoteGraph(revisionOf(scope)), enabled: enabled && Boolean(scope.sourceId), placeholderData: keepPreviousData });
+  const result = useQuery({ queryKey: queryKey(scope, 'graph', {}), queryFn: () => fetchNoteGraph(scope.revisions), enabled: enabled && Boolean(scope.sourceId), placeholderData: keepPreviousData });
   const graph = useMemo(() => (enabled && result.data ? overlayGraphDrafts({ nodes: result.data.nodes, links: result.data.links }, draftGraphNotes(scope.drafts)) : undefined), [enabled, result.data, scope.drafts]);
   return { graph, loading: enabled && result.isPending, error: errorText(result.error) };
 }

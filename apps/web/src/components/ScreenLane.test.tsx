@@ -28,7 +28,7 @@ beforeEach(() => {
   );
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ revision: REVISION, notes: [{ id: 'notes/nb1/a.md', path: 'notes/nb1/a.md', notebookId: 'nb1', title: 'Note A', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } })));
   client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  setNoteQueryScope({ sourceId: 'github:me/notes', revision: REVISION, drafts: {} });
+  setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, drafts: {} });
 });
 afterEach(() => {
   cleanup();

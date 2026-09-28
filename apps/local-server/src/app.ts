@@ -2,13 +2,13 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { classifyResource, deploymentConfigSource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, parseRevision, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceNoteTags, resolveSafePath, SCREEN_DOCUMENT, SourceError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource } from '@mygitnotes/core';
+import { classifyResource, deploymentConfigSource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceNoteTags, resolveSafePath, SCREEN_DOCUMENT, SourceError, StaleRevisionError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRemoteMCP } from './mcp.js';
 import { createRemoteCoreUpdateRouter } from './remote-core-update.js';
 import { createLocalApp } from './local-app.js';
 import { createAuth } from './auth.js';
-import { localHome, remoteHome, requestWorkspace, workspaceOf } from './request-workspace.js';
+import { localHome, type RemoteHandle, remoteHome, requestCatalog, requestWorkspace, workspaceOf } from './request-workspace.js';
 import { createStudyRouter } from './study.js';
 import { createWorkspaceDocumentRouter } from './workspace-document.js';
 import { createFolderManagerRouter } from './folder-manager.js';
@@ -128,18 +128,12 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
         fail(res, error);
       }
     });
-    /** `revision` is the snapshot the browser is working from; reads always answer from the branch head. */
-    const catalog = async (res: express.Response, revision: unknown) => {
-      const reader: RemoteSource = res.locals.reader;
-      const expected = parseRevision(revision);
-      const snapshot = await reader.getSnapshot();
-      if (expected && expected !== snapshot.sha) throw new SourceError('The repository changed. Reload to continue from the latest revision.', 409);
-      return reader.catalog();
-    };
+    /** `revisions` are the snapshots the browser is working from; reads always answer from each branch head. */
+    const catalog = (res: express.Response, revisions: unknown) => requestCatalog(res, revisions, handle => (handle as RemoteHandle).reader.catalog());
     app.get('/api/notes/query', async (req, res) => {
       try {
         const { query, options } = parseNoteQuery(req.query);
-        const notes = await catalog(res, req.query.revision);
+        const notes = await catalog(res, req.query.revisions);
         res.json(options.select ? await queryNotePaths(notes, query) : await queryNotes(notes, query, options));
       } catch (error) {
         fail(res, error);
@@ -147,14 +141,14 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     });
     app.get('/api/notes/facets', async (req, res) => {
       try {
-        res.json(await noteFacets(await catalog(res, req.query.revision), req.query.showHidden === '1'));
+        res.json(await noteFacets(await catalog(res, req.query.revisions), req.query.showHidden === '1'));
       } catch (error) {
         fail(res, error);
       }
     });
     app.post('/api/notes/lookup', async (req, res) => {
       try {
-        res.json(await lookupNotes(await catalog(res, req.body?.revision), req.body?.paths, req.body?.content === true));
+        res.json(await lookupNotes(await catalog(res, req.body?.revisions), req.body?.paths, req.body?.content === true));
       } catch (error) {
         fail(res, error);
       }
@@ -162,14 +156,14 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     app.get('/api/notes/agenda', async (req, res) => {
       try {
         if (typeof req.query.notebookId !== 'string' || !req.query.notebookId) throw new SourceError('notebookId is required.');
-        res.json(await noteAgenda(await catalog(res, req.query.revision), req.query.notebookId, req.query.showHidden === '1'));
+        res.json(await noteAgenda(await catalog(res, req.query.revisions), req.query.notebookId, req.query.showHidden === '1'));
       } catch (error) {
         fail(res, error);
       }
     });
     app.get('/api/notes/graph', async (req, res) => {
       try {
-        res.json(await noteGraph(await catalog(res, req.query.revision)));
+        res.json(await noteGraph(await catalog(res, req.query.revisions)));
       } catch (error) {
         fail(res, error);
       }
@@ -363,5 +357,5 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
 function fail(res: express.Response, error: unknown) {
   const retryAfter = error instanceof SourceError ? error.retryAfter : undefined;
   if (retryAfter) res.setHeader('Retry-After', String(retryAfter));
-  res.status(error instanceof SourceError ? error.status : 500).json({ error: error instanceof Error ? error.message : 'Request failed.', ...(retryAfter ? { retryAfter } : {}) });
+  res.status(error instanceof SourceError ? error.status : 500).json({ error: error instanceof Error ? error.message : 'Request failed.', ...(retryAfter ? { retryAfter } : {}), ...(error instanceof StaleRevisionError ? { staleRepositories: error.repositories } : {}) });
 }

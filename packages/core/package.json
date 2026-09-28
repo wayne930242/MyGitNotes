@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./repository": {
+      "types": "./dist/repository.d.ts",
+      "import": "./dist/repository.js"
+    },
     "./note-status": {
       "types": "./dist/note-status.d.ts",
       "import": "./dist/note-status.js"
