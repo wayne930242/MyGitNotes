@@ -18,8 +18,8 @@ Default transport is **stdio** for local agent integration (e.g. Claude Desktop,
 8. `list_assets`: Lists a notebook's assets. With private R2 storage configured the bucket objects are listed alongside the repository files, and every entry names its `storage` and the `reference` a note links it by.
 9. `add_asset`: Stores an asset file (with optional subfolder directory) and returns the reference a note links it by. With private R2 storage configured the file is uploaded to `<notebookId>/<directory>/<filename>` in the bucket and the response carries `storage: "r2"`, the object `key` and an `r2:<object-key>` `reference`; otherwise it is written into the notebook asset directory, committed, and returned as a notebook-relative path.
 10. `delete_asset`: Removes an asset. A repository path is deleted with a Git commit; an `r2:<object-key>` reference deletes that bucket object, refused while a note still links it unless `force` is true.
-11. `get_git_status`: Returns branch name, clean/dirty state, and recent commit history.
-12. `git_commit`: Creates an atomic commit across staged/modified files.
+11. `get_git_status`: Returns branch name, clean/dirty state, and recent commit history for each available repository; unavailable repositories are reported.
+12. `git_commit`: Creates an atomic commit in the repository selected by `notebookId` (optional only in a single-repository workspace). Files cannot span repositories.
 13. `update_core`: Performs the guarded Core update workflow, or inspects available updates if `checkOnly: true`.
 14. `list_folders`: Returns notebook-relative folder paths and `_dir.yml` display metadata, or inspects a specific folder if `path` is provided.
 15. `mkdir`: Creates a notebook folder or updates display metadata (`title`, `order`, `description`, and custom fields) in `_dir.yml` (supports `overwrite: true`), creating an atomic Git commit.
@@ -33,8 +33,13 @@ Default transport is **stdio** for local agent integration (e.g. Claude Desktop,
 ## Source selection and hosted access
 
 The stdio entry resolves `mygitnotes.server.yaml` (or legacy `github-notes.server.yaml`) from its repository argument.
-A local source uses the filesystem tools above; a GitHub or GitLab source exposes the
-remote read tools against the configured public repository.
+A local source uses the filesystem tools above; a GitHub or GitLab source exposes
+remote read tools against the configured public repositories. Stdio and hosted
+sessions resolve each notebook against its manifest-declared repository. Path-only
+tools accept an optional `notebookId` to disambiguate identical paths in different
+repositories; an unqualified path must lie in exactly one configured notebook.
+A path outside every notebook is rejected. `cp` and `mv` cannot cross repositories.
+Workspace-wide listings merge available repositories and report unavailable ones.
 
 Hosted `/mcp` uses stateless Streamable HTTP. Settings → Access control creates
 named read-only or write grants and shows a complete `/mcp/<token>` connector URL
@@ -58,8 +63,15 @@ list notes). Each match carries status, tags, matched terms and a snippet;
 `limit` defaults to 20. Hosted `list_notes` pages note summaries with `offset`
 and `limit` (default 100, maximum 500) and returns `total` and `nextOffset`; each
 entry carries the frontmatter `description`, or the opening body line, capped at
-240 characters, in place of the Markdown body. Listing and reading return a revision.
-All writes require that revision, push permission and the `main` branch. Each
+240 characters, in place of the Markdown body. Hosted reads return an opaque
+`revision` for the repositories they cover: `v1.` followed by unpadded base64url
+of a UTF-8 JSON object mapping repository identity to 40- or 64-hex commit SHA.
+Writes decode this token, require the target repository's entry and check only
+that entry; a stale target names its repository. Receipts advance the target
+entry while retaining entries received for other repositories. A bare 40- or
+64-hex SHA is accepted only when the workspace contains exactly one repository.
+Optional revisions default to the target repository's current head. Required
+writes need the revision, push permission and the `main` branch. Each
 successful mutation creates one program-named commit and updates the remote
 branch without force. Multi-file changes share one commit; GitLab uses batch actions with per-file version checks. Stale
 revisions reject the operation. Mutations allow at most 200 files and 5 MiB of
@@ -74,8 +86,8 @@ Hosted agent-system tools read what governs a notebook or note. A target is a
 before the note exists. `get_system_prompt` returns every `AGENTS.md` from the
 repository root down to the target, root first, and their joined `content`.
 `list_skills` returns the `.agents/skills/<name>/SKILL.md` skills of each
-directory from the target up to the root, the nearest winning a shared name, or
-every workspace skill without a target. `invoke_skill` returns a skill's
+directory from the target up to its own repository root, the nearest winning a
+shared name, or every available repository's skills without a target. `invoke_skill` returns a skill's
 `SKILL.md` body, description and readable supporting files. Skills may live in
 the repository root, notebook roots and their ancestors, and folders inside
 notebooks; their Markdown and text files and `agents/openai.yaml` are readable.

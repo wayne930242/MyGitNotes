@@ -30,7 +30,7 @@ function scopeNotes(ctx: ToolContext, config: WorkspaceConfig, args: NoteScope):
 }
 
 export async function handleSearchNotes(ctx: ToolContext, args: NoteScope & { query: string; maxResults?: number; }) {
-  const config = loadWorkspaceConfig(ctx.repoRoot);
+  const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
   if (!args.query) return { error: 'query is required' };
 
@@ -71,7 +71,7 @@ export async function handleReplaceNotes(ctx: ToolContext, args: NoteScope & { f
   if (!args.dryRun) {
     await assertUserWorkspaceBranch(ctx.repoRoot);
   }
-  const config = loadWorkspaceConfig(ctx.repoRoot);
+  const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
   if (!args.find) return { error: 'find parameter is required' };
   if (args.replace === undefined) return { error: 'replace parameter is required' };

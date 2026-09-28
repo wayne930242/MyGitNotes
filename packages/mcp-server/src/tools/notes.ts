@@ -6,7 +6,7 @@ import { assertSafeRepoPath, assertUserWorkspaceBranch } from '../guards.js';
 import type { ToolContext } from './context.js';
 
 export async function handleGetWorkspaceConfig(ctx: ToolContext) {
-  const config = loadWorkspaceConfig(ctx.repoRoot);
+  const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) {
     return { error: 'No .mygitnotes.yaml (or legacy .github-notes.yaml) configuration file found in workspace.' };
   }
@@ -14,7 +14,7 @@ export async function handleGetWorkspaceConfig(ctx: ToolContext) {
 }
 
 export async function handleListNotebooks(ctx: ToolContext) {
-  const config = loadWorkspaceConfig(ctx.repoRoot);
+  const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) {
     return { error: 'Workspace not initialized.' };
   }
@@ -22,7 +22,7 @@ export async function handleListNotebooks(ctx: ToolContext) {
 }
 
 export async function handleListNotes(ctx: ToolContext, args: { notebookId?: string; offset?: number; limit?: number; }) {
-  const config = loadWorkspaceConfig(ctx.repoRoot);
+  const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) {
     return { error: 'Workspace not initialized.' };
   }
@@ -87,7 +87,7 @@ export async function handleDeleteNote(ctx: ToolContext, args: { path: string; c
 }
 
 export async function handleGetStatuses(ctx: ToolContext, args: { notebookId?: string; } = {}) {
-  const config = loadWorkspaceConfig(ctx.repoRoot);
+  const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
 
   const notebooks = args.notebookId ? config.notebooks.filter((nb) => nb.id === args.notebookId) : config.notebooks;
@@ -117,7 +117,7 @@ function availableStatuses(ctx: ToolContext, nb?: NotebookConfig) {
 
 export async function handleGetNoteMetadata(ctx: ToolContext, args: { path: string; }) {
   assertSafeRepoPath(ctx.repoRoot, args.path);
-  const config = loadWorkspaceConfig(ctx.repoRoot);
+  const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
 
   const located = locateNote(ctx, config, args.path);
@@ -132,7 +132,7 @@ export async function handleUpdateNoteMetadata(ctx: ToolContext, args: { path: s
   await assertUserWorkspaceBranch(ctx.repoRoot);
   assertSafeRepoPath(ctx.repoRoot, args.path);
 
-  const config = loadWorkspaceConfig(ctx.repoRoot);
+  const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
 
   const located = locateNote(ctx, config, args.path);

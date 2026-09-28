@@ -26,3 +26,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   });
 }
 export * from './remote-tools.js';
+export * from './workspace-remote.js';

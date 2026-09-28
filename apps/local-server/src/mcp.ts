@@ -4,7 +4,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { type RemoteCache, SourceError, type WorkspaceConfigSource, WorkspaceSetupError } from '@mygitnotes/core';
-import { callRemoteTool, isMutationTool, remoteTools } from '@mygitnotes/mcp-server';
+import { callWorkspaceRemoteTool, isMutationTool, remoteTools } from '@mygitnotes/mcp-server';
 import { CredentialRejected, credentialToken, SessionStore } from './auth.js';
 import { openWorkspace, type RemoteHandle } from './request-workspace.js';
 
@@ -40,12 +40,12 @@ export function createRemoteMCP(base: string, configSource: WorkspaceConfigSourc
         await remember(error instanceof CredentialRejected ? error.reason : 'credential-unavailable');
         return res.status(error instanceof SourceError ? error.status : 503).json({ error: error instanceof SourceError ? error.message : 'Agent authorization service unavailable. Retry later.' });
       }
-      const { reader } = openWorkspace(settings, token, cache).home.handle as RemoteHandle;
+      const workspace = openWorkspace(settings, token, cache);
       const server = new Server({ name: 'mygitnotes', version: buildInfo.version }, { capabilities: { tools: {} }, instructions: 'Operate on the configured note repository. Use ls or glob to locate paths, read or find to inspect complete files, then pass the returned revision to a write operation. Before creating or editing notes, read the agent system of the notebook or note with get_system_prompt and list_skills; invoke_skill loads a skill, and read, write, append, edit and rm also work on skill files. Each successful mutation creates one atomic remote commit with a program-generated message. Respect read-only grants. Use Settings to revoke persistent connector URLs.' });
       server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: remoteTools.filter(t => grant.write || !isMutationTool(t.name)) }));
       server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
         try {
-          const result = await callRemoteTool(reader, params.name, params.arguments || {}, grant.write, process.env.APP_URL);
+          const result = await callWorkspaceRemoteTool(workspace as import('@mygitnotes/core').WorkspaceRepositories<RemoteHandle>, params.name, params.arguments || {}, grant.write, process.env.APP_URL);
           return { structuredContent: result, content: [{ type: 'text', text: JSON.stringify(result) }] };
         } catch (error) {
           return { isError: true, content: [{ type: 'text', text: JSON.stringify({ error: (error as Error).message }) }] };

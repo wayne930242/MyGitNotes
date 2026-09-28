@@ -9,7 +9,7 @@ export async function handleListFolders(ctx: ToolContext, args?: { path?: string
   if (args?.path) {
     return handleGetFolderMetadata(ctx, { path: args.path });
   }
-  const config = loadWorkspaceConfig(ctx.repoRoot);
+  const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { folders: [] };
   const notebooks = args?.notebookId ? config.notebooks.filter((nb) => nb.id === args.notebookId) : config.notebooks;
   const folders = notebooks.flatMap((nb) => scanNotebookFolders(ctx.repoRoot, nb));
@@ -30,7 +30,7 @@ export async function handleMkdir(ctx: ToolContext, args: { path: string; title?
   await assertUserWorkspaceBranch(ctx.repoRoot);
   assertSafeRepoPath(ctx.repoRoot, args.path);
 
-  const config = loadWorkspaceConfig(ctx.repoRoot);
+  const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) {
     return { error: 'Workspace not configured' };
   }

@@ -25,7 +25,7 @@ export async function listR2Assets(notebookIds: string[]) {
 }
 
 export async function handleListAssets(ctx: ToolContext, args: { notebookId: string; }) {
-  const config = loadWorkspaceConfig(ctx.repoRoot);
+  const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
 
   const nb = config.notebooks.find((n) => n.id === args.notebookId);
@@ -81,7 +81,7 @@ export async function uploadR2Asset(notebookId: string, args: AssetUpload) {
 
 export async function handleAddAsset(ctx: ToolContext, args: { notebookId: string; } & AssetUpload) {
   await assertUserWorkspaceBranch(ctx.repoRoot);
-  const config = loadWorkspaceConfig(ctx.repoRoot);
+  const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
 
   const nb = config.notebooks.find((n) => n.id === args.notebookId);
@@ -125,7 +125,7 @@ export async function deleteR2Asset(reference: string, notebookIds: string[], no
 export async function handleDeleteAsset(ctx: ToolContext, args: { path: string; commitMessage?: string; force?: boolean; }) {
   await assertUserWorkspaceBranch(ctx.repoRoot);
 
-  const config = loadWorkspaceConfig(ctx.repoRoot);
+  const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
 
   const removed = await deleteR2Asset(args.path, config.notebooks.map(nb => nb.id), async () => localNotes(ctx, config.notebooks), args.force);
