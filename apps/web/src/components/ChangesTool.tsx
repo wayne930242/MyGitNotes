@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { FileDiff, GitCommit, RotateCcw } from 'lucide-react';
 import type { ChangeRequest, FileChange, GitStatus, NoteItem } from '../lib/types.js';
 import { fetchFileChanges, fetchFileDiff } from '../lib/api.js';
-import { changeKey } from '../lib/file-changes.js';
+import { changeKey, groupChanges } from '../lib/file-changes.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { Button } from './Button.js';
 import { DiffPreview } from './DiffPreview.js';
@@ -20,6 +20,8 @@ interface ChangesToolProps {
   onSynced?: () => void;
   /** Worktrees to sync; with more than one, each gets its own section. */
   syncTargets?: SyncTarget[];
+  /** Names a repository and branch; given when the workspace has several repositories, it groups changes under them. */
+  repositoryHeading?: (repository: string | undefined) => string;
 }
 export interface SyncTarget {
   id: string;
@@ -27,7 +29,7 @@ export interface SyncTarget {
   gitStatus: GitStatus | null;
 }
 
-export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, syncTargets }: ChangesToolProps) {
+export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, syncTargets, repositoryHeading }: ChangesToolProps) {
   const { t } = useTranslation();
   const [localFiles, setFiles] = useState<FileChange[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -103,56 +105,67 @@ export function ChangesTool({ gitStatus, deletedNotes, onRestoreNote, onOpenComm
             />
             {t('changes.selectAll')}
           </label>
-          <ul className='changes-file-list'>
-            {files.map(file => (
-              <li key={changeKey(file)} className='panel-change' data-change-path={file.path}>
-                <div className='panel-change-heading'>
-                  <input
-                    type='checkbox'
-                    aria-label={t('changes.selectFile', { path: file.path })}
-                    checked={selected.includes(changeKey(file))}
-                    disabled={!writable || !file.available}
-                    onChange={event => setSelected(old => event.target.checked ? [...old, changeKey(file)] : old.filter(key => key !== changeKey(file)))}
-                  />
-                  <Button
-                    className='panel-file-title'
-                    title={file.path}
-                    aria-pressed={activeKey === changeKey(file)}
-                    onClick={() => setActiveKey(old => old === changeKey(file) ? undefined : changeKey(file))}
-                  >
-                    <FileDiff aria-hidden='true' />
-                    <span>
-                      {file.path.split('/').pop()}
-                      <small>{file.path}</small>
-                    </span>
-                  </Button>
-                </div>
-                <div className='panel-change-actions'>
-                  <span className='change-kind' data-kind={file.kind}>{t(`changes.${file.kind}`)}</span>
-                  <Button
-                    size='icon'
-                    title={t('changes.viewFile')}
-                    aria-label={t('panel.changesViewDiff', { path: file.path })}
-                    onClick={() => request('review', [changeKey(file)])}
-                  >
-                    <FileDiff aria-hidden='true' />
-                  </Button>
-                  <Button
-                    size='icon'
-                    title={t('common.restore')}
-                    aria-label={t('changes.restoreFile', { path: file.path })}
-                    disabled={!canRestore(file)}
-                    onClick={() => request('restore', [changeKey(file)])}
-                  >
-                    <RotateCcw aria-hidden='true' />
-                  </Button>
-                  <Button size='icon' title={t('changes.commitFile', { path: file.path })} aria-label={t('changes.commitFile', { path: file.path })} disabled={!writable || !file.available} onClick={() => request('commit', [changeKey(file)])}>
-                    <GitCommit aria-hidden='true' />
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {groupChanges(files, repositoryHeading).map(group => (
+            <section key={group.key} className='changes-repository-group'>
+              {group.heading && <h4 className='changes-repository'>{group.heading}</h4>}
+              <ul className='changes-file-list'>
+                {group.files.map(file => (
+                  <li key={changeKey(file)} className='panel-change' data-change-path={file.path}>
+                    <div className='panel-change-heading'>
+                      <input
+                        type='checkbox'
+                        aria-label={t('changes.selectFile', { path: file.path })}
+                        checked={selected.includes(changeKey(file))}
+                        disabled={!writable || !file.available}
+                        onChange={event => setSelected(old => event.target.checked ? [...old, changeKey(file)] : old.filter(key => key !== changeKey(file)))}
+                      />
+                      <Button
+                        className='panel-file-title'
+                        title={file.path}
+                        aria-pressed={activeKey === changeKey(file)}
+                        onClick={() => setActiveKey(old => old === changeKey(file) ? undefined : changeKey(file))}
+                      >
+                        <FileDiff aria-hidden='true' />
+                        <span>
+                          {file.path.split('/').pop()}
+                          <small>{file.path}</small>
+                        </span>
+                      </Button>
+                    </div>
+                    <div className='panel-change-actions'>
+                      <span className='change-kind' data-kind={file.kind}>{t(`changes.${file.kind}`)}</span>
+                      <Button
+                        size='icon'
+                        title={t('changes.viewFile')}
+                        aria-label={t('panel.changesViewDiff', { path: file.path })}
+                        onClick={() => request('review', [changeKey(file)])}
+                      >
+                        <FileDiff aria-hidden='true' />
+                      </Button>
+                      <Button
+                        size='icon'
+                        title={t('common.restore')}
+                        aria-label={t('changes.restoreFile', { path: file.path })}
+                        disabled={!canRestore(file)}
+                        onClick={() => request('restore', [changeKey(file)])}
+                      >
+                        <RotateCcw aria-hidden='true' />
+                      </Button>
+                      <Button
+                        size='icon'
+                        title={t('changes.commitFile', { path: file.path })}
+                        aria-label={t('changes.commitFile', { path: file.path })}
+                        disabled={!writable || !file.available}
+                        onClick={() => request('commit', [changeKey(file)])}
+                      >
+                        <GitCommit aria-hidden='true' />
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
           {active && <DiffPreview file={active} diff={diff} loading={loading} error={diffError} />}
           <div className='panel-bulk-actions'>
             <Button variant='primary' disabled={!writable || !chosen.length} onClick={() => request('commit', chosen.map(changeKey))}>

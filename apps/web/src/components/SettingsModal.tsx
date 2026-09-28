@@ -22,13 +22,12 @@ interface SettingsModalProps {
   accountSettings?: React.ReactNode;
   config: WorkspaceConfig | null;
   branch: string;
-  repoRoot: string;
   onRefreshWorkspace: () => Promise<void>;
   currentTheme: ThemeChoice;
   onSelectTheme: (theme: ThemeChoice) => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = true, canWrite, configRevision, onConfigRevision, accountSettings, branch, repoRoot, onRefreshWorkspace, currentTheme, onSelectTheme }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = true, canWrite, configRevision, onConfigRevision, accountSettings, branch, onRefreshWorkspace, currentTheme, onSelectTheme }) => {
   const { t, language, setLanguage } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
   const [yamlContent, setYamlContent] = useState(() => config ? YAML.stringify(config) : '');
@@ -160,12 +159,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
                   <span>{statusMessage.text}</span>
                 </div>
               )}
-            </div>
-            {/* Information footer */}
-            <div className='break-words text-[11px] text-muted border-t border-line pt-3'>
-              {local ? t('settings.repoRoot') : t('settings.githubSource')}
-              {': '}
-              <code className='text-muted font-mono'>{repoRoot}</code>
             </div>
           </div>
         </div>

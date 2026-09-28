@@ -298,7 +298,12 @@ try {
   await tap('.note-panel-tabs [role="tab"][aria-label="Frontmatter"]');
   await page.waitForSelector('.note-document-panel[data-panel="frontmatter"] .note-metadata');
   await fits('.note-document-panel');
-  assert(await page.$$eval('.note-panel-tabs [role="tab"]', buttons => buttons.map(button => button.getAttribute('aria-label')).join(',') === 'Find in note,Outline,Frontmatter,Insert image,View settings'), 'Mobile document panel tabs are incomplete');
+  assert(await page.$$eval('.note-panel-tabs [role="tab"]', buttons => buttons.map(button => button.getAttribute('aria-label')).join(',') === 'Find in note,Outline,Frontmatter,Insert image,View settings,Info'), 'Mobile document panel tabs are incomplete');
+  await tap('.note-panel-tabs [role="tab"][aria-label="Info"]');
+  await page.waitForSelector('.note-info-panel');
+  assert((await page.$eval('.note-info-panel', element => element.textContent)).includes(noteFile), 'The Info tab does not name the note path');
+  await tap('.note-panel-tabs [role="tab"][aria-label="Frontmatter"]');
+  await page.waitForSelector('.note-document-panel[data-panel="frontmatter"] .note-metadata');
   await page.$eval('.note-metadata input', e => e.scrollIntoView());
   assert(await page.$eval('.note-metadata input', e => parseFloat(getComputedStyle(e).fontSize) >= 16), 'Metadata input triggers mobile zoom');
   await tap('.note-panel-tabs [role="tab"][aria-label="Frontmatter"]');

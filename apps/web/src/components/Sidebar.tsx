@@ -134,10 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
               <div className='w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-fg/5' style={{ color: 'var(--color-muted)' }}>
                 <GitBranch className='w-4 h-4' />
               </div>
-              <div className='flex flex-col'>
-                <span className='font-mono text-xs font-semibold text-fg leading-tight'>{gitStatus?.branch || 'main'}</span>
-                <span className='text-[10px] text-muted leading-tight'>{gitStatus?.branch === 'core' ? t('sidebar.productCore') : t('sidebar.userWorkspace')}</span>
-              </div>
+              <span className='text-xs font-semibold text-fg leading-tight'>{t('panel.changes')}</span>
             </div>
             <div>
               {dirtyCount > 0

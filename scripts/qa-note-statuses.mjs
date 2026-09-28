@@ -2,6 +2,14 @@ import { chooseSelect } from './browser-select.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { clickButton, collectPageErrors, createQaWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
+/** The path of a browser URL; a string the browser would never report yields no match. */
+const pathnameOf = url => {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return '';
+  }
+};
 const require = qaRequire();
 const { root, write, git, commitFixture } = createQaWorkspace('github-notes-browser-');
 write('notes/.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Folder QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
@@ -29,14 +37,14 @@ const click = text => clickButton(page, text);
 const commit = async () => {
   if (!await page.$('.changes-tool')) await page.click('button[aria-label="Changes"]');
   await click('Manage changes');
-  const committed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/notes/commit');
+  const committed = page.waitForResponse(response => pathnameOf(response.url()) === '/api/notes/commit');
   await click('Commit to remote repository');
   await committed;
   await page.click('button[aria-label="Changes"]');
   await page.waitForFunction(() => !document.querySelector('.changes-tool'));
 };
 const assert = (condition, message) => {
-  if (!condition) throw Error(message);
+  if (!condition) throw new Error(message);
 };
 const selector = title => `button[role="combobox"][aria-label="Status for ${title}"]`;
 const options = async selector => {
@@ -60,7 +68,7 @@ const waitDisk = async (file, text) => {
     if (fs.existsSync(path.join(root, file)) && fs.readFileSync(path.join(root, file), 'utf8').includes(text)) return;
     await new Promise(r => setTimeout(r, 50));
   }
-  throw Error(`Missing saved text: ${text}`);
+  throw new Error(`Missing saved text: ${text}`);
 };
 const manifest = 'schema_version: 1\nworkspace:\n  title: Status QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: research\n    title: Research\n    root: notes/research\n    statuses: [capture, published]\n';
 // Settings opens the manifest on its form; the raw YAML lives behind the advanced tab.
@@ -243,6 +251,9 @@ try {
     if (url.pathname === '/api/auth/session') body = { authenticated: true, user: { login: 'fixture' } };
     if (url.pathname === '/api/folders') body = { folders: [] };
     if (url.pathname === '/api/assets') body = { assets: [] };
+    // The hosted workspace keeps its Screen and Focus documents in its own repository, not in the local QA server's.
+    if (url.pathname === '/api/screen-page' && request.method() === 'GET') body = { page: { version: 2, rows: [] }, revision: remoteNote.revision, path: '.github-notes-screen.yaml', writable: true, repository: url.searchParams.get('repository') };
+    if (url.pathname === '/api/focus-page' && request.method() === 'GET') body = { page: { version: 1, focuses: [] }, revision: remoteNote.revision, path: '.github-notes-focus.yaml', writable: true, repository: url.searchParams.get('repository') };
     if (url.pathname === '/api/git/status') body = { status: { branch: 'main', isClean: true, staged: [], modified: [], untracked: [] }, commits: [] };
     if (body) void request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     else void request.continue();

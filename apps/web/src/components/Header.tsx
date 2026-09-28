@@ -8,8 +8,9 @@ import type { NotebookConfig } from '../lib/types.js';
 import { Select } from './Select.js';
 
 interface HeaderProps {
+  /** Notebooks whose repository cannot serve them; the switcher marks them. */
+  unavailableNotebooks?: string[];
   workspaceTitle: string;
-  sourceLabel?: string;
   accountControls?: React.ReactNode;
   activeTab: WorkspaceTab;
   setActiveTab: (tab: WorkspaceTab) => void;
@@ -23,7 +24,7 @@ interface HeaderProps {
   navigationDisabled?: boolean;
 }
 
-export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab, setActiveTab, notebooks, selectedNotebookId, onSelectNotebook, notebookDisabled, onCreateNote, createNoteDisabled, onOpenCommands, navigationDisabled = false }: HeaderProps) {
+export function Header({ workspaceTitle, unavailableNotebooks = [], accountControls, activeTab, setActiveTab, notebooks, selectedNotebookId, onSelectNotebook, notebookDisabled, onCreateNote, createNoteDisabled, onOpenCommands, navigationDisabled = false }: HeaderProps) {
   const { t } = useTranslation();
   useEffect(() => {
     document.title = `${t(`nav.${activeTab}`)} · MyGitNotes`;
@@ -36,7 +37,7 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
           <img src={`${import.meta.env.BASE_URL}brand/github-notes-64.png`} width='32' height='32' alt='MyGitNotes' className='workspace-brand-icon' />
           <div className='min-w-0'>
             <h1>{workspaceTitle || 'MyGitNotes'}</h1>
-            <p>{sourceLabel || t('header.gitWorkspace')}</p>
+            <p>{t('header.gitWorkspace')}</p>
           </div>
           <span id='workspace-sidebar-toggle-slot' className='sidebar-toggle-slot' />
         </div>
@@ -69,7 +70,7 @@ export function Header({ workspaceTitle, sourceLabel, accountControls, activeTab
             {notebooks.length > 0 && (
               <>
                 <BookOpen aria-hidden='true' />
-                <Select aria-label={t('sidebar.notebooks')} value={selectedNotebookId} title={notebooks.find(nb => nb.id === selectedNotebookId)?.title} disabled={notebookDisabled || navigationDisabled} onValueChange={onSelectNotebook} options={notebooks.map(nb => ({ value: nb.id, label: nb.title }))} />
+                <Select aria-label={t('sidebar.notebooks')} value={selectedNotebookId} title={notebooks.find(nb => nb.id === selectedNotebookId)?.title} disabled={notebookDisabled || navigationDisabled} onValueChange={onSelectNotebook} options={notebooks.map(nb => ({ value: nb.id, label: unavailableNotebooks.includes(nb.id) ? `${nb.title} · ${t('notebook.unavailable')}` : nb.title }))} />
               </>
             )}
           </div>

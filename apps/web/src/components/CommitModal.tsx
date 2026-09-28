@@ -2,12 +2,12 @@ import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { Button } from './Button.js';
 import { DiffPreview } from './DiffPreview.js';
 import { EditorNotice } from './EditorNotice.js';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { GitCommit, Minus, Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import type { ChangeRequest, FileChange, GitStatus } from '../lib/types.js';
 import { commitStagedChanges, fetchFileChanges, fetchFileDiff, generateSemanticCommit, manageFileChange, PartialCommitError } from '../lib/api.js';
 import { useTranslation } from '../lib/i18n/index.js';
-import { changeKey } from '../lib/file-changes.js';
+import { changeKey, groupChanges } from '../lib/file-changes.js';
 import { LoadingStatus } from './LoadingStatus.js';
 
 interface Props {
@@ -19,13 +19,15 @@ interface Props {
   getPreview?: (file: FileChange) => string;
   restoreFile?: (file: FileChange) => Promise<void>;
   commitFiles?: (files: FileChange[], message: string) => Promise<void>;
+  /** Names a repository and branch; given when the workspace has several repositories, it groups changes under them. */
+  repositoryHeading?: (repository: string | undefined) => string;
   onChanged: () => Promise<void>;
   onCommitted: () => Promise<void>;
   onClose: () => void;
 }
 export const CommitModal = (props: Props) => props.isOpen ? <Changes {...props} /> : null;
 
-function Changes({ request, writable, gitStatus, remoteChanges, getPreview, restoreFile, commitFiles, onChanged, onCommitted, onClose }: Props) {
+function Changes({ request, writable, gitStatus, remoteChanges, getPreview, restoreFile, commitFiles, repositoryHeading, onChanged, onCommitted, onClose }: Props) {
   const { t } = useTranslation();
   const remote = Boolean(commitFiles);
   /** A remote row is a draft held in this browser, so discarding it needs neither write access nor a committable state. */
@@ -212,18 +214,52 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
       <h4>
         {t(selectionMode ? 'panel.changesFiles' : side === 'working' ? 'changes.unstaged' : remote ? 'changes.included' : 'changes.staged')} <small>{changes.filter(file => selectionMode || (side === 'working' ? file.unstaged : file.staged)).length}</small>
       </h4>
-      {changes.filter(file => selectionMode || (side === 'working' ? file.unstaged : file.staged)).map(file => (
-        <div className='changes-row' key={changeKey(file)} data-change-path={file.path} data-side={side}>
-          <input type='checkbox' aria-label={t('changes.selectFile', { path: file.path })} checked={selectionMode ? included.includes(changeKey(file)) : file.staged} disabled={busy || !writable || !file.available} onChange={() => selectionMode ? setIncluded(old => old.includes(changeKey(file)) ? old.filter(key => key !== changeKey(file)) : [...old, changeKey(file)]) : void act(file, file.staged ? 'unstage' : 'stage')} />
-          <Button type='button' className='changes-file' aria-pressed={active?.key === changeKey(file) && active.side === side} onClick={() => setActive({ key: changeKey(file), side })} title={file.path}>
-            <span>{file.path}</span>
-            <small>{t(`changes.${file.kind}`)}</small>
-          </Button>
-          {!selectionMode && <Button type='button' size='icon' aria-label={`${t(side === 'working' ? 'changes.stage' : 'changes.unstage')} ${file.path}`} title={t(side === 'working' ? 'changes.stage' : 'changes.unstage')} disabled={busy || !writable || !file.available} onClick={() => void act(file, side === 'working' ? 'stage' : 'unstage')}>{side === 'working' ? <Plus /> : <Minus />}</Button>}
-          <Button type='button' size='icon' aria-label={`${t('common.restore')} ${file.path}`} title={t(file.tracked ? 'common.restore' : 'changes.discardNew')} disabled={busy || !canRestore(file)} onClick={() => void act(file, 'restore')}>
-            <RotateCcw />
-          </Button>
-        </div>
+      {groupChanges(changes.filter(file => selectionMode || (side === 'working' ? file.unstaged : file.staged)), repositoryHeading).map(repositoryGroup => (
+        <React.Fragment key={repositoryGroup.key}>
+          {repositoryGroup.heading && <h5 className='changes-repository'>{repositoryGroup.heading}</h5>}
+          {repositoryGroup.files.map(file => (
+            <div className='changes-row' key={changeKey(file)} data-change-path={file.path} data-side={side}>
+              <input
+                type='checkbox'
+                aria-label={t('changes.selectFile', { path: file.path })}
+                checked={selectionMode ? included.includes(changeKey(file)) : file.staged}
+                disabled={busy || !writable || !file.available}
+                onChange={() =>
+                  selectionMode
+                    ? setIncluded(old => old.includes(changeKey(file))
+                      ? old.filter(key => key !== changeKey(file))
+                      : [...old, changeKey(file)]
+                    )
+                    : void act(file, file.staged ? 'unstage' : 'stage')}
+              />
+              <Button
+                type='button'
+                className='changes-file'
+                aria-pressed={active?.key === changeKey(file) && active.side === side}
+                onClick={() => setActive({ key: changeKey(file), side })}
+                title={file.path}
+              >
+                <span>{file.path}</span>
+                <small>{t(`changes.${file.kind}`)}</small>
+              </Button>
+              {!selectionMode && (
+                <Button
+                  type='button'
+                  size='icon'
+                  aria-label={`${t(side === 'working' ? 'changes.stage' : 'changes.unstage')} ${file.path}`}
+                  title={t(side === 'working' ? 'changes.stage' : 'changes.unstage')}
+                  disabled={busy || !writable || !file.available}
+                  onClick={() => void act(file, side === 'working' ? 'stage' : 'unstage')}
+                >
+                  {side === 'working' ? <Plus /> : <Minus />}
+                </Button>
+              )}
+              <Button type='button' size='icon' aria-label={`${t('common.restore')} ${file.path}`} title={t(file.tracked ? 'common.restore' : 'changes.discardNew')} disabled={busy || !canRestore(file)} onClick={() => void act(file, 'restore')}>
+                <RotateCcw />
+              </Button>
+            </div>
+          ))}
+        </React.Fragment>
       ))}
     </section>
   );
@@ -236,9 +272,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
       }}
     >
       <header>
-        <div>
-          <small>{t('commit.branch', { branch: gitStatus?.branch || '' })}</small>
-        </div>
+        <div>{!repositoryHeading && <small>{t('commit.branch', { branch: gitStatus?.branch || '' })}</small>}</div>
         <Button
           size='icon'
           aria-label={t('changes.refresh')}

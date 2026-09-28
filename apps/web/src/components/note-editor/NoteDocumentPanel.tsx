@@ -3,6 +3,7 @@ import { Button } from '../Button.js';
 import { FileManager } from '../files/index.js';
 import { NoteFrontmatterPanel } from './NoteFrontmatterPanel.js';
 import { NoteViewPanel } from './NoteViewPanel.js';
+import { NoteInfoPanel } from './NoteInfoPanel.js';
 import type { FileResult } from '../../lib/files-api.js';
 import type { OutlineHeading } from '../../lib/note-navigation.js';
 import type { NotebookMetadataField } from '../../lib/types.js';
@@ -18,6 +19,9 @@ export interface NoteDocumentPanelProps {
   showFrontmatter: boolean;
   isAssetPickerOpen: boolean;
   isViewPanelOpen: boolean;
+  isInfoPanelOpen: boolean;
+  /** The note's repository-relative path, for the Info tab. */
+  notePath: string;
   findQuery: string;
   setFindQuery: (value: string) => void;
   findIndex: number;
@@ -59,7 +63,7 @@ export interface NoteDocumentPanelProps {
 }
 
 /** The zoom/pane editor's document panel: its tab strip and the find, outline, frontmatter, asset and view sections it switches between. */
-export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isViewPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, readOnly, beforeFileChange, onFilesChanged }: NoteDocumentPanelProps) {
+export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isViewPanelOpen, isInfoPanelOpen, notePath, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, readOnly, beforeFileChange, onFilesChanged }: NoteDocumentPanelProps) {
   const { t } = useTranslation();
 
   const sections = (
@@ -137,6 +141,7 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
       {showFrontmatter && <NoteFrontmatterPanel metadata={metadata} setMetadata={setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={locked} newFieldKey={newFieldKey} setNewFieldKey={setNewFieldKey} frontmatterViewMode={frontmatterViewMode} setFrontmatterViewMode={setFrontmatterViewMode} yamlText={yamlText} setYamlText={setYamlText} yamlError={yamlError} setYamlError={setYamlError} tagInput={tagInput} setTagInput={setTagInput} isTagDropdownOpen={isTagDropdownOpen} setIsTagDropdownOpen={setIsTagDropdownOpen} />}
       {isAssetPickerOpen && <FileManager notebookId={notebookId} writable={!readOnly} mode='pick-image' layout='panel' onInsert={locked ? undefined : onInsertAssetRef} beforeChange={beforeFileChange} onChanged={onFilesChanged} />}
       {isViewPanelOpen && <NoteViewPanel />}
+      {isInfoPanelOpen && <NoteInfoPanel note={{ notebookId, path: notePath }} />}
     </>
   );
 
@@ -157,7 +162,7 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
           tabs[(target + tabs.length) % tabs.length].focus();
         }}
       >
-        <Button type='button' role='tab' aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isAssetPickerOpen || isViewPanelOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}>
+        <Button type='button' role='tab' aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isAssetPickerOpen || isViewPanelOpen || isInfoPanelOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}>
           <span>{t('editor.find')}</span>
         </Button>
         {isMarkdown && (
@@ -173,6 +178,9 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
         </Button>
         <Button type='button' role='tab' aria-selected={isViewPanelOpen} tabIndex={isViewPanelOpen ? 0 : -1} aria-label={t('editor.viewSettings')} title={t('editor.viewSettings')} onClick={() => setNotePanel(isViewPanelOpen ? null : 'view')}>
           <span>{t('editor.view')}</span>
+        </Button>
+        <Button type='button' role='tab' aria-selected={isInfoPanelOpen} tabIndex={isInfoPanelOpen ? 0 : -1} aria-label={t('editor.info')} title={t('editor.info')} onClick={() => setNotePanel(isInfoPanelOpen ? null : 'info')}>
+          <span>{t('editor.info')}</span>
         </Button>
       </div>
       {sections}
