@@ -31,7 +31,7 @@ const Probe = () => {
   /* eslint-enable react/globals */
   return null;
 };
-let flushEditors: ReturnType<typeof vi.fn<(paths?: readonly string[]) => Promise<boolean>>>;
+let flushEditors: ReturnType<typeof vi.fn<(keys?: readonly string[]) => Promise<boolean>>>;
 beforeEach(() => {
   flushEditors = vi.fn(async () => true);
 });
@@ -52,7 +52,7 @@ it('mounts one editor for a note shown in two hosts and lets the other host clai
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit here' }));
   });
-  expect(flushEditors).toHaveBeenCalledWith(['notes/a.md']);
+  expect(flushEditors).toHaveBeenCalledWith(['a:notes/a.md']);
   expect(screen.getAllByTestId('editor')).toHaveLength(1);
   expect(screen.getByTestId('card').querySelector('[data-testid="editor"]')).toHaveAttribute('data-frame', 'compact');
   expect(screen.getByTestId('pane')).toHaveTextContent('This note is open for editing elsewhere.');
@@ -72,7 +72,7 @@ it('lends the owner editor to zoom and takes it back when zoom closes', () => {
   render(twoHosts());
   const slot = document.createElement('div');
   document.body.append(slot);
-  act(() => editing.setZoom({ path: 'notes/a.md', borrowed: true, slot }));
+  act(() => editing.setZoom({ key: 'a:notes/a.md', borrowed: true, slot }));
   const editor = screen.getByTestId('editor');
   expect(editor).toHaveAttribute('data-frame', 'zoom');
   expect(slot.contains(editor)).toBe(true);
@@ -88,7 +88,7 @@ it('lends the owner editor to zoom and takes it back when zoom closes', () => {
 
 it('shows every host as open in zoom while zoom runs its own editor', () => {
   render(twoHosts());
-  act(() => editing.setZoom({ path: 'notes/a.md', borrowed: false, slot: null }));
+  act(() => editing.setZoom({ key: 'a:notes/a.md', borrowed: false, slot: null }));
   expect(screen.queryByTestId('editor')).toBeNull();
   expect(screen.getByTestId('pane')).toHaveTextContent('This note is open in zoom.');
   expect(screen.getByTestId('card')).toHaveTextContent('This note is open in zoom.');

@@ -1,3 +1,4 @@
+import { noteRefKey, sameNote } from '@mygitnotes/core/note-query';
 import React, { useId, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Pencil } from 'lucide-react';
@@ -33,16 +34,17 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ notebookId, 
   const editing = useNoteEditing();
   const { hosts } = editing;
   const id = useId();
+  const key = noteRefKey({ notebookId, path });
   useSyncExternalStore(hosts.subscribe, hosts.snapshot);
   useLayoutEffect(() => {
-    hosts.register(path, id);
-    return () => hosts.release(path, id);
-  }, [hosts, path, id]);
-  const owner = hosts.owner(path) === id;
+    hosts.register(key, id);
+    return () => hosts.release(key, id);
+  }, [hosts, key, id]);
+  const owner = hosts.owner(key) === id;
   const lookup = useNoteLookup([{ notebookId, path }], true);
   const found = lookup.notes[0], committed = lookup.committed[0];
   const loaded = found && typeof found.content === 'string' ? found as NoteItem : null;
-  const zoom = editing.zoom?.path === path ? editing.zoom : null;
+  const zoom = editing.zoom?.key === key ? editing.zoom : null;
   const lending = owner && Boolean(zoom?.borrowed);
   const showsEditor = owner && (!zoom || lending);
   // Like zoom, the editor keeps the note it opened and follows only its own saves.
@@ -67,7 +69,7 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ notebookId, 
 
   if (zoom && !lending) return <p className='note-editor-placeholder' role='status'>{t('focus.editingInZoom')}</p>;
   if (!note) return lookup.error ? <p className='note-editor-placeholder' role='alert'>{lookup.error}</p> : <LoadingStatus className='note-editor-placeholder'>{t('notes.loadingNote')}</LoadingStatus>;
-  if (!owner) return <NotePreview note={note} onClaim={() => void editing.claimEditor(path, id)} />;
+  if (!owner) return <NotePreview note={note} onClaim={() => void editing.claimEditor(key, id)} />;
   const props = editing.editorProps(note, committed && typeof committed.content === 'string' ? committed as NoteItem : undefined);
   return (
     <>
@@ -76,12 +78,12 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ notebookId, 
       {createPortal(
         <NoteEditor
           ref={editorRef}
-          key={`${props.draftScope}:${path}`}
+          key={`${props.draftScope}:${key}`}
           {...props}
           note={note}
           onSave={async params => {
             const saved = await props.onSave(params);
-            setPinned(current => current?.path === saved.path ? saved : current);
+            setPinned(current => current && sameNote(current, saved) ? saved : current);
             return saved;
           }}
           frame={lending ? 'zoom' : frame}

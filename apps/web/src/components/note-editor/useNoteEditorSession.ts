@@ -1,3 +1,4 @@
+import { noteRefKey } from '@mygitnotes/core/note-query';
 import { useEffect, useRef, useState } from 'react';
 import { mergeNote, NoteDraft, sameValue } from '../../lib/merge-note.js';
 import { ApiError } from '../../lib/api.js';
@@ -406,7 +407,7 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
       await waitForOperation();
       return !mounted.current || current.current.blocked || await persist();
     };
-    const unregister = [registerBeforeNavigate(beforeNavigate), registerEditor(note.path, beforeHide)];
+    const unregister = [registerBeforeNavigate(beforeNavigate), registerEditor(noteRefKey(note), beforeHide)];
     return () => unregister.forEach(release => release());
   }, [registerBeforeNavigate, registerEditor, readOnly, note, onSave, draftScope, branch]);
 

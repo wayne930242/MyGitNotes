@@ -1,3 +1,4 @@
+import { noteRefKey } from '@mygitnotes/core/note-query';
 import { createGraphInteractions } from './createGraphInteractions.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -150,7 +151,9 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
   };
   // Collapsing unmounts the card's editor, so its pending edits are saved first and a failed save keeps the card open.
   const setExpanded = async (paths: string[], value: boolean) => {
-    if (!value && !await editing.flushEditors(paths)) return;
+    // Graph nodes are identified by path; their editors are registered by notebook and path.
+    const editorKeys = paths.flatMap(path => graph.nodes.filter(node => node.id === path).map(node => noteRefKey({ notebookId: node.notebookId, path })));
+    if (!value && !await editing.flushEditors(editorKeys)) return;
     freeze();
     const next = currentLayout();
     for (const path of paths) {

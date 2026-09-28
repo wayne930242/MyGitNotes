@@ -1,4 +1,4 @@
-import { type NoteListItem, type NoteRef } from '@mygitnotes/core/note-query';
+import { type NoteListItem, type NoteRef, sameNote } from '@mygitnotes/core/note-query';
 import { useNavigate } from 'react-router-dom';
 import React, { useState } from 'react';
 import { deleteNote, fetchGitStatus, restoreNote } from '../lib/api.js';
@@ -40,7 +40,7 @@ export function useDeletionUndo({ canWriteNotebook, revisionFor, setNotebookRevi
     // phantom draft for the path we just deleted while the new revision is being queried.
     setNotebookRevision(note.notebookId, result.revision);
     updateDraft(note.notebookId, note.path, null);
-    if (editingNote?.path === note.path) {
+    if (editingNote && sameNote(editingNote, note)) {
       setEditingNote(null);
       navigate(returnTo, { replace: true });
     }
@@ -58,7 +58,7 @@ export function useDeletionUndo({ canWriteNotebook, revisionFor, setNotebookRevi
       setActionError((error as Error).message);
       return;
     }
-    setDeletedNotes((prev) => [deleted, ...prev.filter((n) => n.path !== note.path)]);
+    setDeletedNotes((prev) => [deleted, ...prev.filter((n) => !sameNote(n, note))]);
 
     // 2. Delete from disk without committing to git
     await deleteNote(note.path, { noCommit: true });
@@ -66,7 +66,7 @@ export function useDeletionUndo({ canWriteNotebook, revisionFor, setNotebookRevi
     const statusRes = await fetchGitStatus();
     setGitStatus(statusRes.status);
 
-    if (editingNote?.path === note.path) {
+    if (editingNote && sameNote(editingNote, note)) {
       setEditingNote(null);
     }
 
@@ -83,9 +83,9 @@ export function useDeletionUndo({ canWriteNotebook, revisionFor, setNotebookRevi
     const res = await restoreNote({ path: note.path, content: note.content, metadata: note.metadata, notebookId: note.notebookId });
     if (!res.note) throw new Error('The deleted note could not be restored.');
     invalidateNotes();
-    setDeletedNotes((prev) => prev.filter((n) => n.path !== note.path));
+    setDeletedNotes((prev) => prev.filter((n) => !sameNote(n, note)));
 
-    if (undoToast?.note.path === note.path) {
+    if (undoToast && sameNote(undoToast.note, note)) {
       clearTimeout(undoToast.timerId);
       setUndoToast(null);
     }

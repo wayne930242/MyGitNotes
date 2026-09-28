@@ -5,6 +5,7 @@ import { NoteTagActions, NoteTags } from './NoteTags.js';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import { Select } from './Select.js';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
+import { noteRefKey } from '@mygitnotes/core/note-query';
 import { noteUpdatedTime, SortField, SortOrder } from '../lib/note-sort.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
@@ -44,8 +45,8 @@ interface ListViewProps {
   leading?: React.ReactNode;
   /** Active search text: highlights matches in the title and shows a matched-content snippet. */
   highlightQuery?: string;
-  /** Paths currently selected for bulk actions; a checkbox only appears on rows while this is non-empty. */
-  selectedPaths?: Set<string>;
+  /** `noteRefKey`s of the notes selected for bulk actions; a checkbox only appears on rows while this is non-empty. */
+  selectedKeys?: Set<string>;
   /** Modifier-click (or the checkbox, once shown) toggles a row's membership; a plain click still opens it. */
   onToggleSelect?: (note: NoteListItem) => void;
 }
@@ -130,7 +131,7 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
   );
 });
 
-export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onUpdateNoteStatus, onNewNote, sortField = 'updated', sortOrder = 'desc', onSortChange, showMobileSort = false, tagActions, focusMode, compact = false, leading, highlightQuery = '', selectedPaths, onToggleSelect }) => {
+export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onUpdateNoteStatus, onNewNote, sortField = 'updated', sortOrder = 'desc', onSortChange, showMobileSort = false, tagActions, focusMode, compact = false, leading, highlightQuery = '', selectedKeys, onToggleSelect }) => {
   const { t, language } = useTranslation();
   // Rows retain stable actions while invoking the latest committed callbacks.
   const handlers = useRef({ onOpenNote, onDeleteNote, onUpdateNoteStatus, onMoveNote, focusMode, onToggleSelect });
@@ -142,10 +143,10 @@ export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], has
     notesRef.current = [...uncommitted, ...notes];
   });
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(confirmDelete, path => {
-    const note = notesRef.current.find(n => n.path === path);
+    const note = notesRef.current.find(n => noteRefKey(n) === path);
     if (note) handlers.current.onDeleteNote(note);
   });
-  const actions = useMemo<NoteRowActions>(() => ({ open: note => handlers.current.onOpenNote(note), remove: note => requestDelete(note.path), move: note => handlers.current.onMoveNote?.(note), status: (note, status) => handlers.current.onUpdateNoteStatus(note, status), zoom: note => handlers.current.focusMode?.onZoomNote(note), toggleSelect: note => handlers.current.onToggleSelect?.(note) }), [requestDelete]);
+  const actions = useMemo<NoteRowActions>(() => ({ open: note => handlers.current.onOpenNote(note), remove: note => requestDelete(noteRefKey(note)), move: note => handlers.current.onMoveNote?.(note), status: (note, status) => handlers.current.onUpdateNoteStatus(note, status), zoom: note => handlers.current.focusMode?.onZoomNote(note), toggleSelect: note => handlers.current.onToggleSelect?.(note) }), [requestDelete]);
   const dates = useMemo(() => ({ short: new Intl.DateTimeFormat(language, { month: '2-digit', day: '2-digit', hour12: false, hour: '2-digit', minute: '2-digit' }), full: new Intl.DateTimeFormat(language, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }) }), [language]);
 
   const isEmpty = !loading && notes.length === 0 && uncommitted.length === 0 && !hasFolderEntries;
@@ -205,7 +206,7 @@ export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], has
                   <tr>
                     <th colSpan={5} scope='colgroup' className='py-2 px-4 text-left text-xs uppercase font-semibold text-warning'>{t('notes.uncommitted')}</th>
                   </tr>
-                  {uncommitted.map(note => <NoteRow key={note.path} note={note} statuses={statuses} readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} tagActions={tagActions} showZoom={!!focusMode} canDrag={!!focusMode?.canDrag(note)} highlightQuery={highlightQuery} selected={false} selectionActive={false} />)}
+                  {uncommitted.map(note => <NoteRow key={noteRefKey(note)} note={note} statuses={statuses} readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === noteRefKey(note)} actions={actions} dates={dates} tagActions={tagActions} showZoom={!!focusMode} canDrag={!!focusMode?.canDrag(note)} highlightQuery={highlightQuery} selected={false} selectionActive={false} />)}
                 </tbody>
               )}
               <tbody className='divide-y' style={{ borderColor: 'var(--color-border)' }}>
@@ -215,7 +216,7 @@ export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], has
                   </tr>
                 )}
                 {/* Notes row rendering */}
-                {notes.map(note => <NoteRow key={note.path} note={note} statuses={statuses} readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === note.path} actions={actions} dates={dates} tagActions={tagActions} showZoom={!!focusMode} canDrag={!!focusMode?.canDrag(note)} highlightQuery={highlightQuery} selected={selectedPaths?.has(note.path) ?? false} selectionActive={Boolean(selectedPaths?.size)} />)}
+                {notes.map(note => <NoteRow key={noteRefKey(note)} note={note} statuses={statuses} readOnly={readOnly} canDelete={canDelete} isPendingDelete={pendingDeletePath === noteRefKey(note)} actions={actions} dates={dates} tagActions={tagActions} showZoom={!!focusMode} canDrag={!!focusMode?.canDrag(note)} highlightQuery={highlightQuery} selected={selectedKeys?.has(noteRefKey(note)) ?? false} selectionActive={Boolean(selectedKeys?.size)} />)}
               </tbody>
             </table>
           </div>

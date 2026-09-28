@@ -4,6 +4,7 @@ import { Clock, Trash2 } from 'lucide-react';
 import { NoteTagActions, NoteTags } from './NoteTags.js';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
+import { noteRefKey } from '@mygitnotes/core/note-query';
 import { useTranslation } from '../lib/i18n/index.js';
 import { noteUpdatedTime } from '../lib/note-sort.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
@@ -37,17 +38,17 @@ interface CardViewProps {
   strip?: boolean;
   /** Active search text: highlights matches in the title, and swaps the excerpt for a matched-content snippet when present. */
   highlightQuery?: string;
-  /** Paths currently selected for bulk actions; a checkbox only appears on cards while this is non-empty. */
-  selectedPaths?: Set<string>;
+  /** `noteRefKey`s of the notes selected for bulk actions; a checkbox only appears on cards while this is non-empty. */
+  selectedKeys?: Set<string>;
   /** Modifier-click (or the checkbox, once shown) toggles a card's membership; a plain click still opens it. */
   onToggleSelect?: (note: NoteListItem) => void;
 }
 
-export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onNewNote, onUpdateNoteStatus, tagActions, focusMode, strip = false, highlightQuery = '', selectedPaths, onToggleSelect }) => {
+export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onNewNote, onUpdateNoteStatus, tagActions, focusMode, strip = false, highlightQuery = '', selectedKeys, onToggleSelect }) => {
   const { t } = useTranslation();
   const touchSelection = useNoteTouchSelection(onToggleSelect);
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(confirmDelete, path => {
-    const note = [...uncommitted, ...notes].find(n => n.path === path);
+    const note = [...uncommitted, ...notes].find(n => noteRefKey(n) === path);
     if (note) onDeleteNote(note);
   });
 
@@ -67,12 +68,12 @@ export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], has
     const formattedDate = updated ? new Date(updated).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
     const canDrag = !!focusMode?.canDrag(note);
     const excerpt = note.matchSnippet || getExcerpt(note.content || '');
-    const selectionActive = !draft && Boolean(selectedPaths?.size);
-    const selected = !draft && (selectedPaths?.has(note.path) ?? false);
+    const selectionActive = !draft && Boolean(selectedKeys?.size);
+    const selected = !draft && (selectedKeys?.has(noteRefKey(note)) ?? false);
 
     return (
       <div
-        key={note.path}
+        key={noteRefKey(note)}
         {...touchSelection.itemProps(note, onOpenNote, !draft)}
         title={draft || selectionActive ? undefined : t('notes.multiSelectHint')}
         draggable={canDrag}
@@ -112,9 +113,9 @@ export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], has
               {!readOnly && canDelete && (
                 <button
                   type='button'
-                  onClick={() => requestDelete(note.path)}
-                  title={pendingDeletePath === note.path ? t('notes.confirmDelete') : t('notes.delete')}
-                  className={pendingDeletePath === note.path ? 'p-1 text-on-danger bg-danger hover:bg-danger/90 transition rounded' : 'p-1 text-muted hover:text-danger transition rounded'}
+                  onClick={() => requestDelete(noteRefKey(note))}
+                  title={pendingDeletePath === noteRefKey(note) ? t('notes.confirmDelete') : t('notes.delete')}
+                  className={pendingDeletePath === noteRefKey(note) ? 'p-1 text-on-danger bg-danger hover:bg-danger/90 transition rounded' : 'p-1 text-muted hover:text-danger transition rounded'}
                 >
                   <Trash2 className='w-3.5 h-3.5' />
                 </button>

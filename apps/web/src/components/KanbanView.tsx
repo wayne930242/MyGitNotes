@@ -2,6 +2,7 @@ import { NoteMoveButton } from './NoteMoveButton.js';
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Clock, GripVertical, Kanban as KanbanIcon, Plus, Tag, Trash2 } from 'lucide-react';
 import type { NoteListItem, NoteQuery } from '@mygitnotes/core/note-query';
+import { noteRefKey, sameNote } from '@mygitnotes/core/note-query';
 import { noteUpdatedTime, SortField, SortOrder } from '../lib/note-sort.js';
 import { Select } from './Select.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -36,8 +37,8 @@ interface KanbanViewProps {
   onSortChange?: (field: SortField, order?: SortOrder) => void;
   /** Present while a Focus is displayed: cards get a zoom button and can be dragged into a pane. */
   focusMode?: NoteBrowseFocusMode;
-  /** Paths currently selected for bulk actions; a checkbox only appears on cards while this is non-empty. */
-  selectedPaths?: Set<string>;
+  /** `noteRefKey`s of the notes selected for bulk actions; a checkbox only appears on cards while this is non-empty. */
+  selectedKeys?: Set<string>;
   /** Modifier-click (or the checkbox, once shown) toggles a card's membership; a plain click still opens it. */
   onToggleSelect?: (note: NoteListItem) => void;
 }
@@ -64,7 +65,7 @@ interface BoardContext {
   setDragOverColumnId: (id: string | null) => void;
   onTotal: (columnId: string, total: number) => void;
   focusMode?: NoteBrowseFocusMode;
-  selectedPaths?: Set<string>;
+  selectedKeys?: Set<string>;
   onToggleSelect?: (note: NoteListItem) => void;
 }
 
@@ -115,11 +116,11 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
   const { t } = useTranslation();
   const touchSelection = useNoteTouchSelection(board.onToggleSelect);
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(board.confirmDelete, () => board.onDeleteNote(note));
-  const isBeingDragged = board.dragged?.path === note.path;
+  const isBeingDragged = Boolean(board.dragged && sameNote(board.dragged, note));
   const updated = noteUpdatedTime(note);
   const formattedDate = updated ? new Date(updated).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
-  const selectionActive = Boolean(board.selectedPaths?.size);
-  const selected = board.selectedPaths?.has(note.path) ?? false;
+  const selectionActive = Boolean(board.selectedKeys?.size);
+  const selected = board.selectedKeys?.has(noteRefKey(note)) ?? false;
   return (
     <div data-notepath={note.path} {...cardDragProps(board, note)} {...touchSelection.itemProps(note, board.onOpenNote)} title={selectionActive ? undefined : t('notes.multiSelectHint')} className={`p-3 rounded-lg border transition-all cursor-grab active:cursor-grabbing group shadow-xs ${isBeingDragged ? 'opacity-40 scale-[0.98] border-primary shadow-inner' : 'hover:shadow-sm hover:border-muted'}`} style={{ backgroundColor: 'var(--color-surface)', borderColor: isBeingDragged ? 'var(--color-primary)' : 'var(--color-border)' }}>
       <div className='flex items-start justify-between gap-1 mb-1.5'>
@@ -166,7 +167,7 @@ function KanbanCard({ note, board, index }: { note: NoteListItem; board: BoardCo
             </button>
           )}
           {!board.readOnly && board.canDelete && (
-            <button type='button' onClick={() => requestDelete(note.path)} title={pendingDeletePath === note.path ? t('notes.confirmDelete') : t('notes.delete')} className={pendingDeletePath === note.path ? 'p-1 text-on-danger bg-danger hover:bg-danger/90 rounded transition' : 'p-1 hover:text-danger rounded hover:bg-danger-soft transition opacity-40 hover:opacity-100'}>
+            <button type='button' onClick={() => requestDelete(noteRefKey(note))} title={pendingDeletePath === noteRefKey(note) ? t('notes.confirmDelete') : t('notes.delete')} className={pendingDeletePath === noteRefKey(note) ? 'p-1 text-on-danger bg-danger hover:bg-danger/90 rounded transition' : 'p-1 hover:text-danger rounded hover:bg-danger-soft transition opacity-40 hover:opacity-100'}>
               <Trash2 className='w-3.5 h-3.5' />
             </button>
           )}
@@ -225,7 +226,7 @@ function KanbanColumn({ col, index, board, query, hiddenNote, sort, onSort }: { 
         {isColumnDragOver && board.dragged && <div className='border-2 border-dashed rounded-lg p-3 text-center text-xs font-semibold animate-pulse transition my-1' style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', backgroundColor: 'var(--color-primary-light)' }}>{t('kanban.dropNoteInto', { title: col.title })}</div>}
         {result.error && <p role='alert' className='text-xs text-danger'>{result.error}</p>}
         {result.loading && <LoadingStatus className='text-xs text-muted'>{t('notes.loading')}</LoadingStatus>}
-        {!result.loading && notes.length === 0 && !isColumnDragOver ? <div className='py-8 text-center text-xs text-muted border border-dashed border-line rounded-lg'>{board.readOnly ? t('kanban.noNotes') : t('kanban.dragNotesHere')}</div> : (notes.map(note => <KanbanCard key={note.path} note={note} board={board} index={index} />))}
+        {!result.loading && notes.length === 0 && !isColumnDragOver ? <div className='py-8 text-center text-xs text-muted border border-dashed border-line rounded-lg'>{board.readOnly ? t('kanban.noNotes') : t('kanban.dragNotesHere')}</div> : (notes.map(note => <KanbanCard key={noteRefKey(note)} note={note} board={board} index={index} />))}
         <NoteListSentinel hasMore={result.hasMore} loading={result.loadingMore} error={result.error} onLoadMore={result.loadMore} />
       </div>
     </div>
@@ -257,10 +258,10 @@ function KanbanUnassignedColumn({ board, query, hiddenNote, sort }: { board: Boa
       <div className='overflow-y-auto space-y-2.5 flex-1 pr-0.5'>
         {result.loading && <LoadingStatus className='text-xs text-muted'>{t('notes.loading')}</LoadingStatus>}
         {notes.map((note) => {
-          const selectionActive = Boolean(board.selectedPaths?.size);
-          const selected = board.selectedPaths?.has(note.path) ?? false;
+          const selectionActive = Boolean(board.selectedKeys?.size);
+          const selected = board.selectedKeys?.has(noteRefKey(note)) ?? false;
           return (
-            <div key={note.path} {...cardDragProps(board, note)} {...touchSelection.itemProps(note, board.onOpenNote)} title={selectionActive ? undefined : t('notes.multiSelectHint')} className='p-3 rounded-lg border hover:shadow-xs transition cursor-grab active:cursor-grabbing' style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <div key={noteRefKey(note)} {...cardDragProps(board, note)} {...touchSelection.itemProps(note, board.onOpenNote)} title={selectionActive ? undefined : t('notes.multiSelectHint')} className='p-3 rounded-lg border hover:shadow-xs transition cursor-grab active:cursor-grabbing' style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
               <div className='flex items-start gap-1.5 mb-1 min-w-0'>
                 {selectionActive && <NoteSelectBox title={note.title} checked={selected} onToggle={() => board.onToggleSelect?.(note)} className='mt-0.5' />}
                 <div className='font-medium text-fg text-sm line-clamp-2 min-w-0'>{note.title}</div>
@@ -275,7 +276,7 @@ function KanbanUnassignedColumn({ board, query, hiddenNote, sort }: { board: Boa
   );
 }
 
-export const KanbanView: React.FC<KanbanViewProps> = ({ query, hiddenNote, leading, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onUpdateNoteStatus, onDeleteNote, onMoveNote, onNewNoteWithStatus, sortField = 'updated', sortOrder = 'desc', onSortChange, focusMode, selectedPaths, onToggleSelect }) => {
+export const KanbanView: React.FC<KanbanViewProps> = ({ query, hiddenNote, leading, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onUpdateNoteStatus, onDeleteNote, onMoveNote, onNewNoteWithStatus, sortField = 'updated', sortOrder = 'desc', onSortChange, focusMode, selectedKeys, onToggleSelect }) => {
   const { t } = useTranslation();
   const [dragged, setDragged] = useState<NoteListItem | null>(null);
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
@@ -294,7 +295,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({ query, hiddenNote, leadi
 
   const boardSortOptions = [{ value: 'updated:desc', label: t('sort.updatedDesc') }, { value: 'updated:asc', label: t('sort.updatedAsc') }, { value: 'created:desc', label: t('sort.createdDesc') }, { value: 'created:asc', label: t('sort.createdAsc') }, { value: 'title:asc', label: t('sort.titleAsc') }, { value: 'title:desc', label: t('sort.titleDesc') }];
 
-  const board: BoardContext = { columns, readOnly, canDelete, confirmDelete, onOpenNote, onUpdateNoteStatus, onDeleteNote, onMoveNote, onNewNoteWithStatus, dragged, setDragged, dragOverColumnId, setDragOverColumnId, focusMode, selectedPaths, onToggleSelect, onTotal: (columnId, total) => setTotals(previous => (previous[columnId] === total ? previous : { ...previous, [columnId]: total })) };
+  const board: BoardContext = { columns, readOnly, canDelete, confirmDelete, onOpenNote, onUpdateNoteStatus, onDeleteNote, onMoveNote, onNewNoteWithStatus, dragged, setDragged, dragOverColumnId, setDragOverColumnId, focusMode, selectedKeys, onToggleSelect, onTotal: (columnId, total) => setTotals(previous => (previous[columnId] === total ? previous : { ...previous, [columnId]: total })) };
   // Only the columns on the board count, so a status that disappeared leaves no stale total.
   const boardTotal = [...columns.map(col => col.id), ''].reduce((sum, id) => sum + (totals[id] || 0), 0);
 

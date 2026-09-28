@@ -1,3 +1,4 @@
+import { noteRefKey } from '@mygitnotes/core/note-query';
 import React, { useLayoutEffect, useState, useSyncExternalStore } from 'react';
 import { NoteItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -18,7 +19,7 @@ interface EditorModalProps {
 export const EditorModal: React.FC<EditorModalProps> = ({ note, committed, loading, isOpen }) => {
   if (!isOpen) return null;
   if (!note) return loading ? <EditorModalLoading /> : null;
-  return <ZoomFrame key={note.path} note={note} committed={committed} />;
+  return <ZoomFrame key={noteRefKey(note)} note={note} committed={committed} />;
 };
 
 /** Shown while a note's body is read; the editor never starts from a missing body. */
@@ -36,17 +37,18 @@ const ZoomFrame: React.FC<{ note: NoteItem; committed?: NoteItem; }> = ({ note, 
   const { setZoom, hosts } = editing;
   // A host that already edits this note lends its editor, so both places keep one session, cursor and undo history.
   useSyncExternalStore(hosts.subscribe, hosts.snapshot);
-  const [canBorrow] = useState(() => Boolean(hosts.owner(note.path)));
-  const borrowed = canBorrow && Boolean(hosts.owner(note.path));
+  const key = noteRefKey(note);
+  const [canBorrow] = useState(() => Boolean(hosts.owner(key)));
+  const borrowed = canBorrow && Boolean(hosts.owner(key));
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
-    setZoom({ path: note.path, borrowed, slot });
+    setZoom({ key, borrowed, slot });
     return () => setZoom(null);
-  }, [setZoom, note.path, borrowed, slot]);
+  }, [setZoom, key, borrowed, slot]);
   const props = editing.editorProps(note, committed);
   return (
     <div className='note-overlay viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn'>
-      <div role='dialog' aria-modal='true' aria-label='Note editor' className='note-dialog ui-dialog shadow-2xl w-full max-w-none h-full flex flex-col overflow-hidden transition-colors'>{borrowed ? <div ref={setSlot} className='note-editor-slot' /> : <NoteEditor key={`${props.draftScope}:${note.path}`} {...props} note={note} frame='zoom' active onClose={editing.closeZoom} onAddToFocus={editing.addToFocus(note)} />}</div>
+      <div role='dialog' aria-modal='true' aria-label='Note editor' className='note-dialog ui-dialog shadow-2xl w-full max-w-none h-full flex flex-col overflow-hidden transition-colors'>{borrowed ? <div ref={setSlot} className='note-editor-slot' /> : <NoteEditor key={`${props.draftScope}:${key}`} {...props} note={note} frame='zoom' active onClose={editing.closeZoom} onAddToFocus={editing.addToFocus(note)} />}</div>
     </div>
   );
 };

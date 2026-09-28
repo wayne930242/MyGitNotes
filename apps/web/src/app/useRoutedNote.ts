@@ -1,3 +1,4 @@
+import { sameNote } from '@mygitnotes/core/note-query';
 import { useEffect, useMemo, useState } from 'react';
 import type { NotebookConfig, NoteItem } from '../lib/types.js';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
@@ -23,10 +24,10 @@ export function useRoutedNote({ config, editorRoute, editorNotebookId, editingNo
   const routedCommitted = routedLookup.committed[0];
   const routedNote = useMemo<NoteItem | null>(() => {
     if (!routedPath) return null;
-    if (editingNote?.path === routedPath && typeof editingNote.content === 'string') return editingNote as NoteItem;
+    if (editingNote && routedNotebook && sameNote(editingNote, { notebookId: routedNotebook.id, path: routedPath }) && typeof editingNote.content === 'string') return editingNote as NoteItem;
     const found = routedLookup.notes[0];
     return found && typeof found.content === 'string' ? found as NoteItem : null;
-  }, [routedPath, editingNote, routedLookup.notes]);
+  }, [routedPath, routedNotebook, editingNote, routedLookup.notes]);
   const routedLoading = Boolean(routedPath) && !routedNote && routedLookup.loading;
 
   useEffect(() => {

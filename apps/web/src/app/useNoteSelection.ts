@@ -1,4 +1,4 @@
-import { type NoteListItem } from '@mygitnotes/core/note-query';
+import { type NoteListItem, noteRefKey } from '@mygitnotes/core/note-query';
 import { useCallback, useMemo, useState } from 'react';
 import { pruneNoteSelection, toggleNoteSelection } from '../lib/note-selection.js';
 import type { ViewMode } from '../lib/types.js';
@@ -31,10 +31,10 @@ export function useNoteSelection({ displayedNotes, viewMode, selectedNotebookId,
 
   const clearSelection = useCallback(() => setSelected(new Map()), []);
 
-  const visibleSelection = useMemo(() => viewMode === 'kanban' ? selected : pruneNoteSelection(selected, new Set(displayedNotes.map(note => note.path))), [displayedNotes, selected, viewMode]);
-  const selectedPaths = useMemo(() => Array.from(visibleSelection.keys()), [visibleSelection]);
+  const visibleSelection = useMemo(() => viewMode === 'kanban' ? selected : pruneNoteSelection(selected, new Set(displayedNotes.map(noteRefKey))), [displayedNotes, selected, viewMode]);
   const selectedNotes = useMemo(() => Array.from(visibleSelection.values()), [visibleSelection]);
-  const selectedPathSet = useMemo(() => new Set(selectedPaths), [selectedPaths]);
+  /** `noteRefKey`s of the selected notes. */
+  const selectedKeys = useMemo(() => new Set(visibleSelection.keys()), [visibleSelection]);
 
-  return { selectedNotes, selectedPaths, selectedPathSet, toggleSelect, clearSelection };
+  return { selectedNotes, selectedKeys, toggleSelect, clearSelection };
 }

@@ -1,3 +1,4 @@
+import { sameNote } from '@mygitnotes/core/note-query';
 import { type NoteListItem } from '@mygitnotes/core/note-query';
 import { adoptGraphDrafts } from '../lib/storage.js';
 import React, { useEffect } from 'react';
@@ -40,7 +41,7 @@ export function useNoteSaving({ canWriteNotebook, remote, readDraft, readCommitt
     const res = await saveNote({ ...params, noCommit: true });
     // The local workspace keeps one revision, so its cached query answers are refetched.
     invalidateNotes();
-    setEditingNote(prev => prev?.path === res.note.path ? res.note : prev);
+    setEditingNote(prev => prev && sameNote(prev, res.note) ? res.note : prev);
     // Refresh git status to update dirty count
     const statusRes = await fetchGitStatus();
     setGitStatus(statusRes.status);

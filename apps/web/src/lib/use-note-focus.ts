@@ -1,3 +1,4 @@
+import { noteRefKey } from '@mygitnotes/core/note-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { changeDivision, closeTab, emptyFocusLayout, findFocusTabInPane, FOCUS_MAX_FOCUSES, FOCUS_MAX_TABS, type FocusDivision, FocusError, type FocusLayout, focusPaneCount, type FocusTab, focusTabCount, focusTabKey, moveTab as moveFocusTab, nameFocus, notebookFocuses, placeTab, placeTabs, pruneFocus, removeFocus, renameFocus, updateFocus } from '@mygitnotes/core/focus-page';
 import type { ScreenRow } from '@mygitnotes/core/screen-page';
@@ -32,6 +33,8 @@ function loadView(key: string): FocusViewState {
 }
 const notePath = (key: string | null) => key?.startsWith('note:') ? key.slice('note:'.length) : undefined;
 const notePaths = (keys: (string | null)[]) => keys.map(notePath).filter((path): path is string => Boolean(path));
+/** The editor keys of the notes the tabs `keys` show; a Focus belongs to one notebook. */
+const noteKeys = (notebookId: string, keys: (string | null)[]) => notePaths(keys).map(path => noteRefKey({ notebookId, path }));
 
 /** Named Focus (Git-synced through the Focus workspace document) and this browser's (current) Focus and view state for one notebook. */
 export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lanes, flushEditors }: NoteFocusOptions) {
@@ -118,7 +121,7 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
     const found = findFocusTabInPane(layout, pane, tabKey) !== -1;
     if (!found && !editable(shown)) return 'readonly';
     if (!found && focusTabCount(layout) >= FOCUS_MAX_TABS) return 'full';
-    if (!await flushEditors(notePaths([entry.shown[pane]]))) return 'blocked';
+    if (!await flushEditors(noteKeys(notebookId, [entry.shown[pane]]))) return 'blocked';
     // The tab count is already checked above; a FocusError here means the layout changed since, so it counts as full too.
     if (!found) {
       try {
@@ -136,7 +139,7 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
     const current = layoutOf(target), before = entryOf(target, current);
     if (!current || !before || !editable(target)) return false;
     const tabKey = focusTabKey(tab);
-    if (target === shown && !await flushEditors(notePaths([before.shown[pane]]))) return false;
+    if (target === shown && !await flushEditors(noteKeys(notebookId, [before.shown[pane]]))) return false;
     if (!mutate(target, layout => placeTab(layout, tab, pane, index))) return false;
     setEntry(target, entry => showTab(entry, pane, tabKey), current);
     return true;
@@ -147,7 +150,7 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
     if (!current || !before || !editable(target)) return false;
     const leavesSource = fromPane !== toPane && before.shown[fromPane] === key;
     const toFlush = leavesSource ? [before.shown[fromPane], before.shown[toPane]] : [before.shown[toPane]];
-    if (target === shown && !await flushEditors(notePaths(toFlush))) return false;
+    if (target === shown && !await flushEditors(noteKeys(notebookId, toFlush))) return false;
     const sourceNext = leavesSource ? shownAfterClose(current, fromPane, key) : null;
     if (!mutate(target, layout => moveFocusTab(layout, fromPane, toPane, key, index))) return false;
     setEntry(target, entry => {
@@ -159,7 +162,7 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
   const show = async (pane: number, tabKey: string) => {
     if (!shown || !entry) return;
     const previous = entry.shown[pane];
-    if (previous !== tabKey && !await flushEditors(notePaths([previous]))) return;
+    if (previous !== tabKey && !await flushEditors(noteKeys(notebookId, [previous]))) return;
     setEntry(shown, current => showTab(current, pane, tabKey));
   };
   const activate = (pane: number) => {
@@ -170,7 +173,7 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
     if (!shown || !layout || !entry) return;
     if (findFocusTabInPane(layout, pane, tabKey) === -1) return;
     const visible = entry.shown[pane] === tabKey;
-    if (visible && !await flushEditors(notePaths([tabKey]))) return;
+    if (visible && !await flushEditors(noteKeys(notebookId, [tabKey]))) return;
     const next = shownAfterClose(layout, pane, tabKey);
     if (!mutate(shown, current => closeTab(current, pane, tabKey))) return;
     if (visible) setEntry(shown, current => ({ ...current, shown: current.shown.map((key, index) => index === pane ? next : key) }), layout);
@@ -193,7 +196,7 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
     if (!shown || !layout || !entry || division === layout.division) return;
     const count = focusPaneCount(division);
     // Every pane is laid out again, so every displayed editor remounts.
-    if (!await flushEditors(notePaths(entry.shown))) return;
+    if (!await flushEditors(noteKeys(notebookId, entry.shown))) return;
     if (!mutate(shown, current => changeDivision(current, division))) return;
     const kept = entry.activePane >= count ? entry.shown[entry.activePane] : undefined;
     setEntry(shown, current => {
@@ -224,7 +227,7 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
   /** Throws FocusError for a duplicate name. */
   const rename = (id: string, label: string) => page.change(renameFocus(page.page, id, label));
   const remove = async (id: string) => {
-    if (id === shown && entry && !await flushEditors(notePaths(entry.shown))) return false;
+    if (id === shown && entry && !await flushEditors(noteKeys(notebookId, entry.shown))) return false;
     page.change(removeFocus(page.page, id));
     update(current => {
       const { [id]: _removed, ...entries } = current.entries;

@@ -26,6 +26,7 @@ export interface NoteRef {
 }
 /** A string key for a note; notebook ids hold no colon, so the first colon separates the parts. */
 export const noteRefKey = (note: NoteRef) => `${note.notebookId}:${note.path}`;
+export const sameNote = (a: NoteRef, b: NoteRef) => a.notebookId === b.notebookId && a.path === b.path;
 
 /** A note as returned by list queries; `content` is present only when requested. */
 export interface NoteListItem {
