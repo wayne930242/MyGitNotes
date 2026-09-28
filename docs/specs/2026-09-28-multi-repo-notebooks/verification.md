@@ -67,3 +67,40 @@ A copy of `examples/demo-workspace` served as a local workspace, driven with age
 - Graph node identity with repository-scoped link resolution.
 - Per-notebook resolution in both MCP servers, after deciding how MCP tools carry revisions across repositories.
 - Git status, agent resources, Screen, Focus, Study and R2 per repository, together with the stage 2 behavior for those areas.
+
+# Stage 2 verification
+
+Stage 2 adds the multi-repository behavior on top of the stage 1 seams.
+
+| Requirement | Evidence | Result |
+| --- | --- | --- |
+| Manifest `source`, schema version 2 and migration; local `repositories` mappings | `config.test.ts` (source parsing, per-repository root overlap, version rules), `workspace-migration.test.ts`, `workspace-config-source.test.ts` (mappings, resolver grouping) | pass |
+| Availability with reasons, other notebooks unaffected | `notebook-repositories.test.ts` (unmapped), `notebook-repositories-remote.test.ts` (no-access, missing-branch, unsupported-platform); browser anchor: switcher mark and reason card, Examples still served | pass |
+| Reads and writes target the notebook's repository; same-path notes stay distinct | Local and remote route tests; browser anchor: editing `notes/example/welcome.md` in both repositories wrote each worktree | pass |
+| Changes grouped by repository; one commit per repository | `useWorkingNoteCommit.test.tsx`, `notebook-repositories.test.ts` (Git per worktree); browser anchor: one Commit created one commit in each worktree, both clean | pass |
+| Screen, Focus and Study documents per notebook repository | `notebook-repositories.test.ts`, `focus-page.test.ts`; browser anchor: a Campaign lane landed in the campaign repository's `.github-notes-screen.yaml` only | pass |
+| Links resolve within their repository; graph identity by notebook | `note-graph.test.ts`, `WorkspaceLinks.test.tsx`, `use-linked-note-preload.test.tsx`; browser anchor: a link to a home-only note showed "not found", a same-repository link opened the campaign note | pass |
+| R2 scans and moves across repositories | `r2-manager.test.ts` (references in two worktrees, read-only repository refused before copying) | pass |
+| Agent files per repository | `notebook-repositories.test.ts`; `qa-workspace-agent-system` | pass |
+| MCP per notebook repository with the revision token | `workspace-remote.test.ts`, `workspace-local.test.ts` | pass |
+| Location labels removed; Info tab | browser anchor at 1440 and 390 px: header, footer, sidebar and Settings show no repository; Info names notebook, repository, branch, path and write access; Settings YAML shows `source`; `qa-mobile` checks the Info tab | pass |
+| Existing behavior for one repository | Full suite, lint, build and the browser QA scripts below | pass |
+
+## Automated checks
+
+| Command | Outcome |
+| --- | --- |
+| `pnpm test` | 208 files, 1483 tests, all green |
+| `pnpm lint` | Clean |
+| `pnpm build` | Built |
+| `pnpm format:check` | No new findings; the 10 files unformatted on the base remain |
+
+Browser QA scripts passing on the final head: `qa-mobile`, `qa-working-notes`, `qa-note-statuses`, `qa-browser`, `qa-live-editor`, `qa-note-navigation`, `qa-file-manager`, `qa-shared-editors`, `qa-graph-layout`, `qa-graph-editing` (all sections; its Focus selector was updated), `qa-screen`, `qa-editor-links`, `qa-git-sync`, `qa-workspace-agent-system`, `qa-inline-note-transition`. Still failing as before this change: `qa-note-focus` (`.focus-switcher-menu`, removed in b297307), `qa-folder-index`, `qa-keyboard-shortcuts`.
+
+## Browser anchor
+
+A disposable copy of `examples/demo-workspace` as the home repository, a second Git repository mapped to a `campaign` notebook with the same root, and an unmapped `lost` notebook, served locally and driven with agent-browser. The check found and fixed four path-only requests or labels that confused equal paths across repositories: remote-version reads, restores and deletions without a notebook, asset URLs without a notebook, dirty marks from the home repository's status, and change counts that merged equal paths.
+
+## Not verified
+
+- A hosted deployment with a second GitHub repository. Remote behavior is covered by route and MCP tests with fake providers; binding a notebook of the production knowledge base to a second repository waits for the user's go-ahead.
