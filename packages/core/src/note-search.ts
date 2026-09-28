@@ -2,6 +2,11 @@ import { SourceError } from './remote-source.js';
 import { matchNoteGlob } from './note-shell.js';
 import { NoteItem } from './types.js';
 
+/** Global matcher for a find or replace request: `query` is a pattern when `isRegex`, otherwise literal text. Throws on an invalid pattern. */
+export function textSearchRegex(query: string, isRegex = false, caseSensitive = false) {
+  return new RegExp(isRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), caseSensitive ? 'g' : 'gi');
+}
+
 export interface NoteSearchOptions {
   query?: string;
   isRegex?: boolean;

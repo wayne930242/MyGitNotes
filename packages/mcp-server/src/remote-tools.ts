@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { agentSystemHint, callAgentSystem, callNoteShell, NOTE_DESCRIPTION_LIMIT, type NoteItem, type NoteSearchOptions, noteShellWrites, noteSummary, noteWebPath, RemoteSource, searchNotes, serializeNoteContent, skillFile, withNoteStatus } from '@mygitnotes/core';
+import { agentSystemHint, callAgentSystem, callNoteShell, configuredNoteStatuses, DEFAULT_NOTE_STATUSES, NOTE_DESCRIPTION_LIMIT, type NoteItem, type NoteMetadata, type NoteMetadataEdits, type NoteSearchOptions, noteShellWrites, noteSummary, noteWebPath, RemoteSource, searchNotes, serializeNoteContent, skillFile, textSearchRegex, withNoteEdits } from '@mygitnotes/core';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { type AssetUpload, deleteR2Asset, listR2Assets, uploadR2Asset } from './tools/assets.js';
 
@@ -81,6 +81,47 @@ export async function callRemoteTool(reader: RemoteSource, name: string, args: R
   return { ...result, path: file, ...(url ? { url } : {}) };
 }
 
+/** The status, tags and title edits a note tool received. */
+function metadataEdits(args: Record<string, unknown>): NoteMetadataEdits {
+  return { status: args.status === undefined ? undefined : String(args.status), tags: args.tags as string[] | undefined, title: args.title as string | undefined };
+}
+
+/** The revision a mutation names, defaulting to the current branch head. */
+async function revisionArg(reader: RemoteSource, args: Record<string, unknown>) {
+  const snapshot = await reader.getSnapshot();
+  return String(args.revision || snapshot.sha);
+}
+
+async function findFolder(reader: RemoteSource, requested: unknown) {
+  const folders = await reader.folders();
+  const norm = String(requested).replace(/\/(_dir\.yml)?$/, '');
+  const folder = folders.find((f) => f.path === norm || `${f.notebookId}/${f.path}` === norm || norm.endsWith(`/${f.path}`));
+  if (!folder) throw new Error(`Folder not found: ${requested}`);
+  return { ...folder, path: norm };
+}
+
+/** A note with its configured statuses, as returned by the metadata tools. */
+async function noteMetadata(reader: RemoteSource, file: unknown) {
+  const note = await reader.note(String(file));
+  const nb = (await reader.config()).notebooks.find((n) => n.id === note.notebookId);
+  return { note, availableStatuses: configuredNoteStatuses(nb) };
+}
+
+function metadataResult({ note, availableStatuses }: Awaited<ReturnType<typeof noteMetadata>>) {
+  return { path: note.path, notebookId: note.notebookId, title: note.title, status: note.status || null, tags: note.tags, metadata: note.metadata, revision: note.revision, availableStatuses };
+}
+
+/** Rewrites a note's metadata without resending its body; `hidden` is honored only when `allowHidden`. */
+async function updateNoteMetadata(reader: RemoteSource, args: Record<string, unknown>, allowHidden: boolean) {
+  const { note, availableStatuses } = await noteMetadata(reader, args.path);
+  if (args.status !== undefined && args.status !== '' && !availableStatuses.includes(String(args.status))) {
+    throw new Error(`Invalid status '${args.status}'. Available statuses: ${availableStatuses.join(', ')}`);
+  }
+  const updated = withNoteEdits({ ...note.metadata, ...args.metadata as NoteMetadata }, metadataEdits(args));
+  if (allowHidden && args.hidden !== undefined) updated.hiden = Boolean(args.hidden);
+  return reader.save(note.path, note.content, updated, await revisionArg(reader, args), false);
+}
+
 async function runRemoteTool(reader: RemoteSource, name: string, args: Record<string, unknown>, write: boolean): Promise<Record<string, unknown>> {
   const definition = remoteTools.find((t) => t.name === name) || legacyRemoteTools.find((t) => t.name === name);
   if (!definition) throw new Error('This operation is unavailable for a remote source.');
@@ -92,23 +133,10 @@ async function runRemoteTool(reader: RemoteSource, name: string, args: Record<st
       return { config: await reader.config() };
     case 'list_notebooks':
       return { notebooks: (await reader.config()).notebooks };
-    case 'list_folders': {
-      if (args.path) {
-        const folders = await reader.folders();
-        const norm = String(args.path).replace(/\/(_dir\.yml)?$/, '');
-        const folder = folders.find((f) => f.path === norm || `${f.notebookId}/${f.path}` === norm || norm.endsWith(`/${f.path}`));
-        if (!folder) throw new Error(`Folder not found: ${args.path}`);
-        return { ...folder, path: norm };
-      }
-      return { folders: await reader.folders() };
-    }
-    case 'get_folder_metadata': {
-      const folders = await reader.folders();
-      const norm = String(args.path).replace(/\/(_dir\.yml)?$/, '');
-      const folder = folders.find((f) => f.path === norm || `${f.notebookId}/${f.path}` === norm || norm.endsWith(`/${f.path}`));
-      if (!folder) throw new Error(`Folder not found: ${args.path}`);
-      return { ...folder, path: norm };
-    }
+    case 'list_folders':
+      return args.path ? findFolder(reader, args.path) : { folders: await reader.folders() };
+    case 'get_folder_metadata':
+      return findFolder(reader, args.path);
     case 'list_notes': {
       const notebooks = (await reader.config()).notebooks.filter((nb) => !args.notebookId || nb.id === args.notebookId);
       const offset = args.offset === undefined ? 0 : Number(args.offset);
@@ -123,46 +151,16 @@ async function runRemoteTool(reader: RemoteSource, name: string, args: Record<st
       const next = offset + read.length;
       return { revision: (await reader.getSnapshot()).sha, notes: read.map(noteSummary), count: read.length, total: paths.length, nextOffset: next < paths.length ? next : null };
     }
-    case 'read_note': {
-      if (args.metadataOnly) {
-        const note = await reader.note(String(args.path));
-        const config = await reader.config();
-        const nb = config.notebooks.find((n) => n.id === note.notebookId);
-        const availableStatuses = nb?.statuses && nb.statuses.length > 0 ? nb.statuses : ['inbox', 'working', 'done', 'archived'];
-        return { path: note.path, notebookId: note.notebookId, title: note.title, status: note.status || null, tags: note.tags, metadata: note.metadata, revision: note.revision, availableStatuses };
-      }
-      return { note: await reader.note(String(args.path)) };
-    }
+    case 'read_note':
+      return args.metadataOnly ? metadataResult(await noteMetadata(reader, args.path)) : { note: await reader.note(String(args.path)) };
     case 'save_note': {
-      if (args.content === undefined) {
-        const note = await reader.note(String(args.path));
-        const config = await reader.config();
-        const nb = config.notebooks.find((n) => n.id === note.notebookId);
-        const availableStatuses = nb?.statuses && nb.statuses.length > 0 ? nb.statuses : ['inbox', 'working', 'done', 'archived'];
-        if (args.status !== undefined && args.status !== '' && !availableStatuses.includes(String(args.status))) {
-          throw new Error(`Invalid status '${args.status}'. Available statuses: ${availableStatuses.join(', ')}`);
-        }
-        let newMetadata: Record<string, unknown> = { ...note.metadata, ...args.metadata as Record<string, unknown> };
-        if (args.status !== undefined) newMetadata = withNoteStatus(newMetadata, String(args.status));
-        if (args.tags !== undefined) newMetadata.tags = args.tags;
-        if (args.title !== undefined) newMetadata.title = args.title;
-        const snapshot = await reader.getSnapshot();
-        const rev = String(args.revision || snapshot.sha);
-        return reader.save(note.path, note.content, newMetadata, rev, false);
-      }
-      let finalMetadata = args.metadata as Record<string, unknown> | undefined;
-      if (args.status !== undefined || args.tags !== undefined || args.title !== undefined) {
-        finalMetadata = { ...finalMetadata };
-        if (args.status !== undefined) finalMetadata = withNoteStatus(finalMetadata, String(args.status));
-        if (args.tags !== undefined) finalMetadata.tags = args.tags;
-        if (args.title !== undefined) finalMetadata.title = args.title;
-      }
+      if (args.content === undefined) return updateNoteMetadata(reader, args, false);
+      const edited = args.status !== undefined || args.tags !== undefined || args.title !== undefined;
+      const finalMetadata = edited ? withNoteEdits({ ...args.metadata as NoteMetadata | undefined }, metadataEdits(args)) : args.metadata as NoteMetadata | undefined;
       return reader.save(String(args.path), String(args.content), finalMetadata, String(args.revision), args.createOnly === true);
     }
     case 'delete_note': {
-      const snapshot = await reader.getSnapshot();
-      const rev = String(args.revision || snapshot.sha);
-      const receipt = await reader.commitChanges([{ path: String(args.path), sha: null }], rev, 'delete', 'notes');
+      const receipt = await reader.commitChanges([{ path: String(args.path), sha: null }], await revisionArg(reader, args), 'delete', 'notes');
       return { success: true, path: String(args.path), commit: receipt.commit };
     }
     case 'render_template':
@@ -177,9 +175,7 @@ async function runRemoteTool(reader: RemoteSource, name: string, args: Record<st
       const nb = config.notebooks.find((n) => n.id === args.notebookId) || config.notebooks[0];
       const uploaded = await uploadR2Asset(nb.id, args as unknown as AssetUpload);
       if (uploaded) return uploaded;
-      const snapshot = await reader.getSnapshot();
-      const rev = String(args.revision || snapshot.sha);
-      const res = await reader.mutateAsset('upload', { ...args, revision: rev });
+      const res = await reader.mutateAsset('upload', { ...args, revision: await revisionArg(reader, args) });
       const dest = String(res.path);
       const markdownRel = dest.slice(nb.root.length + 1);
       return { ...res, storage: 'git', filename: path.posix.basename(dest), path: dest, reference: markdownRel, markdownRef: `![${path.posix.basename(dest)}](${markdownRel})` };
@@ -188,45 +184,23 @@ async function runRemoteTool(reader: RemoteSource, name: string, args: Record<st
       const config = await reader.config();
       const removed = await deleteR2Asset(String(args.path), config.notebooks.map((n) => n.id), async () => new Map((await reader.notes()).map((note) => [note.path, note.content])), args.force === true);
       if (removed) return removed;
-      const snapshot = await reader.getSnapshot();
-      const rev = String(args.revision || snapshot.sha);
-      const res = await reader.mutateAsset('delete', { ...args, revision: rev });
+      const res = await reader.mutateAsset('delete', { ...args, revision: await revisionArg(reader, args) });
       return { success: true, storage: 'git', path: String(args.path), commit: res.commit };
     }
     case 'get_statuses': {
       const config = await reader.config();
-      const defaultStatuses = ['inbox', 'working', 'done', 'archived'];
+      const defaultStatuses = [...DEFAULT_NOTE_STATUSES];
       const nb = args.notebookId ? config.notebooks.find((n) => n.id === args.notebookId) : config.notebooks[0];
-      const configuredStatuses = nb?.statuses && nb.statuses.length > 0 ? nb.statuses : defaultStatuses;
+      const configuredStatuses = configuredNoteStatuses(nb);
       const notes = await reader.notes(args.notebookId as string | undefined);
       const observedStatuses = Array.from(new Set(notes.map((n) => n.status).filter(Boolean))) as string[];
       const allStatuses = Array.from(new Set([...configuredStatuses, ...observedStatuses]));
       return { notebookId: nb?.id || 'default', defaultStatuses, configuredStatuses, observedStatuses, allStatuses };
     }
-    case 'get_note_metadata': {
-      const note = await reader.note(String(args.path));
-      const config = await reader.config();
-      const nb = config.notebooks.find((n) => n.id === note.notebookId);
-      const availableStatuses = nb?.statuses && nb.statuses.length > 0 ? nb.statuses : ['inbox', 'working', 'done', 'archived'];
-      return { path: note.path, notebookId: note.notebookId, title: note.title, status: note.status || null, tags: note.tags, metadata: note.metadata, revision: note.revision, availableStatuses };
-    }
-    case 'update_note_metadata': {
-      const note = await reader.note(String(args.path));
-      const config = await reader.config();
-      const nb = config.notebooks.find((n) => n.id === note.notebookId);
-      const availableStatuses = nb?.statuses && nb.statuses.length > 0 ? nb.statuses : ['inbox', 'working', 'done', 'archived'];
-      if (args.status !== undefined && args.status !== '' && !availableStatuses.includes(String(args.status))) {
-        throw new Error(`Invalid status '${args.status}'. Available statuses: ${availableStatuses.join(', ')}`);
-      }
-      let newMetadata: Record<string, unknown> = { ...note.metadata, ...args.metadata as Record<string, unknown> };
-      if (args.status !== undefined) newMetadata = withNoteStatus(newMetadata, String(args.status));
-      if (args.tags !== undefined) newMetadata.tags = args.tags;
-      if (args.title !== undefined) newMetadata.title = args.title;
-      if (args.hidden !== undefined) newMetadata.hiden = Boolean(args.hidden);
-      const snapshot = await reader.getSnapshot();
-      const rev = String(args.revision || snapshot.sha);
-      return reader.save(note.path, note.content, newMetadata, rev, false);
-    }
+    case 'get_note_metadata':
+      return metadataResult(await noteMetadata(reader, args.path));
+    case 'update_note_metadata':
+      return updateNoteMetadata(reader, args, true);
     case 'search_notes': {
       const notes = await reader.notes(args.notebookId as string | undefined);
       const result = searchNotes(notes, args as NoteSearchOptions);
@@ -239,13 +213,7 @@ async function runRemoteTool(reader: RemoteSource, name: string, args: Record<st
       const isRegex = Boolean(args.isRegex);
       const caseSensitive = Boolean(args.caseSensitive);
       const dryRun = Boolean(args.dryRun);
-      let regex: RegExp;
-      if (isRegex) {
-        regex = new RegExp(search, caseSensitive ? 'g' : 'gi');
-      } else {
-        const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        regex = new RegExp(escaped, caseSensitive ? 'g' : 'gi');
-      }
+      const regex = textSearchRegex(search, isRegex, caseSensitive);
       const modified: { path: string; metadata: any; content: string; }[] = [];
       for (const note of notes) {
         if (regex.test(note.content)) {
@@ -260,8 +228,7 @@ async function runRemoteTool(reader: RemoteSource, name: string, args: Record<st
       if (modified.length === 0) {
         return { success: true, dryRun: false, search, replace, matchedFiles: [], totalFiles: 0 };
       }
-      const snapshot = await reader.getSnapshot();
-      const rev = String(args.revision || snapshot.sha);
+      const rev = await revisionArg(reader, args);
       const changes = modified.map((n) => ({ path: n.path, content: serializeNoteContent(n.metadata, n.content, false) }));
       const receipt = await reader.commitChanges(changes, rev, 'replace', 'notes', `docs(notes): replace "${search}" across ${modified.length} notes`);
       return { success: true, dryRun: false, search, replace, matchedFiles: modified.map((n) => n.path), totalFiles: modified.length, commit: receipt.commit };

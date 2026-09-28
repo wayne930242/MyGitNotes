@@ -1,38 +1,42 @@
 import fs from 'node:fs';
-import { loadWorkspaceConfig, matchNoteGlob, NoteItem, resolveSafePath, scanNotebookNotes, textLines } from '@mygitnotes/core';
+import { loadWorkspaceConfig, matchNoteGlob, NoteItem, resolveSafePath, scanNotebookNotes, textLines, textSearchRegex, type WorkspaceConfig } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { assertUserWorkspaceBranch } from '../guards.js';
 import type { ToolContext } from './context.js';
 
-export async function handleSearchNotes(ctx: ToolContext, args: { query: string; isRegex?: boolean; pattern?: string; notebookId?: string; caseSensitive?: boolean; maxResults?: number; }) {
+interface NoteScope {
+  isRegex?: boolean;
+  pattern?: string;
+  notebookId?: string;
+  caseSensitive?: boolean;
+}
+
+/** Builds the request's matcher, or the tool error for an invalid pattern. */
+function scopeRegex(query: string, args: NoteScope): RegExp | { error: string; } {
+  try {
+    return textSearchRegex(query, args.isRegex, args.caseSensitive);
+  } catch (err) {
+    return { error: `Invalid regular expression: ${(err as Error).message}` };
+  }
+}
+
+/** Notes in the requested notebook (or all), narrowed by the optional path glob. */
+function scopeNotes(ctx: ToolContext, config: WorkspaceConfig, args: NoteScope): NoteItem[] {
+  const notebooks = args.notebookId ? config.notebooks.filter((nb) => nb.id === args.notebookId) : config.notebooks;
+  const notes = notebooks.flatMap((nb) => scanNotebookNotes(ctx.repoRoot, nb));
+  if (!args.pattern) return notes;
+  const matcher = matchNoteGlob(args.pattern);
+  return notes.filter((n) => matcher(n.path));
+}
+
+export async function handleSearchNotes(ctx: ToolContext, args: NoteScope & { query: string; maxResults?: number; }) {
   const config = loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
   if (!args.query) return { error: 'query is required' };
 
-  let re: RegExp;
-  try {
-    if (args.isRegex) {
-      re = new RegExp(args.query, args.caseSensitive ? 'g' : 'gi');
-    } else {
-      const escaped = args.query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      re = new RegExp(escaped, args.caseSensitive ? 'g' : 'gi');
-    }
-  } catch (err) {
-    return { error: `Invalid regular expression: ${(err as Error).message}` };
-  }
-
-  const notebooks = args.notebookId ? config.notebooks.filter((nb) => nb.id === args.notebookId) : config.notebooks;
-
-  const notes: NoteItem[] = [];
-  for (const nb of notebooks) {
-    notes.push(...scanNotebookNotes(ctx.repoRoot, nb));
-  }
-
-  let filteredNotes = notes;
-  if (args.pattern) {
-    const matcher = matchNoteGlob(args.pattern);
-    filteredNotes = notes.filter((n) => matcher(n.path));
-  }
+  const re = scopeRegex(args.query, args);
+  if (!(re instanceof RegExp)) return re;
+  const filteredNotes = scopeNotes(ctx, config, args);
 
   const maxResults = args.maxResults || 100;
   const matches: { path: string; line: number; text: string; matches?: string[]; }[] = [];
@@ -63,7 +67,7 @@ export async function handleSearchNotes(ctx: ToolContext, args: { query: string;
   return { matches, totalMatches: matches.length, scannedFiles, truncated };
 }
 
-export async function handleReplaceNotes(ctx: ToolContext, args: { find: string; replace: string; isRegex?: boolean; pattern?: string; notebookId?: string; caseSensitive?: boolean; dryRun?: boolean; commitMessage?: string; }) {
+export async function handleReplaceNotes(ctx: ToolContext, args: NoteScope & { find: string; replace: string; dryRun?: boolean; commitMessage?: string; }) {
   if (!args.dryRun) {
     await assertUserWorkspaceBranch(ctx.repoRoot);
   }
@@ -72,30 +76,9 @@ export async function handleReplaceNotes(ctx: ToolContext, args: { find: string;
   if (!args.find) return { error: 'find parameter is required' };
   if (args.replace === undefined) return { error: 'replace parameter is required' };
 
-  let re: RegExp;
-  try {
-    if (args.isRegex) {
-      re = new RegExp(args.find, args.caseSensitive ? 'g' : 'gi');
-    } else {
-      const escaped = args.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      re = new RegExp(escaped, args.caseSensitive ? 'g' : 'gi');
-    }
-  } catch (err) {
-    return { error: `Invalid regular expression: ${(err as Error).message}` };
-  }
-
-  const notebooks = args.notebookId ? config.notebooks.filter((nb) => nb.id === args.notebookId) : config.notebooks;
-
-  const notes: NoteItem[] = [];
-  for (const nb of notebooks) {
-    notes.push(...scanNotebookNotes(ctx.repoRoot, nb));
-  }
-
-  let filteredNotes = notes;
-  if (args.pattern) {
-    const matcher = matchNoteGlob(args.pattern);
-    filteredNotes = notes.filter((n) => matcher(n.path));
-  }
+  const re = scopeRegex(args.find, args);
+  if (!(re instanceof RegExp)) return re;
+  const filteredNotes = scopeNotes(ctx, config, args);
 
   const changedFiles: string[] = [];
   let totalReplacements = 0;
