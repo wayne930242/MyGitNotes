@@ -7,6 +7,7 @@ import { copyToClipboard } from '../lib/clipboard.js';
 import { createR2Folder, deleteR2, fetchR2References, moveR2, type R2Listing, r2RawUrl, type R2References, uploadR2 } from '../lib/r2-api.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { LoadingStatus } from './LoadingStatus.js';
+import { baseName, parentPath } from '../lib/paths.js';
 
 export interface R2PanelProps {
   notebookId: string;
@@ -26,8 +27,6 @@ export interface R2PanelProps {
   onInsert?: (reference: string) => void;
 }
 type Operation = 'mkdir' | 'move' | 'delete';
-const parentOf = (key: string) => key.slice(0, key.lastIndexOf('/'));
-const basename = (key: string) => key.slice(key.lastIndexOf('/') + 1);
 
 /** R2 folder listings derived from flat object keys. */
 export function r2Folders(listing: R2Listing, showHidden: boolean) {
@@ -36,7 +35,7 @@ export function r2Folders(listing: R2Listing, showHidden: boolean) {
     const parts = key.split('/');
     for (let index = 2; index < parts.length; index++) {
       const folder = parts.slice(0, index).join('/');
-      if (showHidden || !basename(folder).startsWith('.')) folders.add(folder);
+      if (showHidden || !baseName(folder).startsWith('.')) folders.add(folder);
     }
   }
   return { root, folders: [...folders].sort() };
@@ -52,8 +51,8 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
   const visible = (key: string) => showHidden || !key.slice(root.length + 1).split('/').some(part => part.startsWith('.'));
   const selectedObject = listing.objects.find(object => object.key === selected);
   const target = selectedObject ? selected : directory, directoryTarget = !selectedObject;
-  const childFolders = folders.filter(folder => parentOf(folder) === directory);
-  const files = listing.objects.filter(object => parentOf(object.key) === directory && visible(object.key)).sort((a, b) => a.key.localeCompare(b.key));
+  const childFolders = folders.filter(folder => parentPath(folder) === directory);
+  const files = listing.objects.filter(object => parentPath(object.key) === directory && visible(object.key)).sort((a, b) => a.key.localeCompare(b.key));
   useEffect(() => {
     setSelected(pendingSelection.current);
     pendingSelection.current = '';
@@ -66,8 +65,8 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
     void run(async () => {
       setOperation(kind);
       setReferences(undefined);
-      setName(kind === 'move' ? basename(target) : '');
-      setDestination(parentOf(target));
+      setName(kind === 'move' ? baseName(target) : '');
+      setDestination(parentPath(target));
       if (kind !== 'mkdir') setReferences(await fetchR2References(notebookId, target, directoryTarget));
     });
   const finish = async (next: string, select = '') => {
@@ -93,7 +92,7 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
         await finish(directoryTarget ? moved : destination, directoryTarget ? '' : moved);
       } else if (operation === 'delete') {
         await deleteR2(notebookId, target, directoryTarget);
-        await finish(directoryTarget ? parentOf(target) : directory);
+        await finish(directoryTarget ? parentPath(target) : directory);
       }
     });
   const upload = (file?: globalThis.File) =>
@@ -165,7 +164,7 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
       <div className='file-list' aria-label={t('files.list')}>
         {directory !== root && (
           <div className='file-row file-navigation-row'>
-            <button type='button' className='file-row-name' aria-label={t('files.up')} title={t('files.up')} disabled={busy} onClick={() => onNavigate(parentOf(directory))}>
+            <button type='button' className='file-row-name' aria-label={t('files.up')} title={t('files.up')} disabled={busy} onClick={() => onNavigate(parentPath(directory))}>
               <CornerLeftUp size={18} />
               <span>..</span>
             </button>
@@ -173,9 +172,9 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
         )}
         {childFolders.map(folder => (
           <div key={folder} className='file-row'>
-            <button type='button' disabled={busy} className='file-row-name' title={folder} aria-label={`${t('files.openFolder')}: ${basename(folder)}`} onClick={() => onNavigate(folder)}>
+            <button type='button' disabled={busy} className='file-row-name' title={folder} aria-label={`${t('files.openFolder')}: ${baseName(folder)}`} onClick={() => onNavigate(folder)}>
               <Folder size={18} />
-              <span>{basename(folder)}</span>
+              <span>{baseName(folder)}</span>
               <small>{t('files.directory')}</small>
             </button>
           </div>
@@ -187,14 +186,14 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
               disabled={busy}
               className='file-row-name'
               title={object.key}
-              aria-label={`${t('files.select')}: ${basename(object.key)}`}
+              aria-label={`${t('files.select')}: ${baseName(object.key)}`}
               onClick={() => {
                 setSelected(object.key);
                 setOperation(undefined);
               }}
             >
               <File size={18} />
-              <span>{basename(object.key)}</span>
+              <span>{baseName(object.key)}</span>
               <small>{`${(object.size / 1024).toFixed(1)} KB`}</small>
             </button>
           </div>
@@ -205,7 +204,7 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
         <section className='file-detail' aria-label={t('files.details')}>
           <div className='file-detail-heading'>
             <div className='file-detail-title'>
-              <strong>{basename(selectedObject.key)}</strong>
+              <strong>{baseName(selectedObject.key)}</strong>
               <div className='file-detail-icons'>
                 {onInsert && <Button type='button' variant='primary' disabled={busy} onClick={() => onInsert(r2Reference(selectedObject.key))}>{t('files.r2Insert')}</Button>}
                 <a className='ui-icon-button' href={rawUrl + '&download=1'} aria-label={t('files.download')} title={t('files.download')}>
@@ -257,7 +256,7 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
               </>
             )}
           </div>
-          <Preview key={selectedObject.key} entry={{ path: selectedObject.key, name: basename(selectedObject.key), directory: false, size: selectedObject.size, hidden: false, presentation }} url={rawUrl} />
+          <Preview key={selectedObject.key} entry={{ path: selectedObject.key, name: baseName(selectedObject.key), directory: false, size: selectedObject.size, hidden: false, presentation }} url={rawUrl} />
         </section>
       )}
       {operation && mutable && (

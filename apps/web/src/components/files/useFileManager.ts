@@ -8,9 +8,8 @@ import { fetchR2, type R2Listing } from '../../lib/r2-api.js';
 import { useWorkspaceSidebarDrawer } from '../WorkspaceChrome.js';
 import type { ForwardedRef } from 'react';
 import type { FileManagerHandle, FileManagerProps } from './types.js';
+import { baseName, parentPath } from '../../lib/paths.js';
 type Operation = 'create' | 'mkdir' | 'move' | 'delete' | 'remove-directory' | 'metadata';
-const parentOf = (path: string) => path.slice(0, path.lastIndexOf('/'));
-const basename = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
 export function useFileManager({ notebookId, writable, initialPath, movePath, mode = 'manage', layout = 'page', beforeChange, onChanged, onOpenIndex, onInsert, onBusyChange, onSelectionChange, metadataContainer, notebooks, onNotebookChange, onShowMetadata }: FileManagerProps, ref: ForwardedRef<FileManagerHandle>) {
   const { t } = useTranslation();
@@ -33,7 +32,7 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
   const mutable = mode === 'manage' && writable && listing?.writable;
   const dirty = typeof detail?.content === 'string' && content !== detail.content;
   const selectedEntry = listing?.entries.find(entry => entry.path === selected);
-  const currentEntry = useMemo<FileEntry | undefined>(() => r2Directory !== undefined ? undefined : selectedEntry || (listing && directory ? listing.entries.find(entry => entry.path === directory) || { path: directory, name: basename(directory), directory: true, size: 0, hidden: false, presentation: 'file' } : undefined), [selectedEntry, listing, directory, r2Directory]);
+  const currentEntry = useMemo<FileEntry | undefined>(() => r2Directory !== undefined ? undefined : selectedEntry || (listing && directory ? listing.entries.find(entry => entry.path === directory) || { path: directory, name: baseName(directory), directory: true, size: 0, hidden: false, presentation: 'file' } : undefined), [selectedEntry, listing, directory, r2Directory]);
   useEffect(() => {
     onSelectionChange?.(currentEntry);
     return () => onSelectionChange?.(undefined);
@@ -46,7 +45,7 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
   const entries = listing?.entries.filter(entry => showHidden || !entry.hidden) || [];
   const dirs = entries.filter(entry => entry.directory);
   const { roots: tree, rootHasNonDocument } = listing ? buildFileTree(entries, listing.root) : { roots: [] as FileTreeNode[], rootHasNonDocument: false };
-  const current = entries.filter(entry => parentOf(entry.path) === directory && (showMarkdown || entry.directory || !isMarkdownFile(entry.name))).sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
+  const current = entries.filter(entry => parentPath(entry.path) === directory && (showMarkdown || entry.directory || !isMarkdownFile(entry.name))).sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
   const toggleExpand = (path: string) =>
     setExpanded(previous => {
       const next = new Set(previous);
@@ -115,7 +114,7 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
       setListing(next);
       const requested = movePath || initialPath;
       const entry = next.entries.find(entry => entry.path === requested);
-      setDirectory(entry?.directory && !movePath ? entry.path : entry ? parentOf(entry.path) : next.root);
+      setDirectory(entry?.directory && !movePath ? entry.path : entry ? parentPath(entry.path) : next.root);
       if (entry) {
         if (entry.hidden) setShowHidden(true);
         if (!entry.directory && isMarkdownFile(entry.name)) setShowMarkdown(true);
@@ -123,7 +122,7 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
           setSelected(entry.path);
           setOperation('move');
           setName(entry.name);
-          setDestination(parentOf(entry.path));
+          setDestination(parentPath(entry.path));
         } else void loadDetail(entry.path);
       }
     }).catch(error => {
@@ -177,7 +176,7 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
     if (entry?.hidden) setShowHidden(true);
     if (entry && !entry.directory && isMarkdownFile(entry.name)) setShowMarkdown(true);
     if (entry && !entry.directory) {
-      setDirectory(parentOf(entry.path));
+      setDirectory(parentPath(entry.path));
       await loadDetail(entry.path);
     } else {
       setDirectory(entry?.path || next.root);
@@ -234,7 +233,7 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
   };
   const loadMetadata = async (path: string) => {
     const next = await readFile(notebookId, path);
-    setTitle(next.metadata?.title || basename(path));
+    setTitle(next.metadata?.title || baseName(path));
     setDescription(next.metadata?.description || '');
     setOrder(next.metadata?.order || 0);
     setListing(previous => previous ? { ...previous, revision: next.revision } : previous);
@@ -243,8 +242,8 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
     if (!await prepareLeave()) return;
     setOperation(kind);
     setError('');
-    setName(kind === 'move' ? basename(selected) : '');
-    setDestination(kind === 'remove-directory' ? listing!.root : selected ? parentOf(selected) : directory);
+    setName(kind === 'move' ? baseName(selected) : '');
+    setDestination(kind === 'remove-directory' ? listing!.root : selected ? parentPath(selected) : directory);
     if (kind === 'metadata') {
       showInfo();
       await run(() => loadMetadata(selected || directory));

@@ -2,7 +2,7 @@ import { Button } from '../Button.js';
 import type { useFileManager } from './useFileManager.js';
 import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
-const basename = (path: string) => path.slice(path.lastIndexOf('/') + 1);
+import { baseName } from '../../lib/paths.js';
 export function FileOperation({ model }: { model: ReturnType<typeof useFileManager>; }) {
   const { t, listing: maybeListing, selected, busy, operation, setOperation, name, setName, destination, setDestination, title, setTitle, description, setDescription, order, setOrder, operationForm, mutable, infoHost, submit, operationLabel, destinationDirs, relative } = model;
   const listing = maybeListing!;
@@ -66,7 +66,7 @@ export function FileOperation({ model }: { model: ReturnType<typeof useFileManag
               </ul>
             </>
           )}
-          {operation === 'delete' && <p>{t('files.deleteHint', { name: basename(selected) })}</p>}
+          {operation === 'delete' && <p>{t('files.deleteHint', { name: baseName(selected) })}</p>}
           {operation === 'metadata' && (
             <>
               <label>

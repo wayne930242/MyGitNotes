@@ -6,8 +6,7 @@ import { fetchFiles, type FileResult, mutateFile } from '../lib/files-api.js';
 import type { I18nContextValue } from '../lib/i18n/index.js';
 import type { useTagOperations } from '../lib/use-tag-operations.js';
 import type { WorkspaceState } from './workspace-state.js';
-
-const basename = (path: string) => path.slice(path.lastIndexOf('/') + 1);
+import { baseName } from '../lib/paths.js';
 
 interface Params {
   selectedNotes: NoteListItem[];
@@ -82,7 +81,7 @@ export function useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNote
       const targetDir = destinationFolder ? `${root}/${destinationFolder}` : root;
       let currentRevision = (await fetchFiles(notebookId)).revision;
       for (const note of selectedNotes) {
-        const destination = `${targetDir}/${basename(note.path)}`;
+        const destination = `${targetDir}/${baseName(note.path)}`;
         if (destination === note.path) continue;
         const result = await mutateFile({ kind: 'move', notebookId, path: note.path, destination }, currentRevision);
         currentRevision = result.revision;

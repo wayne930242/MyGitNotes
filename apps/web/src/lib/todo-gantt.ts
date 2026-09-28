@@ -1,4 +1,5 @@
 import type { TodoTask } from './todo-list.js';
+import { pad2 } from './date-utils.js';
 
 const MS_PER_DAY = 86_400_000;
 const MIN_SPAN_DAYS = 7;
@@ -40,10 +41,6 @@ export function ganttDayWidth(scale: GanttScale): number {
 
 function dayIndex(dateYMD: string): number {
   return Math.floor(Date.parse(`${dateYMD}T00:00:00Z`) / MS_PER_DAY);
-}
-
-function pad2(value: number): string {
-  return String(value).padStart(2, '0');
 }
 
 /** Formats a day index (see `dayIndex`) back to `YYYY-MM-DD`, in UTC to match the index's own basis. */

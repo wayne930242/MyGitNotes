@@ -1,6 +1,6 @@
 import { BookOpen, CornerLeftUp, File, Folder, Pencil } from 'lucide-react';
 import type { useFileManager } from './useFileManager.js';
-const parentOf = (path: string) => path.slice(0, path.lastIndexOf('/'));
+import { parentPath } from '../../lib/paths.js';
 export function FileListing({ model }: { model: ReturnType<typeof useFileManager>; }) {
   const { t, listing: maybeListing, directory, selected, busy, mutable, current, navigate, notebookTitle } = model;
   const listing = maybeListing!;
@@ -25,7 +25,7 @@ export function FileListing({ model }: { model: ReturnType<typeof useFileManager
         )}
         {directory !== listing.root && (
           <div className='file-row file-navigation-row'>
-            <button type='button' className='file-row-name' aria-label={t('files.up')} title={t('files.up')} disabled={busy} onClick={() => void navigate(parentOf(directory))}>
+            <button type='button' className='file-row-name' aria-label={t('files.up')} title={t('files.up')} disabled={busy} onClick={() => void navigate(parentPath(directory))}>
               <CornerLeftUp size={18} />
               <span>..</span>
             </button>

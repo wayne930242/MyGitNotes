@@ -13,7 +13,8 @@ function devPortsFile(repoRoot: string): string {
   return process.env.MYGITNOTES_DEV_PORTS_FILE || path.join(repoRoot, DEV_PORTS_FILENAME);
 }
 
-function toPort(value: unknown): number | undefined {
+/** A valid TCP port number, or undefined. */
+export function toPort(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 && value < 65536 ? value : undefined;
 }
 

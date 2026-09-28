@@ -1,10 +1,10 @@
 import { readBuildInfo } from '../build-info.mjs';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { loadEnvDefaults } from '@mygitnotes/core';
+import { readDevPorts, toPort, writeDevPorts } from '../local-server/src/dev-ports.js';
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../..');
 // Read into a private object, not process.env: resolveApiPort() below trusts an explicit
@@ -12,30 +12,6 @@ const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../..');
 const fileEnv: NodeJS.ProcessEnv = {};
 loadEnvDefaults(path.join(repoRoot, '.env'), fileEnv);
 const webPort = process.env.MYGITNOTES_WEB_PORT || fileEnv.MYGITNOTES_WEB_PORT;
-const devPortsFile = process.env.MYGITNOTES_DEV_PORTS_FILE || path.join(repoRoot, '.mygitnotes-dev-ports.json');
-
-interface DevPorts {
-  serverPort?: number;
-  serverPid?: number;
-  webPort?: number;
-}
-
-function toPort(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value < 65536 ? value : undefined;
-}
-
-function toPid(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
-}
-
-function readDevPorts(): DevPorts {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(devPortsFile, 'utf-8'));
-    return { serverPort: toPort(parsed.serverPort), serverPid: toPid(parsed.serverPid), webPort: toPort(parsed.webPort) };
-  } catch {
-    return {};
-  }
-}
 
 function isProcessAlive(pid: number): boolean {
   try {
@@ -43,16 +19,6 @@ function isProcessAlive(pid: number): boolean {
     return true;
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === 'EPERM';
-  }
-}
-
-function writeDevPort(key: keyof DevPorts, port: number): void {
-  const ports = readDevPorts();
-  ports[key] = port;
-  try {
-    fs.writeFileSync(devPortsFile, JSON.stringify(ports));
-  } catch {
-    // Best-effort dev convenience; the local-server falls back to its default origin allowlist.
   }
 }
 
@@ -65,7 +31,7 @@ async function resolveApiPort(): Promise<number> {
   if (process.env.PORT) return Number(process.env.PORT);
   const deadline = Date.now() + 3000;
   while (Date.now() < deadline) {
-    const { serverPort, serverPid } = readDevPorts();
+    const { serverPort, serverPid } = readDevPorts(repoRoot);
     if (serverPort && serverPid && isProcessAlive(serverPid)) return serverPort;
     await new Promise(resolve => setTimeout(resolve, 50));
   }
@@ -78,7 +44,7 @@ function recordWebPort(): Plugin {
     configureServer(server) {
       server.httpServer?.once('listening', () => {
         const address = server.httpServer!.address();
-        if (address && typeof address === 'object') writeDevPort('webPort', address.port);
+        if (address && typeof address === 'object') writeDevPorts(repoRoot, { webPort: address.port });
       });
     },
   };
