@@ -4,15 +4,15 @@ import { getSavedPanelState, savePanelState } from './panel-state.js';
 export type WorkspaceToolId = 'calendar' | 'todo' | 'changes';
 export const WORKSPACE_TOOL_IDS: readonly WorkspaceToolId[] = ['calendar', 'todo', 'changes'];
 /** The active pane's document panel sections, offered in the rail while a Focus is displayed. */
-export type DocumentToolId = 'outline' | 'find' | 'frontmatter' | 'assets' | 'git';
-export const DOCUMENT_TOOL_IDS: readonly DocumentToolId[] = ['outline', 'find', 'frontmatter', 'assets', 'git'];
+export type DocumentToolId = 'outline' | 'find' | 'frontmatter' | 'assets' | 'view';
+export const DOCUMENT_TOOL_IDS: readonly DocumentToolId[] = ['outline', 'find', 'frontmatter', 'assets', 'view'];
 export type PanelToolId = WorkspaceToolId | DocumentToolId;
 export const isDocumentTool = (id: PanelToolId): id is DocumentToolId => (DOCUMENT_TOOL_IDS as readonly PanelToolId[]).includes(id);
 
 /**
  * Tracks the workspace-level tool panel (Calendar/Todo). It hides itself
  * while a note is open — the editor owns its own document panel (find,
- * outline, frontmatter, assets, git) rather than sharing this one.
+ * outline, frontmatter, assets, view) rather than sharing this one.
  */
 interface PanelContextValue {
   isOpen: boolean;

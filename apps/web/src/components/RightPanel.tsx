@@ -1,6 +1,6 @@
 import { Button } from './Button.js';
 import { type ReactNode, useLayoutEffect } from 'react';
-import { Braces, CalendarDays, GitBranch, History, ImageIcon, Info, ListTodo, ListTree, Search } from 'lucide-react';
+import { Braces, CalendarDays, GitBranch, ImageIcon, Info, ListTodo, ListTree, Search, Type } from 'lucide-react';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { ChangeRequest, FileChange, GitStatus, NotebookConfig, NoteItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -42,8 +42,8 @@ interface RightPanelProps {
 
 const WORKSPACE_TOOL_ICONS: Record<WorkspaceToolId, typeof CalendarDays> = { calendar: CalendarDays, todo: ListTodo, changes: GitBranch };
 const WORKSPACE_TOOL_LABELS: Record<WorkspaceToolId, 'panel.calendar' | 'panel.todo' | 'panel.changes'> = { calendar: 'panel.calendar', todo: 'panel.todo', changes: 'panel.changes' };
-const DOCUMENT_TOOL_ICONS: Record<DocumentToolId, typeof CalendarDays> = { outline: ListTree, find: Search, frontmatter: Braces, assets: ImageIcon, git: History };
-const DOCUMENT_TOOL_LABELS: Record<DocumentToolId, 'editor.outline' | 'editor.findInNote' | 'editor.frontmatter' | 'editor.notebookAssets' | 'editor.fileGitStatus'> = { outline: 'editor.outline', find: 'editor.findInNote', frontmatter: 'editor.frontmatter', assets: 'editor.notebookAssets', git: 'editor.fileGitStatus' };
+const DOCUMENT_TOOL_ICONS: Record<DocumentToolId, typeof CalendarDays> = { outline: ListTree, find: Search, frontmatter: Braces, assets: ImageIcon, view: Type };
+const DOCUMENT_TOOL_LABELS: Record<DocumentToolId, 'editor.outline' | 'editor.findInNote' | 'editor.frontmatter' | 'editor.notebookAssets' | 'editor.viewSettings'> = { outline: 'editor.outline', find: 'editor.findInNote', frontmatter: 'editor.frontmatter', assets: 'editor.notebookAssets', view: 'editor.viewSettings' };
 
 /** The workspace-level Calendar/Todo/Changes panel. Hidden while a note is open — the editor has its own document panel. */
 export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpenNote, onSaveNote, onReadNote, gitStatus, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, fileMode = false, fileMetadata, onFileMetadataContainer, metadataOpen = false, onMetadataOpenChange, onWidthChange, documentPanel }: RightPanelProps) {

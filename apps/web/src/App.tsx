@@ -165,6 +165,8 @@ const AppContent: React.FC = () => {
     onUploadAsset: !canWrite ? undefined : handleUploadAsset,
     onDeleteAsset: !canWrite ? undefined : handleDeleteAsset,
     onMoveAsset: !canWrite ? undefined : handleMoveAsset,
+    beforeFileChange: !canWrite ? undefined : beforeFileChange,
+    onFilesChanged: !canWrite ? undefined : onFilesChanged,
     readOnly: !canWrite,
     autoSave: true,
     draftMode: remote,

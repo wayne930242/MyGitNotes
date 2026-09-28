@@ -43,7 +43,6 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
   const copyResetTimer = useRef<ReturnType<typeof setTimeout>>();
   const [metadata, setMetadata] = useState<Record<string, unknown>>(note.metadata || {});
   const [isSaving, setIsSaving] = useState(false);
-  const [isRestoring, setIsRestoring] = useState(false);
   const [saveError, setSaveError] = useState(conflictReason || '');
   // Translated at render time alongside saveError, so a raw error message doesn't get frozen
   // in whatever language was active when it was caught.
@@ -83,7 +82,7 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
   current.current = { content, metadata, baseNote, blocked };
   /* eslint-enable react/refs */
   /* eslint-disable react/refs -- The editor keeps current draft and event callbacks in refs for async saves and imperative keyboard handlers. */
-  const locked = readOnly || blocked || isRestoring || closing.current || (!autoSave && isSaving);
+  const locked = readOnly || blocked || closing.current || (!autoSave && isSaving);
   /* eslint-enable react/refs */
   const preserveConflict = () => {
     const key = `${draftScope || branch}:conflict`;
@@ -211,7 +210,6 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
 
   // Note is considered dirty if it has uncommitted edits on disk OR unsaved session edits
   const isDirty = Boolean(propIsDirty || hasUnsavedChanges);
-  const canRestore = autoSave && !readOnly && !isSaving && !isRestoring && (draftMode ? isDirty : propIsDirty);
   const editorState: 'saving' | 'pending' | 'saved' = isSaving ? 'saving' : isDirty ? 'pending' : 'saved';
   const editorStatus = isSaving ? t(draftMode ? 'editor.savingLocally' : autoSave ? 'editor.autoSavingToDisk' : 'editor.savingToGitHub') : isDirty ? t(draftMode ? hasUnsavedChanges ? 'editor.unsavedLocalChanges' : 'editor.savedLocallyPendingCommit' : autoSave ? 'editor.uncommittedChanges' : 'editor.unsavedChanges') : t(readOnly ? 'editor.readOnly' : draftMode ? 'editor.noPendingChanges' : autoSave ? 'editor.cleanSavedToDisk' : 'editor.savedToGitHub');
   const title = String(metadata.title || note.title || '');
@@ -237,7 +235,6 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
     setContent(note.content);
     setMetadata(note.metadata || {});
     setHasUnsavedChanges(false);
-    setConfirmRestore(false);
     setCopyState('idle');
     // `note` already reflects whatever is durably persisted for this session (the file on disk in
     // local mode, or the currently staged working draft in draftMode); treat it as already-saved so
@@ -269,7 +266,7 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
       // Save local draft for crash recovery
       saveLocalDraft(draftScope || branch, note.path, content, metadata);
 
-      if (!autoSave || blocked || isRestoring) return;
+      if (!autoSave || blocked) return;
 
       // Timestamps are stamped server-side on every save; absorb them so the next
       // comparison against the refreshed `note`/`baseNote` prop doesn't see a
@@ -337,7 +334,7 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
       // Edits undone after a save leave nothing newer than it to recover.
       if (saved) clearLocalDraft(draftScope || branch, note.path);
     }
-  }, [content, metadata, note, branch, draftScope, onSave, readOnly, autoSave, baseNote, blocked, draftMode, isRestoring]);
+  }, [content, metadata, note, branch, draftScope, onSave, readOnly, autoSave, baseNote, blocked, draftMode]);
 
   const handleExplicitSave = async () => {
     if (locked || operation.current) return;
@@ -414,7 +411,7 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
   }, [registerBeforeNavigate, registerEditor, readOnly, note, onSave, draftScope, branch]);
 
   const close = async () => {
-    if (closing.current || isRestoring || operation.current) return;
+    if (closing.current || operation.current) return;
     if (autoSave && !readOnly && !current.current.blocked && (draftMode || current.current.content !== note.content || !sameIgnoringTimestamps(current.current.metadata, note.metadata))) {
       closing.current = true;
       setIsSaving(true);
@@ -457,51 +454,9 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
     setRecoveredDraft(null);
   };
 
-  // Two-click confirm single-file restore state
-  const [confirmRestore, setConfirmRestore] = useState(false);
-  const restoreTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Two-click confirm single-file restore
-  const handleRestoreClick = async () => {
-    if (!canRestore) return;
-    if (!confirmRestore) {
-      // First click: prompt confirmation
-      setConfirmRestore(true);
-      if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
-      restoreTimerRef.current = setTimeout(() => {
-        setConfirmRestore(false);
-      }, 4000);
-      return;
-    }
-
-    // Second click: execute single-file restore from Git HEAD
-    try {
-      if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
-      setConfirmRestore(false);
-      setIsRestoring(true);
-      operation.current = true;
-      setIsSaving(true);
-      const restored = await onRestoreFile(note.path);
-      clearLocalDraft(draftScope || branch, note.path);
-      if (restored) {
-        setBaseNote(restored);
-        setContent(restored.content);
-        setMetadata(restored.metadata || {});
-        lastSaved.current = { content: restored.content, metadata: restored.metadata || {} };
-      }
-      setHasUnsavedChanges(false);
-    } catch (err) {
-      setSaveError((err as Error).message);
-    } finally {
-      setIsRestoring(false);
-      operation.current = false;
-      setIsSaving(false);
-    }
-  };
-
   const conflictDraftDismissed = conflictDraftSavedAt != null && conflictNoticeDismissedAt === conflictDraftSavedAt;
   const showRemoteNotice = Boolean(remoteNotice) && (blocked || !remoteNoticeDismissed);
   const showConflictDraftNotice = Boolean(conflictDraft) && (blocked || !conflictDraftDismissed);
 
-  return { content, setContent, metadata, setMetadata, copyState, copyNote, isSaving, isRestoring, saveError, saveErrorParams, hasUnsavedChanges, baseNote, blocked, locked, isDirty, canRestore, editorState, editorStatus, title, recoveredDraft, handleRestoreDraft, handleDiscardDraft, confirmRestore, handleRestoreClick, conflictDraft, showRemoteNotice, remoteNotice, showConflictDraftNotice, dismissNotice, refreshRemote, downloadConflictDraft, handleExplicitSave, close };
+  return { content, setContent, metadata, setMetadata, copyState, copyNote, isSaving, saveError, saveErrorParams, hasUnsavedChanges, baseNote, blocked, locked, isDirty, editorState, editorStatus, title, recoveredDraft, handleRestoreDraft, handleDiscardDraft, conflictDraft, showRemoteNotice, remoteNotice, showConflictDraftNotice, dismissNotice, refreshRemote, downloadConflictDraft, handleExplicitSave, close };
 }

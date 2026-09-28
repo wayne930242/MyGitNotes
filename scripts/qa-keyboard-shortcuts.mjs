@@ -157,10 +157,17 @@ try {
   fs.mkdirSync(`${product}/artifacts/qa`, { recursive: true });
   await page.screenshot({ path: `${product}/artifacts/qa/note-document-panel-desktop.png` });
   assert(await page.$$eval('.note-outline nav button', buttons => buttons.map(button => button.querySelector('span').textContent).join('|')) === 'Example|Section Two|Final Section', 'Markdown outline is incomplete');
-  await page.click('.note-panel-tabs [role="tab"][aria-label="File Git status"]');
-  assert(await page.$eval('.note-git-panel', panel => panel.textContent.includes('notes/example/example.md') && panel.textContent.includes('main')), 'File Git panel omitted the note path or branch');
-  assert(await page.$eval('button[aria-label="Restore note"]', button => button.disabled), 'Clean file restore should be disabled');
-  await page.screenshot({ path: `${product}/artifacts/qa/note-git-panel-desktop.png` });
+  await page.click('.note-panel-tabs [role="tab"][aria-label="View settings"]');
+  await page.click('.note-view-panel button[title="18px"]');
+  await page.click('.note-view-width button:last-child');
+  await page.waitForFunction(() => {
+    const content = getComputedStyle(document.querySelector('[data-live-markdown] .cm-content'));
+    return content.fontSize === '18px' && content.maxWidth === 'none';
+  });
+  assert(JSON.parse(await page.evaluate(() => localStorage.getItem('github-notes:note-view'))).fontSize === 18, 'View preferences were not stored on this device');
+  await page.screenshot({ path: `${product}/artifacts/qa/note-view-panel-desktop.png` });
+  await page.click('.note-view-panel button[title="16px"]');
+  await page.click('.note-view-width button:first-child');
   await page.click('.note-panel-tabs [role="tab"][aria-label="Outline"]');
   // Focused panel tabs keep their own keys, so J/K run from the outline itself.
   await page.waitForSelector('.note-outline nav button[aria-current="true"]');

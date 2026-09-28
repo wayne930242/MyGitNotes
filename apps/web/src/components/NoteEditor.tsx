@@ -15,10 +15,11 @@ import { useNoteEditorSession } from './note-editor/useNoteEditorSession.js';
 import { useNoteDocumentPanel } from './note-editor/useNoteDocumentPanel.js';
 import { NoteDocumentPanel } from './note-editor/NoteDocumentPanel.js';
 import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
-import { readShowLineNumbers, writeShowLineNumbers } from '../lib/editor-preferences.js';
+import { noteViewStyle, readShowLineNumbers, useNoteViewPreferences, writeShowLineNumbers } from '../lib/editor-preferences.js';
+import type { FileResult } from '../lib/files-api.js';
 
-export type NotePanelMode = 'find' | 'outline' | 'frontmatter' | 'assets' | 'git';
-export const NOTE_PANEL_MODES: readonly NotePanelMode[] = ['outline', 'find', 'frontmatter', 'assets', 'git'];
+export type NotePanelMode = 'find' | 'outline' | 'frontmatter' | 'assets' | 'view';
+export const NOTE_PANEL_MODES: readonly NotePanelMode[] = ['outline', 'find', 'frontmatter', 'assets', 'view'];
 
 /** Props every editor of one note shares, whether zoom or a Focus pane frames it. */
 export interface NoteEditorSharedProps {
@@ -39,6 +40,10 @@ export interface NoteEditorSharedProps {
   onUploadAsset?: (file: File, directory: string) => Promise<AssetItem>;
   onDeleteAsset?: (asset: AssetItem) => Promise<void>;
   onMoveAsset?: (asset: AssetItem, directory: string) => Promise<AssetItem>;
+  /** Guards unsaved workspace edits before a document-panel file action rewrites notes. */
+  beforeFileChange?: () => Promise<void>;
+  /** Reloads workspace views after a document-panel file action rewrote notes. */
+  onFilesChanged?: (result: FileResult) => Promise<void>;
   branch: string;
   draftScope?: string;
 }
@@ -78,7 +83,7 @@ export interface NoteEditorProps extends NoteEditorSharedProps {
 }
 
 /** A note's editing session: content, frontmatter, drafts, autosave, conflicts, crash recovery and the document panel. */
-export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note, frame, active, documentPanel, onClose, onAddToFocus, onSession, onCaret, statuses, metadataFields, readOnly = false, autoSave = true, draftMode = false, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, isDirty: propIsDirty = false, availableTags = [], branch, draftScope }, ref) => {
+export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note, frame, active, documentPanel, onClose, onAddToFocus, onSession, onCaret, statuses, metadataFields, readOnly = false, autoSave = true, draftMode = false, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, isDirty: propIsDirty = false, availableTags = [], beforeFileChange, onFilesChanged, branch, draftScope }, ref) => {
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(note.path);
   const { t } = useTranslation();
   const { setHasOpenNote } = usePanelContext();
@@ -98,6 +103,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
       writeShowLineNumbers(next);
       return next;
     });
+  const viewPreferences = useNoteViewPreferences();
   const [insertSlot, setInsertSlot] = useState<HTMLDivElement | null>(null);
   const editorRef = useRef<MarkdownEditorHandle>(null);
 
@@ -118,7 +124,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   };
 
   return (
-    <div className='note-editor' data-frame={frame}>
+    <div className='note-editor' data-frame={frame} style={frame === 'compact' ? undefined : noteViewStyle(viewPreferences)}>
       <div className='editor-notices'>
         {/* Crash recovery banner if draft differs from disk */}
         {session.recoveredDraft && !session.blocked && <CrashRecoveryBanner draft={{ path: note.path, content: session.recoveredDraft.content, metadata: session.recoveredDraft.metadata, savedAt: session.recoveredDraft.savedAt }} onRestore={session.handleRestoreDraft} onDiscard={session.handleDiscardDraft} />}
@@ -226,12 +232,12 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
               {frame === 'zoom'
                 ? (
                   <aside className='note-document-panel' data-open={Boolean(docPanel.notePanel)} data-panel={docPanel.notePanel || undefined} aria-label={t('editor.documentPanel')}>
-                    <NoteDocumentPanel includeTabs isMarkdown={isMarkdown} setNotePanel={docPanel.setNotePanel} isFindOpen={docPanel.isFindOpen} isOutlineOpen={docPanel.isOutlineOpen} showFrontmatter={docPanel.showFrontmatter} isAssetPickerOpen={docPanel.isAssetPickerOpen} isGitPanelOpen={docPanel.isGitPanelOpen} findQuery={docPanel.findQuery} setFindQuery={docPanel.setFindQuery} findIndex={docPanel.findIndex} matches={docPanel.matches} stepFind={docPanel.stepFind} findInputRef={docPanel.findInputRef} outline={docPanel.outline} lineNumberOffset={session.baseNote.lineNumberOffset || 0} outlineIndex={docPanel.outlineIndex} setOutlineIndex={docPanel.setOutlineIndex} chooseOutline={docPanel.chooseOutline} openOutline={docPanel.openOutline} newFieldKey={docPanel.newFieldKey} setNewFieldKey={docPanel.setNewFieldKey} frontmatterViewMode={docPanel.frontmatterViewMode} setFrontmatterViewMode={docPanel.setFrontmatterViewMode} yamlText={docPanel.yamlText} setYamlText={docPanel.setYamlText} yamlError={docPanel.yamlError} setYamlError={docPanel.setYamlError} tagInput={docPanel.tagInput} setTagInput={docPanel.setTagInput} isTagDropdownOpen={docPanel.isTagDropdownOpen} setIsTagDropdownOpen={docPanel.setIsTagDropdownOpen} metadata={session.metadata} setMetadata={session.setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={session.locked} notebookId={note.notebookId} onInsertAssetRef={handleInsertAssetRef} notePath={note.path} branch={branch} editorState={session.editorState} editorStatus={session.editorStatus} autoSave={autoSave} readOnly={readOnly} isDirty={session.isDirty} canRestore={session.canRestore} confirmRestore={session.confirmRestore} onRestoreClick={session.handleRestoreClick} />
+                    <NoteDocumentPanel includeTabs isMarkdown={isMarkdown} setNotePanel={docPanel.setNotePanel} isFindOpen={docPanel.isFindOpen} isOutlineOpen={docPanel.isOutlineOpen} showFrontmatter={docPanel.showFrontmatter} isAssetPickerOpen={docPanel.isAssetPickerOpen} isViewPanelOpen={docPanel.isViewPanelOpen} findQuery={docPanel.findQuery} setFindQuery={docPanel.setFindQuery} findIndex={docPanel.findIndex} matches={docPanel.matches} stepFind={docPanel.stepFind} findInputRef={docPanel.findInputRef} outline={docPanel.outline} lineNumberOffset={session.baseNote.lineNumberOffset || 0} outlineIndex={docPanel.outlineIndex} setOutlineIndex={docPanel.setOutlineIndex} chooseOutline={docPanel.chooseOutline} openOutline={docPanel.openOutline} newFieldKey={docPanel.newFieldKey} setNewFieldKey={docPanel.setNewFieldKey} frontmatterViewMode={docPanel.frontmatterViewMode} setFrontmatterViewMode={docPanel.setFrontmatterViewMode} yamlText={docPanel.yamlText} setYamlText={docPanel.setYamlText} yamlError={docPanel.yamlError} setYamlError={docPanel.setYamlError} tagInput={docPanel.tagInput} setTagInput={docPanel.setTagInput} isTagDropdownOpen={docPanel.isTagDropdownOpen} setIsTagDropdownOpen={docPanel.setIsTagDropdownOpen} metadata={session.metadata} setMetadata={session.setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={session.locked} notebookId={note.notebookId} onInsertAssetRef={handleInsertAssetRef} readOnly={readOnly} beforeFileChange={beforeFileChange} onFilesChanged={onFilesChanged} />
                   </aside>
                 )
                 : documentPanel?.target && docPanel.notePanel && createPortal(
                   <section className='note-document-panel' data-open='true' data-panel={docPanel.notePanel} data-frame='rail' aria-label={t('editor.documentPanel')}>
-                    <NoteDocumentPanel includeTabs={false} isMarkdown={isMarkdown} setNotePanel={docPanel.setNotePanel} isFindOpen={docPanel.isFindOpen} isOutlineOpen={docPanel.isOutlineOpen} showFrontmatter={docPanel.showFrontmatter} isAssetPickerOpen={docPanel.isAssetPickerOpen} isGitPanelOpen={docPanel.isGitPanelOpen} findQuery={docPanel.findQuery} setFindQuery={docPanel.setFindQuery} findIndex={docPanel.findIndex} matches={docPanel.matches} stepFind={docPanel.stepFind} findInputRef={docPanel.findInputRef} outline={docPanel.outline} lineNumberOffset={session.baseNote.lineNumberOffset || 0} outlineIndex={docPanel.outlineIndex} setOutlineIndex={docPanel.setOutlineIndex} chooseOutline={docPanel.chooseOutline} openOutline={docPanel.openOutline} newFieldKey={docPanel.newFieldKey} setNewFieldKey={docPanel.setNewFieldKey} frontmatterViewMode={docPanel.frontmatterViewMode} setFrontmatterViewMode={docPanel.setFrontmatterViewMode} yamlText={docPanel.yamlText} setYamlText={docPanel.setYamlText} yamlError={docPanel.yamlError} setYamlError={docPanel.setYamlError} tagInput={docPanel.tagInput} setTagInput={docPanel.setTagInput} isTagDropdownOpen={docPanel.isTagDropdownOpen} setIsTagDropdownOpen={docPanel.setIsTagDropdownOpen} metadata={session.metadata} setMetadata={session.setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={session.locked} notebookId={note.notebookId} onInsertAssetRef={handleInsertAssetRef} notePath={note.path} branch={branch} editorState={session.editorState} editorStatus={session.editorStatus} autoSave={autoSave} readOnly={readOnly} isDirty={session.isDirty} canRestore={session.canRestore} confirmRestore={session.confirmRestore} onRestoreClick={session.handleRestoreClick} />
+                    <NoteDocumentPanel includeTabs={false} isMarkdown={isMarkdown} setNotePanel={docPanel.setNotePanel} isFindOpen={docPanel.isFindOpen} isOutlineOpen={docPanel.isOutlineOpen} showFrontmatter={docPanel.showFrontmatter} isAssetPickerOpen={docPanel.isAssetPickerOpen} isViewPanelOpen={docPanel.isViewPanelOpen} findQuery={docPanel.findQuery} setFindQuery={docPanel.setFindQuery} findIndex={docPanel.findIndex} matches={docPanel.matches} stepFind={docPanel.stepFind} findInputRef={docPanel.findInputRef} outline={docPanel.outline} lineNumberOffset={session.baseNote.lineNumberOffset || 0} outlineIndex={docPanel.outlineIndex} setOutlineIndex={docPanel.setOutlineIndex} chooseOutline={docPanel.chooseOutline} openOutline={docPanel.openOutline} newFieldKey={docPanel.newFieldKey} setNewFieldKey={docPanel.setNewFieldKey} frontmatterViewMode={docPanel.frontmatterViewMode} setFrontmatterViewMode={docPanel.setFrontmatterViewMode} yamlText={docPanel.yamlText} setYamlText={docPanel.setYamlText} yamlError={docPanel.yamlError} setYamlError={docPanel.setYamlError} tagInput={docPanel.tagInput} setTagInput={docPanel.setTagInput} isTagDropdownOpen={docPanel.isTagDropdownOpen} setIsTagDropdownOpen={docPanel.setIsTagDropdownOpen} metadata={session.metadata} setMetadata={session.setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={session.locked} notebookId={note.notebookId} onInsertAssetRef={handleInsertAssetRef} readOnly={readOnly} beforeFileChange={beforeFileChange} onFilesChanged={onFilesChanged} />
                   </section>,
                   documentPanel.target,
                 )}

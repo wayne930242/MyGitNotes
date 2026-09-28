@@ -25,6 +25,7 @@ import { liveDecorations } from './live-markdown/decorations.js';
 import { cardBackgroundLayer, theme } from './live-markdown/theme.js';
 import { attachGutterLineCopy } from './live-markdown/gutter-line-copy.js';
 import { tableBoundaries } from './live-markdown/table-boundaries.js';
+import { useNoteViewPreferences } from '../lib/editor-preferences.js';
 
 export interface LiveMarkdownHandle {
   /** Inserts `text` at `at`, or in place of the selection. */
@@ -213,6 +214,12 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
   useEffect(() => {
     editor.current?.dispatch({ effects: permission.current.reconfigure([EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]) });
   }, [readOnly]);
+  // The host editor applies the view preferences as CSS variables; CodeMirror caches line heights and the
+  // content box, so it re-measures once the new size and width are in the DOM.
+  const viewPreferences = useNoteViewPreferences();
+  useEffect(() => {
+    editor.current?.requestMeasure();
+  }, [viewPreferences]);
   useEffect(() => {
     editor.current?.dispatch({ effects: lineNumberGutter.current.reconfigure(showLineNumbers ? [lineNumbers({ formatNumber: number => String(number + lineNumberOffset) }), highlightActiveLineGutter()] : []) });
   }, [showLineNumbers, lineNumberOffset]);

@@ -27,7 +27,7 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
   const lastNotePanel = useRef<NotePanelMode>((() => {
     try {
       const saved = localStorage.getItem('mygitnotes.documentPanel');
-      if (['find', 'outline', 'frontmatter', 'assets', 'git'].includes(saved || '')) return saved as NotePanelMode;
+      if (['find', 'outline', 'frontmatter', 'assets', 'view'].includes(saved || '')) return saved as NotePanelMode;
     } catch { /* Use the default panel when storage is unavailable. */ }
     return isMarkdown ? 'outline' : 'find';
   })());
@@ -46,7 +46,7 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
   const isFindOpen = notePanel === 'find';
   const isOutlineOpen = notePanel === 'outline';
   const showFrontmatter = notePanel === 'frontmatter';
-  const isGitPanelOpen = notePanel === 'git';
+  const isViewPanelOpen = notePanel === 'view';
   const [findQuery, setFindQuery] = useState('');
   const [findIndex, setFindIndex] = useState(0);
   const [outlineIndex, setOutlineIndex] = useState(0);
@@ -197,5 +197,5 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
     requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-outline-index="${index}"]`)?.focus());
   }, [isOutlineOpen, outline, outlineIndex]);
 
-  return { editorRef, notePanel, setNotePanel, lastNotePanel, isAssetPickerOpen, isFindOpen, isOutlineOpen, showFrontmatter, isGitPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, moveOutline, openFind, openOutline, isEditorLeaderOpen, setIsEditorLeaderOpen, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen };
+  return { editorRef, notePanel, setNotePanel, lastNotePanel, isAssetPickerOpen, isFindOpen, isOutlineOpen, showFrontmatter, isViewPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, moveOutline, openFind, openOutline, isEditorLeaderOpen, setIsEditorLeaderOpen, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen };
 }

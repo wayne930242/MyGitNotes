@@ -369,27 +369,6 @@ it('does not flag the note as unsaved again right after an explicit save', async
   expect((screen.getByLabelText('Save to remote repository') as HTMLButtonElement).disabled).toBe(true);
 });
 
-it('does not write the restored content back to disk with a new timestamp', async () => {
-  const head: NoteItem = { ...note, content: '# Alpha\nHEAD version.\n', metadata: { title: 'Alpha', updated: 'thead' } };
-  const onRestoreFile = vi.fn(async () => head);
-  const onSave = vi.fn(async ({ content, metadata }: { content: string; metadata?: Record<string, unknown>; }) => ({ ...note, content, metadata: { ...metadata, updated: 't1' } }));
-  render(editor({ frame: 'zoom', isDirty: true, onRestoreFile, onSave }));
-
-  fireEvent.click(screen.getByLabelText('File Git status')); // opens the Git panel, which hosts the restore control
-  fireEvent.click(screen.getByLabelText('Restore note'));
-  fireEvent.click(screen.getByLabelText('Confirm restore note'));
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(0);
-  });
-  expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe(head.content);
-
-  onSave.mockClear();
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(2000);
-  });
-  expect(onSave).not.toHaveBeenCalled();
-});
-
 it('dismissing the merged notice hides it', async () => {
   const start: NoteItem = { ...note, content: 'line1\nline2\nline3\n' };
   let resolveRead: ((value: NoteItem) => void) | null = null;

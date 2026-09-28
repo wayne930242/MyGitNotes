@@ -1,8 +1,9 @@
 import { ChevronDown, ChevronUp, Search } from 'lucide-react';
-import { AlertTriangle, RotateCcw } from 'lucide-react';
 import { Button } from '../Button.js';
 import { FileManager } from '../files/index.js';
 import { NoteFrontmatterPanel } from './NoteFrontmatterPanel.js';
+import { NoteViewPanel } from './NoteViewPanel.js';
+import type { FileResult } from '../../lib/files-api.js';
 import type { OutlineHeading } from '../../lib/note-navigation.js';
 import type { NotebookMetadataField } from '../../lib/types.js';
 import type { NotePanelMode } from '../NoteEditor.js';
@@ -16,7 +17,7 @@ export interface NoteDocumentPanelProps {
   isOutlineOpen: boolean;
   showFrontmatter: boolean;
   isAssetPickerOpen: boolean;
-  isGitPanelOpen: boolean;
+  isViewPanelOpen: boolean;
   findQuery: string;
   setFindQuery: (value: string) => void;
   findIndex: number;
@@ -50,20 +51,15 @@ export interface NoteDocumentPanelProps {
   locked: boolean;
   notebookId: string;
   onInsertAssetRef: (ref: string) => void;
-  notePath: string;
-  branch: string;
-  editorState: 'saving' | 'pending' | 'saved';
-  editorStatus: string;
-  autoSave: boolean;
   readOnly: boolean;
-  isDirty: boolean;
-  canRestore: boolean;
-  confirmRestore: boolean;
-  onRestoreClick: () => void;
+  /** Guards unsaved workspace edits before an R2 move rewrites notes. */
+  beforeFileChange?: () => Promise<void>;
+  /** Reloads workspace views after an R2 move rewrote notes. */
+  onFilesChanged?: (result: FileResult) => Promise<void>;
 }
 
-/** The zoom/pane editor's document panel: its tab strip and the find, outline, frontmatter, asset and git sections it switches between. */
-export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isGitPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, notePath, branch, editorState, editorStatus, autoSave, readOnly, isDirty, canRestore, confirmRestore, onRestoreClick }: NoteDocumentPanelProps) {
+/** The zoom/pane editor's document panel: its tab strip and the find, outline, frontmatter, asset and view sections it switches between. */
+export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isViewPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, readOnly, beforeFileChange, onFilesChanged }: NoteDocumentPanelProps) {
   const { t } = useTranslation();
 
   const sections = (
@@ -139,27 +135,8 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
         </section>
       )}
       {showFrontmatter && <NoteFrontmatterPanel metadata={metadata} setMetadata={setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={locked} newFieldKey={newFieldKey} setNewFieldKey={setNewFieldKey} frontmatterViewMode={frontmatterViewMode} setFrontmatterViewMode={setFrontmatterViewMode} yamlText={yamlText} setYamlText={setYamlText} yamlError={yamlError} setYamlError={setYamlError} tagInput={tagInput} setTagInput={setTagInput} isTagDropdownOpen={isTagDropdownOpen} setIsTagDropdownOpen={setIsTagDropdownOpen} />}
-      {isAssetPickerOpen && <FileManager notebookId={notebookId} writable={false} mode='pick-image' layout='panel' onInsert={locked ? undefined : onInsertAssetRef} />}
-      {isGitPanelOpen && (
-        <div className='note-git-panel note-panel-scroll'>
-          <dl>
-            <div>
-              <dt>{t('editor.filePath')}</dt>
-              <dd className='font-mono'>{notePath}</dd>
-            </div>
-            <div>
-              <dt>{t('editor.currentBranch')}</dt>
-              <dd className='font-mono'>{branch}</dd>
-            </div>
-          </dl>
-          <div className='note-git-state' data-state={editorState} role='status'>
-            <span aria-hidden='true' />
-            {editorStatus}
-          </div>
-          {autoSave && !readOnly ? <button type='button' aria-label={confirmRestore ? t('editor.confirmRestoreNote') : t('editor.restoreNote')} disabled={!canRestore} onClick={onRestoreClick} className={`ui-button ${confirmRestore ? 'ui-button-danger note-restore-confirm' : ''}`} title={confirmRestore ? t('editor.confirmRestoreTooltip') : t('editor.restoreTooltip')}>{confirmRestore ? <AlertTriangle aria-hidden='true' /> : <RotateCcw aria-hidden='true' />}{confirmRestore ? t('editor.confirmRestore') : t('editor.restore')}</button> : <p className='note-git-help'>{t('editor.restoreUnavailable')}</p>}
-          {!isDirty && autoSave && !readOnly && <p className='note-git-help'>{t('editor.noFileChanges')}</p>}
-        </div>
-      )}
+      {isAssetPickerOpen && <FileManager notebookId={notebookId} writable={!readOnly} mode='pick-image' layout='panel' onInsert={locked ? undefined : onInsertAssetRef} beforeChange={beforeFileChange} onChanged={onFilesChanged} />}
+      {isViewPanelOpen && <NoteViewPanel />}
     </>
   );
 
@@ -180,7 +157,7 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
           tabs[(target + tabs.length) % tabs.length].focus();
         }}
       >
-        <Button type='button' role='tab' aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isAssetPickerOpen || isGitPanelOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}>
+        <Button type='button' role='tab' aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isAssetPickerOpen || isViewPanelOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}>
           <span>{t('editor.find')}</span>
         </Button>
         {isMarkdown && (
@@ -194,8 +171,8 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
         <Button type='button' role='tab' aria-selected={isAssetPickerOpen} tabIndex={isAssetPickerOpen ? 0 : -1} aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onClick={() => setNotePanel(isAssetPickerOpen ? null : 'assets')}>
           <span>{t('editor.asset')}</span>
         </Button>
-        <Button type='button' role='tab' aria-selected={isGitPanelOpen} tabIndex={isGitPanelOpen ? 0 : -1} aria-label={t('editor.fileGitStatus')} title={t('editor.fileGitStatus')} onClick={() => setNotePanel(isGitPanelOpen ? null : 'git')}>
-          <span>{t('editor.git')}</span>
+        <Button type='button' role='tab' aria-selected={isViewPanelOpen} tabIndex={isViewPanelOpen ? 0 : -1} aria-label={t('editor.viewSettings')} title={t('editor.viewSettings')} onClick={() => setNotePanel(isViewPanelOpen ? null : 'view')}>
+          <span>{t('editor.view')}</span>
         </Button>
       </div>
       {sections}
