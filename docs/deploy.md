@@ -211,6 +211,32 @@ Run `pnpm update-core` from a clean `core` checkout to fast-forward the product 
 
 To convert an older workspace whose `main` still contains product files, clean the checkout and run `pnpm convert-workspace` on `main` once. Then create a separate Core worktree with `git worktree add --track -b core ../mygitnotes-core origin/core`, set `MYGITNOTES_LOCAL_PATH` in that worktree's .env to the converted checkout, and start from the Core worktree. `pnpm update-core` runs only on `core`.
 
+## Notebooks in other repositories
+
+A notebook can live in its own repository. Declare it in the home manifest with `source`; the manifest needs `schema_version: 2` (`pnpm migrate-workspace` upgrades a version 1 manifest):
+
+```yaml
+notebooks:
+  - id: trpg
+    title: TRPG
+    root: notes
+    source:
+      type: github
+      repository: owner/trpg-notes
+      branch: main
+```
+
+`branch` defaults to `main`; GitLab also needs `url`. `root` and `assets` are relative to that repository. A hosted deployment reaches the repository with the signed-in account; phase one requires it on the home repository's platform and site. A local deployment maps it to a worktree in `mygitnotes.server.yaml`, with `path` relative to that file:
+
+```yaml
+repositories:
+  - type: github
+    repository: owner/trpg-notes
+    path: ../trpg-notes
+```
+
+A notebook whose repository cannot be reached shows as unavailable with the reason; the other notebooks work normally. Each repository keeps its own Screen, Focus and Study files and Agent files, and a commit that spans repositories creates one commit in each.
+
 ## Optional: private R2 assets
 
 Store large files in a private Cloudflare R2 bucket and reference them in notes as `r2:<object-key>`. Set `MYGITNOTES_R2_ACCOUNT_ID`, `MYGITNOTES_R2_ACCESS_KEY_ID`, `MYGITNOTES_R2_SECRET_ACCESS_KEY`, and `MYGITNOTES_R2_BUCKET` in the deployment environment. Browser uploads also require a bucket CORS rule allowing PUT, GET, and HEAD from `APP_URL`. A read-only R2 token supports previews; Files-page management needs Object Read & Write. The MCP asset tools follow the same setting: with R2 configured `add_asset` uploads to the bucket and answers with the `r2:<object-key>` reference instead of committing the binary, `list_assets` reports bucket objects beside repository files, and `delete_asset` accepts that reference. A bucket-bound upload is not held to the 3 MiB repository limit; over hosted `/mcp` its ceiling is the 64 MiB request body, and the Files page uploads straight to the bucket with no ceiling. See [Cloudflare R2 CORS](https://developers.cloudflare.com/r2/buckets/cors/) and [R2 object access](https://developers.cloudflare.com/r2/api/s3/api/).

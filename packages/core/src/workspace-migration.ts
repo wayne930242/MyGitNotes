@@ -54,7 +54,8 @@ export function migrateWorkspace(root: string): WorkspaceMigrationResult {
     migrated = true;
   }
   let notesMissingTimestamps = 0;
-  for (const notebook of loadWorkspaceConfig(root)?.notebooks ?? []) {
+  // Notebooks in their own repositories are counted by the backfill in their worktrees.
+  for (const notebook of (loadWorkspaceConfig(root)?.notebooks ?? []).filter(notebook => !notebook.source)) {
     for (const note of scanNotebookNotes(root, notebook)) {
       if (!note.metadata.created || !note.metadata.updated) notesMissingTimestamps++;
     }

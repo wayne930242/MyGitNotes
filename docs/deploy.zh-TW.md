@@ -211,6 +211,32 @@ GitHub App 安裝需在 App 設定開啟 **Contents**、**Workflows**、**Action
 
 若舊工作區的 `main` 仍包含產品檔案，先提交或清除變更，再於 `main` 執行一次 `pnpm convert-workspace`。接著以 `git worktree add --track -b core ../mygitnotes-core origin/core` 建立獨立 Core worktree，在其 .env 將 `MYGITNOTES_LOCAL_PATH` 設為轉換後的 checkout，並從 Core worktree 啟動。`pnpm update-core` 僅能在 `core` 執行。
 
+## 筆記本放在其他儲存庫
+
+筆記本可以放在自己的儲存庫。在主儲存庫的 manifest 用 `source` 指定，manifest 需要 `schema_version: 2`（`pnpm migrate-workspace` 會把第 1 版升級）：
+
+```yaml
+notebooks:
+  - id: trpg
+    title: TRPG
+    root: notes
+    source:
+      type: github
+      repository: owner/trpg-notes
+      branch: main
+```
+
+`branch` 預設是 `main`；GitLab 另外要填 `url`。`root` 和 `assets` 都相對於那個儲存庫。線上部署會用登入的帳號存取它；第一階段要求它和主儲存庫在同一個平台和站台。本機部署則在 `mygitnotes.server.yaml` 設定對應的 worktree，`path` 相對於這個設定檔：
+
+```yaml
+repositories:
+  - type: github
+    repository: owner/trpg-notes
+    path: ../trpg-notes
+```
+
+儲存庫連不上的筆記本會標成無法使用並顯示原因，其他筆記本照常運作。每個儲存庫各自保存 Screen、Focus、Study 設定檔和 Agent 檔案；跨儲存庫的提交會在每個儲存庫各產生一個 commit。
+
 ## 選用：私有 R2 素材
 
 將大型檔案存放在 Cloudflare 私有 R2 bucket，並在筆記中以 `r2:<object-key>` 引用。於部署環境設定 `MYGITNOTES_R2_ACCOUNT_ID`、`MYGITNOTES_R2_ACCESS_KEY_ID`、`MYGITNOTES_R2_SECRET_ACCESS_KEY` 與 `MYGITNOTES_R2_BUCKET`。瀏覽器上傳還需要 bucket CORS 允許來自 `APP_URL` 的 PUT、GET 與 HEAD。唯讀 token 可預覽素材；檔案頁管理功能需要 Object Read & Write。參考 [Cloudflare R2 CORS](https://developers.cloudflare.com/r2/buckets/cors/) 與 [R2 object access](https://developers.cloudflare.com/r2/api/s3/api/)。
