@@ -2,9 +2,12 @@ import YAML from 'yaml';
 import path from 'node:path';
 import fs from 'node:fs';
 import { NotebookConfig, NotebookMetadataField, NoteTemplate, WorkspaceConfig, WorkspacePreferences, YouTubeDisplayMode } from './types.js';
+import { parseSourceConfig, type RemoteSourceConfig, sourceIdentity } from './source-config.js';
 
 export const WORKSPACE_CONFIG_FILENAME = '.mygitnotes.yaml';
 export const LEGACY_WORKSPACE_CONFIG_FILENAME = '.github-notes.yaml';
+/** The workspace manifest schema this Core reads and writes. Version 2 adds notebook `source`. */
+export const SUPPORTED_SCHEMA_VERSION = 2;
 
 /** Returns whichever manifest filename exists in `dir` (new name preferred), or null if neither does. */
 function existingConfigFilename(dir: string): string | null {
@@ -28,6 +31,20 @@ function normalizePreferences(raw: unknown): WorkspacePreferences {
   return { defaultYoutubeDisplayMode: YOUTUBE_DISPLAY_MODES.includes(prefs.defaultYoutubeDisplayMode as YouTubeDisplayMode) ? prefs.defaultYoutubeDisplayMode as YouTubeDisplayMode : 'thumbnail', defaultShowLineNumbers: typeof prefs.defaultShowLineNumbers === 'boolean' ? prefs.defaultShowLineNumbers : false, defaultFocusMode: typeof prefs.defaultFocusMode === 'boolean' ? prefs.defaultFocusMode : false };
 }
 
+/** A notebook's declared platform repository; `branch` defaults to `main` and GitLab requires `url`. */
+function notebookSource(item: Record<string, unknown>, schemaVersion: number): RemoteSourceConfig | undefined {
+  if (item.source === undefined) return undefined;
+  if (schemaVersion < 2) throw new ConfigValidationError(`Notebook '${item.id}' declares source, which needs schema_version 2. Run \`pnpm migrate-workspace\`.`);
+  const declared = item.source as Record<string, unknown> | null;
+  if (!declared || typeof declared !== 'object' || (declared.type !== 'github' && declared.type !== 'gitlab')) throw new ConfigValidationError(`Notebook '${item.id}' source.type must be github or gitlab`);
+  if (declared.type === 'gitlab' && declared.url === undefined) throw new ConfigValidationError(`Notebook '${item.id}' source.url must name the GitLab site`);
+  try {
+    return parseSourceConfig({ source: { ...declared, branch: declared.branch ?? 'main' } }, '.') as RemoteSourceConfig;
+  } catch (error) {
+    throw new ConfigValidationError(`Notebook '${item.id}' source is invalid: ${(error as Error).message}`);
+  }
+}
+
 /**
  * Validates a parsed WorkspaceConfig object according to project invariants.
  */
@@ -40,6 +57,9 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
 
   if (typeof raw.schema_version !== 'number' || raw.schema_version < 1) {
     throw new ConfigValidationError('schema_version must be a positive integer');
+  }
+  if (raw.schema_version > SUPPORTED_SCHEMA_VERSION) {
+    throw new ConfigValidationError(`schema_version ${raw.schema_version} requires a newer Core than this one (${SUPPORTED_SCHEMA_VERSION}). Update Core with \`pnpm update-core\`.`);
   }
 
   if (!raw.workspace || typeof raw.workspace !== 'object') {
@@ -59,7 +79,8 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
   }
 
   const notebookIds = new Set<string>();
-  const notebookRoots: string[] = [];
+  /** Roots per repository: '' for the home repository, else the declared source identity. */
+  const notebookRoots = new Map<string, string[]>();
 
   const validatedNotebooks: NotebookConfig[] = [];
 
@@ -92,15 +113,19 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
       throw new ConfigValidationError(`Notebook '${item.id}' root must be a relative subdirectory inside the repository: '${item.root}'`);
     }
 
-    // Check non-overlapping roots
-    for (const existingRoot of notebookRoots) {
+    const source = notebookSource(item, raw.schema_version);
+    const repositoryRoots = notebookRoots.get(source ? sourceIdentity(source) : '') ?? [];
+    notebookRoots.set(source ? sourceIdentity(source) : '', repositoryRoots);
+
+    // Roots overlap only within one repository
+    for (const existingRoot of repositoryRoots) {
       const relA = path.posix.relative(existingRoot, normalizedRoot);
       const relB = path.posix.relative(normalizedRoot, existingRoot);
       if (!relA.startsWith('..') || !relB.startsWith('..')) {
         throw new ConfigValidationError(`Notebook roots overlap: '${existingRoot}' and '${normalizedRoot}'`);
       }
     }
-    notebookRoots.push(normalizedRoot);
+    repositoryRoots.push(normalizedRoot);
 
     const assetPath = typeof item.assets === 'string' ? item.assets.replace(/\\/g, '/') : 'assets';
     if (!assetPath || assetPath.startsWith('/') || assetPath.split('/').some(p => p === '..' || p === '.' || !p) || /^[A-Za-z]:/.test(assetPath)) {
@@ -197,7 +222,7 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
       }
     }
 
-    validatedNotebooks.push({ id: item.id, title: item.title, root: normalizedRoot, assets: assetPath, default_view: (item.default_view as 'list' | 'card' | 'kanban' | 'flat') || 'list', ...(item.statuses !== undefined ? { statuses: [...item.statuses as string[]] } : {}), ...(validatedTemplates !== undefined ? { templates: validatedTemplates } : {}), ...(validatedMetadata !== undefined ? { metadata: validatedMetadata } : {}), ...(validatedPathAliases !== undefined ? { pathAliases: validatedPathAliases } : {}) });
+    validatedNotebooks.push({ id: item.id, title: item.title, root: normalizedRoot, assets: assetPath, default_view: (item.default_view as 'list' | 'card' | 'kanban' | 'flat') || 'list', ...(item.statuses !== undefined ? { statuses: [...item.statuses as string[]] } : {}), ...(validatedTemplates !== undefined ? { templates: validatedTemplates } : {}), ...(validatedMetadata !== undefined ? { metadata: validatedMetadata } : {}), ...(validatedPathAliases !== undefined ? { pathAliases: validatedPathAliases } : {}), ...(source ? { source } : {}) });
   }
 
   // Ensure default_notebook exists
@@ -270,8 +295,10 @@ export function discoverTsconfigPaths(repoRoot: string, notebookRoot: string): R
   return aliases;
 }
 
-function attachTsconfigPaths(parsed: WorkspaceConfig, repoRoot: string): WorkspaceConfig {
+/** Adds tsconfig path aliases found in `repoRoot` to the notebooks it serves: those without `source`, unless `all`. */
+export function attachTsconfigPaths(parsed: WorkspaceConfig, repoRoot: string, all = false): WorkspaceConfig {
   parsed.notebooks = parsed.notebooks.map((nb) => {
+    if (nb.source && !all) return nb;
     const discovered = discoverTsconfigPaths(repoRoot, nb.root);
     const pathAliases = { ...discovered, ...nb.pathAliases };
     return { ...nb, ...(Object.keys(pathAliases).length > 0 ? { pathAliases } : {}) };
@@ -294,7 +321,8 @@ export function loadWorkspaceConfig(repoRoot: string): WorkspaceConfig | null {
     // Normalize notebook roots to repository-relative paths
     parsed.notebooks = parsed.notebooks.map((nb) => {
       let root = nb.root.replace(/\\/g, '/');
-      if (!root.startsWith('notes/') && root !== 'notes') {
+      // A notebook in another repository keeps its root relative to that repository.
+      if (!nb.source && !root.startsWith('notes/') && root !== 'notes') {
         if (fs.existsSync(path.join(repoRoot, 'notes', root))) {
           root = path.posix.join('notes', root);
         }
@@ -319,7 +347,7 @@ export function loadWorkspaceConfig(repoRoot: string): WorkspaceConfig | null {
     const exampleConfig = path.join(exampleDir, exampleFilename);
     const content = fs.readFileSync(exampleConfig, 'utf-8');
     const parsed = parseWorkspaceConfig(content);
-    parsed.notebooks = parsed.notebooks.map((nb) => ({ ...nb, root: path.posix.join('examples/workspace', nb.root) }));
+    parsed.notebooks = parsed.notebooks.map((nb) => nb.source ? nb : { ...nb, root: path.posix.join('examples/workspace', nb.root) });
     return attachTsconfigPaths(parsed, repoRoot);
   }
 

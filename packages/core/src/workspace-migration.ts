@@ -1,11 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
-import { loadWorkspaceConfig, resolveWorkspaceConfigPath } from './config.js';
+import { loadWorkspaceConfig, resolveWorkspaceConfigPath, SUPPORTED_SCHEMA_VERSION } from './config.js';
 import { scanNotebookNotes } from './note-service.js';
 
-/** The workspace manifest schema this Core reads and writes. */
-export const SUPPORTED_SCHEMA_VERSION = 1;
+export { SUPPORTED_SCHEMA_VERSION } from './config.js';
 
 export class WorkspaceCompatibilityError extends Error {
   constructor(message: string) {
@@ -40,12 +39,12 @@ export interface WorkspaceMigrationResult {
 export function migrateWorkspace(root: string): WorkspaceMigrationResult {
   const { file, version } = readSchemaVersion(root);
   if (typeof version === 'number' && version > SUPPORTED_SCHEMA_VERSION) assertWorkspaceCompatible(root);
-  // The only migration step so far versions a manifest that predates schema_version.
-  if (version !== undefined && version !== SUPPORTED_SCHEMA_VERSION) {
+  // Version 2 adds notebook `source`; a version 1 or unversioned manifest migrates by its version alone.
+  if (version !== undefined && version !== 1 && version !== SUPPORTED_SCHEMA_VERSION) {
     throw new WorkspaceCompatibilityError(`${file} uses schema_version ${String(version)}; this Core has no migration from it to ${SUPPORTED_SCHEMA_VERSION}.`);
   }
   let migrated = false;
-  if (version === undefined) {
+  if (version !== SUPPORTED_SCHEMA_VERSION) {
     const document = YAML.parseDocument(fs.readFileSync(file, 'utf8'));
     document.set('schema_version', SUPPORTED_SCHEMA_VERSION);
     const map = document.contents as YAML.YAMLMap;

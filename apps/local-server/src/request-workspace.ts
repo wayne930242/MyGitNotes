@@ -1,5 +1,7 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type express from 'express';
-import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, localManifest, type NotebookConfig, type NoteCatalog, parseRevisions, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
+import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, localManifest, type NotebookConfig, type NoteCatalog, parseRevisions, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { authToken } from './auth.js';
 
@@ -18,15 +20,52 @@ export interface RemoteHandle {
 export type RepositoryHandle = LocalHandle | RemoteHandle;
 export type RequestWorkspace = WorkspaceRepositories<RepositoryHandle>;
 
-/** Opens the workspace of one request: the home repository from its settings and the manifest where the settings keep it. */
+/** Opens the workspace of one request: the home repository from its settings, the manifest where the settings keep it, and each notebook repository the manifest declares. */
 export function openWorkspace(settings: WorkspaceSettings, token: string | undefined, cache?: RemoteCache): RequestWorkspace {
   const { home } = settings;
   if (home.source.type === 'local') {
     const root = home.source.path;
-    return createWorkspaceRepositories<RepositoryHandle>({ home, openHome: () => ({ kind: 'local', id: home.id, root }), manifest: () => settings.manifest(() => localManifest(root, stageAndCommit)) });
+    const mapped = (ref: RepositoryRef) => settings.localPath(ref);
+    return createWorkspaceRepositories<RepositoryHandle>({
+      home,
+      openHome: () => ({ kind: 'local', id: home.id, root }),
+      manifest: () => settings.manifest(() => localManifest(root, stageAndCommit)),
+      isHome: ref => sameDirectory(mapped(ref), root),
+      async openRepository(ref) {
+        const worktree = mapped(ref);
+        if (!worktree) return { reason: 'unmapped', message: `No worktree is mapped for ${ref.id}. Add it under repositories in mygitnotes.server.yaml.` };
+        if (!fs.existsSync(path.join(worktree, '.git'))) return { reason: 'unmapped', message: `${worktree} is not a Git worktree.` };
+        return { kind: 'local', id: ref.id, root: worktree };
+      },
+    });
   }
   const source = home.source;
-  return createWorkspaceRepositories<RepositoryHandle>({ home, openHome: scope => ({ kind: 'remote', id: home.id, reader: createRemoteSource(source, token, fetch, cache, scope), authenticated: Boolean(token) }), manifest: handle => settings.manifest(() => new RemoteManifest((handle as RemoteHandle).reader)) });
+  return createWorkspaceRepositories<RepositoryHandle>({
+    home,
+    openHome: scope => ({ kind: 'remote', id: home.id, reader: createRemoteSource(source, token, fetch, cache, scope), authenticated: Boolean(token) }),
+    manifest: handle => settings.manifest(() => new RemoteManifest((handle as RemoteHandle).reader)),
+    async openRepository(ref, scope) {
+      if (ref.source.type === 'local' || !sharesCredential(source, ref.source)) return { reason: 'unsupported-platform', message: `${ref.id} is not on the home repository's platform and site.` };
+      const reader = createRemoteSource(ref.source, token, fetch, cache, scope);
+      try {
+        await reader.getSnapshot();
+      } catch (error) {
+        if (error instanceof RepositoryUnavailableError) return { reason: error.reason, message: error.message };
+        throw error;
+      }
+      return { kind: 'remote', id: ref.id, reader, authenticated: Boolean(token) };
+    },
+  });
+}
+
+/** Whether a mapped worktree is the directory `root`, following symbolic links. */
+function sameDirectory(candidate: string | undefined, root: string): boolean {
+  if (!candidate) return false;
+  try {
+    return fs.realpathSync(candidate) === fs.realpathSync(root);
+  } catch {
+    return false;
+  }
 }
 
 /** Resolves the request's workspace once and stores it in `res.locals.workspace`. */

@@ -6,7 +6,7 @@ import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { get } from 'node:http';
 
-const writeWorkspace = (dir: string, version = 1) => fs.writeFileSync(path.join(dir, '.mygitnotes.yaml'), `schema_version: ${version}\nworkspace:\n  title: Startup\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n`);
+const writeWorkspace = (dir: string, version = 2) => fs.writeFileSync(path.join(dir, '.mygitnotes.yaml'), `schema_version: ${version}\nworkspace:\n  title: Startup\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n`);
 
 let child: ChildProcess | undefined;
 let root: string | undefined;
@@ -74,7 +74,7 @@ it('binds the next free port when the desired one is occupied and records it for
   }
 }, 15000);
 
-it.each([['a newer schema_version', 2, /requires a newer Core/], ['no workspace', 0, /pnpm bootstrap-workspace/]])('fails fast at startup on %s', async (_label, version, message) => {
+it.each([['a newer schema_version', 3, /requires a newer Core/], ['no workspace', 0, /pnpm bootstrap-workspace/]])('fails fast at startup on %s', async (_label, version, message) => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-startup-'));
   if (version) writeWorkspace(root, version);
   const env: NodeJS.ProcessEnv = { ...process.env, PORT: '0', HOST: '127.0.0.1', APP_URL: '', VERCEL: '', MYGITNOTES_DEV_PORTS_FILE: path.join(root, '.mygitnotes-dev-ports.json') };

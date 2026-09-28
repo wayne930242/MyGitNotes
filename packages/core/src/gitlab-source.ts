@@ -2,7 +2,7 @@ import { type RemoteChange, type RemoteEntry, type RemoteSnapshot, RemoteSource 
 import { SourceError } from './github-api.js';
 import { normalizeGitLabUrl, sourceIdentity } from './source-config.js';
 import type { RemoteCache } from './remote-cache.js';
-import type { RepositoryScope } from './repository.js';
+import { reaching, type RepositoryScope } from './repository.js';
 
 /** GitLab API v4 adapter. Reads remain pinned to immutable Git objects. */
 export class GitLabSource extends RemoteSource {
@@ -38,9 +38,12 @@ export class GitLabSource extends RemoteSource {
     return (await this.response(endpoint, init)).json();
   }
   protected async loadSnapshot(): Promise<RemoteSnapshot> {
-    const project = await this.json('');
-    if (project.visibility !== 'public' && !this.token) throw new SourceError('Sign in to read this private repository.', 401);
-    const branch = await this.json(`/repository/branches/${encodeURIComponent(this.branch)}`);
+    const project = await reaching('no-access', async () => {
+      const found = await this.json('');
+      if (found.visibility !== 'public' && !this.token) throw new SourceError('Sign in to read this private repository.', 401);
+      return found;
+    });
+    const branch = await reaching('missing-branch', () => this.json(`/repository/branches/${encodeURIComponent(this.branch)}`));
     const sha = branch.commit?.id;
     if (typeof sha !== 'string' || !/^[a-f0-9]{40,64}$/.test(sha)) throw new SourceError('GitLab returned an invalid branch revision.', 502);
     const entries: RemoteEntry[] = [];

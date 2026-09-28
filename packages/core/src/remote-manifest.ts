@@ -32,7 +32,7 @@ export class RemoteManifest implements ManifestStore {
     const prefixed = new Set<string>();
     if (file.startsWith('notes/')) {
       config.notebooks = config.notebooks.map(nb => {
-        if (nb.root.startsWith('notes/') || nb.root === 'notes' || !entries.some(e => e.path === `notes/${nb.root}` && e.type === 'tree')) return nb;
+        if (nb.source || nb.root.startsWith('notes/') || nb.root === 'notes' || !entries.some(e => e.path === `notes/${nb.root}` && e.type === 'tree')) return nb;
         prefixed.add(nb.id);
         return { ...nb, root: `notes/${nb.root}` };
       });

@@ -16,7 +16,7 @@ export function createLocalWorkspaceRouter(): Router {
       });
       const entries = config ? await workspace.all() : [{ ref: workspace.home.ref, notebooks: [], handle: workspace.home.handle }];
       const repositories = await Promise.all(entries.map(async (entry): Promise<RepositoryStatus & { gitStatus?: unknown; }> => {
-        const base = { id: entry.ref.id, type: entry.ref.source.type, revision: '', notebooks: entry.notebooks.map(notebook => notebook.id) };
+        const base = { id: entry.ref.id, type: entry.ref.source.type, repository: entry.ref.source.type === 'local' ? undefined : entry.ref.source.repository, revision: '', notebooks: entry.notebooks.map(notebook => notebook.id) };
         if (!('handle' in entry)) return { ...base, branch: '', write: false, unavailable: entry.unavailable };
         const { root } = entry.handle as LocalHandle;
         const branch = await getCurrentBranch(root);

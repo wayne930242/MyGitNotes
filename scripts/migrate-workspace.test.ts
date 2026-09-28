@@ -24,6 +24,6 @@ it('migrates the workspace named by the Core checkout .env', () => {
   fs.writeFileSync(path.join(core, '.env'), `MYGITNOTES_SOURCE=local\nMYGITNOTES_LOCAL_PATH=${notes}\n`);
   fs.writeFileSync(path.join(notes, '.mygitnotes.yaml'), 'workspace:\n  title: N\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n');
   expect(run(core)).toContain(`Migrated ${notes}`);
-  expect(fs.readFileSync(path.join(notes, '.mygitnotes.yaml'), 'utf8')).toMatch(/^schema_version: 1$/m);
+  expect(fs.readFileSync(path.join(notes, '.mygitnotes.yaml'), 'utf8')).toMatch(/^schema_version: 2$/m);
   expect(run(core, ['--workspace', notes])).toContain('already current');
 }, 15000);

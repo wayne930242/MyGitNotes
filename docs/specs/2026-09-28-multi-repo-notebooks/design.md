@@ -157,6 +157,16 @@ Each step ends with `pnpm test`, `pnpm lint` and `pnpm build` passing, then a co
 - Graph node identity moves to the first step of stage 2, together with repository-scoped link resolution in `buildNoteGraph`. The layout algorithms (`graph-initial-layout`, `graph-topology-layout`) use a layout node's `path` as the node id, so keying nodes by `noteRefKey` needs an in-memory placement type keyed by id and a conversion at the lane layout that Screen persists by path; the same node key and resolution scope decide how links across repositories resolve as missing. In stage 1 every path is unique in the graph, and graph card flushes already use `noteRefKey`.
 - `sharesCredential` is the credentials seam: a notebook repository opened in stage 2 reuses the signed-in credential only on the home repository's platform and site, and is otherwise `unsupported-platform`.
 
+### Stage 2 notes
+
+- Schema version 2 is required only where Core checks the version: local startup and migration. Hosted deployments never checked the manifest version; the validator now refuses a version newer than Core, and a notebook `source` needs version 2, so a hosted version 1 manifest keeps working until it declares a notebook repository.
+- The validator checks root overlap per declared repository; the resolver checks it again per actual repository, because a `source` naming the home repository (or, locally, a mapping onto the home worktree) joins the home group.
+- The home repository's scope now holds only home notebooks, so a notebook repository's notes never reach the home reader's path checks, indexes or commits.
+- A remote notebook repository opens with the signed-in credential only on the home platform and site, and is probed once per request when first needed. `reaching` names the failed step: reading the repository is `no-access`; reading the branch is `missing-branch` (GitHub reports a missing branch as 422, which `GitHubApi` passes on as 409). The provider's status and message are kept, so the home repository's sign-in and error screens do not change.
+- The local write guard resolves each named path through the request's `notebookId` when present, since equal paths in two repositories cannot be told apart by path alone.
+- Notebook repositories do not get tsconfig path alias discovery; manifest `pathAliases` still apply.
+- Until step 5, both MCP servers act on the home repository and its notebooks only.
+
 ## Friction Notes
 
 - Tried: Trust pi-lens LSP diagnostics after rebuilding `@mygitnotes/core`.

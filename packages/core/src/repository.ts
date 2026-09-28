@@ -29,6 +29,29 @@ export function sharesCredential(home: SourceConfig, other: SourceConfig): boole
   return home.type !== 'gitlab' || (other.type === 'gitlab' && home.url === other.url);
 }
 
+/** Why a notebook repository cannot serve this request. */
+export type UnavailableReason = 'unmapped' | 'no-access' | 'missing-branch' | 'unsupported-platform';
+
+/** The provider refused the repository (`no-access`) or its branch (`missing-branch`); keeps the provider's status and message. */
+export class RepositoryUnavailableError extends SourceError {
+  constructor(readonly reason: 'no-access' | 'missing-branch', message: string, status: number) {
+    super(message, status);
+  }
+}
+
+/** Statuses that mean the provider refused a step. GitHub reports a missing branch or an empty repository as 422, which `GitHubApi` passes on as 409. */
+const REFUSALS: Record<RepositoryUnavailableError['reason'], number[]> = { 'no-access': [401, 403, 404], 'missing-branch': [404, 409, 422] };
+
+/** Runs one step of reaching a repository, naming a refusal by `reason`. */
+export async function reaching<T>(reason: RepositoryUnavailableError['reason'], step: () => Promise<T>): Promise<T> {
+  try {
+    return await step();
+  } catch (error) {
+    if (error instanceof SourceError && !(error instanceof RepositoryUnavailableError) && REFUSALS[reason].includes(error.status)) throw new RepositoryUnavailableError(reason, error.message, error.status);
+    throw error;
+  }
+}
+
 /** A read or write named revisions that some repositories no longer hold. */
 export class StaleRevisionError extends SourceError {
   constructor(readonly repositories: RepositoryId[], message = 'The repository changed. Reload to continue from the latest revision.') {

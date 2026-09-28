@@ -3,7 +3,7 @@ import { GitHubApi, SourceError } from './github-api.js';
 import { readGitHubArchive } from './github-archive.js';
 import { type RemoteChange, type RemoteEntry, type RemoteSnapshot, RemoteSource, type RepositoryInfo } from './remote-source.js';
 import { hashJson, type RemoteCache } from './remote-cache.js';
-import type { RepositoryScope } from './repository.js';
+import { reaching, type RepositoryScope } from './repository.js';
 import { sourceIdentity } from './source-config.js';
 export { SourceError } from './github-api.js';
 export type { RepositoryInfo } from './remote-source.js';
@@ -23,9 +23,12 @@ export class GitHubSource extends RemoteSource {
     return this.client.json(endpoint, init, this.fresh && (endpoint === '' || endpoint.startsWith('/commits/')));
   }
   protected async loadSnapshot(): Promise<RemoteSnapshot> {
-    const info: RepositoryInfo = await this.api('');
-    if (info.private && !this.token) throw new SourceError('Sign in to read this private repository.', 401);
-    const commit = await this.api(`/commits/${encodeURIComponent(this.branch)}`);
+    const info: RepositoryInfo = await reaching('no-access', async () => {
+      const found: RepositoryInfo = await this.api('');
+      if (found.private && !this.token) throw new SourceError('Sign in to read this private repository.', 401);
+      return found;
+    });
+    const commit = await reaching('missing-branch', () => this.api(`/commits/${encodeURIComponent(this.branch)}`));
     const treeSha: string = commit.commit.tree.sha;
     const result = await this.api(`/git/trees/${treeSha}?recursive=1`);
     let entries: GitHubEntry[] = result.tree;

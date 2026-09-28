@@ -192,6 +192,37 @@ notebooks:
   });
 });
 
+describe('Notebook source', () => {
+  const manifest = (version: number, notebooks: string) => `schema_version: ${version}\nworkspace:\n  title: T\n  default_notebook: a\nnotebooks:\n${notebooks}`;
+  const home = '  - id: a\n    title: A\n    root: notes\n';
+
+  it('parses a notebook repository and defaults its branch to main', () => {
+    const config = parseWorkspaceConfig(manifest(2, `${home}  - id: b\n    title: B\n    root: notes\n    source:\n      type: github\n      repository: owner/trpg\n`));
+    expect(config.notebooks[1].source).toEqual({ type: 'github', repository: 'owner/trpg', branch: 'main' });
+    expect(config.notebooks[0].source).toBeUndefined();
+  });
+  it('lets roots overlap only across repositories', () => {
+    expect(() => parseWorkspaceConfig(manifest(2, `${home}  - id: b\n    title: B\n    root: notes/b\n    source: { type: github, repository: owner/trpg }\n  - id: c\n    title: C\n    root: notes\n    source: { type: github, repository: owner/trpg }\n`))).toThrow(/overlap/);
+  });
+  it('needs schema_version 2, a platform repository and a GitLab site', () => {
+    expect(() => parseWorkspaceConfig(manifest(1, `${home}  - id: b\n    title: B\n    root: b\n    source: { type: github, repository: owner/trpg }\n`))).toThrow(/schema_version 2/);
+    expect(() => parseWorkspaceConfig(manifest(2, `${home}  - id: b\n    title: B\n    root: b\n    source: { type: local, path: ../b }\n`))).toThrow(/github or gitlab/);
+    expect(() => parseWorkspaceConfig(manifest(2, `${home}  - id: b\n    title: B\n    root: b\n    source: { type: gitlab, repository: group/project }\n`))).toThrow(/GitLab site/);
+    expect(() => parseWorkspaceConfig(manifest(2, `${home}  - id: b\n    title: B\n    root: b\n    source: { type: github, repository: 'not a repo' }\n`))).toThrow(ConfigValidationError);
+  });
+  it('refuses a schema_version newer than this Core', () => {
+    expect(() => parseWorkspaceConfig(manifest(3, home))).toThrow(/newer Core/);
+  });
+  it('keeps a notebook repository root unprefixed when the manifest lives under notes/', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-source-'));
+    fs.mkdirSync(path.join(root, 'notes/a'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'notes/b'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'notes', WORKSPACE_CONFIG_FILENAME), manifest(2, '  - id: a\n    title: A\n    root: a\n  - id: b\n    title: B\n    root: b\n    source: { type: github, repository: owner/trpg }\n'));
+    expect(loadWorkspaceConfig(root)!.notebooks.map(notebook => notebook.root)).toEqual(['notes/a', 'b']);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+});
+
 describe('Workspace manifest filename resolution', () => {
   let root: string;
   const manifest = (title: string) => `schema_version: 1\nworkspace:\n  title: ${title}\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n`;

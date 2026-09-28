@@ -11,7 +11,12 @@ export const SERVER_CONFIG_FILENAME = 'github-notes.server.yaml';
 /** Deployment-owned HTTPS base URL, including an optional relative installation root. */
 export function normalizeGitLabUrl(value: unknown): string {
   if (typeof value !== 'string' || !value.trim()) throw new Error('Configure a GitLab HTTPS site URL.');
-  const url = new URL(value);
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('GitLab URL must be an absolute HTTPS URL.');
+  }
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || /[\\\s]/.test(value) || /%2f|%5c|%2e/i.test(value)) throw new Error('GitLab URL must use HTTPS with a site path and no credentials, query or fragment.');
   return url.href.replace(/\/+$/, '');
 }
@@ -48,13 +53,51 @@ function defaultLocalPath(base: string): string {
   if (resolveWorkspaceConfigPath(base)) return base;
   throw new Error(`No MyGitNotes workspace at ${base}. Run \`pnpm bootstrap-workspace\` or set MYGITNOTES_LOCAL_PATH to your main worktree.`);
 }
+/** The deployment's server configuration file, whether or not it exists. */
+function serverConfigFile(base: string, env: NodeJS.ProcessEnv): string {
+  const configured = env.MYGITNOTES_SERVER_CONFIG || env.GITHUB_NOTES_SERVER_CONFIG || undefined;
+  return path.resolve(base, configured || (fs.existsSync(path.join(base, 'mygitnotes.server.yaml')) ? 'mygitnotes.server.yaml' : SERVER_CONFIG_FILENAME));
+}
+
+/** A local deployment's worktree for one platform repository, from `repositories` in the server configuration. */
+export interface RepositoryMapping {
+  source: RemoteSourceConfig extends infer T ? T extends RemoteSourceConfig ? Omit<T, 'branch'> : never : never;
+  path: string;
+}
+
+/** Whether a mapping names the platform repository `source` serves; the worktree's checked-out branch is its own. */
+export function mapsRepository(mapping: RepositoryMapping, source: RemoteSourceConfig): boolean {
+  if (mapping.source.type !== source.type || mapping.source.repository !== source.repository) return false;
+  return mapping.source.type !== 'gitlab' || (source.type === 'gitlab' && mapping.source.url === source.url);
+}
+
+/** Worktree paths for notebook repositories; a relative `path` resolves against the server configuration file. */
+export function loadRepositoryMappings(base: string, env: NodeJS.ProcessEnv = process.env): RepositoryMapping[] {
+  const file = serverConfigFile(base, env);
+  if (!fs.existsSync(file)) return [];
+  const listed = (YAML.parse(fs.readFileSync(file, 'utf8')) as { repositories?: unknown; } | null)?.repositories;
+  if (listed === undefined) return [];
+  if (!Array.isArray(listed)) throw new Error(`${file}: repositories must be a list.`);
+  return listed.map((entry: Record<string, unknown>, index) => {
+    if (!entry || typeof entry.path !== 'string' || !entry.path.trim()) throw new Error(`${file}: repositories[${index}] needs a path.`);
+    let source: SourceConfig;
+    try {
+      source = parseSourceConfig({ source: { ...entry, branch: 'main' } }, path.dirname(file));
+    } catch (error) {
+      throw new Error(`${file}: repositories[${index}]: ${(error as Error).message}`);
+    }
+    if (source.type === 'local') throw new Error(`${file}: repositories[${index}] must name a github or gitlab repository.`);
+    const { branch: _branch, ...identity } = source;
+    return { source: identity as RepositoryMapping['source'], path: path.resolve(path.dirname(file), entry.path) };
+  });
+}
+
 export function loadSourceConfig(base: string, env: NodeJS.ProcessEnv = process.env): SourceConfig {
   // An empty key, as .env.example ships them, counts as unset.
   const get = (suffix: string) => env[`MYGITNOTES_${suffix}`] || env[`GITHUB_NOTES_${suffix}`] || undefined;
   const type = get('SOURCE');
   if (type) return parseSourceConfig({ source: type === 'local' ? { type, path: get('LOCAL_PATH') || env.REPO_ROOT || defaultLocalPath(base) } : { type, repository: get('REPOSITORY'), branch: get('BRANCH'), url: get('GITLAB_URL') || env.GITLAB_URL || undefined } }, base);
-  const configured = get('SERVER_CONFIG');
-  const file = path.resolve(base, configured || (fs.existsSync(path.join(base, 'mygitnotes.server.yaml')) ? 'mygitnotes.server.yaml' : SERVER_CONFIG_FILENAME));
+  const file = serverConfigFile(base, env);
   if (fs.existsSync(file)) return parseSourceConfig(YAML.parse(fs.readFileSync(file, 'utf8')), path.dirname(file));
   if (env.VERCEL) throw new Error('Set MYGITNOTES_SOURCE, MYGITNOTES_REPOSITORY and MYGITNOTES_BRANCH. Existing GITHUB_NOTES_REPOSITORY and related settings remain supported.');
   return { type: 'local', path: env.REPO_ROOT ? path.resolve(env.REPO_ROOT) : defaultLocalPath(base) };

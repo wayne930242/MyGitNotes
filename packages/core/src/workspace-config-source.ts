@@ -1,6 +1,6 @@
 import { SourceError } from './github-api.js';
 import { type RepositoryRef, repositoryRef } from './repository.js';
-import { loadSourceConfig } from './source-config.js';
+import { loadRepositoryMappings, loadSourceConfig, mapsRepository, type RepositoryMapping } from './source-config.js';
 import type { WorkspaceConfig } from './types.js';
 
 /** What an adapter may inspect to decide which workspace a request belongs to. */
@@ -36,13 +36,16 @@ export class WorkspaceSetupError extends SourceError {
 
 function readDeploymentSettings(base: string, env: NodeJS.ProcessEnv): WorkspaceSettings {
   let source;
+  let mappings: RepositoryMapping[];
   try {
     source = loadSourceConfig(base, env);
     if (env.VERCEL && source.type === 'local') throw new Error('Vercel requires a GitHub or GitLab source. Configure MYGITNOTES_SOURCE, MYGITNOTES_REPOSITORY and MYGITNOTES_BRANCH.');
+    mappings = source.type === 'local' ? loadRepositoryMappings(base, env) : [];
   } catch (error) {
     throw new WorkspaceSetupError((error as Error).message);
   }
-  return { home: repositoryRef(source), localPath: () => undefined, manifest: inHomeRepository => inHomeRepository() };
+  const localPath = (ref: RepositoryRef) => ref.source.type === 'local' ? undefined : mappings.find(mapping => mapsRepository(mapping, ref.source as Exclude<typeof ref.source, { type: 'local'; }>))?.path;
+  return { home: repositoryRef(source), localPath, manifest: inHomeRepository => inHomeRepository() };
 }
 
 /** Configuration from the environment and `mygitnotes.server.yaml`, with the manifest in the home repository. Settings are read on every call; the mode is fixed when the deployment starts. */
