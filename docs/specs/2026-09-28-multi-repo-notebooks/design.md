@@ -99,6 +99,19 @@ Each step ends with `pnpm test`, `pnpm lint` and `pnpm build` passing, then a co
 
 Stage 2 gets its own step list in this file after the checkpoint.
 
+## Stage 2 steps
+
+Each step ends with `pnpm test`, `pnpm lint` and `pnpm build` passing, then a commit.
+
+1. **Notebook repositories.** Manifest `source`, schema version 2 and its migration; root overlap checked per repository; local `repositories` mappings in `mygitnotes.server.yaml`; the resolver opens notebook repositories (remote through the shared credential, local through the mapping) and reports `unmapped`, `no-access`, `missing-branch` and `unsupported-platform`; `/api/workspace` lists unavailable repositories.
+2. **Graph identity and link scope.** Graph nodes keyed by `noteRefKey`; links resolve within their note's repository, and a target in another repository resolves as missing.
+3. **Workspace documents per repository.** Screen, Focus and Study documents in each notebook repository, read and written through the notebook's repository; entries for notebooks bound elsewhere preserved on save; Study actions commit note and record together.
+4. **Workspace-level routes per repository.** Local Git status, changes and sync per worktree; agent resources grouped by repository with instructions up to the notebook repository root; R2 scans across repositories and moves that commit one repository at a time before deleting old keys.
+5. **MCP.** The opaque revision token (Q10); notebook-scoped tools on the notebook's repository, path-only tools through the containing notebook; Git tools per repository; the stdio server's `ToolContext.workspace`.
+6. **Browser.** Unavailable notebooks in the switcher with the reason; the Info tab; removal of the header, footer, sidebar and Settings location labels; Changes grouped under repository headings with the per-repository commit report.
+7. **Scripts and documentation.** `backfill-note-timestamps` per notebook repository; deploy and architecture documentation for notebook repositories.
+8. **Stage 2 verification**, including the two-repository browser anchor.
+
 ## Precedent
 
 - `NoteCatalog` already separates the query read model from local and remote sources; the composite catalog follows it.
@@ -109,7 +122,7 @@ Stage 2 gets its own step list in this file after the checkpoint.
 ## Alternatives considered
 
 - **One repository interface over local and remote.** Deeper, but duplicates no current need: modes never mix in phase one. Rejected for this change.
-- **Opaque workspace revision token.** Smaller wire change, but the browser could not tell which repository went stale, so every 409 would refresh everything. Rejected for `RevisionSet`.
+- **Opaque workspace revision token** for HTTP. Smaller wire change, but the browser could not tell which repository went stale, so every 409 would refresh everything. Rejected for `RevisionSet`. The hosted MCP uses an opaque token that encodes a `RevisionSet` (Q10), because agents pass revisions back verbatim and a stale error still names the repository.
 - **Server-side batch commit across repositories.** Would move draft merging from the browser to the server and still be non-atomic. Rejected for browser orchestration with one request per repository.
 - **Resolving the source at startup** (today's shape). Rejected by Q9.
 
