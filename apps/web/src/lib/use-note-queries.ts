@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { keepPreviousData, type QueryClient, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { DEFAULT_NOTE_QUERY } from '@mygitnotes/core/note-query';
-import type { NoteAgenda, NotebookFacets, NoteFacets, NoteListItem, NoteQuery, NoteQueryPage } from '@mygitnotes/core/note-query';
+import type { NoteAgenda, NotebookFacets, NoteFacets, NoteListItem, NoteQuery, NoteQueryPage, NoteRef } from '@mygitnotes/core/note-query';
+import { noteRefKey } from '@mygitnotes/core/note-query';
 import type { NoteGraphData } from '@mygitnotes/core/note-graph';
 import type { RepositoryId, RevisionSet } from '@mygitnotes/core/repository';
 import { ApiError } from './api.js';
@@ -119,10 +120,10 @@ function useStable<T>(value: T): T {
   /* eslint-enable react/refs */
 }
 
-export function noteLookupOptions(scope: NoteQueryScope, paths: string[], content: boolean) {
-  const unique = [...new Set(paths)];
-  // Paths may lie in any notebook, so a lookup reads every repository's revision.
-  return { queryKey: queryKey(scope, scope.revisions, 'lookup', { paths: unique, content }), queryFn: () => lookupNotes(unique, { content, revisions: scope.revisions }), enabled: unique.length > 0 && Boolean(scope.sourceId) };
+export function noteLookupOptions(scope: NoteQueryScope, notes: NoteRef[], content: boolean) {
+  const unique = [...new Map(notes.map(note => [noteRefKey(note), { notebookId: note.notebookId, path: note.path }])).values()];
+  // Notes may lie in any notebook, so a lookup reads every repository's revision.
+  return { queryKey: queryKey(scope, scope.revisions, 'lookup', { notes: unique.map(noteRefKey), content }), queryFn: () => lookupNotes(unique, { content, revisions: scope.revisions }), enabled: unique.length > 0 && Boolean(scope.sourceId) };
 }
 
 /** One page of a query, for callers that read outside React rendering. */
@@ -176,13 +177,14 @@ export function useNoteList(query: Partial<NoteQuery> | null, options: NoteListO
   return { notes: overlay.notes, uncommitted: overlay.uncommitted, total: Math.max(0, serverTotal - (options.hide ? 1 : 0) - overlay.removed + overlay.uncommitted.length), loading: Boolean(input) && result.isPending, loadingMore: fetchingNext, hasMore: Boolean(hasNextPage), error: errorText(result.error), loadMore };
 }
 
-export function useNotePaths(query: Partial<NoteQuery> | null): { paths: string[]; loading: boolean; error: string; } {
+/** Every note a query matches, by notebook and path. */
+export function useNotePaths(query: Partial<NoteQuery> | null): { notes: NoteRef[]; loading: boolean; error: string; } {
   const scope = useNoteQueryScope();
   const input = useStable(query ? noteQueryInput(query) : null);
   const options = notePathsOptions(scope, input ?? DEFAULT_NOTE_QUERY);
   const result = useQuery({ ...options, enabled: options.enabled && Boolean(input), placeholderData: keepPreviousData });
-  const paths = useMemo(() => (input ? overlayDraftPaths(result.data?.paths ?? [], input, scope.drafts) : []), [result.data, input, scope.drafts]);
-  return { paths, loading: Boolean(input) && result.isPending, error: errorText(result.error) };
+  const notes = useMemo(() => (input ? overlayDraftPaths(result.data?.notes ?? [], input, scope.drafts) : []), [result.data, input, scope.drafts]);
+  return { notes, loading: Boolean(input) && result.isPending, error: errorText(result.error) };
 }
 
 export function useNoteFacets(showHidden: boolean): { facets: Record<string, NotebookFacets> | undefined; loading: boolean; error: string; } {
@@ -193,9 +195,9 @@ export function useNoteFacets(showHidden: boolean): { facets: Record<string, Not
 }
 
 /** `notes` carries staged drafts; `committed` is what the server answered, for use as a merge base. */
-export function useNoteLookup(paths: string[], content: boolean): { notes: NoteListItem[]; committed: NoteListItem[]; loading: boolean; error: string; } {
+export function useNoteLookup(refs: NoteRef[], content: boolean): { notes: NoteListItem[]; committed: NoteListItem[]; loading: boolean; error: string; } {
   const scope = useNoteQueryScope();
-  const stable = useStable(paths);
+  const stable = useStable(refs);
   const options = noteLookupOptions(scope, stable, content);
   const result = useQuery(options);
   const committed = useMemo(() => result.data?.notes ?? [], [result.data]);

@@ -67,7 +67,7 @@ describe('note query routes', () => {
     expect((await json('/api/notes/query?notebookId=all&q=keyword')).body.notes.map((note: any) => note.path)).toEqual(['notes/other/gamma.md']);
     expect((await json('/api/notes/query?notebookId=all&q=keyword&match=title')).body.total).toBe(0);
     expect((await json('/api/notes/query?notebookId=other&content=1')).body.notes[0].content).toContain('keyword in the body');
-    expect((await json('/api/notes/query?notebookId=example&select=paths&sort=title&order=asc')).body.paths).toEqual(['notes/example/alpha.md', 'notes/example/deep/beta.md']);
+    expect((await json('/api/notes/query?notebookId=example&select=paths&sort=title&order=asc')).body.notes).toEqual([{ notebookId: 'example', path: 'notes/example/alpha.md' }, { notebookId: 'example', path: 'notes/example/deep/beta.md' }]);
     expect((await json('/api/notes/query?notebookId=other&noStatus=1')).body.notes.map((note: any) => note.path)).toEqual(['notes/other/gamma.md']);
     expect((await json('/api/notes/query?notebookId=example&noStatus=1')).body.total).toBe(0);
     expect((await json('/api/notes/query?limit=1')).status).toBe(400);
@@ -78,7 +78,7 @@ describe('note query routes', () => {
     expect(facets.notebooks.example).toMatchObject({ total: 2, hidden: 1, statuses: { inbox: 1, done: 1 }, tags: { work: 2, deep: 1 } });
     expect(facets.notebooks.example.directories).toEqual({ 'notes/example': 1, 'notes/example/deep': 1 });
 
-    const lookup = await json('/api/notes/lookup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paths: ['notes/example/alpha.md', 'notes/example/absent.md'], content: true }) });
+    const lookup = await json('/api/notes/lookup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes: [{ notebookId: 'example', path: 'notes/example/alpha.md' }, { notebookId: 'example', path: 'notes/example/absent.md' }], content: true }) });
     expect(lookup.body.notes.map((note: any) => note.path)).toEqual(['notes/example/alpha.md']);
     expect(lookup.body.notes[0].content).toContain('# Alpha');
 

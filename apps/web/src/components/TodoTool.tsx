@@ -1,3 +1,4 @@
+import type { NoteRef } from '@mygitnotes/core/note-query';
 import { Button } from './Button.js';
 import { TodoGanttChart } from './TodoGanttChart.js';
 import { useMemo, useState } from 'react';
@@ -36,7 +37,7 @@ interface TodoToolProps {
   currentFolder?: string;
   onOpenNote: (note: NoteListItem) => void;
   onSaveNote: (params: { path: string; content: string; metadata?: Record<string, unknown>; notebookId: string; }) => Promise<NoteItem>;
-  onReadNote: (path: string) => Promise<NoteItem>;
+  onReadNote: (note: NoteRef) => Promise<NoteItem>;
 }
 
 /** A todo row identifies its note; opening it needs no more than that. */
@@ -80,7 +81,7 @@ export function TodoTool({ notebooks, selectedNotebookId, currentFolder, onOpenN
     setPendingIds(prev => new Set(prev).add(task.id));
     try {
       // The agenda carries todo lines, not bodies: read the note before rewriting its line.
-      const note = await onReadNote(task.notePath);
+      const note = await onReadNote({ notebookId: task.notebookId, path: task.notePath });
       const lines = note.content.split('\n');
       if (lines[task.lineIndex] !== task.lineText) {
         setStaleIds(prev => new Set(prev).add(task.id));

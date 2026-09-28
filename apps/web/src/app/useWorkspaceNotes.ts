@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { invalidateNoteQueries, noteLookupOptions, resetStaleNoteQueries, setNoteQueryScope, useNoteQueryScope, useStaleNoteQueries } from '../lib/use-note-queries.js';
 import { notebookRepositories, revisionSet } from '../lib/workspace-repositories.js';
 import type { NoteItem } from '../lib/types.js';
+import type { NoteRef } from '@mygitnotes/core/note-query';
 import type { I18nContextValue } from '../lib/i18n/index.js';
 import type { WorkspaceState } from './workspace-state.js';
 
@@ -12,11 +13,11 @@ interface Params {
   activeWorkingNotes: WorkspaceState['activeWorkingNotes'];
   remote: WorkspaceState['remote'];
   refreshWorkspace: WorkspaceState['refreshWorkspace'];
-  readDraftAtPath: WorkspaceState['readDraftAtPath'];
+  readDraft: WorkspaceState['readDraft'];
   t: I18nContextValue['t'];
 }
 
-export function useWorkspaceNotes({ sourceId, repositories, activeWorkingNotes, remote, refreshWorkspace, readDraftAtPath, t }: Params) {
+export function useWorkspaceNotes({ sourceId, repositories, activeWorkingNotes, remote, refreshWorkspace, readDraft, t }: Params) {
   // Every note query is answered for the revisions of the repositories it reads; staged drafts are overlaid on top.
   const queryClient = useQueryClient();
   const revisions = useMemo(() => revisionSet(repositories), [repositories]);
@@ -45,17 +46,17 @@ export function useWorkspaceNotes({ sourceId, repositories, activeWorkingNotes, 
     setPreviousRevisions(revisionKey);
     setStaleNotice('');
   }
-  /** The committed note behind a path, ignoring any staged draft, for use as a merge base. */
-  const readCommittedNote = async (path: string): Promise<NoteItem> => {
-    const result = await queryClient.fetchQuery(noteLookupOptions(queryScope, [path], true));
-    const note = result.notes.find(item => item.path === path);
-    if (!note || typeof note.content !== 'string') throw new Error(t('notes.readFailed', { path }));
+  /** The committed note, ignoring any staged draft, for use as a merge base. */
+  const readCommittedNote = async (ref: NoteRef): Promise<NoteItem> => {
+    const result = await queryClient.fetchQuery(noteLookupOptions(queryScope, [ref], true));
+    const note = result.notes[0];
+    if (!note || typeof note.content !== 'string') throw new Error(t('notes.readFailed', { path: ref.path }));
     return note as NoteItem;
   };
   /** The note a change must be applied to: the staged draft when there is one, else the committed note. */
-  const readNoteForChange = async (path: string): Promise<NoteItem> => {
-    const pending = remote ? readDraftAtPath(path) : undefined;
-    return pending ? pending.note : readCommittedNote(path);
+  const readNoteForChange = async (ref: NoteRef): Promise<NoteItem> => {
+    const pending = remote ? readDraft(ref.notebookId, ref.path) : undefined;
+    return pending ? pending.note : readCommittedNote(ref);
   };
 
   return { queryClient, queryScope, invalidateNotes, refreshNotes, staleNotice, readCommittedNote, readNoteForChange };

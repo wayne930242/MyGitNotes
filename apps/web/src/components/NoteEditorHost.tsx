@@ -12,6 +12,7 @@ import { LoadingStatus } from './LoadingStatus.js';
 import { NoteHtml } from './NoteHtml.js';
 
 export interface HostedNoteEditorProps {
+  notebookId: string;
   path: string;
   frame: 'pane' | 'compact';
   active: boolean;
@@ -27,7 +28,7 @@ export interface HostedNoteEditorProps {
  * remounting; while zoom shows the note the other hosts say so, and otherwise they show a preview with a
  * control that moves editing there.
  */
-export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ path, frame, active, documentPanel, editorRef, onSession, onCaret }) => {
+export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ notebookId, path, frame, active, documentPanel, editorRef, onSession, onCaret }) => {
   const { t } = useTranslation();
   const editing = useNoteEditing();
   const { hosts } = editing;
@@ -38,7 +39,7 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ path, frame,
     return () => hosts.release(path, id);
   }, [hosts, path, id]);
   const owner = hosts.owner(path) === id;
-  const lookup = useNoteLookup([path], true);
+  const lookup = useNoteLookup([{ notebookId, path }], true);
   const found = lookup.notes[0], committed = lookup.committed[0];
   const loaded = found && typeof found.content === 'string' ? found as NoteItem : null;
   const zoom = editing.zoom?.path === path ? editing.zoom : null;

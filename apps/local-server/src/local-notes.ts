@@ -46,7 +46,7 @@ export function createLocalNotesRouter(): Router {
   });
   router.post('/lookup', async (req: Request, res: Response) => {
     try {
-      res.json(await lookupNotes(await catalogOf(res), req.body?.paths, req.body?.content === true));
+      res.json(await lookupNotes(await catalogOf(res), req.body?.notes, req.body?.content === true));
     } catch (error) {
       queryError(res, error);
     }

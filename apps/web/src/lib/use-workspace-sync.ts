@@ -13,6 +13,7 @@ import { setDefaultShowLineNumbers } from './editor-preferences.js';
 import { setDefaultYouTubeDisplayMode } from './youtube-embed.js';
 import { listLocalDrafts } from './storage.js';
 import { draftScope, repositoryOf, type WorkspaceRepository } from './workspace-repositories.js';
+import { noteRefKey } from '@mygitnotes/core/note-query';
 
 export interface UseWorkspaceSyncOptions {
   routeNotebook?: string;
@@ -70,7 +71,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return { repository, scope: draftScope(repository) };
   };
   const readDraft = (notebookId: string, path: string): WorkingNote | undefined => readWorkingNotes(draftScopeFor(notebookId).scope)[path];
-  /** Paths name one note across repositories until notes are identified by notebook. */
+  /** The draft at a path in any repository; the Changes dialog names files by path until it groups them by repository. */
   const readDraftAtPath = (path: string): WorkingNote | undefined => {
     for (const repository of available) {
       const entry = readWorkingNotes(draftScope(repository))[path];
@@ -116,8 +117,8 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   // Workspace documents live in the home repository.
   const pendingDocuments = remote && homeRepository?.write ? documents.filter((document) => document.dirty) : [];
   const writable = repositories.filter(repository => repository.write).map(repository => repository.id).join('\n');
-  /** Drafts of the repositories this requester may commit to, by path. */
-  const activeWorkingNotes = useMemo<WorkingNotes>(() => (remote ? Object.assign({}, ...writable.split('\n').filter(Boolean).map(id => workingNotes[id] ?? {})) : {}), [remote, writable, workingNotes]);
+  /** Drafts of the repositories this requester may commit to, by `noteRefKey`: two repositories can hold the same path. */
+  const activeWorkingNotes = useMemo<WorkingNotes>(() => (remote ? Object.fromEntries(writable.split('\n').filter(Boolean).flatMap(id => Object.values(workingNotes[id] ?? {})).map(entry => [noteRefKey(entry.note), entry])) : {}), [remote, writable, workingNotes]);
 
   /* eslint-disable react/use-memo -- The joined pending-document paths intentionally form a stable primitive projection key. */
   /* eslint-disable react-hooks/exhaustive-deps -- Pending file paths are the status projection key; newly allocated document controllers with the same paths must retain the memoized status identity. */

@@ -32,7 +32,9 @@ export function useChangeDialog({ activeTab, agentSystemRef, remote, documents, 
   };
 
   const panelRemoteChanges = remote ? [...Object.values(activeWorkingNotes).map(entry => ({ path: entry.note.path, kind: entry.blocked ? 'conflict' as const : entry.base ? 'modified' as const : 'added' as const, tracked: Boolean(entry.base), revision: JSON.stringify(entry), available: canWriteNotebook(entry.note.notebookId) && !entry.blocked, staged: false, unstaged: true })), ...pendingDocuments.map(document => ({ path: document.file, kind: 'modified' as const, tracked: true, revision: document.diff, available: documentsWritable && !document.error, staged: false, unstaged: true }))] : undefined;
-  const panelGetPreview = remote ? (file: string) => documents.find(document => document.file === file)?.diff ?? (activeWorkingNotes[file] ? workingDiff({ [file]: activeWorkingNotes[file] }) : '') : undefined;
+  // The Changes dialog names a draft by its path until it groups changes by repository.
+  const draftAt = (file: string) => Object.values(activeWorkingNotes).find(entry => entry.note.path === file);
+  const panelGetPreview = remote ? (file: string) => documents.find(document => document.file === file)?.diff ?? (draftAt(file) ? workingDiff({ [file]: draftAt(file)! }) : '') : undefined;
 
   return { commitRequest, isCommitOpen, setIsCommitOpen, openCommitModal, panelRemoteChanges, panelGetPreview };
 }

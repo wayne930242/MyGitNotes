@@ -22,12 +22,12 @@ interface UseTagWorkspaceOperationsParams {
  * with a session-lifetime undo (kept in `tagOperations.history` until page reload). */
 export function useTagWorkspaceOperations({ queryClient, queryScope, repositories, remote, canWrite, t, invalidateNotes, setRepositoryRevision, setActionError }: UseTagWorkspaceOperationsParams) {
   const tagOperations = useTagOperations();
-  const readNotePaths = async (query: Parameters<typeof notePathsOptions>[1]): Promise<string[]> => (await queryClient.fetchQuery(notePathsOptions(queryScope, query))).paths;
+  const readNotePaths = async (query: Parameters<typeof notePathsOptions>[1]) => (await queryClient.fetchQuery(notePathsOptions(queryScope, query))).notes;
   /** Every note carrying `tag`, in every notebook, hidden ones included: the exact set the server will rewrite. */
   const notesWithTag = async (tag: string) => {
-    const paths = await readNotePaths({ notebookId: 'all', tags: [tag], showHidden: true });
-    if (!paths.length) return [];
-    const result = await queryClient.fetchQuery(noteLookupOptions(queryScope, paths, false));
+    const notes = await readNotePaths({ notebookId: 'all', tags: [tag], showHidden: true });
+    if (!notes.length) return [];
+    const result = await queryClient.fetchQuery(noteLookupOptions(queryScope, notes, false));
     return result.notes;
   };
   const previewTagUsage = async (tag: string): Promise<number> => (await readNotePaths({ notebookId: 'all', tags: [tag], showHidden: true })).length;
@@ -69,7 +69,7 @@ export function useTagWorkspaceOperations({ queryClient, queryScope, repositorie
     if (!record) return;
     try {
       const inverted = invertTagOperationPlan(record.plan);
-      const existing = (await queryClient.fetchQuery(noteLookupOptions(queryScope, inverted.affected.map(entry => entry.path), false))).notes;
+      const existing = (await queryClient.fetchQuery(noteLookupOptions(queryScope, inverted.affected, false))).notes;
       const validEntries = inverted.affected.filter(entry => existing.some(note => note.path === entry.path && note.notebookId === entry.notebookId));
       if (validEntries.length === 0) {
         tagOperations.dismiss(id);

@@ -75,10 +75,10 @@ it('keeps the source in place until a cold note body arrives, then reuses that b
     fireEvent.click(getByTestId('link'));
   });
   expect(onOpenNote).not.toHaveBeenCalled();
-  expect(JSON.parse(fetcher.mock.calls[0][1].body as string)).toMatchObject({ paths: ['notes/b.md'], content: true });
+  expect(JSON.parse(fetcher.mock.calls[0][1].body as string)).toMatchObject({ notes: [{ notebookId: 'n', path: 'notes/b.md' }], content: true });
   await act(async () => release());
   expect(onOpenNote).toHaveBeenCalledWith(expect.objectContaining({ path: 'notes/b.md', content: undefined }), 'heading', getByTestId('link'));
-  expect(client.getQueryData(noteLookupOptions(scope, ['notes/b.md'], true).queryKey)).toMatchObject({ notes: [{ content: '# Body' }] });
+  expect(client.getQueryData(noteLookupOptions(scope, [{ notebookId: 'n', path: 'notes/b.md' }], true).queryKey)).toMatchObject({ notes: [{ content: '# Body' }] });
 });
 
 it('opens a preloaded link without another read and leaves draft selection to the destination', async () => {
@@ -86,7 +86,7 @@ it('opens a preloaded link without another read and leaves draft selection to th
   const scope = { sourceId: 'test:cached', revisions: {}, repositories: {}, drafts: {} };
   setNoteQueryScope(scope);
   client.setDefaultOptions({ queries: { staleTime: Infinity, retry: false } });
-  client.setQueryData(noteLookupOptions(scope, ['notes/b.md'], true).queryKey, { revisions: {}, repositories: {}, notes: [{ path: 'notes/b.md', content: '# Committed' }] });
+  client.setQueryData(noteLookupOptions(scope, [{ notebookId: 'n', path: 'notes/b.md' }], true).queryKey, { revisions: {}, repositories: {}, notes: [{ path: 'notes/b.md', content: '# Committed' }] });
   const fetcher = vi.fn();
   vi.stubGlobal('fetch', fetcher);
   const onOpenNote = vi.fn();

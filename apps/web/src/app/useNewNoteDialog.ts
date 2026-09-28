@@ -86,7 +86,7 @@ export function useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebo
       const folder = newNoteFolder.trim().replace(/^\/+|\/+$/g, '');
       if (folder && !newNoteFolders.includes(folder)) throw new Error(t('createNote.invalidFolder'));
       const notePath = [root, folder, `${slug}.md`].filter(Boolean).join('/');
-      const taken = Boolean(remote && currentNotebook && readDraft(currentNotebook.id, notePath)) || (await queryClient.fetchQuery(noteLookupOptions(queryScope, [notePath], false))).notes.length > 0;
+      const taken = Boolean(remote && currentNotebook && readDraft(currentNotebook.id, notePath)) || (await queryClient.fetchQuery(noteLookupOptions(queryScope, [{ notebookId: currentNotebook?.id ?? selectedNotebookId, path: notePath }], false))).notes.length > 0;
       if (taken) throw new Error('A note with this filename already exists in this folder. Choose another title.');
 
       const status = statusOverride || newNoteStatus;

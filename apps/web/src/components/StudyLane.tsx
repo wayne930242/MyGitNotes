@@ -179,7 +179,7 @@ function StudyPostpone({ note, row, controller, disabled, onDone }: { note: Note
 /** A study card shows the note's pages, so the current card is the one note read in full. */
 function StudyLaneCard({ note: listed, row, controller, disabled, onDone, onOpen, previous, next, onMove, more, remaining }: { note: NoteListItem; row: ScreenRow; controller: StudyController; disabled: boolean; onDone: () => void; onOpen: () => void; previous: boolean; next: boolean; onMove: (direction: number) => void; more: ReactNode; remaining: number; }) {
   const { t } = useTranslation();
-  const lookup = useNoteLookup([listed.path], true);
+  const lookup = useNoteLookup([listed], true);
   const found = lookup.notes[0];
   const note = (typeof found?.content === 'string' ? found : { ...listed, content: '' }) as NoteItem;
   const reading = typeof found?.content !== 'string';

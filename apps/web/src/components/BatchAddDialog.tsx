@@ -36,7 +36,9 @@ export const BatchAddDialog: React.FC<{ focus: NoteFocus; target: string; pane: 
   const andResult = useNotePaths(mode === 'and' && (hasFolder || hasTags) ? { notebookId, folders: hasFolder ? [folder] : [], descendants, tags, tagMode } : null);
   const folderResult = useNotePaths(mode === 'or' ? { notebookId, folders: [folder], descendants } : null);
   const tagsResult = useNotePaths(mode === 'or' ? { notebookId, tags, tagMode } : null);
-  const candidatePaths = batchAddCandidates(mode, andResult.paths, folderResult.paths, tagsResult.paths);
+  // Every query stays inside one notebook, where a path names one note.
+  const pathsOf = (result: { notes: { path: string; }[]; }) => result.notes.map(note => note.path);
+  const candidatePaths = batchAddCandidates(mode, pathsOf(andResult), pathsOf(folderResult), pathsOf(tagsResult));
   const loading = mode === 'or' ? (folderResult.loading || tagsResult.loading) : andResult.loading;
 
   const toggleTag = (tag: string) => setTags(current => current.includes(tag) ? current.filter(item => item !== tag) : [...current, tag]);

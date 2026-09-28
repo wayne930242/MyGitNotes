@@ -223,7 +223,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane; 
           </button>
         </div>
       </div>
-      <div id={panelId} className='focus-pane-body' role='tabpanel' aria-label={shown?.label}>{shown?.tab.kind === 'note' ? <PaneNoteEditor key={shown.tab.path} path={shown.tab.path} active={active} documentPanel={active ? documentPanel : undefined} /> : lane ? renderLane(lane, displayed.pane) : <p className='focus-pane-empty'>{editable ? t('focus.emptyPane') : t('focus.emptyPaneReadonly')}</p>}</div>
+      <div id={panelId} className='focus-pane-body' role='tabpanel' aria-label={shown?.label}>{shown?.tab.kind === 'note' ? <PaneNoteEditor key={shown.tab.path} notebookId={focus.notebookId} path={shown.tab.path} active={active} documentPanel={active ? documentPanel : undefined} /> : lane ? renderLane(lane, displayed.pane) : <p className='focus-pane-empty'>{editable ? t('focus.emptyPane') : t('focus.emptyPaneReadonly')}</p>}</div>
       {batchAddOpen && focus.shown && <BatchAddDialog focus={focus} target={focus.shown} pane={displayed.pane} notebookId={focus.notebookId} notebookRoot={notebookRoot} folders={folders} onClose={() => setBatchAddOpen(false)} />}
     </section>
   );
@@ -265,4 +265,4 @@ const FocusMenu: React.FC<{ label: string; showLabel?: boolean; icon: ReactNode;
 );
 
 /** A note tab's editor: the pane is one host of the note, sharing its single editor with zoom and graph cards. */
-const PaneNoteEditor: React.FC<{ path: string; active: boolean; documentPanel?: NoteEditorProps['documentPanel']; }> = ({ path, active, documentPanel }) => <HostedNoteEditor path={path} frame='pane' active={active} documentPanel={documentPanel} />;
+const PaneNoteEditor: React.FC<{ notebookId: string; path: string; active: boolean; documentPanel?: NoteEditorProps['documentPanel']; }> = ({ notebookId, path, active, documentPanel }) => <HostedNoteEditor notebookId={notebookId} path={path} frame='pane' active={active} documentPanel={documentPanel} />;

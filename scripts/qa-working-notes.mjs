@@ -83,8 +83,8 @@ page.on('request', async request => {
   }
   if (url.pathname === '/api/notes/lookup') {
     const lookup = JSON.parse(request.postData());
-    lookups.push(...lookup.paths);
-    body = await lookupNotes(await hostedCatalog(), lookup.paths, lookup.content === true);
+    lookups.push(...lookup.notes.map(note => note.path));
+    body = await lookupNotes(await hostedCatalog(), lookup.notes, lookup.content === true);
   }
   if (url.pathname === '/api/notes/facets') body = await noteFacets(await hostedCatalog(), url.searchParams.get('showHidden') === '1');
   if (url.pathname === '/api/notes/read') {

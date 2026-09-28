@@ -51,10 +51,10 @@ export function useBrowseNotes({ scopeNotebookId, selectedFolders, selectedTags,
 
   // Choose by filename before applying visibility so a hidden index keeps priority.
   const browsingNotes = activeTab === 'notes';
-  const indexCandidates = useMemo(() => (browsingNotes && !filtered && notebookRoot ? [`${currentDirectory}/index.md`, `${currentDirectory}/README.md`] : []), [browsingNotes, filtered, notebookRoot, currentDirectory]);
+  const indexCandidates = useMemo(() => (browsingNotes && !filtered && notebookRoot ? [`${currentDirectory}/index.md`, `${currentDirectory}/README.md`].map(path => ({ notebookId: selectedNotebookId, path })) : []), [browsingNotes, filtered, notebookRoot, currentDirectory, selectedNotebookId]);
   const indexLookup = useNoteLookup(indexCandidates, false);
   const folderIndex = useMemo(() => {
-    const selected = indexLookup.notes.find(note => note.path === indexCandidates[0]) ?? indexLookup.notes.find(note => note.path === indexCandidates[1]);
+    const selected = indexLookup.notes.find(note => note.path === indexCandidates[0]?.path) ?? indexLookup.notes.find(note => note.path === indexCandidates[1]?.path);
     return selected && (showHidden || !isNoteHidden({ ...selected.metadata, status: selected.status })) ? selected : undefined;
   }, [indexLookup.notes, indexCandidates, showHidden]);
 

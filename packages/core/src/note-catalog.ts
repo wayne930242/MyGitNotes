@@ -7,7 +7,7 @@ import { extractTodoTasks } from './note-agenda.js';
 import { buildNoteGraph } from './note-graph.js';
 import { hashJson } from './remote-cache.js';
 import { type RepositoryId, type RevisionSet, StaleRevisionError } from './repository.js';
-import { DEFAULT_NOTE_QUERY, type NoteAgenda, type NotebookFacets, noteContentSnippet, noteDirectory, type NoteFacets, type NoteGraph, type NoteListItem, type NoteLookup, noteMatchesQuery, type NotePaths, type NoteQuery, type NoteQueryPage, noteQueryStatuses } from './note-query.js';
+import { DEFAULT_NOTE_QUERY, type NoteAgenda, type NotebookFacets, noteContentSnippet, noteDirectory, type NoteFacets, type NoteGraph, type NoteListItem, type NoteLookup, noteMatchesQuery, type NotePaths, type NoteQuery, type NoteQueryPage, noteQueryStatuses, type NoteRef, noteRefKey } from './note-query.js';
 
 /** Read model of the notebooks one repository serves, implemented by remote and local sources. */
 export interface RepositoryCatalog {
@@ -29,7 +29,7 @@ export interface NoteCatalog {
   revisions(notebooks: NotebookConfig[]): Promise<RevisionSet>;
   /** Notes of one notebook without content. */
   index(notebook: NotebookConfig): Promise<NoteListItem[]>;
-  /** Note bodies (without frontmatter) by path. */
+  /** Note bodies (without frontmatter) by `noteRefKey`, so equal paths in two repositories stay apart. */
   contents(notes: NoteListItem[]): Promise<Map<string, string>>;
   /** Result derived from the content of the given notebooks, reused while that content is unchanged. */
   memo<T>(kind: string, notebooks: NotebookConfig[], compute: () => Promise<T>): Promise<T>;
@@ -113,8 +113,11 @@ export async function workspaceCatalog(config: WorkspaceConfig, repositories: Ca
         const repository = repositoryOf(note.notebookId);
         groups.set(repository, [...(groups.get(repository) ?? []), note]);
       }
-      const parts = await Promise.all([...groups].map(([repository, group]) => repository.catalog.contents(group)));
-      return new Map(parts.flatMap(part => [...part]));
+      const parts = await Promise.all([...groups].map(async ([repository, group]) => {
+        const bodies = await repository.catalog.contents(group);
+        return group.map(note => [noteRefKey(note), bodies.get(note.path) ?? ''] as const);
+      }));
+      return new Map(parts.flat());
     },
     // A result spanning several repositories has no single content key to cache it under.
     memo: (kind, notebooks, compute) => {
@@ -156,8 +159,8 @@ async function matching(catalog: NoteCatalog, query: NoteQuery) {
   let matches = notes.filter(note => noteMatchesQuery(note, { ...query, q: '' }));
   if (query.q.trim() && query.match === 'all') {
     const contents = await catalog.contents(matches);
-    matches = matches.filter(note => noteMatchesQuery({ ...note, content: contents.get(note.path) ?? '' }, query)).map(note => {
-      const matchSnippet = noteContentSnippet(contents.get(note.path) ?? '', query.q);
+    matches = matches.filter(note => noteMatchesQuery({ ...note, content: contents.get(noteRefKey(note)) ?? '' }, query)).map(note => {
+      const matchSnippet = noteContentSnippet(contents.get(noteRefKey(note)) ?? '', query.q);
       return matchSnippet ? { ...note, matchSnippet } : note;
     });
   } else if (query.q.trim()) {
@@ -186,12 +189,12 @@ export async function queryNotes(catalog: NoteCatalog, query: NoteQuery, options
   const page = sorted.slice(offset, offset + options.limit);
   const contents = options.content ? await catalog.contents(page) : undefined;
   const next = offset + options.limit;
-  return { revisions, total: sorted.length, notes: contents ? page.map(note => ({ ...note, content: contents.get(note.path) ?? '' })) : page, nextCursor: next < sorted.length ? Buffer.from(JSON.stringify({ k: key, o: next })).toString('base64url') : null };
+  return { revisions, total: sorted.length, notes: contents ? page.map(note => ({ ...note, content: contents.get(noteRefKey(note)) ?? '' })) : page, nextCursor: next < sorted.length ? Buffer.from(JSON.stringify({ k: key, o: next })).toString('base64url') : null };
 }
 
 export async function queryNotePaths(catalog: NoteCatalog, query: NoteQuery): Promise<NotePaths> {
   const [revisions, sorted] = await Promise.all([scopeNotebooks(catalog, query.notebookId).then(notebooks => catalog.revisions(notebooks)), matching(catalog, query)]);
-  return { revisions, paths: sorted.map(note => note.path), total: sorted.length };
+  return { revisions, notes: sorted.map(note => ({ notebookId: note.notebookId, path: note.path })), total: sorted.length };
 }
 
 export async function noteFacets(catalog: NoteCatalog, showHidden: boolean): Promise<NoteFacets> {
@@ -214,20 +217,21 @@ export async function noteFacets(catalog: NoteCatalog, showHidden: boolean): Pro
   return { revisions: await catalog.revisions(notebooks), notebooks: result };
 }
 
-export async function lookupNotes(catalog: NoteCatalog, paths: unknown, content: boolean): Promise<NoteLookup> {
-  if (!Array.isArray(paths) || !paths.length || paths.length > 200 || paths.some(path => typeof path !== 'string' || path.length > 2048)) {
-    throw new SourceError('Select between 1 and 200 note paths.');
+/** Notes by notebook and path, in the requested order; notes that do not exist are omitted. */
+export async function lookupNotes(catalog: NoteCatalog, notes: unknown, content: boolean): Promise<NoteLookup> {
+  if (!Array.isArray(notes) || !notes.length || notes.length > 200 || notes.some(note => typeof note?.notebookId !== 'string' || typeof note?.path !== 'string' || note.path.length > 2048)) {
+    throw new SourceError('Select between 1 and 200 notes by notebook and path.');
   }
+  const refs = notes as NoteRef[];
   const config = await catalog.config();
-  const byPath = new Map<string, NoteListItem>();
-  const notebooks = [...config.notebooks].sort((a, b) => b.root.length - a.root.length);
-  const involved = [...new Set(paths.map(path => notebooks.find(item => (path as string).startsWith(`${item.root}/`))).filter(Boolean) as NotebookConfig[])];
+  const involved = config.notebooks.filter(notebook => refs.some(ref => ref.notebookId === notebook.id));
+  const byKey = new Map<string, NoteListItem>();
   for (const notebook of involved) {
-    for (const note of await catalog.index(notebook)) byPath.set(note.path, note);
+    for (const note of await catalog.index(notebook)) byKey.set(noteRefKey(note), note);
   }
-  const found = (paths as string[]).map(path => byPath.get(path)).filter(Boolean) as NoteListItem[];
+  const found = refs.map(ref => byKey.get(noteRefKey(ref))).filter(Boolean) as NoteListItem[];
   const contents = content ? await catalog.contents(found) : undefined;
-  return { revisions: await catalog.revisions(involved), notes: contents ? found.map(note => ({ ...note, content: contents.get(note.path) ?? '' })) : found };
+  return { revisions: await catalog.revisions(involved), notes: contents ? found.map(note => ({ ...note, content: contents.get(noteRefKey(note)) ?? '' })) : found };
 }
 
 export async function noteAgenda(catalog: NoteCatalog, notebookId: string, showHidden: boolean): Promise<NoteAgenda> {
@@ -236,7 +240,7 @@ export async function noteAgenda(catalog: NoteCatalog, notebookId: string, showH
     const part = await catalog.memo(`agenda:${showHidden ? 1 : 0}`, [notebook], async () => {
       const visible = (await catalog.index(notebook)).filter(note => showHidden || !isNoteHidden({ ...note.metadata, status: note.status }));
       const contents = await catalog.contents(visible);
-      return { tasks: extractTodoTasks(visible.map(note => ({ ...note, content: contents.get(note.path) ?? '' }))), dated: visible.filter(note => note.metadata.created !== undefined || note.metadata.updated !== undefined) };
+      return { tasks: extractTodoTasks(visible.map(note => ({ ...note, content: contents.get(noteRefKey(note)) ?? '' }))), dated: visible.filter(note => note.metadata.created !== undefined || note.metadata.updated !== undefined) };
     });
     // A remembered part keeps the revision it was computed at; each note carries its repository's current one.
     const revision = Object.values(await catalog.revisions([notebook]))[0];
@@ -250,7 +254,7 @@ export async function noteGraph(catalog: NoteCatalog): Promise<NoteGraph> {
   const graph = await catalog.memo(`graph:${hashJson(config.notebooks.map(notebook => notebook.pathAliases || null))}`, notebooks, async () => {
     const notes = (await Promise.all(notebooks.map(notebook => catalog.index(notebook)))).flat();
     const contents = await catalog.contents(notes);
-    return buildNoteGraph(notes.map(note => ({ ...note, content: contents.get(note.path) ?? '' })), { includeHidden: true, notebooks: config.notebooks });
+    return buildNoteGraph(notes.map(note => ({ ...note, content: contents.get(noteRefKey(note)) ?? '' })), { includeHidden: true, notebooks: config.notebooks });
   });
   return { revisions: await catalog.revisions(notebooks), ...graph };
 }

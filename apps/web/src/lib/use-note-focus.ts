@@ -66,7 +66,8 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
   const shown = focusKey && known(focusKey) ? focusKey : null;
   // The displayed Focus's notes are read (without bodies) for tab titles and to hide notes that no longer exist.
   const storedPaths = shown ? (storedLayout(shown)?.panes ?? []).flatMap(pane => pane.tabs.flatMap(tab => tab.kind === 'note' ? [tab.path] : [])) : [];
-  const lookup = useNoteLookup(storedPaths, false);
+  // A Focus belongs to one notebook, so its tabs name notes by path.
+  const lookup = useNoteLookup(storedPaths.map(path => ({ notebookId, path })), false);
   const notes = useMemo(() => new Map(lookup.notes.map(note => [note.path, note])), [lookup.notes]);
   const settled = !lookup.loading && !lookup.error;
   /** A tab is kept until its note or lane is known to be missing. */

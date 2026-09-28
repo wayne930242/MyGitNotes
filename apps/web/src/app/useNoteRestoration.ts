@@ -1,4 +1,4 @@
-import { type NoteListItem } from '@mygitnotes/core/note-query';
+import { type NoteListItem, type NoteRef } from '@mygitnotes/core/note-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { noteRoute } from '../lib/routes.js';
 import React from 'react';
@@ -22,7 +22,7 @@ interface Params {
   setGitStatus: WorkspaceState['setGitStatus'];
   setActionError: WorkspaceState['setActionError'];
   handleSaveNote: ReturnType<typeof useNoteSaving>['handleSaveNote'];
-  readNoteForChange: (path: string) => Promise<NoteItem>;
+  readNoteForChange: (note: NoteRef) => Promise<NoteItem>;
   selectedNotebookId: WorkspaceState['selectedNotebookId'];
   canWriteNotebook: WorkspaceState['canWriteNotebook'];
   t: I18nContextValue['t'];
@@ -82,7 +82,7 @@ export function useNoteRestoration({ remote, readDraft, updateDraft, setEditingN
     const notebook = config?.notebooks.find(item => item.id === notebookId);
     if (!notebook) throw new Error(t('route.notebookNotFound'));
     const path = `${notebook.root.replace(/\/$/, '')}/${folder}/index.md`;
-    const existing = (await queryClient.fetchQuery(noteLookupOptions(queryScope, [path], true))).notes.find(item => item.path === path);
+    const existing = (await queryClient.fetchQuery(noteLookupOptions(queryScope, [{ notebookId: notebook.id, path }], true))).notes[0];
     let note: NoteListItem | undefined = (remote ? readDraft(notebook.id, path)?.note : undefined) || existing;
     if (!note) {
       const metadata = { title: t('folder.index'), tags: [] };

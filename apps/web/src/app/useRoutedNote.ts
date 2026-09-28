@@ -19,7 +19,7 @@ export function useRoutedNote({ config, editorRoute, editorNotebookId, editingNo
   const [routeError, setRouteError] = useState('');
   const routedNotebook = config?.notebooks.find(nb => nb.id === editorNotebookId) || (!editorRoute.notebook ? config?.notebooks[0] : undefined);
   const routedPath = editorRoute.note && routedNotebook ? `${routedNotebook.root}/${editorRoute.note}` : null;
-  const routedLookup = useNoteLookup(routedPath ? [routedPath] : [], true);
+  const routedLookup = useNoteLookup(routedPath && routedNotebook ? [{ notebookId: routedNotebook.id, path: routedPath }] : [], true);
   const routedCommitted = routedLookup.committed[0];
   const routedNote = useMemo<NoteItem | null>(() => {
     if (!routedPath) return null;

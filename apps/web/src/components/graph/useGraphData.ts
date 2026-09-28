@@ -20,8 +20,11 @@ export function useGraphData({ notebooks, filters, lane, activeLane, rows, laneI
 
   const filterQuery = useMemo<Partial<NoteQuery>>(() => (filterValue ? { notebookId: scopeNotebook, folders: filterValue.folders, descendants: filterValue.descendants, tags: filterValue.tags, tagMode: filterValue.tagMode, status: filterValue.status, showHidden: filterValue.showHidden, q: filterValue.q } : { notebookId: scopeNotebook, showHidden: false }), [filterValue, scopeNotebook]);
 
-  const matchingPaths = useNotePaths(filterQuery);
-  const visiblePaths = useNotePaths(filters?.value.showHidden ? null : { notebookId: scopeNotebook, showHidden: false });
+  // Graph nodes are identified by path until they carry their notebook.
+  const matchingNotes = useNotePaths(filterQuery);
+  const visibleNotes = useNotePaths(filters?.value.showHidden ? null : { notebookId: scopeNotebook, showHidden: false });
+  const matchingPaths = useMemo(() => ({ ...matchingNotes, paths: matchingNotes.notes.map(note => note.path) }), [matchingNotes]);
+  const visiblePaths = useMemo(() => ({ ...visibleNotes, paths: visibleNotes.notes.map(note => note.path) }), [visibleNotes]);
   /* eslint-disable react-hooks/exhaustive-deps -- Lane membership is keyed by laneKey; freshly allocated URL arrays must not invalidate the graph and reset mutable simulation nodes. */
   const shownLanes = useMemo(() => [...rows.filter(row => laneIds.includes(row.id)), ...(lane ? [lane] : [])], [rows, laneKey, lane]);
   /* eslint-enable react-hooks/exhaustive-deps */

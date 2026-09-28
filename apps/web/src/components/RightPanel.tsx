@@ -1,3 +1,4 @@
+import type { NoteRef } from '@mygitnotes/core/note-query';
 import { Button } from './Button.js';
 import { type ReactNode, useLayoutEffect } from 'react';
 import { Braces, CalendarDays, GitBranch, ImageIcon, Info, ListTodo, ListTree, Search, Type } from 'lucide-react';
@@ -24,7 +25,7 @@ interface RightPanelProps {
   onOpenNote: (note: NoteListItem) => void;
   onSaveNote: (params: { path: string; content: string; metadata?: Record<string, unknown>; notebookId: string; }) => Promise<NoteItem>;
   /** Reads a note in full before a panel action rewrites it. */
-  onReadNote: (path: string) => Promise<NoteItem>;
+  onReadNote: (note: NoteRef) => Promise<NoteItem>;
   gitStatus: GitStatus | null;
   deletedNotes: NoteItem[];
   onRestoreNote: (note: NoteItem) => void;

@@ -95,7 +95,7 @@ export function useStudyWorkspace(onSaved: (note?: NoteItem) => void) {
     setError('');
     try {
       // A study card carries no body; the note the review applies to is read in full first.
-      const expected = (await queryClient.fetchQuery(noteLookupOptions(scope, [note.path], true))).notes.find(item => item.path === note.path);
+      const expected = (await queryClient.fetchQuery(noteLookupOptions(scope, [note], true))).notes[0];
       if (!expected || typeof expected.content !== 'string') throw new Error(t('notes.readFailed', { path: note.path }));
       const base = snapshot.current, latest = await read();
       if (!same(latest.study, base.study)) throw new Error(t('study.conflict'));

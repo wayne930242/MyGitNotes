@@ -1,5 +1,5 @@
 import { isNoteHidden } from '@mygitnotes/core/note-status';
-import { noteDirectory, noteMatchesQuery } from '@mygitnotes/core/note-query';
+import { noteDirectory, noteMatchesQuery, type NoteRef, noteRefKey } from '@mygitnotes/core/note-query';
 import type { NoteAgenda, NotebookFacets, NoteListItem, NoteQuery } from '@mygitnotes/core/note-query';
 import { extractTodoTasks } from '@mygitnotes/core/note-agenda';
 import { extractNoteLinks } from '@mygitnotes/core/note-graph';
@@ -10,6 +10,7 @@ import type { WorkingNotes } from './working-notes.js';
  * Remote drafts live only in this browser, so server pages never contain them. Every server
  * answer is re-judged here against the same core filter the server used, which keeps a staged
  * edit visible in the view it now belongs to without refetching or losing the scroll position.
+ * Drafts are keyed by `noteRefKey`.
  */
 
 export interface DraftRows {
@@ -30,7 +31,7 @@ export function overlayDraftRows(rows: NoteListItem[], query: NoteQuery, drafts:
   let removed = 0;
   for (const row of rows) {
     if (row.path === options.hide) continue;
-    const draft = drafts[row.path];
+    const draft = drafts[noteRefKey(row)];
     if (!draft) {
       notes.push(row);
       continue;
@@ -38,23 +39,23 @@ export function overlayDraftRows(rows: NoteListItem[], query: NoteQuery, drafts:
     if (matches(draft.note, query)) notes.push(draft.note);
     else removed++;
   }
-  const loaded = new Set(rows.map(row => row.path));
-  const uncommitted = entries.filter(entry => entry.note.path !== options.hide && !loaded.has(entry.note.path) && matches(entry.note, query) && !matches(entry.base, query)).map(entry => entry.note);
+  const loaded = new Set(rows.map(noteRefKey));
+  const uncommitted = entries.filter(entry => entry.note.path !== options.hide && !loaded.has(noteRefKey(entry.note)) && matches(entry.note, query) && !matches(entry.base, query)).map(entry => entry.note);
   return { notes, uncommitted, removed };
 }
 
-export function overlayDraftPaths(paths: string[], query: NoteQuery, drafts: WorkingNotes): string[] {
+export function overlayDraftPaths(notes: NoteRef[], query: NoteQuery, drafts: WorkingNotes): NoteRef[] {
   const entries = Object.values(drafts);
-  if (!entries.length) return paths;
-  const kept = paths.filter(path => !drafts[path] || matches(drafts[path].note, query));
-  const known = new Set(kept);
-  return [...kept, ...entries.filter(entry => !known.has(entry.note.path) && matches(entry.note, query)).map(entry => entry.note.path)];
+  if (!entries.length) return notes;
+  const kept = notes.filter(note => !drafts[noteRefKey(note)] || matches(drafts[noteRefKey(note)].note, query));
+  const known = new Set(kept.map(noteRefKey));
+  return [...kept, ...entries.filter(entry => !known.has(noteRefKey(entry.note)) && matches(entry.note, query)).map(entry => ({ notebookId: entry.note.notebookId, path: entry.note.path }))];
 }
 
 /** Lookup answers in the requested order, with a staged draft replacing the committed note. */
-export function overlayDraftLookup(paths: string[], notes: NoteListItem[], drafts: WorkingNotes): NoteListItem[] {
-  const byPath = new Map(notes.map(note => [note.path, note]));
-  return paths.map(path => drafts[path]?.note || byPath.get(path)).filter(Boolean) as NoteListItem[];
+export function overlayDraftLookup(refs: NoteRef[], notes: NoteListItem[], drafts: WorkingNotes): NoteListItem[] {
+  const byKey = new Map(notes.map(note => [noteRefKey(note), note]));
+  return refs.map(ref => drafts[noteRefKey(ref)]?.note || byKey.get(noteRefKey(ref))).filter(Boolean) as NoteListItem[];
 }
 
 type FacetSource = Pick<NoteListItem, 'notebookId' | 'path' | 'status' | 'tags' | 'metadata'>;
@@ -93,8 +94,8 @@ export function overlayDraftAgenda(agenda: NoteAgenda, drafts: WorkingNotes, opt
   const entries = Object.values(drafts).filter(entry => (options.notebookId === 'all' || entry.note.notebookId === options.notebookId) && (options.showHidden || !isNoteHidden({ ...entry.note.metadata, status: entry.note.status })));
   if (!Object.keys(drafts).length) return agenda;
   const drafted = new Set(Object.keys(drafts));
-  const tasks = [...agenda.tasks.filter(task => !drafted.has(task.notePath)), ...extractTodoTasks(entries.map(entry => entry.note))];
-  const dated = [...agenda.dated.filter(note => !drafted.has(note.path)), ...entries.filter(entry => entry.note.metadata.created !== undefined || entry.note.metadata.updated !== undefined).map(entry => entry.note)];
+  const tasks = [...agenda.tasks.filter(task => !drafted.has(noteRefKey({ notebookId: task.notebookId, path: task.notePath }))), ...extractTodoTasks(entries.map(entry => entry.note))];
+  const dated = [...agenda.dated.filter(note => !drafted.has(noteRefKey(note))), ...entries.filter(entry => entry.note.metadata.created !== undefined || entry.note.metadata.updated !== undefined).map(entry => entry.note)];
   return { revisions: agenda.revisions, tasks, dated };
 }
 

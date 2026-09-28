@@ -235,7 +235,7 @@ try {
     }
     if (url.pathname === '/api/notes/lookup') {
       const lookup = JSON.parse(request.postData());
-      body = await lookupNotes(await hostedCatalog(), lookup.paths, lookup.content === true);
+      body = await lookupNotes(await hostedCatalog(), lookup.notes, lookup.content === true);
     }
     if (url.pathname === '/api/notes/facets') body = await noteFacets(await hostedCatalog(), url.searchParams.get('showHidden') === '1');
     if (url.pathname === '/api/notes/read') body = { note: remoteNote };

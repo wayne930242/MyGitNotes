@@ -5,12 +5,15 @@ import { fetchGitStatus, saveNote } from '../lib/api.js';
 import type { NoteItem } from '../lib/types.js';
 import type { I18nContextValue } from '../lib/i18n/index.js';
 import type { WorkspaceState } from './workspace-state.js';
+import type { useWorkspaceNotes } from './useWorkspaceNotes.js';
+
+type WorkspaceNotes = ReturnType<typeof useWorkspaceNotes>;
 
 interface Params {
   canWriteNotebook: WorkspaceState['canWriteNotebook'];
   remote: WorkspaceState['remote'];
   readDraft: WorkspaceState['readDraft'];
-  readCommittedNote: (path: string) => Promise<NoteItem>;
+  readCommittedNote: WorkspaceNotes['readCommittedNote'];
   t: I18nContextValue['t'];
   stageWorkingNote: WorkspaceState['stageWorkingNote'];
   invalidateNotes: () => void;
@@ -28,7 +31,7 @@ export function useNoteSaving({ canWriteNotebook, remote, readDraft, readCommitt
       // A draft is staged against the committed note it was edited from; read it when the
       // caller did not bring one, so nothing is written from a list row without a body.
       const pending = readDraft(params.notebookId, params.path);
-      const base = pending?.base === null ? null : params.baseNote || pending?.base || await readCommittedNote(params.path);
+      const base = pending?.base === null ? null : params.baseNote || pending?.base || await readCommittedNote({ notebookId: params.notebookId, path: params.path });
       const original = pending?.note || base;
       if (!original) throw new Error(t('notes.unavailable'));
       return stageWorkingNote({ ...original, content: params.content, metadata: params.metadata || original.metadata, title: typeof params.metadata?.title === 'string' ? params.metadata.title : original.title, status: typeof params.metadata?.status === 'string' ? params.metadata.status : undefined, tags: Array.isArray(params.metadata?.tags) ? params.metadata.tags.map(String) : [], revision: base?.revision || original.revision }, base, pending?.blocked);

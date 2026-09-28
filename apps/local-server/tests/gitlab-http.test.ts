@@ -110,7 +110,7 @@ describe('GitLab HTTP and MCP integration', () => {
     expect(next.notes.map((note: any) => note.path)).toEqual(['notes/ex/folder/b.md']);
     const facets = await fetch(`${base}/api/notes/facets`, { headers }).then(r => r.json());
     expect(facets.notebooks.ex).toMatchObject({ total: 2, hidden: 0, tags: { work: 1 } });
-    const lookup = await fetch(`${base}/api/notes/lookup`, post({ paths: ['notes/ex/a.md', 'notes/ex/missing.md'], content: true })).then(r => r.json());
+    const lookup = await fetch(`${base}/api/notes/lookup`, post({ notes: [{ notebookId: 'ex', path: 'notes/ex/a.md' }, { notebookId: 'ex', path: 'notes/ex/missing.md' }], content: true })).then(r => r.json());
     expect(lookup.notes.map((note: any) => note.path)).toEqual(['notes/ex/a.md']);
     expect(lookup.notes[0].content).toContain('# Alpha');
     expect((await fetch(`${base}/api/notes/query?notebookId=ex&revisions=${revisions('zz')}`, { headers })).status).toBe(400);

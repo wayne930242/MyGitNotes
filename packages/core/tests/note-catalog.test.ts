@@ -108,7 +108,7 @@ describe('note queries', () => {
   it('returns every matching path for path selection', async () => {
     const paths = await queryNotePaths(await catalog(), query({ notebookId: 'all', tags: ['b'] }));
     expect(paths).toMatchObject({ revisions, total: 2 });
-    expect(paths.paths).toEqual(['notes/work/deep/beta.md', 'notes/work/alpha.md']);
+    expect(paths.notes).toEqual([{ notebookId: 'work', path: 'notes/work/deep/beta.md' }, { notebookId: 'work', path: 'notes/work/alpha.md' }]);
   });
 });
 
@@ -121,10 +121,11 @@ describe('facets, lookup, agenda and graph', () => {
   });
 
   it('looks up notes by path, keeping request order and skipping unknown paths', async () => {
-    const result = await lookupNotes(await catalog(), ['notes/life/gamma.md', 'notes/work/missing.md', 'notes/work/alpha.md'], true);
+    const result = await lookupNotes(await catalog(), [{ notebookId: 'life', path: 'notes/life/gamma.md' }, { notebookId: 'work', path: 'notes/work/missing.md' }, { notebookId: 'work', path: 'notes/work/alpha.md' }, { notebookId: 'life', path: 'notes/work/alpha.md' }], true);
     expect(result.notes.map(note => note.path)).toEqual(['notes/life/gamma.md', 'notes/work/alpha.md']);
     expect(result.notes[0].content).toBe(bodies['notes/life/gamma.md']);
     await expect(lookupNotes(await catalog(), [], false)).rejects.toThrow(/1 and 200/);
+    await expect(lookupNotes(await catalog(), ['notes/life/gamma.md'], false)).rejects.toThrow(/notebook and path/);
   });
 
   it('collects tasks and dated notes for the requested scope', async () => {
@@ -147,7 +148,7 @@ describe('a catalog over several repositories', () => {
   it('reports the revisions of the repositories a query involves', async () => {
     expect((await queryNotes(await catalog(), query({ notebookId: 'work' }), { limit: 50, content: false })).revisions).toEqual({ [WORK]: revisions[WORK] });
     expect((await queryNotes(await catalog(), query({ notebookId: 'all' }), { limit: 50, content: false })).revisions).toEqual(revisions);
-    expect((await lookupNotes(await catalog(), ['notes/life/gamma.md'], false)).revisions).toEqual({ [LIFE]: revisions[LIFE] });
+    expect((await lookupNotes(await catalog(), [{ notebookId: 'life', path: 'notes/life/gamma.md' }], false)).revisions).toEqual({ [LIFE]: revisions[LIFE] });
     expect((await noteFacets(await catalog(), false)).revisions).toEqual(revisions);
   });
 
@@ -184,5 +185,21 @@ describe('a catalog over several repositories', () => {
     expect(() => parseRevisions('{')).toThrow(/Invalid revisions/);
     expect(() => parseRevisions({ [WORK]: 'short' })).toThrow(/Invalid revisions/);
     expect(() => parseRevisions(['a'.repeat(40)])).toThrow(/Invalid revisions/);
+  });
+});
+
+describe('notes with the same path in two repositories', () => {
+  it('stay distinct in lookups and path queries', async () => {
+    // Two repositories can each hold a notebook whose root is `notes/shared`.
+    const shared = [{ id: 'one', title: 'One', root: 'notes/shared' }, { id: 'two', title: 'Two', root: 'notes/shared' }] as NotebookConfig[];
+    const workspace: WorkspaceConfig = { ...config, notebooks: shared };
+    const note = (notebookId: string) => item('notes/shared/a.md', notebookId, { title: notebookId });
+    const repository = (id: string, notebook: NotebookConfig): CatalogRepository => ({ id, notebooks: [notebook], catalog: { revision: async () => 'f'.repeat(40), index: async nb => [note(nb.id)], contents: async notes => new Map(notes.map(n => [n.path, n.notebookId])), memo: (_kind, _notebooks, compute) => compute() } });
+    const catalog = await workspaceCatalog(workspace, [repository('github:o/one@main', shared[0]), repository('github:o/two@main', shared[1])]);
+    const found = await lookupNotes(catalog, [{ notebookId: 'two', path: 'notes/shared/a.md' }, { notebookId: 'one', path: 'notes/shared/a.md' }], false);
+    expect(found.notes.map(n => n.title)).toEqual(['two', 'one']);
+    const bodies = await lookupNotes(catalog, [{ notebookId: 'one', path: 'notes/shared/a.md' }, { notebookId: 'two', path: 'notes/shared/a.md' }], true);
+    expect(bodies.notes.map(n => n.content)).toEqual(['one', 'two']);
+    expect((await queryNotePaths(catalog, query({ notebookId: 'all', sort: 'title', order: 'asc' }))).notes).toEqual([{ notebookId: 'one', path: 'notes/shared/a.md' }, { notebookId: 'two', path: 'notes/shared/a.md' }]);
   });
 });

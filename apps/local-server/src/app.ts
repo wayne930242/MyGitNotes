@@ -153,7 +153,7 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     });
     app.post('/api/notes/lookup', async (req, res) => {
       try {
-        res.json(await lookupNotes(await catalog(res, req.body?.revisions), req.body?.paths, req.body?.content === true));
+        res.json(await lookupNotes(await catalog(res, req.body?.revisions), req.body?.notes, req.body?.content === true));
       } catch (error) {
         fail(res, error);
       }

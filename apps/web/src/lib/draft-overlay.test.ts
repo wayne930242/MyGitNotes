@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_NOTE_QUERY, type NotebookFacets, type NoteListItem, type NoteQuery } from '@mygitnotes/core/note-query';
+import { DEFAULT_NOTE_QUERY, type NotebookFacets, type NoteListItem, type NoteQuery, noteRefKey } from '@mygitnotes/core/note-query';
 import { overlayDraftFacets, overlayDraftLookup, overlayDraftPaths, overlayDraftRows, overlayGraphDrafts } from './draft-overlay.js';
 import type { WorkingNotes } from './working-notes.js';
 import type { NoteItem } from './types.js';
@@ -7,7 +7,7 @@ import type { NoteItem } from './types.js';
 const row = (path: string, extra: Partial<NoteListItem> = {}): NoteListItem => ({ id: path, path, notebookId: 'life', title: path, tags: [], metadata: {}, ...extra });
 const note = (path: string, extra: Partial<NoteItem> = {}): NoteItem => ({ id: path, path, notebookId: 'life', title: path, tags: [], metadata: {}, content: '', ...extra });
 const query = (extra: Partial<NoteQuery> = {}): NoteQuery => ({ ...DEFAULT_NOTE_QUERY, notebookId: 'life', ...extra });
-const drafts = (...entries: { note: NoteItem; base: NoteItem | null; }[]): WorkingNotes => Object.fromEntries(entries.map(entry => [entry.note.path, entry]));
+const drafts = (...entries: { note: NoteItem; base: NoteItem | null; }[]): WorkingNotes => Object.fromEntries(entries.map(entry => [noteRefKey(entry.note), entry]));
 
 describe('draft rows over a loaded page', () => {
   it('updates a drafted row in place and keeps the others', () => {
@@ -76,12 +76,19 @@ describe('draft facets', () => {
 describe('draft paths, lookups and graph', () => {
   it('drops a path the draft no longer matches and adds one it now matches', () => {
     const staged = drafts({ note: note('notes/life/a.md', { status: 'done' }), base: note('notes/life/a.md', { status: 'inbox' }) }, { note: note('notes/life/new.md', { status: 'inbox' }), base: null });
-    expect(overlayDraftPaths(['notes/life/a.md'], query({ status: 'inbox' }), staged)).toEqual(['notes/life/new.md']);
+    expect(overlayDraftPaths([{ notebookId: 'life', path: 'notes/life/a.md' }], query({ status: 'inbox' }), staged)).toEqual([{ notebookId: 'life', path: 'notes/life/new.md' }]);
+  });
+
+  it('keeps drafts of the same path in two notebooks apart', () => {
+    const other = { ...note('notes/life/a.md', { title: 'Other notebook' }), notebookId: 'work' };
+    const staged = drafts({ note: note('notes/life/a.md', { title: 'Life draft' }), base: note('notes/life/a.md') }, { note: other, base: null });
+    const result = overlayDraftLookup([{ notebookId: 'work', path: 'notes/life/a.md' }, { notebookId: 'life', path: 'notes/life/a.md' }], [], staged);
+    expect(result.map(item => item.title)).toEqual(['Other notebook', 'Life draft']);
   });
 
   it('answers a lookup with the staged draft, in the requested order', () => {
     const staged = drafts({ note: note('notes/life/a.md', { title: 'Draft' }), base: note('notes/life/a.md') });
-    const result = overlayDraftLookup(['notes/life/a.md', 'notes/life/b.md'], [row('notes/life/b.md'), row('notes/life/a.md')], staged);
+    const result = overlayDraftLookup([{ notebookId: 'life', path: 'notes/life/a.md' }, { notebookId: 'life', path: 'notes/life/b.md' }], [row('notes/life/b.md'), row('notes/life/a.md')], staged);
     expect(result.map(item => item.title)).toEqual(['Draft', 'notes/life/b.md']);
   });
 

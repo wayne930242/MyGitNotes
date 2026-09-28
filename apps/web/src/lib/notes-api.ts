@@ -1,10 +1,10 @@
-import { noteQuerySearch } from '@mygitnotes/core/note-query';
+import { noteQuerySearch, type NoteRef, noteRefKey } from '@mygitnotes/core/note-query';
 import type { NoteAgenda, NoteFacets, NoteGraph, NoteLookup, NotePaths, NoteQuery, NoteQueryPage } from '@mygitnotes/core/note-query';
 import type { RevisionSet } from '@mygitnotes/core/repository';
 import { responseError } from './api.js';
 
 const API_BASE = '/api';
-/** The lookup route accepts at most 200 paths per request. */
+/** The lookup route accepts at most 200 notes per request. */
 const LOOKUP_BATCH = 200;
 
 async function readJson<T>(url: string, fallback: string): Promise<T> {
@@ -55,14 +55,14 @@ export function fetchNoteGraph(revisions?: RevisionSet): Promise<NoteGraph> {
   return readJson(`${API_BASE}/notes/graph${search ? `?${search}` : ''}`, 'Failed to load the note graph');
 }
 
-/** Reads notes by path, in batches the route accepts; the result keeps the requested order. */
-export async function lookupNotes(paths: string[], options: { content?: boolean; revisions?: RevisionSet; } = {}): Promise<NoteLookup> {
-  const unique = [...new Set(paths)];
+/** Reads notes by notebook and path, in batches the route accepts; the result keeps the requested order. */
+export async function lookupNotes(notes: NoteRef[], options: { content?: boolean; revisions?: RevisionSet; } = {}): Promise<NoteLookup> {
+  const unique = [...new Map(notes.map(note => [noteRefKey(note), { notebookId: note.notebookId, path: note.path }])).values()];
   if (!unique.length) return { revisions: options.revisions ?? {}, notes: [] };
-  const batches: string[][] = [];
+  const batches: NoteRef[][] = [];
   for (let index = 0; index < unique.length; index += LOOKUP_BATCH) batches.push(unique.slice(index, index + LOOKUP_BATCH));
   const pages = await Promise.all(batches.map(async batch => {
-    const res = await fetch(`${API_BASE}/notes/lookup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paths: batch, content: options.content, revisions: options.revisions }) });
+    const res = await fetch(`${API_BASE}/notes/lookup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes: batch, content: options.content, revisions: options.revisions }) });
     if (!res.ok) throw await responseError(res, 'Failed to read notes');
     return res.json() as Promise<NoteLookup>;
   }));

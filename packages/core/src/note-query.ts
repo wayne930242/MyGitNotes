@@ -19,6 +19,14 @@ export function noteSummary(note: NoteItem) {
   return { id: note.id, path: note.path, notebookId: note.notebookId, title: note.title, description: noteDescription(note), status: note.status ?? null, tags: note.tags, metadata: note.metadata, size: note.size };
 }
 
+/** A note's identity across repositories: its notebook and its repository-relative path. */
+export interface NoteRef {
+  notebookId: string;
+  path: string;
+}
+/** A string key for a note; notebook ids hold no colon, so the first colon separates the parts. */
+export const noteRefKey = (note: NoteRef) => `${note.notebookId}:${note.path}`;
+
 /** A note as returned by list queries; `content` is present only when requested. */
 export interface NoteListItem {
   revision?: string;
@@ -63,7 +71,7 @@ export interface NoteQueryPage {
 }
 export interface NotePaths {
   revisions: RevisionSet;
-  paths: string[];
+  notes: NoteRef[];
   total: number;
 }
 export interface NotebookFacets {

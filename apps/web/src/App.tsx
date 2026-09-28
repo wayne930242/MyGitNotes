@@ -18,7 +18,7 @@ import { useWorkingNoteCommit } from './app/useWorkingNoteCommit.js';
 import { useFileNavigation } from './app/useFileNavigation.js';
 import { useChangeDialog } from './app/useChangeDialog.js';
 import { useShortcutSurface } from './app/useShortcutSurface.js';
-import { type NoteListItem, noteQueryStatuses } from '@mygitnotes/core/note-query';
+import { type NoteListItem, noteQueryStatuses, noteRefKey } from '@mygitnotes/core/note-query';
 import { useWorkspaceSync } from './lib/use-workspace-sync.js';
 import { WorkspaceLinks } from './components/WorkspaceLinks.js';
 import { ImageLightbox } from './components/ImageLightbox.js';
@@ -105,7 +105,7 @@ const AppContent: React.FC = () => {
   const canManageTags = repositories.some(repository => repository.notebooks.length) && repositories.every(repository => repository.write || !repository.notebooks.length);
   const editorRegistry = useNoteEditorRegistry();
 
-  const { queryClient, queryScope, invalidateNotes, refreshNotes, staleNotice, readCommittedNote, readNoteForChange } = useWorkspaceNotes({ sourceId, repositories, activeWorkingNotes, remote, refreshWorkspace, readDraftAtPath, t });
+  const { queryClient, queryScope, invalidateNotes, refreshNotes, staleNotice, readCommittedNote, readNoteForChange } = useWorkspaceNotes({ sourceId, repositories, activeWorkingNotes, remote, refreshWorkspace, readDraft, t });
 
   // Tag management: rename/merge/delete across the whole workspace, one commit per repository,
   // with a session-lifetime undo (kept in `tagOperations.history` until page reload).
@@ -164,6 +164,7 @@ const AppContent: React.FC = () => {
     // The note's repository decides whether it may be written and where its drafts are kept.
     const repository = repositoryFor(note.notebookId);
     const writable = Boolean(repository?.write);
+    const draft = activeWorkingNotes[noteRefKey(note)];
     return {
       statuses: noteQueryStatuses(config?.notebooks || [], note.notebookId, Object.keys(facetsQuery.facets?.[note.notebookId]?.statuses || {})),
       metadataFields: config?.notebooks.find(nb => nb.id === note.notebookId)?.metadata,
@@ -180,14 +181,14 @@ const AppContent: React.FC = () => {
       readOnly: !writable,
       autoSave: true,
       draftMode: remote,
-      remoteBase: activeWorkingNotes[note.path]?.base || (committed && typeof committed.content === 'string' ? committed : undefined),
-      conflictReason: activeWorkingNotes[note.path]?.blocked,
+      remoteBase: draft?.base || (committed && typeof committed.content === 'string' ? committed : undefined),
+      conflictReason: draft?.blocked,
       onMarkConflict: remote
         ? (reason, draft, base) => {
           stageWorkingNote(draft, base, reason);
         }
         : undefined,
-      onReadRemote: remote ? (activeWorkingNotes[note.path]?.base !== null ? readNote : undefined) : readNote,
+      onReadRemote: remote ? (draft?.base !== null ? readNote : undefined) : readNote,
       branch: repository?.branch ?? '',
       draftScope: repository ? draftScope(repository) : '',
     };

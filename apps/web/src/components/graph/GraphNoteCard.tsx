@@ -66,7 +66,7 @@ export function GraphNoteCard({ node, session, editorRef, onSession, onCollapse,
           ))}
         </div>
       )}
-      <HostedNoteEditor path={node.id} frame='compact' active={false} editorRef={editorRef} onSession={onSession} onCaret={onCaret} />
+      <HostedNoteEditor notebookId={node.notebookId} path={node.id} frame='compact' active={false} editorRef={editorRef} onSession={onSession} onCaret={onCaret} />
       {!maximized && <button type='button' className='graph-card-resize' aria-label={t('graph.resize')} onPointerDown={onResize}>◢</button>}
     </article>
   );

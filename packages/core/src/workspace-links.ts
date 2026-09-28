@@ -26,6 +26,11 @@ import type { NotebookConfig } from './types.js';
 
 let workspaceNotebooksRegistry: NotebookConfig[] = [];
 
+/** The notebook whose root holds a path; the longest root wins, as nested roots allow. */
+export function notebookOfPath(file: string, notebooks: NotebookConfig[]): NotebookConfig | undefined {
+  return [...notebooks].sort((a, b) => b.root.length - a.root.length).find(notebook => file === notebook.root || file.startsWith(`${notebook.root}/`));
+}
+
 export function setWorkspaceNotebooks(notebooks: NotebookConfig[]): void {
   workspaceNotebooksRegistry = notebooks;
 }

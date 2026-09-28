@@ -27,16 +27,16 @@ export function useLaneNotes(row: ScreenRow | undefined, options: { content?: bo
   const dynamic = row?.kind === 'dynamic' ? laneNoteQuery(row) : null;
   const paged = useNoteList(options.all ? null : dynamic, { content: options.content });
   const allPaths = useNotePaths(options.all ? dynamic : null);
-  const pinned = row?.kind === 'custom' ? row.items.flatMap(item => item.kind === 'note' ? [item.path] : []) : [];
-  const lookupPaths = row?.kind === 'custom' ? pinned : (options.all ? allPaths.paths : []);
-  const lookup = useNoteLookup(lookupPaths, Boolean(options.content));
+  const pinned = row?.kind === 'custom' ? row.items.flatMap(item => item.kind === 'note' ? [{ notebookId: item.notebookId, path: item.path }] : []) : [];
+  const lookupNotes = row?.kind === 'custom' ? pinned : (options.all ? allPaths.notes : []);
+  const lookup = useNoteLookup(lookupNotes, Boolean(options.content));
   if (row?.kind === 'custom' || options.all) {
     return { notes: lookup.notes, loading: allPaths.loading || lookup.loading, error: allPaths.error || lookup.error, hasMore: false, loadingMore: false, loadMore: () => {} };
   }
   return { notes: [...paged.uncommitted, ...paged.notes], loading: paged.loading, error: paged.error, hasMore: paged.hasMore, loadingMore: paged.loadingMore, loadMore: paged.loadMore };
 }
 
-/** The note paths each lane holds, for views that draw several lanes at once (the graph). */
+/** The note paths each lane holds, for views that draw several lanes at once (the graph); a lane stays inside one notebook, where a path names one note. */
 export function useLanePaths(rows: ScreenRow[]): { paths: Map<string, string[]>; loading: boolean; error: string; } {
   const scope = useNoteQueryScope();
   const dynamic = rows.filter(row => row.kind === 'dynamic');
@@ -45,7 +45,7 @@ export function useLanePaths(rows: ScreenRow[]): { paths: Map<string, string[]>;
   for (const row of rows) {
     if (row.kind === 'custom') paths.set(row.id, row.items.flatMap(item => item.kind === 'note' ? [item.path] : []));
   }
-  dynamic.forEach((row, index) => paths.set(row.id, (results[index]?.data as NotePaths | undefined)?.paths ?? []));
+  dynamic.forEach((row, index) => paths.set(row.id, ((results[index]?.data as NotePaths | undefined)?.notes ?? []).map(note => note.path)));
   const failed = results.find(result => result.error);
   return { paths, loading: results.some(result => result.isPending), error: failed?.error instanceof Error ? failed.error.message : '' };
 }

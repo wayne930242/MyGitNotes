@@ -1,4 +1,4 @@
-import { type NoteListItem } from '@mygitnotes/core/note-query';
+import { type NoteListItem, type NoteRef } from '@mygitnotes/core/note-query';
 import { useNavigate } from 'react-router-dom';
 import React, { useState } from 'react';
 import { deleteNote, fetchGitStatus, restoreNote } from '../lib/api.js';
@@ -17,7 +17,7 @@ interface Params {
   returnTo: string;
   remote: WorkspaceState['remote'];
   setActionError: WorkspaceState['setActionError'];
-  readNoteForChange: (path: string) => Promise<NoteItem>;
+  readNoteForChange: (note: NoteRef) => Promise<NoteItem>;
   invalidateNotes: () => void;
   setGitStatus: WorkspaceState['setGitStatus'];
 }
@@ -53,7 +53,7 @@ export function useDeletionUndo({ canWriteNotebook, revisionFor, setNotebookRevi
     // 1. Read the full note first; Undo restores it from this buffer.
     let deleted: NoteItem;
     try {
-      deleted = await readNoteForChange(note.path);
+      deleted = await readNoteForChange(note);
     } catch (error) {
       setActionError((error as Error).message);
       return;

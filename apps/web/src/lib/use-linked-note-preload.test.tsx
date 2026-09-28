@@ -20,7 +20,7 @@ beforeEach(() => {
     return id;
   });
   vi.stubGlobal('cancelIdleCallback', (key: number) => idle.delete(key));
-  fetcher = vi.fn(async (_url: string, init: RequestInit) => ({ ok: true, json: async () => ({ revision: '', notes: JSON.parse(init.body as string).paths.map((path: string) => ({ path, content: '# Target' })) }) }));
+  fetcher = vi.fn(async (_url: string, init: RequestInit) => ({ ok: true, json: async () => ({ revision: '', notes: JSON.parse(init.body as string).notes.map(({ notebookId, path }: { notebookId: string; path: string; }) => ({ notebookId, path, content: '# Target' })) }) }));
   vi.stubGlobal('fetch', fetcher);
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   setNoteQueryScope(scope);
@@ -58,7 +58,7 @@ it('waits for idle, bounds reads to eight and shares the editor body cache', asy
   for (let index = 0; index < 12; index++) await tick();
   expect(fetcher).toHaveBeenCalledTimes(8);
   for (const [, init] of fetcher.mock.calls) expect(JSON.parse(init.body as string).content).toBe(true);
-  await client.fetchQuery(noteLookupOptions(scope, ['notes/target-0.md'], true));
+  await client.fetchQuery(noteLookupOptions(scope, [{ notebookId: 'n', path: 'notes/target-0.md' }], true));
   expect(fetcher).toHaveBeenCalledTimes(8);
 });
 
@@ -96,7 +96,7 @@ it('leaves a failed speculative read retryable by an explicit open', async () =>
   await tick();
   await tick();
   expect(fetcher).toHaveBeenCalledTimes(1);
-  await client.fetchQuery(noteLookupOptions(scope, ['notes/target-0.md'], true));
+  await client.fetchQuery(noteLookupOptions(scope, [{ notebookId: 'n', path: 'notes/target-0.md' }], true));
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
 
@@ -107,8 +107,8 @@ it('separates preloaded bodies by workspace revision', async () => {
   await tick();
   expect(fetcher).toHaveBeenCalledTimes(2);
   expect(JSON.parse(fetcher.mock.calls[1][1].body as string).revisions).toEqual({ 'github:me/notes': 'next' });
-  expect(client.getQueryData(noteLookupOptions(scope, ['notes/target-0.md'], true).queryKey)).toBeDefined();
-  expect(client.getQueryData(noteLookupOptions({ ...scope, revisions: { 'github:me/notes': 'next' } }, ['notes/target-0.md'], true).queryKey)).toBeDefined();
+  expect(client.getQueryData(noteLookupOptions(scope, [{ notebookId: 'n', path: 'notes/target-0.md' }], true).queryKey)).toBeDefined();
+  expect(client.getQueryData(noteLookupOptions({ ...scope, revisions: { 'github:me/notes': 'next' } }, [{ notebookId: 'n', path: 'notes/target-0.md' }], true).queryKey)).toBeDefined();
 });
 
 it('pauses idle reads in hidden tabs and resumes when visible', async () => {

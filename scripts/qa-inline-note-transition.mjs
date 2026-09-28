@@ -46,7 +46,7 @@ try {
     page.on('request', async request => {
       if (request.url().endsWith('/api/notes/lookup')) {
         const body = JSON.parse(request.postData());
-        if (body.paths.includes('notes/target.md')) {
+        if (body.notes.some(note => note.path === 'notes/target.md')) {
           requests.push({ at: Date.now(), ...body });
           await new Promise(resolve => setTimeout(resolve, 350));
         }

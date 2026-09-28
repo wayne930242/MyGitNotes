@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { NotebookConfig } from './types.js';
 import { noteLookupOptions, useNoteQueryScope } from './use-note-queries.js';
 import { parseWorkspaceRoute } from './routes.js';
-import { resolveWorkspaceHref } from './workspace-links.js';
+import { notebookOfPath, resolveWorkspaceHref } from './workspace-links.js';
 
 /** Resolve only note candidates; folders, assets, anchors and external URLs need no speculative reads. */
 export function linkedNotePath(href: string, source: string, notebooks: NotebookConfig[], origin: string): string | null {
@@ -60,22 +60,23 @@ export function useLinkedNotePreload(surface: RefObject<HTMLElement>, notebooks:
       const visible = root.querySelector('.note-dialog') || root;
       const elements = visible.querySelectorAll<HTMLElement>('[data-workspace-link][data-source-path]');
       const sources = new Set<string>();
-      const candidates: { source: string; path: string; }[] = [];
+      const candidates: { source: string; path: string; notebookId: string; }[] = [];
       for (let index = 0; index < Math.min(elements.length, SCAN_LIMIT); index++) {
         const element = elements[index];
         const source = element.dataset.sourcePath!;
         if (!sources.has(source) && sources.size >= SOURCE_LIMIT) continue;
         sources.add(source);
         const path = linkedNotePath(element.dataset.workspaceLink!, source, notebooks, window.location.origin);
-        if (path) candidates.push({ source, path });
+        const notebook = path ? notebookOfPath(path, notebooks) : undefined;
+        if (path && notebook) candidates.push({ source, path, notebookId: notebook.id });
       }
       for (const source of attempted.keys()) if (!sources.has(source)) attempted.delete(source);
-      for (const { source, path } of candidates) {
+      for (const { source, path, notebookId } of candidates) {
         const paths = attempted.get(source) || new Set<string>();
         attempted.set(source, paths);
         if (paths.size >= PRELOAD_LIMIT || paths.has(path)) continue;
         paths.add(path);
-        const options = noteLookupOptions(scope, [path], true);
+        const options = noteLookupOptions(scope, [{ notebookId, path }], true);
         const query = client.getQueryState(options.queryKey);
         if (query?.data && !query.isInvalidated) continue;
         busy = true;
