@@ -757,6 +757,8 @@ export const en = {
   'editor.unsavedLocalChanges': 'Unsaved local changes',
   'editor.savedLocallyPendingCommit': 'Saved locally · Pending commit',
   'editor.uncommittedChanges': 'Uncommitted Changes',
+  'editor.quickRefresh': 'Refresh',
+  'editor.quickRefreshHint': 'Load the latest version now; local edits are merged with it',
   'editor.quickCommit': 'Commit',
   'editor.confirmQuickCommit': 'Click again to commit',
   'editor.quickCommitHint': 'Commit this note alone; click twice to confirm',

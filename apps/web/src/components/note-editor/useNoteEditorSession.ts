@@ -407,6 +407,22 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
     }
   };
   /** Discards this note's uncommitted changes, on disk or in the draft store, and the session's unsaved edits. */
+  /** Reads this note's latest version now: adopted as is without local edits, merged into them otherwise. */
+  const pullLatest = async () => {
+    if (!onReadRemote || operation.current || autosaving.current || current.current.blocked) return;
+    operation.current = true;
+    setIsSaving(true);
+    setSaveError('');
+    try {
+      const latest = await onReadRemote(note.path);
+      if (mounted.current) applyRemote(latest);
+    } catch (error) {
+      handleRemoteFailure(error);
+    } finally {
+      operation.current = false;
+      if (mounted.current) setIsSaving(false);
+    }
+  };
   const restoreNote = async () => {
     if (readOnly || operation.current) return;
     operation.current = true;
@@ -516,5 +532,5 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
   const showRemoteNotice = Boolean(remoteNotice) && (blocked || !remoteNoticeDismissed);
   const showConflictDraftNotice = Boolean(conflictDraft) && (blocked || !conflictDraftDismissed);
 
-  return { content, setContent, metadata, setMetadata, copyState, copyNote, isSaving, saveError, saveErrorParams, hasUnsavedChanges, baseNote, blocked, locked, isDirty, editorState, editorStatus, title, recoveredDraft, handleRestoreDraft, handleDiscardDraft, conflictDraft, showRemoteNotice, remoteNotice, showConflictDraftNotice, dismissNotice, refreshRemote, downloadConflictDraft, handleExplicitSave, commitNote, restoreNote, close };
+  return { content, setContent, metadata, setMetadata, copyState, copyNote, isSaving, saveError, saveErrorParams, hasUnsavedChanges, baseNote, blocked, locked, isDirty, editorState, editorStatus, title, recoveredDraft, handleRestoreDraft, handleDiscardDraft, conflictDraft, showRemoteNotice, remoteNotice, showConflictDraftNotice, dismissNotice, refreshRemote, downloadConflictDraft, handleExplicitSave, commitNote, restoreNote, pullLatest, close };
 }

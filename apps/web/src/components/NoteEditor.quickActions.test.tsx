@@ -95,3 +95,37 @@ it('offers only Restore when the note cannot be committed from the editor', () =
   expect(screen.queryByRole('button', { name: 'Commit' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Restore' })).toBeTruthy();
 });
+
+it('refreshes a clean note by adopting its latest version without merging', async () => {
+  const latest: NoteItem = { ...note, content: '# Alpha\nFrom elsewhere.' };
+  const onReadRemote = vi.fn(async () => note);
+  const onSave = vi.fn(async () => note);
+  render(editor({ onReadRemote, onSave }));
+  await flush();
+  onReadRemote.mockResolvedValue(latest);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+  await flush();
+
+  expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('# Alpha\nFrom elsewhere.');
+  expect(screen.queryByText(/merged/i)).toBeNull();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
+  // Adopting the latest version is not an edit, so nothing is written back.
+  expect(onSave).not.toHaveBeenCalled();
+});
+
+it('refreshes a note with local edits by merging its latest version into them', async () => {
+  const base: NoteItem = { ...note, content: 'one\ntwo\nthree\n' };
+  const onReadRemote = vi.fn(async () => base);
+  render(editor({ note: base, onReadRemote, onSave: async ({ content }: { content: string; }) => ({ ...base, content }) }));
+  await flush();
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: 'ONE\ntwo\nthree\n' } });
+  onReadRemote.mockResolvedValue({ ...base, content: 'one\ntwo\nTHREE\n' });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+  await flush();
+
+  expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('ONE\ntwo\nTHREE\n');
+});

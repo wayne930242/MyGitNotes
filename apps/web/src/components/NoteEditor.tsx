@@ -245,7 +245,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
                   documentPanel.target,
                 )}
             </div>
-            <EditorFooter content={session.content} path={note.path} state={session.editorState} status={session.editorStatus} actions={!readOnly && session.isDirty ? <NoteQuickActions onCommit={onCommitFile && !session.blocked ? session.commitNote : undefined} onRestore={session.restoreNote} disabled={session.isSaving} /> : null} />
+            <EditorFooter content={session.content} path={note.path} state={session.editorState} status={session.editorStatus} actions={<NoteQuickActions onRefresh={onReadRemote && !session.blocked ? session.pullLatest : undefined} onCommit={!readOnly && session.isDirty && onCommitFile && !session.blocked ? session.commitNote : undefined} onRestore={!readOnly && session.isDirty ? session.restoreNote : undefined} disabled={session.isSaving} />} />
             {docPanel.isEditorLeaderOpen && (
               <div className='note-editor-leader' role='dialog' aria-modal='false' aria-label={t('editor.noteCommands')}>
                 <div>

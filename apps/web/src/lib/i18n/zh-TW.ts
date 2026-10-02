@@ -758,6 +758,8 @@ export const zhTW: Record<TranslationKey, string> = {
   'editor.unsavedLocalChanges': '有未儲存的本機變更',
   'editor.savedLocallyPendingCommit': '已儲存至本機 · 等待提交',
   'editor.uncommittedChanges': '有未提交變更',
+  'editor.quickRefresh': '更新',
+  'editor.quickRefreshHint': '立即讀取最新版本；有本地變更時會與之合併',
   'editor.quickCommit': '提交',
   'editor.confirmQuickCommit': '再按一次提交',
   'editor.quickCommitHint': '只提交這篇筆記，按兩下確認',

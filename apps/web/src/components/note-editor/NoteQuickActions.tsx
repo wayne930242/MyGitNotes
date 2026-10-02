@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
-import { GitCommit, RotateCcw } from 'lucide-react';
+import { GitCommit, RefreshCw, RotateCcw } from 'lucide-react';
 import { useTranslation } from '../../lib/i18n/index.js';
 
 /** How long a first click keeps an action armed for its confirming second click. */
 const ARM_MS = 3000;
 
-/** Commit and Restore for one dirty note; each runs only on a second click while armed. */
-export function NoteQuickActions({ onCommit, onRestore, disabled }: { onCommit?: () => Promise<void>; onRestore: () => Promise<void>; disabled: boolean; }) {
+/**
+ * Refresh pulls the note's latest version at once. Commit and Restore appear for a dirty note only
+ * and each runs on a second click while armed.
+ */
+export function NoteQuickActions({ onRefresh, onCommit, onRestore, disabled }: { onRefresh?: () => Promise<void>; onCommit?: () => Promise<void>; onRestore?: () => Promise<void>; disabled: boolean; }) {
   const { t } = useTranslation();
   const [armed, setArmed] = useState<'commit' | 'restore' | null>(null);
   useEffect(() => {
@@ -22,10 +25,25 @@ export function NoteQuickActions({ onCommit, onRestore, disabled }: { onCommit?:
   };
   return (
     <div className='note-quick-actions flex items-center gap-2'>
-      <button type='button' className='note-quick-action' data-action='restore' data-armed={armed === 'restore' || undefined} disabled={disabled} title={t('editor.quickRestoreHint')} onClick={() => press('restore', onRestore)}>
-        <RotateCcw aria-hidden='true' />
-        <span>{t(armed === 'restore' ? 'editor.confirmQuickRestore' : 'editor.quickRestore')}</span>
-      </button>
+      {onRefresh && (
+        <button
+          type='button'
+          className='note-quick-action'
+          data-action='refresh'
+          disabled={disabled}
+          title={t('editor.quickRefreshHint')}
+          onClick={() => !disabled && void onRefresh()}
+        >
+          <RefreshCw aria-hidden='true' />
+          <span>{t('editor.quickRefresh')}</span>
+        </button>
+      )}
+      {onRestore && (
+        <button type='button' className='note-quick-action' data-action='restore' data-armed={armed === 'restore' || undefined} disabled={disabled} title={t('editor.quickRestoreHint')} onClick={() => press('restore', onRestore)}>
+          <RotateCcw aria-hidden='true' />
+          <span>{t(armed === 'restore' ? 'editor.confirmQuickRestore' : 'editor.quickRestore')}</span>
+        </button>
+      )}
       {onCommit && (
         <button type='button' className='note-quick-action' data-action='commit' data-armed={armed === 'commit' || undefined} disabled={disabled} title={t('editor.quickCommitHint')} onClick={() => press('commit', onCommit)}>
           <GitCommit aria-hidden='true' />
