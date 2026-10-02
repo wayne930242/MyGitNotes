@@ -695,6 +695,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'editor.linesCopied': '已複製關於第 {start}–{end} 行的提示詞',
   'editor.lineCopyFailed': '無法複製行號提示詞',
   'editor.documentPanel': '文件工具',
+  'editor.collapseDocumentPanel': '收合文件工具',
   'editor.info': '資訊',
   'editor.infoNotebook': '筆記本',
   'editor.infoRepository': '儲存庫',

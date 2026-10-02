@@ -3,7 +3,7 @@ import { EditorFooter } from './EditorFooter.js';
 import { NoteQuickActions } from './note-editor/NoteQuickActions.js';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Code2, Eye, FileText, LayoutGrid, ListOrdered, PanelRight, Save, X } from 'lucide-react';
+import { ArrowLeft, Code2, Eye, FileText, LayoutGrid, ListOrdered, PanelRight, Save, X } from 'lucide-react';
 import { Button } from './Button.js';
 import { NoteExportMenu } from './NoteExportMenu.js';
 import { MarkdownEditor, MarkdownEditorMode, MarkdownEditorModeSwitch } from './MarkdownEditor.js';
@@ -176,9 +176,18 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
             <div className='note-toolbar relative shrink-0 px-5 py-3.5 border-b border-line flex items-center justify-between gap-4 bg-sidebar/60'>
               {frame === 'zoom' && (
                 <div className='note-heading flex items-center gap-3 truncate'>
-                  <div className='w-8 h-8 rounded-lg flex items-center justify-center shrink-0' style={{ backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
-                    <FileText className='w-4 h-4' />
-                  </div>
+                  {/* Leaving zoom sits at the far left, away from the document-panel toggle at the right. */}
+                  {onClose
+                    ? (
+                      <button type='button' aria-label={t('editor.closeNote')} title={t('editor.closeNote')} onClick={session.close} className='note-close ui-icon-button toolbar-icon-button shrink-0'>
+                        <ArrowLeft aria-hidden='true' />
+                      </button>
+                    )
+                    : (
+                      <div className='w-8 h-8 rounded-lg flex items-center justify-center shrink-0' style={{ backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
+                        <FileText className='w-4 h-4' />
+                      </div>
+                    )}
                   <div className='truncate'>
                     <div className='font-serif font-semibold text-fg text-sm truncate'>{session.title || t('editor.untitled')}</div>
                     <div className='text-xs text-muted font-mono truncate'>{note.path}</div>
@@ -220,12 +229,6 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
                     className='ui-icon-button toolbar-icon-button editor-panel-action'
                   >
                     <PanelRight aria-hidden='true' />
-                  </button>
-                )}
-                {/* Close Button */}
-                {onClose && (
-                  <button aria-label={t('editor.closeNote')} title={t('editor.closeNote')} onClick={session.close} className='note-close ui-icon-button toolbar-icon-button'>
-                    <X aria-hidden='true' />
                   </button>
                 )}
               </div>

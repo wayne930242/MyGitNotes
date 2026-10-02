@@ -694,6 +694,7 @@ export const en = {
   'editor.linesCopied': 'Copied a prompt about lines {start}-{end}',
   'editor.lineCopyFailed': 'Could not copy line prompt',
   'editor.documentPanel': 'Document tools',
+  'editor.collapseDocumentPanel': 'Collapse document tools',
   'editor.info': 'Info',
   'editor.infoNotebook': 'Notebook',
   'editor.infoRepository': 'Repository',

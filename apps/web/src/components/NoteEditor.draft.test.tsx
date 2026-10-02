@@ -133,7 +133,7 @@ it('lets close proceed while a local autosave is still in flight', async () => {
     return { ...note, content, metadata: { ...metadata, updated: 't1' } };
   });
   const onClose = vi.fn();
-  render(editor({ onSave, onClose }));
+  render(editor({ onSave, onClose, frame: 'zoom' }));
   fireEvent.change(screen.getByLabelText('Note content'), { target: { value: '# Alpha\nMore.' } });
   await act(async () => {
     await vi.advanceTimersByTimeAsync(750);

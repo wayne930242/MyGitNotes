@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Search } from 'lucide-react';
+import { ChevronDown, ChevronUp, PanelRightClose, Search } from 'lucide-react';
 import { Button } from '../Button.js';
 import { FileManager } from '../files/index.js';
 import { NoteFrontmatterPanel } from './NoteFrontmatterPanel.js';
@@ -151,39 +151,44 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
 
   return (
     <>
-      <div
-        className='note-panel-tabs'
-        role='tablist'
-        aria-label={t('editor.documentPanel')}
-        onKeyDown={event => {
-          const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-          const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
-          const target = { ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: tabs.length - 1 }[event.key];
-          if (index < 0 || target === undefined) return;
-          event.preventDefault();
-          tabs[(target + tabs.length) % tabs.length].focus();
-        }}
-      >
-        <Button type='button' role='tab' aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isAssetPickerOpen || isViewPanelOpen || isInfoPanelOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}>
-          <span>{t('editor.find')}</span>
-        </Button>
-        {isMarkdown && (
-          <Button type='button' role='tab' aria-selected={isOutlineOpen} tabIndex={isOutlineOpen ? 0 : -1} aria-label={t('editor.outline')} title={t('editor.outline')} onClick={() => isOutlineOpen ? setNotePanel(null) : openOutline()}>
-            <span>{t('editor.outline')}</span>
+      <div className='note-panel-tabs'>
+        <div
+          className='note-panel-tablist'
+          role='tablist'
+          aria-label={t('editor.documentPanel')}
+          onKeyDown={event => {
+            const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+            const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
+            const target = { ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: tabs.length - 1 }[event.key];
+            if (index < 0 || target === undefined) return;
+            event.preventDefault();
+            tabs[(target + tabs.length) % tabs.length].focus();
+          }}
+        >
+          <Button type='button' role='tab' aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isAssetPickerOpen || isViewPanelOpen || isInfoPanelOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}>
+            <span>{t('editor.find')}</span>
           </Button>
-        )}
-        <Button type='button' role='tab' aria-selected={showFrontmatter} tabIndex={showFrontmatter ? 0 : -1} aria-label={t('editor.frontmatter')} title={t('editor.frontmatter')} onClick={() => setNotePanel(showFrontmatter ? null : 'frontmatter')}>
-          <span>{t('editor.frontmatter')}</span>
-        </Button>
-        <Button type='button' role='tab' aria-selected={isAssetPickerOpen} tabIndex={isAssetPickerOpen ? 0 : -1} aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onClick={() => setNotePanel(isAssetPickerOpen ? null : 'assets')}>
-          <span>{t('editor.asset')}</span>
-        </Button>
-        <Button type='button' role='tab' aria-selected={isViewPanelOpen} tabIndex={isViewPanelOpen ? 0 : -1} aria-label={t('editor.viewSettings')} title={t('editor.viewSettings')} onClick={() => setNotePanel(isViewPanelOpen ? null : 'view')}>
-          <span>{t('editor.view')}</span>
-        </Button>
-        <Button type='button' role='tab' aria-selected={isInfoPanelOpen} tabIndex={isInfoPanelOpen ? 0 : -1} aria-label={t('editor.info')} title={t('editor.info')} onClick={() => setNotePanel(isInfoPanelOpen ? null : 'info')}>
-          <span>{t('editor.info')}</span>
-        </Button>
+          {isMarkdown && (
+            <Button type='button' role='tab' aria-selected={isOutlineOpen} tabIndex={isOutlineOpen ? 0 : -1} aria-label={t('editor.outline')} title={t('editor.outline')} onClick={() => isOutlineOpen ? setNotePanel(null) : openOutline()}>
+              <span>{t('editor.outline')}</span>
+            </Button>
+          )}
+          <Button type='button' role='tab' aria-selected={showFrontmatter} tabIndex={showFrontmatter ? 0 : -1} aria-label={t('editor.frontmatter')} title={t('editor.frontmatter')} onClick={() => setNotePanel(showFrontmatter ? null : 'frontmatter')}>
+            <span>{t('editor.frontmatter')}</span>
+          </Button>
+          <Button type='button' role='tab' aria-selected={isAssetPickerOpen} tabIndex={isAssetPickerOpen ? 0 : -1} aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onClick={() => setNotePanel(isAssetPickerOpen ? null : 'assets')}>
+            <span>{t('editor.asset')}</span>
+          </Button>
+          <Button type='button' role='tab' aria-selected={isViewPanelOpen} tabIndex={isViewPanelOpen ? 0 : -1} aria-label={t('editor.viewSettings')} title={t('editor.viewSettings')} onClick={() => setNotePanel(isViewPanelOpen ? null : 'view')}>
+            <span>{t('editor.view')}</span>
+          </Button>
+          <Button type='button' role='tab' aria-selected={isInfoPanelOpen} tabIndex={isInfoPanelOpen ? 0 : -1} aria-label={t('editor.info')} title={t('editor.info')} onClick={() => setNotePanel(isInfoPanelOpen ? null : 'info')}>
+            <span>{t('editor.info')}</span>
+          </Button>
+        </div>
+        <button type='button' className='note-panel-collapse ui-icon-button' aria-label={t('editor.collapseDocumentPanel')} title={t('editor.collapseDocumentPanel')} onClick={() => setNotePanel(null)}>
+          <PanelRightClose aria-hidden='true' />
+        </button>
       </div>
       {sections}
     </>
