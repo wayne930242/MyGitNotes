@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, PanelRightClose, Search } from 'lucide-react';
+import { Braces, ChevronDown, ChevronUp, Image, Info, ListTree, PanelRightClose, Search, SlidersHorizontal } from 'lucide-react';
 import { Button } from '../Button.js';
 import { FileManager } from '../files/index.js';
 import { NoteFrontmatterPanel } from './NoteFrontmatterPanel.js';
@@ -166,24 +166,24 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
           }}
         >
           <Button type='button' role='tab' aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isAssetPickerOpen || isViewPanelOpen || isInfoPanelOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}>
-            <span>{t('editor.find')}</span>
+            <Search aria-hidden='true' />
           </Button>
           {isMarkdown && (
             <Button type='button' role='tab' aria-selected={isOutlineOpen} tabIndex={isOutlineOpen ? 0 : -1} aria-label={t('editor.outline')} title={t('editor.outline')} onClick={() => isOutlineOpen ? setNotePanel(null) : openOutline()}>
-              <span>{t('editor.outline')}</span>
+              <ListTree aria-hidden='true' />
             </Button>
           )}
           <Button type='button' role='tab' aria-selected={showFrontmatter} tabIndex={showFrontmatter ? 0 : -1} aria-label={t('editor.frontmatter')} title={t('editor.frontmatter')} onClick={() => setNotePanel(showFrontmatter ? null : 'frontmatter')}>
-            <span>{t('editor.frontmatter')}</span>
+            <Braces aria-hidden='true' />
           </Button>
           <Button type='button' role='tab' aria-selected={isAssetPickerOpen} tabIndex={isAssetPickerOpen ? 0 : -1} aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onClick={() => setNotePanel(isAssetPickerOpen ? null : 'assets')}>
-            <span>{t('editor.asset')}</span>
+            <Image aria-hidden='true' />
           </Button>
           <Button type='button' role='tab' aria-selected={isViewPanelOpen} tabIndex={isViewPanelOpen ? 0 : -1} aria-label={t('editor.viewSettings')} title={t('editor.viewSettings')} onClick={() => setNotePanel(isViewPanelOpen ? null : 'view')}>
-            <span>{t('editor.view')}</span>
+            <SlidersHorizontal aria-hidden='true' />
           </Button>
           <Button type='button' role='tab' aria-selected={isInfoPanelOpen} tabIndex={isInfoPanelOpen ? 0 : -1} aria-label={t('editor.info')} title={t('editor.info')} onClick={() => setNotePanel(isInfoPanelOpen ? null : 'info')}>
-            <span>{t('editor.info')}</span>
+            <Info aria-hidden='true' />
           </Button>
         </div>
         <button type='button' className='note-panel-collapse ui-icon-button' aria-label={t('editor.collapseDocumentPanel')} title={t('editor.collapseDocumentPanel')} onClick={() => setNotePanel(null)}>

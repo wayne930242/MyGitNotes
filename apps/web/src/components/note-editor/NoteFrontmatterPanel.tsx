@@ -85,7 +85,7 @@ export function NoteFrontmatterPanel({ metadata, setMetadata, statuses, metadata
   };
 
   return (
-    <div className='note-panel-scroll flex flex-col h-full'>
+    <div className='note-frontmatter-panel note-panel-scroll flex flex-col h-full'>
       {/* Frontmatter Mode Switch */}
       <div className='flex items-center justify-between pb-2 mb-3 border-b border-line shrink-0'>
         <span className='font-semibold text-xs text-fg'>{t('editor.frontmatter')}</span>
