@@ -90,7 +90,7 @@ export function useWorkingNoteCommit({ documents, config, sourceId, t, stageWork
   };
 
   /** Commits the selected changes, each named by its repository and path. */
-  const commitWorkingNotes = async (files: FileChange[], message: string) => {
+  const commitWorkingNotes = async (files: Pick<FileChange, 'path' | 'repository'>[], message: string) => {
     const workspace = await fetchWorkspace(true);
     if (workspace.home !== sourceId) throw new Error('Sign in with write access to this workspace before committing.');
     const repositories = workspace.repositories.filter(repository => !repository.unavailable);

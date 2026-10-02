@@ -179,6 +179,12 @@ input, textarea, [contenteditable='true'] { caret-color: var(--color-text); }
 .note-editor-slot:empty { display: none; }
 .note-editor-placeholder { display: flex; flex: 1; align-items: center; justify-content: center; padding: 24px; color: var(--color-muted); font-size: 13px; text-align: center; }
 /* Compact frame: the body with a status bar, inside a graph card. */
+.note-quick-action { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border: 1px solid var(--color-border); border-radius: var(--radius-control); color: var(--color-text); background: var(--color-surface); font-weight: 500; white-space: nowrap; }
+.note-quick-action > svg { width: 13px; height: 13px; }
+.note-quick-action:hover:not(:disabled) { background: var(--color-primary-soft); }
+.note-quick-action:disabled { opacity: 0.4; cursor: not-allowed; }
+.note-quick-action[data-action='commit'][data-armed] { border-color: var(--color-primary); color: var(--color-on-primary); background: var(--color-primary); }
+.note-quick-action[data-action='restore'][data-armed] { border-color: var(--color-danger); color: var(--color-on-danger); background: var(--color-danger); }
 .note-compact-bar { display: flex; flex: none; align-items: center; gap: 8px; padding: 3px 20px 3px 6px; border-top: 1px solid var(--color-border); font-size: 11px; color: var(--color-muted); }
 .note-compact-bar .ui-icon-button { flex: none; width: 24px; height: 24px; min-height: 0; }
 .note-compact-bar .ui-icon-button[aria-pressed='true'] { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 14%, transparent); }

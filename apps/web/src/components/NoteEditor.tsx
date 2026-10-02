@@ -1,5 +1,6 @@
 import { EditorNotice } from './EditorNotice.js';
 import { EditorFooter } from './EditorFooter.js';
+import { NoteQuickActions } from './note-editor/NoteQuickActions.js';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Code2, Eye, FileText, LayoutGrid, ListOrdered, PanelRight, Save, X } from 'lucide-react';
@@ -34,6 +35,8 @@ export interface NoteEditorSharedProps {
   onSave: (params: { path: string; content: string; metadata?: Record<string, unknown>; revision?: string; baseNote?: NoteItem; }) => Promise<NoteItem>;
   onReadRemote?: (path: string) => Promise<NoteItem>;
   onRestoreFile: (path: string) => Promise<NoteItem | null>;
+  /** Commits one note's saved file alone, from the footer; absent when the note's repository is read-only. */
+  onCommitFile?: (path: string) => Promise<void>;
   isDirty?: boolean;
   availableTags?: string[];
   assets?: AssetItem[];
@@ -83,7 +86,7 @@ export interface NoteEditorProps extends NoteEditorSharedProps {
 }
 
 /** A note's editing session: content, frontmatter, drafts, autosave, conflicts, crash recovery and the document panel. */
-export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note, frame, active, documentPanel, onClose, onAddToFocus, onSession, onCaret, statuses, metadataFields, readOnly = false, autoSave = true, draftMode = false, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, isDirty: propIsDirty = false, availableTags = [], beforeFileChange, onFilesChanged, branch, draftScope }, ref) => {
+export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note, frame, active, documentPanel, onClose, onAddToFocus, onSession, onCaret, statuses, metadataFields, readOnly = false, autoSave = true, draftMode = false, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, onCommitFile, isDirty: propIsDirty = false, availableTags = [], beforeFileChange, onFilesChanged, branch, draftScope }, ref) => {
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(note.path);
   const { t } = useTranslation();
   const { setHasOpenNote } = usePanelContext();
@@ -107,7 +110,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   const [insertSlot, setInsertSlot] = useState<HTMLDivElement | null>(null);
   const editorRef = useRef<MarkdownEditorHandle>(null);
 
-  const session = useNoteEditorSession({ note, readOnly, autoSave, draftMode, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, propIsDirty, branch, draftScope, onClose, onSession });
+  const session = useNoteEditorSession({ note, readOnly, autoSave, draftMode, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, onCommitFile, propIsDirty, branch, draftScope, onClose, onSession });
   const docPanel = useNoteDocumentPanel({ frame, active, isMarkdown, content: session.content, editorMode, documentPanel, editorRef, metadata: session.metadata, notePath: note.path, branch, draftScope, readOnly });
 
   useImperativeHandle(ref, () => ({
@@ -242,7 +245,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
                   documentPanel.target,
                 )}
             </div>
-            <EditorFooter content={session.content} path={note.path} state={session.editorState} status={session.editorStatus} />
+            <EditorFooter content={session.content} path={note.path} state={session.editorState} status={session.editorStatus} actions={!readOnly && session.isDirty ? <NoteQuickActions onCommit={onCommitFile && !session.blocked ? session.commitNote : undefined} onRestore={session.restoreNote} disabled={session.isSaving} /> : null} />
             {docPanel.isEditorLeaderOpen && (
               <div className='note-editor-leader' role='dialog' aria-modal='false' aria-label={t('editor.noteCommands')}>
                 <div>

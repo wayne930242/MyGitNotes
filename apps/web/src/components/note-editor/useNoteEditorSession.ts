@@ -29,6 +29,8 @@ export interface UseNoteEditorSessionParams {
   onSave: (params: { path: string; content: string; metadata?: Record<string, unknown>; revision?: string; baseNote?: NoteItem; }) => Promise<NoteItem>;
   onReadRemote?: (path: string) => Promise<NoteItem>;
   onRestoreFile: (path: string) => Promise<NoteItem | null>;
+  /** Commits this note's saved file alone; absent when the note cannot be committed from the editor. */
+  onCommitFile?: (path: string) => Promise<void>;
   propIsDirty: boolean;
   branch: string;
   draftScope?: string;
@@ -37,7 +39,7 @@ export interface UseNoteEditorSessionParams {
 }
 
 /** A note's editing session: content, frontmatter, drafts, autosave, conflicts, crash recovery and save/restore/close actions. */
-export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, propIsDirty, branch, draftScope, onClose, onSession }: UseNoteEditorSessionParams) {
+export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, onCommitFile, propIsDirty, branch, draftScope, onClose, onSession }: UseNoteEditorSessionParams) {
   const { t } = useTranslation();
   const [content, setContent] = useState(note.content);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
@@ -375,6 +377,61 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
       if (mounted.current) setIsSaving(false);
     }
   };
+  /** Saves any pending edit, then commits this note alone. */
+  const commitNote = async () => {
+    if (!onCommitFile || locked || operation.current) return;
+    operation.current = true;
+    setIsSaving(true);
+    setSaveError('');
+    try {
+      const state = current.current;
+      const saved = lastSaved.current;
+      if (!saved || state.content !== saved.content || !sameIgnoringTimestamps(state.metadata, saved.metadata)) {
+        const written = await onSave({ path: note.path, content: state.content, metadata: state.metadata, baseNote: state.baseNote });
+        if (!mounted.current) return;
+        // Adopting the written note supersedes a pending autosave of the same edit.
+        lastSaved.current = { content: written.content, metadata: written.metadata };
+        current.current = { ...current.current, content: written.content, metadata: written.metadata, baseNote: written };
+        setBaseNote(written);
+        setContent(written.content);
+        setMetadata(written.metadata);
+        clearLocalDraft(draftScope || branch, note.path);
+        setHasUnsavedChanges(false);
+      }
+      await onCommitFile(note.path);
+    } catch (error) {
+      if (mounted.current) setSaveError((error as Error).message);
+    } finally {
+      operation.current = false;
+      if (mounted.current) setIsSaving(false);
+    }
+  };
+  /** Discards this note's uncommitted changes, on disk or in the draft store, and the session's unsaved edits. */
+  const restoreNote = async () => {
+    if (readOnly || operation.current) return;
+    operation.current = true;
+    setIsSaving(true);
+    setSaveError('');
+    try {
+      const restored = await onRestoreFile(note.path);
+      clearLocalDraft(draftScope || branch, note.path);
+      if (!mounted.current || !restored) return;
+      lastSaved.current = { content: restored.content, metadata: restored.metadata };
+      current.current = { content: restored.content, metadata: restored.metadata, baseNote: restored, blocked: false };
+      setBaseNote(restored);
+      setContent(restored.content);
+      setMetadata(restored.metadata);
+      setRecoveredDraft(null);
+      setBlocked(false);
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      if (mounted.current) setSaveError((error as Error).message);
+    } finally {
+      operation.current = false;
+      if (mounted.current) setIsSaving(false);
+    }
+  };
+
   const { registerBeforeNavigate } = useWorkspaceLinks();
   const registerEditor = useEditorRegistry();
   useEffect(() => {
@@ -459,5 +516,5 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
   const showRemoteNotice = Boolean(remoteNotice) && (blocked || !remoteNoticeDismissed);
   const showConflictDraftNotice = Boolean(conflictDraft) && (blocked || !conflictDraftDismissed);
 
-  return { content, setContent, metadata, setMetadata, copyState, copyNote, isSaving, saveError, saveErrorParams, hasUnsavedChanges, baseNote, blocked, locked, isDirty, editorState, editorStatus, title, recoveredDraft, handleRestoreDraft, handleDiscardDraft, conflictDraft, showRemoteNotice, remoteNotice, showConflictDraftNotice, dismissNotice, refreshRemote, downloadConflictDraft, handleExplicitSave, close };
+  return { content, setContent, metadata, setMetadata, copyState, copyNote, isSaving, saveError, saveErrorParams, hasUnsavedChanges, baseNote, blocked, locked, isDirty, editorState, editorStatus, title, recoveredDraft, handleRestoreDraft, handleDiscardDraft, conflictDraft, showRemoteNotice, remoteNotice, showConflictDraftNotice, dismissNotice, refreshRemote, downloadConflictDraft, handleExplicitSave, commitNote, restoreNote, close };
 }

@@ -1,0 +1,97 @@
+// @vitest-environment jsdom
+import { type ChangeEvent, createElement, forwardRef } from 'react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { PanelProvider } from '../lib/panel-context.js';
+import type { NoteItem } from '../lib/types.js';
+import { NoteEditor, type NoteEditorProps } from './NoteEditor.js';
+
+vi.mock('./MarkdownEditor.js', () => ({ MarkdownEditorModeSwitch: () => null, MarkdownEditor: forwardRef<unknown, { content: string; onChange: (content: string) => void; }>(({ content, onChange }, _ref) => createElement('textarea', { 'aria-label': 'Note content', value: content, onChange: (event: ChangeEvent<HTMLTextAreaElement>) => onChange(event.target.value) })) }));
+
+beforeEach(() => {
+  localStorage.clear();
+  vi.useFakeTimers();
+});
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+
+const note: NoteItem = { id: 'a', path: 'notes/a.md', notebookId: 'a', title: 'Alpha', tags: [], metadata: { title: 'Alpha' }, content: '# Alpha\n' };
+const editor = (props: Partial<NoteEditorProps>) => createElement(PanelProvider, null, createElement(NoteEditor, { note, frame: 'pane', active: true, statuses: [], autoSave: true, onSave: async () => note, onRestoreFile: async () => null, onCommitFile: async () => {}, branch: 'main', draftScope: 'src:main', ...props } as NoteEditorProps));
+const flush = () =>
+  act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+
+it('shows neither the path nor the actions while the note is clean', () => {
+  render(editor({}));
+  expect(screen.queryByRole('button', { name: /commit/i })).toBeNull();
+  expect(screen.queryByRole('button', { name: /restore/i })).toBeNull();
+  expect(screen.queryByText(note.path)).toBeNull();
+});
+
+it('shows no actions for a read-only note', () => {
+  render(editor({ isDirty: true, readOnly: true }));
+  expect(screen.queryByRole('button', { name: /commit/i })).toBeNull();
+  expect(screen.queryByRole('button', { name: /restore/i })).toBeNull();
+});
+
+it('commits the note only on a confirming second click, saving pending edits first', async () => {
+  const calls: string[] = [];
+  const onSave = vi.fn(async ({ content, metadata }: { content: string; metadata?: Record<string, unknown>; }) => {
+    calls.push(`save:${content}`);
+    return { ...note, content, metadata: metadata ?? {} };
+  });
+  const onCommitFile = vi.fn(async (path: string) => {
+    calls.push(`commit:${path}`);
+  });
+  render(editor({ isDirty: true, onSave, onCommitFile }));
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: '# Alpha\nMore.' } });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Commit' }));
+  await flush();
+  expect(onCommitFile).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Click again to commit' }));
+  await flush();
+
+  expect(calls).toEqual(['save:# Alpha\nMore.', 'commit:notes/a.md']);
+  // The superseded autosave does not write the same edit again after the commit.
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
+  expect(onSave).toHaveBeenCalledTimes(1);
+});
+
+it('disarms an action when its confirming click does not come in time', async () => {
+  const onCommitFile = vi.fn(async () => {});
+  render(editor({ isDirty: true, onCommitFile }));
+  fireEvent.click(screen.getByRole('button', { name: 'Commit' }));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3000);
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Commit' }));
+  await flush();
+  expect(onCommitFile).not.toHaveBeenCalled();
+});
+
+it('restores the note on a confirming second click and shows the restored content', async () => {
+  const restored: NoteItem = { ...note, content: '# Alpha\nCommitted.' };
+  const onRestoreFile = vi.fn(async () => restored);
+  render(editor({ isDirty: true, onRestoreFile }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+  await flush();
+  expect(onRestoreFile).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Click again to discard' }));
+  await flush();
+
+  expect(onRestoreFile).toHaveBeenCalledWith('notes/a.md');
+  expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('# Alpha\nCommitted.');
+});
+
+it('offers only Restore when the note cannot be committed from the editor', () => {
+  render(editor({ isDirty: true, onCommitFile: undefined }));
+  expect(screen.queryByRole('button', { name: 'Commit' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Restore' })).toBeTruthy();
+});
