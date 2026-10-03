@@ -125,7 +125,7 @@ process.on('exit', killChildren);
 process.on('SIGINT', () => stop(0));
 process.on('SIGTERM', () => stop(0));
 
-start('pnpm', ['dev'], { MYGITNOTES_WEB_PORT: String(port) });
+start('pnpm', ['dev'], { MYGITNOTES_WEB_PORT: String(port), MYGITNOTES_REMOTE_ORIGIN: `https://${host}` });
 await waitUntilReady(port, Date.now() + 120_000);
 
 // Foreground `tailscale serve` keeps the config only while it runs, so stopping it leaves no serve entry behind.

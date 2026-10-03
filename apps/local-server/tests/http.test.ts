@@ -318,6 +318,11 @@ describe('real HTTP local boundaries', () => {
     expect((await fetch(`${base}/api/workspace`, { headers: { Origin: 'http://localhost:5174' } })).status).toBe(200);
     expect((await fetch(`${base}/api/workspace`, { headers: { Origin: 'http://127.0.0.1:5199' } })).status).toBe(200);
     expect((await fetch(`${base}/api/workspace`, { headers: { Origin: 'https://localhost:5173' } })).status).toBe(403);
+    expect((await fetch(`${base}/api/workspace`, { headers: { Origin: 'https://laptop.tailnet.ts.net' } })).status).toBe(403);
+    vi.stubEnv('MYGITNOTES_REMOTE_ORIGIN', 'https://laptop.tailnet.ts.net');
+    expect((await fetch(`${base}/api/workspace`, { headers: { Origin: 'https://laptop.tailnet.ts.net' } })).status).toBe(200);
+    expect((await fetch(`${base}/api/workspace`, { headers: { Origin: 'https://other.tailnet.ts.net' } })).status).toBe(403);
+    vi.stubEnv('MYGITNOTES_REMOTE_ORIGIN', '');
     fs.writeFileSync(path.join(root, '.mygitnotes-dev-ports.json'), JSON.stringify({ webPort: 5174 }));
     expect((await fetch(`${base}/api/workspace`, { headers: { Origin: 'http://localhost:5174' } })).status).toBe(200);
     expect((await fetch(`${base}/api/workspace`, { headers: { Origin: 'http://localhost:5173' } })).status).toBe(200);

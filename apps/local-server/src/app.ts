@@ -49,7 +49,8 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     }
     const origin = req.headers.origin;
     const allowed = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
-    const isLocalDevOrigin = local && isLoopbackHttpOrigin(origin);
+    // `pnpm dev:remote` names the one tailnet origin that reaches the local app through Tailscale Serve and the vite proxy.
+    const isLocalDevOrigin = local && (isLoopbackHttpOrigin(origin) || (Boolean(process.env.MYGITNOTES_REMOTE_ORIGIN) && origin === process.env.MYGITNOTES_REMOTE_ORIGIN));
     if (origin && origin !== allowed && !isLocalDevOrigin) return res.status(403).json({ error: 'Origin is not allowed.' });
     next();
   });
