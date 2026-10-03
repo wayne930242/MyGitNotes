@@ -394,7 +394,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
                       const rangeStart = draggedSourceRange ? Math.min(...draggedSourceRange) : -1;
                       const rangeEnd = draggedSourceRange ? Math.max(...draggedSourceRange) : -1;
                       const inDraggedRange = line >= rangeStart && line <= rangeEnd;
-                      return <div key={index} data-line-number data-body-line={line} data-active-line={line === activeSourceLine ? 'true' : undefined} data-line-copy-selected={inDraggedRange ? 'true' : undefined} className={`cursor-default select-none origin-right transition-[background-color,color,opacity,transform,font-weight] duration-150 ${inDraggedRange ? 'bg-fg/10 text-fg' : ''} ${line === activeSourceLine ? 'scale-[1.08] font-semibold text-muted' : ''}`}>{line + lineNumberOffset}</div>;
+                      return <div key={index} data-line-number data-body-line={line} data-active-line={line === activeSourceLine ? 'true' : undefined} data-line-copy-selected={inDraggedRange ? 'true' : undefined} className={`cursor-default select-none transition-[background-color,color] duration-150 ${inDraggedRange ? 'bg-fg/10 text-fg' : ''} ${line === activeSourceLine ? 'font-semibold text-muted' : ''}`}>{line + lineNumberOffset}</div>;
                     })}
                   </div>
                 </div>

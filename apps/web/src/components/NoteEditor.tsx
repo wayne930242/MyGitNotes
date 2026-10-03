@@ -1,6 +1,6 @@
 import { EditorFooter } from './EditorFooter.js';
 import { NoteQuickActions } from './note-editor/NoteQuickActions.js';
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { MarkdownEditor, type MarkdownEditorHandle, type MarkdownEditorMode } from './MarkdownEditor.js';
 import type { NoteItem } from '../lib/types.js';
 import { usePanelContext } from '../lib/panel-context.js';
@@ -49,9 +49,9 @@ function footerActions({ frame, readOnly, session, refresh, canCommit }: { frame
 export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note, frame, active, documentPanel, onClose, onAddToFocus, onSession, onCaret, statuses, metadataFields, readOnly = false, autoSave = true, draftMode = false, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, onCommitFile, readDiff, isDirty: propIsDirty = false, availableTags = [], beforeFileChange, onFilesChanged, branch, draftScope }, ref) => {
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(note.path);
   const { setHasOpenNote } = usePanelContext();
-  // The workspace rail hides only behind zoom; a pane editor shares the page with it.
-
-  useEffect(() => {
+  // The workspace rail hides only behind zoom; a pane editor shares the page with it. It hides before the
+  // first paint, so zoom opens at its final width instead of widening once the rail has gone.
+  useLayoutEffect(() => {
     if (frame !== 'zoom') return;
     setHasOpenNote(true);
     return () => setHasOpenNote(false);
