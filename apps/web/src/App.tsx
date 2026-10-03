@@ -31,7 +31,8 @@ import { notebookRoute, noteTrail, parseWorkspaceRoute } from './lib/routes.js';
 import { draftScope } from './lib/workspace-repositories.js';
 import { sameValue } from './lib/merge-note.js';
 import React, { useMemo, useState } from 'react';
-import { fetchGitStatus, readNote } from './lib/api.js';
+import { fetchFileDiff, fetchGitStatus, readNote } from './lib/api.js';
+import { workingDiff } from './lib/working-notes.js';
 import { NoteListSentinel } from './components/NoteListSentinel.js';
 import type { NoteItem } from './lib/types.js';
 import { useTagWorkspaceOperations } from './app/useTagWorkspaceOperations.js';
@@ -204,6 +205,8 @@ const AppContent: React.FC = () => {
       onSave: params => handleSaveNote({ ...params, notebookId: note.notebookId }),
       onRestoreFile: path => handleRestoreNoteFile(path, note.notebookId),
       onCommitFile: writable ? path => commitNoteFile(path, note.notebookId) : undefined,
+      // The same diff the Changes panel shows: a remote note's draft against its base, a local note's worktree against HEAD.
+      readDiff: remote ? draft && (async () => workingDiff({ [note.path]: draft })) : () => fetchFileDiff({ path: note.path, repository: repository?.id }, 'current'),
       // A path names a file only within its repository: a remote note is dirty when it holds a draft, a local one when its worktree reports it.
       isDirty: remote ? Boolean(draft) : Boolean(repositoryStatus && [...repositoryStatus.modified, ...repositoryStatus.staged, ...repositoryStatus.untracked].includes(note.path)),
       availableTags,

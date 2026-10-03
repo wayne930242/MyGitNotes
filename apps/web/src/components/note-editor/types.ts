@@ -19,6 +19,8 @@ export interface NoteEditorSharedProps {
   onRestoreFile: (path: string) => Promise<NoteItem | null>;
   /** Commits one note's saved file alone, from the footer; absent when the note's repository is read-only. */
   onCommitFile?: (path: string) => Promise<void>;
+  /** Reads the note's uncommitted changes as a unified diff, for the footer's line counts. */
+  readDiff?: () => Promise<string>;
   isDirty?: boolean;
   availableTags?: string[];
   assets?: AssetItem[];

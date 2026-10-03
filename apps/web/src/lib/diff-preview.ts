@@ -30,3 +30,15 @@ export function parseDiffPreview(diff: string) {
   const notice = /^Binary (?:files? |file added\.)/m.test(diff) ? 'binary' : diff === 'File exceeds the 1 MiB preview limit.' ? 'tooLarge' : undefined;
   return { lines, added, removed, notice };
 }
+
+export interface DiffStats {
+  added: number;
+  removed: number;
+}
+
+/** Added and removed line counts of a unified diff; null when it is empty or has no line preview (binary or too large). */
+export function diffStats(diff: string): DiffStats | null {
+  if (!diff) return null;
+  const { added, removed, notice } = parseDiffPreview(diff);
+  return notice ? null : { added, removed };
+}

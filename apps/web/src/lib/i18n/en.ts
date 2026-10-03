@@ -803,6 +803,7 @@ export const en = {
   'changes.unstage': 'Unstage',
   'changes.refresh': 'Refresh changes',
   'changes.added': 'Added',
+  'changes.diffStats': 'Lines changed since the last commit: {added} added, {removed} removed',
   'changes.modified': 'Modified',
   'changes.deleted': 'Deleted',
   'changes.conflict': 'Conflict',

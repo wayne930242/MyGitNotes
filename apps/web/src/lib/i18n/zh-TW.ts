@@ -804,6 +804,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'changes.unstage': '取消暫存',
   'changes.refresh': '重新整理變更',
   'changes.added': '新增',
+  'changes.diffStats': '自上次 commit 以來新增 {added} 行、刪除 {removed} 行',
   'changes.modified': '修改',
   'changes.deleted': '刪除',
   'changes.conflict': '衝突',

@@ -4,6 +4,7 @@ import { parseDiffPreview } from '../lib/diff-preview.js';
 import type { FileChange } from '../lib/types.js';
 import { EditorNotice } from './EditorNotice.js';
 import { LoadingStatus } from './LoadingStatus.js';
+import { DiffStats } from './DiffStats.js';
 
 export function DiffPreview({ diff, file, loading = false, error = '' }: { diff: string; file?: FileChange; loading?: boolean; error?: string; }) {
   const { t } = useTranslation();
@@ -15,12 +16,7 @@ export function DiffPreview({ diff, file, loading = false, error = '' }: { diff:
       <h4>
         <FileDiff aria-hidden='true' />
         <span>{file?.path || t('commit.diffPreview')}</span>
-        {diff && !preview.notice && (
-          <span className='diff-stats'>
-            <b className='diff-added'>+{preview.added}</b>
-            <b className='diff-removed'>−{preview.removed}</b>
-          </span>
-        )}
+        {diff && !preview.notice && <DiffStats stats={preview} />}
       </h4>
       {error ? <EditorNotice tone='error'>{error}</EditorNotice> : loading ? <LoadingStatus className='diff-empty'>{t('agent.loadingDocument')}</LoadingStatus> : file?.available === false
         ? (

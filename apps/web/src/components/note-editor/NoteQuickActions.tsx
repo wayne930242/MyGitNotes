@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { GitCommit, RefreshCw, RotateCcw } from 'lucide-react';
 import { useTranslation } from '../../lib/i18n/index.js';
+import type { DiffStats as Stats } from '../../lib/diff-preview.js';
+import { DiffStats } from '../DiffStats.js';
 
 /** How long a first click keeps an action armed for its confirming second click. */
 const ARM_MS = 3000;
@@ -18,9 +20,9 @@ export function NoteRefreshAction({ onRefresh, disabled, className = '' }: { onR
 
 /**
  * Refresh pulls the note's latest version at once. Commit and Restore appear for a dirty note only
- * and each runs on a second click while armed.
+ * and each runs on a second click while armed, after the line counts of what they would commit or discard.
  */
-export function NoteQuickActions({ onRefresh, onCommit, onRestore, disabled }: { onRefresh?: () => Promise<void>; onCommit?: () => Promise<void>; onRestore?: () => Promise<void>; disabled: boolean; }) {
+export function NoteQuickActions({ onRefresh, onCommit, onRestore, changes, disabled }: { onRefresh?: () => Promise<void>; onCommit?: () => Promise<void>; onRestore?: () => Promise<void>; changes?: Stats | null; disabled: boolean; }) {
   const { t } = useTranslation();
   const [armed, setArmed] = useState<'commit' | 'restore' | null>(null);
   useEffect(() => {
@@ -37,6 +39,7 @@ export function NoteQuickActions({ onRefresh, onCommit, onRestore, disabled }: {
   return (
     <div className='note-quick-actions flex items-center gap-2'>
       {onRefresh && <NoteRefreshAction onRefresh={onRefresh} disabled={disabled} />}
+      {changes && (onRestore || onCommit) && <DiffStats stats={changes} />}
       {onRestore && (
         <button type='button' className='note-quick-action' data-action='restore' data-armed={armed === 'restore' || undefined} disabled={disabled} title={t('editor.quickRestoreHint')} onClick={() => press('restore', onRestore)}>
           <RotateCcw aria-hidden='true' />

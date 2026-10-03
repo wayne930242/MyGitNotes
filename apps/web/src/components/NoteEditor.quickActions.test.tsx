@@ -96,6 +96,40 @@ it('offers only Restore when the note cannot be committed from the editor', () =
   expect(screen.getByRole('button', { name: 'Restore' })).toBeTruthy();
 });
 
+const stats = (added: number, removed: number) => `Lines changed since the last commit: ${added} added, ${removed} removed`;
+
+it('shows the uncommitted line counts beside the actions of a dirty note', async () => {
+  const readDiff = vi.fn(async () => '--- a\n+++ b\n@@ -1,2 +1,3 @@\n-old\n+new\n+more\n keep\n');
+  render(editor({ isDirty: true, readDiff }));
+  await flush();
+  expect(screen.getByRole('img', { name: stats(2, 1) }).textContent).toBe('+2−1');
+});
+
+it('neither reads nor shows line counts for a clean note', async () => {
+  const readDiff = vi.fn(async () => '');
+  render(editor({ readDiff }));
+  await flush();
+  expect(readDiff).not.toHaveBeenCalled();
+  expect(screen.queryByRole('img', { name: /Lines changed/ })).toBeNull();
+});
+
+it('reads the line counts again once an edit is saved', async () => {
+  const readDiff = vi.fn(async () => '--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new\n');
+  render(editor({ isDirty: true, readDiff, onSave: async ({ content }: { content: string; }) => ({ ...note, content }) }));
+  await flush();
+  expect(screen.getByRole('img', { name: stats(1, 1) })).toBeTruthy();
+
+  readDiff.mockResolvedValue('--- a\n+++ b\n@@ -1 +1,3 @@\n-old\n+new\n+one\n+two\n');
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: '# Alpha\nMore.' } });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
+  await flush();
+
+  expect(readDiff.mock.calls.length).toBeGreaterThan(1);
+  expect(screen.getByRole('img', { name: stats(3, 1) })).toBeTruthy();
+});
+
 it('refreshes a clean note by adopting its latest version without merging', async () => {
   const latest: NoteItem = { ...note, content: '# Alpha\nFrom elsewhere.' };
   const onReadRemote = vi.fn(async () => note);
