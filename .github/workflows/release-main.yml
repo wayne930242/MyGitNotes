@@ -11,6 +11,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   release:
+    # Workspaces that track Core carry this file too; only the product repository verifies and publishes the demo.
+    if: github.repository == 'wayne930242/MyGitNotes'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
