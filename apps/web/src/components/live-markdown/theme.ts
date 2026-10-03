@@ -48,6 +48,9 @@ export const theme = EditorView.theme({
   '.live-md-quote::selection, .live-md-quote *::selection': { color: 'var(--color-muted)' },
   '.live-md-heading': { fontWeight: '700', lineHeight: '1.4', paddingTop: '12px', paddingBottom: '8px' },
   '.live-md-heading span': { textDecoration: 'none' },
+  // The 1em widget buffers CodeMirror places around the hidden '# ' are text-top aligned, which at a
+  // heading's 1.4 line height hangs below the line box and makes it 1px taller than while editing.
+  '.live-md-heading .cm-widgetBuffer': { verticalAlign: 'top' },
   '.live-md-h1': { fontSize: '1.85em' },
   '.live-md-h2': { fontSize: '1.5em' },
   '.live-md-h3': { fontSize: '1.25em' },
