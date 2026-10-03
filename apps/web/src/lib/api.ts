@@ -49,6 +49,9 @@ export async function fetchWorkspace(fresh = false): Promise<WorkspaceAnswer> {
   return res.json();
 }
 
+/** A local workspace's stream of `change` events, sent when files change in any of its worktrees. */
+export const openWorkspaceEvents = () => new EventSource(`${API_BASE}/workspace/events`);
+
 export async function updateWorkspaceConfig(configYaml: string, configRevision: string): Promise<{ success: boolean; config: WorkspaceConfig; configRevision: string; }> {
   const res = await fetch(`${API_BASE}/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ configYaml, configRevision }) });
   if (!res.ok) {

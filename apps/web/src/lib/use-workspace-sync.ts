@@ -6,7 +6,7 @@ import { useFocusPage } from './use-focus-page.js';
 import { pendingDocumentDrafts } from './use-workspace-document.js';
 import { WORKSPACE_DOCUMENT_CLIENTS } from './workspace-document-clients.js';
 import { AssetItem, FolderItem, GitStatus, NoteItem, WorkspaceConfig } from './types.js';
-import { fetchAssets, fetchFolders, fetchGitStatus, fetchWorkspace } from './api.js';
+import { fetchAssets, fetchFolders, fetchGitStatus, fetchWorkspace, openWorkspaceEvents } from './api.js';
 import { clearCommittedNotes, readWorkingNotes, updateWorkingNote, type WorkingNote, type WorkingNotes } from './working-notes.js';
 import { sameValue } from './merge-note.js';
 import { invalidateNoteQueries } from './use-note-queries.js';
@@ -181,6 +181,16 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
       refreshRequest.current++;
     };
   }, [refreshWorkspace]);
+
+  // A local workspace hears of files changed outside the app (an editor, an agent, Git) from the
+  // server's watcher; it reconnects when its repositories change, so a newly mapped worktree is watched.
+  const watchedRepositories = remote || !sourceId ? '' : repositories.map(repository => repository.id).join('\n');
+  useEffect(() => {
+    if (!watchedRepositories) return;
+    const events = openWorkspaceEvents();
+    events.addEventListener('change', () => void refreshWorkspace());
+    return () => events.close();
+  }, [watchedRepositories, refreshWorkspace]);
 
   useEffect(() => {
     if (!sourceId || !config) return;
