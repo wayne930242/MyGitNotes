@@ -136,6 +136,8 @@ console.log('\nWaiting for Tailscale HTTPS (the first run issues a certificate, 
 if (!(await waitForServe(Date.now() + 90_000))) console.error(`${url} is not answering yet; check that HTTPS is enabled for your tailnet.`);
 console.log(`\nMyGitNotes on your tailnet: ${url}\n`);
 console.log(await QRCode.toString(url, { type: 'utf8', margin: 2 }));
+// A browser that resolves names itself bypasses the system resolver Tailscale configures for *.ts.net.
+console.log(['If another device shows DNS_PROBE_FINISHED_NXDOMAIN:', '  - Turn on "Use Tailscale DNS settings" in that device\'s Tailscale client.', "  - Turn off the browser's Secure DNS (chrome://settings/security) and clear its host cache (chrome://net-internals/#dns).", ''].join('\n'));
 
 if (process.stdin.isTTY) {
   console.log('Press c to copy the URL, q or Ctrl+C to stop.\n');
