@@ -32,7 +32,9 @@ export const theme = EditorView.theme({
   '.cm-cursor': { borderLeftColor: 'var(--color-primary)' },
   '.cm-gutters': { backgroundColor: 'transparent', borderRight: '1px solid var(--color-border)', touchAction: 'none', WebkitTouchCallout: 'none' },
   '.cm-lineNumbers': { color: 'var(--color-muted)', fontFamily: 'monospace', fontSize: '11px', opacity: '0.55' },
-  '.cm-lineNumbers .cm-gutterElement': { paddingLeft: '8px', paddingRight: '10px', transformOrigin: 'right center', transition: 'color 150ms, transform 150ms, font-weight 150ms' },
+  // The number takes the body text's line box (its font size at the scroller's 1.8 line height),
+  // so it sits centred beside a line's first row instead of at the top of a taller box.
+  '.cm-lineNumbers .cm-gutterElement': { lineHeight: 'calc(var(--note-font-size, 1rem) * 1.8)', paddingLeft: '8px', paddingRight: '10px', transformOrigin: 'right center', transition: 'color 150ms, transform 150ms, font-weight 150ms' },
   '.cm-lineNumbers .cm-gutterElement:hover': { backgroundColor: 'color-mix(in srgb, var(--color-text) 6%, transparent)', color: 'var(--color-text)' },
   '.cm-lineNumbers .cm-gutterElement.cm-line-copy-selected': { backgroundColor: 'color-mix(in srgb, var(--color-text) 12%, transparent)', color: 'var(--color-text)' },
   '.cm-lineNumbers .cm-activeLineGutter': { color: 'var(--color-primary)', fontWeight: '700', transform: 'scale(1.08)' },
