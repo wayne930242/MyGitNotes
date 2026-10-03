@@ -26,12 +26,12 @@ export function writeShowLineNumbers(value: boolean, storage?: Pick<Storage, 'se
 
 export const FORMAT_TOOLBAR_STORAGE_KEY = 'github-notes:show-format-toolbar';
 
-/** The note editor's formatting toolbar shows until this device hides it. */
+/** The note editor's formatting toolbar stays hidden until this device shows it. */
 export function readShowFormatToolbar(storage?: Pick<Storage, 'getItem'>): boolean {
   try {
-    return (storage ?? globalThis.localStorage).getItem(FORMAT_TOOLBAR_STORAGE_KEY) !== 'false';
+    return (storage ?? globalThis.localStorage).getItem(FORMAT_TOOLBAR_STORAGE_KEY) === 'true';
   } catch {
-    return true;
+    return false;
   }
 }
 

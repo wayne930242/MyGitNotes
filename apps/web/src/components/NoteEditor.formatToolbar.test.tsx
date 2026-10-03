@@ -27,9 +27,13 @@ const note = { id: 'a', path: 'notes/a/a.md', notebookId: 'a', title: 'Alpha', t
 const editor = (props: Partial<NoteEditorProps>) => createElement(PanelProvider, null, createElement(NoteEditor, { note, frame: 'zoom', active: false, statuses: [], onSave: async () => note, onRestoreFile: async () => null, branch: 'main', draftScope: 'src:main', ...props } as NoteEditorProps));
 
 for (const frame of ['pane', 'zoom'] as const) {
-  it(`shows the formatting toolbar below the header and hides it from the header toggle (${frame})`, () => {
+  it(`starts hidden, shows the formatting toolbar below the header from the header toggle, and hides it again (${frame})`, () => {
     const { container } = render(editor({ frame }));
     const toggle = screen.getByRole('button', { name: 'Formatting toolbar' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('toolbar')).toBeNull();
+
+    fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     const toolbar = screen.getByRole('toolbar', { name: 'Formatting toolbar' });
     // The row sits between the header and the editor body, outside the header.
@@ -42,13 +46,20 @@ for (const frame of ['pane', 'zoom'] as const) {
   });
 }
 
-it('keeps the hidden choice across a remount', () => {
+it('remembers the choice in the browser across a remount', () => {
   const { unmount } = render(editor({}));
   fireEvent.click(screen.getByRole('button', { name: 'Formatting toolbar' }));
+  expect(localStorage.getItem(FORMAT_TOOLBAR_STORAGE_KEY)).toBe('true');
   unmount();
 
-  render(editor({}));
+  const { unmount: unmountShown } = render(editor({}));
+  expect(screen.getByRole('button', { name: 'Formatting toolbar' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('toolbar', { name: 'Formatting toolbar' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Formatting toolbar' }));
   expect(localStorage.getItem(FORMAT_TOOLBAR_STORAGE_KEY)).toBe('false');
+  unmountShown();
+
+  render(editor({}));
   expect(screen.getByRole('button', { name: 'Formatting toolbar' })).toHaveAttribute('aria-pressed', 'false');
   expect(screen.queryByRole('toolbar')).toBeNull();
 });
