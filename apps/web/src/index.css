@@ -179,8 +179,10 @@ input, textarea, [contenteditable='true'] { caret-color: var(--color-text); }
 .note-editor-slot:empty { display: none; }
 .note-editor-placeholder { display: flex; flex: 1; align-items: center; justify-content: center; padding: 24px; color: var(--color-muted); font-size: 13px; text-align: center; }
 /* Compact frame: the body with a status bar, inside a graph card. */
-.note-quick-action { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border: 1px solid var(--color-border); border-radius: var(--radius-control); color: var(--color-text); background: var(--color-surface); font-weight: 500; white-space: nowrap; }
-.note-quick-action > svg { width: 13px; height: 13px; }
+.note-quick-action { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: var(--radius-control); color: var(--color-text); background: var(--color-surface); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.note-quick-action > svg { width: 15px; height: 15px; }
+.note-footer:has(.note-quick-action) { padding-block: 8px; }
+.note-heading-icon { background: var(--color-primary-light); color: var(--color-primary); }
 .note-quick-action:hover:not(:disabled) { background: var(--color-primary-soft); }
 .note-quick-action:disabled { opacity: 0.4; cursor: not-allowed; }
 .note-quick-action[data-action='commit'][data-armed] { border-color: var(--color-primary); color: var(--color-on-primary); background: var(--color-primary); }
@@ -267,6 +269,7 @@ input, textarea, [contenteditable='true'] { caret-color: var(--color-text); }
 .note-view-options button { min-width: 0; min-height: 32px; padding: 0 6px; border-radius: var(--radius-control); color: var(--color-muted); font-size: 12px; font-weight: 500; }
 .note-view-options button:hover { color: var(--color-text); }
 .note-view-options button[aria-pressed='true'] { background: var(--color-surface); color: var(--color-text); font-weight: 600; box-shadow: 0 1px 3px color-mix(in srgb, var(--color-scrim) 12%, transparent); }
+.note-view-theme { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 4px; }
 .note-view-hint { color: var(--color-muted); font-size: 11px; line-height: 1.5; }
 @media (max-width: 767px) { .note-view-width { display: none; } }
 .note-info-panel { padding: 14px; }

@@ -5,6 +5,17 @@ import { useTranslation } from '../../lib/i18n/index.js';
 /** How long a first click keeps an action armed for its confirming second click. */
 const ARM_MS = 3000;
 
+/** Pulls the note's latest version at once; the zoomed editor shows it beside the title. */
+export function NoteRefreshAction({ onRefresh, disabled, className = '' }: { onRefresh: () => Promise<void>; disabled: boolean; className?: string; }) {
+  const { t } = useTranslation();
+  return (
+    <button type='button' className={`note-quick-action ${className}`} data-action='refresh' disabled={disabled} title={t('editor.quickRefreshHint')} onClick={() => !disabled && void onRefresh()}>
+      <RefreshCw aria-hidden='true' />
+      <span>{t('editor.quickRefresh')}</span>
+    </button>
+  );
+}
+
 /**
  * Refresh pulls the note's latest version at once. Commit and Restore appear for a dirty note only
  * and each runs on a second click while armed.
@@ -25,19 +36,7 @@ export function NoteQuickActions({ onRefresh, onCommit, onRestore, disabled }: {
   };
   return (
     <div className='note-quick-actions flex items-center gap-2'>
-      {onRefresh && (
-        <button
-          type='button'
-          className='note-quick-action'
-          data-action='refresh'
-          disabled={disabled}
-          title={t('editor.quickRefreshHint')}
-          onClick={() => !disabled && void onRefresh()}
-        >
-          <RefreshCw aria-hidden='true' />
-          <span>{t('editor.quickRefresh')}</span>
-        </button>
-      )}
+      {onRefresh && <NoteRefreshAction onRefresh={onRefresh} disabled={disabled} />}
       {onRestore && (
         <button type='button' className='note-quick-action' data-action='restore' data-armed={armed === 'restore' || undefined} disabled={disabled} title={t('editor.quickRestoreHint')} onClick={() => press('restore', onRestore)}>
           <RotateCcw aria-hidden='true' />

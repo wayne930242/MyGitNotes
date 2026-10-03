@@ -715,6 +715,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'editor.gistSyncHint': '每次提交這篇筆記都會更新 Gist。提交後，發佈狀態才會記錄在筆記裡。',
   'editor.gistSyncFailed': '已提交，但部分 Gist 沒有更新：{errors}',
   'editor.viewSettings': '檢視設定',
+  'editor.theme': '主題',
   'editor.fontSize': '文字大小',
   'editor.fontSize16': '標準',
   'editor.fontSize18': '大',

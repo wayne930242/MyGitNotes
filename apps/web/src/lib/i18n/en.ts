@@ -714,6 +714,7 @@ export const en = {
   'editor.gistSyncHint': 'Each commit of this note updates the Gist. Commit to record publishing in the note.',
   'editor.gistSyncFailed': 'Committed, but some Gists were not updated: {errors}',
   'editor.viewSettings': 'View settings',
+  'editor.theme': 'Theme',
   'editor.fontSize': 'Text size',
   'editor.fontSize16': 'Standard',
   'editor.fontSize18': 'Large',

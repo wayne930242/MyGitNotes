@@ -10,7 +10,7 @@ import { useTranslation } from '../../lib/i18n/index.js';
 import type { TranslationKey } from '../../lib/i18n/index.js';
 import { useWorkspaceLinks } from '../WorkspaceLinks.js';
 import { useEditorRegistry } from '../../lib/note-editing.js';
-import type { NoteEditorSession } from '../NoteEditor.js';
+import type { NoteEditorSession, NoteEditorSharedProps } from './types.js';
 
 /** Server-managed on every save; excluded when deciding whether there is a new edit to save. */
 function sameIgnoringTimestamps(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
@@ -18,22 +18,13 @@ function sameIgnoringTimestamps(a: Record<string, unknown>, b: Record<string, un
   return sameValue(strip(a), strip(b));
 }
 
-export interface UseNoteEditorSessionParams {
+/** `onCommitFile` commits this note's saved file alone; absent when the note cannot be committed from the editor. */
+export interface UseNoteEditorSessionParams extends Pick<NoteEditorSharedProps, 'remoteBase' | 'conflictReason' | 'onMarkConflict' | 'onSave' | 'onReadRemote' | 'onRestoreFile' | 'onCommitFile' | 'branch' | 'draftScope'> {
   note: NoteItem;
   readOnly: boolean;
   autoSave: boolean;
   draftMode: boolean;
-  remoteBase?: NoteItem;
-  conflictReason?: string;
-  onMarkConflict?: (reason: string, draft: NoteItem, base: NoteItem) => void;
-  onSave: (params: { path: string; content: string; metadata?: Record<string, unknown>; revision?: string; baseNote?: NoteItem; }) => Promise<NoteItem>;
-  onReadRemote?: (path: string) => Promise<NoteItem>;
-  onRestoreFile: (path: string) => Promise<NoteItem | null>;
-  /** Commits this note's saved file alone; absent when the note cannot be committed from the editor. */
-  onCommitFile?: (path: string) => Promise<void>;
   propIsDirty: boolean;
-  branch: string;
-  draftScope?: string;
   onClose?: () => void;
   onSession?: (session: NoteEditorSession | null) => void;
 }
@@ -534,3 +525,6 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
 
   return { content, setContent, metadata, setMetadata, copyState, copyNote, isSaving, saveError, saveErrorParams, hasUnsavedChanges, baseNote, blocked, locked, isDirty, editorState, editorStatus, title, recoveredDraft, handleRestoreDraft, handleDiscardDraft, conflictDraft, showRemoteNotice, remoteNotice, showConflictDraftNotice, dismissNotice, refreshRemote, downloadConflictDraft, handleExplicitSave, commitNote, restoreNote, pullLatest, close };
 }
+
+/** Everything a note editing session exposes to the editor parts that render it. */
+export type NoteEditorSessionState = ReturnType<typeof useNoteEditorSession>;

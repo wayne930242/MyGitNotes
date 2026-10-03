@@ -3,7 +3,8 @@ import type { NoteGraphNode } from '@mygitnotes/core/note-graph';
 import { useTranslation } from '../../lib/i18n/index.js';
 import { useNoteCandidates } from '../../lib/note-completion.js';
 import { HostedNoteEditor } from '../NoteEditorHost.js';
-import type { NoteEditorHandle, NoteEditorSession } from '../NoteEditor.js';
+import type { NoteEditorHandle } from '../NoteEditor.js';
+import type { NoteEditorSession } from '../note-editor/types.js';
 
 export function GraphNoteCard({ node, session, editorRef, onSession, onCollapse, onMaximize, onSelect, onMove, onResize, onConnect, onLink, onCaret, selected, maximized, color }: {
   node: NoteGraphNode;

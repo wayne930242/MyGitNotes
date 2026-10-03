@@ -1,65 +1,18 @@
-import { EditorNotice } from './EditorNotice.js';
 import { EditorFooter } from './EditorFooter.js';
 import { NoteQuickActions } from './note-editor/NoteQuickActions.js';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { ArrowLeft, Code2, Eye, FileText, LayoutGrid, ListOrdered, PanelRight, Save, X } from 'lucide-react';
-import { Button } from './Button.js';
-import { NoteExportMenu } from './NoteExportMenu.js';
-import { MarkdownEditor, MarkdownEditorMode, MarkdownEditorModeSwitch } from './MarkdownEditor.js';
-import type { MarkdownEditorHandle } from './MarkdownEditor.js';
-import { AssetItem, NotebookMetadataField, NoteItem } from '../lib/types.js';
-import { useTranslation } from '../lib/i18n/index.js';
-import type { TranslationKey } from '../lib/i18n/index.js';
+import { MarkdownEditor, type MarkdownEditorHandle, type MarkdownEditorMode } from './MarkdownEditor.js';
+import type { NoteItem } from '../lib/types.js';
 import { usePanelContext } from '../lib/panel-context.js';
-import { useNoteEditorSession } from './note-editor/useNoteEditorSession.js';
+import { type NoteEditorSessionState, useNoteEditorSession } from './note-editor/useNoteEditorSession.js';
 import { useNoteDocumentPanel } from './note-editor/useNoteDocumentPanel.js';
-import { NoteDocumentPanel } from './note-editor/NoteDocumentPanel.js';
-import { CrashRecoveryBanner } from './CrashRecoveryBanner.js';
+import { NoteEditorNotices } from './note-editor/NoteEditorNotices.js';
+import { NoteCompactFrame } from './note-editor/NoteCompactFrame.js';
+import { NoteEditorToolbar } from './note-editor/NoteEditorToolbar.js';
+import { NoteEditorDocumentPanel } from './note-editor/NoteEditorDocumentPanel.js';
+import { NoteEditorLeader } from './note-editor/NoteEditorLeader.js';
 import { noteViewStyle, readShowLineNumbers, useNoteViewPreferences, writeShowLineNumbers } from '../lib/editor-preferences.js';
-import type { FileResult } from '../lib/files-api.js';
-
-export type NotePanelMode = 'find' | 'outline' | 'frontmatter' | 'assets' | 'view' | 'info';
-export const NOTE_PANEL_MODES: readonly NotePanelMode[] = ['outline', 'find', 'frontmatter', 'assets', 'view', 'info'];
-
-/** Props every editor of one note shares, whether zoom or a Focus pane frames it. */
-export interface NoteEditorSharedProps {
-  statuses: string[];
-  metadataFields?: NotebookMetadataField[];
-  readOnly?: boolean;
-  autoSave?: boolean;
-  draftMode?: boolean;
-  remoteBase?: NoteItem;
-  conflictReason?: string;
-  onMarkConflict?: (reason: string, draft: NoteItem, base: NoteItem) => void;
-  onSave: (params: { path: string; content: string; metadata?: Record<string, unknown>; revision?: string; baseNote?: NoteItem; }) => Promise<NoteItem>;
-  onReadRemote?: (path: string) => Promise<NoteItem>;
-  onRestoreFile: (path: string) => Promise<NoteItem | null>;
-  /** Commits one note's saved file alone, from the footer; absent when the note's repository is read-only. */
-  onCommitFile?: (path: string) => Promise<void>;
-  isDirty?: boolean;
-  availableTags?: string[];
-  assets?: AssetItem[];
-  onUploadAsset?: (file: File, directory: string) => Promise<AssetItem>;
-  onDeleteAsset?: (asset: AssetItem) => Promise<void>;
-  onMoveAsset?: (asset: AssetItem, directory: string) => Promise<AssetItem>;
-  /** Guards unsaved workspace edits before a document-panel file action rewrites notes. */
-  beforeFileChange?: () => Promise<void>;
-  /** Reloads workspace views after a document-panel file action rewrote notes. */
-  onFilesChanged?: (result: FileResult) => Promise<void>;
-  branch: string;
-  draftScope?: string;
-}
-
-/** What a host that embeds the editor sees of its session, for features it builds on top of the body. */
-export interface NoteEditorSession {
-  content: string;
-  title: string;
-  /** Edits not yet saved by the session. */
-  dirty: boolean;
-  /** No edit is accepted right now: read-only, blocked by a conflict, restoring or saving. */
-  locked: boolean;
-}
+import type { NoteEditorSession, NoteEditorSharedProps, NotePanelMode } from './note-editor/types.js';
 
 export interface NoteEditorHandle {
   /** Inserts `text` at `at`, or at the caret; no-op while the session is locked. */
@@ -85,10 +38,15 @@ export interface NoteEditorProps extends NoteEditorSharedProps {
   onCaret?: (position: number) => void;
 }
 
+/** The footer's actions: Refresh unless zoom shows it beside the title, and Commit and Restore for an editable dirty note. */
+function footerActions({ frame, readOnly, session, refresh, canCommit }: { frame: NoteEditorProps['frame']; readOnly: boolean; session: NoteEditorSessionState; refresh?: () => Promise<void>; canCommit: boolean; }) {
+  const editable = !readOnly && session.isDirty;
+  return { onRefresh: frame === 'zoom' ? undefined : refresh, onCommit: editable && canCommit && !session.blocked ? session.commitNote : undefined, onRestore: editable ? session.restoreNote : undefined };
+}
+
 /** A note's editing session: content, frontmatter, drafts, autosave, conflicts, crash recovery and the document panel. */
 export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note, frame, active, documentPanel, onClose, onAddToFocus, onSession, onCaret, statuses, metadataFields, readOnly = false, autoSave = true, draftMode = false, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, onCommitFile, isDirty: propIsDirty = false, availableTags = [], beforeFileChange, onFilesChanged, branch, draftScope }, ref) => {
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(note.path);
-  const { t } = useTranslation();
   const { setHasOpenNote } = usePanelContext();
   // The workspace rail hides only behind zoom; a pane editor shares the page with it.
 
@@ -111,6 +69,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   const editorRef = useRef<MarkdownEditorHandle>(null);
 
   const session = useNoteEditorSession({ note, readOnly, autoSave, draftMode, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, onCommitFile, propIsDirty, branch, draftScope, onClose, onSession });
+  const refresh = onReadRemote && !session.blocked ? session.pullLatest : undefined;
   const docPanel = useNoteDocumentPanel({ frame, active, isMarkdown, content: session.content, editorMode, documentPanel, editorRef, metadata: session.metadata, notePath: note.path, branch, draftScope, readOnly });
 
   useImperativeHandle(ref, () => ({
@@ -126,149 +85,26 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
     docPanel.setNotePanel(null);
   };
 
-  return (
-    <div className='note-editor' data-frame={frame} data-source-notebook={note.notebookId} style={frame === 'compact' ? undefined : noteViewStyle(viewPreferences)}>
-      <div className='editor-notices'>
-        {/* Crash recovery banner if draft differs from disk */}
-        {session.recoveredDraft && !session.blocked && <CrashRecoveryBanner draft={{ path: note.path, content: session.recoveredDraft.content, metadata: session.recoveredDraft.metadata, savedAt: session.recoveredDraft.savedAt }} onRestore={session.handleRestoreDraft} onDiscard={session.handleDiscardDraft} />}
-        {session.saveError && <EditorNotice tone='error'>{t(session.saveError as TranslationKey, session.saveErrorParams)}</EditorNotice>}
-        {(session.blocked || session.showRemoteNotice || session.showConflictDraftNotice) && (
-          <EditorNotice
-            actions={
-              <>
-                {session.blocked && <button disabled={session.isSaving} onClick={session.refreshRemote} className='font-semibold underline hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed transition'>{t('editor.refreshRemote')}</button>}
-                {session.conflictDraft && <button onClick={session.downloadConflictDraft} className='underline hover:opacity-80 transition'>{t('editor.downloadPreservedDraft')}</button>}
-                {!session.blocked && (
-                  <button type='button' aria-label={t('editor.dismissNotice')} title={t('editor.dismissNotice')} onClick={session.dismissNotice} className='ui-icon-button'>
-                    <X aria-hidden='true' />
-                  </button>
-                )}
-              </>
-            }
-          >
-            {session.showRemoteNotice ? t(session.remoteNotice as TranslationKey) : t('editor.localChangesPreserved')}
-          </EditorNotice>
-        )}
+  if (frame === 'compact') {
+    return (
+      <div className='note-editor' data-frame={frame} data-source-notebook={note.notebookId}>
+        <NoteEditorNotices session={session} notePath={note.path} />
+        <NoteCompactFrame note={note} session={session} editorRef={editorRef} isMarkdown={isMarkdown} editorMode={editorMode} setEditorMode={setEditorMode} showLineNumbers={showLineNumbers} toggleLineNumbers={toggleLineNumbers} onCaret={onCaret} />
       </div>
-      {frame === 'compact'
-        ? (
-          <>
-            <div className='note-editor-body'>
-              <MarkdownEditor ref={editorRef} compact content={session.content} path={note.path} notebookId={note.notebookId} mode={editorMode} readOnly={session.locked} onChange={session.setContent} onCaret={onCaret} ariaLabel='Note content' showLineNumbers={showLineNumbers} lineNumberOffset={session.baseNote.lineNumberOffset} />
-            </div>
-            <div className='note-compact-bar'>
-              {isMarkdown && <button type='button' className='ui-icon-button' data-mode-toggle={editorMode} title={t(editorMode === 'live' ? 'editor.source' : 'editor.livePreview')} aria-label={t(editorMode === 'live' ? 'editor.source' : 'editor.livePreview')} onClick={() => setEditorMode(editorMode === 'live' ? 'raw' : 'live')}>{editorMode === 'live' ? <Code2 size={14} aria-hidden='true' /> : <Eye size={14} aria-hidden='true' />}</button>}
-              <button type='button' className='ui-icon-button' aria-pressed={showLineNumbers} title={t('editor.lineNumbers')} aria-label={t('editor.lineNumbers')} onClick={toggleLineNumbers}>
-                <ListOrdered size={14} aria-hidden='true' />
-              </button>
-              <NoteExportMenu className='ui-icon-button' iconSize={14} path={note.path} notebookId={note.notebookId} title={session.title} content={session.content} copyState={session.copyState} onCopy={session.copyNote} />
-              <span className='note-compact-path' title={note.path}>{note.notebookId}{' · '}{note.path.split('/').pop()}</span>
-              <span role='status' className='note-compact-status' data-state={session.editorState}>
-                <span className={`note-compact-dot ${session.editorState === 'saving' ? 'animate-pulse' : ''}`} aria-hidden='true' />
-                {session.editorStatus}
-              </span>
-            </div>
-          </>
-        )
-        : (
-          <>
-            {/* Modal Top Bar */}
-            <div className='note-toolbar relative shrink-0 px-5 py-3.5 border-b border-line flex items-center justify-between gap-4 bg-sidebar/60'>
-              {frame === 'zoom' && (
-                <div className='note-heading flex items-center gap-3 truncate'>
-                  {/* Leaving zoom sits at the far left, away from the document-panel toggle at the right. */}
-                  {onClose
-                    ? (
-                      <button type='button' aria-label={t('editor.closeNote')} title={t('editor.closeNote')} onClick={session.close} className='note-close ui-icon-button toolbar-icon-button shrink-0'>
-                        <ArrowLeft aria-hidden='true' />
-                      </button>
-                    )
-                    : (
-                      <div className='w-8 h-8 rounded-lg flex items-center justify-center shrink-0' style={{ backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
-                        <FileText className='w-4 h-4' />
-                      </div>
-                    )}
-                  <div className='truncate'>
-                    <div className='font-serif font-semibold text-fg text-sm truncate'>{session.title || t('editor.untitled')}</div>
-                    <div className='text-xs text-muted font-mono truncate'>{note.path}</div>
-                  </div>
-                </div>
-              )}
-              <div className='note-controls flex items-center gap-2'>
-                {!autoSave && !readOnly && (
-                  <Button variant='primary' aria-label={t('editor.saveToGitHub')} title={t('editor.saveToGitHub')} disabled={session.locked || !session.hasUnsavedChanges} onClick={session.handleExplicitSave} className='note-save editor-action'>
-                    <Save className='editor-mobile-icon w-5 h-5' />
-                    <span>{session.isSaving ? t('editor.saving') : t('editor.saveToGitHub')}</span>
-                  </Button>
-                )}
-                {isMarkdown && <MarkdownEditorModeSwitch mode={editorMode} onChange={setEditorMode} />}
-                <button type='button' aria-pressed={showLineNumbers} aria-label={t('editor.lineNumbers')} title={t('editor.lineNumbers')} onClick={toggleLineNumbers} className='ui-icon-button toolbar-icon-button editor-line-numbers-action'>
-                  <ListOrdered aria-hidden='true' />
-                </button>
-                <NoteExportMenu className='ui-icon-button toolbar-icon-button' path={note.path} notebookId={note.notebookId} title={session.title} content={session.content} copyState={session.copyState} onCopy={session.copyNote} />
-                {onAddToFocus && (
-                  <button type='button' aria-label={t('focus.addTo')} title={t('focus.addTo')} onClick={onAddToFocus} className='ui-icon-button toolbar-icon-button'>
-                    <LayoutGrid aria-hidden='true' />
-                  </button>
-                )}
-                <div ref={setInsertSlot} className='note-insert-actions' />
-                {frame === 'zoom' && (
-                  <button
-                    type='button'
-                    aria-label={t('editor.documentPanel')}
-                    title={t('editor.documentPanel')}
-                    aria-pressed={Boolean(docPanel.notePanel)}
-                    onClick={() => {
-                      if (docPanel.notePanel) docPanel.setNotePanel(null);
-                      else if (docPanel.lastNotePanel.current === 'outline') {
-                        if (isMarkdown) docPanel.openOutline();
-                        else docPanel.openFind();
-                      } else if (docPanel.lastNotePanel.current === 'find') docPanel.openFind();
-                      else docPanel.setNotePanel(docPanel.lastNotePanel.current);
-                    }}
-                    className='ui-icon-button toolbar-icon-button editor-panel-action'
-                  >
-                    <PanelRight aria-hidden='true' />
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className='note-editor-body'>
-              <MarkdownEditor ref={editorRef} content={session.content} path={note.path} notebookId={note.notebookId} mode={editorMode} readOnly={session.locked} onChange={session.setContent} onCaret={onCaret} insertSlot={insertSlot} ariaLabel='Note content' showLineNumbers={showLineNumbers} lineNumberOffset={session.baseNote.lineNumberOffset} />
-              {frame === 'zoom'
-                ? (
-                  <aside className='note-document-panel' data-open={Boolean(docPanel.notePanel)} data-panel={docPanel.notePanel || undefined} aria-label={t('editor.documentPanel')}>
-                    <NoteDocumentPanel includeTabs isMarkdown={isMarkdown} setNotePanel={docPanel.setNotePanel} isFindOpen={docPanel.isFindOpen} isOutlineOpen={docPanel.isOutlineOpen} showFrontmatter={docPanel.showFrontmatter} isAssetPickerOpen={docPanel.isAssetPickerOpen} isViewPanelOpen={docPanel.isViewPanelOpen} isInfoPanelOpen={docPanel.isInfoPanelOpen} notePath={note.path} content={session.content} findQuery={docPanel.findQuery} setFindQuery={docPanel.setFindQuery} findIndex={docPanel.findIndex} matches={docPanel.matches} stepFind={docPanel.stepFind} findInputRef={docPanel.findInputRef} outline={docPanel.outline} lineNumberOffset={session.baseNote.lineNumberOffset || 0} outlineIndex={docPanel.outlineIndex} setOutlineIndex={docPanel.setOutlineIndex} chooseOutline={docPanel.chooseOutline} openOutline={docPanel.openOutline} newFieldKey={docPanel.newFieldKey} setNewFieldKey={docPanel.setNewFieldKey} frontmatterViewMode={docPanel.frontmatterViewMode} setFrontmatterViewMode={docPanel.setFrontmatterViewMode} yamlText={docPanel.yamlText} setYamlText={docPanel.setYamlText} yamlError={docPanel.yamlError} setYamlError={docPanel.setYamlError} tagInput={docPanel.tagInput} setTagInput={docPanel.setTagInput} isTagDropdownOpen={docPanel.isTagDropdownOpen} setIsTagDropdownOpen={docPanel.setIsTagDropdownOpen} metadata={session.metadata} setMetadata={session.setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={session.locked} notebookId={note.notebookId} onInsertAssetRef={handleInsertAssetRef} readOnly={readOnly} beforeFileChange={beforeFileChange} onFilesChanged={onFilesChanged} />
-                  </aside>
-                )
-                : documentPanel?.target && docPanel.notePanel && createPortal(
-                  <section className='note-document-panel' data-open='true' data-panel={docPanel.notePanel} data-frame='rail' aria-label={t('editor.documentPanel')}>
-                    <NoteDocumentPanel includeTabs={false} isMarkdown={isMarkdown} setNotePanel={docPanel.setNotePanel} isFindOpen={docPanel.isFindOpen} isOutlineOpen={docPanel.isOutlineOpen} showFrontmatter={docPanel.showFrontmatter} isAssetPickerOpen={docPanel.isAssetPickerOpen} isViewPanelOpen={docPanel.isViewPanelOpen} isInfoPanelOpen={docPanel.isInfoPanelOpen} notePath={note.path} content={session.content} findQuery={docPanel.findQuery} setFindQuery={docPanel.setFindQuery} findIndex={docPanel.findIndex} matches={docPanel.matches} stepFind={docPanel.stepFind} findInputRef={docPanel.findInputRef} outline={docPanel.outline} lineNumberOffset={session.baseNote.lineNumberOffset || 0} outlineIndex={docPanel.outlineIndex} setOutlineIndex={docPanel.setOutlineIndex} chooseOutline={docPanel.chooseOutline} openOutline={docPanel.openOutline} newFieldKey={docPanel.newFieldKey} setNewFieldKey={docPanel.setNewFieldKey} frontmatterViewMode={docPanel.frontmatterViewMode} setFrontmatterViewMode={docPanel.setFrontmatterViewMode} yamlText={docPanel.yamlText} setYamlText={docPanel.setYamlText} yamlError={docPanel.yamlError} setYamlError={docPanel.setYamlError} tagInput={docPanel.tagInput} setTagInput={docPanel.setTagInput} isTagDropdownOpen={docPanel.isTagDropdownOpen} setIsTagDropdownOpen={docPanel.setIsTagDropdownOpen} metadata={session.metadata} setMetadata={session.setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={session.locked} notebookId={note.notebookId} onInsertAssetRef={handleInsertAssetRef} readOnly={readOnly} beforeFileChange={beforeFileChange} onFilesChanged={onFilesChanged} />
-                  </section>,
-                  documentPanel.target,
-                )}
-            </div>
-            <EditorFooter content={session.content} path={note.path} state={session.editorState} status={session.editorStatus} actions={<NoteQuickActions onRefresh={onReadRemote && !session.blocked ? session.pullLatest : undefined} onCommit={!readOnly && session.isDirty && onCommitFile && !session.blocked ? session.commitNote : undefined} onRestore={!readOnly && session.isDirty ? session.restoreNote : undefined} disabled={session.isSaving} />} />
-            {docPanel.isEditorLeaderOpen && (
-              <div className='note-editor-leader' role='dialog' aria-modal='false' aria-label={t('editor.noteCommands')}>
-                <div>
-                  <strong>{t('editor.noteCommands')}</strong>
-                  <small>{t('editor.leaderHint')}</small>
-                </div>
-                <button type='button' onClick={docPanel.openFind}>
-                  <kbd>F</kbd>
-                  <span>{t('editor.findInNote')}</span>
-                </button>
-                {isMarkdown && (
-                  <button type='button' onClick={docPanel.openOutline}>
-                    <kbd>/</kbd>
-                    <span>{t('editor.outline')}</span>
-                  </button>
-                )}
-              </div>
-            )}
-          </>
-        )}
+    );
+  }
+
+  const panel = { ...docPanel, isMarkdown, notePath: note.path, content: session.content, lineNumberOffset: session.baseNote.lineNumberOffset || 0, metadata: session.metadata, setMetadata: session.setMetadata, statuses, metadataFields, availableTags, locked: session.locked, notebookId: note.notebookId, onInsertAssetRef: handleInsertAssetRef, readOnly, beforeFileChange, onFilesChanged };
+  return (
+    <div className='note-editor' data-frame={frame} data-source-notebook={note.notebookId} style={noteViewStyle(viewPreferences)}>
+      <NoteEditorNotices session={session} notePath={note.path} />
+      <NoteEditorToolbar frame={frame} note={note} session={session} docPanel={docPanel} isMarkdown={isMarkdown} autoSave={autoSave} readOnly={readOnly} editorMode={editorMode} setEditorMode={setEditorMode} showLineNumbers={showLineNumbers} toggleLineNumbers={toggleLineNumbers} setInsertSlot={setInsertSlot} onRefresh={refresh} onClose={onClose} onAddToFocus={onAddToFocus} />
+      <div className='note-editor-body'>
+        <MarkdownEditor ref={editorRef} content={session.content} path={note.path} notebookId={note.notebookId} mode={editorMode} readOnly={session.locked} onChange={session.setContent} onCaret={onCaret} insertSlot={insertSlot} ariaLabel='Note content' showLineNumbers={showLineNumbers} lineNumberOffset={session.baseNote.lineNumberOffset} />
+        <NoteEditorDocumentPanel frame={frame} target={documentPanel?.target} notePanel={docPanel.notePanel} panel={panel} />
+      </div>
+      <EditorFooter content={session.content} path={note.path} state={session.editorState} status={session.editorStatus} actions={<NoteQuickActions {...footerActions({ frame, readOnly, session, refresh, canCommit: Boolean(onCommitFile) })} disabled={session.isSaving} />} />
+      {docPanel.isEditorLeaderOpen && <NoteEditorLeader docPanel={docPanel} isMarkdown={isMarkdown} />}
     </div>
   );
 });

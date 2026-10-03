@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import type { NoteItem } from './types.js';
-import type { NoteEditorSharedProps } from '../components/NoteEditor.js';
+import type { NoteEditorSharedProps } from '../components/note-editor/types.js';
 
 type Flush = () => Promise<boolean>;
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE_FAMILIES } from './palettes.js';
-import { resolveThemeChoice, themeTokens } from './themes.js';
+import { getThemeChoice, resolveThemeChoice, setThemeChoice, subscribeThemeChoice, themeTokens } from './themes.js';
 
 const luminance = (hex: string) => {
   const [r, g, b] = hex.slice(1, 7).match(/.{2}/g)!.map(value => parseInt(value, 16) / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
@@ -20,6 +20,17 @@ describe('theme choice', () => {
   it('keeps a saved mode when the family id is unknown', () => {
     expect(resolveThemeChoice('nord-arctic', 'system')).toEqual({ familyId: 'flexoki', mode: 'system' });
     expect(resolveThemeChoice('no-such-family', 'light')).toEqual({ familyId: 'flexoki', mode: 'light' });
+  });
+
+  it('shares one choice and notifies every subscriber when it changes', () => {
+    const seen: string[] = [];
+    const unsubscribe = subscribeThemeChoice(() => seen.push(getThemeChoice().familyId));
+    setThemeChoice({ familyId: 'gruvbox', mode: 'dark' });
+    expect(getThemeChoice()).toEqual({ familyId: 'gruvbox', mode: 'dark' });
+    expect(seen).toEqual(['gruvbox']);
+    unsubscribe();
+    setThemeChoice({ familyId: 'carbon', mode: 'light' });
+    expect(seen).toEqual(['gruvbox']);
   });
 
   it('defaults to Flexoki following the system', () => {

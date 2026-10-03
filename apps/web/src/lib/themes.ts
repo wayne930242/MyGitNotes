@@ -7,15 +7,17 @@ export interface ThemeChoice {
   mode: ThemeMode;
 }
 
-export const DEFAULT_FAMILY_ID = 'flexoki';
-export const THEME_FAMILY_KEY = 'github_notes_theme';
-export const THEME_MODE_KEY = 'github_notes_theme_mode';
+/** The first palette family, Flexoki, is the default. */
+const DEFAULT_FAMILY = PALETTE_FAMILIES[0];
+const DEFAULT_FAMILY_ID = DEFAULT_FAMILY.id;
+const THEME_FAMILY_KEY = 'github_notes_theme';
+const THEME_MODE_KEY = 'github_notes_theme_mode';
 
 /** Retired single-mode themes; a saved retired id still tells us the mode the user chose. */
 const RETIRED_THEME_MODES: Record<string, PaletteMode> = { 'clean-indigo': 'light', 'warm-sepia': 'light', 'forest-emerald': 'light', 'github-dark': 'dark', 'nord-arctic': 'dark', 'midnight-violet': 'dark' };
 
 export function getFamily(id: string): PaletteFamily {
-  return PALETTE_FAMILIES.find(family => family.id === id) ?? PALETTE_FAMILIES.find(family => family.id === DEFAULT_FAMILY_ID)!;
+  return PALETTE_FAMILIES.find(family => family.id === id) ?? DEFAULT_FAMILY;
 }
 
 function isMode(value: string | null): value is ThemeMode {
@@ -24,12 +26,12 @@ function isMode(value: string | null): value is ThemeMode {
 
 /** Unknown or retired family ids resolve to Flexoki; the saved mode is kept. */
 export function resolveThemeChoice(savedFamily: string | null, savedMode: string | null): ThemeChoice {
-  const familyId = PALETTE_FAMILIES.some(family => family.id === savedFamily) ? savedFamily! : DEFAULT_FAMILY_ID;
+  const familyId = PALETTE_FAMILIES.find(family => family.id === savedFamily)?.id ?? DEFAULT_FAMILY_ID;
   const mode = isMode(savedMode) ? savedMode : (savedFamily && RETIRED_THEME_MODES[savedFamily]) || 'system';
   return { familyId, mode };
 }
 
-export function getSavedTheme(): ThemeChoice {
+function getSavedTheme(): ThemeChoice {
   try {
     return resolveThemeChoice(localStorage.getItem(THEME_FAMILY_KEY), localStorage.getItem(THEME_MODE_KEY));
   } catch {
@@ -37,13 +39,30 @@ export function getSavedTheme(): ThemeChoice {
   }
 }
 
+let themeChoice: ThemeChoice | undefined;
+const themeListeners = new Set<() => void>();
+
+/** Current theme choice, shared by the settings dialog and the editor's view panel. */
+export const getThemeChoice = () => themeChoice ??= getSavedTheme();
+
+export function subscribeThemeChoice(listener: () => void) {
+  themeListeners.add(listener);
+  return () => themeListeners.delete(listener);
+}
+
+export function setThemeChoice(choice: ThemeChoice) {
+  themeChoice = choice;
+  for (const listener of themeListeners) listener();
+}
+
 export function resolveMode(mode: ThemeMode): PaletteMode {
   if (mode !== 'system') return mode;
   return typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-export function buttonTextColor(background: string): string {
-  const rgb = background.replace('#', '').match(/.{2}/g)!.slice(0, 3).map(value => parseInt(value, 16) / 255);
+function buttonTextColor(background: string): string {
+  const hex = background.replace('#', '');
+  const rgb = [0, 2, 4].map(start => parseInt(hex.slice(start, start + 2), 16) / 255);
   const linear = rgb.map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
   const luminance = .2126 * linear[0] + .7152 * linear[1] + .0722 * linear[2];
   return (luminance + .05) / .05 >= 1.05 / (luminance + .05) ? INK.black : INK.white;
@@ -62,7 +81,7 @@ export function applyTheme(choice: ThemeChoice): void {
   try {
     localStorage.setItem(THEME_FAMILY_KEY, choice.familyId);
     localStorage.setItem(THEME_MODE_KEY, choice.mode);
-  } catch {}
+  } catch { /* Keep the in-page theme. */ }
 
   const mode = resolveMode(choice.mode);
   const root = document.documentElement;

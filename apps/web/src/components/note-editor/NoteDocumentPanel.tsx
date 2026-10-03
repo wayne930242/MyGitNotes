@@ -7,7 +7,7 @@ import { NoteInfoPanel } from './NoteInfoPanel.js';
 import type { FileResult } from '../../lib/files-api.js';
 import type { OutlineHeading } from '../../lib/note-navigation.js';
 import type { NotebookMetadataField } from '../../lib/types.js';
-import type { NotePanelMode } from '../NoteEditor.js';
+import type { NotePanelMode } from './types.js';
 import { useTranslation } from '../../lib/i18n/index.js';
 
 export interface NoteDocumentPanelProps {

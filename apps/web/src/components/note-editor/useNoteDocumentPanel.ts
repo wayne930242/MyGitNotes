@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import YAML from 'yaml';
 import { chooseOutlineHeading, findOutlineIndexForLine, findTextMatches, isEditableTarget, parseMarkdownOutline } from '../../lib/note-navigation.js';
 import type { MarkdownEditorHandle, MarkdownEditorMode } from '../MarkdownEditor.js';
-import type { NotePanelMode } from '../NoteEditor.js';
+import type { NotePanelMode } from './types.js';
 
 export interface UseNoteDocumentPanelParams {
   frame: 'zoom' | 'pane' | 'compact';
@@ -200,3 +200,6 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
 
   return { editorRef, notePanel, setNotePanel, lastNotePanel, isAssetPickerOpen, isFindOpen, isOutlineOpen, showFrontmatter, isViewPanelOpen, isInfoPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, moveOutline, openFind, openOutline, isEditorLeaderOpen, setIsEditorLeaderOpen, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen };
 }
+
+/** The document panel state the editor parts that render it share. */
+export type NoteDocumentPanelState = ReturnType<typeof useNoteDocumentPanel>;

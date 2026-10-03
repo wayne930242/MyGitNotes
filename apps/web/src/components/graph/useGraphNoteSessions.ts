@@ -2,7 +2,8 @@ import { useRef, useState } from 'react';
 import { insertNoteLink } from '@mygitnotes/core/note-graph';
 import { useNoteEditing } from '../../lib/note-editing.js';
 import type { I18nContextValue } from '../../lib/i18n/index.js';
-import type { NoteEditorHandle, NoteEditorSession } from '../NoteEditor.js';
+import type { NoteEditorHandle } from '../NoteEditor.js';
+import type { NoteEditorSession } from '../note-editor/types.js';
 
 /** Expanded cards host the notes' editors; their sessions drive the pending edges and link insertion. */
 export function useGraphNoteSessions({ t, onNotice }: { t: I18nContextValue['t']; onNotice: (message: string) => void; }) {

@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
-import { applyTheme, getSavedTheme, ThemeChoice } from '../lib/themes.js';
+import { useEffect, useSyncExternalStore } from 'react';
+import { applyTheme, getThemeChoice, setThemeChoice, subscribeThemeChoice } from '../lib/themes.js';
 
+/** Reads and changes the shared theme choice; any component may use it. */
+export const useThemeChoice = () => useSyncExternalStore(subscribeThemeChoice, getThemeChoice);
+
+/** Applies the shared theme choice to the document; mount once at the app root. */
 export function useTheme() {
-  // Theme State
-  const [currentTheme, setCurrentTheme] = useState<ThemeChoice>(() => getSavedTheme());
+  const currentTheme = useThemeChoice();
 
   useEffect(() => {
     applyTheme(currentTheme);
@@ -14,7 +17,5 @@ export function useTheme() {
     return () => query.removeEventListener('change', follow);
   }, [currentTheme]);
 
-  const handleSelectTheme = (theme: ThemeChoice) => setCurrentTheme(theme);
-
-  return { currentTheme, handleSelectTheme };
+  return { currentTheme, handleSelectTheme: setThemeChoice };
 }

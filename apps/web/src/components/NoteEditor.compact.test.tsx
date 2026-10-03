@@ -4,7 +4,8 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { PanelProvider } from '../lib/panel-context.js';
-import { NoteEditor, type NoteEditorHandle, type NoteEditorSession } from './NoteEditor.js';
+import { NoteEditor, type NoteEditorHandle } from './NoteEditor.js';
+import type { NoteEditorSession } from './note-editor/types.js';
 import type { MarkdownEditorHandle } from './MarkdownEditor.js';
 
 vi.mock('./MarkdownEditor.js', () => ({

@@ -54,7 +54,7 @@ import { ListView } from './components/ListView.js';
 import { CardView } from './components/CardView.js';
 import { KanbanView } from './components/KanbanView.js';
 import { EditorModal } from './components/EditorModal.js';
-import type { NoteEditorSharedProps } from './components/NoteEditor.js';
+import type { NoteEditorSharedProps } from './components/note-editor/types.js';
 import { NoteEditingProvider, useNoteEditorRegistry } from './lib/note-editing.js';
 import { FocusArea } from './components/FocusArea.js';
 import { FocusControls } from './components/FocusControls.js';
