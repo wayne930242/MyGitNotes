@@ -1,7 +1,7 @@
 /* ===== 10. Mobile & Touch Responsive Adaptations ===== */
 @media (max-width: 640px), (pointer: coarse) {
   /* Directive container adjustments */
-  .live-md-directive { margin: 1rem 0; }
+  .live-md-directive { padding: 1rem 0; }
 
   /* Live Directive Toolbar: dock as a persistent, wrapping bar above the card on mobile */
   .live-directive-toolbar { position: relative !important; top: auto !important; right: auto !important; left: auto !important; opacity: 1 !important; pointer-events: auto !important; width: 100% !important; box-sizing: border-box; display: flex !important; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; margin-bottom: 6px; border: 1px solid var(--color-border); border-radius: 6px; background: color-mix(in srgb, var(--color-text) 4%, var(--color-surface)); box-shadow: none; }
