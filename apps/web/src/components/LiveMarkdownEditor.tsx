@@ -27,6 +27,8 @@ import { attachGutterLineCopy } from './live-markdown/gutter-line-copy.js';
 import { headingGutter } from './live-markdown/heading-gutter.js';
 import { tableBoundaries } from './live-markdown/table-boundaries.js';
 import { useNoteViewPreferences } from '../lib/editor-preferences.js';
+import { applyMarkdownFormat, formatKeymap } from './live-markdown/format-commands.js';
+import type { MarkdownFormat } from '../lib/markdown-format.js';
 
 export interface LiveMarkdownHandle {
   /** Inserts `text` at `at`, or in place of the selection. */
@@ -34,6 +36,7 @@ export interface LiveMarkdownHandle {
   revealRange: (from: number, to: number, focus?: boolean) => void;
   goToLine: (line: number, options?: { focus?: boolean; }) => void;
   getCurrentLine: () => number;
+  format: (format: MarkdownFormat) => void;
 }
 interface Props {
   content: string;
@@ -119,6 +122,9 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
       const atEnd = view.scrollDOM.scrollTop + view.scrollDOM.clientHeight >= view.scrollDOM.scrollHeight - 2;
       return atEnd ? view.state.doc.lines : view.state.doc.lineAt(view.viewport.from).number;
     },
+    format(format) {
+      if (editor.current) applyMarkdownFormat(editor.current, format);
+    },
   }), []);
   /* eslint-disable react-hooks/exhaustive-deps -- CodeMirror owns selection, focus and undo history; content, read-only and gutter changes have separate view updates and must not recreate it. */
   useEffect(() => {
@@ -142,6 +148,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
           markdown({ base: markdownLanguage, extensions: [cjkEmphasis] }),
           history(),
           tableBoundaries,
+          formatKeymap,
           keymap.of([...defaultKeymap, ...historyKeymap]),
           drawSelection(),
           cardBackgroundLayer,

@@ -24,6 +24,23 @@ export function writeShowLineNumbers(value: boolean, storage?: Pick<Storage, 'se
   } catch { /* Keep the in-page preference. */ }
 }
 
+export const FORMAT_TOOLBAR_STORAGE_KEY = 'github-notes:show-format-toolbar';
+
+/** The note editor's formatting toolbar shows until this device hides it. */
+export function readShowFormatToolbar(storage?: Pick<Storage, 'getItem'>): boolean {
+  try {
+    return (storage ?? globalThis.localStorage).getItem(FORMAT_TOOLBAR_STORAGE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+export function writeShowFormatToolbar(value: boolean, storage?: Pick<Storage, 'setItem'>) {
+  try {
+    (storage ?? globalThis.localStorage).setItem(FORMAT_TOOLBAR_STORAGE_KEY, String(value));
+  } catch { /* Keep the in-page preference. */ }
+}
+
 export const NOTE_VIEW_STORAGE_KEY = 'github-notes:note-view';
 /** Body text sizes in pixels; the smallest stays at 16px so mobile browsers do not zoom a focused editor. */
 export const NOTE_FONT_SIZES = [16, 18, 20, 22] as const;

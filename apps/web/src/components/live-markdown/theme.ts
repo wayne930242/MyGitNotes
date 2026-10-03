@@ -64,6 +64,7 @@ export const theme = EditorView.theme({
   '.live-md-strong': { fontWeight: '700' },
   '.live-md-emphasis': { fontStyle: 'italic' },
   '.live-md-strike': { textDecoration: 'line-through' },
+  '.live-md-underline': { textDecoration: 'underline' },
   '.live-md-link, .live-md-link span, .live-md-url': { color: 'var(--color-link)', textDecoration: 'underline' },
   '.live-md-hr': { color: 'var(--color-text)' },
   '.live-md-code': { fontFamily: 'monospace', backgroundColor: 'var(--color-code-bg)', borderRadius: '4px' },

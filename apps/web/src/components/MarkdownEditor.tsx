@@ -2,7 +2,7 @@ import { Select } from './Select.js';
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Code2, Eye, Link2, Plus, Square, Table2 } from 'lucide-react';
+import { Bold, Code, Code2, Eye, Heading1, Heading2, Heading3, Italic, Link, Link2, List, ListOrdered, ListTodo, type LucideIcon, Plus, Quote, SeparatorHorizontal, Square, SquareCode, Strikethrough, Table2, Underline } from 'lucide-react';
 import type { LiveMarkdownHandle } from './LiveMarkdownEditor.js';
 import { type TranslationKey, useTranslation } from '../lib/i18n/index.js';
 import { noteCompletionAt, useNoteCandidates } from '../lib/note-completion.js';
@@ -13,6 +13,7 @@ import './note-completion.css';
 import { copyLinePrompt } from '../lib/line-prompt-copy.js';
 import { attachLineGutterGesture } from '../lib/line-gutter-gesture.js';
 import { LoadingStatus } from './LoadingStatus.js';
+import { applyEdits, formatMarkdown, type MarkdownFormat } from '../lib/markdown-format.js';
 
 const LiveMarkdownEditor = React.lazy(() => import('./LiveMarkdownEditor.js').then(module => ({ default: module.LiveMarkdownEditor })));
 export type MarkdownEditorMode = 'live' | 'raw';
@@ -34,11 +35,17 @@ interface Props {
   ariaLabel?: string;
   onCaret?: (position: number) => void;
   compact?: boolean;
-  /** A toolbar element that hosts the insert actions; without one they sit in a row above the content. */
-  insertSlot?: HTMLElement | null;
+  /** The element that hosts the formatting toolbar; null hides it, and without one it sits in a row above the content. */
+  toolbarSlot?: HTMLElement | null;
   showLineNumbers?: boolean;
   lineNumberOffset?: number;
 }
+
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+
+/** The formatting toolbar's groups; a shortcut key is shown in the button's label. */
+const FORMAT_GROUPS: { format: MarkdownFormat; icon: LucideIcon; key?: string; }[][] = [[{ format: 'heading1', icon: Heading1 }, { format: 'heading2', icon: Heading2 }, { format: 'heading3', icon: Heading3 }], [{ format: 'bold', icon: Bold, key: 'B' }, { format: 'italic', icon: Italic, key: 'I' }, { format: 'underline', icon: Underline, key: 'U' }, { format: 'strikethrough', icon: Strikethrough }, { format: 'code', icon: Code }], [{ format: 'bulletList', icon: List }, { format: 'orderedList', icon: ListOrdered }, { format: 'taskList', icon: ListTodo }, { format: 'quote', icon: Quote }], [{ format: 'codeBlock', icon: SquareCode }, { format: 'link', icon: Link }, { format: 'horizontalRule', icon: SeparatorHorizontal }]];
+const SHORTCUT_FORMATS: Record<string, MarkdownFormat> = { b: 'bold', i: 'italic', u: 'underline' };
 
 export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEditorMode; onChange: (mode: MarkdownEditorMode) => void; }) {
   const { t } = useTranslation();
@@ -56,7 +63,7 @@ export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEdi
   );
 }
 
-export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, notebookId, mode, readOnly, onChange, onCaret, compact = false, insertSlot, ariaLabel = 'Document content', showLineNumbers = true, lineNumberOffset = 0 }, ref) => {
+export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, notebookId, mode, readOnly, onChange, onCaret, compact = false, toolbarSlot, ariaLabel = 'Document content', showLineNumbers = true, lineNumberOffset = 0 }, ref) => {
   const { t } = useTranslation();
   const [caret, setCaret] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -161,67 +168,105 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
       onChange(content.slice(0, position) + text + content.slice(position));
     }
   };
-  const insertActions = isMarkdown && !readOnly && !compact
+  const applyFormat = (format: MarkdownFormat) => {
+    if (readOnly) return;
+    if (mode === 'live') {
+      live.current?.format(format);
+      return;
+    }
+    const target = source.current;
+    if (!target) return;
+    const result = formatMarkdown(content, target.selectionStart, target.selectionEnd, format);
+    onChange(applyEdits(content, result.changes));
+    requestAnimationFrame(() => {
+      target.focus();
+      target.setSelectionRange(result.anchor, result.head);
+      updateActiveSourceLine(target);
+    });
+  };
+  const toolbar = isMarkdown && !readOnly && !compact
     ? (
-      <>
-        <button
-          type='button'
-          className='ui-icon-button toolbar-icon-button insert-icon-button'
-          aria-label={t('graph.insertLink')}
-          title={t('graph.insertLink')}
-          aria-expanded={picker}
-          onMouseDown={event => event.preventDefault()}
-          onClick={() => {
-            setPicker(value => !value);
-            setQuery('');
-          }}
-        >
-          <Link2 aria-hidden='true' />
-          <span className='insert-plus-badge' aria-hidden='true'>
-            <Plus />
-          </span>
-        </button>
-        <button type='button' className='ui-icon-button toolbar-icon-button insert-icon-button' aria-label={t('table.insert')} title={t('table.insert')} onClick={insertTable}>
-          <Table2 aria-hidden='true' />
-          <span className='insert-plus-badge' aria-hidden='true'>
-            <Plus />
-          </span>
-        </button>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger className='ui-icon-button toolbar-icon-button insert-icon-button' aria-label={t('directive.insert')} title={t('directive.insert')}>
-            <Square aria-hidden='true' />
+      <div className='markdown-format-toolbar' role='toolbar' aria-label={t('editor.formatToolbar')}>
+        {FORMAT_GROUPS.map((group, index) => (
+          <div className='markdown-format-group' key={index}>
+            {group.map(({ format, icon: Icon, key }) => {
+              const label = t(`format.${format}` as TranslationKey) + (key ? ` (${isMac ? '⌘' : 'Ctrl+'}${key})` : '');
+              return (
+                <button
+                  key={format}
+                  type='button'
+                  className='ui-icon-button toolbar-icon-button'
+                  aria-label={label}
+                  title={label}
+                  onMouseDown={event => event.preventDefault()}
+                  onClick={() => applyFormat(format)}
+                >
+                  <Icon aria-hidden='true' />
+                </button>
+              );
+            })}
+          </div>
+        ))}
+        <div className='markdown-format-group'>
+          <button
+            type='button'
+            className='ui-icon-button toolbar-icon-button insert-icon-button'
+            aria-label={t('graph.insertLink')}
+            title={t('graph.insertLink')}
+            aria-expanded={picker}
+            onMouseDown={event => event.preventDefault()}
+            onClick={() => {
+              setPicker(value => !value);
+              setQuery('');
+            }}
+          >
+            <Link2 aria-hidden='true' />
             <span className='insert-plus-badge' aria-hidden='true'>
               <Plus />
             </span>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              className='markdown-insert-menu'
-              align='end'
-              sideOffset={4}
-              collisionPadding={8}
-              aria-label={t('directive.selectFormat')}
-              onEscapeKeyDown={event => event.stopPropagation()}
-              onCloseAutoFocus={event => {
-                if (directiveInserted.current) event.preventDefault();
-                directiveInserted.current = false;
-              }}
-            >
-              {DIRECTIVE_TEMPLATES.map(tpl => (
-                <DropdownMenu.Item
-                  key={tpl.type}
-                  onSelect={() => {
-                    directiveInserted.current = true;
-                    insertDirective(tpl.type);
-                  }}
-                >
-                  {t(`directive.${tpl.type}` as TranslationKey)}
-                </DropdownMenu.Item>
-              ))}
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
-      </>
+          </button>
+          <button type='button' className='ui-icon-button toolbar-icon-button insert-icon-button' aria-label={t('table.insert')} title={t('table.insert')} onClick={insertTable}>
+            <Table2 aria-hidden='true' />
+            <span className='insert-plus-badge' aria-hidden='true'>
+              <Plus />
+            </span>
+          </button>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger className='ui-icon-button toolbar-icon-button insert-icon-button' aria-label={t('directive.insert')} title={t('directive.insert')}>
+              <Square aria-hidden='true' />
+              <span className='insert-plus-badge' aria-hidden='true'>
+                <Plus />
+              </span>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                className='markdown-insert-menu'
+                align='end'
+                sideOffset={4}
+                collisionPadding={8}
+                aria-label={t('directive.selectFormat')}
+                onEscapeKeyDown={event => event.stopPropagation()}
+                onCloseAutoFocus={event => {
+                  if (directiveInserted.current) event.preventDefault();
+                  directiveInserted.current = false;
+                }}
+              >
+                {DIRECTIVE_TEMPLATES.map(tpl => (
+                  <DropdownMenu.Item
+                    key={tpl.type}
+                    onSelect={() => {
+                      directiveInserted.current = true;
+                      insertDirective(tpl.type);
+                    }}
+                  >
+                    {t(`directive.${tpl.type}` as TranslationKey)}
+                  </DropdownMenu.Item>
+                ))}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+        </div>
+      </div>
     )
     : null;
 
@@ -283,7 +328,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
 
   return (
     <div className='relative flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden' data-markdown-editor>
-      {insertActions && (insertSlot ? createPortal(insertActions, insertSlot) : <div className='markdown-insert-toolbar'>{insertActions}</div>)}
+      {toolbar && (toolbarSlot === undefined ? <div className='markdown-insert-toolbar'>{toolbar}</div> : toolbarSlot && createPortal(toolbar, toolbarSlot))}
       {picker && (
         <div className='note-link-picker'>
           <input
@@ -366,7 +411,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
                   onChange(event.target.value);
                 }}
                 onKeyDown={event => {
-                  if (event.nativeEvent.isComposing || !suggestions.length) return;
+                  if (event.nativeEvent.isComposing) return;
+                  const shortcut = SHORTCUT_FORMATS[event.key.toLowerCase()];
+                  if (shortcut && isMarkdown && !readOnly && (isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) && !event.shiftKey && !event.altKey) {
+                    event.preventDefault();
+                    applyFormat(shortcut);
+                    return;
+                  }
+                  if (!suggestions.length) return;
                   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                     event.preventDefault();
                     setChoice(value => (value + (event.key === 'ArrowDown' ? 1 : suggestions.length - 1)) % suggestions.length);

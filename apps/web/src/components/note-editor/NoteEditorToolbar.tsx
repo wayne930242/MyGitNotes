@@ -1,4 +1,4 @@
-import { ArrowLeft, FileText, LayoutGrid, ListOrdered, PanelRight, Save } from 'lucide-react';
+import { ArrowLeft, FileText, LayoutGrid, ListOrdered, PanelRight, Save, Type } from 'lucide-react';
 import { useTranslation } from '../../lib/i18n/index.js';
 import type { NoteItem } from '../../lib/types.js';
 import { Button } from '../Button.js';
@@ -20,8 +20,9 @@ interface NoteEditorToolbarProps {
   setEditorMode: (mode: MarkdownEditorMode) => void;
   showLineNumbers: boolean;
   toggleLineNumbers: () => void;
-  /** Receives the element the editor renders its insert actions into. */
-  setInsertSlot: (slot: HTMLDivElement | null) => void;
+  showFormatToolbar: boolean;
+  /** Present when the note offers a formatting toolbar: an editable Markdown note. */
+  toggleFormatToolbar?: () => void;
   /** Present when the note can pull its latest version; zoom shows it beside the title. */
   onRefresh?: () => Promise<void>;
   onClose?: () => void;
@@ -62,8 +63,8 @@ function NoteZoomHeading({ note, session, onRefresh, onClose }: Pick<NoteEditorT
   );
 }
 
-/** The zoom and pane editor's top bar: the zoom title, then save, mode, line number, export, Focus, insert and panel actions. */
-export function NoteEditorToolbar({ frame, note, session, docPanel, isMarkdown, autoSave, readOnly, editorMode, setEditorMode, showLineNumbers, toggleLineNumbers, setInsertSlot, onRefresh, onClose, onAddToFocus }: NoteEditorToolbarProps) {
+/** The zoom and pane editor's top bar: the zoom title, then save, mode, line number, export, Focus, formatting toolbar and panel actions. */
+export function NoteEditorToolbar({ frame, note, session, docPanel, isMarkdown, autoSave, readOnly, editorMode, setEditorMode, showLineNumbers, toggleLineNumbers, showFormatToolbar, toggleFormatToolbar, onRefresh, onClose, onAddToFocus }: NoteEditorToolbarProps) {
   const { t } = useTranslation();
   const zoom = frame === 'zoom';
   return (
@@ -86,7 +87,11 @@ export function NoteEditorToolbar({ frame, note, session, docPanel, isMarkdown, 
             <LayoutGrid aria-hidden='true' />
           </button>
         )}
-        <div ref={setInsertSlot} className='note-insert-actions' />
+        {toggleFormatToolbar && (
+          <button type='button' aria-pressed={showFormatToolbar} aria-label={t('editor.formatToolbar')} title={t('editor.formatToolbar')} onClick={toggleFormatToolbar} className='ui-icon-button toolbar-icon-button editor-format-toolbar-action'>
+            <Type aria-hidden='true' />
+          </button>
+        )}
         {zoom && (
           <button type='button' aria-label={t('editor.documentPanel')} title={t('editor.documentPanel')} aria-pressed={Boolean(docPanel.notePanel)} onClick={() => togglePanel(docPanel, isMarkdown)} className='ui-icon-button toolbar-icon-button editor-panel-action'>
             <PanelRight aria-hidden='true' />

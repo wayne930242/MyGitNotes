@@ -37,6 +37,8 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
   // same spot (see .live-md-quote-mark-reveal), so adjacent marks are merged into one span here —
   // otherwise a depth-2+ line's revealed markers would render on top of each other.
   let quoteReveal: { from: number; to: number; } | null = null;
+  // Markdown has no underline syntax; an inline `<u>` and the next `</u>` in the same parent draw one.
+  let underlineOpen: { from: number; to: number; parent: number; } | null = null;
   const flushQuoteReveal = () => {
     if (quoteReveal) marks.push(Decoration.mark({ class: 'live-md-quote-mark-reveal' }).range(quoteReveal.from, quoteReveal.to));
     quoteReveal = null;
@@ -83,6 +85,18 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
       }
       const styles: Record<string, string> = { StrongEmphasis: 'live-md-strong', Emphasis: 'live-md-emphasis', Strikethrough: 'live-md-strike', InlineCode: 'live-md-code', Link: 'live-md-link' };
       if (styles[name] && from < to) marks.push(Decoration.mark({ class: styles[name] }).range(from, to));
+      if (name === 'HTMLTag') {
+        const tag = state.sliceDoc(from, to).toLowerCase(), parent = node.node.parent?.from ?? -1;
+        if (tag === '<u>') underlineOpen = { from, to, parent };
+        else if (tag === '</u>' && underlineOpen?.parent === parent) {
+          if (underlineOpen.to < from) marks.push(Decoration.mark({ class: 'live-md-underline' }).range(underlineOpen.to, from));
+          if (!active(underlineOpen.from, to)) {
+            hide(underlineOpen.from, underlineOpen.to);
+            hide(from, to);
+          }
+          underlineOpen = null;
+        }
+      }
       if (name === 'HorizontalRule' && node.node.parent?.name === 'Document' && state.sliceDoc(from, to).trim() === '---') {
         const currentPage = pageNumber;
         pageNumber++;

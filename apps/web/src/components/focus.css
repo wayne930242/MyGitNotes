@@ -129,9 +129,8 @@
 
 /* A pane frames the editor tighter than zoom: one-line chrome leaves the editor its height. */
 .note-editor[data-frame='pane'] .note-toolbar { padding: 6px 10px; }
-/* A pane has no heading, so its controls span the toolbar and the insert actions sit at its far end. */
+/* A pane has no heading, so its controls span the toolbar. */
 .note-editor[data-frame='pane'] .note-controls { flex: 1; min-width: 0; }
-.note-editor[data-frame='pane'] .note-insert-actions { margin-left: auto; }
 .note-editor[data-frame='pane'] .note-footer { gap: 12px; padding: 5px 12px; white-space: nowrap; }
 .note-editor[data-frame='pane'] .note-footer > div:first-child { min-width: 0; overflow: hidden; }
 .note-editor[data-frame='pane'] .note-footer > div:first-child > :last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
