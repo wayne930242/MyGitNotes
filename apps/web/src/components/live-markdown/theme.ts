@@ -37,6 +37,11 @@ export const theme = EditorView.theme({
   '.cm-lineNumbers .cm-gutterElement': { lineHeight: 'calc(var(--note-font-size, 1rem) * 1.8)', paddingLeft: '8px', paddingRight: '10px', transformOrigin: 'right center', transition: 'color 150ms, transform 150ms, font-weight 150ms' },
   '.cm-lineNumbers .cm-gutterElement:hover': { backgroundColor: 'color-mix(in srgb, var(--color-text) 6%, transparent)', color: 'var(--color-text)' },
   '.cm-lineNumbers .cm-gutterElement.cm-line-copy-selected': { backgroundColor: 'color-mix(in srgb, var(--color-text) 12%, transparent)', color: 'var(--color-text)' },
+  // A heading line's number takes the heading's top padding and line box, so it sits beside the heading text.
+  '.cm-lineNumbers .cm-heading-gutter': { paddingTop: '12px', lineHeight: 'calc(var(--note-font-size, 1rem) * 1.4)' },
+  '.cm-lineNumbers .cm-heading-gutter-1': { lineHeight: 'calc(var(--note-font-size, 1rem) * 1.85 * 1.4)' },
+  '.cm-lineNumbers .cm-heading-gutter-2': { lineHeight: 'calc(var(--note-font-size, 1rem) * 1.5 * 1.4)' },
+  '.cm-lineNumbers .cm-heading-gutter-3': { lineHeight: 'calc(var(--note-font-size, 1rem) * 1.25 * 1.4)' },
   '.cm-lineNumbers .cm-activeLineGutter': { color: 'var(--color-primary)', fontWeight: '700', transform: 'scale(1.08)' },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--color-selection) !important' },
   // CodeMirror's own hideNativeSelection theme makes the native ::selection background

@@ -24,6 +24,7 @@ import { anchorMermaidSwap } from './live-markdown/mermaid-scroll.js';
 import { liveDecorations } from './live-markdown/decorations.js';
 import { cardBackgroundLayer, theme } from './live-markdown/theme.js';
 import { attachGutterLineCopy } from './live-markdown/gutter-line-copy.js';
+import { headingGutter } from './live-markdown/heading-gutter.js';
 import { tableBoundaries } from './live-markdown/table-boundaries.js';
 import { useNoteViewPreferences } from '../lib/editor-preferences.js';
 
@@ -144,6 +145,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
           keymap.of([...defaultKeymap, ...historyKeymap]),
           drawSelection(),
           cardBackgroundLayer,
+          headingGutter,
           lineNumberGutter.current.of(
             showLineNumbers
               ? [lineNumbers({ formatNumber: number => String(number + lineOffset.current) }), highlightActiveLineGutter()]
