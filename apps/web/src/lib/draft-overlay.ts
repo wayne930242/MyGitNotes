@@ -67,7 +67,7 @@ export function overlayDraftFacets(notebooks: Record<string, NotebookFacets>, dr
   if (!entries.length) return notebooks;
   const result: Record<string, NotebookFacets> = {};
   for (const [id, facets] of Object.entries(notebooks)) {
-    result[id] = { total: facets.total, hidden: facets.hidden, statuses: { ...facets.statuses }, tags: { ...facets.tags }, directories: { ...facets.directories }, compilations: { total: facets.compilations.total, statuses: { ...facets.compilations.statuses }, tags: { ...facets.compilations.tags } } };
+    result[id] = { total: facets.total, hidden: facets.hidden, statuses: { ...facets.statuses }, tags: { ...facets.tags }, directories: { ...facets.directories }, compilations: { total: facets.compilations.total, statuses: { ...facets.compilations.statuses }, tags: { ...facets.compilations.tags } }, outlines: { total: facets.outlines.total, statuses: { ...facets.outlines.statuses }, tags: { ...facets.outlines.tags } } };
   }
   const bump = (counts: Record<string, number>, name: string, sign: number) => {
     const next = (counts[name] || 0) + sign;
@@ -78,12 +78,14 @@ export function overlayDraftFacets(notebooks: Record<string, NotebookFacets>, dr
     const facets = result[note.notebookId];
     if (!facets) return;
     const hidden = isNoteHidden({ ...note.metadata, status: note.status });
-    // Compilations are counted apart from notes and have no folder facet or hidden count.
-    if (entryKind(note) === 'compilation') {
+    // Specialized kinds are counted apart, without a folder facet or hidden count.
+    const kind = entryKind(note);
+    if (kind !== 'note') {
       if (hidden && !showHidden) return;
-      facets.compilations.total = Math.max(0, facets.compilations.total + sign);
-      bump(facets.compilations.statuses, note.status || '', sign);
-      for (const tag of note.tags) bump(facets.compilations.tags, tag, sign);
+      const target = kind === 'outline' ? facets.outlines : facets.compilations;
+      target.total = Math.max(0, target.total + sign);
+      bump(target.statuses, note.status || '', sign);
+      for (const tag of note.tags) bump(target.tags, tag, sign);
       return;
     }
     if (hidden) facets.hidden = Math.max(0, facets.hidden + sign);

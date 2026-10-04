@@ -11,7 +11,7 @@ import { I18nProvider } from '../lib/i18n/index.js';
 import { Sidebar } from './Sidebar.js';
 
 const kind = { total: 0, statuses: {}, tags: {} };
-const facets: Record<string, NotebookFacets> = { life: { total: 7, hidden: 0, statuses: { todo: 3, done: 4 }, tags: { work: 2 }, directories: {}, compilations: { total: 3, statuses: {}, tags: {} } }, work: { total: 1, hidden: 0, statuses: {}, tags: {}, directories: {}, compilations: kind } };
+const facets: Record<string, NotebookFacets> = { life: { total: 7, hidden: 0, statuses: { todo: 3, done: 4 }, tags: { work: 2 }, directories: {}, outlines: kind, compilations: { total: 3, statuses: {}, tags: {} } }, work: { total: 1, hidden: 0, statuses: {}, tags: {}, directories: {}, outlines: kind, compilations: kind } };
 
 beforeEach(() => {
   window.localStorage.clear();

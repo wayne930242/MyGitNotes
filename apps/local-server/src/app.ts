@@ -85,7 +85,7 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
       '/r2-assets/*',
       createR2AssetHandler(async (res, notePath) => {
         const { handle, config } = await noteRepository(res, notePath);
-        if (classifyResource(notePath, config).type !== 'note') throw new Error('Path is not a configured note.');
+        if (!['note', 'outline'].includes(classifyResource(notePath, config).type)) throw new Error('Path is not a configured note.');
         return fs.readFileSync(resolveSafePath(asLocal(handle).root, notePath), 'utf8');
       }),
     );

@@ -1,5 +1,6 @@
 import { applyCompilationMetadata, compilationFields, isCompilationPath, replaceCompilationTags } from './compilation.js';
 import { parseNoteContent, replaceNoteTags, serializeNoteContent } from './frontmatter.js';
+import { isOutlinePath, OUTLINE_SUFFIX } from './outline.js';
 import type { NoteMetadata } from './types.js';
 
 /** Extensions of Markdown and plain-text notes. */
@@ -12,8 +13,8 @@ export interface ParsedNoteFile {
   content: string;
   title: string;
   lineNumberOffset: number;
-  /** Present only for a compilation, so a note's shape does not change. */
-  extra: { kind?: 'compilation'; invalid?: string; };
+  /** Specialized kind, leaving an ordinary note's shape unchanged. */
+  extra: { kind?: 'compilation' | 'outline'; invalid?: string; };
 }
 
 /**
@@ -24,8 +25,10 @@ export interface ParsedNoteFile {
 export function parseNoteFile(raw: string, filePath: string, notebookRoot?: string): ParsedNoteFile {
   const name = filePath.split('/').pop() ?? filePath;
   if (!isCompilationPath(filePath)) {
-    const { metadata, content, title, lineNumberOffset } = parseNoteContent(raw, name);
-    return { metadata, content, title, lineNumberOffset, extra: {} };
+    const outline = isOutlinePath(filePath);
+    const fallback = outline ? name.slice(0, -OUTLINE_SUFFIX.length) + '.md' : name;
+    const { metadata, content, title, lineNumberOffset } = parseNoteContent(raw, fallback);
+    return { metadata, content, title, lineNumberOffset, extra: outline ? { kind: 'outline' } : {} };
   }
   const fields = compilationFields(raw, filePath, notebookRoot);
   return { metadata: fields.metadata, content: raw, title: fields.title, lineNumberOffset: 0, extra: { kind: 'compilation', ...(fields.invalid ? { invalid: fields.invalid } : {}) } };

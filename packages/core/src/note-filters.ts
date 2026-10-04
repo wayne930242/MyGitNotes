@@ -3,8 +3,8 @@ import { isNoteHidden } from './note-status.js';
 import type { NoteGraphData } from './note-graph.js';
 
 export interface NoteFilters {
-  /** What the list shows: notes (the default) or compilations; the in-memory `filterNotes` ignores it. */
-  kind?: 'note' | 'compilation';
+  /** What the list shows: ordinary notes (the default), outlines or compilations; the in-memory `filterNotes` ignores it. */
+  kind?: 'note' | 'compilation' | 'outline';
   notebookId: string;
   folders: string[];
   descendants: boolean;

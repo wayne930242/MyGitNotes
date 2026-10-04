@@ -1,107 +1,167 @@
 Status: approved
-Approved at: 2026-10-04
-Approved from: User selected「定案，接著實作」after reviewing the full behavior and acceptance proposal.
+Approved at: 2026-10-04 (conversation approval; exact wall-clock time not supplied)
+Approved from: User approved native list editing and implementation with「好，開始處理吧」, then confirmed the clarified general-purpose model/name with「可以，那就叫大綱筆記」.
 
-# Notebook bookmarks
+# Outline notes
 
-## Purpose
+The approval covers the user-facing outline model, not a claim that this redesign is implemented or visually accepted.
+This specification replaces the earlier notebook bookmark collection contract and the intermediate bookmark-document terminology.
+Engineering choices and the conservative legacy-import boundary are recorded in [design.md](design.md).
 
-Provide a notebook's shared, ordered shortcuts without duplicating its notes or replacing compilations.
-Implementation is authorized by the approval above; this artifact itself is not an implementation or release claim.
-Confirmed decisions are recorded in [decision.md](decision.md).
+## Observable requirements
 
-## Observable behavior
+### R1 — Native note type and identity
 
-### Sidebar and organization
+An **Outline note / 大綱筆記** is a note type parallel to compilation; short UI labels are **Outline / 大綱**.
+A notebook can create, name, open and keep multiple outline documents through the existing Notes creation and browsing surfaces.
+Each document has its own path, title, frontmatter, body, tags/status and normal note identity.
+Use `*.outline.md`; body content remains portable Markdown, without a separate item registry, required item IDs or a frontmatter type flag duplicating the filename.
+Normal `.md` files stay normal notes; old `.compilation.yml` behavior is unchanged.
+Opening a document does not rewrite its formatting or create a legacy metadata file.
 
-Each notebook has a collapsible Bookmarks section before its folder tree.
-Show ungrouped bookmarks and single-level named groups; do not introduce nested bookmark folders.
-Users can add, rename, re-target, reorder, move between groups, and remove bookmarks.
-Support drag reordering, with accessible move-up/down and group-selection alternatives that also work on touch devices.
-Removing a bookmark never deletes a note, folder, compilation, website, or document text.
-Removing a group moves its bookmarks to the ungrouped list while preserving their relative order.
-Changing an explicit bookmark label never renames its target.
-A blank collection presents a clear Add bookmark action rather than a permanently empty tree.
+### R2 — General items, optional links and annotations
 
-### Targets and creation
+Default new content is an unordered `-` list.
+Every item can contain plain text, Markdown formatting, zero or more links, annotations and child items.
+There is no text-group/link-leaf distinction, filesystem action attached to an item, or one-group-level limit.
+Indentation and Markdown list syntax express children; continuation lines without a list marker express the same item's annotation.
+Deleting an item or outline never deletes a linked target.
+Labels are ordinary source text and never rename a target.
 
-| Target | Creation entry | Activation |
-| --- | --- | --- |
-| Note | Note actions or the Add bookmark picker | Open the note using existing note navigation. |
-| Folder | Folder dropdown or picker | Open Notes filtered to that folder, not the file-manager dialog. |
-| Compilation | Compilation actions or picker | Open that compilation. |
-| Heading or paragraph | Note outline/selection actions or position picker | Open the note and reveal the uniquely resolved text location. |
-| External website | Add bookmark URL form | Open an HTTP(S) URL in a new tab without granting opener access. |
-| Search/view | Save current view in the notebook's Notes view | Restore validated query, filters, display mode, and supported sort; execute against current content. |
+```markdown
+- Research plan
+  Clarify the next experiment.
+  - Compare the baseline
+  - Read [design notes](design.md) and [reference](https://example.com/)
+    Record the useful parts here.
+    - Verify the assumptions
+- Unlinked thought
+```
 
-Every internal target belongs to the owning notebook.
-Saved searches cannot enable allNotebooks or reference another notebook's folders.
-Saved views store a query, not a frozen list of results, transient panel geometry, open dialogs, pagination, or the current deployment origin.
-Adding an already-bookmarked equivalent target offers the existing entry for editing rather than silently duplicating it.
-Different heading/paragraph locations or different query definitions are distinct targets.
+The continuation lines remain within their preceding list item in CommonMark; a standard renderer may render a soft break as a space.
+The app shows the line break using its existing live/raw and rendered-Markdown behavior.
+Existing prose, headings, ordered lists or incomplete Markdown are preserved and remain editable; this is not a strict schema that rejects a partially typed note.
 
-### Document positions
+### R3 — Keyboard and editing behavior
 
-Creating a position bookmark never injects IDs, comments, frontmatter, or other markers into Markdown.
-Store the selected heading/paragraph text and bounded surrounding context in bookmark data.
-Use a deterministic match: accept a unique exact target match or a uniquely disambiguated exact target/context match.
-Line numbers and offsets may be hints but cannot alone establish that a changed document location is correct.
-Do not use approximate similarity to silently jump to another paragraph.
-When the text is removed, rewritten, or remains ambiguous, retain the bookmark and explain that the location cannot be resolved.
-If the note exists, offer Open whole note and Re-target actions rather than claiming the position was found.
-Moving a uniquely identifiable paragraph within a document should not depend on its old line number.
+In outline list context, Enter adds a sibling at the current item's level, including when invoked from its annotation; it does not create a child accidentally.
+At the end of an item with children, the sibling follows the complete subtree, leaving those children attached to their original item.
+At a text caret in the middle of an item's line, split that line: text after the caret becomes the new sibling's text; other annotation blocks and child items remain attached to the original item.
+A selection is replaced without deleting unselected content; selections spanning structural blocks use native Markdown fallback instead of guessing a restructuring.
+An empty item follows native list-exit/outdent behavior so the user can leave the list.
+Shift+Enter inserts a newline at the item's content indentation without a new bullet, keeping an annotation in the same item.
+Tab nests the current item/subtree under its preceding sibling; Shift+Tab promotes it one level while retaining its subtree.
+An impossible indent/outdent leaves content unchanged; no blank parent is invented.
+Multi-item indentation handles contiguous sibling subtrees as one change and preserves their relative order.
 
-### Persistence, permissions, and compatibility
+These semantics work in both the existing live CodeMirror editor and raw textarea, with undo/redo, IME composition, selections and read-only state respected.
+They are scoped to outline list context, not installed as global changes to all Markdown notes.
+Outside list context, inside code fences and during composition, retain the native editor behavior.
+Completion acceptance takes priority over plain Enter; modified Enter must not inadvertently accept a completion.
+Keep an accessible way to leave the editor with Tab and existing toolbar-style indent/outdent actions usable without a hardware keyboard.
+No independent tree/editor state is synchronized beside the Markdown source.
 
-Persist the collection as optional, versioned data owned by the notebook's repository; synchronize via existing Git workflows.
-A notebook without bookmark data remains valid and starts with an empty collection; reading it does not create files.
-Bookmark changes require that notebook's existing write permission and the expected revision.
-Read-only users can navigate bookmarks but cannot change the shared collection.
-Use the existing local and GitHub/GitLab write boundaries; local changes remain available to the normal Git workflow and remote writes use its atomic commit mechanism.
-Concurrent edits must fail visibly instead of silently overwriting another user's changes.
-Reject malformed/unsupported bookmark data visibly without replacing it with an empty file.
-Internal targets are notebook-relative typed references, not environment-specific URLs or absolute filesystem paths.
-External targets allow HTTP(S) only, reject embedded credentials and unsafe schemes, and are not automatically fetched for previews or health checks.
-Do not assume external websites are reachable or mark them broken merely because no check has run.
+### R3a — Same-document drag movement
 
-### Changes and unresolved targets
+Approved from: User asked「拖曳移動也會做吧？」after confirming Tab/Shift+Tab; parent explicitly included this bounded addition on 2026-10-04.
+In the live outline editor, a native-consistent item drag handle and visible drop position/indent level allow sibling reorder and nesting changes.
+Move the whole item, annotations and descendants together, preserving their source and relative order.
+Dropping inside the item's own descendants is forbidden; cancel changes nothing; read-only disallows movement.
+Each drop is one undoable/redoable editor transaction over the same Markdown source, with no parallel editable tree state.
+Scope is one outline document only, not cross-note or cross-notebook dragging.
+Tab/Shift+Tab and toolbar indentation remain keyboard/touch alternatives.
+Verify actual dragging in a real browser, independently of pure movement-helper tests.
 
-GitNotes-managed moves/renames update affected bookmark paths and saved folder filters in the same operation as the target mutation.
-Cover all existing mutation entry points, including note moves, folder operations, and file-manager operations; no one-off fix limited to the new UI.
-Removing a target retains its bookmark as unresolved; removing a bookmark never removes the target.
-Out-of-band edits are revalidated on load/activation, not silently guessed as renames.
-A network error or unavailable repository shows Unavailable/retry, not a persisted claim of deletion.
-Re-targeting preserves bookmark identity, custom label, group, and order unless explicitly edited.
-Unsaved note contents cannot create a supposedly synchronized position bookmark that points only to an unsaved local draft: save successfully first or cancel creation with an explanation.
+### R4 — Familiar UI and persistence feedback
 
-## Non-goals
+Creation uses the existing New menu beside New note/New compilation and the native note creation dialog's layout, fields and buttons.
+Outline documents appear through the native kind filter/list, not as individual sidebar shortcuts in a new singleton section.
+Editing, frontmatter, formatting tools, zoom/Focus hosting, save, drafts, errors and Changes use existing note components.
+No permanent Saved badge, generic type/path/group form, or Add group dialog remains.
+A short editor hint explains Enter, Shift+Enter and indentation without turning the document into a special form.
+Fields, labels, buttons, spacing and focus behavior must match the existing note/compilation UI, not merely fit within the viewport.
+Provide English and Traditional Chinese labels and keyboard/touch access.
 
-- Personal accounts or a second private favorites collection.
-- Cross-notebook internal targets or global searches.
-- Nested bookmark groups, browser-bookmark import/export, automatic website metadata fetching, or URL availability crawling.
-- Stable markers inserted into Markdown or fuzzy paragraph matching.
-- Frozen search results, copied note content collections, or replacement of compilations.
-- Public deployment beyond the established upstream push and downstream synchronization lifecycle.
+### R5 — Links and navigation
 
-## Applied standards
+Internal Markdown links use existing workspace-link resolution, notebook/repository identity, dirty-editor guards and note routing.
+Generated links use portable relative paths, not deployment URLs or absolute filesystem paths.
+External HTTP(S) links open only from explicit user action, in a new tab with opener isolation; unsafe schemes and embedded credentials are non-navigable.
+No link previews, automatic website health checks or URL-derived embeds are introduced for outline links.
+In particular, an ordinary YouTube link in an outline stays a link rather than becoming a network-fetching media preview.
+A missing internal target produces the existing visible link error and retains the source; an unavailable repository is not treated as deletion.
+Live mode retains editable source when the caret enters an item and explicit native open-link affordances; raw mode remains source editing, not row-click navigation.
+An item containing a link can still have children and annotations.
+The source notebook must be present in editor/link scope so equal paths in different repositories cannot cross-resolve.
 
-Reuse existing menu/dialog primitives, navigation, i18n, focus/dirty-editor guards, and theme tokens.
-Provide English and Traditional Chinese labels, keyboard controls, and mobile-usable targets.
-Preserve backend path protection, notebook boundaries, optimistic revision checks, and atomic writes/rollback.
-Keep snapshot contents and expected revision paired; never attach a newer revision to old bookmark data.
-Respect upstream-first delivery when implementation is separately authorized.
+### R6 — Add current content to an outline
 
-## Reality anchor and acceptance checkpoint
+From current note or compilation actions, Add to outline prefills a Markdown link's target and title.
+Choose an existing outline in that notebook or create one using native outline creation; there is no target-type/path/group editor.
+The chosen destination opens in its existing editor and receives one new item through a normal editable transaction; users can then change its label, annotate or indent inline.
+The source action never silently appends to an unmounted stale copy or overwrites a dirty destination draft.
+Cancel, source-save failure, read-only permission or destination-load failure adds nothing.
+Do not force a remote commit just to create an ordinary link; the normal note-draft and Changes lifecycle remains explicit.
 
-Implementation will use testing plus isolated browser verification before review and upstream push.
-No verification below is claimed as already executed for this planned feature.
+### R7 — Full lifecycle and kind isolation
 
-1. Round-trip all target types, groups, labels, ordering and empty/legacy notebooks through local and remote adapters.
-2. Test create/edit/re-target/remove, read-only rejection, stale revisions, corrupt data, and concurrent moves/bookmark edits.
-3. Verify target relocation across every relevant note/folder/file mutation; unrelated notebooks remain untouched.
-4. Verify missing targets persist and removing groups/bookmarks never removes content.
-5. Verify headings/paragraphs with duplicate text, shifted lines, moved blocks, edits, deletion and ambiguous context never silently misnavigate.
-6. Verify saved queries return new matching content after activation and cannot escape notebook scope.
-7. Reject unsafe URLs and paths without requests or mutations.
-8. Exercise real desktop/mobile UI on a disposable workspace: add each type, reorder/group, activate, repair, cancel and navigate with dirty editors.
-9. Obtain code review with special attention to snapshot/revision integrity and cross-repository boundaries.
+List/query/lookup/facets, draft overlays, local creation/save/reopen, remote staging/commit, tag/status edits, copy/move/rename, deletion/restore and Git Changes treat an outline as a native note file with its own kind.
+Default ordinary-note listings and compilation listings keep their established meaning; kind `all` includes outlines.
+Renaming a title does not alter the suffix; normal rename/copy UI preserves `.outline.md` by default.
+An explicit file-manager extension change changes classification on refresh, without rewriting body contents or a hidden type flag.
+Existing Markdown graph/agenda behavior can consume outline Markdown through the existing paths; no new Workflowy task/graph subsystem is added.
+Local worktree save, browser recovery draft, remote pending change and Git commit/push remain distinct states.
+Read-only and failed/conflicting operations keep recoverable content and existing protection boundaries.
+
+### R8 — Relocation and non-destructive references
+
+Managed file/folder rename/move updates relative links from and to outline files in the same transaction as the path change.
+Moving the outline itself rebases its outgoing links; moving a linked note updates incoming references.
+Preserve labels, annotation text, hierarchy, external URLs, fragments and code literals.
+Cover local and remote file/folder planners, bulk moves through their shared seam and hosted MCP `mv`; do not assume the shell already rewrites Markdown links.
+Same-path documents in other repositories remain untouched.
+Deletion retains referring Markdown; restore can make the link resolve again.
+Out-of-band Git/filesystem edits are refreshed, not guessed into renames.
+Local rollback and provider snapshot/revision pairing remain intact, including retained legacy reference updates.
+
+### R9 — Explicit non-lossy legacy handling
+
+Existing `.mygitnotes-bookmarks.yaml` files are not outlines and are never auto-migrated, silently deleted or reset on read.
+Offer an explicit import/recovery entry using existing menu/dialog components, not the rejected bookmark editor.
+Preview the chosen repository/notebook, destination new outline, source revision, item/group order, convertible entries and every unsupported entry before applying.
+Import is create-only and additive; cancellation writes nothing and import never modifies the original legacy file.
+Notes, compilations and safe HTTP(S) URLs can become ordinary links; text groups become ordinary parent items and retain their relative display order.
+Exact-position and saved-query entries are not silently approximated; retain them in the source, display their IDs/labels/reasons and allow exact source export.
+Folder entries remain legacy in this bounded first import because native folder activation does not guarantee the old saved filtering semantics in every case.
+Importing only the representable subset requires an explicit preview acknowledgement and must be called **partial import**, not complete migration.
+If nothing is representable, create nothing and explain why.
+
+Malformed/unsupported versions, stale revisions, unknown selected owners, protected destinations, symlinks and permission failures reject the whole apply without partial files.
+Other owners, including unknown owners, are never filtered out of the source.
+A legacy browser draft must not disappear when the old controller is removed: detect and expose it for exact export/recovery or explicit discard, preserving its original base/revision.
+Do not silently merge draft and saved data or pass a new repository head off as its base.
+Repeated apply to the same destination cannot duplicate/overwrite it; after an uncertain network result inspect the destination rather than automatically retry at another filename.
+Retain legacy path protection and rename relocation while legacy files can still exist.
+
+### R10 — Verification and delivery gates
+
+New requirements start **unknown** until exercised; old feature tests do not prove this redesign.
+Use a disposable two-repository fixture, not user notes or credentials.
+The parent independently drives native creation, keyboard hierarchy/annotations, optional/internal/external links, save/reopen, current-content insertion and same-path repository isolation in a real browser.
+Compare desktop/mobile screenshots against existing note/compilation dialogs/editor chrome and record human appropriateness separately from functional tests.
+Core/API tests cover note-kind lifecycle, local/GitHub/GitLab transactions, relocation and canceled/invalid/stale/unknown-owner import.
+Existing compilation, ordinary Markdown, Focus and shared recovery/protection tests must still pass.
+Update both READMEs and the domain glossary during implementation; keep Startup troubleshooting as the last top-level section in each README.
+Upstream-first integration remains the parent's responsibility; no publication is claimed by this plan.
+
+## Non-goals and standards
+
+No full Workflowy parity, node zoom, custom tree editor, stable node IDs, task engine, second group registry, new link protocol, exact-position/query authoring, global singleton bookmarks or automatic migration.
+Reuse current components, Markdown parser/rendering and note APIs; add no dependencies unless the implementation exposes a concrete need and obtains authorization.
+Preserve current path/symlink protections, repository identity, local mutation queues and provider revision checks.
+Apply root TypeScript, UI, Git safety, architecture and Markdown rules; `notes/AGENTS.md` is not a product-root instruction file.
+
+## Reality anchor
+
+Checkpoint: after the sequential implementation and targeted tests, before upstream delivery, the parent runs the independent disposable real-browser journey and existing-UI screenshot comparison in [verification.md](verification.md).
+The UI appropriateness gate is not replaced by green tests or a no-overflow measurement.

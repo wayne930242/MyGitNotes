@@ -1,3 +1,4 @@
+import { isOutlinePath } from './outline.js';
 import type { RevisionSet } from './repository.js';
 import type { NotebookConfig, NoteItem } from './types.js';
 import type { SortField, SortOrder } from './note-sort.js';
@@ -43,18 +44,18 @@ export interface NoteListItem {
   content?: string;
   /** Body excerpt around a search query's match, present only when the query matched inside content. */
   matchSnippet?: string;
-  /** Set only on a compilation (`<name>.compilation.yml`); absent means a note. */
-  kind?: 'compilation';
+  /** Filename-derived specialized note kind; absent means an ordinary note. */
+  kind?: 'compilation' | 'outline';
   /** Why a compilation cannot open. */
   invalid?: string;
 }
 
-/** What a query returns: notes (the default), compilations, or both. */
-export type NoteKindFilter = 'note' | 'compilation' | 'all';
-export const NOTE_KIND_FILTERS: readonly NoteKindFilter[] = ['note', 'compilation', 'all'];
+/** What a query returns: ordinary notes (the default), a specialized kind, or all kinds. */
+export type NoteKindFilter = 'note' | 'compilation' | 'outline' | 'all';
+export const NOTE_KIND_FILTERS: readonly NoteKindFilter[] = ['note', 'compilation', 'outline', 'all'];
 export const isCompilationEntry = (note: Pick<NoteListItem, 'kind'>) => note.kind === 'compilation';
 /** The kind of an entry; a staged draft that never passed the server is told by its file name. */
-export const entryKind = (note: Pick<NoteListItem, 'kind' | 'path'>): 'note' | 'compilation' => note.kind ?? (note.path.endsWith('.compilation.yml') ? 'compilation' : 'note');
+export const entryKind = (note: Pick<NoteListItem, 'kind' | 'path'>): Exclude<NoteKindFilter, 'all'> => note.kind ?? (isOutlinePath(note.path) ? 'outline' : note.path.endsWith('.compilation.yml') ? 'compilation' : 'note');
 
 export interface NoteQuery {
   notebookId: string;
@@ -101,6 +102,7 @@ export interface NotebookFacets {
   directories: Record<string, number>;
   /** The notebook's compilations; notes and compilations are counted apart. */
   compilations: KindFacets;
+  outlines: KindFacets;
 }
 export interface NoteFacets {
   revisions: RevisionSet;

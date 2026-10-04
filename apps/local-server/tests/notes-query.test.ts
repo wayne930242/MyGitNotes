@@ -94,6 +94,38 @@ describe('note query routes', () => {
   });
 });
 
+describe('outlines over native local note routes', () => {
+  const send = (method: string, url: string, body?: unknown) => json(url, { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+
+  it('creates, edits, queries, copies, deletes and restores an outline without changing ordinary-note counts', async () => {
+    const file = 'notes/example/plan.outline.md';
+    const content = '- Plan\n  Annotation\n  - Read [Alpha](alpha.md)\n';
+    const head = git('rev-parse', 'HEAD').toString().trim();
+    const created = await send('POST', '/api/notes', { path: file, content, metadata: { title: 'Plan', tags: ['outline'], status: 'working' }, notebookId: 'example', createOnly: true, noCommit: true });
+    expect(created.status).toBe(200);
+    expect(created.body.note).toMatchObject({ kind: 'outline', title: 'Plan', tags: ['outline'], status: 'working' });
+    expect(git('rev-parse', 'HEAD').toString().trim()).toBe(head);
+    expect((await json('/api/notes/query?notebookId=example')).body.total).toBe(2);
+    expect((await json('/api/notes/query?notebookId=example&kind=outline&tag=outline&status=working')).body.total).toBe(1);
+    expect((await json('/api/notes/facets')).body.notebooks.example).toMatchObject({ total: 2, outlines: { total: 1, tags: { outline: 1 }, statuses: { working: 1 } } });
+    expect((await send('POST', '/api/notes', { path: file, content, metadata: {}, notebookId: 'example', createOnly: true })).status).toBe(409);
+    const changed = await send('POST', '/api/notes', { path: file, content, metadata: { title: 'Renamed title', tags: ['changed'], status: 'done' }, notebookId: 'example', noCommit: true });
+    expect(changed.body.note).toMatchObject({ path: file, kind: 'outline', title: 'Renamed title', tags: ['changed'], status: 'done' });
+    const copy = 'notes/example/copy.outline.md';
+    expect((await send('POST', '/api/notes', { path: copy, content, metadata: { title: 'Copy' }, notebookId: 'example', createOnly: true, noCommit: true })).status).toBe(200);
+    expect((await json(`/api/notes/read?notebookId=example&path=${copy}`)).body.note.kind).toBe('outline');
+    const before = fs.readFileSync(path.join(root, file), 'utf8');
+    git('add', file, copy);
+    git('commit', '-m', 'Outline fixture');
+    expect((await send('DELETE', `/api/notes?path=${file}&notebookId=example&noCommit=true`)).status).toBe(200);
+    expect((await json('/api/notes/query?notebookId=example&kind=outline')).body.total).toBe(1);
+    expect((await send('POST', '/api/notes/restore', { path: file, notebookId: 'example' })).status).toBe(200);
+    expect(fs.readFileSync(path.join(root, file), 'utf8')).toBe(before);
+    expect((await json(`/api/notes/read?notebookId=example&path=${file}`)).body.note.kind).toBe('outline');
+    expect(fs.existsSync(path.join(root, '.mygitnotes-bookmarks.yaml'))).toBe(false);
+  });
+});
+
 describe('compilations over the note routes', () => {
   const compilation = (id: string, extra = '') => `version: 1\nid: ${id}\ntitle: Title ${id}\narrangement: lane\n${extra}items:\n  - { id: i1, kind: note, path: notes/example/alpha.md }\n`;
   const send = (method: string, url: string, body?: unknown) => json(url, { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });

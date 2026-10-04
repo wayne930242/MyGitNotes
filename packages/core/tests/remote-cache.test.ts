@@ -72,7 +72,7 @@ describe('shared remote cache', () => {
     const blobKeys = keys.filter(key => key.startsWith('mgn:blob:'));
     expect(blobKeys.length).toBeGreaterThan(0);
     expect(blobKeys.every(key => allowed.has(key))).toBe(true);
-    expect(keys.filter(key => !key.startsWith('mgn:blob:')).every(key => key.startsWith('mgn:index:v2:owner/repo:'))).toBe(true);
+    expect(keys.filter(key => !key.startsWith('mgn:blob:')).every(key => key.startsWith('mgn:index:v3:owner/repo:'))).toBe(true);
   });
 
   it('never stores content whose git object id does not match the tree', async () => {

@@ -107,7 +107,7 @@ function walkNotebook(repoRoot: string, notebook: NotebookConfig, compilations: 
  * Lists all notes in a given notebook.
  */
 export function scanNotebookNotes(repoRoot: string, notebook: NotebookConfig): NoteItem[] {
-  return walkNotebook(repoRoot, notebook, false);
+  return walkNotebook(repoRoot, notebook, false).filter(note => !note.kind);
 }
 
 /** Lists the notes and compilations of a notebook; the catalog tells them apart by `kind`. */

@@ -7,7 +7,7 @@ import { extractTodoTasks } from './note-agenda.js';
 import { buildNoteGraph } from './note-graph.js';
 import { hashJson } from './remote-cache.js';
 import { type RepositoryId, type RevisionSet, StaleRevisionError } from './repository.js';
-import { DEFAULT_NOTE_QUERY, isCompilationEntry, NOTE_KIND_FILTERS, type NoteAgenda, type NotebookFacets, noteContentSnippet, noteDirectory, type NoteFacets, type NoteGraph, type NoteKindFilter, type NoteListItem, type NoteLookup, noteMatchesQuery, type NotePaths, type NoteQuery, type NoteQueryPage, noteQueryStatuses, type NoteRef, noteRefKey } from './note-query.js';
+import { DEFAULT_NOTE_QUERY, entryKind, isCompilationEntry, NOTE_KIND_FILTERS, type NoteAgenda, type NotebookFacets, noteContentSnippet, noteDirectory, type NoteFacets, type NoteGraph, type NoteKindFilter, type NoteListItem, type NoteLookup, noteMatchesQuery, type NotePaths, type NoteQuery, type NoteQueryPage, noteQueryStatuses, type NoteRef, noteRefKey } from './note-query.js';
 
 /** Read model of the notebooks one repository serves, implemented by remote and local sources. */
 export interface RepositoryCatalog {
@@ -147,7 +147,7 @@ async function indexWithIdentity(repository: CatalogRepository, notebook: Notebo
     }
   }
   return items.map(item => {
-    const same = !item.invalid && typeof item.metadata.id === 'string' ? owners.get(item.metadata.id) ?? [] : [];
+    const same = isCompilationEntry(item) && !item.invalid && typeof item.metadata.id === 'string' ? owners.get(item.metadata.id) ?? [] : [];
     return same.length > 1 ? { ...item, invalid: `Duplicate compilation id "${item.metadata.id}" also used by ${same.filter(path => path !== item.path).join(', ')}` } : item;
   });
 }
@@ -226,17 +226,17 @@ export async function noteFacets(catalog: NoteCatalog, showHidden: boolean): Pro
   const { notebooks } = await scope(catalog, 'all');
   const result: Record<string, NotebookFacets> = {};
   for (const notebook of notebooks) {
-    const facets: NotebookFacets = { total: 0, hidden: 0, statuses: {}, tags: {}, directories: {}, compilations: { total: 0, statuses: {}, tags: {} } };
+    const facets: NotebookFacets = { total: 0, hidden: 0, statuses: {}, tags: {}, directories: {}, compilations: { total: 0, statuses: {}, tags: {} }, outlines: { total: 0, statuses: {}, tags: {} } };
     for (const note of await catalog.index(notebook)) {
       const hidden = isNoteHidden({ ...note.metadata, status: note.status });
-      const compilation = isCompilationEntry(note);
-      if (hidden && !compilation) facets.hidden++;
+      const kind = entryKind(note);
+      if (hidden && kind === 'note') facets.hidden++;
       if (hidden && !showHidden) continue;
-      const target = compilation ? facets.compilations : facets;
+      const target = kind === 'outline' ? facets.outlines : kind === 'compilation' ? facets.compilations : facets;
       target.total++;
       target.statuses[note.status || ''] = (target.statuses[note.status || ''] || 0) + 1;
       for (const tag of note.tags) target.tags[tag] = (target.tags[tag] || 0) + 1;
-      if (compilation) continue;
+      if (kind !== 'note') continue;
       const directory = noteDirectory(note.path);
       facets.directories[directory] = (facets.directories[directory] || 0) + 1;
     }

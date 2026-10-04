@@ -26,6 +26,10 @@
       "types": "./dist/frontmatter-patch.d.ts",
       "import": "./dist/frontmatter-patch.js"
     },
+    "./outline": {
+      "types": "./dist/outline.d.ts",
+      "import": "./dist/outline.js"
+    },
     "./compilation": {
       "types": "./dist/compilation.d.ts",
       "import": "./dist/compilation.js"

@@ -7,6 +7,7 @@ import { MANIFEST_FILES } from './remote-manifest.js';
 import { type RepositoryId, type RepositoryScope, StaleRevisionError } from './repository.js';
 import { parseNoteContent } from './frontmatter.js';
 import { isCompilationPath } from './compilation.js';
+import { isOutlinePath } from './outline.js';
 import { isNoteFile, NOTE_EXTENSIONS, parseNoteFile, serializeNoteFile } from './note-file.js';
 import { formatTemplateDate, renderNoteTemplate } from './templates.js';
 import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js';
@@ -22,7 +23,7 @@ import type { NoteListItem } from './note-query.js';
 
 export { SourceError } from './github-api.js';
 const CACHEABLE_FILE = /\.(md|markdown|mdx|txt|ya?ml)$/i;
-const INDEX_VERSION = 'v2';
+const INDEX_VERSION = 'v3';
 /** Blobs kept in memory for one request. */
 const LOADED_MAX_BYTES = 64 * 1024 * 1024;
 export interface RemoteEntry {
@@ -177,10 +178,10 @@ export abstract class RemoteSource {
     return { id: typeof metadata.id === 'string' ? metadata.id : file, path: file, notebookId: nb.id, title, metadata, content, lineNumberOffset, tags: Array.isArray(metadata.tags) ? metadata.tags.map(String) : [], status: typeof metadata.status === 'string' ? metadata.status : undefined, size: Buffer.byteLength(raw), revision: (await this.getSnapshot()).sha, ...extra };
   }
 
-  /** The notebook's note files; `compilations` adds its `.compilation.yml` files. */
-  private notebookFiles(nb: NotebookConfig, entries: RemoteEntry[], compilations = false) {
+  /** Ordinary notes by default; `allKinds` includes outlines and compilations. */
+  private notebookFiles(nb: NotebookConfig, entries: RemoteEntry[], allKinds = false) {
     const templateFiles = new Set((nb.templates || []).map(t => t.file));
-    return entries.filter(e => e.type === 'blob' && e.mode !== '120000' && e.path.startsWith(`${nb.root}/`) && isNotebookContent(e.path.slice(nb.root.length + 1), nb) && !templateFiles.has(e.path.slice(nb.root.length + 1)) && (NOTE_EXTENSIONS.test(e.path) || compilations && isCompilationPath(e.path)));
+    return entries.filter(e => e.type === 'blob' && e.mode !== '120000' && e.path.startsWith(`${nb.root}/`) && isNotebookContent(e.path.slice(nb.root.length + 1), nb) && !templateFiles.has(e.path.slice(nb.root.length + 1)) && (NOTE_EXTENSIONS.test(e.path) && (allKinds || !isOutlinePath(e.path)) || allKinds && isCompilationPath(e.path)));
   }
 
   /** Note paths of one notebook, taken from the snapshot tree without reading any file. */

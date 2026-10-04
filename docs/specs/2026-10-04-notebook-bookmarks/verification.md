@@ -1,160 +1,171 @@
-# Notebook bookmarks — implementation verification
+# Outline notes — verification ledger
 
-Date: 2026-10-04. Owner: upstream single writer, `/home/weihung/github-notes`.
-Baseline: `298eb474ec40b0ee5828b078cff18bb95a994dcc` on `core`.
-Status: complete feature implementation; automated checks and bounded browser checks below executed. Parent's independent full UI and code review remain separate gates, not claimed complete here. No push, downstream write, deployment, live-provider write, credential change or user-workspace mutation was performed.
+Planning baseline: `/home/weihung/github-notes`, clean HEAD `ac26edfe69120fac9eff904b5cb7f53e76966588`.
+Status: implementation in progress; native-kind foundation verified in upstream, remaining editor/UI/import/relocation work and independent browser QA are not complete.
+No push, deployment or downstream synchronization was performed by this worker.
+The approved model is **Outline note / 大綱筆記**, with general items and optional links, not the earlier specialized bookmark document.
+Contract: [spec.md](spec.md); implementation sequence: [design.md](design.md).
 
-## Delivered surfaces
+## Historical evidence and human verdict
 
-- Browser-safe strict domain schemas and immutable operations for all six target kinds, headings and paragraphs, labels, groups and ordering; exact source anchors with CRLF mapping; canonical scoped queries and safe HTTP(S) URLs.
-- Optional repository-root `.mygitnotes-bookmarks.yaml` registered as a workspace document. Local and provider adapters preserve paired snapshots/revisions, unknown-owner collections, corrupt-file refusal, permissions and visible conflicts.
-- Bounded read-only resolver: no URL fetching, no deletion inference on transient failures, actual saved source and exact mounted-editor re-resolution.
-- Local file/folder planners and hosted MCP moves relocate references atomically; deletions retain references. Metadata participates in move revisions and local rollback, and is protected from ordinary note/file/MCP editing, including normalized paths and internal symlink aliases.
-- Shared drafts/Changes integration, inactive-repository views, race-preserving settlement, query/sort/graph scope, sidebar groups/drag/accessible alternatives, creation/repair entrypoints and local-save versus remote-commit capture boundary.
-- English/Traditional Chinese UI and usage documentation. Startup troubleshooting remains the last top-level section in both READMEs.
+**Prior human UI acceptance: FAIL.**
+The user rejected inconsistent fields/buttons/layout, the constant Saved badge, and separate Add bookmark/Add group flows.
+Later compact rows, green functional tests and no-overflow measurements did not establish that the workflow was suitable.
+The final user clarification also invalidated a text-group/link-leaf distinction: every outline item is general content.
 
-## Executed automated verification
+At BASE, the earlier verification document recorded old collection implementation checks, culminating in 247 test files / 1797 tests, builds/types/lint/format and bounded disposable browser checks.
+It also recorded fixes for cross-repository equal-root validation, metadata symlink protection and raw-textarea CRLF offsets.
+Those are historical reports for the retired collection implementation, not new execution evidence or proof of outline semantics.
+The full previous artifact is preserved in Git at `ac26edfe69120fac9eff904b5cb7f53e76966588:docs/specs/2026-10-04-notebook-bookmarks/verification.md`.
+Its temporary log/screenshot paths were not revalidated in this planning session.
+Retain the security/race/CRLF regressions during replacement rather than treating the UI rejection as permission to remove their protections.
 
-The final full run used the commands below, after all production changes including normalized-path MCP protection. All completed with exit 0.
+## New requirement evidence
+
+All new requirements start unknown.
+A planned test or a source reading is not an executed behavior check.
+
+| Requirement | Evidence | Result |
+| --- | --- | --- |
+| R1 Native Outline type, multiple documents, portable `.outline.md`, no hidden registry | Stage 1 parser/classifier/local HTTP/GitHub/GitLab tests pass; native creation UI not yet connected. | unknown |
+| R2 General text/link items, children and annotations, non-destructive deletion | Standard Markdown representation specified; no new source round-trip or rendered-browser evidence. | unknown |
+| R3 Enter sibling, Shift+Enter annotation, Tab hierarchy in live/raw, undo/IME/accessibility | Inspected current keymaps: raw lacks list commands and live lacks Tab binding; approved commands unimplemented. | unknown |
+| R3a Same-document live-editor subtree dragging, drop/nesting feedback, cancel/read-only, undo/redo | User-approved addition; pure movement and real-browser drag evidence not yet exercised. | unknown |
+| R4 Existing UI consistency, native save state, no old forms/Saved badge | Existing components named as precedents; replacement UI and independent visual comparison not executed. | unknown |
+| R5 Internal/external optional links, opener isolation, no preview fetching, repository scope | Native resolver/dispatcher inspected; outline-specific interaction/no-embed checks not executed. | unknown |
+| R6 Add current content with filled label/target into selected/new outline | Consumed-once mounted-editor insertion planned; cancel/race/dirty-destination behavior untested. | unknown |
+| R7 All note lifecycle/local+remote/kind isolation and compilation unaffected | Stage 1 catalog, local create/save/copy/delete/restore, GitHub/GitLab create/save guards and draft facets pass; full move/UI lifecycle remains unverified. | unknown |
+| R8 Atomic rename/move references and non-destructive delete/restore | Existing Markdown planner reuse identified; hosted shell Markdown relocation gap remains for implementation. | unknown |
+| R9 Explicit partial/non-lossy import, retained source/drafts, invalid/stale/unknown-owner refusal | Preview/apply/recovery contract specified; no import endpoint or migration test executed. | unknown |
+| R10 Disposable independent reality anchor, documentation and delivery gates | Fixture/task/cleanup plan recorded; new integrated QA and parent human acceptance not executed. | unknown |
+
+## Stage 1 execution checkpoint
+
+- Native suffix classification, ordinary Markdown parse/serialize, title fallback, catalog/query/facet isolation, repository-aware draft overlays and local HTTP access are implemented.
+- Compilation duplicate-ID invalidation now explicitly applies only to compilations; ordinary/outline frontmatter IDs cannot inherit compilation errors.
+- Remote index cache advances to `v3` so cached generic-note rows cannot hide the new kind.
+- Red anchor: `/tmp/outline-stage1-red.log`, 8 expected failures before implementation.
+- Full automated regression: `/tmp/outline-stage1-full-tests2.log`, **248 files / 1808 tests passed**.
+- Build: `/tmp/outline-stage1-full-build.log`, passed with existing Vite chunk warnings.
+- Lint and format: `/tmp/outline-stage1-lint.log`, `/tmp/outline-stage1-format.log`, both passed.
+- Fresh types: `/tmp/outline-stage1-webtypes2.log`, `/tmp/outline-stage1-servertypes2.log`, both exit 0.
+- Active LSP was exercised; its web server retained pre-build core declarations and reported stale outline/facet errors despite fresh package build and fresh compiler success; those exact diagnostics were recorded false-positive rather than silenced with source comments.
+- Runtime integration: the local native-note test starts `createApp` on an ephemeral loopback HTTP port and exercises POST/query/facets/read/delete/restore; its own server and temporary root are closed/removed in `afterEach`.
+- Provider evidence is deterministic GitHub/GitLab fixture execution, not live-provider access.
+- Stage 2 source-command files may be uncommitted while the verified stage 1 is checkpointed; they are not included in stage 1's full-suite claim.
+- No persistent fixture server or browser session is running yet; rendered UI/drag/textarea undo evidence and human appropriateness remain unknown.
+
+## Required automated evidence
+
+### Core and classification
+
+- Parse/serialize `.outline.md` with standard frontmatter, no frontmatter, malformed frontmatter handled as existing Markdown, CRLF, CJK and filenames with spaces.
+- Verify suffix-only kind, fallback title without `.outline`, kind `all`/`outline`/`note`/`compilation`, separate facets and remote draft overlay counts.
+- Exercise local and provider list/query/lookup/create/save/tag/status/rename/copy/delete/restore/Changes; a staged outline must classify before its first server read.
+- Confirm default compilation sources and duplicate compilation ID validation stay restricted to their established kinds.
+- Verify outline graph/agenda participation uses native Markdown paths without a new task model.
+
+### Actual editor adapters
+
+- Mount real CodeMirror and raw textarea, send actual key events, assert both source and selection, then switch mode/save/reopen.
+- Enter at text end and inside text; Enter in annotations; sibling after an item with children; empty item exit; Shift+Enter repeated annotations; nested child beneath an item that already contains links.
+- Tab/Shift+Tab on one item, a complete subtree and multiple sibling subtrees; first sibling/root boundary; Escape-then-Tab focus escape; touch toolbar indentation.
+- Preserve non-list prose, ordered-list paste, fences, escaped markers, incomplete links, long lines, annotations that contain Markdown and unselected children.
+- Check selection replacement, mid-line edits, undo/redo and CRLF offsets; raw browser undo must be exercised beyond React callback assertions.
+- IME composition must not create siblings; completion Enter priority and modified Enter behavior must be deterministic.
+- Link text in editable CodeMirror must not have Enter stolen by `WorkspaceLinks` capture; explicit open affordance and keyboard-focused link activation still navigate.
+- Drag a live-editor item with annotations/children to a sibling position and another nesting level; verify drop indicator, exact source, own-descendant refusal, cancel/read-only, one-step undo and redo in an actual browser.
+- Existing ordinary Markdown and compilation editor tests remain green.
+
+### Links and relocation
+
+- Internal note, outline and compilation links; optional mixed text/multiple links; missing target retained; unavailable repository shown as unavailable.
+- HTTP(S) new-tab opener isolation and zero automatic URL-preview requests, including YouTube; unsafe schemes/credentials remain non-navigable.
+- Same root/path in repositories A/B, including delayed loads, completion choices, Focus/zoom and reopened editor.
+- Move link target, move outline itself, rename containing folder, remove folder while keeping content, bulk partial failure and hosted MCP directory-destination `mv`.
+- Assert labels, annotations, hierarchy, external URLs, fragments and code literals stay unchanged; incoming references from ordinary notes also follow outline-file moves.
+- Local second-write fault restores original source/target/legacy bytes; move-versus-edit stale rejection; GitHub one tree/commit and GitLab one actions commit using paired snapshots.
+- Deletion and restore retain referring Markdown; no inferred rename from arbitrary Git edits.
+
+### Legacy import and retirement
+
+- Preview/cancel/missing source: no writes and no spontaneous metadata creation.
+- Exact converted/retained report for all old target kinds, groups, empty groups, duplicate labels, Markdown-sensitive titles/URLs and missing note targets.
+- Explicit partial acknowledgement for positions/queries/folders; no hidden directive, slug downgrade or generated fake query URL.
+- Invalid YAML, unknown schema version, oversize, unknown selected owner/ID, nested notebook ownership, symlink/alias/protected destination, read-only branch, stale source/config/head and destination collision: refuse with unchanged bytes/tree.
+- Known-owner import retains every other owner, including unknown ones, byte-for-byte in the original source.
+- No representable selection creates no file; duplicate apply never overwrites or auto-selects another filename; timeout/readback distinguishes unknown outcome from safe retry.
+- Remote preview reads one snapshot; apply commits only the new outline; provider errors never convert stored data to empty.
+- Detect inactive-repository and malformed legacy browser drafts; exact JSON export, discard confirmation/cancel, unchanged base/revision and no auto-merge/autosave/commit through retired endpoints.
+- Old bookmark PUT and remote Changes document writes are rejected; old sidebar/forms disappear; metadata registry protection and rename handling continue to pass existing HTTP/MCP tests.
+
+## Independent parent browser reality anchor
+
+Update the existing disposable fixture to seed two repositories with identical `notes/shared` roots and paths, two outline documents per notebook, one ordinary note, one compilation and a legacy collection containing all target kinds.
+Include an unknown legacy owner, a malformed-data variant and browser recovery-draft setup without touching real browser storage or user workspaces.
+The fixture must use the current schema constant, actual built web/local server and printed readiness/PID/port/root records.
+Retain a bounded `--smoke` mode and cleanup of only fixture-created paths.
+
+1. Capture the existing New note, New compilation and note-editor chrome as the same-session desktop/mobile visual baseline.
+2. From the native New menu create an Outline note; verify title/folder/status alignment and normal editor opening, then create a second independent outline.
+3. Type an unlinked item, Enter a sibling, Tab a child, Shift+Tab promote it and Shift+Enter add an annotation; add children beneath both plain-text and link-containing items.
+4. Repeat in raw mode, exercise undo/redo, switch live/raw and confirm one Markdown source rather than a lossy tree conversion.
+5. Add internal links to an ordinary note/compilation and external HTTP(S); verify native navigation, editable link text and zero automatic media/preview requests.
+6. Save locally, reopen/reload and inspect actual fixture bytes; separately test remote staging/commit through deterministic provider integration, without calling it a live-provider browser run.
+7. Use Add to outline from current content with filled label/target; select existing/new destination, cancel once and exercise dirty-source/destination failure paths.
+8. In repository B, activate identical-path links and repeat creation/insertion; verify A remains byte-identical.
+9. Rename/move target and outline via actual file/folder UI; reopen and activate refs, then delete/restore the target without pruning Markdown.
+10. Preview legacy import, inspect the exact retained position/query/folder report, cancel and assert no files; explicitly apply a partial import and verify original bytes and pending drafts remain.
+11. Inspect malformed/stale/unknown-owner recovery errors and read-only controls; no rejected Add group or target-type form may reappear as a fallback.
+12. Compare screenshots against step 1 at desktop and narrow touch width; evaluate consistent controls, field alignment, editor rhythm, focus return and readable hierarchy, not only overflow.
+
+External opening may be verified by intercepted navigation/new-page intent to a disposable/local destination; no public website fetch is required.
+Keep actual browser evidence, API readback, provider fixtures and human judgment distinctly labeled.
+
+## Commands and process ownership
+
+The following are implementation verification instructions, not commands run in this planning session.
 
 ```bash
-pnpm build
+pnpm --filter './packages/*' run build
 pnpm test
+pnpm build
 pnpm lint
 pnpm format:check
 pnpm exec tsc --noEmit -p apps/web/tsconfig.json
 pnpm exec tsc --noEmit -p apps/local-server/tsconfig.json
 node --check scripts/qa-bookmarks-fixture.mjs
 node scripts/qa-bookmarks-fixture.mjs --smoke
-git diff --cached --check
 ```
 
-Logs are local handoff evidence, not repository fixtures:
+If the fixture is renamed, update the last two commands and callers together.
+Run targeted new and existing suites after each task before the final broad checks.
+Use `MonitorCreate` for builds/long checks and persistent fixture servers; never use `&` or `nohup` for persistent processes.
+Record the monitor ID, PID, port, fixture roots and owned browser session.
+At completion use `MonitorStop`, close the owned browser session and verify the recorded PID/listener/roots are gone.
+This planning session started no persistent process or browser session and needs no process cleanup.
 
-- `/tmp/bookmarks-build.log`
-- `/tmp/bookmarks-full-tests.log`
-- `/tmp/bookmarks-lint.log`
-- `/tmp/bookmarks-format.log`
-- `/tmp/bookmarks-types.log`
-- `/tmp/bookmarks-targeted.log` (earlier bounded server/multi-repository/rollback run)
+## Claims and remaining gates
 
-Final results: **246 test files, 1779 tests passed**, duration 63.24s. Production build passed (existing large-bundle warnings only); lint reported no diagnostics across 730 source files/128 rules, with no hard-coded colours in 477 web files; format check and both fresh TypeScript checks passed. Final fixture smoke also passed (PID 369077, port 33437) and removed both temporary roots before exit.
+| Claim | Status |
+| --- | --- |
+| Clean specified upstream BASE before planning | Confirmed by Git status/HEAD inspection. |
+| Four-document plan researched against actual source | Complete: exactly four allowed modified files; six ordered implementation tasks; 15 relative evidence links resolve; `git diff --check` clean; HEAD unchanged. |
+| New outline tests/build/types/lint | Stage 1 passed as recorded above; later stages remain in progress. |
+| New browser/UI/real provider evidence | Not run. |
+| Human appropriateness of rejected collection | FAIL. |
+| Human appropriateness of replacement outline UI | Unknown; parent/user review required after implementation. |
+| Commit/push/CI/deployment/downstream | Stage commits are recorded in worker handoffs; no push/CI/deployment/downstream action performed by this worker. |
 
-### Behavior evidence map
-
-| Requirement | Evidence | Result |
-| --- | --- | --- |
-| All target kinds, strict serialization, groups/order/identity, non-destructive removal | `packages/core/tests/bookmarks.test.ts`; `apps/web/src/components/BookmarksSection.test.tsx`; `BookmarkDialog.test.tsx`. | pass |
-| Empty read, local permission, two writers, corrupt data, safe paths/URLs, saved-source resolution | `apps/local-server/tests/bookmarks.test.ts`; temporary actual HTTP servers and worktrees. | pass |
-| GitHub/GitLab persistence, stale revisions, paired Changes base, document-only scope, permission | `packages/core/tests/bookmarks-remote.test.ts`; deterministic provider fixtures, not live network. | pass |
-| Repository identity and same-root isolation | `apps/local-server/tests/notebook-repositories.test.ts`, plus two mapped `main` repositories in the real browser fixture. | pass |
-| File move, old bookmark token, bookmark edit invalidating old move token, deletion, direct note restore | Bookmark-specific HTTP regressions in `apps/local-server/tests/bookmarks.test.ts`. | pass |
-| Folder move/removal, recursive delete, absent metadata, corrupt metadata, alias protection | `packages/core/tests/bookmark-relocation.test.ts`, shared planner cases. | pass |
-| Atomic rollback after a second local write fails | `apps/local-server/tests/bookmark-rollback.test.ts`: original note/bookmark bytes restored and destination absent. | pass |
-| Hosted MCP directory destination rule and atomic provider metadata change | `packages/core/tests/bookmark-relocation.test.ts`: GitHub single tree includes bookmark file; GitLab single move actions commit includes note paths and bookmark file; subsequent recursive deletion retains exact metadata bytes. | pass |
-| Local MCP artifact protection | `packages/mcp-server/tests/bookmark-protection.test.ts`: dot/backslash/absolute paths, existing file symlink and directory symlink before artifact creation; ordinary note remains allowed. | pass |
-| Draft/save/commit races, inactive scope and note save failures | `apps/web/src/lib/use-bookmarks.test.tsx`; `apps/web/src/app/useBookmarkActions.test.tsx`; existing `useWorkingNoteCommit.test.tsx` and shared document suite executed in full run. | pass |
-| Exact moved/repeated/ambiguous/edited/CJK/CRLF positions, code exclusions | `packages/core/tests/bookmarks.test.ts`; no hint-based or fuzzy fallback. | pass |
-| Mounted editor content, readiness and note/request races | `apps/web/src/lib/use-bookmark-position.test.tsx`: 4 cases, including shifted dirty content and ambiguous duplicates without reveal. | pass |
-| Scoped route/query restoration, canonical identity, explicit sort | `apps/web/src/lib/bookmark-navigation.test.ts`; core query tests; existing graph/filter/sort tests run unchanged. | pass |
-| Existing lifecycle and movement entrypoints | Complete suite includes file/folder/bulk/shell, local/remote adapters, Focus/Study and editor tests; new bookmarks flow through the shared planner/document seams. | pass |
-| Build/type/lint/format regression checks | Final logs: 246 files/1779 tests, build/lint/format/types exit 0 | pass |
-| Full desktop/mobile acceptance and independent code review | F001/F002/F003 fixed with red/green evidence below; independent re-review remains pending | unknown |
-
-The movement entrypoint audit is the detailed table in `design.md`. Tests exercise shared planners, HTTP note/file mutations, provider commits, shell movement/deletion and rollback; this is not a claim that every provider × UI entrypoint Cartesian product was independently driven in a real browser. Parent review should verify the shared-seam coverage against that audit.
-
-## Executed disposable real-browser checks
-
-Build: final feature build before the final MCP-only alias hardening; no UI source changed afterward.
-Browser: owned headless `agent-browser --session bookmarks-api`; no login or user session.
-Fixture: `scripts/qa-bookmarks-fixture.mjs`, actual built web/local server, two disposable `main` repositories with current manifest schema constant, same notebook roots, Markdown headings/paragraphs and compilation.
-
-Observed:
-
-1. Desktop rendered all seeded target kinds and Saved status; no page errors were reported.
-2. Created a saved-query bookmark through the actual Notes toolbar/dialog; autosave completed and reload retained it.
-3. Created an HTTP(S) bookmark through Add bookmark; verified its rendered link has `target="_blank"` and `rel="noopener noreferrer"`. Did not navigate to or fetch the external website.
-4. Activated a heading bookmark: routed to `notebooks/a/notes/guide.md`, one CodeMirror host mounted, actual browser selection was exactly `# Bookmark fixture`, no alert appeared.
-5. At 390×844, opened notebook sidebar; document scroll width stayed 390 and bookmark section fit its container.
-6. Used the mobile-accessible group selector to move the heading bookmark into Reading; API readback confirmed stable ID `fixture-3`, label `4. position`, group `reading` after Saved.
-7. Fixture preflight resolved seven seeded entries (all kinds, both position kinds), verified both repositories writable on `main`, and loaded the built UI over HTTP. `--smoke` exited and removed both roots.
-
-Screenshots and supporting snapshot:
-
-- `/tmp/bookmarks-desktop.png`
-- `/tmp/bookmarks-position-desktop.png`
-- `/tmp/bookmarks-mobile.png`
-- `/tmp/bookmarks-mobile-grouped.png`
-- `/tmp/bookmarks-desktop-snapshot.txt`
-
-Own fixture process: PID `330757`, port `46115`, monitor `9`.
-Own roots: `/tmp/mygitnotes-bookmarks-home-xPPZpx`, `/tmp/mygitnotes-bookmarks-other-QsWDzU`.
-Cleanup executed: browser session closed; MonitorStop called; `ps`, `ss` and existence checks confirmed PID, listener and both roots gone. Parent's independently started fixture is not ours and was not stopped.
-
-## Independent parent fixture instructions
-
-```bash
-pnpm build
-node scripts/qa-bookmarks-fixture.mjs --smoke
-# For interactive browser QA, launch this command ONLY with MonitorCreate:
-node scripts/qa-bookmarks-fixture.mjs
-```
-
-The fixture prints one JSON ready record with PID, port, home root, other root, route and schema; no browser dependency is needed to bootstrap it. Open the printed route in the parent's own browser session. Stop its monitor afterward and verify the printed PID/port and both roots are gone. Signal handlers remove only the fixture-created roots. It accepts no user-workspace root or credential input.
-
-## Compact UI follow-up
-
-Baseline for this UI-only follow-up: `0a2b5ea83d6b8b36542aab83fcfc89c849758cf8`. Replaced repeated disclosure rows with type icon/name/ellipsis, using the existing Radix folder-menu styles and native-dialog focus convention. Group actions use an ellipsis menu; Move up/down remain in the menu and Group opens a select dialog. Drag paths still call the same operations. No API/data source changed.
-
-- Full rerun: **246 files, 1781 tests passed**; build/lint/format/web types exit 0. Logs: `/tmp/bookmarks-compact-{build,tests,lint,format,types}.log`.
-- Component regressions cover read-only navigation, menu grouping/removal, up/down, drag, group rename, Escape focus return and menu-to-editor sequencing. A test initially sent Enter without focusing the target; focusing the real keyboard target fixed the invalid simulation.
-- Actual 1440×1000 browser: all seven seeded rows measured **32px**, Add appeared at y544 and the folder tree at y602. Actual menu→Group saved successfully; Edit→Escape returned focus to the exact ellipsis trigger.
-- Mobile emulation: viewport/document width 393px with no horizontal overflow, all rows measured **44px**; group menu→Rename persisted successfully. Screenshots: `/tmp/bookmarks-compact-desktop.png`, `/tmp/bookmarks-compact-mobile.png`. No browser errors reported.
-- Owned session `bookmarks-compact` closed; monitor12 stopped; PID390520/port38123 and roots `/tmp/mygitnotes-bookmarks-home-A6VklZ`, `/tmp/mygitnotes-bookmarks-other-tgHfRN` verified gone.
-
-Parent independently verified initial note/position creation, unresolved/retarget behavior, atomic folder moves, repository-isolated URL creation, group/ungroup persistence and content retention. Independent static review of the immutable initial commit nevertheless found three blockers: F001 cross-repository same-root UI path validation, F002 HTTP note symlink alias protection, and F003 raw textarea CRLF offsets. They were **not resolved by that UI-only follow-up**. The subsequent review-fix work below addresses all three before re-review; no publication occurred.
-
-## Review blockers — sequential fixes (2026-10-05)
-
-Baseline for these fixes: compact-UI commit `72df3828ef347b5f9fafd93ed9fd8087e12d5430`. All three findings were reproduced with failing regressions before their corresponding production edit.
-
-| Requirement | Evidence | Result |
-| --- | --- | --- |
-| F001 same-root notebooks in distinct repositories | Action tests initially failed four cases; scope now filters `config.notebooks` by `repositoryFor(id).id` before both path validations. Seven action tests pass, including B note/compilation/position activation and position capture. | pass |
-| F002 HTTP note aliases must not bypass document revision protection | Four read/write/delete/restore tests initially returned 200 for a metadata symlink. `noteRepository` now applies the existing managed-file no-symlink policy for local handles, including ancestors and portable separators. Fifteen bookmark HTTP cases pass, including directory aliases with present/absent metadata and slash/backslash paths; original bytes remain unchanged. | pass |
-| F003 raw textarea CRLF position mapping | Real textarea integration initially failed three cases, including revealing `ragraph`. Raw selection now maps LF textarea offsets to the original body; raw reveal maps original offsets back to LF. Four MD/text and CRLF/LF textarea cases pass without content mutation. | pass |
-
-Red/green logs: `/tmp/bookmarks-F001-{red,green}.log`, `/tmp/bookmarks-F002-{red,green}.log`, `/tmp/bookmarks-F003-{red,green}.log`.
-Final full run: **247 test files, 1797 tests passed** (63.20s); build, lint, format, web/server types all exit 0. Lint: 732 files/128 rules, no diagnostics; theme audit: 479 web files. Logs: `/tmp/bookmarks-review-{build,tests,lint,format,types}.log`.
-Active LSP recheck covered all six changed TypeScript files: four clean, two inconclusive; known cached-import findings remain explicitly dispositioned. Fresh compilers are the independent complete type evidence.
-
-Actual same-root B browser fixture verification:
-
-- Seeded B note/compilation bookmarks only in the disposable secondary repository; activated each via sidebar. Routes were `/notebooks/b/notes/guide.md` and `/notebooks/b/notes/reading.compilation.yml`; Other guide and QA compilation rendered without alerts.
-- Created B position through the editor picker and Save first; after closing zoom and activating the sidebar bookmark, actual selection was exactly `## Second heading`. Screenshot: `/tmp/bookmarks-F001-B-position.png`.
-- Created another disposable B note whose saved body retained CRLF. Switched to Source, selected Paragraph in the actual LF textarea, captured/saved the position, then activated it. Actual selection was exactly `Paragraph`; default reopened host was live, so **raw reveal** evidence remains the explicit textarea integration tests, not a claim about that browser host. Screenshot: `/tmp/bookmarks-F003-crlf-capture-activation.png`.
-- Initial attempts to click sidebar controls behind zoom, and to select fixed offsets without accounting for serializer-added leading blank lines, were not successful actions. Closing zoom and selecting the actual source substring exercised the intended UI; invalid cross-block selection was rejected rather than stored.
-- No page errors reported. Owned session `bookmarks-review` closed; monitor14 stopped; PID421673/port37185 and roots `/tmp/mygitnotes-bookmarks-home-Ibw7MC`, `/tmp/mygitnotes-bookmarks-other-f7ZmtS` verified gone.
-
-Independent re-review is required before calling the feature approved. Initial passing tests did not cover these three cases; their old successful counts are not evidence that the initial commit was safe.
-
-## Human appropriateness
-
-Parent's independent desktop/mobile acceptance and code review are pending, distinct from the bounded worker checks. Initial presentation feedback and its impact are recorded below; no final human-appropriateness verdict is claimed.
+The retained legacy registry is an intentional compatibility boundary, not an unresolved duplicate outline store.
+Partial import preserves data but does not reproduce active old query/exact-position behavior; that limitation must remain visible to the user.
+No active-fidelity conversion or legacy archive deletion is authorized by this plan.
 
 ## Reflexive
 
-- Gap: LSP cached package exports, while fresh compilers and runtime verified the new exports. Evidence was preserved and findings dispositioned; no import-boundary workaround or inline type suppression. Solid-loop action: parent may inspect diagnostic refresh behavior separately; no project rule change needed.
-- Gap: monitor shell was POSIX sh, not bash; removed an unnecessary pipefail setting and reran the entire chain. Solid-loop action: use portable monitor commands for this handoff.
-- Gap: headless CLI click did not scroll offscreen controls; explicit scroll-then-click verified the actual UI. Solid-loop action: include this observation in parent fixture instructions, without changing browser security or product behavior.
-- Gap: bookmark sidebar disclosure density needs independent UI judgment. Solid-loop action: retain parent feedback as a focused follow-up rather than changing UI under active QA.
-
-## Remaining review gates and limitations
-
-- Parent owns independent code review and the complete desktop/mobile acceptance journey, including every creation entry, drag/group/remove/repair, read-only navigation, unavailable/retry, second-tab conflicts and dirty-editor cancellation across Focus/zoom hosts. The bounded browser checks above do not claim those entire journeys passed.
-- Parent's initial sidebar-density concern was addressed by the separately committed compact UI and measured desktop/mobile checks above. Independent final visual approval remains the parent's gate.
-- Provider tests use deterministic GitHub/GitLab fixtures. No live provider/deployment verification occurred. GitLab's existing changed-file preconditions are not a whole-branch compare-and-swap after its final branch check.
-- Local mutation queue is process-local, not an OS transaction against independent external editors/Git processes.
-- Active LSP probes were run on changed boundaries. The server retained old core package exports/declarations; findings were explicitly dispositioned as false positives after fresh compiler/build/runtime evidence. Some push-only probes were inconclusive. This document does not report an LSP-clean verdict; fresh `tsc` results are the type-check evidence.
-- First final-monitor attempt used `set -o pipefail`, but MonitorCreate's `/bin/sh` rejected it before executing commands. The corrected portable command completed; no failed output was counted as a successful run.
-- Agent-browser did not automatically scroll offscreen sidebar/dialog controls into view. Explicit `scrollintoview` followed by real clicks succeeded; the initial click attempts/timeouts are not counted as completed actions.
+- Discovery gap: presumed local-source/link-hook filenames were absent; actual adapter/component paths were found and recorded in the design seam table.
+  Disposition: no implementation or behavior conclusion depends on the failed lookups; no new global rule needed.
+- Authority update: parent delivered the user-approved Outline terminology while planning; the intermediate bookmark-document decision was replaced before finalization.
+  Disposition: all owning artifacts now use general items and optional links; no full Workflowy scope was inferred.
+- Historical feedback: functional tests and compact/no-overflow UI checks did not establish usability.
+  Disposition: retain human FAIL and require direct native-UI screenshot/workflow comparison as a separate gate; do not relabel historical green checks as acceptance.

@@ -1,594 +1,381 @@
-# Notebook bookmarks — implementation design
+# Outline notes — implementation-ready replacement design
 
-Status: implementation-ready design; no product implementation or feature verification is claimed here.
-Baseline: upstream `/home/weihung/github-notes`, Core `298eb47`.
-Contract: [approved specification](spec.md); terminology and authorization: [decisions](decision.md).
-Owner: `aaaav-do` Durable Design, with `codebase-design` for seams and `domain-modeling` for invariants.
+Status: design handoff, not implementation evidence.
+Baseline: clean upstream `/home/weihung/github-notes` at `ac26edfe69120fac9eff904b5cb7f53e76966588`.
+Contract: [approved outline specification](spec.md); authority and terminology: [decision.md](decision.md).
+Owner: `aaaav-do` Durable with `codebase-design`; one sequential writer, no parallel branches.
+The existing folder name is historical; the new product is **Outline note / 大綱筆記**, short **Outline / 大綱**.
 
-## Intent and scope
+## Intent and smallest approach
 
-Deliver every approved target in one coherent implementation: note, folder, compilation, heading/paragraph position, HTTP(S) URL, and saved query/view.
-Bookmarks belong to a notebook, share its repository permissions, and remain references rather than copies of content.
-This design changes neither the approved specification nor the meaning of compilation, Focus, or notebook.
-There is no schema migration, new dependency, deployment, or private favorites store.
-The implementation and subsequent verification belong in upstream before the parent's authorized push and downstream synchronization.
+Use an ordinary Markdown note with a recognizable filename suffix and a small, outline-scoped list-command adapter inside the existing editor.
+Do not introduce a parallel editable tree, node registry, custom note API, custom form toolkit or specialized bookmark-link schema.
+Links are optional inline content; any item may contain links and children.
+Keep legacy bookmark data behind a compatibility/import boundary, not as a second source of outline truth.
 
-## Source-grounded architecture
+### Alternatives and decision
 
-| Area | Current evidence | Consequence |
+| Shape | Depth, locality and compatibility | Decision |
 | --- | --- | --- |
-| Optional shared metadata | [WorkspaceDocument registry](../../../packages/core/src/workspace-documents.ts), [Focus document](../../../packages/core/src/focus-page.ts), [document HTTP adapter](../../../apps/local-server/src/workspace-document.ts) | Reuse a repository-root, versioned YAML document rather than extending `.mygitnotes.yaml`. |
-| Repository ownership | [request workspace](../../../apps/local-server/src/request-workspace.ts), especially `notebookRepository`, `repositoryOrHome`, and `openWorkspace`; [domain context](../../CONTEXT.md) | Resolve the owning notebook through configured repository handles; deployment origin and primary worktree do not identify a bookmark's repository. |
-| Local transactions | [mutation queue](../../../apps/local-server/src/workspace-mutation.ts), [folder apply/rollback](../../../apps/local-server/src/folder-manager.ts), [file apply/rollback](../../../apps/local-server/src/file-manager.ts) | Bookmark writes and reference relocation share the same worktree queue and rollback boundary. |
-| Remote transactions | [RemoteSource](../../../packages/core/src/remote-source.ts), `getSnapshot`, `commitNotes`, `commitChanges`; [GitHub](../../../packages/core/src/github-source.ts); [GitLab](../../../packages/core/src/gitlab-source.ts) | Read metadata and targets from one snapshot, then commit all changed paths using that snapshot's revision. |
-| Existing relocation | [folder planner](../../../packages/core/src/folder-plan.ts), [file planner](../../../packages/core/src/file-manager.ts) | Both already call `relocateWorkspaceDocuments`; register bookmarks there rather than implementing relocation in UI handlers. |
-| Additional movement surface | [remote note shell](../../../packages/core/src/note-shell.ts), `callNoteShell` `mv`; [MCP repository routing](../../../packages/mcp-server/src/workspace-remote.ts) | MCP moves currently bypass the planners and must explicitly include bookmark relocation in their existing atomic commit. |
-| Query definitions | [filter URL codec](../../../apps/web/src/lib/filter-query.ts), [filters](../../../packages/core/src/note-filters.ts), [browse query](../../../apps/web/src/app/useBrowseNotes.ts), [sort state](../../../apps/web/src/app/useNoteSort.ts) | Persist typed filters and sort, not a URL or result list; sort currently lives outside the filter URL. |
-| Positions | [outline source offsets](../../../apps/web/src/lib/note-navigation.ts), [MarkdownEditor handle](../../../apps/web/src/components/MarkdownEditor.tsx), [live editor](../../../apps/web/src/components/LiveMarkdownEditor.tsx) | Exact source matching can reveal a range through existing editors; heading slugs and rendered DOM text are not stable identities. |
-| Dirty state | [document drafts](../../../apps/web/src/lib/use-workspace-document.ts), [note save](../../../apps/web/src/app/useNoteSaving.ts), [remote commit](../../../apps/web/src/app/useWorkingNoteCommit.ts), [editor registry](../../../apps/web/src/lib/note-editing.tsx) | Local save writes the worktree, but remote editor save only stages a browser draft; position creation must explicitly distinguish them. |
+| Arbitrary `.md` plus frontmatter `type: outline` | Portable body, but type changes require body reads, create another editable metadata invariant and diverge from staged compilation classification. | Not selected. |
+| `*.outline.md` plus normal frontmatter/body | Uses existing Markdown scans, file protection, serializers, relative-link rewriting and the compilation suffix precedent; drafts can classify without a fetch. | Selected; suffix is the only type discriminator. |
+| `.outline.yml` tree or Markdown plus hidden JSON registry | Makes node operations convenient but duplicates source/editor state, weakens portability and recreates the rejected model. | Rejected. |
+| Separate outline editor/view | Would own caret, undo, links, draft lifecycle and editor hosting again. | Rejected; use native live/raw editor with scoped commands. |
 
-### Storage/interface alternatives
+No workspace schema bump or automatic workspace migration is needed for a recognized Markdown suffix.
+Ordinary Markdown outside list items is tolerated and preserved, not coerced into a tree on save.
 
-| Option | Advantages | Cost and decision |
+## Source-grounded seams
+
+Line references below describe BASE and may shift during implementation.
+
+| Seam | Verified source/precedent | Required change |
 | --- | --- | --- |
-| Optional bookmarks inside each `NotebookConfig` | Notebook identity is immediately present. | Rejected: the manifest lives in the primary repository, while notebook content can live elsewhere; unrelated configuration contention and credentials would own bookmark writes. |
-| `<notebook.root>/.mygitnotes-bookmarks.yaml` per notebook | Physical ownership and smaller conflict unit. | Viable, but not selected: all existing document registries, remote commit allowlists, Changes clients, and auxiliary snapshot readers use a fixed repository-root filename; dynamic files add a second storage protocol. |
-| One optional repository-root `.mygitnotes-bookmarks.yaml`, containing notebook-owned collections | Matches Focus/Study storage, existing Git Changes and document draft lifecycle, and both relocation planners. | Selected: one revision covers the repository's collections; the UI edits only the owning notebook's collection and preserves the others. |
-| Separate operation-specific REST endpoints for every group/bookmark operation | Server could own each edit command. | Rejected for this run: creates a second draft/commit protocol and obstructs existing whole-document Changes. Use pure domain operations and one versioned document endpoint with server validation. |
+| Type discriminator and parsing | `packages/core/src/compilation.ts:7-12`; `note-file.ts:5-42`; `types.ts:71-72` | Add browser-safe `outline.ts` with `OUTLINE_SUFFIX`/`isOutlinePath`; extend kind without changing Markdown serialization. |
+| Classification and scans | `classifier.ts:68-75`; `note-service.ts:95-114`; `remote-source.ts:180-183` | Classify outline before generic note, including no-config fallback; existing `.md` scanners already discover it. |
+| Queries and drafts | `note-query.ts:46-58,126-129`; `note-catalog.ts:137-157,225-244`; web `lib/draft-overlay.ts:63-86` | Extend `kind`/`all`, separate outline facets, and staged classification; ensure compilation-only ID checks do not touch outline metadata. |
+| New menu and dialog | `NoteToolbar.tsx:101-129`; `app/NewNoteDialog.tsx`; `app/useNewNoteDialog.ts:68-123`; `lib/compilation-create.ts` | Add New outline to the native split menu; parameterize native creation for title/folder/status and `.outline.md`, not another bookmark dialog. |
+| Browsing | `Sidebar.tsx:235-294`; `useBrowseNotes.ts:45-71`; `useBrowseFacets.ts:24-49`; `lib/filter-query.ts`; `lib/note-facets.ts` | Add outline kind alongside compilation, using the same list/count/filter pattern; remove the old `BookmarksSection`. |
+| Editor and save | `NoteEditor.tsx`; `note-editor/useNoteEditorSession.ts`; `MarkdownEditor.tsx`; `LiveMarkdownEditor.tsx`; `app/useNoteSaving.ts:28-53` | Existing note lifecycle and editor hosts; local worktree save versus remote draft/commit stays unchanged. |
+| List keys today | `LiveMarkdownEditor.tsx:155-159`; `MarkdownEditor.tsx:419-450` | Live installs Markdown Enter continuation and default keymap, but no Tab indent binding; raw has only formatting/completion handlers, no list-key behavior. |
+| Link editing and opening | `live-markdown/decorations.ts:23-31`; `widgets.ts:15-37`; `WorkspaceLinks.tsx:49-121,162-189` | Preserve native decorations/open affordances; fix any capture event that steals Enter from an active editable span. |
+| Repository-aware link scope | `NoteEditor.tsx:129,145`; `lib/use-linked-note-preload.ts:21-42`; `lib/note-completion.ts:29-58` | Keep `data-source-notebook`; scope outline candidates to source notebook and use notebook/path keys instead of path alone. |
+| Rendering and soft breaks | `lib/markdown.ts:35-42,68-80,124-149` | Existing `breaks: true` makes annotations visible; suppress URL-to-YouTube conversion for outline documents, not for all notes. |
+| Relative links and moves | core `workspace-links.ts:3-19`; `folder-plan.ts:22-59,93`; `file-manager.ts:145-157` | Reuse `noteMarkdownLink`/`relocateLinks`; `.outline.md` already matches planner Markdown paths. |
+| Hosted shell gap | `note-shell.ts:202-229`; `bookmark-relocation.ts` | Shell `mv` currently copies blob SHAs and relocates only old bookmark metadata, not Markdown links; add outline-link coverage within the same snapshot/commit. |
+| Legacy registry and recovery | `workspace-documents.ts:8-33,56-71`; `bookmarks.ts:207`; web `use-workspace-document.ts:34-85` | Retain protection/relocation, retire collection writes and live UI controller, preserve repository-keyed legacy drafts for explicit recovery. |
 
-The selected seam is `WorkspaceDocument<BookmarksPage>` plus pure bookmark operations, exact anchor matching, and query canonicalization.
-Do not import Express, filesystem, React, router state, or `window` into the domain module.
-Expose browser-safe subpath exports, as Focus and compilation already do.
-A small transport resolver translates relative targets into the owning repository's read operations; it never follows arbitrary URLs.
+No product-root AGENTS/GEMINI/CLAUDE or `.claude/skills` workflow was found; `notes/AGENTS.md` is not treated as a root instruction.
+Global UI, TypeScript, architecture, Markdown and Git safety rules were read.
+The four supplied artifacts are tracked at BASE (`git ls-files`); their earlier claim that they were ignored is no longer true.
 
-## Persisted model and invariants
+## Native model and lifecycle
 
-Add `packages/core/src/bookmarks.ts`, `bookmark-anchor.ts`, and `bookmark-query.ts`.
-Use Zod strict schemas and domain-specific `BookmarkError` codes, translated to HTTP errors at the edge.
-Public object types use interfaces where practical; discriminated unions describe target variants.
+### Core interface
 
-```typescript
-interface BookmarksPage {
-  version: 1;
-  notebooks: NotebookBookmarks[];
-}
-interface NotebookBookmarks {
-  notebookId: string;
-  groups: BookmarkGroup[];
-  bookmarks: Bookmark[];
-}
-interface BookmarkGroup {
-  id: string;
-  label: string;
-}
-interface Bookmark {
-  id: string;
-  label: string;
-  groupId: string | null;
-  target: BookmarkTarget;
-}
-type BookmarkTarget =
-  | { kind: 'note'; path: string }
-  | { kind: 'folder'; path: string }
-  | { kind: 'compilation'; path: string }
-  | { kind: 'position'; path: string; anchor: TextAnchor }
-  | { kind: 'url'; url: string }
-  | { kind: 'query'; query: SavedBookmarkQuery };
-interface TextAnchor {
-  version: 1;
-  kind: 'heading' | 'paragraph';
-  exact: string;
-  prefix: string;
-  suffix: string;
-  fromHint: number;
-}
-interface SavedBookmarkQuery {
-  q: string;
-  kind: 'note' | 'compilation';
-  tags: string[];
-  folders: string[];
-  descendants: boolean;
-  tagMode: 'any' | 'all';
-  status: string | null;
-  showHidden: boolean;
-  neighbors: boolean;
-  view: 'flat' | 'list' | 'card' | 'kanban' | 'graph';
-  sort: { field: 'updated' | 'created' | 'title' | 'status'; order: 'asc' | 'desc' };
-}
-```
+`packages/core/src/outline.ts` should export only filename/type helpers needed by browser and server, not an item database.
+Add its browser-safe export in `packages/core/package.json` and `src/index.ts`.
+Extend `NoteItem.kind`, `ParsedNoteFile.extra.kind`, `NoteListItem.kind` to `'compilation' | 'outline'`; absence continues to mean ordinary note.
+Extend `NoteKindFilter`, `NOTE_KIND_FILTERS`, `entryKind` and `NoteFilters.kind`.
+Keep `entryKind` filename fallback for remote drafts that have never passed through the server.
+`parseNoteFile` uses `parseNoteContent` for outlines, adding only the kind and an outline-aware title fallback that strips the complete suffix when no title/H1 exists.
+`serializeNoteFile`, tag replacement, frontmatter preservation and timestamps stay on the ordinary Markdown branch.
+No required IDs, node count schema, unique-link constraint or legacy anchor metadata is attached to outline items.
 
-### Scope, paths, and limits
+Update `classifyResource` and `ResourceType` consistently, plus every classifier consumer that distinguishes notebook content from assets/product files.
+Use the existing note/folder path protections; do not loosen them to accommodate the new kind.
+Outline files already satisfy `NOTE_EXTENSIONS` and `isNoteFile`; exercise both local catalog and remote index paths rather than adding another scanner.
 
-- `notebookId` is the logical owner, never a repository URL or filesystem path.
-- All persisted `path` and query `folders` values are **notebook-root-relative**.
-  Store `chapter/a.md`, not `notes/books/chapter/a.md`, an absolute path, or a browser route.
-  Empty string is allowed only for a folder target or folder filter meaning the notebook root.
-- Convert to repository paths at adapters using the notebook's configured root.
-  Validate segments before joining; reject absolute/drive-qualified paths, URL-scheme prefixes, backslashes, control characters, empty interior segments, `.` and `..`.
-  Keep case and Unicode unchanged; never URI-decode an already parsed stored path a second time.
-  Recheck ownership against the complete repository notebook scope, including a more-specific nested root; a relative path must not enter a different notebook, asset alias, protected metadata, or Agent directory.
-- `version: 1` and `anchor.version: 1` are literal schema versions.
-  Unsupported versions, malformed YAML, unknown properties, invalid IDs, or invalid group references are visible errors, not an empty page or a migration opportunity.
-- Use existing YAML parsing with bounded aliases, plus limits before and after parsing.
-  Proposed implementation constants: 1 MiB serialized YAML per repository, 500 bookmarks total, 100 groups total, at most 100 notebook collections.
-  IDs use existing `[A-Za-z0-9_-]{1,64}` convention; notebook IDs are 1–128 characters; labels are trimmed nonempty strings of at most 120 characters; paths at most 2048 characters.
-  Query text is at most 1000 characters; at most 100 tags and 100 folders; each tag/status at most 128 characters.
-  URL is at most 4096 characters; exact anchor is nonempty and at most 8192 UTF-16 code units; prefix/suffix at most 128 each; hint is a nonnegative safe integer.
-  Never silently truncate an anchor or query to fit; ask the user to select a smaller passage through an in-app validation message.
-- A missing file reads as `{ version: 1, notebooks: [] }` without creating a file.
-  Removing the last bookmark persists a valid empty document on an explicit save; reads and target checks never write.
-- Notebook collection IDs are unique in the page; group IDs and bookmark IDs are unique within their owning collection; each non-null `groupId` must identify exactly one group in that collection.
-  UI/query identity is the pair `(notebookId, bookmarkId)`, additionally scoped by repository for transport/cache state.
-  IDs are stable across rename, re-target, grouping, ordering, and unresolved states.
-  Labels are explicit, with creation prefilled from the current target title; subsequent target title changes do not overwrite the label.
-- Group array order is presentation order.
-  Bookmark array order is the stable manual order; each group's list and the ungrouped list are projections preserving array order.
-  Moving within a list repositions the entry; moving to a group appends after that group's last entry unless a specific insertion position is supplied.
-  Group deletion appends its members after current ungrouped entries in their prior relative order, removes only the group, and sets member `groupId` to null.
-- Duplicate target identities are not a reason to discard a file or existing entries.
-  Relocation can converge two folder references; preserve both IDs rather than losing user labels.
-  Creation and re-target operations reject a newly equivalent target and return the existing ID for the UI's Edit existing action.
-  An unchanged target may still have its label/group/order edited even when a previous relocation produced equivalent entries.
-- Unknown notebook IDs found in an existing repository document remain semantically intact in the parsed page; never filter them out while reading.
-  They have no navigable owner in the current manifest and are not offered for creation.
-  Writes may preserve these collections unchanged but cannot create or alter an unconfigured collection.
+Add `NotebookFacets.outlines` using `KindFacets`; adjust core accumulation, web `mergeNotebookFacets`, default/fallback records, draft overlays and tests together.
+Ordinary-note counters must not accidentally include outlines after replacing an old `!isCompilationEntry` condition.
+Keep compilation duplicate-ID validation restricted to compilation entries; an outline may have ordinary frontmatter named `id` without participating in that registry.
+Keep agenda/graph on their existing non-compilation Markdown path, now explicitly including outlines; default ordinary-note queries and dynamic compilation sources still query `kind: note`.
+Explicit lookup/open and kind `all` include outlines.
+Existing compilation selection/filter semantics must not expand by accident merely because outlines end in `.md`.
 
-### Domain operations
+### Web creation, browsing and persistence
 
-Expose `emptyBookmarksPage`, `notebookBookmarks`, `addBookmark`, `updateBookmark`, `removeBookmark`, `addBookmarkGroup`, `renameBookmarkGroup`, `removeBookmarkGroup`, `moveBookmark`, and `moveBookmarkGroup`.
-Each returns a validated next page or a typed error; no operation mutates notes or opens a URL.
-Use a supplied/generated ID at creation (`crypto.randomUUID` at the caller is sufficient).
-`updateBookmark` keeps identity and all omitted fields, including label/group/order when re-targeting.
-Export `bookmarkTargetKey` for canonical target identity and `findEquivalentBookmark` for the Add flow.
-The key includes kind and canonical target, excludes hints, IDs, label, group and ordering, and retains query sort/view and anchor context.
-For position duplicates, when both candidates resolve against the same saved body, identical kind/path/resolved range is also equivalent even if context changed since the first capture.
-Do not equate two unresolved anchors using approximate text or line numbers.
+Parameterize `useNewNoteDialog`/`NewNoteDialog` with the small creation variant `'note' | 'outline'` and an optional initial Markdown body for current-content insertion.
+Use the same title, notebook/folder ownership, status/tags, collision lookup, `createOnly`, write permission and error lifecycle.
+A blank outline starts with `- `; do not apply arbitrary normal-note templates to overwrite that initial structure.
+A current-content-created outline starts with `- ` plus the prefilled ordinary link.
+Do not infer an outline from the current selected filter for unrelated New note actions.
 
-## Metadata registration and write protection
+Add New outline alongside New note/New compilation in `NoteToolbar`; add an Outline kind row/filter adjacent to Compilation in `Sidebar`, with document counts, not item shortcuts.
+Extend `filter-query`, facets and browse hooks so outline kind has native listing, search, status/tags, paging and view selection, without ordinary-folder index promotion.
+Reuse `NoteEditorHost`/`NoteEditor` for routing, Focus, zoom and graph-expanded editors; no `OutlineView` component with its own document controller.
+The suffix enables the scoped keyboard profile and small help/actions inside `MarkdownEditor`.
+Keep title/status/tags/frontmatter, draft recovery, save errors and Changes exactly where native note users find them.
+Do not carry `useBookmarks` autosave into the new type.
 
-Register `BOOKMARKS_DOCUMENT` in `WORKSPACE_DOCUMENTS`, with scopes `['bookmarks', 'folders', 'files']` and new `CommitScope` member `bookmarks`.
-Add `bookmarks` to `RemoteSource.commitChanges`' document-only scope exclusions so it cannot write arbitrary note paths.
-Do not add it to `NotebookConfig`, `WorkspaceConfig.schema_version`, or workspace migration scripts.
+Document identity remains `NoteRef`/`noteRefKey` plus existing repository query scope.
+Keep destination/source identity and editor ownership in deferred callbacks; a late load/insert from repository A must not act on B at the same path.
+An extension-changing raw file-manager rename intentionally changes derived kind on refresh; ordinary rename controls retain the compound suffix by default.
 
-Root storage already falls outside ordinary notebook scans, and dotfiles are hidden by [classifier](../../../packages/core/src/classifier.ts) and [folder content rules](../../../packages/core/src/folders.ts).
-Make protection explicit at the file-manager boundary: a registered workspace-document path must never be returned by `managedNotebook`, even when notebook aliases could reach it.
-Its bytes are loaded as auxiliary metadata for relocation, not exposed as a selectable/editable file.
-Reject direct create/write/upload/move/delete targeting that file and directory operations that would encompass a protected document.
-Verify note read/save/delete and raw-file endpoints cannot be used to bypass this guard; protect the exact registered path in local MCP note mutation handlers too, whose existing `assertSafeRepoPath` only checks filesystem containment.
-Keep explicit Git Changes diff/stage/commit/restore working for metadata; these are intentional version-control actions, not file-manager editing.
-Git restore/pull and external Git operations trigger revalidation rather than rename inference.
+## Editor interface and source operations
 
-Add an optional `WorkspaceDocument.validateChange(current, next, notebooks)` hook for stateful bookmark validation.
-It checks configured ownership of changed collections, preserves unknown-owner collections unchanged, validates newly changed target definitions and duplicate additions/re-targets, and never requires every retained target to exist.
-Call it from both `createWorkspaceDocumentRouter` PUT and `RemoteSource.commitNotes` document handling.
-For the bookmark document, decode the existing raw file before any replacement, even if its revision matches: a caller must not overwrite corrupt/unsupported data with an empty page.
-Do not use Focus's `own` filtering behavior for bookmarks; dropping references is forbidden.
-At the lower remote write boundary, validate the bookmark schema, size, scoped target paths and ownership for relocation writes as well.
-Relocation is an explicit trusted planner operation and may preserve converged targets; an ordinary edit cannot use that exception to add duplicates.
+### One command seam, two existing adapters
 
-## HTTP and persistence contract
+Add a bounded web helper such as `lib/outline-editing.ts` accepting source text, selection and command, returning source edits plus next selection or `not-handled`.
+Use the installed Markdown syntax tooling (Lezer via the existing CodeMirror Markdown package) to locate list items, paragraphs, fences and subtrees; do not introduce a persistent JSON tree.
+This pure operation is the interface; the CodeMirror transaction and textarea selection/change handlers are its two concrete adapters.
+Commands own item boundaries, continuation indentation and selection mapping once instead of duplicating string manipulation in both editors.
+Use ordinary Markdown list markers/content columns; emit two-space child indentation for new default `-` items while respecting existing marker widths in pasted ordered lists.
+Do not reserialize the whole document or normalize unrelated whitespace, CRLF, code or frontmatter.
 
-### Collection endpoint
-
-Mount `GET/PUT /api/bookmarks` through the existing workspace-document adapter in `apps/local-server/src/app.ts`, before the local/remote branch, matching `/api/focus-page`.
-Use explicit `repository` from `repositoryFor(notebookId).id` in every new browser call; never default a notebook action to the home repository.
-The adapter may retain its existing home default for backward consistency, but bookmark UI clients must not use it.
-Mount `/api/bookmarks/resolve` before the document router and ensure the resolver does not pass through local middleware that mistakes every POST for a write; it must remain usable on read-only branches.
-
-| Request | Response and rules |
+| Command/context | Required source edit |
 | --- | --- |
-| `GET /api/bookmarks?repository=<id>` | `200 { page, revision, path: '.mygitnotes-bookmarks.yaml', writable, repository }`; reads the repository's full page once. |
-| `PUT /api/bookmarks` with `{ repository, revision, page }` | `200` with the same envelope for the exact saved page and its new revision; local saves leave normal Git changes, remote PUT uses one atomic commit. |
-| Remote Changes commit: existing `POST /api/notes/commit` | Include `{ path: BOOKMARKS_FILE, page, base }` in `documents`, the selected repository, its expected commit revision, and existing note changes/message. No second bookmark commit protocol. |
+| Enter at nonempty item end or annotation end | Insert sibling marker after that item's entire subtree, at the item's marker column. |
+| Enter inside a text line | Split the selected text line at the caret; move its trailing text to the new sibling; retain other annotations and descendants on the original item. |
+| Empty item | Use native Markdown exit/outdent behavior, covered separately from nonempty-item sibling creation. |
+| Shift+Enter | Insert newline plus current item content-column indentation, without another marker; resulting paragraph belongs to the same list item. |
+| Tab | Move the current/selected sibling subtrees one level beneath their preceding sibling, shifting their annotations/descendants together. |
+| Shift+Tab | Promote selected sibling subtrees one level, preserving internal hierarchy. |
+| No previous sibling / no parent | No content change; do not invent a parent node. |
+| Outside a list, fenced/code block, structurally ambiguous multi-block selection, IME composition | Return `not-handled`; native behavior remains available. |
 
-Reject unknown request properties for the new resolver and collection request schema.
-Return `400` invalid request/target/scope, `403` read-only or unsafe path, `409` stale revision or duplicate target (include `code` and `existingId` for duplicate), `413` limits, and `422` corrupt/unsupported stored data.
-Repository authentication/network/rate-limit failures retain their appropriate `401/403/429/5xx` semantics and retry information; they are never converted into an empty collection.
-A duplicate detected before persistence keeps the draft and offers the existing entry rather than automatically removing either entry.
+`Enter` on a plain text item has identical semantics to `Enter` on a link-containing item.
+Children are never inferred from link presence or absence.
+Continuation indentation alone is not a child: a child has a list marker at its indentation.
+No HTML comments, hard-break escapes or proprietary annotation syntax are needed.
 
-Local revision is `revisionOf(raw)` (`missing` for absence), read from exactly the raw content decoded into the page.
-Inside `serializeWorkspaceMutation(root)`: check main branch, read/decode current raw, compare revision, validate change, and atomically replace the regular file.
-The new file's revision comes from the exact serialized bytes written, not a later reread.
-Use existing regular-file/symlink checks and `writeFileAtomic`; preserve rollback semantics when multiple files change.
-Local save success means worktree persistence, not commit/push.
+Install outline commands above Markdown's high-precedence Enter binding only when they handle list context; coordinate with completion so unmodified Enter first accepts a selected completion.
+The installed `@codemirror/lang-markdown` already supplies `insertNewlineContinueMarkup`; default commands bind Enter/Shift+Enter to indentation-aware newline, but neither guarantees the approved same-item annotation contract.
+The installed `indentWithTab` is generic line indentation, not sufficient evidence for subtree semantics.
+Do not claim the new behavior exists because these packages are installed.
 
-Remote revision is the repository snapshot's commit SHA.
-Obtain one fresh snapshot for write preflight; read current document and all needed targets from its immutable blobs; validate expected revision and scope; pass that **same snapshot** into `commitChanges`.
-Never read content at A, refresh to B, and return B with A's page or plan.
-GitHub uses one tree/commit plus non-force ref update; GitLab uses one actions commit with file-version preconditions and branch recheck.
-Do not implement a second provider client or write to the deployment's primary repository by assumption.
-The existing GitLab adapter is not a general compare-and-swap on unrelated branch changes after its final branch check; its atomic changed-file version checks protect bookmark overwrites, and tests must distinguish that guarantee from whole-branch serialization.
-No silent retries or automatic overwrite on any conflict.
+Raw textarea must use the same logical edits/selection mapping and actual undoable input behavior; verify real browser undo, not only `onChange` output.
+If browser-native programmatic edits do not enter its undo stack, add a narrowly scoped raw-edit history adapter for outline commands rather than replacing the editor.
+Preserve the existing CRLF selection/reveal fixes: `MarkdownEditor.tsx` currently imports these helpers from `bookmark-anchor.ts`; retain them or extract generic text-offset helpers with regression tests before deleting old position UI.
+Do not erase those fixes as bookmark-specific dead code.
 
-### Target resolution endpoint
+Respect read-only and composition before key interception.
+CodeMirror Tab escape behavior and a raw Escape-then-Tab escape must remain available; document it in the short editor hint.
+Add indent/outdent buttons using the existing formatting-toolbar group and `ui-icon-button`, restoring caret focus after activation.
+Keep normal notes' Tab behavior and raw formatting/completion unchanged.
 
-Add `apps/local-server/src/bookmarks.ts` for `POST /api/bookmarks/resolve`.
-Request: `{ notebookId, targets: Array<{ id, target }> }`, 1–100 targets with unique request IDs; `target` uses the same strict target schema.
-The endpoint is read-only despite POST and needs read access, not write permission.
-It supports current stored bookmarks and unsaved picker candidates without persisting either.
-Response: `{ notebookId, repository, revision, results: Array<{ id, resolution }> }`.
-Remote `revision` is the single fresh repository snapshot used for the batch; local `revision` is an empty repository revision, not a bookmark write token.
-Every resolved position includes `contentRevision`, defined as SHA-256 of the LF-normalized saved body; it identifies the body used for its range, not permission to skip re-matching the mounted editor.
+### Same-document drag adapter
 
-```typescript
-type BookmarkResolution =
-  | { state: 'resolved'; target: BookmarkTarget; range?: { from: number; to: number }; contentRevision?: string }
-  | { state: 'unresolved'; reason: 'missing-note' | 'missing-folder' | 'missing-compilation' | 'invalid-compilation' | 'missing-position' | 'ambiguous-position' | 'missing-query-folder' }
-  | { state: 'unavailable'; retryable: boolean }
-  | { state: 'external'; url: string };
-```
+User-approved addition after planning: live outline items expose native-consistent drag handles and a visible drop marker/indent level.
+Inspect existing project drag-and-drop affordances before implementing the editor adapter.
+Derive item/subtree ranges from the current Markdown source, not a parallel tree model.
+The bounded source-command seam also accepts same-document subtree movement, reorders or nests the entire item with annotations/descendants, and rejects a target inside its own subtree.
+A completed drop dispatches one undoable CodeMirror transaction; cancel and read-only change nothing.
+No cross-document or cross-notebook drag is supported.
+Keep keyboard and touch toolbar alternatives; add pure source preservation tests and real-browser handle/drop/undo/redo evidence.
 
-For unavailable repositories, the request may return the existing repository-level error envelope; the browser maps it to Unavailable/retry for every affected entry without changing persisted data.
-Within an available repository, a target is missing only if its complete current tree/local filesystem proves absence.
-A blob fetch failure or provider 404 after a tree lists a blob is Unavailable, not deletion.
-A directory in remote Git exists if represented by a tree entry or descendant; local empty directories also count.
-Compilation resolution verifies the path's compilation kind and parse validity without rewriting it or searching for a matching compilation ID elsewhere.
-Saved query folders must still resolve; do not remove a missing folder and accidentally widen the query.
-A query with zero matching notes is resolved, not broken.
-A URL is external/unverified and is never fetched.
+### Visual editing and link activation
 
-Batch duplicate note reads, limit remote blob-read concurrency to the established six-at-a-time pattern, and apply existing 5 MiB note read limits.
-Revalidate visible/expanded collections on load, Git refresh, file mutation and activation; chunk larger collections into bounded batches.
-Cancel/ignore stale async responses by repository, notebook, page generation and request identity.
-Derived resolution state stays in browser/query memory, never in YAML.
+Reuse existing source-on-active-line decorations; render no special folder/leaf icons or custom row forms.
+Continuation annotations appear on following lines at the item's content column; nested bullets supply the hierarchy visually in both modes.
+Keep the standard explicit open-link affordance, keyboard link activation when that affordance has focus, and editable source when the caret is in the text.
+`WorkspaceLinks` currently intercepts Enter/Space on `data-workspace-link` elements in capture phase.
+Ensure an active editable CodeMirror text span does not route before the editor receives an outline command; actual link anchors/read-only link elements still activate normally.
+Limit any shared fix to editable-text event handling and regress ordinary notes.
 
-## Exact document anchors
+Reuse `resolveWorkspaceHref`, `linkScope`, `WorkspaceLinks`, `noteMarkdownLink` and dirty navigation guards.
+For generated outline links/candidates, carry source notebook and restrict candidates to that notebook, with `kind: all` to include ordinary notes, compilations and outlines.
+Do not use the current global `candidateQuery` without a source scope: it currently queries `notebookId: all`, excludes by path alone and renders raw candidate keys by path.
+Add an optional scope to that existing candidate seam rather than creating another picker service; retain existing ordinary-note behavior outside this task.
+Pasted ordinary same-repository relative links retain native navigation behavior, with no new cross-repository protocol.
 
-### Capture and matching
+Suppress the existing bare-link-to-YouTube widget/render transform when `isOutlinePath(sourcePath)` is true, across live decorations and `renderNote` consumers.
+Outline links should cause no preview/image request just by rendering, including YouTube destinations.
+Unsafe destinations remain visible/editable source but cannot activate.
+Do not narrow the ordinary-note renderer's existing safe `mailto:`/protocol-relative behavior globally; the new UI generates only internal relative links and absolute HTTP(S), and dangerous schemes remain rejected everywhere.
 
-Anchor text is an exact slice of the parsed Markdown **body**, not rendered text, heading slug, frontmatter, or a line-number pointer.
-Normalize CRLF to LF for matching/capture only and keep a normalized-to-original offset map when revealing against a body that contains CRLF.
-Perform no whitespace collapsing, case folding, Unicode normalization, Markdown stripping, or approximate matching.
-Store up to 128 code units immediately before and after the selected source range.
-`fromHint` is useful for preview labels and checking the selected candidate during capture, never a tie-breaker during resolution.
+### Current-content insertion
 
-Expose `captureTextAnchor(body, range, kind)`, `resolveTextAnchor(body, anchor)`, `listBookmarkPositions(body, format)`, and an offset conversion helper.
-`resolveTextAnchor` enumerates all exact occurrences, including overlapping ones.
-One exact occurrence resolves even if surrounding context changed, so moving a uniquely identifiable paragraph succeeds.
-For multiple occurrences, require exact prefix and suffix matches at their immediate boundaries; zero or more than one surviving occurrence is unresolved.
-Empty context is allowed at a document edge but provides no distinguishing evidence.
-Return `missing-position` for zero exact matches and `ambiguous-position` for multiple non-uniquely-disambiguated matches.
-Never fall back to the nearest offset, first heading, first DOM match, or a title/slug lookup.
+Replace old bookmark note/compilation action with Add to outline.
+Use `WorkspaceDialog`, existing `Select`/`Button`/note candidate presentation for a destination chooser, not a new set of field styles.
+Show the prefilled link label/target as a preview; subsequent label edits occur inline in the destination editor.
+Offer existing outline documents in the source notebook and New outline through the parameterized native creation dialog.
 
-Heading capture uses the source span of the chosen outline heading, including the ATX marker or setext underline, not its display label.
-Move the existing outline parser into a browser-safe core helper if needed and re-export it from `lib/note-navigation.ts` so outline behavior has one owner.
-Paragraph capture uses an exact contiguous source range within a prose block; the default picker offers whole blank-line-delimited prose blocks, preserving Markdown/list/quote syntax in the captured slice.
-Exclude fenced/indented code, frontmatter, and separator-only blocks from paragraph picker candidates.
-An editor selection wholly within one prose block can select a smaller range; reject selections across separate blocks or code with a clear hint and retain the picker alternative.
-Markdown/MDX headings and paragraphs and plain-text paragraphs are supported; the candidate picker shows a source excerpt so inline markup is not misrepresented as rendered selection text.
-Use existing source parsing/`marked` where helpful, but source spans must be taken from the original body, not found by searching rendered text.
-Tests establish blank lines, code fences, setext, inline formatting, CJK, CRLF, lists/quotes, and repeated blocks before UI integration.
+After guarded source navigation, open the selected destination through existing note routing and wait for its owning editor session to be ready.
+Send a consumed-once insertion request keyed by destination `NoteRef`, repository/source generation and request ID through existing editor orchestration; reuse the `MarkdownEditorHandle.insert` seam.
+Append a top-level item at a safe Markdown block boundary; if EOF is inside an unclosed fence/ambiguous block, open and focus the editor with an explanatory error instead of inserting into code.
+The insertion changes the mounted session's current body, including any recovery draft, not a list row or previously fetched body.
+Save through `handleSaveNote`/normal editor lifecycle; preserve later edits and do not create an independent API append protocol.
+A staged new source note may be linked within the existing draft lifecycle; do not label that link committed or force a remote commit that the user did not request.
+Read-only, cancel, failed source flush, destination disappearance and rapid notebook switches consume no insertion.
 
-### Save-before-capture boundary
+## Legacy compatibility and additive import
 
-1. Snapshot the requested range and source text before opening a menu steals editor selection.
-2. If the owner editor or its staged remote note is dirty, show an in-app Save first/Cancel confirmation with the local versus remote effect stated.
-3. Flush the specific note via `flushEditors([noteRefKey(note)])` and require success.
-   For local workspaces, await the actual worktree save and reread the saved note.
-   For remote workspaces, flushing only stages a draft: explicitly commit that selected note using the existing `commitWorkingNotes`/quick-commit path, and await success before reading it again.
-   This includes newly created notes; a staged-only new note cannot supply a synchronized position target.
-4. Re-resolve the originally requested slice against the saved body using exact text/context; if it no longer uniquely identifies the selected range, keep the dialog open and request a fresh selection.
-5. Capture the final anchor from that saved body, then add the bookmark to the document draft/save lifecycle.
-   If the note commit succeeds but bookmark save later fails, report the partial outcome honestly; never claim the bookmark was synchronized.
+### Remove the old product surfaces without unprotecting data
 
-Read-only users may navigate an anchor but cannot run its capture/write flow.
-At activation, use the saved target body for initial resolution and resolve again against the actual editor session content before revealing.
-A dirty editor must not use offsets computed from a different committed body; flush through the established navigation guard or retain the editor and show the location warning.
-Reveal through `MarkdownEditorHandle.revealRange(from, to, true)` after the correct note/editor owner has mounted.
-Thread a consumed-once request containing bookmark identity and anchor, not a global DOM query or persistent offset.
-This works in raw/live, zoom, and borrowed Focus/graph editor hosts without changing Markdown or adding rendered IDs.
-An unresolved position offers Open whole note and Re-target; opening the note must not display a successful-location indicator.
-
-## Saved query and URL canonicalization
-
-`canonicalizeBookmarkQuery` is a pure strict validator/canonicalizer in core.
-It accepts the explicit saved fields above, fills defined defaults at capture, sorts/deduplicates set-valued tags/folders deterministically, and preserves query text, status case and tag case as the existing filters do.
-Sort/view participate in identity; array order for tags/folders does not.
-Do not silently trim or rewrite query text in ways that alter the current search behavior.
-
-`captureBookmarkQuery(filters, sort, notebook)` in web translates `tag` to `tags` and repository-root folder filters into notebook-relative folders.
-Reject `allNotebooks: true`, a foreign folder, or an effective notebook scope of `all` with a visible hint to choose one notebook first.
-Do not quietly convert a global search into a partial notebook query.
-The persisted schema has no notebook selector, `allNotebooks`, origin, route URL, pagination, Focus, pane sizes, dialogs, or cached results.
-Any supplied unknown field is rejected by core/API validation.
-
-`bookmarkQueryRoute(notebook, query)` builds a clean route from `notebookRoute` and `writeFilterQuery` rather than merging current location parameters.
-Restore every saved filter, view and explicit sort order, resetting transient pagination/focus/returnTo state.
-For `view: graph`, use the existing `/graph?notebook=...` navigation semantics without losing the saved filters; do not rely on an intermediate legacy redirect to retain state.
-Add explicit sort-field/order parameters to the web route codec and teach `useNoteSort` to prefer a valid route sort over its local-storage default, so activation/reload/back navigation preserve saved sort.
-Existing URLs without sort keep current behavior.
-When graph neighbors are enabled, restrict the graph's nodes/links to the owning notebook before neighbor expansion; the current `selectFilteredGraph` can otherwise include cross-notebook neighbors.
-Run the current note query against current content; never persist result IDs or a query revision.
-
-`canonicalizeBookmarkUrl` uses `new URL` with no base, accepts only `http:`/`https:`, requires a hostname, and rejects credentials, backslashes and control characters before parsing.
-Use its serialized absolute URL as identity (standard host/default-port normalization); preserve query order and fragments rather than guessing website equivalence.
-No preview, favicon, DNS lookup or health request.
-Activate through a real `<a target='_blank' rel='noopener noreferrer'>` from the user's click, avoiding popup blockers and opener access.
-
-## Relocation and deletion coverage
-
-Change the registry relocation seam to receive `Pick<NotebookConfig, 'id' | 'root'>` instead of only notebook ID.
-Adapt Focus/Study callbacks with the same existing behavior and pass the notebook object from both planners.
-Bookmarks can then translate relative paths to repository paths, apply the planner's exact path mapping, validate ownership, and translate back.
-Do not store a redundant notebook root in bookmark YAML just to support relocation.
-Export `relocateBookmarkPaths(page, notebook, move)` and a small `bookmarkRelocationChange(reader, snapshot, notebook, move)` adapter for the shell path.
-Only same-owner note/folder/compilation/position paths and query folder filters change; anchors, IDs, labels and order remain identical.
-Prefix mappings must use full path-segment boundaries (`one` never matches `one-more`).
-
-| Entrypoint | Existing path | Required treatment |
-| --- | --- | --- |
-| Note/compilation move action, rename and file manager move | `useFileNavigation.moveNoteAction` → files dialog / `components/files/useFileManager.ts` → `POST /api/files`, command `move` → `planFileChange` | Registered bookmark auxiliary file participates in the same plan/apply or commit. Rename is this same operation, not note metadata title editing. |
-| Bulk note move | `app/useBulkNoteActions.ts`, `runBulkMove` → sequential `mutateFile(kind: 'move')` calls with each returned revision | Each individual note plus affected metadata moves atomically. Preserve the existing partial-batch reporting and refresh all successful path maps after a later failure; do not claim the entire bulk loop is one transaction. |
-| Folder drag/nest/reorder | `FolderTree` → `POST /api/folder-manager`, command `move` → `planFolderChange` | Map folder target itself, descendants and all saved folder filters. Pure same-path reorder must not manufacture bookmark edits. |
-| Folder removal while keeping content | Folder action `delete` in folder planner, or `remove-directory` in file planner | This is relocation into an existing destination, not content deletion; map the source folder target/filter to the destination and move descendant references atomically. |
-| File-manager recursive deletion | `POST /api/files`, `delete-directory` | Retain all bookmarks verbatim; refreshed resolution marks missing targets/filters. No metadata pruning. |
-| File-manager note/compilation deletion | `POST /api/files`, `delete` | Retain references, refresh resolution after the existing successful operation. |
-| Direct local note deletion and undo | `DELETE /api/notes`, `POST /api/notes/restore` in `local-notes.ts`; `useDeletionUndo.ts` | Retain bookmarks on deletion and let restore re-resolve them. No bookmark rewrite or inferred rename. |
-| Remote UI deletion | `useDeletionUndo.handleRemoteDeleteNote` → `mutateFile({ kind: 'delete', ... })` → `POST /api/files` | Keep metadata untouched; revalidate after the commit. There is no remote `DELETE /api/notes` endpoint in the current app. |
-| Hosted MCP move/rename, including directory `mv` | `callWorkspaceRemoteTool` → `callRemoteTool` → `callNoteShell(..., 'mv', ...)` | Compute mapping from the already resolved final destination (including directory-destination basename rule); add bookmark document change to the same SHA-based commit, with the same original snapshot/revision. Preserve shell's current relative-link semantics. |
-| Hosted MCP deletion | `callNoteShell` `rm`, and `callRemoteTool` `delete_note` | Keep metadata unchanged and resolve on next load; protect metadata from direct access. |
-| Local MCP deletion | `handleDeleteNote` in `packages/mcp-server/src/tools/notes.ts` | Keep references; guard registered metadata paths. Local MCP currently exposes no `mv`/`cp` handler, so do not invent one. |
-| Copy/create/body edit/metadata title edit | File `create/upload/write`, shell `cp/write/append/edit`, note save, compilation save, tag/status updates | No path relocation or bookmark duplication. Revalidate anchors after body edits and compilations after validity changes. |
-| Git restore/pull, user filesystem edits, manifest-root edits | Git routes and worktree watcher | Revalidate on load/activation; do not guess path correspondences or rewrite bookmark data. |
-
-`app.ts`'s method/operation loop handles asset operations, not note deletion; test the actual remote file-manager path used by `useDeletionUndo`.
-Asset/R2 and Agent skill moves are not bookmark target types; their file writes may still alter note bodies, so anchor resolution refreshes, but no new bookmark type or relocation mapping is needed.
-
-The current MCP shell permits transfers between notebooks in one repository, unlike the UI file planners.
-Do not extend a bookmark across its owner boundary or silently migrate it to another notebook.
-For such a transfer, the owning notebook observes removal: retain its original reference unresolved, while same-notebook moves follow their destination.
-Destination notebook bookmarks and all other repositories remain untouched.
-This is the deletion/same-notebook rule applied to the existing broader shell operation, not permission to invent cross-notebook targets.
-An explicit re-target may only choose another target within the original owner.
-
-### Atomicity and stale protection checklist
-
-- Include present bookmark metadata in folder/file snapshots and in their revision computation; the registry already drives auxiliary file loading.
-- Do not load an absent bookmark file as an empty placeholder that then appears in the output as a new file during a move.
-- File snapshots must load actual auxiliary bytes on movement paths, not the zero-byte collision placeholders used for untouched files.
-- Decode/validate a present bookmark document before planning reference-affecting moves; corrupt/unknown versions fail before any source mutation.
-- The local snapshot, revision comparison, planner, apply and rollback stay inside one `serializeWorkspaceMutation(root)` action; do not nest that queue recursively.
-- The remote folder/file snapshot loaders should return their captured snapshot revision explicitly, rather than deriving it from a later potentially refreshed reader state.
-  Pass that revision and known snapshot through the final commit where applicable.
-- Existing file count (200), text snapshot (32 MiB) and commit bytes (5 MiB) limits include bookmark changes; oversize fails without a partial relocation.
-- A concurrent bookmark PUT changes the local metadata hash/stamp and invalidates a previously reviewed move revision.
-  A move changes the bookmark document and invalidates the old bookmark PUT revision.
-  Remote writes fail expected-head/content-base checks instead of reapplying a stale page to the new head.
-- Direct local note writes/deletes/restores and Git restore of this metadata should use the same worktree queue when they can interleave with a bookmark resolution/save or planner transaction.
-  Keep synchronous multi-file apply/rollback unchanged; this queue is process-local and is not an OS lock against arbitrary external editors.
-  Tests must not claim inter-process filesystem isolation beyond the existing application boundary.
-- Returning a new note revision after a move is not permission to attach it to a pre-move bookmark page; refresh the document snapshot or show a conflict.
-
-## Browser state, UX, and navigation
-
-### Document lifecycle
-
-Add a bookmark document client in `apps/web/src/lib/use-bookmarks.ts` and register it in `workspace-document-clients.ts`.
-Local edits follow the existing document recovery-draft/autosave-to-worktree behavior.
-Remote edits remain visibly pending in Changes and commit through `useWorkingNoteCommit`; the sidebar must distinguish Pending from Saved rather than claiming immediate Git synchronization.
-Retain failed drafts and their original `base/revision`; show Reload/review and explicit Discard, never silently replace them on conflict.
-
-Reuse `useWorkspaceDocument`, but fix/cover its relevant lifecycle holes while integrating bookmarks:
-
-- A late response for a previous repository must not populate a new notebook's collection or reenable write controls.
-- Snapshot page/revision/base must remain paired; unrelated repository-head refresh cannot rebase an old page automatically.
-- When an in-flight save finishes and another tab changed the stored draft, only carry later edits forward if they descend from the sent draft/base.
-  Otherwise preserve the newer draft with its original base and report conflict; do not stamp it with the successful request's newer revision.
-- A remote successful commit must preserve later edits or report a conflict rather than overwriting a different tab's state in `settleDocumentDraft`.
-- Reset or hide stale `writable` state when the repository becomes unavailable or changes, and stop autosave after load/conflict errors.
-- Failed note save/commit cancels position creation and keeps the selected candidate/dirty editor intact.
-
-The existing active-document list is scoped to the selected notebook's repository.
-Keep that architecture: the selected repository has one live editable bookmark controller, shared by its notebook collections.
-For other notebooks visible in the all-notebooks sidebar, use cached read-only document queries keyed by repository and render their sections from that snapshot.
-A mutation action on another notebook first performs guarded notebook selection, waits for that repository's live controller, then opens its editor dialog with the original target/ID.
-No mutation may act on a merely read-only cache entry or overwrite a document loaded by a different controller.
-Remote pending draft overlays for inactive repositories come from the existing keyed document draft store and remain visible as Pending; unknown/corrupt drafts show an error rather than falling back to server data.
-Refresh/invalidate both live and cached document views on save, commit, file changes, Git refresh and storage events.
-Add bookmarks to `useWorkspaceSync.documents`, `refreshDocuments`, Changes enumeration and pre-file-change draft guards.
-The guards must inspect pending bookmark drafts across all writable repository keys, not just the selected repository's mounted controller; an inactive notebook draft must not be silently overtaken by a move.
-
-### Components and entrypoints
-
-Create `components/BookmarksSection.tsx` and `components/BookmarkDialog.tsx`; keep orchestration in `app/useBookmarkActions.ts` and pure route/query conversion in `lib/bookmark-navigation.ts`.
-Do not put the full feature in `App.tsx` or `Sidebar.tsx`; those wire existing application callbacks and state only.
-Use existing Radix dropdowns, native/dialog wrappers, `NavTree` styles, theme tokens and translation keys.
-
-| Surface | Integration |
+| Existing area | Replacement / retention boundary |
 | --- | --- |
-| Sidebar | In `Sidebar.tsx`, each notebook's Bookmarks section appears immediately before its `FolderTree`, including the selected notebook's empty-folder state. Show ungrouped entries, ordered single-level groups, collapse toggles, status badges and Add bookmark. Collapsed state is local presentation, scoped by repository/notebook; labels/order/group membership are shared. |
-| Note actions | Add Bookmark note and Bookmark position to `NoteEditorToolbar`/the existing note action surface, passed through `NoteEditingProvider` shared props so zoom and embedded owners behave identically. Do not hide bookmark navigation for read-only notes; creation follows notebook write permission. |
-| Outline and selection | `NoteDocumentPanel` adds an action beside each heading; `MarkdownEditorHandle`/`LiveMarkdownHandle` expose current source selection without changing text. Provide a toolbar/menu action usable by keyboard and touch, plus the position picker as the non-selection alternative. |
-| Folder dropdown | Extend `FolderActions` with a separate bookmark callback rather than mapping it into `FolderAction` filesystem operations. Thread it through `FolderTree`. Bookmark activation never invokes `onManageFiles`. |
-| Compilation | Add through `CompilationHeader.extra` / `lib/compilation-actions.tsx`, plus picker; target is the compilation path, not a lane ID or a copy of its items. |
-| Save current view | Add a translated action to `NoteToolbar`; capture the complete effective Notes query and supported sort, not the debounced previous query. Reject global/foreign scope visibly. |
-| Add picker | Offer all six target kinds in one dialog; note/compilation candidates use existing paged query/lookup, folders use the notebook tree, positions first select a note then its saved source position, URL uses validated form, saved view uses the current scoped query. Show notebook ownership explicitly. |
-| Repair/edit | The same dialog edits label, group and target independently. Re-target preserves ID/order/custom label. Existing-equivalent detection offers Edit existing rather than replacing it. |
+| `BookmarksSection.tsx`, `BookmarkMenu.tsx`, `BookmarkDialog.tsx`, `bookmarks.css`, sidebar mounting | Remove rejected sidebar collection/forms and permanent Saved status after new native flows are connected. |
+| `app/useBookmarkActions.ts`, `lib/bookmark-context.tsx`, `use-bookmark-position.ts` | Replace note/compilation creation entrypoints with outline insertion; remove position activation/capture plumbing from `NoteEditor`, outline panel and toolbar. |
+| `FolderActions`, `FolderTree`, `NoteToolbar.onSaveView` | Remove old Add folder bookmark / Save view / group UI; do not invent new outline target forms for these legacy target types. |
+| `App`, `use-workspace-sync`, `workspace-document-clients`, `lib/use-bookmarks` | Remove the live editable collection controller and normal Changes registration; replace with explicit read-only legacy discovery/recovery client. |
+| `/api/bookmarks` and `/api/bookmarks/resolve` in `apps/local-server/src/app.ts` | Retire old authoring/resolution API; old PUT returns a typed 410 retirement response with no write, and old GET may remain a read-only compatibility/export response during this transition. New app uses import preview, not the resolver. |
+| `bookmarks.ts`, `bookmark-query.ts`, `bookmark-anchor.ts`, `bookmark-resolution.ts`, `bookmark-relocation.ts` | Keep strict legacy parsing/limits and relocation needed by existing data; stop using domain operations as active outline model. Delete only demonstrably unused code after call-site review. |
+| `WORKSPACE_DOCUMENTS`, `CommitScope`, remote document commits | Keep legacy filename reserved, validated and included in move snapshots; remove ordinary `bookmarks` authoring scope and reject legacy document edits through remote Changes as well as PUT. Allow only trusted existing move scopes to relocate it. |
+| Shared race, path/symlink and CRLF safeguards | Preserve them, including HTTP/MCP protections, unknown-owner retention and raw offset mapping; they are not invalidated by the UI rejection. |
+| `filter-query` sort fields / graph scope / shared draft settlement | Retain useful existing behavior used outside retired bookmark UI; avoid unrelated cleanup. Rename generic conflict messages away from bookmark wording where shared callers still use them. |
 
-Provide Move up/Move down controls for both groups and entries, plus a group selector (including Ungrouped).
-Implement drag reordering for groups and bookmarks as approved, delegating to the same domain operations.
-Move up/down and the group selector are the complete accessible/touch alternatives; drag must not be the only way to organize bookmarks.
-Use proper button names, visible focus, Escape/cancel, dialog focus return and menu-to-dialog focus sequencing, as `FolderActions` already does.
-Removal confirms which bookmark/group is being removed and explains group ungrouping; never call a note delete endpoint from this action.
-Include English and Traditional Chinese labels in `lib/i18n/en.ts` and `zh-TW.ts`.
+The compatibility registry entry is deliberately not deleted in the same release.
+Removing it now would stop legacy rename updates and could turn protected metadata into a file-manager/MCP mutation target.
+A future removal requires a separate deprecation decision and evidence that all remaining data has a safe disposition; import does not make that assumption.
 
-### Activation dispatch
+### Import interface
 
-`activateBookmark(owner, bookmark)` is the single dispatcher, with repository-aware resolution and stale-request cancellation.
-For internal targets, run the existing editor/file/Agent leave guard as appropriate; a failed save cancels navigation.
-External URL activation does not unmount the editor and needs no save/leave flow.
+Add a pure `planLegacyOutlineImport` in a browser-safe/core import module (for example `packages/core/src/outline-import.ts`).
+Inputs: validated legacy page, repository-scoped configured owner, explicit selected legacy IDs, destination `.outline.md` path and title.
+Output: proposed Markdown plus a report of converted IDs, retained IDs/reasons, groups and display order; no mutation of input.
+Server adapters own reading raw bytes, parsing, revisions, permission, path checks and writes.
+Escape text-only legacy labels so a label like `[x](...)` does not accidentally acquire link semantics; use `noteMarkdownLink` for actual internal references.
+Retain duplicate labels/targets and empty groups instead of applying old deduplication rules to freeform outline items.
 
-- Note: existing note-open callback/route with the owner notebook; respect Focus/zoom and current return context.
-- Compilation: existing compilation-open path through note routing/compilation actions.
-- Folder: clean owner Notes route with exactly that folder, `kind: note`, `allNotebooks: false`, and clear unrelated search/tag/status filters; use descendants true and current supported view/sort.
-- Position: open the note with a pending typed anchor request; resolve against the mounted editor body and reveal the unique range.
-- Query: apply the validated full filter/sort/view state in one guarded transition; invalidate/query current content through existing query hooks.
-- Unresolved: retain the sidebar entry, show the specific problem and Repair/remove; for a position whose note exists also show Open whole note.
-- Unavailable: show Retry and preserve the target without offering a false deletion diagnosis.
+| Legacy target | Import disposition |
+| --- | --- |
+| note / compilation | Relative Markdown link from destination to the original owner-root-resolved path, preserving explicit label even when the target is missing. |
+| URL | Safe validated HTTP(S) Markdown link; escape/encode Markdown-sensitive URL delimiters without changing query/fragment meaning. |
+| group | Text-only parent item; member order follows old bookmark array projection, group order follows group array, ungrouped items retain display order. It is now an ordinary node. |
+| exact position | Retain in source and report unsupported; no slug guess, whole-note downgrade or hidden metadata side channel. |
+| query/view | Retain in source and report unsupported; no deployment URL or new query syntax. |
+| folder | Retain in source and report unsupported for this first import; native folder fallback is not guaranteed equivalent to the old clean filtered-view behavior. |
 
-## Single-writer implementation tasks
+Expose a bounded preview/apply adapter, e.g. `POST /api/outline-import/preview` and `POST /api/outline-import`.
+Preview is read-only despite POST and remains usable on a read-only branch; it returns `writable: false` rather than requiring a mutation grant.
+Require explicit repository and notebook IDs, not a home-repository default.
+Preview reads the legacy raw file and destination existence from one snapshot, returns a source token, proposed content and converted/retained report, and creates nothing.
+The token pairs repository identity, source byte revision/hash, configured owner/root fingerprint and destination absence; remote preview also carries the captured commit SHA.
+The apply request sends those identities, selected IDs, destination/title and an explicit partial-import acknowledgement where needed; never trust client-supplied Markdown instead of recomputing the plan.
+Bound requests with existing legacy limits and note/commit size limits; reject unknown properties and cross-owner IDs.
 
-All tasks run sequentially in the upstream checkout; there are no parallel writing branches or downstream edits in this design.
-The parent owns any commits/integration; dependencies below mean the preceding working-tree step must be verified before the next starts.
-Do not leave stubs or defer a target type to a later release.
-No persistent process is needed for implementation planning.
-During implementation verification, start any persistent server only with `MonitorCreate`, record PID/port, stop it with `MonitorStop`, and verify its PID/port are gone; close only the browser session created for this work.
+Local apply runs within `serializeWorkspaceMutation`, rechecks branch/write permission, owner config, legacy raw revision and destination absence, recomputes the plan, then creates one ordinary note using existing safe-path/atomic file primitives.
+Reuse file-manager snapshot/planning/apply helpers where possible rather than inventing rollback infrastructure.
+Remote apply uses one immutable snapshot for legacy/destination reads and one existing `RemoteSource.commitChanges` commit for the new outline with expected head; use GitHub/GitLab provider adapters, never a second provider client.
+The confirmation explicitly says local import creates a worktree file, while remote import creates one commit; this is an intentional import operation, not the ordinary editor Save action.
+Do not modify/delete legacy bytes, consume browser drafts or overwrite a destination in either adapter.
+Return the created native note ref/revision and the same retained-item report.
+Source changes, owner/root changes, preexisting destinations, malformed/unsupported legacy data, invalid selected IDs, unknown selected owners, unsafe paths or read-only state fail before any write.
+Keep existing provider guarantees honest: GitLab changed-file preconditions plus branch recheck are not universal whole-branch CAS after the final check.
+No automatic retry to a new filename; after timeout, read the originally requested destination and compare before offering a retry.
 
-### 1. Implement the domain document and pure invariants
+Unknown-owner collections may be shown in the recovery report but are never reassigned or imported into the currently selected notebook.
+A known owner can import its representable entries while the complete original file, including unknown-owner records, remains intact.
+No representable selected entries means no output file, even if groups exist.
+Import does not create an import-status registry or mark the old file migrated.
+Re-importing to a different explicitly selected filename is a new user action; reapplying to the same filename is a collision, not an overwrite.
 
-- **Files/area:** new `packages/core/src/bookmarks.ts`, `bookmark-query.ts`, `bookmark-anchor.ts`; exports in `packages/core/src/index.ts` and `packages/core/package.json`; focused tests alongside core tests.
-- **Behavior:** All target schemas, limits, immutable operations, canonical identity/query/URL validation, exact capture/matching and position candidate spans.
-- **Constraints:** Browser-safe modules; no product URLs, Markdown mutation, fuzzy match, or dependency addition.
-- **Acceptance:** Unit tests cover every target, group removal/order, duplicates, invalid paths/URLs, canonical queries and ambiguous/moved/deleted anchors, including CRLF offset conversion.
-- **Depends on:** none.
+### Legacy browser draft recovery
+
+Before removing `bookmarksDocumentClient` from normal editable document enumeration, add a read-only recovery path for `github-notes:bookmarks-draft:<repository>`.
+Detect drafts across all configured repository IDs, not just the selected notebook.
+Keep the stored envelope byte-for-byte on read, including `page`, `base`, `revision`, `id` and ancestry; malformed/unknown-version drafts remain downloadable as raw JSON, never rewritten empty.
+Show saved-versus-draft provenance and a clear pending-recovery notice through an existing dialog/notice surface, not the old bookmark section.
+The bounded implementation can export the exact draft envelope and import the saved source separately; it must not offer a falsely reconciled draft import.
+Explicit discard confirms which repository's recovery draft is being removed; cancel removes nothing.
+Disable normal commit/autosave of that retired draft, and keep it visible as a recovery blocker rather than silently dropping it from pending changes.
+The new outline docs use only normal note drafts.
+
+## Relocation coverage and atomicity
+
+`*.outline.md` already flows through `relocateLinks` in `planFileChange` and `planFolderChange`.
+Test this rather than adding a second outline-link registry or relocation parser.
+Both source and target moves matter: rewriting links in an outline moved to a new folder and rewriting links from other notes/outlines to that file.
+Preserve reference-style destinations, fragments, Unicode/escaped labels and unrelated text/code; extend the existing shared rewriter only if a tested ordinary Markdown case fails.
+
+| Entrypoint | Required proof |
+| --- | --- |
+| Local/remote file move and rename | Destination file and all affected refs appear together; stale snapshot refuses; local fault restores original bytes. |
+| Folder move / removal keeping contents | Entire subtree and relative links rebase, including outline annotations; legacy registry participates as before. |
+| Bulk note move | Each sequential file transaction uses returned revision; partial-batch failures retain existing honest reporting. |
+| Hosted MCP `mv` | Add a snapshot-pinned Markdown relocation change set for moved outline source links and incoming links to moved targets; merge by final destination path with existing SHA moves/deletions before a single commit. |
+| Cross-notebook same-repository shell move | Preserve actual repository-relative target meaning where native links can represent it; never select another repository by equal roots. Existing legacy same-owner-only retention rule remains unchanged. |
+| Delete/restore and recursive delete | Referring outline Markdown is not pruned; restore resolves normally. |
+| Copy / title edit / Git pull or external rename | Copy retains source bytes under existing semantics; metadata title changes do not rename; external path changes are not inferred. |
+
+Shell `mv` already uses scope `folders` and one captured snapshot; extend that adapter instead of calling a second commit after movement.
+Do not change ordinary compilation YAML rendering or add unsupported shell compilation operations as part of this outline task.
+Keep path/count/byte limits, snapshot revisions, metadata protection and rollback intact.
+
+## Ordered implementation tasks
+
+All tasks are sequential in upstream; no independent parallel writers or worktree branches are planned.
+Dependencies below are verified prior tasks in the same working tree, not permission to branch from uncommitted work.
+The parent owns commits/integration and upstream-first delivery.
+Any persistent server/watcher must use `MonitorCreate`, never `&`/`nohup`; record PID/port, stop with `MonitorStop`, verify PID/listener cleanup and close only the owned `agent-browser --session <name>`.
+No task may modify user notebooks, secrets, `.env`, downstream checkouts or make live-provider writes during verification.
+
+### 1. Add the native outline kind and lifecycle contracts
+
+- **Files/area:** core `outline.ts` (new), `types.ts`, `note-file.ts`, `classifier.ts`, `note-query.ts`, `note-filters.ts`, `note-catalog.ts`, exports; web `filter-query.ts`, `note-facets.ts`, `draft-overlay.ts`, query types/fallback fixtures.
+- **Behavior:** Suffix-derived kind, portable Markdown parse/serialize, separate queries/facets, proper remote draft kind, unchanged compilation identity and default ordinary-note filters.
+- **Constraints:** No manifest migration, registry or new serializer; retain native read/write protections.
+- **Acceptance:** New core classifier/parser/catalog tests plus local/remote create/query/lookup/save/tag/status/delete/restore tests; compilation catalog/move tests unchanged and green.
+- **Depends on:** none; BASE `ac26edfe69120fac9eff904b5cb7f53e76966588`.
 - **Workspace:** sequential.
 
-### 2. Register metadata and implement safe collection/resolution APIs
+### 2. Implement source-based outline commands in both native editor modes
 
-- **Files/area:** `workspace-documents.ts`, `remote-source.ts`, `apps/local-server/src/workspace-document.ts`, new `apps/local-server/src/bookmarks.ts`, `app.ts`, `workspace-files.ts`, protection in core file manager and local MCP note mutations.
-- **Behavior:** Optional empty read, scoped GET/PUT, strict existing-file decode before overwrite, change validator, bounded snapshot-based resolution, repository-aware ownership and write permission.
-- **Constraints:** Fixed optional root document; explicit snapshot/revision pair; preserve unknown-owner collections unchanged; no metadata fetch for external URLs.
-- **Acceptance:** Local and both remote adapter tests for empty/round-trip, malformed/unsupported/oversize, read-only, unsafe paths, duplicate conflict, two writers, same-root notebooks in different repositories, and unavailable versus proven missing.
+- **Files/area:** new web `lib/outline-editing.ts`; `MarkdownEditor.tsx`, `LiveMarkdownEditor.tsx`, formatting toolbar and bounded help/i18n; `WorkspaceLinks.tsx` editable event handling; `markdown.ts` and live decorations for URL-only links.
+- **Behavior:** Approved sibling/annotation/subtree commands and same-document live-editor subtree drag movement, optional links, source editing, safe activation and no automatic YouTube preview.
+- **Constraints:** One Markdown source, existing editors, scoped behavior, IME/read-only/completion/undo/CRLF preserved, no global Markdown behavior rewrite.
+- **Acceptance:** Pure source-edit assertions and real mounted CodeMirror/textarea key events covering mid-line/end/annotation/children/empty/fenced cases, selection, undo/redo, tab escape and link click versus Enter editing.
 - **Depends on:** task 1.
 - **Workspace:** sequential.
 
-### 3. Integrate all relocation and protection surfaces
+### 3. Connect native creation, browsing and current-content insertion
 
-- **Files/area:** `folder-plan.ts`, `file-manager.ts`, `focus-page.ts`, `study.ts`, `workspace-documents.ts`, local-server folder/file snapshot adapters, `note-shell.ts`, relevant local note/Git queue boundaries.
-- **Behavior:** Notebook-relative bookmark refs and saved folder filters follow same-notebook moves in the same operation; all deletion paths retain refs; MCP moves include metadata in the same atomic commit.
-- **Constraints:** Preserve existing note-link/Focus/Study semantics; never create absent metadata during move; fail corrupt metadata before mutation; no new cross-notebook reference.
-- **Acceptance:** Full entrypoint matrix, directory removal/rename, nested paths, convergence, local rollback fault injection, remote tree/actions content, and concurrent move-versus-bookmark-write tests.
-- **Depends on:** task 2.
+- **Files/area:** `NoteToolbar`, `Sidebar`, `NewNoteDialog`, `useNewNoteDialog`, browse hooks, `App`, `NoteEditor`/shared editing context; new bounded outline action hook; scoped `note-completion` seam; EN/zh-TW labels.
+- **Behavior:** Multiple outline documents, native kind list and creation, existing save/Focus/zoom; destination chooser with prefilled current-content link and consumed-once mounted-editor insertion.
+- **Constraints:** Existing `Select`, `Button`, `WorkspaceDialog` and field styles; no target/group forms, no stale out-of-band append, no permanent Saved label.
+- **Acceptance:** Creation and action tests including dirty destination/source failure/cancel/repository race/read-only; native list/facet counts before and after remote staging/commit and reopening.
+- **Depends on:** tasks 1–2.
 - **Workspace:** sequential.
 
-### 4. Integrate document drafts and saved-query navigation
+### 4. Verify and close relocation gaps
 
-- **Files/area:** new `lib/use-bookmarks.ts`, `lib/bookmark-navigation.ts`; `use-workspace-document.ts`, `workspace-document-clients.ts`, `use-workspace-sync.ts`, `useWorkingNoteCommit.ts`, `useChangeDialog.ts`, `useFileNavigation.ts`, route/filter/sort helpers and graph scope.
-- **Behavior:** One editable controller per selected repository, inactive cached views, pending Changes integration, conflict-preserving snapshots, sort-aware saved routes and notebook-scoped queries.
-- **Constraints:** No optimistic revision rebasing of another tab's draft; bookmark draft must not evade move guards; no global query leakage.
-- **Acceptance:** Hook tests with deferred responses, repository switching, in-flight save/other-tab edit, commit settlement, failed writes, and route/query round trips including graph neighbors and sort after reload/back.
-- **Depends on:** tasks 2–3.
+- **Files/area:** core `folder-plan.ts`, `file-manager.ts`, `note-shell.ts` and a bounded snapshot relocation helper if needed; local-server file/folder adapters; existing move/rollback/MCP tests.
+- **Behavior:** Native Markdown refs from/to outlines track managed moves, including hosted shell movement, in the same transaction; retained legacy relocation still runs.
+- **Constraints:** No second commit, no cross-repository matching, no deletion pruning, no broad compilation changes.
+- **Acceptance:** Local fault-injection rollback; stale/move-vs-edit; GitHub tree and GitLab action assertions; source and target moves, nested directories, copy/delete/restore and compilation regression coverage.
+- **Depends on:** task 1, verified with task 3 lifecycle.
 - **Workspace:** sequential.
 
-### 5. Implement sidebar organization and all creation/repair entrypoints
+### 5. Add explicit legacy import and recovery, then retire old writes/UI
 
-- **Files/area:** new `BookmarksSection.tsx`, `BookmarkDialog.tsx`, `app/useBookmarkActions.ts`; `Sidebar.tsx`, `FolderTree.tsx`, `FolderActions.tsx`, `NoteToolbar.tsx`, note/compilation action wiring, `App.tsx`, both i18n files and bounded styles.
-- **Behavior:** All six target kinds, custom labels, groups, ordering, duplicates, remove/repair, per-notebook section before folders and a useful empty action.
-- **Constraints:** Existing dialogs/menus/theme, keyboard/touch alternatives, true read-only restrictions, no file deletion from bookmark operations.
-- **Acceptance:** Component tests enumerate all picker types and actions, grouping/ungrouping/order persistence, duplicate Edit existing, disabled writes, focus return, error/Pending/Saved states and multiple notebook sections.
-- **Depends on:** task 4.
+- **Files/area:** new core `outline-import.ts` and local-server adapter; `app.ts`, `workspace-documents.ts`, `remote-source.ts`; old bookmark components/hooks/context, workspace sync/document clients, normal commit boundary; existing dialog/notice surfaces.
+- **Behavior:** Read-only discovery/preview, additive create-only import, explicit partial report and exact exports; retained drafts/unknown owners; old UI and authoring paths removed or rejected.
+- **Constraints:** Never auto-migrate/delete original data or silently merge drafts; keep path protections, strict legacy schemas, rename relocation, useful shared race/CRLF fixes.
+- **Acceptance:** Pure conversion/report tests and local/GitHub/GitLab API tests for cancel/no-write, stale/source/owner changes, destination collision, invalid/unsupported data, unknown owner, partial acknowledgement, no convertible entries, provider failure and unmodified legacy bytes; browser draft recovery/export/discard-cancel tests.
+- **Depends on:** tasks 1–4; new flow and recovery must exist before old registrations disappear.
 - **Workspace:** sequential.
 
-### 6. Complete exact position creation and navigation across editor hosts
+### 6. Exercise the disposable reality anchor and update usage documents
 
-- **Files/area:** `MarkdownEditor.tsx`, `LiveMarkdownEditor.tsx`, `NoteEditor.tsx`, `note-editor/types.ts`, `NoteDocumentPanel.tsx`, editor toolbar/document-panel session wiring, `note-editing.tsx`, note/Focus navigation and bookmark actions.
-- **Behavior:** Capture from saved source after explicit local-save or remote-commit success, selection/outline/picker actions, mounted-editor exact re-resolution and range reveal, unresolved Open whole note/Re-target.
-- **Constraints:** No slug fallback or DOM text heuristic; do not treat remote staged notes as saved; no bypass of dirty/focus guards or duplicate editor ownership.
-- **Acceptance:** Tests for failed save/commit/cancel, selected text changing during save, dirty destination, note/repository races, live/raw reveal, repeated text ambiguity and zoom/Focus host reuse.
-- **Depends on:** tasks 4–5.
+- **Files/area:** adapt `scripts/qa-bookmarks-fixture.mjs` (retain name or rename callers consistently), new/updated tests, both READMEs, `docs/CONTEXT.md`, this folder's `verification.md`.
+- **Behavior:** Two disposable repositories with identical paths, multiple outlines, ordinary notes, compilation and legacy fixtures; independent parent native-browser journey and existing-UI screenshot comparison.
+- **Constraints:** No production/user-workspace migration; old UI human FAIL remains recorded; keep README troubleshooting last; obey process/browser cleanup rule above.
+- **Acceptance:** Targeted/full tests, builds/type/lint/format, parent browser evidence and explicit human appropriateness verdict remain separate; requirements not exercised remain unknown.
+- **Depends on:** tasks 1–5.
 - **Workspace:** sequential.
 
-### 7. Run integrated verification, document usage and hand off
+## Verification strategy
 
-- **Files/area:** core/web/server/MCP tests below; `README.md`, `README.zh-TW.md`, `docs/CONTEXT.md` for concise bookmark usage/terminology during implementation; `verification.md` in this spec folder belongs to the implementing/verifying run.
-- **Behavior:** Exercise the full approved reality anchor, review diff and data preservation, record local tests/build/browser/review separately.
-- **Constraints:** Disposable multi-repository workspace only; do not mutate user notes; parent owns review, upstream commit/push and only then downstream sync.
-- **Acceptance:** Commands and browser matrix below pass, every spec requirement has evidence or an explicit unresolved verification gap; no broad formatting churn, new packages, processes or temporary workspace left behind.
-- **Depends on:** tasks 1–6.
-- **Workspace:** sequential.
-
-## Verification map
-
-The commands below are the worker's plan, not evidence of execution in this design session.
-Run targeted tests after package build when browser/server tests import core's `dist`, then run the complete suite/build/lint with the repository's scripts.
-Use active LSP diagnostics for changed TypeScript files; an empty session cache is not a pass.
-
-```bash
-pnpm --filter './packages/*' run build
-pnpm exec vitest run packages/core/tests/bookmarks.test.ts packages/core/tests/bookmark-anchor.test.ts packages/core/tests/bookmark-query.test.ts
-pnpm exec vitest run apps/local-server/tests/bookmarks.test.ts apps/local-server/tests/bookmarks-remote.test.ts apps/local-server/tests/bookmark-relocation.test.ts
-pnpm exec vitest run apps/web/src/lib/bookmark-navigation.test.ts apps/web/src/lib/use-bookmarks.test.tsx apps/web/src/components/BookmarksSection.test.tsx apps/web/src/components/BookmarkDialog.test.tsx
-pnpm test
-pnpm build
-pnpm lint
-pnpm format:check
-```
-
-New test filenames are planned, not existing files.
-Extend the actual precedents: `packages/core/src/folder-plan.test.ts`, `packages/core/tests/file-manager.test.ts`, `compilation-moves.test.ts`, `workspace-documents.test.ts`, `commit-notes-concurrency.test.ts`, `sources.test.ts`, `note-shell.test.ts`, `gitlab-source.test.ts`, `apps/local-server/tests/focus-page.test.ts`, `folder-manager.test.ts`, `file-manager.test.ts`, `file-manager-remote.test.ts`, `notebook-repositories*.test.ts`, and `packages/mcp-server/tests`.
-Reuse `packages/core/tests/fixtures/github.ts` and `gitlab.ts` for deterministic provider transactions and race barriers.
-Add editor tests adjacent to `NoteEditor.*.test.tsx` and `useWorkingNoteCommit.test.tsx`; run existing Focus/Study and note navigation tests after changing shared seams.
-
-| Approved requirement | Required observation |
-| --- | --- |
-| All targets, groups, labels, order; optional legacy state | Domain round-trip and local/GitHub/GitLab API fixtures; absent metadata remains absent after GET and unrelated moves. |
-| Read-only/stale/corrupt/unsupported | HTTP responses and unchanged bytes/tree; corrupt current data cannot be replaced even with a matching revision; future versions never become empty. |
-| Snapshot/revision integrity | Controlled request barriers: read A, concurrent B, attempted write from A fails; no new revision attached to old page; provider head changes between preflight/publish fail without bookmark overwrite. |
-| Multi-repository isolation | Same note/root/bookmark filename in two repositories; mutation changes exactly the notebook's mapped worktree or provider project, never home/deployment origin. |
-| Atomic relocation through all entrypoints | Table above exercised for local, GitHub, GitLab and MCP; saved folder queries move too; fault after first local write restores notes and metadata; stale concurrent writers cannot drop refs. |
-| Deletion retains references | Direct note delete, file delete, recursive delete and MCP delete leave metadata unchanged; restore resolves again; group/bookmark deletion leaves all content byte-identical. |
-| Deterministic positions | Unique exact, duplicates with unique context, duplicates with identical context, moved paragraph, shifted lines/frontmatter, edited/deleted text, CJK and CRLF; no wrong range is revealed. |
-| Saved-query current results and scope | Create another matching note after saving, activate and see it; verify full filters/view/sort; global and foreign folders rejected; graph neighbor expansion remains in owner. |
-| URL/path safety | Reject `javascript:`, `data:`, protocol-relative URLs, credentials, control chars, traversal/symlinks and protected metadata; assert zero URL-preview/provider write calls on rejection. |
-| Dirty lifecycle | Local note persisted before capture; remote note explicitly committed before capture; failed/canceled save does not add bookmark; stale document drafts remain visible and recoverable. |
-| UI and accessibility | Real isolated desktop/mobile browser plus component tests: all entrypoints, keyboard Add/Edit/Escape, move up/down, group selector, label isolation, duplicate offer, unresolved repair, unavailable retry and read-only navigation. |
-
-For real browser verification create a disposable `main` workspace with two mapped repositories, duplicate paths, headings/paragraph fixtures and one compilation.
-Use the existing server configuration mechanism without touching real workspace mappings.
-Record browser session, server PID/port and screenshots/results for desktop and a narrow touch viewport.
-Drive actual UI: add each type, save/commit via normal lifecycle, reload, activate, reorder/group/ungroup, mutate target paths, remove/restore target, repair anchor and exercise dirty cancellation.
-Use a second tab/session to provoke a stale document/move conflict.
-Network/provider fault tests remain distinct from real browser evidence; do not claim live GitHub/GitLab deployment verification from adapter fixtures.
-Stop every monitor and close the owned browser session, then verify no owned listener/process remains.
-
-## Implementation record
-
-The source implementation and executed evidence are recorded in [verification.md](verification.md); earlier planning-only status paragraphs describe the design session, not the delivered source state.
-
-- Added an optional async `WorkspaceDocument.validateReferences(current, next, notebooks, readBody)` beside the planned synchronous change validator. Local reads execute inside the existing mutation queue; remote reads use the same captured snapshot. It rejects newly equivalent position anchors that resolve to the same exact saved range even when their stored context differs. Unchanged targets and trusted relocation retain existing identities.
-- Local MCP note-resource protection canonicalizes safe absolute/relative paths and internal symlink aliases before checking the workspace-document registry, including a not-yet-created metadata file below a linked directory.
-- Extracted small context/action/position hooks rather than a large App implementation. The App provider wraps an already built content element to avoid unrelated JSX indentation churn.
-- Native details retain collapsible lists; compact icon/name/ellipsis rows use the existing Radix folder-menu and native-dialog focus conventions. Accessible ordering stays in the menu and grouping uses a select dialog. This separately verified follow-up addresses the parent's initial density concern.
-- Review regressions established three additional boundaries: UI path ownership receives only notebooks from the owner's repository (identical roots in different repositories are not competing owners); local HTTP note/asset lookup rejects symlink resources/ancestors using the existing managed-file policy; raw textarea selection/reveal converts between LF control offsets and original CRLF body offsets. See verification for red/green and real-browser evidence.
-- The isolated fixture uses the actual current schema constant and two mapped disposable repositories; it has a browser-neutral smoke mode and cleanup handlers. No dependency was added.
-
-## Implementation friction notes
-
-- Tried: LSP diagnostics immediately after adding core subpath exports and building core.
-  Found: the active server retained old package/declaration resolution while fresh core, server and web compilers accepted the new exports; subsequent file checks were retriggered and stale findings identified explicitly.
-  Led by: proactive LSP diagnostics rule.
-  Classification: tool-cache gap; fresh compiler and runtime tests remain independent evidence.
-- Tried: draft race hook tests with a newly allocated mock translation function on each render.
-  Found: changing `t` restarted the load effect indefinitely; production's stable translator is part of the hook dependency contract.
-  Led by: none.
-  Classification: test-fixture gap; the mock now retains a stable translator and all 14 draft/query/commit tests pass.
+Implementation should first build package exports for server/web tests importing core `dist`, run targeted tests at each seam, then run `pnpm test`, `pnpm build`, `pnpm lint`, `pnpm format:check`, and fresh web/server `tsc --noEmit` with the repository project configs.
+Use active LSP path diagnostics on changed TypeScript; empty cached results are not proof.
+Extend actual existing suites: core `tests/compilation-catalog.test.ts`, `tests/compilation-moves.test.ts`, `tests/file-manager.test.ts`, `src/folder-plan.test.ts`, `tests/note-shell.test.ts`, `tests/bookmark-relocation.test.ts`, `tests/bookmarks-remote.test.ts`; server `tests/bookmarks.test.ts`, `tests/bookmark-rollback.test.ts` and notebook repository tests; MCP `tests/bookmark-protection.test.ts`; web `Sidebar.test.tsx`, `NoteToolbar.test.tsx`, editor/draft/save and workspace-link tests.
+New outline-specific suites should assert public parser/query/import contracts and actual editor adapters, not only mock a proposed command function.
+Deterministic GitHub/GitLab fixtures are not live-provider proof.
+The full browser matrix and honest results start in [verification.md](verification.md).
 
 ## Risks and open questions
 
-- No unresolved user-owned decision blocks implementation; storage filename, bounds, helper shapes and ordering mechanics above are engineering choices inside the approved contract.
-- The largest correctness risks are remote draft versus committed-note confusion, snapshot/revision mismatches, MCP movement bypassing planners, and query/anchor offsets leaking across notebook/editor switches.
-- Repository-root storage intentionally serializes concurrent bookmark edits across notebooks in the same repository; visible conflicts are preferable to another bespoke merge protocol.
-- Metadata derived from existing unknown notebook owners must survive untouched; validation must not borrow the lossy Focus ownership filter.
-- Exact anchors intentionally become unresolved after text edits or unresolved ambiguity; that is successful adherence to the contract, not a reason to add fuzzy recovery.
-- External filesystem/Git operations are outside the in-process local transaction queue; reload/revalidation is promised, cross-process ACID is not.
-- Browser-safe exports and current package-build prerequisites must be respected; do not pull server filesystem modules into the web bundle.
-- Review should specifically examine the changed shared document hook, low-level commit validation, relocation tests and permission isolation before the parent delivers upstream.
+- Native key behavior must be proven on actual CodeMirror and textarea, especially caret-in-link capture, annotated subtree splits, undo and IME; package defaults are insufficient.
+- Kind expansion touches facet defaults/draft overlays and broad `not compilation` branches; compilation uniqueness and ordinary-note filtering are regression-sensitive.
+- Hosted shell currently does not rewrite Markdown links; leaving it unchanged would violate managed outline relocation even if UI moves pass.
+- Pending legacy drafts and direct remote document commits can keep the rejected write model alive unless both are explicitly retired/recovered.
+- Ordinary Markdown cannot faithfully express old exact positions/views; this plan retains them rather than inventing syntax or silently approximating them.
+- No blocking user question remains for this scope; active conversion of unsupported target kinds or deletion of legacy archives requires a separate decision.
 
-## Design verification and friction notes
+## Friction Notes
 
-Read `decision.md` and `spec.md` completely and mapped every approved behavior to domain/API/UI operations, movement entrypoints and a concrete verification surface.
-Read current repository context and root clean-architecture, TypeScript, UI, Markdown and Git rules; no app-root AGENTS/GEMINI/CLAUDE file or project skill/rules tree was present in this checkout.
-The only artifact written by this planning task is this design.
-Production implementation, tests, build, browser verification and review remain unexecuted.
-Artifact checks found seven ordered tasks, 30 valid relative evidence links, no trailing whitespace and one final newline.
-`git check-ignore -v` confirms `.gitignore:40` ignores `docs/specs/`, including the supplied approved artifacts and this design.
-The files exist on disk, but normal `git status`/`git diff` will not list them; the parent must deliberately include the exact durable artifact paths if its delivery should track them, without deleting the supplied files or broadening this task into a `.gitignore` change.
-
-- Tried: reading `packages/core/src/package.json` for browser exports.
-  Found: the package manifest is `packages/core/package.json`; source files are below `src`.
+- Tried: inspecting a presumed `packages/core/src/local-source.ts` and `lib/use-workspace-links.ts`.
+  Found: local note pipelines live in note-service/server adapters; the web link dispatcher is `components/WorkspaceLinks.tsx`, with repository scope in `lib/use-linked-note-preload.ts`.
   Led by: none.
-  Classification: discovery gap; corrected the evidence path, no new project rule required.
-- Tried: a symbol-reference request for `deleteNoteFile` at an incorrect source line.
-  Found: the declaration is at `note-service.ts:121`; the empty reference answer was not evidence that there were no callers.
-  Led by: LSP navigation guidance.
-  Classification: discovery gap; verified HTTP/MCP callers by reading their source, no implementation conclusion relies on that empty result.
+  Classification: discovery gap; corrected paths in the seam table, no production conclusion relies on the missing files.
+- Tried: carrying the intermediate bookmark-document terminology into the replacement decision.
+  Found: the user's later clarification approved general Outline notes; link presence must not define item kind or impose a group/leaf distinction.
+  Led by: initial caller brief, superseded by the parent's later user-confirmed model.
+  Classification: changed authority, not a code defect; all four artifacts now use the latest model.
+- Tried: `read_symbol` with `RemoteSource.notebookFiles`.
+  Found: this tool resolves the class method by `notebookFiles`, despite its documented dotted-member form.
+  Led by: `read_symbol` tool documentation.
+  Classification: tool mismatch; continued with the returned exact symbol name, no source assumption changed.
+- Tried: asserting a newly serialized note body exactly equals its supplied body and running multiple GitHub mutations with Vitest's default five-second timeout.
+  Found: native Markdown serialization adds the established frontmatter separator newline; the GitHub adapter intentionally spaces writes by one second, and existing provider suites use a 30-second budget.
+  Led by: existing native note pipeline and provider-fixture precedent.
+  Classification: test discovery gap; preserve native serialization and provider throttling, assert the stored native body and use the established test budget.
+- Tried: testing worktree-only creation via bare POST `/api/notes`.
+  Found: native local HTTP writes commit by default; the editor explicitly supplies `noCommit: true` for worktree saves.
+  Led by: approved native save lifecycle.
+  Classification: test setup gap; integration checks now use the actual editor's explicit no-commit flag and native restore endpoint.
+- Tried: active web LSP diagnostics after rebuilding core exports.
+  Found: the language server retained the old `dist` declarations, while fresh web `tsc --noEmit` passed.
+  Led by: required active LSP verification.
+  Classification: tool cache gap; retain both results and use fresh compiler evidence rather than label stale diagnostics as product errors.

@@ -68,13 +68,13 @@ export interface NoteItem {
   lineNumberOffset?: number;
   mtime?: number;
   size?: number;
-  /** Set only on a compilation (`<name>.compilation.yml`); absent means a note. */
-  kind?: 'compilation';
+  /** Filename-derived specialized note kind; absent means an ordinary note. */
+  kind?: 'compilation' | 'outline';
   /** Why a compilation cannot open: a syntax, schema, scope or duplicate-id problem. */
   invalid?: string;
 }
 
-export type ResourceType = 'note' | 'compilation' | 'agent_instruction' | 'agent_doc' | 'workspace_config' | 'asset' | 'product_source' | 'hidden';
+export type ResourceType = 'note' | 'compilation' | 'outline' | 'agent_instruction' | 'agent_doc' | 'workspace_config' | 'asset' | 'product_source' | 'hidden';
 
 export interface ClassifiedResource {
   path: string;

@@ -50,7 +50,18 @@ describe('draft rows over a loaded page', () => {
 });
 
 describe('draft facets', () => {
-  const facets = (): Record<string, NotebookFacets> => ({ life: { total: 2, hidden: 0, statuses: { inbox: 2 }, tags: { work: 1 }, directories: { 'notes/life': 2 }, compilations: { total: 0, statuses: {}, tags: {} } } });
+  const facets = (): Record<string, NotebookFacets> => ({ life: { total: 2, hidden: 0, statuses: { inbox: 2 }, tags: { work: 1 }, directories: { 'notes/life': 2 }, compilations: { total: 0, statuses: {}, tags: {} }, outlines: { total: 0, statuses: {}, tags: {} } } });
+
+  it('classifies a new outline draft before its first server read and isolates same-path notebooks', () => {
+    const source = facets();
+    const staged = drafts({ note: note('notes/life/new.outline.md', { status: 'working', tags: ['outline'] }), base: null });
+    expect(overlayDraftRows([], query(), staged).uncommitted).toEqual([]);
+    expect(overlayDraftRows([], query({ kind: 'outline' }), staged).uncommitted).toHaveLength(1);
+    expect(overlayDraftRows([], query({ kind: 'outline', notebookId: 'other' }), staged).uncommitted).toEqual([]);
+    const result = overlayDraftFacets(source, staged, false);
+    expect(result.life).toMatchObject({ total: 2, outlines: { total: 1, statuses: { working: 1 }, tags: { outline: 1 } }, compilations: { total: 0 } });
+    expect(source.life.outlines.total).toBe(0);
+  });
 
   it('moves a draft between status counts without changing the total', () => {
     const result = overlayDraftFacets(facets(), drafts({ note: note('notes/life/a.md', { status: 'done' }), base: note('notes/life/a.md', { status: 'inbox' }) }), false);

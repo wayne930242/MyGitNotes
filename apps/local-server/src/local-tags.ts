@@ -32,7 +32,7 @@ export function createLocalTagsRouter(): Router {
           let safePath: string;
           try {
             safePath = resolveSafePath(repoRoot, entry.path);
-            if (!['note', 'compilation'].includes(classifyResource(entry.path, config).type) || !fs.existsSync(safePath)) throw new Error('not a note');
+            if (!['note', 'compilation', 'outline'].includes(classifyResource(entry.path, config).type) || !fs.existsSync(safePath)) throw new Error('not a note');
           } catch {
             throw Object.assign(new Error(`Not a configured note: ${entry.path}`), { status: 403 });
           }
