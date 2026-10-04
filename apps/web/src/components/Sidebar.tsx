@@ -130,31 +130,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
       className='notes-sidebar'
       footer={
         <div className='pt-3 mt-3 border-t shrink-0 flex flex-col gap-2.5' style={{ borderColor: 'var(--color-border)' }}>
-          <div className='flex items-center gap-2'>
-            <div className='flex-1 min-w-0 flex items-center justify-between px-3 py-2 rounded-xl border shadow-xs transition-colors' style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-              <div className='flex items-center gap-2.5'>
-                <div className='w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-fg/5' style={{ color: 'var(--color-muted)' }}>
-                  <GitBranch className='w-4 h-4' />
-                </div>
-                <span className='text-xs font-semibold text-fg leading-tight'>{t('panel.changes')}</span>
+          <div className='flex items-center justify-between px-3 py-2 rounded-xl border shadow-xs transition-colors' style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <div className='flex items-center gap-2.5'>
+              <div className='w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-fg/5' style={{ color: 'var(--color-muted)' }}>
+                <GitBranch className='w-4 h-4' />
               </div>
-              <div>
-                {dirtyCount > 0
-                  ? (
-                    <span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warning-soft text-warning'>
-                      <span className='w-1.5 h-1.5 rounded-full bg-warning animate-pulse' />
-                      {t('sidebar.dirty', { count: dirtyCount })}
-                    </span>
-                  )
-                  : (
-                    <span className='inline-flex items-center gap-1 text-[10px] text-success font-medium'>
-                      <CheckCircle2 className='w-3.5 h-3.5' />
-                      {t('sidebar.clean')}
-                    </span>
-                  )}
-              </div>
+              <span className='text-xs font-semibold text-fg leading-tight'>{t('panel.changes')}</span>
             </div>
-            {onPulled && <GitPullButton onPulled={onPulled} />}
+            <div className='flex items-center gap-1.5'>
+              {dirtyCount > 0
+                ? (
+                  <span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warning-soft text-warning'>
+                    <span className='w-1.5 h-1.5 rounded-full bg-warning animate-pulse' />
+                    {t('sidebar.dirty', { count: dirtyCount })}
+                  </span>
+                )
+                : (
+                  <span className='inline-flex items-center gap-1 text-[10px] text-success font-medium'>
+                    <CheckCircle2 className='w-3.5 h-3.5' />
+                    {t('sidebar.clean')}
+                  </span>
+                )}
+              {onPulled && <GitPullButton onPulled={onPulled} />}
+            </div>
           </div>
           <a className='sidebar-credit' href='https://github.com/wayne930242/MyGitNotes' target='_blank' rel='noopener noreferrer' title='MyGitNotes by wayne930242'>
             {'powered by '}
