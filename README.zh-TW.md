@@ -93,3 +93,37 @@ Shell 環境變數仍優先於 `.env`。
 ## 授權條款
 
 MIT
+
+## 啟動疑難排解
+
+### 工作區與 pnpm
+
+若啟動時顯示缺少工作區，已有筆記請使用 `pnpm link-workspace "/absolute/path/to/workspace"`。
+`pnpm bootstrap-workspace` 用來建立工作區，不是修復既有工作區的指令。
+若 pnpm 顯示原生執行檔警告，之後成功改用 JavaScript CLI 繼續執行，該警告不會阻止啟動。
+若程序退出，請查看後續錯誤，不要直接將這項警告當作原因。
+
+### 透過 Tailscale 遠端連線
+
+- **同一個 tailnet：** 伺服器與開啟瀏覽器的裝置必須加入同一個 tailnet。
+  WSL 與 Windows 可能各自執行 Tailscale client，登入不同帳號或 tailnet；兩邊都要確認。
+- **DNS／`DNS_PROBE_FINISHED_NXDOMAIN`：** 在開啟瀏覽器的裝置啟用 **Use Tailscale DNS settings**。
+  瀏覽器的 Secure DNS 可能略過系統解析器；請檢查瀏覽器的 DNS 設定（Chrome 為 `chrome://settings/security`），讓 tailnet 主機名稱透過 Tailscale DNS 解析。
+  不需要全域關閉瀏覽器安全功能。
+- **瀏覽器權限：** 若信任的網站跳出區域網路存取提示，請選 **Allow local access**。
+  若之前拒絕過，請檢查該網站的區域網路存取權限。
+  這項權限與 DNS 解析分開：允許存取不會修復 NXDOMAIN，也不是 Tailscale 的 exit-node LAN-access 設定。
+- **Serve 啟用／`node not found`：** 確認瀏覽器中的 Tailscale 管理介面登入的是伺服器所屬的 tailnet。
+  只有出現提示或被封鎖時，才檢查瀏覽器的區域網路權限；不能把它當作這個訊息的通用原因。
+  在正確的 tailnet 開啟 [DNS 設定](https://login.tailscale.com/admin/dns) → **HTTPS Certificates**，依[官方 HTTPS 說明][tailscale-https]操作。
+- **Linux／WSL 出現 `Access denied: serve config denied`：** 管理者可在伺服器執行一次以下指令，授予目前使用者本機 Tailscale 管理權限：
+
+  ~~~bash
+  sudo tailscale set --operator="$USER"
+  ~~~
+
+  這會授予該使用者 Tailscale 管理權限；不要用 sudo 執行整個 `pnpm dev` 或 `pnpm dev:remote`。
+- **程序生命週期：** `dev:remote` 以前景模式執行 Serve，使用遠端頁面時請保持指令執行。
+  切換 tailnet 後，先停止再重新執行 `pnpm dev:remote`，開啟新印出的網址，不要沿用舊書籤。
+
+[tailscale-https]: https://tailscale.com/kb/1153/enabling-https

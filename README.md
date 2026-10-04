@@ -93,3 +93,37 @@ Run `pnpm update-core` from a clean `core` checkout; it fast-forwards `core` fro
 ## License
 
 MIT
+
+## Startup troubleshooting
+
+### Workspace and pnpm
+
+If startup reports a missing workspace, use `pnpm link-workspace "/absolute/path/to/workspace"` for existing notes.
+Use `pnpm bootstrap-workspace` only when creating a workspace; it is not a repair command for an existing one.
+A pnpm warning about its native executable, followed by successful fallback to the JavaScript CLI, is nonfatal.
+If startup exits, check the subsequent error rather than treating that warning as the cause.
+
+### Remote access with Tailscale
+
+- **Same tailnet:** the server and browsing device must join the same tailnet.
+  WSL and Windows may run separate Tailscale clients signed into different accounts or tailnets; check both.
+- **DNS / `DNS_PROBE_FINISHED_NXDOMAIN`:** enable **Use Tailscale DNS settings** on the browsing device.
+  Browser Secure DNS may bypass the system resolver; check the browser's resolver settings (`chrome://settings/security` in Chrome) so the tailnet hostname uses Tailscale DNS.
+  Do not disable browser security globally.
+- **Browser permission:** if a trusted site's browser prompt requests local-network access, choose **Allow local access**.
+  If previously denied, review that site's local-network permission.
+  This permission is separate from DNS resolution: granting it does not fix NXDOMAIN, and it is not Tailscale's exit-node LAN-access setting.
+- **Serve activation / `node not found`:** ensure the browser's Tailscale admin console is signed into the server's tailnet.
+  Check browser local-network permission only if prompted or blocked; it is not a proven universal cause of this message.
+  In the correct tailnet, open [DNS settings](https://login.tailscale.com/admin/dns) → **HTTPS Certificates**, following the [official HTTPS instructions][tailscale-https].
+- **`Access denied: serve config denied` on Linux/WSL:** an administrator can run the following once on the server to grant the current user local Tailscale management:
+
+  ~~~bash
+  sudo tailscale set --operator="$USER"
+  ~~~
+
+  This grants Tailscale management privileges to that user; do not run the entire `pnpm dev` or `pnpm dev:remote` command with sudo.
+- **Lifecycle:** `dev:remote` runs Serve in the foreground; keep the command running while using the remote page.
+  After changing tailnets, stop and rerun `pnpm dev:remote`, then open the newly printed URL rather than an old bookmark.
+
+[tailscale-https]: https://tailscale.com/kb/1153/enabling-https

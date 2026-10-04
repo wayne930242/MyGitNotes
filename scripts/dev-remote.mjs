@@ -2,6 +2,7 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import net from 'node:net';
 import QRCode from 'qrcode';
+import { remoteHelp } from './lib/dev-remote-help.mjs';
 
 function findFreePort() {
   return new Promise((resolve, reject) => {
@@ -75,81 +76,98 @@ function copy(text) {
   }
 }
 
-// Fail before Tailscale setup when the local workspace is missing or incompatible.
-const workspaceCheck = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/check-dev-workspace.ts'], { stdio: 'inherit' });
-if (workspaceCheck.error) throw workspaceCheck.error;
-if (workspaceCheck.status !== 0) process.exit(workspaceCheck.status || 1);
+async function main() {
+  // Fail before Tailscale setup when the local workspace is missing or incompatible.
+  const workspaceCheck = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/check-dev-workspace.ts'], { stdio: 'inherit' });
+  if (workspaceCheck.error) throw workspaceCheck.error;
+  if (workspaceCheck.status !== 0) {
+    console.error(remoteHelp());
+    process.exitCode = workspaceCheck.status || 1;
+    return;
+  }
 
-const host = tailnetHost();
-const url = `https://${host}/`;
-const port = await findFreePort();
-const children = [];
+  const host = tailnetHost();
+  const url = `https://${host}/`;
+  const port = await findFreePort();
+  const children = [];
 
-function start(command, args, env) {
-  const child = spawn(command, args, { stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, ...env } });
-  children.push(child);
-  child.on('exit', (code, signal) => {
-    console.error(`\n${command} exited (${signal ?? code}); stopping.`);
-    stop(code || 1);
-  });
-  return child;
-}
+  function start(command, args, env) {
+    const child = spawn(command, args, { stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, ...env } });
+    children.push(child);
+    child.on('error', error => {
+      console.error(`\nCould not start ${command}: ${error.message}`);
+      stop(1);
+    });
+    child.on('exit', (code, signal) => {
+      console.error(`\n${command} exited (${signal ?? code}); stopping.`);
+      stop(code || 1);
+    });
+    return child;
+  }
 
-function killChildren() {
-  const pids = children.filter(child => child.exitCode === null && child.signalCode === null).flatMap(child => [child.pid, ...descendants(child.pid)]);
-  for (const pid of pids) {
-    try {
-      process.kill(pid, 'SIGTERM');
-    } catch {
-      // Already exited.
+  function killChildren() {
+    const pids = children.filter(child => child.pid && child.exitCode === null && child.signalCode === null).flatMap(child => [child.pid, ...descendants(child.pid)]);
+    for (const pid of pids) {
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch {
+        // Already exited.
+      }
     }
+  }
+
+  function stop(code) {
+    if (code !== 0) console.error(remoteHelp());
+    killChildren();
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    process.exit(code);
+  }
+
+  /** Polls the tailnet URL; the first run waits while Tailscale issues the HTTPS certificate. */
+  async function waitForServe(deadline) {
+    while (Date.now() < deadline) {
+      try {
+        await fetch(url, { signal: AbortSignal.timeout(10_000) });
+        return true;
+      } catch {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    return false;
+  }
+
+  // killChildren() is synchronous, so it also cleans up when the script exits through an error.
+  process.on('exit', killChildren);
+  process.on('SIGINT', () => stop(0));
+  process.on('SIGTERM', () => stop(0));
+
+  start('pnpm', ['dev'], { MYGITNOTES_WEB_PORT: String(port), MYGITNOTES_REMOTE_ORIGIN: `https://${host}` });
+  await waitUntilReady(port, Date.now() + 120_000);
+
+  // Foreground `tailscale serve` keeps the config only while it runs, so stopping it leaves no serve entry behind.
+  // Target `localhost`: tailscale rewrites `http://[::1]:port` into the unusable `http://::1:port`.
+  start('tailscale', ['serve', `http://localhost:${port}`]);
+
+  console.log('\nWaiting for Tailscale HTTPS (the first run issues a certificate, about 30 seconds)...');
+  if (!(await waitForServe(Date.now() + 90_000))) {
+    console.error(`${url} is not answering yet.\n${remoteHelp()}`);
+  }
+  console.log(`\nMyGitNotes on your tailnet: ${url}\n`);
+  console.log(await QRCode.toString(url, { type: 'utf8', margin: 2 }));
+  console.log(remoteHelp());
+
+  if (process.stdin.isTTY) {
+    console.log('Press c to copy the URL, q or Ctrl+C to stop.\n');
+    process.stdin.setRawMode(true);
+    process.stdin.setEncoding('utf-8');
+    process.stdin.on('data', key => {
+      if (key === 'c') copy(url);
+      else if (key === 'q' || key === '\u0003') stop(0);
+    });
   }
 }
 
-function stop(code) {
-  killChildren();
-  if (process.stdin.isTTY) process.stdin.setRawMode(false);
-  process.exit(code);
-}
-
-/** Polls the tailnet URL; the first run waits while Tailscale issues the HTTPS certificate. */
-async function waitForServe(deadline) {
-  while (Date.now() < deadline) {
-    try {
-      await fetch(url, { signal: AbortSignal.timeout(10_000) });
-      return true;
-    } catch {
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-  }
-  return false;
-}
-
-// killChildren() is synchronous, so it also cleans up when the script exits through an error.
-process.on('exit', killChildren);
-process.on('SIGINT', () => stop(0));
-process.on('SIGTERM', () => stop(0));
-
-start('pnpm', ['dev'], { MYGITNOTES_WEB_PORT: String(port), MYGITNOTES_REMOTE_ORIGIN: `https://${host}` });
-await waitUntilReady(port, Date.now() + 120_000);
-
-// Foreground `tailscale serve` keeps the config only while it runs, so stopping it leaves no serve entry behind.
-// Target `localhost`: tailscale rewrites `http://[::1]:port` into the unusable `http://::1:port`.
-start('tailscale', ['serve', `http://localhost:${port}`]);
-
-console.log('\nWaiting for Tailscale HTTPS (the first run issues a certificate, about 30 seconds)...');
-if (!(await waitForServe(Date.now() + 90_000))) console.error(`${url} is not answering yet; check that HTTPS is enabled for your tailnet.`);
-console.log(`\nMyGitNotes on your tailnet: ${url}\n`);
-console.log(await QRCode.toString(url, { type: 'utf8', margin: 2 }));
-// A browser that resolves names itself bypasses the system resolver Tailscale configures for *.ts.net.
-console.log(['If another device shows DNS_PROBE_FINISHED_NXDOMAIN:', '  - Turn on "Use Tailscale DNS settings" in that device\'s Tailscale client.', "  - Turn off the browser's Secure DNS (chrome://settings/security) and clear its host cache (chrome://net-internals/#dns).", ''].join('\n'));
-
-if (process.stdin.isTTY) {
-  console.log('Press c to copy the URL, q or Ctrl+C to stop.\n');
-  process.stdin.setRawMode(true);
-  process.stdin.setEncoding('utf-8');
-  process.stdin.on('data', key => {
-    if (key === 'c') copy(url);
-    else if (key === 'q' || key === '\u0003') stop(0);
-  });
-}
+await main().catch(error => {
+  console.error(`${error.message}\n${remoteHelp()}`);
+  process.exit(1);
+});
