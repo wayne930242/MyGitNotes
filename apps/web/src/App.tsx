@@ -389,7 +389,8 @@ const AppContent: React.FC = () => {
             <SidebarProvider open={filtersOpen} onOpenChange={setFiltersOpen}>
               <div ref={sidebarGestureRef} className='workspace-body relative flex-1 min-h-0 min-w-0 flex overflow-hidden'>
                 <WorkspaceSplitLayout
-                  hasSidebar={activeTab !== 'graph' && activeTab !== 'screen'}
+                  // Collapsing the Notes browse dock hides the notebook sidebar with it; expanding the dock brings both back.
+                  hasSidebar={activeTab !== 'graph' && activeTab !== 'screen' && !(activeTab === 'notes' && dockToggle && noteFocus.view.dock.collapsed)}
                   sidebarDomId={activeTab === 'notes' ? 'notebook-panel' : activeTab === 'agent' ? 'agent-sidebar-panel' : activeTab === 'assets' ? 'assets-sidebar-panel' : activeTab === 'settings' ? 'settings-sidebar-panel' : undefined}
                   closeLabel={t('sidebar.closeFilters')}
                   rightPanelWidth={rightPanelWidth}
