@@ -11,7 +11,7 @@ import { LINE_NUMBERS_STORAGE_KEY, setDefaultShowLineNumbers } from '../lib/edit
 vi.mock('./MarkdownEditor.js', () => ({
   MarkdownEditorModeSwitch: ({ mode, onChange }: { mode: MarkdownEditorMode; onChange: (mode: MarkdownEditorMode) => void; }) => createElement('button', { type: 'button', onClick: () => onChange(mode === 'live' ? 'raw' : 'live') }, `Switch to ${mode === 'live' ? 'Source' : 'Live'}`),
   MarkdownEditor: forwardRef<MarkdownEditorHandle, { content: string; mode: MarkdownEditorMode; showLineNumbers?: boolean; onChange: (content: string) => void; }>(({ content, mode, showLineNumbers, onChange }, ref) => {
-    useImperativeHandle(ref, () => ({ insert() {}, revealRange() {}, goToLine() {}, getCurrentLine: () => 1 }), []);
+    useImperativeHandle(ref, () => ({ insert() {}, revealRange() {}, goToLine() {}, getCurrentLine: () => 1, getSelection: () => null, ready: () => true }), []);
     return createElement('textarea', { 'aria-label': 'Note content', value: content, 'data-mode': mode, 'data-line-numbers': showLineNumbers ? 'true' : 'false', onChange: (event: ChangeEvent<HTMLTextAreaElement>) => onChange(event.target.value) });
   }),
 }));

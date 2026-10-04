@@ -2,7 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { DEFAULT_NOTE_STATUSES, deleteNoteFile, loadWorkspaceConfig, type NotebookConfig, NoteItem, noteSummary, readNoteFile, resolveNoteStatuses, resolveSafePath, scanNotebookNotes, withNoteEdits, type WorkspaceConfig, writeNoteFile } from '@mygitnotes/core';
 import { generateCommitMessage, stageAndCommit } from '@mygitnotes/git';
-import { assertSafeRepoPath, assertUserWorkspaceBranch } from '../guards.js';
+import { assertNoteResource, assertUserWorkspaceBranch } from '../guards.js';
 import type { ToolContext } from './context.js';
 
 export async function handleGetWorkspaceConfig(ctx: ToolContext) {
@@ -42,7 +42,7 @@ export async function handleListNotes(ctx: ToolContext, args: { notebookId?: str
 }
 
 export async function handleReadNote(ctx: ToolContext, args: { path: string; notebookId?: string; metadataOnly?: boolean; }) {
-  assertSafeRepoPath(ctx.repoRoot, args.path);
+  assertNoteResource(ctx.repoRoot, args.path);
   if (args.metadataOnly) {
     return handleGetNoteMetadata(ctx, { path: args.path });
   }
@@ -53,7 +53,7 @@ export async function handleReadNote(ctx: ToolContext, args: { path: string; not
 
 export async function handleSaveNote(ctx: ToolContext, args: { path: string; content?: string; metadata?: Record<string, unknown>; status?: string; tags?: string[]; title?: string; commitMessage?: string; }) {
   await assertUserWorkspaceBranch(ctx.repoRoot);
-  assertSafeRepoPath(ctx.repoRoot, args.path);
+  assertNoteResource(ctx.repoRoot, args.path);
 
   if (args.content === undefined) {
     return handleUpdateNoteMetadata(ctx, args);
@@ -76,7 +76,7 @@ export async function handleSaveNote(ctx: ToolContext, args: { path: string; con
 
 export async function handleDeleteNote(ctx: ToolContext, args: { path: string; commitMessage?: string; }) {
   await assertUserWorkspaceBranch(ctx.repoRoot);
-  assertSafeRepoPath(ctx.repoRoot, args.path);
+  assertNoteResource(ctx.repoRoot, args.path);
 
   deleteNoteFile(ctx.repoRoot, args.path);
 
@@ -116,7 +116,7 @@ function availableStatuses(ctx: ToolContext, nb?: NotebookConfig) {
 }
 
 export async function handleGetNoteMetadata(ctx: ToolContext, args: { path: string; }) {
-  assertSafeRepoPath(ctx.repoRoot, args.path);
+  assertNoteResource(ctx.repoRoot, args.path);
   const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };
 
@@ -130,7 +130,7 @@ export async function handleGetNoteMetadata(ctx: ToolContext, args: { path: stri
 
 export async function handleUpdateNoteMetadata(ctx: ToolContext, args: { path: string; metadata?: Record<string, unknown>; status?: string; tags?: string[]; title?: string; commitMessage?: string; }) {
   await assertUserWorkspaceBranch(ctx.repoRoot);
-  assertSafeRepoPath(ctx.repoRoot, args.path);
+  assertNoteResource(ctx.repoRoot, args.path);
 
   const config = ctx.config ?? loadWorkspaceConfig(ctx.repoRoot);
   if (!config) return { error: 'Workspace not configured' };

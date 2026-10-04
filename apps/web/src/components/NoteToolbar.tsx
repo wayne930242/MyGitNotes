@@ -32,9 +32,10 @@ interface NoteToolbarProps {
   onToggleFilters: () => void;
   /** The Focus switcher and division picker. */
   focusControls?: ReactNode;
+  onSaveView?: () => void;
 }
 
-export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, onOpenNewCompilation, query, onQueryChange, filtersOpen, onToggleFilters, focusControls }: NoteToolbarProps) {
+export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, onOpenNewCompilation, query, onQueryChange, filtersOpen, onToggleFilters, focusControls, onSaveView }: NoteToolbarProps) {
   const { t } = useTranslation();
   // Below 768px the field is hidden behind a button and expands over the toolbar.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -95,6 +96,7 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
           </button>
         ))}
       </div>
+      {onSaveView && <button type='button' className='ui-icon-button' disabled={readOnly} title={t('bookmarks.saveView')} aria-label={t('bookmarks.saveView')} onClick={onSaveView}>☆</button>}
       {/* New Note Button */}
       {!readOnly && (
         <SelectButtonGroup>

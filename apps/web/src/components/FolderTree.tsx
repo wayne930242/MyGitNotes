@@ -1,5 +1,6 @@
 import { type FolderAction, FolderActions } from './FolderActions.js';
 import { ReorderToggle } from './ReorderToggle.js';
+import { useBookmarkActionsContext } from '../lib/bookmark-context.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import { Check, Folder, FolderPlus, GripVertical } from 'lucide-react';
@@ -20,6 +21,7 @@ function DropZone({ path, position, disabled, children }: { path: string; positi
 
 function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage, multiSelectable, touchMultiSelect, onLongPress, hasChildren, isExpanded, onToggleExpand }: { folder: FolderItem; reorder: boolean; disabled: boolean; selected: boolean; onSelect: (event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean; }) => void; onManage: (action: FolderAction) => void; multiSelectable: boolean; touchMultiSelect?: boolean; onLongPress?: () => void; hasChildren: boolean; isExpanded: boolean; onToggleExpand: (event: React.MouseEvent) => void; }) {
   const { t } = useTranslation();
+  const bookmarks = useBookmarkActionsContext();
   const drag = useDraggable({ id: folder.path, disabled: disabled || !reorder });
   const longPress = useLongPress(() => onLongPress?.(), multiSelectable && Boolean(onLongPress));
   const title = `${folder.description || folder.path}${touchMultiSelect ? ` (${t('folder.touchMultiSelectInstruction')})` : multiSelectable ? ` (${t('folder.multiSelectHint')})` : ''}`;
@@ -46,7 +48,16 @@ function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage, mul
             )
             : undefined}
           suffix={touchMultiSelect ? <span className={`folder-check ${selected ? 'is-checked' : ''}`} aria-hidden='true'>{selected && <Check size={11} strokeWidth={3} />}</span> : undefined}
-          actions={<FolderActions title={folder.title} disabled={disabled} onAction={onManage} />}
+          actions={
+            <FolderActions
+              title={folder.title}
+              disabled={disabled}
+              onAction={onManage}
+              onBookmark={bookmarks?.repositoryFor(folder.notebookId)?.write
+                ? () => bookmarks.request({ notebookId: folder.notebookId, target: { kind: 'folder', path: folder.path }, label: folder.title })
+                : undefined}
+            />
+          }
           buttonProps={{ title, onContextMenu: longPress.onContextMenu, onTouchStart: longPress.onTouchStart, onTouchMove: longPress.onTouchMove, onTouchEnd: longPress.onTouchEnd, onTouchCancel: longPress.onTouchCancel }}
         />
       </DropZone>

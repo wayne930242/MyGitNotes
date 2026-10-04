@@ -36,6 +36,8 @@ export interface LiveMarkdownHandle {
   revealRange: (from: number, to: number, focus?: boolean) => void;
   goToLine: (line: number, options?: { focus?: boolean; }) => void;
   getCurrentLine: () => number;
+  getSelection: () => { from: number; to: number; } | null;
+  ready: () => boolean;
   format: (format: MarkdownFormat) => void;
 }
 interface Props {
@@ -90,6 +92,11 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
   lineOffset.current = lineNumberOffset;
   /* eslint-enable react/refs */
   useImperativeHandle(ref, () => ({
+    ready: () => Boolean(editor.current),
+    getSelection: () => {
+      const selection = editor.current?.state.selection.main;
+      return selection ? { from: selection.from, to: selection.to } : null;
+    },
     insert(text, at) {
       const view = editor.current;
       if (!view || view.state.readOnly) return;

@@ -1,4 +1,5 @@
 import { Select } from './Select.js';
+import { bookmarkOriginalRange, normalizeBookmarkBody } from '@mygitnotes/core/bookmark-anchor';
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -23,6 +24,8 @@ export interface MarkdownEditorHandle {
   revealRange: (from: number, to: number, focus?: boolean) => void;
   goToLine: (line: number, options?: { focus?: boolean; smooth?: boolean; }) => void;
   getCurrentLine: () => number;
+  getSelection: () => { from: number; to: number; } | null;
+  ready: () => boolean;
 }
 interface Props {
   content: string;
@@ -271,6 +274,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
     : null;
 
   useImperativeHandle(ref, () => ({
+    ready: () => mode === 'live' && isMarkdown ? Boolean(live.current?.ready()) : Boolean(source.current),
+    getSelection() {
+      if (mode === 'live' && isMarkdown) {
+        const range = live.current?.getSelection();
+        return range ? bookmarkOriginalRange(content, range) : null;
+      }
+      return source.current ? { from: source.current.selectionStart, to: source.current.selectionEnd } : null;
+    },
     insert(text, at) {
       if (readOnly) return;
       if (mode === 'live' && isMarkdown) {
@@ -287,7 +298,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
     },
     revealRange(from, to, focus = false) {
       if (mode === 'live' && isMarkdown) {
-        live.current?.revealRange(from, to, focus);
+        const { offsets } = normalizeBookmarkBody(content);
+        live.current?.revealRange(offsets.indexOf(from), offsets.indexOf(to), focus);
         return;
       }
       const target = source.current;

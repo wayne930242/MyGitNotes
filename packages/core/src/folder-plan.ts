@@ -96,7 +96,7 @@ export function planFolderChange(snapshot: FolderSnapshot, input: unknown) {
     directories.add(destination);
     files.set(`${destination}/_dir.yml`, YAML.stringify({ title: command.title || command.name }));
   }
-  if (source && source !== destination) relocateWorkspaceDocuments(files, notebook.id, relocate);
+  if (source && source !== destination) relocateWorkspaceDocuments(files, notebook, relocate);
   const folders = (): FolderItem[] => sortFolders([...directories].filter(dir => dir.startsWith(root + '/') && isNotebookContent(dir.slice(root.length + 1), notebook)).map(dir => ({ notebookId: notebook.id, path: dir.slice(root.length + 1), ...parseFolderConfig(files.get(`${dir}/_dir.yml`) || '', path.posix.basename(dir), dir) })));
   const siblings = folders().filter(folder => parentOf(folder.path) === parent);
   if (command.kind !== 'delete') {

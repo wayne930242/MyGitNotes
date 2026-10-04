@@ -4,6 +4,7 @@ import { relocateWorkspaceDocuments, validateWorkspaceDocument, WORKSPACE_DOCUME
 import { planFolderChange } from '../src/folder-plan.js';
 import { createStudyNote, STUDY_FILE } from '../src/study.js';
 import { FOCUS_PAGE_FILE } from '../src/focus-page.js';
+import { BOOKMARKS_FILE } from '../src/bookmarks.js';
 
 const notebooks = [{ id: 'a', title: 'A', root: 'notes/a' }, { id: 'b', title: 'B', root: 'notes/b' }];
 const move = (file: string) => file.startsWith('notes/a/one/') ? 'notes/a/two/' + file.slice('notes/a/one/'.length) : file;
@@ -15,7 +16,7 @@ function documents() {
 
 describe('workspace documents', () => {
   it('registers study and Focus with their commit scopes', () => {
-    expect(WORKSPACE_DOCUMENTS.map(document => document.file)).toEqual([STUDY_FILE, FOCUS_PAGE_FILE]);
+    expect(WORKSPACE_DOCUMENTS.map(document => document.file)).toEqual([STUDY_FILE, FOCUS_PAGE_FILE, BOOKMARKS_FILE]);
     expect(workspaceDocument(FOCUS_PAGE_FILE)?.scopes).toEqual(['focus', 'folders', 'files']);
     expect(workspaceDocument('.github-notes-screen.yaml')).toBeUndefined();
     expect(workspaceDocument('notes/a/note.md')).toBeUndefined();
@@ -29,12 +30,12 @@ describe('workspace documents', () => {
   });
   it('relocates one notebook across every document and leaves unchanged files untouched', () => {
     const files = documents();
-    relocateWorkspaceDocuments(files, 'a', move);
+    relocateWorkspaceDocuments(files, notebooks[0], move);
     const study = YAML.parse(files.get(STUDY_FILE)!), focus = YAML.parse(files.get(FOCUS_PAGE_FILE)!);
     expect(study.notes.map((note: { path: string; }) => note.path)).toEqual(['notes/a/two/note.md', 'notes/a/one/note.md']);
     expect(focus.focuses.map((entry: { panes: { tabs: { path?: string; }[]; }[]; }) => entry.panes[0].tabs[0].path)).toEqual(['notes/a/two/note.md', 'notes/a/one/note.md']);
     const unchanged = documents(), original = new Map(unchanged);
-    relocateWorkspaceDocuments(unchanged, 'b', file => file);
+    relocateWorkspaceDocuments(unchanged, notebooks[1], file => file);
     expect(unchanged).toEqual(original);
   });
   it('updates study and Focus references when a folder moves', () => {

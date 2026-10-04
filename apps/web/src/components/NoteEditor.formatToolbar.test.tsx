@@ -12,7 +12,7 @@ import { FORMAT_TOOLBAR_STORAGE_KEY } from '../lib/editor-preferences.js';
 vi.mock('./MarkdownEditor.js', () => ({
   MarkdownEditorModeSwitch: () => null,
   MarkdownEditor: forwardRef<MarkdownEditorHandle, { toolbarSlot?: HTMLElement | null; }>(({ toolbarSlot }, ref) => {
-    useImperativeHandle(ref, () => ({ insert() {}, revealRange() {}, goToLine() {}, getCurrentLine: () => 1 }), []);
+    useImperativeHandle(ref, () => ({ insert() {}, revealRange() {}, goToLine() {}, getCurrentLine: () => 1, getSelection: () => null, ready: () => true }), []);
     return toolbarSlot ? createPortal(createElement('div', { role: 'toolbar', 'aria-label': 'Formatting toolbar' }), toolbarSlot) : null;
   }),
 }));

@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import path from 'node:path';
-import { readWorkspaceDocument, serializeWorkspaceDocument, SourceError, type WorkspaceConfig, type WorkspaceDocument } from '@mygitnotes/core';
+import { BookmarkError, parseNoteContent, readWorkspaceDocument, serializeWorkspaceDocument, SourceError, type WorkspaceConfig, type WorkspaceDocument } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { repositoryOrHome as documentRepository } from './request-workspace.js';
-import { readBoundedFile, readSnapshotText, revisionOf, writeFileAtomic } from './workspace-files.js';
+import { readBoundedFile, readSnapshotText, regularPath, revisionOf, writeFileAtomic } from './workspace-files.js';
 
 /** Reads and writes one workspace document of one repository as `{ page, revision, path, writable, repository }`. */
 export function createWorkspaceDocumentRouter(document: WorkspaceDocument): Router {
@@ -22,7 +22,8 @@ export function createWorkspaceDocumentRouter(document: WorkspaceDocument): Rout
     return document.own ? document.own(value, config?.notebooks ?? []) : { page: value, foreign: false };
   }
   function fail(res: import('express').Response, error: unknown) {
-    res.status(error instanceof SourceError ? error.status : 500).json({ error: error instanceof SourceError ? error.message : `${label} configuration could not be saved. Your draft is preserved.` });
+    const status = error instanceof BookmarkError ? error.code === 'duplicate-target' ? 409 : 400 : error instanceof SourceError ? error.status : 500;
+    res.status(status).json({ error: error instanceof SourceError || error instanceof BookmarkError ? error.message : `${label} configuration could not be saved. Your draft is preserved.`, ...(error && typeof error === 'object' && 'code' in error ? { code: error.code, ...('existingId' in error ? { existingId: error.existingId } : {}) } : {}) });
   }
   const router = Router();
   router.get('/', async (req, res) => {
@@ -36,6 +37,7 @@ export function createWorkspaceDocumentRouter(document: WorkspaceDocument): Rout
       const { reader } = handle;
       const snapshot = await reader.getSnapshot();
       const raw = await readSnapshotText(reader, snapshot, file);
+      if (raw !== null && Buffer.byteLength(raw) > maxBytes) throw new SourceError(`${label} configuration is too large.`, 413);
       const { page } = own(decode(raw), config);
       res.json({ page, revision: snapshot.sha, path: file, writable: reader.canWrite(snapshot), repository: id });
     } catch (error) {
@@ -57,7 +59,14 @@ export function createWorkspaceDocumentRouter(document: WorkspaceDocument): Rout
           if (await getCurrentBranch(root) !== 'main') throw new SourceError(`Switch to main to save the ${label} configuration.`, 403);
           if (own(value.data, config).foreign) throw foreign();
           const raw = await readLocal(root);
+          const current = document.validateChange ? decode(raw) : undefined;
           if (revisionOf(raw) !== revision) throw new SourceError(`The ${label} configuration changed. Reload it before saving your draft.`, 409);
+          document.validateChange?.(current, value.data, config?.notebooks ?? []);
+          await document.validateReferences?.(current, value.data, config?.notebooks ?? [], async notePath => {
+            regularPath(root, notePath);
+            const raw = await readBoundedFile(root, notePath, 5 * 1024 * 1024, 'Note');
+            return raw === null ? null : /\.txt$/i.test(notePath) ? raw : parseNoteContent(raw).content;
+          });
           await writeFileAtomic(path.join(root, file), yaml);
           res.json({ page: value.data, revision: revisionOf(yaml), path: file, writable: true, repository: id });
         });

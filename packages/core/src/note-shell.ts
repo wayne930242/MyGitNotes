@@ -5,6 +5,7 @@ import { isNotebookContent, serializeFolderConfig } from './folders.js';
 import { NotebookConfig } from './types.js';
 import { skillFile } from './agent-system.js';
 import type { CommitScope } from './workspace-documents.js';
+import { bookmarkRelocationChange } from './bookmark-relocation.js';
 import YAML from 'yaml';
 
 type Args = Record<string, unknown>;
@@ -79,7 +80,7 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
   };
   const receipt = async (changes: { path: string; content?: string; sha?: string | null; }[], scope: CommitScope = 'notes') => {
     const expected = string(args, 'revision');
-    return reader.commitChanges(changes, expected, operation, scope);
+    return reader.commitChanges(changes, expected, operation, scope, undefined, snapshot);
   };
   if (operation === 'ls') {
     const input = string(args, 'path', '.');
@@ -216,7 +217,7 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
     const files = selected(from, args.recursive === true);
     if (snapshot.entries.some(e => e.path === to && e.type === 'tree')) to = to + '/' + path.posix.basename(from);
     if (to === from || to.startsWith(from + '/') || from.startsWith(to + '/')) throw new SourceError('Source and destination must be separate paths.');
-    const changes: { path: string; sha: string | null; }[] = [];
+    const changes: { path: string; sha?: string | null; content?: string; }[] = [];
     for (const entry of files) {
       const target = to + entry.path.slice(from.length);
       if (!noteFile(target, notebooks)) throw new SourceError('Destination must be inside a configured note directory.', 403);
@@ -224,7 +225,14 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
       changes.push({ path: target, sha: entry.sha });
       if (operation === 'mv') changes.push({ path: entry.path, sha: null });
     }
-    return receipt(changes);
+    if (operation === 'mv') {
+      const owner = inNotebook(from, notebooks);
+      if (owner) {
+        const change = await bookmarkRelocationChange(reader, snapshot, owner, file => file === from || file.startsWith(from + '/') ? to + file.slice(from.length) : file);
+        if (change) changes.push(change);
+      }
+    }
+    return receipt(changes, operation === 'mv' ? 'folders' : 'notes');
   }
   throw new SourceError('Unknown note operation.');
 }

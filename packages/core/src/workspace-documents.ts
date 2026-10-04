@@ -3,8 +3,9 @@ import type { ZodType, ZodTypeDef } from 'zod';
 import { SourceError } from './github-api.js';
 import { STUDY_DOCUMENT } from './study.js';
 import { FOCUS_DOCUMENT } from './focus-page.js';
+import { BOOKMARKS_DOCUMENT } from './bookmarks.js';
 
-export type CommitScope = 'notes' | 'assets' | 'agents' | 'skills' | 'folders' | 'study' | 'study-transition' | 'files' | 'focus' | 'config';
+export type CommitScope = 'notes' | 'assets' | 'agents' | 'skills' | 'folders' | 'study' | 'study-transition' | 'files' | 'focus' | 'config' | 'bookmarks';
 
 /** A Git-tracked YAML file at the workspace root that the app reads and writes as a whole. */
 export interface WorkspaceDocument<T = unknown> {
@@ -20,12 +21,16 @@ export interface WorkspaceDocument<T = unknown> {
   empty(): T;
   read(value: unknown): T;
   /** Rewrites one notebook's note paths in place and reports whether anything changed. */
-  relocate?(value: T, notebookId: string, move: (path: string) => string): boolean;
+  relocate?(value: T, notebook: { id: string; root: string; }, move: (path: string) => string): boolean;
+  /** Validate changed collections without dropping retained missing or unknown-owner references. */
+  validateChange?(current: T, next: T, notebooks: readonly { id: string; root: string; }[], relocation?: boolean): void;
+  /** Optional saved-body validation; the adapter pins reads to its transaction snapshot. */
+  validateReferences?(current: T, next: T, notebooks: readonly { id: string; root: string; }[], readBody: (path: string) => Promise<string | null>): Promise<void>;
   /** Keeps only content owned by its notebook; `foreign` reports that something was dropped. */
   own?(value: T, notebooks: readonly { id: string; root: string; }[]): { page: T; foreign: boolean; };
 }
 
-export const WORKSPACE_DOCUMENTS: readonly WorkspaceDocument[] = [STUDY_DOCUMENT, FOCUS_DOCUMENT];
+export const WORKSPACE_DOCUMENTS: readonly WorkspaceDocument[] = [STUDY_DOCUMENT, FOCUS_DOCUMENT, BOOKMARKS_DOCUMENT];
 export const workspaceDocument = (file: string) => WORKSPACE_DOCUMENTS.find(document => document.file === file);
 export const serializeWorkspaceDocument = (value: unknown) => stringifyYaml(value, { lineWidth: 0 });
 const parse = (content: string) => parseYaml(content, { maxAliasCount: 20 });
@@ -45,11 +50,17 @@ export function validateWorkspaceDocument(document: WorkspaceDocument, content: 
 }
 
 /** Keeps every workspace document pointing at the notes that moved inside one notebook. */
-export function relocateWorkspaceDocuments(files: { get(file: string): string | undefined; set(file: string, content: string): void; }, notebookId: string, move: (path: string) => string) {
+export function relocateWorkspaceDocuments(files: { get(file: string): string | undefined; set(file: string, content: string): void; }, notebook: { id: string; root: string; }, move: (path: string) => string) {
   for (const document of WORKSPACE_DOCUMENTS) {
     const raw = files.get(document.file);
     if (raw === undefined || !document.relocate) continue;
-    const value = document.read(parse(raw));
-    if (document.relocate(value, notebookId, move)) files.set(document.file, serializeWorkspaceDocument(value));
+    if (Buffer.byteLength(raw) > document.maxBytes) throw new SourceError(`${document.label} is too large.`, 413);
+    let value;
+    try {
+      value = document.read(parse(raw));
+    } catch {
+      throw new SourceError(`Invalid ${document.label} YAML. Fix the file before moving content.`, 422);
+    }
+    if (document.relocate(value, notebook, move)) files.set(document.file, serializeWorkspaceDocument(value));
   }
 }

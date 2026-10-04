@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { classifyResource, deploymentConfigSource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceFileTags, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
+import { BOOKMARKS_DOCUMENT, classifyResource, deploymentConfigSource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceFileTags, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRemoteMCP } from './mcp.js';
 import { createRemoteCoreUpdateRouter } from './remote-core-update.js';
@@ -10,6 +10,7 @@ import { createLocalApp } from './local-app.js';
 import { createAuth } from './auth.js';
 import { asLocal, asRemote, eachRepository, namedRemote, notebookRepository, noteRepository, type RemoteHandle, remoteHome, repositoryOrHome, requestCatalog, requestWorkspace, workspaceOf } from './request-workspace.js';
 import { createStudyRouter } from './study.js';
+import { createBookmarksResolver } from './bookmarks.js';
 import { createWorkspaceDocumentRouter } from './workspace-document.js';
 import { createFolderManagerRouter } from './folder-manager.js';
 import { createR2AssetHandler } from './r2-assets.js';
@@ -76,6 +77,8 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
   app.use(createR2ManagerRouter());
   app.use('/api/study', createStudyRouter());
   app.use('/api/focus-page', createWorkspaceDocumentRouter(FOCUS_DOCUMENT));
+  app.use('/api/bookmarks/resolve', createBookmarksResolver());
+  app.use('/api/bookmarks', createWorkspaceDocumentRouter(BOOKMARKS_DOCUMENT));
   app.use('/api/folder-manager', createFolderManagerRouter());
   if (local) {
     app.get(

@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { deleteNoteFile, lookupNotes, noteAgenda, noteFacets, noteGraph, type NoteItem, parseNoteQuery, queryNotePaths, queryNotes, readNoteFile, type RepositoryCatalog, resolveSafePath, scanNotebookEntries, scanNotebookNotes, SourceError, StaleRevisionError, writeNoteFile } from '@mygitnotes/core';
 import { changeFile, generateCommitMessage, listChanges, stageAndCommit } from '@mygitnotes/git';
+import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { asLocal, eachRepository, type LocalHandle, notebookRepository, noteRepository, requestCatalog } from './request-workspace.js';
 
 export function createLocalNotesRouter(): Router {
@@ -103,22 +104,24 @@ export function createLocalNotesRouter(): Router {
       const { handle, notebook } = await noteRepository(res, notePath, notebookId);
       const repoRoot = asLocal(handle).root;
 
-      if (req.body.createOnly && fs.existsSync(resolveSafePath(repoRoot, notePath))) return res.status(409).json({ error: 'A note already exists at this path.' });
-      const saved = writeNoteFile(repoRoot, notePath, content, metadata, notebook.id, notebook.root);
+      return await serializeWorkspaceMutation(repoRoot, async () => {
+        if (req.body.createOnly && fs.existsSync(resolveSafePath(repoRoot, notePath))) return res.status(409).json({ error: 'A note already exists at this path.' });
+        const saved = writeNoteFile(repoRoot, notePath, content, metadata, notebook.id, notebook.root);
 
-      // If noCommit is requested or commit is false, write file and leave working tree dirty
-      if (req.body.noCommit === true || req.body.commit === false) {
-        return res.json({ success: true, note: saved, committed: false });
-      }
+        // If noCommit is requested or commit is false, write file and leave working tree dirty
+        if (req.body.noCommit === true || req.body.commit === false) {
+          return res.json({ success: true, note: saved, committed: false });
+        }
 
-      // Commit change
-      let message = commitMessage;
-      if (!message) {
-        message = await generateCommitMessage({ filePath: notePath, diff: content });
-      }
+        // Commit change
+        let message = commitMessage;
+        if (!message) {
+          message = await generateCommitMessage({ filePath: notePath, diff: content });
+        }
 
-      const commit = await stageAndCommit(repoRoot, [notePath], message);
-      res.json({ success: true, note: saved, commit, committed: true });
+        const commit = await stageAndCommit(repoRoot, [notePath], message);
+        res.json({ success: true, note: saved, commit, committed: true });
+      });
     } catch (err: unknown) {
       res.status(err instanceof SourceError ? err.status : 500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -134,13 +137,15 @@ export function createLocalNotesRouter(): Router {
       }
       const repoRoot = asLocal((await noteRepository(res, notePath, req.query.notebookId)).handle).root;
 
-      deleteNoteFile(repoRoot, notePath);
-      if (noCommit) {
-        return res.json({ success: true, committed: false });
-      }
+      return await serializeWorkspaceMutation(repoRoot, async () => {
+        deleteNoteFile(repoRoot, notePath);
+        if (noCommit) {
+          return res.json({ success: true, committed: false });
+        }
 
-      const commit = await stageAndCommit(repoRoot, [notePath], `docs(notes): delete ${path.basename(notePath)}`);
-      res.json({ success: true, commit, committed: true });
+        const commit = await stageAndCommit(repoRoot, [notePath], `docs(notes): delete ${path.basename(notePath)}`);
+        res.json({ success: true, commit, committed: true });
+      });
     } catch (err: unknown) {
       res.status(err instanceof SourceError ? err.status : 500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -156,17 +161,19 @@ export function createLocalNotesRouter(): Router {
       const { handle, notebook } = await noteRepository(res, notePath, notebookId);
       const repoRoot = asLocal(handle).root;
 
-      if (typeof content === 'string') {
-        const restored = writeNoteFile(repoRoot, notePath, content, metadata, notebook.id, notebook.root);
-        return res.json({ success: true, note: restored });
-      }
+      return await serializeWorkspaceMutation(repoRoot, async () => {
+        if (typeof content === 'string') {
+          const restored = writeNoteFile(repoRoot, notePath, content, metadata, notebook.id, notebook.root);
+          return res.json({ success: true, note: restored });
+        }
 
-      const change = (await listChanges(repoRoot)).find(file => file.path === notePath);
-      if (!change) return res.status(409).json({ error: 'This note has no changes to restore.' });
-      const restored = await changeFile(repoRoot, notePath, 'restore', req.body.revision || change.revision);
-      if (!change.tracked) return res.json({ success: true, note: null, ...restored });
-      const restoredNote = readNoteFile(repoRoot, notePath, notebook.id, notebook.root);
-      res.json({ success: true, note: restoredNote });
+        const change = (await listChanges(repoRoot)).find(file => file.path === notePath);
+        if (!change) return res.status(409).json({ error: 'This note has no changes to restore.' });
+        const restored = await changeFile(repoRoot, notePath, 'restore', req.body.revision || change.revision);
+        if (!change.tracked) return res.json({ success: true, note: null, ...restored });
+        const restoredNote = readNoteFile(repoRoot, notePath, notebook.id, notebook.root);
+        res.json({ success: true, note: restoredNote });
+      });
     } catch (err: unknown) {
       res.status(err instanceof SourceError ? err.status : 500).json({ error: err instanceof Error ? err.message : String(err) });
     }

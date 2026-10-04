@@ -1,4 +1,5 @@
 import { STUDY_FILE } from './study.js';
+import { BookmarkError } from './bookmark-error.js';
 import { managedNotebook } from './file-manager.js';
 import path from 'node:path';
 import { assetInfo, assetPath, assetRoot, decodeAsset, isAssetPath } from './assets.js';
@@ -138,9 +139,12 @@ export abstract class RemoteSource {
     if (!expected || expected !== snapshot.sha) throw new StaleRevisionError([this.id], 'The repository changed. Reload before saving.');
   }
   async readFile(file: string): Promise<Buffer> {
+    return this.readSnapshotFile(await this.getSnapshot(), file);
+  }
+  /** Read immutable blobs from the exact snapshot used for planning or resolution. */
+  async readSnapshotFile(snapshot: RemoteSnapshot, file: string): Promise<Buffer> {
     if (file.startsWith('/') || file.includes('\\') || file.split('/').some(p => p === '..' || p === '.' || !p) || file.includes('\0')) throw new SourceError('Invalid repository path.');
-    const { entries } = await this.getSnapshot();
-    const entry = entries.find(e => e.path === file && e.type === 'blob' && e.mode !== '120000');
+    const entry = snapshot.entries.find(e => e.path === file && e.type === 'blob' && e.mode !== '120000');
     if (!entry) throw new SourceError('File unavailable.', 404);
     if ((entry.size || 0) > 5 * 1024 * 1024) throw new SourceError('File exceeds the 5 MiB read limit.', 413);
     if (!this.loaded.has(entry.sha)) await this.loadCached([entry]);
@@ -391,8 +395,9 @@ export abstract class RemoteSource {
       if (!document?.scopes.includes('folders')) throw new SourceError('Path is not an allowed workspace resource.', 403);
       const page = document.schema.safeParse(draft.page), base = document.schema.safeParse(draft.base);
       if (!page.success || !base.success) throw new SourceError(`Invalid ${document.label} configuration.`);
-      const current = readWorkspaceDocument(document, snapshot.entries.some(entry => entry.path === document.file) ? (await this.readFile(document.file)).toString('utf8') : null);
+      const current = await this.readDocumentSnapshot(document, snapshot);
       if (JSON.stringify(current) !== JSON.stringify(base.data)) throw new SourceError(`${document.label} configuration changed. Reload and review your draft.`, 409);
+      await this.validateDocumentChange(document, current, page.data, (await this.config()).notebooks, snapshot);
       changes.push({ path: document.file, content: serializeWorkspaceDocument(page.data) });
     }
     return this.commitChanges(changes, expected, 'update', documents.length ? 'folders' : 'notes', message.trim(), snapshot);
@@ -465,7 +470,39 @@ export abstract class RemoteSource {
   }
 
   async saveWorkspaceDocument(document: WorkspaceDocument, content: string, expected: string) {
-    return this.commitChanges([{ path: document.file, content }], expected, 'save', document.scopes[0]);
+    const snapshot = await this.getSnapshot(true);
+    this.assertMutable(snapshot, expected);
+    const current = await this.readDocumentSnapshot(document, snapshot);
+    await this.validateDocumentChange(document, current, readWorkspaceDocument(document, content), (await this.config()).notebooks, snapshot);
+    return this.commitChanges([{ path: document.file, content }], expected, 'save', document.scopes[0], undefined, snapshot);
+  }
+
+  private async readDocumentSnapshot(document: WorkspaceDocument, snapshot: RemoteSnapshot) {
+    const entry = snapshot.entries.find(entry => entry.path === document.file);
+    if (entry && (entry.type !== 'blob' || entry.mode === '120000')) throw new SourceError(`${document.label} must be a regular file.`, 403);
+    if (entry?.size && entry.size > document.maxBytes) throw new SourceError(`${document.label} is too large.`, 413);
+    const raw = entry ? (await this.readSnapshotFile(snapshot, document.file)).toString('utf8') : null;
+    if (raw !== null && Buffer.byteLength(raw) > document.maxBytes) throw new SourceError(`${document.label} is too large.`, 413);
+    try {
+      return readWorkspaceDocument(document, raw);
+    } catch {
+      throw new SourceError(`Invalid ${document.label} YAML. Fix the file before saving.`, 422);
+    }
+  }
+
+  private async validateDocumentChange(document: WorkspaceDocument, current: unknown, next: unknown, notebooks: NotebookConfig[], snapshot: RemoteSnapshot, relocation = false) {
+    try {
+      document.validateChange?.(current, next, notebooks, relocation);
+      if (!relocation) {
+        await document.validateReferences?.(current, next, notebooks, async file => {
+          if (!snapshot.entries.some(entry => entry.path === file)) return null;
+          return parseNoteFile((await this.readSnapshotFile(snapshot, file)).toString('utf8'), file).content;
+        });
+      }
+    } catch (error) {
+      if (error instanceof BookmarkError) throw Object.assign(new SourceError(error.message, error.code === 'duplicate-target' ? 409 : 400), { code: error.code, existingId: error.existingId });
+      throw error;
+    }
   }
 
   async commitChanges(changes: { path: string; content?: string; base64?: string; sha?: string | null; }[], expected: string, operation: string, scope: CommitScope = 'notes', requestedMessage?: string, knownSnapshot?: RemoteSnapshot) {
@@ -480,9 +517,15 @@ export abstract class RemoteSource {
       const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
       const document = workspaceDocument(file);
       const documentFile = Boolean(document?.scopes.includes(scope));
-      const allowed = documentFile || (scope === 'config' ? MANIFEST_FILES.includes(file) : !['study', 'focus', 'config'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_EXTENSIONS.test(file) : scope === 'skills' ? Boolean(skillFile(file, config.notebooks)) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (isNoteFile(file) || path.posix.basename(file) === '_dir.yml'))));
+      const allowed = documentFile || (scope === 'config' ? MANIFEST_FILES.includes(file) : !['study', 'focus', 'config', 'bookmarks'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_EXTENSIONS.test(file) : scope === 'skills' ? Boolean(skillFile(file, config.notebooks)) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (isNoteFile(file) || path.posix.basename(file) === '_dir.yml'))));
       if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
-      if (documentFile) validateWorkspaceDocument(document!, change.content);
+      if (documentFile) {
+        validateWorkspaceDocument(document!, change.content);
+        if (document!.validateChange) {
+          const current = await this.readDocumentSnapshot(document!, snapshot);
+          await this.validateDocumentChange(document!, current, readWorkspaceDocument(document!, change.content!), config.notebooks, snapshot, ['move', 'delete', 'remove-directory', 'mv'].includes(operation) && ['files', 'folders'].includes(scope));
+        }
+      }
       if (snapshot.entries.some(e => (e.path === file || file.startsWith(e.path + '/')) && (e.mode === '120000' || (e.path !== file && e.type !== 'tree')))) throw new SourceError('Path crosses a non-directory or symlink.', 403);
       const existing = snapshot.entries.find(e => e.path === file);
       if (existing && existing.type !== 'blob') throw new SourceError('A directory occupies the target path.', 409);

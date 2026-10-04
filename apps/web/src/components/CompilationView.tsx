@@ -7,6 +7,7 @@ import { type CompilationItem, type CompilationRow, moveCompilationItem } from '
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { useNoteEditing } from '../lib/note-editing.js';
 import { useCompilationActions } from '../lib/compilation-actions.js';
+import { useBookmarkActionsContext } from '../lib/bookmark-context.js';
 import { planCompilationCopy } from '../lib/compilation-copy.js';
 import { screenCollision, screenKeyboardCoordinates } from '../lib/compilation-drag.js';
 import { useLaneNotes } from '../lib/compilation-queries.js';
@@ -52,6 +53,7 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
   const navigate = useNavigate();
   const editing = useNoteEditing();
   const actions = useCompilationActions();
+  const bookmarks = useBookmarkActionsContext();
   const compilation = useCompilation({ notebookId, path }, notebooks);
   const study = useStudyWorkspace(actions.repository(notebookId), ignoreSaved);
   const { assets, error: assetError } = useCompilationAssets(notebooks, notebookId);
@@ -132,7 +134,14 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
       onAdd: () => setDialog('add'),
       extra: (
         <>
-          {!disabled && current.kind === 'custom' && current.view !== 'stack' && current.view !== 'graph' && <ReorderToggle active={reorder} disabled={disabled} onToggle={() => setReorder(value => !value)} />}
+          {bookmarks && compilation.writable && compilation.note && <button type='button' className='ui-icon-button' aria-label={t('bookmarks.add')} title={t('bookmarks.add')} onClick={() => bookmarks.bookmarkNote({ ...compilation.note!, content: compilation.note!.content ?? '' })}>☆</button>}
+          {!disabled && current.kind === 'custom' && current.view !== 'stack' && current.view !== 'graph' && (
+            <ReorderToggle
+              active={reorder}
+              disabled={disabled}
+              onToggle={() => setReorder(value => !value)}
+            />
+          )}
           {(compilation.writable || addToFocus) && (
             // Secondary actions share one menu so the header stays on one line in a narrow Focus pane.
             <DropdownMenu.Root>
@@ -140,13 +149,7 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
                 <MoreHorizontal size={16} aria-hidden='true' />
               </DropdownMenu.Trigger>
               <DropdownMenu.Portal>
-                <DropdownMenu.Content
-                  className='focus-menu'
-                  align='end'
-                  sideOffset={4}
-                  collisionPadding={8}
-                  onEscapeKeyDown={event => event.stopPropagation()}
-                >
+                <DropdownMenu.Content className='focus-menu' align='end' sideOffset={4} collisionPadding={8} onEscapeKeyDown={event => event.stopPropagation()}>
                   {addToFocus && (
                     <DropdownMenu.Item onSelect={addToFocus}>
                       <LayoutGrid size={14} aria-hidden='true' />

@@ -60,5 +60,5 @@ export async function readBoundedFile(root: string, file: string, maxBytes: numb
 
 /** Reads a remote file as text when `snapshot` lists it; null otherwise. */
 export async function readSnapshotText(reader: RemoteSource, snapshot: RemoteSnapshot, file: string) {
-  return snapshot.entries.some(entry => entry.path === file) ? (await reader.readFile(file)).toString('utf8') : null;
+  return snapshot.entries.some(entry => entry.path === file) ? (await reader.readSnapshotFile(snapshot, file)).toString('utf8') : null;
 }

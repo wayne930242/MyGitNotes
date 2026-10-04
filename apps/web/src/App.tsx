@@ -1,4 +1,8 @@
 import { useNoteSort } from './app/useNoteSort.js';
+import { useBookmarkActions } from './app/useBookmarkActions.js';
+import { BookmarksProvider } from './lib/bookmark-context.js';
+import { BookmarkDialog } from './components/BookmarkDialog.js';
+import { captureBookmarkQuery } from './lib/bookmark-navigation.js';
 import { useFilterSidebar } from './app/useFilterSidebar.js';
 import { useTheme } from './app/useTheme.js';
 import { useFilePanel } from './app/useFilePanel.js';
@@ -104,9 +108,10 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const editorRoute = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
 
-  const { selectedNotebookId, folders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, actionError, setActionError, repoRoot, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
+  const { selectedNotebookId, folders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, actionError, setActionError, repoRoot, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus: focusPage, bookmarks, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
   const refreshDocuments = async () => {
     await Promise.all(documents.map(document => document.refresh()));
+    await queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
   };
   // The selected notebook's repository decides what the browse, create and file views may write.
   const canWrite = canWriteNotebook(selectedNotebookId);
@@ -190,6 +195,32 @@ const AppContent: React.FC = () => {
 
   const { commitWorkingNotes } = useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError });
   const { commitNoteFile } = useQuickNoteCommit({ remote, repositoryFor, refreshWorkspace, commitWorkingNotes });
+  const bookmarkActions = useBookmarkActions({
+    controller: bookmarks,
+    config,
+    folders,
+    repositoryFor,
+    remote,
+    readDraft,
+    selectedNotebookId,
+    refreshKey: JSON.stringify([repositories.map(repository => [repository.id, repository.revision, repository.gitStatus]), gitStatus]),
+    captureView: () => {
+      const owner = config!.notebooks.find(notebook => notebook.id === selectedNotebookId)!;
+      return captureBookmarkQuery({ ...queryState, q: searchQuery, folders: selectedFolders, view: activeTab === 'graph' ? 'graph' : viewMode }, { field: sortField, order: sortOrder }, owner, scopeNotebookId);
+    },
+    sort: { field: sortField, order: sortOrder },
+    view: viewMode,
+    prepareLeave: async () => {
+      if (activeTab === 'agent' && !await agentSystemRef.current?.prepareLeave()) return false;
+      if (activeTab === 'assets' && !await fileManagerRef.current?.prepareLeave()) return false;
+      return editorRegistry.flushEditors();
+    },
+    flushEditors: editorRegistry.flushEditors,
+    commitNoteFile,
+    openNote: handleOpenNote,
+    navigate,
+    onError: setActionError,
+  });
 
   // Assets are scoped to whichever notebook the open note (or the selected browse notebook) belongs to.
   const { handleUploadAsset, handleDeleteAsset, handleMoveAsset } = useAssetOperations({ editingNote, selectedNotebookId, remote, setAssets, setGitStatus });
@@ -353,7 +384,7 @@ const AppContent: React.FC = () => {
   if (loading || loadError) return <ConnectionState loading={loading} error={loadError} onRetry={refreshWorkspace} />;
   if (route.legacyScreen) return <LegacyScreenRedirect laneId={route.legacyLane} notebooks={config?.notebooks || []} onMissing={setActionError} />;
 
-  return (
+  const content = (
     <CompilationActionsProvider value={compilationActions}>
       <WorkspaceLinks notebooks={config?.notebooks || []} folders={folders} onOpenNote={(note, anchor, source) => void openLink(note, anchor, source)}>
         <NoteLocationProvider locate={locateNote}>
@@ -496,7 +527,42 @@ const AppContent: React.FC = () => {
                         <main className='workspace-main notes-main'>
                           <PageToolbar>
                             {dockToggle}
-                            <NoteToolbar sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode} hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null} showHidden={showHidden} descendants={route.descendants} onShowHiddenChange={value => changeFilters({ showHidden: value })} onDescendantsChange={value => changeFilters({ descendants: value })} onOpenNewNoteModal={() => openNewNote()} onOpenNewCompilation={() => setNewCompilationOpen(true)} query={searchQuery} onQueryChange={value => changeFilters({ q: value })} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(open => !open)} focusControls={<FocusControls focus={noteFocus} onShow={key => void showFocus(key)} onReload={() => void focusPage.reload()} browseToggle={focusCapacity === 1 ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') } : undefined} />} />
+                            <NoteToolbar
+                              onSaveView={() => {
+                                try {
+                                  bookmarkActions.value.request({ notebookId: selectedNotebookId, target: { kind: 'query', query: bookmarkActions.value.captureView() }, label: searchQuery || t('bookmarks.saveView') });
+                                } catch {
+                                  setActionError(t('bookmarks.scopeHint'));
+                                }
+                              }}
+                              sortField={sortField}
+                              sortOrder={sortOrder}
+                              onSortChange={handleSortChange}
+                              readOnly={!canWrite}
+                              viewMode={viewMode}
+                              setViewMode={setViewMode}
+                              hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null}
+                              showHidden={showHidden}
+                              descendants={route.descendants}
+                              onShowHiddenChange={value => changeFilters({ showHidden: value })}
+                              onDescendantsChange={value => changeFilters({ descendants: value })}
+                              onOpenNewNoteModal={() => openNewNote()}
+                              onOpenNewCompilation={() => setNewCompilationOpen(true)}
+                              query={searchQuery}
+                              onQueryChange={value => changeFilters({ q: value })}
+                              filtersOpen={filtersOpen}
+                              onToggleFilters={() => setFiltersOpen(open => !open)}
+                              focusControls={
+                                <FocusControls
+                                  focus={noteFocus}
+                                  onShow={key => void showFocus(key)}
+                                  onReload={() => void focusPage.reload()}
+                                  browseToggle={focusCapacity === 1
+                                    ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') }
+                                    : undefined}
+                                />
+                              }
+                            />
                           </PageToolbar>
                           {noteFocus.layout
                             ? (
@@ -704,11 +770,13 @@ const AppContent: React.FC = () => {
               )}
             </div>
             <ImageLightbox />
+            {bookmarkActions.dialog && <BookmarkDialog key={`${bookmarkActions.dialog.notebook.id}:${bookmarkActions.dialog.request.id ?? JSON.stringify(bookmarkActions.dialog.request.target)}`} {...bookmarkActions.dialog} />}
           </NoteEditingProvider>
         </NoteLocationProvider>
       </WorkspaceLinks>
     </CompilationActionsProvider>
   );
+  return <BookmarksProvider value={bookmarkActions.value}>{content}</BookmarksProvider>;
 };
 
 export const App: React.FC = () => {

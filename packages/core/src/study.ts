@@ -95,7 +95,7 @@ export const STUDY_DOCUMENT: WorkspaceDocument<StudyWorkspace> = {
     StudyWorkspaceSchema.parse(value);
     return value as StudyWorkspace;
   },
-  relocate(study, notebookId, move) {
+  relocate(study, { id: notebookId }, move) {
     let changed = false;
     for (const note of study.notes) {
       if (note.notebookId === notebookId) {

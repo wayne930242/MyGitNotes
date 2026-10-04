@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { NotebookConfig } from './types.js';
 import { parseFolderConfig } from './folders.js';
 import { relocateLinks } from './folder-plan.js';
-import { relocateWorkspaceDocuments } from './workspace-documents.js';
+import { relocateWorkspaceDocuments, workspaceDocument } from './workspace-documents.js';
 import { isCompilationPath, relocateCompilation } from './compilation.js';
 import { decodeAsset } from './assets.js';
 import { LEGACY_WORKSPACE_CONFIG_FILENAME, WORKSPACE_CONFIG_FILENAME } from './config.js';
@@ -25,7 +25,7 @@ export const withinPath = (file: string, dir: string) => file === dir || file.st
 
 /** File browsing includes assets and dotfiles; note discovery keeps its own narrower rule. */
 export function managedNotebook(file: string, notebooks: NotebookConfig[]): NotebookConfig | undefined {
-  if (!filePath.safeParse(file).success) return;
+  if (!filePath.safeParse(file).success || workspaceDocument(file)) return;
   let nb = [...notebooks].sort((a, b) => b.root.length - a.root.length).find(nb => withinPath(file, nb.root));
   if (nb) {
     const relative = file.slice(nb.root.length + 1);
@@ -153,7 +153,7 @@ export function planFileChange(snapshot: FileSnapshot, input: unknown) {
       files.set(next, pinned !== null ? Buffer.from(pinned) : raw === undefined ? bytes : Buffer.from(relocateLinks(raw, file, next, relocate)));
     }
     pathMap[command.path] = destination;
-    relocateWorkspaceDocuments({ get: file => files.get(file)?.toString('utf8'), set: (file, text) => files.set(file, Buffer.from(text)) }, nb!.id, relocate);
+    relocateWorkspaceDocuments({ get: file => files.get(file)?.toString('utf8'), set: (file, text) => files.set(file, Buffer.from(text)) }, nb!, relocate);
     selectedPath = destination;
   }
   for (const [file, bytes] of files) if (path.posix.basename(file) === '_dir.yml' && bytes !== snapshot.files.get(file)) parseFolderConfig(bytes.toString('utf8'), path.posix.basename(path.posix.dirname(file)), file);

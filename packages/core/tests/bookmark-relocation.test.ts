@@ -1,0 +1,52 @@
+import { expect, it } from 'vitest';
+import { parse, stringify } from 'yaml';
+import { BOOKMARKS_DOCUMENT, BOOKMARKS_FILE } from '../src/bookmarks.js';
+import { managedNotebook, planFileChange } from '../src/file-manager.js';
+import { planFolderChange } from '../src/folder-plan.js';
+import { callNoteShell } from '../src/note-shell.js';
+import { githubFixture } from './fixtures/github.js';
+import { gitlabFixture } from './fixtures/gitlab.js';
+import { openRemoteHome } from '../src/remote-factory.js';
+const notebooks = [{ id: 'ex', title: 'Example', root: 'notes/ex' }];
+const page = { version: 1, notebooks: [{ notebookId: 'ex', groups: [], bookmarks: [{ id: 'a', label: 'A', groupId: null, target: { kind: 'note', path: 'work/b.md' } }, { id: 'folder', label: 'Work', groupId: null, target: { kind: 'folder', path: 'work' } }] }] };
+const files = () => new Map([[BOOKMARKS_FILE, stringify(page)], ['notes/ex/work/b.md', '# Beta']]);
+it('file and folder planners include bookmarks in one plan, deletion retains them and absent metadata stays absent', () => {
+  const source = { notebooks, directories: ['notes/ex', 'notes/ex/work', 'notes/ex/dest'], protectedPaths: [], files: files() };
+  const after = planFolderChange(source, { kind: 'move', notebookId: 'ex', path: 'work', parent: 'dest' });
+  expect(parse(after.files.get(BOOKMARKS_FILE)!).notebooks[0].bookmarks.map((b: { target: { path: string; }; }) => b.target.path)).toEqual(['dest/work/b.md', 'dest/work']);
+  const binary = { ...source, files: new Map([...source.files].map(([p, raw]) => [p, Buffer.from(raw)])) };
+  const removed = planFileChange(binary, { kind: 'remove-directory', notebookId: 'ex', path: 'notes/ex/work', destination: 'notes/ex/dest' });
+  expect(parse(removed.files.get(BOOKMARKS_FILE)!.toString()).notebooks[0].bookmarks.map((b: { target: { path: string; }; }) => b.target.path)).toEqual(['dest/b.md', 'dest']);
+  const deleted = planFileChange(binary, { kind: 'delete-directory', notebookId: 'ex', path: 'notes/ex/work' });
+  expect(deleted.files.get(BOOKMARKS_FILE)).toEqual(binary.files.get(BOOKMARKS_FILE));
+  binary.files.delete(BOOKMARKS_FILE);
+  expect(planFileChange(binary, { kind: 'move', notebookId: 'ex', path: 'notes/ex/work/b.md', destination: 'notes/ex/dest/b.md' }).files.has(BOOKMARKS_FILE)).toBe(false);
+});
+it('rejects corrupt metadata before moving and protects the document through aliases', () => {
+  const source = { notebooks, directories: ['notes/ex', 'notes/ex/work', 'notes/ex/dest'], protectedPaths: [], files: new Map([...files()].map(([p, raw]) => [p, Buffer.from(p === BOOKMARKS_FILE ? 'version: 2' : raw)])) };
+  expect(() => planFileChange(source, { kind: 'move', notebookId: 'ex', path: 'notes/ex/work/b.md', destination: 'notes/ex/dest/b.md' })).toThrow();
+  expect(managedNotebook(BOOKMARKS_FILE, [{ ...notebooks[0], pathAliases: { '@all/*': '*' } }])).toBeUndefined();
+});
+it('GitLab MCP move commits bookmarks with notes and deletion retains the moved references', async () => {
+  const f = gitlabFixture();
+  const reader = () => openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'token', f.request).reader;
+  const initial = JSON.parse(JSON.stringify(page).replaceAll('work', 'folder'));
+  await reader().saveWorkspaceDocument(BOOKMARKS_DOCUMENT, stringify(initial), f.head);
+  await callNoteShell(reader(), 'mv', { source: 'notes/ex/folder', destination: 'notes/ex/moved', recursive: true, revision: f.head }, true);
+  const moved = f.files.get(BOOKMARKS_FILE)!;
+  expect(parse(moved).notebooks[0].bookmarks.map((b: { target: { path: string; }; }) => b.target.path)).toEqual(['moved/b.md', 'moved']);
+  expect(f.writes).toBe(2);
+  const commits = f.calls.filter(call => call.url.endsWith('/repository/commits'));
+  const actions = JSON.parse(String(commits[1].init?.body)).actions;
+  expect(actions.map((action: { file_path: string; }) => action.file_path)).toEqual(expect.arrayContaining([BOOKMARKS_FILE, 'notes/ex/folder/b.md', 'notes/ex/moved/b.md']));
+  await callNoteShell(reader(), 'rm', { paths: ['notes/ex/moved'], recursive: true, revision: f.head }, true);
+  expect(f.files.get(BOOKMARKS_FILE)).toBe(moved);
+});
+it('MCP directory mv relocates using the resolved basename destination in the same commit', async () => {
+  const f = githubFixture({ [BOOKMARKS_FILE]: stringify(page), 'notes/ex/dest/_dir.yml': 'title: Dest' });
+  await callNoteShell(f.reader(), 'mv', { source: 'notes/ex/work', destination: 'notes/ex/dest', recursive: true, revision: f.head() }, true);
+  expect(parse(f.text(BOOKMARKS_FILE)!).notebooks[0].bookmarks.map((b: { target: { path: string; }; }) => b.target.path)).toEqual(['dest/work/b.md', 'dest/work']);
+  const trees = f.calls.filter(c => c.endpoint === '/git/trees');
+  expect(trees).toHaveLength(1);
+  expect(trees[0].body.tree.map((c: { path: string; }) => c.path)).toContain(BOOKMARKS_FILE);
+});

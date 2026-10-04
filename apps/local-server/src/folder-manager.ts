@@ -2,7 +2,7 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { FolderCommandSchema, type FolderSnapshot, isCompilationPath, isNotebookContent, type NotebookConfig, planFolderChange, RemoteSource, SourceError, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
+import { FolderCommandSchema, type FolderSnapshot, isCompilationPath, isNotebookContent, type NotebookConfig, planFolderChange, type RemoteSnapshot, RemoteSource, SourceError, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { notebookRepository } from './request-workspace.js';
@@ -83,8 +83,9 @@ export function applyLocalFolderPlan(root: string, before: FolderSnapshot, after
   }
 }
 
-async function remoteSnapshot(reader: RemoteSource): Promise<FolderSnapshot> {
-  const { entries } = await reader.getSnapshot(true);
+async function remoteSnapshot(reader: RemoteSource): Promise<{ snapshot: FolderSnapshot; state: RemoteSnapshot; }> {
+  const state = await reader.getSnapshot(true);
+  const { entries } = state;
   const config = await reader.config();
   const snapshot: FolderSnapshot = { notebooks: config.notebooks, directories: [], protectedPaths: [], files: new Map() };
   const readable: string[] = [];
@@ -103,8 +104,8 @@ async function remoteSnapshot(reader: RemoteSource): Promise<FolderSnapshot> {
   }
   if (bytes > 32 * 1024 * 1024) throw new SourceError('Folder operations currently support up to 32 MiB of notebook text.', 413);
   await reader.prefetchFiles(readable);
-  for (const file of readable) snapshot.files.set(file, (await reader.readFile(file)).toString('utf8'));
-  return snapshot;
+  for (const file of readable) snapshot.files.set(file, (await reader.readSnapshotFile(state, file)).toString('utf8'));
+  return { snapshot, state };
 }
 
 export function createFolderManagerRouter(): Router {
@@ -139,12 +140,11 @@ export function createFolderManagerRouter(): Router {
       }
       if (!handle.authenticated) throw new SourceError('Sign in with write access to manage folders.', 403);
       const { reader } = handle;
-      const before = await remoteSnapshot(reader);
-      const current = await reader.getSnapshot();
+      const { snapshot: before, state: current } = await remoteSnapshot(reader);
       if (current.sha !== req.body.revision) throw new SourceError('The workspace changed. Reload the folders and try again.', 409);
       const after = planFolderChange(before, command.data);
       const changes = changesFor(before, after);
-      const receipt = changes.length ? await reader.commitChanges(changes, req.body.revision, command.data.kind, 'folders') : { revision: current.sha };
+      const receipt = changes.length ? await reader.commitChanges(changes, req.body.revision, command.data.kind, 'folders', undefined, current) : { revision: current.sha };
       res.json({ selectedPath: after.selectedPath, revision: receipt.revision });
     } catch (error) {
       fail(res, error);

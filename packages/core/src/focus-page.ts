@@ -277,4 +277,4 @@ export function ownFocusPage(page: FocusPage, notebooks: readonly { id: string; 
   return foreign ? { page: { ...page, focuses }, foreign } : { page, foreign };
 }
 
-export const FOCUS_DOCUMENT: WorkspaceDocument<FocusPage> = { file: FOCUS_PAGE_FILE, label: 'Focus', maxBytes: FOCUS_MAX_BYTES, scopes: ['focus', 'folders', 'files'], schema: FocusPageSchema, fileSchema: FocusPageSchema, empty: emptyFocusPage, read: readFocusPage, relocate: relocateFocusPaths, own: ownFocusPage };
+export const FOCUS_DOCUMENT: WorkspaceDocument<FocusPage> = { file: FOCUS_PAGE_FILE, label: 'Focus', maxBytes: FOCUS_MAX_BYTES, scopes: ['focus', 'folders', 'files'], schema: FocusPageSchema, fileSchema: FocusPageSchema, empty: emptyFocusPage, read: readFocusPage, relocate: (page, notebook, move) => relocateFocusPaths(page, notebook.id, move), own: ownFocusPage };

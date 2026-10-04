@@ -56,7 +56,7 @@ export function createLocalGitRouter(): Router {
       const { path: file, action, revision } = req.body;
       if (!['stage', 'unstage', 'restore'].includes(action) || typeof revision !== 'string') return res.status(400).json({ error: 'An action and reviewed revision are required.' });
       if (!canManageChange(repoRoot, config, file)) return res.status(403).json({ error: 'This file is outside workspace resources.' });
-      res.json({ success: true, ...await changeFile(repoRoot, file, action, revision) });
+      res.json({ success: true, ...await serializeWorkspaceMutation(repoRoot, () => changeFile(repoRoot, file, action, revision)) });
     } catch (error) {
       res.status(409).json({ error: (error as Error).message });
     }

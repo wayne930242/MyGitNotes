@@ -81,6 +81,14 @@ Run `pnpm update-core` from a clean `core` checkout; it fast-forwards `core` fro
 - Connect local agents through stdio or remote agents through Streamable HTTP MCP with named read-only or write grants.
 - The Files page manages notebook folders, notes, text files, and attachments: 3 MiB uploads, 5 MiB reads and changes, up to 200 changed files per operation.
 
+## Notebook bookmarks
+
+The **Bookmarks** section above each notebook's folders contains shared shortcuts. Use **Add bookmark**, note/outline or folder actions, a compilation's bookmark action, or **Save current view** in Notes. Supported targets are notes, folders, compilations, exact headings/paragraphs, HTTP(S) websites, and the current notebook's query/filters/view/sort. A saved query runs against current content; it does not freeze results. Position creation can use the source selection or a saved-source picker.
+
+Edit a bookmark to change its label, target or group. Drag entries/groups to reorder, or use Move up/down and the group selector with keyboard or touch. Removing a group ungroups its entries; removing a bookmark never deletes content. Equivalent additions offer **Edit existing**. Missing targets remain visible for repair; unresolved positions offer **Open whole note** and re-targeting. Matching is exact text/context, never guessed by line number, and adds no markers to Markdown. Websites open in a separate tab without opener access; they are not fetched or checked in advance.
+
+Collections live in each owning repository's optional `.mygitnotes-bookmarks.yaml`. Local **Saved** means written to the worktree: use normal Git Changes to commit/sync. Remote **Pending** is only a browser draft until committed through Changes. Position creation requires saving local note contents first, or explicitly committing a remote staged note first. Read-only users can open bookmarks but cannot edit shared data. Failed/conflicting saves preserve drafts for review; unavailable repositories are not treated as deleted targets. GitNotes moves update references atomically; external moves require re-targeting.
+
 ## Documentation
 
 - [Deployment guide](docs/deploy.md)

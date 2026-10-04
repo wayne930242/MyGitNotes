@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { getCurrentBranch } from '@mygitnotes/git';
-import { assetHash, assetInfo, assetRoot, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isCompilationPath, isNotebookContent, managedNotebook, type NotebookConfig, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSource, SourceError, withinPath, WORKSPACE_DOCUMENTS, type WorkspaceConfig } from '@mygitnotes/core';
+import { assetHash, assetInfo, assetRoot, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isCompilationPath, isNotebookContent, managedNotebook, type NotebookConfig, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSnapshot, type RemoteSource, SourceError, withinPath, WORKSPACE_DOCUMENTS, type WorkspaceConfig } from '@mygitnotes/core';
 import { eachRepository, notebookRepository, noteRepository, type RepositoryHandle } from './request-workspace.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { regularPath, writeFileAtomicSync } from './workspace-files.js';
@@ -89,7 +89,7 @@ export function localFileSnapshot(root: string, notebooks: NotebookConfig[], com
 function catalogRevision(catalog: FileCatalog) {
   return createHash('sha256').update(JSON.stringify([catalog.notebooks, [...catalog.directories].sort(), [...catalog.protectedPaths].sort(), [...catalog.files].sort(([a], [b]) => a.localeCompare(b)).map(([file, entry]) => [file, entry.stamp])])).digest('hex');
 }
-async function remoteFiles(reader: RemoteSource, command: FileCommand): Promise<FileSnapshot> {
+async function remoteFiles(reader: RemoteSource, command: FileCommand): Promise<{ snapshot: FileSnapshot; state: RemoteSnapshot; }> {
   const state = await reader.getSnapshot(true), config = await reader.config();
   const snapshot: FileSnapshot = { notebooks: config.notebooks, files: new Map(), directories: [], protectedPaths: [] };
   const readable: string[] = [];
@@ -105,12 +105,12 @@ async function remoteFiles(reader: RemoteSource, command: FileCommand): Promise<
       snapshot.files.set(file, Buffer.alloc(0));
       continue;
     }
-    const bytes = await reader.readFile(file);
+    const bytes = await reader.readSnapshotFile(state, file);
     total += bytes.length;
     if (total > 32 * 1024 * 1024) throw new SourceError('File operations support 32 MiB per workspace snapshot.', 413);
     snapshot.files.set(file, bytes);
   }
-  return snapshot;
+  return { snapshot, state };
 }
 export function changedFiles(before: FileSnapshot, after: FileSnapshot) {
   const files = [...new Set([...before.files.keys(), ...after.files.keys()])].filter(file => !before.files.get(file)?.equals(after.files.get(file) ?? Buffer.alloc(0)) || !after.files.has(file));
@@ -153,11 +153,11 @@ export function createFileManagerRouter(): Router {
     const { handle, config } = await notebookRepository(res, command.notebookId);
     if (handle.kind === 'local') {
       const snapshot = localFileSnapshot(handle.root, config.notebooks, command);
-      return { snapshot, revision: catalogRevision(localFileCatalog(handle.root, config.notebooks)), writable: await getCurrentBranch(handle.root) === 'main', reader: undefined, local: handle.root, notebooks: config.notebooks };
+      return { snapshot, revision: catalogRevision(localFileCatalog(handle.root, config.notebooks)), writable: await getCurrentBranch(handle.root) === 'main', reader: undefined, remoteSnapshot: undefined, local: handle.root, notebooks: config.notebooks };
     }
     const { reader } = handle;
-    const snapshot = await remoteFiles(reader, command), state = await reader.getSnapshot();
-    return { snapshot, revision: state.sha, writable: reader.canWrite(state), reader, local: undefined, notebooks: config.notebooks };
+    const { snapshot, state } = await remoteFiles(reader, command);
+    return { snapshot, revision: state.sha, writable: reader.canWrite(state), reader, remoteSnapshot: state, local: undefined, notebooks: config.notebooks };
   };
   const catalogOf = async (handle: RepositoryHandle, config: WorkspaceConfig) => {
     if (handle.kind === 'local') {
@@ -288,7 +288,7 @@ export function createFileManagerRouter(): Router {
         applyLocalFilePlan(state.local, state.snapshot, after);
         nextRevision = catalogRevision(localFileCatalog(state.local, state.notebooks));
       } else {
-        const entries = (await state.reader!.getSnapshot()).entries;
+        const entries = state.remoteSnapshot!.entries;
         const changes: RemoteChange[] = paths.map(file => {
           const bytes = after.files.get(file);
           if (!bytes) return { path: file, sha: null };
@@ -297,7 +297,7 @@ export function createFileManagerRouter(): Router {
           const content = editableFile(file, bytes);
           return content === undefined ? { path: file, base64: bytes.toString('base64') } : { path: file, content };
         });
-        nextRevision = changes.length ? (await state.reader!.commitChanges(changes, state.revision, command.kind, 'files')).revision : state.revision;
+        nextRevision = changes.length ? (await state.reader!.commitChanges(changes, state.revision, command.kind, 'files', undefined, state.remoteSnapshot)).revision : state.revision;
       }
       res.json({ revision: nextRevision, selectedPath: after.selectedPath, pathMap: after.pathMap, deletedPaths: [...paths.filter(file => !after.files.has(file)), ...state.snapshot.directories.filter(dir => !after.directories.includes(dir))] });
     };

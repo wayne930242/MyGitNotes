@@ -34,6 +34,18 @@
       "types": "./dist/screen-page.d.ts",
       "import": "./dist/screen-page.js"
     },
+    "./bookmarks": {
+      "types": "./dist/bookmarks.d.ts",
+      "import": "./dist/bookmarks.js"
+    },
+    "./bookmark-anchor": {
+      "types": "./dist/bookmark-anchor.d.ts",
+      "import": "./dist/bookmark-anchor.js"
+    },
+    "./bookmark-query": {
+      "types": "./dist/bookmark-query.d.ts",
+      "import": "./dist/bookmark-query.js"
+    },
     "./focus-page": {
       "types": "./dist/focus-page.d.ts",
       "import": "./dist/focus-page.js"

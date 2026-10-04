@@ -59,7 +59,7 @@ export function useGraphData({ notebooks, filters, lane, activeLane, rows, laneI
 
   const graphData = useMemo(() => {
     const eligible = new Set(filters?.value.showHidden ? graph.nodes.map(node => node.id) : visiblePaths.paths);
-    const nodes = graph.nodes.filter(node => eligible.has(node.id) && (activeNotebookId === undefined || node.notebookId === activeNotebookId));
+    const nodes = graph.nodes.filter(node => eligible.has(node.id) && (scopeNotebook === 'all' || node.notebookId === scopeNotebook));
     const ids = new Set(nodes.map(node => node.id));
     const full = { nodes, links: graph.links.filter(link => ids.has(link.source) && ids.has(link.target)) };
     const graphResult = selectFilteredGraph(full, new Set(matching), filters?.neighbors || false);
@@ -77,7 +77,7 @@ export function useGraphData({ notebooks, filters, lane, activeLane, rows, laneI
         return { ...node, x: position.x, y: position.y, fx: position.x, fy: position.y };
       }),
     };
-  }, [graph, matching, visiblePaths.paths, layout, showOrphans, filters?.neighbors, filters?.value.showHidden, activeNotebookId, positions]);
+  }, [graph, matching, visiblePaths.paths, layout, showOrphans, filters?.neighbors, filters?.value.showHidden, scopeNotebook, positions]);
 
   /* eslint-enable react/refs */
   const colors = useMemo(() => graphColorGroups(graphData.nodes, notebooks, appearance), [graphData, notebooks, appearance]);

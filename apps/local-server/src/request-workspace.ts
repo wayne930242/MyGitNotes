@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type express from 'express';
-import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, localManifest, type NotebookConfig, type NoteCatalog, parseRevisions, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
+import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, localManifest, type NotebookConfig, type NoteCatalog, parseRevisions, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { authToken } from './auth.js';
 
@@ -167,6 +167,7 @@ export async function notebookRepository(res: express.Response, notebookId: unkn
  */
 export async function noteRepository(res: express.Response, file: unknown, notebookId?: unknown): Promise<ResolvedRepository> {
   if (typeof file !== 'string' || !file) throw new SourceError('path is required.');
+  if (workspaceDocument(file)) throw new SourceError('Workspace metadata is protected.', 403);
   if (notebookId !== undefined && notebookId !== '') {
     const resolved = await notebookRepository(res, notebookId);
     if (!file.startsWith(`${resolved.notebook.root}/`)) throw new SourceError('Path is not in the named notebook.', 403);

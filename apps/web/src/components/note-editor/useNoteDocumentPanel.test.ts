@@ -33,7 +33,7 @@ it('keeps panel drafts across content updates and resets navigation only when th
 
 it('clamps a search selection when matches shrink and keeps the clamped selection when they grow again', () => {
   const revealRange = vi.fn();
-  const editorRef = { current: { insert: vi.fn(), revealRange, goToLine: vi.fn(), getCurrentLine: () => 1 } };
+  const editorRef = { current: { insert: vi.fn(), revealRange, goToLine: vi.fn(), getCurrentLine: () => 1, getSelection: () => null, ready: () => true } };
   const initialProps = { frame: 'zoom' as const, active: false, isMarkdown: true, content: 'one one one', editorMode: 'raw' as const, editorRef, metadata: {}, notePath: 'notes/a.md', branch: 'main', readOnly: false };
   const { result, rerender } = renderHook(props => useNoteDocumentPanel(props), { initialProps });
   act(() => {

@@ -1,4 +1,8 @@
 import { EditorFooter } from './EditorFooter.js';
+import { captureBookmarkSelection, captureTextAnchor, listBookmarkPositions } from '@mygitnotes/core/bookmark-anchor';
+import { useBookmarkActionsContext } from '../lib/bookmark-context.js';
+import { useBookmarkPosition } from '../lib/use-bookmark-position.js';
+import { useTranslation } from '../lib/i18n/index.js';
 import { NoteQuickActions } from './note-editor/NoteQuickActions.js';
 import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { MarkdownEditor, type MarkdownEditorHandle, type MarkdownEditorMode } from './MarkdownEditor.js';
@@ -78,6 +82,31 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
 
   const session = useNoteEditorSession({ note, readOnly, autoSave, draftMode, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, onCommitFile, propIsDirty, branch, draftScope, onClose, onSession });
   // A graph card has no footer to show the counts in.
+  const bookmarks = useBookmarkActionsContext();
+  const { t } = useTranslation();
+  const [bookmarkError, setBookmarkError] = useState('');
+  useBookmarkPosition(note, session.content, editorRef);
+  const canBookmark = Boolean(bookmarks?.repositoryFor(note.notebookId)?.write);
+  const bookmarkPosition = (headingFrom?: number) => {
+    if (!bookmarks || !canBookmark) return;
+    setBookmarkError('');
+    try {
+      if (headingFrom !== undefined) {
+        const position = listBookmarkPositions(session.content, note.path.split('.').at(-1)).find((candidate: { kind: string; from: number; to: number; }) => candidate.kind === 'heading' && candidate.from === headingFrom);
+        if (!position) {
+          setBookmarkError(t('bookmarks.positionHint'));
+          return;
+        }
+        bookmarks.bookmarkPosition(note, captureTextAnchor(session.content, position, 'heading'));
+      } else {
+        const selection = editorRef.current?.getSelection();
+        const anchor = selection && selection.to > selection.from ? captureBookmarkSelection(session.content, selection, note.path.split('.').at(-1)) : undefined;
+        bookmarks.bookmarkPosition(note, anchor);
+      }
+    } catch {
+      setBookmarkError(t('bookmarks.positionHint'));
+    }
+  };
   const changes = useNoteDiffStats(frame === 'compact' ? undefined : readDiff, session.isDirty, !session.isSaving && !session.hasUnsavedChanges);
   const refresh = onReadRemote && !session.blocked ? session.pullLatest : undefined;
   const docPanel = useNoteDocumentPanel({ frame, active, isMarkdown, content: session.content, editorMode, documentPanel, editorRef, metadata: session.metadata, notePath: note.path, branch, draftScope, readOnly });
@@ -99,16 +128,24 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
     return (
       <div className='note-editor' data-frame={frame} data-source-notebook={note.notebookId}>
         <NoteEditorNotices session={session} notePath={note.path} />
+        {canBookmark && (
+          <div className='bookmark-control-grid'>
+            <button type='button' onClick={() => bookmarks!.bookmarkNote(note)}>{t('bookmarks.note')}</button>
+            <button type='button' onPointerDown={event => event.preventDefault()} onClick={() => bookmarkPosition()}>{t('bookmarks.position')}</button>
+          </div>
+        )}
+        {bookmarkError && <p role='alert'>{bookmarkError}</p>}
         <NoteCompactFrame note={note} session={session} editorRef={editorRef} isMarkdown={isMarkdown} editorMode={editorMode} setEditorMode={setEditorMode} showLineNumbers={showLineNumbers} toggleLineNumbers={toggleLineNumbers} onCaret={onCaret} />
       </div>
     );
   }
 
-  const panel = { ...docPanel, isMarkdown, notePath: note.path, content: session.content, lineNumberOffset: session.baseNote.lineNumberOffset || 0, metadata: session.metadata, setMetadata: session.setMetadata, statuses, metadataFields, availableTags, locked: session.locked, notebookId: note.notebookId, onInsertAssetRef: handleInsertAssetRef, readOnly, beforeFileChange, onFilesChanged };
+  const panel = { ...docPanel, onBookmarkHeading: canBookmark ? bookmarkPosition : undefined, isMarkdown, notePath: note.path, content: session.content, lineNumberOffset: session.baseNote.lineNumberOffset || 0, metadata: session.metadata, setMetadata: session.setMetadata, statuses, metadataFields, availableTags, locked: session.locked, notebookId: note.notebookId, onInsertAssetRef: handleInsertAssetRef, readOnly, beforeFileChange, onFilesChanged };
   return (
     <div className='note-editor' data-frame={frame} data-source-notebook={note.notebookId} style={noteViewStyle(viewPreferences)}>
       <NoteEditorNotices session={session} notePath={note.path} />
-      <NoteEditorToolbar frame={frame} note={note} session={session} docPanel={docPanel} isMarkdown={isMarkdown} autoSave={autoSave} readOnly={readOnly} editorMode={editorMode} setEditorMode={setEditorMode} showLineNumbers={showLineNumbers} toggleLineNumbers={toggleLineNumbers} showFormatToolbar={showFormatToolbar} toggleFormatToolbar={isMarkdown && !session.locked ? toggleFormatToolbar : undefined} onRefresh={refresh} onClose={onClose} onAddToFocus={onAddToFocus} />
+      <NoteEditorToolbar frame={frame} note={note} session={session} docPanel={docPanel} isMarkdown={isMarkdown} autoSave={autoSave} readOnly={readOnly} editorMode={editorMode} setEditorMode={setEditorMode} showLineNumbers={showLineNumbers} toggleLineNumbers={toggleLineNumbers} showFormatToolbar={showFormatToolbar} toggleFormatToolbar={isMarkdown && !session.locked ? toggleFormatToolbar : undefined} onRefresh={refresh} onClose={onClose} onAddToFocus={onAddToFocus} onBookmarkNote={canBookmark ? () => bookmarks!.bookmarkNote(note) : undefined} onBookmarkPosition={canBookmark ? () => bookmarkPosition() : undefined} />
+      {bookmarkError && <p role='alert'>{bookmarkError}</p>}
       {showFormatToolbar && <div ref={setToolbarSlot} className='note-format-toolbar' />}
       <div className='note-editor-body'>
         <MarkdownEditor ref={editorRef} content={session.content} path={note.path} notebookId={note.notebookId} mode={editorMode} readOnly={session.locked} onChange={session.setContent} onCaret={onCaret} toolbarSlot={showFormatToolbar ? toolbarSlot : null} ariaLabel='Note content' showLineNumbers={showLineNumbers} lineNumberOffset={session.baseNote.lineNumberOffset} />
