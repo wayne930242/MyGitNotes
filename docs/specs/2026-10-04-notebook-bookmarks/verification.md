@@ -2,7 +2,7 @@
 
 Planning baseline: `/home/weihung/github-notes`, clean HEAD `ac26edfe69120fac9eff904b5cb7f53e76966588`.
 Status: implementation in progress; stages 1–4 (native kind, bounded editing, creation/list/insertion and atomic relocation) verified in upstream; tasks 5–6 and independent parent browser QA are not complete.
-Parent review of immutable stages 1–3 found an outline-only R2 reference-guard gap and adjacent drag duplication; both are pending follow-up after the coherent stage 4 checkpoint.
+Parent review of immutable stages 1–3 found an outline-only R2 reference-guard gap and adjacent drag duplication; both are repaired and independently anchored in the post-stage-4 checkpoint below.
 No push, deployment or downstream synchronization was performed by this worker.
 The approved model is **Outline note / 大綱筆記**, with general items and optional links, not the earlier specialized bookmark document.
 Contract: [spec.md](spec.md); implementation sequence: [design.md](design.md).
@@ -186,6 +186,45 @@ The existing Marked lexer supplies only transient block-line protection ranges, 
 Tasks 5–6 remain untouched.
 The parent-reported R2 outline-reference safety and adjacent drag duplication findings are not covered by stage 4 completion and must be repaired before final delivery.
 
+## Post-stage-4 parent-review corrections
+
+- `OUTLINE-R1-F001`: reference safety now uses dedicated `scanNotebookMarkdownNotes` / `RemoteSource.markdownNotes` enumeration including outlines; ordinary `scanNotebookNotes` / `notes` browsing stays ordinary-only.
+  Actual local scanning and actual hosted GitLab fixture scanning each reject no-force deletion of an outline-only R2 reference.
+  The loopback bucket observes zero DELETE requests and retains the object; no live R2 operation occurred.
+- `OUTLINE-R1-F002`: `moveOutlineItem` coalesces a same-offset removal/insertion into one replacement.
+  Adjacent after/before no-op drops leave exact source unchanged, while legitimate adjacent child placement changes indentation once without duplicating the item, its annotation or descendants.
+  LF/CRLF, EOF with/without final newline, trailing prose, actual mounted pointer finish and one-step undo/redo pass.
+- Red anchor `/tmp/outline-review-fixes-red.log` reproduced six failures before production fixes.
+  Targeted `/tmp/outline-review-fixes-target1.log`: 39 tests passed, including mounted CodeMirror pointer gestures and provider-not-called deletion assertions.
+- Full regression `/tmp/outline-review-tests.log`: **257 files / 1909 tests passed**.
+  Build, lint, format, fresh web/server/MCP compilers passed in `/tmp/outline-review-{build,lint,format,webtypes,servertypes,mcptypes}.log`.
+  Monitor 12 exited `tests=0 build=0 lint=0 format=0 web=0 server=0 mcp=0`.
+- Active LSP checked eight changed paths; six were silent/inconclusive and three diagnostics on two MCP paths retained obsolete core declarations despite the successful package build and fresh MCP compiler.
+  These were recorded as stale false positives, not suppressed in source or claimed as clean LSP coverage.
+
+### Actual adjacent-pointer browser check
+
+- Fresh built disposable fixture: monitor 13, PID `945116`, port `43921`, roots `/tmp/mygitnotes-bookmarks-home-gOo0wF` and `/tmp/mygitnotes-bookmarks-other-YoR06j`.
+  Owned headless browser session `outline-review-fixes`, Chromium PID `956748`, CDP port `34427`.
+- Seeded only fixture A/B `notes/shared/adjacent.outline.md` through native create-only/no-commit HTTP with Parent → Existing child, adjacent Other + `annotation **keep**` + Nested, then trailing Prose.
+- Real `agent-browser mouse move/down/up` dragged Other after Parent.
+  Visible `after`, indent 0 feedback appeared and the exact CodeMirror source stayed unchanged.
+- A second real gesture dropped Other as Parent's child.
+  Visible `child`, indent 2 feedback appeared; the complete subtree nested once and trailing prose remained outside it.
+  One actual Control+Z restored the original source; one Control+Y restored nesting without duplication.
+- Native Close note flushed the editor; `/tmp/outline-review-browser-readback.json` exact-content assertions confirmed A's nested subtree and B's unchanged original.
+- Screenshots: `/tmp/outline-review-adjacent-noop-preview.png`, `/tmp/outline-review-adjacent-child-preview.png`, `/tmp/outline-review-adjacent-final.png`.
+  The final pixels were inspected; this functional correction is not human acceptance of the replacement UI.
+- Browser closed and monitor stopped; both PIDs/listeners/temporary roots were asserted absent in `/tmp/outline-review-cleanup.log`.
+
+| Review correction | Evidence | Result |
+| --- | --- | --- |
+| Outline-only local/hosted R2 refs block no-force deletion, without broadening ordinary browse | Actual scanners + loopback bucket zero-DELETE assertions in `r2-assets.test.ts` | pass |
+| Adjacent no-op and legitimate child drops retain one exact subtree | Source matrix, mounted pointer tests and actual browser gesture/readback | pass |
+| Whole child move remains one undoable/redoable transaction | Mounted keys and actual Control+Z/Control+Y source assertions | pass |
+
+Tasks 5–6 and the final independent parent browser journey remain incomplete.
+
 ## Required automated evidence
 
 ### Core and classification
@@ -282,7 +321,7 @@ This planning session started no persistent process or browser session and needs
 | --- | --- |
 | Clean specified upstream BASE before planning | Confirmed by Git status/HEAD inspection. |
 | Four-document plan researched against actual source | Complete: exactly four allowed modified files; six ordered implementation tasks; 15 relative evidence links resolve; `git diff --check` clean; HEAD unchanged. |
-| New outline tests/build/types/lint | Stages 1–4 passed as recorded above; reviewer fixes and tasks 5–6 remain. |
+| New outline tests/build/types/lint | Stages 1–4 and both parent-review fixes passed as recorded above; tasks 5–6 remain. |
 | New browser/UI/real provider evidence | Worker disposable local-browser stages 2–3 recorded above; independent parent, human appropriateness and live-provider evidence not claimed. |
 | Human appropriateness of rejected collection | FAIL. |
 | Human appropriateness of replacement outline UI | Unknown; parent/user review required after implementation. |

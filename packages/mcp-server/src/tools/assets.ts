@@ -1,12 +1,12 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { assetPath, assetSubPath, decodeAsset, deleteR2Object, isAssetPath, isNotebookR2Key, listR2Objects, loadWorkspaceConfig, parseR2Reference, putR2Object, r2NotebookPrefix, r2ObjectExists, r2Reference, r2ReferenceKeys, r2SettingsFromEnv, resolveSafePath, scanNotebookNotes } from '@mygitnotes/core';
+import { assetPath, assetSubPath, decodeAsset, deleteR2Object, isAssetPath, isNotebookR2Key, listR2Objects, loadWorkspaceConfig, parseR2Reference, putR2Object, r2NotebookPrefix, r2ObjectExists, r2Reference, r2ReferenceKeys, r2SettingsFromEnv, resolveSafePath, scanNotebookMarkdownNotes } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { assertSafeRepoPath, assertUserWorkspaceBranch } from '../guards.js';
 import type { ToolContext } from './context.js';
 
 /** Every note body in the workspace, keyed by path, for checking what an R2 object is still linked from. */
-const localNotes = (ctx: ToolContext, notebooks: Parameters<typeof scanNotebookNotes>[1][]) => new Map(notebooks.flatMap(nb => scanNotebookNotes(ctx.repoRoot, nb)).map(note => [note.path, note.content]));
+const localNotes = (ctx: ToolContext, notebooks: Parameters<typeof scanNotebookMarkdownNotes>[1][]) => new Map(notebooks.flatMap(nb => scanNotebookMarkdownNotes(ctx.repoRoot, nb)).map(note => [note.path, note.content]));
 
 /** The notebooks' R2 objects with the reference a note links each by; null when R2 is unconfigured. */
 export async function listR2Assets(notebookIds: string[]) {

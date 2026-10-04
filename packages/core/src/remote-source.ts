@@ -277,11 +277,18 @@ export abstract class RemoteSource {
   }
 
   async notes(notebookId?: string): Promise<NoteItem[]> {
+    return this.readMarkdownNotes(notebookId, false);
+  }
+  /** All native Markdown bodies, including outlines, for reference safety checks. */
+  async markdownNotes(notebookId?: string): Promise<NoteItem[]> {
+    return this.readMarkdownNotes(notebookId, true);
+  }
+  private async readMarkdownNotes(notebookId: string | undefined, includeOutlines: boolean): Promise<NoteItem[]> {
     const config = await this.config();
     const { entries } = await this.getSnapshot();
     const output: NoteItem[] = [];
     for (const nb of config.notebooks.filter(n => !notebookId || n.id === notebookId)) {
-      const files = this.notebookFiles(nb, entries);
+      const files = this.notebookFiles(nb, entries, includeOutlines).filter(file => NOTE_EXTENSIONS.test(file.path));
       await this.prefetchFiles(files.map(file => file.path));
       // The shared transport coalesces cache misses and serializes upstream requests.
       for (let i = 0; i < files.length; i += 6) output.push(...await Promise.all(files.slice(i, i + 6).map(f => this.note(f.path))));

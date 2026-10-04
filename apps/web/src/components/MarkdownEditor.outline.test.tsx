@@ -124,6 +124,36 @@ it('gives plain Enter to completion but keeps Shift+Enter an annotation command'
   }
 });
 
+it('keeps an adjacent pointer drop unchanged and nests its subtree once with one-step undo/redo', () => {
+  const initial = '- Parent\n  - Existing child\n- Other\n  annotation\n  - Nested\n\nProse';
+  const nested = '- Parent\n  - Existing child\n  - Other\n    annotation\n    - Nested\n\nProse';
+  const { container } = mount(initial, 'live');
+  const element = screen.getByRole('textbox', { name: 'Outline content' });
+  const view = EditorView.findFromDOM(element)!;
+  vi.spyOn(view, 'posAtCoords').mockReturnValue(2);
+  vi.spyOn(view, 'coordsAtPos').mockImplementation(position => ({ left: position === 2 ? 40 : 20, right: 50, top: 10, bottom: 30 }));
+  const pointer = (target: Element | Window, type: string, x: number, y: number) => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y });
+    Object.defineProperty(event, 'pointerId', { value: 1 });
+    fireEvent(target, event);
+  };
+  const drop = (placement: 'after' | 'child') => {
+    const handle = container.querySelector(`[data-outline-handle="${initial.indexOf('- Other')}"]`)!;
+    pointer(handle, 'pointerdown', 20, 100);
+    pointer(window, 'pointermove', placement === 'child' ? 100 : 20, 25);
+    expect(container.querySelector('.outline-drop-indicator')?.getAttribute('data-outline-drop')).toBe(placement);
+    pointer(window, 'pointerup', placement === 'child' ? 100 : 20, 25);
+  };
+  drop('after');
+  expect(view.state.doc.toString()).toBe(initial);
+  drop('child');
+  expect(view.state.doc.toString()).toBe(nested);
+  key(element, 'z', { ctrlKey: true });
+  expect(view.state.doc.toString()).toBe(initial);
+  key(element, 'y', { ctrlKey: true });
+  expect(view.state.doc.toString()).toBe(nested);
+});
+
 it('renders outline YouTube links without media previews in live and rendered Markdown', () => {
   const content = '- Read [reference](https://youtu.be/dQw4w9WgXcQ)\n\nhttps://youtu.be/dQw4w9WgXcQ';
   const { container } = mount(content, 'live');

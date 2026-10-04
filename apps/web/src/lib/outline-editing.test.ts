@@ -66,6 +66,27 @@ describe('same-document subtree movement', () => {
     expect(applyEdits(source, result.changes)).toBe('- Last\n- First');
   });
 
+  it.each(['\n', '\r\n'])('keeps adjacent no-op drops unchanged, including subtrees, prose and EOF (%j)', eol => {
+    for (const suffix of ['', eol, `${eol}${eol}Prose`]) {
+      const source = ['- First', '  annotation', '  - Child', '- Second', '  annotation two', '  - Nested'].join(eol) + suffix;
+      const second = source.indexOf('- Second');
+      for (const [from, target, placement] of [[second, 0, 'after'], [0, second, 'before']] as const) {
+        const result = moveOutlineItem(source, from, target, placement)!;
+        expect(applyEdits(source, result.changes)).toBe(source);
+        expect(result.changes).toEqual([]);
+      }
+    }
+  });
+
+  it.each(['\n', '\r\n'])('nests an immediately adjacent annotated subtree once (%j)', eol => {
+    for (const suffix of ['', eol, `${eol}${eol}Prose`]) {
+      const source = ['- Parent', '  - Existing child', '- Other', '  annotation', '  - Nested'].join(eol) + suffix;
+      const result = moveOutlineItem(source, source.indexOf('- Other'), 0, 'child')!;
+      expect(applyEdits(source, result.changes)).toBe(['- Parent', '  - Existing child', '  - Other', '    annotation', '    - Nested'].join(eol) + suffix);
+      expect(result.changes).toHaveLength(1);
+    }
+  });
+
   it('nests under a link item and rejects own-descendant drops', () => {
     const source = '- First\n  - Child\n- [Second](note.md)\n';
     const result = moveOutlineItem(source, 0, source.indexOf('- [Second]'), 'child')!;

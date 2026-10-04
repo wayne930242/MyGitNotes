@@ -194,7 +194,7 @@ async function runRemoteTool(reader: RemoteSource, name: string, args: Record<st
     }
     case 'delete_asset': {
       const config = await reader.config();
-      const removed = await deleteR2Asset(String(args.path), config.notebooks.map((n) => n.id), async () => new Map((await reader.notes()).map((note) => [note.path, note.content])), args.force === true);
+      const removed = await deleteR2Asset(String(args.path), config.notebooks.map((n) => n.id), async () => new Map((await reader.markdownNotes()).map((note) => [note.path, note.content])), args.force === true);
       if (removed) return removed;
       const res = await reader.mutateAsset('delete', { ...args, revision: await revisionArg(reader, args) });
       return { success: true, storage: 'git', path: String(args.path), commit: res.commit };

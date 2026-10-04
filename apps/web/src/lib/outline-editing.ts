@@ -162,7 +162,9 @@ export function moveOutlineItem(source: string, from: number, target: number, pl
   const eol = newline(source);
   if (!text.endsWith('\n') && insertAt < source.length) text += eol;
   if (insertAt === source.length && source.length && !source.endsWith('\n')) text = eol + text;
-  const changes = [{ from: item.from, to: end, insert: '' }, { from: insertAt, to: insertAt, insert: text }].sort((a, b) => a.from - b.from);
+  // Adjacent drops can replace at the removal boundary (including valid reparenting).
+  // A delete and insert at the same offset would overlap in applyEdits.
+  const changes = insertAt === item.from ? [{ from: item.from, to: end, insert: text }] : [{ from: item.from, to: end, insert: '' }, { from: insertAt, to: insertAt, insert: text }].sort((a, b) => a.from - b.from);
   const position = insertAt - (insertAt >= end ? end - item.from : 0) + (text.startsWith(eol) ? eol.length : 0) + indent + item.prefix.length;
   return movementResult(source, changes, position);
 }

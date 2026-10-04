@@ -356,6 +356,15 @@ The full browser matrix and honest results start in [verification.md](verificati
 
 ## Friction Notes
 
+- Tried: parent review against immutable stages 1–3, followed by local/remote no-force R2 deletion regressions.
+  Found: ordinary-note kind isolation had narrowed the scans used as all-reference bodies, allowing deletion of outline-only assets. Dedicated local `scanNotebookMarkdownNotes` and remote `markdownNotes` enumeration restores the safety guard without broadening ordinary listings.
+  Led by: parent reviewer OUTLINE-R1-F001 and R7 lifecycle/protection requirements.
+  Classification: implementation regression; actual loopback bucket tests assert zero DELETE requests and unchanged objects.
+- Tried: parent adjacency reproductions and actual mounted drag adapter tests with annotated subtrees, LF/CRLF, EOF and trailing prose.
+  Found: same-offset delete and insert overlap in `applyEdits`, duplicating a subtree for both no-op drops and legitimate adjacent nesting. Coalescing that boundary into one replacement preserves no-op bytes and valid indentation changes.
+  Led by: parent reviewer OUTLINE-R1-F002 and R3a source/undo contract.
+  Classification: implementation regression; pure cases, mounted pointer finish/undo/redo and actual browser recheck cover the correction.
+
 - Tried: stage 4 red-anchor relocation cases before shared rewriting changes.
   Found: escaped closing brackets were not rewritten; unfinished fences and indented code were rewritten as links. Hosted shell moves omitted all Markdown relocation, as documented.
   Led by: task 4 source-preservation and shell snapshot contract.

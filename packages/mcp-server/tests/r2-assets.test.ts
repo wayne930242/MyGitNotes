@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createServer } from 'node:http';
-import { RemoteSource, WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
+import { openRemoteHome, RemoteSource, scanNotebookNotes, WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
+import { gitlabFixture } from '../../core/tests/fixtures/gitlab.js';
 import { runGit, stageAndCommit } from '@mygitnotes/git';
 import { handleAddAsset, handleDeleteAsset, handleListAssets } from '../src/tools/index.js';
 import { callRemoteTool } from '../src/remote-tools.js';
@@ -22,6 +23,7 @@ notebooks:
 /** Minimal S3-compatible stand-in covering the requests the asset tools send. */
 async function startBucket() {
   const objects = new Map<string, Buffer>();
+  const deletions: string[] = [];
   const server = createServer((req, res) => {
     const url = new URL(req.url!, 'http://bucket'), [, bucket, ...parts] = url.pathname.split('/');
     const key = parts.map(decodeURIComponent).join('/');
@@ -41,6 +43,7 @@ async function startBucket() {
         return res.end();
       }
       if (req.method === 'DELETE') {
+        deletions.push(key);
         objects.delete(key);
         res.statusCode = 204;
         return res.end();
@@ -58,7 +61,7 @@ async function startBucket() {
     });
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  return { objects, server, endpoint: `http://127.0.0.1:${(server.address() as { port: number; }).port}` };
+  return { objects, deletions, server, endpoint: `http://127.0.0.1:${(server.address() as { port: number; }).port}` };
 }
 
 let repo: string, bucket: Awaited<ReturnType<typeof startBucket>>;
@@ -151,6 +154,27 @@ describe('managing R2 assets over MCP', () => {
     expect(bucket.objects.has('example/images/photo.png')).toBe(false);
   });
 
+  it('blocks local deletion for an outline-only reference without broadening ordinary note browsing', async () => {
+    await handleAddAsset({ repoRoot: repo }, upload);
+    note('Ordinary note without an asset.');
+    fs.writeFileSync(path.join(repo, 'notes/example/plan.outline.md'), '- Inspect ![photo](<r2:example/images/photo.png>)\n');
+    expect(scanNotebookNotes(repo, { id: 'example', title: 'Example', root: 'notes/example' }).map(note => note.path)).toEqual(['notes/example/welcome.md']);
+    await expect(handleDeleteAsset({ repoRoot: repo }, { path: 'r2:example/images/photo.png' })).rejects.toThrow(/still referenced by notes\/example\/plan\.outline\.md/);
+    expect(bucket.objects.has('example/images/photo.png')).toBe(true);
+    expect(bucket.deletions).toEqual([]);
+  });
+
+  it('blocks hosted deletion for an outline-only reference through the actual remote scanner', async () => {
+    await handleAddAsset({ repoRoot: repo }, upload);
+    const fixture = gitlabFixture(undefined, { 'notes/.github-notes.yaml': MANIFEST, 'notes/example/plain.md': '# No asset\n', 'notes/example/plan.outline.md': '- Inspect ![photo](<r2:example/images/photo.png>)\n' });
+    const reader = openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'test-token', fixture.request).reader;
+    expect((await reader.notes()).map(note => note.path)).toEqual(['notes/example/plain.md']);
+    await expect(callRemoteTool(reader, 'delete_asset', { path: 'r2:example/images/photo.png' }, true)).rejects.toThrow(/still referenced by notes\/example\/plan\.outline\.md/);
+    expect(bucket.objects.has('example/images/photo.png')).toBe(true);
+    expect(bucket.deletions).toEqual([]);
+    expect(fixture.writes).toBe(0);
+  });
+
   it('deletes a referenced object when the caller forces it', async () => {
     await handleAddAsset({ repoRoot: repo }, upload);
     note('![photo.png](<r2:example/images/photo.png>)');
@@ -166,7 +190,7 @@ describe('managing R2 assets over MCP', () => {
   it('lists and deletes bucket objects for a hosted workspace', async () => {
     await handleAddAsset({ repoRoot: repo }, upload);
     const notes = [{ path: 'notes/example/welcome.md', content: 'nothing linked' }];
-    const reader = { config: async () => ({ notebooks: [{ id: 'example', root: 'notes/example' }] }), assets: async () => [], notes: async () => notes, mutateAsset: () => expect.unreachable('a bucket object must not be deleted through a commit') } as unknown as RemoteSource;
+    const reader = { config: async () => ({ notebooks: [{ id: 'example', root: 'notes/example' }] }), assets: async () => [], markdownNotes: async () => notes, mutateAsset: () => expect.unreachable('a bucket object must not be deleted through a commit') } as unknown as RemoteSource;
 
     expect(await callRemoteTool(reader, 'list_assets', { notebookId: 'example' }, false)).toMatchObject({ assets: [{ storage: 'r2', key: 'example/images/photo.png' }] });
     expect(await callRemoteTool(reader, 'delete_asset', { path: 'r2:example/images/photo.png' }, true)).toMatchObject({ success: true, storage: 'r2' });
