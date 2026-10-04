@@ -13,8 +13,15 @@ import { type CompilationAsset, compilationItemTitle } from './CompilationCard.j
 import { LoadingStatus } from './LoadingStatus.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 
-/** Rows only move up and down, so a sideways drag never widens the list into a horizontal scroll. */
-const verticalOnly: Modifier = ({ transform }) => ({ ...transform, x: 0 });
+/**
+ * Rows move only up and down and stay inside the list's visible box. A row dragged past the end would
+ * otherwise grow the list, and auto-scroll would chase it without end.
+ */
+const withinList: Modifier = ({ transform, draggingNodeRect, containerNodeRect }) => {
+  if (!draggingNodeRect || !containerNodeRect) return { ...transform, x: 0 };
+  const y = Math.min(Math.max(transform.y, containerNodeRect.top - draggingNodeRect.top), containerNodeRect.bottom - draggingNodeRect.bottom);
+  return { ...transform, x: 0, y };
+};
 
 type DynamicRow = Extract<CompilationRow, { kind: 'dynamic'; }>;
 
@@ -56,7 +63,7 @@ export function CompilationOrderDialog({ row, notebooks, assets, disabled, onSav
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
-          modifiers={[verticalOnly]}
+          modifiers={[withinList]}
           onDragEnd={({ active, over }) => {
             if (!over || active.id === over.id) return;
             setEntries(current => {
