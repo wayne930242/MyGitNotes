@@ -58,7 +58,20 @@ it('commits the Screen migration of a Git worktree as one commit and leaves the 
 it('stops without writing when the Screen file has uncommitted changes', () => {
   const core = temp(), notes = screenWorkspace();
   fs.appendFileSync(path.join(notes, '.github-notes-screen.yaml'), '# local edit\n');
-  expect(() => run(core, ['--workspace', notes])).toThrow(/uncommitted changes/);
+  expect(() => run(core, ['--workspace', notes])).toThrow(/uncommitted changes in files the migration touches: .*\.github-notes-screen\.yaml/);
   expect(fs.readFileSync(path.join(notes, '.mygitnotes.yaml'), 'utf8')).toMatch(/^schema_version: 2$/m);
   expect(fs.existsSync(path.join(notes, '.github-notes-screen.yaml'))).toBe(true);
+}, 30000);
+
+it('names a Screen file Git has never seen instead of migrating it, then migrates once it is committed', () => {
+  const core = temp(), notes = screenWorkspace();
+  git(notes, ['rm', '-q', '--cached', '.github-notes-screen.yaml']);
+  git(notes, ['-c', 'user.name=T', '-c', 'user.email=t@example.com', 'commit', '-q', '-m', 'untrack Screen']);
+  expect(() => run(core, ['--workspace', notes])).toThrow(/files the migration touches: .*\.github-notes-screen\.yaml/);
+  expect(fs.existsSync(path.join(notes, '.github-notes-screen.yaml'))).toBe(true);
+  git(notes, ['add', '.github-notes-screen.yaml']);
+  git(notes, ['-c', 'user.name=T', '-c', 'user.email=t@example.com', 'commit', '-q', '-m', 'save Screen']);
+  run(core, ['--workspace', notes]);
+  expect(fs.existsSync(path.join(notes, '.github-notes-screen.yaml'))).toBe(false);
+  expect(fs.existsSync(path.join(notes, 'notes/a/reading.compilation.yml'))).toBe(true);
 }, 30000);

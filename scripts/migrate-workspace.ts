@@ -7,10 +7,10 @@ import { resolveWorkspaceRoot } from './lib/workspace-root.js';
 const isGitWorktree = (root: string) => fs.existsSync(path.join(root, '.git'));
 const git = (root: string, args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
 
-/** Whether none of `files` has uncommitted changes. A directory that is not a Git worktree has none to lose. */
-function isClean(root: string, files: string[]): boolean {
-  if (!isGitWorktree(root)) return true;
-  return git(root, ['status', '--porcelain', '--', ...files]).trim() === '';
+/** The files of `files` with uncommitted changes, untracked ones included. A directory that is not a Git worktree has none to lose. */
+function dirtyFiles(root: string, files: string[]): string[] {
+  if (!isGitWorktree(root)) return [];
+  return git(root, ['status', '--porcelain', '-z', '--', ...files]).split('\0').filter(Boolean).map(entry => entry.slice(3));
 }
 
 try {
@@ -33,7 +33,7 @@ try {
     }
     return found;
   };
-  const { migrated, notesMissingTimestamps, repositories } = migrateWorkspace(root, { worktrees, isClean });
+  const { migrated, notesMissingTimestamps, repositories } = migrateWorkspace(root, { worktrees, dirtyFiles });
   for (const repository of repositories) {
     const detail = `${repository.compilations} compilation(s)${repository.droppedFocusTabs ? `, ${repository.droppedFocusTabs} Focus tab(s) of deleted lanes dropped` : ''}`;
     if (!isGitWorktree(repository.root)) {

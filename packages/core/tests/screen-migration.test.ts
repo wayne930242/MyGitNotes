@@ -87,7 +87,7 @@ describe('migrateWorkspace with a Screen file', () => {
     const root = temp();
     write(root, '.mygitnotes.yaml', manifest(2));
     write(root, '.github-notes-screen.yaml', YAML.stringify(screenV2));
-    expect(() => migrateWorkspace(root, { isClean: () => false })).toThrow(/uncommitted changes/);
+    expect(() => migrateWorkspace(root, { dirtyFiles: () => ['.github-notes-screen.yaml'] })).toThrow(/uncommitted changes in files the migration touches: \.github-notes-screen\.yaml\./);
     expect(fs.existsSync(path.join(root, '.github-notes-screen.yaml'))).toBe(true);
     expect(read(root, '.mygitnotes.yaml')).toMatch(/^schema_version: 2$/m);
   });

@@ -41,8 +41,8 @@ export interface MigrationWorktree {
 export interface MigrationOptions {
   /** Worktrees of notebook repositories, migrated with the home repository; a function receives the manifest being migrated. */
   worktrees?: MigrationWorktree[] | ((config: WorkspaceConfig) => MigrationWorktree[]);
-  /** Whether none of `files` has uncommitted changes in the worktree `root`; a worktree that is not clean is not migrated. */
-  isClean?(root: string, files: string[]): boolean;
+  /** The files of `files` with uncommitted changes in the worktree `root`, a file Git has never seen included; a worktree with any is not migrated. */
+  dirtyFiles?(root: string, files: string[]): string[];
 }
 
 export interface MigratedRepository {
@@ -79,7 +79,7 @@ export function migrateWorkspace(root: string, options: MigrationOptions = {}): 
     bumped = document.toString();
   }
   const config = bumped === undefined ? loadWorkspaceConfig(root) : parseWorkspaceConfig(bumped);
-  const isClean = options.isClean ?? (() => true);
+  const dirtyFiles = options.dirtyFiles ?? (() => []);
   // Plan every repository first: a lane that cannot convert, or a worktree with local changes, stops the migration before anything is written.
   const worktrees: MigrationWorktree[] = [{ root, notebooks: (config?.notebooks ?? []).filter(notebook => !notebook.source) }, ...(typeof options.worktrees === 'function' ? (config ? options.worktrees(config) : []) : options.worktrees ?? []).filter(worktree => path.resolve(worktree.root) !== path.resolve(root))];
   const plans: { worktree: MigrationWorktree; plan: ScreenMigrationPlan; }[] = [];
@@ -92,7 +92,8 @@ export function migrateWorkspace(root: string, options: MigrationOptions = {}): 
       throw error;
     }
     if (!plan) continue;
-    if (!isClean(worktree.root, plan.touched)) throw new WorkspaceCompatibilityError(`${worktree.root} has uncommitted changes in files the migration touches. Commit or discard them, then run \`pnpm migrate-workspace\` again.`);
+    const dirty = dirtyFiles(worktree.root, plan.touched);
+    if (dirty.length) throw new WorkspaceCompatibilityError(`${worktree.root} has uncommitted changes in files the migration touches: ${dirty.join(', ')}. Commit them (a file Git has never seen counts too) or discard them, then run \`pnpm migrate-workspace\` again.`);
     plans.push({ worktree, plan });
   }
   const repositories: MigratedRepository[] = plans.map(({ worktree, plan }) => {
