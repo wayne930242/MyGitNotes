@@ -53,6 +53,7 @@ pnpm dev
 `link-workspace` validates the existing manifest and schema, then saves `MYGITNOTES_SOURCE=local` and the absolute `MYGITNOTES_LOCAL_PATH` in Core's `.env`, preserving unrelated settings.
 It does not change notes or Git remotes, create worktrees, or migrate the workspace.
 For an older schema, run `pnpm migrate-workspace --workspace "/absolute/path/to/workspace"` explicitly before linking; for a newer schema, update Core first.
+An existing nonempty `REPO_ROOT` in `.env` follows the linked workspace too; an absent or empty value stays unchanged.
 Shell environment settings still override `.env`.
 `pnpm dev:remote` shares the same local workspace through Tailscale; it does not select a GitHub/GitLab source.
 Both dev commands show `link-workspace` guidance if the workspace is missing.

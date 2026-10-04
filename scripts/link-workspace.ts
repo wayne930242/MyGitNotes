@@ -20,12 +20,16 @@ try {
   const file = path.join(checkout, '.env');
   const previous = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
   const before = parseEnv(previous);
-  const next = `${previous}${previous && !previous.endsWith('\n') ? '\n' : ''}MYGITNOTES_SOURCE=local\nMYGITNOTES_LOCAL_PATH=${quote}${workspace}${quote}\n`;
+  // Dev gives REPO_ROOT precedence over LOCAL_PATH. Keep an existing selector in sync,
+  // but do not introduce it when absent/empty or change shell environment precedence.
+  const updates = { MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: workspace, ...(before.REPO_ROOT ? { REPO_ROOT: workspace } : {}) };
+  const assignments = Object.entries(updates).map(([key, value]) => `${key}=${quote}${value}${quote}\n`).join('');
+  const next = `${previous}${previous && !previous.endsWith('\n') ? '\n' : ''}${assignments}`;
   const after = parseEnv(next);
-  if (after.MYGITNOTES_SOURCE !== 'local' || after.MYGITNOTES_LOCAL_PATH !== workspace || Object.entries(before).some(([key, value]) => !['MYGITNOTES_SOURCE', 'MYGITNOTES_LOCAL_PATH'].includes(key) && after[key] !== value)) {
+  if (Object.entries(updates).some(([key, value]) => after[key] !== value) || Object.entries(before).some(([key, value]) => !Object.hasOwn(updates, key) && after[key] !== value)) {
     throw new Error('Cannot safely update .env; fix its quoting before linking a workspace.');
   }
-  if (before.MYGITNOTES_SOURCE !== 'local' || before.MYGITNOTES_LOCAL_PATH !== workspace) fs.writeFileSync(file, next, { mode: 0o600 });
+  if (Object.entries(updates).some(([key, value]) => before[key] !== value)) fs.writeFileSync(file, next, { mode: 0o600 });
   console.log(`[link-workspace] Linked ${workspace} in ${file}. Run pnpm dev or pnpm dev:remote. Existing shell environment overrides still take precedence over .env.`);
 } catch (error) {
   console.error(`[link-workspace] ${(error as Error).message}`);

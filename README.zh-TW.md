@@ -53,6 +53,7 @@ pnpm dev
 `link-workspace` 會驗證既有 manifest 與 schema，再將 `MYGITNOTES_SOURCE=local` 及絕對路徑 `MYGITNOTES_LOCAL_PATH` 寫入 Core 的 `.env`，保留其他設定。
 它不會修改筆記或 Git remote、建立 worktree，也不會遷移工作區。
 若 schema 較舊，先明確執行 `pnpm migrate-workspace --workspace "/absolute/path/to/workspace"` 再連結；若較新，則先更新 Core。
+若 `.env` 已有非空的 `REPO_ROOT`，也會同步指向連結的工作區；未設定或空值則保持不變。
 Shell 環境變數仍優先於 `.env`。
 `pnpm dev:remote` 透過 Tailscale 分享同一個本機工作區，不會切換成 GitHub/GitLab 來源。
 兩個 dev 指令都會在缺少工作區時顯示 `link-workspace` 操作指引。

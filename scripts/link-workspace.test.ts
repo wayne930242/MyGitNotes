@@ -60,6 +60,34 @@ describe('link-workspace CLI', () => {
     expect(parseEnv(config())).toEqual({ ...parseEnv(previous), MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: workspace });
   });
 
+  it.each([false, true])('repairs stale REPO_ROOT when canonical keys already match: %s', canonicalMatches => {
+    const previous = `MYGITNOTES_SOURCE=${canonicalMatches ? 'local' : 'github'}\nMYGITNOTES_LOCAL_PATH='${canonicalMatches ? workspace : 'old-path'}'\nREPO_ROOT=older-path\nexport REPO_ROOT='missing-old-workspace'\nOTHER="keep\nREPO_ROOT=inside-value"\n`;
+    fs.writeFileSync(path.join(core, '.env'), previous);
+    const check = (shell = env) => spawnSync(process.execPath, ['--import', 'tsx', 'scripts/check-dev-workspace.ts'], { cwd: core, env: shell, encoding: 'utf8', timeout: 15_000 });
+    expect(check().status).not.toBe(0);
+    expect(run('link-workspace', workspace).status).toBe(0);
+    const linked = config();
+    expect(linked.startsWith(previous)).toBe(true);
+    expect(parseEnv(linked)).toEqual({ ...parseEnv(previous), MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: workspace, REPO_ROOT: workspace });
+    const result = check();
+    expect(result.status, result.stderr).toBe(0);
+    expect(run('link-workspace', workspace).status).toBe(0);
+    expect(config()).toBe(linked);
+    const overridden = check({ ...env, REPO_ROOT: path.join(core, 'shell-override-missing') });
+    expect(overridden.status).not.toBe(0);
+    expect(overridden.stderr).toContain('shell-override-missing');
+    expect(config()).toBe(linked);
+  });
+
+  it.each(['', 'REPO_ROOT=\n'])('does not introduce REPO_ROOT when absent or empty: %j', previous => {
+    fs.writeFileSync(path.join(core, '.env'), previous);
+    expect(run('link-workspace', workspace).status).toBe(0);
+    const linked = config();
+    expect(parseEnv(linked).REPO_ROOT).toBe(parseEnv(previous).REPO_ROOT);
+    expect(run('link-workspace', workspace).status).toBe(0);
+    expect(config()).toBe(linked);
+  });
+
   it('refuses an unsafe dotenv update without changing the file', () => {
     const previous = "OTHER='unterminated";
     fs.writeFileSync(path.join(core, '.env'), previous);
