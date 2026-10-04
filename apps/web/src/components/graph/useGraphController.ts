@@ -2,7 +2,7 @@ import { noteRefKey } from '@mygitnotes/core/note-query';
 import { createGraphInteractions } from './createGraphInteractions.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type GraphLayout, ScreenPageSchema, type ScreenRow } from '@mygitnotes/core/screen-page';
+import { type CompilationRow, type GraphLayout, ScreenPageSchema } from '@mygitnotes/core/screen-page';
 import { arrangeGraphLayout, graphLaneViewport, type GraphPlacement } from '../../lib/graph-layout.js';
 import { optimizeGraphLayout } from '../../lib/graph-topology-layout.js';
 import { useTranslation } from '../../lib/i18n/index.js';
@@ -13,7 +13,7 @@ import { useLaneSelection } from './useLaneSelection.js';
 import type { GraphGesture, GraphPageProps, LayoutNode, Node } from './types.js';
 import { useGraphData } from './useGraphData.js';
 // Screen owns one notebook and persists paths; the canvas owns notebook-qualified ids.
-function lanePlacement(lane?: ScreenRow): GraphPlacement {
+function lanePlacement(lane?: CompilationRow): GraphPlacement {
   return { nodes: (lane?.graph?.nodes ?? []).map(({ path, ...node }) => ({ ...node, id: noteRefKey({ notebookId: lane!.notebookId, path }) })) };
 }
 function persistedLayout(placement: GraphPlacement, notebookId: string): GraphLayout {
@@ -294,7 +294,7 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
   const saveLane = () => {
     if (!screen?.writable || !name.trim() || !saveNotebook) return;
     const id = crypto.randomUUID(), current = currentLayout();
-    const row: ScreenRow = { id, kind: 'custom', name: name.trim(), view: 'graph', notebookId: saveNotebook, items: graphData.nodes.filter(node => visibleSelected.includes(node.id)).map(node => ({ id: crypto.randomUUID(), kind: 'note', notebookId: saveNotebook, path: node.path })), graph: persistedLayout({ nodes: current.nodes.filter(n => visibleSelected.includes(n.id)) }, saveNotebook) };
+    const row: CompilationRow = { id, kind: 'custom', name: name.trim(), view: 'graph', notebookId: saveNotebook, items: graphData.nodes.filter(node => visibleSelected.includes(node.id)).map(node => ({ id: crypto.randomUUID(), kind: 'note', notebookId: saveNotebook, path: node.path })), graph: persistedLayout({ nodes: current.nodes.filter(n => visibleSelected.includes(n.id)) }, saveNotebook) };
     const next = ScreenPageSchema.safeParse({ ...screen.page, rows: [...screen.page.rows, row] });
     if (!next.success) {
       setNotice(t('screen.limit'));

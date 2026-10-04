@@ -11,17 +11,17 @@ const repoPath = z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]
 /* eslint-enable no-control-regex */
 const notebookId = z.string().min(1).max(128);
 const reference = { id, notebookId, path: repoPath };
-export const ScreenItemSchema = z.discriminatedUnion('kind', [z.object({ ...reference, kind: z.literal('note') }).strict(), z.object({ ...reference, kind: z.literal('folder') }).strict(), z.object({ ...reference, kind: z.literal('asset') }).strict(), z.object({ id, kind: z.literal('youtube'), videoId: z.string().regex(/^[\w-]{11}$/), start: z.number().int().min(0).max(86400).default(0), title: z.string().max(160).optional() }).strict()]);
+export const CompilationItemSchema = z.discriminatedUnion('kind', [z.object({ ...reference, kind: z.literal('note') }).strict(), z.object({ ...reference, kind: z.literal('folder') }).strict(), z.object({ ...reference, kind: z.literal('asset') }).strict(), z.object({ id, kind: z.literal('youtube'), videoId: z.string().regex(/^[\w-]{11}$/), start: z.number().int().min(0).max(86400).default(0), title: z.string().max(160).optional() }).strict()]);
 export const GraphLayoutSchema = z.object({ nodes: z.array(z.object({ path: repoPath, x: z.number().finite().min(-1e7).max(1e7), y: z.number().finite().min(-1e7).max(1e7), width: z.number().min(240).max(1600).optional(), height: z.number().min(180).max(1400).optional(), expanded: z.boolean().optional(), pinned: z.boolean().optional() }).strict()).max(5000) }).strict();
 export type GraphLayout = z.infer<typeof GraphLayoutSchema>;
 const row = { id, name: z.string().trim().min(1).max(100), view: z.enum(['thumbnail', 'small', 'medium', 'graph', 'reading', 'study']).transform(value => value === 'reading' || value === 'study' ? 'small' as const : value), graph: GraphLayoutSchema.optional(), progression: StudyProgressionSchema.optional(), study: z.object({ filter: z.enum(['all', 'due', 'future', 'paused']), dueFirst: z.boolean(), status: z.string().max(200).optional() }).strict().optional() };
 const sort = z.object({ field: z.enum(['updated', 'created', 'title', 'status']), order: z.enum(['asc', 'desc']) }).strict().optional();
 const tagSource = z.object({ kind: z.literal('tag'), tag: z.string().min(1).max(200), notebookId }).strict();
 const folderSource = z.object({ kind: z.literal('folder'), notebookId, path: repoPath, recursive: z.boolean().default(true) }).strict();
-const items = z.array(ScreenItemSchema).max(100);
+const items = z.array(CompilationItemSchema).max(100);
 /** Every lane belongs to one notebook; its pinned items and dynamic source stay inside it. */
-export const ScreenRowSchema = z.discriminatedUnion('kind', [z.object({ ...row, notebookId, kind: z.literal('custom'), items }).strict(), z.object({ ...row, notebookId, kind: z.literal('dynamic'), sort, source: z.discriminatedUnion('kind', [tagSource, folderSource]) }).strict()]);
-export const ScreenPageSchema = z.object({ version: z.literal(2), rows: z.array(ScreenRowSchema).max(40) }).strict().superRefine((page, context) => {
+export const CompilationRowSchema = z.discriminatedUnion('kind', [z.object({ ...row, notebookId, kind: z.literal('custom'), items }).strict(), z.object({ ...row, notebookId, kind: z.literal('dynamic'), sort, source: z.discriminatedUnion('kind', [tagSource, folderSource]) }).strict()]);
+export const ScreenPageSchema = z.object({ version: z.literal(2), rows: z.array(CompilationRowSchema).max(40) }).strict().superRefine((page, context) => {
   const ids = new Set<string>();
   let items = 0;
   for (const row of page.rows) {
@@ -40,8 +40,8 @@ export const ScreenPageSchema = z.object({ version: z.literal(2), rows: z.array(
 const LegacyScreenPageSchema = z.object({ version: z.literal(1), rows: z.array(z.discriminatedUnion('kind', [z.object({ ...row, kind: z.literal('custom'), items }).strict(), z.object({ ...row, kind: z.literal('dynamic'), sort, source: z.discriminatedUnion('kind', [tagSource.extend({ notebookId: notebookId.optional() }), folderSource]) }).strict()])).max(40) }).strict();
 /** Validates a stored file of either version without migrating it. */
 export const ScreenPageFileSchema = z.union([ScreenPageSchema, LegacyScreenPageSchema]);
-export type ScreenItem = z.infer<typeof ScreenItemSchema>;
-export type ScreenRow = z.infer<typeof ScreenRowSchema>;
+export type CompilationItem = z.infer<typeof CompilationItemSchema>;
+export type CompilationRow = z.infer<typeof CompilationRowSchema>;
 export type ScreenPage = z.infer<typeof ScreenPageSchema>;
 export interface ScreenNotebookConfig {
   workspace: { default_notebook: string; };
@@ -67,7 +67,7 @@ export function readScreenPage(value: unknown, config: ScreenNotebookConfig | nu
       const owner = row.source.notebookId || fallback;
       return [{ ...row, notebookId: owner, source: { ...row.source, notebookId: owner } }];
     }
-    const groups = new Map<string, ScreenItem[]>();
+    const groups = new Map<string, CompilationItem[]>();
     for (const item of row.items) if (item.kind !== 'youtube') groups.set(item.notebookId, [...(groups.get(item.notebookId) || []), item]);
     const [first = fallback, ...rest] = groups.keys();
     return [{ ...row, notebookId: first, items: row.items.filter(item => item.kind === 'youtube' || item.notebookId === first) }, ...rest.map(owner => ({ ...row, id: unique(`${row.id}-${owner}`), notebookId: owner, items: groups.get(owner)! }))];
@@ -103,7 +103,7 @@ export const SCREEN_DOCUMENT: WorkspaceDocument<ScreenPage> = {
 };
 
 /** Membership is shared by lane cards and graph views; folder shortcuts stay shortcuts. */
-export function screenRowNotes(row: ScreenRow, notes: NoteItem[]): NoteItem[] {
+export function compilationNotes(row: CompilationRow, notes: NoteItem[]): NoteItem[] {
   return notes.filter(note => {
     if (row.study?.status && note.status !== row.study.status) return false;
     if (note.notebookId !== row.notebookId) return false;
@@ -114,8 +114,8 @@ export function screenRowNotes(row: ScreenRow, notes: NoteItem[]): NoteItem[] {
     return note.path.startsWith(source.path + '/') && (source.recursive || !note.path.slice(source.path.length + 1).includes('/'));
   });
 }
-export function screenRowNotePaths(row: ScreenRow, notes: NoteItem[]): string[] {
-  return screenRowNotes(row, notes).map(note => note.path);
+export function compilationNotePaths(row: CompilationRow, notes: NoteItem[]): string[] {
+  return compilationNotes(row, notes).map(note => note.path);
 }
 
 export function moveScreenRow(page: ScreenPage, rowId: string, index: number): ScreenPage {
@@ -126,7 +126,7 @@ export function moveScreenRow(page: ScreenPage, rowId: string, index: number): S
   return ScreenPageSchema.parse({ ...page, rows });
 }
 
-export function moveScreenItem(page: ScreenPage, itemId: string, targetRowId: string, index: number): ScreenPage {
+export function moveCompilationItem(page: ScreenPage, itemId: string, targetRowId: string, index: number): ScreenPage {
   const source = page.rows.find(row => row.kind === 'custom' && row.items.some(item => item.id === itemId));
   const target = page.rows.find(row => row.id === targetRowId);
   if (source?.kind !== 'custom' || target?.kind !== 'custom') throw new Error('Only custom swimlanes accept moved items');

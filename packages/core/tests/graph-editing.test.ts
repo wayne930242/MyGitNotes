@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { insertNoteLink } from '../src/note-graph.js';
-import { ScreenPageSchema, screenRowNotePaths } from '../src/screen-page.js';
+import { compilationNotePaths, ScreenPageSchema } from '../src/screen-page.js';
 import { extractNoteLinks } from '../src/note-graph.js';
 import type { NoteItem } from '../src/types.js';
 
@@ -25,8 +25,8 @@ describe('graph editing contracts', () => {
   });
   it('resolves lane notes consistently without expanding folder shortcuts or including assets', () => {
     const notes = [{ path: 'notes/a.md', notebookId: 'n', tags: ['x'], metadata: {}, status: 'draft' }, { path: 'notes/sub/b.md', notebookId: 'n', tags: [], metadata: {} }, { path: 'other/c.md', notebookId: 'm', tags: ['x'], metadata: {} }] as NoteItem[];
-    expect(screenRowNotePaths({ id: 'r', name: 'R', view: 'graph', notebookId: 'n', kind: 'custom', items: [{ id: 'a', kind: 'note', path: 'notes/a.md', notebookId: 'n' }, { id: 'f', kind: 'folder', path: 'notes/sub', notebookId: 'n' }] }, notes)).toEqual(['notes/a.md']);
-    expect(screenRowNotePaths({ id: 'd', name: 'D', view: 'graph', notebookId: 'n', kind: 'dynamic', source: { kind: 'folder', notebookId: 'n', path: 'notes', recursive: true } }, notes)).toEqual(['notes/a.md', 'notes/sub/b.md']);
-    expect(screenRowNotePaths({ id: 't', name: 'T', view: 'graph', notebookId: 'n', kind: 'dynamic', source: { kind: 'tag', tag: 'x', notebookId: 'n' } }, notes)).toEqual(['notes/a.md']);
+    expect(compilationNotePaths({ id: 'r', name: 'R', view: 'graph', notebookId: 'n', kind: 'custom', items: [{ id: 'a', kind: 'note', path: 'notes/a.md', notebookId: 'n' }, { id: 'f', kind: 'folder', path: 'notes/sub', notebookId: 'n' }] }, notes)).toEqual(['notes/a.md']);
+    expect(compilationNotePaths({ id: 'd', name: 'D', view: 'graph', notebookId: 'n', kind: 'dynamic', source: { kind: 'folder', notebookId: 'n', path: 'notes', recursive: true } }, notes)).toEqual(['notes/a.md', 'notes/sub/b.md']);
+    expect(compilationNotePaths({ id: 't', name: 'T', view: 'graph', notebookId: 'n', kind: 'dynamic', source: { kind: 'tag', tag: 'x', notebookId: 'n' } }, notes)).toEqual(['notes/a.md']);
   });
 });

@@ -9,33 +9,33 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { stringify } from 'yaml';
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { ArrowLeft, GripVertical, Pencil, Plus } from 'lucide-react';
-import { moveScreenItem, type ScreenItem, type ScreenRow } from '@mygitnotes/core/screen-page';
+import { type CompilationItem, type CompilationRow, moveCompilationItem } from '@mygitnotes/core/screen-page';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { FolderItem, NotebookConfig } from '../lib/types.js';
 import { useNoteFacets } from '../lib/use-note-queries.js';
-import { useLaneNotes } from '../lib/screen-queries.js';
+import { useLaneNotes } from '../lib/compilation-queries.js';
 import { screenLaneRoute } from '../lib/routes.js';
 import { useStudyWorkspace } from '../lib/use-study-workspace.js';
 import { StudyLane } from './StudyLane.js';
 import { defaultStudyProgression, studyLaneStatuses } from '@mygitnotes/core/study-stages';
-import { screenRowItems, studyRowItems } from '../lib/screen-content.js';
+import { compilationRowItems, studyRowItems } from '../lib/compilation-content.js';
 import type { ScreenController } from '../lib/use-screen-page.js';
 import { ScreenIcon } from './ScreenIcon.js';
-import { screenCollision, screenKeyboardCoordinates } from '../lib/screen-drag.js';
+import { screenCollision, screenKeyboardCoordinates } from '../lib/compilation-drag.js';
 import { useTranslation } from '../lib/i18n/index.js';
-import { type ScreenContentProps, screenItemTitle } from './ScreenCard.js';
-import { ScreenAddItem, ScreenAddRow, ScreenEditRow } from './ScreenDialogs.js';
+import { type CompilationContentProps, compilationItemTitle } from './CompilationCard.js';
+import { CompilationAddItem, CompilationAddRow, CompilationEditRow } from './CompilationDialogs.js';
 import { ScreenLaneNavigation } from './ScreenLaneNavigation.js';
 import { useWorkspaceSidebarDrawer, WorkspaceSidebar, WorkspaceSidebarDrawer, WorkspaceSidebarToggle } from './WorkspaceChrome.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
-import { ScreenLane } from './ScreenLane.js';
-import { useScreenAssets, useScreenItemOpen } from './useScreenItemOpen.js';
+import { CompilationLane } from './CompilationLane.js';
+import { useCompilationAssets, useCompilationItemOpen } from './useCompilationItemOpen.js';
 import { LoadingStatus } from './LoadingStatus.js';
 
-export { createLaneNoteContext } from './ScreenLane.js';
-export { screenViewTabs } from './ScreenLane.js';
+export { createLaneNoteContext } from './CompilationLane.js';
+export { compilationViewTabs } from './CompilationLane.js';
 
-export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onOpenNote, onStudySaved, focusedLaneId, onCreateNote, focusSection, onAddLaneToFocus }: { notebooks: NotebookConfig[]; folders: FolderItem[]; selectedNotebookId: string; screen: ScreenController; focusedLaneId?: string | null; onOpenNote: (note: NoteListItem) => void; onStudySaved: () => void; onCreateNote?: (context?: { notebookId?: string; folder?: string; tag?: string; }) => void; focusSection?: ReactNode; onAddLaneToFocus?: (row: ScreenRow) => void; }) {
+export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onOpenNote, onStudySaved, focusedLaneId, onCreateNote, focusSection, onAddLaneToFocus }: { notebooks: NotebookConfig[]; folders: FolderItem[]; selectedNotebookId: string; screen: ScreenController; focusedLaneId?: string | null; onOpenNote: (note: NoteListItem) => void; onStudySaved: () => void; onCreateNote?: (context?: { notebookId?: string; folder?: string; tag?: string; }) => void; focusSection?: ReactNode; onAddLaneToFocus?: (row: CompilationRow) => void; }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -48,7 +48,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
     setReorder(false);
   }
   const study = useStudyWorkspace(screen.repository, onStudySaved);
-  const { assets, error: assetError, loading: assetsLoading, retry: retryAssets } = useScreenAssets(notebooks, selectedNotebookId);
+  const { assets, error: assetError, loading: assetsLoading, retry: retryAssets } = useCompilationAssets(notebooks, selectedNotebookId);
   const [studyToolbar, setStudyToolbar] = useState<HTMLDivElement | null>(null);
   const [editing, setEditing] = useState<string>();
   const rows = screen.page.rows.filter(row => row.notebookId === selectedNotebookId);
@@ -72,13 +72,13 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
   const facets = useNoteFacets(false);
   // A study session orders its whole queue, so the focused lane reads every member at once.
   const reviewLane = useLaneNotes(focusedLaneId ? reviewRow : undefined, { all: true });
-  const reviewItems = reviewRow ? studyRowItems(screenRowItems(reviewRow, reviewLane.notes, [], notebooks), reviewRow, reviewLane.notes, study.study) : [];
+  const reviewItems = reviewRow ? studyRowItems(compilationRowItems(reviewRow, reviewLane.notes, [], notebooks), reviewRow, reviewLane.notes, study.study) : [];
   const reviewNotes = reviewItems.flatMap(item => item.kind === 'note' ? reviewLane.notes.filter(note => note.notebookId === item.notebookId && note.path === item.path) : []);
   useEffect(() => {
     if (!focusedLaneId && location.hash.startsWith('#screen-lane-')) document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: 'start' });
   }, [focusedLaneId, location.hash, screen.loading]);
   const [dialog, setDialog] = useState<'add' | 'reload' | null>(null), [addTo, setAddTo] = useState<string | null>(null);
-  const [dragging, setDragging] = useState<ScreenItem>();
+  const [dragging, setDragging] = useState<CompilationItem>();
   // Only a custom lane's cards are draggable, so its own note titles name the dragged item.
   const draggedLane = screen.page.rows.find(row => row.kind === 'custom' && row.items.some(item => item.id === dragging?.id));
   const draggedNotes = useLaneNotes(dragging ? draggedLane : undefined);
@@ -103,8 +103,8 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
   }, [focusedLaneId, setSidebarOpen]);
 
   const disabled = !screen.writable || screen.loading;
-  const itemOpen = useScreenItemOpen({ notebooks, assets, onOpenNote, onMissing: () => screen.setError(t('screen.missing')) });
-  const content: Omit<ScreenContentProps, 'notes'> = { notebooks, assets, onOpen: itemOpen.open };
+  const itemOpen = useCompilationItemOpen({ notebooks, assets, onOpenNote, onMissing: () => screen.setError(t('screen.missing')) });
+  const content: Omit<CompilationContentProps, 'notes'> = { notebooks, assets, onOpen: itemOpen.open };
   const row = screen.page.rows.find(row => row.id === addTo);
   return (
     <div className={`workspace-route screen-main ${focusedLaneId ? 'screen-focused' : 'has-sidebar-drawer'}`}>
@@ -238,7 +238,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
                       return;
                     }
                     if (target?.kind === 'custom') {
-                      screen.change(moveScreenItem(
+                      screen.change(moveCompilationItem(
                         screen.page,
                         String(active.id),
                         target.id,
@@ -248,7 +248,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
                   }}
                 >
                   {rows.map(row => (
-                    <ScreenLane
+                    <CompilationLane
                       reorder={reorder}
                       key={row.id}
                       row={row}
@@ -281,7 +281,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
                     {dragging && (
                       <div className='screen-drag-overlay'>
                         <GripVertical size={16} />
-                        {screenItemTitle(dragging, draggedNotes.notes, assets)}
+                        {compilationItemTitle(dragging, draggedNotes.notes, assets)}
                       </div>
                     )}
                   </DragOverlay>
@@ -292,7 +292,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
         </div>
       </main>
       {editingRow && (
-        <ScreenEditRow
+        <CompilationEditRow
           row={editingRow}
           disabled={disabled}
           notebooks={notebooks}
@@ -307,7 +307,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
           }}
         />
       )}
-      {dialog === 'add' && <ScreenAddRow notebooks={notebooks} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onClose={() => setDialog(null)} onAdd={row => screen.change({ ...screen.page, rows: [...screen.page.rows, row] })} />}
+      {dialog === 'add' && <CompilationAddRow notebooks={notebooks} assets={assets} folders={folders} selectedNotebookId={selectedNotebookId} onClose={() => setDialog(null)} onAdd={row => screen.change({ ...screen.page, rows: [...screen.page.rows, row] })} />}
       {dialog === 'reload' && (
         <WorkspaceDialog title={t('screen.reload')} onClose={() => setDialog(null)}>
           <p>{t('screen.reloadHint')}</p>
@@ -324,7 +324,7 @@ export function ScreenPage({ notebooks, folders, selectedNotebookId, screen, onO
           </div>
         </WorkspaceDialog>
       )}
-      {row?.kind === 'custom' && <ScreenAddItem notebooks={notebooks} assets={assets} folders={folders} rowName={row.name} notebookId={row.notebookId} onClose={() => setAddTo(null)} onAdd={item => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id && value.kind === 'custom' ? { ...value, items: [...value.items, item] } : value) })} />}
+      {row?.kind === 'custom' && <CompilationAddItem notebooks={notebooks} assets={assets} folders={folders} rowName={row.name} notebookId={row.notebookId} onClose={() => setAddTo(null)} onAdd={item => screen.change({ ...screen.page, rows: screen.page.rows.map(value => value.id === row.id && value.kind === 'custom' ? { ...value, items: [...value.items, item] } : value) })} />}
       {itemOpen.preview}
     </div>
   );

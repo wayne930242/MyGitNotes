@@ -1,7 +1,7 @@
 import { noteRefKey } from '@mygitnotes/core/note-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { changeDivision, closeTab, emptyFocusLayout, findFocusTabInPane, FOCUS_MAX_FOCUSES, FOCUS_MAX_TABS, type FocusDivision, FocusError, type FocusLayout, focusPaneCount, type FocusTab, focusTabCount, focusTabKey, moveTab as moveFocusTab, nameFocus, notebookFocuses, placeTab, placeTabs, pruneFocus, removeFocus, renameFocus, updateFocus } from '@mygitnotes/core/focus-page';
-import type { ScreenRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/screen-page';
 import type { FocusPageController } from './use-focus-page.js';
 import { useNoteLookup } from './use-note-queries.js';
 import { activatePane, browseTarget, CURRENT_FOCUS, emptyFocusView, entryView, type FocusEntryView, type FocusViewState, focusViewStorageKey, readFocusView, shownAfterClose, showTab, sideTarget } from './focus-view.js';
@@ -18,7 +18,7 @@ interface NoteFocusOptions {
   defaultFocus?: string | null;
   writable: boolean;
   /** The notebook's lanes, or undefined while they are unknown. */
-  lanes: readonly ScreenRow[] | undefined;
+  lanes: readonly CompilationRow[] | undefined;
   /** Saves the pending edits of the editors of `paths` before they unmount; false keeps the current view. */
   flushEditors: (paths?: readonly string[]) => Promise<boolean>;
 }

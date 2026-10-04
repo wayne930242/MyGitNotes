@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import { Button } from './Button.js';
 import { type ReactNode, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Ellipsis, Undo2 } from 'lucide-react';
-import type { ScreenRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/screen-page';
 import { createStudyNote, findStudyNote, rebindStudyNote, reconcileStudyNote } from '@mygitnotes/core/study';
 import { deduplicatedStudyRatings, type Familiarity, type StudyProgression } from '@mygitnotes/core/study-stages';
 import { splitNotePages } from '@mygitnotes/core/note-pages';
@@ -44,7 +44,7 @@ export function StudyLaneSettings({ progression, disabled, onChange }: { progres
   );
 }
 
-export function StudyLane({ row, notes, controller, disabled, onOpen, toolbar }: { toolbar: HTMLElement | null; row: ScreenRow; notes: NoteListItem[]; controller: StudyController; disabled: boolean; onOpen: (note: NoteListItem) => void; }) {
+export function StudyLane({ row, notes, controller, disabled, onOpen, toolbar }: { toolbar: HTMLElement | null; row: CompilationRow; notes: NoteListItem[]; controller: StudyController; disabled: boolean; onOpen: (note: NoteListItem) => void; }) {
   const { t } = useTranslation();
   const [skipped, setSkipped] = useState<string[]>([]), [selected, setSelected] = useState<string>();
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -149,7 +149,7 @@ export function StudyLane({ row, notes, controller, disabled, onOpen, toolbar }:
   );
 }
 
-function StudyPostpone({ note, row, controller, disabled, onDone }: { note: NoteItem; row: ScreenRow; controller: StudyController; disabled: boolean; onDone: () => void; }) {
+function StudyPostpone({ note, row, controller, disabled, onDone }: { note: NoteItem; row: CompilationRow; controller: StudyController; disabled: boolean; onDone: () => void; }) {
   const { t } = useTranslation();
   const [date, setDate] = useState('');
   const stored = findStudyNote(controller.study, note);
@@ -177,7 +177,7 @@ function StudyPostpone({ note, row, controller, disabled, onDone }: { note: Note
 }
 
 /** A study card shows the note's pages, so the current card is the one note read in full. */
-function StudyLaneCard({ note: listed, row, controller, disabled, onDone, onOpen, previous, next, onMove, more, remaining }: { note: NoteListItem; row: ScreenRow; controller: StudyController; disabled: boolean; onDone: () => void; onOpen: () => void; previous: boolean; next: boolean; onMove: (direction: number) => void; more: ReactNode; remaining: number; }) {
+function StudyLaneCard({ note: listed, row, controller, disabled, onDone, onOpen, previous, next, onMove, more, remaining }: { note: NoteListItem; row: CompilationRow; controller: StudyController; disabled: boolean; onDone: () => void; onOpen: () => void; previous: boolean; next: boolean; onMove: (direction: number) => void; more: ReactNode; remaining: number; }) {
   const { t } = useTranslation();
   const lookup = useNoteLookup([listed], true);
   const found = lookup.notes[0];

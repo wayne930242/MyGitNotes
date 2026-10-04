@@ -1,5 +1,5 @@
 import { Focus, LayoutGrid, ListChecks, PanelsTopLeft, PanelTopClose, PanelTopOpen, Pencil, Save, Scan } from 'lucide-react';
-import type { ScreenRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/screen-page';
 import type { I18nContextValue } from '../../lib/i18n/index.js';
 import { GraphTool } from './GraphTool.js';
 
@@ -19,7 +19,7 @@ interface GraphSelectionToolbarProps {
   onArrange: () => void;
   lanePanel: boolean;
   onToggleLanePanel: () => void;
-  activeLane: ScreenRow | undefined;
+  activeLane: CompilationRow | undefined;
   onEditLane: () => void;
 }
 

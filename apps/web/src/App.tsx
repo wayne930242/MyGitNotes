@@ -63,7 +63,7 @@ import { AddToFocusDialog } from './components/AddToFocusDialog.js';
 import { FocusLaneTab } from './components/FocusLaneTab.js';
 import { FocusList } from './components/FocusList.js';
 import { BrowseDock, BrowseDockToggle, CARD_TWO_ROW_HEIGHT } from './components/BrowseDock.js';
-import type { ScreenRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/screen-page';
 import { RightPanel } from './components/RightPanel.js';
 import { FileManager, FileManagerDialog, FileMetadata } from './components/files/index.js';
 import { AgentSystemView } from './components/AgentSystemView.js';
@@ -315,7 +315,7 @@ const AppContent: React.FC = () => {
       )}
     </>
   );
-  const renderFocusLane = (row: ScreenRow, pane: number) => (
+  const renderFocusLane = (row: CompilationRow, pane: number) => (
     <FocusLaneTab
       key={row.id}
       row={row}

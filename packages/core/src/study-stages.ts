@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { DEFAULT_NOTE_STATUSES, resolveNoteStatuses } from './note-status.js';
-import type { ScreenRow } from './screen-page.js';
+import type { CompilationRow } from './screen-page.js';
 import type { NotebookConfig } from './types.js';
 
 export const StudyProgressionSchema = z.object({ stages: z.array(z.object({ status: z.string().trim().min(1).max(200), intervalDays: z.number().finite().min(1 / 1440).max(3650) }).strict()).min(1).max(20), easy: z.enum(['two', 'last']).default('two') }).strict().refine(value => new Set(value.stages.map(stage => stage.status)).size === value.stages.length, 'Stage statuses must be unique.');
@@ -49,7 +49,7 @@ export function deduplicatedStudyRatings(progression: StudyProgression, status: 
 }
 
 /** A lane uses the statuses of the notebook it belongs to. */
-export function studyLaneStatuses(lane: ScreenRow, notebooks: Pick<NotebookConfig, 'id' | 'statuses'>[]): string[] {
+export function studyLaneStatuses(lane: CompilationRow, notebooks: Pick<NotebookConfig, 'id' | 'statuses'>[]): string[] {
   return [...new Set(notebooks.filter(notebook => notebook.id === lane.notebookId).flatMap(notebook => resolveNoteStatuses(notebook)))];
 }
 

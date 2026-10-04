@@ -3,24 +3,24 @@ import { useDroppable } from '@dnd-kit/core';
 import { horizontalListSortingStrategy, SortableContext, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Brain, ChevronLeft, ChevronRight, Columns2, Columns3, GripVertical, LayoutGrid, Network, Plus, SlidersHorizontal, X, Zap } from 'lucide-react';
-import type { ScreenItem, ScreenRow } from '@mygitnotes/core/screen-page';
+import type { CompilationItem, CompilationRow } from '@mygitnotes/core/screen-page';
 import { type NotebookFacets, noteQueryStatuses } from '@mygitnotes/core/note-query';
 import type { NotebookConfig } from '../lib/types.js';
-import { useLaneNotes } from '../lib/screen-queries.js';
+import { useLaneNotes } from '../lib/compilation-queries.js';
 import type { StudyController } from '../lib/use-study-workspace.js';
-import { screenRowItems, studyRowItems } from '../lib/screen-content.js';
+import { compilationRowItems, studyRowItems } from '../lib/compilation-content.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { Button } from './Button.js';
-import { ScreenCard, type ScreenContentProps, screenItemTitle } from './ScreenCard.js';
+import { CompilationCard, type CompilationContentProps, compilationItemTitle } from './CompilationCard.js';
 import { NoteListSentinel } from './NoteListSentinel.js';
 import { Select } from './Select.js';
 import type { SortConfig } from '../lib/note-sort.js';
 import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
 import { LoadingStatus } from './LoadingStatus.js';
 
-export const screenViewTabs = [{ value: 'thumbnail', icon: LayoutGrid }, { value: 'small', icon: Columns3 }, { value: 'medium', icon: Columns2 }, { value: 'graph', icon: Network }] as const;
+export const compilationViewTabs = [{ value: 'thumbnail', icon: LayoutGrid }, { value: 'small', icon: Columns3 }, { value: 'medium', icon: Columns2 }, { value: 'graph', icon: Network }] as const;
 
-export function createLaneNoteContext(row: ScreenRow, notebooks: NotebookConfig[]): { notebookId?: string; folder?: string; tag?: string; } | null {
+export function createLaneNoteContext(row: CompilationRow, notebooks: NotebookConfig[]): { notebookId?: string; folder?: string; tag?: string; } | null {
   if (row.kind !== 'dynamic') return null;
   if (row.source.kind === 'tag') {
     return { tag: row.source.tag, notebookId: row.source.notebookId };
@@ -34,24 +34,24 @@ export function createLaneNoteContext(row: ScreenRow, notebooks: NotebookConfig[
   return null;
 }
 
-export function MovableCard({ item, row, reorder, disabled, remove, ...content }: ScreenContentProps & { item: ScreenItem; row: ScreenRow; reorder: boolean; disabled: boolean; remove: () => void; }) {
+export function MovableCard({ item, row, reorder, disabled, remove, ...content }: CompilationContentProps & { item: CompilationItem; row: CompilationRow; reorder: boolean; disabled: boolean; remove: () => void; }) {
   const { t } = useTranslation();
   const sort = useSortable({ id: item.id, disabled: disabled || !reorder, data: { rowId: row.id } });
   /* eslint-disable react/refs -- dnd-kit sortable bindings are callback refs and render state, forwarded to the card and drag handle. */
   return (
     <div ref={sort.setNodeRef} className='screen-card-slot' style={{ transform: CSS.Transform.toString(sort.transform), transition: sort.transition, opacity: sort.isDragging ? .3 : undefined }}>
-      <ScreenCard
+      <CompilationCard
         {...content}
         item={item}
         view={row.view}
         controls={!disabled && (
           <>
             {reorder && (
-              <Button type='button' ref={sort.setActivatorNodeRef} {...sort.attributes} {...sort.listeners} size='icon' className='screen-drag-handle' aria-label={`${t('screen.moveItem')}: ${screenItemTitle(item, content.notes, content.assets)}`}>
+              <Button type='button' ref={sort.setActivatorNodeRef} {...sort.attributes} {...sort.listeners} size='icon' className='screen-drag-handle' aria-label={`${t('screen.moveItem')}: ${compilationItemTitle(item, content.notes, content.assets)}`}>
                 <GripVertical size={14} />
               </Button>
             )}
-            <Button type='button' size='icon' className='screen-remove' aria-label={`${t('screen.unpin')}: ${screenItemTitle(item, content.notes, content.assets)}`} onClick={remove}>
+            <Button type='button' size='icon' className='screen-remove' aria-label={`${t('screen.unpin')}: ${compilationItemTitle(item, content.notes, content.assets)}`} onClick={remove}>
               <X size={12} />
             </Button>
           </>
@@ -62,7 +62,7 @@ export function MovableCard({ item, row, reorder, disabled, remove, ...content }
   /* eslint-enable react/refs */
 }
 
-export function ScreenLane({ row, graph, reorder, disabled, study, facets, notebooks, assets, onOpen, onStudy, onStudyChange, onView, onSort, onAdd, onRemove, onCreateNote, readOnly, onAddToFocus }: Omit<ScreenContentProps, 'notes'> & { graph?: ReactNode; facets?: Record<string, NotebookFacets>; row: ScreenRow; reorder: boolean; disabled: boolean; study: StudyController; readOnly?: boolean; onAddToFocus?: () => void; onStudy?: () => void; onView?: (view: ScreenRow['view']) => void; onAdd?: () => void; onRemove?: (id: string) => void; onSort?: (sort: SortConfig) => void; onStudyChange?: (study: NonNullable<ScreenRow['study']>) => void; onCreateNote?: (context?: { notebookId?: string; folder?: string; tag?: string; }) => void; }) {
+export function CompilationLane({ row, graph, reorder, disabled, study, facets, notebooks, assets, onOpen, onStudy, onStudyChange, onView, onSort, onAdd, onRemove, onCreateNote, readOnly, onAddToFocus }: Omit<CompilationContentProps, 'notes'> & { graph?: ReactNode; facets?: Record<string, NotebookFacets>; row: CompilationRow; reorder: boolean; disabled: boolean; study: StudyController; readOnly?: boolean; onAddToFocus?: () => void; onStudy?: () => void; onView?: (view: CompilationRow['view']) => void; onAdd?: () => void; onRemove?: (id: string) => void; onSort?: (sort: SortConfig) => void; onStudyChange?: (study: NonNullable<CompilationRow['study']>) => void; onCreateNote?: (context?: { notebookId?: string; folder?: string; tag?: string; }) => void; }) {
   const { t } = useTranslation();
   const host = useRef<HTMLElement>(null), strip = useRef<HTMLDivElement>(null);
   const [queryOpen, setQueryOpen] = useState(false);
@@ -73,9 +73,9 @@ export function ScreenLane({ row, graph, reorder, disabled, study, facets, noteb
   }, []);
   // Cards show a body, so the lane's page is read with content; a graph lane needs none.
   const laneNotes = useLaneNotes(row, { content: row.view !== 'graph' });
-  const content: ScreenContentProps = { notebooks, assets, onOpen, notes: laneNotes.notes };
+  const content: CompilationContentProps = { notebooks, assets, onOpen, notes: laneNotes.notes };
   const ordinaryRow = { ...row, study: { ...row.study, filter: 'all' as const, dueFirst: false } };
-  const items = studyRowItems(screenRowItems(row, content.notes, content.assets, content.notebooks), ordinaryRow, content.notes, study.study, clock);
+  const items = studyRowItems(compilationRowItems(row, content.notes, content.assets, content.notebooks), ordinaryRow, content.notes, study.study, clock);
   const query = row.study || { filter: 'all' as const, dueFirst: false };
   const filtered = Boolean(query.status);
   const drop = useDroppable({ id: `lane:${row.id}`, disabled: readOnly || disabled || !reorder || filtered || row.kind !== 'custom', data: { rowId: row.id, empty: row.kind === 'custom' && !row.items.length } });
@@ -135,10 +135,10 @@ export function ScreenLane({ row, graph, reorder, disabled, study, facets, noteb
               )}
             </div>
           )}
-          {!readOnly && <Select className='screen-view-select' aria-label={`${t('screen.view')}: ${row.name}`} value={row.view} disabled={disabled} onValueChange={value => onView?.(value as ScreenRow['view'])} options={(['thumbnail', 'small', 'medium', 'graph'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} />}
+          {!readOnly && <Select className='screen-view-select' aria-label={`${t('screen.view')}: ${row.name}`} value={row.view} disabled={disabled} onValueChange={value => onView?.(value as CompilationRow['view'])} options={(['thumbnail', 'small', 'medium', 'graph'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} />}
           {!readOnly && (
             <div className='screen-view-tabs' role='group' aria-label={`${t('screen.view')}: ${row.name}`}>
-              {screenViewTabs.map(({ value, icon: Icon }) => (
+              {compilationViewTabs.map(({ value, icon: Icon }) => (
                 <Button
                   key={value}
                   type='button'
@@ -188,7 +188,7 @@ export function ScreenLane({ row, graph, reorder, disabled, study, facets, noteb
           <div ref={strip} className='screen-lane-strip' tabIndex={0} aria-label={`${row.name} · ${t('screen.items')}`}>
             {!readOnly && row.kind === 'custom' ? <SortableContext items={items.map(item => item.id)} strategy={horizontalListSortingStrategy}>{items.map(item => <MovableCard reorder={reorder} key={item.id} {...content} item={item} row={row} disabled={disabled || filtered} remove={() => onRemove?.(item.id)} />)}</SortableContext> : items.map(item => (
               <div className='screen-card-slot' key={item.id}>
-                <ScreenCard {...content} item={item} view={row.view} />
+                <CompilationCard {...content} item={item} view={row.view} />
               </div>
             ))}
             {laneNotes.error && <p role='alert' className='screen-error'>{laneNotes.error}</p>}

@@ -4,18 +4,18 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import type { ScreenRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/screen-page';
 import { emptyStudyWorkspace } from '@mygitnotes/core/study';
 import type { NotebookConfig } from '../lib/types.js';
 import { setNoteQueryScope } from '../lib/use-note-queries.js';
 import type { StudyController } from '../lib/use-study-workspace.js';
-import { ScreenLane } from './ScreenLane.js';
+import { CompilationLane } from './CompilationLane.js';
 
 const REVISION = 'e'.repeat(40);
 let client: QueryClient;
 
 const notebooks: NotebookConfig[] = [{ id: 'nb1', title: 'NB1', root: 'notes/nb1' }];
-const row: ScreenRow = { id: 'row-1', name: 'Pinned', view: 'thumbnail', notebookId: 'nb1', kind: 'custom', items: [{ id: 'item-1', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/a.md' }] };
+const row: CompilationRow = { id: 'row-1', name: 'Pinned', view: 'thumbnail', notebookId: 'nb1', kind: 'custom', items: [{ id: 'item-1', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/a.md' }] };
 const study: StudyController = { study: emptyStudyWorkspace(), save: async () => false, action: async () => false, reload: async () => {}, loading: false, saving: false, error: '', writable: false };
 
 beforeEach(() => {
@@ -37,7 +37,7 @@ afterEach(() => {
 
 const wrapper = ({ children }: { children: ReactNode; }) => createElement(QueryClientProvider, { client }, children);
 
-const lane = (props: Partial<Parameters<typeof ScreenLane>[0]> = {}) => createElement(ScreenLane, { row, reorder: false, disabled: false, study, notebooks, assets: [], onOpen: () => {}, ...props });
+const lane = (props: Partial<Parameters<typeof CompilationLane>[0]> = {}) => createElement(CompilationLane, { row, reorder: false, disabled: false, study, notebooks, assets: [], onOpen: () => {}, ...props });
 
 it('read-only: renders cards and scroll buttons but no editing controls', async () => {
   render(lane({ readOnly: true }), { wrapper });

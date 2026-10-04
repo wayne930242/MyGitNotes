@@ -4,9 +4,9 @@ import { createElement, type ReactNode } from 'react';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Network } from 'lucide-react';
-import type { ScreenRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/screen-page';
 import type { NotebookConfig } from '../lib/types.js';
-import { createLaneNoteContext, screenViewTabs } from './ScreenPage.js';
+import { compilationViewTabs, createLaneNoteContext } from './ScreenPage.js';
 import { KeyboardShortcuts } from './KeyboardShortcuts.js';
 
 beforeEach(() => {
@@ -20,29 +20,29 @@ describe('createLaneNoteContext', () => {
   const notebooks: NotebookConfig[] = [{ id: 'nb-1', title: 'Main Notebook', root: 'notes/main' }, { id: 'nb-2', title: 'Second Notebook', root: 'notes/secondary' }];
 
   it('extracts tag context for tag dynamic lanes with notebookId', () => {
-    const row: ScreenRow = { id: 'r1', name: 'Clues', view: 'small', notebookId: 'nb-1', kind: 'dynamic', source: { kind: 'tag', tag: 'clue', notebookId: 'nb-1' } };
+    const row: CompilationRow = { id: 'r1', name: 'Clues', view: 'small', notebookId: 'nb-1', kind: 'dynamic', source: { kind: 'tag', tag: 'clue', notebookId: 'nb-1' } };
     expect(createLaneNoteContext(row, notebooks)).toEqual({ tag: 'clue', notebookId: 'nb-1' });
   });
 
   it('extracts relative folder context for nested folder dynamic lanes', () => {
-    const row: ScreenRow = { id: 'r3', name: 'Deep Folder', view: 'medium', notebookId: 'nb-1', kind: 'dynamic', source: { kind: 'folder', notebookId: 'nb-1', path: 'notes/main/campaign/sessions', recursive: true } };
+    const row: CompilationRow = { id: 'r3', name: 'Deep Folder', view: 'medium', notebookId: 'nb-1', kind: 'dynamic', source: { kind: 'folder', notebookId: 'nb-1', path: 'notes/main/campaign/sessions', recursive: true } };
     expect(createLaneNoteContext(row, notebooks)).toEqual({ notebookId: 'nb-1', folder: 'campaign/sessions' });
   });
 
   it('extracts empty string folder context when folder is at notebook root', () => {
-    const row: ScreenRow = { id: 'r4', name: 'Root Folder', view: 'thumbnail', notebookId: 'nb-2', kind: 'dynamic', source: { kind: 'folder', notebookId: 'nb-2', path: 'notes/secondary', recursive: false } };
+    const row: CompilationRow = { id: 'r4', name: 'Root Folder', view: 'thumbnail', notebookId: 'nb-2', kind: 'dynamic', source: { kind: 'folder', notebookId: 'nb-2', path: 'notes/secondary', recursive: false } };
     expect(createLaneNoteContext(row, notebooks)).toEqual({ notebookId: 'nb-2', folder: '' });
   });
 
   it('returns null for custom lanes', () => {
-    const row: ScreenRow = { id: 'r5', name: 'Pinned', view: 'small', notebookId: 'nb-1', kind: 'custom', items: [] };
+    const row: CompilationRow = { id: 'r5', name: 'Pinned', view: 'small', notebookId: 'nb-1', kind: 'custom', items: [] };
     expect(createLaneNoteContext(row, notebooks)).toBeNull();
   });
 });
 
 describe('Screen view icons', () => {
   it('uses the same network icon for a lane graph as the main Graph navigation', () => {
-    expect(screenViewTabs.find(item => item.value === 'graph')?.icon).toBe(Network);
+    expect(compilationViewTabs.find(item => item.value === 'graph')?.icon).toBe(Network);
   });
 });
 

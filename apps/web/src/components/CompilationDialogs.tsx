@@ -1,36 +1,36 @@
 import { Button } from './Button.js';
 import { useState } from 'react';
-import { parseYouTubeUrl, type ScreenItem, type ScreenRow } from '@mygitnotes/core/screen-page';
+import { type CompilationItem, type CompilationRow, parseYouTubeUrl } from '@mygitnotes/core/screen-page';
 import { defaultStudyProgression, studyLaneStatuses, type StudyProgression, StudyProgressionSchema } from '@mygitnotes/core/study-stages';
 import { StudyLaneSettings } from './StudyLane.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { Select } from './Select.js';
-import type { ScreenContentProps } from './ScreenCard.js';
+import type { CompilationContentProps } from './CompilationCard.js';
 import type { FolderItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
-import { screenFolderOptions } from '../lib/screen-content.js';
+import { compilationFolderOptions } from '../lib/compilation-content.js';
 import { useNoteFacets, useNoteList } from '../lib/use-note-queries.js';
 import { useDebounced } from '../lib/use-debounced.js';
 import { LoadingStatus } from './LoadingStatus.js';
 
-type RowDialogContent = Pick<ScreenContentProps, 'notebooks' | 'assets'> & { folders: FolderItem[]; selectedNotebookId: string; };
+type RowDialogContent = Pick<CompilationContentProps, 'notebooks' | 'assets'> & { folders: FolderItem[]; selectedNotebookId: string; };
 
-function ScreenRowDialog({ notebooks, assets, folders, selectedNotebookId, row, disabled, onApply, onClose, onRemove }: RowDialogContent & { row?: ScreenRow; disabled?: boolean; onApply: (row: ScreenRow) => void; onClose: () => void; onRemove?: () => void; }) {
+function CompilationRowDialog({ notebooks, assets, folders, selectedNotebookId, row, disabled, onApply, onClose, onRemove }: RowDialogContent & { row?: CompilationRow; disabled?: boolean; onApply: (row: CompilationRow) => void; onClose: () => void; onRemove?: () => void; }) {
   const { t } = useTranslation();
   const source = row?.kind === 'dynamic' ? row.source : undefined;
   const [kind, setKind] = useState(row?.kind === 'dynamic' ? row.source.kind : 'custom');
   const [name, setName] = useState(row?.name || ''), [tag, setTag] = useState(source?.kind === 'tag' ? source.tag : '');
   const notebookId = row?.notebookId || selectedNotebookId;
   const [folder, setFolder] = useState(source?.kind === 'folder' ? source.path : ''), [recursive, setRecursive] = useState(source?.kind === 'folder' ? source.recursive : true);
-  const [view, setView] = useState<ScreenRow['view']>(row?.view || 'small');
+  const [view, setView] = useState<CompilationRow['view']>(row?.view || 'small');
   const [customProgression, setProgression] = useState<StudyProgression | undefined>(row?.progression);
   const [studyChanged, setStudyChanged] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [studyFilter, setStudyFilter] = useState<NonNullable<ScreenRow['study']>['filter']>(row?.study?.filter || 'all');
+  const [studyFilter, setStudyFilter] = useState<NonNullable<CompilationRow['study']>['filter']>(row?.study?.filter || 'all');
   const [stageError, setStageError] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const nb = notebooks.find(nb => nb.id === notebookId);
-  const draftRow: ScreenRow = kind === 'custom' ? { id: row?.id || 'draft', name: name || 'draft', view, notebookId, kind: 'custom', items: row?.kind === 'custom' ? row.items : [] } : { id: row?.id || 'draft', name: name || 'draft', view, notebookId, kind: 'dynamic', source: kind === 'tag' ? { kind: 'tag', tag, notebookId } : { kind: 'folder', notebookId, path: folder || nb?.root || '', recursive } };
+  const draftRow: CompilationRow = kind === 'custom' ? { id: row?.id || 'draft', name: name || 'draft', view, notebookId, kind: 'custom', items: row?.kind === 'custom' ? row.items : [] } : { id: row?.id || 'draft', name: name || 'draft', view, notebookId, kind: 'dynamic', source: kind === 'tag' ? { kind: 'tag', tag, notebookId } : { kind: 'folder', notebookId, path: folder || nb?.root || '', recursive } };
   const progression = customProgression || defaultStudyProgression(studyLaneStatuses(draftRow, notebooks)) || { stages: [], easy: 'two' as const };
   const facets = useNoteFacets(true);
   const tags = Object.keys(facets.facets?.[notebookId]?.tags || {}).sort();
@@ -77,7 +77,7 @@ function ScreenRowDialog({ notebooks, assets, folders, selectedNotebookId, row, 
           <>
             <label>
               {t('folder.folders')}
-              <Select value={folder || nb?.root || ''} onValueChange={setFolder} options={screenFolderOptions(nb, folders, assets).map(folder => ({ value: folder.path, label: folder.title }))} />
+              <Select value={folder || nb?.root || ''} onValueChange={setFolder} options={compilationFolderOptions(nb, folders, assets).map(folder => ({ value: folder.path, label: folder.title }))} />
             </label>
             <label className='screen-checkbox'>
               <input type='checkbox' checked={recursive} onChange={e => setRecursive(e.target.checked)} />
@@ -87,7 +87,7 @@ function ScreenRowDialog({ notebooks, assets, folders, selectedNotebookId, row, 
         )}
         <label>
           {t('screen.view')}
-          <Select aria-label={t('screen.view')} value={view} disabled={disabled} onValueChange={value => setView(value as ScreenRow['view'])} options={(['thumbnail', 'small', 'medium', 'graph'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} />
+          <Select aria-label={t('screen.view')} value={view} disabled={disabled} onValueChange={value => setView(value as CompilationRow['view'])} options={(['thumbnail', 'small', 'medium', 'graph'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} />
         </label>
         <details className='study-advanced' open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}>
           <summary>{t('study.advanced')}</summary>
@@ -155,15 +155,15 @@ function ScreenRowDialog({ notebooks, assets, folders, selectedNotebookId, row, 
   );
 }
 
-export function ScreenAddRow(props: RowDialogContent & { onAdd: (row: ScreenRow) => void; onClose: () => void; }) {
-  return <ScreenRowDialog {...props} onApply={props.onAdd} />;
+export function CompilationAddRow(props: RowDialogContent & { onAdd: (row: CompilationRow) => void; onClose: () => void; }) {
+  return <CompilationRowDialog {...props} onApply={props.onAdd} />;
 }
 
-export function ScreenEditRow(props: RowDialogContent & { row: ScreenRow; disabled?: boolean; onApply: (row: ScreenRow) => void; onRemove: () => void; onClose: () => void; }) {
-  return <ScreenRowDialog {...props} />;
+export function CompilationEditRow(props: RowDialogContent & { row: CompilationRow; disabled?: boolean; onApply: (row: CompilationRow) => void; onRemove: () => void; onClose: () => void; }) {
+  return <CompilationRowDialog {...props} />;
 }
 
-export function ScreenAddItem({ rowName, notebookId, notebooks, assets, folders, onAdd, onClose }: Omit<ScreenContentProps, 'onOpen' | 'notes'> & { rowName: string; notebookId: string; folders: FolderItem[]; onAdd: (item: ScreenItem) => void; onClose: () => void; }) {
+export function CompilationAddItem({ rowName, notebookId, notebooks, assets, folders, onAdd, onClose }: Omit<CompilationContentProps, 'onOpen' | 'notes'> & { rowName: string; notebookId: string; folders: FolderItem[]; onAdd: (item: CompilationItem) => void; onClose: () => void; }) {
   const { t } = useTranslation();
   const [kind, setKind] = useState('note');
   const [query, setQuery] = useState(''), [youtube, setYoutube] = useState(''), [title, setTitle] = useState('');
@@ -171,7 +171,7 @@ export function ScreenAddItem({ rowName, notebookId, notebooks, assets, folders,
   // Notes are searched on the server; assets and folders are already loaded with the page.
   const settledQuery = useDebounced(query);
   const noteMatches = useNoteList(kind === 'note' ? { notebookId, q: settledQuery, match: 'title', showHidden: true, sort: 'title', order: 'asc' } : null);
-  const options = kind === 'note' ? noteMatches.notes.map(note => ({ path: note.path, title: note.title })) : kind === 'asset' ? assets.filter(asset => asset.notebookId === notebookId).map(asset => ({ path: asset.path, title: asset.name })) : screenFolderOptions(nb, folders, assets);
+  const options = kind === 'note' ? noteMatches.notes.map(note => ({ path: note.path, title: note.title })) : kind === 'asset' ? assets.filter(asset => asset.notebookId === notebookId).map(asset => ({ path: asset.path, title: asset.name })) : compilationFolderOptions(nb, folders, assets);
   const video = parseYouTubeUrl(youtube);
   return (
     <WorkspaceDialog title={`${t('screen.addItem')} · ${rowName}`} onClose={onClose}>

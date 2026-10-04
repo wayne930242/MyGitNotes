@@ -3,14 +3,14 @@ import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Pencil, Zap } from 'lucide-react';
-import { moveScreenRow, type ScreenPage, type ScreenRow } from '@mygitnotes/core/screen-page';
+import { type CompilationRow, moveScreenRow, type ScreenPage } from '@mygitnotes/core/screen-page';
 import { useTranslation } from '../lib/i18n/index.js';
 import { ScreenIcon } from './ScreenIcon.js';
-import { ScreenEditRow } from './ScreenDialogs.js';
-import type { ScreenAsset } from './ScreenCard.js';
+import { CompilationEditRow } from './CompilationDialogs.js';
+import type { CompilationAsset } from './CompilationCard.js';
 import type { FolderItem, NotebookConfig } from '../lib/types.js';
 
-function LaneLink({ row, reorder, disabled, onSelect, onEdit }: { row: ScreenRow; reorder: boolean; disabled: boolean; onSelect: () => void; onEdit: () => void; }) {
+function LaneLink({ row, reorder, disabled, onSelect, onEdit }: { row: CompilationRow; reorder: boolean; disabled: boolean; onSelect: () => void; onEdit: () => void; }) {
   const { t } = useTranslation();
   const sort = useSortable({ id: row.id, disabled: disabled || !reorder });
   /* eslint-disable react/refs -- dnd-kit sortable bindings are callback refs and render state, forwarded to the lane and drag handle. */
@@ -33,7 +33,7 @@ function LaneLink({ row, reorder, disabled, onSelect, onEdit }: { row: ScreenRow
   /* eslint-enable react/refs */
 }
 
-export function ScreenLaneNavigation({ page, reorder = false, disabled, notebooks, assets, folders, selectedNotebookId, onChange, onSelect }: { page: ScreenPage; reorder?: boolean; disabled: boolean; notebooks: NotebookConfig[]; assets: ScreenAsset[]; folders: FolderItem[]; selectedNotebookId: string; onChange: (page: ScreenPage) => void; onSelect: (id: string) => void; }) {
+export function ScreenLaneNavigation({ page, reorder = false, disabled, notebooks, assets, folders, selectedNotebookId, onChange, onSelect }: { page: ScreenPage; reorder?: boolean; disabled: boolean; notebooks: NotebookConfig[]; assets: CompilationAsset[]; folders: FolderItem[]; selectedNotebookId: string; onChange: (page: ScreenPage) => void; onSelect: (id: string) => void; }) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState<string>();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
@@ -57,7 +57,7 @@ export function ScreenLaneNavigation({ page, reorder = false, disabled, notebook
         </DndContext>
       </nav>
       {editingRow && (
-        <ScreenEditRow
+        <CompilationEditRow
           row={editingRow}
           disabled={disabled}
           notebooks={notebooks}

@@ -1,12 +1,12 @@
 import { useCallback, useMemo } from 'react';
 import type { NoteGraphNode } from '@mygitnotes/core/note-graph';
 import { selectFilteredGraph } from '@mygitnotes/core/note-filters';
-import type { ScreenRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/screen-page';
 import { noteRefKey } from '@mygitnotes/core/note-query';
 import type { NoteQuery } from '@mygitnotes/core/note-query';
 import { useNoteGraph, useNotePaths } from '../../lib/use-note-queries.js';
 import { overlayGraphDrafts } from '../../lib/draft-overlay.js';
-import { useLanePaths } from '../../lib/screen-queries.js';
+import { useLanePaths } from '../../lib/compilation-queries.js';
 import { initializeGraphLayout } from '../../lib/graph-initial-layout.js';
 import type { GraphPlacement } from '../../lib/graph-layout.js';
 import { useNoteQueryScope } from '../../lib/use-note-queries.js';
@@ -15,7 +15,7 @@ import { themeColor } from '../../lib/theme-color.js';
 import type { MutableRefObject } from 'react';
 import type { GraphPageProps, LayoutNode } from './types.js';
 import type { useGraphNoteSessions } from './useGraphNoteSessions.js';
-export function useGraphData({ notebooks, filters, lane, activeLane, rows, laneIds, laneKey, showOutside, sessions, only, layout, showOrphans, positions, appearance }: Pick<GraphPageProps, 'notebooks' | 'filters' | 'lane'> & { activeLane?: ScreenRow; rows: ScreenRow[]; laneIds: string[]; laneKey: string; showOutside: boolean; sessions: ReturnType<typeof useGraphNoteSessions>['sessions']; only: string[] | null; layout: GraphPlacement; showOrphans: boolean; positions: MutableRefObject<Map<string, LayoutNode>>; appearance: GraphAppearance; }) {
+export function useGraphData({ notebooks, filters, lane, activeLane, rows, laneIds, laneKey, showOutside, sessions, only, layout, showOrphans, positions, appearance }: Pick<GraphPageProps, 'notebooks' | 'filters' | 'lane'> & { activeLane?: CompilationRow; rows: CompilationRow[]; laneIds: string[]; laneKey: string; showOutside: boolean; sessions: ReturnType<typeof useGraphNoteSessions>['sessions']; only: string[] | null; layout: GraphPlacement; showOrphans: boolean; positions: MutableRefObject<Map<string, LayoutNode>>; appearance: GraphAppearance; }) {
   const graphSource = useNoteGraph();
   const { repositories } = useNoteQueryScope();
   const filterValue = filters?.value;

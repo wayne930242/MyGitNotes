@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moveScreenItem, moveScreenRow, parseYouTubeUrl, readScreenPage, ScreenPageSchema } from './screen-page.js';
+import { moveCompilationItem, moveScreenRow, parseYouTubeUrl, readScreenPage, ScreenPageSchema } from './screen-page.js';
 
 const note = { id: 'a', kind: 'note', notebookId: 'one', path: 'notes/one/a.md' };
 const page = { version: 2, rows: [{ id: 'first', name: '閱讀', view: 'small', notebookId: 'one', kind: 'custom', items: [note] }, { id: 'second', name: '參考', view: 'medium', notebookId: 'one', kind: 'custom', items: [{ ...note, id: 'b', path: 'notes/one/b.md' }] }, { id: 'live', name: '動態標籤', view: 'thumbnail', notebookId: 'one', kind: 'dynamic', source: { kind: 'tag', tag: 'clue', notebookId: 'one' } }, { id: 'other', name: '其他', view: 'small', notebookId: 'two', kind: 'custom', items: [] }] };
@@ -24,13 +24,13 @@ describe('Screen Page swimlanes', () => {
   });
   it('moves references across custom rows of the same notebook only', () => {
     const parsed = ScreenPageSchema.parse(page);
-    const moved = moveScreenItem(parsed, 'a', 'second', 1);
+    const moved = moveCompilationItem(parsed, 'a', 'second', 1);
     expect(moved.rows[0]).toMatchObject({ items: [] });
     expect(moved.rows[1]).toMatchObject({ items: [{ id: 'b' }, note] });
     expect(parsed.rows[0]).toMatchObject({ items: [note] });
     expect(moveScreenRow(parsed, 'live', 0).rows.map(r => r.id)).toEqual(['live', 'first', 'second', 'other']);
-    expect(() => moveScreenItem(parsed, 'a', 'live', 0)).toThrow();
-    expect(() => moveScreenItem(parsed, 'a', 'other', 0)).toThrow('Items stay inside their notebook');
+    expect(() => moveCompilationItem(parsed, 'a', 'live', 0)).toThrow();
+    expect(() => moveCompilationItem(parsed, 'a', 'other', 0)).toThrow('Items stay inside their notebook');
   });
   it('rejects lane content from another notebook', () => {
     expect(ScreenPageSchema.safeParse({ version: 2, rows: [{ ...page.rows[0], items: [{ ...note, notebookId: 'two' }] }] }).success).toBe(false);

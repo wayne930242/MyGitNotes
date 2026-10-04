@@ -4,7 +4,7 @@ import { GraphFilters } from '../GraphFilters.js';
 import { GraphLanePanel } from './GraphLanePanel.js';
 import { GraphSelectionToolbar } from './GraphSelectionToolbar.js';
 import { GraphTool } from './GraphTool.js';
-import { ScreenEditRow } from '../ScreenDialogs.js';
+import { CompilationEditRow } from '../CompilationDialogs.js';
 import type { useGraphController } from './useGraphController.js';
 export function GraphPanels({ model }: { model: ReturnType<typeof useGraphController>; }) {
   const { notebooks, filters, screen, lane, folders, t, params, setParams, laneIds, activeLane, showOutside, lanePanel, setLanePanel, editLane, setEditLane, rows, laneRows, selectLane, setSaveLayoutRequested, controls, selected, only, setOnly, showOrphans, setShowOrphans, boxMode, setBoxMode, setSaveOpen, setName, notice, setNotice, pickerOpen, setPickerOpen, appearance, appearanceError, matching, laneMembers, graphData, colors, changeAppearance, currentLayout, persistLayout, freeze, reflow, setExpanded, select, fitView, visibleSelected, changeMembership, openFullGraph, saveNotebook } = model;
@@ -121,7 +121,7 @@ export function GraphPanels({ model }: { model: ReturnType<typeof useGraphContro
         </button>
       )}
       {editLane && activeLane && screen && (
-        <ScreenEditRow
+        <CompilationEditRow
           row={activeLane}
           notebooks={notebooks}
           assets={[]}

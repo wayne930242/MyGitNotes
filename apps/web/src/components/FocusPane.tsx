@@ -3,7 +3,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, FileText, GalleryHorizontalEnd, ListPlus, Maximize2, PanelTopDashed, Plus, X } from 'lucide-react';
 import { findFocusTabInPane, type FocusTab, focusTabKey } from '@mygitnotes/core/focus-page';
-import type { ScreenRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/screen-page';
 import type { NoteFocus } from '../lib/use-note-focus.js';
 import type { DisplayedPane } from '../lib/focus-view.js';
 import type { FolderItem } from '../lib/types.js';
@@ -19,12 +19,12 @@ const TAB_DRAG_TYPE = 'application/x-mygitnotes-focus-tab';
 export interface FocusPaneContext {
   focus: NoteFocus;
   /** The notebook's lanes. */
-  lanes: readonly ScreenRow[];
+  lanes: readonly CompilationRow[];
   /** Notes dropped from outside must live under this root. */
   notebookRoot: string;
   /** The notebook's configured folders, for the batch-add picker. */
   folders: readonly FolderItem[];
-  renderLane: (row: ScreenRow, pane: number) => ReactNode;
+  renderLane: (row: CompilationRow, pane: number) => ReactNode;
   onZoomNote: (path: string) => void;
   /** The rail container and section the active pane's editor renders its document panel into. */
   documentPanel?: NoteEditorProps['documentPanel'];

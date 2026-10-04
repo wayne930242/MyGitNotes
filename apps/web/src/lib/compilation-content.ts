@@ -1,11 +1,11 @@
 import { findStudyNote, matchesStudyFilter, studyDue, type StudyWorkspace } from '@mygitnotes/core/study';
-import { type ScreenItem, type ScreenRow, screenRowNotes } from '@mygitnotes/core/screen-page';
+import { type CompilationItem, compilationNotes, type CompilationRow } from '@mygitnotes/core/screen-page';
 import { resolveNoteStatuses } from '@mygitnotes/core/note-status';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { AssetItem, FolderItem, NotebookConfig } from './types.js';
 import { sortNotes } from './note-sort.js';
 
-export function screenFolderOptions(notebook: NotebookConfig | undefined, folders: FolderItem[], assets: (AssetItem & { notebookId: string; })[]) {
+export function compilationFolderOptions(notebook: NotebookConfig | undefined, folders: FolderItem[], assets: (AssetItem & { notebookId: string; })[]) {
   if (!notebook) return [];
   const options = new Map([[notebook.root, notebook.title]]);
   for (const folder of folders.filter(folder => folder.notebookId === notebook.id)) options.set(`${notebook.root}/${folder.path}`, folder.title);
@@ -20,12 +20,12 @@ export function screenFolderOptions(notebook: NotebookConfig | undefined, folder
   return [...options].map(([path, title]) => ({ path, title }));
 }
 
-export function screenRowItems(row: ScreenRow, notes: NoteListItem[], assets: (AssetItem & { notebookId: string; })[], notebooks: NotebookConfig[] = []): ScreenItem[] {
+export function compilationRowItems(row: CompilationRow, notes: NoteListItem[], assets: (AssetItem & { notebookId: string; })[], notebooks: NotebookConfig[] = []): CompilationItem[] {
   if (row.kind === 'custom') return row.items;
   const source = row.source;
   const within = (file: string) => file.startsWith(`${source.kind === 'folder' ? source.path : ''}/`) && (source.kind !== 'folder' || source.recursive || !file.slice(source.path.length + 1).includes('/'));
   // Membership is judged again on the loaded rows so a staged draft lands in the right lane.
-  const selectedNotes: NoteListItem[] = screenRowNotes({ ...row, study: undefined }, notes.map(note => ({ ...note, content: note.content ?? '' })));
+  const selectedNotes: NoteListItem[] = compilationNotes({ ...row, study: undefined }, notes.map(note => ({ ...note, content: note.content ?? '' })));
   const selectedAssets = source.kind === 'folder' ? assets.filter(asset => asset.notebookId === row.notebookId && within(asset.path)) : [];
   if (row.sort) {
     const entries = [
@@ -33,7 +33,7 @@ export function screenRowItems(row: ScreenRow, notes: NoteListItem[], assets: (A
       // Assets have no creation metadata; use their modification time as in Notes.
       ...selectedAssets.map(asset => ({ kind: 'asset' as const, note: { id: asset.path, path: asset.path, notebookId: asset.notebookId, title: asset.name, mtime: asset.mtime, metadata: {}, tags: [], content: '' } as NoteListItem })),
     ];
-    const items = new Map<string, ScreenItem>();
+    const items = new Map<string, CompilationItem>();
     const sortable = entries.map(({ note, kind }) => {
       const id = `dynamic:${row.id}:${note.path}`;
       items.set(id, { id, kind, notebookId: note.notebookId, path: note.path });
@@ -51,10 +51,10 @@ export function noteSummary(content: string): string {
   return content.replace(/^#{1,6}\s+.*$/gm, '').replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[`*_>#]/g, '').replace(/\s+/g, ' ').trim().slice(0, 180);
 }
 
-export function studyRowItems(items: ScreenItem[], row: ScreenRow, notes: NoteListItem[], study: StudyWorkspace, now = new Date()): ScreenItem[] {
+export function studyRowItems(items: CompilationItem[], row: CompilationRow, notes: NoteListItem[], study: StudyWorkspace, now = new Date()): CompilationItem[] {
   if (!row.study) return items;
   const sources = new Map(notes.map(note => [JSON.stringify([note.notebookId, note.path]), note]));
-  const lookup = (item: ScreenItem) => item.kind === 'note' ? sources.get(JSON.stringify([item.notebookId, item.path])) : undefined;
+  const lookup = (item: CompilationItem) => item.kind === 'note' ? sources.get(JSON.stringify([item.notebookId, item.path])) : undefined;
   const entries = items.map(item => {
     const note = lookup(item);
     return { item, note, study: note ? findStudyNote(study, { ...note, content: note.content ?? '' }) : undefined };

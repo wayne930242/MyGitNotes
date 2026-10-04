@@ -1,13 +1,13 @@
 import { Minus, Pencil, Plus, Save, X } from 'lucide-react';
 import type { ScreenController } from '../../lib/use-screen-page.js';
-import type { ScreenRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/screen-page';
 import type { I18nContextValue } from '../../lib/i18n/index.js';
 
 interface GraphLanePanelProps {
   t: I18nContextValue['t'];
-  activeLane: ScreenRow | undefined;
+  activeLane: CompilationRow | undefined;
   onClose: () => void;
-  laneRows: ScreenRow[];
+  laneRows: CompilationRow[];
   onSelectLane: (id: string) => void;
   showOutside: boolean;
   onToggleShowOutside: (checked: boolean) => void;

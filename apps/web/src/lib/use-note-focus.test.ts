@@ -4,7 +4,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emptyFocusPage, FOCUS_MAX_TABS, FocusError, type FocusLayout } from '@mygitnotes/core/focus-page';
-import type { ScreenRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/screen-page';
 import { useNoteFocus } from './use-note-focus.js';
 import { CURRENT_FOCUS } from './focus-view.js';
 import { focusDocumentClient, type FocusPageController } from './use-focus-page.js';
@@ -16,7 +16,7 @@ const storageKey = `github-notes:focus-view:${SCOPE}:${NOTEBOOK}`;
 function fakeController(): FocusPageController {
   return { client: focusDocumentClient as WorkspaceDocumentClient<unknown>, repository: 'local:/workspace', file: '.github-notes-focus.yaml', page: emptyFocusPage(), change: () => {}, save: async () => {}, reload: async () => {}, refresh: async () => {}, loading: false, saving: false, dirty: false, error: '', writable: true, setError: () => {}, diff: '' };
 }
-const lane = (id: string): ScreenRow => ({ id, notebookId: NOTEBOOK, kind: 'custom', name: id, view: 'small', items: [] });
+const lane = (id: string): CompilationRow => ({ id, notebookId: NOTEBOOK, kind: 'custom', name: id, view: 'small', items: [] });
 
 let client: QueryClient;
 const wrapper = ({ children }: { children: ReactNode; }) => createElement(QueryClientProvider, { client }, children);

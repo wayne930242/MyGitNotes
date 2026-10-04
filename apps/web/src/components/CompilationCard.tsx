@@ -1,9 +1,9 @@
 import { type ReactNode, useMemo, useState } from 'react';
 import { ExternalLink, FileText, Folder, Image as ImageIcon, Play, Youtube } from 'lucide-react';
-import type { ScreenItem, ScreenRow } from '@mygitnotes/core/screen-page';
+import type { CompilationItem, CompilationRow } from '@mygitnotes/core/screen-page';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { AssetItem, NotebookConfig } from '../lib/types.js';
-import { noteSummary } from '../lib/screen-content.js';
+import { noteSummary } from '../lib/compilation-content.js';
 import { renderNote } from '../lib/markdown.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { youtubeLabels } from '../lib/youtube-embed.js';
@@ -12,25 +12,25 @@ import { NoteListSentinel } from './NoteListSentinel.js';
 import { LoadingStatus } from './LoadingStatus.js';
 import { NoteHtml } from './NoteHtml.js';
 
-export type ScreenAsset = AssetItem & { notebookId: string; };
-export interface ScreenContentProps {
+export type CompilationAsset = AssetItem & { notebookId: string; };
+export interface CompilationContentProps {
   notebooks: NotebookConfig[];
   notes: NoteListItem[];
-  assets: ScreenAsset[];
-  onOpen: (item: ScreenItem, note?: NoteListItem) => void;
+  assets: CompilationAsset[];
+  onOpen: (item: CompilationItem, note?: NoteListItem) => void;
 }
-export function screenItemTitle(item: ScreenItem, notes: NoteListItem[], assets: ScreenAsset[]): string {
+export function compilationItemTitle(item: CompilationItem, notes: NoteListItem[], assets: CompilationAsset[]): string {
   if (item.kind === 'youtube') return item.title || 'YouTube';
   return notes.find(note => note.path === item.path && note.notebookId === item.notebookId)?.title || assets.find(asset => asset.path === item.path && asset.notebookId === item.notebookId)?.name || item.path.split('/').pop() || item.path;
 }
 
-export function ScreenCard({ item, view, controls, ...content }: ScreenContentProps & { item: ScreenItem; view: ScreenRow['view']; controls?: ReactNode; }) {
+export function CompilationCard({ item, view, controls, ...content }: CompilationContentProps & { item: CompilationItem; view: CompilationRow['view']; controls?: ReactNode; }) {
   const { t } = useTranslation();
   const [playing, setPlaying] = useState(false);
   const note = item.kind === 'note' ? content.notes.find(note => note.path === item.path && note.notebookId === item.notebookId) : undefined;
   const asset = item.kind === 'asset' ? content.assets.find(asset => asset.path === item.path && asset.notebookId === item.notebookId) : undefined;
   const notebook = item.kind !== 'youtube' ? content.notebooks.find(nb => nb.id === item.notebookId) : undefined;
-  const title = screenItemTitle(item, content.notes, content.assets);
+  const title = compilationItemTitle(item, content.notes, content.assets);
   const tableLabel = t('preview.scrollableTable');
   /* eslint-disable react/preserve-manual-memoization -- Memoization follows the note content/path and display inputs used by the renderer. */
   const html = useMemo(() => note?.content && view !== 'thumbnail' ? renderNote(note.content, note.path, tableLabel, youtubeLabels(t), note.notebookId) : '', [note?.content, note?.path, note?.notebookId, view, tableLabel, t]);

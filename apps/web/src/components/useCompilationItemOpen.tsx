@@ -7,14 +7,14 @@ import { notebookRoute } from '../lib/routes.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { Button } from './Button.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
-import type { ScreenAsset, ScreenContentProps } from './ScreenCard.js';
+import type { CompilationAsset, CompilationContentProps } from './CompilationCard.js';
 
-export function useScreenItemOpen(options: { notebooks: NotebookConfig[]; assets: ScreenAsset[]; onOpenNote: (note: NoteListItem) => void; onMissing: () => void; }): { open: ScreenContentProps['onOpen']; preview: ReactNode; } {
+export function useCompilationItemOpen(options: { notebooks: NotebookConfig[]; assets: CompilationAsset[]; onOpenNote: (note: NoteListItem) => void; onMissing: () => void; }): { open: CompilationContentProps['onOpen']; preview: ReactNode; } {
   const { notebooks, assets, onOpenNote, onMissing } = options;
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const [preview, setPreview] = useState<ScreenAsset>();
-  const open: ScreenContentProps['onOpen'] = (item, note) => {
+  const [preview, setPreview] = useState<CompilationAsset>();
+  const open: CompilationContentProps['onOpen'] = (item, note) => {
     if (item.kind === 'youtube') {
       window.open(`https://www.youtube.com/watch?v=${item.videoId}&t=${item.start}`, '_blank', 'noopener,noreferrer');
       return;
@@ -49,8 +49,8 @@ export function useScreenItemOpen(options: { notebooks: NotebookConfig[]; assets
   return { open, preview: previewNode };
 }
 
-export function useScreenAssets(notebooks: NotebookConfig[], notebookId: string): { assets: ScreenAsset[]; error: boolean; loading: boolean; retry: () => void; } {
-  const [assets, setAssets] = useState<ScreenAsset[]>([]);
+export function useCompilationAssets(notebooks: NotebookConfig[], notebookId: string): { assets: CompilationAsset[]; error: boolean; loading: boolean; retry: () => void; } {
+  const [assets, setAssets] = useState<CompilationAsset[]>([]);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [attempt, setAttempt] = useState(0);
