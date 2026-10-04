@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { ExternalLink, FileText, Folder, Library, Search, TextQuote } from 'lucide-react';
+import { BookmarkMenu } from './BookmarkMenu.js';
 import { useQuery } from '@tanstack/react-query';
 import { addBookmarkGroup, type Bookmark, type BookmarksPage, BookmarksPageSchema, moveBookmark, moveBookmarkGroup, notebookBookmarks, removeBookmark, removeBookmarkGroup, renameBookmarkGroup } from '@mygitnotes/core/bookmarks';
 import type { BookmarkResolution } from '@mygitnotes/core';
@@ -14,6 +16,7 @@ export function BookmarksSection({ notebookId }: { notebookId: string; }) {
   const context = useBookmarkActionsContext();
   return context ? <Section key={`${context.repositoryFor(notebookId)?.id}:${notebookId}`} context={context} notebookId={notebookId} /> : null;
 }
+const targetIcons = { note: FileText, folder: Folder, compilation: Library, position: TextQuote, url: ExternalLink, query: Search };
 function Section({ context, notebookId }: { context: BookmarkContextValue; notebookId: string; }) {
   const { t } = useTranslation();
   const repository = context.repositoryFor(notebookId);
@@ -59,7 +62,7 @@ function Section({ context, notebookId }: { context: BookmarkContextValue; noteb
   const [resolutions, setResolutions] = useState<Record<string, BookmarkResolution>>({});
   const [retry, setRetry] = useState(0);
   const [drag, setDrag] = useState<{ kind: 'bookmark' | 'group'; id: string; }>();
-  const [dialog, setDialog] = useState<{ kind: 'new-group' | 'rename-group' | 'remove-group' | 'remove-bookmark'; id?: string; label: string; }>();
+  const [dialog, setDialog] = useState<{ kind: 'new-group' | 'rename-group' | 'remove-group' | 'remove-bookmark' | 'move-bookmark'; id?: string; label: string; groupId?: string; }>();
   const generation = JSON.stringify(collection.bookmarks.map((bookmark: Bookmark) => ({ id: bookmark.id, target: bookmark.target })));
   const repositoryId = repository?.id, repositoryRevision = repository?.revision, unavailable = Boolean(repository?.unavailable);
   useEffect(() => {
@@ -94,6 +97,7 @@ function Section({ context, notebookId }: { context: BookmarkContextValue; noteb
         }}
       >
         {siblings.map((bookmark: Bookmark, index: number) => {
+          const Icon = targetIcons[bookmark.target.kind];
           const resolution = resolutions[bookmark.id];
           const broken = resolution?.state === 'unresolved', unavailable = resolution?.state === 'unavailable';
           return (
@@ -120,31 +124,14 @@ function Section({ context, notebookId }: { context: BookmarkContextValue; noteb
                 setDrag(undefined);
               }}
             >
-              <div className='bookmark-heading'>{bookmark.target.kind === 'url' ? <a href={bookmark.target.url} target='_blank' rel='noopener noreferrer' title={t('bookmarks.external')}>{bookmark.label}{' ↗'}</a> : <button type='button' onClick={() => void context.activate(notebookId, bookmark)}>{bookmark.label}</button>}{(broken || unavailable) && <span className='bookmark-status' title={broken ? resolution.reason : t('bookmarks.unavailable')}>{t(broken ? 'bookmarks.unresolved' : 'bookmarks.unavailable')}</span>}</div>
+              <div className='bookmark-row'>
+                <Icon size={15} className='bookmark-type-icon' aria-hidden='true' />
+                <div className='bookmark-heading'>{bookmark.target.kind === 'url' ? <a href={bookmark.target.url} target='_blank' rel='noopener noreferrer' title={t('bookmarks.external')}>{bookmark.label}</a> : <button type='button' title={bookmark.label} onClick={() => void context.activate(notebookId, bookmark)}>{bookmark.label}</button>}</div>
+                {canEdit && <BookmarkMenu label={`${t('bookmarks.edit')}: ${bookmark.label}`} actions={[{ label: t('bookmarks.edit'), onSelect: () => context.request({ notebookId, id: bookmark.id }) }, { label: t('bookmarks.up'), disabled: index === 0, onSelect: () => apply(page => moveBookmark(page, notebookId, bookmark.id, groupId, index - 1)) }, { label: t('bookmarks.down'), disabled: index === siblings.length - 1, onSelect: () => apply(page => moveBookmark(page, notebookId, bookmark.id, groupId, index + 1)) }, { label: t('bookmarks.group'), onSelect: () => setDialog({ kind: 'move-bookmark', id: bookmark.id, label: bookmark.label, groupId: bookmark.groupId ?? '' }) }, { label: t('bookmarks.remove'), onSelect: () => setDialog({ kind: 'remove-bookmark', id: bookmark.id, label: bookmark.label }) }]} />}
+              </div>
+              {(broken || unavailable) && <span className='bookmark-status' title={broken ? resolution.reason : t('bookmarks.unavailable')}>{t(broken ? 'bookmarks.unresolved' : 'bookmarks.unavailable')}</span>}
               {unavailable && <button type='button' onClick={() => setRetry(value => value + 1)}>{t('bookmarks.retry')}</button>}
               {broken && bookmark.target.kind === 'position' && ['missing-position', 'ambiguous-position'].includes(resolution.reason) && <button type='button' onClick={() => void context.activate(notebookId, bookmark, true)}>{t('bookmarks.wholeNote')}</button>}
-              {canEdit && (
-                <details className='bookmark-controls'>
-                  <summary aria-label={`${t('bookmarks.edit')}: ${bookmark.label}`}>{t('bookmarks.edit')}</summary>
-                  <div className='bookmark-control-grid'>
-                    <button type='button' onClick={() => context.request({ notebookId, id: bookmark.id })}>{t('bookmarks.retarget')}</button>
-                    <button type='button' disabled={index === 0} onClick={() => apply(page => moveBookmark(page, notebookId, bookmark.id, groupId, index - 1))}>{t('bookmarks.up')}</button>
-                    <button type='button' disabled={index === siblings.length - 1} onClick={() => apply(page => moveBookmark(page, notebookId, bookmark.id, groupId, index + 1))}>{t('bookmarks.down')}</button>
-                    <select
-                      aria-label={`${t('bookmarks.group')}: ${bookmark.label}`}
-                      value={bookmark.groupId ?? ''}
-                      onChange={event => {
-                        const group = event.target.value || null;
-                        apply(page => moveBookmark(page, notebookId, bookmark.id, group));
-                      }}
-                    >
-                      <option value=''>{t('bookmarks.ungrouped')}</option>
-                      {collection.groups.map((group: { id: string; label: string; }) => <option key={group.id} value={group.id}>{group.label}</option>)}
-                    </select>
-                    <button type='button' onClick={() => setDialog({ kind: 'remove-bookmark', id: bookmark.id, label: bookmark.label })}>{t('bookmarks.remove')}</button>
-                  </div>
-                </details>
-              )}
             </div>
           );
         })}
@@ -197,16 +184,11 @@ function Section({ context, notebookId }: { context: BookmarkContextValue; noteb
               }
             }}
           >
-            <summary>{group.label}</summary>
+            <summary>
+              <span className='bookmark-group-label'>{group.label}</span>
+              {canEdit && <BookmarkMenu label={`${t('bookmarks.group')}: ${group.label}`} actions={[{ label: t('bookmarks.up'), disabled: index === 0, onSelect: () => apply(page => moveBookmarkGroup(page, notebookId, group.id, index - 1)) }, { label: t('bookmarks.down'), disabled: index === collection.groups.length - 1, onSelect: () => apply(page => moveBookmarkGroup(page, notebookId, group.id, index + 1)) }, { label: t('bookmarks.renameGroup'), onSelect: () => setDialog({ kind: 'rename-group', id: group.id, label: group.label }) }, { label: t('bookmarks.removeGroup'), onSelect: () => setDialog({ kind: 'remove-group', id: group.id, label: group.label }) }]} />}
+            </summary>
             {entries(group.id)}
-            {canEdit && (
-              <div className='bookmark-control-grid'>
-                <button type='button' disabled={index === 0} onClick={() => apply(page => moveBookmarkGroup(page, notebookId, group.id, index - 1))}>{t('bookmarks.up')}</button>
-                <button type='button' disabled={index === collection.groups.length - 1} onClick={() => apply(page => moveBookmarkGroup(page, notebookId, group.id, index + 1))}>{t('bookmarks.down')}</button>
-                <button type='button' onClick={() => setDialog({ kind: 'rename-group', id: group.id, label: group.label })}>{t('bookmarks.renameGroup')}</button>
-                <button type='button' onClick={() => setDialog({ kind: 'remove-group', id: group.id, label: group.label })}>{t('bookmarks.removeGroup')}</button>
-              </div>
-            )}
           </details>
         ))}
         <div className='bookmark-control-grid'>
@@ -215,22 +197,36 @@ function Section({ context, notebookId }: { context: BookmarkContextValue; noteb
         </div>
       </details>
       {dialog && (
-        <WorkspaceDialog title={t(dialog.kind === 'remove-bookmark' ? 'bookmarks.remove' : dialog.kind === 'remove-group' ? 'bookmarks.removeGroup' : dialog.kind === 'rename-group' ? 'bookmarks.renameGroup' : 'bookmarks.newGroup')} onClose={() => setDialog(undefined)}>
+        <WorkspaceDialog title={t(dialog.kind === 'move-bookmark' ? 'bookmarks.group' : dialog.kind === 'remove-bookmark' ? 'bookmarks.remove' : dialog.kind === 'remove-group' ? 'bookmarks.removeGroup' : dialog.kind === 'rename-group' ? 'bookmarks.renameGroup' : 'bookmarks.newGroup')} onClose={() => setDialog(undefined)}>
           <form
             className='screen-form'
             onSubmit={event => {
               event.preventDefault();
               const action = dialog;
-              apply(page => action.kind === 'remove-bookmark' ? removeBookmark(page, notebookId, action.id!) : action.kind === 'remove-group' ? removeBookmarkGroup(page, notebookId, action.id!) : action.kind === 'rename-group' ? renameBookmarkGroup(page, notebookId, action.id!, action.label) : addBookmarkGroup(page, notebookId, { id: crypto.randomUUID(), label: action.label }));
+              apply(page => action.kind === 'move-bookmark' ? moveBookmark(page, notebookId, action.id!, action.groupId || null) : action.kind === 'remove-bookmark' ? removeBookmark(page, notebookId, action.id!) : action.kind === 'remove-group' ? removeBookmarkGroup(page, notebookId, action.id!) : action.kind === 'rename-group' ? renameBookmarkGroup(page, notebookId, action.id!, action.label) : addBookmarkGroup(page, notebookId, { id: crypto.randomUUID(), label: action.label }));
               setDialog(undefined);
             }}
           >
-            {dialog.kind.startsWith('remove') ? <p>{dialog.label}{' — '}{t(dialog.kind === 'remove-group' ? 'bookmarks.removeGroupHint' : 'bookmarks.removeHint')}</p> : (
-              <label>
-                {t('bookmarks.label')}
-                <input autoFocus required maxLength={120} value={dialog.label} onChange={event => setDialog({ ...dialog, label: event.target.value })} />
-              </label>
-            )}
+            {dialog.kind === 'move-bookmark'
+              ? (
+                <label>
+                  {t('bookmarks.group')}
+                  {': '}
+                  {dialog.label}
+                  <select value={dialog.groupId ?? ''} onChange={event => setDialog({ ...dialog, groupId: event.target.value })}>
+                    <option value=''>{t('bookmarks.ungrouped')}</option>
+                    {collection.groups.map(group => <option key={group.id} value={group.id}>{group.label}</option>)}
+                  </select>
+                </label>
+              )
+              : dialog.kind.startsWith('remove')
+              ? <p>{dialog.label}{' — '}{t(dialog.kind === 'remove-group' ? 'bookmarks.removeGroupHint' : 'bookmarks.removeHint')}</p>
+              : (
+                <label>
+                  {t('bookmarks.label')}
+                  <input autoFocus required maxLength={120} value={dialog.label} onChange={event => setDialog({ ...dialog, label: event.target.value })} />
+                </label>
+              )}
             <div className='workspace-dialog-actions'>
               <Button type='button' onClick={() => setDialog(undefined)}>{t('common.cancel')}</Button>
               <Button type='submit' disabled={!canEdit}>{t(dialog.kind.startsWith('remove') ? 'common.delete' : 'common.save')}</Button>

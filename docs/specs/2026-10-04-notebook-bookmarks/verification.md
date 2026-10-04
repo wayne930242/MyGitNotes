@@ -59,7 +59,7 @@ Final results: **246 test files, 1779 tests passed**, duration 63.24s. Productio
 | Scoped route/query restoration, canonical identity, explicit sort | `apps/web/src/lib/bookmark-navigation.test.ts`; core query tests; existing graph/filter/sort tests run unchanged. | pass |
 | Existing lifecycle and movement entrypoints | Complete suite includes file/folder/bulk/shell, local/remote adapters, Focus/Study and editor tests; new bookmarks flow through the shared planner/document seams. | pass |
 | Build/type/lint/format regression checks | Final logs: 246 files/1779 tests, build/lint/format/types exit 0 | pass |
-| Full desktop/mobile acceptance and independent code review | Parent-owned fixture and review, distinct from worker checks | unknown |
+| Full desktop/mobile acceptance and independent code review | Parent review found F001/F002/F003; UI density follow-up verified separately | fail |
 
 The movement entrypoint audit is the detailed table in `design.md`. Tests exercise shared planners, HTTP note/file mutations, provider commits, shell movement/deletion and rollback; this is not a claim that every provider × UI entrypoint Cartesian product was independently driven in a real browser. Parent review should verify the shared-seam coverage against that audit.
 
@@ -101,6 +101,18 @@ node scripts/qa-bookmarks-fixture.mjs
 ```
 
 The fixture prints one JSON ready record with PID, port, home root, other root, route and schema; no browser dependency is needed to bootstrap it. Open the printed route in the parent's own browser session. Stop its monitor afterward and verify the printed PID/port and both roots are gone. Signal handlers remove only the fixture-created roots. It accepts no user-workspace root or credential input.
+
+## Compact UI follow-up
+
+Baseline for this UI-only follow-up: `0a2b5ea83d6b8b36542aab83fcfc89c849758cf8`. Replaced repeated disclosure rows with type icon/name/ellipsis, using the existing Radix folder-menu styles and native-dialog focus convention. Group actions use an ellipsis menu; Move up/down remain in the menu and Group opens a select dialog. Drag paths still call the same operations. No API/data source changed.
+
+- Full rerun: **246 files, 1781 tests passed**; build/lint/format/web types exit 0. Logs: `/tmp/bookmarks-compact-{build,tests,lint,format,types}.log`.
+- Component regressions cover read-only navigation, menu grouping/removal, up/down, drag, group rename, Escape focus return and menu-to-editor sequencing. A test initially sent Enter without focusing the target; focusing the real keyboard target fixed the invalid simulation.
+- Actual 1440×1000 browser: all seven seeded rows measured **32px**, Add appeared at y544 and the folder tree at y602. Actual menu→Group saved successfully; Edit→Escape returned focus to the exact ellipsis trigger.
+- Mobile emulation: viewport/document width 393px with no horizontal overflow, all rows measured **44px**; group menu→Rename persisted successfully. Screenshots: `/tmp/bookmarks-compact-desktop.png`, `/tmp/bookmarks-compact-mobile.png`. No browser errors reported.
+- Owned session `bookmarks-compact` closed; monitor12 stopped; PID390520/port38123 and roots `/tmp/mygitnotes-bookmarks-home-A6VklZ`, `/tmp/mygitnotes-bookmarks-other-tgHfRN` verified gone.
+
+Parent independently verified initial note/position creation, unresolved/retarget behavior, atomic folder moves, repository-isolated URL creation, group/ungroup persistence and content retention. Independent static review of the immutable initial commit nevertheless found three blockers: F001 cross-repository same-root UI path validation, F002 HTTP note symlink alias protection, and F003 raw textarea CRLF offsets. They are **not resolved by this UI-only follow-up**; sequential red-regression fixes are the next authorized work, before approval or publication.
 
 ## Human appropriateness
 

@@ -56,15 +56,52 @@ it('navigates read-only entries but disables shared writes', async () => {
   expect((screen.getByRole('button', { name: 'bookmarks.add' }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.queryByRole('button', { name: 'bookmarks.remove' })).toBeNull();
 });
-it('shows Pending, offers Add, grouping and removal confirmation without deleting content', async () => {
+async function menu(name: string, action: string) {
+  const trigger = screen.getByRole('button', { name });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  fireEvent.click(await screen.findByRole('menuitem', { name: action }));
+}
+it('shows Pending and groups/removes through compact keyboard-accessible menus', async () => {
   render(<Harness />);
   expect(screen.getByText('bookmarks.pending')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'bookmarks.add' }));
   expect(request).toHaveBeenCalledWith({ notebookId: 'n' });
-  fireEvent.change(screen.getByRole('combobox', { name: 'bookmarks.group: Alpha' }), { target: { value: 'g' } });
-  await waitFor(() => expect((screen.getByRole('combobox', { name: 'bookmarks.group: Alpha' }) as HTMLSelectElement).value).toBe('g'));
-  fireEvent.click(screen.getByRole('button', { name: 'bookmarks.remove' }));
-  expect(screen.getByText(/bookmarks.removeHint/)).toBeTruthy();
+  expect(screen.queryByRole('combobox')).toBeNull();
+  await menu('bookmarks.edit: Alpha', 'bookmarks.group');
+  fireEvent.change(await screen.findByRole('combobox', { name: 'bookmarks.group: Alpha' }), { target: { value: 'g' } });
+  fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Alpha' }).closest('.bookmark-group')).toBeTruthy());
+  await menu('bookmarks.edit: Alpha', 'bookmarks.remove');
+  expect(await screen.findByText(/bookmarks.removeHint/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'common.delete' }));
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Alpha' })).toBeNull());
+});
+it('keeps up/down, group actions and drag ordering without permanent control rows', async () => {
+  page = addBookmark(page, 'n', { ...bookmark, id: 'b', label: 'Beta', target: { kind: 'note', path: 'b.md' } });
+  render(<Harness />);
+  await menu('bookmarks.edit: Alpha', 'bookmarks.down');
+  await waitFor(() => expect(Array.from(document.querySelectorAll('.bookmark-row .bookmark-heading')).map(row => row.textContent)).toEqual(['Beta', 'Alpha']));
+  const rows = document.querySelectorAll('.bookmark-entry');
+  fireEvent.dragStart(rows[1], { dataTransfer: { setData: vi.fn() } });
+  fireEvent.drop(rows[0]);
+  await waitFor(() => expect(Array.from(document.querySelectorAll('.bookmark-row .bookmark-heading')).map(row => row.textContent)).toEqual(['Alpha', 'Beta']));
+  await menu('bookmarks.group: Reading', 'bookmarks.renameGroup');
+  const input = await screen.findByRole('textbox', { name: 'bookmarks.label' });
+  fireEvent.change(input, { target: { value: 'Renamed' } });
+  fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+  expect(await screen.findByRole('button', { name: 'bookmarks.group: Renamed' })).toBeTruthy();
+});
+it('returns focus to the compact trigger after Escape and sequences edit after menu close', async () => {
+  render(<Harness />);
+  const trigger = screen.getByRole('button', { name: 'bookmarks.edit: Alpha' });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  const dropdown = await screen.findByRole('menu');
+  fireEvent.keyDown(dropdown, { key: 'Escape' });
+  await waitFor(() => expect(document.activeElement).toBe(trigger));
+  await menu('bookmarks.edit: Alpha', 'bookmarks.edit');
+  await waitFor(() => expect(request).toHaveBeenCalledWith({ notebookId: 'n', id: 'a' }));
+  expect(screen.queryByRole('menu')).toBeNull();
+  expect(document.activeElement).toBe(trigger);
 });
