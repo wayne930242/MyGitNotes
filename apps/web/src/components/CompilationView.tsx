@@ -16,7 +16,7 @@ import { useNoteFacets } from '../lib/use-note-queries.js';
 import { useCompilation } from '../lib/use-compilation.js';
 import { useStudyWorkspace } from '../lib/use-study-workspace.js';
 import { Button } from './Button.js';
-import { compilationItemTitle, type CompilationContentProps } from './CompilationCard.js';
+import { type CompilationContentProps, compilationItemTitle } from './CompilationCard.js';
 import { CompilationAddItem, CompilationEditRow } from './CompilationDialogs.js';
 import { CompilationLane } from './CompilationLane.js';
 import { CompilationStack } from './CompilationStack.js';
@@ -126,7 +126,14 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
           {!disabled && current.kind === 'custom' && current.view !== 'stack' && current.view !== 'graph' && <ReorderToggle active={reorder} disabled={disabled} onToggle={() => setReorder(value => !value)} />}
           {compilation.writable && (
             <>
-              <Button type='button' size='icon' disabled={disabled} aria-label={`${t('screen.editRow')}: ${current.name}`} title={t('screen.editRow')} onClick={() => setDialog('edit')}>
+              <Button
+                type='button'
+                size='icon'
+                disabled={disabled}
+                aria-label={`${t('screen.editRow')}: ${current.name}`}
+                title={t('screen.editRow')}
+                onClick={() => setDialog('edit')}
+              >
                 <Pencil size={16} />
               </Button>
               <Button type='button' size='icon' disabled={disabled} aria-label={`${t('compilation.copy')}: ${current.name}`} title={t('compilation.copy')} onClick={() => void copy()}>
@@ -147,7 +154,12 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
       <DndContext
         sensors={sensors}
         collisionDetection={screenCollision}
-        onDragStart={({ active }) => setDragging(current.kind === 'custom' ? current.items.find(item => item.id === active.id) : undefined)}
+        onDragStart={({ active }) =>
+          setDragging(
+            current.kind === 'custom'
+              ? current.items.find(item => item.id === active.id)
+              : undefined,
+          )}
         onDragCancel={() => setDragging(undefined)}
         onDragEnd={({ active, over }) => {
           setDragging(undefined);
@@ -191,13 +203,9 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
       <div className='compilation-body'>
         {compilation.error && <p role='alert' className='screen-error'>{compilation.error}</p>}
         {assetError && <p role='alert' className='screen-error'>{t('screen.assetsError')}</p>}
-        {(missing) && <p role='alert' className='screen-error'>{t('screen.missing')}</p>}
+        {missing && <p role='alert' className='screen-error'>{t('screen.missing')}</p>}
         {notice && <p role='status' className='screen-dialog-hint'>{notice}</p>}
-        {compilation.loading
-          ? <LoadingStatus>{t('screen.loading')}</LoadingStatus>
-          : compilation.missing
-          ? <p role='alert' className='screen-error'>{t('compilation.notFound')}</p>
-          : !row
+        {compilation.loading ? <LoadingStatus>{t('screen.loading')}</LoadingStatus> : compilation.missing ? <p role='alert' className='screen-error'>{t('compilation.notFound')}</p> : !row
           ? (
             <div className='screen-board-empty' role='alert'>
               <h3>{compilation.invalid[0]?.title ?? path.split('/').pop()}</h3>
@@ -207,19 +215,7 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
           )
           : view(row)}
       </div>
-      {row && dialog === 'edit' && (
-        <CompilationEditRow
-          row={row}
-          disabled={disabled}
-          notebooks={notebooks}
-          assets={assets}
-          folders={folders}
-          selectedNotebookId={notebookId}
-          onClose={() => setDialog(null)}
-          onApply={change}
-          onRemove={() => setDialog('delete')}
-        />
-      )}
+      {row && dialog === 'edit' && <CompilationEditRow row={row} disabled={disabled} notebooks={notebooks} assets={assets} folders={folders} selectedNotebookId={notebookId} onClose={() => setDialog(null)} onApply={change} onRemove={() => setDialog('delete')} />}
       {row?.kind === 'custom' && dialog === 'add' && <CompilationAddItem notebooks={notebooks} assets={assets} folders={folders} rowName={row.name} notebookId={row.notebookId} onClose={() => setDialog(null)} onAdd={item => change({ ...row, items: [...row.items, item] })} />}
       {row && dialog === 'delete' && (
         <WorkspaceDialog title={t('compilation.delete')} onClose={() => setDialog(null)}>

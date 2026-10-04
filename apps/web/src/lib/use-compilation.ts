@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type CompilationPage, type CompilationRow, compilationSlug, uniqueCompilationPath } from '@mygitnotes/core/compilation';
 import { type NoteListItem, type NoteRef, noteRefKey } from '@mygitnotes/core/note-query';
 import { useCompilationActions } from './compilation-actions.js';
-import { compilationMetadata, compilationText, type ParsedCompilation, parseCompilationNote, planCompilationWrites } from './compilation-rows.js';
+import { compilationMetadata, compilationText, parseCompilationNote, type ParsedCompilation, planCompilationWrites } from './compilation-rows.js';
 import { useEditorRegistry } from './note-editing.js';
 import { useNoteList, useNoteLookup } from './use-note-queries.js';
 import type { NotebookConfig } from './types.js';
@@ -142,11 +142,12 @@ function useCompilationController({ entries, notebooks, loading, error: loadErro
   }, [flush]);
 
   // Edits waiting for the pause are written before the view goes away, and before the app saves its editors.
-  useEffect(() => register(registryKey, async () => {
-    if (!queued.current.size) return true;
-    await flush();
-    return !queued.current.size;
-  }), [register, registryKey, flush]);
+  useEffect(() =>
+    register(registryKey, async () => {
+      if (!queued.current.size) return true;
+      await flush();
+      return !queued.current.size;
+    }), [register, registryKey, flush]);
   useEffect(() => () => {
     if (queued.current.size) void flush();
   }, [flush]);

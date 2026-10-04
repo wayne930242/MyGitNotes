@@ -85,23 +85,7 @@ export function CompilationLane({ row, graph, reorder, disabled, study, facets, 
   };
   return (
     <section id={`screen-lane-${row.id}`} ref={host} className={`screen-lane screen-view-${row.view} ${row.kind === 'dynamic' ? 'screen-lane-dynamic' : ''}`} aria-label={row.name}>
-      <CompilationHeader
-        row={row}
-        count={items.length}
-        disabled={disabled}
-        readOnly={readOnly}
-        notebooks={content.notebooks}
-        facets={facets}
-        extra={extra}
-        onAddToFocus={onAddToFocus}
-        onStudy={onStudy}
-        onView={onView}
-        onAdd={onAdd}
-        onSort={onSort}
-        onStudyChange={onStudyChange}
-        onCreateInSource={handleCreateInLane}
-        onScroll={row.view === 'graph' ? undefined : scroll}
-      />
+      <CompilationHeader row={row} count={items.length} disabled={disabled} readOnly={readOnly} notebooks={content.notebooks} facets={facets} extra={extra} onAddToFocus={onAddToFocus} onStudy={onStudy} onView={onView} onAdd={onAdd} onSort={onSort} onStudyChange={onStudyChange} onCreateInSource={handleCreateInLane} onScroll={row.view === 'graph' ? undefined : scroll} />
       {row.view === 'graph' ? graph : (
         <div ref={readOnly ? undefined : drop.setNodeRef} className={!readOnly && drop.isOver ? 'screen-drop-target' : ''}>
           <div ref={strip} className='screen-lane-strip' tabIndex={0} aria-label={`${row.name} · ${t('screen.items')}`}>

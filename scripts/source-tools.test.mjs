@@ -11,7 +11,7 @@ afterAll(() => rmSync(directory, { recursive: true, force: true }));
 const compile = async source => (await transformWithEsbuild(source, 'probe.tsx', { loader: 'tsx', jsx: 'automatic', minify: true })).code;
 
 describe('source formatting semantics', () => {
-  it.each(['ChangesTool.tsx', 'KanbanView.tsx', 'ScreenPage.tsx'])('matches stable file formatting in check mode: %s', name => {
+  it.each(['ChangesTool.tsx', 'KanbanView.tsx', 'CompilationView.tsx'])('matches stable file formatting in check mode: %s', name => {
     const file = path.join(directory, name);
     const source = readFileSync(path.join(root, 'apps/web/src/components', name), 'utf8');
     writeFileSync(file, source);

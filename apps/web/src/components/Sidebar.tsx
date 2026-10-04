@@ -2,7 +2,7 @@ import './sidebar-filters.css';
 import type { FilterControls } from '../lib/filter-controls.js';
 import { FolderTree } from './FolderTree.js';
 import React, { useEffect, useState } from 'react';
-import { BookOpen, CheckCircle2, CheckSquare, ChevronsDownUp, ChevronsUpDown, Filter, GitBranch, Library, MoreHorizontal, Search, Tag, X } from 'lucide-react';
+import { BookOpen, CheckCircle2, CheckSquare, ChevronsDownUp, ChevronsUpDown, Filter, GalleryHorizontalEnd, GitBranch, Library, MoreHorizontal, Search, Tag, X } from 'lucide-react';
 import type { NotebookFacets } from '@mygitnotes/core/note-query';
 import { FolderItem } from '../lib/types.js';
 import { mergeNotebookFacets, queryNotebookIds } from '../lib/note-facets.js';
@@ -13,6 +13,7 @@ import { LoadingStatus } from './LoadingStatus.js';
 import { filterAndSortTags, getSavedTagSort, saveTagSort, TagSort } from '../lib/tag-list.js';
 import { resolveAllNotebooksFolderSelect, resolveEnterTouchMultiSelect } from '../lib/folder-tree.js';
 import { NavTree, NavTreeRow } from './NavTree.js';
+import { useSidebarSections } from '../lib/sidebar-sections.js';
 import { ReorderToggle } from './ReorderToggle.js';
 import { TagActions } from './TagActions.js';
 import { GitPullButton } from './GitPullButton.js';
@@ -52,6 +53,7 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, foldersWritable = false, beforeFolderChange, onFoldersChanged, selectedFolder = null, onSelectFolder, selectedNotebookId, facets, facetsLoading = false, facetsError = '', workspaceTagNames, filters, reorder, onToggleReorder, changeCount, onPulled, repoRoot = '', canManageTags = false, onPreviewTagUsage, onRenameTag, onMergeTag, onDeleteTag }) => {
   const { t, language } = useTranslation();
   const { value, statuses, onChange } = filters;
+  const sections = useSidebarSections();
   const { status: selectedStatus, tags: selectedTags } = value;
   const allNotebooks = filters.allNotebooks;
   const [expandedNotebooks, setExpandedNotebooks] = useState<Set<string>>(() => new Set(selectedNotebookId ? [selectedNotebookId] : []));
@@ -165,14 +167,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
     >
       <section className='sidebar-search' aria-label={t('filters.title')}>
         <div className='sidebar-search-row'>
-          <label className='sidebar-note-search header-search'>
-            <Search size={15} aria-hidden='true' />
-            <input type='search' aria-label={t('header.searchPlaceholder')} placeholder={t('header.searchPlaceholder')} value={value.q} onChange={event => onChange({ q: event.target.value })} />
-          </label>
           {onSelectFolder && (
             <div className='sidebar-panel-actions' role='group' aria-label={t('sidebar.notebooks')}>
               {filters.notebooks.length > 1 && (
-                <button type='button' className='ui-icon-button all-notebooks-toggle' title={t('filters.allNotebooks')} aria-label={t('filters.allNotebooks')} aria-pressed={allNotebooks} onClick={() => filters.onAllNotebooksChange(!allNotebooks)}>
+                <button
+                  type='button'
+                  className='ui-icon-button all-notebooks-toggle'
+                  title={t('filters.allNotebooks')}
+                  aria-label={t('filters.allNotebooks')}
+                  aria-pressed={allNotebooks}
+                  onClick={() => filters.onAllNotebooksChange(!allNotebooks)}
+                >
                   <Library size={15} />
                 </button>
               )}
@@ -192,12 +197,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
           {facetsError && <span role='alert' className='sidebar-facets-status'>{t('notes.countsFailed', { message: facetsError })}</span>}
           <button type='button' className='sidebar-clear-filters' onClick={filters.onClear}>{t('filters.clear')}</button>
         </div>
-        {value.folders.filter(path =>
-          !filters.notebooks.some(nb => path === nb.root.replace(/\/$/, '')) && !folders.some(folder => {
-            const root = filters.notebooks.find(nb => nb.id === folder.notebookId)?.root.replace(/\/$/, '');
-            return path === `${root}/${folder.path}`;
-          })
-        ).map(path => (
+        {value.folders.filter(path => !filters.notebooks.some(nb => path === nb.root.replace(/\/$/, '')) && !folders.some(folder => {
+          const root = filters.notebooks.find(nb => nb.id === folder.notebookId)?.root.replace(/\/$/, '');
+          return path === `${root}/${folder.path}`;
+        })).map(path => (
           <button type='button' className='sidebar-missing-filter' key={path} aria-label={t('filters.remove', { value: path })} onClick={() => onChange({ folders: value.folders.filter(item => item !== path) })}>
             {path}
             <X size={12} />
@@ -214,7 +217,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
         </div>
       )}
       {onSelectFolder && (
-        <section className='sidebar-notebooks' aria-label={t('sidebar.notebooks')}>
+        <details className='sidebar-filter-section sidebar-notebooks' open={sections.isOpen('notebooks')} onToggle={event => sections.setOpen('notebooks', event.currentTarget.open)}>
+          <summary>{t('sidebar.notebooks')}</summary>
           <NavTree aria-label={t('sidebar.notebooks')}>
             {filters.notebooks.filter(nb => allNotebooks || nb.id === selectedNotebookId).map(nb => {
               const root = nb.root.replace(/\/$/, '');
@@ -224,7 +228,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
               const nbFolders = folders.filter(f => f.notebookId === nb.id);
               const hasFolders = nbFolders.length > 0;
               const isCurrentNotebook = nb.id === selectedNotebookId;
-              const isSelected = allNotebooks ? value.folders.includes(root) : isCurrentNotebook && selectedFolder === null && value.folders.length === 0;
+              const compilationList = value.kind === 'compilation';
+              const isSelected = !compilationList && (allNotebooks ? value.folders.includes(root) : isCurrentNotebook && selectedFolder === null && value.folders.length === 0);
+              const compilationSelected = compilationList && (allNotebooks ? value.folders.includes(root) : isCurrentNotebook);
+              const compilationCount = facets ? facets[nb.id]?.compilations.total ?? 0 : null;
 
               return (
                 <section className='sidebar-notebook-group' key={nb.id} data-selected={isSelected || selectedPaths.length > 0} data-scope={allNotebooks ? (isCurrentNotebook ? 'current' : 'included') : undefined}>
@@ -246,12 +253,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
                       if (allNotebooks) {
                         if (event.metaKey || event.ctrlKey || event.shiftKey) {
                           onChange({
+                            kind: 'note',
                             folders: value.folders.includes(root)
                               ? value.folders.filter(path => path !== root)
                               : [...value.folders, root],
                           });
                         } else {
-                          onChange({ folders: [root] });
+                          onChange({ kind: 'note', folders: [root] });
                           if (!expanded) {
                             setExpandedNotebooks(previous => new Set([...previous, nb.id]));
                           }
@@ -273,15 +281,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
                       : undefined}
                   />
                   <div id={`notebook-folders-${nb.id}`} hidden={!expanded} className='sidebar-notebook-folders'>{hasFolders ? <FolderTree onManageFiles={path => onManageFiles(nb.id, path)} reorder={reorder} onToggleReorder={onToggleReorder} folders={folders} notebookId={nb.id} selected={isCurrentNotebook ? selectedFolder : null} onSelect={folder => selectSingleFolder(nb.id, folder)} allFoldersSelected={value.folders.length === 0} selectedPaths={selectedPaths} onFilterFolder={folder => toggleFolder(nb.id, folder)} touchMultiSelect={touchMultiSelect} onLongPressFolder={folder => enterTouchMultiSelect(nb.id, folder)} writable={foldersWritable && isCurrentNotebook} beforeChange={beforeFolderChange} onChanged={onFoldersChanged} expandCommand={folderExpandCommand} /> : <p className='sidebar-notebook-empty'>{t('folder.subfolderCount', { count: 0 })}</p>}</div>
+                  <NavTreeRow
+                    icon={<GalleryHorizontalEnd size={16} />}
+                    title={t('sidebar.compilations')}
+                    selected={compilationSelected}
+                    className='sidebar-compilations-row'
+                    onSelect={() => {
+                      setTouchMultiSelect(false);
+                      if (!allNotebooks && !isCurrentNotebook) onSelectFolder?.(null);
+                      onChange({ kind: 'compilation', folders: allNotebooks ? [root] : [] });
+                    }}
+                    suffix={<span className='sidebar-notebook-count' title={compilationCount === null ? t('notes.countsLoading') : t('sidebar.compilationCount', { count: compilationCount })}>{compilationCount ?? '—'}</span>}
+                  />
                 </section>
               );
             })}
           </NavTree>
-        </section>
+        </details>
       )}
       {/* Status Filters */}
-      <details key={`status-${selectedNotebookId}-${Boolean(selectedStatus)}`} open={!allNotebooks || Boolean(selectedStatus)} className='sidebar-filter-section'>
-        <summary>{t('sidebar.statusFilter')}</summary>
+      <details open={sections.isOpen('status')} onToggle={event => sections.setOpen('status', event.currentTarget.open)} className='sidebar-filter-section'>
+        <summary>{t('sidebar.status')}</summary>
         <div className='flex items-center justify-between text-xs font-semibold text-muted uppercase tracking-wider mb-2.5 px-2'>{selectedStatus && <button type='button' onClick={() => onSelectStatus(null)} className='text-xs hover:underline capitalize' style={{ color: 'var(--color-muted)' }}>{t('sidebar.clear')}</button>}</div>
         <div className='space-y-1 text-sm'>
           <button type='button' onClick={() => onSelectStatus(null)} aria-pressed={selectedStatus === null} style={selectedStatus === null ? selectedItemStyle : undefined} className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition ${selectedStatus === null ? 'font-semibold hover:opacity-90' : 'text-muted hover:bg-fg/5 hover:text-fg'}`}>
@@ -309,7 +329,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
       </details>
       {/* Tags Cloud */}
       {allTags.length > 0 && (
-        <details key={`tags-${selectedNotebookId}-${selectedTags.length > 0}`} open={!allNotebooks || selectedTags.length > 0} className='sidebar-filter-section' aria-label={t('sidebar.tags')}>
+        <details open={sections.isOpen('tags')} onToggle={event => sections.setOpen('tags', event.currentTarget.open)} className='sidebar-filter-section' aria-label={t('sidebar.tags')}>
           <summary>{t('sidebar.tags')}</summary>
           <div className='flex items-center justify-between text-xs font-semibold text-muted uppercase tracking-wider mb-2.5 px-2'>{selectedTags.length > 0 && <button type='button' onClick={() => onSelectTag(null)} className='text-xs hover:underline' style={{ color: 'var(--color-muted)' }}>{t('sidebar.clear')}</button>}</div>
           <div className='space-y-2 px-1 mb-2.5'>

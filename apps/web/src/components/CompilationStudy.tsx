@@ -64,12 +64,7 @@ export function CompilationStudy({ notebooks, folders, notebookId, path, onOpenN
                 <p>{compilation.invalid[0]?.error ?? t('compilation.notFound')}</p>
               </div>
             )
-            : reviewRow && (
-              <section id={`screen-lane-${reviewRow.id}`} className='screen-study-session' aria-label={reviewRow.name}>
-                {lane.error && <p role='alert' className='screen-error'>{lane.error}</p>}
-                {lane.loading ? <LoadingStatus>{t('notes.loading')}</LoadingStatus> : <StudyLane toolbar={toolbar} key={reviewRow.id} row={reviewRow} notes={notes} controller={study} disabled={disabled} onOpen={onOpenNote} />}
-              </section>
-            )}
+            : reviewRow && <section id={`screen-lane-${reviewRow.id}`} className='screen-study-session' aria-label={reviewRow.name}>{lane.error && <p role='alert' className='screen-error'>{lane.error}</p>}{lane.loading ? <LoadingStatus>{t('notes.loading')}</LoadingStatus> : <StudyLane toolbar={toolbar} key={reviewRow.id} row={reviewRow} notes={notes} controller={study} disabled={disabled} onOpen={onOpenNote} />}</section>}
         </div>
       </main>
       {editing && row && (

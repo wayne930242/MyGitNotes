@@ -1,4 +1,4 @@
-import { type CompilationRow, compilationFile, compilationRow, parseCompilation, serializeCompilation } from '@mygitnotes/core/compilation';
+import { compilationFile, type CompilationRow, compilationRow, parseCompilation, serializeCompilation } from '@mygitnotes/core/compilation';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { NotebookConfig } from './types.js';
 

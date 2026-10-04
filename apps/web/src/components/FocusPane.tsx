@@ -11,6 +11,7 @@ import { useTranslation } from '../lib/i18n/index.js';
 import type { NoteEditorProps } from './NoteEditor.js';
 import { HostedNoteEditor } from './NoteEditorHost.js';
 import { BatchAddDialog } from './BatchAddDialog.js';
+import { paneDimmed, tabDimmed } from '../lib/focus-search.js';
 
 /** Drag payload for a tab moved inside the displayed Focus: its FocusTab and the pane it was dragged from, as JSON. */
 const TAB_DRAG_TYPE = 'application/x-mygitnotes-focus-tab';
@@ -26,6 +27,8 @@ export interface FocusPaneContext {
   onZoomNote: (path: string) => void;
   /** The rail container and section the active pane's editor renders its document panel into. */
   documentPanel?: NoteEditorProps['documentPanel'];
+  /** The paths matching the toolbar search while it dims the Focus; null when it is inactive. */
+  searchMatches?: ReadonlySet<string> | null;
 }
 
 interface PaneTab {
@@ -43,7 +46,7 @@ interface DropSlot {
 
 /** One pane on screen: its tab list and the displayed tab. On narrow screens it stands for several stored panes. */
 export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane; }> = ({ displayed, ...context }) => {
-  const { focus, notebookRoot, folders, renderCompilation, onZoomNote, documentPanel } = context;
+  const { focus, notebookRoot, folders, renderCompilation, onZoomNote, documentPanel, searchMatches = null } = context;
   const { t } = useTranslation();
   const layout = focus.layout!, entry = focus.entry!;
   const active = displayed.panes.includes(entry.activePane);
@@ -116,6 +119,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane; 
       className='focus-pane'
       data-focus-pane={displayed.pane}
       data-active={active || undefined}
+      data-dimmed={paneDimmed(searchMatches, displayed.panes.flatMap(pane => layout.panes[pane].tabs)) || undefined}
       data-dropping={slot ? true : undefined}
       data-autohide={autoHide || undefined}
       aria-label={t('focus.paneNumber', { number: displayed.pane + 1 })}
@@ -148,6 +152,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane; 
               role='presentation'
               className='focus-tab'
               data-pane={tab.pane}
+              data-dimmed={tabDimmed(searchMatches, tab.tab) || undefined}
               data-shown={(tab.pane === displayed.pane && tab.key === displayed.key) || undefined}
               data-drop={marker(tab)}
               draggable={editable}

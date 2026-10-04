@@ -443,6 +443,8 @@ export const en = {
   'view.card': 'Card View',
   'view.kanban': 'Kanban View',
   'view.graph': 'Graph View',
+  'header.newMenu': 'New menu',
+  'compilation.new': 'New compilation',
   'header.searchPlaceholder': 'Search notes, tags, content...',
   'header.newNote': 'New Note',
   'shortcuts.title': 'Keyboard shortcuts',
@@ -547,7 +549,10 @@ export const en = {
   'folder.open': 'Open',
 
   // Sidebar
+  'sidebar.compilations': 'Compilations',
+  'sidebar.compilationCount': '{count} compilations',
   'sidebar.notebooks': 'Notebooks',
+  'sidebar.status': 'Status',
   'sidebar.statusFilter': 'Status Filter',
   'sidebar.allStatuses': 'All Statuses',
   'sidebar.clear': 'clear',

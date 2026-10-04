@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { legacyAllNotebooksRoute, notebookRoute, compilationStudyRoute, noteReturnRoute, noteRoute, parseWorkspaceRoute } from './routes.js';
+import { compilationStudyRoute, legacyAllNotebooksRoute, notebookRoute, noteReturnRoute, noteRoute, parseWorkspaceRoute } from './routes.js';
 describe('workspace URLs', () => {
   it('returns editors to their original workspace and preserves filters', () => {
     for (const origin of ['/graph?notebook=example', '/screen?notebook=work', '/notebooks/example/folders/projects?view=graph&tag=demo&q=hello']) {

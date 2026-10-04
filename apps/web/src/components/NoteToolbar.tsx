@@ -1,7 +1,8 @@
 import './note-toolbar.css';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Button } from './Button.js';
-import { Eye, EyeOff, FolderTree, Kanban, LayoutGrid, LayoutList, ListTree, Plus } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, FolderTree, GalleryHorizontalEnd, Kanban, LayoutGrid, LayoutList, ListTree, Plus, Search, X } from 'lucide-react';
 import { WorkspaceSidebarToggle } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
 import type { SortField, SortOrder } from '../lib/note-sort.js';
@@ -22,17 +23,36 @@ interface NoteToolbarProps {
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
   onOpenNewNoteModal: () => void;
+  /** Starts a compilation in the selected folder. */
+  onOpenNewCompilation: () => void;
+  /** The note search, the `q` query parameter. */
+  query: string;
+  onQueryChange: (query: string) => void;
   filtersOpen: boolean;
   onToggleFilters: () => void;
   /** The Focus switcher and division picker. */
   focusControls?: ReactNode;
 }
 
-export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, filtersOpen, onToggleFilters, focusControls }: NoteToolbarProps) {
+export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, onOpenNewCompilation, query, onQueryChange, filtersOpen, onToggleFilters, focusControls }: NoteToolbarProps) {
   const { t } = useTranslation();
+  // Below 768px the field is hidden behind a button and expands over the toolbar.
+  const [searchOpen, setSearchOpen] = useState(false);
   return (
     <div className='header-note-actions flex items-center gap-2.5 flex-1 min-w-0 justify-end'>
       <WorkspaceSidebarToggle label={t('filters.notebookPanel')} open={filtersOpen} controlsId='notebook-panel' onClick={onToggleFilters} />
+      <button type='button' className='ui-icon-button note-search-toggle' aria-label={t('header.searchPlaceholder')} aria-expanded={searchOpen} aria-controls='note-toolbar-search' data-active={query.trim() ? true : undefined} onClick={() => setSearchOpen(true)}>
+        <Search size={16} aria-hidden='true' />
+      </button>
+      <div id='note-toolbar-search' className='note-toolbar-search' role='search' data-open={searchOpen || undefined}>
+        <label className='note-search-field'>
+          <Search size={15} aria-hidden='true' />
+          <input type='search' aria-label={t('header.searchPlaceholder')} placeholder={t('header.searchPlaceholder')} value={query} onChange={event => onQueryChange(event.target.value)} />
+        </label>
+        <button type='button' className='ui-icon-button note-search-close' aria-label={t('common.close')} onClick={() => setSearchOpen(false)}>
+          <X size={16} aria-hidden='true' />
+        </button>
+      </div>
       {/* View Switcher Mobile */}
       <Select aria-label={t('filters.noteView')} value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)} options={[{ value: 'flat', label: t('view.flat') }, { value: 'list', label: t('layout.list') }, { value: 'card', label: t('layout.card') }, { value: 'kanban', label: t('layout.kanban') }]} className='mobile-only note-view-select px-1' />
       {viewMode === 'flat' && (
@@ -77,10 +97,29 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
       </div>
       {/* New Note Button */}
       {!readOnly && (
-        <Button variant='primary' type='button' aria-label={t('header.newNote')} onClick={onOpenNewNoteModal} className='header-new-note'>
-          <Plus className='w-4 h-4' />
-          <span>{t('header.newNote')}</span>
-        </Button>
+        <div className='header-new-note-group'>
+          <Button variant='primary' type='button' aria-label={t('header.newNote')} onClick={onOpenNewNoteModal} className='header-new-note'>
+            <Plus className='w-4 h-4' />
+            <span>{t('header.newNote')}</span>
+          </Button>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger className='ui-icon-button header-new-menu' aria-label={t('header.newMenu')} title={t('header.newMenu')}>
+              <ChevronDown size={16} aria-hidden='true' />
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content className='focus-menu' align='end' sideOffset={4} collisionPadding={8} aria-label={t('header.newMenu')}>
+                <DropdownMenu.Item onSelect={onOpenNewNoteModal}>
+                  <Plus size={14} aria-hidden='true' />
+                  {t('header.newNote')}
+                </DropdownMenu.Item>
+                <DropdownMenu.Item onSelect={onOpenNewCompilation}>
+                  <GalleryHorizontalEnd size={14} aria-hidden='true' />
+                  {t('compilation.new')}
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+        </div>
       )}
     </div>
   );

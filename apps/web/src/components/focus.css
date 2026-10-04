@@ -140,3 +140,7 @@
 
 /* Tablet: the right rail overlays the main panel, so the main panel keeps the rail's width clear for toolbar and pane buttons. */
 @media (min-width: 768px) and (max-width: 1100px) { .workspace-split-main-panel:has(+ .right-panel) { padding-right: var(--right-panel-rail-width); } /* Like zoom, a Focus makes room for the open document panel instead of hiding the active pane under it. */ .workspace-split-main-panel:has(+ .right-panel):has(.focus-area) { padding-right: var(--right-panel-width); } }
+
+/* The toolbar search dims what it does not match; a dimmed tab or pane stays usable. */
+.focus-tab[data-dimmed] { opacity: 0.4; }
+.focus-pane[data-dimmed] .focus-pane-body { opacity: 0.55; }

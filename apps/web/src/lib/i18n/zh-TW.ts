@@ -444,6 +444,8 @@ export const zhTW: Record<TranslationKey, string> = {
   'view.card': '卡片檢視',
   'view.kanban': '看板檢視',
   'view.graph': '關聯圖檢視',
+  'header.newMenu': '新增選單',
+  'compilation.new': '新增合輯',
   'header.searchPlaceholder': '搜尋筆記、標籤、內文...',
   'header.newNote': '新增筆記',
   'shortcuts.title': '鍵盤快速鍵',
@@ -548,7 +550,10 @@ export const zhTW: Record<TranslationKey, string> = {
   'folder.open': '開啟',
 
   // Sidebar
+  'sidebar.compilations': '合輯',
+  'sidebar.compilationCount': '{count} 個合輯',
   'sidebar.notebooks': '筆記本',
+  'sidebar.status': '狀態',
   'sidebar.statusFilter': '狀態篩選',
   'sidebar.allStatuses': '所有狀態',
   'sidebar.clear': '清除',

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createElement } from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { I18nProvider } from '../lib/i18n/index.js';
@@ -19,10 +19,32 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-const baseProps = { showHidden: false, descendants: false, hiddenNoteCount: 0, onShowHiddenChange: () => {}, onDescendantsChange: () => {}, sortField: 'updated' as const, sortOrder: 'desc' as const, onSortChange: () => {}, readOnly: false, viewMode: 'flat' as const, setViewMode: () => {}, onOpenNewNoteModal: () => {}, filtersOpen: false, onToggleFilters: () => {} };
+const baseProps = { showHidden: false, descendants: false, hiddenNoteCount: 0, onShowHiddenChange: () => {}, onDescendantsChange: () => {}, sortField: 'updated' as const, sortOrder: 'desc' as const, onSortChange: () => {}, readOnly: false, viewMode: 'flat' as const, setViewMode: () => {}, onOpenNewNoteModal: () => {}, onOpenNewCompilation: () => {}, query: '', onQueryChange: () => {}, filtersOpen: false, onToggleFilters: () => {} };
 
 it('labels the notebook-panel toggle and view switcher in Traditional Chinese under the zh-TW locale', () => {
   render(createElement(I18nProvider, null, createElement(NoteToolbar, baseProps)));
   expect(screen.getByRole('button', { name: '筆記本與篩選' })).toBeInTheDocument();
   expect(screen.getByRole('combobox', { name: '筆記檢視' })).toBeInTheDocument();
+});
+
+it('puts the note search in the toolbar and reports each keystroke as the query', () => {
+  const changes: string[] = [];
+  render(createElement(I18nProvider, null, createElement(NoteToolbar, { ...baseProps, query: 'dragon', onQueryChange: value => changes.push(value) })));
+  const field = screen.getByRole('searchbox', { name: '搜尋筆記、標籤、內文...' });
+  expect(field).toHaveValue('dragon');
+  fireEvent.change(field, { target: { value: 'dragons' } });
+  expect(changes).toEqual(['dragons']);
+});
+
+it('keeps the field behind a button on phones: the button opens it over the toolbar and close hides it', () => {
+  render(createElement(I18nProvider, null, createElement(NoteToolbar, baseProps)));
+  const toggle = screen.getByRole('button', { name: '搜尋筆記、標籤、內文...' });
+  const search = document.getElementById('note-toolbar-search')!;
+  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect(search).not.toHaveAttribute('data-open');
+  fireEvent.click(toggle);
+  expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  expect(search).toHaveAttribute('data-open');
+  fireEvent.click(screen.getByRole('button', { name: '關閉' }));
+  expect(search).not.toHaveAttribute('data-open');
 });

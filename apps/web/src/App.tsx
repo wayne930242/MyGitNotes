@@ -61,6 +61,11 @@ import { FocusArea } from './components/FocusArea.js';
 import { FocusControls } from './components/FocusControls.js';
 import { AddToFocusDialog } from './components/AddToFocusDialog.js';
 import { CompilationView } from './components/CompilationView.js';
+import { NewCompilationDialog } from './components/NewCompilationDialog.js';
+import { planNewCompilation } from './lib/compilation-create.js';
+import type { CompilationRow } from '@mygitnotes/core/compilation';
+import { usePhone } from './components/FocusArea.js';
+import { useFocusSearch } from './lib/focus-search.js';
 import { LegacyScreenRedirect } from './components/LegacyScreenRedirect.js';
 import { CompilationActionsProvider } from './lib/compilation-actions.js';
 import { useCompilationActionsValue } from './app/useCompilationActionsValue.js';
@@ -316,7 +321,21 @@ const AppContent: React.FC = () => {
       )}
     </>
   );
+  // The toolbar search dims what the Focus shows that it does not match; on a phone it only filters the list.
+  const phone = usePhone();
+  const focusMatches = useFocusSearch({ q: debouncedSearch, notebookId: selectedNotebookId, enabled: Boolean(noteFocus.layout) && !phone });
   const compilationActions = useCompilationActionsValue({ remote, canWriteNotebook, repositoryId: notebookId => repositoryFor(notebookId)?.id, revisionFor, save: handleSaveNote, remove: handleDeleteNote, stageWorkingNote, invalidateNotes, setGitStatus, createNote: openNewNote });
+  const [newCompilationOpen, setNewCompilationOpen] = useState(false);
+  const createCompilation = async (row: CompilationRow) => {
+    const notebook = config?.notebooks.find(nb => nb.id === row.notebookId);
+    if (!notebook) return;
+    try {
+      const plan = await planNewCompilation(row, notebook, selectedFolder ?? '');
+      void openFromBrowse(await compilationActions.create(notebook.id, plan.path, plan.content, plan.metadata));
+    } catch (error) {
+      setActionError((error as Error).message);
+    }
+  };
   const openCompilationFolder = (item: { notebookId: string; path: string; }) => {
     // A folder of this notebook filters the browse region and keeps the Focus; others open as they do elsewhere.
     const notebook = config?.notebooks.find(nb => nb.id === item.notebookId);
@@ -344,363 +363,363 @@ const AppContent: React.FC = () => {
     />
   );
 
-
   if (loading || loadError) return <ConnectionState loading={loading} error={loadError} onRetry={refreshWorkspace} />;
   if (route.legacyScreen) return <LegacyScreenRedirect laneId={route.legacyLane} notebooks={config?.notebooks || []} onMissing={setActionError} />;
 
   return (
     <CompilationActionsProvider value={compilationActions}>
-    <WorkspaceLinks notebooks={config?.notebooks || []} folders={folders} onOpenNote={(note, anchor, source) => void openLink(note, anchor, source)}>
-      <NoteLocationProvider locate={locateNote}>
-        <NoteEditingProvider register={editorRegistry.register} editorProps={editorProps} flushEditors={editorRegistry.flushEditors} refreshNotes={refreshNotes} closeZoom={closeZoom} addToFocus={addToFocus}>
-          <div className='app-shell h-dvh w-full overflow-hidden flex flex-col font-sans transition-colors duration-200' data-workspace-tab={activeTab} data-screen-focus={Boolean(route.study)} style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}>
-            {/* Core Branch User Guidance Banner (Theme-aware, harmonized with active palette) */}
-            {!remote && homeBranch === 'core' && (
-              <div className='shrink-0 flex-none px-4 py-2 text-xs flex items-center justify-between font-medium border-b transition-colors' style={{ backgroundColor: 'var(--color-sidebar)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                <div className='flex items-center gap-2.5'>
-                  <AlertTriangle className='w-4 h-4 text-warning shrink-0' />
-                  <span className='px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-on-primary shrink-0 shadow-xs' style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-on-primary)' }}>{t('nav.coreBaseline')}</span>
-                  <span className='text-muted'>{t('nav.coreBanner')}</span>
+      <WorkspaceLinks notebooks={config?.notebooks || []} folders={folders} onOpenNote={(note, anchor, source) => void openLink(note, anchor, source)}>
+        <NoteLocationProvider locate={locateNote}>
+          <NoteEditingProvider register={editorRegistry.register} editorProps={editorProps} flushEditors={editorRegistry.flushEditors} refreshNotes={refreshNotes} closeZoom={closeZoom} addToFocus={addToFocus}>
+            <div className='app-shell h-dvh w-full overflow-hidden flex flex-col font-sans transition-colors duration-200' data-workspace-tab={activeTab} data-screen-focus={Boolean(route.study)} style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}>
+              {/* Core Branch User Guidance Banner (Theme-aware, harmonized with active palette) */}
+              {!remote && homeBranch === 'core' && (
+                <div className='shrink-0 flex-none px-4 py-2 text-xs flex items-center justify-between font-medium border-b transition-colors' style={{ backgroundColor: 'var(--color-sidebar)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <div className='flex items-center gap-2.5'>
+                    <AlertTriangle className='w-4 h-4 text-warning shrink-0' />
+                    <span className='px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-on-primary shrink-0 shadow-xs' style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-on-primary)' }}>{t('nav.coreBaseline')}</span>
+                    <span className='text-muted'>{t('nav.coreBanner')}</span>
+                  </div>
                 </div>
-              </div>
-            )}
-            {/* Top Header */}
-            <Header unavailableNotebooks={repositories.filter(repository => repository.unavailable).flatMap(repository => repository.notebooks)} workspaceTitle={config?.workspace.title || 'MyGitNotes'} accountControls={<AuthControls local={!remote} />} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} onSelectNotebook={id => void setSelectedNotebookId(id)} notebookDisabled={loading || resourceNavigationBusy || notebookSwitchBusy} activeTab={activeTab} setActiveTab={setActiveTab} onCreateNote={() => openNewNote()} createNoteDisabled={!canWrite} onOpenCommands={() => setShortcutMode('palette')} navigationDisabled={noteEditorOpen || isCommitOpen} />
-            <KeyboardShortcuts
-              mode={shortcutMode}
-              onModeChange={setShortcutMode}
-              suspended={isCommitOpen}
-              noteEditorOpen={noteEditorOpen}
-              activeTab={activeTab}
-              canCreateNote={canWrite}
-              selectedNotebookId={selectedNotebookId}
-              onNavigate={tab => void setActiveTab(tab)}
-              onCreateNote={() => openNewNote()}
-              onFocusSearch={() => {
-                if (activeTab === 'notes') setFiltersOpen(true);
-                requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.header-search input')?.focus());
-              }}
-              onOpenNote={note => void handleOpenNote(note)}
-              pageCommands={focusCommands}
-            />
-            {routeError && (
-              <div role='alert' className='px-6 py-3 text-sm text-danger'>
-                {routeError.startsWith('route.') ? t(routeError as any) : routeError} <button className='underline' onClick={() => navigate('/notes')}>{t('route.goToNotes')}</button>
-              </div>
-            )}
-            {/* Main Workspace Layout */}
-            <SidebarProvider open={filtersOpen} onOpenChange={setFiltersOpen}>
-              <div ref={sidebarGestureRef} className='workspace-body relative flex-1 min-h-0 min-w-0 flex overflow-hidden'>
-                <WorkspaceSplitLayout
-                  // Collapsing the Notes browse dock hides the notebook sidebar with it; expanding the dock brings both back.
-                  hasSidebar={activeTab !== 'graph' && !route.study && !(activeTab === 'notes' && dockToggle && noteFocus.view.dock.collapsed)}
-                  sidebarDomId={activeTab === 'notes' ? 'notebook-panel' : activeTab === 'agent' ? 'agent-sidebar-panel' : activeTab === 'assets' ? 'assets-sidebar-panel' : activeTab === 'settings' ? 'settings-sidebar-panel' : undefined}
-                  closeLabel={t('sidebar.closeFilters')}
-                  rightPanelWidth={rightPanelWidth}
-                  rightPanel={
-                    <RightPanel
-                      documentPanel={activeTab === 'notes' && noteFocus.layout ? { enabled: activePaneNote, onContainer: setDocumentContainer } : undefined}
-                      fileMode={activeTab === 'assets'}
-                      metadataOpen={fileMetadataOpen}
-                      onMetadataOpenChange={setFileMetadataOpen}
-                      fileMetadata={selectedFileEntry
-                        ? (
-                          <FileMetadata
-                            entry={selectedFileEntry}
-                            onEdit={canWrite && !resourceNavigationBusy
-                              ? () => void fileManagerRef.current?.editMetadata()
-                              : undefined}
-                          />
-                        )
-                        : undefined}
-                      onFileMetadataContainer={setFileMetadataContainer}
-                      notebooks={config?.notebooks || []}
-                      selectedNotebookId={selectedNotebookId}
-                      currentFolder={selectedFolder && notebookRoot ? `${notebookRoot}/${selectedFolder}` : undefined}
-                      onOpenNote={handleOpenNote}
-                      onSaveNote={handleSaveNote}
-                      onReadNote={readNoteForChange}
-                      gitStatus={gitStatus}
-                      changeCount={changeCount}
-                      deletedNotes={deletedNotes}
-                      onRestoreNote={handleRestoreNote}
-                      onOpenCommitModal={openCommitModal}
-                      writable={canWrite}
-                      remoteChanges={panelRemoteChanges}
-                      getPreview={panelGetPreview}
-                      onSynced={remote ? undefined : async () => {
-                        await refreshWorkspace();
-                        await refreshDocuments();
-                      }}
-                      repositoryHeading={repositoryHeading}
-                      syncTargets={remote ? undefined : repositories.filter(repository => !repository.unavailable).map(repository => ({ id: repository.id, label: repository.repository ?? repository.id.replace(/^local:/, ''), gitStatus: repository.id === sourceId ? gitStatus : repository.gitStatus ?? null }))}
-                      onWidthChange={setRightPanelWidth}
-                    />
-                  }
-                >
-                  {notebookUnavailable && ['notes', 'assets', 'graph'].includes(activeTab) && (
-                    <main className='workspace-route notebook-unavailable'>
-                      <section role='alert' className='notebook-unavailable-card'>
-                        <AlertCircle aria-hidden='true' />
-                        <div>
-                          <h2>{t('notebook.unavailableTitle', { title: config?.notebooks.find(nb => nb.id === selectedNotebookId)?.title ?? selectedNotebookId })}</h2>
-                          <p>{t(`notebook.unavailable.${notebookUnavailable.reason}`)}</p>
-                          <p className='notebook-unavailable-detail'>{notebookUnavailable.message}</p>
-                        </div>
-                      </section>
-                    </main>
-                  )}
-                  {!notebookUnavailable && activeTab === 'notes' && !route.study && (
-                    <>
-                      <WorkspaceSidebarPortal>
-                        <Sidebar
-                          selectedNotebookId={selectedNotebookId}
-                          folders={folders}
-                          onManageFiles={openFileManager}
-                          foldersWritable={canWrite}
-                          reorder={folderReorder}
-                          onToggleReorder={() => setFolderReorder(value => !value)}
-                          filters={filterProps}
-                          facets={facetsQuery.facets}
-                          facetsLoading={facetsQuery.loading}
-                          facetsError={facetsQuery.error}
-                          workspaceTagNames={workspaceTagNames}
-                          beforeFolderChange={() => {
-                            if (hasPendingDrafts() || documents.some(document => document.dirty)) throw new Error(t('folder.draftsHint'));
-                          }}
-                          onFoldersChanged={async () => {
-                            await refreshWorkspace(remote);
-                            await refreshDocuments();
-                          }}
-                          selectedFolder={selectedFolder}
-                          onSelectFolder={setSelectedFolder}
-                          changeCount={changeCount}
-                          onPulled={remote ? undefined : async () => {
-                            await refreshWorkspace();
-                            await refreshDocuments();
-                          }}
-                          repoRoot={repoRoot}
-                          canManageTags={canWrite}
-                          onPreviewTagUsage={previewTagUsage}
-                          onRenameTag={handleRenameTag}
-                          onMergeTag={handleMergeTag}
-                          onDeleteTag={handleDeleteTag}
-                        />
-                      </WorkspaceSidebarPortal>
-                      {/* Main Content Area */}
-                      <main className='workspace-main notes-main'>
-                        <PageToolbar>
-                          {dockToggle}
-                          <NoteToolbar sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode} hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null} showHidden={showHidden} descendants={route.descendants} onShowHiddenChange={value => changeFilters({ showHidden: value })} onDescendantsChange={value => changeFilters({ descendants: value })} onOpenNewNoteModal={() => openNewNote()} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(open => !open)} focusControls={<FocusControls focus={noteFocus} onShow={key => void showFocus(key)} onReload={() => void focusPage.reload()} browseToggle={focusCapacity === 1 ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') } : undefined} />} />
-                        </PageToolbar>
-                        {noteFocus.layout
+              )}
+              {/* Top Header */}
+              <Header unavailableNotebooks={repositories.filter(repository => repository.unavailable).flatMap(repository => repository.notebooks)} workspaceTitle={config?.workspace.title || 'MyGitNotes'} accountControls={<AuthControls local={!remote} />} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} onSelectNotebook={id => void setSelectedNotebookId(id)} notebookDisabled={loading || resourceNavigationBusy || notebookSwitchBusy} activeTab={activeTab} setActiveTab={setActiveTab} onCreateNote={() => openNewNote()} createNoteDisabled={!canWrite} onOpenCommands={() => setShortcutMode('palette')} navigationDisabled={noteEditorOpen || isCommitOpen} />
+              <KeyboardShortcuts
+                mode={shortcutMode}
+                onModeChange={setShortcutMode}
+                suspended={isCommitOpen}
+                noteEditorOpen={noteEditorOpen}
+                activeTab={activeTab}
+                canCreateNote={canWrite}
+                selectedNotebookId={selectedNotebookId}
+                onNavigate={tab => void setActiveTab(tab)}
+                onCreateNote={() => openNewNote()}
+                onFocusSearch={() => {
+                  if (activeTab === 'notes') setFiltersOpen(true);
+                  requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.header-search input')?.focus());
+                }}
+                onOpenNote={note => void handleOpenNote(note)}
+                pageCommands={focusCommands}
+              />
+              {routeError && (
+                <div role='alert' className='px-6 py-3 text-sm text-danger'>
+                  {routeError.startsWith('route.') ? t(routeError as any) : routeError} <button className='underline' onClick={() => navigate('/notes')}>{t('route.goToNotes')}</button>
+                </div>
+              )}
+              {/* Main Workspace Layout */}
+              <SidebarProvider open={filtersOpen} onOpenChange={setFiltersOpen}>
+                <div ref={sidebarGestureRef} className='workspace-body relative flex-1 min-h-0 min-w-0 flex overflow-hidden'>
+                  <WorkspaceSplitLayout
+                    // Collapsing the Notes browse dock hides the notebook sidebar with it; expanding the dock brings both back.
+                    hasSidebar={activeTab !== 'graph' && !route.study && !(activeTab === 'notes' && dockToggle && noteFocus.view.dock.collapsed)}
+                    sidebarDomId={activeTab === 'notes' ? 'notebook-panel' : activeTab === 'agent' ? 'agent-sidebar-panel' : activeTab === 'assets' ? 'assets-sidebar-panel' : activeTab === 'settings' ? 'settings-sidebar-panel' : undefined}
+                    closeLabel={t('sidebar.closeFilters')}
+                    rightPanelWidth={rightPanelWidth}
+                    rightPanel={
+                      <RightPanel
+                        documentPanel={activeTab === 'notes' && noteFocus.layout ? { enabled: activePaneNote, onContainer: setDocumentContainer } : undefined}
+                        fileMode={activeTab === 'assets'}
+                        metadataOpen={fileMetadataOpen}
+                        onMetadataOpenChange={setFileMetadataOpen}
+                        fileMetadata={selectedFileEntry
                           ? (
-                            <BrowseDock placement={topDock ? 'top' : 'left'} size={topDock ? noteFocus.view.dock.top : noteFocus.view.dock.left} onSizeChange={size => noteFocus.setDock(topDock ? { top: size } : { left: size })} collapsed={noteFocus.view.dock.collapsed} narrow={focusCapacity === 1} narrowView={focusNarrowView} browse={height => browseRegion(true, height)}>
-                              <FocusArea focus={noteFocus} capacity={focusCapacity} notebookRoot={folderRoot ?? ''} folders={folders} renderCompilation={renderCompilation} onZoomNote={zoomFocusNote} documentPanel={focusDocumentPanel} />
-                            </BrowseDock>
+                            <FileMetadata
+                              entry={selectedFileEntry}
+                              onEdit={canWrite && !resourceNavigationBusy
+                                ? () => void fileManagerRef.current?.editMetadata()
+                                : undefined}
+                            />
                           )
-                          : <div className='workspace-scroll'>{browseRegion(false, 0)}</div>}
-                      </main>
-                    </>
-                  )}
-                  {activeTab === 'agent' && (
-                    <main className='workspace-route agent-main'>
-                      <AgentSystemView key={agentRepository} repository={agentRepository} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} ref={agentSystemRef} onBusyChange={setResourceNavigationBusy} readOnly={!canWrite} remote={remote} onGitStatus={agentRepository === sourceId ? setGitStatus : undefined} readOnlyNotice={t(remote ? 'agent.remoteReadOnlyNotice' : branch === 'core' ? 'agent.coreBranchNotice' : 'agent.workspaceReadOnlyNotice')} />
-                    </main>
-                  )}
-                  {!notebookUnavailable && activeTab === 'assets' && (
-                    <main className='workspace-route assets-main has-sidebar-drawer'>
-                      <FileManager key={`${sourceId}:${selectedNotebookId}`} ref={fileManagerRef} notebookId={selectedNotebookId} notebooks={config?.notebooks || []} onNotebookChange={id => void setSelectedNotebookId(id)} writable={canWrite} onSelectionChange={setSelectedFileEntry} metadataContainer={fileMetadataContainer} onShowMetadata={() => setFileMetadataOpen(true)} initialPath={new URLSearchParams(location.search).get('asset') || (new URLSearchParams(location.search).has('directory') ? `${folderRoot}/${config?.notebooks.find(nb => nb.id === selectedNotebookId)?.assets || 'assets'}${new URLSearchParams(location.search).get('directory') ? '/' + new URLSearchParams(location.search).get('directory') : ''}` : undefined)} onBusyChange={setResourceNavigationBusy} beforeChange={beforeFileChange} onChanged={onFilesChanged} onOpenIndex={openFileIndex} />
-                    </main>
-                  )}
-                  {!notebookUnavailable && activeTab === 'notes' && route.study && (
-                    <React.Suspense fallback={<LoadingStatus className='p-8'>{t('screen.loading')}</LoadingStatus>}>
-                      <CompilationStudy
-                        key={`${selectedNotebookId}:${route.study}`}
+                          : undefined}
+                        onFileMetadataContainer={setFileMetadataContainer}
                         notebooks={config?.notebooks || []}
-                        folders={folders}
-                        notebookId={selectedNotebookId}
-                        path={route.study}
-                        onStudySaved={() => {
-                          if (remote) void refreshWorkspace(true);
-                          else invalidateNotes();
-                          void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message));
-                        }}
+                        selectedNotebookId={selectedNotebookId}
+                        currentFolder={selectedFolder && notebookRoot ? `${notebookRoot}/${selectedFolder}` : undefined}
                         onOpenNote={handleOpenNote}
-                        onBack={() => {
-                          const notebook = config?.notebooks.find(nb => nb.id === selectedNotebookId);
-                          navigate(notebook ? noteRoute(notebook.id, route.study!.slice(notebook.root.length + 1)) : '/notes');
+                        onSaveNote={handleSaveNote}
+                        onReadNote={readNoteForChange}
+                        gitStatus={gitStatus}
+                        changeCount={changeCount}
+                        deletedNotes={deletedNotes}
+                        onRestoreNote={handleRestoreNote}
+                        onOpenCommitModal={openCommitModal}
+                        writable={canWrite}
+                        remoteChanges={panelRemoteChanges}
+                        getPreview={panelGetPreview}
+                        onSynced={remote ? undefined : async () => {
+                          await refreshWorkspace();
+                          await refreshDocuments();
                         }}
+                        repositoryHeading={repositoryHeading}
+                        syncTargets={remote ? undefined : repositories.filter(repository => !repository.unavailable).map(repository => ({ id: repository.id, label: repository.repository ?? repository.id.replace(/^local:/, ''), gitStatus: repository.id === sourceId ? gitStatus : repository.gitStatus ?? null }))}
+                        onWidthChange={setRightPanelWidth}
                       />
-                    </React.Suspense>
-                  )}
-                  {!notebookUnavailable && activeTab === 'graph' && (
-                    <main className='workspace-route graph-main flex-1 w-full h-full relative min-h-0'>
-                      <React.Suspense fallback={<p role='status' className='p-8'>{t('graph.title')}</p>}>
-                        <NotebookGraphPage key={remote ? sourceId : repoRoot} notebookId={selectedNotebookId} notebooks={config?.notebooks || []} filters={filterProps} folders={folders} />
+                    }
+                  >
+                    {notebookUnavailable && ['notes', 'assets', 'graph'].includes(activeTab) && (
+                      <main className='workspace-route notebook-unavailable'>
+                        <section role='alert' className='notebook-unavailable-card'>
+                          <AlertCircle aria-hidden='true' />
+                          <div>
+                            <h2>{t('notebook.unavailableTitle', { title: config?.notebooks.find(nb => nb.id === selectedNotebookId)?.title ?? selectedNotebookId })}</h2>
+                            <p>{t(`notebook.unavailable.${notebookUnavailable.reason}`)}</p>
+                            <p className='notebook-unavailable-detail'>{notebookUnavailable.message}</p>
+                          </div>
+                        </section>
+                      </main>
+                    )}
+                    {!notebookUnavailable && activeTab === 'notes' && !route.study && (
+                      <>
+                        <WorkspaceSidebarPortal>
+                          <Sidebar
+                            selectedNotebookId={selectedNotebookId}
+                            folders={folders}
+                            onManageFiles={openFileManager}
+                            foldersWritable={canWrite}
+                            reorder={folderReorder}
+                            onToggleReorder={() => setFolderReorder(value => !value)}
+                            filters={filterProps}
+                            facets={facetsQuery.facets}
+                            facetsLoading={facetsQuery.loading}
+                            facetsError={facetsQuery.error}
+                            workspaceTagNames={workspaceTagNames}
+                            beforeFolderChange={() => {
+                              if (hasPendingDrafts() || documents.some(document => document.dirty)) throw new Error(t('folder.draftsHint'));
+                            }}
+                            onFoldersChanged={async () => {
+                              await refreshWorkspace(remote);
+                              await refreshDocuments();
+                            }}
+                            selectedFolder={selectedFolder}
+                            onSelectFolder={setSelectedFolder}
+                            changeCount={changeCount}
+                            onPulled={remote ? undefined : async () => {
+                              await refreshWorkspace();
+                              await refreshDocuments();
+                            }}
+                            repoRoot={repoRoot}
+                            canManageTags={canWrite}
+                            onPreviewTagUsage={previewTagUsage}
+                            onRenameTag={handleRenameTag}
+                            onMergeTag={handleMergeTag}
+                            onDeleteTag={handleDeleteTag}
+                          />
+                        </WorkspaceSidebarPortal>
+                        {/* Main Content Area */}
+                        <main className='workspace-main notes-main'>
+                          <PageToolbar>
+                            {dockToggle}
+                            <NoteToolbar sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode} hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null} showHidden={showHidden} descendants={route.descendants} onShowHiddenChange={value => changeFilters({ showHidden: value })} onDescendantsChange={value => changeFilters({ descendants: value })} onOpenNewNoteModal={() => openNewNote()} onOpenNewCompilation={() => setNewCompilationOpen(true)} query={searchQuery} onQueryChange={value => changeFilters({ q: value })} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(open => !open)} focusControls={<FocusControls focus={noteFocus} onShow={key => void showFocus(key)} onReload={() => void focusPage.reload()} browseToggle={focusCapacity === 1 ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') } : undefined} />} />
+                          </PageToolbar>
+                          {noteFocus.layout
+                            ? (
+                              <BrowseDock placement={topDock ? 'top' : 'left'} size={topDock ? noteFocus.view.dock.top : noteFocus.view.dock.left} onSizeChange={size => noteFocus.setDock(topDock ? { top: size } : { left: size })} collapsed={noteFocus.view.dock.collapsed} narrow={focusCapacity === 1} narrowView={focusNarrowView} browse={height => browseRegion(true, height)}>
+                                <FocusArea focus={noteFocus} capacity={focusCapacity} notebookRoot={folderRoot ?? ''} folders={folders} renderCompilation={renderCompilation} searchMatches={focusMatches} onZoomNote={zoomFocusNote} documentPanel={focusDocumentPanel} />
+                              </BrowseDock>
+                            )
+                            : <div className='workspace-scroll'>{browseRegion(false, 0)}</div>}
+                        </main>
+                      </>
+                    )}
+                    {activeTab === 'agent' && (
+                      <main className='workspace-route agent-main'>
+                        <AgentSystemView key={agentRepository} repository={agentRepository} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} ref={agentSystemRef} onBusyChange={setResourceNavigationBusy} readOnly={!canWrite} remote={remote} onGitStatus={agentRepository === sourceId ? setGitStatus : undefined} readOnlyNotice={t(remote ? 'agent.remoteReadOnlyNotice' : branch === 'core' ? 'agent.coreBranchNotice' : 'agent.workspaceReadOnlyNotice')} />
+                      </main>
+                    )}
+                    {!notebookUnavailable && activeTab === 'assets' && (
+                      <main className='workspace-route assets-main has-sidebar-drawer'>
+                        <FileManager key={`${sourceId}:${selectedNotebookId}`} ref={fileManagerRef} notebookId={selectedNotebookId} notebooks={config?.notebooks || []} onNotebookChange={id => void setSelectedNotebookId(id)} writable={canWrite} onSelectionChange={setSelectedFileEntry} metadataContainer={fileMetadataContainer} onShowMetadata={() => setFileMetadataOpen(true)} initialPath={new URLSearchParams(location.search).get('asset') || (new URLSearchParams(location.search).has('directory') ? `${folderRoot}/${config?.notebooks.find(nb => nb.id === selectedNotebookId)?.assets || 'assets'}${new URLSearchParams(location.search).get('directory') ? '/' + new URLSearchParams(location.search).get('directory') : ''}` : undefined)} onBusyChange={setResourceNavigationBusy} beforeChange={beforeFileChange} onChanged={onFilesChanged} onOpenIndex={openFileIndex} />
+                      </main>
+                    )}
+                    {!notebookUnavailable && activeTab === 'notes' && route.study && (
+                      <React.Suspense fallback={<LoadingStatus className='p-8'>{t('screen.loading')}</LoadingStatus>}>
+                        <CompilationStudy
+                          key={`${selectedNotebookId}:${route.study}`}
+                          notebooks={config?.notebooks || []}
+                          folders={folders}
+                          notebookId={selectedNotebookId}
+                          path={route.study}
+                          onStudySaved={() => {
+                            if (remote) void refreshWorkspace(true);
+                            else invalidateNotes();
+                            void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message));
+                          }}
+                          onOpenNote={handleOpenNote}
+                          onBack={() => {
+                            const notebook = config?.notebooks.find(nb => nb.id === selectedNotebookId);
+                            navigate(notebook ? noteRoute(notebook.id, route.study!.slice(notebook.root.length + 1)) : '/notes');
+                          }}
+                        />
                       </React.Suspense>
-                    </main>
-                  )}
-                  {activeTab === 'settings' && (
-                    <main className='workspace-route settings-main has-sidebar-drawer'>
-                      <SettingsModal config={config} branch={homeBranch} local={!remote} canWrite={manifestWritable} configRevision={configRevision} onConfigRevision={setConfigRevision} accountSettings={<AgentAccessSettings local={!remote} />} onRefreshWorkspace={refreshWorkspace} currentTheme={currentTheme} onSelectTheme={handleSelectTheme} />
-                    </main>
-                  )}
-                </WorkspaceSplitLayout>
-              </div>
-            </SidebarProvider>
-            {/* Undo Toast Notification */}
-            {undoToast && (
-              <div className='fixed top-20 right-6 z-50 animate-in fade-in slide-in-from-top-3 duration-200'>
-                <div className='bg-surface/95 text-fg backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-line/80 flex items-center gap-3 text-xs'>
-                  <span>{t('toast.noteMovedToTrash', { title: undoToast.note.title })}</span>
-                  <button onClick={() => handleRestoreNote(undoToast.note)} className='px-2.5 py-1 bg-warning hover:bg-warning/90 active:scale-95 text-on-warning font-semibold rounded-md transition'>{t('common.undo')}</button>
-                  <button onClick={() => setUndoToast(null)} className='text-muted hover:text-fg p-1 rounded hover:bg-fg/10 transition ml-1'>
-                    <X className='w-3.5 h-3.5' />
-                  </button>
+                    )}
+                    {!notebookUnavailable && activeTab === 'graph' && (
+                      <main className='workspace-route graph-main flex-1 w-full h-full relative min-h-0'>
+                        <React.Suspense fallback={<p role='status' className='p-8'>{t('graph.title')}</p>}>
+                          <NotebookGraphPage key={remote ? sourceId : repoRoot} notebookId={selectedNotebookId} notebooks={config?.notebooks || []} filters={filterProps} folders={folders} />
+                        </React.Suspense>
+                      </main>
+                    )}
+                    {activeTab === 'settings' && (
+                      <main className='workspace-route settings-main has-sidebar-drawer'>
+                        <SettingsModal config={config} branch={homeBranch} local={!remote} canWrite={manifestWritable} configRevision={configRevision} onConfigRevision={setConfigRevision} accountSettings={<AgentAccessSettings local={!remote} />} onRefreshWorkspace={refreshWorkspace} currentTheme={currentTheme} onSelectTheme={handleSelectTheme} />
+                      </main>
+                    )}
+                  </WorkspaceSplitLayout>
                 </div>
-              </div>
-            )}
-            {
-              /* Recent tag operations: session-lifetime, each independently undoable (the list itself
-          is not cleared by navigation or further mutations, only by page reload). Undoing a
-          record unconditionally restores its recorded prior tags on every note it touched; it
-          does not detect or warn about a later edit to the same note's tags in the meantime. */
-            }
-            {tagOperations.history.length > 0 && (
-              <section className='fixed top-28 sm:top-auto sm:bottom-6 right-4 sm:right-16 left-4 sm:left-auto z-50 flex flex-col gap-2 items-end' aria-label={t('sidebar.recentTagChanges')}>
-                {tagOperations.history.map(record => (
-                  <div key={record.id} className='bg-surface/95 text-fg backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-line/80 flex items-center gap-3 text-xs max-w-sm'>
-                    <span>{t(record.label.key, record.label.params)}</span>
-                    <button
-                      autoFocus
-                      onClick={() => void handleUndoTagOperation(record.id)}
-                      className='px-2.5 py-1 bg-warning hover:bg-warning/90 active:scale-95 text-on-warning font-semibold rounded-md transition shrink-0'
-                    >
-                      {t('common.undo')}
-                    </button>
-                    <button
-                      aria-label={t('sidebar.dismissTagOperation')}
-                      onClick={() => tagOperations.dismiss(record.id)}
-                      className='text-muted hover:text-fg p-1 rounded hover:bg-fg/10 transition ml-1 shrink-0'
-                    >
+              </SidebarProvider>
+              {/* Undo Toast Notification */}
+              {undoToast && (
+                <div className='fixed top-20 right-6 z-50 animate-in fade-in slide-in-from-top-3 duration-200'>
+                  <div className='bg-surface/95 text-fg backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-line/80 flex items-center gap-3 text-xs'>
+                    <span>{t('toast.noteMovedToTrash', { title: undoToast.note.title })}</span>
+                    <button onClick={() => handleRestoreNote(undoToast.note)} className='px-2.5 py-1 bg-warning hover:bg-warning/90 active:scale-95 text-on-warning font-semibold rounded-md transition'>{t('common.undo')}</button>
+                    <button onClick={() => setUndoToast(null)} className='text-muted hover:text-fg p-1 rounded hover:bg-fg/10 transition ml-1'>
                       <X className='w-3.5 h-3.5' />
                     </button>
                   </div>
-                ))}
-              </section>
-            )}
-            {fileDialog && <FileManagerDialog notebookId={fileDialog.notebookId} notebooks={config?.notebooks || []} writable={canWrite} initialPath={fileDialog.path} movePath={fileDialog.movePath} beforeChange={beforeFileChange} onChanged={onFilesChanged} onOpenIndex={openFileIndex} onClose={() => setFileDialog(undefined)} />}
-            {bulkMoveOpen && bulkMoveNotebook && (
-              <BulkMoveDialog
-                notebook={bulkMoveNotebook}
-                folders={folders}
-                count={selectedNotes.length}
-                busy={bulkBusy}
-                onClose={() => setBulkMoveOpen(false)}
-                onConfirm={destination => {
-                  setBulkMoveOpen(false);
-                  void runBulkMove(bulkMoveNotebook.id, destination);
-                }}
-              />
-            )}
-            {/* Note Editor Modal */}
-            <EditorModal key={fileEditorRevision} note={routedNote} committed={routedCommitted && typeof routedCommitted.content === 'string' ? routedCommitted as NoteItem : undefined} loading={routedLoading} isOpen={noteEditorOpen} renderCompilation={renderCompilation} />
-            {addingToFocus && (
-              <AddToFocusDialog
-                focus={noteFocus}
-                tab={addingToFocus.tab}
-                label={addingToFocus.label}
-                onClose={() => setAddingToFocus(null)}
-                onPlaced={addingToFocus.tab.kind === 'note'
-                  ? target => {
-                    setEditingNote(null);
-                    setFocusNarrowView('focus');
-                    navigate(`${notebookRoute(selectedNotebookId)}?${new URLSearchParams({ focus: target })}`, { replace: true });
+                </div>
+              )}
+              {
+                /* Recent tag operations: session-lifetime, each independently undoable (the list itself
+          is not cleared by navigation or further mutations, only by page reload). Undoing a
+          record unconditionally restores its recorded prior tags on every note it touched; it
+          does not detect or warn about a later edit to the same note's tags in the meantime. */
+              }
+              {tagOperations.history.length > 0 && (
+                <section className='fixed top-28 sm:top-auto sm:bottom-6 right-4 sm:right-16 left-4 sm:left-auto z-50 flex flex-col gap-2 items-end' aria-label={t('sidebar.recentTagChanges')}>
+                  {tagOperations.history.map(record => (
+                    <div key={record.id} className='bg-surface/95 text-fg backdrop-blur-md px-4 py-3 rounded-xl shadow-xl border border-line/80 flex items-center gap-3 text-xs max-w-sm'>
+                      <span>{t(record.label.key, record.label.params)}</span>
+                      <button
+                        autoFocus
+                        onClick={() => void handleUndoTagOperation(record.id)}
+                        className='px-2.5 py-1 bg-warning hover:bg-warning/90 active:scale-95 text-on-warning font-semibold rounded-md transition shrink-0'
+                      >
+                        {t('common.undo')}
+                      </button>
+                      <button
+                        aria-label={t('sidebar.dismissTagOperation')}
+                        onClick={() => tagOperations.dismiss(record.id)}
+                        className='text-muted hover:text-fg p-1 rounded hover:bg-fg/10 transition ml-1 shrink-0'
+                      >
+                        <X className='w-3.5 h-3.5' />
+                      </button>
+                    </div>
+                  ))}
+                </section>
+              )}
+              {fileDialog && <FileManagerDialog notebookId={fileDialog.notebookId} notebooks={config?.notebooks || []} writable={canWrite} initialPath={fileDialog.path} movePath={fileDialog.movePath} beforeChange={beforeFileChange} onChanged={onFilesChanged} onOpenIndex={openFileIndex} onClose={() => setFileDialog(undefined)} />}
+              {bulkMoveOpen && bulkMoveNotebook && (
+                <BulkMoveDialog
+                  notebook={bulkMoveNotebook}
+                  folders={folders}
+                  count={selectedNotes.length}
+                  busy={bulkBusy}
+                  onClose={() => setBulkMoveOpen(false)}
+                  onConfirm={destination => {
+                    setBulkMoveOpen(false);
+                    void runBulkMove(bulkMoveNotebook.id, destination);
+                  }}
+                />
+              )}
+              {/* Note Editor Modal */}
+              <EditorModal key={fileEditorRevision} note={routedNote} committed={routedCommitted && typeof routedCommitted.content === 'string' ? routedCommitted as NoteItem : undefined} loading={routedLoading} isOpen={noteEditorOpen} renderCompilation={renderCompilation} />
+              {newCompilationOpen && <NewCompilationDialog notebooks={config?.notebooks || []} folders={folders} notebookId={selectedNotebookId} onAdd={row => void createCompilation(row)} onClose={() => setNewCompilationOpen(false)} />}
+              {addingToFocus && (
+                <AddToFocusDialog
+                  focus={noteFocus}
+                  tab={addingToFocus.tab}
+                  label={addingToFocus.label}
+                  onClose={() => setAddingToFocus(null)}
+                  onPlaced={addingToFocus.tab.kind === 'note'
+                    ? target => {
+                      setEditingNote(null);
+                      setFocusNarrowView('focus');
+                      navigate(`${notebookRoute(selectedNotebookId)}?${new URLSearchParams({ focus: target })}`, { replace: true });
+                    }
+                    : undefined}
+                />
+              )}
+              {/* Commit Modal */}
+              <CommitModal
+                writable={repositories.some(repository => repository.write)}
+                remoteChanges={panelRemoteChanges}
+                getPreview={panelGetPreview}
+                request={commitRequest}
+                restoreFile={remote
+                  ? async file => {
+                    const pendingDocument = pendingDocuments.find(document => document.repository === file.repository && document.file === file.path);
+                    if (pendingDocument) {
+                      if (file.revision !== pendingDocument.diff) throw new Error('Draft changed. Review it again.');
+                      discardDocumentDraft(documentClientOf(file.path)!, pendingDocument.repository);
+                      const live = documents.find(document => document.file === file.path && document.repository === pendingDocument.repository);
+                      if (live) await live.reload();
+                      return;
+                    }
+                    const entry = file.repository ? readDraftIn(file.repository, file.path) : undefined;
+                    if (!entry || JSON.stringify(entry) !== file.revision) throw new Error('Draft changed. Review it again.');
+                    // The draft lives in this browser, so discarding it is a local delete. Reading the remote
+                    // only refreshes an open editor, and a draft is often blocked precisely because that read
+                    // fails, which used to leave the draft undiscardable.
+                    const latest = entry.base ? await readNote(file.path).catch(() => null) : null;
+                    if (JSON.stringify(readDraft(entry.note.notebookId, file.path)) !== file.revision) throw new Error('Draft changed. Review it again.');
+                    updateDraft(entry.note.notebookId, file.path, null);
+                    if (latest && editingNote && sameNote(editingNote, entry.note)) setEditingNote(latest);
                   }
                   : undefined}
-              />
-            )}
-            {/* Commit Modal */}
-            <CommitModal
-              writable={repositories.some(repository => repository.write)}
-              remoteChanges={panelRemoteChanges}
-              getPreview={panelGetPreview}
-              request={commitRequest}
-              restoreFile={remote
-                ? async file => {
-                  const pendingDocument = pendingDocuments.find(document => document.repository === file.repository && document.file === file.path);
-                  if (pendingDocument) {
-                    if (file.revision !== pendingDocument.diff) throw new Error('Draft changed. Review it again.');
-                    discardDocumentDraft(documentClientOf(file.path)!, pendingDocument.repository);
-                    const live = documents.find(document => document.file === file.path && document.repository === pendingDocument.repository);
-                    if (live) await live.reload();
-                    return;
+                commitFiles={remote ? commitWorkingNotes : undefined}
+                repositoryHeading={repositoryHeading}
+                isOpen={isCommitOpen}
+                onClose={() => setIsCommitOpen(false)}
+                gitStatus={gitStatus}
+                onChanged={async () => {
+                  await refreshWorkspace();
+                  if (!remote) {
+                    await refreshDocuments();
+                    await agentSystemRef.current?.refresh();
                   }
-                  const entry = file.repository ? readDraftIn(file.repository, file.path) : undefined;
-                  if (!entry || JSON.stringify(entry) !== file.revision) throw new Error('Draft changed. Review it again.');
-                  // The draft lives in this browser, so discarding it is a local delete. Reading the remote
-                  // only refreshes an open editor, and a draft is often blocked precisely because that read
-                  // fails, which used to leave the draft undiscardable.
-                  const latest = entry.base ? await readNote(file.path).catch(() => null) : null;
-                  if (JSON.stringify(readDraft(entry.note.notebookId, file.path)) !== file.revision) throw new Error('Draft changed. Review it again.');
-                  updateDraft(entry.note.notebookId, file.path, null);
-                  if (latest && editingNote && sameNote(editingNote, entry.note)) setEditingNote(latest);
-                }
-                : undefined}
-              commitFiles={remote ? commitWorkingNotes : undefined}
-              repositoryHeading={repositoryHeading}
-              isOpen={isCommitOpen}
-              onClose={() => setIsCommitOpen(false)}
-              gitStatus={gitStatus}
-              onChanged={async () => {
-                await refreshWorkspace();
-                if (!remote) {
-                  await refreshDocuments();
-                  await agentSystemRef.current?.refresh();
-                }
-              }}
-              onCommitted={async () => {
-                // Another server instance may still cache the head from before this commit.
-                await refreshWorkspace(true);
-                if (!remote) {
-                  await refreshDocuments();
-                  await agentSystemRef.current?.refresh();
-                }
-                setDeletedNotes([]);
-                setUndoToast(null);
-              }}
-            />
-            {/* Create New Note Modal */}
-            {isNewNoteOpen && (
-              <NewNoteDialog
-                t={t}
-                createError={createError}
-                newNoteTitle={newNoteTitle}
-                onTitleChange={setNewNoteTitle}
-                onSubmit={() => handleCreateNewNote()}
-                newNoteFolder={newNoteFolder}
-                onFolderChange={setNewNoteFolder}
-                newNoteFolders={newNoteFolders}
-                newNoteTemplates={newNoteTemplates}
-                newNoteTemplateId={newNoteTemplateId}
-                onTemplateChange={handleTemplateChange}
-                newNoteTags={newNoteTags}
-                newNoteStatus={newNoteStatus}
-                onStatusChange={setNewNoteStatus}
-                newNoteStatuses={newNoteStatuses}
-                onCancel={() => {
-                  setIsNewNoteOpen(false);
-                  setNewNoteTags([]);
-                  setNewNoteTemplateId('');
+                }}
+                onCommitted={async () => {
+                  // Another server instance may still cache the head from before this commit.
+                  await refreshWorkspace(true);
+                  if (!remote) {
+                    await refreshDocuments();
+                    await agentSystemRef.current?.refresh();
+                  }
+                  setDeletedNotes([]);
+                  setUndoToast(null);
                 }}
               />
-            )}
-          </div>
-          <ImageLightbox />
-        </NoteEditingProvider>
-      </NoteLocationProvider>
-    </WorkspaceLinks>
+              {/* Create New Note Modal */}
+              {isNewNoteOpen && (
+                <NewNoteDialog
+                  t={t}
+                  createError={createError}
+                  newNoteTitle={newNoteTitle}
+                  onTitleChange={setNewNoteTitle}
+                  onSubmit={() => handleCreateNewNote()}
+                  newNoteFolder={newNoteFolder}
+                  onFolderChange={setNewNoteFolder}
+                  newNoteFolders={newNoteFolders}
+                  newNoteTemplates={newNoteTemplates}
+                  newNoteTemplateId={newNoteTemplateId}
+                  onTemplateChange={handleTemplateChange}
+                  newNoteTags={newNoteTags}
+                  newNoteStatus={newNoteStatus}
+                  onStatusChange={setNewNoteStatus}
+                  newNoteStatuses={newNoteStatuses}
+                  onCancel={() => {
+                    setIsNewNoteOpen(false);
+                    setNewNoteTags([]);
+                    setNewNoteTemplateId('');
+                  }}
+                />
+              )}
+            </div>
+            <ImageLightbox />
+          </NoteEditingProvider>
+        </NoteLocationProvider>
+      </WorkspaceLinks>
     </CompilationActionsProvider>
   );
 };
