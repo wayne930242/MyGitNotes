@@ -14,7 +14,7 @@ it('fails when the sparse path list or workflow filter misses a product path', (
   const edit = (file: string, from: string, to: string) => fs.writeFileSync(path.join(root, file), fs.readFileSync(path.join(root, file), 'utf8').replace(from, to));
   try {
     execFileSync('git', ['worktree', 'add', '--detach', root, 'HEAD'], { stdio: 'pipe' });
-    for (const file of [listFile, '.github/workflows/deploy-vercel-sparse.yml', 'vercel.json', 'scripts/check-vercel-sparse-paths.mjs', 'scripts/vercel-sparse-non-deploy-paths.mjs']) fs.copyFileSync(file, path.join(root, file));
+    for (const file of [listFile, '.github/workflows/deploy-vercel-sparse.yml', 'scripts/check-vercel-sparse-paths.mjs', 'scripts/vercel-sparse-non-deploy-paths.mjs']) fs.copyFileSync(file, path.join(root, file));
     // In a workspace repo, HEAD also carries content/agent top-level paths Core never tracks;
     // strip anything the fixture's own copied list doesn't own so the fixture always looks like Core.
     const listedTopLevel = fs.readFileSync(path.join(root, listFile), 'utf8').split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#')).map(entry => entry.split('/')[0]);
@@ -38,9 +38,6 @@ it('fails when the sparse path list or workflow filter misses a product path', (
     edit('.github/workflows/deploy-vercel-sparse.yml', "      - 'apps/**'\n", '');
     expect(() => check()).toThrow(/push paths/);
     edit('.github/workflows/deploy-vercel-sparse.yml', "      - 'api/**'\n", "      - 'api/**'\n      - 'apps/**'\n");
-    edit('vercel.json', ' apps docs/agent', ' docs/agent');
-    expect(() => check()).toThrow(/ignoreCommand/);
-    edit('vercel.json', ' api docs/agent', ' api apps docs/agent');
     fs.appendFileSync(path.join(root, 'api/index.js'), "\nimport '../scripts/convert-workspace.mjs';\n");
     expect(() => check()).toThrow(/convert-workspace\.mjs', outside/);
   } finally {

@@ -2,7 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "pnpm install --frozen-lockfile",
-  "ignoreCommand": "git diff --quiet \"${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}\" HEAD -- .github/vercel-sparse-paths.txt .vercelignore api apps docs/agent package.json packages pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json vercel.json",
   "buildCommand": "pnpm build",
   "outputDirectory": "apps/web/dist",
   "functions": {
