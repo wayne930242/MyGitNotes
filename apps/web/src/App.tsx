@@ -173,7 +173,7 @@ const AppContent: React.FC = () => {
 
   const { handleOpenNote } = useNoteActions({ activeTab, editorRegistry, setEditingNote, config, location, editorRoute, returnTo, selectedFolder, selectedNotebookId, navigate, setAssets });
 
-  const { openInFocus, openFromBrowse, openLink, zoomFocusNote, addToFocus } = useFocusNoteNavigation({ noteFocus, selectedNotebookId, setFocusNarrowView, handleOpenNote, setAddingToFocus });
+  const { openFromBrowse, openLink, zoomFocusNote, addToFocus } = useFocusNoteNavigation({ noteFocus, selectedNotebookId, setFocusNarrowView, handleOpenNote, setAddingToFocus });
 
   const { handleSaveNote } = useNoteSaving({ canWriteNotebook, remote, readDraft, readCommittedNote, t, stageWorkingNote, invalidateNotes, setEditingNote, setGitStatus, homeDraftScope: homeRepository ? draftScope(homeRepository) : '' });
 
@@ -343,9 +343,8 @@ const AppContent: React.FC = () => {
       notebooks={config?.notebooks || []}
       folders={folders}
       frame={pane === undefined ? 'zoom' : 'pane'}
-      onOpenNote={note => void (pane === undefined ? handleOpenNote(note) : openInFocus(note, pane).then(opened => {
-        if (!opened) void handleOpenNote(note);
-      }))}
+      // A card opens its note in zoom, over the Focus too, rather than as a tab of the pane.
+      onOpenNote={note => void handleOpenNote(note)}
       onOpenFolder={openCompilationFolder}
       onClose={pane === undefined ? closeZoom : undefined}
     />
