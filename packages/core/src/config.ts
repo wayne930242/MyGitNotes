@@ -307,17 +307,13 @@ export function attachTsconfigPaths(parsed: WorkspaceConfig, repoRoot: string, a
 }
 
 /**
- * Loads and validates the workspace manifest from a repository notes root or root directory.
- * Accepts the standard `.mygitnotes.yaml` name and falls back to the legacy `.github-notes.yaml` name.
+ * Parses the manifest text of the file `relativeFile` (repository-relative, as `resolveWorkspaceConfigPath` returns it)
+ * the way `loadWorkspaceConfig` would load it from disk: notebook roots become repository-relative and tsconfig aliases attach.
+ * Migration reads a manifest it has not written yet through this, so it sees the notebooks where the loaded manifest does.
  */
-export function loadWorkspaceConfig(repoRoot: string): WorkspaceConfig | null {
-  // 1. Primary: Look in notes/ root directly (e.g. notes/.mygitnotes.yaml)
-  const notesDir = path.join(repoRoot, 'notes');
-  const notesFilename = existingConfigFilename(notesDir);
-  if (notesFilename) {
-    const notesConfigPath = path.join(notesDir, notesFilename);
-    const content = fs.readFileSync(notesConfigPath, 'utf-8');
-    const parsed = parseWorkspaceConfig(content);
+export function parseWorkspaceConfigAt(repoRoot: string, relativeFile: string, content: string): WorkspaceConfig {
+  const parsed = parseWorkspaceConfig(content);
+  if (relativeFile.startsWith('notes/')) {
     // Normalize notebook roots to repository-relative paths
     parsed.notebooks = parsed.notebooks.map((nb) => {
       let root = nb.root.replace(/\\/g, '/');
@@ -329,7 +325,22 @@ export function loadWorkspaceConfig(repoRoot: string): WorkspaceConfig | null {
       }
       return { ...nb, root };
     });
-    return attachTsconfigPaths(parsed, repoRoot);
+  }
+  return attachTsconfigPaths(parsed, repoRoot);
+}
+
+/**
+ * Loads and validates the workspace manifest from a repository notes root or root directory.
+ * Accepts the standard `.mygitnotes.yaml` name and falls back to the legacy `.github-notes.yaml` name.
+ */
+export function loadWorkspaceConfig(repoRoot: string): WorkspaceConfig | null {
+  // 1. Primary: Look in notes/ root directly (e.g. notes/.mygitnotes.yaml)
+  const notesDir = path.join(repoRoot, 'notes');
+  const notesFilename = existingConfigFilename(notesDir);
+  if (notesFilename) {
+    const notesConfigPath = path.join(notesDir, notesFilename);
+    const content = fs.readFileSync(notesConfigPath, 'utf-8');
+    return parseWorkspaceConfigAt(repoRoot, path.posix.join('notes', notesFilename), content);
   }
 
   // 2. Secondary: Look in repository root (.mygitnotes.yaml)

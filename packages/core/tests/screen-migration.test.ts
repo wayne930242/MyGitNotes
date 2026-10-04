@@ -104,3 +104,61 @@ describe('migrateWorkspace with a Screen file', () => {
     expect(fs.existsSync(path.join(root, 'notes/a/reading-list.compilation.yml'))).toBe(true);
   });
 });
+
+describe('migrateWorkspace edge paths', () => {
+  const taggedLane = { version: 2, rows: [{ id: 'tagged', notebookId: 'a', kind: 'dynamic', name: 'Tagged', view: 'small', source: { kind: 'tag', tag: 'clue', notebookId: 'a' } }] };
+  it('places compilations inside the notebook when the manifest sits in the notes/ tier', () => {
+    const root = temp();
+    write(root, 'notes/.mygitnotes.yaml', manifest(2).replaceAll('root: notes/', 'root: '));
+    write(root, 'notes/a/one.md', '# One\n');
+    write(root, '.github-notes-screen.yaml', YAML.stringify(taggedLane));
+    const result = migrateWorkspace(root);
+    expect(result.repositories[0].touched).toContain('notes/a/tagged.compilation.yml');
+    expect(fs.existsSync(path.join(root, 'notes/a/tagged.compilation.yml'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'a'))).toBe(false);
+    expect(result.repositories[0].touched).toContain('notes/.mygitnotes.yaml');
+  });
+  it('drops Focus lane tabs of a repository that has no Screen file', () => {
+    const root = temp();
+    write(root, '.mygitnotes.yaml', manifest(2));
+    write(root, '.github-notes-focus.yaml', YAML.stringify(focusWithLanes));
+    const result = migrateWorkspace(root);
+    const focus = FocusPageSchema.parse(YAML.parse(read(root, '.github-notes-focus.yaml')));
+    expect(focus.focuses[0].panes.flatMap(pane => pane.tabs).every(tab => tab.kind === 'note')).toBe(true);
+    expect(result.repositories[0]).toMatchObject({ compilations: 0, droppedFocusTabs: 3 });
+    expect(result.repositories[0].touched).toEqual(['.github-notes-focus.yaml', '.mygitnotes.yaml']);
+  });
+  it('commits the manifest bump on its own and refuses a manifest with uncommitted edits', () => {
+    const root = temp();
+    write(root, '.mygitnotes.yaml', manifest(2));
+    expect(() => migrateWorkspace(root, { dirtyFiles: (_root, files) => files.filter(file => file === '.mygitnotes.yaml') })).toThrow(/uncommitted changes in files the migration touches: \.mygitnotes\.yaml\./);
+    expect(read(root, '.mygitnotes.yaml')).toMatch(/^schema_version: 2$/m);
+    const result = migrateWorkspace(root);
+    expect(result.repositories).toEqual([{ root, touched: ['.mygitnotes.yaml'], compilations: 0, droppedFocusTabs: 0 }]);
+  });
+  it('reuses the files an interrupted run already wrote instead of suffixing them', () => {
+    const root = temp();
+    write(root, '.mygitnotes.yaml', manifest(2));
+    write(root, '.github-notes-screen.yaml', YAML.stringify(taggedLane));
+    const first = migrateWorkspace(root);
+    const lanePaths = first.repositories[0].touched.filter(file => file.endsWith('.compilation.yml'));
+    expect(lanePaths).toEqual(['notes/a/tagged.compilation.yml']);
+    // The run stopped before it deleted the Screen file and bumped the manifest.
+    write(root, '.github-notes-screen.yaml', YAML.stringify(taggedLane));
+    write(root, '.mygitnotes.yaml', manifest(2));
+    const asked: string[] = [];
+    const second = migrateWorkspace(root, { dirtyFiles: (_root, files) => (asked.push(...files), []) });
+    expect(second.repositories[0].touched.filter(file => file.endsWith('.compilation.yml'))).toEqual(lanePaths);
+    expect(asked).not.toContain('notes/a/tagged.compilation.yml');
+    expect(fs.existsSync(path.join(root, 'notes/a/tagged-2.compilation.yml'))).toBe(false);
+  });
+  it('treats a file with another id at the planned path as taken', () => {
+    const root = temp();
+    write(root, '.mygitnotes.yaml', manifest(2));
+    write(root, 'notes/a/tagged.compilation.yml', 'version: 1\nid: someone-else\ntitle: Other\narrangement: lane\nsource:\n  kind: tag\n  tag: x\n');
+    write(root, '.github-notes-screen.yaml', YAML.stringify(taggedLane));
+    const result = migrateWorkspace(root);
+    expect(result.repositories[0].touched).toContain('notes/a/tagged-2.compilation.yml');
+    expect(read(root, 'notes/a/tagged.compilation.yml')).toContain('someone-else');
+  });
+});

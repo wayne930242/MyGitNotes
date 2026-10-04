@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
-import { loadWorkspaceConfig, parseWorkspaceConfig, resolveWorkspaceConfigPath, SUPPORTED_SCHEMA_VERSION } from './config.js';
+import { loadWorkspaceConfig, parseWorkspaceConfigAt, resolveWorkspaceConfigPath, SUPPORTED_SCHEMA_VERSION } from './config.js';
 import { scanNotebookNotes } from './note-service.js';
 import { applyScreenMigration, planScreenMigration, ScreenMigrationError, type ScreenMigrationPlan } from './screen-migration.js';
 import type { NotebookConfig, WorkspaceConfig } from './types.js';
@@ -78,11 +78,12 @@ export function migrateWorkspace(root: string, options: MigrationOptions = {}): 
     map.items.unshift(...map.items.splice(index, 1));
     bumped = document.toString();
   }
-  const config = bumped === undefined ? loadWorkspaceConfig(root) : parseWorkspaceConfig(bumped);
+  const config = bumped === undefined ? loadWorkspaceConfig(root) : parseWorkspaceConfigAt(root, path.relative(root, file).split(path.sep).join('/'), bumped);
   const dirtyFiles = options.dirtyFiles ?? (() => []);
   // Plan every repository first: a lane that cannot convert, or a worktree with local changes, stops the migration before anything is written.
   const worktrees: MigrationWorktree[] = [{ root, notebooks: (config?.notebooks ?? []).filter(notebook => !notebook.source) }, ...(typeof options.worktrees === 'function' ? (config ? options.worktrees(config) : []) : options.worktrees ?? []).filter(worktree => path.resolve(worktree.root) !== path.resolve(root))];
   const plans: { worktree: MigrationWorktree; plan: ScreenMigrationPlan; }[] = [];
+  const manifest = path.relative(root, file).split(path.sep).join('/');
   for (const worktree of worktrees) {
     let plan: ScreenMigrationPlan | null;
     try {
@@ -91,8 +92,14 @@ export function migrateWorkspace(root: string, options: MigrationOptions = {}): 
       if (error instanceof ScreenMigrationError) throw new WorkspaceCompatibilityError(error.message);
       throw error;
     }
+    const isHome = path.resolve(worktree.root) === path.resolve(root);
+    // The home repository always has a plan when the manifest is bumped, so the bump is committed with the rest.
+    if (!plan && bumped !== undefined && isHome) plan = { lanes: [], touched: [] };
     if (!plan) continue;
-    const dirty = dirtyFiles(worktree.root, plan.touched);
+    if (bumped !== undefined && isHome) plan.touched.push(manifest);
+    // Files an interrupted earlier run already wrote with the planned content are not local changes to lose.
+    const written = new Set(plan.lanes.filter(lane => lane.written).map(lane => lane.path));
+    const dirty = dirtyFiles(worktree.root, plan.touched.filter(touched => !written.has(touched)));
     if (dirty.length) throw new WorkspaceCompatibilityError(`${worktree.root} has uncommitted changes in files the migration touches: ${dirty.join(', ')}. Commit them (a file Git has never seen counts too) or discard them, then run \`pnpm migrate-workspace\` again.`);
     plans.push({ worktree, plan });
   }
@@ -104,8 +111,6 @@ export function migrateWorkspace(root: string, options: MigrationOptions = {}): 
   if (bumped !== undefined) {
     fs.writeFileSync(file, bumped);
     migrated = true;
-    const home = repositories.find(repository => path.resolve(repository.root) === path.resolve(root));
-    if (home) home.touched.push(path.relative(root, file));
   }
   let notesMissingTimestamps = 0;
   // Notebooks in their own repositories are counted by the backfill in their worktrees.

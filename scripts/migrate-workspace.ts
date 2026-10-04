@@ -1,11 +1,17 @@
 import { execFileSync } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
 import { loadRepositoryMappings, mapsRepository, migrateWorkspace, type MigrationWorktree, type WorkspaceConfig } from '../packages/core/src/index.js';
 import { resolveWorkspaceRoot } from './lib/workspace-root.js';
 
-const isGitWorktree = (root: string) => fs.existsSync(path.join(root, '.git'));
-const git = (root: string, args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+const git = (root: string, args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+/** True inside a Git worktree, a workspace in a subdirectory of one included. */
+const isGitWorktree = (root: string) => {
+  try {
+    return git(root, ['rev-parse', '--is-inside-work-tree']).trim() === 'true';
+  } catch {
+    return false;
+  }
+};
+const MESSAGE = 'chore: migrate Screen lanes to compilations';
 
 /** The files of `files` with uncommitted changes, untracked ones included. A directory that is not a Git worktree has none to lose. */
 function dirtyFiles(root: string, files: string[]): string[] {
@@ -34,15 +40,27 @@ try {
     return found;
   };
   const { migrated, notesMissingTimestamps, repositories } = migrateWorkspace(root, { worktrees, dirtyFiles });
+  const uncommitted: { root: string; touched: string[]; reason: string; }[] = [];
   for (const repository of repositories) {
     const detail = `${repository.compilations} compilation(s)${repository.droppedFocusTabs ? `, ${repository.droppedFocusTabs} Focus tab(s) of deleted lanes dropped` : ''}`;
     if (!isGitWorktree(repository.root)) {
       console.log(`[migrate-workspace] ${repository.root}: ${detail}. Not a Git worktree, so nothing was committed.`);
       continue;
     }
-    git(repository.root, ['add', '--all', '--', ...repository.touched]);
-    git(repository.root, ['commit', '-m', 'chore: migrate Screen lanes to compilations', '--only', '--', ...repository.touched]);
-    console.log(`[migrate-workspace] ${repository.root}: ${detail}. Committed.`);
+    try {
+      git(repository.root, ['add', '--all', '--', ...repository.touched]);
+      git(repository.root, ['commit', '-m', MESSAGE, '--only', '--', ...repository.touched]);
+      console.log(`[migrate-workspace] ${repository.root}: ${detail}. Committed.`);
+    } catch (error) {
+      uncommitted.push({ root: repository.root, touched: repository.touched, reason: String((error as { stderr?: unknown; }).stderr ?? (error as Error).message).trim().split('\n')[0] });
+    }
+  }
+  if (uncommitted.length) {
+    // The files are already written and the Screen file is gone, so a re-run cannot see them: the user has to commit these.
+    for (const { root: failed, touched, reason } of uncommitted) {
+      console.error(`[migrate-workspace] ${failed}: the migration was written but not committed (${reason}). Commit it yourself:\n  git -C '${failed}' add --all -- ${touched.map(file => `'${file}'`).join(' ')} && git -C '${failed}' commit -m '${MESSAGE}' --only -- ${touched.map(file => `'${file}'`).join(' ')}`);
+    }
+    process.exit(1);
   }
   console.log(migrated ? `[migrate-workspace] Migrated ${root}.` : `[migrate-workspace] ${root} is already current.`);
   if (notesMissingTimestamps > 0) console.log(`[migrate-workspace] ${notesMissingTimestamps} note(s) are missing created/updated. Run \`pnpm backfill-note-timestamps\` and review the diff.`);

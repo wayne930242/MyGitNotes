@@ -75,3 +75,23 @@ it('names a Screen file Git has never seen instead of migrating it, then migrate
   expect(fs.existsSync(path.join(notes, '.github-notes-screen.yaml'))).toBe(false);
   expect(fs.existsSync(path.join(notes, 'notes/a/reading.compilation.yml'))).toBe(true);
 }, 30000);
+
+it('names the files and the commands to commit them when Git refuses the migration commit', () => {
+  const core = temp(), notes = screenWorkspace();
+  const hook = path.join(notes, '.git/hooks/pre-commit');
+  fs.writeFileSync(hook, '#!/bin/sh\necho "hook says no" >&2\nexit 1\n', { mode: 0o755 });
+  let stderr = '';
+  try {
+    run(core, ['--workspace', notes]);
+  } catch (error) {
+    stderr = String((error as { stderr?: unknown; }).stderr);
+  }
+  expect(stderr).toContain('written but not committed');
+  expect(stderr).toContain('hook says no');
+  expect(stderr).toContain(`git -C '${notes}' add --all -- `);
+  expect(stderr).toContain("'notes/a/reading.compilation.yml'");
+  // The migration itself is on disk, so the printed commit is all that is left to do.
+  expect(fs.existsSync(path.join(notes, 'notes/a/reading.compilation.yml'))).toBe(true);
+  expect(fs.existsSync(path.join(notes, '.github-notes-screen.yaml'))).toBe(false);
+  expect(git(notes, ['status', '--porcelain']).trim()).not.toBe('');
+}, 30000);
