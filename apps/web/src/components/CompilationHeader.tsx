@@ -1,10 +1,11 @@
-import { type ReactNode, useState } from 'react';
+import { type ButtonHTMLAttributes, type ReactNode, useState } from 'react';
 import { Brain, ChevronLeft, ChevronRight, Columns2, Columns3, LayoutGrid, Network, Plus, Rows3, SlidersHorizontal, Zap } from 'lucide-react';
 import type { CompilationRow } from '@mygitnotes/core/compilation';
 import { type NotebookFacets, noteQueryStatuses } from '@mygitnotes/core/note-query';
 import type { NotebookConfig } from '../lib/types.js';
 import type { SortConfig } from '../lib/note-sort.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import type { ScrollDirection } from '../lib/use-hold-scroll.js';
 import { Button } from './Button.js';
 import { Select } from './Select.js';
 import './study.css';
@@ -27,13 +28,14 @@ export interface CompilationHeaderProps {
   /** Adds a note to a dynamic compilation's source. */
   onCreateInSource?: () => void;
   /** Scrolls a lane's strip; absent for arrangements that do not scroll sideways. */
-  onScroll?: (direction: number) => void;
+  /** Props for the left and right scroll buttons; absent when the arrangement does not scroll sideways. */
+  scrollButton?: (direction: ScrollDirection) => ButtonHTMLAttributes<HTMLButtonElement>;
   /** View-level actions that follow the others, such as edit, copy and delete. */
   extra?: ReactNode;
 }
 
 /** The compilation's name, source and the controls shared by its arrangements. */
-export function CompilationHeader({ row, count, disabled, readOnly, notebooks, facets, onStudy, onView, onAdd, onSort, onStudyChange, onCreateInSource, onScroll, extra }: CompilationHeaderProps) {
+export function CompilationHeader({ row, count, disabled, readOnly, notebooks, facets, onStudy, onView, onAdd, onSort, onStudyChange, onCreateInSource, scrollButton, extra }: CompilationHeaderProps) {
   const { t } = useTranslation();
   const [queryOpen, setQueryOpen] = useState(false);
   const query = row.study || { filter: 'all' as const, dueFirst: false };
@@ -131,12 +133,12 @@ export function CompilationHeader({ row, count, disabled, readOnly, notebooks, f
               <Plus size={16} />
             </Button>
           ))}
-        {onScroll && (
+        {scrollButton && (
           <>
-            <Button type='button' size='icon' className='screen-lane-scroll' aria-label={`${t('screen.scrollLeft')}: ${row.name}`} onClick={() => onScroll(-1)}>
+            <Button type='button' size='icon' className='screen-lane-scroll' aria-label={`${t('screen.scrollLeft')}: ${row.name}`} {...scrollButton(-1)}>
               <ChevronLeft size={16} />
             </Button>
-            <Button type='button' size='icon' className='screen-lane-scroll' aria-label={`${t('screen.scrollRight')}: ${row.name}`} onClick={() => onScroll(1)}>
+            <Button type='button' size='icon' className='screen-lane-scroll' aria-label={`${t('screen.scrollRight')}: ${row.name}`} {...scrollButton(1)}>
               <ChevronRight size={16} />
             </Button>
           </>
