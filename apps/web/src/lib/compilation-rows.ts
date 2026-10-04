@@ -18,6 +18,8 @@ export function parseCompilationNote(note: Pick<NoteListItem, 'path' | 'notebook
   const base = { path: note.path, notebookId: note.notebookId, title: note.title, content: note.content ?? '' };
   const notebook = notebooks.find(candidate => candidate.id === note.notebookId);
   if (!notebook) return { ...base, error: `Notebook ${note.notebookId} is not configured.` };
+  // A file the catalog marks invalid (a duplicate id, a path outside its notebook) opens to the error, even though its text is readable.
+  if (note.invalid) return { ...base, error: note.invalid };
   if (typeof note.content !== 'string') return { ...base, error: note.invalid };
   try {
     return { ...base, row: compilationRow(parseCompilation(note.content, notebook.root), { notebookId: note.notebookId, path: note.path }) };
