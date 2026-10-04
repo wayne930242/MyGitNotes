@@ -14,7 +14,4 @@
 .note-search-field:focus-within { border-color: var(--color-primary); }
 .note-search-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--color-text); font-size: 0.8125rem; }
 .note-search-toggle, .note-search-close { display: none; }
-.header-new-note-group { display: inline-flex; flex: none; align-items: stretch; gap: 1px; }
-.header-new-note-group .header-new-note { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.header-new-note-group .header-new-menu { width: 28px; border-radius: 0 8px 8px 0; background: var(--color-primary); color: var(--color-on-primary); }
 @media (max-width: 767px) { .note-search-toggle { display: inline-flex; } .note-search-toggle[data-active] { color: var(--color-primary); } .note-toolbar-search { display: none; } .note-toolbar-search[data-open] { position: absolute; z-index: 20; inset: 0; display: flex; flex: none; min-width: 0; padding: 0 6px; background: var(--color-surface); } .note-toolbar-search[data-open] .note-search-field { height: 44px; } .note-toolbar-search[data-open] .note-search-field input { font-size: 16px; } .note-search-close { display: inline-flex; } }

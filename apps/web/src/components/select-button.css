@@ -6,3 +6,6 @@
 .select-button > .ui-button.select-button-trigger { flex: none; margin-left: -1px; padding: 0 6px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .select-button > .ui-button.select-button-trigger > svg { width: 14px; height: 14px; color: var(--color-muted); }
 .select-button[data-active] > .ui-button { background: var(--workspace-selection); }
+/* A primary pair shares one fill, so a faint seam keeps the chevron readable as its own target. */
+.select-button > .ui-button.ui-button-primary.select-button-trigger { border-left-color: color-mix(in srgb, var(--color-on-primary) 35%, var(--color-primary)); }
+.select-button > .ui-button.ui-button-primary.select-button-trigger > svg { color: currentColor; }

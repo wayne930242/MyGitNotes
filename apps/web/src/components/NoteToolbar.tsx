@@ -1,10 +1,10 @@
 import './note-toolbar.css';
 import { type ReactNode, useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Button } from './Button.js';
 import { ChevronDown, Eye, EyeOff, FolderTree, GalleryHorizontalEnd, Kanban, LayoutGrid, LayoutList, ListTree, Plus, Search, X } from 'lucide-react';
 import { WorkspaceSidebarToggle } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
+import { SelectButtonGroup, SelectButtonPrimary, SelectButtonTrigger } from './SelectButton.js';
 import type { SortField, SortOrder } from '../lib/note-sort.js';
 import { ViewMode } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -97,15 +97,15 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
       </div>
       {/* New Note Button */}
       {!readOnly && (
-        <div className='header-new-note-group'>
-          <Button variant='primary' type='button' aria-label={t('header.newNote')} onClick={onOpenNewNoteModal} className='header-new-note'>
-            <Plus className='w-4 h-4' />
+        <SelectButtonGroup>
+          <SelectButtonPrimary aria-label={t('header.newNote')} onClick={onOpenNewNoteModal} className='ui-button-primary header-new-note'>
+            <Plus aria-hidden='true' />
             <span>{t('header.newNote')}</span>
-          </Button>
+          </SelectButtonPrimary>
           <DropdownMenu.Root>
-            <DropdownMenu.Trigger className='ui-icon-button header-new-menu' aria-label={t('header.newMenu')} title={t('header.newMenu')}>
-              <ChevronDown size={16} aria-hidden='true' />
-            </DropdownMenu.Trigger>
+            <SelectButtonTrigger className='ui-button-primary' aria-label={t('header.newMenu')} title={t('header.newMenu')}>
+              <ChevronDown aria-hidden='true' />
+            </SelectButtonTrigger>
             <DropdownMenu.Portal>
               <DropdownMenu.Content className='focus-menu' align='end' sideOffset={4} collisionPadding={8} aria-label={t('header.newMenu')}>
                 <DropdownMenu.Item onSelect={onOpenNewNoteModal}>
@@ -119,7 +119,7 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
               </DropdownMenu.Content>
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
-        </div>
+        </SelectButtonGroup>
       )}
     </div>
   );
