@@ -103,7 +103,7 @@ describe('repositories by path and shared credentials', () => {
 describe('notebook repositories', () => {
   const home = repositoryRef({ type: 'github', repository: 'owner/home', branch: 'main' });
   const trpg = { type: 'github' as const, repository: 'owner/trpg', branch: 'main' };
-  const config: WorkspaceConfig = { schema_version: 2, workspace: { title: 'Test', default_notebook: 'life' }, notebooks: [{ id: 'life', title: 'Life', root: 'notes' }, { id: 'trpg', title: 'TRPG', root: 'notes', source: trpg }, { id: 'also-home', title: 'Also home', root: 'other', source: { type: 'github', repository: 'owner/home', branch: 'main' } }] };
+  const config: WorkspaceConfig = { schema_version: 3, workspace: { title: 'Test', default_notebook: 'life' }, notebooks: [{ id: 'life', title: 'Life', root: 'notes' }, { id: 'trpg', title: 'TRPG', root: 'notes', source: trpg }, { id: 'also-home', title: 'Also home', root: 'other', source: { type: 'github', repository: 'owner/home', branch: 'main' } }] };
   const load = async () => ({ config, revision: 'a'.repeat(40) });
   const open = (openRepository?: (ref: ReturnType<typeof repositoryRef>, scope: () => Promise<WorkspaceConfig>) => Promise<unknown>) => createWorkspaceRepositories<unknown>({ home, openHome: scope => ({ scope }), manifest: () => ({ load, save: vi.fn() }), ...(openRepository ? { openRepository: openRepository as never } : {}) });
 

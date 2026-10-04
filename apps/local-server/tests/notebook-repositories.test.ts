@@ -23,7 +23,7 @@ function worktree(files: Record<string, string>): string {
   return root;
 }
 
-const manifest = `schema_version: 2
+const manifest = `schema_version: 3
 workspace:
   title: Two repositories
   default_notebook: life

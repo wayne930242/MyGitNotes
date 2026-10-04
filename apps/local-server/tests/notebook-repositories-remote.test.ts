@@ -6,7 +6,7 @@ import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
 import { SessionStore } from '../src/auth.js';
 
-const manifest = `schema_version: 2
+const manifest = `schema_version: 3
 workspace:
   title: Hosted
   default_notebook: life

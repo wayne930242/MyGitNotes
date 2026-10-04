@@ -13,7 +13,7 @@ import { githubFixture } from './fixtures/github.js';
 vi.setConfig({ testTimeout: 30000 });
 
 const compilation = (id: string, extra = '', items = '  - { id: i1, kind: note, path: notes/ex/a.md }') => `version: 1\nid: ${id}\ntitle: Title ${id}\narrangement: lane\n${extra}items:\n${items}\n`;
-const manifest = 'schema_version: 2\nworkspace:\n  title: QA\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n  - id: other\n    title: Other\n    root: notes/other\n';
+const manifest = 'schema_version: 3\nworkspace:\n  title: QA\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n  - id: other\n    title: Other\n    root: notes/other\n';
 const query = (overrides: Partial<typeof DEFAULT_NOTE_QUERY> = {}) => ({ ...DEFAULT_NOTE_QUERY, notebookId: 'ex', ...overrides });
 const options = { limit: 50, content: false };
 

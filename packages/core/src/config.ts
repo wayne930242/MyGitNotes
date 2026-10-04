@@ -6,8 +6,8 @@ import { parseSourceConfig, type RemoteSourceConfig, sourceIdentity } from './so
 
 export const WORKSPACE_CONFIG_FILENAME = '.mygitnotes.yaml';
 export const LEGACY_WORKSPACE_CONFIG_FILENAME = '.github-notes.yaml';
-/** The workspace manifest schema this Core reads and writes. Version 2 adds notebook `source`. */
-export const SUPPORTED_SCHEMA_VERSION = 2;
+/** The workspace manifest schema this Core reads and writes. Version 2 adds notebook `source`; version 3 replaces the Screen file with compilation files. */
+export const SUPPORTED_SCHEMA_VERSION = 3;
 
 /** Returns whichever manifest filename exists in `dir` (new name preferred), or null if neither does. */
 function existingConfigFilename(dir: string): string | null {

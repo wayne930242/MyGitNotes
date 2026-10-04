@@ -9,7 +9,7 @@ const a = repositoryRef(home).id;
 const b = repositoryRef(other).id;
 
 function fixture(two = true, otherRoot = 'notes/shared') {
-  const config = { schema_version: 2, workspace: { title: 'Test', default_notebook: 'home' }, notebooks: [{ id: 'home', title: 'Home', root: 'notes/shared' }, ...(two ? [{ id: 'other', title: 'Other', root: otherRoot, source: other }] : [])] } as WorkspaceConfig;
+  const config = { schema_version: 3, workspace: { title: 'Test', default_notebook: 'home' }, notebooks: [{ id: 'home', title: 'Home', root: 'notes/shared' }, ...(two ? [{ id: 'other', title: 'Other', root: otherRoot, source: other }] : [])] } as WorkspaceConfig;
   const heads: Record<string, string> = { [a]: sha('a'), [b]: sha('b') };
   const writes: string[] = [];
   const reader = (id: string, scope: () => Promise<WorkspaceConfig>) =>

@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 it('stdio resolves identical note paths, merges listings, reports both statuses, and commits only the selected notebook', async () => {
-  const home = worktree({ '.mygitnotes.yaml': 'schema_version: 2\nworkspace:\n  title: Test\n  default_notebook: home\nnotebooks:\n  - id: home\n    title: Home\n    root: notes/shared\n  - id: other\n    title: Other\n    root: notes/shared\n    source: { type: github, repository: owner/other }\n', 'notes/shared/note.md': '# Home\n', 'AGENTS.md': '# Home rules\n' });
+  const home = worktree({ '.mygitnotes.yaml': 'schema_version: 3\nworkspace:\n  title: Test\n  default_notebook: home\nnotebooks:\n  - id: home\n    title: Home\n    root: notes/shared\n  - id: other\n    title: Other\n    root: notes/shared\n    source: { type: github, repository: owner/other }\n', 'notes/shared/note.md': '# Home\n', 'AGENTS.md': '# Home rules\n' });
   const other = worktree({ 'notes/shared/note.md': '# Other\n' });
   const source: WorkspaceConfigSource = { mode: 'local', settings: async () => ({ home: repositoryRef({ type: 'local', path: home }), localPath: ref => ref.id === 'github:owner/other@main' ? other : undefined, manifest: inHome => inHome() }) };
   const server = createMCPServer(home, source);

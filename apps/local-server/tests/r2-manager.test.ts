@@ -321,7 +321,7 @@ describe('R2 references across notebook repositories', () => {
     run('config', 'user.email', 'test@example.com');
     run('add', '.');
     run('commit', '-m', 'fixture');
-    fs.writeFileSync(path.join(root, '.github-notes.yaml'), MANIFEST.replace('schema_version: 1', 'schema_version: 2') + '  - id: trpg\n    title: TRPG\n    root: notes/ex\n    source: { type: github, repository: owner/trpg }\n');
+    fs.writeFileSync(path.join(root, '.github-notes.yaml'), MANIFEST.replace('schema_version: 1', 'schema_version: 3') + '  - id: trpg\n    title: TRPG\n    root: notes/ex\n    source: { type: github, repository: owner/trpg }\n');
     fs.writeFileSync(path.join(root, 'mygitnotes.server.yaml'), `repositories:\n  - type: github\n    repository: owner/trpg\n    path: ${second}\n`);
   }
   afterEach(() => {

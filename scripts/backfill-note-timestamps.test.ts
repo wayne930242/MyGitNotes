@@ -70,7 +70,7 @@ describe('backfill-note-timestamps CLI', () => {
       fs.writeFileSync(path.join(second, 'notes/personal/campaign.md'), '# Campaign\n');
       run('add', '.');
       execFileSync('git', ['commit', '-m', 'add campaign'], { cwd: second, env: { ...process.env, GIT_AUTHOR_DATE: '2026-09-20T08:00:00+00:00', GIT_COMMITTER_DATE: '2026-09-20T08:00:00+00:00' } });
-      write('.github-notes.yaml', 'schema_version: 2\nworkspace:\n  title: Personal\n  default_notebook: personal\nnotebooks:\n  - id: personal\n    title: Personal\n    root: notes/personal\n  - id: trpg\n    title: TRPG\n    root: notes/personal\n    source: { type: github, repository: owner/trpg }\n  - id: lost\n    title: Lost\n    root: notes/lost\n    source: { type: github, repository: owner/lost }\n');
+      write('.github-notes.yaml', 'schema_version: 3\nworkspace:\n  title: Personal\n  default_notebook: personal\nnotebooks:\n  - id: personal\n    title: Personal\n    root: notes/personal\n  - id: trpg\n    title: TRPG\n    root: notes/personal\n    source: { type: github, repository: owner/trpg }\n  - id: lost\n    title: Lost\n    root: notes/lost\n    source: { type: github, repository: owner/lost }\n');
       write('mygitnotes.server.yaml', `source:\n  type: local\n  path: .\nrepositories:\n  - type: github\n    repository: owner/trpg\n    path: ${second}\n`);
       const output = backfill();
       expect(parseNoteContent(fs.readFileSync(path.join(second, 'notes/personal/campaign.md'), 'utf8')).metadata.created).toBe('2026-09-20T08:00:00.000Z');

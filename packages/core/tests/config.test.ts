@@ -211,7 +211,7 @@ describe('Notebook source', () => {
     expect(() => parseWorkspaceConfig(manifest(2, `${home}  - id: b\n    title: B\n    root: b\n    source: { type: github, repository: 'not a repo' }\n`))).toThrow(ConfigValidationError);
   });
   it('refuses a schema_version newer than this Core', () => {
-    expect(() => parseWorkspaceConfig(manifest(3, home))).toThrow(/newer Core/);
+    expect(() => parseWorkspaceConfig(manifest(4, home))).toThrow(/newer Core/);
   });
   it('keeps a notebook repository root unprefixed when the manifest lives under notes/', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-source-'));
