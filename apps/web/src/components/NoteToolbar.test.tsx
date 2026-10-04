@@ -46,6 +46,22 @@ it('offers native outline creation in the New menu and hides creation for read-o
   expect(screen.queryByRole('button', { name: '新增選單' })).not.toBeInTheDocument();
 });
 
+it('keeps import/export reachable from the native menu on read-only notebooks without retired Save view', async () => {
+  const open = vi.fn();
+  render(
+    <I18nProvider>
+      <NoteToolbar {...baseProps} readOnly onImportLegacy={open} />
+    </I18nProvider>,
+  );
+  const menu = screen.getByRole('button', { name: '新增選單' });
+  menu.focus();
+  fireEvent.keyDown(menu, { key: 'Enter' });
+  fireEvent.click(await screen.findByRole('menuitem', { name: '匯入舊書籤' }));
+  expect(open).toHaveBeenCalledOnce();
+  expect(screen.queryByText('保存目前檢視')).toBeNull();
+  expect(screen.queryByRole('button', { name: '新增筆記' })).toBeNull();
+});
+
 it('puts the note search in the toolbar and reports each keystroke as the query', () => {
   const changes: string[] = [];
   render(createElement(I18nProvider, null, createElement(NoteToolbar, { ...baseProps, query: 'dragon', onQueryChange: value => changes.push(value) })));

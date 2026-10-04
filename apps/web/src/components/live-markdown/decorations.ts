@@ -15,6 +15,14 @@ import { BulletMarker, DateAdder, ExternalLink, MathFormula, MdxImportWidget, Me
 import { chipEditState } from './chip-editing.js';
 import { mermaidFenceAt } from './mermaid-fence.js';
 
+/** Inline/reference destinations interpret character references once; bare/autolinks do not. */
+function decodeDestinationEntities(href: string): string {
+  return href.replace(/&(?:#[xX][\da-fA-F]{1,6}|#\d{1,7}|[a-zA-Z][a-zA-Z0-9]{1,31});/g, entity => {
+    // Only a single character reference reaches this inert element, never source HTML.
+    return new DOMParser().parseFromString(entity, 'text/html').body.textContent ?? entity;
+  });
+}
+
 export function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string, pageLabel: string, youtubeOwner: string, t: I18nContextValue['t'], notebookId?: string): DecorationSet {
   const marks: Range<Decoration>[] = [];
   const mermaidRanges: { from: number; to: number; }[] = [];
@@ -147,13 +155,15 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
         const url = node.node.getChild('URL');
         if (url) {
           const href = state.sliceDoc(url.from, url.to).replace(/^<|>$/g, '');
-          link(from, to, href);
+          link(from, to, decodeDestinationEntities(href));
           const source = state.sliceDoc(from, to);
           const start = source.indexOf('[') + 1;
           const end = source.indexOf('](', start);
           if (!editing && end >= start) {
             hide(from, from + start);
             hide(from + end, to);
+            // The collapsed link skips child traversal; still hide source escapes in its label.
+            for (const escape of node.node.getChildren('Escape')) if (escape.to <= from + end) hide(escape.from, escape.from + 1);
             return false;
           }
         } else {
@@ -161,10 +171,11 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
           const reference = source.match(/^\[([^\]]+)\](?:\[([^\]]*)\])?$/);
           const target = reference && references[(reference[2] || reference[1]).replace(/\s+/g, ' ').toLowerCase()];
           if (target) {
-            link(from, to, target.href);
+            link(from, to, decodeDestinationEntities(target.href));
             if (!editing) {
               hide(from, from + 1);
               hide(from + 1 + reference![1].length, to);
+              for (const escape of node.node.getChildren('Escape')) if (escape.to <= from + 1 + reference![1].length) hide(escape.from, escape.from + 1);
               return false;
             }
           }

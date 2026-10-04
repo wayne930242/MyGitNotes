@@ -31,7 +31,6 @@ export interface NoteDocumentPanelProps {
   stepFind: (delta: number) => void;
   findInputRef: React.RefObject<HTMLInputElement>;
   outline: OutlineHeading[];
-  onBookmarkHeading?: (from: number) => void;
   /** Frontmatter lines, so a heading is listed by its line in the file rather than in the body. */
   lineNumberOffset: number;
   outlineIndex: number;
@@ -66,7 +65,7 @@ export interface NoteDocumentPanelProps {
 }
 
 /** The zoom/pane editor's document panel: its tab strip and the find, outline, frontmatter, asset and view sections it switches between. */
-export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isViewPanelOpen, isInfoPanelOpen, notePath, content, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, onBookmarkHeading, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, readOnly, beforeFileChange, onFilesChanged }: NoteDocumentPanelProps) {
+export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isViewPanelOpen, isInfoPanelOpen, notePath, content, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, readOnly, beforeFileChange, onFilesChanged }: NoteDocumentPanelProps) {
   const { t } = useTranslation();
 
   const sections = (
@@ -122,31 +121,19 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
             ? (
               <nav aria-label={t('editor.outline')}>
                 {outline.map((heading, index) => (
-                  <div key={`${heading.from}-${index}`} className='bookmark-heading'>
-                    <button
-                      type='button'
-                      key={`${heading.from}-${index}`}
-                      data-outline-index={index}
-                      aria-current={index === outlineIndex ? 'true' : undefined}
-                      style={{ paddingInlineStart: `${12 + (heading.depth - 1) * 14}px` }}
-                      title={heading.label}
-                      onFocus={() => setOutlineIndex(index)}
-                      onClick={() => chooseOutline(index)}
-                    >
-                      <span>{heading.label}</span>
-                      <small>{heading.line + lineNumberOffset}</small>
-                    </button>
-                    {onBookmarkHeading && (
-                      <button
-                        type='button'
-                        className='ui-icon-button'
-                        aria-label={`${t('bookmarks.position')}: ${heading.label}`}
-                        onClick={() => onBookmarkHeading(heading.from)}
-                      >
-                        ☆
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    type='button'
+                    key={`${heading.from}-${index}`}
+                    data-outline-index={index}
+                    aria-current={index === outlineIndex ? 'true' : undefined}
+                    style={{ paddingInlineStart: `${12 + (heading.depth - 1) * 14}px` }}
+                    title={heading.label}
+                    onFocus={() => setOutlineIndex(index)}
+                    onClick={() => chooseOutline(index)}
+                  >
+                    <span>{heading.label}</span>
+                    <small>{heading.line + lineNumberOffset}</small>
+                  </button>
                 ))}
               </nav>
             )

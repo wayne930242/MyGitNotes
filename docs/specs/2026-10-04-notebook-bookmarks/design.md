@@ -356,6 +356,22 @@ The full browser matrix and honest results start in [verification.md](verificati
 
 ## Friction Notes
 
+- Tried: visually inspecting imported numbered/punctuated labels in the native live editor.
+  Found: collapsed links skip syntax-child traversal, leaving literal backslashes visible in imported labels. Hide only the label's existing Escape-node prefixes during collapsed-link decoration; source and active editing remain untouched. Red/green mounted import-link tests cover the original label.
+  Led by: actual desktop screenshot inspection; classification: native display gap, fixed within the existing decoration adapter.
+- Tried: browser file movement with pending retired envelopes using the existing generic pending-draft predicate.
+  Found: movement was blocked correctly but its old error instructed users to commit remote drafts. The legacy guard now raises the explicit recovery message before the generic note-draft hint.
+  Led by: actual mounted application journey; classification: integration wording gap, fixed without putting legacy drafts back in Changes.
+- Tried: stage 5a importer URL escaping with the existing native live-link adapter.
+  Found: Lezer returns raw character references, so `&amp;` was sent literally to navigation. Decode inline/reference destination entities exactly once before the existing safety resolver; leave bare/autolinks unchanged and retain importer escaping. Mounted import-to-activation tests reproduce and close OUTLINE-S5A-R2-F001, including literal entity-looking parameters.
+  Led by: independent parent review; classification: shared semantic boundary gap, fixed without a second renderer or unsafe source HTML parsing.
+- Tried: mounted Radix selector tests using click-only selection and a guessed translated field label.
+  Found: focus plus keyboard selection avoids leftover focus timing, and the native title label is `Note Title`. Use actual native controls and labels rather than mocking a replacement form.
+  Led by: existing UI reuse; classification: test harness gap, corrected in mounted tests.
+- Tried: probing a separate web API client file and a lib-owned live-markdown folder.
+  Found: the shared response helper lives in `lib/api.ts` and live decorations in `components/live-markdown`; no new client or package is needed.
+  Led by: none; classification: discovery gap, corrected at existing seams.
+
 - Tried: task-item re-lexing from F003, then parent F004 unmatched-backtick/inline-tilde LF/CRLF reproductions.
   Found: stripping a checkbox can turn original paragraph text into a code fence and hide live links. Preserve the original block tokens and restore their exact checkbox raw prefix solely for source alignment; do not re-lex task text. This supersedes F003's earlier re-lex implementation rationale below.
   Led by: parent reviewer F004; classification: implementation gap, bounded original-token repair with pure/planner/actual HTTP move regressions.

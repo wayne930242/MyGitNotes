@@ -400,6 +400,7 @@ export abstract class RemoteSource {
     }
     for (const draft of documents) {
       const document = workspaceDocument(draft?.path);
+      if (document?.retired) throw new SourceError('Legacy bookmark authoring is retired. Export or import the saved source into a new outline.', 410);
       if (!document?.scopes.includes('folders')) throw new SourceError('Path is not an allowed workspace resource.', 403);
       const page = document.schema.safeParse(draft.page), base = document.schema.safeParse(draft.base);
       if (!page.success || !base.success) throw new SourceError(`Invalid ${document.label} configuration.`);
@@ -478,6 +479,7 @@ export abstract class RemoteSource {
   }
 
   async saveWorkspaceDocument(document: WorkspaceDocument, content: string, expected: string) {
+    if (document.retired) throw new SourceError('Legacy bookmark authoring is retired. Export or import the saved source into a new outline.', 410);
     const snapshot = await this.getSnapshot(true);
     this.assertMutable(snapshot, expected);
     const current = await this.readDocumentSnapshot(document, snapshot);
@@ -524,14 +526,16 @@ export abstract class RemoteSource {
       const file = change.path;
       const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
       const document = workspaceDocument(file);
+      const relocation = ['move', 'delete', 'remove-directory', 'mv'].includes(operation) && ['files', 'folders'].includes(scope);
+      if (document?.retired && !relocation) throw new SourceError('Legacy bookmark authoring is retired. Export or import the saved source into a new outline.', 410);
       const documentFile = Boolean(document?.scopes.includes(scope));
-      const allowed = documentFile || (scope === 'config' ? MANIFEST_FILES.includes(file) : !['study', 'focus', 'config', 'bookmarks'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_EXTENSIONS.test(file) : scope === 'skills' ? Boolean(skillFile(file, config.notebooks)) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (isNoteFile(file) || path.posix.basename(file) === '_dir.yml'))));
+      const allowed = documentFile || (scope === 'config' ? MANIFEST_FILES.includes(file) : !['study', 'focus', 'config'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_EXTENSIONS.test(file) : scope === 'skills' ? Boolean(skillFile(file, config.notebooks)) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (isNoteFile(file) || path.posix.basename(file) === '_dir.yml'))));
       if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
       if (documentFile) {
         validateWorkspaceDocument(document!, change.content);
         if (document!.validateChange) {
           const current = await this.readDocumentSnapshot(document!, snapshot);
-          await this.validateDocumentChange(document!, current, readWorkspaceDocument(document!, change.content!), config.notebooks, snapshot, ['move', 'delete', 'remove-directory', 'mv'].includes(operation) && ['files', 'folders'].includes(scope));
+          await this.validateDocumentChange(document!, current, readWorkspaceDocument(document!, change.content!), config.notebooks, snapshot, relocation);
         }
       }
       if (snapshot.entries.some(e => (e.path === file || file.startsWith(e.path + '/')) && (e.mode === '120000' || (e.path !== file && e.type !== 'tree')))) throw new SourceError('Path crosses a non-directory or symlink.', 403);

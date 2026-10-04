@@ -7,41 +7,37 @@ import { readWorkspaceDocument, serializeWorkspaceDocument } from '../src/worksp
 const page = { version: 1, notebooks: [{ notebookId: 'ex', groups: [], bookmarks: [{ id: 'a', label: 'Alpha', groupId: null, target: { kind: 'note', path: 'a.md' } }] }] };
 const yaml = serializeWorkspaceDocument(page);
 for (const provider of ['github', 'gitlab'] as const) {
-  describe(`${provider} bookmarks`, () => {
-    const fixture = () => {
+  describe(`${provider} retained legacy bookmarks`, () => {
+    const fixture = (raw = yaml) => {
       if (provider === 'github') {
-        const f = githubFixture();
-        return { reader: f.reader, head: f.head, text: f.text };
+        const f = githubFixture({ [BOOKMARKS_FILE]: raw });
+        return { reader: f.reader, head: f.head, text: f.text, writes: () => f.calls.filter(call => call.method === 'POST' || call.method === 'PATCH').length };
       }
-      const f = gitlabFixture();
-      return { reader: () => openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'token', f.request).reader, head: () => f.head, text: (file: string) => f.files.get(file) };
+      const f = gitlabFixture(undefined, { [BOOKMARKS_FILE]: raw });
+      return { reader: () => openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'token', f.request).reader, head: () => f.head, text: (file: string) => f.files.get(file), writes: () => f.writes };
     };
-    it('persists a document atomically and rejects stale writers and arbitrary-note document scope', async () => {
-      const f = fixture(), reader = f.reader();
-      const before = await reader.getSnapshot();
-      const saved = await reader.saveWorkspaceDocument(BOOKMARKS_DOCUMENT, yaml, before.sha);
-      expect(saved.revision).toBe(f.head());
+    it('preserves read compatibility and rejects document saves and normal Changes', async () => {
+      const f = fixture(), head = f.head(), writes = f.writes();
       expect(readWorkspaceDocument(BOOKMARKS_DOCUMENT, f.text(BOOKMARKS_FILE)!)).toEqual(page);
-      await expect(f.reader().saveWorkspaceDocument(BOOKMARKS_DOCUMENT, yaml, before.sha)).rejects.toMatchObject({ status: 409 });
-      await expect(f.reader().commitChanges([{ path: 'notes/ex/a.md', content: 'overwrite' }], f.head(), 'save', 'bookmarks')).rejects.toMatchObject({ status: 403 });
+      await expect(f.reader().saveWorkspaceDocument(BOOKMARKS_DOCUMENT, yaml, head)).rejects.toMatchObject({ status: 410 });
+      await expect(f.reader().commitNotes([], head, 'docs: retired', [{ path: BOOKMARKS_FILE, page, base: page }])).rejects.toMatchObject({ status: 410 });
+      for (const scope of ['notes', 'files', 'folders', 'config'] as const) await expect(f.reader().commitChanges([{ path: BOOKMARKS_FILE, content: yaml }], head, 'update', scope)).rejects.toMatchObject({ status: 410 });
+      expect(f.head()).toBe(head);
+      expect(f.writes()).toBe(writes);
+      expect(f.text(BOOKMARKS_FILE)).toBe(yaml);
     });
-    it('joins Changes with a paired base and rejects mismatched drafts', async () => {
-      const f = fixture();
-      await f.reader().commitNotes([], f.head(), 'docs: bookmarks', [{ path: BOOKMARKS_FILE, page, base: BOOKMARKS_DOCUMENT.empty() }]);
-      await expect(f.reader().commitNotes([], f.head(), 'docs: stale', [{ path: BOOKMARKS_FILE, page: BOOKMARKS_DOCUMENT.empty(), base: BOOKMARKS_DOCUMENT.empty() }])).rejects.toMatchObject({ status: 409 });
-      expect(readWorkspaceDocument(BOOKMARKS_DOCUMENT, f.text(BOOKMARKS_FILE)!)).toEqual(page);
+    it('refuses replacement of unsupported existing data without a provider write', async () => {
+      const raw = 'version: 8\nnotebooks: []\n', f = fixture(raw), writes = f.writes();
+      await expect(f.reader().saveWorkspaceDocument(BOOKMARKS_DOCUMENT, yaml, f.head())).rejects.toMatchObject({ status: 410 });
+      expect(f.text(BOOKMARKS_FILE)).toBe(raw);
+      expect(f.writes()).toBe(writes);
     });
   });
 }
-it('refuses unsupported existing data instead of replacing it', async () => {
-  const f = githubFixture({ [BOOKMARKS_FILE]: 'version: 8\nnotebooks: []\n' });
-  await expect(f.reader().saveWorkspaceDocument(BOOKMARKS_DOCUMENT, yaml, f.head())).rejects.toMatchObject({ status: 422 });
-  expect(f.text(BOOKMARKS_FILE)).toContain('version: 8');
-});
-it('GitLab read-only credentials cannot write bookmarks', async () => {
+it('GitLab read-only credentials cannot revive legacy authoring', async () => {
   const f = gitlabFixture();
   f.readOnly();
   const reader = openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'token', f.request).reader;
-  await expect(reader.saveWorkspaceDocument(BOOKMARKS_DOCUMENT, yaml, f.head)).rejects.toMatchObject({ status: 403 });
+  await expect(reader.saveWorkspaceDocument(BOOKMARKS_DOCUMENT, yaml, f.head)).rejects.toMatchObject({ status: 410 });
   expect(f.writes).toBe(0);
 });

@@ -5,7 +5,7 @@ import { STUDY_DOCUMENT } from './study.js';
 import { FOCUS_DOCUMENT } from './focus-page.js';
 import { BOOKMARKS_DOCUMENT } from './bookmarks.js';
 
-export type CommitScope = 'notes' | 'assets' | 'agents' | 'skills' | 'folders' | 'study' | 'study-transition' | 'files' | 'focus' | 'config' | 'bookmarks';
+export type CommitScope = 'notes' | 'assets' | 'agents' | 'skills' | 'folders' | 'study' | 'study-transition' | 'files' | 'focus' | 'config';
 
 /** A Git-tracked YAML file at the workspace root that the app reads and writes as a whole. */
 export interface WorkspaceDocument<T = unknown> {
@@ -15,6 +15,8 @@ export interface WorkspaceDocument<T = unknown> {
   maxBytes: number;
   /** Commit scopes that may write this file. */
   scopes: readonly CommitScope[];
+  /** Retained metadata may only be rewritten by trusted relocation operations. */
+  retired?: boolean;
   schema: ZodType<T, ZodTypeDef, unknown>;
   /** Accepts every stored version without migrating it. */
   fileSchema: ZodType<unknown, ZodTypeDef, unknown>;

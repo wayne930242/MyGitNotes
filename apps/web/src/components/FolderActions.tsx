@@ -5,11 +5,11 @@ import { useTranslation } from '../lib/i18n/index.js';
 
 export type FolderAction = 'browse' | 'move' | 'delete';
 
-export function FolderActions({ title, disabled, onAction, onBookmark }: { title: string; disabled: boolean; onAction: (action: FolderAction) => void; onBookmark?: () => void; }) {
+export function FolderActions({ title, disabled, onAction }: { title: string; disabled: boolean; onAction: (action: FolderAction) => void; }) {
   const { t } = useTranslation();
   const trigger = useRef<HTMLButtonElement>(null);
   const [portal, setPortal] = useState<HTMLElement>();
-  const pendingAction = useRef<FolderAction | 'bookmark'>();
+  const pendingAction = useRef<FolderAction>();
   return (
     <DropdownMenu.Root
       onOpenChange={open => {
@@ -34,20 +34,10 @@ export function FolderActions({ title, disabled, onAction, onBookmark }: { title
               pendingAction.current = undefined;
               // The new dialog captures this trigger as its return-focus target, not a removed menu item.
               trigger.current?.focus();
-              if (action === 'bookmark') onBookmark?.();
-              else onAction(action);
+              onAction(action);
             }
           }}
         >
-          {onBookmark && (
-            <DropdownMenu.Item
-              onSelect={() => {
-                pendingAction.current = 'bookmark';
-              }}
-            >
-              {t('bookmarks.add')}
-            </DropdownMenu.Item>
-          )}
           {(['delete', 'move', 'browse'] as const).map(action => (
             <DropdownMenu.Item
               key={action}

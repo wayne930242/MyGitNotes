@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { RepositoryId } from '@mygitnotes/core/repository';
 import { useFocusPage } from './use-focus-page.js';
-import { useBookmarks } from './use-bookmarks.js';
+import { legacyBookmarkRecoveries } from './legacy-bookmark-recovery.js';
+import { useTranslation } from './i18n/index.js';
 import { pendingDocumentDrafts } from './use-workspace-document.js';
 import { WORKSPACE_DOCUMENT_CLIENTS } from './workspace-document-clients.js';
 import { AssetItem, FolderItem, GitStatus, NoteItem, WorkspaceConfig } from './types.js';
@@ -24,6 +25,7 @@ export interface UseWorkspaceSyncOptions {
 
 export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const { routeNotebook, onStageNote } = options;
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
@@ -89,7 +91,10 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     setWorkingNotes(previous => ({ ...previous, [repository.id]: entries }));
   };
   /** Whether any repository holds staged drafts or unsaved editor drafts. */
-  const hasPendingDrafts = () => available.some(repository => Object.keys(readWorkingNotes(draftScope(repository))).length || listLocalDrafts(draftScope(repository)).length) || pendingDocumentDrafts(WORKSPACE_DOCUMENT_CLIENTS, available.filter(repository => repository.write).map(repository => repository.id)).length > 0;
+  const hasPendingDrafts = () => {
+    if (legacyBookmarkRecoveries(repositories.map(repository => repository.id)).length > 0) throw new Error(t('legacyOutline.blocker'));
+    return available.some(repository => Object.keys(readWorkingNotes(draftScope(repository))).length || listLocalDrafts(draftScope(repository)).length) || pendingDocumentDrafts(WORKSPACE_DOCUMENT_CLIENTS, available.filter(repository => repository.write).map(repository => repository.id)).length > 0;
+  };
 
   // Workspace documents live in each notebook repository; the open notebook's repository serves Screen and Focus.
   const documentRepository = repositoryFor(selectedNotebookId);
@@ -99,16 +104,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   };
   const focus = useFocusPage(documentRepositoryId, refreshGitStatus, remote, Boolean(config && sourceId));
 
-  const bookmarks = useBookmarks(
-    documentRepositoryId,
-    () => {
-      refreshGitStatus();
-      void queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
-    },
-    remote,
-    Boolean(config && sourceId),
-  );
-  const documents = [focus, bookmarks];
+  const documents = [focus];
   // Remote drafts wait in Changes until committed, whichever notebook is open; local ones autosave to the working tree.
   const pendingDocuments = remote ? pendingDocumentDrafts(WORKSPACE_DOCUMENT_CLIENTS, repositories.filter(repository => repository.write).map(repository => repository.id)) : [];
   const writable = repositories.filter(repository => repository.write).map(repository => repository.id).join('\n');
@@ -220,5 +216,5 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return note;
   };
 
-  return { selectedNotebookId, folders, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, bookmarks, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
+  return { selectedNotebookId, folders, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
 }

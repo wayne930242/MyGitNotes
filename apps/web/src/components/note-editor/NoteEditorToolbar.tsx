@@ -28,7 +28,6 @@ interface NoteEditorToolbarProps {
   onClose?: () => void;
   onAddToFocus?: () => void;
   onAddToOutline?: () => void;
-  onBookmarkPosition?: () => void;
 }
 
 /** Reopens the section the panel showed last; an outline falls back to find for a note that is not Markdown. */
@@ -66,7 +65,7 @@ function NoteZoomHeading({ note, session, onRefresh, onClose }: Pick<NoteEditorT
 }
 
 /** The zoom and pane editor's top bar: the zoom title, then save, mode, line number, export, Focus, formatting toolbar and panel actions. */
-export function NoteEditorToolbar({ frame, note, session, docPanel, isMarkdown, autoSave, readOnly, editorMode, setEditorMode, showLineNumbers, toggleLineNumbers, showFormatToolbar, toggleFormatToolbar, onRefresh, onClose, onAddToFocus, onAddToOutline, onBookmarkPosition }: NoteEditorToolbarProps) {
+export function NoteEditorToolbar({ frame, note, session, docPanel, isMarkdown, autoSave, readOnly, editorMode, setEditorMode, showLineNumbers, toggleLineNumbers, showFormatToolbar, toggleFormatToolbar, onRefresh, onClose, onAddToFocus, onAddToOutline }: NoteEditorToolbarProps) {
   const { t } = useTranslation();
   const zoom = frame === 'zoom';
   return (
@@ -88,7 +87,6 @@ export function NoteEditorToolbar({ frame, note, session, docPanel, isMarkdown, 
             <ListTree aria-hidden='true' />
           </button>
         )}
-        {onBookmarkPosition && <button type='button' className='ui-icon-button toolbar-icon-button' aria-label={t('bookmarks.position')} title={t('bookmarks.position')} onPointerDown={event => event.preventDefault()} onClick={onBookmarkPosition}>⌖</button>}
         <NoteExportMenu className='ui-icon-button toolbar-icon-button' path={note.path} notebookId={note.notebookId} title={session.title} content={session.content} copyState={session.copyState} onCopy={session.copyNote} />
         {onAddToFocus && (
           <button type='button' aria-label={t('focus.addTo')} title={t('focus.addTo')} onClick={onAddToFocus} className='ui-icon-button toolbar-icon-button'>

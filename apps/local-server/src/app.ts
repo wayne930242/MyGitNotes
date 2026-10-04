@@ -10,7 +10,6 @@ import { createLocalApp } from './local-app.js';
 import { createAuth } from './auth.js';
 import { asLocal, asRemote, eachRepository, namedRemote, notebookRepository, noteRepository, type RemoteHandle, remoteHome, repositoryOrHome, requestCatalog, requestWorkspace, workspaceOf } from './request-workspace.js';
 import { createStudyRouter } from './study.js';
-import { createBookmarksResolver } from './bookmarks.js';
 import { createOutlineImportRouter } from './outline-import.js';
 import { createWorkspaceDocumentRouter } from './workspace-document.js';
 import { createFolderManagerRouter } from './folder-manager.js';
@@ -79,7 +78,7 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
   app.use('/api/study', createStudyRouter());
   app.use('/api/focus-page', createWorkspaceDocumentRouter(FOCUS_DOCUMENT));
   app.use('/api/outline-import', createOutlineImportRouter());
-  app.use('/api/bookmarks/resolve', createBookmarksResolver());
+  app.use('/api/bookmarks/resolve', (_req, res) => res.status(410).json({ code: 'legacy-authoring-retired', error: 'Legacy bookmark resolution is retired. Use the saved-source outline import preview.' }));
   app.use('/api/bookmarks', createWorkspaceDocumentRouter(BOOKMARKS_DOCUMENT));
   app.use('/api/folder-manager', createFolderManagerRouter());
   if (local) {

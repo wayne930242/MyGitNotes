@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { BOOKMARKS_FILE, repositoryRef, type WorkspaceConfigSource } from '@mygitnotes/core';
+import { BOOKMARKS_FILE, repositoryRef, serializeWorkspaceDocument, type WorkspaceConfigSource } from '@mygitnotes/core';
 import { createApp } from '../src/app.js';
 
 /** A worktree on main with the given files committed. */
@@ -118,12 +118,12 @@ describe('bookmarks in distinct notebook repositories', () => {
     const empty = (await get(`/api/bookmarks?repository=${encodeURIComponent(repository)}`)).body;
     const page = { version: 1, notebooks: [{ notebookId: 'trpg', groups: [], bookmarks: [{ id: 'note', label: 'TRPG', groupId: null, target: { kind: 'note', path: 'note.md' } }] }] };
     const save = (page: unknown, revision: string) => fetch(`${base}/api/bookmarks`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, page, revision }) });
-    const saved = await save(page, empty.revision);
-    expect(saved.status).toBe(200);
+    expect((await save(page, empty.revision)).status).toBe(410);
+    fs.writeFileSync(path.join(trpg, BOOKMARKS_FILE), serializeWorkspaceDocument(page));
     expect(fs.existsSync(path.join(home, BOOKMARKS_FILE))).toBe(false);
-    expect(fs.readFileSync(path.join(trpg, BOOKMARKS_FILE), 'utf8')).toContain('TRPG');
-    const revision = (await saved.json()).revision;
-    expect((await save({ ...page, notebooks: [{ ...page.notebooks[0], notebookId: 'life' }] }, revision)).status).toBe(400);
+    const saved = (await get(`/api/bookmarks?repository=${encodeURIComponent(repository)}`)).body;
+    expect(saved).toMatchObject({ page, writable: false });
+    expect((await save({ ...page, notebooks: [{ ...page.notebooks[0], notebookId: 'life' }] }, saved.revision)).status).toBe(410);
     expect((await get('/api/bookmarks?repository=github%3Aowner%2Flost%40main')).status).toBe(503);
   });
 });

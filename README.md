@@ -81,13 +81,35 @@ Run `pnpm update-core` from a clean `core` checkout; it fast-forwards `core` fro
 - Connect local agents through stdio or remote agents through Streamable HTTP MCP with named read-only or write grants.
 - The Files page manages notebook folders, notes, text files, and attachments: 3 MiB uploads, 5 MiB reads and changes, up to 200 changed files per operation.
 
-## Notebook bookmarks
+## Outline notes
 
-The **Bookmarks** section above each notebook's folders contains shared shortcuts. Use **Add bookmark**, note/outline or folder actions, a compilation's bookmark action, or **Save current view** in Notes. Supported targets are notes, folders, compilations, exact headings/paragraphs, HTTP(S) websites, and the current notebook's query/filters/view/sort. A saved query runs against current content; it does not freeze results. Position creation can use the source selection or a saved-source picker.
+Use **New → New outline** to create a named `*.outline.md` note, or **Add to outline** from a note or compilation to insert its link into an existing or new outline.
+A notebook can contain multiple outlines; find them under **Outlines** and edit them in the normal live/raw note editor.
+Items can contain text, multiple optional Markdown links, annotations and children.
+Enter adds a sibling, Shift+Enter adds an annotation, and Tab/Shift+Tab indent or promote a subtree.
+The live editor also supports same-document drag handles and one-step undo; toolbar indentation works without a hardware keyboard, and Escape then Tab leaves the editor.
+Deleting an item does not delete linked content.
+HTTP(S) links open explicitly with opener isolation, without preview fetching.
 
-Edit a bookmark to change its label, target or group. Drag entries/groups to reorder, or use Move up/down and the group selector with keyboard or touch. Removing a group ungroups its entries; removing a bookmark never deletes content. Equivalent additions offer **Edit existing**. Missing targets remain visible for repair; unresolved positions offer **Open whole note** and re-targeting. Matching is exact text/context, never guessed by line number, and adds no markers to Markdown. Websites open in a separate tab without opener access; they are not fetched or checked in advance.
+Outlines use normal note saves and Changes: local saves write the worktree; remote saves stage browser drafts until you commit.
+Managed moves update relative links together with the moved files, scoped to their repository.
+Read-only and recovery behavior follows the normal editor.
 
-Collections live in each owning repository's optional `.mygitnotes-bookmarks.yaml`. Local **Saved** means written to the worktree: use normal Git Changes to commit/sync. Remote **Pending** is only a browser draft until committed through Changes. Position creation requires saving local note contents first, or explicitly committing a remote staged note first. Read-only users can open bookmarks but cannot edit shared data. Failed/conflicting saves preserve drafts for review; unavailable repositories are not treated as deleted targets. GitNotes moves update references atomically; external moves require re-targeting.
+### Legacy bookmark recovery and import
+
+**New → Import legacy bookmarks** offers exact saved-source export and a read-only preview, including on read-only repositories.
+Choose the repository, notebook, new title/path and entry IDs explicitly.
+Note, compilation and safe web links can become outline items; old groups become text parents.
+Positions, queries and folders remain in the original source with their IDs, labels and reasons shown.
+Converting only the representable subset requires **partial import** acknowledgement.
+Apply creates a new file only: a local worktree file or one remote commit, as the preview states.
+Cancel writes nothing, and uncertain results require inspecting the original destination rather than automatic retry.
+
+The original `.mygitnotes-bookmarks.yaml` is retained and protected; legacy editing and resolver endpoints are retired.
+A workspace notice exposes pending browser envelopes from every configured repository, including unavailable repositories and malformed drafts.
+Export preserves the exact envelope and its original base/revision; discard requires repository-specific confirmation and refuses a changed draft.
+Legacy drafts never autosave, merge into saved source or enter normal Changes.
+They remain a file-move blocker until explicitly discarded.
 
 ## Documentation
 

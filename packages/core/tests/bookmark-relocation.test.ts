@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { parse, stringify } from 'yaml';
-import { BOOKMARKS_DOCUMENT, BOOKMARKS_FILE } from '../src/bookmarks.js';
+import { BOOKMARKS_FILE } from '../src/bookmarks.js';
 import { managedNotebook, planFileChange } from '../src/file-manager.js';
 import { planFolderChange } from '../src/folder-plan.js';
 import { callNoteShell } from '../src/note-shell.js';
@@ -28,16 +28,15 @@ it('rejects corrupt metadata before moving and protects the document through ali
   expect(managedNotebook(BOOKMARKS_FILE, [{ ...notebooks[0], pathAliases: { '@all/*': '*' } }])).toBeUndefined();
 });
 it('GitLab MCP move commits bookmarks with notes and deletion retains the moved references', async () => {
-  const f = gitlabFixture();
-  const reader = () => openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'token', f.request).reader;
   const initial = JSON.parse(JSON.stringify(page).replaceAll('work', 'folder'));
-  await reader().saveWorkspaceDocument(BOOKMARKS_DOCUMENT, stringify(initial), f.head);
+  const f = gitlabFixture(undefined, { [BOOKMARKS_FILE]: stringify(initial) });
+  const reader = () => openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'token', f.request).reader;
   await callNoteShell(reader(), 'mv', { source: 'notes/ex/folder', destination: 'notes/ex/moved', recursive: true, revision: f.head }, true);
   const moved = f.files.get(BOOKMARKS_FILE)!;
   expect(parse(moved).notebooks[0].bookmarks.map((b: { target: { path: string; }; }) => b.target.path)).toEqual(['moved/b.md', 'moved']);
-  expect(f.writes).toBe(2);
+  expect(f.writes).toBe(1);
   const commits = f.calls.filter(call => call.url.endsWith('/repository/commits'));
-  const actions = JSON.parse(String(commits[1].init?.body)).actions;
+  const actions = JSON.parse(String(commits[0].init?.body)).actions;
   expect(actions.map((action: { file_path: string; }) => action.file_path)).toEqual(expect.arrayContaining([BOOKMARKS_FILE, 'notes/ex/folder/b.md', 'notes/ex/moved/b.md']));
   await callNoteShell(reader(), 'rm', { paths: ['notes/ex/moved'], recursive: true, revision: f.head }, true);
   expect(f.files.get(BOOKMARKS_FILE)).toBe(moved);

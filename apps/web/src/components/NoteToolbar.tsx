@@ -33,10 +33,10 @@ interface NoteToolbarProps {
   onToggleFilters: () => void;
   /** The Focus switcher and division picker. */
   focusControls?: ReactNode;
-  onSaveView?: () => void;
+  onImportLegacy?: () => void;
 }
 
-export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, onOpenNewCompilation, onOpenNewOutline, query, onQueryChange, filtersOpen, onToggleFilters, focusControls, onSaveView }: NoteToolbarProps) {
+export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, onOpenNewCompilation, onOpenNewOutline, query, onQueryChange, filtersOpen, onToggleFilters, focusControls, onImportLegacy }: NoteToolbarProps) {
   const { t } = useTranslation();
   // Below 768px the field is hidden behind a button and expands over the toolbar.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -97,34 +97,40 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
           </button>
         ))}
       </div>
-      {onSaveView && <button type='button' className='ui-icon-button' disabled={readOnly} title={t('bookmarks.saveView')} aria-label={t('bookmarks.saveView')} onClick={onSaveView}>☆</button>}
       {/* New Note Button */}
-      {!readOnly && (
+      {(!readOnly || onImportLegacy) && (
         <SelectButtonGroup>
-          <SelectButtonPrimary aria-label={t('header.newNote')} onClick={onOpenNewNoteModal} className='ui-button-primary header-new-note'>
-            <Plus aria-hidden='true' />
-            <span>{t('header.newNote')}</span>
-          </SelectButtonPrimary>
+          {!readOnly && (
+            <SelectButtonPrimary aria-label={t('header.newNote')} onClick={onOpenNewNoteModal} className='ui-button-primary header-new-note'>
+              <Plus aria-hidden='true' />
+              <span>{t('header.newNote')}</span>
+            </SelectButtonPrimary>
+          )}
           <DropdownMenu.Root>
             <SelectButtonTrigger className='ui-button-primary' aria-label={t('header.newMenu')} title={t('header.newMenu')}>
               <ChevronDown aria-hidden='true' />
             </SelectButtonTrigger>
             <DropdownMenu.Portal>
               <DropdownMenu.Content className='focus-menu' align='end' sideOffset={4} collisionPadding={8} aria-label={t('header.newMenu')}>
-                <DropdownMenu.Item onSelect={onOpenNewNoteModal}>
-                  <Plus size={14} aria-hidden='true' />
-                  {t('header.newNote')}
-                </DropdownMenu.Item>
-                {onOpenNewOutline && (
+                {!readOnly && (
+                  <DropdownMenu.Item onSelect={onOpenNewNoteModal}>
+                    <Plus size={14} aria-hidden='true' />
+                    {t('header.newNote')}
+                  </DropdownMenu.Item>
+                )}
+                {!readOnly && onOpenNewOutline && (
                   <DropdownMenu.Item onSelect={onOpenNewOutline}>
                     <ListTree size={14} aria-hidden='true' />
                     {t('outline.new')}
                   </DropdownMenu.Item>
                 )}
-                <DropdownMenu.Item onSelect={onOpenNewCompilation}>
-                  <GalleryHorizontalEnd size={14} aria-hidden='true' />
-                  {t('compilation.new')}
-                </DropdownMenu.Item>
+                {!readOnly && (
+                  <DropdownMenu.Item onSelect={onOpenNewCompilation}>
+                    <GalleryHorizontalEnd size={14} aria-hidden='true' />
+                    {t('compilation.new')}
+                  </DropdownMenu.Item>
+                )}
+                {onImportLegacy && <DropdownMenu.Item onSelect={onImportLegacy}>{t('legacyOutline.title')}</DropdownMenu.Item>}
               </DropdownMenu.Content>
             </DropdownMenu.Portal>
           </DropdownMenu.Root>

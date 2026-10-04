@@ -204,4 +204,4 @@ export function relocateBookmarkPaths(page: BookmarksPage, notebook: BookmarkOwn
   }
   return changed;
 }
-export const BOOKMARKS_DOCUMENT: WorkspaceDocument<BookmarksPage> = { file: BOOKMARKS_FILE, label: 'Bookmarks', maxBytes: BOOKMARKS_MAX_BYTES, scopes: ['bookmarks', 'folders', 'files'], schema: BookmarksPageSchema, fileSchema: BookmarksPageSchema, empty: emptyBookmarksPage, read: value => BookmarksPageSchema.parse(value), relocate: relocateBookmarkPaths, validateChange: validateBookmarksChange, validateReferences: validateBookmarkPositions };
+export const BOOKMARKS_DOCUMENT: WorkspaceDocument<BookmarksPage> = { file: BOOKMARKS_FILE, label: 'Bookmarks', maxBytes: BOOKMARKS_MAX_BYTES, scopes: ['folders', 'files'], retired: true, schema: BookmarksPageSchema, fileSchema: BookmarksPageSchema, empty: emptyBookmarksPage, read: value => BookmarksPageSchema.parse(value), relocate: relocateBookmarkPaths, validateChange: validateBookmarksChange, validateReferences: validateBookmarkPositions };

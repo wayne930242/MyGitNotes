@@ -1,11 +1,10 @@
 import { useNoteSort } from './app/useNoteSort.js';
-import { useBookmarkActions } from './app/useBookmarkActions.js';
+import { LegacyOutlineDialog } from './components/LegacyOutlineDialog.js';
+import { useLegacyBookmarkRecovery } from './lib/use-legacy-bookmark-recovery.js';
+import { Button } from './components/Button.js';
 import { useOutlineActions } from './app/useOutlineActions.js';
 import { OutlineActionsProvider } from './lib/outline-actions.js';
 import { AddToOutlineDialog } from './components/AddToOutlineDialog.js';
-import { BookmarksProvider } from './lib/bookmark-context.js';
-import { BookmarkDialog } from './components/BookmarkDialog.js';
-import { captureBookmarkQuery } from './lib/bookmark-navigation.js';
 import { useFilterSidebar } from './app/useFilterSidebar.js';
 import { useTheme } from './app/useTheme.js';
 import { useFilePanel } from './app/useFilePanel.js';
@@ -111,10 +110,9 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const editorRoute = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
 
-  const { selectedNotebookId, folders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, actionError, setActionError, repoRoot, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus: focusPage, bookmarks, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
+  const { selectedNotebookId, folders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, actionError, setActionError, repoRoot, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
   const refreshDocuments = async () => {
     await Promise.all(documents.map(document => document.refresh()));
-    await queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
   };
   // The selected notebook's repository decides what the browse, create and file views may write.
   const canWrite = canWriteNotebook(selectedNotebookId);
@@ -200,32 +198,8 @@ const AppContent: React.FC = () => {
 
   const { commitWorkingNotes } = useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError });
   const { commitNoteFile } = useQuickNoteCommit({ remote, repositoryFor, refreshWorkspace, commitWorkingNotes });
-  const bookmarkActions = useBookmarkActions({
-    controller: bookmarks,
-    config,
-    folders,
-    repositoryFor,
-    remote,
-    readDraft,
-    selectedNotebookId,
-    refreshKey: JSON.stringify([repositories.map(repository => [repository.id, repository.revision, repository.gitStatus]), gitStatus]),
-    captureView: () => {
-      const owner = config!.notebooks.find(notebook => notebook.id === selectedNotebookId)!;
-      return captureBookmarkQuery({ ...queryState, q: searchQuery, folders: selectedFolders, view: activeTab === 'graph' ? 'graph' : viewMode }, { field: sortField, order: sortOrder }, owner, scopeNotebookId);
-    },
-    sort: { field: sortField, order: sortOrder },
-    view: viewMode,
-    prepareLeave: async () => {
-      if (activeTab === 'agent' && !await agentSystemRef.current?.prepareLeave()) return false;
-      if (activeTab === 'assets' && !await fileManagerRef.current?.prepareLeave()) return false;
-      return editorRegistry.flushEditors();
-    },
-    flushEditors: editorRegistry.flushEditors,
-    commitNoteFile,
-    openNote: handleOpenNote,
-    navigate,
-    onError: setActionError,
-  });
+  const legacyRecovery = useLegacyBookmarkRecovery(repositories.map(repository => repository.id));
+  const [legacyImportOpen, setLegacyImportOpen] = useState(false);
 
   // Assets are scoped to whichever notebook the open note (or the selected browse notebook) belongs to.
   const { handleUploadAsset, handleDeleteAsset, handleMoveAsset } = useAssetOperations({ editingNote, selectedNotebookId, remote, setAssets, setGitStatus });
@@ -405,6 +379,12 @@ const AppContent: React.FC = () => {
                   </div>
                 </div>
               )}
+              {(legacyRecovery.recoveries.length > 0 || legacyRecovery.error) && (
+                <div role='alert' className='shrink-0 px-4 py-2 text-sm bg-surface border-b border-line flex flex-wrap items-center gap-2'>
+                  <span>{legacyRecovery.error || t('legacyOutline.notice')}</span>
+                  <Button onClick={() => setLegacyImportOpen(true)}>{t('legacyOutline.recovery')}</Button>
+                </div>
+              )}
               {/* Top Header */}
               <Header unavailableNotebooks={repositories.filter(repository => repository.unavailable).flatMap(repository => repository.notebooks)} workspaceTitle={config?.workspace.title || 'MyGitNotes'} accountControls={<AuthControls local={!remote} />} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} onSelectNotebook={id => void setSelectedNotebookId(id)} notebookDisabled={loading || resourceNavigationBusy || notebookSwitchBusy} activeTab={activeTab} setActiveTab={setActiveTab} onCreateNote={() => openNewNote()} createNoteDisabled={!canWrite} onOpenCommands={() => setShortcutMode('palette')} navigationDisabled={noteEditorOpen || isCommitOpen} />
               <KeyboardShortcuts
@@ -532,43 +512,7 @@ const AppContent: React.FC = () => {
                         <main className='workspace-main notes-main'>
                           <PageToolbar>
                             {dockToggle}
-                            <NoteToolbar
-                              onSaveView={() => {
-                                try {
-                                  bookmarkActions.value.request({ notebookId: selectedNotebookId, target: { kind: 'query', query: bookmarkActions.value.captureView() }, label: searchQuery || t('bookmarks.saveView') });
-                                } catch {
-                                  setActionError(t('bookmarks.scopeHint'));
-                                }
-                              }}
-                              sortField={sortField}
-                              sortOrder={sortOrder}
-                              onSortChange={handleSortChange}
-                              readOnly={!canWrite}
-                              viewMode={viewMode}
-                              setViewMode={setViewMode}
-                              hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null}
-                              showHidden={showHidden}
-                              descendants={route.descendants}
-                              onShowHiddenChange={value => changeFilters({ showHidden: value })}
-                              onDescendantsChange={value => changeFilters({ descendants: value })}
-                              onOpenNewNoteModal={() => openNewNote()}
-                              onOpenNewOutline={() => openNewNote({ kind: 'outline', folder: selectedFolder ?? '' })}
-                              onOpenNewCompilation={() => setNewCompilationOpen(true)}
-                              query={searchQuery}
-                              onQueryChange={value => changeFilters({ q: value })}
-                              filtersOpen={filtersOpen}
-                              onToggleFilters={() => setFiltersOpen(open => !open)}
-                              focusControls={
-                                <FocusControls
-                                  focus={noteFocus}
-                                  onShow={key => void showFocus(key)}
-                                  onReload={() => void focusPage.reload()}
-                                  browseToggle={focusCapacity === 1
-                                    ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') }
-                                    : undefined}
-                                />
-                              }
-                            />
+                            <NoteToolbar onImportLegacy={() => setLegacyImportOpen(true)} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode} hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null} showHidden={showHidden} descendants={route.descendants} onShowHiddenChange={value => changeFilters({ showHidden: value })} onDescendantsChange={value => changeFilters({ descendants: value })} onOpenNewNoteModal={() => openNewNote()} onOpenNewOutline={() => openNewNote({ kind: 'outline', folder: selectedFolder ?? '' })} onOpenNewCompilation={() => setNewCompilationOpen(true)} query={searchQuery} onQueryChange={value => changeFilters({ q: value })} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(open => !open)} focusControls={<FocusControls focus={noteFocus} onShow={key => void showFocus(key)} onReload={() => void focusPage.reload()} browseToggle={focusCapacity === 1 ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') } : undefined} />} />
                           </PageToolbar>
                           {noteFocus.layout
                             ? (
@@ -754,17 +698,29 @@ const AppContent: React.FC = () => {
             </div>
             <ImageLightbox />
             {outlineActions.dialog && <AddToOutlineDialog key={outlineActions.dialog.id} source={outlineActions.dialog.source} busy={outlineActions.busy} error={outlineActions.error} onChoose={outlineActions.choose} onClose={outlineActions.cancel} />}
-            {bookmarkActions.dialog && <BookmarkDialog key={`${bookmarkActions.dialog.notebook.id}:${bookmarkActions.dialog.request.id ?? JSON.stringify(bookmarkActions.dialog.request.target)}`} {...bookmarkActions.dialog} />}
+            {legacyImportOpen && (
+              <LegacyOutlineDialog
+                repositories={repositories}
+                notebooks={config?.notebooks ?? []}
+                recoveries={legacyRecovery.recoveries}
+                recoveryError={legacyRecovery.error}
+                onRecoveryChanged={legacyRecovery.refresh}
+                onClose={() => setLegacyImportOpen(false)}
+                onCreated={async ref => {
+                  await refreshWorkspace(true);
+                  await refreshNotes();
+                  const note = await readNote(ref.path, ref.notebookId);
+                  if (!await handleOpenNote(note)) throw new Error(t('legacyOutline.openFailed'));
+                  setLegacyImportOpen(false);
+                }}
+              />
+            )}
           </NoteEditingProvider>
         </NoteLocationProvider>
       </WorkspaceLinks>
     </CompilationActionsProvider>
   );
-  return (
-    <BookmarksProvider value={bookmarkActions.value}>
-      <OutlineActionsProvider value={outlineActions.value}>{content}</OutlineActionsProvider>
-    </BookmarksProvider>
-  );
+  return <OutlineActionsProvider value={outlineActions.value}>{content}</OutlineActionsProvider>;
 };
 
 export const App: React.FC = () => {

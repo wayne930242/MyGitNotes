@@ -80,7 +80,7 @@ export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote,
     if (!Object.keys(sent).length && !sentDocuments.length) return [];
     const result = await commitRemoteNotes(repository.id, Object.values(sent).map(entry => ({ path: entry.note.path, content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base })), expected, message, sentDocuments.map(({ path, page, base }) => ({ path, page, base })));
     for (const document of sentDocuments) {
-      if (!settleDocumentDraft(document.client, repository.id, document, result.revision)) setActionError(t('bookmarks.conflict'));
+      if (!settleDocumentDraft(document.client, repository.id, document, result.revision)) setActionError(t('changes.reviewRequired'));
       // The open notebook's document shows the committed page and any edit made meanwhile.
       documents.find(live => live.client === document.client && live.repository === repository.id)?.refresh();
     }
@@ -96,6 +96,7 @@ export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote,
     const repositories = workspace.repositories.filter(repository => !repository.unavailable);
     const groups = new Map<string, CommitGroup>();
     for (const file of files) {
+      if (file.path === '.mygitnotes-bookmarks.yaml') throw new Error('Legacy bookmark drafts require explicit recovery, not a Changes commit.');
       const repository = repositories.find(candidate => candidate.id === file.repository);
       if (!repository) throw new Error('Pending files changed. Review the selection again.');
       const group = groups.get(repository.id) ?? { repository, entries: [], documents: [] };

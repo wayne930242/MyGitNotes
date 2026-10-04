@@ -2,7 +2,6 @@ import './sidebar-filters.css';
 import type { FilterControls } from '../lib/filter-controls.js';
 import type { FolderAction } from './FolderActions.js';
 import { FolderTree } from './FolderTree.js';
-import { BookmarksSection } from './BookmarksSection.js';
 import React, { useEffect, useState } from 'react';
 import { BookOpen, CheckCircle2, CheckSquare, ChevronsDownUp, ChevronsUpDown, Filter, GalleryHorizontalEnd, GitBranch, Library, ListTree, Search, Tag, X } from 'lucide-react';
 import type { NotebookFacets } from '@mygitnotes/core/note-query';
@@ -280,10 +279,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
                     suffix={<span className='sidebar-notebook-count' title={count === null ? t('notes.countsLoading') : t('folder.noteCount', { count })}>{count ?? '—'}</span>}
                     actions={foldersWritable && isCurrentNotebook ? <div className='folder-heading-actions'>{onToggleReorder && <ReorderToggle active={reorder} onToggle={onToggleReorder} />}</div> : undefined}
                   />
-                  <div id={`notebook-folders-${nb.id}`} hidden={!expanded} className='sidebar-notebook-folders'>
-                    <BookmarksSection notebookId={nb.id} />
-                    {hasFolders ? <FolderTree onManageFiles={(path, action) => onManageFiles(nb.id, path, action)} reorder={reorder} onToggleReorder={onToggleReorder} folders={folders} notebookId={nb.id} selected={isCurrentNotebook ? selectedFolder : null} onSelect={folder => selectSingleFolder(nb.id, folder)} allFoldersSelected={value.folders.length === 0} selectedPaths={selectedPaths} onFilterFolder={folder => toggleFolder(nb.id, folder)} touchMultiSelect={touchMultiSelect} onLongPressFolder={folder => enterTouchMultiSelect(nb.id, folder)} writable={foldersWritable && isCurrentNotebook} beforeChange={beforeFolderChange} onChanged={onFoldersChanged} expandCommand={folderExpandCommand} /> : <p className='sidebar-notebook-empty'>{t('folder.subfolderCount', { count: 0 })}</p>}
-                  </div>
+                  <div id={`notebook-folders-${nb.id}`} hidden={!expanded} className='sidebar-notebook-folders'>{hasFolders ? <FolderTree onManageFiles={(path, action) => onManageFiles(nb.id, path, action)} reorder={reorder} onToggleReorder={onToggleReorder} folders={folders} notebookId={nb.id} selected={isCurrentNotebook ? selectedFolder : null} onSelect={folder => selectSingleFolder(nb.id, folder)} allFoldersSelected={value.folders.length === 0} selectedPaths={selectedPaths} onFilterFolder={folder => toggleFolder(nb.id, folder)} touchMultiSelect={touchMultiSelect} onLongPressFolder={folder => enterTouchMultiSelect(nb.id, folder)} writable={foldersWritable && isCurrentNotebook} beforeChange={beforeFolderChange} onChanged={onFoldersChanged} expandCommand={folderExpandCommand} /> : <p className='sidebar-notebook-empty'>{t('folder.subfolderCount', { count: 0 })}</p>}</div>
                   <NavTreeRow
                     icon={<ListTree size={16} />}
                     title={t('outline.list')}

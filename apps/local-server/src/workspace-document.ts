@@ -32,19 +32,20 @@ export function createWorkspaceDocumentRouter(document: WorkspaceDocument): Rout
       if (handle.kind === 'local') {
         const raw = await readLocal(handle.root);
         const { page } = own(decode(raw), config);
-        return res.json({ page, revision: revisionOf(raw), path: file, writable: await getCurrentBranch(handle.root) === 'main', repository: id });
+        return res.json({ page, revision: revisionOf(raw), path: file, writable: !document.retired && await getCurrentBranch(handle.root) === 'main', repository: id });
       }
       const { reader } = handle;
       const snapshot = await reader.getSnapshot();
       const raw = await readSnapshotText(reader, snapshot, file);
       if (raw !== null && Buffer.byteLength(raw) > maxBytes) throw new SourceError(`${label} configuration is too large.`, 413);
       const { page } = own(decode(raw), config);
-      res.json({ page, revision: snapshot.sha, path: file, writable: reader.canWrite(snapshot), repository: id });
+      res.json({ page, revision: snapshot.sha, path: file, writable: !document.retired && reader.canWrite(snapshot), repository: id });
     } catch (error) {
       fail(res, error);
     }
   });
   router.put('/', async (req, res) => {
+    if (document.retired) return res.status(410).json({ code: 'legacy-authoring-retired', error: 'Legacy bookmark authoring is retired. Export or import the saved source into a new outline.' });
     try {
       const value = document.schema.safeParse(req.body?.page);
       const revision = req.body?.revision;

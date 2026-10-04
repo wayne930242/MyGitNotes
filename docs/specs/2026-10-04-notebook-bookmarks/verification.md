@@ -1,7 +1,7 @@
 # Outline notes — verification ledger
 
 Planning baseline: `/home/weihung/github-notes`, clean HEAD `ac26edfe69120fac9eff904b5cb7f53e76966588`.
-Status: implementation in progress; stages 1–4 and task 5a (pure import planner, additive HTTP adapter and unmounted recovery primitives) verified in upstream; recovery/import UI, authoring retirement, task 6 and independent parent browser QA are not complete.
+Status: upstream implementation through tasks 5b–6 is verified and ready for product freeze / independent parent browser QA. Native import/recovery, old-authoring retirement, fixture and documentation are implemented. Independent full-journey review, human appropriateness and parent-owned delivery remain pending.
 Parent review found an outline-only R2 reference-guard gap, adjacent drag duplication, a GFM checkbox relocation blocker and changed task-block semantics; all four are repaired and anchored below.
 No push, deployment or downstream synchronization was performed by this worker.
 The approved model is **Outline note / 大綱筆記**, with general items and optional links, not the earlier specialized bookmark document.
@@ -32,13 +32,13 @@ A planned test or a source reading is not an executed behavior check.
 | R2 General text/link items, children and annotations, non-destructive deletion | Stage 2 source tests and actual browser subtree edits retain annotations/children; final mixed-link/delete lifecycle matrix remains. | unknown |
 | R3 Enter sibling, Shift+Enter annotation, Tab hierarchy in live/raw, undo/IME/accessibility | Stage 2 shared-source and mounted CM/textarea tests plus real raw-browser undo/redo pass for covered scenarios; final integrated matrix and independent parent journey remain. | unknown |
 | R3a Same-document live-editor subtree dragging, drop/nesting feedback, cancel/read-only, undo/redo | Stage 2 real mouse reorder/nesting, full annotation+child preservation, cancel, own-descendant refusal and one-step undo/redo observed; independent parent and real-browser read-only checks remain. | unknown |
-| R4 Existing UI consistency, native save state, no old forms/Saved badge | Stage 3 reuses native New note fields and WorkspaceDialog/Select/Button, with desktop/mobile captures; legacy UI intentionally awaits task 5 retirement and independent visual comparison remains. | unknown |
+| R4 Existing UI consistency, native save state, no old forms/Saved badge | Native New note fields and WorkspaceDialog/Select/Button are reused; task 5b removes legacy forms/sidebar/controller/position/Save view. Worker desktop/mobile comparisons are recorded; independent visual comparison remains. | unknown |
 | R5 Internal/external optional links, opener isolation, no preview fetching, repository scope | Mounted explicit-link/editable-text isolation and no-YouTube-preview checks pass; stage 3 scoped completion and real A/B equal-path insertion isolation pass; full integrated link matrix remains. | unknown |
 | R6 Add current content with filled label/target into selected/new outline | Stage 3 mounted dirty/recovered-body insertion, source-save failure, cancel, read-only, route/repository/root races and failed-navigation tests pass; real existing/new destination and compilation-source browser checks pass; independent parent matrix remains. | unknown |
 | R7 All note lifecycle/local+remote/kind isolation and compilation unaffected | Stage 1 catalog, local create/save/copy/delete/restore, GitHub/GitLab create/save guards and draft facets pass; full move/UI lifecycle remains unverified. | unknown |
 | R8 Atomic rename/move references and non-destructive delete/restore | Stage 4 shared source-preservation, local HTTP stale/rollback, GitHub tree/GitLab actions and single-snapshot shell movement pass; deletion/copy retain references/bytes. Independent final file/folder browser journey remains. | unknown |
-| R9 Explicit partial/non-lossy import, retained source/drafts, invalid/stale/unknown-owner refusal | Task 5a pure/local/GitHub/GitLab and built HTTP import anchors pass; exact-envelope recovery primitives pass. Import/recovery UI, recovery blockers and old-authoring retirement remain unimplemented. | unknown |
-| R10 Disposable independent reality anchor, documentation and delivery gates | Fixture/task/cleanup plan recorded; new integrated QA and parent human acceptance not executed. | unknown |
+| R9 Explicit partial/non-lossy import, retained source/drafts, invalid/stale/unknown-owner refusal | Task 5a pure/local/GitHub/GitLab import anchors and task 5b mounted import/recovery, exact export, stale/cancel/uncertain-outcome, all-repository blockers and retired-write guards pass. Worker actual browser import/recovery/read-only evidence is below; independent parent journey remains. | unknown |
+| R10 Disposable independent reality anchor, documentation and delivery gates | Final built two-repository fixture, normal/read-only/malformed smokes, full automated gates, docs and worker browser checks pass. All owned processes/roots are gone; independent parent QA and delivery remain pending. | unknown |
 
 ## Stage 1 execution checkpoint
 
@@ -353,6 +353,39 @@ No skill, root instruction or architecture was expanded.
 - Detect inactive-repository and malformed legacy browser drafts; exact JSON export, discard confirmation/cancel, unchanged base/revision and no auto-merge/autosave/commit through retired endpoints.
 - Old bookmark PUT and remote Changes document writes are rejected; old sidebar/forms disappear; metadata registry protection and rename handling continue to pass existing HTTP/MCP tests.
 
+## Tasks 5b–6 execution checkpoint
+
+The native New menu now opens saved-source import through WorkspaceDialog/Select/Button. Repository, notebook, title, path and selected legacy IDs are explicit. Preview distinguishes converted entries, ordered text parents, original retained records/reasons, local worktree creation versus one remote commit, and partial acknowledgement. Saved-source export preserves bytes, including non-UTF-8 data; browser recovery export preserves the exact stored envelope. Read-only export/preview remain available. Cancel never applies; a stale result requires a new preview; an uncertain result freezes the original destination for inspection and does not retry automatically. Successful creation refreshes native state and opens the outline.
+
+Recovery discovery covers every configured repository ID, including inactive/unavailable repositories, malformed and empty envelopes. The notice and file-movement blockers retain the original envelope until repository-specific, race-checked explicit discard. The legacy document is absent from normal document clients/Changes. Old sidebar/forms/controller/position/Save view surfaces and resolver are removed; legacy PUT and direct remote authoring are refused, while read compatibility, reserved metadata protection and trusted relocation remain.
+
+### Final automated gates
+
+- `/tmp/outline-stage6-tests-final.log`: **258 files / 1946 tests passed**. The lower total than 5a reflects removal of obsolete legacy-authoring tests and replacement with native recovery/import/retirement tests, not skipped failures.
+- `/tmp/outline-stage6-{build,lint,format,webtypes,servertypes,testtypes}-final.log`: all passed. Existing Vite chunk/dynamic-import warnings remain informational.
+- MCP first used an incorrect nonexistent `packages/mcp/tsconfig.json` path; this invocation failed before compilation. The corrected fresh `packages/mcp-server/tsconfig.json` compiler passed in `/tmp/outline-stage6-mcptypes-final2.log`.
+- `/tmp/outline-stage6-{smoke,variants-smoke}-final.log`: freshly built normal and combined read-only/malformed-source fixture preflights passed. `node --check scripts/qa-bookmarks-fixture.mjs` and `git diff --check` passed.
+- Mounted cases cover cancelled/invalidated previews, stale source responses, uncertain original-destination inspection without retry, read-only apply, exact binary export, empty/malformed/unavailable recovery, discard races and storage failures. Existing document lifecycle/race coverage moved to `workspace-document-races.test.tsx`; guarded relocation and remote commit bounds remain exercised.
+- Reviewer `OUTLINE-S5A-R2-F001`: live Markdown destinations now decode entities once at the semantic boundary, preserving both ordinary query separators and literal entity-looking parameters. Imported live activation tests cover exact query/fragment plus unsafe-scheme refusal. Import escaping remains intact.
+- Worker pixel inspection also exposed visible source escapes in collapsed imported link labels. Existing Escape-node prefixes are now hidden only in the collapsed label; the source is unchanged. `/tmp/outline-stage6-label-red.log` reproduced two failures; `/tmp/outline-stage6-label-green.log` passed **17 tests** across imported links/native outline editor.
+- Active LSP was exercised on 13 production paths: four silent/inconclusive outcomes and three stale core-declaration `retired` errors in the already-running language server. Fresh package build and fresh web/server/MCP/test compiler processes passed; no clean-LSP claim or suppression is made.
+
+### Worker actual browser evidence (not human acceptance)
+
+- First built fixture: monitor 9, PID `1105048`, port `45565`; roots and readiness are in `/tmp/outline-stage6-ready.json`. Browser `outline-stage6`, Chromium PID `1105175`, CDP port `44943`.
+- The native menu/dialog preview, cancellation, explicit partial import and native open were exercised. Exact saved-source export matched fixture bytes; native HTTP readback reported the imported Outline title/kind; original source and same-path B remained unchanged: `/tmp/outline-stage6-browser-readback.json`.
+- Browser recovery exported A's original envelope and B's malformed raw envelope, preserved them on cancel and discarded only the confirmed repository. The active A page still detected B. Desktop/mobile captures include `/tmp/outline-stage6-{new-note-desktop,import-desktop,import-mobile-fields,import-mobile-preview,imported-editor-desktop,recovery-desktop,recovery-mobile-confirm}.png`.
+- Final rebuilt fixture: monitor 14, PID `1136477`, port `32813`, roots `/tmp/mygitnotes-bookmarks-home-C0iWcn` and `/tmp/mygitnotes-bookmarks-other-LmDPHy`, launched with `--read-only`. Browser `outline-stage6-final`, PID `1136661`, CDP port `43657`.
+- B's saved-source preview remained available and apply stayed disabled even after acknowledging partial conversion: `/tmp/outline-stage6-final-readonly-evidence.json` and `...-readonly-preview.png`.
+- Actual native import into A displayed `1. note` / `6. url` without source backslashes. Exact link target and actual clicked `window.open` intent preserved `?x=1&v=2&literal=&amp;#part&two`, `_blank`, `noopener,noreferrer`, with zero requests to the external destination: `/tmp/outline-stage6-final-link-evidence.json`, `...-external-activation.json`, `...-imported-labels.png`.
+- An attempted native file move with both recovery seeds showed the explicit export-for-safekeeping then discard blocker, not an unusable instruction to save a retired draft: `/tmp/outline-stage6-final-blocker-evidence.json`. Final mobile recovery pixels: `...-recovery-mobile.png`.
+- A combined additional final assertion command was blocked by Safety Net because its fixture variable `s.key` matched `secret.ext-pattern.key`; it was not retried or bypassed and is not counted as executed evidence. Prior exact-envelope tests and browser evidence above remain the actual evidence.
+- Both named browsers closed. Monitor 9 was explicitly stopped; monitor 14 had already hit its inactivity deadline and its fixture teardown completed before the explicit stop attempt. Every recorded owned PID/listener/root was confirmed absent: `/tmp/outline-stage6-cleanup1.log`, `/tmp/outline-stage6-cleanup-final.log`. The smoke fixtures also printed their teardown records.
+
+The fixture remains named `scripts/qa-bookmarks-fixture.mjs` consistently for compatibility, but its retired resolver preflight now expects 410. It seeds two same-root repositories, multiple outlines, ordinary notes, compilation, all legacy target kinds, unknown ownership and exact valid/malformed browser envelopes. `--read-only` and `--malformed-source` add bounded variants; `--smoke` exits and cleans. No dependencies were added.
+
+Product changes are ready for independent parent review at the final worker commit. Parent still owns full fresh browser journey, any review corrections, upstream push, downstream synchronization, CI/deployment and shutdown. Historical bookmark human **FAIL** and replacement human **UNKNOWN** are unchanged. No live-provider write, user data/credential change, push or deployment occurred here.
+
 ## Independent parent browser reality anchor
 
 Update the existing disposable fixture to seed two repositories with identical `notes/shared` roots and paths, two outline documents per notebook, one ordinary note, one compilation and a legacy collection containing all target kinds.
@@ -405,8 +438,8 @@ This planning session started no persistent process or browser session and needs
 | --- | --- |
 | Clean specified upstream BASE before planning | Confirmed by Git status/HEAD inspection. |
 | Four-document plan researched against actual source | Complete: exactly four allowed modified files; six ordered implementation tasks; 15 relative evidence links resolve; `git diff --check` clean; HEAD unchanged. |
-| New outline tests/build/types/lint | Stages 1–4 and parent-review fixes passed as recorded above; tasks 5–6 remain. |
-| New browser/UI/real provider evidence | Worker disposable local-browser stages 2–3 recorded above; independent parent, human appropriateness and live-provider evidence not claimed. |
+| New outline tests/build/types/lint | Stages 1–6 and scoped review fixes pass as recorded above; independent parent final QA remains. |
+| New browser/UI/real provider evidence | Worker disposable local-browser stages 2–3 and 5b–6 recorded above; independent parent, human appropriateness and live-provider evidence not claimed. |
 | Human appropriateness of rejected collection | FAIL. |
 | Human appropriateness of replacement outline UI | Unknown; parent/user review required after implementation. |
 | Commit/push/CI/deployment/downstream | Stage commits are recorded in worker handoffs; no push/CI/deployment/downstream action performed by this worker. |
