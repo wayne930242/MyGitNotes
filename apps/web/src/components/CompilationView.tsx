@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react';
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Copy, GripVertical, LayoutGrid, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
@@ -11,6 +11,7 @@ import { planCompilationCopy } from '../lib/compilation-copy.js';
 import { screenCollision, screenKeyboardCoordinates } from '../lib/compilation-drag.js';
 import { useLaneNotes } from '../lib/compilation-queries.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { usePanelContext } from '../lib/panel-context.js';
 import { compilationStudyRoute } from '../lib/routes.js';
 import type { FolderItem, NotebookConfig } from '../lib/types.js';
 import { useNoteFacets } from '../lib/use-note-queries.js';
@@ -64,6 +65,13 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
   const draggedNotes = useLaneNotes(dragging ? row : undefined);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: screenKeyboardCoordinates }));
   const disabled = !compilation.writable || compilation.loading;
+  const { setHasOpenNote } = usePanelContext();
+  // Like a zoomed note, a zoomed compilation hides the workspace rail before the first paint, so both dialogs share the same edges.
+  useLayoutEffect(() => {
+    if (frame !== 'zoom') return;
+    setHasOpenNote(true);
+    return () => setHasOpenNote(false);
+  }, [frame, setHasOpenNote]);
 
   // In zoom the Escape key closes the view, unless a dialog of its own is open.
   useEffect(() => {
