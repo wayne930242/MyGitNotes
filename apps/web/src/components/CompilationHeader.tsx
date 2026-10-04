@@ -7,6 +7,7 @@ import type { SortConfig } from '../lib/note-sort.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { Button } from './Button.js';
 import { Select } from './Select.js';
+import './study.css';
 
 /** The arrangement switch: the three lane sizes, stack and graph. */
 export const compilationViewTabs = [{ value: 'thumbnail', icon: LayoutGrid }, { value: 'small', icon: Columns3 }, { value: 'medium', icon: Columns2 }, { value: 'stack', icon: Rows3 }, { value: 'graph', icon: Network }] as const;

@@ -15,26 +15,17 @@ const REVISION = 'e'.repeat(40);
 let client: QueryClient;
 
 const notebooks: NotebookConfig[] = [{ id: 'nb1', title: 'NB1', root: 'notes/nb1' }];
-const row: CompilationRow = {
-  id: 'row-1',
-  path: 'notes/nb1/reading.compilation.yml',
-  name: 'Reading',
-  view: 'stack',
-  notebookId: 'nb1',
-  kind: 'custom',
-  items: [
-    { id: 'item-1', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/a.md' },
-    { id: 'item-2', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/gone.md' },
-    { id: 'item-3', kind: 'youtube', videoId: 'dQw4w9WgXcQ', start: 0, title: 'A talk' },
-  ],
-};
+const row: CompilationRow = { id: 'row-1', path: 'notes/nb1/reading.compilation.yml', name: 'Reading', view: 'stack', notebookId: 'nb1', kind: 'custom', items: [{ id: 'item-1', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/a.md' }, { id: 'item-2', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/gone.md' }, { id: 'item-3', kind: 'youtube', videoId: 'dQw4w9WgXcQ', start: 0, title: 'A talk' }] };
 const study: StudyController = { study: emptyStudyWorkspace(), save: async () => false, action: async () => false, reload: async () => {}, loading: false, saving: false, error: '', writable: false };
 
 beforeEach(() => {
-  vi.stubGlobal('IntersectionObserver', class {
-    observe() {}
-    disconnect() {}
-  });
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ revision: REVISION, notes: [{ id: 'notes/nb1/a.md', path: 'notes/nb1/a.md', notebookId: 'nb1', title: 'Note A', tags: [], metadata: {}, content: '# Chapter One\n\nThe body of note A.' }] }), { headers: { 'Content-Type': 'application/json' } })));
   client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, repositories: {}, drafts: {} });

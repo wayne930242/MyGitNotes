@@ -24,23 +24,10 @@ afterEach(() => {
 });
 
 function controls(value: Partial<NoteFilters> = {}, onChange: FilterControls['onChange'] = () => {}): FilterControls {
-  return {
-    value: { kind: 'note', notebookId: 'life', folders: [], descendants: true, tags: [], tagMode: 'any', q: '', status: null, showHidden: false, ...value },
-    neighbors: false,
-    notebooks: [{ id: 'life', title: 'Life', root: 'notes/life', statuses: ['todo', 'done'] }, { id: 'work', title: 'Work', root: 'notes/work' }],
-    folders: [],
-    tags: ['work'],
-    statuses: ['todo', 'done'],
-    count: 7,
-    onChange,
-    allNotebooks: false,
-    onAllNotebooksChange: () => {},
-    onClear: () => {},
-  };
+  return { value: { kind: 'note', notebookId: 'life', folders: [], descendants: true, tags: [], tagMode: 'any', q: '', status: null, showHidden: false, ...value }, neighbors: false, notebooks: [{ id: 'life', title: 'Life', root: 'notes/life', statuses: ['todo', 'done'] }, { id: 'work', title: 'Work', root: 'notes/work' }], folders: [], tags: ['work'], statuses: ['todo', 'done'], count: 7, onChange, allNotebooks: false, onAllNotebooksChange: () => {}, onClear: () => {} };
 }
 
-const sidebar = (filters: FilterControls, onSelectFolder = vi.fn()) =>
-  render(createElement(I18nProvider, null, createElement(Sidebar, { filters, facets, folders: [], selectedNotebookId: 'life', onManageFiles: () => {}, reorder: false, onToggleReorder: () => {}, onSelectFolder, workspaceTagNames: ['work'], changeCount: 0 })));
+const sidebar = (filters: FilterControls, onSelectFolder = vi.fn()) => render(createElement(I18nProvider, null, createElement(Sidebar, { filters, facets, folders: [], selectedNotebookId: 'life', onManageFiles: () => {}, reorder: false, onToggleReorder: () => {}, onSelectFolder, workspaceTagNames: ['work'], changeCount: 0 })));
 
 it('has three collapsible sections, Notebooks, Status and Tags, and no search field', () => {
   sidebar(controls());

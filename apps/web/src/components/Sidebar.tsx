@@ -119,7 +119,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
     setTagQuery('');
   }
 
-  const notebookFacets = mergeNotebookFacets(queryNotebookIds(filters.notebooks, value.notebookId, value.folders).flatMap(id => facets?.[id] || []));
+  // While the list shows compilations, the filters count compilations.
+  const kindFacets = (facet: NotebookFacets): NotebookFacets => value.kind === 'compilation' ? { ...facet, total: facet.compilations.total, hidden: 0, statuses: facet.compilations.statuses, tags: facet.compilations.tags, directories: {} } : facet;
+  const notebookFacets = mergeNotebookFacets(queryNotebookIds(filters.notebooks, value.notebookId, value.folders).flatMap(id => facets?.[id] ? [kindFacets(facets[id])] : []));
   const statusCounts = notebookFacets.statuses;
   const tagCounts: Record<string, number> = { ...notebookFacets.tags };
   for (const tag of selectedTags) tagCounts[tag] ??= 0;
