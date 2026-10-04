@@ -160,6 +160,13 @@ describe('real HTTP local boundaries', () => {
       expect((await request({ strategy: 'sideways' })).status).toBe(400);
       expect((await request({ strategy: 'local' })).status).toBe(200);
       expect(execFileSync('git', ['show', 'main:notes/example/projects/deep/note.md'], { cwd: remote }).toString()).toBe('# Conflict');
+      expect((await request({ pullOnly: 'yes' })).status).toBe(400);
+      fs.writeFileSync(path.join(root, 'notes/example/projects/deep/note.md'), '# Unpushed');
+      git('commit', '-am', 'unpushed edit');
+      const pulled = await request({ pullOnly: true });
+      expect(pulled.status).toBe(200);
+      expect((await pulled.json()).result).toMatchObject({ pulled: 0, pushed: 0 });
+      expect(execFileSync('git', ['show', 'main:notes/example/projects/deep/note.md'], { cwd: remote }).toString()).toBe('# Conflict');
       git('checkout', '-b', 'core');
       expect((await request()).status).toBe(403);
     } finally {

@@ -260,8 +260,8 @@ export class GitSyncError extends Error {
 }
 
 /** Pulls and pushes one worktree, the home worktree when `repository` is absent. */
-export async function syncGitWorkspace(strategy?: 'remote' | 'local', repository?: string): Promise<{ upstream: string; pulled: number; pushed: number; backup?: string; }> {
-  const res = await fetch(`${API_BASE}/git/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(strategy ? { strategy } : {}), ...(repository ? { repository } : {}) }) });
+export async function syncGitWorkspace(strategy?: 'remote' | 'local', repository?: string, pullOnly?: boolean): Promise<{ upstream: string; pulled: number; pushed: number; backup?: string; }> {
+  const res = await fetch(`${API_BASE}/git/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(strategy ? { strategy } : {}), ...(repository ? { repository } : {}), ...(pullOnly ? { pullOnly } : {}) }) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new GitSyncError(data.error || 'Sync failed', data.code || 'FAILED', data.files || []);
   return data.result;

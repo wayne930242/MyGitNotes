@@ -471,6 +471,10 @@ const AppContent: React.FC = () => {
                           selectedFolder={selectedFolder}
                           onSelectFolder={setSelectedFolder}
                           changeCount={changeCount}
+                          onPulled={remote ? undefined : async () => {
+                            await refreshWorkspace();
+                            await refreshDocuments();
+                          }}
                           canManageTags={canWrite}
                           onPreviewTagUsage={previewTagUsage}
                           onRenameTag={handleRenameTag}

@@ -133,9 +133,11 @@ export function createLocalGitRouter(): Router {
   router.post('/sync', async (req, res) => {
     const strategy = req.body?.strategy;
     if (strategy !== undefined && strategy !== 'remote' && strategy !== 'local') return res.status(400).json({ error: 'Unknown sync strategy.' });
+    const pullOnly = req.body?.pullOnly;
+    if (pullOnly !== undefined && typeof pullOnly !== 'boolean') return res.status(400).json({ error: 'pullOnly must be a boolean.' });
     try {
       const { root: repoRoot } = await worktree(res, req.body?.repository);
-      res.json({ result: await serializeWorkspaceMutation(repoRoot, () => syncWorkspace(repoRoot, strategy)) });
+      res.json({ result: await serializeWorkspaceMutation(repoRoot, () => syncWorkspace(repoRoot, strategy, { pullOnly })) });
     } catch (error) {
       if (!(error instanceof SyncError)) return res.status(500).json({ error: (error as Error).message });
       res.status(error.code === 'INVALID_BRANCH' ? 403 : error.code === 'FAILED' ? 502 : 409).json({ error: error.message, code: error.code, files: error.files });

@@ -68,6 +68,16 @@ describe('syncWorkspace', () => {
     expect(await getUpstreamStatus(local)).toMatchObject({ ahead: 0, behind: 0 });
   });
 
+  it('pulls without pushing local commits when pullOnly is set', async () => {
+    await commit(other, 'remote.md', 'remote\n');
+    await git(other, 'push');
+    await commit(local, 'local.md', 'local\n');
+    expect(await syncWorkspace(local, undefined, { pullOnly: true })).toEqual({ upstream: 'origin/main', pulled: 1, pushed: 0 });
+    expect(read(local, 'remote.md')).toBe('remote\n');
+    expect(await git(remote, 'ls-tree', '--name-only', 'main')).not.toContain('local.md');
+    expect(await getUpstreamStatus(local)).toMatchObject({ ahead: 1, behind: 0 });
+  });
+
   it('refuses uncommitted tracked changes before fetching and allows untracked files', async () => {
     await commit(other, 'remote.md', 'remote\n');
     await git(other, 'push');

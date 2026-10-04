@@ -30,11 +30,16 @@ async function networkOptions(root: string) {
   return { timeout: NETWORK_TIMEOUT, env: { GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: `${ssh} -o BatchMode=yes` } };
 }
 
+export interface SyncOptions {
+  /** Stop after the rebase and leave local commits unpushed. */
+  pullOnly?: boolean;
+}
+
 /**
  * Rebases main onto its upstream and pushes the result without force.
  * A conflicting rebase is aborted so the repository returns to its previous state.
  */
-export async function syncWorkspace(root: string, strategy?: SyncStrategy): Promise<SyncResult> {
+export async function syncWorkspace(root: string, strategy?: SyncStrategy, { pullOnly = false }: SyncOptions = {}): Promise<SyncResult> {
   return exclusive(root, async () => {
     if (await getCurrentBranch(root) !== 'main') throw new SyncError('Switch to main before syncing.', 'INVALID_BRANCH');
     const upstream = await runGit(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], root).then(result => result.stdout.trim(), () => '');
@@ -72,6 +77,7 @@ export async function syncWorkspace(root: string, strategy?: SyncStrategy): Prom
       throw strategy ? new SyncError('Git could not resolve these conflicts automatically. Resolve them in a terminal.', 'UNRESOLVED', files) : new SyncError('Remote changes conflict with local commits.', 'CONFLICT', files);
     }
 
+    if (pullOnly) return { upstream, pulled, pushed: 0, ...(backup ? { backup } : {}) };
     const pushed = await count(root, '@{u}..HEAD');
     if (pushed > 0) {
       try {

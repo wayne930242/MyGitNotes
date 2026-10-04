@@ -585,6 +585,11 @@ export const en = {
   'sidebar.tagDeletedLabel': 'Deleted #{tag} from {count} notes',
   'sidebar.clean': 'Clean',
   'sidebar.dirty': '{count} dirty',
+  'sidebar.pull': 'Pull main from its upstream',
+  'sidebar.pulling': 'Pulling…',
+  'sidebar.pulled': 'Pulled {count} commits.',
+  'sidebar.pullUpToDate': 'Already up to date.',
+  'sidebar.pullFailed': 'Pull failed: {message}',
 
   // Note List & Card
   'notes.emptyTitle': 'No notes found',

@@ -15,6 +15,7 @@ import { resolveAllNotebooksFolderSelect, resolveEnterTouchMultiSelect } from '.
 import { NavTree, NavTreeRow } from './NavTree.js';
 import { ReorderToggle } from './ReorderToggle.js';
 import { TagActions } from './TagActions.js';
+import { GitPullButton } from './GitPullButton.js';
 
 const selectedItemStyle: React.CSSProperties = { backgroundColor: 'color-mix(in srgb, var(--color-text) 8%, transparent)', color: 'var(--color-text)' };
 
@@ -37,6 +38,8 @@ interface SidebarProps {
   workspaceTagNames: string[];
   /** Pending changes across the workspace's repositories. */
   changeCount: number;
+  /** Local sources only: shows the pull button and refreshes the workspace after a pull. */
+  onPulled?: () => Promise<void>;
   canManageTags?: boolean;
   onPreviewTagUsage?: (tag: string) => Promise<number>;
   onRenameTag?: (from: string, to: string) => Promise<void>;
@@ -44,7 +47,7 @@ interface SidebarProps {
   onDeleteTag?: (tag: string) => Promise<void>;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, foldersWritable = false, beforeFolderChange, onFoldersChanged, selectedFolder = null, onSelectFolder, selectedNotebookId, facets, facetsLoading = false, facetsError = '', workspaceTagNames, filters, reorder, onToggleReorder, changeCount, canManageTags = false, onPreviewTagUsage, onRenameTag, onMergeTag, onDeleteTag }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, foldersWritable = false, beforeFolderChange, onFoldersChanged, selectedFolder = null, onSelectFolder, selectedNotebookId, facets, facetsLoading = false, facetsError = '', workspaceTagNames, filters, reorder, onToggleReorder, changeCount, onPulled, canManageTags = false, onPreviewTagUsage, onRenameTag, onMergeTag, onDeleteTag }) => {
   const { t, language } = useTranslation();
   const { value, statuses, onChange } = filters;
   const { status: selectedStatus, tags: selectedTags } = value;
@@ -127,28 +130,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
       className='notes-sidebar'
       footer={
         <div className='pt-3 mt-3 border-t shrink-0 flex flex-col gap-2.5' style={{ borderColor: 'var(--color-border)' }}>
-          <div className='flex items-center justify-between px-3 py-2 rounded-xl border shadow-xs transition-colors' style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <div className='flex items-center gap-2.5'>
-              <div className='w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-fg/5' style={{ color: 'var(--color-muted)' }}>
-                <GitBranch className='w-4 h-4' />
+          <div className='flex items-center gap-2'>
+            <div className='flex-1 min-w-0 flex items-center justify-between px-3 py-2 rounded-xl border shadow-xs transition-colors' style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <div className='flex items-center gap-2.5'>
+                <div className='w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-fg/5' style={{ color: 'var(--color-muted)' }}>
+                  <GitBranch className='w-4 h-4' />
+                </div>
+                <span className='text-xs font-semibold text-fg leading-tight'>{t('panel.changes')}</span>
               </div>
-              <span className='text-xs font-semibold text-fg leading-tight'>{t('panel.changes')}</span>
+              <div>
+                {dirtyCount > 0
+                  ? (
+                    <span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warning-soft text-warning'>
+                      <span className='w-1.5 h-1.5 rounded-full bg-warning animate-pulse' />
+                      {t('sidebar.dirty', { count: dirtyCount })}
+                    </span>
+                  )
+                  : (
+                    <span className='inline-flex items-center gap-1 text-[10px] text-success font-medium'>
+                      <CheckCircle2 className='w-3.5 h-3.5' />
+                      {t('sidebar.clean')}
+                    </span>
+                  )}
+              </div>
             </div>
-            <div>
-              {dirtyCount > 0
-                ? (
-                  <span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warning-soft text-warning'>
-                    <span className='w-1.5 h-1.5 rounded-full bg-warning animate-pulse' />
-                    {t('sidebar.dirty', { count: dirtyCount })}
-                  </span>
-                )
-                : (
-                  <span className='inline-flex items-center gap-1 text-[10px] text-success font-medium'>
-                    <CheckCircle2 className='w-3.5 h-3.5' />
-                    {t('sidebar.clean')}
-                  </span>
-                )}
-            </div>
+            {onPulled && <GitPullButton onPulled={onPulled} />}
           </div>
           <a className='sidebar-credit' href='https://github.com/wayne930242/MyGitNotes' target='_blank' rel='noopener noreferrer' title='MyGitNotes by wayne930242'>
             {'powered by '}

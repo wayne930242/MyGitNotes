@@ -586,6 +586,11 @@ export const zhTW: Record<TranslationKey, string> = {
   'sidebar.tagDeletedLabel': '已從 {count} 篇筆記刪除 #{tag}',
   'sidebar.clean': '乾淨',
   'sidebar.dirty': '{count} 項變更',
+  'sidebar.pull': '從 upstream 拉取 main',
+  'sidebar.pulling': '拉取中…',
+  'sidebar.pulled': '已拉取 {count} 個 commit。',
+  'sidebar.pullUpToDate': '已是最新。',
+  'sidebar.pullFailed': '拉取失敗：{message}',
 
   // Note List & Card
   'notes.emptyTitle': '找不到筆記',
