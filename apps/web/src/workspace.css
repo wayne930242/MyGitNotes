@@ -140,7 +140,7 @@
 .screen-sort-select { width: 140px; max-width: 100%; min-height: 28px; padding: 4px 8px; font-size: 12px; line-height: 18px; margin-right: 4px; }
 .screen-view-tabs { display: flex; align-items: center; gap: 2px; padding: 2px; margin-right: 4px; border-radius: 8px; background: var(--workspace-selection); }
 .screen-view-tabs [aria-pressed='true'] { background: var(--color-surface); color: var(--color-primary); box-shadow: 0 1px 3px color-mix(in srgb, var(--color-scrim) 7%, transparent); }
-.screen-lane-strip { display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 6px; min-height: 120px; }
+.screen-lane-strip { display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 0; min-height: 120px; }
 .screen-card-slot { flex: 0 0 var(--screen-card-width); width: var(--screen-card-width); max-width: calc(100vw - 44px); min-width: 0; }
 .screen-card { position: relative; display: flex; flex-direction: column; border: 1px solid var(--workspace-divider); border-radius: 10px; background: var(--color-surface); overflow: hidden; box-shadow: 0 2px 4px color-mix(in srgb, var(--color-scrim) 1%, transparent); }
 .screen-card-header { display: flex; align-items: center; gap: 7px; padding: 6px 10px; min-width: 0; }
