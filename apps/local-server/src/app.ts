@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { classifyResource, deploymentConfigSource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceNoteTags, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
+import { classifyResource, deploymentConfigSource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceFileTags, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRemoteMCP } from './mcp.js';
 import { createRemoteCoreUpdateRouter } from './remote-core-update.js';
@@ -308,7 +308,7 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
         const changes: { path: string; content: string; }[] = [];
         for (const entry of entries) {
           const raw = (await reader.readFile(String(entry.path))).toString('utf8');
-          const patched = replaceNoteTags(raw, entry.tags as string[]);
+          const patched = replaceFileTags(raw, String(entry.path), entry.tags as string[]);
           if (patched === raw) continue;
           changes.push({ path: String(entry.path), content: patched });
         }

@@ -51,6 +51,21 @@ describe('local /api/tags/apply', () => {
     vi.restoreAllMocks();
   });
 
+  it('rewrites the tags of a compilation like those of a note', async () => {
+    const file = 'notes/blog/picks.compilation.yml';
+    fs.writeFileSync(path.join(root, file), 'version: 1\nid: picks\ntitle: Picks\narrangement: lane\ntags: [todo]\nsource:\n  kind: tag\n  tag: todo\n');
+    git('add', '.');
+    git('commit', '-m', 'add a compilation');
+    const res = await post({ entries: [{ path: file, notebookId: 'blog', tags: ['doing'] }], message: 'docs(tags): rename todo' });
+    expect(res.status).toBe(200);
+    expect((await res.json()).changedPaths).toEqual([file]);
+    const stored = fs.readFileSync(path.join(root, file), 'utf8');
+    expect(stored).toContain('tags:\n  - doing');
+    // The tag it collects stays: renaming a tag of the compilation itself does not rewrite its source.
+    expect(stored).toContain('kind: tag\n  tag: todo');
+    expect(git('log', '-1', '--format=%s').toString().trim()).toBe('docs(tags): rename todo');
+  });
+
   it('renames a tag across notebooks in one commit, preserving every other byte', async () => {
     const before = fs.readFileSync(path.join(root, 'notes/blog/a.md'), 'utf8');
     const commitsBefore = git('rev-list', '--count', 'HEAD').toString().trim();

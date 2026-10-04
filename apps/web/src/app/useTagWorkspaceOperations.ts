@@ -25,12 +25,12 @@ export function useTagWorkspaceOperations({ queryClient, queryScope, repositorie
   const readNotePaths = async (query: Parameters<typeof notePathsOptions>[1]) => (await queryClient.fetchQuery(notePathsOptions(queryScope, query))).notes;
   /** Every note carrying `tag`, in every notebook, hidden ones included: the exact set the server will rewrite. */
   const notesWithTag = async (tag: string) => {
-    const notes = await readNotePaths({ notebookId: 'all', tags: [tag], showHidden: true });
+    const notes = await readNotePaths({ notebookId: 'all', tags: [tag], showHidden: true, kind: 'all' });
     if (!notes.length) return [];
     const result = await queryClient.fetchQuery(noteLookupOptions(queryScope, notes, false));
     return result.notes;
   };
-  const previewTagUsage = async (tag: string): Promise<number> => (await readNotePaths({ notebookId: 'all', tags: [tag], showHidden: true })).length;
+  const previewTagUsage = async (tag: string): Promise<number> => (await readNotePaths({ notebookId: 'all', tags: [tag], showHidden: true, kind: 'all' })).length;
   const applyEntries = (entries: { path: string; notebookId: string; tags: string[]; }[], message: string) =>
     applyTagEntries(repositories, entries, message, (repository, revision) => {
       if (remote && revision) setRepositoryRevision(repository.id, revision);

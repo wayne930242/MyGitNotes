@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import fs from 'node:fs';
-import { classifyResource, replaceNoteTags, resolveSafePath } from '@mygitnotes/core';
+import { classifyResource, replaceFileTags, resolveSafePath } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { namedLocal } from './request-workspace.js';
@@ -32,12 +32,12 @@ export function createLocalTagsRouter(): Router {
           let safePath: string;
           try {
             safePath = resolveSafePath(repoRoot, entry.path);
-            if (classifyResource(entry.path, config).type !== 'note' || !fs.existsSync(safePath)) throw new Error('not a note');
+            if (!['note', 'compilation'].includes(classifyResource(entry.path, config).type) || !fs.existsSync(safePath)) throw new Error('not a note');
           } catch {
             throw Object.assign(new Error(`Not a configured note: ${entry.path}`), { status: 403 });
           }
           const raw = fs.readFileSync(safePath, 'utf-8');
-          const patched = replaceNoteTags(raw, entry.tags);
+          const patched = replaceFileTags(raw, entry.path, entry.tags);
           if (patched === raw) continue;
           planned.push({ path: entry.path, safePath, patched });
         }

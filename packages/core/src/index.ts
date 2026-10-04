@@ -12,6 +12,7 @@ export * from './note-timestamps.js';
 export * from './classifier.js';
 export * from './path-guard.js';
 export * from './note-service.js';
+export { replaceFileTags } from './note-file.js';
 export * from './templates.js';
 export * from './source-config.js';
 export * from './folders.js';

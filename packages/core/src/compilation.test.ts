@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { replaceFileTags } from './note-file.js';
 import YAML from 'yaml';
 import { applyCompilationMetadata, compilationCopyPath, compilationFields, type CompilationFile, compilationFile, compilationNotes, compilationRow, compilationSlug, copyCompilation, isCompilationPath, moveCompilationItem, parseCompilation, parseYouTubeUrl, relocateCompilation, serializeCompilation, uniqueCompilationPath } from './compilation.js';
 
@@ -192,5 +193,20 @@ describe('YouTube URLs', () => {
     expect(parseYouTubeUrl('https://youtu.be/dQw4w9WgXcQ?t=1m30s')).toEqual({ videoId: 'dQw4w9WgXcQ', start: 90 });
     expect(parseYouTubeUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toEqual({ videoId: 'dQw4w9WgXcQ', start: 0 });
     for (const url of ['javascript:alert(1)', 'https://youtube.com.evil.test/watch?v=dQw4w9WgXcQ', 'https://youtube.com/watch?v=bad', 'https://u:p@youtube.com/watch?v=dQw4w9WgXcQ']) expect(parseYouTubeUrl(url)).toBeNull();
+  });
+});
+
+describe('replaceFileTags', () => {
+  it('replaces the tags of a compilation and keeps status, items and comments', () => {
+    const raw = `# my list\n${custom}`;
+    const next = replaceFileTags(raw, 'notes/one/reading.compilation.yml', ['queue', 'later']);
+    expect(YAML.parse(next)).toMatchObject({ id: 'reading-queue', status: 'working', tags: ['queue', 'later'], items: expect.any(Array) });
+    expect(next.startsWith('# my list')).toBe(true);
+  });
+  it('removes the key when the tags become empty', () => {
+    expect(YAML.parse(replaceFileTags(custom, 'notes/one/reading.compilation.yml', [])).tags).toBeUndefined();
+  });
+  it('patches the frontmatter of a note', () => {
+    expect(replaceFileTags('---\ntags: [a]\n---\nBody\n', 'notes/one/a.md', ['b'])).toBe('---\ntags: [b]\n---\nBody\n');
   });
 });
