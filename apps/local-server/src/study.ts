@@ -4,13 +4,14 @@ import { isDeepStrictEqual } from 'node:util';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { parse, stringify } from 'yaml';
-import { emptyStudyWorkspace, SourceError, STUDY_FILE, STUDY_MAX_BYTES, StudyWorkspaceSchema } from '@mygitnotes/core';
-import { applyStageAction, createStudyNote, defaultStudyProgression, findStudyNote, isNotebookContent, parseNoteContent, readNoteFile, readScreenPage, reconcileStudyNote, replaceNoteStatus, resolveSafePath, SCREEN_PAGE_FILE, StudyLaneActionSchema, studyLaneStatuses, undoStudyAction } from '@mygitnotes/core';
+import { compilationRow, emptyStudyWorkspace, parseCompilation, SourceError, STUDY_FILE, STUDY_MAX_BYTES, StudyWorkspaceSchema } from '@mygitnotes/core';
+import { applyStageAction, createStudyNote, defaultStudyProgression, findStudyNote, isNotebookContent, parseNoteContent, readNoteFile, reconcileStudyNote, replaceNoteStatus, resolveSafePath, StudyLaneActionSchema, studyLaneStatuses, undoStudyAction } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { notebookRepository, repositoryOrHome } from './request-workspace.js';
 import { readBoundedFile, readSnapshotText, revisionOf, writeFileAtomic } from './workspace-files.js';
 
+const withinNotebook = (file: string, root: string) => file.startsWith(`${root}/`);
 const readLocal = (root: string) => readBoundedFile(root, STUDY_FILE, STUDY_MAX_BYTES, 'Study data');
 function decode(raw: string | null) {
   if (raw !== null && Buffer.byteLength(raw) > STUDY_MAX_BYTES) throw new SourceError('Study data is too large.', 413);
@@ -69,10 +70,15 @@ export function createStudyRouter(): Router {
           nextStudy = undoStudyAction(currentStudy);
           status = event.transition.fromStatus;
         } else {
-          const screen = readScreenPage(parse(await read(SCREEN_PAGE_FILE), { maxAliasCount: 20 }), config);
-          const lane = screen.rows.find(row => row.id === body.laneId);
-          if (!lane) throw new SourceError('This lane no longer exists. Reload before reviewing.', 409);
-          if (lane.notebookId !== body.notebookId) throw new SourceError('This note is not in the lane notebook.', 403);
+          const compilationPath = body.compilationPath;
+          if (!compilationPath || !withinNotebook(compilationPath, notebook.root)) throw new SourceError('Path is not a configured compilation.', 403);
+          let lane;
+          try {
+            lane = compilationRow(parseCompilation(await read(compilationPath), notebook.root), { notebookId: notebook.id, path: compilationPath });
+          } catch {
+            throw new SourceError('This compilation no longer exists or cannot be read. Reload before reviewing.', 409);
+          }
+          if (lane.id !== body.laneId) throw new SourceError('This compilation changed. Reload before reviewing.', 409);
           const progression = lane.progression || defaultStudyProgression(studyLaneStatuses(lane, config.notebooks));
           if (!progression) throw new SourceError('Configure learning stages for this lane before reviewing.', 400);
           const stored = findStudyNote(currentStudy, currentNote), resolved = stored ? reconcileStudyNote(stored, currentNote) : createStudyNote(currentNote);

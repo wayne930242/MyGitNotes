@@ -17,7 +17,7 @@ export function createLocalGitRouter(): Router {
         return true;
       }
       const resource = classifyResource(file, config);
-      return Boolean(managedNotebook(file, config.notebooks)) || Boolean(workspaceDocument(file)) || resource.type === 'workspace_config' || file.startsWith('notes/') && ['note', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type);
+      return Boolean(managedNotebook(file, config.notebooks)) || Boolean(workspaceDocument(file)) || resource.type === 'workspace_config' || file.startsWith('notes/') && ['note', 'compilation', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type);
     } catch {
       return false;
     }

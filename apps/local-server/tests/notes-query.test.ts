@@ -93,3 +93,54 @@ describe('note query routes', () => {
     expect(graph.nodes.map((node: any) => node.id)).toContain('example:notes/example/hidden.md');
   });
 });
+
+describe('compilations over the note routes', () => {
+  const compilation = (id: string, extra = '') => `version: 1\nid: ${id}\ntitle: Title ${id}\narrangement: lane\n${extra}items:\n  - { id: i1, kind: note, path: notes/example/alpha.md }\n`;
+  const send = (method: string, url: string, body?: unknown) => json(url, { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+
+  it('lists compilations apart from notes and counts them in the facets', async () => {
+    write('notes/example/reading.compilation.yml', compilation('reading', 'tags: [clue]\nstatus: working\n'));
+    write('notes/example/deep/broken.compilation.yml', 'version: 1\nid: broken\ntitle: Broken\narrangement: nope\nitems: []\n');
+    git('add', '.');
+    git('commit', '-m', 'compilations');
+    expect((await json('/api/notes/query?notebookId=example')).body.notes.every((note: any) => note.kind === undefined)).toBe(true);
+    const listed = (await json('/api/notes/query?notebookId=example&kind=compilation')).body;
+    expect(listed.notes.map((note: any) => [note.path, note.kind, note.invalid ? 'invalid' : 'ok']).sort()).toEqual([['notes/example/deep/broken.compilation.yml', 'compilation', 'invalid'], ['notes/example/reading.compilation.yml', 'compilation', 'ok']]);
+    expect(listed.notes.find((note: any) => note.path.endsWith('reading.compilation.yml'))).toMatchObject({ title: 'Title reading', tags: ['clue'], status: 'working' });
+    expect((await json('/api/notes/query?notebookId=example&kind=compilation&tag=clue')).body.notes.map((note: any) => note.path)).toEqual(['notes/example/reading.compilation.yml']);
+    expect((await json('/api/notes/query?notebookId=example&kind=all&select=paths')).body.total).toBe(4);
+    expect((await json('/api/notes/query?notebookId=example&kind=folder')).status).toBe(400);
+    const facets = (await json('/api/notes/facets')).body.notebooks.example;
+    expect(facets.total).toBe(2);
+    expect(facets.compilations).toEqual({ total: 2, statuses: { working: 1, '': 1 }, tags: { clue: 1 } });
+    expect((await json('/api/notes/graph')).body.nodes.map((node: any) => node.id).some((id: string) => id.includes('compilation'))).toBe(false);
+    expect((await json('/api/notes/agenda?notebookId=example')).body.dated.some((note: any) => note.path.includes('compilation'))).toBe(false);
+  });
+
+  it('creates, copies and deletes a compilation through the note routes', async () => {
+    const file = 'notes/example/fresh.compilation.yml';
+    const created = await send('POST', '/api/notes', { path: file, content: compilation('fresh'), metadata: { tags: ['new'] }, notebookId: 'example', createOnly: true, commitMessage: 'docs(notes): add fresh' });
+    expect(created.body.error ?? '').toBe('');
+    expect(created.status).toBe(200);
+    expect(created.body.note).toMatchObject({ kind: 'compilation', id: 'fresh', tags: ['new'] });
+    expect(fs.readFileSync(path.join(root, 'notes/example/fresh.compilation.yml'), 'utf8')).toContain('tags:\n  - new');
+    expect((await send('POST', '/api/notes', { path: file, content: compilation('fresh'), metadata: {}, notebookId: 'example', createOnly: true })).status).toBe(409);
+    const copyPath = 'notes/example/fresh-copy.compilation.yml';
+    const copy = await send('POST', '/api/notes', { path: copyPath, content: compilation('fresh-copy'), metadata: {}, notebookId: 'example', createOnly: true });
+    expect(copy.status).toBe(200);
+    const read = (await json(`/api/notes/read?path=${copyPath}&notebookId=example`)).body.note;
+    expect(read).toMatchObject({ kind: 'compilation', title: 'Title fresh-copy' });
+    expect((await json('/api/notes/query?notebookId=example&kind=compilation')).body.total).toBe(2);
+    expect((await send('DELETE', `/api/notes?path=${copyPath}&notebookId=example`)).status).toBe(200);
+    expect(fs.existsSync(path.join(root, copyPath))).toBe(false);
+    expect((await json('/api/notes/query?notebookId=example&kind=compilation')).body.total).toBe(1);
+  });
+
+  it('saves a compilation that does not parse and reports it as invalid instead of hiding it', async () => {
+    const saved = await send('POST', '/api/notes', { path: 'notes/example/bad.compilation.yml', content: 'version: 1\nitems: {', metadata: {}, notebookId: 'example', createOnly: true });
+    expect(saved.status).toBe(200);
+    expect(saved.body.note).toMatchObject({ kind: 'compilation', invalid: expect.stringContaining('YAML') });
+    const listed = (await json('/api/notes/query?notebookId=example&kind=compilation')).body.notes;
+    expect(listed.find((note: any) => note.path.endsWith('bad.compilation.yml'))?.invalid).toContain('YAML');
+  });
+});

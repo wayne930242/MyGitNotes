@@ -96,17 +96,17 @@ describe('notebooks in their own local repositories', () => {
 });
 
 describe('workspace documents in notebook repositories', () => {
-  it('reads and writes Screen in the repository a request names, the home repository by default', async () => {
+  it('reads and writes Focus in the repository a request names, the home repository by default', async () => {
     const { home, trpg } = await serve();
     const trpgId = 'github:owner/trpg@main';
-    const empty = (await get(`/api/screen-page?repository=${encodeURIComponent(trpgId)}`)).body;
-    expect(empty).toMatchObject({ repository: trpgId, page: { version: 2, rows: [] }, writable: true });
-    const page = { version: 2, rows: [{ id: 'lane', notebookId: 'trpg', kind: 'custom', name: 'Campaign', view: 'small', items: [] }] };
-    const saved = await fetch(`${base}/api/screen-page`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page, revision: empty.revision, repository: trpgId }) });
+    const empty = (await get(`/api/focus-page?repository=${encodeURIComponent(trpgId)}`)).body;
+    expect(empty).toMatchObject({ repository: trpgId, page: { version: 1, focuses: [] }, writable: true });
+    const page = { version: 1, focuses: [{ id: 'campaign', notebookId: 'trpg', name: 'Campaign', division: 'single', panes: [{ tabs: [] }] }] };
+    const saved = await fetch(`${base}/api/focus-page`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page, revision: empty.revision, repository: trpgId }) });
     expect(saved.status).toBe(200);
-    expect(fs.readFileSync(path.join(trpg, '.github-notes-screen.yaml'), 'utf8')).toContain('Campaign');
-    expect(fs.existsSync(path.join(home, '.github-notes-screen.yaml'))).toBe(false);
-    expect((await get('/api/screen-page')).body).toMatchObject({ page: { rows: [] } });
+    expect(fs.readFileSync(path.join(trpg, '.github-notes-focus.yaml'), 'utf8')).toContain('Campaign');
+    expect(fs.existsSync(path.join(home, '.github-notes-focus.yaml'))).toBe(false);
+    expect((await get('/api/focus-page')).body).toMatchObject({ page: { focuses: [] } });
     expect((await get('/api/study?repository=github%3Aowner%2Flost%40main')).status).toBe(503);
   });
 });

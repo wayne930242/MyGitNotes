@@ -92,7 +92,7 @@ describe('GitLab HTTP and MCP integration', () => {
     const saved = await fetch(`${base}/api/notes/commit`, post({ repository: workspace.home, notes: [{ ...note, content: '# Updated' }], revision: fixture.head, message: 'docs: edit note' }));
     expect(saved.status).toBe(200);
     expect(fixture.writes).toBe(1);
-    expect(await fetch(`${base}/api/screen-page`, { headers: { Cookie: cookie } }).then(r => r.json())).toMatchObject({ writable: true, page: { version: 2 } });
+    expect(await fetch(`${base}/api/focus-page`, { headers: { Cookie: cookie } }).then(r => r.json())).toMatchObject({ writable: true, page: { version: 1 } });
     expect(await fetch(`${base}/api/study`, { headers: { Cookie: cookie } }).then(r => r.json())).toMatchObject({ writable: true });
     expect((await fetch(`${base}/api/agent-resources`, { headers: { Cookie: cookie } }).then(r => r.json())).instructions[0].path).toBe('AGENTS.md');
   });

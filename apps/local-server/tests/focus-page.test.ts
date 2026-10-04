@@ -8,7 +8,7 @@ import { createApp } from '../src/app.js';
 import { FOCUS_PAGE_FILE } from '@mygitnotes/core';
 
 let root: string, server: Server, base: string, url: string;
-const page = { version: 1, focuses: [{ id: 'weekly', notebookId: 'a', name: '週報', division: 'major-left', panes: [{ tabs: [{ kind: 'note', path: 'notes/a/guide.md' }] }, { tabs: [{ kind: 'lane', id: 'row' }] }, { tabs: [] }] }] };
+const page = { version: 1, focuses: [{ id: 'weekly', notebookId: 'a', name: '週報', division: 'major-left', panes: [{ tabs: [{ kind: 'note', path: 'notes/a/guide.md' }] }, { tabs: [{ kind: 'note', path: 'notes/a/reading.compilation.yml' }] }, { tabs: [] }] }] };
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), 'focus-yaml-'));
   execFileSync('git', ['init', '-b', 'main', root], { stdio: 'pipe' });
@@ -71,10 +71,10 @@ it('rewrites Focus tabs when the file manager moves a note', async () => {
   expect(stored.page.focuses[0].panes[0].tabs).toEqual([{ kind: 'note', path: 'notes/a/one/guide.md' }]);
 });
 it('rejects tabs outside the Focus notebook and hides them in a stored file', async () => {
-  await writeFile(path.join(root, '.github-notes-screen.yaml'), 'version: 2\nrows:\n  - id: other-row\n    notebookId: b\n    kind: custom\n    name: B\n    view: small\n    items: []\n');
   const outside = (tab: unknown) => ({ version: 1, focuses: [{ id: 'f', notebookId: 'a', name: 'F', division: 'single', panes: [{ tabs: [tab] }] }] });
   expect((await put(outside({ kind: 'note', path: 'notes/b/outside.md' }))).status).toBe(400);
-  expect((await put(outside({ kind: 'lane', id: 'other-row' }))).status).toBe(400);
+  expect((await put(outside({ kind: 'note', path: 'notes/b/theirs.compilation.yml' }))).status).toBe(400);
+  expect((await put(outside({ kind: 'lane', id: 'row' }))).status).toBe(400);
   expect(await readFile(path.join(root, FOCUS_PAGE_FILE), 'utf8').catch(() => null)).toBeNull();
   expect((await put(outside({ kind: 'note', path: 'notes/a/inside.md' }))).status).toBe(200);
   await writeFile(path.join(root, FOCUS_PAGE_FILE), 'version: 1\nfocuses:\n  - id: f\n    notebookId: a\n    name: F\n    division: single\n    panes:\n      - tabs:\n          - kind: note\n            path: notes/a/inside.md\n          - kind: note\n            path: notes/b/outside.md\n');

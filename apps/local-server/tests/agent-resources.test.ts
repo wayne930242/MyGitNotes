@@ -81,18 +81,18 @@ it.each(['.agents/skills/custom/agents/openai.yaml', 'CLAUDE.md', '.claude/CLAUD
   expect(writes.find(w => w.endpoint === '/git/trees')?.body.tree).toEqual([{ path, mode: '100644', type: 'blob', content }]);
 });
 
-it('saves Screen YAML as one remote file with authentication and revision protection', async () => {
+it('saves Focus YAML as one remote file with authentication and revision protection', async () => {
   const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
-  const page = { version: 2, rows: [{ id: 'lane', name: 'Reading', view: 'small', notebookId: 'ex', kind: 'custom', items: [{ id: 'pin', kind: 'note', notebookId: 'ex', path: 'notes/ex/read.md' }] }] };
-  expect(await fetch(`${base}/api/screen-page`).then(r => r.json())).toMatchObject({ writable: false, page: { version: 2, rows: [] } });
-  expect(await fetch(`${base}/api/screen-page`, { headers }).then(r => r.json())).toMatchObject({ writable: true, revision: 'before' });
-  const put = (revision: string, authenticated = true) => fetch(`${base}/api/screen-page`, { method: 'PUT', headers: authenticated ? headers : { 'Content-Type': 'application/json' }, body: JSON.stringify({ page, revision }) });
+  const page = { version: 1, focuses: [{ id: 'weekly', name: 'Weekly', notebookId: 'ex', division: 'single', panes: [{ tabs: [{ kind: 'note', path: 'notes/ex/read.md' }, { kind: 'note', path: 'notes/ex/reading.compilation.yml' }] }] }] };
+  expect(await fetch(`${base}/api/focus-page`).then(r => r.json())).toMatchObject({ writable: false, page: { version: 1, focuses: [] } });
+  expect(await fetch(`${base}/api/focus-page`, { headers }).then(r => r.json())).toMatchObject({ writable: true, revision: 'before' });
+  const put = (revision: string, authenticated = true) => fetch(`${base}/api/focus-page`, { method: 'PUT', headers: authenticated ? headers : { 'Content-Type': 'application/json' }, body: JSON.stringify({ page, revision }) });
   expect((await put('before', false)).status).toBe(403);
   expect((await put('stale')).status).toBe(409);
   expect(writes).toEqual([]);
   const saved = await put('before');
   expect(saved.status).toBe(200);
   expect(await saved.json()).toMatchObject({ page, revision: 'after' });
-  expect(writes.find(w => w.endpoint === '/git/trees')?.body.tree).toEqual([{ path: '.github-notes-screen.yaml', mode: '100644', type: 'blob', content: expect.stringContaining('notebookId: ex') }]);
+  expect(writes.find(w => w.endpoint === '/git/trees')?.body.tree).toEqual([{ path: '.github-notes-focus.yaml', mode: '100644', type: 'blob', content: expect.stringContaining('reading.compilation.yml') }]);
   expect(writes.find(w => w.endpoint === '/git/refs/heads/main')?.body.force).toBe(false);
 });
