@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createElement } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { I18nProvider } from '../lib/i18n/index.js';
 import { NoteToolbar } from './NoteToolbar.js';
@@ -25,6 +25,25 @@ it('labels the notebook-panel toggle and view switcher in Traditional Chinese un
   render(createElement(I18nProvider, null, createElement(NoteToolbar, baseProps)));
   expect(screen.getByRole('button', { name: '筆記本與篩選' })).toBeInTheDocument();
   expect(screen.getByRole('combobox', { name: '筆記檢視' })).toBeInTheDocument();
+});
+
+it('offers native outline creation in the New menu and hides creation for read-only notebooks', async () => {
+  const create = vi.fn();
+  const view = render(
+    <I18nProvider>
+      <NoteToolbar {...baseProps} onOpenNewOutline={create} />
+    </I18nProvider>,
+  );
+  const trigger = screen.getByRole('button', { name: '新增選單' });
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  fireEvent.click(await screen.findByRole('menuitem', { name: '新增大綱' }));
+  expect(create).toHaveBeenCalledOnce();
+  view.rerender(
+    <I18nProvider>
+      <NoteToolbar {...baseProps} readOnly onOpenNewOutline={create} />
+    </I18nProvider>,
+  );
+  expect(screen.queryByRole('button', { name: '新增選單' })).not.toBeInTheDocument();
 });
 
 it('puts the note search in the toolbar and reports each keystroke as the query', () => {

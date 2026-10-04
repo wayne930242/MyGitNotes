@@ -121,7 +121,7 @@ function patchNoteMetadata(raw: string, metadata: NoteMetadata): string | null {
  * from scratch, so a metadata-only edit (e.g. a status change) changes only the lines of the
  * keys it actually edits.
  */
-export function serializeNoteContent(metadata: NoteMetadata, content: string, isNew: boolean, now: Date = new Date(), existingRaw?: string): string {
+export function serializeNoteContent(metadata: NoteMetadata, content: string, isNew: boolean, now: Date = new Date(), existingRaw?: string, preserveBodyWhitespace = false): string {
   const stamped = stampSaveTimestamps(metadata, isNew, now);
   const keys = Object.keys(stamped);
   const trimmedContent = content.trim();
@@ -139,6 +139,12 @@ export function serializeNoteContent(metadata: NoteMetadata, content: string, is
   }
 
   const yamlStr = stringifyMetadata(stamped).trim();
+  // Outline markers and annotations are editable source: trimming an empty `- `
+  // removes its content column, and trimming indentation can change its hierarchy.
+  if (preserveBodyWhitespace && content) {
+    const separator = /^[\r\n]/.test(content) ? '' : '\n';
+    return `---\n${yamlStr}\n---\n${separator}${content}${content.endsWith('\n') ? '' : '\n'}`;
+  }
   if (!trimmedContent) {
     return `---\n${yamlStr}\n---\n`;
   }

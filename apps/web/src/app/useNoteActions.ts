@@ -24,7 +24,7 @@ export function useNoteActions({ activeTab, editorRegistry, setEditingNote, conf
   // Note Handlers
   const handleOpenNote = async (note: NoteListItem, anchor = '') => {
     // Zoom is a Notes route: leaving another tab unmounts its graph cards, so their edits are saved first.
-    if (activeTab !== 'notes' && !await editorRegistry.flushEditors()) return;
+    if (activeTab !== 'notes' && !await editorRegistry.flushEditors()) return false;
     setEditingNote(note);
 
     const notebook = config?.notebooks.find(nb => nb.id === note.notebookId);
@@ -43,6 +43,7 @@ export function useNoteActions({ activeTab, editorRegistry, setEditingNote, conf
     if (targetNotebook) {
       fetchAssets(targetNotebook).then(setAssets).catch(console.error);
     }
+    return Boolean(notebook);
   };
 
   return { handleOpenNote };

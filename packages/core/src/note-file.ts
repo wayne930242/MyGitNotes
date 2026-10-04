@@ -37,7 +37,7 @@ export function parseNoteFile(raw: string, filePath: string, notebookRoot?: stri
 /** The stored form of a save: a note's frontmatter and body, or a compilation's YAML carrying the caller's tags and status. */
 export function serializeNoteFile(filePath: string, metadata: NoteMetadata, content: string, isNew: boolean, now: Date, existingRaw?: string): string {
   if (isCompilationPath(filePath)) return applyCompilationMetadata(content, metadata);
-  return serializeNoteContent(metadata, content, isNew, now, existingRaw);
+  return serializeNoteContent(metadata, content, isNew, now, existingRaw, isOutlinePath(filePath));
 }
 
 /** Replaces only the tags of a stored file: a compilation's `tags` key, or a note's frontmatter `tags`; every other field stays as it is. */

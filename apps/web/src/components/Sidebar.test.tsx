@@ -59,6 +59,22 @@ it('gives each notebook a Compilations entry with its count that lists compilati
   expect(onChange).toHaveBeenCalledWith({ kind: 'compilation', folders: [] });
 });
 
+it('lists outline documents beside compilations and scopes their status/tag counts', () => {
+  const onChange = vi.fn();
+  const outlineFacets = { ...facets, life: { ...facets.life, outlines: { total: 2, statuses: { todo: 2 }, tags: { research: 2 } } } };
+  render(
+    <I18nProvider>
+      <Sidebar filters={controls({ kind: 'outline' }, onChange)} facets={outlineFacets} folders={[]} selectedNotebookId='life' onManageFiles={() => {}} reorder={false} onToggleReorder={() => {}} onSelectFolder={() => {}} workspaceTagNames={[]} changeCount={0} />
+    </I18nProvider>,
+  );
+  const entry = screen.getByRole('button', { name: /Outlines/ });
+  expect(within(entry.closest('.nav-tree-row') as HTMLElement).getByText('2')).toBeInTheDocument();
+  expect([...document.querySelectorAll('.nav-tree-row.is-selected')].map(row => row.textContent)).toEqual([expect.stringContaining('Outlines')]);
+  expect(screen.getByText('research')).toBeInTheDocument();
+  fireEvent.click(entry);
+  expect(onChange).toHaveBeenCalledWith({ kind: 'outline', folders: [] });
+});
+
 it.each(['Delete', 'Move', 'Open file browser'])('puts %s on the folder dropdown, never the notebook, and forwards its nested path', async label => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ revision: 'r1' }) }));
   const onManageFiles = vi.fn();

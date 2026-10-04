@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { OUTLINE_SUFFIX } from '@mygitnotes/core/outline';
+import { noteMarkdownLink } from '@mygitnotes/core/workspace-links';
 import type { QueryClient } from '@tanstack/react-query';
 import { fetchGitStatus, renderNoteTemplate, saveNote } from '../lib/api.js';
 import { buildNewNoteDraft } from '../lib/new-note.js';
@@ -28,9 +30,35 @@ interface UseNewNoteDialogParams {
   onCreated: (note: NoteItem) => void;
 }
 
+export interface NewNoteOptions {
+  status?: string;
+  folder?: string;
+  tag?: string;
+  tags?: string[];
+  notebookId?: string;
+  kind?: 'note' | 'outline';
+  initialLink?: Pick<NoteItem, 'notebookId' | 'path' | 'title'>;
+}
+
 /** Create New Note dialog: its form state, and the handlers that render or persist a new note draft. */
 export function useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, newNoteStatuses, sourceId, t, onCreated }: UseNewNoteDialogParams) {
   const [createError, setCreateError] = useState('');
+  const [creation, setCreation] = useState<NewNoteOptions>({});
+  const [creating, setCreating] = useState(false);
+  const generation = useRef(0);
+  const submitting = useRef(false);
+  useLayoutEffect(() => () => {
+    generation.current++;
+  }, []);
+  const latest = useRef({ sourceId, selectedNotebookId, canWrite, config, queryScope });
+  const scopeKey = JSON.stringify([sourceId, selectedNotebookId, canWrite, queryScope.repositories[selectedNotebookId], config?.notebooks.find(nb => nb.id === selectedNotebookId)?.root]);
+  const requestScope = useRef(scopeKey);
+  useLayoutEffect(() => {
+    if (requestScope.current !== scopeKey) generation.current++;
+    requestScope.current = scopeKey;
+    latest.current = { sourceId, selectedNotebookId, canWrite, config, queryScope };
+  }, [scopeKey, sourceId, selectedNotebookId, canWrite, config, queryScope]);
+  const newNoteKind = creation.kind ?? 'note';
   const [isNewNoteOpen, setIsNewNoteOpen] = useState<boolean>(false);
   const [previousSourceId, setPreviousSourceId] = useState(sourceId);
   if (previousSourceId !== sourceId) {
@@ -61,11 +89,14 @@ export function useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebo
       // Ignore template preview error
     }
   };
-  const openNewNote = (options?: string | { status?: string; folder?: string; tag?: string; tags?: string[]; notebookId?: string; }) => {
+  const openNewNote = (options?: string | NewNoteOptions) => {
+    generation.current++;
     const opts = typeof options === 'string' ? { status: options } : { ...options };
     if (opts.notebookId && opts.notebookId !== selectedNotebookId && config?.notebooks.some(n => n.id === opts.notebookId)) {
       setSelectedNotebookId(opts.notebookId);
     }
+    setCreation({ ...opts, notebookId: opts.notebookId ?? selectedNotebookId });
+    setNewNoteTitle('');
     setNewNoteStatus(opts.status || newNoteStatuses[0]);
     setNewNoteFolder(opts.folder || '');
     setNewNoteTags(opts.tags || (opts.tag ? [opts.tag] : []));
@@ -74,30 +105,45 @@ export function useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebo
     setIsNewNoteOpen(true);
   };
 
+  const cancelNewNote = () => {
+    generation.current++;
+    setIsNewNoteOpen(false);
+  };
   const handleCreateNewNote = async (statusOverride?: string) => {
+    if (submitting.current) return;
+    submitting.current = true;
+    setCreating(true);
+    const request = generation.current;
+    const currentRequest = () => request === generation.current && latest.current.sourceId === sourceId && latest.current.selectedNotebookId === selectedNotebookId && latest.current.queryScope.repositories[selectedNotebookId] === queryScope.repositories[selectedNotebookId] && latest.current.config?.notebooks.find(nb => nb.id === selectedNotebookId)?.root === config?.notebooks.find(nb => nb.id === selectedNotebookId)?.root;
     try {
       setCreateError('');
       if (!canWrite) throw new Error('This workspace is read-only.');
+      if (creation.notebookId && creation.notebookId !== selectedNotebookId) throw new Error(t('outline.changed'));
       const title = newNoteTitle.trim() || 'Untitled Note';
       const slug = title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'untitled';
 
-      const currentNotebook = config?.notebooks.find((n) => n.id === selectedNotebookId) || config?.notebooks[0];
-      const root = currentNotebook?.root || 'notes/example';
+      const currentNotebook = config?.notebooks.find((n) => n.id === selectedNotebookId);
+      if (!currentNotebook) throw new Error(t('outline.changed'));
+      const root = currentNotebook.root;
       const folder = newNoteFolder.trim().replace(/^\/+|\/+$/g, '');
       if (folder && !newNoteFolders.includes(folder)) throw new Error(t('createNote.invalidFolder'));
-      const notePath = [root, folder, `${slug}.md`].filter(Boolean).join('/');
-      const taken = Boolean(remote && currentNotebook && readDraft(currentNotebook.id, notePath)) || (await queryClient.fetchQuery(noteLookupOptions(queryScope, [{ notebookId: currentNotebook?.id ?? selectedNotebookId, path: notePath }], false))).notes.length > 0;
+      const notePath = [root, folder, `${slug}${newNoteKind === 'outline' ? OUTLINE_SUFFIX : '.md'}`].filter(Boolean).join('/');
+      const taken = Boolean(remote && readDraft(currentNotebook.id, notePath)) || (await queryClient.fetchQuery(noteLookupOptions(queryScope, [{ notebookId: currentNotebook.id, path: notePath }], false))).notes.length > 0;
       if (taken) throw new Error('A note with this filename already exists in this folder. Choose another title.');
 
       const status = statusOverride || newNoteStatus;
-      const template = newNoteTemplateId ? await renderNoteTemplate({ notebookId: currentNotebook!.id, templateId: newNoteTemplateId, title }) : undefined;
+      const template = newNoteKind === 'note' && newNoteTemplateId ? await renderNoteTemplate({ notebookId: currentNotebook.id, templateId: newNoteTemplateId, title }) : undefined;
       const draft = buildNewNoteDraft({ slug, title, tags: newNoteTags, status, template });
-      const initialContent = draft.content;
+      if (creation.initialLink && creation.initialLink.notebookId !== currentNotebook.id) throw new Error(t('outline.changed'));
+      const initialContent = newNoteKind === 'outline' ? `- ${creation.initialLink ? noteMarkdownLink(notePath, creation.initialLink.path, creation.initialLink.title) : ''}` : draft.content;
       const finalStatus = draft.status;
       const initialMetadata = withNoteStatus(draft.metadata, finalStatus);
 
-      const res = remote ? { note: stageWorkingNote({ id: slug, path: notePath, notebookId: currentNotebook!.id, title, content: initialContent, metadata: initialMetadata, status: finalStatus, tags: Array.isArray(initialMetadata.tags) ? initialMetadata.tags.map(String) : [], revision: revisionFor(currentNotebook!.id) }, null) } : await saveNote({ path: notePath, notebookId: currentNotebook?.id, createOnly: true, content: initialContent, metadata: initialMetadata, noCommit: true });
+      if (!currentRequest()) return;
+      if (!latest.current.canWrite) throw new Error(t('outline.readOnly'));
+      const res = remote ? { note: stageWorkingNote({ ...(newNoteKind === 'outline' ? { kind: 'outline' as const } : {}), id: slug, path: notePath, notebookId: currentNotebook.id, title, content: initialContent, metadata: initialMetadata, status: finalStatus, tags: Array.isArray(initialMetadata.tags) ? initialMetadata.tags.map(String) : [], revision: revisionFor(currentNotebook.id) }, null) } : await saveNote({ path: notePath, notebookId: currentNotebook.id, createOnly: true, content: initialContent, metadata: initialMetadata, noCommit: true });
       if (!remote) invalidateNotes();
+      if (!currentRequest()) return;
 
       setIsNewNoteOpen(false);
       setNewNoteTitle('');
@@ -105,13 +151,18 @@ export function useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebo
       setNewNoteTags([]);
       setNewNoteTemplateId('');
       setNewNoteStatus(newNoteStatuses[0]);
-      const statusRes = await fetchGitStatus();
-      setGitStatus(statusRes.status);
       onCreated(res.note);
+      // Creation has already succeeded; a status refresh failure must not invite a duplicate retry.
+      void fetchGitStatus().then(statusRes => {
+        if (currentRequest()) setGitStatus(statusRes.status);
+      }).catch(() => {});
     } catch (error) {
-      setCreateError((error as Error).message);
+      if (currentRequest()) setCreateError((error as Error).message);
+    } finally {
+      submitting.current = false;
+      setCreating(false);
     }
   };
 
-  return { createError, setCreateError, isNewNoteOpen, setIsNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteFolder, setNewNoteFolder, newNoteTags, setNewNoteTags, newNoteTemplateId, setNewNoteTemplateId, newNoteFolders, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote };
+  return { newNoteKind, creating, cancelNewNote, createError, setCreateError, isNewNoteOpen, setIsNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteFolder, setNewNoteFolder, newNoteTags, setNewNoteTags, newNoteTemplateId, setNewNoteTemplateId, newNoteFolders, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote };
 }

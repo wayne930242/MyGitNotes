@@ -1,4 +1,4 @@
-import { ArrowLeft, FileText, LayoutGrid, ListOrdered, PanelRight, Save, Type } from 'lucide-react';
+import { ArrowLeft, FileText, LayoutGrid, ListOrdered, ListTree, PanelRight, Save, Type } from 'lucide-react';
 import { useTranslation } from '../../lib/i18n/index.js';
 import type { NoteItem } from '../../lib/types.js';
 import { Button } from '../Button.js';
@@ -27,7 +27,7 @@ interface NoteEditorToolbarProps {
   onRefresh?: () => Promise<void>;
   onClose?: () => void;
   onAddToFocus?: () => void;
-  onBookmarkNote?: () => void;
+  onAddToOutline?: () => void;
   onBookmarkPosition?: () => void;
 }
 
@@ -66,7 +66,7 @@ function NoteZoomHeading({ note, session, onRefresh, onClose }: Pick<NoteEditorT
 }
 
 /** The zoom and pane editor's top bar: the zoom title, then save, mode, line number, export, Focus, formatting toolbar and panel actions. */
-export function NoteEditorToolbar({ frame, note, session, docPanel, isMarkdown, autoSave, readOnly, editorMode, setEditorMode, showLineNumbers, toggleLineNumbers, showFormatToolbar, toggleFormatToolbar, onRefresh, onClose, onAddToFocus, onBookmarkNote, onBookmarkPosition }: NoteEditorToolbarProps) {
+export function NoteEditorToolbar({ frame, note, session, docPanel, isMarkdown, autoSave, readOnly, editorMode, setEditorMode, showLineNumbers, toggleLineNumbers, showFormatToolbar, toggleFormatToolbar, onRefresh, onClose, onAddToFocus, onAddToOutline, onBookmarkPosition }: NoteEditorToolbarProps) {
   const { t } = useTranslation();
   const zoom = frame === 'zoom';
   return (
@@ -83,7 +83,11 @@ export function NoteEditorToolbar({ frame, note, session, docPanel, isMarkdown, 
         <button type='button' aria-pressed={showLineNumbers} aria-label={t('editor.lineNumbers')} title={t('editor.lineNumbers')} onClick={toggleLineNumbers} className='ui-icon-button toolbar-icon-button editor-line-numbers-action'>
           <ListOrdered aria-hidden='true' />
         </button>
-        {onBookmarkNote && <button type='button' className='ui-icon-button toolbar-icon-button' aria-label={t('bookmarks.note')} title={t('bookmarks.note')} onClick={onBookmarkNote}>☆</button>}
+        {onAddToOutline && (
+          <button type='button' className='ui-icon-button toolbar-icon-button' disabled={session.locked} aria-label={t('outline.add')} title={t('outline.add')} onClick={onAddToOutline}>
+            <ListTree aria-hidden='true' />
+          </button>
+        )}
         {onBookmarkPosition && <button type='button' className='ui-icon-button toolbar-icon-button' aria-label={t('bookmarks.position')} title={t('bookmarks.position')} onPointerDown={event => event.preventDefault()} onClick={onBookmarkPosition}>⌖</button>}
         <NoteExportMenu className='ui-icon-button toolbar-icon-button' path={note.path} notebookId={note.notebookId} title={session.title} content={session.content} copyState={session.copyState} onCopy={session.copyNote} />
         {onAddToFocus && (

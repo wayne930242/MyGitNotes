@@ -1,5 +1,8 @@
 import { useNoteSort } from './app/useNoteSort.js';
 import { useBookmarkActions } from './app/useBookmarkActions.js';
+import { useOutlineActions } from './app/useOutlineActions.js';
+import { OutlineActionsProvider } from './lib/outline-actions.js';
+import { AddToOutlineDialog } from './components/AddToOutlineDialog.js';
 import { BookmarksProvider } from './lib/bookmark-context.js';
 import { BookmarkDialog } from './components/BookmarkDialog.js';
 import { captureBookmarkQuery } from './lib/bookmark-navigation.js';
@@ -191,7 +194,9 @@ const AppContent: React.FC = () => {
   const bulkMoveNotebook = config?.notebooks.find(nb => nb.id === bulkMoveNotebookId);
 
   // Create New Note dialog: its form state and the handlers that render or persist a new note draft.
-  const { createError, isNewNoteOpen, setIsNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteFolder, setNewNoteFolder, newNoteTags, setNewNoteTags, newNoteTemplateId, setNewNoteTemplateId, newNoteFolders, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote } = useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, sourceId, newNoteStatuses, t, onCreated: handleOpenNote });
+  const { newNoteKind, creating, cancelNewNote, createError, isNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteFolder, setNewNoteFolder, newNoteTags, newNoteTemplateId, newNoteFolders, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote } = useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, sourceId, newNoteStatuses, t, onCreated: handleOpenNote });
+
+  const outlineActions = useOutlineActions({ config, repositoryFor, readDraft, remote, sourceId, selectedNotebookId, locationKey: location.key, routedRef: editorRoute.note && editorNotebookId ? { notebookId: editorNotebookId, path: `${config?.notebooks.find(nb => nb.id === editorNotebookId)?.root}/${editorRoute.note}` } : null, prepareLeave: editorRegistry.flushEditors, openNote: handleOpenNote, openNewNote, onError: setActionError });
 
   const { commitWorkingNotes } = useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError });
   const { commitNoteFile } = useQuickNoteCommit({ remote, repositoryFor, refreshWorkspace, commitWorkingNotes });
@@ -547,6 +552,7 @@ const AppContent: React.FC = () => {
                               onShowHiddenChange={value => changeFilters({ showHidden: value })}
                               onDescendantsChange={value => changeFilters({ descendants: value })}
                               onOpenNewNoteModal={() => openNewNote()}
+                              onOpenNewOutline={() => openNewNote({ kind: 'outline', folder: selectedFolder ?? '' })}
                               onOpenNewCompilation={() => setNewCompilationOpen(true)}
                               query={searchQuery}
                               onQueryChange={value => changeFilters({ q: value })}
@@ -744,39 +750,21 @@ const AppContent: React.FC = () => {
                 }}
               />
               {/* Create New Note Modal */}
-              {isNewNoteOpen && (
-                <NewNoteDialog
-                  t={t}
-                  createError={createError}
-                  newNoteTitle={newNoteTitle}
-                  onTitleChange={setNewNoteTitle}
-                  onSubmit={() => handleCreateNewNote()}
-                  newNoteFolder={newNoteFolder}
-                  onFolderChange={setNewNoteFolder}
-                  newNoteFolders={newNoteFolders}
-                  newNoteTemplates={newNoteTemplates}
-                  newNoteTemplateId={newNoteTemplateId}
-                  onTemplateChange={handleTemplateChange}
-                  newNoteTags={newNoteTags}
-                  newNoteStatus={newNoteStatus}
-                  onStatusChange={setNewNoteStatus}
-                  newNoteStatuses={newNoteStatuses}
-                  onCancel={() => {
-                    setIsNewNoteOpen(false);
-                    setNewNoteTags([]);
-                    setNewNoteTemplateId('');
-                  }}
-                />
-              )}
+              {isNewNoteOpen && <NewNoteDialog t={t} createError={createError} kind={newNoteKind} creating={creating} newNoteTitle={newNoteTitle} onTitleChange={setNewNoteTitle} onSubmit={() => handleCreateNewNote()} newNoteFolder={newNoteFolder} onFolderChange={setNewNoteFolder} newNoteFolders={newNoteFolders} newNoteTemplates={newNoteTemplates} newNoteTemplateId={newNoteTemplateId} onTemplateChange={handleTemplateChange} newNoteTags={newNoteTags} newNoteStatus={newNoteStatus} onStatusChange={setNewNoteStatus} newNoteStatuses={newNoteStatuses} onCancel={cancelNewNote} />}
             </div>
             <ImageLightbox />
+            {outlineActions.dialog && <AddToOutlineDialog key={outlineActions.dialog.id} source={outlineActions.dialog.source} busy={outlineActions.busy} error={outlineActions.error} onChoose={outlineActions.choose} onClose={outlineActions.cancel} />}
             {bookmarkActions.dialog && <BookmarkDialog key={`${bookmarkActions.dialog.notebook.id}:${bookmarkActions.dialog.request.id ?? JSON.stringify(bookmarkActions.dialog.request.target)}`} {...bookmarkActions.dialog} />}
           </NoteEditingProvider>
         </NoteLocationProvider>
       </WorkspaceLinks>
     </CompilationActionsProvider>
   );
-  return <BookmarksProvider value={bookmarkActions.value}>{content}</BookmarksProvider>;
+  return (
+    <BookmarksProvider value={bookmarkActions.value}>
+      <OutlineActionsProvider value={outlineActions.value}>{content}</OutlineActionsProvider>
+    </BookmarksProvider>
+  );
 };
 
 export const App: React.FC = () => {

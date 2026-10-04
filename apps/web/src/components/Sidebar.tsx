@@ -4,7 +4,7 @@ import type { FolderAction } from './FolderActions.js';
 import { FolderTree } from './FolderTree.js';
 import { BookmarksSection } from './BookmarksSection.js';
 import React, { useEffect, useState } from 'react';
-import { BookOpen, CheckCircle2, CheckSquare, ChevronsDownUp, ChevronsUpDown, Filter, GalleryHorizontalEnd, GitBranch, Library, Search, Tag, X } from 'lucide-react';
+import { BookOpen, CheckCircle2, CheckSquare, ChevronsDownUp, ChevronsUpDown, Filter, GalleryHorizontalEnd, GitBranch, Library, ListTree, Search, Tag, X } from 'lucide-react';
 import type { NotebookFacets } from '@mygitnotes/core/note-query';
 import { FolderItem } from '../lib/types.js';
 import { mergeNotebookFacets, queryNotebookIds } from '../lib/note-facets.js';
@@ -121,8 +121,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
     setTagQuery('');
   }
 
-  // While the list shows compilations, the filters count compilations.
-  const kindFacets = (facet: NotebookFacets): NotebookFacets => value.kind === 'compilation' ? { ...facet, total: facet.compilations.total, hidden: 0, statuses: facet.compilations.statuses, tags: facet.compilations.tags, directories: {} } : facet;
+  // Native kind filters count the same documents as the list.
+  const kindFacets = (facet: NotebookFacets): NotebookFacets => {
+    const kind = value.kind === 'outline' ? facet.outlines : value.kind === 'compilation' ? facet.compilations : null;
+    return kind ? { ...facet, total: kind.total, hidden: 0, statuses: kind.statuses, tags: kind.tags, directories: {} } : facet;
+  };
   const notebookFacets = mergeNotebookFacets(queryNotebookIds(filters.notebooks, value.notebookId, value.folders).flatMap(id => facets?.[id] ? [kindFacets(facets[id])] : []));
   const statusCounts = notebookFacets.statuses;
   const tagCounts: Record<string, number> = { ...notebookFacets.tags };
@@ -233,9 +236,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
               const hasFolders = nbFolders.length > 0;
               const isCurrentNotebook = nb.id === selectedNotebookId;
               const compilationList = value.kind === 'compilation';
-              const isSelected = !compilationList && (allNotebooks ? value.folders.includes(root) : isCurrentNotebook && selectedFolder === null && value.folders.length === 0);
+              const outlineList = value.kind === 'outline';
+              const isSelected = !compilationList && !outlineList && (allNotebooks ? value.folders.includes(root) : isCurrentNotebook && selectedFolder === null && value.folders.length === 0);
               const compilationSelected = compilationList && (allNotebooks ? value.folders.includes(root) : isCurrentNotebook);
               const compilationCount = facets ? facets[nb.id]?.compilations.total ?? 0 : null;
+              const outlineCount = facets ? facets[nb.id]?.outlines.total ?? 0 : null;
 
               return (
                 <section className='sidebar-notebook-group' key={nb.id} data-selected={isSelected || selectedPaths.length > 0} data-scope={allNotebooks ? (isCurrentNotebook ? 'current' : 'included') : undefined}>
@@ -279,6 +284,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
                     <BookmarksSection notebookId={nb.id} />
                     {hasFolders ? <FolderTree onManageFiles={(path, action) => onManageFiles(nb.id, path, action)} reorder={reorder} onToggleReorder={onToggleReorder} folders={folders} notebookId={nb.id} selected={isCurrentNotebook ? selectedFolder : null} onSelect={folder => selectSingleFolder(nb.id, folder)} allFoldersSelected={value.folders.length === 0} selectedPaths={selectedPaths} onFilterFolder={folder => toggleFolder(nb.id, folder)} touchMultiSelect={touchMultiSelect} onLongPressFolder={folder => enterTouchMultiSelect(nb.id, folder)} writable={foldersWritable && isCurrentNotebook} beforeChange={beforeFolderChange} onChanged={onFoldersChanged} expandCommand={folderExpandCommand} /> : <p className='sidebar-notebook-empty'>{t('folder.subfolderCount', { count: 0 })}</p>}
                   </div>
+                  <NavTreeRow
+                    icon={<ListTree size={16} />}
+                    title={t('outline.list')}
+                    selected={outlineList && (allNotebooks ? value.folders.includes(root) : isCurrentNotebook)}
+                    className='sidebar-compilations-row'
+                    onSelect={() => {
+                      setTouchMultiSelect(false);
+                      onChange({ kind: 'outline', folders: allNotebooks ? [root] : [] });
+                    }}
+                    suffix={<span className='sidebar-notebook-count' title={outlineCount === null ? t('notes.countsLoading') : t('outline.count', { count: outlineCount })}>{outlineCount ?? '—'}</span>}
+                  />
                   <NavTreeRow
                     icon={<GalleryHorizontalEnd size={16} />}
                     title={t('sidebar.compilations')}

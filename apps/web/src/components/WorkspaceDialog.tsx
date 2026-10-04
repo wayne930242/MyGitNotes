@@ -15,8 +15,12 @@ export function WorkspaceDialog({ title, children, onClose, className = '' }: { 
     const element = dialog.current;
     element?.showModal();
     return () => {
+      // A succeeding native dialog may already have focused its field. Do not
+      // steal that focus back to the old trigger during the previous cleanup.
+      const active = document.activeElement;
+      const restore = active === document.body || active === element || Boolean(active && element?.contains(active));
       element?.close();
-      previous?.focus();
+      if (restore) previous?.focus();
     };
   }, []);
 

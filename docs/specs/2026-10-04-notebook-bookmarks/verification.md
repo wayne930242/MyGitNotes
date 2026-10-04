@@ -1,7 +1,7 @@
 # Outline notes — verification ledger
 
 Planning baseline: `/home/weihung/github-notes`, clean HEAD `ac26edfe69120fac9eff904b5cb7f53e76966588`.
-Status: implementation in progress; native-kind foundation and bounded editor stage verified in upstream; tasks 3–6 and independent parent browser QA are not complete.
+Status: implementation in progress; stages 1–3 (native kind, bounded editing, native creation/list/insertion) verified in upstream; tasks 4–6 and independent parent browser QA are not complete.
 No push, deployment or downstream synchronization was performed by this worker.
 The approved model is **Outline note / 大綱筆記**, with general items and optional links, not the earlier specialized bookmark document.
 Contract: [spec.md](spec.md); implementation sequence: [design.md](design.md).
@@ -27,13 +27,13 @@ A planned test or a source reading is not an executed behavior check.
 
 | Requirement | Evidence | Result |
 | --- | --- | --- |
-| R1 Native Outline type, multiple documents, portable `.outline.md`, no hidden registry | Stage 1 parser/classifier/local HTTP/GitHub/GitLab tests pass; native creation UI not yet connected. | unknown |
+| R1 Native Outline type, multiple documents, portable `.outline.md`, no hidden registry | Stage 1 parser/classifier/local HTTP/GitHub/GitLab tests and stage 3 native multi-document creation/browser checks pass; final integrated parent matrix remains. | unknown |
 | R2 General text/link items, children and annotations, non-destructive deletion | Stage 2 source tests and actual browser subtree edits retain annotations/children; final mixed-link/delete lifecycle matrix remains. | unknown |
 | R3 Enter sibling, Shift+Enter annotation, Tab hierarchy in live/raw, undo/IME/accessibility | Stage 2 shared-source and mounted CM/textarea tests plus real raw-browser undo/redo pass for covered scenarios; final integrated matrix and independent parent journey remain. | unknown |
 | R3a Same-document live-editor subtree dragging, drop/nesting feedback, cancel/read-only, undo/redo | Stage 2 real mouse reorder/nesting, full annotation+child preservation, cancel, own-descendant refusal and one-step undo/redo observed; independent parent and real-browser read-only checks remain. | unknown |
-| R4 Existing UI consistency, native save state, no old forms/Saved badge | Existing components named as precedents; replacement UI and independent visual comparison not executed. | unknown |
-| R5 Internal/external optional links, opener isolation, no preview fetching, repository scope | Mounted explicit-link/editable-text isolation tests and real no-YouTube-preview check pass; repository-scoped completion and full integrated link matrix remain. | unknown |
-| R6 Add current content with filled label/target into selected/new outline | Consumed-once mounted-editor insertion planned; cancel/race/dirty-destination behavior untested. | unknown |
+| R4 Existing UI consistency, native save state, no old forms/Saved badge | Stage 3 reuses native New note fields and WorkspaceDialog/Select/Button, with desktop/mobile captures; legacy UI intentionally awaits task 5 retirement and independent visual comparison remains. | unknown |
+| R5 Internal/external optional links, opener isolation, no preview fetching, repository scope | Mounted explicit-link/editable-text isolation and no-YouTube-preview checks pass; stage 3 scoped completion and real A/B equal-path insertion isolation pass; full integrated link matrix remains. | unknown |
+| R6 Add current content with filled label/target into selected/new outline | Stage 3 mounted dirty/recovered-body insertion, source-save failure, cancel, read-only, route/repository/root races and failed-navigation tests pass; real existing/new destination and compilation-source browser checks pass; independent parent matrix remains. | unknown |
 | R7 All note lifecycle/local+remote/kind isolation and compilation unaffected | Stage 1 catalog, local create/save/copy/delete/restore, GitHub/GitLab create/save guards and draft facets pass; full move/UI lifecycle remains unverified. | unknown |
 | R8 Atomic rename/move references and non-destructive delete/restore | Existing Markdown planner reuse identified; hosted shell Markdown relocation gap remains for implementation. | unknown |
 | R9 Explicit partial/non-lossy import, retained source/drafts, invalid/stale/unknown-owner refusal | Preview/apply/recovery contract specified; no import endpoint or migration test executed. | unknown |
@@ -97,9 +97,60 @@ Outline URL-only YouTube links remain links in both rendering paths; editable li
 - A first gutter attempt placed handles far from the centered card; inline zero-width widgets now attach handles to the actual item marker. A narrow-layout check also exposed global icon-button minimum sizing; the scoped marker sizes were corrected, retaining native toolbar alternatives for touch.
 
 This is **not** the final parent fixture-ready production freeze.
-Tasks 3–6 remain: native creation/list UI/current-content insertion and scoped completion; full relocation/hosted shell gap; explicit import/recovery followed by old UI/write retirement; final two-repo fixture/docs/independent browser matrix.
+At the stage 2 checkpoint, tasks 3–6 remained; stage 3 execution is recorded below.
+Tasks 4–6 still remain: full relocation/hosted shell gap; explicit import/recovery followed by old UI/write retirement; final two-repo fixture/docs/independent browser matrix.
 The rejected bookmark UI is intentionally still mounted until recovery exists; it is not accepted or considered the new outline UI.
 Human appropriateness remains unknown.
+
+## Stage 3 execution checkpoint
+
+Native creation/listing now exposes New outline and Outlines beside existing note/compilation controls.
+The same creation dialog retains folder, status/tags, collision, permission and local-worktree/remote-staging behavior; outlines bypass normal-note templates and use `.outline.md`.
+`useOutlineActions`, `AddToOutlineDialog` and `useOutlineInsertion` coordinate one repository-qualified request; only the initialized, mounted editor appends the ordinary Markdown link to its current body.
+No append API or second document model exists.
+Requests remain unarmed until guarded navigation succeeds and are canceled on route/repository/root changes, permission loss, cancellation or unmount.
+A pending recovery draft is restored/discarded explicitly before insertion and can cancel the insertion independently.
+The normal editor lifecycle owns subsequent persistence, including remote staging without a forced source commit.
+Completion is scoped to the outline's notebook with `kind: all`; ordinary-note completion scope is unchanged.
+
+### Final automated evidence
+
+- `/tmp/outline-stage3-full-tests-final.log`: **256 files / 1870 tests passed**.
+- `/tmp/outline-stage3-build-final.log`: production build passed; existing Vite chunk/dynamic-import warnings remain informational.
+- `/tmp/outline-stage3-lint-final.log`, `/tmp/outline-stage3-format-final.log`: both passed.
+- `/tmp/outline-stage3-webtypes-final.log`, `/tmp/outline-stage3-servertypes-final.log`: fresh compiler processes both passed.
+- Final monitor 10 exited `tests=0 build=0 lint=0 format=0 web=0 server=0`; no product-source edit followed this run.
+- Active LSP probes covered 17 changed production paths, reporting zero error diagnostics but 17 silent/inconclusive outcomes, not confirmed clean coverage.
+- `/tmp/outline-stage3-mounted-final.log`: actual mounted CodeMirror/raw insertion, recovery/cancel, CRLF caret/undo/redo and dialog focus tests passed (8 tests).
+- Earlier logs retain the discovered HTML-comment EOF failure (`outline-stage3-target1.log`) and absent JSDOM native-dialog methods (`outline-stage3-target-final.log`); those were corrected before the final green suite.
+- Runtime-discovered fixes: the shared serializer preserves outline body whitespace so an empty `- ` remains editable; ordinary-note trimming stays unchanged.
+  `WorkspaceDialog` no longer steals the succeeding creation input's autofocus; ordinary dismissal still restores its trigger.
+  Live imperative insertion uses CodeMirror Text length for CRLF-safe selection and an isolated outline history transaction.
+
+### Actual worker browser evidence
+
+- Initial built fixture: Monitor 7, PID `786186`, port `46277`, roots `/tmp/mygitnotes-bookmarks-home-Fxvh0Y` and `/tmp/mygitnotes-bookmarks-other-FcWAN6`; named browser `outline-stage3`, PID `786394`, CDP port `38247`.
+- Created `Native plan` and `Second plan` through the native New menu; Outlines counted/listed both while ordinary-note results remained separate.
+- Actual raw keys produced `- First`, same-item `Annotation`, and nested `Second`; native close/save/reopen retained them.
+- From `Home guide`, Add to outline selected Second plan and inserted its ordinary relative link through the mounted live editor.
+- In B, created the identical `notes/shared/second-plan.outline.md` via native creation; the chooser listed only B's outline.
+  Cancel wrote no link; the subsequent insertion used `Other guide`, and A's source remained byte-identical.
+  Readback: `/tmp/outline-stage3-readback.json`, prior A snapshot `/tmp/outline-stage3-a-before.json`.
+- From B's compilation, Add to outline → New outline reused native creation and stored `- [QA compilation](reading.compilation.yml)`.
+- Desktop/native baseline and narrow captures: `/tmp/outline-stage3-new-note-desktop.png`, `/tmp/outline-stage3-new-outline-desktop.png`, `/tmp/outline-stage3-editor-desktop.png`, `/tmp/outline-stage3-chooser-desktop.png`, `/tmp/outline-stage3-chooser-mobile.png`, `/tmp/outline-stage3-new-outline-mobile.png`.
+- Red browser evidence exposed a new empty outline readback of `\n-\n` (lost space) and the prior chooser's Add to outline button stealing new-dialog focus.
+- Final rebuilt fixture after all production changes: Monitor 11, PID `855175`, port `39771`, roots `/tmp/mygitnotes-bookmarks-home-3Bhzue` and `/tmp/mygitnotes-bookmarks-other-qtkO21`; browser `outline-stage3-final`, PID `855322`, CDP port `33515`.
+- Real Add to outline → New outline left `document.activeElement` on the native title INPUT; `/tmp/outline-stage3-focus-final.png`.
+- Native creation returned exact empty body `\n- \n`; `/tmp/outline-stage3-blank-final.json`.
+  With the caret on that marker, actual live typing/Shift+Enter/Enter/Tab produced the annotation and nested child.
+- Final guarded Add to outline inserted one Home guide link; exact saved body readback passed in `/tmp/outline-stage3-final-readback.json`, with `/tmp/outline-stage3-insertion-final.png`.
+- Both named browsers were closed, both fixture monitors stopped, and every recorded PID, listener and temporary root was asserted absent: `/tmp/outline-stage3-cleanup1.log`, `/tmp/outline-stage3-cleanup-final.log`.
+
+This is a stage 3 checkpoint, not the final fixture-ready production freeze.
+Tasks 4–6 remain untouched; their required work is unchanged.
+Old bookmark position/sidebar/forms and write APIs intentionally remain until explicit import/recovery exists.
+Human appropriateness remains **unknown**, and the historical bookmark UI **FAIL** remains in force.
+No push, live-provider mutation, downstream edit, deployment, user-notebook edit or shutdown occurred.
 
 ## Required automated evidence
 
@@ -197,8 +248,8 @@ This planning session started no persistent process or browser session and needs
 | --- | --- |
 | Clean specified upstream BASE before planning | Confirmed by Git status/HEAD inspection. |
 | Four-document plan researched against actual source | Complete: exactly four allowed modified files; six ordered implementation tasks; 15 relative evidence links resolve; `git diff --check` clean; HEAD unchanged. |
-| New outline tests/build/types/lint | Stage 1 passed as recorded above; later stages remain in progress. |
-| New browser/UI/real provider evidence | Not run. |
+| New outline tests/build/types/lint | Stages 1–3 passed as recorded above; tasks 4–6 remain. |
+| New browser/UI/real provider evidence | Worker disposable local-browser stages 2–3 recorded above; independent parent, human appropriateness and live-provider evidence not claimed. |
 | Human appropriateness of rejected collection | FAIL. |
 | Human appropriateness of replacement outline UI | Unknown; parent/user review required after implementation. |
 | Commit/push/CI/deployment/downstream | Stage commits are recorded in worker handoffs; no push/CI/deployment/downstream action performed by this worker. |

@@ -185,8 +185,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
     setActiveSourceLine(1);
   }
   const match = !readOnly && mode === 'raw' && !dismissed && caret !== null ? noteCompletionAt(content, caret) : null;
-  const suggestions = useNoteCandidates(match ? match.query : null, path);
-  const pickerCandidates = useNoteCandidates(picker ? query : null, path);
+  const suggestions = useNoteCandidates(match ? match.query : null, path, isOutlinePath(path) ? notebookId : undefined);
+  const pickerCandidates = useNoteCandidates(picker ? query : null, path, isOutlinePath(path) ? notebookId : undefined);
   const accept = (note: NoteListItem) => {
     if (!match) return;
     const insert = noteLinkHref(path, note.path) + (content[match.to] === ')' ? '' : ')');
@@ -433,7 +433,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
           {pickerCandidates.map(note => (
             <button
               type='button'
-              key={note.path}
+              key={`${note.notebookId}:${note.path}`}
               onClick={() => insertPicked(note)}
             >
               {note.title}
@@ -464,7 +464,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
                       type='button'
                       role='option'
                       aria-selected={index === choice % suggestions.length}
-                      key={note.path}
+                      key={`${note.notebookId}:${note.path}`}
                       onMouseDown={event => event.preventDefault()}
                       onClick={() => accept(note)}
                     >

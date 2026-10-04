@@ -1,4 +1,6 @@
 import { EditorFooter } from './EditorFooter.js';
+import { ListTree } from 'lucide-react';
+import { useOutlineActions, useOutlineInsertion } from '../lib/outline-actions.js';
 import { captureBookmarkSelection, captureTextAnchor, listBookmarkPositions } from '@mygitnotes/core/bookmark-anchor';
 import { useBookmarkActionsContext } from '../lib/bookmark-context.js';
 import { useBookmarkPosition } from '../lib/use-bookmark-position.js';
@@ -81,6 +83,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   const editorRef = useRef<MarkdownEditorHandle>(null);
 
   const session = useNoteEditorSession({ note, readOnly, autoSave, draftMode, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, onCommitFile, propIsDirty, branch, draftScope, onClose, onSession });
+  const outlines = useOutlineActions();
+  const awaitingRecovery = useOutlineInsertion(note, session, editorRef);
+  const addToOutline = outlines?.canAdd(note.notebookId) && !session.locked ? () => outlines.add({ ...note, title: session.title, content: session.content }) : undefined;
   // A graph card has no footer to show the counts in.
   const bookmarks = useBookmarkActionsContext();
   const { t } = useTranslation();
@@ -130,9 +135,18 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
         <NoteEditorNotices session={session} notePath={note.path} />
         {canBookmark && (
           <div className='bookmark-control-grid'>
-            <button type='button' onClick={() => bookmarks!.bookmarkNote(note)}>{t('bookmarks.note')}</button>
             <button type='button' onPointerDown={event => event.preventDefault()} onClick={() => bookmarkPosition()}>{t('bookmarks.position')}</button>
           </div>
+        )}
+        {addToOutline && (
+          <button type='button' className='ui-icon-button' title={t('outline.add')} aria-label={t('outline.add')} onClick={addToOutline}>
+            <ListTree aria-hidden='true' />
+          </button>
+        )}
+        {awaitingRecovery && (
+          <p role='status'>
+            {t('outline.recoveryPending')} <button type='button' className='ui-button' onClick={() => outlines?.cancel()}>{t('common.cancel')}</button>
+          </p>
         )}
         {bookmarkError && <p role='alert'>{bookmarkError}</p>}
         <NoteCompactFrame note={note} session={session} editorRef={editorRef} isMarkdown={isMarkdown} editorMode={editorMode} setEditorMode={setEditorMode} showLineNumbers={showLineNumbers} toggleLineNumbers={toggleLineNumbers} onCaret={onCaret} />
@@ -144,7 +158,12 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   return (
     <div className='note-editor' data-frame={frame} data-source-notebook={note.notebookId} style={noteViewStyle(viewPreferences)}>
       <NoteEditorNotices session={session} notePath={note.path} />
-      <NoteEditorToolbar frame={frame} note={note} session={session} docPanel={docPanel} isMarkdown={isMarkdown} autoSave={autoSave} readOnly={readOnly} editorMode={editorMode} setEditorMode={setEditorMode} showLineNumbers={showLineNumbers} toggleLineNumbers={toggleLineNumbers} showFormatToolbar={showFormatToolbar} toggleFormatToolbar={isMarkdown && !session.locked ? toggleFormatToolbar : undefined} onRefresh={refresh} onClose={onClose} onAddToFocus={onAddToFocus} onBookmarkNote={canBookmark ? () => bookmarks!.bookmarkNote(note) : undefined} onBookmarkPosition={canBookmark ? () => bookmarkPosition() : undefined} />
+      <NoteEditorToolbar frame={frame} note={note} session={session} docPanel={docPanel} isMarkdown={isMarkdown} autoSave={autoSave} readOnly={readOnly} editorMode={editorMode} setEditorMode={setEditorMode} showLineNumbers={showLineNumbers} toggleLineNumbers={toggleLineNumbers} showFormatToolbar={showFormatToolbar} toggleFormatToolbar={isMarkdown && !session.locked ? toggleFormatToolbar : undefined} onRefresh={refresh} onClose={onClose} onAddToFocus={onAddToFocus} onAddToOutline={addToOutline} onBookmarkPosition={canBookmark ? () => bookmarkPosition() : undefined} />
+      {awaitingRecovery && (
+        <p role='status'>
+          {t('outline.recoveryPending')} <button type='button' className='ui-button' onClick={() => outlines?.cancel()}>{t('common.cancel')}</button>
+        </p>
+      )}
       {bookmarkError && <p role='alert'>{bookmarkError}</p>}
       {showFormatToolbar && <div ref={setToolbarSlot} className='note-format-toolbar' />}
       <div className='note-editor-body'>

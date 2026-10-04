@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { Compartment, EditorState, StateEffect, StateField, Transaction } from '@codemirror/state';
 import { type DecorationSet, drawSelection, EditorView, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
 import { autocompletion } from '@codemirror/autocomplete';
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, isolateHistory } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { codeMirrorTokenTheme, tokenHighlightStyle } from '../lib/codemirror-theme.js';
@@ -106,7 +106,8 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
       const view = editor.current;
       if (!view || view.state.readOnly) return;
       const from = at === undefined ? undefined : Math.max(0, Math.min(at, view.state.doc.length));
-      view.dispatch(from === undefined ? view.state.replaceSelection(text) : { changes: { from, insert: text }, selection: { anchor: from + text.length } }, { scrollIntoView: true, userEvent: 'input' });
+      const inserted = view.state.toText(text);
+      view.dispatch(from === undefined ? view.state.replaceSelection(inserted) : { changes: { from, insert: inserted }, selection: { anchor: from + inserted.length } }, { scrollIntoView: true, userEvent: 'input', annotations: isOutlinePath(notePath) ? isolateHistory.of('full') : undefined });
       view.focus();
     },
     revealRange(from, to, focus = false) {
@@ -205,7 +206,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
               await new Promise(resolve => setTimeout(resolve, 150));
               if (context.aborted) return null;
               const { queryClient: client, scope: current } = completionSource.current;
-              const notes = await fetchNoteCandidates(client, current, match.query, notePath);
+              const notes = await fetchNoteCandidates(client, current, match.query, notePath, isOutlinePath(notePath) ? notebookId : undefined);
               if (context.aborted) return null;
               return { from: match.from, to: match.to, filter: false, options: notes.map(note => ({ label: note.title, detail: `${note.notebookId} · ${note.path}`, apply: noteLinkHref(notePath, note.path) + (text[context.pos] === ')' ? '' : ')') })) };
             }],

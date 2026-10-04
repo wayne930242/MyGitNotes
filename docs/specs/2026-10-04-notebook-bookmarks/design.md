@@ -60,6 +60,7 @@ Extend `NoteKindFilter`, `NOTE_KIND_FILTERS`, `entryKind` and `NoteFilters.kind`
 Keep `entryKind` filename fallback for remote drafts that have never passed through the server.
 `parseNoteFile` uses `parseNoteContent` for outlines, adding only the kind and an outline-aware title fallback that strips the complete suffix when no title/H1 exists.
 `serializeNoteFile`, tag replacement, frontmatter preservation and timestamps stay on the ordinary Markdown branch.
+Stage 3 browser evidence exposed that the ordinary serializer trims a new empty `- ` to `-`; its existing serializer now accepts an outline-only body-whitespace preservation option, retaining the empty content column, indentation and annotation spaces without changing ordinary-note trimming.
 No required IDs, node count schema, unique-link constraint or legacy anchor metadata is attached to outline items.
 
 Update `classifyResource` and `ResourceType` consistently, plus every classifier consumer that distinguishes notebook content from assets/product files.
@@ -403,3 +404,27 @@ The full browser matrix and honest results start in [verification.md](verificati
   Found: the tool partially applies unique edits and rejects a repeated anchor.
   Led by: exact edit tool usage.
   Classification: general tool-use slip; only unapplied replacements were retried with unique context; no rule or product workaround added.
+- Tried: rejecting an unfinished HTML block solely by Lezer's `HTMLBlock` node name.
+  Found: HTML comments and processing instructions have distinct `CommentBlock` and `ProcessingInstructionBlock` nodes; the safe-append seam now refuses all three ambiguous EOF block families.
+  Led by: approved source-aware insertion contract.
+  Classification: parser discovery gap; bounded pure regression added, no new global rule.
+- Tried: creating a blank outline with the ordinary serializer's default body handling.
+  Found: real HTTP readback was `\n-\n`, because `content.trim()` removed the item's content-column space; an outline-only option in the shared serializer now preserves body whitespace and has round-trip/ordinary-note regression coverage.
+  Led by: existing native Markdown lifecycle reuse.
+  Classification: shared seam gap; retained one serializer and ordinary-note behavior.
+- Tried: transferring from the destination chooser to native creation using existing dialog cleanup.
+  Found: real browser autofocus moved back to the prior Add to outline button; `WorkspaceDialog` now restores its trigger only when focus has not already moved into the succeeding dialog.
+  Led by: existing WorkspaceDialog focus lifecycle.
+  Classification: integration gap; mounted regression and real-browser recheck required, no new UI toolkit.
+- Tried: spying on JSDOM's dialog `showModal`/`close` for the focus regression.
+  Found: those native methods are absent in this test environment; the bounded test supplies and removes the same methods, while actual browser behavior is verified independently.
+  Led by: mounted dialog test setup.
+  Classification: test-environment gap, not production evidence.
+- Tried: treating dispatch to existing note navigation as immediately ready for insertion.
+  Found: graph navigation may perform a second guarded editor flush; requests are now unarmed until navigation succeeds, including a self-link destination already mounted at the source route.
+  Led by: source-save failure and consumed-once insertion contract.
+  Classification: integration gap; explicit failed-navigation regression added.
+- Tried: staging the explicit changed production and tracked specification paths together.
+  Found: Git returned an ignored `docs/specs` directory warning after successfully staging the tracked files; `git ls-files --stage` and the cached diff confirmed their tracked updated blobs.
+  Led by: explicit-path Git safety rule.
+  Classification: Git staging diagnostic gap; inspect the index and use tracked-only updates, without changing ignore rules or adding machine-local cache files.

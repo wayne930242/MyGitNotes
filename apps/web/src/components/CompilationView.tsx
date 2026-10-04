@@ -1,13 +1,13 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react';
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Copy, GripVertical, LayoutGrid, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
+import { Copy, GripVertical, LayoutGrid, ListTree, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { type CompilationItem, type CompilationRow, moveCompilationItem } from '@mygitnotes/core/compilation';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { useNoteEditing } from '../lib/note-editing.js';
 import { useCompilationActions } from '../lib/compilation-actions.js';
-import { useBookmarkActionsContext } from '../lib/bookmark-context.js';
+import { useOutlineActions } from '../lib/outline-actions.js';
 import { planCompilationCopy } from '../lib/compilation-copy.js';
 import { screenCollision, screenKeyboardCoordinates } from '../lib/compilation-drag.js';
 import { useLaneNotes } from '../lib/compilation-queries.js';
@@ -53,7 +53,7 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
   const navigate = useNavigate();
   const editing = useNoteEditing();
   const actions = useCompilationActions();
-  const bookmarks = useBookmarkActionsContext();
+  const outlines = useOutlineActions();
   const compilation = useCompilation({ notebookId, path }, notebooks);
   const study = useStudyWorkspace(actions.repository(notebookId), ignoreSaved);
   const { assets, error: assetError } = useCompilationAssets(notebooks, notebookId);
@@ -134,14 +134,19 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
       onAdd: () => setDialog('add'),
       extra: (
         <>
-          {bookmarks && compilation.writable && compilation.note && <button type='button' className='ui-icon-button' aria-label={t('bookmarks.add')} title={t('bookmarks.add')} onClick={() => bookmarks.bookmarkNote({ ...compilation.note!, content: compilation.note!.content ?? '' })}>☆</button>}
-          {!disabled && current.kind === 'custom' && current.view !== 'stack' && current.view !== 'graph' && (
-            <ReorderToggle
-              active={reorder}
+          {outlines?.canAdd(notebookId) && compilation.writable && compilation.note && (
+            <button
+              type='button'
+              className='ui-icon-button'
               disabled={disabled}
-              onToggle={() => setReorder(value => !value)}
-            />
+              aria-label={t('outline.add')}
+              title={t('outline.add')}
+              onClick={() => outlines.add({ ...compilation.note!, content: compilation.note!.content ?? '' })}
+            >
+              <ListTree aria-hidden='true' />
+            </button>
           )}
+          {!disabled && current.kind === 'custom' && current.view !== 'stack' && current.view !== 'graph' && <ReorderToggle active={reorder} disabled={disabled} onToggle={() => setReorder(value => !value)} />}
           {(compilation.writable || addToFocus) && (
             // Secondary actions share one menu so the header stays on one line in a narrow Focus pane.
             <DropdownMenu.Root>
@@ -162,7 +167,10 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
                         <Pencil size={14} aria-hidden='true' />
                         <span>{t('screen.editRow')}</span>
                       </DropdownMenu.Item>
-                      <DropdownMenu.Item disabled={disabled} onSelect={() => void copy()}>
+                      <DropdownMenu.Item
+                        disabled={disabled}
+                        onSelect={() => void copy()}
+                      >
                         <Copy size={14} aria-hidden='true' />
                         <span>{t('compilation.copy')}</span>
                       </DropdownMenu.Item>

@@ -26,25 +26,25 @@ export function noteCompletionAt(text: string, position: number) {
   if ((prefix.match(/`/g) || []).length % 2) return null;
   return { from: before.length - match[2].length, to: before.length, query: match[2] };
 }
-const candidateQuery = (query: string, source: string) => ({ notebookId: 'all', q: query, match: 'title' as const, showHidden: false, exclude: source ? [source] : [] });
+const candidateQuery = (query: string, source: string, notebookId?: string) => ({ notebookId: notebookId ?? 'all', ...(notebookId ? { kind: 'all' as const } : {}), q: query, match: 'title' as const, showHidden: false, exclude: source ? [source] : [] });
 
 /** Link candidates for an editor that completes outside React rendering (CodeMirror). */
-export async function fetchNoteCandidates(client: QueryClient, scope: NoteQueryScope, query: string, source: string): Promise<NoteListItem[]> {
-  const input = noteQueryInput(candidateQuery(query, source));
+export async function fetchNoteCandidates(client: QueryClient, scope: NoteQueryScope, query: string, source: string, notebookId?: string): Promise<NoteListItem[]> {
+  const input = noteQueryInput(candidateQuery(query, source, notebookId));
   const page = await client.fetchQuery(notePageOptions(scope, input, { limit: NOTE_COMPLETION_LIMIT }));
   const overlay = overlayDraftRows(page.notes, input, scope.drafts);
   return [...overlay.uncommitted, ...overlay.notes].slice(0, NOTE_COMPLETION_LIMIT);
 }
 
 /** Link candidates for `query`, matched by the server against title, path and notebook. */
-export function useNoteCandidates(query: string | null, source: string): NoteListItem[] {
-  return useNoteCandidateResults(query, source).notes;
+export function useNoteCandidates(query: string | null, source: string, notebookId?: string): NoteListItem[] {
+  return useNoteCandidateResults(query, source, notebookId).notes;
 }
 
 /** Link candidates plus whether the first answer for them is still on its way. */
-export function useNoteCandidateResults(query: string | null, source: string): { notes: NoteListItem[]; loading: boolean; } {
+export function useNoteCandidateResults(query: string | null, source: string, notebookId?: string): { notes: NoteListItem[]; loading: boolean; } {
   const settled = useDebounced(query ?? '');
-  const result = useNoteList(query === null ? null : candidateQuery(settled, source), { limit: NOTE_COMPLETION_LIMIT });
+  const result = useNoteList(query === null ? null : candidateQuery(settled, source, notebookId), { limit: NOTE_COMPLETION_LIMIT });
   // A note staged but not committed is still a link target.
-  return { notes: [...result.uncommitted, ...result.notes].slice(0, NOTE_COMPLETION_LIMIT), loading: result.loading };
+  return { notes: [...result.uncommitted, ...result.notes].filter(note => !notebookId || note.notebookId === notebookId).slice(0, NOTE_COMPLETION_LIMIT), loading: result.loading };
 }

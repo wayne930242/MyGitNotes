@@ -25,6 +25,7 @@ interface NoteToolbarProps {
   onOpenNewNoteModal: () => void;
   /** Starts a compilation in the selected folder. */
   onOpenNewCompilation: () => void;
+  onOpenNewOutline?: () => void;
   /** The note search, the `q` query parameter. */
   query: string;
   onQueryChange: (query: string) => void;
@@ -35,7 +36,7 @@ interface NoteToolbarProps {
   onSaveView?: () => void;
 }
 
-export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, onOpenNewCompilation, query, onQueryChange, filtersOpen, onToggleFilters, focusControls, onSaveView }: NoteToolbarProps) {
+export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, onOpenNewCompilation, onOpenNewOutline, query, onQueryChange, filtersOpen, onToggleFilters, focusControls, onSaveView }: NoteToolbarProps) {
   const { t } = useTranslation();
   // Below 768px the field is hidden behind a button and expands over the toolbar.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -114,6 +115,12 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
                   <Plus size={14} aria-hidden='true' />
                   {t('header.newNote')}
                 </DropdownMenu.Item>
+                {onOpenNewOutline && (
+                  <DropdownMenu.Item onSelect={onOpenNewOutline}>
+                    <ListTree size={14} aria-hidden='true' />
+                    {t('outline.new')}
+                  </DropdownMenu.Item>
+                )}
                 <DropdownMenu.Item onSelect={onOpenNewCompilation}>
                   <GalleryHorizontalEnd size={14} aria-hidden='true' />
                   {t('compilation.new')}

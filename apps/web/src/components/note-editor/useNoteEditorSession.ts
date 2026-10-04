@@ -33,6 +33,8 @@ export interface UseNoteEditorSessionParams extends Pick<NoteEditorSharedProps, 
 export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, onCommitFile, propIsDirty, branch, draftScope, onClose, onSession }: UseNoteEditorSessionParams) {
   const { t } = useTranslation();
   const [content, setContent] = useState(note.content);
+  const sessionKey = JSON.stringify([note.notebookId, note.path, draftScope, branch, readOnly]);
+  const [readyKey, setReadyKey] = useState('');
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const copyResetTimer = useRef<ReturnType<typeof setTimeout>>();
   const [metadata, setMetadata] = useState<Record<string, unknown>>(note.metadata || {});
@@ -225,6 +227,7 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
   useEffect(() => {
     /* eslint-disable react/set-state-in-effect -- Session opening reads persisted recovery state and updates the saved baseline before the autosave effect; preserve this ordering. */
     setBaseNote(remoteBase || note);
+    setReadyKey(sessionKey);
     /* eslint-enable react/set-state-in-effect */
     setContent(note.content);
     setMetadata(note.metadata || {});
@@ -241,7 +244,7 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
     } else {
       setRecoveredDraft(null);
     }
-  }, [note.path, branch, draftScope, readOnly]);
+  }, [note.notebookId, note.path, branch, draftScope, readOnly]);
   /* eslint-enable react-hooks/exhaustive-deps */
 
   // Debounced auto-save directly to disk on edit
@@ -523,7 +526,7 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
   const showRemoteNotice = Boolean(remoteNotice) && (blocked || !remoteNoticeDismissed);
   const showConflictDraftNotice = Boolean(conflictDraft) && (blocked || !conflictDraftDismissed);
 
-  return { content, setContent, metadata, setMetadata, copyState, copyNote, isSaving, saveError, saveErrorParams, hasUnsavedChanges, baseNote, blocked, locked, isDirty, editorState, editorStatus, title, recoveredDraft, handleRestoreDraft, handleDiscardDraft, conflictDraft, showRemoteNotice, remoteNotice, showConflictDraftNotice, dismissNotice, refreshRemote, downloadConflictDraft, handleExplicitSave, commitNote, restoreNote, pullLatest, close };
+  return { ready: readyKey === sessionKey, content, setContent, metadata, setMetadata, copyState, copyNote, isSaving, saveError, saveErrorParams, hasUnsavedChanges, baseNote, blocked, locked, isDirty, editorState, editorStatus, title, recoveredDraft, handleRestoreDraft, handleDiscardDraft, conflictDraft, showRemoteNotice, remoteNotice, showConflictDraftNotice, dismissNotice, refreshRemote, downloadConflictDraft, handleExplicitSave, commitNote, restoreNote, pullLatest, close };
 }
 
 /** Everything a note editing session exposes to the editor parts that render it. */
