@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { closestCenter, DndContext, KeyboardSensor, type Modifier, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
@@ -12,6 +12,9 @@ import { Button } from './Button.js';
 import { type CompilationAsset, compilationItemTitle } from './CompilationCard.js';
 import { LoadingStatus } from './LoadingStatus.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
+
+/** Rows only move up and down, so a sideways drag never widens the list into a horizontal scroll. */
+const verticalOnly: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 
 type DynamicRow = Extract<CompilationRow, { kind: 'dynamic'; }>;
 
@@ -53,14 +56,13 @@ export function CompilationOrderDialog({ row, notebooks, assets, disabled, onSav
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
+          modifiers={[verticalOnly]}
           onDragEnd={({ active, over }) => {
             if (!over || active.id === over.id) return;
             setEntries(current => {
               if (!current) return current;
               const from = current.findIndex(entry => entry.item.id === active.id);
-              const to = current.findIndex(entry =>
-                entry.item.id === over.id
-              );
+              const to = current.findIndex(entry => entry.item.id === over.id);
               return from < 0 || to < 0 ? current : arrayMove(current, from, to);
             });
           }}
@@ -93,7 +95,7 @@ function OrderRow({ entry, index }: { entry: OrderEntry; index: number; }) {
   const sort = useSortable({ id: entry.item.id });
   /* eslint-disable react/refs -- dnd-kit sortable bindings are callback refs and render state, forwarded to the row and its handle. */
   return (
-    <li ref={sort.setNodeRef} className='compilation-order-row' data-dragging={sort.isDragging || undefined} style={{ transform: CSS.Transform.toString(sort.transform), transition: sort.transition }}>
+    <li ref={sort.setNodeRef} className='compilation-order-row' data-dragging={sort.isDragging || undefined} style={{ transform: CSS.Translate.toString(sort.transform), transition: sort.transition }}>
       <Button type='button' size='icon' ref={sort.setActivatorNodeRef} {...sort.attributes} {...sort.listeners} className='screen-drag-handle' aria-label={`${t('screen.moveItem')}: ${entry.title}`}>
         <GripVertical size={16} aria-hidden='true' />
       </Button>
