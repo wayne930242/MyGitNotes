@@ -10,6 +10,8 @@ export const COMPILATION_SCHEMA_VERSION = 3;
 export const COMPILATION_SUFFIX = '.compilation.yml';
 export const COMPILATION_MAX_BYTES = 512 * 1024;
 export const COMPILATION_MAX_ITEMS = 100;
+/** A manual order names every member of a dynamic compilation, which can outgrow the pinned-item limit. */
+export const COMPILATION_MAX_ORDER = 2000;
 export const isCompilationPath = (file: string) => file.endsWith(COMPILATION_SUFFIX);
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
@@ -32,7 +34,7 @@ export type CompilationItem = z.infer<typeof CompilationItemSchema>;
 const fileReference = { id, path: repoPath };
 const FileItemSchema = z.discriminatedUnion('kind', [z.object({ ...fileReference, kind: z.literal('note') }).strict(), z.object({ ...fileReference, kind: z.literal('folder') }).strict(), z.object({ ...fileReference, kind: z.literal('asset') }).strict(), z.object({ id, kind: z.literal('youtube'), videoId, start, title: videoTitle }).strict()]);
 const FileSourceSchema = z.discriminatedUnion('kind', [z.object({ kind: z.literal('tag'), tag: z.string().min(1).max(200) }).strict(), z.object({ kind: z.literal('folder'), path: repoPath, recursive: z.boolean().default(true) }).strict()]);
-const SortSchema = z.object({ field: z.enum(['updated', 'created', 'title', 'status']), order: z.enum(['asc', 'desc']) }).strict();
+const SortSchema = z.object({ field: z.enum(['updated', 'created', 'title', 'status', 'manual']), order: z.enum(['asc', 'desc']) }).strict();
 const StudySchema = z.object({ filter: z.enum(['all', 'due', 'future', 'paused']), dueFirst: z.boolean(), status: z.string().max(200).optional() }).strict();
 const tag = z.string().trim().min(1).max(200);
 
@@ -40,9 +42,11 @@ export const COMPILATION_ARRANGEMENTS = ['lane', 'stack', 'graph'] as const;
 export const COMPILATION_SIZES = ['thumbnail', 'small', 'medium'] as const;
 
 /** The stored file; it never repeats the notebook, which the path decides. */
-export const CompilationFileSchema = z.object({ version: z.literal(1), id, title: z.string().trim().min(1).max(100), arrangement: z.enum(COMPILATION_ARRANGEMENTS), size: z.enum(COMPILATION_SIZES).optional(), tags: z.array(tag).max(100).optional(), status: z.string().trim().min(1).max(200).optional(), items: z.array(FileItemSchema).max(COMPILATION_MAX_ITEMS).optional(), source: FileSourceSchema.optional(), sort: SortSchema.optional(), study: StudySchema.optional(), progression: StudyProgressionSchema.optional(), graph: GraphLayoutSchema.optional() }).strict().superRefine((file, context) => {
+export const CompilationFileSchema = z.object({ version: z.literal(1), id, title: z.string().trim().min(1).max(100), arrangement: z.enum(COMPILATION_ARRANGEMENTS), size: z.enum(COMPILATION_SIZES).optional(), tags: z.array(tag).max(100).optional(), status: z.string().trim().min(1).max(200).optional(), items: z.array(FileItemSchema).max(COMPILATION_MAX_ITEMS).optional(), source: FileSourceSchema.optional(), sort: SortSchema.optional(), manualOrder: z.array(repoPath).max(COMPILATION_MAX_ORDER).optional(), study: StudySchema.optional(), progression: StudyProgressionSchema.optional(), graph: GraphLayoutSchema.optional() }).strict().superRefine((file, context) => {
   if ((file.items === undefined) === (file.source === undefined)) context.addIssue({ code: 'custom', message: 'Give exactly one of items or source', path: ['items'] });
   if (file.sort && !file.source) context.addIssue({ code: 'custom', message: 'sort applies to a source', path: ['sort'] });
+  if (file.manualOrder && !file.source) context.addIssue({ code: 'custom', message: 'manualOrder applies to a source', path: ['manualOrder'] });
+  if (file.manualOrder && new Set(file.manualOrder).size !== file.manualOrder.length) context.addIssue({ code: 'custom', message: 'manualOrder repeats a path', path: ['manualOrder'] });
   const ids = new Set<string>();
   for (const item of file.items ?? []) {
     if (ids.has(item.id)) context.addIssue({ code: 'custom', message: `Duplicate item id ${item.id}`, path: ['items'] });
@@ -60,7 +64,8 @@ export interface CompilationStudy {
   status?: string;
 }
 export interface CompilationSort {
-  field: 'updated' | 'created' | 'title' | 'status';
+  /** `manual` follows the row's `manualOrder`, then the members it does not name, oldest update first. */
+  field: 'updated' | 'created' | 'title' | 'status' | 'manual';
   order: 'asc' | 'desc';
 }
 interface CompilationRowBase {
@@ -81,7 +86,7 @@ interface CompilationRowBase {
 export type CompilationTagSource = { kind: 'tag'; tag: string; notebookId: string; };
 export type CompilationFolderSource = { kind: 'folder'; path: string; recursive: boolean; notebookId: string; };
 export type CompilationSource = CompilationTagSource | CompilationFolderSource;
-export type CompilationRow = (CompilationRowBase & { kind: 'custom'; items: CompilationItem[]; }) | (CompilationRowBase & { kind: 'dynamic'; source: CompilationSource; sort?: CompilationSort; });
+export type CompilationRow = (CompilationRowBase & { kind: 'custom'; items: CompilationItem[]; }) | (CompilationRowBase & { kind: 'dynamic'; source: CompilationSource; sort?: CompilationSort; /** Member paths in the order the user set; kept while another sort is chosen. */ manualOrder?: string[]; });
 /** What the browser holds of a notebook's compilations. */
 export interface CompilationPage {
   rows: CompilationRow[];
@@ -116,7 +121,7 @@ export function parseCompilation(raw: string, notebookRoot?: string): Compilatio
   const file = parsed.data;
   if (notebookRoot !== undefined) {
     const root = stripSlash(notebookRoot);
-    const paths = [...(file.items ?? []).flatMap(item => item.kind === 'youtube' ? [] : [item.path]), ...(file.source?.kind === 'folder' ? [file.source.path] : [])];
+    const paths = [...(file.items ?? []).flatMap(item => item.kind === 'youtube' ? [] : [item.path]), ...(file.source?.kind === 'folder' ? [file.source.path] : []), ...(file.manualOrder ?? [])];
     const outside = paths.find(path => !within(path, root));
     if (outside) throw new CompilationError(`${outside} is outside the notebook ${root}`);
   }
@@ -124,8 +129,8 @@ export function parseCompilation(raw: string, notebookRoot?: string): Compilatio
 }
 
 export function serializeCompilation(file: CompilationFile): string {
-  const { version, id, title, arrangement, size, tags, status, items, source, sort, study, progression, graph } = file;
-  const ordered = { version, id, title, arrangement, ...(size ? { size } : {}), ...(tags?.length ? { tags } : {}), ...(status ? { status } : {}), ...(items ? { items } : {}), ...(source ? { source } : {}), ...(sort ? { sort } : {}), ...(study ? { study } : {}), ...(progression ? { progression } : {}), ...(graph ? { graph } : {}) };
+  const { version, id, title, arrangement, size, tags, status, items, source, sort, manualOrder, study, progression, graph } = file;
+  const ordered = { version, id, title, arrangement, ...(size ? { size } : {}), ...(tags?.length ? { tags } : {}), ...(status ? { status } : {}), ...(items ? { items } : {}), ...(source ? { source } : {}), ...(sort ? { sort } : {}), ...(manualOrder?.length ? { manualOrder } : {}), ...(study ? { study } : {}), ...(progression ? { progression } : {}), ...(graph ? { graph } : {}) };
   return YAML.stringify(ordered, { lineWidth: 0 });
 }
 
@@ -137,7 +142,7 @@ export function compilationRow(file: CompilationFile, owner: { notebookId: strin
     return { ...base, kind: 'custom', items: file.items.map(item => item.kind === 'youtube' ? item : { ...item, notebookId: owner.notebookId }) };
   }
   const source = file.source!;
-  return { ...base, kind: 'dynamic', source: source.kind === 'tag' ? { ...source, notebookId: owner.notebookId } : { ...source, notebookId: owner.notebookId }, ...(file.sort ? { sort: file.sort } : {}) };
+  return { ...base, kind: 'dynamic', source: source.kind === 'tag' ? { ...source, notebookId: owner.notebookId } : { ...source, notebookId: owner.notebookId }, ...(file.sort ? { sort: file.sort } : {}), ...(file.manualOrder?.length ? { manualOrder: file.manualOrder } : {}) };
 }
 
 /** The stored form of a lane model; the inverse of `compilationRow`. */
@@ -147,7 +152,7 @@ export function compilationFile(row: CompilationRow): CompilationFile {
   const common = { version: 1 as const, id: row.id, title: row.name, arrangement: lane ? 'lane' as const : row.view as 'graph' | 'stack', ...(size ? { size } : {}), ...(row.tags?.length ? { tags: row.tags } : {}), ...(row.status ? { status: row.status } : {}), ...(row.study ? { study: row.study } : {}), ...(row.progression ? { progression: row.progression } : {}), ...(row.graph ? { graph: row.graph } : {}) };
   if (row.kind === 'custom') return { ...common, items: row.items.map(item => item.kind === 'youtube' ? item : { id: item.id, kind: item.kind, path: item.path }) };
   const source = row.source.kind === 'tag' ? { kind: 'tag' as const, tag: row.source.tag } : { kind: 'folder' as const, path: row.source.path, recursive: row.source.recursive };
-  return { ...common, source, ...(row.sort ? { sort: row.sort } : {}) };
+  return { ...common, source, ...(row.sort ? { sort: row.sort } : {}), ...(row.manualOrder?.length ? { manualOrder: row.manualOrder } : {}) };
 }
 
 export interface CompilationFields {
@@ -216,7 +221,7 @@ export function replaceCompilationTags(raw: string, tags: readonly string[]): st
 export function relocateCompilation(raw: string, move: (path: string) => string): string | null {
   const document = YAML.parseDocument(raw);
   if (document.errors.length || !YAML.isMap(document.contents)) return null;
-  const value = document.toJS({ maxAliasCount: 20 }) as { items?: { kind?: string; path?: unknown; }[]; source?: { kind?: string; path?: unknown; }; graph?: { nodes?: { path?: unknown; }[]; }; };
+  const value = document.toJS({ maxAliasCount: 20 }) as { items?: { kind?: string; path?: unknown; }[]; source?: { kind?: string; path?: unknown; }; manualOrder?: unknown[]; graph?: { nodes?: { path?: unknown; }[]; }; };
   let changed = false;
   const update = (location: (string | number)[], current: unknown) => {
     if (typeof current !== 'string') return;
@@ -229,6 +234,7 @@ export function relocateCompilation(raw: string, move: (path: string) => string)
     if (item.kind !== 'youtube') update(['items', index, 'path'], item.path);
   });
   if (value.source?.kind === 'folder') update(['source', 'path'], value.source.path);
+  if (Array.isArray(value.manualOrder)) value.manualOrder.forEach((path, index) => update(['manualOrder', index], path));
   value.graph?.nodes?.forEach((node, index) => update(['graph', 'nodes', index, 'path'], node.path));
   return changed ? document.toString({ lineWidth: 0 }) : null;
 }

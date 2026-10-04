@@ -41,6 +41,13 @@ export function compilationRowItems(row: CompilationRow, notes: NoteListItem[], 
     });
     const applicable = notebooks.filter(notebook => notebook.id === row.notebookId);
     const statuses = [...new Set((applicable.length ? applicable.flatMap(notebook => resolveNoteStatuses(notebook)) : resolveNoteStatuses()).map(status => status.trim().toLowerCase()))];
+    if (row.sort.field === 'manual') {
+      // The user's order first; members it does not name follow, oldest update first, so new arrivals join at the end.
+      const position = new Map((row.manualOrder ?? []).map((path, index) => [path, index]));
+      const placed = sortable.filter(note => position.has(note.path)).sort((a, b) => position.get(a.path)! - position.get(b.path)!);
+      const rest = sortNotes(sortable.filter(note => !position.has(note.path)), 'updated', 'asc', statuses);
+      return [...placed, ...rest].map(note => items.get(note.id)!);
+    }
     return sortNotes(sortable, row.sort.field, row.sort.order, statuses).map(note => items.get(note.id)!);
   }
   // Preserve the original note-first order until the user chooses a sort.

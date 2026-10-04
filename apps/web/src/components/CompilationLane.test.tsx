@@ -60,3 +60,15 @@ it('read-only: clicking a card calls onOpen', async () => {
   expect(onOpen).toHaveBeenCalledTimes(1);
   expect(onOpen.mock.calls[0][0]).toMatchObject({ path: 'notes/nb1/a.md', notebookId: 'nb1' });
 });
+
+it('offers the order editor on a writable dynamic compilation only', async () => {
+  const onEditOrder = vi.fn();
+  const dynamic: CompilationRow = { id: 'row-2', path: 'notes/nb1/live.compilation.yml', name: 'Live', view: 'small', notebookId: 'nb1', kind: 'dynamic', source: { kind: 'folder', path: 'notes/nb1', recursive: true, notebookId: 'nb1' } };
+  const { rerender } = render(lane({ row: dynamic, onEditOrder }), { wrapper });
+  fireEvent.click(await screen.findByLabelText('Edit order: Live'));
+  expect(onEditOrder).toHaveBeenCalledTimes(1);
+  rerender(lane({ row: dynamic, onEditOrder, readOnly: true }));
+  expect(screen.queryByLabelText('Edit order: Live')).not.toBeInTheDocument();
+  rerender(lane({ onEditOrder }));
+  expect(screen.queryByLabelText(/Edit order/)).not.toBeInTheDocument();
+});

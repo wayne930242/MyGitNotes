@@ -1,9 +1,8 @@
 import { type ButtonHTMLAttributes, type ReactNode, useState } from 'react';
-import { Brain, ChevronLeft, ChevronRight, Columns2, Columns3, LayoutGrid, Network, Plus, Rows3, SlidersHorizontal, Zap } from 'lucide-react';
-import type { CompilationRow } from '@mygitnotes/core/compilation';
+import { Brain, ChevronLeft, ChevronRight, Columns2, Columns3, LayoutGrid, ListOrdered, Network, Plus, Rows3, SlidersHorizontal, Zap } from 'lucide-react';
+import type { CompilationRow, CompilationSort } from '@mygitnotes/core/compilation';
 import { type NotebookFacets, noteQueryStatuses } from '@mygitnotes/core/note-query';
 import type { NotebookConfig } from '../lib/types.js';
-import type { SortConfig } from '../lib/note-sort.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import type { ScrollDirection } from '../lib/use-hold-scroll.js';
 import { Button } from './Button.js';
@@ -23,11 +22,12 @@ export interface CompilationHeaderProps {
   onStudy?: () => void;
   onView?: (view: CompilationRow['view']) => void;
   onAdd?: () => void;
-  onSort?: (sort: SortConfig) => void;
+  onSort?: (sort: CompilationSort) => void;
+  /** Opens the dialog that sets a dynamic compilation's manual order. */
+  onEditOrder?: () => void;
   onStudyChange?: (study: NonNullable<CompilationRow['study']>) => void;
   /** Adds a note to a dynamic compilation's source. */
   onCreateInSource?: () => void;
-  /** Scrolls a lane's strip; absent for arrangements that do not scroll sideways. */
   /** Props for the left and right scroll buttons; absent when the arrangement does not scroll sideways. */
   scrollButton?: (direction: ScrollDirection) => ButtonHTMLAttributes<HTMLButtonElement>;
   /** View-level actions that follow the others, such as edit, copy and delete. */
@@ -35,7 +35,7 @@ export interface CompilationHeaderProps {
 }
 
 /** The compilation's name, source and the controls shared by its arrangements. */
-export function CompilationHeader({ row, count, disabled, readOnly, notebooks, facets, onStudy, onView, onAdd, onSort, onStudyChange, onCreateInSource, scrollButton, extra }: CompilationHeaderProps) {
+export function CompilationHeader({ row, count, disabled, readOnly, notebooks, facets, onStudy, onView, onAdd, onSort, onEditOrder, onStudyChange, onCreateInSource, scrollButton, extra }: CompilationHeaderProps) {
   const { t } = useTranslation();
   const [queryOpen, setQueryOpen] = useState(false);
   const query = row.study || { filter: 'all' as const, dueFirst: false };
@@ -81,20 +81,27 @@ export function CompilationHeader({ row, count, disabled, readOnly, notebooks, f
               </select>
             </label>
             {row.kind === 'dynamic' && (
-              <label className='screen-lane-sort'>
-                <span>{t('sort.select')}</span>
-                <Select
-                  className='screen-sort-select'
-                  aria-label={`${t('sort.select')}: ${row.name}`}
-                  disabled={disabled}
-                  value={`${row.sort?.field || 'title'}:${row.sort?.order || 'asc'}`}
-                  onValueChange={value => {
-                    const [field, order] = value.split(':') as [SortConfig['field'], SortConfig['order']];
-                    onSort?.({ field, order });
-                  }}
-                  options={([['updated:desc', 'sort.updatedDesc'], ['updated:asc', 'sort.updatedAsc'], ['created:desc', 'sort.createdDesc'], ['created:asc', 'sort.createdAsc'], ['title:asc', 'sort.titleAsc'], ['title:desc', 'sort.titleDesc'], ['status:asc', 'sort.status']] as const).map(([value, label]) => ({ value, label: t(label) }))}
-                />
-              </label>
+              <div className='screen-lane-sort-group'>
+                <label className='screen-lane-sort'>
+                  <span>{t('sort.select')}</span>
+                  <Select
+                    className='screen-sort-select'
+                    aria-label={`${t('sort.select')}: ${row.name}`}
+                    disabled={disabled}
+                    value={`${row.sort?.field || 'title'}:${row.sort?.order || 'asc'}`}
+                    onValueChange={value => {
+                      const [field, order] = value.split(':') as [CompilationSort['field'], CompilationSort['order']];
+                      onSort?.({ field, order });
+                    }}
+                    options={([['updated:desc', 'sort.updatedDesc'], ['updated:asc', 'sort.updatedAsc'], ['created:desc', 'sort.createdDesc'], ['created:asc', 'sort.createdAsc'], ['title:asc', 'sort.titleAsc'], ['title:desc', 'sort.titleDesc'], ['status:asc', 'sort.status'], ...(row.manualOrder?.length || row.sort?.field === 'manual' ? [['manual:asc', 'sort.manual'] as const] : [])] as const).map(([value, label]) => ({ value, label: t(label) }))}
+                  />
+                </label>
+                {onEditOrder && !readOnly && (
+                  <Button type='button' size='icon' className='screen-lane-order' disabled={disabled} aria-label={`${t('compilation.editOrder')}: ${row.name}`} title={t('compilation.editOrder')} onClick={onEditOrder}>
+                    <ListOrdered size={16} aria-hidden='true' />
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         )}

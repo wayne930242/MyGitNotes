@@ -154,6 +154,10 @@
 .screen-lane-query { display: contents; }
 .screen-lane-query-toggle.ui-icon-button, .screen-lane-sort > span { display: none; }
 .screen-lane-sort { display: inline-flex; flex: none; align-items: center; }
+/* The order editor sits beside the sort it sets, in the header and in the floating filters alike. */
+.screen-lane-sort-group { display: inline-flex; flex: none; align-items: center; gap: 2px; }
+.screen-lane-query[data-open='true'] .screen-lane-sort-group { display: flex; }
+.screen-lane-query[data-open='true'] .screen-lane-sort-group .screen-lane-sort { flex: 1 1 auto; min-width: 0; }
 .screen-lane-filter { display: inline-flex; flex: none; align-items: center; gap: 5px; margin-right: 7px; white-space: nowrap; font-size: 12px; }
 .screen-lane-filter .ui-control { flex: none; width: auto; min-width: 84px; max-width: 132px; min-height: 28px; padding: 4px 8px; font-size: 12px; line-height: 18px; }
 .screen-lane-actions .ui-icon-button { width: 28px; height: 28px; }
@@ -250,6 +254,13 @@
 .screen-board-empty h3 { color: var(--color-text); font-size: 20px; font-weight: 500; }
 .screen-board-empty p { font-size: 13px; max-width: 400px; line-height: 1.8; }
 .screen-form { display: flex; flex-direction: column; gap: 18px; }
+/* Manual order: a numbered list, each row dragged by its handle. */
+.compilation-order-dialog .screen-dialog-hint { margin-bottom: 12px; }
+.compilation-order-list { display: flex; flex-direction: column; gap: 4px; max-height: min(60dvh, 560px); margin: 0 0 16px; padding: 0; overflow-y: auto; list-style: none; }
+.compilation-order-row { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 10px 4px 4px; border: 1px solid var(--workspace-divider); border-radius: 8px; background: var(--color-surface); }
+.compilation-order-row[data-dragging] { z-index: 1; box-shadow: 0 4px 12px color-mix(in srgb, var(--color-scrim) 13%, transparent); }
+.compilation-order-index { flex: none; min-width: 2ch; color: var(--color-muted); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
+.compilation-order-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .screen-form label { display: flex; flex-direction: column; gap: 7px; font-size: 12px; color: var(--color-muted); }
 .screen-form .screen-checkbox { flex-direction: row; align-items: center; gap: 8px; }
 .screen-dialog-hint { color: var(--color-muted); font-size: 12px; line-height: 1.8; }

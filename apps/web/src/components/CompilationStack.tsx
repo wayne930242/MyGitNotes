@@ -10,7 +10,7 @@ import { CompilationHeader, type CompilationHeaderProps } from './CompilationHea
 import { LoadingStatus } from './LoadingStatus.js';
 import { NoteListSentinel } from './NoteListSentinel.js';
 
-type StackHeader = Omit<CompilationHeaderProps, 'row' | 'count' | 'notebooks' | 'onScroll'>;
+type StackHeader = Omit<CompilationHeaderProps, 'row' | 'count' | 'notebooks' | 'scrollButton'>;
 
 /**
  * The stack arrangement: every item in order as one long document. Notes show their full Markdown,

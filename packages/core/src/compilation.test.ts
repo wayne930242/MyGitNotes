@@ -59,6 +59,22 @@ describe('compilation file', () => {
       expect(() => parseCompilation(`version: 1\nid: x\ntitle: X\narrangement: lane\n${body}\n`)).toThrow(/items|sort/);
     }
   });
+  it('keeps a manual order on a dynamic compilation through the lane model and the file', () => {
+    const raw = `version: 1\nid: m\ntitle: M\narrangement: lane\nsize: small\nsource: { kind: folder, path: notes/one/sub }\nsort: { field: manual, order: asc }\nmanualOrder: [notes/one/sub/b.md, notes/one/sub/a.md]\n`;
+    const file = parseCompilation(raw, 'notes/one');
+    const row = compilationRow(file, owner);
+    expect(row).toMatchObject({ kind: 'dynamic', sort: { field: 'manual' }, manualOrder: ['notes/one/sub/b.md', 'notes/one/sub/a.md'] });
+    expect(compilationFile(row)).toEqual(file);
+    expect(parseCompilation(serializeCompilation(file), 'notes/one')).toEqual(file);
+    // Another sort keeps the order, so choosing manual again restores it.
+    if (row.kind !== 'dynamic') throw new Error('expected a dynamic row');
+    expect(compilationFile({ ...row, sort: { field: 'title', order: 'asc' } })).toMatchObject({ sort: { field: 'title' }, manualOrder: ['notes/one/sub/b.md', 'notes/one/sub/a.md'] });
+  });
+  it('rejects a manual order on pinned items, a repeated path, or a path outside the notebook', () => {
+    expect(() => parseCompilation('version: 1\nid: x\ntitle: X\narrangement: lane\nitems: []\nmanualOrder: [notes/one/a.md]\n')).toThrow(/manualOrder/);
+    expect(() => parseCompilation('version: 1\nid: x\ntitle: X\narrangement: lane\nsource: { kind: tag, tag: t }\nmanualOrder: [notes/one/a.md, notes/one/a.md]\n')).toThrow(/repeats/);
+    expect(() => parseCompilation('version: 1\nid: x\ntitle: X\narrangement: lane\nsource: { kind: tag, tag: t }\nmanualOrder: [notes/two/a.md]\n', 'notes/one')).toThrow(/outside/);
+  });
   it('names the problem of an invalid file instead of dropping it', () => {
     expect(() => parseCompilation('version: 1\nid: bad id\ntitle: X\narrangement: lane\nitems: []\n')).toThrow('id:');
     expect(() => parseCompilation('version: 1\nid: x\ntitle: X\narrangement: carousel\nitems: []\n')).toThrow('arrangement');
@@ -121,13 +137,15 @@ describe('tag and status edits', () => {
 
 describe('reference rewrite', () => {
   const move = (path: string) => path.startsWith('notes/one/sub') ? 'notes/one/renamed' + path.slice('notes/one/sub'.length) : path === 'notes/one/a.md' ? 'notes/one/b.md' : path;
-  it('rewrites pinned items, folder items, folder sources and graph nodes', () => {
+  it('rewrites pinned items, folder items, folder sources, the manual order and graph nodes', () => {
     const raw = `${custom}graph:\n  nodes:\n    - { path: notes/one/a.md, x: 0, y: 0 }\n`;
     const next = relocateCompilation(raw, move)!;
     const value = YAML.parse(next);
     expect(value.items.map((item: { path?: string; }) => item.path)).toEqual(['notes/one/b.md', undefined, 'notes/one/renamed']);
     expect(value.graph.nodes[0].path).toBe('notes/one/b.md');
     expect(YAML.parse(relocateCompilation('version: 1\nid: x\ntitle: X\narrangement: lane\nsource: { kind: folder, path: notes/one/sub }\n', move)!).source.path).toBe('notes/one/renamed');
+    const ordered = YAML.parse(relocateCompilation('version: 1\nid: x\ntitle: X\narrangement: lane\nsource: { kind: tag, tag: t }\nmanualOrder: [notes/one/a.md, notes/one/c.md]\n', move)!);
+    expect(ordered.manualOrder).toEqual(['notes/one/b.md', 'notes/one/c.md']);
   });
   it('returns null when nothing it names moved, and for an unreadable file', () => {
     expect(relocateCompilation(dynamic, move)).toBeNull();

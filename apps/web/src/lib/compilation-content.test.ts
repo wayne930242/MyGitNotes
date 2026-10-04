@@ -28,6 +28,18 @@ it('applies independent dynamic sorting to notes and assets without mutating inp
   expect(compilationRowItems(tagged, selected.map(note => ({ ...note, tags: ['clue'] })), assets).map(item => item.kind !== 'youtube' && item.path)).toEqual(['notes/a/sub/three.md', 'notes/a/one.md']);
 });
 
+it('follows a manual order, then adds the members it does not name oldest update first', () => {
+  const row: Extract<CompilationRow, { kind: 'dynamic'; }> = { id: 'r', path: 'notes/a/manual.compilation.yml', name: 'Manual', view: 'small', notebookId: 'a', kind: 'dynamic', source: { kind: 'folder', notebookId: 'a', path: 'notes/a', recursive: true }, sort: { field: 'manual', order: 'asc' }, manualOrder: ['notes/a/one.md', 'notes/a/gone.md', 'notes/a/sub/three.md'] };
+  const selected = [{ ...notes[0], mtime: 100 }, { ...notes[2], mtime: 50 }, { ...notes[0], id: 'new-late', path: 'notes/a/late.md', title: 'Late', mtime: 400 }, { ...notes[0], id: 'new-early', path: 'notes/a/early.md', title: 'Early', mtime: 200 }];
+  const assets = [{ name: 'Image', notebookId: 'a', path: 'notes/a/image.png', mtime: 300, size: 1, rawUrl: '', markdownRef: '' }];
+  const paths = (next: typeof row) => compilationRowItems(next, selected, assets).map(item => item.kind !== 'youtube' && item.path);
+  expect(paths(row)).toEqual(['notes/a/one.md', 'notes/a/sub/three.md', 'notes/a/early.md', 'notes/a/image.png', 'notes/a/late.md']);
+  // Without a stored order every member is new, so the lane reads oldest update first.
+  expect(paths({ ...row, manualOrder: undefined })).toEqual(['notes/a/sub/three.md', 'notes/a/one.md', 'notes/a/early.md', 'notes/a/image.png', 'notes/a/late.md']);
+  // Another sort ignores the stored order.
+  expect(paths({ ...row, sort: { field: 'title', order: 'asc' } })[0]).toBe('notes/a/early.md');
+});
+
 it('filters and sorts study views while preserving custom pin order and note status', () => {
   const now = new Date('2026-09-14T04:00:00Z');
   const selected = notes.slice(0, 2).map((note, i) => ({ ...note, status: i ? 'done' : 'working', content: 'Question\n\n---\n\nAnswer' }));

@@ -360,6 +360,10 @@ export const en = {
   'compilation.invalid': 'This compilation file cannot be read. Fix the file and reload.',
   'compilation.copy': 'Duplicate compilation',
   'compilation.more': 'More compilation actions',
+  'compilation.editOrder': 'Edit order',
+  'compilation.orderHint': 'Starts from the current order. Drag a row by its handle, or focus the handle and use Space and the arrow keys. Saving switches to the manual order; notes added later join at the end, oldest update first.',
+  'compilation.orderEmpty': 'This compilation has no items yet.',
+  'compilation.orderSave': 'Save order',
   'compilation.copied': 'Created “{title}”.',
   'compilation.delete': 'Delete compilation',
   'compilation.deleteHint': 'Delete “{title}”? Its pinned notes and assets are not deleted.',
@@ -503,6 +507,7 @@ export const en = {
   'sort.titleAsc': 'Title (A-Z)',
   'sort.titleDesc': 'Title (Z-A)',
   'sort.status': 'Status (Workflow)',
+  'sort.manual': 'Manual',
 
   // Kanban
   'kanban.sortBy': 'Sort',

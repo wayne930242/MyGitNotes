@@ -362,6 +362,10 @@ export const zhTW: Record<TranslationKey, string> = {
   'compilation.invalid': '無法讀取這個合輯檔案。請修正檔案後重新載入。',
   'compilation.copy': '複製合輯',
   'compilation.more': '更多合輯動作',
+  'compilation.editOrder': '編輯次序',
+  'compilation.orderHint': '從目前的排序開始。拖曳每列左側的把手調整順序，或聚焦把手後用空白鍵與方向鍵移動。儲存後改用手動排序；之後新加入的筆記會依更新時間由舊到新接在最後。',
+  'compilation.orderEmpty': '這個合輯目前沒有項目。',
+  'compilation.orderSave': '儲存次序',
   'compilation.copied': '已建立「{title}」。',
   'compilation.delete': '刪除合輯',
   'compilation.deleteHint': '要刪除「{title}」嗎？它釘選的筆記與資產不會被刪除。',
@@ -504,6 +508,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'sort.titleAsc': '標題 (A 到 Z)',
   'sort.titleDesc': '標題 (Z 到 A)',
   'sort.status': '狀態 (工作流程順序)',
+  'sort.manual': '手動',
 
   // Kanban
   'kanban.sortBy': '排序',

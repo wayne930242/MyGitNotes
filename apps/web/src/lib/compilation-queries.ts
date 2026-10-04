@@ -3,11 +3,16 @@ import type { CompilationRow } from '@mygitnotes/core/compilation';
 import type { NoteListItem, NotePaths, NoteQuery } from '@mygitnotes/core/note-query';
 import { notePathsOptions, useNoteList, useNoteLookup, useNotePaths, useNoteQueryScope } from './use-note-queries.js';
 
+/** Whether a dynamic lane follows the order the user set by hand. */
+function isManual(row: CompilationRow | undefined): boolean {
+  return row?.kind === 'dynamic' && row.sort?.field === 'manual';
+}
+
 /** The server query a dynamic lane's membership comes from; its filter mirrors `compilationNotes`. */
 export function laneNoteQuery(row: CompilationRow): Partial<NoteQuery> | null {
   if (row.kind !== 'dynamic') return null;
   const source = row.source;
-  return { notebookId: row.notebookId, tags: source.kind === 'tag' ? [source.tag] : [], folders: source.kind === 'folder' ? [source.path] : [], descendants: source.kind === 'folder' ? source.recursive : true, status: row.study?.status || null, showHidden: false, sort: row.sort?.field || 'title', order: row.sort?.order || 'asc' };
+  return { notebookId: row.notebookId, tags: source.kind === 'tag' ? [source.tag] : [], folders: source.kind === 'folder' ? [source.path] : [], descendants: source.kind === 'folder' ? source.recursive : true, status: row.study?.status || null, showHidden: false, sort: !row.sort || row.sort.field === 'manual' ? 'title' : row.sort.field, order: row.sort?.order || 'asc' };
 }
 
 export interface LaneNotes {
@@ -23,7 +28,9 @@ export interface LaneNotes {
  * A lane's notes: a dynamic lane queries the server, a custom lane reads its pinned paths.
  * `all` skips paging for a study session, which needs the whole queue to order it.
  */
-export function useLaneNotes(row: CompilationRow | undefined, options: { content?: boolean; all?: boolean; } = {}): LaneNotes {
+export function useLaneNotes(row: CompilationRow | undefined, requested: { content?: boolean; all?: boolean; } = {}): LaneNotes {
+  // A manual order can place any member first, so it needs every member rather than the first page.
+  const options = { ...requested, all: requested.all || isManual(row) };
   const dynamic = row?.kind === 'dynamic' ? laneNoteQuery(row) : null;
   const paged = useNoteList(options.all ? null : dynamic, { content: options.content });
   const allPaths = useNotePaths(options.all ? dynamic : null);
