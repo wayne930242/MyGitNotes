@@ -144,7 +144,7 @@ export function planFileChange(snapshot: FileSnapshot, input: unknown) {
       files.set(next, pinned !== null ? Buffer.from(pinned) : raw === undefined ? bytes : Buffer.from(relocateLinks(raw, file, next, relocate)));
     }
     pathMap[command.path] = destination;
-    relocateWorkspaceDocuments({ get: file => files.get(file)?.toString('utf8'), set: (file, text) => files.set(file, Buffer.from(text)) }, { notebooks: snapshot.notebooks, workspace: { default_notebook: snapshot.notebooks[0]?.id } }, nb!.id, relocate);
+    relocateWorkspaceDocuments({ get: file => files.get(file)?.toString('utf8'), set: (file, text) => files.set(file, Buffer.from(text)) }, nb!.id, relocate);
     selectedPath = destination;
   }
   for (const [file, bytes] of files) if (path.posix.basename(file) === '_dir.yml' && bytes !== snapshot.files.get(file)) parseFolderConfig(bytes.toString('utf8'), path.posix.basename(path.posix.dirname(file)), file);

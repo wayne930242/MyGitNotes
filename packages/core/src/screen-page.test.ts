@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moveScreenRow, readScreenPage, ScreenPageSchema } from './screen-page.js';
+import { readScreenPage, ScreenPageSchema } from './screen-page.js';
 
 const note = { id: 'a', kind: 'note', notebookId: 'one', path: 'notes/one/a.md' };
 const page = { version: 2, rows: [{ id: 'first', name: '閱讀', view: 'small', notebookId: 'one', kind: 'custom', items: [note] }, { id: 'second', name: '參考', view: 'medium', notebookId: 'one', kind: 'custom', items: [{ ...note, id: 'b', path: 'notes/one/b.md' }] }, { id: 'live', name: '動態標籤', view: 'thumbnail', notebookId: 'one', kind: 'dynamic', source: { kind: 'tag', tag: 'clue', notebookId: 'one' } }, { id: 'other', name: '其他', view: 'small', notebookId: 'two', kind: 'custom', items: [] }] };
@@ -21,10 +21,6 @@ describe('Screen Page swimlanes', () => {
     for (const view of ['reading', 'study']) {
       expect(ScreenPageSchema.parse({ version: 2, rows: [{ ...page.rows[0], view, progression }] }).rows[0]).toMatchObject({ view: 'small', progression });
     }
-  });
-  it('reorders rows', () => {
-    const parsed = ScreenPageSchema.parse(page);
-    expect(moveScreenRow(parsed, 'live', 0).rows.map(r => r.id)).toEqual(['live', 'first', 'second', 'other']);
   });
   it('rejects lane content from another notebook', () => {
     expect(ScreenPageSchema.safeParse({ version: 2, rows: [{ ...page.rows[0], items: [{ ...note, notebookId: 'two' }] }] }).success).toBe(false);

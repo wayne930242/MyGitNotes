@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { changeDivision, closeTab, displayPanes, findFocusTab, findFocusTabInPane, FOCUS_DIVISIONS, FOCUS_MAX_TABS, FocusError, FocusLayoutSchema, FocusPageSchema, FocusSchema, focusTabCount, focusTabKey, foreignFocusTab, moveTab, nameFocus, notebookFocuses, ownFocusPage, placeTab, placeTabs, pruneFocus, relocateFocusPaths, removeFocus, renameFocus, updateFocus } from '../src/focus-page.js';
 
 const note = (path: string) => ({ kind: 'note' as const, path });
-const lane = (id: string) => ({ kind: 'lane' as const, id });
+/** A tab to a compilation is a path tab like any note. */
+const compilation = (id: string) => note(`notes/work/${id}.compilation.yml`);
 const pane = (...tabs: { kind: string; }[]) => ({ tabs });
 const focus = (overrides: Record<string, unknown> = {}) => ({ division: 'single', panes: [pane()], id: 'f1', notebookId: 'nb1', name: 'Work', ...overrides });
 const notes = (count: number) => Array.from({ length: count }, (_, index) => note(`n${index}.md`));
@@ -16,8 +17,8 @@ describe('Focus schema invariants', () => {
     expect(FocusLayoutSchema.safeParse({ division: 'columns-2', panes: [pane(note('a.md')), pane(note('a.md'))] }).success).toBe(true);
   });
   it('dedupes a same-pane duplicate on parse, keeping the first occurrence', () => {
-    const parsed = FocusLayoutSchema.parse({ division: 'single', panes: [pane(note('a.md'), lane('l1'), note('a.md'))] });
-    expect(parsed).toEqual({ division: 'single', panes: [pane(note('a.md'), lane('l1'))] });
+    const parsed = FocusLayoutSchema.parse({ division: 'single', panes: [pane(note('a.md'), compilation('l1'), note('a.md'))] });
+    expect(parsed).toEqual({ division: 'single', panes: [pane(note('a.md'), compilation('l1'))] });
   });
   it('returns the same reference when parsing finds no duplicate', () => {
     const input = { division: 'single', panes: [pane(note('a.md'))] };
@@ -36,6 +37,9 @@ describe('Focus schema invariants', () => {
   it('rejects duplicate names within a notebook but allows the same name across notebooks', () => {
     expect(FocusPageSchema.safeParse({ version: 1, focuses: [focus({ id: 'f1', name: 'Same' }), focus({ id: 'f2', name: 'Same' })] }).success).toBe(false);
     expect(FocusPageSchema.safeParse({ version: 1, focuses: [focus({ id: 'f1', name: 'Same', notebookId: 'a' }), focus({ id: 'f2', name: 'Same', notebookId: 'b' })] }).success).toBe(true);
+  });
+  it('no longer accepts a lane tab', () => {
+    expect(FocusLayoutSchema.safeParse({ division: 'single', panes: [pane({ kind: 'lane', id: 'l1' })] }).success).toBe(false);
   });
   it('rejects unknown keys everywhere the schemas are strict', () => {
     expect(FocusLayoutSchema.safeParse({ division: 'single', panes: [pane()], extra: 1 }).success).toBe(false);
@@ -162,12 +166,12 @@ describe('placeTabs', () => {
 
 describe('pruneFocus', () => {
   it('returns the same reference when nothing is dropped', () => {
-    const layout = { division: 'single' as const, panes: [pane(note('a.md'), lane('l1'))] };
+    const layout = { division: 'single' as const, panes: [pane(note('a.md'), compilation('l1'))] };
     expect(pruneFocus(layout, () => true)).toBe(layout);
   });
   it('drops tabs the predicate rejects', () => {
-    const layout = { division: 'columns-2' as const, panes: [pane(note('a.md'), lane('l1')), pane(note('b.md'))] };
-    const pruned = pruneFocus(layout, tab => tab.kind !== 'lane');
+    const layout = { division: 'columns-2' as const, panes: [pane(note('a.md'), compilation('l1')), pane(note('b.md'))] };
+    const pruned = pruneFocus(layout, tab => !tab.path.endsWith('.compilation.yml'));
     expect(pruned).not.toBe(layout);
     expect(pruned).toEqual({ division: 'columns-2', panes: [pane(note('a.md')), pane(note('b.md'))] });
   });
@@ -175,7 +179,7 @@ describe('pruneFocus', () => {
 
 describe('findFocusTab and focusTabCount', () => {
   it('locates a tab by key and counts tabs across panes', () => {
-    const layout = { division: 'columns-2' as const, panes: [pane(note('a.md')), pane(note('b.md'), lane('l1'))] };
+    const layout = { division: 'columns-2' as const, panes: [pane(note('a.md')), pane(note('b.md'), compilation('l1'))] };
     expect(findFocusTab(layout, focusTabKey(note('b.md')))).toEqual({ pane: 1, index: 0 });
     expect(findFocusTab(layout, 'note:missing.md')).toBeUndefined();
     expect(focusTabCount(layout)).toBe(3);
@@ -209,12 +213,12 @@ describe('displayPanes', () => {
 });
 
 describe('relocateFocusPaths', () => {
-  const build = () => ({ version: 1 as const, focuses: [focus({ id: 'f1', notebookId: 'one', panes: [pane(note('notes/one/a.md'), lane('l1'))] }), focus({ id: 'f2', notebookId: 'two', name: 'Other', panes: [pane(note('notes/two/a.md'))] })] });
+  const build = () => ({ version: 1 as const, focuses: [focus({ id: 'f1', notebookId: 'one', panes: [pane(note('notes/one/a.md'), compilation('l1'))] }), focus({ id: 'f2', notebookId: 'two', name: 'Other', panes: [pane(note('notes/two/a.md'))] })] });
   it('rewrites note paths only for the matching notebook, mutating in place', () => {
     const page = build();
     const changed = relocateFocusPaths(page, 'one', path => path.replace('notes/one', 'notes/one-renamed'));
     expect(changed).toBe(true);
-    expect(page.focuses[0].panes[0].tabs).toEqual([note('notes/one-renamed/a.md'), lane('l1')]);
+    expect(page.focuses[0].panes[0].tabs).toEqual([note('notes/one-renamed/a.md'), compilation('l1')]);
     expect(page.focuses[1].panes[0].tabs).toEqual([note('notes/two/a.md')]);
   });
   it('returns false when nothing changes', () => {
@@ -291,24 +295,22 @@ describe('notebookFocuses, nameFocus, renameFocus, updateFocus and removeFocus',
 
 describe('Focus notebook ownership', () => {
   const notebooks = [{ id: 'work', root: 'notes/work' }, { id: 'other', root: 'notes/other' }];
-  const screen = { version: 2 as const, rows: [{ id: 'mine', notebookId: 'work', kind: 'custom' as const, name: 'Mine', view: 'small', items: [] }, { id: 'theirs', notebookId: 'other', kind: 'custom' as const, name: 'Theirs', view: 'small', items: [] }] } as never;
-  it('rejects note and lane tabs owned by another notebook and keeps stale lanes for pruning', () => {
-    expect(foreignFocusTab(note('notes/work/a.md'), 'work', notebooks, screen)).toBe(false);
-    expect(foreignFocusTab(note('notes/other/outside.md'), 'work', notebooks, screen)).toBe(true);
-    expect(foreignFocusTab(note('elsewhere/x.md'), 'work', notebooks, screen)).toBe(true);
-    expect(foreignFocusTab(lane('mine'), 'work', notebooks, screen)).toBe(false);
-    expect(foreignFocusTab(lane('theirs'), 'work', notebooks, screen)).toBe(true);
-    expect(foreignFocusTab(lane('deleted'), 'work', notebooks, screen)).toBe(false);
+  it('rejects tabs owned by another notebook, compilations included', () => {
+    expect(foreignFocusTab(note('notes/work/a.md'), 'work', notebooks)).toBe(false);
+    expect(foreignFocusTab(compilation('mine'), 'work', notebooks)).toBe(false);
+    expect(foreignFocusTab(note('notes/other/outside.md'), 'work', notebooks)).toBe(true);
+    expect(foreignFocusTab(note('notes/other/theirs.compilation.yml'), 'work', notebooks)).toBe(true);
+    expect(foreignFocusTab(note('elsewhere/x.md'), 'work', notebooks)).toBe(true);
   });
   it('drops cross-notebook tabs from a stored page', () => {
-    const page = FocusPageSchema.parse({ version: 1, focuses: [focus({ notebookId: 'work', panes: [pane(note('notes/work/a.md'), note('notes/other/outside.md'), lane('theirs'))] })] });
-    const owned = ownFocusPage(page, notebooks, screen);
+    const page = FocusPageSchema.parse({ version: 1, focuses: [focus({ notebookId: 'work', panes: [pane(note('notes/work/a.md'), note('notes/other/outside.md'), note('notes/other/theirs.compilation.yml'))] })] });
+    const owned = ownFocusPage(page, notebooks);
     expect(owned.foreign).toBe(true);
     expect(owned.page.focuses[0].panes[0].tabs).toEqual([note('notes/work/a.md')]);
-    expect(ownFocusPage(owned.page, notebooks, screen)).toEqual({ page: owned.page, foreign: false });
+    expect(ownFocusPage(owned.page, notebooks)).toEqual({ page: owned.page, foreign: false });
   });
   it('keeps a Focus of a notebook another repository serves exactly as stored', () => {
     const page = FocusPageSchema.parse({ version: 1, focuses: [focus({ notebookId: 'elsewhere', panes: [pane(note('notes/work/a.md'), note('anything/b.md'))] })] });
-    expect(ownFocusPage(page, notebooks, screen)).toEqual({ page, foreign: false });
+    expect(ownFocusPage(page, notebooks)).toEqual({ page, foreign: false });
   });
 });

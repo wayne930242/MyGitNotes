@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import type { WorkspaceDocument } from './workspace-documents.js';
-import type { ScreenPage } from './screen-page.js';
 
 export const FOCUS_PAGE_FILE = '.github-notes-focus.yaml';
 export const FOCUS_MAX_BYTES = 512 * 1024;
@@ -20,13 +19,14 @@ const repoPath = z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]
 /* eslint-enable no-control-regex */
 const notebookId = z.string().min(1).max(128);
 
-export const FocusTabSchema = z.discriminatedUnion('kind', [z.object({ kind: z.literal('note'), path: repoPath }).strict(), z.object({ kind: z.literal('lane'), id }).strict()]);
+/** A tab names a note or a compilation by its repository-relative path. */
+export const FocusTabSchema = z.discriminatedUnion('kind', [z.object({ kind: z.literal('note'), path: repoPath }).strict()]);
 export const FocusPaneSchema = z.object({ tabs: z.array(FocusTabSchema) }).strict();
 export type FocusTab = z.infer<typeof FocusTabSchema>;
 export type FocusPane = z.infer<typeof FocusPaneSchema>;
 
 export function focusTabKey(tab: FocusTab): string {
-  return tab.kind === 'note' ? `note:${tab.path}` : `lane:${tab.id}`;
+  return `note:${tab.path}`;
 }
 
 /** A note may sit in several panes at once; within one pane a tab key is unique. Drops a later duplicate, keeping the first. Same reference when nothing changes. Also used by `changeDivision` to dedupe a fold. */
@@ -194,7 +194,6 @@ export function relocateFocusPaths(page: FocusPage, notebookId: string, move: (p
     if (focus.notebookId !== notebookId) continue;
     for (const pane of focus.panes) {
       for (const tab of pane.tabs) {
-        if (tab.kind !== 'note') continue;
         const next = move(tab.path);
         if (next !== tab.path) {
           tab.path = next;
@@ -241,15 +240,8 @@ export function removeFocus(page: FocusPage, id: string): FocusPage {
 
 const within = (path: string, root: string) => path === root || path.startsWith(root + '/');
 
-/**
- * Tab content must belong to the Focus's notebook: a note by its notebook root, a lane by the Screen lane's notebook.
- * A lane id no Screen lane carries is stale, not foreign; stale tabs are hidden and dropped on the next write.
- */
-export function foreignFocusTab(tab: FocusTab, notebookId: string, notebooks: readonly { id: string; root: string; }[], screen: ScreenPage): boolean {
-  if (tab.kind === 'lane') {
-    const row = screen.rows.find(row => row.id === tab.id);
-    return Boolean(row && row.notebookId !== notebookId);
-  }
+/** Tab content must belong to the Focus's notebook: a note or compilation by its notebook root. */
+export function foreignFocusTab(tab: FocusTab, notebookId: string, notebooks: readonly { id: string; root: string; }[]): boolean {
   const owner = [...notebooks].sort((a, b) => b.root.length - a.root.length).find(notebook => within(tab.path, notebook.root));
   return owner?.id !== notebookId;
 }
@@ -258,11 +250,11 @@ export function foreignFocusTab(tab: FocusTab, notebookId: string, notebooks: re
  * Drops every tab that belongs to another notebook and reports whether any was dropped. `notebooks` are
  * those this document's repository serves; a Focus of any other notebook is kept unchanged.
  */
-export function ownFocusPage(page: FocusPage, notebooks: readonly { id: string; root: string; }[], screen: ScreenPage): { page: FocusPage; foreign: boolean; } {
+export function ownFocusPage(page: FocusPage, notebooks: readonly { id: string; root: string; }[]): { page: FocusPage; foreign: boolean; } {
   let foreign = false;
   const focuses = page.focuses.map(focus =>
     !notebooks.some(notebook => notebook.id === focus.notebookId) ? focus : pruneFocus(focus, tab => {
-      const outside = foreignFocusTab(tab, focus.notebookId, notebooks, screen);
+      const outside = foreignFocusTab(tab, focus.notebookId, notebooks);
       if (outside) foreign = true;
       return !outside;
     })

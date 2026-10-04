@@ -2,12 +2,11 @@ import { describe, expect, it } from 'vitest';
 import YAML from 'yaml';
 import { editableFile, type FileSnapshot, managedNotebook, planFileChange } from '../src/file-manager.js';
 import { createStudyNote, STUDY_FILE } from '../src/study.js';
-import { SCREEN_PAGE_FILE } from '../src/screen-page.js';
 import { assetHash } from '../src/assets.js';
 
 function fixture(): FileSnapshot {
   const note = createStudyNote({ notebookId: 'a', path: 'notes/a/one/note.md', title: 'Note', content: '# Note', metadata: {} });
-  return { notebooks: [{ id: 'a', title: 'A', root: 'notes/a' }, { id: 'b', title: 'B', root: 'notes/b' }], directories: ['notes/a', 'notes/a/one', 'notes/a/two', 'notes/a/one/child', 'notes/b'], protectedPaths: [], files: new Map([['notes/a/one/note.md', Buffer.from('---\ncustom: keep\n---\n# Note\n\n![image](image.png)\n[other](../two/other.md)\n')], ['notes/a/one/image.png', Buffer.from([137, 80, 78, 71, 0, 255])], ['notes/a/two/other.md', Buffer.from('[note](../one/note.md#heading)\n![image](/api/files/raw?notebookId=a&path=notes%2Fa%2Fone%2Fimage.png)\n')], ['notes/a/.hidden.json', Buffer.from('{"keep":true}\r\n')], ['notes/a/one/_dir.yml', Buffer.from('title: One\ncustom: preserve\n')], ['notes/a/two/_dir.yml', Buffer.from('title: Two\ncustom: destination\n')], [STUDY_FILE, Buffer.from(YAML.stringify({ version: 1, notes: [note], events: [] }))], [SCREEN_PAGE_FILE, Buffer.from(YAML.stringify({ version: 2, rows: [{ id: 'row', notebookId: 'a', kind: 'custom', name: 'Row', view: 'small', items: [{ id: 'note', kind: 'note', notebookId: 'a', path: 'notes/a/one/note.md' }, { id: 'image', kind: 'asset', notebookId: 'a', path: 'notes/a/one/image.png' }] }] }))]]) };
+  return { notebooks: [{ id: 'a', title: 'A', root: 'notes/a' }, { id: 'b', title: 'B', root: 'notes/b' }], directories: ['notes/a', 'notes/a/one', 'notes/a/two', 'notes/a/one/child', 'notes/b'], protectedPaths: [], files: new Map([['notes/a/one/note.md', Buffer.from('---\ncustom: keep\n---\n# Note\n\n![image](image.png)\n[other](../two/other.md)\n')], ['notes/a/one/image.png', Buffer.from([137, 80, 78, 71, 0, 255])], ['notes/a/two/other.md', Buffer.from('[note](../one/note.md#heading)\n![image](/api/files/raw?notebookId=a&path=notes%2Fa%2Fone%2Fimage.png)\n')], ['notes/a/.hidden.json', Buffer.from('{"keep":true}\r\n')], ['notes/a/one/_dir.yml', Buffer.from('title: One\ncustom: preserve\n')], ['notes/a/two/_dir.yml', Buffer.from('title: Two\ncustom: destination\n')], [STUDY_FILE, Buffer.from(YAML.stringify({ version: 1, notes: [note], events: [] }))], ['notes/a/reading.compilation.yml', Buffer.from(YAML.stringify({ version: 1, id: 'row', title: 'Row', arrangement: 'lane', size: 'small', items: [{ id: 'note', kind: 'note', path: 'notes/a/one/note.md' }, { id: 'image', kind: 'asset', path: 'notes/a/one/image.png' }] }))]]) };
 }
 describe('file planning', () => {
   it('moves a directory with binary files, rewrites references and preserves study identities', () => {
@@ -20,8 +19,8 @@ describe('file planning', () => {
     expect(after.files.get('notes/a/two/other.md')!.toString()).toContain('path=notes%2Fa%2Ftwo%2Frenamed%2Fimage.png');
     const studyBefore = YAML.parse(before.files.get(STUDY_FILE)!.toString()), studyAfter = YAML.parse(after.files.get(STUDY_FILE)!.toString());
     expect(studyAfter).toEqual({ ...studyBefore, notes: studyBefore.notes.map((note: any) => ({ ...note, path: 'notes/a/two/renamed/note.md' })) });
-    const screen = YAML.parse(after.files.get(SCREEN_PAGE_FILE)!.toString());
-    expect(screen.rows[0].items.map((item: any) => item.path)).toEqual(['notes/a/two/renamed/note.md', 'notes/a/two/renamed/image.png']);
+    const lane = YAML.parse(after.files.get('notes/a/reading.compilation.yml')!.toString());
+    expect(lane.items.map((item: any) => item.path)).toEqual(['notes/a/two/renamed/note.md', 'notes/a/two/renamed/image.png']);
     expect(before.files.has('notes/a/one/note.md')).toBe(true);
   });
   it('moves one note and updates its outbound links', () => {

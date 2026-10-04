@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { StudyProgressionSchema } from './study-stages.js';
 import { type CompilationItem, CompilationItemSchema, GraphLayoutSchema } from './compilation.js';
-import type { WorkspaceDocument } from './workspace-documents.js';
 
 export const SCREEN_PAGE_FILE = '.github-notes-screen.yaml';
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
@@ -67,39 +66,4 @@ export function readScreenPage(value: unknown, config: ScreenNotebookConfig | nu
     return [{ ...row, notebookId: first, items: row.items.filter(item => item.kind === 'youtube' || item.notebookId === first) }, ...rest.map(owner => ({ ...row, id: unique(`${row.id}-${owner}`), notebookId: owner, items: groups.get(owner)! }))];
   });
   return ScreenPageSchema.parse({ version: 2, rows });
-}
-
-export const SCREEN_DOCUMENT: WorkspaceDocument<ScreenPage> = {
-  file: SCREEN_PAGE_FILE,
-  label: 'Screen',
-  maxBytes: 512 * 1024,
-  scopes: ['screen', 'folders', 'files'],
-  schema: ScreenPageSchema,
-  fileSchema: ScreenPageFileSchema,
-  empty: emptyScreenPage,
-  read: readScreenPage,
-  relocate(page, notebookId, move) {
-    let changed = false;
-    const update = (item: { path: string; }) => {
-      const next = move(item.path);
-      if (next !== item.path) {
-        item.path = next;
-        changed = true;
-      }
-    };
-    for (const row of page.rows) {
-      if (row.kind === 'custom') { for (const item of row.items) if (item.kind !== 'youtube' && item.notebookId === notebookId) update(item); }
-      else if (row.source.kind === 'folder' && row.source.notebookId === notebookId) update(row.source);
-      if (row.notebookId === notebookId) { for (const node of row.graph?.nodes || []) update(node); }
-    }
-    return changed;
-  },
-};
-
-export function moveScreenRow(page: ScreenPage, rowId: string, index: number): ScreenPage {
-  const selected = page.rows.find(row => row.id === rowId);
-  if (!selected) throw new Error('Unknown swimlane');
-  const rows = page.rows.filter(row => row.id !== rowId);
-  rows.splice(Math.max(0, Math.min(index, rows.length)), 0, selected);
-  return ScreenPageSchema.parse({ ...page, rows });
 }
