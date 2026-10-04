@@ -82,8 +82,23 @@ export class FocusError extends Error {
 
 export const emptyFocusPage = (): FocusPage => ({ version: 1, focuses: [] });
 export const emptyFocusLayout = (): FocusLayout => ({ division: 'single', panes: [{ tabs: [] }] });
+interface LegacyLaneTab {
+  kind?: unknown;
+}
+
+/**
+ * Reads a Focus file. `lane` tabs belong to a workspace not yet migrated to compilations (`pnpm migrate-workspace`);
+ * they are left out, so the rest of Focus still opens and files can still move, instead of every read failing on them.
+ */
 export function readFocusPage(value: unknown): FocusPage {
-  return FocusPageSchema.parse(value);
+  const focuses = (value as { focuses?: unknown; } | null)?.focuses;
+  if (!Array.isArray(focuses)) return FocusPageSchema.parse(value);
+  const withoutLaneTabs = focuses.map(focus => {
+    const panes = (focus as { panes?: unknown; } | null)?.panes;
+    if (!Array.isArray(panes)) return focus;
+    return { ...focus, panes: panes.map(pane => Array.isArray((pane as { tabs?: unknown; } | null)?.tabs) ? { ...pane, tabs: (pane as { tabs: LegacyLaneTab[]; }).tabs.filter(tab => tab?.kind !== 'lane') } : pane) };
+  });
+  return FocusPageSchema.parse({ ...(value as object), focuses: withoutLaneTabs });
 }
 
 /** First pane (in pane order) holding `key`, for UI heuristics that only need to know whether a tab exists somewhere — never for deciding where to place or remove one. */

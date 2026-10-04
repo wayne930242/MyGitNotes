@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changeDivision, closeTab, displayPanes, findFocusTab, findFocusTabInPane, FOCUS_DIVISIONS, FOCUS_MAX_TABS, FocusError, FocusLayoutSchema, FocusPageSchema, FocusSchema, focusTabCount, focusTabKey, foreignFocusTab, moveTab, nameFocus, notebookFocuses, ownFocusPage, placeTab, placeTabs, pruneFocus, relocateFocusPaths, removeFocus, renameFocus, updateFocus } from '../src/focus-page.js';
+import { changeDivision, closeTab, displayPanes, findFocusTab, findFocusTabInPane, FOCUS_DIVISIONS, FOCUS_MAX_TABS, FocusError, FocusLayoutSchema, FocusPageSchema, FocusSchema, focusTabCount, focusTabKey, foreignFocusTab, moveTab, nameFocus, notebookFocuses, ownFocusPage, placeTab, placeTabs, pruneFocus, readFocusPage, relocateFocusPaths, removeFocus, renameFocus, updateFocus } from '../src/focus-page.js';
 
 const note = (path: string) => ({ kind: 'note' as const, path });
 /** A tab to a compilation is a path tab like any note. */
@@ -312,5 +312,16 @@ describe('Focus notebook ownership', () => {
   it('keeps a Focus of a notebook another repository serves exactly as stored', () => {
     const page = FocusPageSchema.parse({ version: 1, focuses: [focus({ notebookId: 'elsewhere', panes: [pane(note('notes/work/a.md'), note('anything/b.md'))] })] });
     expect(ownFocusPage(page, notebooks)).toEqual({ page, foreign: false });
+  });
+});
+
+describe('reading a Focus file of a workspace not yet migrated', () => {
+  const page = (...tabs: unknown[]) => ({ version: 1, focuses: [focus({ panes: [{ tabs }] })] });
+  it('leaves out legacy lane tabs so the rest of Focus still opens', () => {
+    const read = readFocusPage(page(note('a.md'), { kind: 'lane', id: 'reading' }, note('b.md')));
+    expect(read.focuses[0].panes[0].tabs).toEqual([note('a.md'), note('b.md')]);
+  });
+  it('still rejects a tab of any other unknown kind', () => {
+    expect(() => readFocusPage(page({ kind: 'drawing', id: 'x' }))).toThrow();
   });
 });

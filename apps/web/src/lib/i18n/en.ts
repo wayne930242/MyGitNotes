@@ -361,6 +361,7 @@ export const en = {
   'screen.stack': 'Stack',
   'compilation.backTo': 'Back to compilations',
   'compilation.notFound': 'This compilation no longer exists.',
+  'workspace.legacySchema': 'This workspace is on schema {version}, before compilations. Its Screen lanes are not shown. Run `pnpm migrate-workspace` locally and commit the result.',
   'compilation.invalid': 'This compilation file cannot be read. Fix the file and reload.',
   'compilation.copy': 'Duplicate compilation',
   'compilation.copied': 'Created “{title}”.',

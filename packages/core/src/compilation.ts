@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { type StudyProgression, StudyProgressionSchema } from './study-stages.js';
 import { isNoteHidden } from './note-status.js';
 
+/** The workspace `schema_version` that replaced the Screen file with compilation files. */
+export const COMPILATION_SCHEMA_VERSION = 3;
+
 /** A compilation is a note-shaped file inside a notebook: `<name>.compilation.yml`. */
 export const COMPILATION_SUFFIX = '.compilation.yml';
 export const COMPILATION_MAX_BYTES = 512 * 1024;

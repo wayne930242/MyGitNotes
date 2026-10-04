@@ -363,6 +363,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'screen.stack': '堆疊',
   'compilation.backTo': '返回合輯',
   'compilation.notFound': '這個合輯已不存在。',
+  'workspace.legacySchema': '這個工作區仍是 schema {version}，早於合輯。原有的 Screen 河道不會顯示。請在本機執行 `pnpm migrate-workspace` 並提交結果。',
   'compilation.invalid': '無法讀取這個合輯檔案。請修正檔案後重新載入。',
   'compilation.copy': '複製合輯',
   'compilation.copied': '已建立「{title}」。',

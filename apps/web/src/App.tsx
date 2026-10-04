@@ -67,6 +67,7 @@ import type { CompilationRow } from '@mygitnotes/core/compilation';
 import { usePhone } from './components/FocusArea.js';
 import { useFocusSearch } from './lib/focus-search.js';
 import { LegacyScreenRedirect } from './components/LegacyScreenRedirect.js';
+import { LegacySchemaNotice } from './components/LegacySchemaNotice.js';
 import { CompilationActionsProvider } from './lib/compilation-actions.js';
 import { useCompilationActionsValue } from './app/useCompilationActionsValue.js';
 import { BrowseDock, BrowseDockToggle, CARD_TWO_ROW_HEIGHT } from './components/BrowseDock.js';
@@ -254,22 +255,9 @@ const AppContent: React.FC = () => {
   const dockToggle = noteFocus.layout && focusCapacity > 1 ? <BrowseDockToggle placement={topDock ? 'top' : 'left'} collapsed={noteFocus.view.dock.collapsed} onCollapsedChange={collapsed => noteFocus.setDock({ collapsed })} /> : undefined;
   const browseRegion = (docked: boolean, dockHeight: number) => (
     <>
+      <LegacySchemaNotice schemaVersion={config?.schema_version} />
       {actionError && <p role='alert' className='mb-3 text-sm text-danger'>{actionError}</p>}
-      {selectedNotes.length > 0 && (
-        <BulkActionsToolbar
-          count={selectedNotes.length}
-          statuses={notebookStatuses}
-          availableTags={availableTags}
-          busy={bulkBusy}
-          readOnly={!canWrite}
-          canMove={Boolean(bulkMoveNotebookId)}
-          onSetStatus={status => void runBulkStatus(status)}
-          onAddTag={tag => void runBulkTag('add', tag)}
-          onRemoveTag={tag => void runBulkTag('remove', tag)}
-          onMove={() => setBulkMoveOpen(true)}
-          onClear={clearSelection}
-        />
-      )}
+      {selectedNotes.length > 0 && <BulkActionsToolbar count={selectedNotes.length} statuses={notebookStatuses} availableTags={availableTags} busy={bulkBusy} readOnly={!canWrite} canMove={Boolean(bulkMoveNotebookId)} onSetStatus={status => void runBulkStatus(status)} onAddTag={tag => void runBulkTag('add', tag)} onRemoveTag={tag => void runBulkTag('remove', tag)} onMove={() => setBulkMoveOpen(true)} onClear={clearSelection} />}
       {staleNotice && <p role='alert' className='mb-3 text-sm text-warning'>{staleNotice}</p>}
       {listResult.error && <p role='alert' className='mb-3 text-sm text-danger'>{t('notes.loadFailed', { message: listResult.error })}</p>}
       {facetsQuery.error && <p role='alert' className='mb-3 text-sm text-danger'>{t('notes.countsFailed', { message: facetsQuery.error })}</p>}
