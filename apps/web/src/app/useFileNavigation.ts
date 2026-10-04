@@ -1,3 +1,5 @@
+import type { FileDialogRequest } from '../components/files/types.js';
+import type { FolderAction } from '../components/FolderActions.js';
 import { type NoteListItem } from '@mygitnotes/core/note-query';
 import type { FilterControls } from '../lib/filter-controls.js';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -16,7 +18,7 @@ interface Params {
   documents: WorkspaceState['documents'];
   t: I18nContextValue['t'];
   config: WorkspaceState['config'];
-  setFileDialog: React.Dispatch<React.SetStateAction<{ notebookId: string; path?: string; movePath?: string; } | undefined>>;
+  setFileDialog: React.Dispatch<React.SetStateAction<FileDialogRequest | undefined>>;
   setActionError: WorkspaceState['setActionError'];
   refreshWorkspace: WorkspaceState['refreshWorkspace'];
   refreshDocuments: () => Promise<void>;
@@ -35,12 +37,12 @@ interface Params {
 
 export function useFileNavigation({ editorRegistry, hasPendingDrafts, documents, t, config, setFileDialog, setActionError, refreshWorkspace, refreshDocuments, editorRoute, editorNotebookId, setEditingNote, navigate, location, returnTo, setFileEditorRevision, selectedFolder, folderRoot, changeFilters, handleOpenFolderIndex }: Params) {
   const beforeFileChange = async () => {
-    await editorRegistry.flushEditors();
-    if (hasPendingDrafts() || documents.some(document => document.dirty)) throw new Error(t('folder.draftsHint'));
+    const flushed = await editorRegistry.flushEditors();
+    if (!flushed || hasPendingDrafts() || documents.some(document => document.dirty)) throw new Error(t('folder.draftsHint'));
   };
-  const openFileManager = (notebookId: string, relativePath = '') => {
+  const openFileManager = (notebookId: string, relativePath = '', action: FolderAction = 'browse') => {
     const notebook = config?.notebooks.find(nb => nb.id === notebookId);
-    if (notebook) setFileDialog({ notebookId, path: notebook.root + (relativePath ? '/' + relativePath : '') });
+    if (notebook) setFileDialog({ notebookId, path: notebook.root + (relativePath ? '/' + relativePath : ''), showDocuments: true, initialOperation: action === 'delete' ? 'remove-directory' : action === 'move' ? 'move' : undefined });
   };
   const handleMoveNote = async (note: NoteListItem) => {
     try {
@@ -84,6 +86,8 @@ export function useFileNavigation({ editorRegistry, hasPendingDrafts, documents,
     if (selectedFolder && folderRoot && result.pathMap[folderRoot + '/' + selectedFolder]) {
       const moved = result.pathMap[folderRoot + '/' + selectedFolder];
       changeFilters({ folders: [moved] });
+    } else if (selectedFolder && folderRoot && result.deletedPaths.includes(folderRoot + '/' + selectedFolder)) {
+      changeFilters({ folders: [] });
     }
   };
   const openFileIndex = async (path: string, notebookId: string) => {

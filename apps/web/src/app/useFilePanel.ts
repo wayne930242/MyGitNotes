@@ -1,10 +1,11 @@
+import type { FileDialogRequest } from '../components/files/types.js';
 import { useRef, useState } from 'react';
 import { RIGHT_PANEL_RAIL_WIDTH } from '../components/WorkspaceChrome.js';
 import { type FileManagerHandle } from '../components/files/index.js';
 import { type FileEntry } from '../lib/files-api.js';
 
 export function useFilePanel() {
-  const [fileDialog, setFileDialog] = useState<{ notebookId: string; path?: string; movePath?: string; }>();
+  const [fileDialog, setFileDialog] = useState<FileDialogRequest>();
   const [fileMetadataContainer, setFileMetadataContainer] = useState<HTMLDivElement | null>(null);
   const [fileMetadataOpen, setFileMetadataOpen] = useState(false);
   // Seeded to the rail width (not 0) so the right panel mounts on first render and can report

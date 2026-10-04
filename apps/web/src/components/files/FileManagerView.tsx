@@ -70,7 +70,7 @@ export const FileManager = forwardRef<FileManagerHandle, FileManagerProps>(funct
               )
               : (
                 <section className={`file-content ${selectedEntry ? 'has-selection' : ''}`}>
-                  <p className='file-storage-hint'>{mode === 'pick-image' ? t('files.pickerHint') : !mutable ? t('files.readOnly') : listing.remote ? t('files.remoteHint') : t('files.localHint')}</p>
+                  <p className='file-storage-hint'>{mode === 'pick-image' ? t('files.pickerHint') : !mutable ? t('files.readOnly') : listing.remote ? t('files.remoteHint') : t('files.localHint')}{mode === 'manage' && <>{' '}{t('files.listHint')}</>}</p>
                   <FileListing model={model} />
                   <FileDetail model={model} />
                   <FileOperation model={model} />

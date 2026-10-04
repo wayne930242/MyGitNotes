@@ -52,6 +52,38 @@ describe('file planning', () => {
     expect(() => planFileChange({ ...before, protectedPaths: ['notes/a/one/link'] }, { kind: 'move', notebookId: 'a', path: 'notes/a/one', destination: 'notes/a/new' })).toThrow('protected');
     expect(() => planFileChange(before, { kind: 'write', notebookId: 'a', path: 'notes/a/one/image.png', content: 'overwrite' })).toThrow('UTF-8');
   });
+  it('deletes a directory recursively including metadata, binary, hidden files and empty directories without changing other files', () => {
+    const before = fixture();
+    before.files.set('notes/a/one/child/.secret.txt', Buffer.from('hidden'));
+    const after = planFileChange(before, { kind: 'delete-directory', notebookId: 'a', path: 'notes/a/one' });
+    expect([...after.files.keys()].some(file => file.startsWith('notes/a/one/'))).toBe(false);
+    expect(after.directories.filter(dir => dir.startsWith('notes/a/one'))).toEqual([]);
+    expect(after.selectedPath).toBe('notes/a');
+    expect(after.pathMap).toEqual({});
+    for (const [file, bytes] of before.files) if (!file.startsWith('notes/a/one/')) expect(after.files.get(file)).toEqual(bytes);
+    expect(before.files.get('notes/a/one/child/.secret.txt')?.toString()).toBe('hidden');
+  });
+  it.each(['notes/a', 'notes/b', 'notes/b/missing', 'notes/a/../b', '/notes/a/one', 'notes/a/one/note.md', 'notes/a/missing', 'notes/a/.git'])('rejects unsafe or non-directory recursive delete targets: %s', path => {
+    expect(() => planFileChange(fixture(), { kind: 'delete-directory', notebookId: 'a', path })).toThrow();
+  });
+  it.each(['delete-directory', 'remove-directory'])('protects descendant symlinks, protected entries and nested notebooks for %s', kind => {
+    const command = { kind, notebookId: 'a', path: 'notes/a/one', ...(kind === 'remove-directory' ? { destination: 'notes/a/two' } : {}) };
+    for (const protectedPath of ['notes/a/one/link', 'notes/a/one/child/.git', 'notes/a/one/AGENTS.md']) {
+      expect(() => planFileChange({ ...fixture(), protectedPaths: [protectedPath] }, command)).toThrow('protected');
+    }
+    const before = fixture();
+    before.notebooks.push({ id: 'nested', title: 'Nested', root: 'notes/a/one/child' });
+    expect(() => planFileChange(before, command)).toThrow('another notebook');
+  });
+  it('retains preserve-mode collision, cycle and destination checks without modifying the input', () => {
+    const before = fixture();
+    const command = { kind: 'remove-directory', notebookId: 'a', path: 'notes/a/one' };
+    for (const destination of ['notes/a/one', 'notes/a/one/child']) expect(() => planFileChange(before, { ...command, destination })).toThrow('outside');
+    expect(() => planFileChange(before, { ...command, destination: 'notes/a/missing' })).toThrow('existing destination');
+    before.files.set('notes/a/two/note.md', Buffer.from('collision'));
+    expect(() => planFileChange(before, { ...command, destination: 'notes/a/two' })).toThrow('already exists');
+    expect(before.files.has('notes/a/one/note.md')).toBe(true);
+  });
   it('recognizes UTF-8 including empty files and BOM, while preserving binary classification', () => {
     expect(managedNotebook('notes/a/.hidden.json', fixture().notebooks)?.id).toBe('a');
     expect(editableFile('empty', Buffer.alloc(0))).toBe('');

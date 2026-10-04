@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createElement } from 'react';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import type { NoteFilters } from '@mygitnotes/core/note-filters';
@@ -20,6 +20,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   window.localStorage.clear();
 });
 
@@ -56,6 +57,47 @@ it('gives each notebook a Compilations entry with its count that lists compilati
   expect(within(entry.closest('.nav-tree-row') as HTMLElement).getByText('3')).toBeInTheDocument();
   fireEvent.click(entry);
   expect(onChange).toHaveBeenCalledWith({ kind: 'compilation', folders: [] });
+});
+
+it.each(['Delete', 'Move', 'Open file browser'])('puts %s on the folder dropdown, never the notebook, and forwards its nested path', async label => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ revision: 'r1' }) }));
+  const onManageFiles = vi.fn();
+  render(
+    <I18nProvider>
+      <Sidebar filters={controls()} facets={facets} folders={[{ notebookId: 'life', path: 'one', title: 'One', order: 0 }, { notebookId: 'life', path: 'one/nested', title: 'Nested', order: 0 }]} selectedNotebookId='life' selectedFolder='one/nested' onManageFiles={onManageFiles} foldersWritable reorder={false} onToggleReorder={() => {}} onSelectFolder={() => {}} workspaceTagNames={[]} changeCount={0} />
+    </I18nProvider>,
+  );
+  expect(screen.queryByRole('button', { name: 'Manage folder: Life' })).not.toBeInTheDocument();
+  expect(document.querySelector('.folder-heading-actions button')).toBeInTheDocument();
+  const trigger = screen.getByRole('button', { name: 'Manage folder: Nested' });
+  trigger.focus();
+  await act(async () => {
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+  });
+  const menu = await screen.findByRole('menu');
+  expect(within(menu).getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Delete', 'Move', 'Open file browser']);
+  await waitFor(() => expect(within(menu).getByRole('menuitem', { name: label })).not.toHaveAttribute('data-disabled'));
+  fireEvent.click(within(menu).getByRole('menuitem', { name: label }));
+  await waitFor(() => expect(onManageFiles).toHaveBeenCalledWith('life', 'one/nested', label === 'Delete' ? 'delete' : label === 'Move' ? 'move' : 'browse'));
+});
+
+it('dismisses the folder dropdown on Escape and restores trigger focus without opening a manager', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ revision: 'r1' }) }));
+  const onManageFiles = vi.fn();
+  render(
+    <I18nProvider>
+      <Sidebar filters={controls()} folders={[{ notebookId: 'life', path: 'one', title: 'One', order: 0 }]} selectedNotebookId='life' onManageFiles={onManageFiles} foldersWritable reorder={false} onToggleReorder={() => {}} onSelectFolder={() => {}} workspaceTagNames={[]} changeCount={0} />
+    </I18nProvider>,
+  );
+  const trigger = screen.getByRole('button', { name: 'Manage folder: One' });
+  trigger.focus();
+  await act(async () => {
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+  });
+  fireEvent.keyDown(await screen.findByRole('menu'), { key: 'Escape' });
+  await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+  await waitFor(() => expect(trigger).toHaveFocus());
+  expect(onManageFiles).not.toHaveBeenCalled();
 });
 
 it('marks Compilations as the selected entry, not the notebook, while the list shows compilations', () => {

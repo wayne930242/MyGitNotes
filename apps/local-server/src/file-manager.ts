@@ -64,6 +64,8 @@ async function localHash(root: string, file: string, size: number) {
 }
 function needsContent(file: string, command?: FileCommand) {
   if (!command) return true;
+  // Keep original bytes for rollback if unlink/rmdir fails partway through deletion.
+  if (command.kind === 'delete-directory') return withinPath(file, command.path);
   if (command.kind === 'move' || command.kind === 'remove-directory') return withinPath(file, command.path) || /\.(md|markdown)$/i.test(file) || isCompilationPath(file) || auxiliary.includes(file);
   return file === command.path || command.kind === 'metadata' && file === command.path + '/_dir.yml';
 }
@@ -297,7 +299,7 @@ export function createFileManagerRouter(): Router {
         });
         nextRevision = changes.length ? (await state.reader!.commitChanges(changes, state.revision, command.kind, 'files')).revision : state.revision;
       }
-      res.json({ revision: nextRevision, selectedPath: after.selectedPath, pathMap: after.pathMap, deletedPaths: paths.filter(file => !after.files.has(file)) });
+      res.json({ revision: nextRevision, selectedPath: after.selectedPath, pathMap: after.pathMap, deletedPaths: [...paths.filter(file => !after.files.has(file)), ...state.snapshot.directories.filter(dir => !after.directories.includes(dir))] });
     };
     try {
       // A local mutation is serialized on the worktree it changes.

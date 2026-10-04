@@ -1,7 +1,8 @@
+import { type FolderAction, FolderActions } from './FolderActions.js';
 import { ReorderToggle } from './ReorderToggle.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
-import { Check, Folder, FolderPlus, GripVertical, MoreHorizontal } from 'lucide-react';
+import { Check, Folder, FolderPlus, GripVertical } from 'lucide-react';
 import type { FolderCommand } from '@mygitnotes/core';
 import type { FolderItem } from '../lib/types.js';
 import { folderDropCommand } from '../lib/folder-drag.js';
@@ -17,7 +18,7 @@ function DropZone({ path, position, disabled, children }: { path: string; positi
   /* eslint-enable react/refs */
 }
 
-function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage, multiSelectable, touchMultiSelect, onLongPress, hasChildren, isExpanded, onToggleExpand }: { folder: FolderItem; reorder: boolean; disabled: boolean; selected: boolean; onSelect: (event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean; }) => void; onManage: () => void; multiSelectable: boolean; touchMultiSelect?: boolean; onLongPress?: () => void; hasChildren: boolean; isExpanded: boolean; onToggleExpand: (event: React.MouseEvent) => void; }) {
+function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage, multiSelectable, touchMultiSelect, onLongPress, hasChildren, isExpanded, onToggleExpand }: { folder: FolderItem; reorder: boolean; disabled: boolean; selected: boolean; onSelect: (event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean; }) => void; onManage: (action: FolderAction) => void; multiSelectable: boolean; touchMultiSelect?: boolean; onLongPress?: () => void; hasChildren: boolean; isExpanded: boolean; onToggleExpand: (event: React.MouseEvent) => void; }) {
   const { t } = useTranslation();
   const drag = useDraggable({ id: folder.path, disabled: disabled || !reorder });
   const longPress = useLongPress(() => onLongPress?.(), multiSelectable && Boolean(onLongPress));
@@ -45,13 +46,7 @@ function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage, mul
             )
             : undefined}
           suffix={touchMultiSelect ? <span className={`folder-check ${selected ? 'is-checked' : ''}`} aria-hidden='true'>{selected && <Check size={11} strokeWidth={3} />}</span> : undefined}
-          actions={!disabled
-            ? (
-              <button type='button' className='folder-manage' aria-label={`${t('folder.manage')}: ${folder.title}`} title={t('folder.manage')} onClick={onManage}>
-                <MoreHorizontal size={15} />
-              </button>
-            )
-            : undefined}
+          actions={<FolderActions title={folder.title} disabled={disabled} onAction={onManage} />}
           buttonProps={{ title, onContextMenu: longPress.onContextMenu, onTouchStart: longPress.onTouchStart, onTouchMove: longPress.onTouchMove, onTouchEnd: longPress.onTouchEnd, onTouchCancel: longPress.onTouchCancel }}
         />
       </DropZone>
@@ -61,14 +56,14 @@ function TreeItem({ folder, reorder, disabled, selected, onSelect, onManage, mul
   /* eslint-enable react/refs */
 }
 
-function TreeBranch({ node, expanded, onToggleExpand, reorder, disabled, isSelected, selectFolder, onManageFiles, multiSelectable, touchMultiSelect, onLongPressFolder }: { node: FolderTreeNode; expanded: Set<string>; onToggleExpand: (path: string, event: React.MouseEvent) => void; reorder: boolean; disabled: boolean; isSelected: (path: string | null) => boolean; selectFolder: (folder: string | null, event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean; }) => void; onManageFiles: (path: string) => void; multiSelectable: boolean; touchMultiSelect?: boolean; onLongPressFolder?: (folder: string) => void; }) {
+function TreeBranch({ node, expanded, onToggleExpand, reorder, disabled, isSelected, selectFolder, onManageFiles, multiSelectable, touchMultiSelect, onLongPressFolder }: { node: FolderTreeNode; expanded: Set<string>; onToggleExpand: (path: string, event: React.MouseEvent) => void; reorder: boolean; disabled: boolean; isSelected: (path: string | null) => boolean; selectFolder: (folder: string | null, event: { shiftKey: boolean; ctrlKey?: boolean; metaKey?: boolean; }) => void; onManageFiles: (path: string, action?: FolderAction) => void; multiSelectable: boolean; touchMultiSelect?: boolean; onLongPressFolder?: (folder: string) => void; }) {
   const isExpanded = expanded.has(node.path);
   const hasChildren = node.children.length > 0;
   const folder = node.folder;
 
   return (
     <div className='nav-tree-node' key={node.path}>
-      <TreeItem folder={folder} reorder={reorder} disabled={disabled} selected={isSelected(folder.path)} onSelect={event => selectFolder(folder.path, event)} onManage={() => onManageFiles(folder.path)} multiSelectable={multiSelectable} touchMultiSelect={touchMultiSelect} onLongPress={onLongPressFolder && (() => onLongPressFolder(folder.path))} hasChildren={hasChildren} isExpanded={isExpanded} onToggleExpand={event => onToggleExpand(node.path, event)} />
+      <TreeItem folder={folder} reorder={reorder} disabled={disabled} selected={isSelected(folder.path)} onSelect={event => selectFolder(folder.path, event)} onManage={action => onManageFiles(folder.path, action)} multiSelectable={multiSelectable} touchMultiSelect={touchMultiSelect} onLongPress={onLongPressFolder && (() => onLongPressFolder(folder.path))} hasChildren={hasChildren} isExpanded={isExpanded} onToggleExpand={event => onToggleExpand(node.path, event)} />
       {hasChildren && isExpanded && <NavTreeChildren>{node.children.map(child => <TreeBranch key={child.path} node={child} expanded={expanded} onToggleExpand={onToggleExpand} reorder={reorder} disabled={disabled} isSelected={isSelected} selectFolder={selectFolder} onManageFiles={onManageFiles} multiSelectable={multiSelectable} touchMultiSelect={touchMultiSelect} onLongPressFolder={onLongPressFolder} />)}</NavTreeChildren>}
     </div>
   );
@@ -77,7 +72,7 @@ function TreeBranch({ node, expanded, onToggleExpand, reorder, disabled, isSelec
 export function FolderTree({ showHeading = false, showRoot = false, onManageFiles, reorder = false, onToggleReorder, selectedPaths, allFoldersSelected, onFilterFolder, touchMultiSelect = false, onLongPressFolder, folders, notebookId, selected, onSelect, writable, beforeChange, onChanged, expandCommand }: {
   showHeading?: boolean;
   showRoot?: boolean;
-  onManageFiles: (path: string) => void;
+  onManageFiles: (path: string, action?: FolderAction) => void;
   reorder?: boolean;
   onToggleReorder?: () => void;
   selectedPaths?: string[];

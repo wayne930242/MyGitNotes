@@ -9,7 +9,7 @@
 .file-hidden-toggle { flex-shrink: 0; color: var(--color-muted); }
 .file-hidden-toggle[aria-pressed='true'] { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
 .file-manager-body { display: flex; min-height: 0; flex: 1; }
-.file-tree { width: var(--workspace-sidebar-width, 256px); flex: 0 0 var(--workspace-sidebar-width, 256px); overflow: auto; border-right: 1px solid var(--workspace-divider, var(--color-border)); padding: 16px 10px; background: var(--workspace-rail, var(--color-surface)); }
+.file-tree { width: var(--workspace-sidebar-width, 256px); flex: 0 0 var(--workspace-sidebar-width, 256px); overflow: auto; border: 0; padding: 16px 10px; background: var(--workspace-rail, var(--color-surface)); }
 .file-tree-r2-sub .nav-tree-entry { padding-left: 14px; }
 .file-markdown-toggle { flex-shrink: 0; color: var(--color-muted); }
 .file-markdown-toggle[aria-pressed='true'] { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
@@ -19,9 +19,20 @@
 .file-actions svg { flex-shrink: 0; }
 .file-storage-hint { color: var(--color-muted); margin: 10px 0 16px; font-size: 12px; }
 .file-list { border: 1px solid var(--color-border); border-radius: 9px; overflow: hidden; }
-.file-row { display: flex; align-items: center; border-bottom: 1px solid var(--color-border); padding-right: 8px; }
+.file-row { display: flex; align-items: center; }
+.file-row.is-selected { background: var(--workspace-selection); }
+.file-list-columns, .file-row-name { display: grid; grid-template-columns: minmax(0, 1fr) 70px 65px; gap: 10px; align-items: center; }
+.file-list-columns { padding: 10px 12px; font-size: 11px; color: var(--color-muted); background: var(--color-bg); }
+.file-entry-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.file-entry-name svg { flex: none; }
+.file-entry-name span { overflow: hidden; text-overflow: ellipsis; }
+.file-details-toggle { margin-top: 12px; }
+.file-delete-choice { display: flex; flex-direction: column; gap: 10px; }
+.file-delete-choice legend { margin-bottom: 10px; }
+.file-operation .file-delete-choice label, .file-operation .file-delete-confirm { flex-direction: row; align-items: flex-start; gap: 8px; }
+.file-delete-choice input, .file-delete-confirm input { flex: none; margin-top: 3px; }
 .file-row:last-child { border: 0; }
-.file-row-name { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 10px 12px; text-align: left; }
+.file-row-name { flex: 1; min-width: 0; width: 100%; padding: 10px 12px; text-align: left; min-height: 44px; }
 .file-row-name span { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .file-row-name small { color: var(--color-muted); white-space: nowrap; }
 .file-row:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
@@ -88,7 +99,7 @@
 
 /* The dialog keeps folder and file information in its own right panel, like the Files page. */
 .file-manager { position: relative; }
-.file-info-panel { flex: 0 0 300px; width: 300px; min-width: 0; overflow-y: auto; padding: 18px; border-left: 1px solid var(--workspace-divider, var(--color-border)); background: var(--color-surface); }
+.file-info-panel { flex: 0 0 300px; width: 300px; min-width: 0; overflow-y: auto; padding: 18px; border: 1px solid var(--workspace-divider, var(--color-border)); background: var(--color-surface); }
 .file-info-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .file-info-heading h2 { font-size: 14px; font-weight: 600; }
 .file-info-panel .file-operation { padding: 12px; }
@@ -111,11 +122,11 @@
 .file-manager[data-layout='panel'] .file-storage-hint { margin: 4px 4px 10px; font-size: 11px; line-height: 1.5; }
 .file-manager[data-layout='panel'] .file-list { border: 0; border-radius: 0; max-height: none; }
 .file-manager[data-layout='panel'] .file-row { border-bottom: 0; border-radius: 6px; padding: 0; }
-.file-manager[data-layout='panel'] .file-row-name { gap: 7px; padding: 8px 6px; min-height: 36px; font-size: 12px; }
+.file-manager[data-layout='panel'] .file-row-name { grid-template-columns: minmax(0, 1fr) 45px 55px; gap: 7px; padding: 8px 6px; min-height: 36px; font-size: 12px; }
 .file-manager[data-layout='panel'] .file-row-name svg { flex: none; width: 15px; height: 15px; }
 .file-manager[data-layout='panel'] .file-row-name span { white-space: nowrap; }
 .file-manager[data-layout='panel'] .file-row-name small { font-size: 10px; }
-.file-manager[data-layout='panel'] .file-content.has-selection > .file-list, .file-manager[data-layout='panel'] .file-content.has-selection > .file-storage-hint { display: none; }
+.file-manager[data-layout='panel'] .file-list-columns { grid-template-columns: minmax(0, 1fr) 45px 55px; gap: 7px; padding: 8px 6px; }
 .file-manager[data-layout='panel'] .file-detail { border: 0; padding: 2px; margin: 0; overflow: visible; }
 .file-manager[data-layout='panel'] .file-detail-title { gap: 6px; }
 .file-manager[data-layout='panel'] .file-detail-title strong { font-size: 12px; }

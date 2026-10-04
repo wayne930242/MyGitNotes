@@ -9,20 +9,23 @@ import { useWorkspaceSidebarDrawer } from '../WorkspaceChrome.js';
 import type { ForwardedRef } from 'react';
 import type { FileManagerHandle, FileManagerProps } from './types.js';
 import { baseName, parentPath } from '../../lib/paths.js';
-type Operation = 'create' | 'mkdir' | 'move' | 'delete' | 'remove-directory' | 'metadata';
+type Operation = 'create' | 'mkdir' | 'rename' | 'move' | 'delete' | 'remove-directory' | 'metadata';
 
-export function useFileManager({ notebookId, writable, initialPath, movePath, mode = 'manage', layout = 'page', beforeChange, onChanged, onOpenIndex, onInsert, onBusyChange, onSelectionChange, metadataContainer, notebooks, onNotebookChange, onShowMetadata }: FileManagerProps, ref: ForwardedRef<FileManagerHandle>) {
+export function useFileManager({ notebookId, writable, initialPath, initialOperation, showDocuments = false, movePath, mode = 'manage', layout = 'page', beforeChange, onChanged, onOpenIndex, onInsert, onBusyChange, onSelectionChange, metadataContainer, notebooks, onNotebookChange, onShowMetadata }: FileManagerProps, ref: ForwardedRef<FileManagerHandle>) {
   const { t } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
   const [listing, setListing] = useState<FileListing>();
   const [directory, setDirectory] = useState(''), [selected, setSelected] = useState('');
   const [showHidden, setShowHidden] = useState(false), [treeOpen, setTreeOpen] = useState(false);
-  const [showMarkdown, setShowMarkdown] = useState(false), [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showMarkdown, setShowMarkdown] = useState(mode === 'manage' && showDocuments), [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<FileRead>(), [content, setContent] = useState('');
   const [sourceView, setSourceView] = useState(false), [busy, setBusy] = useState(false), [reading, setReading] = useState(false), [error, setError] = useState('');
   const [operation, setOperation] = useState<Operation>(), [name, setName] = useState(''), [destination, setDestination] = useState('');
   const [title, setTitle] = useState(''), [description, setDescription] = useState(''), [order, setOrder] = useState(0);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [deleteMode, setDeleteMode] = useState<'preserve' | 'contents'>('preserve');
+  const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   const [r2, setR2] = useState<R2Listing>(), [r2Directory, setR2Directory] = useState<string>();
   const [rootExpanded, setRootExpanded] = useState(true);
   const [infoOpen, setInfoOpen] = useState(false), [infoContainer, setInfoContainer] = useState<HTMLDivElement | null>(null);
@@ -80,6 +83,7 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
   const loadDetail = async (file: string) => {
     const sequence = ++readSequence.current;
     setSelected(file);
+    setDetailOpen(true);
     setDetail(undefined);
     setReading(true);
     setSourceView(false);
@@ -114,16 +118,18 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
       setListing(next);
       const requested = movePath || initialPath;
       const entry = next.entries.find(entry => entry.path === requested);
-      setDirectory(entry?.directory && !movePath ? entry.path : entry ? parentPath(entry.path) : next.root);
+      setDirectory(entry?.directory && !movePath && !initialOperation ? entry.path : entry ? parentPath(entry.path) : next.root);
       if (entry) {
         if (entry.hidden) setShowHidden(true);
         if (!entry.directory && isMarkdownFile(entry.name)) setShowMarkdown(true);
-        if (movePath) {
+        if (movePath || initialOperation) {
           setSelected(entry.path);
-          setOperation('move');
+          setOperation(movePath ? 'move' : initialOperation);
           setName(entry.name);
-          setDestination(parentPath(entry.path));
-        } else void loadDetail(entry.path);
+          setDestination(initialOperation === 'remove-directory' ? next.root : parentPath(entry.path));
+          setDeleteMode('preserve');
+          setDeleteConfirmed(false);
+        } else if (!entry.directory) void loadDetail(entry.path);
       }
     }).catch(error => {
       if (active) setError(error.message);
@@ -133,7 +139,7 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
       readSequence.current++;
       leaveResolver.current?.(false);
     };
-  }, [notebookId, initialPath, movePath]);
+  }, [notebookId, initialPath, movePath, initialOperation]);
   /* eslint-enable react-hooks/exhaustive-deps */
   useEffect(() => {
     onBusyChange?.(busy);
@@ -220,6 +226,31 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
     }
     setTreeOpen(false);
   };
+  const selectEntry = async (path: string) => {
+    if (selected === path || !await prepareLeave()) return;
+    if (mode === 'pick-image') {
+      await loadDetail(path);
+      return;
+    }
+    readSequence.current++;
+    setSelected(path);
+    setDetail(undefined);
+    setReading(false);
+    setDetailOpen(false);
+    setOperation(undefined);
+    setError('');
+  };
+  const openSelected = async () => {
+    if (!selectedEntry) return;
+    await navigate(selectedEntry.path, !selectedEntry.directory);
+  };
+  const toggleDetails = async () => {
+    if (detailOpen) setDetailOpen(false);
+    else if (selected) {
+      if (detail) setDetailOpen(true);
+      else if (await prepareLeave()) await loadDetail(selected);
+    }
+  };
   const navigateR2 = async (path: string) => {
     if (!await prepareLeave()) return;
     setError('');
@@ -242,7 +273,9 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
     if (!await prepareLeave()) return;
     setOperation(kind);
     setError('');
-    setName(kind === 'move' ? baseName(selected) : '');
+    setName(kind === 'move' || kind === 'rename' ? baseName(selected) : '');
+    setDeleteMode('preserve');
+    setDeleteConfirmed(false);
     setDestination(kind === 'remove-directory' ? listing!.root : selected ? parentPath(selected) : directory);
     if (kind === 'metadata') {
       showInfo();
@@ -271,9 +304,11 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
     const base = { notebookId, path: selected || directory };
     let command: FileCommand;
     if (operation === 'create' || operation === 'mkdir') command = { kind: operation, notebookId, path: directory + '/' + name.trim() };
-    else if (operation === 'move') command = { ...base, kind: 'move', destination: destination + '/' + name.trim() };
-    else if (operation === 'remove-directory') command = { ...base, kind: operation, destination };
-    else if (operation === 'metadata') command = { ...base, kind: operation, title, description, order };
+    else if (operation === 'move' || operation === 'rename') command = { ...base, kind: 'move', destination: (operation === 'rename' ? parentPath(base.path) : destination) + '/' + name.trim() };
+    else if (operation === 'remove-directory') {
+      if (deleteMode === 'contents' && !deleteConfirmed) return;
+      command = deleteMode === 'contents' ? { ...base, kind: 'delete-directory' } : { ...base, kind: operation, destination };
+    } else if (operation === 'metadata') command = { ...base, kind: operation, title, description, order };
     else command = { ...base, kind: 'delete' };
     await run(() => apply(command));
   };
@@ -315,5 +350,5 @@ export function useFileManager({ notebookId, writable, initialPath, movePath, mo
       }
     })();
   };
-  return { toggleMarkdown, toggleHidden, notebookId, writable, initialPath, movePath, mode, layout, beforeChange, onChanged, onOpenIndex, onInsert, onBusyChange, onSelectionChange, metadataContainer, notebooks, onNotebookChange, onShowMetadata, t, sidebar, listing, setListing, directory, setDirectory, selected, setSelected, showHidden, setShowHidden, treeOpen, setTreeOpen, showMarkdown, setShowMarkdown, expanded, setExpanded, detail, setDetail, content, setContent, sourceView, setSourceView, busy, setBusy, reading, setReading, error, setError, operation, setOperation, name, setName, destination, setDestination, title, setTitle, description, setDescription, order, setOrder, confirmLeave, setConfirmLeave, r2, setR2, r2Directory, setR2Directory, rootExpanded, setRootExpanded, infoOpen, setInfoOpen, infoContainer, setInfoContainer, operationForm, leaveResolver, readSequence, running, mutable, dirty, selectedEntry, currentEntry, infoHost, showInfo, entries, dirs, tree, rootHasNonDocument, current, toggleExpand, refresh, refreshR2, loadDetail, run, apply, save, prepareLeave, finishLeave, navigate, navigateR2, loadMetadata, openOperation, openFolderInfo, switchNotebook, submit, upload, operationLabel, destinationDirs, relative, rawUrl, markerLabel, notebookTitle, treeNotebooks };
+  return { detailOpen, toggleDetails, selectEntry, openSelected, deleteMode, setDeleteMode, deleteConfirmed, setDeleteConfirmed, toggleMarkdown, toggleHidden, notebookId, writable, initialPath, movePath, mode, layout, beforeChange, onChanged, onOpenIndex, onInsert, onBusyChange, onSelectionChange, metadataContainer, notebooks, onNotebookChange, onShowMetadata, t, sidebar, listing, setListing, directory, setDirectory, selected, setSelected, showHidden, setShowHidden, treeOpen, setTreeOpen, showMarkdown, setShowMarkdown, expanded, setExpanded, detail, setDetail, content, setContent, sourceView, setSourceView, busy, setBusy, reading, setReading, error, setError, operation, setOperation, name, setName, destination, setDestination, title, setTitle, description, setDescription, order, setOrder, confirmLeave, setConfirmLeave, r2, setR2, r2Directory, setR2Directory, rootExpanded, setRootExpanded, infoOpen, setInfoOpen, infoContainer, setInfoContainer, operationForm, leaveResolver, readSequence, running, mutable, dirty, selectedEntry, currentEntry, infoHost, showInfo, entries, dirs, tree, rootHasNonDocument, current, toggleExpand, refresh, refreshR2, loadDetail, run, apply, save, prepareLeave, finishLeave, navigate, navigateR2, loadMetadata, openOperation, openFolderInfo, switchNotebook, submit, upload, operationLabel, destinationDirs, relative, rawUrl, markerLabel, notebookTitle, treeNotebooks };
 }

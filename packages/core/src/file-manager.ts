@@ -13,7 +13,7 @@ import { LEGACY_WORKSPACE_CONFIG_FILENAME, WORKSPACE_CONFIG_FILENAME } from './c
 const filePath = z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value) && value.split('/').every(p => p && p !== '.' && p !== '..'), 'Use a relative workspace path.');
 /* eslint-enable no-control-regex */
 const target = { notebookId: z.string().min(1), path: filePath };
-export const FileCommandSchema = z.discriminatedUnion('kind', [z.object({ ...target, kind: z.literal('create') }).strict(), z.object({ ...target, kind: z.literal('write'), content: z.string() }).strict(), z.object({ ...target, kind: z.literal('upload'), base64: z.string() }).strict(), z.object({ ...target, kind: z.literal('mkdir') }).strict(), z.object({ ...target, kind: z.literal('move'), destination: filePath }).strict(), z.object({ ...target, kind: z.literal('delete') }).strict(), z.object({ ...target, kind: z.literal('remove-directory'), destination: filePath }).strict(), z.object({ ...target, kind: z.literal('metadata'), title: z.string().trim().min(1).max(120), description: z.string().max(10000), order: z.number().finite() }).strict()]);
+export const FileCommandSchema = z.discriminatedUnion('kind', [z.object({ ...target, kind: z.literal('create') }).strict(), z.object({ ...target, kind: z.literal('write'), content: z.string() }).strict(), z.object({ ...target, kind: z.literal('upload'), base64: z.string() }).strict(), z.object({ ...target, kind: z.literal('mkdir') }).strict(), z.object({ ...target, kind: z.literal('move'), destination: filePath }).strict(), z.object({ ...target, kind: z.literal('delete') }).strict(), z.object({ ...target, kind: z.literal('delete-directory') }).strict(), z.object({ ...target, kind: z.literal('remove-directory'), destination: filePath }).strict(), z.object({ ...target, kind: z.literal('metadata'), title: z.string().trim().min(1).max(120), description: z.string().max(10000), order: z.number().finite() }).strict()]);
 export type FileCommand = z.infer<typeof FileCommandSchema>;
 export interface FileSnapshot {
   notebooks: NotebookConfig[];
@@ -108,6 +108,15 @@ export function planFileChange(snapshot: FileSnapshot, input: unknown) {
   } else if (command.kind === 'delete') {
     if (!files.has(command.path)) throw new Error('File does not exist.');
     files.delete(command.path);
+    selectedPath = path.posix.dirname(command.path);
+  } else if (command.kind === 'delete-directory') {
+    if (!directories.has(command.path)) throw new Error('Directory does not exist.');
+    if (snapshot.protectedPaths.some(p => withinPath(p, command.path))) throw new Error('This directory contains protected entries.');
+    if (snapshot.notebooks.some(other => other.id !== nb!.id && withinPath(other.root, command.path))) throw new Error('This directory contains another notebook.');
+    // Validate the entire scope before removing anything, including hidden descendants.
+    for (const file of [...directories, ...files.keys()]) if (withinPath(file, command.path)) assertPath(file);
+    for (const file of files.keys()) if (withinPath(file, command.path)) files.delete(file);
+    for (const dir of directories) if (withinPath(dir, command.path)) directories.delete(dir);
     selectedPath = path.posix.dirname(command.path);
   } else if (command.kind === 'move' || command.kind === 'remove-directory') {
     const destination = command.destination;

@@ -1,4 +1,5 @@
-import { Eye, EyeOff, FilePen, FilePlus, FileText, FileX, Folder, FolderPlus, Info, RefreshCw, Upload } from 'lucide-react';
+import { ArrowUp, Eye, EyeOff, FilePen, FilePlus, FileText, FileX, Folder, FolderPlus, Info, RefreshCw, Upload } from 'lucide-react';
+import { parentPath } from '../../lib/paths.js';
 import type { useFileManager } from './useFileManager.js';
 export function FileToolbar({ model }: { model: ReturnType<typeof useFileManager>; }) {
   const { notebookId, layout, onOpenIndex, t, listing, directory, setDirectory, selected, setSelected, showHidden, treeOpen, setTreeOpen, showMarkdown, setDetail, busy, setOperation, r2, r2Directory, setR2Directory, readSequence, mutable, refresh, refreshR2, loadDetail, run, prepareLeave, navigate, openOperation, openFolderInfo, upload, toggleHidden, toggleMarkdown } = model;
@@ -11,9 +12,14 @@ export function FileToolbar({ model }: { model: ReturnType<typeof useFileManager
             <Folder size={16} />
           </button>
         )}
-        {r2Directory === undefined && (layout === 'panel' || directory !== listing?.root) && (
+        {r2Directory === undefined && listing && (
+          <button type='button' className='ui-icon-button' aria-label={t('files.up')} title={t('files.up')} disabled={busy || directory === listing.root} onClick={() => void navigate(parentPath(directory))}>
+            <ArrowUp size={18} />
+          </button>
+        )}
+        {r2Directory === undefined && (
           <nav aria-label={t('files.location')} className='file-breadcrumbs'>
-            {layout === 'panel' && listing && (
+            {listing && (
               <button
                 type='button'
                 disabled={busy}
@@ -81,7 +87,17 @@ export function FileToolbar({ model }: { model: ReturnType<typeof useFileManager
               <span className='file-toolbar-label'>{t('files.metadata')}</span>
             </button>
             {onOpenIndex && (
-              <button type='button' className='ui-icon-button' aria-label={t('files.index')} title={t('files.index')} disabled={busy} onClick={() => void run(() => onOpenIndex(directory, notebookId))}>
+              <button
+                type='button'
+                className='ui-icon-button'
+                aria-label={t('files.index')}
+                title={t('files.index')}
+                disabled={busy}
+                onClick={() =>
+                  void (async () => {
+                    if (await prepareLeave()) await run(() => onOpenIndex(directory, notebookId));
+                  })()}
+              >
                 <FilePen size={17} />
                 <span className='file-toolbar-label'>{t('files.index')}</span>
               </button>

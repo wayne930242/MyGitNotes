@@ -28,6 +28,8 @@
 .sidebar-tag-menu [role='menuitem'][aria-disabled='true'] { opacity: 0.6; }
 .sidebar-tag-menu .sidebar-tag-menu-danger { color: var(--color-danger); }
 .sidebar-tag-menu .sidebar-tag-menu-danger[data-armed] { background: var(--color-danger); color: var(--color-on-danger); font-weight: 600; }
+.nav-tree-row .folder-manage[data-state='open'] { opacity: 1; }
+@media (hover: none), (pointer: coarse) { .nav-tree-row .folder-manage { width: 44px; height: 44px; } .folder-action-menu [role='menuitem'] { min-height: 44px; display: flex; align-items: center; } }
 .sidebar-tag-menu > p { padding: 0.15rem 0.5rem 0.25rem; max-width: 14rem; }
 .sidebar-tag-action-form { display: grid; gap: 0.35rem; width: 100%; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); }
 .sidebar-tag-action-form input { width: 100%; padding: 0.3rem 0.5rem; border: 1px solid var(--color-border); border-radius: 0.35rem; background: transparent; color: var(--color-text); font-size: 0.8rem; }

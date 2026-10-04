@@ -90,6 +90,60 @@ it('restores the original binary and text snapshot after a write fails', () => {
   expect(() => applyLocalFilePlan(root, before, after)).toThrow('Injected failure');
   expect(localFileSnapshot(root, loadWorkspaceConfig(root)!.notebooks)).toEqual(before);
 });
+it('preserves folder contents or deletes the entire tree and reports deleted directories for selection repair', async () => {
+  write('notes/a/one/child/.hidden.txt', 'keep hidden');
+  write('notes/a/one/_dir.yml', 'title: One\n');
+  const bytes = fs.readFileSync(path.join(root, 'notes/a/one/image.png'));
+  const preserved = await post({ kind: 'remove-directory', path: 'notes/a/one', destination: 'notes/a/two' });
+  expect(preserved.status).toBe(200);
+  expect((await preserved.json()).pathMap['notes/a/one/child']).toBe('notes/a/two/child');
+  expect(fs.readFileSync(path.join(root, 'notes/a/two/image.png'))).toEqual(bytes);
+  expect(fs.readFileSync(path.join(root, 'notes/a/two/child/.hidden.txt'), 'utf8')).toBe('keep hidden');
+  expect(fs.readFileSync(path.join(root, 'notes/a/two/_dir.yml'), 'utf8')).toBe('title: Two\n');
+  const deleted = await post({ kind: 'delete-directory', path: 'notes/a/two' });
+  expect(deleted.status).toBe(200);
+  expect(await deleted.json()).toMatchObject({ selectedPath: 'notes/a', pathMap: {}, deletedPaths: expect.arrayContaining(['notes/a/two', 'notes/a/two/child', 'notes/a/two/child/.hidden.txt', 'notes/a/two/image.png', 'notes/a/two/note.md', 'notes/a/two/_dir.yml']) });
+  expect(fs.existsSync(path.join(root, 'notes/a/two'))).toBe(false);
+  expect(fs.readFileSync(path.join(root, 'notes/b/other.md'), 'utf8')).toBe('# Other');
+});
+it.each(['remove-directory', 'delete-directory'])('rejects stale, root, traversal, symlink and read-only %s without deleting data', async kind => {
+  const command = { kind, path: 'notes/a/one', ...(kind === 'remove-directory' ? { destination: 'notes/a/two' } : {}) };
+  const stale = (await list()).revision;
+  write('notes/a/one/new.txt', 'new');
+  expect((await post(command, stale)).status).toBe(409);
+  for (const file of ['notes/a', 'notes/b', 'notes/a/../b', 'notes/a/one/../two']) expect((await post({ ...command, path: file })).status).toBe(400);
+  fs.symlinkSync(path.join(root, 'notes/b'), path.join(root, 'notes/a/one/link'));
+  expect((await post(command)).status).toBe(400);
+  fs.unlinkSync(path.join(root, 'notes/a/one/link'));
+  write('notes/a/one/AGENTS.md', 'protected');
+  expect((await post(command)).status).toBe(400);
+  fs.unlinkSync(path.join(root, 'notes/a/one/AGENTS.md'));
+  git('checkout', '-b', 'readonly');
+  expect((await post(command)).status).toBe(403);
+  expect(fs.readFileSync(path.join(root, 'notes/a/one/note.md'), 'utf8')).toBe('# Note\n');
+});
+it.each(['unlinkSync', 'rmdirSync'] as const)('rolls recursive deletion back after %s fails, including original binary bytes and modes', failure => {
+  write('notes/a/one/child/.hidden', 'private');
+  fs.chmodSync(path.join(root, 'notes/a/one/child/.hidden'), 0o640);
+  const command = { kind: 'delete-directory' as const, notebookId: 'a', path: 'notes/a/one' };
+  const notebooks = loadWorkspaceConfig(root)!.notebooks;
+  const before = localFileSnapshot(root, notebooks, command), after = planFileChange(before, command);
+  const original = fs[failure].bind(fs);
+  let calls = 0;
+  vi.spyOn(fs, failure).mockImplementation((file: fs.PathLike) => {
+    if (++calls === 2) throw new Error('Injected delete failure');
+    return original(file);
+  });
+  expect(() => applyLocalFilePlan(root, before, after)).toThrow('Injected delete failure');
+  expect(localFileSnapshot(root, notebooks, command)).toEqual(before);
+  expect(fs.statSync(path.join(root, 'notes/a/one/child/.hidden')).mode & 0o777).toBe(0o640);
+});
+it('serializes concurrent destructive commands so only the first matching revision succeeds', async () => {
+  const revision = (await list()).revision;
+  const results = await Promise.all([post({ kind: 'delete-directory', path: 'notes/a/one' }, revision), post({ kind: 'delete-directory', path: 'notes/a/two' }, revision)]);
+  expect(results.map(response => response.status).sort()).toEqual([200, 409]);
+  expect([fs.existsSync(path.join(root, 'notes/a/one')), fs.existsSync(path.join(root, 'notes/a/two'))].filter(Boolean)).toHaveLength(1);
+});
 it('browses large binary files without loading their contents and reports the read limit separately', async () => {
   write('notes/a/large.bin', Buffer.alloc(6 * 1024 * 1024));
   const listing = await list();
