@@ -58,12 +58,12 @@ export async function printNoteAsPdf(title: string, content: string, notePath: s
   frame.addEventListener('load', async () => {
     const view = frame.contentWindow;
     if (!view) return remove();
-    await Promise.all([...view.document.images].map(image => image.complete
-      ? image.decode?.().catch(() => undefined)
-      : new Promise<void>(resolve => {
-          image.addEventListener('load', () => resolve(), { once: true });
-          image.addEventListener('error', () => resolve(), { once: true });
-        })));
+    await Promise.all([...view.document.images].map(image =>
+      image.complete ? image.decode?.().catch(() => undefined) : new Promise<void>(resolve => {
+        image.addEventListener('load', () => resolve(), { once: true });
+        image.addEventListener('error', () => resolve(), { once: true });
+      })
+    ));
     // KaTeX fonts load on first use; printing before they arrive lays formulas out in fallback fonts.
     await view.document.fonts?.ready;
     view.addEventListener('afterprint', remove);

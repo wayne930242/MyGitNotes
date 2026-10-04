@@ -1,4 +1,4 @@
-import { hydrateMermaid, renderMermaidBlocks, createMermaidBlock, currentAppearance } from './mermaid.js';
+import { createMermaidBlock, currentAppearance, hydrateMermaid, renderMermaidBlocks } from './mermaid.js';
 
 export interface MermaidEditorLabels {
   title: string;

@@ -41,7 +41,15 @@ export function NoteQuickActions({ onRefresh, onCommit, onRestore, changes, disa
       {onRefresh && <NoteRefreshAction onRefresh={onRefresh} disabled={disabled} />}
       {changes && (onRestore || onCommit) && <DiffStats stats={changes} />}
       {onRestore && (
-        <button type='button' className='note-quick-action' data-action='restore' data-armed={armed === 'restore' || undefined} disabled={disabled} title={t('editor.quickRestoreHint')} onClick={() => press('restore', onRestore)}>
+        <button
+          type='button'
+          className='note-quick-action'
+          data-action='restore'
+          data-armed={armed === 'restore' || undefined}
+          disabled={disabled}
+          title={t('editor.quickRestoreHint')}
+          onClick={() => press('restore', onRestore)}
+        >
           <RotateCcw aria-hidden='true' />
           <span>{t(armed === 'restore' ? 'editor.confirmQuickRestore' : 'editor.quickRestore')}</span>
         </button>

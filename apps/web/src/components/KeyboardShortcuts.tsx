@@ -321,7 +321,10 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, noteE
                 {command
                   ? (
                     <span className='keyboard-shortcuts-command'>
-                      <span className='keyboard-shortcuts-command-title'><span>{label}</span><code>{command.id}</code></span>
+                      <span className='keyboard-shortcuts-command-title'>
+                        <span>{label}</span>
+                        <code>{command.id}</code>
+                      </span>
                       {command.description && <small className='keyboard-shortcuts-description'>{command.description}</small>}
                     </span>
                   )

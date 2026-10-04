@@ -19,7 +19,7 @@ interface FenceBox {
  * back to the edge when it was scrolled out of view, so the source and its cursor are visible. Null when the
  * diagram was not in view, which leaves the position to CodeMirror's own anchoring.
  */
-export function sourceTopAfterEnter(box: { top: number; height: number }, viewportHeight: number): number | null {
+export function sourceTopAfterEnter(box: { top: number; height: number; }, viewportHeight: number): number | null {
   if (box.top >= viewportHeight || box.top + box.height <= 0) return null;
   return Math.min(Math.max(box.top, EDGE_MARGIN), Math.max(EDGE_MARGIN, viewportHeight - MIN_VISIBLE_SOURCE));
 }

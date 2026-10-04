@@ -31,7 +31,9 @@ describe('holdTop', () => {
     Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
     Range.prototype.getBoundingClientRect = () => new DOMRect();
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => queue.push(cb));
-    vi.stubGlobal('cancelAnimationFrame', () => { queue = []; });
+    vi.stubGlobal('cancelAnimationFrame', () => {
+      queue = [];
+    });
     const view = new EditorView({ parent: document.body, state: EditorState.create({ doc: 'a\nb\nc' }), dispatchTransactions: anchorMermaidSwap });
     views.push(view);
     const placements = vi.spyOn(view, 'dispatch');

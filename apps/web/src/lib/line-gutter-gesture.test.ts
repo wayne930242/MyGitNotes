@@ -26,15 +26,7 @@ beforeEach(() => {
   lineAtY = vi.fn((y: number) => Math.floor(y / LINE_HEIGHT) + 1 + Math.floor(scroller.scrollTop / LINE_HEIGHT));
   onCopy = vi.fn();
   onPreview = vi.fn();
-  cleanup = attachLineGutterGesture({
-    gutter,
-    scroller,
-    lineFromTarget: target => Number((target.closest('[data-line]') as HTMLElement | null)?.dataset.line ?? NaN) || null,
-    lineAtY,
-    lineHeight: () => LINE_HEIGHT,
-    onPreview,
-    onCopy,
-  });
+  cleanup = attachLineGutterGesture({ gutter, scroller, lineFromTarget: target => Number((target.closest('[data-line]') as HTMLElement | null)?.dataset.line ?? NaN) || null, lineAtY, lineHeight: () => LINE_HEIGHT, onPreview, onCopy });
 });
 
 afterEach(() => {

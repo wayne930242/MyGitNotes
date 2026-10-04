@@ -29,7 +29,7 @@ it('downloads the note content as a markdown file named after the note', async (
   let blob: Blob | undefined;
   URL.createObjectURL = vi.fn((value: Blob | MediaSource) => (blob = value as Blob, 'blob:note'));
   URL.revokeObjectURL = vi.fn();
-  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function(this: HTMLAnchorElement) {
     expect(this.download).toBe('a.md');
   });
   menu();

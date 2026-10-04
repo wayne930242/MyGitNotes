@@ -12,11 +12,7 @@ import { MermaidDiagram } from './widgets.js';
 vi.mock('../../lib/mermaid.js', async importOriginal => ({ ...await importOriginal<typeof import('../../lib/mermaid.js')>(), hydrateMermaid: () => () => {} }));
 
 const t = (key: string) => key;
-const decorations = StateField.define<DecorationSet>({
-  create: state => liveDecorations(state, false, 'n.md', 'link', 'table', 'page', 'owner', t as never),
-  update: (_value, tr) => liveDecorations(tr.state, false, 'n.md', 'link', 'table', 'page', 'owner', t as never),
-  provide: field => EditorView.decorations.from(field),
-});
+const decorations = StateField.define<DecorationSet>({ create: state => liveDecorations(state, false, 'n.md', 'link', 'table', 'page', 'owner', t as never), update: (_value, tr) => liveDecorations(tr.state, false, 'n.md', 'link', 'table', 'page', 'owner', t as never), provide: field => EditorView.decorations.from(field) });
 
 const views: EditorView[] = [];
 function editor(doc: string) {

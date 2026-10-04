@@ -318,7 +318,7 @@ export function R2Panel({ notebookId, listing, directory, mutable, showHidden, b
                 <ul className='file-affected'>
                   {references.notes.map(note => (
                     <li key={noteRefKey(note)}>
-                      <code>{note.notebookId}: {note.path}</code>
+                      <code>{note.notebookId}{': '}{note.path}</code>
                     </li>
                   ))}
                 </ul>

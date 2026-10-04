@@ -247,10 +247,12 @@ describe('real HTTP local boundaries', () => {
     fs.writeFileSync(path.join(oldSkill, 'SKILL.md'), originalSkill);
     fs.writeFileSync(path.join(root, 'AGENTS.md'), originalAgents);
     const writeFileSync = fs.writeFileSync.bind(fs);
-    vi.spyOn(fs, 'writeFileSync').mockImplementation(((file: fs.PathOrFileDescriptor, data: string | NodeJS.ArrayBufferView, options?: fs.WriteFileOptions) => {
-      if (String(file).endsWith('/.agents/skills/new-name/SKILL.md')) throw new Error('injected write failure');
-      return writeFileSync(file, data, options);
-    }) as typeof fs.writeFileSync);
+    vi.spyOn(fs, 'writeFileSync').mockImplementation(
+      ((file: fs.PathOrFileDescriptor, data: string | NodeJS.ArrayBufferView, options?: fs.WriteFileOptions) => {
+        if (String(file).endsWith('/.agents/skills/new-name/SKILL.md')) throw new Error('injected write failure');
+        return writeFileSync(file, data, options);
+      }) as typeof fs.writeFileSync,
+    );
     const response = await fetch(`${base}/api/agent-resources/rename-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: '.agents/skills/old-name/SKILL.md', slug: 'new-name', content: '---\nname: new-name\n---\nChanged\n' }) });
     expect(response.status).toBe(500);
     expect(await response.json()).toMatchObject({ error: 'injected write failure' });
@@ -264,17 +266,21 @@ describe('real HTTP local boundaries', () => {
     fs.mkdirSync(oldSkill, { recursive: true });
     fs.writeFileSync(path.join(oldSkill, 'SKILL.md'), '---\nname: old-name\n---\nOld\n');
     const writeFileSync = fs.writeFileSync.bind(fs);
-    vi.spyOn(fs, 'writeFileSync').mockImplementation(((file: fs.PathOrFileDescriptor, data: string | NodeJS.ArrayBufferView, options?: fs.WriteFileOptions) => {
-      if (String(file).endsWith('/.agents/skills/new-name/SKILL.md')) throw new Error('injected write failure');
-      return writeFileSync(file, data, options);
-    }) as typeof fs.writeFileSync);
+    vi.spyOn(fs, 'writeFileSync').mockImplementation(
+      ((file: fs.PathOrFileDescriptor, data: string | NodeJS.ArrayBufferView, options?: fs.WriteFileOptions) => {
+        if (String(file).endsWith('/.agents/skills/new-name/SKILL.md')) throw new Error('injected write failure');
+        return writeFileSync(file, data, options);
+      }) as typeof fs.writeFileSync,
+    );
     const renameSync = fs.renameSync.bind(fs);
     let renameCalls = 0;
-    vi.spyOn(fs, 'renameSync').mockImplementation(((oldPath: fs.PathLike, newPath: fs.PathLike) => {
-      renameCalls++;
-      if (renameCalls === 2) throw new Error('injected rollback failure');
-      return renameSync(oldPath, newPath);
-    }) as typeof fs.renameSync);
+    vi.spyOn(fs, 'renameSync').mockImplementation(
+      ((oldPath: fs.PathLike, newPath: fs.PathLike) => {
+        renameCalls++;
+        if (renameCalls === 2) throw new Error('injected rollback failure');
+        return renameSync(oldPath, newPath);
+      }) as typeof fs.renameSync,
+    );
     const response = await fetch(`${base}/api/agent-resources/rename-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: '.agents/skills/old-name/SKILL.md', slug: 'new-name', content: '---\nname: new-name\n---\nChanged\n' }) });
     expect(response.status).toBe(500);
     expect(await response.json()).toMatchObject({ rollbackFailed: true, error: expect.stringContaining('injected write failure') });

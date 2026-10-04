@@ -1,6 +1,6 @@
 import { syntaxTree } from '@codemirror/language';
 import { type EditorState, type Range, RangeSet, StateField } from '@codemirror/state';
-import { GutterMarker, gutterLineClass } from '@codemirror/view';
+import { gutterLineClass, GutterMarker } from '@codemirror/view';
 
 /** Marks a heading line's gutter cells with its level, so the line number can sit beside the heading text. */
 class HeadingGutterClass extends GutterMarker {
@@ -28,8 +28,4 @@ function headingLines(state: EditorState) {
 }
 
 /** Heading-level classes for the gutter, recomputed whenever the parser's tree changes. */
-export const headingGutter = StateField.define<RangeSet<GutterMarker>>({
-  create: headingLines,
-  update: (value, transaction) => syntaxTree(transaction.state) === syntaxTree(transaction.startState) ? value : headingLines(transaction.state),
-  provide: field => gutterLineClass.from(field),
-});
+export const headingGutter = StateField.define<RangeSet<GutterMarker>>({ create: headingLines, update: (value, transaction) => syntaxTree(transaction.state) === syntaxTree(transaction.startState) ? value : headingLines(transaction.state), provide: field => gutterLineClass.from(field) });
