@@ -475,6 +475,7 @@ const AppContent: React.FC = () => {
                             await refreshWorkspace();
                             await refreshDocuments();
                           }}
+                          repoRoot={repoRoot}
                           canManageTags={canWrite}
                           onPreviewTagUsage={previewTagUsage}
                           onRenameTag={handleRenameTag}

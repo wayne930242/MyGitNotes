@@ -589,7 +589,9 @@ export const en = {
   'sidebar.pulling': 'Pulling…',
   'sidebar.pulled': 'Pulled {count} commits.',
   'sidebar.pullUpToDate': 'Already up to date.',
-  'sidebar.pullFailed': 'Pull failed: {message}',
+  'sidebar.pullFailedTitle': 'Pull failed',
+  'sidebar.pullPromptHint': 'Copy this prompt to a local coding agent to resolve it.',
+  'sidebar.pullCopyPrompt': 'Copy prompt',
 
   // Note List & Card
   'notes.emptyTitle': 'No notes found',

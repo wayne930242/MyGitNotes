@@ -390,6 +390,9 @@ input, textarea, [contenteditable='true'] { caret-color: var(--color-text); }
 .git-sync-status { color: var(--color-text); font-size: 12px; }
 .git-sync-button { justify-content: center; }
 .git-pull-button { width: 26px; height: 26px; padding: 5px; }
+.git-pull-dialog { width: min(640px, calc(100vw - 32px)); }
+.git-pull-dialog .changes-error { overflow-wrap: anywhere; white-space: pre-wrap; }
+.git-pull-prompt { width: 100%; resize: vertical; padding: 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-bg); color: var(--color-text); font: 12px/1.5 ui-monospace, monospace; }
 .git-sync-conflict ul { margin: 6px 0; }
 .note-editor-leader { position: absolute; z-index: 70; left: 50%; top: 50%; display: grid; grid-template-columns: 1fr 1fr; width: min(340px, calc(100% - 24px)); padding: 8px; transform: translate(-50%, -50%); border: 1px solid var(--color-border); border-radius: var(--radius-panel); background: var(--color-surface); box-shadow: 0 18px 55px color-mix(in srgb, var(--color-scrim) 27%, transparent); }
 .note-editor-leader > div { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 6px 8px 10px; }

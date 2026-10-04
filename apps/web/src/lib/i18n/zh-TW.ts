@@ -590,7 +590,9 @@ export const zhTW: Record<TranslationKey, string> = {
   'sidebar.pulling': '拉取中…',
   'sidebar.pulled': '已拉取 {count} 個 commit。',
   'sidebar.pullUpToDate': '已是最新。',
-  'sidebar.pullFailed': '拉取失敗：{message}',
+  'sidebar.pullFailedTitle': '拉取失敗',
+  'sidebar.pullPromptHint': '複製這段 prompt 給本地的 coding agent 處理。',
+  'sidebar.pullCopyPrompt': '複製 prompt',
 
   // Note List & Card
   'notes.emptyTitle': '找不到筆記',

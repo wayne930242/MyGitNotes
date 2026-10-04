@@ -40,6 +40,8 @@ interface SidebarProps {
   changeCount: number;
   /** Local sources only: shows the pull button and refreshes the workspace after a pull. */
   onPulled?: () => Promise<void>;
+  /** The home worktree's absolute path, named in the pull failure prompt. */
+  repoRoot?: string;
   canManageTags?: boolean;
   onPreviewTagUsage?: (tag: string) => Promise<number>;
   onRenameTag?: (from: string, to: string) => Promise<void>;
@@ -47,7 +49,7 @@ interface SidebarProps {
   onDeleteTag?: (tag: string) => Promise<void>;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, foldersWritable = false, beforeFolderChange, onFoldersChanged, selectedFolder = null, onSelectFolder, selectedNotebookId, facets, facetsLoading = false, facetsError = '', workspaceTagNames, filters, reorder, onToggleReorder, changeCount, onPulled, canManageTags = false, onPreviewTagUsage, onRenameTag, onMergeTag, onDeleteTag }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, foldersWritable = false, beforeFolderChange, onFoldersChanged, selectedFolder = null, onSelectFolder, selectedNotebookId, facets, facetsLoading = false, facetsError = '', workspaceTagNames, filters, reorder, onToggleReorder, changeCount, onPulled, repoRoot = '', canManageTags = false, onPreviewTagUsage, onRenameTag, onMergeTag, onDeleteTag }) => {
   const { t, language } = useTranslation();
   const { value, statuses, onChange } = filters;
   const { status: selectedStatus, tags: selectedTags } = value;
@@ -151,7 +153,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
                     {t('sidebar.clean')}
                   </span>
                 )}
-              {onPulled && <GitPullButton onPulled={onPulled} />}
+              {onPulled && <GitPullButton onPulled={onPulled} repoRoot={repoRoot} />}
             </div>
           </div>
           <a className='sidebar-credit' href='https://github.com/wayne930242/MyGitNotes' target='_blank' rel='noopener noreferrer' title='MyGitNotes by wayne930242'>
