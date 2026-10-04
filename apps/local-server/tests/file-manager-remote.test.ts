@@ -7,6 +7,8 @@ vi.mock('../src/auth.js', async original => ({ ...await original<typeof import('
 it.each(['github', 'gitlab'])('%s file HTTP adapter uses an atomic revision-checked commit for text and binary moves', async provider => {
   const binary = Buffer.from([137, 0, 255, 78]);
   const files = new Map([['.github-notes.yaml', Buffer.from('schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n')], ['notes/a/folder/image.png', binary], ['notes/a/note.md', Buffer.from('![image](folder/image.png)\n')], ['notes/a/.hidden.json', Buffer.from('{}')]]);
+  files.set('notes/a/folder/plan.outline.md', Buffer.from('- Parent\r\n  Annotation\r\n  - [Note](../note.md#part)\r\n'));
+  files.set('notes/a/ref.md', Buffer.from('[Plan](folder/plan.outline.md)\n'));
   let revision = 'one', canPush = true;
   const published: RemoteChange[][] = [];
   const prototype = (provider === 'github' ? GitHubSource : GitLabSource).prototype as any;
@@ -49,6 +51,9 @@ it.each(['github', 'gitlab'])('%s file HTTP adapter uses an atomic revision-chec
     expect(files.get('notes/a/renamed/image.png')).toEqual(binary);
     expect(files.get('notes/a/note.md')!.toString()).toContain('renamed/image.png');
     expect(published[0].find(change => change.path === 'notes/a/renamed/image.png')?.sha).toBe(assetHash(binary));
+    expect(files.get('notes/a/renamed/plan.outline.md')!.toString()).toBe('- Parent\r\n  Annotation\r\n  - [Note](../note.md#part)\r\n');
+    expect(files.get('notes/a/ref.md')!.toString()).toBe('[Plan](renamed/plan.outline.md)\n');
+    expect(published[0].map(change => change.path)).toEqual(expect.arrayContaining(['notes/a/folder/plan.outline.md', 'notes/a/renamed/plan.outline.md', 'notes/a/ref.md']));
     expect((await post({ notebookId: 'a', kind: 'create', path: 'notes/a/empty.txt' })).status).toBe(200);
     expect(files.get('notes/a/empty.txt')!.length).toBe(0);
     expect((await post({ notebookId: 'a', kind: 'write', path: 'notes/a/.hidden.json', content: '{"new":true}\n' })).status).toBe(200);
@@ -62,6 +67,8 @@ it.each(['github', 'gitlab'])('%s file HTTP adapter uses an atomic revision-chec
     expect((await post({ notebookId: 'a', kind: 'remove-directory', path: 'notes/a/renamed', destination: 'notes/a' })).status).toBe(200);
     expect(files.get('notes/a/image.png')).toEqual(binary);
     expect(files.get('notes/a/note.md')!.toString()).toContain('![image](image.png)');
+    expect(files.get('notes/a/plan.outline.md')!.toString()).toBe('- Parent\r\n  Annotation\r\n  - [Note](note.md#part)\r\n');
+    expect(files.get('notes/a/ref.md')!.toString()).toBe('[Plan](plan.outline.md)\n');
     expect((await post({ notebookId: 'a', kind: 'mkdir', path: 'notes/a/doomed' })).status).toBe(200);
     expect((await post({ notebookId: 'a', kind: 'move', path: 'notes/a/image.png', destination: 'notes/a/doomed/image.png' })).status).toBe(200);
     expect((await post({ notebookId: 'a', kind: 'upload', path: 'notes/a/doomed/.hidden', base64: binary.toString('base64') })).status).toBe(200);

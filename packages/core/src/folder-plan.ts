@@ -1,6 +1,7 @@
 import path from 'node:path';
 import YAML from 'yaml';
 import { z } from 'zod';
+import { Lexer, type Token } from 'marked';
 import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js';
 import { relocateWorkspaceDocuments } from './workspace-documents.js';
 import { isCompilationPath, relocateCompilation } from './compilation.js';
@@ -17,6 +18,41 @@ export interface FolderSnapshot {
 }
 const inside = (file: string, dir: string) => file === dir || file.startsWith(dir + '/');
 const parentOf = (file: string) => path.posix.dirname(file) === '.' ? '' : path.posix.dirname(file);
+
+/** Block token line ranges survive list/quote prefix removal and CRLF normalization. */
+function markdownCodeRanges(raw: string): [number, number][] {
+  const lineOffsets = [0];
+  for (const match of raw.matchAll(/\r\n|\r|\n/g)) lineOffsets.push(match.index + match[0].length);
+  const ranges: [number, number][] = [];
+  const lines = (text: string) => (text.match(/\n/g) || []).length;
+  const visit = (source: string, tokens: Token[], firstLine: number) => {
+    let cursor = 0, line = firstLine;
+    for (const token of tokens) {
+      const offset = source.indexOf(token.raw, cursor);
+      if (offset < 0) throw new Error('Markdown block could not be located in the source.');
+      line += lines(source.slice(cursor, offset));
+      if (token.type === 'code') {
+        const endLine = line + lines(token.raw) + (token.raw.endsWith('\n') ? 0 : 1);
+        ranges.push([lineOffsets[line], lineOffsets[endLine] ?? raw.length]);
+      } else if (token.type === 'list') {
+        let itemCursor = 0, itemLine = line;
+        for (const item of token.items) {
+          const itemOffset = token.raw.indexOf(item.raw, itemCursor);
+          if (itemOffset < 0) throw new Error('Markdown list item could not be located in the source.');
+          itemLine += lines(token.raw.slice(itemCursor, itemOffset));
+          visit(item.text, item.tokens, itemLine);
+          itemCursor = itemOffset + item.raw.length;
+          itemLine += lines(item.raw);
+        }
+      } else if (token.type === 'blockquote') visit(token.text, token.tokens ?? Lexer.lex(token.text), line);
+      cursor = offset + token.raw.length;
+      line += lines(token.raw);
+    }
+  };
+  const source = raw.replace(/\r\n?/g, '\n');
+  visit(source, Lexer.lex(source), 0);
+  return ranges;
+}
 
 /** Resolve links against the original document, then express them from its new location. */
 export function relocateLinks(raw: string, oldFile: string, newFile: string, relocate: (file: string) => string): string {
@@ -51,14 +87,26 @@ export function relocateLinks(raw: string, oldFile: string, newFile: string, rel
     next = next.split('/').map(segment => encodeURIComponent(segment)).join('/');
     return next + match[2];
   };
-  // Preserve frontmatter, fenced/inline code. Handle inline destinations and reference definitions.
-  return raw.replace(/(^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$))|(^\s*(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\s*\3[^\n]*(?:\n|$))|(`+)[\s\S]*?\4|(!?\[[^\]\n]*\]\()(<[^>\n]*>|(?:\\.|[^\s()])+)([^\n)]*\))|(^ {0,3}\[[^\]\n]+\]:\s*)(<[^>\n]*>|\S+)/gm, (all, front, fence, _marker, code, start, destination, end, ref, refDest) => {
-    if (front || fence || code) return all;
-    const value = destination || refDest;
-    const angle = value.startsWith('<');
-    const next = rewrite(angle ? value.slice(1, -1) : value);
-    return (start || ref) + (angle ? `<${next}>` : next) + (end || '');
-  });
+  const protectedRanges = markdownCodeRanges(raw);
+  for (const match of raw.matchAll(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/gm)) protectedRanges.push([match.index, match.index + match[0].length]);
+  // Rewrite only prose between protected blocks. A closing fence must not act as an
+  // inline-code opener that consumes subsequent prose. Source bytes stay untouched.
+  const prose = (text: string) =>
+    text.replace(/(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)|(!?\[(?:\\.|[^\]\\\n])*\]\()(<[^>\n]*>|(?:\\.|[^\s()])+)([^\n)]*\))|(^ {0,3}\[(?:\\.|[^\]\\\n])+\]:[ \t]*)(<[^>\n]*>|\S+)/gm, (all, code, start, destination, end, ref, refDest) => {
+      if (code) return all;
+      const value = destination || refDest;
+      const angle = value.startsWith('<');
+      const next = rewrite(angle ? value.slice(1, -1) : value);
+      return (start || ref) + (angle ? `<${next}>` : next) + (end || '');
+    });
+  let cursor = 0, result = '';
+  for (const [from, to] of protectedRanges.sort(([a], [b]) => a - b)) {
+    if (to <= cursor) continue;
+    if (from > cursor) result += prose(raw.slice(cursor, from));
+    result += raw.slice(Math.max(cursor, from), to);
+    cursor = to;
+  }
+  return result + prose(raw.slice(cursor));
 }
 
 export function planFolderChange(snapshot: FolderSnapshot, input: unknown) {

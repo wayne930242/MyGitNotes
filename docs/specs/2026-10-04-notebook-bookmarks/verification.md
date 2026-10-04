@@ -1,7 +1,8 @@
 # Outline notes — verification ledger
 
 Planning baseline: `/home/weihung/github-notes`, clean HEAD `ac26edfe69120fac9eff904b5cb7f53e76966588`.
-Status: implementation in progress; stages 1–3 (native kind, bounded editing, native creation/list/insertion) verified in upstream; tasks 4–6 and independent parent browser QA are not complete.
+Status: implementation in progress; stages 1–4 (native kind, bounded editing, creation/list/insertion and atomic relocation) verified in upstream; tasks 5–6 and independent parent browser QA are not complete.
+Parent review of immutable stages 1–3 found an outline-only R2 reference-guard gap and adjacent drag duplication; both are pending follow-up after the coherent stage 4 checkpoint.
 No push, deployment or downstream synchronization was performed by this worker.
 The approved model is **Outline note / 大綱筆記**, with general items and optional links, not the earlier specialized bookmark document.
 Contract: [spec.md](spec.md); implementation sequence: [design.md](design.md).
@@ -35,7 +36,7 @@ A planned test or a source reading is not an executed behavior check.
 | R5 Internal/external optional links, opener isolation, no preview fetching, repository scope | Mounted explicit-link/editable-text isolation and no-YouTube-preview checks pass; stage 3 scoped completion and real A/B equal-path insertion isolation pass; full integrated link matrix remains. | unknown |
 | R6 Add current content with filled label/target into selected/new outline | Stage 3 mounted dirty/recovered-body insertion, source-save failure, cancel, read-only, route/repository/root races and failed-navigation tests pass; real existing/new destination and compilation-source browser checks pass; independent parent matrix remains. | unknown |
 | R7 All note lifecycle/local+remote/kind isolation and compilation unaffected | Stage 1 catalog, local create/save/copy/delete/restore, GitHub/GitLab create/save guards and draft facets pass; full move/UI lifecycle remains unverified. | unknown |
-| R8 Atomic rename/move references and non-destructive delete/restore | Existing Markdown planner reuse identified; hosted shell Markdown relocation gap remains for implementation. | unknown |
+| R8 Atomic rename/move references and non-destructive delete/restore | Stage 4 shared source-preservation, local HTTP stale/rollback, GitHub tree/GitLab actions and single-snapshot shell movement pass; deletion/copy retain references/bytes. Independent final file/folder browser journey remains. | unknown |
 | R9 Explicit partial/non-lossy import, retained source/drafts, invalid/stale/unknown-owner refusal | Preview/apply/recovery contract specified; no import endpoint or migration test executed. | unknown |
 | R10 Disposable independent reality anchor, documentation and delivery gates | Fixture/task/cleanup plan recorded; new integrated QA and parent human acceptance not executed. | unknown |
 
@@ -152,6 +153,39 @@ Old bookmark position/sidebar/forms and write APIs intentionally remain until ex
 Human appropriateness remains **unknown**, and the historical bookmark UI **FAIL** remains in force.
 No push, live-provider mutation, downstream edit, deployment, user-notebook edit or shutdown occurred.
 
+## Stage 4 execution checkpoint
+
+Hosted shell `mv` now snapshot-reads Markdown sources and incoming refs, rebases them through the shared `relocateLinks`, and merges edits by final destination with the existing SHA moves/deletions and legacy relocation before one `folders` receipt.
+Overwritten destinations cannot replace the moved source with their old bodies.
+Copy semantics, deletion non-pruning, reserved metadata protections, 200-change/5-MiB commit bounds and snapshot-pinned provider writes remain intact; reference scanning uses the existing 32-MiB workspace-snapshot bound.
+Shared rewriting now handles escaped closing brackets and protects closed/unfinished fences, nested indented code, inline code, CRLF and frontmatter without reserializing source.
+The existing Marked lexer supplies only transient block-line protection ranges, not an outline registry or separate document model.
+
+- Red evidence: `/tmp/outline-stage4-red.log`, `/tmp/outline-stage4-nested-red.log`, `/tmp/outline-stage4-fence-red.log` exposed omitted shell refs, escaped labels, unfinished/nested code, and a longer fence swallowing subsequent prose.
+- Provider-fixture fidelity correction: GitHub now models non-fast-forward ref rejection; GitLab seed files initialize their original last-commit versions.
+  A concurrent GitHub move may create an unreachable commit object, but the branch/tree stays at the concurrent edit; the test does not claim no commit object was created.
+- Final regression: `/tmp/outline-stage4-full-tests-final2.log`, **257 files / 1902 tests passed**.
+- Final build, lint, format and fresh web/server compilers passed: `/tmp/outline-stage4-{build,lint,format,webtypes,servertypes}-final.log`.
+  Monitor 8 exited `tests=0 build=0 lint=0 format=0 web=0 server=0`; existing Vite informational warnings remain.
+- New-test lint separately passed in `/tmp/outline-stage4-newtest-lint.log`; active LSP checked eight paths with zero diagnostics but eight inconclusive push-only outcomes, not clean coverage.
+- Actual local HTTP test starts `createApp` on an ephemeral loopback server, moves the target, outline and containing folder, checks exact CRLF bytes/incoming links, refuses a stale move, retains refs after deletion and leaves another notebook untouched.
+- Local fault injection restores moved note, outline and legacy bookmark bytes after the second write fails.
+- GitHub/GitLab tests assert directory-destination, source/target, folder and same-repository cross-notebook moves; overwrite precedence; pinned reads; branch races; count limits; copy/deletion behavior; and one successful commit per move.
+- Existing compilation, file/folder and legacy bookmark relocation suites pass in the full run.
+- All runtime servers belong to test fixtures and close/remove their roots in teardown.
+  No persistent browser/server, live-provider write, user-note change, push or downstream operation was started for stage 4.
+
+| Stage 4 contract | Evidence | Result |
+| --- | --- | --- |
+| Hosted mv merges source, incoming and legacy updates in one paired snapshot commit | `outline-relocation.test.ts` GitHub/GitLab cases and `bookmark-relocation.test.ts` | pass |
+| Native file/folder source/target moves and deletion/copy semantics | Shared planner cases plus actual local/remote HTTP adapter tests | pass |
+| Code, escaped labels, reference definitions, annotations, hierarchy and CRLF survive relocation | Executed source-preserving cases, including unfinished/nested code and longer closing fences | pass |
+| Stale/racing moves and local late failure preserve recoverable bytes | Provider branch-race cases, local HTTP stale case, bookmark/outline rollback test | pass |
+| Final independent browser lifecycle and human appropriateness | Parent journey still pending; no new human verdict | unknown |
+
+Tasks 5–6 remain untouched.
+The parent-reported R2 outline-reference safety and adjacent drag duplication findings are not covered by stage 4 completion and must be repaired before final delivery.
+
 ## Required automated evidence
 
 ### Core and classification
@@ -248,7 +282,7 @@ This planning session started no persistent process or browser session and needs
 | --- | --- |
 | Clean specified upstream BASE before planning | Confirmed by Git status/HEAD inspection. |
 | Four-document plan researched against actual source | Complete: exactly four allowed modified files; six ordered implementation tasks; 15 relative evidence links resolve; `git diff --check` clean; HEAD unchanged. |
-| New outline tests/build/types/lint | Stages 1–3 passed as recorded above; tasks 4–6 remain. |
+| New outline tests/build/types/lint | Stages 1–4 passed as recorded above; reviewer fixes and tasks 5–6 remain. |
 | New browser/UI/real provider evidence | Worker disposable local-browser stages 2–3 recorded above; independent parent, human appropriateness and live-provider evidence not claimed. |
 | Human appropriateness of rejected collection | FAIL. |
 | Human appropriateness of replacement outline UI | Unknown; parent/user review required after implementation. |

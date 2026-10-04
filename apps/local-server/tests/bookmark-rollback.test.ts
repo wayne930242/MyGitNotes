@@ -5,12 +5,14 @@ import path from 'node:path';
 import { BOOKMARKS_FILE, planFileChange, serializeWorkspaceDocument } from '@mygitnotes/core';
 import { applyLocalFilePlan, localFileSnapshot } from '../src/file-manager.js';
 
-it('restores bookmark bytes and moved note bytes after a late local apply failure', () => {
+it('restores bookmark, outline references and moved note bytes after a late local apply failure', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bookmarks-rollback-'));
   const raw = serializeWorkspaceDocument({ version: 1, notebooks: [{ notebookId: 'n', groups: [], bookmarks: [{ id: 'a', label: 'A', groupId: null, target: { kind: 'note', path: 'a.md' } }] }] });
   try {
     fs.mkdirSync(path.join(root, 'notes/n'), { recursive: true });
     fs.writeFileSync(path.join(root, 'notes/n/a.md'), '# Original\n');
+    const outline = '- Parent\r\n  Annotation\r\n  - [A\\] 中文](a.md#part)\r\n';
+    fs.writeFileSync(path.join(root, 'notes/n/plan.outline.md'), outline);
     fs.writeFileSync(path.join(root, BOOKMARKS_FILE), raw);
     const command = { kind: 'move', notebookId: 'n', path: 'notes/n/a.md', destination: 'notes/n/b.md' } as const;
     const before = localFileSnapshot(root, [{ id: 'n', root: 'notes/n', title: 'N' }], command);
@@ -30,7 +32,8 @@ it('restores bookmark bytes and moved note bytes after a late local apply failur
     expect(fs.readFileSync(path.join(root, BOOKMARKS_FILE), 'utf8')).toBe(raw);
     expect(fs.readFileSync(path.join(root, 'notes/n/a.md'), 'utf8')).toBe('# Original\n');
     expect(fs.existsSync(path.join(root, 'notes/n/b.md'))).toBe(false);
-    expect(fs.readdirSync(path.join(root, 'notes/n'))).toEqual(['a.md']);
+    expect(fs.readFileSync(path.join(root, 'notes/n/plan.outline.md'), 'utf8')).toBe(outline);
+    expect(fs.readdirSync(path.join(root, 'notes/n'))).toEqual(['a.md', 'plan.outline.md']);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

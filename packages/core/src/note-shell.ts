@@ -6,6 +6,8 @@ import { NotebookConfig } from './types.js';
 import { skillFile } from './agent-system.js';
 import type { CommitScope } from './workspace-documents.js';
 import { bookmarkRelocationChange } from './bookmark-relocation.js';
+import { relocateLinks } from './folder-plan.js';
+import { decodeTextFile } from './file-manager.js';
 import YAML from 'yaml';
 
 type Args = Record<string, unknown>;
@@ -226,13 +228,30 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
       if (operation === 'mv') changes.push({ path: entry.path, sha: null });
     }
     if (operation === 'mv') {
+      const relocate = (file: string) => file === from || file.startsWith(from + '/') ? to + file.slice(from.length) : file;
+      const destinations = new Set(files.map(entry => relocate(entry.path)));
+      const merged = new Map(changes.map(change => [change.path, change]));
+      let bytes = 0;
+      for (const entry of blobs) {
+        // An overwritten destination's old body must not replace the moved source.
+        if (!/\.(md|markdown)$/i.test(entry.path) || destinations.has(entry.path)) continue;
+        const content = await reader.readSnapshotFile(snapshot, entry.path);
+        bytes += content.length;
+        if (bytes > 32 * 1024 * 1024) throw new SourceError('File operations support 32 MiB per workspace snapshot.', 413);
+        const raw = decodeTextFile(content);
+        if (raw === undefined) continue;
+        const target = relocate(entry.path);
+        const rewritten = relocateLinks(raw, entry.path, target, relocate);
+        if (rewritten !== raw) merged.set(target, { path: target, content: rewritten });
+      }
       const owner = inNotebook(from, notebooks);
       if (owner) {
-        const change = await bookmarkRelocationChange(reader, snapshot, owner, file => file === from || file.startsWith(from + '/') ? to + file.slice(from.length) : file);
-        if (change) changes.push(change);
+        const change = await bookmarkRelocationChange(reader, snapshot, owner, relocate);
+        if (change) merged.set(change.path, change);
       }
+      return receipt([...merged.values()], 'folders');
     }
-    return receipt(changes, operation === 'mv' ? 'folders' : 'notes');
+    return receipt(changes, 'notes');
   }
   throw new SourceError('Unknown note operation.');
 }

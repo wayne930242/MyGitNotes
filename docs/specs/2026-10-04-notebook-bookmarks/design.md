@@ -356,6 +356,19 @@ The full browser matrix and honest results start in [verification.md](verificati
 
 ## Friction Notes
 
+- Tried: stage 4 red-anchor relocation cases before shared rewriting changes.
+  Found: escaped closing brackets were not rewritten; unfinished fences and indented code were rewritten as links. Hosted shell moves omitted all Markdown relocation, as documented.
+  Led by: task 4 source-preservation and shell snapshot contract.
+  Classification: evidenced shared-seam gaps; retain source edits, add bounded code shielding and escaped-label handling instead of a second outline parser.
+- Tried: top-level code shielding and the existing GitHub fixture for a concurrent-head move test.
+  Found: nested indented code needs list/blockquote block-token line ranges, and the fixture asserted `force: false` without enforcing non-fast-forward refusal. GitHub can create an unreachable commit before refusing the ref update; GitLab rejects before creating its commit.
+  Led by: R8 code preservation and snapshot/revision pairing.
+  Classification: bounded shared-seam and fixture gaps; use existing Marked block tokens mapped back to original line offsets, model fixture ref rejection, and assert unchanged branch/tree instead of claiming zero GitHub commit objects. A follow-up red test showed a longer closing fence acting as an inline backtick opener; rewrite only prose between protected ranges so block delimiters cannot consume subsequent links.
+- Tried: adding GitLab test files after fixture initialization and using a guessed `baseUrl` descriptor property.
+  Found: existing-file actions require the fixture's initialized last-commit table, and the descriptor uses `url`; seed extra files before initializing versions.
+  Led by: deterministic provider verification.
+  Classification: test setup gap; additive fixture input only, no provider behavior change.
+
 - Tried: inspecting a presumed `packages/core/src/local-source.ts` and `lib/use-workspace-links.ts`.
   Found: local note pipelines live in note-service/server adapters; the web link dispatcher is `components/WorkspaceLinks.tsx`, with repository scope in `lib/use-linked-note-preload.ts`.
   Led by: none.

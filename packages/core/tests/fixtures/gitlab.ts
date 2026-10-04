@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 
-export function gitlabFixture(site = 'https://gitlab.example.test/gitlab') {
+export function gitlabFixture(site = 'https://gitlab.example.test/gitlab', extra: Record<string, string> = {}) {
   const manifest = 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n';
   const files = new Map<string, string>([['notes/.github-notes.yaml', manifest], ['notes/ex/a.md', '---\ncustom: preserved\ntags: [work]\n---\n# Alpha\n'], ['notes/ex/folder/_dir.yml', 'title: Folder\n'], ['notes/ex/folder/b.md', '# Beta\n'], ['notes/ex/assets/picture.png', 'image bytes'], ['.github-notes-screen.yaml', 'version: 1\nrows: []\n'], ['AGENTS.md', '# Workspace\n']]);
+  for (const [file, content] of Object.entries(extra)) files.set(file, content);
   const sha = (text: string) => createHash('sha1').update(text).digest('hex');
   let head = 'a'.repeat(40), writes = 0;
   let canPush = true, privateRepo = true, rejectCommit = false;

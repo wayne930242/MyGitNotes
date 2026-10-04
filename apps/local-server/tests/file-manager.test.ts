@@ -172,6 +172,27 @@ it('browses large binary files without loading their contents and reports the re
   expect((await post({ kind: 'move', path: 'notes/a/one/note.md', destination: 'notes/a/two/note.md' })).status).toBe(200);
   expect(fs.statSync(path.join(root, 'notes/a/large.bin')).size).toBe(6 * 1024 * 1024);
 });
+it('moves outline sources, targets and folders through HTTP while stale edits and deletion preserve references', async () => {
+  const original = '- Parent\r\n  Annotation\r\n  - [Note\\] 中文](one/note.md#part)\r\n';
+  write('notes/a/plan.outline.md', original);
+  write('notes/a/ref.md', '[Plan](plan.outline.md)\n');
+  write('notes/b/plan.outline.md', original);
+  const stale = (await list()).revision;
+  write('notes/a/plan.outline.md', original + '- Concurrent edit\r\n');
+  expect((await post({ kind: 'move', path: 'notes/a/one/note.md', destination: 'notes/a/two/note.md' }, stale)).status).toBe(409);
+  expect(fs.existsSync(path.join(root, 'notes/a/one/note.md'))).toBe(true);
+  expect((await post({ kind: 'move', path: 'notes/a/one/note.md', destination: 'notes/a/two/note.md' })).status).toBe(200);
+  expect((await post({ kind: 'move', path: 'notes/a/plan.outline.md', destination: 'notes/a/one/plan.outline.md' })).status).toBe(200);
+  expect(fs.readFileSync(path.join(root, 'notes/a/one/plan.outline.md'), 'utf8')).toBe(original.replace('(one/note.md#part)', '(../two/note.md#part)') + '- Concurrent edit\r\n');
+  expect((await post({ kind: 'move', path: 'notes/a/one', destination: 'notes/a/two/one' })).status).toBe(200);
+  const final = original.replace('(one/note.md#part)', '(../note.md#part)') + '- Concurrent edit\r\n';
+  expect(fs.readFileSync(path.join(root, 'notes/a/two/one/plan.outline.md'), 'utf8')).toBe(final);
+  expect(fs.readFileSync(path.join(root, 'notes/a/ref.md'), 'utf8')).toBe('[Plan](two/one/plan.outline.md)\n');
+  expect((await post({ kind: 'delete', path: 'notes/a/two/note.md' })).status).toBe(200);
+  expect(fs.readFileSync(path.join(root, 'notes/a/two/one/plan.outline.md'), 'utf8')).toBe(final);
+  expect(fs.readFileSync(path.join(root, 'notes/b/plan.outline.md'), 'utf8')).toBe(original);
+  expect(git('log', '--format=%s').toString().trim()).toBe('fixture');
+});
 it('includes hidden files in the normal Git review and commit flow', async () => {
   await post({ kind: 'write', path: 'notes/a/.hidden.json', content: '{"a":2}\n' });
   const response = await fetch(base + '/api/git/diff?path=notes/a/.hidden.json');

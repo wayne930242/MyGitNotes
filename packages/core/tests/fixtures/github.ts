@@ -16,6 +16,7 @@ export function githubFixture(extra: Record<string, string> = {}) {
   }
   const trees = new Map<string, Map<string, string>>([[treeId, new Map(files)]]);
   const commits = new Map<string, string>([[head, treeId]]);
+  const parents = new Map<string, string[]>();
   const calls: { endpoint: string; method?: string; body: any; }[] = [];
   const request: typeof fetch = async (input, init) => {
     // Batched blob reads are optional: a failing GraphQL endpoint makes the reader fall back to single blob reads.
@@ -63,9 +64,11 @@ export function githubFixture(extra: Record<string, string> = {}) {
     } else if (endpoint === '/git/commits') {
       const sha = 'head' + counter++;
       commits.set(sha, body.tree);
+      parents.set(sha, body.parents);
       result = { sha };
     } else if (endpoint.startsWith('/git/refs/heads/')) {
       expect(body.force).toBe(false);
+      if (!parents.get(body.sha)?.includes(head)) return new Response(JSON.stringify({ message: 'Update is not a fast forward' }), { status: 422 });
       head = body.sha;
       treeId = commits.get(head)!;
       files = new Map(trees.get(treeId));
