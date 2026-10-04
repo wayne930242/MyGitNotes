@@ -39,3 +39,6 @@ mygitnotes.server.yaml
 # Specs
 docs/specs/
 docs/spec/
+
+# Local scratch work
+/scratch/
