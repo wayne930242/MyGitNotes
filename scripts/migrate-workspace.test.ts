@@ -39,6 +39,10 @@ function screenWorkspace() {
   write('notes/a/one.md', '---\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\n# One\n');
   write('.github-notes-screen.yaml', 'version: 2\nrows:\n  - id: reading\n    notebookId: a\n    kind: custom\n    name: Reading\n    view: small\n    items:\n      - id: n1\n        kind: note\n        notebookId: a\n        path: notes/a/one.md\n');
   git(notes, ['init', '-q', '-b', 'main']);
+  // The migration commits on its own, so the repository carries an identity rather than relying on the
+  // machine's: a CI runner has no global one and cannot guess an email.
+  git(notes, ['config', 'user.name', 'T']);
+  git(notes, ['config', 'user.email', 't@example.com']);
   git(notes, ['add', '--all']);
   git(notes, ['-c', 'user.name=T', '-c', 'user.email=t@example.com', 'commit', '-q', '-m', 'init']);
   return notes;
