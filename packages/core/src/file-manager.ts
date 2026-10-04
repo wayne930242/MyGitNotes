@@ -5,6 +5,7 @@ import type { NotebookConfig } from './types.js';
 import { parseFolderConfig } from './folders.js';
 import { relocateLinks } from './folder-plan.js';
 import { relocateWorkspaceDocuments } from './workspace-documents.js';
+import { isCompilationPath, relocateCompilation } from './compilation.js';
 import { decodeAsset } from './assets.js';
 import { LEGACY_WORKSPACE_CONFIG_FILENAME, WORKSPACE_CONFIG_FILENAME } from './config.js';
 
@@ -138,7 +139,9 @@ export function planFileChange(snapshot: FileSnapshot, input: unknown) {
       if (file === removedMetadata) continue;
       const next = relocate(file);
       const raw = /\.(md|markdown)$/i.test(file) ? decodeTextFile(bytes) : undefined;
-      files.set(next, raw === undefined ? bytes : Buffer.from(relocateLinks(raw, file, next, relocate)));
+      // A compilation pins paths of its notebook; they follow the move like a link does.
+      const pinned = isCompilationPath(file) && bytes.length ? relocateCompilation(decodeTextFile(bytes) ?? '', relocate) : null;
+      files.set(next, pinned !== null ? Buffer.from(pinned) : raw === undefined ? bytes : Buffer.from(relocateLinks(raw, file, next, relocate)));
     }
     pathMap[command.path] = destination;
     relocateWorkspaceDocuments({ get: file => files.get(file)?.toString('utf8'), set: (file, text) => files.set(file, Buffer.from(text)) }, { notebooks: snapshot.notebooks, workspace: { default_notebook: snapshot.notebooks[0]?.id } }, nb!.id, relocate);

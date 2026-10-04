@@ -2,7 +2,7 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { FolderCommandSchema, type FolderSnapshot, isNotebookContent, type NotebookConfig, planFolderChange, RemoteSource, SourceError, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
+import { FolderCommandSchema, type FolderSnapshot, isCompilationPath, isNotebookContent, type NotebookConfig, planFolderChange, RemoteSource, SourceError, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { notebookRepository } from './request-workspace.js';
@@ -10,7 +10,7 @@ import { regularPath, writeFileAtomicSync } from './workspace-files.js';
 
 const documents = WORKSPACE_DOCUMENTS.map(document => document.file);
 
-const isText = (file: string) => /\.(md|markdown|txt)$/i.test(file) || path.posix.basename(file) === '_dir.yml';
+const isText = (file: string) => /\.(md|markdown|txt)$/i.test(file) || isCompilationPath(file) || path.posix.basename(file) === '_dir.yml';
 export function localFolderSnapshot(root: string, notebooks: NotebookConfig[]): FolderSnapshot {
   const snapshot: FolderSnapshot = { notebooks, directories: [], protectedPaths: [], files: new Map() };
   let bytes = 0;

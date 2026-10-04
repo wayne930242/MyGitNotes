@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { getCurrentBranch } from '@mygitnotes/git';
-import { assetHash, assetInfo, assetRoot, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isNotebookContent, managedNotebook, type NotebookConfig, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSource, SourceError, withinPath, WORKSPACE_DOCUMENTS, type WorkspaceConfig } from '@mygitnotes/core';
+import { assetHash, assetInfo, assetRoot, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isCompilationPath, isNotebookContent, managedNotebook, type NotebookConfig, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSource, SourceError, withinPath, WORKSPACE_DOCUMENTS, type WorkspaceConfig } from '@mygitnotes/core';
 import { eachRepository, notebookRepository, noteRepository, type RepositoryHandle } from './request-workspace.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { regularPath, writeFileAtomicSync } from './workspace-files.js';
@@ -64,7 +64,7 @@ async function localHash(root: string, file: string, size: number) {
 }
 function needsContent(file: string, command?: FileCommand) {
   if (!command) return true;
-  if (command.kind === 'move' || command.kind === 'remove-directory') return withinPath(file, command.path) || /\.(md|markdown)$/i.test(file) || auxiliary.includes(file);
+  if (command.kind === 'move' || command.kind === 'remove-directory') return withinPath(file, command.path) || /\.(md|markdown)$/i.test(file) || isCompilationPath(file) || auxiliary.includes(file);
   return file === command.path || command.kind === 'metadata' && file === command.path + '/_dir.yml';
 }
 export function localFileSnapshot(root: string, notebooks: NotebookConfig[], command?: FileCommand): FileSnapshot {

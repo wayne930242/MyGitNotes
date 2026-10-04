@@ -3,6 +3,7 @@ import YAML from 'yaml';
 import { z } from 'zod';
 import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js';
 import { relocateWorkspaceDocuments } from './workspace-documents.js';
+import { isCompilationPath, relocateCompilation } from './compilation.js';
 import type { FolderItem, NotebookConfig } from './types.js';
 
 const relative = z.string().max(512).refine(value => !value || !/[\\\0]/.test(value) && value.split('/').every(part => part && part !== '.' && part !== '..'));
@@ -89,7 +90,7 @@ export function planFolderChange(snapshot: FolderSnapshot, input: unknown) {
     if (file === removedMetadata) continue;
     const next = relocate(file);
     if (file !== next && (snapshot.files.has(next) && !inside(next, source) || snapshot.directories.includes(next) || snapshot.protectedPaths.includes(next))) throw new Error('Destination already exists.');
-    files.set(next, /\.(md|markdown)$/i.test(file) ? relocateLinks(raw, file, next, relocate) : raw);
+    files.set(next, /\.(md|markdown)$/i.test(file) ? relocateLinks(raw, file, next, relocate) : isCompilationPath(file) ? relocateCompilation(raw, relocate) ?? raw : raw);
   }
   if (command.kind === 'create') {
     directories.add(destination);
