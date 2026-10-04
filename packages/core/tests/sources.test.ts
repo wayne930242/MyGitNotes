@@ -59,7 +59,7 @@ describe('source configuration', () => {
   it('reads the application root only when it holds a workspace, and otherwise requires MYGITNOTES_LOCAL_PATH', () => {
     const core = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-core-'));
     try {
-      for (const env of [{}, { MYGITNOTES_SOURCE: 'local' }]) expect(() => loadSourceConfig(core, env)).toThrow(/pnpm bootstrap-workspace.*MYGITNOTES_LOCAL_PATH/);
+      for (const env of [{}, { MYGITNOTES_SOURCE: 'local' }]) expect(() => loadSourceConfig(core, env)).toThrow(/pnpm link-workspace <path>.*pnpm bootstrap-workspace/);
       expect(loadSourceConfig(core, { MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: '../notes' })).toEqual({ type: 'local', path: path.resolve(core, '../notes') });
       expect(loadSourceConfig(core, { REPO_ROOT: root })).toEqual({ type: 'local', path: root });
     } finally {

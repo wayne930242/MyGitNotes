@@ -41,7 +41,21 @@ git remote add origin <your-repository-url>
 git push -u origin core main
 ~~~
 
-Open http://localhost:5173; the new workspace appears in the Notes view. To use an existing workspace, set `MYGITNOTES_LOCAL_PATH` in .env to its absolute path, or run `REPO_ROOT=/absolute/path/to/workspace pnpm dev`.
+Open http://localhost:5173; the new workspace appears in the Notes view.
+
+Already have a workspace? Instead of bootstrap, run from the Core checkout:
+
+~~~bash
+pnpm link-workspace "/absolute/path/to/workspace"
+pnpm dev
+~~~
+
+`link-workspace` validates the existing manifest and schema, then saves `MYGITNOTES_SOURCE=local` and the absolute `MYGITNOTES_LOCAL_PATH` in Core's `.env`, preserving unrelated settings.
+It does not change notes or Git remotes, create worktrees, or migrate the workspace.
+For an older schema, run `pnpm migrate-workspace --workspace "/absolute/path/to/workspace"` explicitly before linking; for a newer schema, update Core first.
+Shell environment settings still override `.env`.
+`pnpm dev:remote` shares the same local workspace through Tailscale; it does not select a GitHub/GitLab source.
+Both dev commands show `link-workspace` guidance if the workspace is missing.
 
 ## Deploy
 

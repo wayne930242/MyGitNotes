@@ -51,7 +51,7 @@ export function loadEnvDefaults(file: string, env: NodeJS.ProcessEnv = process.e
 /** A fork-model checkout holds its workspace at the application root; a Core checkout names its `main` worktree. */
 function defaultLocalPath(base: string): string {
   if (resolveWorkspaceConfigPath(base)) return base;
-  throw new Error(`No MyGitNotes workspace at ${base}. Run \`pnpm bootstrap-workspace\` or set MYGITNOTES_LOCAL_PATH to your main worktree.`);
+  throw new Error(`No MyGitNotes workspace at ${base}. Run \`pnpm link-workspace <path>\` to use an existing workspace, or \`pnpm bootstrap-workspace\` to create one.`);
 }
 /** The deployment's server configuration file, whether or not it exists. */
 function serverConfigFile(base: string, env: NodeJS.ProcessEnv): string {

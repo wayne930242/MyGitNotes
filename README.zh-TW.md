@@ -41,7 +41,21 @@ git remote add origin <your-repository-url>
 git push -u origin core main
 ~~~
 
-開啟 http://localhost:5173，新建立的工作區會出現在筆記檢視。若要改用既有工作區，將 .env 的 `MYGITNOTES_LOCAL_PATH` 設為它的絕對路徑，或執行 `REPO_ROOT=/absolute/path/to/workspace pnpm dev`。
+開啟 http://localhost:5173，新建立的工作區會出現在筆記檢視。
+
+已有工作區時，不需要 bootstrap；改在 Core checkout 執行：
+
+~~~bash
+pnpm link-workspace "/absolute/path/to/workspace"
+pnpm dev
+~~~
+
+`link-workspace` 會驗證既有 manifest 與 schema，再將 `MYGITNOTES_SOURCE=local` 及絕對路徑 `MYGITNOTES_LOCAL_PATH` 寫入 Core 的 `.env`，保留其他設定。
+它不會修改筆記或 Git remote、建立 worktree，也不會遷移工作區。
+若 schema 較舊，先明確執行 `pnpm migrate-workspace --workspace "/absolute/path/to/workspace"` 再連結；若較新，則先更新 Core。
+Shell 環境變數仍優先於 `.env`。
+`pnpm dev:remote` 透過 Tailscale 分享同一個本機工作區，不會切換成 GitHub/GitLab 來源。
+兩個 dev 指令都會在缺少工作區時顯示 `link-workspace` 操作指引。
 
 ## 部署
 

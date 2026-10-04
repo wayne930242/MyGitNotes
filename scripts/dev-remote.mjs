@@ -1,5 +1,5 @@
 // Runs `pnpm dev` and shares the web app over Tailscale Serve, so other devices on your tailnet can open it.
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import net from 'node:net';
 import QRCode from 'qrcode';
 
@@ -74,6 +74,11 @@ function copy(text) {
     console.log(`Could not copy with ${command}; the URL is ${text}`);
   }
 }
+
+// Fail before Tailscale setup when the local workspace is missing or incompatible.
+const workspaceCheck = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/check-dev-workspace.ts'], { stdio: 'inherit' });
+if (workspaceCheck.error) throw workspaceCheck.error;
+if (workspaceCheck.status !== 0) process.exit(workspaceCheck.status || 1);
 
 const host = tailnetHost();
 const url = `https://${host}/`;

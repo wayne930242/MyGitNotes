@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "link-workspace": "tsx scripts/link-workspace.ts",
     "bootstrap-workspace": "tsx scripts/bootstrap-workspace.ts",
     "update-core": "tsx scripts/update-core.ts",
     "migrate-workspace": "tsx scripts/migrate-workspace.ts",
@@ -13,7 +14,7 @@
     "test": "pnpm --filter \"./packages/*\" run build && node scripts/check-vercel-sparse-paths.mjs && vitest run",
     "check:vercel-sparse-paths": "node scripts/check-vercel-sparse-paths.mjs",
     "check:theme-colors": "node scripts/check-theme-colors.mjs",
-    "dev": "pnpm --filter \"./packages/*\" run build && pnpm --parallel --filter \"@mygitnotes/local-server\" --filter \"@mygitnotes/web\" dev",
+    "dev": "tsx scripts/check-dev-workspace.ts && pnpm --filter \"./packages/*\" run build && pnpm --parallel --filter \"@mygitnotes/local-server\" --filter \"@mygitnotes/web\" dev",
     "dev:remote": "node scripts/dev-remote.mjs",
     "dev:server": "pnpm --filter \"@mygitnotes/local-server\" dev",
     "dev:web": "pnpm --filter \"@mygitnotes/web\" dev",

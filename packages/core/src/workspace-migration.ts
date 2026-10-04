@@ -25,7 +25,7 @@ export class PartialMigrationError extends WorkspaceCompatibilityError {
 
 function readSchemaVersion(root: string): { file: string; version: unknown; } {
   const relative = resolveWorkspaceConfigPath(root);
-  if (!relative) throw new WorkspaceCompatibilityError(`No MyGitNotes workspace found at ${root}. Run \`pnpm bootstrap-workspace\` or set MYGITNOTES_LOCAL_PATH.`);
+  if (!relative) throw new WorkspaceCompatibilityError(`No MyGitNotes workspace found at ${root}. Run \`pnpm link-workspace <path>\` to use an existing workspace, or \`pnpm bootstrap-workspace\` to create one.`);
   const file = path.join(root, relative);
   return { file, version: (YAML.parse(fs.readFileSync(file, 'utf8')) as { schema_version?: unknown; } | null)?.schema_version };
 }
