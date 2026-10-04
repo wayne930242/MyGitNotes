@@ -1,0 +1,12 @@
+version: 1
+id: review-stage
+title: 進階複習 · 7 天
+arrangement: lane
+size: small
+source:
+  kind: tag
+  tag: study-demo
+study:
+  filter: all
+  dueFirst: true
+  status: review

@@ -1,0 +1,23 @@
+version: 1
+id: example-media
+title: Images and Music
+arrangement: lane
+size: medium
+items:
+  - id: example-media-note
+    kind: note
+    path: notes/example/music-resources.md
+  - id: example-river-image
+    kind: asset
+    path: notes/example/assets/river-reading.png
+  - id: example-desk-image
+    kind: asset
+    path: notes/example/assets/evening-desk.png
+  - id: example-song
+    kind: youtube
+    videoId: dQw4w9WgXcQ
+    start: 0
+    title: Rick Astley — Never Gonna Give You Up
+  - id: example-folder
+    kind: folder
+    path: notes/example/projects

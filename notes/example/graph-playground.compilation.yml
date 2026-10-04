@@ -1,0 +1,30 @@
+version: 1
+id: example-graph
+title: Graph Playground
+arrangement: graph
+source:
+  kind: tag
+  tag: graph-demo
+graph:
+  nodes:
+    - path: notes/example/graph-playground.md
+      x: -220
+      y: -160
+      width: 380
+      height: 320
+      expanded: true
+    - path: notes/example/river-reading.md
+      x: 220
+      y: -160
+      width: 380
+      height: 320
+      expanded: true
+    - path: notes/example/evening-ideas.md
+      x: 260
+      y: 260
+    - path: notes/example/music-resources.md
+      x: -50
+      y: 330
+    - path: notes/example/todo-demo.md
+      x: -330
+      y: 260

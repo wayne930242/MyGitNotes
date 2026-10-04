@@ -1,0 +1,12 @@
+version: 1
+id: done-stage
+title: 熟悉 · 30 天
+arrangement: lane
+size: thumbnail
+source:
+  kind: tag
+  tag: study-demo
+study:
+  filter: all
+  dueFirst: true
+  status: done
