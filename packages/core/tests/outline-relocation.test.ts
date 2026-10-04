@@ -29,6 +29,18 @@ describe('source-preserving outline relocation', () => {
     const raw = ['- [ ] Parent', '  - [x] Child', '', '        [literal](a.md)', '', '    [real](a.md)', '', '- [X] [outside](a.md)', ''].join(eol);
     expect(relocateLinks(raw, 'notes/ex/tasks.md', 'notes/ex/work/tasks.md', file => file)).toBe(raw.replace('[real](a.md)', '[real](../a.md)').replace('[outside](a.md)', '[outside](../a.md)'));
   });
+  it.each(['\n', '\r\n'])('retains original task block semantics rather than reinterpreting stripped text (%j)', eol => {
+    for (const body of ['- [ ] ```text\n  [real](a.md)\n', '- [ ] ~~~old~~~ [real](a.md)\n', '- [X] ```text\n  [real](a.md)\n\n  Annotation\n', '- Parent\n  - [x] ```text\n    [real](a.md)\n']) {
+      const raw = body.replaceAll('\n', eol);
+      expect(relocateLinks(raw, 'notes/ex/tasks.md', 'notes/ex/work/tasks.md', file => file)).toBe(raw.replace('[real](a.md)', '[real](../a.md)'));
+    }
+    const code = ['- [ ] Parent', '', '  ```text', '  [literal](a.md)', '  ```', '', '  [real](a.md)', ''].join(eol);
+    expect(relocateLinks(code, 'notes/ex/tasks.md', 'notes/ex/work/tasks.md', file => file)).toBe(code.replace('[real](a.md)', '[real](../a.md)'));
+    const before = snapshot();
+    before.files.set('notes/ex/old/tasks.md', '- [ ] ```text' + eol + '  [real](../a.md)' + eol);
+    const moved = planFolderChange(before, { kind: 'move', notebookId: 'ex', path: 'old', parent: 'work' });
+    expect(moved.files.get('notes/ex/work/old/tasks.md')).toBe('- [ ] ```text' + eol + '  [real](../../a.md)' + eol);
+  });
   it('does not let a longer closing fence swallow a following link and inline code', () => {
     const raw = '```\n[literal](a.md)\n````\n- [real](a.md)\n`code`\n';
     expect(relocateLinks(raw, 'notes/ex/plan.outline.md', 'notes/ex/work/plan.outline.md', file => file)).toBe(raw.replace('[real](a.md)', '[real](../a.md)'));

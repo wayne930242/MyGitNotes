@@ -175,7 +175,8 @@ it('browses large binary files without loading their contents and reports the re
 it('moves outline sources, targets and folders through HTTP while stale edits and deletion preserve references', async () => {
   const original = '- Parent\r\n  Annotation\r\n  - [Note\\] 中文](one/note.md#part)\r\n';
   write('notes/a/plan.outline.md', original);
-  write('notes/a/tasks.md', '- [ ] Unrelated task\n  - [x] Done\n');
+  const tasks = '- [ ] Unrelated task\n  - [x] Done\n- [ ] ```text\n  [live](one/note.md)\n- [X] ~~~old~~~ [live](one/note.md)\n';
+  write('notes/a/tasks.md', tasks);
   write('notes/a/ref.md', '[Plan](plan.outline.md)\n');
   write('notes/b/plan.outline.md', original);
   const stale = (await list()).revision;
@@ -192,7 +193,7 @@ it('moves outline sources, targets and folders through HTTP while stale edits an
   expect((await post({ kind: 'delete', path: 'notes/a/two/note.md' })).status).toBe(200);
   expect(fs.readFileSync(path.join(root, 'notes/a/two/one/plan.outline.md'), 'utf8')).toBe(final);
   expect(fs.readFileSync(path.join(root, 'notes/b/plan.outline.md'), 'utf8')).toBe(original);
-  expect(fs.readFileSync(path.join(root, 'notes/a/tasks.md'), 'utf8')).toBe('- [ ] Unrelated task\n  - [x] Done\n');
+  expect(fs.readFileSync(path.join(root, 'notes/a/tasks.md'), 'utf8')).toBe(tasks.replaceAll('(one/note.md)', '(two/note.md)'));
   expect(git('log', '--format=%s').toString().trim()).toBe('fixture');
 });
 it('includes hidden files in the normal Git review and commit flow', async () => {
