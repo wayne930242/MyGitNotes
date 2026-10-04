@@ -4,7 +4,7 @@ import { exclusive } from './change-management.js';
 import { getCurrentBranch, GitExecutionError, runGit } from './git-service.js';
 
 export type SyncStrategy = 'remote' | 'local';
-export type SyncErrorCode = 'INVALID_BRANCH' | 'NO_UPSTREAM' | 'DIRTY' | 'CONFLICT' | 'UNRESOLVED' | 'FAILED';
+export type SyncErrorCode = 'INVALID_BRANCH' | 'NO_UPSTREAM' | 'DIRTY' | 'CONFLICT' | 'UNRESOLVED' | 'STASH_CONFLICT' | 'FAILED';
 
 export interface SyncResult {
   upstream: string;
@@ -31,13 +31,17 @@ async function networkOptions(root: string) {
 }
 
 export interface SyncOptions {
-  /** Stop after the rebase and leave local commits unpushed. */
+  /** Stop after the rebase and leave local commits unpushed; uncommitted tracked changes are stashed around the rebase. */
   pullOnly?: boolean;
 }
+
+const unmergedFiles = async (root: string) => (await runGit(['diff', '--name-only', '--diff-filter=U', '-z'], root)).stdout.split('\0').filter(Boolean);
 
 /**
  * Rebases main onto its upstream and pushes the result without force.
  * A conflicting rebase is aborted so the repository returns to its previous state.
+ * With `pullOnly`, uncommitted changes are stashed and popped back; when they conflict with the pulled commits,
+ * the worktree is reset to the new HEAD and the changes stay in stash@{0}, so no note ever holds conflict markers.
  */
 export async function syncWorkspace(root: string, strategy?: SyncStrategy, { pullOnly = false }: SyncOptions = {}): Promise<SyncResult> {
   return exclusive(root, async () => {
@@ -47,7 +51,7 @@ export async function syncWorkspace(root: string, strategy?: SyncStrategy, { pul
     const merge = (await runGit(['config', '--get', 'branch.main.merge'], root).catch(() => ({ stdout: '' }))).stdout.trim();
     if (!upstream || !remote || !merge) throw new SyncError('main has no upstream branch. Run: git push -u origin main', 'NO_UPSTREAM');
     const dirty = (await runGit(['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=no'], root)).stdout.split('\0').filter(Boolean).map(record => record.slice(3));
-    if (dirty.length) throw new SyncError('Commit or restore changes before syncing.', 'DIRTY', dirty);
+    if (dirty.length && !pullOnly) throw new SyncError('Commit or restore changes before syncing.', 'DIRTY', dirty);
 
     const network = await networkOptions(root);
     try {
@@ -56,25 +60,37 @@ export async function syncWorkspace(root: string, strategy?: SyncStrategy, { pul
       throw new SyncError(gitMessage(error), 'FAILED');
     }
     const pulled = await count(root, 'HEAD..@{u}');
+    if (pullOnly && pulled === 0) return { upstream, pulled, pushed: 0 };
 
     let backup: string | undefined;
     if (strategy) {
       backup = `refs/github-notes/sync-backups/${new Date().toISOString().replace(/[:.]/g, '-')}`;
       await runGit(['update-ref', backup, 'HEAD'], root);
     }
+    // Git's own --autostash leaves conflict markers in the worktree when the pop conflicts, so the stash is handled here.
+    const stashed = pullOnly && dirty.length > 0;
+    if (stashed) await runGit(['stash', 'push', '-m', 'mygitnotes: pull'], root);
     try {
       // Keep Core update merges intact instead of replaying Core commits one by one.
       await runGit(['rebase', '--rebase-merges', '--no-autostash', ...(strategy ? ['-X', strategy === 'remote' ? 'ours' : 'theirs'] : [])], root);
     } catch (error) {
       const rebasing = (await Promise.all(['rebase-merge', 'rebase-apply'].map(async name => fs.existsSync(path.resolve(root, (await runGit(['rev-parse', '--git-path', name], root)).stdout.trim()))))).some(Boolean);
-      if (!rebasing) {
-        if (backup) await runGit(['update-ref', '-d', backup], root);
-        throw new SyncError(gitMessage(error), 'FAILED');
-      }
-      const files = (await runGit(['diff', '--name-only', '--diff-filter=U', '-z'], root)).stdout.split('\0').filter(Boolean);
-      await runGit(['rebase', '--abort'], root);
+      const files = rebasing ? await unmergedFiles(root) : [];
+      if (rebasing) await runGit(['rebase', '--abort'], root);
+      if (stashed) await runGit(['stash', 'pop'], root);
       if (backup) await runGit(['update-ref', '-d', backup], root);
+      if (!rebasing) throw new SyncError(gitMessage(error), 'FAILED');
       throw strategy ? new SyncError('Git could not resolve these conflicts automatically. Resolve them in a terminal.', 'UNRESOLVED', files) : new SyncError('Remote changes conflict with local commits.', 'CONFLICT', files);
+    }
+    if (stashed) {
+      try {
+        await runGit(['stash', 'pop'], root);
+      } catch {
+        // A conflicting pop keeps the stash entry; drop the half-applied changes so every file matches the pulled HEAD.
+        const files = await unmergedFiles(root);
+        await runGit(['reset', '--hard', 'HEAD'], root);
+        throw new SyncError(`Pulled ${pulled} commits, but your uncommitted changes conflict with them. They are kept in stash@{0}; run git stash pop in a terminal to resolve them.`, 'STASH_CONFLICT', files);
+      }
     }
 
     if (pullOnly) return { upstream, pulled, pushed: 0, ...(backup ? { backup } : {}) };

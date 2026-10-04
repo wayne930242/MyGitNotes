@@ -78,6 +78,52 @@ describe('syncWorkspace', () => {
     expect(await getUpstreamStatus(local)).toMatchObject({ ahead: 1, behind: 0 });
   });
 
+  describe('pullOnly with uncommitted changes', () => {
+    it('stashes them around the pull and restores them', async () => {
+      await commit(other, 'remote.md', 'remote\n');
+      await git(other, 'push');
+      write(local, 'a.md', 'edited\n');
+      expect(await syncWorkspace(local, undefined, { pullOnly: true })).toMatchObject({ pulled: 1, pushed: 0 });
+      expect(read(local, 'remote.md')).toBe('remote\n');
+      expect(read(local, 'a.md')).toBe('edited\n');
+      expect(await git(local, 'stash', 'list')).toBe('');
+    });
+
+    it('leaves files untouched when nothing is pulled', async () => {
+      write(local, 'a.md', 'edited\n');
+      expect(await syncWorkspace(local, undefined, { pullOnly: true })).toMatchObject({ pulled: 0 });
+      expect(read(local, 'a.md')).toBe('edited\n');
+      expect(await git(local, 'stash', 'list')).toBe('');
+    });
+
+    it('keeps conflicting changes in the stash and leaves a clean worktree at the pulled HEAD', async () => {
+      await commit(other, 'a.md', 'one\nremote\nthree\n');
+      await git(other, 'push');
+      write(local, 'a.md', 'one\nlocal\nthree\n');
+      const error = await failure(syncWorkspace(local, undefined, { pullOnly: true }));
+      expect(error).toMatchObject({ code: 'STASH_CONFLICT', files: ['a.md'] });
+      expect(error.message).toContain('stash@{0}');
+      expect(await git(local, 'rev-parse', 'HEAD')).toBe(await git(local, 'rev-parse', 'origin/main'));
+      expect(await git(local, 'status', '--porcelain')).toBe('');
+      expect(read(local, 'a.md')).toBe('one\nremote\nthree\n');
+      expect(await git(local, 'stash', 'list')).toContain('mygitnotes: pull');
+      expect(await git(local, 'show', 'stash@{0}:a.md')).toBe('one\nlocal\nthree');
+    });
+
+    it('restores the changes when local commits conflict with the pulled ones', async () => {
+      await commit(other, 'a.md', 'one\nremote\nthree\n');
+      await git(other, 'push');
+      await commit(local, 'a.md', 'one\nlocal\nthree\n');
+      const head = await git(local, 'rev-parse', 'HEAD');
+      write(local, 'local.md', 'draft\n');
+      await git(local, 'add', 'local.md');
+      expect(await failure(syncWorkspace(local, undefined, { pullOnly: true }))).toMatchObject({ code: 'CONFLICT', files: ['a.md'] });
+      expect(await git(local, 'rev-parse', 'HEAD')).toBe(head);
+      expect(read(local, 'local.md')).toBe('draft\n');
+      expect(await git(local, 'stash', 'list')).toBe('');
+    });
+  });
+
   it('refuses uncommitted tracked changes before fetching and allows untracked files', async () => {
     await commit(other, 'remote.md', 'remote\n');
     await git(other, 'push');

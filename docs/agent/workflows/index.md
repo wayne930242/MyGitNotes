@@ -41,13 +41,16 @@ Local MCP saves create a Git commit. Remote UI edits persist as browser working 
 ## 4. Local Git Sync
 
 The Changes panel syncs a local workspace's `main` with its upstream through `POST /api/git/sync` (`packages/git/src/sync.ts`).
-Sync requires `main`, a configured upstream and no uncommitted tracked changes; it never auto-stashes or force-pushes.
+Sync requires `main`, a configured upstream and no uncommitted tracked changes; it never auto-stashes (except pull-only, below) or force-pushes.
 It fetches, rebases with `--rebase-merges` so Core update merges keep their merged commits, then pushes `HEAD` to the upstream branch.
 A conflicting rebase is aborted and returns the conflicting files.
 The user may retry with `-X ours` (remote side wins), `-X theirs` (local side wins), or resolve the rebase in a terminal.
 A strategy retry first saves the previous `HEAD` under `refs/github-notes/sync-backups/`.
 Conflicts Git cannot resolve with a strategy, such as delete conflicts, are aborted again.
 Network commands run without credential prompts and time out after 60 seconds.
+The pull button in the notes sidebar's Changes card sends `pullOnly: true`: it stops after the rebase and never pushes.
+When upstream has new commits, uncommitted tracked changes are stashed before the rebase and popped after it; a conflicting rebase is aborted and the stash popped back.
+When the pop itself conflicts, the worktree is reset to the pulled `HEAD` and the changes stay in `stash@{0}` (`STASH_CONFLICT`), so no note is left with conflict markers.
 Remote sources have no sync step because each remote commit updates the branch directly.
 
 ## 5. Public Demo CI/CD

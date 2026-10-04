@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowDownToLine, X } from 'lucide-react';
-import { syncGitWorkspace } from '../lib/api.js';
+import { GitSyncError, syncGitWorkspace } from '../lib/api.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
 interface Toast {
@@ -11,7 +11,7 @@ interface Toast {
 
 const SUCCESS_TOAST_MS = 3000;
 
-/** Pulls the home worktree's main from its upstream without pushing; a failure stays in a toast until dismissed. */
+/** Pulls the home worktree's main from its upstream without pushing, stashing uncommitted changes around it; a failure stays in a toast until dismissed. */
 export function GitPullButton({ onPulled }: { onPulled: () => Promise<void> | void; }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
@@ -32,6 +32,8 @@ export function GitPullButton({ onPulled }: { onPulled: () => Promise<void> | vo
       if (pulled) await onPulled();
     } catch (failure) {
       setToast({ message: t('sidebar.pullFailed', { message: (failure as Error).message }), failed: true });
+      // The pull itself landed; only the stashed changes stayed behind, so the files on disk moved.
+      if (failure instanceof GitSyncError && failure.code === 'STASH_CONFLICT') await onPulled();
     } finally {
       setBusy(false);
     }
