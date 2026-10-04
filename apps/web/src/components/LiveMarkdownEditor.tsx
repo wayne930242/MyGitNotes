@@ -29,6 +29,10 @@ import { tableBoundaries } from './live-markdown/table-boundaries.js';
 import { useNoteViewPreferences } from '../lib/editor-preferences.js';
 import { applyMarkdownFormat, formatKeymap } from './live-markdown/format-commands.js';
 import type { MarkdownFormat } from '../lib/markdown-format.js';
+import { isOutlinePath } from '@mygitnotes/core/outline';
+import { applyOutlineCommand, outlineKeymap } from './live-markdown/outline-commands.js';
+import { outlineDrag } from './live-markdown/outline-drag.js';
+import type { OutlineCommand } from '../lib/outline-editing.js';
 
 export interface LiveMarkdownHandle {
   /** Inserts `text` at `at`, or in place of the selection. */
@@ -39,6 +43,7 @@ export interface LiveMarkdownHandle {
   getSelection: () => { from: number; to: number; } | null;
   ready: () => boolean;
   format: (format: MarkdownFormat) => void;
+  outline: (command: OutlineCommand) => void;
 }
 interface Props {
   content: string;
@@ -132,7 +137,13 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
     format(format) {
       if (editor.current) applyMarkdownFormat(editor.current, format);
     },
-  }), []);
+    outline(command) {
+      if (editor.current && isOutlinePath(notePath)) {
+        applyOutlineCommand(editor.current, command);
+        editor.current.focus();
+      }
+    },
+  }), [notePath]);
   /* eslint-disable react-hooks/exhaustive-deps -- CodeMirror owns selection, focus and undo history; content, read-only and gutter changes have separate view updates and must not recreate it. */
   useEffect(() => {
     const field = StateField.define<{ decorations: DecorationSet; focused: boolean; }>({
@@ -154,6 +165,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
         extensions: [
           markdown({ base: markdownLanguage, extensions: [cjkEmphasis] }),
           history(),
+          isOutlinePath(notePath) ? [outlineKeymap, outlineDrag({ move: t('outline.move'), before: t('outline.dropBefore'), after: t('outline.dropAfter'), child: t('outline.dropChild') })] : [],
           tableBoundaries,
           formatKeymap,
           keymap.of([...defaultKeymap, ...historyKeymap]),

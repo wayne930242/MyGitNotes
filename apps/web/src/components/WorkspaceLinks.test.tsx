@@ -74,6 +74,24 @@ it('still opens a cross-origin absolute URL in a new window', async () => {
   expect(navigate).not.toHaveBeenCalled();
 });
 
+it('leaves editable outline link text to the editor but opens its explicit affordance safely', async () => {
+  const view = render(
+    <WorkspaceLinks notebooks={[]} folders={[]} onOpenNote={() => {}}>
+      <div contentEditable suppressContentEditableWarning>
+        <span data-testid='source' data-workspace-link='https://example.com/' data-source-path='notes/plan.outline.md'>Editable link text</span>
+        <button contentEditable={false} data-testid='open' data-workspace-link='https://example.com/' data-source-path='notes/plan.outline.md'>Open link</button>
+      </div>
+    </WorkspaceLinks>,
+    { wrapper },
+  );
+  fireEvent.mouseDown(view.getByTestId('source'));
+  fireEvent.click(view.getByTestId('source'));
+  fireEvent.keyDown(view.getByTestId('source'), { key: 'Enter' });
+  expect(windowOpen).not.toHaveBeenCalled();
+  await act(async () => fireEvent.keyDown(view.getByTestId('open'), { key: 'Enter' }));
+  expect(windowOpen).toHaveBeenCalledWith('https://example.com/', '_blank', 'noopener,noreferrer');
+});
+
 it('opens a same-origin absolute URL in a new tab on a modifier click', async () => {
   const { getByTestId } = render(workspace(`${window.location.origin}/notebooks/nb1/notes/a.md`), { wrapper });
   await act(async () => {

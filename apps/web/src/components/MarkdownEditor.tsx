@@ -1,9 +1,9 @@
 import { Select } from './Select.js';
 import { bookmarkOriginalRange, normalizeBookmarkBody } from '@mygitnotes/core/bookmark-anchor';
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Bold, Code, Code2, Eye, Heading1, Heading2, Heading3, Italic, Link, Link2, List, ListOrdered, ListTodo, type LucideIcon, Plus, Quote, SeparatorHorizontal, Square, SquareCode, Strikethrough, Table2, Underline } from 'lucide-react';
+import { Bold, Code, Code2, Eye, Heading1, Heading2, Heading3, IndentDecrease, IndentIncrease, Italic, Link, Link2, List, ListOrdered, ListTodo, type LucideIcon, Plus, Quote, SeparatorHorizontal, Square, SquareCode, Strikethrough, Table2, Underline } from 'lucide-react';
 import type { LiveMarkdownHandle } from './LiveMarkdownEditor.js';
 import { type TranslationKey, useTranslation } from '../lib/i18n/index.js';
 import { noteCompletionAt, useNoteCandidates } from '../lib/note-completion.js';
@@ -15,6 +15,9 @@ import { copyLinePrompt } from '../lib/line-prompt-copy.js';
 import { attachLineGutterGesture } from '../lib/line-gutter-gesture.js';
 import { LoadingStatus } from './LoadingStatus.js';
 import { applyEdits, formatMarkdown, type MarkdownFormat } from '../lib/markdown-format.js';
+import { isOutlinePath } from '@mygitnotes/core/outline';
+import { editOutline, type OutlineCommand } from '../lib/outline-editing.js';
+import { OutlineRawHistory, type OutlineRawSnapshot } from '../lib/outline-raw-history.js';
 
 const LiveMarkdownEditor = React.lazy(() => import('./LiveMarkdownEditor.js').then(module => ({ default: module.LiveMarkdownEditor })));
 export type MarkdownEditorMode = 'live' | 'raw';
@@ -85,6 +88,62 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   const lineCopyTimer = useRef<ReturnType<typeof setTimeout>>();
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
   const sourceLineCount = content.split('\n').length;
+  const outline = isOutlinePath(path);
+  const rawHistory = useRef(new OutlineRawHistory());
+  const rawBeforeInput = useRef<OutlineRawSnapshot | null>(null);
+  const tabEscape = useRef(false);
+  const pendingRawSelection = useRef<OutlineRawSnapshot | null>(null);
+  useLayoutEffect(() => {
+    rawHistory.current = new OutlineRawHistory();
+    rawBeforeInput.current = null;
+    pendingRawSelection.current = null;
+    tabEscape.current = false;
+  }, [path, notebookId, mode]);
+  const updateActiveSourceLine = (target: HTMLTextAreaElement) => {
+    setActiveSourceLine(target.value.slice(0, target.selectionStart).split('\n').length);
+    setCaret(target.selectionStart);
+    onCaret?.(target.selectionStart);
+  };
+  const rawSnapshot = (): OutlineRawSnapshot => {
+    const range = bookmarkOriginalRange(content, { from: source.current?.selectionStart ?? 0, to: source.current?.selectionEnd ?? 0 });
+    return { content, anchor: range.from, head: range.to };
+  };
+  const restoreRawSelection = (snapshot: OutlineRawSnapshot) => {
+    pendingRawSelection.current = snapshot;
+  };
+  useLayoutEffect(() => {
+    const snapshot = pendingRawSelection.current, target = source.current;
+    if (!snapshot || !target || snapshot.content !== content) return;
+    pendingRawSelection.current = null;
+    const { offsets } = normalizeBookmarkBody(snapshot.content);
+    target.focus();
+    target.setSelectionRange(offsets.indexOf(snapshot.anchor), offsets.indexOf(snapshot.head));
+    updateActiveSourceLine(target);
+  });
+  const changeSource = (next: string, selection?: { anchor: number; head: number; }, before = rawSnapshot(), restore = true) => {
+    if (outline) rawHistory.current.record(before, { content: next, anchor: selection?.anchor ?? before.anchor, head: selection?.head ?? before.head });
+    onChange(next);
+    if (outline && selection && restore) restoreRawSelection({ content: next, ...selection });
+  };
+  const rawUndo = (redo: boolean) => {
+    const snapshot = redo ? rawHistory.current.redo(content) : rawHistory.current.undo(content);
+    if (snapshot) {
+      onChange(snapshot.content);
+      restoreRawSelection(snapshot);
+    }
+  };
+  const applyOutline = (command: OutlineCommand): boolean => {
+    if (!outline || readOnly) return false;
+    if (mode === 'live') {
+      live.current?.outline(command);
+      return true;
+    }
+    const before = rawSnapshot();
+    const result = editOutline(content, before.anchor, before.head, command);
+    if (!result) return false;
+    if (result.changes.length) changeSource(applyEdits(content, result.changes), result, before);
+    return true;
+  };
 
   const copyLines = async (firstBodyLine: number, lastBodyLine = firstBodyLine) => {
     const firstBody = Math.min(firstBodyLine, lastBodyLine), lastBody = Math.max(firstBodyLine, lastBodyLine);
@@ -125,18 +184,13 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
     setSourceIdentity({ path, mode });
     setActiveSourceLine(1);
   }
-  const updateActiveSourceLine = (target: HTMLTextAreaElement) => {
-    setActiveSourceLine(target.value.slice(0, target.selectionStart).split('\n').length);
-    setCaret(target.selectionStart);
-    onCaret?.(target.selectionStart);
-  };
   const match = !readOnly && mode === 'raw' && !dismissed && caret !== null ? noteCompletionAt(content, caret) : null;
   const suggestions = useNoteCandidates(match ? match.query : null, path);
   const pickerCandidates = useNoteCandidates(picker ? query : null, path);
   const accept = (note: NoteListItem) => {
     if (!match) return;
     const insert = noteLinkHref(path, note.path) + (content[match.to] === ')' ? '' : ')');
-    onChange(content.slice(0, match.from) + insert + content.slice(match.to));
+    changeSource(content.slice(0, match.from) + insert + content.slice(match.to));
     setDismissed(true);
     requestAnimationFrame(() => {
       const pos = match.from + insert.length;
@@ -149,7 +203,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
     if (mode === 'live') live.current?.insert(text);
     else {
       const position = source.current?.selectionStart ?? content.length;
-      onChange(content.slice(0, position) + text + content.slice(position));
+      changeSource(content.slice(0, position) + text + content.slice(position));
     }
     setPicker(false);
   };
@@ -159,7 +213,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
     if (mode === 'live') live.current?.insert(text);
     else {
       const position = source.current?.selectionStart ?? content.length;
-      onChange(content.slice(0, position) + text + content.slice(position));
+      changeSource(content.slice(0, position) + text + content.slice(position));
     }
   };
 
@@ -168,7 +222,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
     if (mode === 'live') live.current?.insert(text);
     else {
       const position = source.current?.selectionStart ?? content.length;
-      onChange(content.slice(0, position) + text + content.slice(position));
+      changeSource(content.slice(0, position) + text + content.slice(position));
     }
   };
   const applyFormat = (format: MarkdownFormat) => {
@@ -179,8 +233,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
     }
     const target = source.current;
     if (!target) return;
-    const result = formatMarkdown(content, target.selectionStart, target.selectionEnd, format);
-    onChange(applyEdits(content, result.changes));
+    const selection = outline ? rawSnapshot() : { anchor: target.selectionStart, head: target.selectionEnd };
+    const result = formatMarkdown(content, selection.anchor, selection.head, format);
+    changeSource(applyEdits(content, result.changes), result);
+    if (outline) return;
     requestAnimationFrame(() => {
       target.focus();
       target.setSelectionRange(result.anchor, result.head);
@@ -210,6 +266,23 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
             })}
           </div>
         ))}
+        {outline && (
+          <div className='markdown-format-group'>
+            {([['outdent', IndentDecrease], ['indent', IndentIncrease]] as const).map(([command, Icon]) => (
+              <button
+                key={command}
+                type='button'
+                className='ui-icon-button toolbar-icon-button'
+                aria-label={t(`outline.${command}`)}
+                title={t(`outline.${command}`)}
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => applyOutline(command)}
+              >
+                <Icon aria-hidden='true' />
+              </button>
+            ))}
+          </div>
+        )}
         <div className='markdown-format-group'>
           <button
             type='button'
@@ -290,7 +363,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
       }
       const start = at ?? source.current?.selectionStart ?? content.length;
       const end = at ?? source.current?.selectionEnd ?? content.length;
-      onChange(content.slice(0, start) + text + content.slice(end));
+      changeSource(content.slice(0, start) + text + content.slice(end));
       requestAnimationFrame(() => {
         source.current?.focus();
         source.current?.setSelectionRange(start + text.length, start + text.length);
@@ -338,11 +411,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
       const lineHeight = Number.parseFloat(getComputedStyle(target).lineHeight) || 22.75;
       return Math.max(1, Math.min(Math.floor(target.scrollTop / lineHeight) + 1, lineCount));
     },
-  }), [content, mode, readOnly, isMarkdown, onChange]);
+  }));
 
   return (
     <div className='relative flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden' data-markdown-editor>
       {toolbar && (toolbarSlot === undefined ? <div className='markdown-insert-toolbar'>{toolbar}</div> : toolbarSlot && createPortal(toolbar, toolbarSlot))}
+      {outline && !readOnly && !compact && <p className='px-3 py-1 text-xs text-muted' data-outline-hint>{t('outline.keys')}</p>}
       {picker && (
         <div className='note-link-picker'>
           <input
@@ -418,11 +492,15 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
                 readOnly={readOnly}
                 aria-label={ariaLabel}
                 value={content}
+                onBeforeInput={() => {
+                  if (outline && !readOnly) rawBeforeInput.current = rawSnapshot();
+                }}
                 onChange={event => {
                   setDismissed(false);
                   setChoice(0);
                   updateActiveSourceLine(event.currentTarget);
-                  onChange(event.target.value);
+                  changeSource(event.target.value, { anchor: event.currentTarget.selectionStart, head: event.currentTarget.selectionEnd }, rawBeforeInput.current ?? rawSnapshot(), false);
+                  rawBeforeInput.current = null;
                 }}
                 onKeyDown={event => {
                   if (event.nativeEvent.isComposing) return;
@@ -432,12 +510,26 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
                     applyFormat(shortcut);
                     return;
                   }
+                  if (outline && !readOnly && (isMac ? event.metaKey : event.ctrlKey) && !event.altKey && ['z', 'y'].includes(event.key.toLowerCase())) {
+                    event.preventDefault();
+                    rawUndo(event.shiftKey || event.key.toLowerCase() === 'y');
+                    return;
+                  }
+                  const escaped = tabEscape.current;
+                  tabEscape.current = event.key === 'Escape';
+                  if (outline && !readOnly && !event.altKey && !event.metaKey && !event.ctrlKey && !(event.key === 'Tab' && escaped)) {
+                    const command = event.key === 'Enter' ? event.shiftKey ? 'annotation' : suggestions.length ? null : 'sibling' : event.key === 'Tab' ? event.shiftKey ? 'outdent' : 'indent' : null;
+                    if (command && applyOutline(command)) {
+                      event.preventDefault();
+                      return;
+                    }
+                  }
                   if (!suggestions.length) return;
                   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                     event.preventDefault();
                     setChoice(value => (value + (event.key === 'ArrowDown' ? 1 : suggestions.length - 1)) % suggestions.length);
                   }
-                  if (event.key === 'Enter') {
+                  if (event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
                     event.preventDefault();
                     accept(suggestions[choice % suggestions.length]);
                   }

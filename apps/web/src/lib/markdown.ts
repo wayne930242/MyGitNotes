@@ -2,6 +2,7 @@ import { Marked } from 'marked';
 import markedCjkFriendly from 'marked-cjk-friendly';
 import DOMPurify from 'dompurify';
 import { parseYouTubeUrl } from '@mygitnotes/core/compilation';
+import { isOutlinePath } from '@mygitnotes/core/outline';
 import { parseR2Reference, r2AssetUrl, r2PreviewType } from '@mygitnotes/core/r2-references';
 import { headingSlug, resolveWorkspaceHref } from './workspace-links.js';
 import { escapeHtml, stripMdxImports, transformDirectives, transformMdxComponents } from './directives.js';
@@ -67,7 +68,7 @@ export function renderNote(content: string, notePath: string, tableLabel = 'Hori
     if (p.children.length === 1 && p.children[0].tagName.toLowerCase() === 'a') {
       const anchor = p.children[0] as HTMLAnchorElement;
       const href = anchor.getAttribute('href') || '';
-      const video = parseYouTubeUrl(href);
+      const video = isOutlinePath(notePath) ? null : parseYouTubeUrl(href);
       if (video && (p.textContent || '').trim() === (anchor.textContent || '').trim()) {
         const embed = parsed.createElement('div');
         embed.className = 'note-youtube-embed';

@@ -1,7 +1,7 @@
 # Outline notes — verification ledger
 
 Planning baseline: `/home/weihung/github-notes`, clean HEAD `ac26edfe69120fac9eff904b5cb7f53e76966588`.
-Status: implementation in progress; native-kind foundation verified in upstream, remaining editor/UI/import/relocation work and independent browser QA are not complete.
+Status: implementation in progress; native-kind foundation and bounded editor stage verified in upstream; tasks 3–6 and independent parent browser QA are not complete.
 No push, deployment or downstream synchronization was performed by this worker.
 The approved model is **Outline note / 大綱筆記**, with general items and optional links, not the earlier specialized bookmark document.
 Contract: [spec.md](spec.md); implementation sequence: [design.md](design.md).
@@ -28,11 +28,11 @@ A planned test or a source reading is not an executed behavior check.
 | Requirement | Evidence | Result |
 | --- | --- | --- |
 | R1 Native Outline type, multiple documents, portable `.outline.md`, no hidden registry | Stage 1 parser/classifier/local HTTP/GitHub/GitLab tests pass; native creation UI not yet connected. | unknown |
-| R2 General text/link items, children and annotations, non-destructive deletion | Standard Markdown representation specified; no new source round-trip or rendered-browser evidence. | unknown |
-| R3 Enter sibling, Shift+Enter annotation, Tab hierarchy in live/raw, undo/IME/accessibility | Inspected current keymaps: raw lacks list commands and live lacks Tab binding; approved commands unimplemented. | unknown |
-| R3a Same-document live-editor subtree dragging, drop/nesting feedback, cancel/read-only, undo/redo | User-approved addition; pure movement and real-browser drag evidence not yet exercised. | unknown |
+| R2 General text/link items, children and annotations, non-destructive deletion | Stage 2 source tests and actual browser subtree edits retain annotations/children; final mixed-link/delete lifecycle matrix remains. | unknown |
+| R3 Enter sibling, Shift+Enter annotation, Tab hierarchy in live/raw, undo/IME/accessibility | Stage 2 shared-source and mounted CM/textarea tests plus real raw-browser undo/redo pass for covered scenarios; final integrated matrix and independent parent journey remain. | unknown |
+| R3a Same-document live-editor subtree dragging, drop/nesting feedback, cancel/read-only, undo/redo | Stage 2 real mouse reorder/nesting, full annotation+child preservation, cancel, own-descendant refusal and one-step undo/redo observed; independent parent and real-browser read-only checks remain. | unknown |
 | R4 Existing UI consistency, native save state, no old forms/Saved badge | Existing components named as precedents; replacement UI and independent visual comparison not executed. | unknown |
-| R5 Internal/external optional links, opener isolation, no preview fetching, repository scope | Native resolver/dispatcher inspected; outline-specific interaction/no-embed checks not executed. | unknown |
+| R5 Internal/external optional links, opener isolation, no preview fetching, repository scope | Mounted explicit-link/editable-text isolation tests and real no-YouTube-preview check pass; repository-scoped completion and full integrated link matrix remain. | unknown |
 | R6 Add current content with filled label/target into selected/new outline | Consumed-once mounted-editor insertion planned; cancel/race/dirty-destination behavior untested. | unknown |
 | R7 All note lifecycle/local+remote/kind isolation and compilation unaffected | Stage 1 catalog, local create/save/copy/delete/restore, GitHub/GitLab create/save guards and draft facets pass; full move/UI lifecycle remains unverified. | unknown |
 | R8 Atomic rename/move references and non-destructive delete/restore | Existing Markdown planner reuse identified; hosted shell Markdown relocation gap remains for implementation. | unknown |
@@ -53,7 +53,53 @@ A planned test or a source reading is not an executed behavior check.
 - Runtime integration: the local native-note test starts `createApp` on an ephemeral loopback HTTP port and exercises POST/query/facets/read/delete/restore; its own server and temporary root are closed/removed in `afterEach`.
 - Provider evidence is deterministic GitHub/GitLab fixture execution, not live-provider access.
 - Stage 2 source-command files may be uncommitted while the verified stage 1 is checkpointed; they are not included in stage 1's full-suite claim.
-- No persistent fixture server or browser session is running yet; rendered UI/drag/textarea undo evidence and human appropriateness remain unknown.
+- At that checkpoint no persistent fixture/browser had been started; the later stage 2 evidence below supersedes its then-unverified drag/textarea checks, not the unknown human verdict.
+
+## Stage 2 execution checkpoint
+
+Implemented source seams: `lib/outline-editing.ts`, `lib/outline-raw-history.ts`, native `MarkdownEditor`/`LiveMarkdownEditor`, `live-markdown/outline-commands.ts` and `outline-drag.ts`.
+The transient Lezer ranges and inline handle decorations derive entirely from the current Markdown document; there is no separately editable tree.
+The raw adapter has a bounded outline-only history so programmatic source transactions participate in undo/redo alongside subsequent typed edits.
+Annotations, children and unselected siblings remain attached correctly when splitting, indenting, promoting or dragging a subtree.
+Ordinary-note keyboard bindings are unchanged.
+Live/raw EN/zh-TW hints and native toolbar indentation actions are present.
+Outline URL-only YouTube links remain links in both rendering paths; editable link text is not stolen by the workspace navigation capture handler.
+
+### Automated evidence
+
+- Final full regression after the scope review: `/tmp/outline-stage2-full-tests-final.log`, **250 files / 1831 tests passed**.
+- Final production build: `/tmp/outline-stage2-build-final.log`, exit 0; pre-existing Vite chunk/dynamic-import warnings remain informational.
+- Final lint/format: `/tmp/outline-stage2-lint-final.log`, `/tmp/outline-stage2-format-final.log`, both exit 0.
+- Final fresh web/server compilers: `/tmp/outline-stage2-webtypes-final.log`, `/tmp/outline-stage2-servertypes-final.log`, both exit 0.
+- Active LSP checked 12 changed files; its existing language-server instance still reported four stale `@mygitnotes/core/outline` resolution diagnostics and eight silent/inconclusive paths. This is not a clean-LSP claim; current package builds and fresh compiler processes independently passed.
+- Earlier expected/red iterations remain in `/tmp/outline-stage2-mounted*.log`; `/tmp/outline-stage2-mounted6.log` records the green bounded suite. The earlier `/tmp/outline-stage2-full-tests.log` had two completion/no-preview assertion failures; these were investigated and corrected before the green final run.
+- `git diff --check` passed. Final full command monitor exited with `tests=0 build=0 lint=0 format=0 web=0 server=0`.
+
+### Real browser evidence (worker, not human acceptance)
+
+- Served the existing built `scripts/qa-bookmarks-fixture.mjs` under Monitor 17: PID `629885`, port `32887`, roots `/tmp/mygitnotes-bookmarks-home-hXuAHm` and `/tmp/mygitnotes-bookmarks-other-c7sNng`.
+- Created `notes/shared/editor.outline.md` in both fixture notebooks using native POST `/api/notes`, explicit `createOnly: true`, `noCommit: true`; no user-workspace data or credentials were used.
+- Owned headless browser session: `outline-stage2`; route `/notebooks/a/notes/editor.outline.md`.
+- Used real `agent-browser mouse move/down/up`, not synthetic `dispatchEvent`, to move `First` with its `Annotation **one**` and `Child` after `Second`.
+- Observed visible `data-outline-drop=after`, indent 0, then one Control+Z restored the complete original source order and one Control+Y restored the move.
+- Raw mode readback after redo: `Second`, `First` + annotation + child, `Last`, retaining source formatting.
+- In the real textarea, Shift+Enter inserted `Raw annotation`; Enter added `Raw item`; Tab nested it and Shift+Tab promoted it; Control+Z/Control+Y each undid/redid the whole promotion.
+- Escape then Tab moved actual browser focus from the textarea to the native Restore button.
+- Real pointer child-drop showed `data-outline-drop=child`, indent 2; Escape canceled without a change, then a new drop moved the complete `First` subtree beneath `Last`.
+- Control+Z/Control+Y undid/redid that nesting in one step, and raw mode confirmed two-space nesting and exact `**one**` annotation source.
+- Dragging `First` into its own `Child` showed no valid drop marker and changed no source.
+- Native local autosave HTTP readback showed the edited outline in repository A and byte-identical original outline content in repository B: `/tmp/outline-stage2-readback.json`.
+- Added a bare YouTube URL through real raw-editor typing and returned to live mode: zero media-preview/image-source nodes and zero captured YouTube requests.
+- Screenshots: `/tmp/outline-stage2-drag-preview.png`, `/tmp/outline-stage2-nest-preview.png`, `/tmp/outline-stage2-nested.png`, `/tmp/outline-stage2-raw-keys.png`, `/tmp/outline-stage2-mobile-final.png`, `/tmp/outline-stage2-desktop-final.png`.
+- Final built-widget check also moved the complete `Last` subtree before `Second` with a visible `before`, indent 0 marker and restored it with one Control+Z.
+- Exact final HTTP assertions/evidence: `/tmp/outline-stage2-browser-evidence.json`; repository A source matched the expected nested/annotated Markdown and B matched the untouched original.
+- Cleanup: named browser closed (PID `634652`, CDP port `41013`), Monitor 17 stopped; both fixture roots, both PIDs and listeners `32887`/`41013` were confirmed absent. Evidence: `/tmp/outline-stage2-cleanup.log`.
+- A first gutter attempt placed handles far from the centered card; inline zero-width widgets now attach handles to the actual item marker. A narrow-layout check also exposed global icon-button minimum sizing; the scoped marker sizes were corrected, retaining native toolbar alternatives for touch.
+
+This is **not** the final parent fixture-ready production freeze.
+Tasks 3–6 remain: native creation/list UI/current-content insertion and scoped completion; full relocation/hosted shell gap; explicit import/recovery followed by old UI/write retirement; final two-repo fixture/docs/independent browser matrix.
+The rejected bookmark UI is intentionally still mounted until recovery exists; it is not accepted or considered the new outline UI.
+Human appropriateness remains unknown.
 
 ## Required automated evidence
 

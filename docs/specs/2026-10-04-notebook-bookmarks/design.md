@@ -379,3 +379,27 @@ The full browser matrix and honest results start in [verification.md](verificati
   Found: the language server retained the old `dist` declarations, while fresh web `tsc --noEmit` passed.
   Led by: required active LSP verification.
   Classification: tool cache gap; retain both results and use fresh compiler evidence rather than label stale diagnostics as product errors.
+- Tried: restoring raw-outline command selection in `requestAnimationFrame`, following the existing formatting adapter.
+  Found: consecutive commands could arrive before that frame and act on the textarea's reset selection instead of the original item.
+  Led by: existing raw formatting code.
+  Classification: gap resolved by the change; outline selection restoration now runs in the controlled editor's layout effect, with mounted rapid-key regression coverage.
+- Tried: relying only on CodeMirror `composing` and its default Escape handling.
+  Found: `composing` becomes true only after a composition text mutation, and a consumed Escape does not necessarily enable Tab escape.
+  Led by: approved IME/accessibility contract.
+  Classification: gap resolved by the change; a scoped native capture guard preserves IME default behavior and explicit `setTabFocusMode` guarantees Escape-Tab.
+- Tried: treating `acceptCompletion` returning false as permission to run outline Enter.
+  Found: CodeMirror's interaction-delay guard may return false while a completion is already active.
+  Led by: native completion reuse.
+  Classification: gap resolved by the change; active completion always owns plain Enter, including its delay window; modified Enter remains an annotation.
+- Tried: placing native drag handles in a CodeMirror gutter.
+  Found: the native centered document card can be far from the gutter, and the gutter is aria-hidden.
+  Led by: native editor seam reuse.
+  Classification: gap resolved by the change; zero-width inline CodeMirror widgets put handles beside their item markers without changing source or card layout.
+- Tried: expecting rendered HTML alone to retain `target=_blank` and treating every live-editor `img` as a preview.
+  Found: the native final sanitizer strips `target`; `WorkspaceLinks` owns safe new-tab activation, and CodeMirror uses source-less `img.cm-widgetBuffer` nodes for caret positioning.
+  Led by: no-network-preview and safe-link acceptance tests.
+  Classification: test gap resolved by checking actual link activation with opener isolation and only image `src`/media-preview nodes.
+- Tried: short repeated exact-replacement anchors in two edit batches.
+  Found: the tool partially applies unique edits and rejects a repeated anchor.
+  Led by: exact edit tool usage.
+  Classification: general tool-use slip; only unapplied replacements were retried with unique context; no rule or product workaround added.

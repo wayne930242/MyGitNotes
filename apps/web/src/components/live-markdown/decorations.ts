@@ -5,6 +5,7 @@ import { marked } from 'marked';
 import { findDirectiveBlocks } from '../../lib/directive-editing.js';
 import { headingSlug, resolveWorkspaceHref } from '../../lib/workspace-links.js';
 import { parseYouTubeUrl } from '@mygitnotes/core/compilation';
+import { isOutlinePath } from '@mygitnotes/core/outline';
 import { DONE_EMOJI, DUE_EMOJI, findToken, isTaskLine, START_EMOJI, TIMESTAMP_EMOJI } from '../../lib/task-tokens.js';
 import type { I18nContextValue } from '../../lib/i18n/index.js';
 import { LiveMarkdownDirective } from '../LiveMarkdownDirective.js';
@@ -105,7 +106,7 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
         else marks.push(Decoration.replace({ widget: new PageBreak(from, label, currentPage), block: true }).range(from, to));
         return false;
       }
-      if (name === 'Paragraph' && node.node.parent?.name !== 'ListItem') {
+      if (!isOutlinePath(notePath) && name === 'Paragraph' && node.node.parent?.name !== 'ListItem') {
         const text = state.sliceDoc(from, to).trim();
         const match = text.match(/^\[([^\]]*)\]\(([^)]+)\)$/);
         const url = match ? match[2].trim() : text.replace(/^<|>$/g, '');

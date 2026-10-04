@@ -150,7 +150,11 @@ export function WorkspaceLinks({ notebooks, folders, children, onOpenNote }: {
       setError(t('links.loadFailed'));
     }
   };
-  const clickedLink = (target: EventTarget) => target instanceof Element ? target.closest<HTMLElement>('[data-workspace-link]') : null;
+  const clickedLink = (target: EventTarget) => {
+    if (!(target instanceof Element)) return null;
+    if (target.closest('[contenteditable="true"]') && !target.closest('a, button, [contenteditable="false"]')) return null;
+    return target.closest<HTMLElement>('[data-workspace-link]');
+  };
   return (
     <Context.Provider value={{ registerBeforeNavigate }}>
       <div
@@ -171,6 +175,9 @@ export function WorkspaceLinks({ notebooks, folders, children, onOpenNote }: {
           }
         }}
         onKeyDownCapture={event => {
+          // Editable source owns Enter/Space; only the explicit link affordance should navigate.
+          const target = event.target instanceof HTMLElement ? event.target : null;
+          if (target?.isContentEditable && !target.closest('a, button, [contenteditable="false"]')) return;
           const element = clickedLink(event.target);
           if (element && ['Enter', ' '].includes(event.key)) {
             event.preventDefault();
