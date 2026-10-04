@@ -7,7 +7,7 @@ const note = (path: string): FocusTab => ({ kind: 'note', path });
 const lane = (id: string): FocusTab => ({ kind: 'note', path: `notes/${id}.compilation.yml` });
 const pane = (...tabs: FocusTab[]) => ({ tabs });
 const layout = (division: FocusLayout['division'], ...panes: ReturnType<typeof pane>[]): FocusLayout => ({ division, panes });
-const entry = (overrides: Partial<FocusEntryView> = {}): FocusEntryView => ({ activePane: 0, shown: [], recent: [], ratios: {}, autoHide: [], ...overrides });
+const entry = (overrides: Partial<FocusEntryView> = {}): FocusEntryView => ({ activePane: 0, shown: [], recent: [], ratios: {}, hideToolbar: [], ...overrides });
 const state = (overrides: Partial<FocusViewState> = {}): FocusViewState => ({ ...emptyFocusView(), ...overrides });
 
 describe('emptyFocusView', () => {
@@ -30,12 +30,16 @@ describe('readFocusView', () => {
   });
   it('drops individually invalid entries and keeps valid ones', () => {
     const valid = entry({ activePane: 1, shown: ['note:a.md', null], recent: [1, 0], ratios: { g: [50, 50] } });
-    const raw = { entries: { good: valid, notAnObject: 42, badActivePane: { ...valid, activePane: 'x' }, badShown: { ...valid, shown: [1, 2] }, badRecent: { ...valid, recent: ['x'] }, badRatios: { ...valid, ratios: { g: ['x'] } }, badAutoHide: { ...valid, autoHide: ['yes'] } } };
+    const raw = { entries: { good: valid, notAnObject: 42, badActivePane: { ...valid, activePane: 'x' }, badShown: { ...valid, shown: [1, 2] }, badRecent: { ...valid, recent: ['x'] }, badRatios: { ...valid, ratios: { g: ['x'] } }, badAutoHide: { ...valid, hideToolbar: ['yes'] } } };
     expect(readFocusView(raw).entries).toEqual({ good: valid });
   });
-  it('reads an entry stored without autoHide as having none', () => {
-    const { autoHide: _autoHide, ...older } = entry({ shown: ['note:a.md'] });
+  it('reads an entry stored without hideToolbar as having none', () => {
+    const { hideToolbar: _hideToolbar, ...older } = entry({ shown: ['note:a.md'] });
     expect(readFocusView({ entries: { f: older } }).entries.f).toEqual(entry({ shown: ['note:a.md'] }));
+  });
+  it('ignores the retired tab bar autoHide flag', () => {
+    const { hideToolbar: _hideToolbar, ...older } = entry({ shown: ['note:a.md'] });
+    expect(readFocusView({ entries: { f: { ...older, autoHide: [true] } } }).entries.f?.hideToolbar).toEqual([]);
   });
   it('drops a non-object entries field entirely', () => {
     expect(readFocusView({ entries: 'nope' }).entries).toEqual({});
@@ -62,7 +66,7 @@ describe('readFocusView', () => {
 describe('entryView', () => {
   const twoPane = layout('columns-2', pane(note('a.md'), note('b.md')), pane(lane('l1')));
   it('normalizes a fresh key against the layout', () => {
-    expect(entryView(state(), 'missing', twoPane)).toEqual({ activePane: 0, shown: ['note:a.md', 'note:notes/l1.compilation.yml'], recent: [0, 1], ratios: {}, autoHide: [false, false] });
+    expect(entryView(state(), 'missing', twoPane)).toEqual({ activePane: 0, shown: ['note:a.md', 'note:notes/l1.compilation.yml'], recent: [0, 1], ratios: {}, hideToolbar: [false, false] });
   });
   it('falls back to the first tab when the stored shown key is stale', () => {
     const stored = entry({ shown: ['note:gone.md', 'note:notes/gone.compilation.yml'] });
@@ -83,8 +87,8 @@ describe('entryView', () => {
     expect(entryView(state({ entries: { f: stored } }), 'f', twoPane).recent).toEqual([1, 0]);
   });
   it('keeps one auto-hide flag per pane', () => {
-    expect(entryView(state({ entries: { f: entry({ autoHide: [false, true, true] }) } }), 'f', twoPane).autoHide).toEqual([false, true]);
-    expect(entryView(state({ entries: { f: entry({ autoHide: [true] }) } }), 'f', twoPane).autoHide).toEqual([true, false]);
+    expect(entryView(state({ entries: { f: entry({ hideToolbar: [false, true, true] }) } }), 'f', twoPane).hideToolbar).toEqual([false, true]);
+    expect(entryView(state({ entries: { f: entry({ hideToolbar: [true] }) } }), 'f', twoPane).hideToolbar).toEqual([true, false]);
   });
   it('passes ratios through unchanged', () => {
     const stored = entry({ ratios: { g: [30, 70] } });

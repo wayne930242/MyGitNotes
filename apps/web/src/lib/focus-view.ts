@@ -12,7 +12,8 @@ export interface FocusEntryView {
   /** Split sizes (percentages) keyed by a group id chosen by the layout component. */
   ratios: Record<string, number[]>;
   /** Per pane: its tab bar stays hidden until pointed at. */
-  autoHide: boolean[];
+  /** Per pane: hide the note editor and compilation toolbars to leave room for content. */
+  hideToolbar: boolean[];
 }
 
 export interface FocusViewState {
@@ -46,14 +47,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readEntry(raw: unknown): FocusEntryView | null {
   if (!isRecord(raw)) return null;
-  const { activePane, shown, recent, ratios, autoHide } = raw;
+  const { activePane, shown, recent, ratios, hideToolbar } = raw;
   if (typeof activePane !== 'number') return null;
   if (!Array.isArray(shown) || !shown.every(value => value === null || typeof value === 'string')) return null;
   if (!Array.isArray(recent) || !recent.every(value => typeof value === 'number')) return null;
   if (!isRecord(ratios) || !Object.values(ratios).every(value => Array.isArray(value) && value.every(n => typeof n === 'number'))) return null;
-  // Entries stored before auto-hide existed have no autoHide.
-  if (autoHide !== undefined && !(Array.isArray(autoHide) && autoHide.every(value => typeof value === 'boolean'))) return null;
-  return { activePane, shown: [...shown] as (string | null)[], recent: [...recent] as number[], ratios: ratios as Record<string, number[]>, autoHide: autoHide ? [...autoHide] as boolean[] : [] };
+  // Entries stored before the toolbar toggle have no hideToolbar; the retired tab bar `autoHide` flag is ignored.
+  if (hideToolbar !== undefined && !(Array.isArray(hideToolbar) && hideToolbar.every(value => typeof value === 'boolean'))) return null;
+  return { activePane, shown: [...shown] as (string | null)[], recent: [...recent] as number[], ratios: ratios as Record<string, number[]>, hideToolbar: hideToolbar ? [...hideToolbar] as boolean[] : [] };
 }
 
 export function emptyFocusView(): FocusViewState {
@@ -83,7 +84,7 @@ export function readFocusView(raw: unknown): FocusViewState {
   return { current, entries, last, dock: { left, top, collapsed } };
 }
 
-/** Normalizes a stored entry (if any) against `layout`: one shown slot and auto-hide flag per pane, a valid activePane, and recent covering every pane. */
+/** Normalizes a stored entry (if any) against `layout`: one shown slot and toolbar flag per pane, a valid activePane, and recent covering every pane. */
 export function entryView(state: FocusViewState, key: string, layout: FocusLayout): FocusEntryView {
   const stored = state.entries[key];
   const paneCount = layout.panes.length;
@@ -107,8 +108,8 @@ export function entryView(state: FocusViewState, key: string, layout: FocusLayou
       recent.push(pane);
     }
   }
-  const autoHide = layout.panes.map((_, index) => stored?.autoHide[index] === true);
-  return { activePane, shown, recent, ratios: stored?.ratios || {}, autoHide };
+  const hideToolbar = layout.panes.map((_, index) => stored?.hideToolbar[index] === true);
+  return { activePane, shown, recent, ratios: stored?.ratios || {}, hideToolbar };
 }
 
 export function activatePane(entry: FocusEntryView, pane: number): FocusEntryView {

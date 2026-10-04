@@ -70,6 +70,8 @@ interface CompilationRowBase {
   /** The file's repository-relative path. */
   path: string;
   view: CompilationView;
+  /** The stored lane card size, kept while `view` is stack or graph so switching back restores it. */
+  size?: CompilationFile['size'];
   tags?: string[];
   status?: string;
   graph?: GraphLayout;
@@ -130,7 +132,7 @@ export function serializeCompilation(file: CompilationFile): string {
 /** The lane model of a stored compilation: arrangement and size fold into `view`, and items carry their notebook. */
 export function compilationRow(file: CompilationFile, owner: { notebookId: string; path: string; }): CompilationRow {
   const view: CompilationView = file.arrangement === 'lane' ? file.size ?? 'small' : file.arrangement;
-  const base = { id: file.id, name: file.title, notebookId: owner.notebookId, path: owner.path, view, ...(file.tags?.length ? { tags: file.tags } : {}), ...(file.status ? { status: file.status } : {}), ...(file.graph ? { graph: file.graph } : {}), ...(file.progression ? { progression: file.progression } : {}), ...(file.study ? { study: file.study } : {}) };
+  const base = { id: file.id, name: file.title, notebookId: owner.notebookId, path: owner.path, view, ...(file.size ? { size: file.size } : {}), ...(file.tags?.length ? { tags: file.tags } : {}), ...(file.status ? { status: file.status } : {}), ...(file.graph ? { graph: file.graph } : {}), ...(file.progression ? { progression: file.progression } : {}), ...(file.study ? { study: file.study } : {}) };
   if (file.items) {
     return { ...base, kind: 'custom', items: file.items.map(item => item.kind === 'youtube' ? item : { ...item, notebookId: owner.notebookId }) };
   }
@@ -141,7 +143,8 @@ export function compilationRow(file: CompilationFile, owner: { notebookId: strin
 /** The stored form of a lane model; the inverse of `compilationRow`. */
 export function compilationFile(row: CompilationRow): CompilationFile {
   const lane = row.view !== 'graph' && row.view !== 'stack';
-  const common = { version: 1 as const, id: row.id, title: row.name, arrangement: lane ? 'lane' as const : row.view as 'graph' | 'stack', ...(lane ? { size: row.view as CompilationFile['size'] } : {}), ...(row.tags?.length ? { tags: row.tags } : {}), ...(row.status ? { status: row.status } : {}), ...(row.study ? { study: row.study } : {}), ...(row.progression ? { progression: row.progression } : {}), ...(row.graph ? { graph: row.graph } : {}) };
+  const size = lane ? row.view as CompilationFile['size'] : row.size;
+  const common = { version: 1 as const, id: row.id, title: row.name, arrangement: lane ? 'lane' as const : row.view as 'graph' | 'stack', ...(size ? { size } : {}), ...(row.tags?.length ? { tags: row.tags } : {}), ...(row.status ? { status: row.status } : {}), ...(row.study ? { study: row.study } : {}), ...(row.progression ? { progression: row.progression } : {}), ...(row.graph ? { graph: row.graph } : {}) };
   if (row.kind === 'custom') return { ...common, items: row.items.map(item => item.kind === 'youtube' ? item : { id: item.id, kind: item.kind, path: item.path }) };
   const source = row.source.kind === 'tag' ? { kind: 'tag' as const, tag: row.source.tag } : { kind: 'folder' as const, path: row.source.path, recursive: row.source.recursive };
   return { ...common, source, ...(row.sort ? { sort: row.sort } : {}) };

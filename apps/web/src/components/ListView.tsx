@@ -1,6 +1,7 @@
 import { NoteMoveButton } from './NoteMoveButton.js';
 import React, { useLayoutEffect, useMemo, useRef } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Clock, FileText, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Clock, FileText, GalleryHorizontalEnd, Trash2 } from 'lucide-react';
+import { isCompilationPath } from '@mygitnotes/core/compilation';
 import { NoteTagActions, NoteTags } from './NoteTags.js';
 import { NoteStatusSelect } from './NoteStatusSelect.js';
 import { Select } from './Select.js';
@@ -82,7 +83,7 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
       <td className='py-3 px-4'>
         <div className='flex items-center gap-2.5'>
           {selectionActive && <NoteSelectBox title={note.title} checked={selected} onToggle={() => actions.toggleSelect(note)} />}
-          <FileText className='w-4 h-4 text-primary shrink-0' />
+          {isCompilationPath(note.path) ? <GalleryHorizontalEnd className='w-4 h-4 text-primary shrink-0' aria-hidden='true' /> : <FileText className='w-4 h-4 text-primary shrink-0' />}
           <div>
             <div className='font-medium text-fg transition flex items-center gap-1.5'>
               <span>

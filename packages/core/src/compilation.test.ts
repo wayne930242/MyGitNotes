@@ -47,6 +47,13 @@ describe('compilation file', () => {
     const graph = parseCompilation('version: 1\nid: g\ntitle: G\narrangement: graph\nitems: []\ngraph: { nodes: [{ path: notes/one/a.md, x: 1, y: 2, expanded: true }] }\n');
     expect(compilationFile(compilationRow(graph, owner))).toEqual(graph);
   });
+  it('keeps the lane size while the compilation is stacked, so switching back restores it', () => {
+    const row = compilationRow(parseCompilation(custom, 'notes/one'), owner);
+    const stacked = compilationFile({ ...row, view: 'stack' });
+    expect(stacked).toMatchObject({ arrangement: 'stack', size: 'medium' });
+    expect(compilationRow(stacked, owner).view).toBe('stack');
+    expect(compilationFile({ ...compilationRow(stacked, owner), view: 'medium' })).toMatchObject({ arrangement: 'lane', size: 'medium' });
+  });
   it('rejects a file that does not hold exactly one of items and source, or sorts pinned items', () => {
     for (const body of ['', 'items: []\nsource: { kind: tag, tag: t }', 'items: []\nsort: { field: title, order: asc }']) {
       expect(() => parseCompilation(`version: 1\nid: x\ntitle: X\narrangement: lane\n${body}\n`)).toThrow(/items|sort/);

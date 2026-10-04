@@ -43,7 +43,7 @@
 .sidebar-tag-action-buttons { display: flex; justify-content: flex-end; gap: 0.4rem; }
 @media (max-width: 1100px) { .sidebar-note-search { height: 44px; padding-block: 0; } .sidebar-search .sidebar-note-search input { height: 100%; font-size: 16px; } }
 
-.sidebar-notebooks { display: grid; gap: 2px; min-width: 0; width: 100%; }
+.sidebar-notebooks { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; min-width: 0; width: 100%; }
 .sidebar-notebook-group { display: flex; flex-direction: column; gap: 1px; min-width: 0; width: 100%; }
 .sidebar-notebook-heading { margin: 0; font-family: inherit; }
 .sidebar-notebook-heading > button { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 40px; padding: 8px 6px; border-radius: 7px; color: var(--color-text); text-align: left; font-size: 13px; font-weight: 600; }

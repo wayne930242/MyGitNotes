@@ -78,11 +78,6 @@
 .focus-pane-actions .ui-icon-button svg { width: 15px; height: 15px; }
 .focus-pane-actions .focus-menu-trigger { min-height: 28px; gap: 4px; padding: 4px 8px; }
 .focus-pane-actions .focus-menu-trigger svg { width: 14px; height: 14px; }
-.focus-pane-actions .focus-pane-autohide[aria-pressed='true'] { background: var(--workspace-selection); color: var(--color-text); }
-/* Auto-hide: the tab bar slides up out of the pane, leaving a strip to point at. Pointing, keyboard focus, an open menu, or a drag brings it back over the content. */
-@media (hover: hover) { .focus-pane[data-autohide] { padding-top: 6px; overflow: hidden; } .focus-pane[data-autohide] .focus-pane-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 1; transform: translateY(calc(6px - 100%)); transition: transform 150ms ease 250ms, box-shadow 150ms ease 250ms; } .focus-pane[data-autohide] .focus-pane-bar:hover, .focus-pane[data-autohide] .focus-pane-bar:has(:focus-visible, [data-state='open']), .focus-pane[data-autohide][data-dropping] .focus-pane-bar { transform: none; box-shadow: 0 4px 12px color-mix(in srgb, var(--color-scrim) 10%, transparent); transition-delay: 0s; } }
-@media (hover: none) { .focus-pane-autohide { display: none; } }
-@media (prefers-reduced-motion: reduce) { .focus-pane[data-autohide] .focus-pane-bar { transition: none; } }
 .focus-pane-body { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .focus-pane-body > .focus-lane { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
 .focus-pane-empty { display: flex; flex: 1; align-items: center; justify-content: center; padding: 24px; color: var(--color-muted); font-size: 13px; text-align: center; }
@@ -144,3 +139,6 @@
 /* The toolbar search dims what it does not match; a dimmed tab or pane stays usable. */
 .focus-tab[data-dimmed] { opacity: 0.4; }
 .focus-pane[data-dimmed] .focus-pane-body { opacity: 0.55; }
+.focus-pane-actions .focus-pane-hide-toolbar[aria-pressed='true'] { background: var(--workspace-selection); color: var(--color-text); }
+/* Toolbar toggle: the pane keeps its tab bar and hides the editor toolbars inside it. */
+.focus-pane[data-hide-toolbar] .note-toolbar, .focus-pane[data-hide-toolbar] .screen-lane-header { display: none; }

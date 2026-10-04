@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { Copy, GripVertical, Pencil, Trash2, X } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { Copy, GripVertical, LayoutGrid, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { type CompilationItem, type CompilationRow, moveCompilationItem } from '@mygitnotes/core/compilation';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
@@ -116,7 +117,6 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
       readOnly: !compilation.writable,
       study,
       facets: facets.facets,
-      onAddToFocus: addToFocus,
       onStudy: () => void startStudy(),
       onView: (next: CompilationRow['view']) => change({ ...current, view: next }),
       onStudyChange: (value: NonNullable<CompilationRow['study']>) => change({ ...current, study: value }),
@@ -124,25 +124,45 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
       extra: (
         <>
           {!disabled && current.kind === 'custom' && current.view !== 'stack' && current.view !== 'graph' && <ReorderToggle active={reorder} disabled={disabled} onToggle={() => setReorder(value => !value)} />}
-          {compilation.writable && (
-            <>
-              <Button
-                type='button'
-                size='icon'
-                disabled={disabled}
-                aria-label={`${t('screen.editRow')}: ${current.name}`}
-                title={t('screen.editRow')}
-                onClick={() => setDialog('edit')}
-              >
-                <Pencil size={16} />
-              </Button>
-              <Button type='button' size='icon' disabled={disabled} aria-label={`${t('compilation.copy')}: ${current.name}`} title={t('compilation.copy')} onClick={() => void copy()}>
-                <Copy size={16} />
-              </Button>
-              <Button type='button' size='icon' disabled={disabled} aria-label={`${t('compilation.delete')}: ${current.name}`} title={t('compilation.delete')} onClick={() => setDialog('delete')}>
-                <Trash2 size={16} />
-              </Button>
-            </>
+          {(compilation.writable || addToFocus) && (
+            // Secondary actions share one menu so the header stays on one line in a narrow Focus pane.
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger className='ui-icon-button' aria-label={`${t('compilation.more')}: ${current.name}`} title={t('compilation.more')}>
+                <MoreHorizontal size={16} aria-hidden='true' />
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  className='focus-menu'
+                  align='end'
+                  sideOffset={4}
+                  collisionPadding={8}
+                  onEscapeKeyDown={event => event.stopPropagation()}
+                >
+                  {addToFocus && (
+                    <DropdownMenu.Item onSelect={addToFocus}>
+                      <LayoutGrid size={14} aria-hidden='true' />
+                      <span>{t('focus.addTo')}</span>
+                    </DropdownMenu.Item>
+                  )}
+                  {compilation.writable && (
+                    <>
+                      <DropdownMenu.Item disabled={disabled} onSelect={() => setDialog('edit')}>
+                        <Pencil size={14} aria-hidden='true' />
+                        <span>{t('screen.editRow')}</span>
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item disabled={disabled} onSelect={() => void copy()}>
+                        <Copy size={14} aria-hidden='true' />
+                        <span>{t('compilation.copy')}</span>
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item disabled={disabled} onSelect={() => setDialog('delete')}>
+                        <Trash2 size={14} aria-hidden='true' />
+                        <span>{t('compilation.delete')}</span>
+                      </DropdownMenu.Item>
+                    </>
+                  )}
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
           )}
         </>
       ),

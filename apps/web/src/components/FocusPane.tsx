@@ -1,6 +1,6 @@
 import React, { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronDown, FileText, GalleryHorizontalEnd, ListPlus, Maximize2, PanelTopDashed, X } from 'lucide-react';
+import { ChevronDown, FileText, GalleryHorizontalEnd, ListPlus, Maximize2, PanelTopClose, X } from 'lucide-react';
 import { findFocusTabInPane, type FocusTab, focusTabKey } from '@mygitnotes/core/focus-page';
 import { COMPILATION_SUFFIX, isCompilationPath } from '@mygitnotes/core/compilation';
 import type { NoteFocus } from '../lib/use-note-focus.js';
@@ -55,7 +55,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane; 
   const repeatedLabels = new Set(tabs.filter((tab, index) => tabs.findIndex(candidate => candidate.label === tab.label) !== index).map(tab => tab.label));
   const shown = tabs.find(tab => tab.pane === displayed.pane && tab.key === displayed.key);
   const panelId = `focus-pane-${displayed.pane}`;
-  const autoHide = entry.autoHide[displayed.pane];
+  const hideToolbar = entry.hideToolbar[displayed.pane];
 
   const list = useRef<HTMLDivElement>(null);
   const [overflowing, setOverflowing] = useState(false);
@@ -121,7 +121,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane; 
       data-active={active || undefined}
       data-dimmed={paneDimmed(searchMatches, displayed.panes.flatMap(pane => layout.panes[pane].tabs)) || undefined}
       data-dropping={slot ? true : undefined}
-      data-autohide={autoHide || undefined}
+      data-hide-toolbar={hideToolbar || undefined}
       aria-label={t('focus.paneNumber', { number: displayed.pane + 1 })}
       onPointerDownCapture={() => focus.activate(displayed.pane)}
       onFocusCapture={() => focus.activate(displayed.pane)}
@@ -203,8 +203,8 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane; 
               <Maximize2 aria-hidden='true' />
             </button>
           )}
-          <button type='button' className='ui-icon-button focus-pane-autohide' aria-pressed={autoHide} aria-label={t('focus.autoHideTabs')} title={t('focus.autoHideTabs')} onClick={() => focus.setAutoHide(displayed.pane, !autoHide)}>
-            <PanelTopDashed aria-hidden='true' />
+          <button type='button' className='ui-icon-button focus-pane-hide-toolbar' aria-pressed={hideToolbar} aria-label={t('focus.hideToolbar')} title={t('focus.hideToolbar')} onClick={() => focus.setHideToolbar(displayed.pane, !hideToolbar)}>
+            <PanelTopClose aria-hidden='true' />
           </button>
         </div>
       </div>

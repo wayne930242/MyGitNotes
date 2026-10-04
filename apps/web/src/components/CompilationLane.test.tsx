@@ -60,14 +60,3 @@ it('read-only: clicking a card calls onOpen', async () => {
   expect(onOpen).toHaveBeenCalledTimes(1);
   expect(onOpen.mock.calls[0][0]).toMatchObject({ path: 'notes/nb1/a.md', notebookId: 'nb1' });
 });
-
-it('shows the add-to-focus button only when provided and not read-only', async () => {
-  const onAddToFocus = vi.fn();
-  const { rerender } = render(lane(), { wrapper });
-  await waitFor(() => expect(screen.getByText('Note A')).toBeInTheDocument());
-  expect(screen.queryByLabelText('Add to Focus: Pinned')).not.toBeInTheDocument();
-  rerender(lane({ onAddToFocus }));
-  const button = screen.getByLabelText('Add to Focus: Pinned');
-  fireEvent.click(button);
-  expect(onAddToFocus).toHaveBeenCalledTimes(1);
-});

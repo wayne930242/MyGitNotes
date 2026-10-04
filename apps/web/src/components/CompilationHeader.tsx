@@ -19,7 +19,6 @@ export interface CompilationHeaderProps {
   readOnly?: boolean;
   notebooks: NotebookConfig[];
   facets?: Record<string, NotebookFacets>;
-  onAddToFocus?: () => void;
   onStudy?: () => void;
   onView?: (view: CompilationRow['view']) => void;
   onAdd?: () => void;
@@ -34,7 +33,7 @@ export interface CompilationHeaderProps {
 }
 
 /** The compilation's name, source and the controls shared by its arrangements. */
-export function CompilationHeader({ row, count, disabled, readOnly, notebooks, facets, onAddToFocus, onStudy, onView, onAdd, onSort, onStudyChange, onCreateInSource, onScroll, extra }: CompilationHeaderProps) {
+export function CompilationHeader({ row, count, disabled, readOnly, notebooks, facets, onStudy, onView, onAdd, onSort, onStudyChange, onCreateInSource, onScroll, extra }: CompilationHeaderProps) {
   const { t } = useTranslation();
   const [queryOpen, setQueryOpen] = useState(false);
   const query = row.study || { filter: 'all' as const, dueFirst: false };
@@ -119,11 +118,6 @@ export function CompilationHeader({ row, count, disabled, readOnly, notebooks, f
         {!readOnly && (
           <Button type='button' size='icon' className='screen-start-study' aria-label={`${t('study.start')}: ${row.name}`} title={t('study.start')} onClick={onStudy}>
             <Brain size={18} />
-          </Button>
-        )}
-        {!readOnly && onAddToFocus && (
-          <Button type='button' size='icon' className='screen-add-to-focus' aria-label={`${t('focus.addTo')}: ${row.name}`} title={t('focus.addTo')} onClick={onAddToFocus}>
-            <LayoutGrid size={18} />
           </Button>
         )}
         {!readOnly && (row.kind === 'custom'

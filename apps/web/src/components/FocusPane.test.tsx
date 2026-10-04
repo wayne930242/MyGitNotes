@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 const layout: FocusLayout = { division: 'columns-2', panes: [{ tabs: [{ kind: 'note', path: 'notes/a.md' }, { kind: 'note', path: 'notes/b.compilation.yml' }] }, { tabs: [{ kind: 'note', path: 'notes/c.md' }] }] };
-const focus = { notebookId: 'life', layout, entry: { activePane: 0, shown: ['note:notes/a.md', 'note:notes/c.md'], recent: [0, 1], ratios: {}, autoHide: [false, false] }, notes: new Map([['notes/a.md', { title: 'Alpha' }], ['notes/b.compilation.yml', { title: 'Beta list' }], ['notes/c.md', { title: 'Gamma' }]]), editable: false, shown: null } as unknown as NoteFocus;
+const focus = { notebookId: 'life', layout, entry: { activePane: 0, shown: ['note:notes/a.md', 'note:notes/c.md'], recent: [0, 1], ratios: {}, hideToolbar: [false, false] }, notes: new Map([['notes/a.md', { title: 'Alpha' }], ['notes/b.compilation.yml', { title: 'Beta list' }], ['notes/c.md', { title: 'Gamma' }]]), editable: false, shown: null } as unknown as NoteFocus;
 
 function pane(index: number, searchMatches: ReadonlySet<string> | null) {
   const displayed = { panes: [index], pane: index, key: index === 0 ? 'note:notes/a.md' : 'note:notes/c.md' };

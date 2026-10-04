@@ -211,8 +211,8 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, restoreLast = 
   const setRatios = (group: string, sizes: number[]) => {
     if (shown) setEntry(shown, current => ({ ...current, ratios: { ...current.ratios, [group]: sizes } }));
   };
-  const setAutoHide = (pane: number, on: boolean) => {
-    if (shown) setEntry(shown, current => ({ ...current, autoHide: current.autoHide.map((value, index) => index === pane ? on : value) }));
+  const setHideToolbar = (pane: number, on: boolean) => {
+    if (shown) setEntry(shown, current => ({ ...current, hideToolbar: current.hideToolbar.map((value, index) => index === pane ? on : value) }));
   };
   const setDock = (dock: Partial<FocusViewState['dock']>) => update(current => ({ ...current, dock: { ...current.dock, ...dock } }));
   const forget = () => update(current => ({ ...current, last: null }));
@@ -240,6 +240,6 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, restoreLast = 
     return true;
   };
 
-  return { notebookId, focuses, error: page.error, loading: page.loading, view, shown, layout, entry, notes, mutationError, dismissMutationError: () => setMutationError(null), editable: shown ? editable(shown) : false, canName, layoutOf, entryOf, editableFocus: editable, openNote, place, moveTab, show, activate, close, addBatch, setDivision, setRatios, setAutoHide, setDock, forget, name, rename, remove };
+  return { notebookId, focuses, error: page.error, loading: page.loading, view, shown, layout, entry, notes, mutationError, dismissMutationError: () => setMutationError(null), editable: shown ? editable(shown) : false, canName, layoutOf, entryOf, editableFocus: editable, openNote, place, moveTab, show, activate, close, addBatch, setDivision, setRatios, setHideToolbar, setDock, forget, name, rename, remove };
 }
 export type NoteFocus = ReturnType<typeof useNoteFocus>;
