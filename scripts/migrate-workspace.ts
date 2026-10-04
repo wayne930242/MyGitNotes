@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { loadRepositoryMappings, mapsRepository, migrateWorkspace, type MigrationWorktree, type WorkspaceConfig } from '../packages/core/src/index.js';
+import { loadRepositoryMappings, mapsRepository, migrateWorkspace, type MigrationWorktree, PartialMigrationError, type WorkspaceConfig } from '../packages/core/src/index.js';
 import { resolveWorkspaceRoot } from './lib/workspace-root.js';
 
 const git = (root: string, args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
@@ -12,6 +12,15 @@ const isGitWorktree = (root: string) => {
   }
 };
 const MESSAGE = 'chore: migrate Screen lanes to compilations';
+const quote = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
+
+/** The files are written and the Screen file is gone, so a re-run cannot see them: the user has to commit these. */
+function reportUncommitted(repositories: { root: string; touched: string[]; reason?: string; }[]) {
+  for (const { root, touched, reason } of repositories) {
+    const files = touched.map(quote).join(' ');
+    console.error(`[migrate-workspace] ${root}: the migration was written but not committed${reason ? ` (${reason})` : ''}. Commit it yourself:\n  git -C ${quote(root)} add --all -- ${files} && git -C ${quote(root)} commit -m ${quote(MESSAGE)} --only -- ${files}`);
+  }
+}
 
 /** The files of `files` with uncommitted changes, untracked ones included. A directory that is not a Git worktree has none to lose. */
 function dirtyFiles(root: string, files: string[]): string[] {
@@ -52,19 +61,17 @@ try {
       git(repository.root, ['commit', '-m', MESSAGE, '--only', '--', ...repository.touched]);
       console.log(`[migrate-workspace] ${repository.root}: ${detail}. Committed.`);
     } catch (error) {
-      uncommitted.push({ root: repository.root, touched: repository.touched, reason: String((error as { stderr?: unknown; }).stderr ?? (error as Error).message).trim().split('\n')[0] });
+      uncommitted.push({ root: repository.root, touched: repository.touched, reason: String((error as { stderr?: unknown; }).stderr || (error as Error).message).trim().split('\n')[0] });
     }
   }
   if (uncommitted.length) {
-    // The files are already written and the Screen file is gone, so a re-run cannot see them: the user has to commit these.
-    for (const { root: failed, touched, reason } of uncommitted) {
-      console.error(`[migrate-workspace] ${failed}: the migration was written but not committed (${reason}). Commit it yourself:\n  git -C '${failed}' add --all -- ${touched.map(file => `'${file}'`).join(' ')} && git -C '${failed}' commit -m '${MESSAGE}' --only -- ${touched.map(file => `'${file}'`).join(' ')}`);
-    }
+    reportUncommitted(uncommitted);
     process.exit(1);
   }
   console.log(migrated ? `[migrate-workspace] Migrated ${root}.` : `[migrate-workspace] ${root} is already current.`);
   if (notesMissingTimestamps > 0) console.log(`[migrate-workspace] ${notesMissingTimestamps} note(s) are missing created/updated. Run \`pnpm backfill-note-timestamps\` and review the diff.`);
 } catch (error) {
   console.error(`[migrate-workspace] ${error instanceof Error ? error.message : String(error)}`);
+  if (error instanceof PartialMigrationError) reportUncommitted(error.applied.filter(repository => isGitWorktree(repository.root)));
   process.exit(1);
 }

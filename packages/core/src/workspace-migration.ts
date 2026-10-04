@@ -15,6 +15,14 @@ export class WorkspaceCompatibilityError extends Error {
   }
 }
 
+/** A repository could not be written after others had been: those hold uncommitted migration files a re-run no longer sees. */
+export class PartialMigrationError extends WorkspaceCompatibilityError {
+  constructor(message: string, public readonly applied: MigratedRepository[]) {
+    super(message);
+    this.name = 'PartialMigrationError';
+  }
+}
+
 function readSchemaVersion(root: string): { file: string; version: unknown; } {
   const relative = resolveWorkspaceConfigPath(root);
   if (!relative) throw new WorkspaceCompatibilityError(`No MyGitNotes workspace found at ${root}. Run \`pnpm bootstrap-workspace\` or set MYGITNOTES_LOCAL_PATH.`);
@@ -103,10 +111,15 @@ export function migrateWorkspace(root: string, options: MigrationOptions = {}): 
     if (dirty.length) throw new WorkspaceCompatibilityError(`${worktree.root} has uncommitted changes in files the migration touches: ${dirty.join(', ')}. Commit them (a file Git has never seen counts too) or discard them, then run \`pnpm migrate-workspace\` again.`);
     plans.push({ worktree, plan });
   }
-  const repositories: MigratedRepository[] = plans.map(({ worktree, plan }) => {
-    applyScreenMigration(worktree.root, plan);
-    return { root: worktree.root, touched: [...plan.touched], compilations: plan.lanes.length, droppedFocusTabs: plan.focus?.droppedTabs ?? 0 };
-  });
+  const repositories: MigratedRepository[] = [];
+  for (const { worktree, plan } of plans) {
+    try {
+      applyScreenMigration(worktree.root, plan);
+    } catch (error) {
+      throw new PartialMigrationError(`Writing the migration in ${worktree.root} failed: ${error instanceof Error ? error.message : String(error)}. The manifest was not bumped${repositories.length ? `; ${repositories.length} repository(ies) before it were already written but not committed` : ''}.`, repositories);
+    }
+    repositories.push({ root: worktree.root, touched: [...plan.touched], compilations: plan.lanes.length, droppedFocusTabs: plan.focus?.droppedTabs ?? 0 });
+  }
   let migrated = repositories.length > 0;
   if (bumped !== undefined) {
     fs.writeFileSync(file, bumped);

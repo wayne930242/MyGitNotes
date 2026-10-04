@@ -198,6 +198,17 @@ export function applyCompilationMetadata(raw: string, metadata: { tags?: unknown
   return changed ? document.toString({ lineWidth: 0 }) : raw;
 }
 
+/** Replaces only the `tags` key of a compilation file, keeping every other field, its comments and order; a file that is not a YAML mapping is returned as it is. */
+export function replaceCompilationTags(raw: string, tags: readonly string[]): string {
+  const document = YAML.parseDocument(raw);
+  if (document.errors.length || !YAML.isMap(document.contents)) return raw;
+  const stored = (document.toJS({ maxAliasCount: 20 }) as { tags?: unknown; }).tags ?? [];
+  if (JSON.stringify(stored) === JSON.stringify(tags)) return raw;
+  if (tags.length) document.set('tags', [...tags]);
+  else document.delete('tags');
+  return document.toString({ lineWidth: 0 });
+}
+
 /** Rewrites the paths a compilation pins when files or folders move; returns the new text, or null when nothing it names moved. */
 export function relocateCompilation(raw: string, move: (path: string) => string): string | null {
   const document = YAML.parseDocument(raw);

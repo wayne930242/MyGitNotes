@@ -206,6 +206,15 @@ describe('replaceFileTags', () => {
   it('removes the key when the tags become empty', () => {
     expect(YAML.parse(replaceFileTags(custom, 'notes/one/reading.compilation.yml', [])).tags).toBeUndefined();
   });
+  it('touches nothing but the tags, a status or field that does not validate included', () => {
+    const odd = 'version: 1\nid: odd\ntitle: Odd\nstatus: 3\nunknown: {a: 1}\nsource:\n  kind: tag\n  tag: x\ntags: [old]\n';
+    const next = replaceFileTags(odd, 'notes/one/odd.compilation.yml', ['new']);
+    expect(YAML.parse(next)).toMatchObject({ status: 3, unknown: { a: 1 }, tags: ['new'] });
+  });
+  it('returns the text itself when the tags already match or it is not a mapping', () => {
+    expect(replaceFileTags(custom, 'notes/one/reading.compilation.yml', ['reading'])).toBe(custom);
+    expect(replaceFileTags('- just\n- a list\n', 'notes/one/x.compilation.yml', ['a'])).toBe('- just\n- a list\n');
+  });
   it('patches the frontmatter of a note', () => {
     expect(replaceFileTags('---\ntags: [a]\n---\nBody\n', 'notes/one/a.md', ['b'])).toBe('---\ntags: [b]\n---\nBody\n');
   });

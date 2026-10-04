@@ -1,4 +1,4 @@
-import { applyCompilationMetadata, compilationFields, isCompilationPath } from './compilation.js';
+import { applyCompilationMetadata, compilationFields, isCompilationPath, replaceCompilationTags } from './compilation.js';
 import { parseNoteContent, replaceNoteTags, serializeNoteContent } from './frontmatter.js';
 import type { NoteMetadata } from './types.js';
 
@@ -40,6 +40,5 @@ export function serializeNoteFile(filePath: string, metadata: NoteMetadata, cont
 /** Replaces only the tags of a stored file: a compilation's `tags` key, or a note's frontmatter `tags`; every other field stays as it is. */
 export function replaceFileTags(raw: string, filePath: string, tags: string[]): string {
   if (!isCompilationPath(filePath)) return replaceNoteTags(raw, tags);
-  const stored = compilationFields(raw, filePath);
-  return applyCompilationMetadata(raw, { tags, status: stored.status });
+  return replaceCompilationTags(raw, tags);
 }

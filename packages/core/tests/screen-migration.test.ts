@@ -7,7 +7,7 @@ import { parseCompilation } from '../src/compilation.js';
 import { FocusPageSchema } from '../src/focus-page.js';
 import { legacyScreenToCompilations, migrateFocusLaneTabs } from '../src/screen-migration.js';
 import { readScreenPage } from '../src/screen-page.js';
-import { migrateWorkspace, WorkspaceCompatibilityError } from '../src/workspace-migration.js';
+import { migrateWorkspace, PartialMigrationError, WorkspaceCompatibilityError } from '../src/workspace-migration.js';
 
 const roots: string[] = [];
 const temp = () => {
@@ -160,5 +160,48 @@ describe('migrateWorkspace edge paths', () => {
     const result = migrateWorkspace(root);
     expect(result.repositories[0].touched).toContain('notes/a/tagged-2.compilation.yml');
     expect(read(root, 'notes/a/tagged.compilation.yml')).toContain('someone-else');
+  });
+  it("refuses to overwrite a file with the lane's id but other content", () => {
+    const root = temp();
+    write(root, '.mygitnotes.yaml', manifest(2));
+    const mine = '# my list\nversion: 1\nid: tagged\ntitle: Tagged\narrangement: lane\nsource:\n  kind: tag\n  tag: other\n';
+    write(root, 'notes/a/tagged.compilation.yml', mine);
+    write(root, '.github-notes-screen.yaml', YAML.stringify(taggedLane));
+    expect(() => migrateWorkspace(root)).toThrow(/notes\/a\/tagged\.compilation\.yml already holds a compilation with the id "tagged" but other content/);
+    expect(read(root, 'notes/a/tagged.compilation.yml')).toBe(mine);
+    expect(fs.existsSync(path.join(root, '.github-notes-screen.yaml'))).toBe(true);
+    expect(read(root, '.mygitnotes.yaml')).toMatch(/^schema_version: 2$/m);
+  });
+  it.each([['not a mapping', 'focuses: {}\n'], ['a syntax error', 'focuses: [\n']])('does not stop on a raw error for a Focus file that is %s', (_label, text) => {
+    const root = temp();
+    write(root, '.mygitnotes.yaml', manifest(2));
+    write(root, '.github-notes-focus.yaml', `version: 1\n${text}`);
+    if (_label === 'not a mapping') {
+      // Nothing to migrate in it: the manifest still moves on and Focus is left as it was.
+      expect(migrateWorkspace(root).migrated).toBe(true);
+      expect(read(root, '.github-notes-focus.yaml')).toBe(`version: 1\n${text}`);
+    } else {
+      expect(() => migrateWorkspace(root)).toThrow(/\.github-notes-focus\.yaml in .* cannot be read/);
+      expect(read(root, '.mygitnotes.yaml')).toMatch(/^schema_version: 2$/m);
+    }
+  });
+  it('reports the repositories already written when a later one cannot be', () => {
+    const root = temp(), other = temp();
+    write(root, '.mygitnotes.yaml', manifest(2).replace('  - id: b\n    title: B\n    root: notes/b\n', '  - id: b\n    title: B\n    root: notes/b\n    source: { type: github, repository: owner/trpg }\n'));
+    write(root, '.github-notes-screen.yaml', YAML.stringify({ version: 2, rows: [screenV2.rows[0]] }));
+    write(other, '.github-notes-screen.yaml', YAML.stringify({ version: 2, rows: [screenV2.rows[2]] }));
+    // `notes` is a file here, so notes/b cannot be created.
+    write(other, 'notes', 'not a directory');
+    let caught: unknown;
+    try {
+      migrateWorkspace(root, { worktrees: [{ root: other, notebooks: [{ id: 'b', title: 'B', root: 'notes/b' }] }] });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(PartialMigrationError);
+    const { applied } = caught as PartialMigrationError;
+    expect(applied.map(repository => repository.root)).toEqual([root]);
+    expect(applied[0].touched).toContain('notes/a/reading-list.compilation.yml');
+    expect(read(root, '.mygitnotes.yaml')).toMatch(/^schema_version: 2$/m);
   });
 });

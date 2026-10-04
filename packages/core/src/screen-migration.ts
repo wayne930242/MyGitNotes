@@ -59,13 +59,15 @@ interface RawTab {
 export function migrateFocusLaneTabs(raw: unknown, paths: ReadonlyMap<string, string>): { page: unknown; changedTabs: number; droppedTabs: number; } {
   let changedTabs = 0;
   let droppedTabs = 0;
-  const focuses = ((raw as { focuses?: unknown[]; } | null)?.focuses ?? []).map(focus => {
-    const record = focus as { panes?: { tabs?: RawTab[]; }[]; };
+  const list = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
+  const focuses = list((raw as { focuses?: unknown; } | null)?.focuses).map(focus => {
+    const record = focus as { panes?: unknown; };
     return {
       ...record,
-      panes: (record.panes ?? []).map(pane => ({
-        ...pane,
-        tabs: (pane.tabs ?? []).flatMap(tab => {
+      panes: list(record.panes).map(pane => ({
+        ...(pane as object),
+        tabs: list((pane as { tabs?: unknown; }).tabs).flatMap(item => {
+          const tab = item as RawTab;
           if (tab.kind !== 'lane') return [tab];
           const file = typeof tab.id === 'string' ? paths.get(tab.id) : undefined;
           if (!file) {
@@ -89,7 +91,12 @@ export function planScreenMigration(root: string, notebooks: readonly { id: stri
   const screenFile = path.join(root, SCREEN_PAGE_FILE);
   const hasScreen = fs.existsSync(screenFile);
   const focusFile = path.join(root, FOCUS_PAGE_FILE);
-  const rawFocus = fs.existsSync(focusFile) ? YAML.parse(fs.readFileSync(focusFile, 'utf8'), { maxAliasCount: 20 }) : undefined;
+  let rawFocus: unknown;
+  try {
+    rawFocus = fs.existsSync(focusFile) ? YAML.parse(fs.readFileSync(focusFile, 'utf8'), { maxAliasCount: 20 }) : undefined;
+  } catch (error) {
+    throw new ScreenMigrationError(`${FOCUS_PAGE_FILE} in ${root} cannot be read: ${(error as Error).message.split('\n')[0]}`);
+  }
   if (!hasScreen && !(rawFocus && migrateFocusLaneTabs(rawFocus, new Map()).droppedTabs)) return null;
   let lanes: ScreenMigrationLane[] = [];
   if (hasScreen) {
@@ -101,7 +108,7 @@ export function planScreenMigration(root: string, notebooks: readonly { id: stri
     } catch (error) {
       throw new ScreenMigrationError(`${SCREEN_PAGE_FILE} in ${root} is not a valid Screen file: ${(error as Error).message.split('\n')[0]}`);
     }
-    // A file with the lane's own id is what an interrupted run left; it is overwritten, not worked around with a suffix.
+    // A file with the lane's own id is what an interrupted run left, and is reused when it holds exactly what would be written.
     lanes = legacyScreenToCompilations(page, notebooks, (file, laneId) => {
       const existing = path.join(root, file);
       if (!fs.existsSync(existing)) return false;
@@ -110,7 +117,13 @@ export function planScreenMigration(root: string, notebooks: readonly { id: stri
       } catch {
         return true;
       }
-    }).map(lane => ({ ...lane, written: fs.existsSync(path.join(root, lane.path)) && fs.readFileSync(path.join(root, lane.path), 'utf8') === lane.content }));
+    }).map(lane => {
+      const existing = path.join(root, lane.path);
+      if (!fs.existsSync(existing)) return lane;
+      // The same id with other content is somebody's edit, or a copy of the lane: overwriting it would lose that, and a suffix would duplicate the id.
+      if (fs.readFileSync(existing, 'utf8') !== lane.content) throw new ScreenMigrationError(`${lane.path} already holds a compilation with the id "${lane.id}" but other content. Rename or delete it, then run the migration again.`);
+      return { ...lane, written: true };
+    });
   }
   const touched = [...lanes.map(lane => lane.path), ...(hasScreen ? [SCREEN_PAGE_FILE] : [])];
   const plan: ScreenMigrationPlan = { lanes, touched };
