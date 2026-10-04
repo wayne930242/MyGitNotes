@@ -105,3 +105,35 @@ describe('useNoteFocus mutationError', () => {
     expect(result.current.mutationError).toBeNull();
   });
 });
+
+describe('useNoteFocus openNote', () => {
+  const twoColumns: FocusLayout = { division: 'columns-2', panes: [{ tabs: [{ kind: 'lane', id: 'lane-a' }] }, { tabs: [{ kind: 'lane', id: 'lane-b' }] }] };
+  const render = () => {
+    localStorage.setItem(storageKey, JSON.stringify({ current: twoColumns, entries: {}, last: null }));
+    const { result } = renderHook(() => useNoteFocus({ page: fakeController(), notebookId: NOTEBOOK, scope: SCOPE, focusKey: CURRENT_FOCUS, writable: true, lanes: [lane('lane-a'), lane('lane-b')], flushEditors: async () => true }), { wrapper });
+    return result;
+  };
+
+  it('opens a note from inside a pane as a tab of that pane when placed here', async () => {
+    const result = render();
+    await waitFor(() => expect(result.current.layout?.panes).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.openNote('notes/a.md', 1, 'here');
+    });
+    expect(result.current.layout?.panes[1]?.tabs).toContainEqual({ kind: 'note', path: 'notes/a.md' });
+    expect(result.current.layout?.panes[0]?.tabs).toHaveLength(1);
+    expect(result.current.entry?.shown[1]).toBe('note:notes/a.md');
+  });
+
+  it('still opens beside the source pane by default', async () => {
+    const result = render();
+    await waitFor(() => expect(result.current.layout?.panes).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.openNote('notes/a.md', 1);
+    });
+    expect(result.current.layout?.panes[0]?.tabs).toContainEqual({ kind: 'note', path: 'notes/a.md' });
+    expect(result.current.layout?.panes[1]?.tabs).toHaveLength(1);
+  });
+});

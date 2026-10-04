@@ -13,6 +13,9 @@ interface NoteFocusOptions {
   scope: string;
   /** The `focus` URL parameter. */
   focusKey: string | null;
+  /** With no `focus` in the URL, show the Focus displayed last, else `defaultFocus`; the URL is left as it is. */
+  restoreLast?: boolean;
+  defaultFocus?: string | null;
   writable: boolean;
   /** The notebook's lanes, or undefined while they are unknown. */
   lanes: readonly ScreenRow[] | undefined;
@@ -22,6 +25,8 @@ interface NoteFocusOptions {
 
 /** Why a note did not open in the displayed Focus; the caller opens zoom instead. */
 export type OpenResult = 'opened' | 'full' | 'readonly' | 'blocked';
+/** Where a note opened from inside a pane goes: a tab of that pane, or the pane beside it. */
+export type OpenPlacement = 'here' | 'beside';
 
 function loadView(key: string): FocusViewState {
   try {
@@ -37,7 +42,7 @@ const notePaths = (keys: (string | null)[]) => keys.map(notePath).filter((path):
 const noteKeys = (notebookId: string, keys: (string | null)[]) => notePaths(keys).map(path => noteRefKey({ notebookId, path }));
 
 /** Named Focus (Git-synced through the Focus workspace document) and this browser's (current) Focus and view state for one notebook. */
-export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lanes, flushEditors }: NoteFocusOptions) {
+export function useNoteFocus({ page, notebookId, scope, focusKey, restoreLast = false, defaultFocus = null, writable, lanes, flushEditors }: NoteFocusOptions) {
   const key = focusViewStorageKey(scope, notebookId);
   const [stored, setStored] = useState(() => ({ key, view: loadView(key) }));
   const view = stored.key === key ? stored.view : loadView(key);
@@ -66,7 +71,9 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
   const focuses = useMemo(() => available ? notebookFocuses(page.page, notebookId) : [], [available, page.page, notebookId]);
   const known = (target: string) => target === CURRENT_FOCUS || focuses.some(focus => focus.id === target);
   const storedLayout = (target: string): FocusLayout | undefined => target === CURRENT_FOCUS ? viewRef.current.current : focuses.find(focus => focus.id === target);
-  const shown = focusKey && known(focusKey) ? focusKey : null;
+  /** The Focus asked for: the URL's, else the one displayed last. */
+  const requested = focusKey ?? (restoreLast ? view.last ?? defaultFocus : null);
+  const shown = requested && known(requested) ? requested : null;
   // The displayed Focus's notes are read (without bodies) for tab titles and to hide notes that no longer exist.
   const storedPaths = shown ? (storedLayout(shown)?.panes ?? []).flatMap(pane => pane.tabs.flatMap(tab => tab.kind === 'note' ? [tab.path] : [])) : [];
   // A Focus belongs to one notebook, so its tabs name notes by path.
@@ -113,11 +120,11 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, writable, lane
     }
   };
 
-  /** Opens a note from the browse region (into the active pane) or from inside pane `source` (into the most recently used other pane); a copy already open in another pane is untouched there. */
-  const openNote = async (path: string, source?: number): Promise<OpenResult> => {
+  /** Opens a note from the browse region (into the active pane) or from inside pane `source`: into `source` itself for `here`, else the most recently used other pane; a copy already open in another pane is untouched there. */
+  const openNote = async (path: string, source?: number, placement: OpenPlacement = 'beside'): Promise<OpenResult> => {
     if (!shown || !layout || !entry) return 'readonly';
     const tab: FocusTab = { kind: 'note', path }, tabKey = focusTabKey(tab);
-    const pane = source === undefined ? browseTarget(entry) : sideTarget(entry, source, layout.panes.length);
+    const pane = source === undefined ? browseTarget(entry) : placement === 'here' ? source : sideTarget(entry, source, layout.panes.length);
     const found = findFocusTabInPane(layout, pane, tabKey) !== -1;
     if (!found && !editable(shown)) return 'readonly';
     if (!found && focusTabCount(layout) >= FOCUS_MAX_TABS) return 'full';

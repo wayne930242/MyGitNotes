@@ -73,6 +73,13 @@ Browser QA scripts (`node scripts/qa-*.mjs`) drive the built `apps/local-server/
 Core 不得追蹤真實配置，工作區更新必須保留此檔案；測試配置只建立於隔離暫存工作區。
 每個 Focus 記錄 `notebookId`，tab 只參照該筆記本的筆記或河道；暫存 Focus（程式內 `CURRENT_FOCUS`）與作用窗格等檢視狀態只存在瀏覽器。
 
+### Focus 顯示與開啟規則
+
+URL 的 `focus` 參數指定顯示的 Focus；沒有時，`useNoteFocus` 在 render 時改用該筆記本上次顯示的 Focus（`view.last`），不把它寫回 URL，避免先畫出瀏覽區再跳成 Focus。
+不要用 effect 補寫 URL 來決定畫面；react-router 與 nuqs 的更新都包在 `startTransition`，`useLayoutEffect` 也擋不住中間畫面。
+關閉 Focus 時清除 `view.last`，之後回到筆記頁顯示瀏覽區。
+窗格內點選的 `[[link]]` 開在同一窗格的 tab；河道卡片開在最近使用的另一窗格；瀏覽區點選開在作用窗格。
+
 ### 工作區文件
 
 Screen、學習資料與 Focus 配置登錄在 `packages/core/src/workspace-documents.ts`，登錄決定可提交的範圍、大小上限、格式驗證，以及搬移筆記或資料夾時如何更新參照。

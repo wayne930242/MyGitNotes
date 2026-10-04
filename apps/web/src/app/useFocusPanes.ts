@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { parseWorkspaceRoute, WorkspaceTab } from '../lib/routes.js';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNoteEditorRegistry } from '../lib/note-editing.js';
 import { type FocusTab } from '@mygitnotes/core/focus-page';
 import { useNoteFocus } from '../lib/use-note-focus.js';
@@ -23,16 +23,18 @@ interface Params {
   editorRegistry: ReturnType<typeof useNoteEditorRegistry>;
   location: ReturnType<typeof useLocation>;
   navigate: ReturnType<typeof useNavigate>;
-  loading: WorkspaceState['loading'];
   editorRoute: ReturnType<typeof parseWorkspaceRoute>;
   config: WorkspaceState['config'];
 }
 
-export function useFocusPanes({ screen, selectedNotebookId, focusPage, remote, sourceId, repoRoot, activeTab, route, canWrite, editorRegistry, location, navigate, loading, editorRoute, config }: Params) {
+export function useFocusPanes({ screen, selectedNotebookId, focusPage, remote, sourceId, repoRoot, activeTab, route, canWrite, editorRegistry, location, navigate, editorRoute, config }: Params) {
   // Focus: the URL names the displayed one; named Focus sync through their workspace document.
   const focusCapacity = usePaneCapacity();
   const notebookLanes = useMemo(() => screen.loading || screen.error ? undefined : screen.page.rows.filter(row => row.notebookId === selectedNotebookId), [screen.loading, screen.error, screen.page, selectedNotebookId]);
-  const noteFocus = useNoteFocus({ page: focusPage, notebookId: selectedNotebookId, scope: remote ? sourceId : `local:${repoRoot}`, focusKey: activeTab === 'notes' ? route.focus : null, writable: canWrite, lanes: notebookLanes, flushEditors: editorRegistry.flushEditors });
+  const focusScope = remote ? sourceId : `local:${repoRoot}`;
+  // A Notes page whose URL names no Focus shows the one it displayed last, decided while rendering so the list never paints first.
+  const defaultFocus = config?.preferences?.defaultFocusMode && !hasStoredFocusView(focusScope, selectedNotebookId) ? CURRENT_FOCUS : null;
+  const noteFocus = useNoteFocus({ page: focusPage, notebookId: selectedNotebookId, scope: focusScope, focusKey: activeTab === 'notes' ? route.focus : null, restoreLast: activeTab === 'notes' && !editorRoute.note, defaultFocus, writable: canWrite, lanes: notebookLanes, flushEditors: editorRegistry.flushEditors });
   const focusDisplay = noteFocus.layout && noteFocus.entry ? displayedPanes(noteFocus.entry, noteFocus.layout, focusCapacity) : undefined;
   /** On phones the browse region and the Focus take turns filling the screen. */
   const [focusNarrowView, setFocusNarrowView] = useState<'focus' | 'browse'>('focus');
@@ -59,25 +61,5 @@ export function useFocusPanes({ screen, selectedNotebookId, focusPage, remote, s
     setFocusNarrowView('focus');
     navigate({ pathname: location.pathname, search: query.toString() });
   };
-  // Arriving at a notebook's Notes page shows the Focus it displayed last.
-  const focusArrival = useRef('');
-
-  useEffect(() => {
-    if (activeTab !== 'notes') {
-      focusArrival.current = '';
-      return;
-    }
-    if (loading || editorRoute.note) return;
-    const arrival = `${sourceId}:${selectedNotebookId}`;
-    if (focusArrival.current === arrival) return;
-    focusArrival.current = arrival;
-    if (route.focus) return;
-    const target = noteFocus.view.last ?? (config?.preferences?.defaultFocusMode && !hasStoredFocusView(remote ? sourceId : `local:${repoRoot}`, selectedNotebookId) ? CURRENT_FOCUS : null);
-    if (!target) return;
-    const query = new URLSearchParams(location.search);
-    query.set('focus', target);
-    navigate({ pathname: location.pathname, search: query.toString() }, { replace: true });
-  }, [activeTab, loading, editorRoute.note, sourceId, selectedNotebookId, route.focus, noteFocus.view.last, config, remote, repoRoot, location.search, location.pathname, navigate]);
-
   return { focusCapacity, notebookLanes, noteFocus, focusDisplay, focusNarrowView, setFocusNarrowView, addingToFocus, setAddingToFocus, activePaneNote, focusDocumentPanel, setDocumentContainer, showFocus };
 }
