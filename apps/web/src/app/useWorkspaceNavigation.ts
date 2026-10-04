@@ -50,7 +50,7 @@ export function useWorkspaceNavigation({ location, queryState, selectedFolders, 
     } else void setFilterQuery(next, { history: Object.keys(patch).length === 1 && 'q' in patch ? 'replace' : 'push' });
   };
   const clearFilters = () => {
-    const query = currentFilterSearch({ q: '', tag: [], folders: [], descendants: true, tagMode: 'any', status: null, showHidden: false, neighbors: false });
+    const query = currentFilterSearch({ q: '', kind: 'note', tag: [], folders: [], descendants: true, tagMode: 'any', status: null, showHidden: false, neighbors: false });
     query.delete('lanes');
     void navigateFiltered(activeTab === 'graph' ? '/graph' : notebookRoute(selectedNotebookId), query);
   };
@@ -98,7 +98,7 @@ export function useWorkspaceNavigation({ location, queryState, selectedFolders, 
       if (activeTab === 'agent' && !await agentSystemRef.current?.prepareNotebookChange(id)) return;
       if (activeTab === 'assets' && !await fileManagerRef.current?.prepareLeave()) return;
       if (activeTab === 'notes' && !await editorRegistry.flushEditors()) return;
-      const query = currentFilterSearch({ folders: [] });
+      const query = currentFilterSearch({ folders: [], kind: 'note' });
       query.delete('focus');
       query.set('notebook', id);
       await navigateFiltered(activeTab === 'notes' ? notebookRoute(id) : `/${activeTab}`, query);
@@ -107,7 +107,7 @@ export function useWorkspaceNavigation({ location, queryState, selectedFolders, 
     }
   };
   const setSelectedFolder = (folder: string | null) => {
-    const query = currentFilterSearch({ folders: legacyFolderPaths(config?.notebooks || [], selectedNotebookId, folder) });
+    const query = currentFilterSearch({ folders: legacyFolderPaths(config?.notebooks || [], selectedNotebookId, folder), kind: 'note' });
     void navigateFiltered(notebookRoute(selectedNotebookId), query);
   };
   const setViewMode = (mode: ViewMode) => {

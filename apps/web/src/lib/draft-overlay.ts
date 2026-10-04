@@ -1,5 +1,5 @@
 import { isNoteHidden } from '@mygitnotes/core/note-status';
-import { noteDirectory, noteMatchesQuery, type NoteRef, noteRefKey } from '@mygitnotes/core/note-query';
+import { entryKind, noteDirectory, noteMatchesQuery, type NoteRef, noteRefKey } from '@mygitnotes/core/note-query';
 import type { NoteAgenda, NotebookFacets, NoteListItem, NoteQuery } from '@mygitnotes/core/note-query';
 import { extractTodoTasks } from '@mygitnotes/core/note-agenda';
 import { extractNoteLinks } from '@mygitnotes/core/note-graph';
@@ -60,14 +60,14 @@ export function overlayDraftLookup(refs: NoteRef[], notes: NoteListItem[], draft
   return refs.map(ref => drafts[noteRefKey(ref)]?.note || byKey.get(noteRefKey(ref))).filter(Boolean) as NoteListItem[];
 }
 
-type FacetSource = Pick<NoteListItem, 'notebookId' | 'path' | 'status' | 'tags' | 'metadata'>;
+type FacetSource = Pick<NoteListItem, 'notebookId' | 'path' | 'status' | 'tags' | 'metadata' | 'kind'>;
 
 export function overlayDraftFacets(notebooks: Record<string, NotebookFacets>, drafts: WorkingNotes, showHidden: boolean): Record<string, NotebookFacets> {
   const entries = Object.values(drafts);
   if (!entries.length) return notebooks;
   const result: Record<string, NotebookFacets> = {};
   for (const [id, facets] of Object.entries(notebooks)) {
-    result[id] = { total: facets.total, hidden: facets.hidden, statuses: { ...facets.statuses }, tags: { ...facets.tags }, directories: { ...facets.directories } };
+    result[id] = { total: facets.total, hidden: facets.hidden, statuses: { ...facets.statuses }, tags: { ...facets.tags }, directories: { ...facets.directories }, compilations: { total: facets.compilations.total, statuses: { ...facets.compilations.statuses }, tags: { ...facets.compilations.tags } } };
   }
   const bump = (counts: Record<string, number>, name: string, sign: number) => {
     const next = (counts[name] || 0) + sign;
@@ -78,6 +78,14 @@ export function overlayDraftFacets(notebooks: Record<string, NotebookFacets>, dr
     const facets = result[note.notebookId];
     if (!facets) return;
     const hidden = isNoteHidden({ ...note.metadata, status: note.status });
+    // Compilations are counted apart from notes and have no folder facet or hidden count.
+    if (entryKind(note) === 'compilation') {
+      if (hidden && !showHidden) return;
+      facets.compilations.total = Math.max(0, facets.compilations.total + sign);
+      bump(facets.compilations.statuses, note.status || '', sign);
+      for (const tag of note.tags) bump(facets.compilations.tags, tag, sign);
+      return;
+    }
     if (hidden) facets.hidden = Math.max(0, facets.hidden + sign);
     if (hidden && !showHidden) return;
     facets.total = Math.max(0, facets.total + sign);

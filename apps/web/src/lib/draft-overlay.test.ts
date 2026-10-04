@@ -50,7 +50,7 @@ describe('draft rows over a loaded page', () => {
 });
 
 describe('draft facets', () => {
-  const facets = (): Record<string, NotebookFacets> => ({ life: { total: 2, hidden: 0, statuses: { inbox: 2 }, tags: { work: 1 }, directories: { 'notes/life': 2 } } });
+  const facets = (): Record<string, NotebookFacets> => ({ life: { total: 2, hidden: 0, statuses: { inbox: 2 }, tags: { work: 1 }, directories: { 'notes/life': 2 }, compilations: { total: 0, statuses: {}, tags: {} } } });
 
   it('moves a draft between status counts without changing the total', () => {
     const result = overlayDraftFacets(facets(), drafts({ note: note('notes/life/a.md', { status: 'done' }), base: note('notes/life/a.md', { status: 'inbox' }) }), false);

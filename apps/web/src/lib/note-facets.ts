@@ -1,6 +1,6 @@
 import type { NotebookFacets } from '@mygitnotes/core/note-query';
 
-export const emptyNotebookFacets = (): NotebookFacets => ({ total: 0, hidden: 0, statuses: {}, tags: {}, directories: {} });
+export const emptyNotebookFacets = (): NotebookFacets => ({ total: 0, hidden: 0, statuses: {}, tags: {}, directories: {}, compilations: { total: 0, statuses: {}, tags: {} } });
 
 /** Adds up notebook facets, for a view scoped to several notebooks ("all notebooks"). */
 export function mergeNotebookFacets(facets: NotebookFacets[]): NotebookFacets {
@@ -14,6 +14,9 @@ export function mergeNotebookFacets(facets: NotebookFacets[]): NotebookFacets {
     add(result.statuses, item.statuses);
     add(result.tags, item.tags);
     add(result.directories, item.directories);
+    result.compilations.total += item.compilations.total;
+    add(result.compilations.statuses, item.compilations.statuses);
+    add(result.compilations.tags, item.compilations.tags);
   }
   return result;
 }

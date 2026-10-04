@@ -53,6 +53,8 @@ export interface NoteListItem {
 export type NoteKindFilter = 'note' | 'compilation' | 'all';
 export const NOTE_KIND_FILTERS: readonly NoteKindFilter[] = ['note', 'compilation', 'all'];
 export const isCompilationEntry = (note: Pick<NoteListItem, 'kind'>) => note.kind === 'compilation';
+/** The kind of an entry; a staged draft that never passed the server is told by its file name. */
+export const entryKind = (note: Pick<NoteListItem, 'kind' | 'path'>): 'note' | 'compilation' => note.kind ?? (note.path.endsWith('.compilation.yml') ? 'compilation' : 'note');
 
 export interface NoteQuery {
   notebookId: string;
@@ -120,7 +122,7 @@ export const noteDirectory = (path: string) => path.slice(0, path.lastIndexOf('/
 /** Same rules as `filterNotes`, plus `exclude` and title-only matching. Content must be present when `q` searches content. */
 export function noteMatchesQuery(note: NoteListItem, query: NoteQuery): boolean {
   const kind = query.kind ?? DEFAULT_NOTE_QUERY.kind;
-  if (kind !== 'all' && (note.kind ?? 'note') !== kind) return false;
+  if (kind !== 'all' && entryKind(note) !== kind) return false;
   if (!query.showHidden && isNoteHidden({ ...note.metadata, status: note.status })) return false;
   if (query.notebookId !== 'all' && note.notebookId !== query.notebookId) return false;
   if (query.exclude.includes(note.path)) return false;

@@ -25,7 +25,10 @@ export function useBrowseFacets({ showHidden, config, scopeNotebookId, selectedF
   // Counts, status options, tag lists and subfolder counts all come from one facet answer.
   const facetsQuery = useNoteFacets(showHidden);
   const facetNotebookIds = useMemo(() => queryNotebookIds(config?.notebooks || [], scopeNotebookId, selectedFolders), [config, scopeNotebookId, selectedFolders]);
-  const notebookFacets = useMemo(() => mergeNotebookFacets(facetNotebookIds.flatMap(id => facetsQuery.facets?.[id] || [])), [facetsQuery.facets, facetNotebookIds]);
+  const merged = useMemo(() => mergeNotebookFacets(facetNotebookIds.flatMap(id => facetsQuery.facets?.[id] || [])), [facetsQuery.facets, facetNotebookIds]);
+  // While a notebook's compilations are listed, the counts and the status and tag filters describe them.
+  const compilationList = route.kind === 'compilation';
+  const notebookFacets = useMemo(() => compilationList ? { ...merged, total: merged.compilations.total, hidden: 0, statuses: merged.compilations.statuses, tags: merged.compilations.tags, directories: {} } : merged, [merged, compilationList]);
   const notebookStatuses = useMemo(() => noteQueryStatuses(config?.notebooks || [], facetNotebookIds.length === 1 ? facetNotebookIds[0] : 'all', Object.keys(notebookFacets.statuses)), [config, facetNotebookIds, notebookFacets]);
   // A new note is created in the current notebook, so it offers that notebook's statuses even while every notebook is listed.
   const newNoteStatuses = useMemo(() => noteQueryStatuses(config?.notebooks || [], selectedNotebookId, Object.keys(facetsQuery.facets?.[selectedNotebookId]?.statuses || {})), [config, selectedNotebookId, facetsQuery.facets]);
@@ -42,7 +45,7 @@ export function useBrowseFacets({ showHidden, config, scopeNotebookId, selectedF
   const searchQuery = route.q;
   const viewMode = route.view;
   // Flat and Kanban list the whole notebook, without folder navigation.
-  const folderless = viewMode === 'flat' || viewMode === 'kanban';
+  const folderless = viewMode === 'flat' || viewMode === 'kanban' || compilationList;
 
-  return { facetsQuery, notebookFacets, notebookStatuses, newNoteStatuses, selectedTags, workspaceTagNames, noteTagActions, searchQuery, viewMode, folderless };
+  return { facetsQuery, notebookFacets, compilationFacets: merged.compilations, notebookStatuses, newNoteStatuses, selectedTags, workspaceTagNames, noteTagActions, searchQuery, viewMode, folderless };
 }

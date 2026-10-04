@@ -42,25 +42,26 @@ interface Params {
 
 export function useBrowseNotes({ scopeNotebookId, selectedFolders, selectedTags, route, searchQuery, selectedStatus, showHidden, config, selectedNotebookId, selectedFolder, activeTab, sortField, sortOrder, viewMode, facetsQuery, notebookFacets, folders, notebookStatuses, changeAllNotebooks, changeFilters, clearFilters, folderless, t }: Params) {
   const noteFilters = useMemo<NoteFilters>(() => ({ notebookId: scopeNotebookId, folders: selectedFolders, tags: selectedTags, descendants: route.descendants, tagMode: route.tagMode, q: searchQuery, status: selectedStatus, showHidden }), [scopeNotebookId, selectedFolders, selectedTags, route.descendants, route.tagMode, searchQuery, selectedStatus, showHidden]);
+  const compilationList = route.kind === 'compilation';
   const hasCollectionFilter = selectedFolders.length > 0 || selectedTags.length > 0 || scopeNotebookId === 'all';
   // Typing in the search box must not fire one server query per keystroke.
   const debouncedSearch = useDebounced(searchQuery);
-  const filtered = Boolean(debouncedSearch.trim() || selectedStatus || hasCollectionFilter);
+  const filtered = Boolean(debouncedSearch.trim() || selectedStatus || hasCollectionFilter || compilationList);
   const notebookRoot = config?.notebooks.find(nb => nb.id === selectedNotebookId)?.root.replace(/\/$/, '') || '';
   const currentDirectory = [notebookRoot, selectedFolder].filter(Boolean).join('/');
 
   // Choose by filename before applying visibility so a hidden index keeps priority.
   const browsingNotes = activeTab === 'notes';
-  const indexCandidates = useMemo(() => (browsingNotes && !filtered && notebookRoot ? [`${currentDirectory}/index.md`, `${currentDirectory}/README.md`].map(path => ({ notebookId: selectedNotebookId, path })) : []), [browsingNotes, filtered, notebookRoot, currentDirectory, selectedNotebookId]);
+  const indexCandidates = useMemo(() => (browsingNotes && !filtered && !compilationList && notebookRoot ? [`${currentDirectory}/index.md`, `${currentDirectory}/README.md`].map(path => ({ notebookId: selectedNotebookId, path })) : []), [browsingNotes, filtered, notebookRoot, currentDirectory, selectedNotebookId]);
   const indexLookup = useNoteLookup(indexCandidates, false);
   const folderIndex = useMemo(() => {
     const selected = indexLookup.notes.find(note => note.path === indexCandidates[0]?.path) ?? indexLookup.notes.find(note => note.path === indexCandidates[1]?.path);
     return selected && (showHidden || !isNoteHidden({ ...selected.metadata, status: selected.status })) ? selected : undefined;
   }, [indexLookup.notes, indexCandidates, showHidden]);
 
-  const baseQuery = useMemo<Partial<NoteQuery>>(() => ({ notebookId: scopeNotebookId, folders: selectedFolders, descendants: route.descendants, tags: selectedTags, tagMode: route.tagMode, status: selectedStatus, showHidden, q: debouncedSearch, sort: sortField, order: sortOrder }), [scopeNotebookId, selectedFolders, route.descendants, selectedTags, route.tagMode, selectedStatus, showHidden, debouncedSearch, sortField, sortOrder]);
+  const baseQuery = useMemo<Partial<NoteQuery>>(() => ({ kind: route.kind, notebookId: scopeNotebookId, folders: selectedFolders, descendants: route.descendants, tags: selectedTags, tagMode: route.tagMode, status: selectedStatus, showHidden, q: debouncedSearch, sort: sortField, order: sortOrder }), [route.kind, scopeNotebookId, selectedFolders, route.descendants, selectedTags, route.tagMode, selectedStatus, showHidden, debouncedSearch, sortField, sortOrder]);
   // Browsing a folder lists that one directory; searching or filtering lists the whole result.
-  const listQuery = useMemo<Partial<NoteQuery>>(() => (filtered || viewMode === 'flat' || viewMode === 'kanban' ? baseQuery : { ...baseQuery, folders: currentDirectory ? [currentDirectory] : [], descendants: false }), [baseQuery, filtered, viewMode, currentDirectory]);
+  const listQuery = useMemo<Partial<NoteQuery>>(() => (filtered || compilationList || viewMode === 'flat' || viewMode === 'kanban' ? baseQuery : { ...baseQuery, folders: currentDirectory ? [currentDirectory] : [], descendants: false }), [baseQuery, filtered, compilationList, viewMode, currentDirectory]);
   // Only the notes page lists notes; the other tabs ask for what they draw themselves.
   const listResult = useNoteList(browsingNotes && viewMode !== 'kanban' ? listQuery : null, { content: viewMode === 'card', hide: folderIndex?.path });
   // Kanban pages each column on its own, so the filter result count needs its own answer.
