@@ -22,10 +22,15 @@ export function useFileManager({ notebookId, writable, initialPath, initialOpera
   const [sourceView, setSourceView] = useState(false), [busy, setBusy] = useState(false), [reading, setReading] = useState(false), [error, setError] = useState('');
   const [operation, setOperation] = useState<Operation>(), [name, setName] = useState(''), [destination, setDestination] = useState('');
   const [title, setTitle] = useState(''), [description, setDescription] = useState(''), [order, setOrder] = useState(0);
+  const [metadataRead, setMetadataRead] = useState<FileRead>();
+  const metadataReady = Boolean(metadataRead?.revision) && metadataRead?.path === (selected || directory);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [deleteMode, setDeleteMode] = useState<'preserve' | 'contents'>('preserve');
-  const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+  // Confirmation belongs to the displayed scope, never to a later refreshed catalog.
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ snapshot: FileListing; path: string; }>();
+  const deleteConfirmed = Boolean(listing && deleteConfirmation?.snapshot === listing && deleteConfirmation.path === selected);
+  const setDeleteConfirmed = (confirmed: boolean) => setDeleteConfirmation(confirmed && listing ? { snapshot: listing, path: selected } : undefined);
   const [r2, setR2] = useState<R2Listing>(), [r2Directory, setR2Directory] = useState<string>();
   const [rootExpanded, setRootExpanded] = useState(true);
   const [infoOpen, setInfoOpen] = useState(false), [infoContainer, setInfoContainer] = useState<HTMLDivElement | null>(null);
@@ -263,11 +268,13 @@ export function useFileManager({ notebookId, writable, initialPath, initialOpera
     setTreeOpen(false);
   };
   const loadMetadata = async (path: string) => {
+    setMetadataRead(undefined);
     const next = await readFile(notebookId, path);
     setTitle(next.metadata?.title || baseName(path));
     setDescription(next.metadata?.description || '');
     setOrder(next.metadata?.order || 0);
-    setListing(previous => previous ? { ...previous, revision: next.revision } : previous);
+    // This read covers one directory's metadata, not the catalog's displayed entries.
+    setMetadataRead(next);
   };
   const openOperation = async (kind: Operation) => {
     if (!await prepareLeave()) return;
@@ -300,7 +307,8 @@ export function useFileManager({ notebookId, writable, initialPath, initialOpera
     onNotebookChange?.(id);
   };
   const submit = async () => {
-    if (!operation || !listing) return;
+    if (!operation || !listing || operation === 'metadata' && !metadataReady) return;
+    const expected = operation === 'metadata' ? metadataRead?.revision : listing.revision;
     const base = { notebookId, path: selected || directory };
     let command: FileCommand;
     if (operation === 'create' || operation === 'mkdir') command = { kind: operation, notebookId, path: directory + '/' + name.trim() };
@@ -310,7 +318,7 @@ export function useFileManager({ notebookId, writable, initialPath, initialOpera
       command = deleteMode === 'contents' ? { ...base, kind: 'delete-directory' } : { ...base, kind: operation, destination };
     } else if (operation === 'metadata') command = { ...base, kind: operation, title, description, order };
     else command = { ...base, kind: 'delete' };
-    await run(() => apply(command));
+    await run(() => apply(command, expected));
   };
   const upload = createFileUpload({ prepareLeave, run, apply, t, notebookId, directory });
   const operationLabel = operation ? t(`files.${operation}`) : '';
@@ -350,5 +358,5 @@ export function useFileManager({ notebookId, writable, initialPath, initialOpera
       }
     })();
   };
-  return { detailOpen, toggleDetails, selectEntry, openSelected, deleteMode, setDeleteMode, deleteConfirmed, setDeleteConfirmed, toggleMarkdown, toggleHidden, notebookId, writable, initialPath, movePath, mode, layout, beforeChange, onChanged, onOpenIndex, onInsert, onBusyChange, onSelectionChange, metadataContainer, notebooks, onNotebookChange, onShowMetadata, t, sidebar, listing, setListing, directory, setDirectory, selected, setSelected, showHidden, setShowHidden, treeOpen, setTreeOpen, showMarkdown, setShowMarkdown, expanded, setExpanded, detail, setDetail, content, setContent, sourceView, setSourceView, busy, setBusy, reading, setReading, error, setError, operation, setOperation, name, setName, destination, setDestination, title, setTitle, description, setDescription, order, setOrder, confirmLeave, setConfirmLeave, r2, setR2, r2Directory, setR2Directory, rootExpanded, setRootExpanded, infoOpen, setInfoOpen, infoContainer, setInfoContainer, operationForm, leaveResolver, readSequence, running, mutable, dirty, selectedEntry, currentEntry, infoHost, showInfo, entries, dirs, tree, rootHasNonDocument, current, toggleExpand, refresh, refreshR2, loadDetail, run, apply, save, prepareLeave, finishLeave, navigate, navigateR2, loadMetadata, openOperation, openFolderInfo, switchNotebook, submit, upload, operationLabel, destinationDirs, relative, rawUrl, markerLabel, notebookTitle, treeNotebooks };
+  return { metadataReady, detailOpen, toggleDetails, selectEntry, openSelected, deleteMode, setDeleteMode, deleteConfirmed, setDeleteConfirmed, toggleMarkdown, toggleHidden, notebookId, writable, initialPath, movePath, mode, layout, beforeChange, onChanged, onOpenIndex, onInsert, onBusyChange, onSelectionChange, metadataContainer, notebooks, onNotebookChange, onShowMetadata, t, sidebar, listing, setListing, directory, setDirectory, selected, setSelected, showHidden, setShowHidden, treeOpen, setTreeOpen, showMarkdown, setShowMarkdown, expanded, setExpanded, detail, setDetail, content, setContent, sourceView, setSourceView, busy, setBusy, reading, setReading, error, setError, operation, setOperation, name, setName, destination, setDestination, title, setTitle, description, setDescription, order, setOrder, confirmLeave, setConfirmLeave, r2, setR2, r2Directory, setR2Directory, rootExpanded, setRootExpanded, infoOpen, setInfoOpen, infoContainer, setInfoContainer, operationForm, leaveResolver, readSequence, running, mutable, dirty, selectedEntry, currentEntry, infoHost, showInfo, entries, dirs, tree, rootHasNonDocument, current, toggleExpand, refresh, refreshR2, loadDetail, run, apply, save, prepareLeave, finishLeave, navigate, navigateR2, loadMetadata, openOperation, openFolderInfo, switchNotebook, submit, upload, operationLabel, destinationDirs, relative, rawUrl, markerLabel, notebookTitle, treeNotebooks };
 }

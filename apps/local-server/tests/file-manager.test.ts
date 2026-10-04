@@ -106,6 +106,21 @@ it('preserves folder contents or deletes the entire tree and reports deleted dir
   expect(fs.existsSync(path.join(root, 'notes/a/two'))).toBe(false);
   expect(fs.readFileSync(path.join(root, 'notes/b/other.md'), 'utf8')).toBe('# Other');
 });
+it('rejects old catalog deletion and stale metadata edits after independent directory reads', async () => {
+  const initial = await list();
+  write('notes/a/one/new.md', '# Not in the initial scope\n');
+  const metadata = await fetch(base + '/api/files/read?notebookId=a&path=notes/a/one').then(response => response.json());
+  expect(metadata.revision).not.toBe(initial.revision);
+  write('notes/a/one/_dir.yml', 'title: External metadata\n');
+  expect((await post({ kind: 'metadata', path: 'notes/a/one', title: 'Stale edit', description: '', order: 0 }, metadata.revision)).status).toBe(409);
+  expect(fs.readFileSync(path.join(root, 'notes/a/one/_dir.yml'), 'utf8')).toBe('title: External metadata\n');
+  expect((await post({ kind: 'delete-directory', path: 'notes/a/one' }, initial.revision)).status).toBe(409);
+  expect(fs.readFileSync(path.join(root, 'notes/a/one/new.md'), 'utf8')).toBe('# Not in the initial scope\n');
+  const refreshed = await list();
+  expect(refreshed.entries).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'notes/a/one/new.md' })]));
+  expect((await post({ kind: 'delete-directory', path: 'notes/a/one' }, refreshed.revision)).status).toBe(200);
+  expect(fs.existsSync(path.join(root, 'notes/a/one'))).toBe(false);
+});
 it.each(['remove-directory', 'delete-directory'])('rejects stale, root, traversal, symlink and read-only %s without deleting data', async kind => {
   const command = { kind, path: 'notes/a/one', ...(kind === 'remove-directory' ? { destination: 'notes/a/two' } : {}) };
   const stale = (await list()).revision;

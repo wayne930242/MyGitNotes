@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { baseName } from '../../lib/paths.js';
 
 export function FileOperation({ model }: { model: ReturnType<typeof useFileManager>; }) {
-  const { t, listing, selected, busy, operation, setOperation, name, setName, destination, setDestination, title, setTitle, description, setDescription, order, setOrder, operationForm, mutable, infoHost, submit, operationLabel, destinationDirs, relative, deleteMode, setDeleteMode, deleteConfirmed, setDeleteConfirmed, error } = model;
+  const { t, listing, selected, busy, operation, setOperation, name, setName, destination, setDestination, title, setTitle, description, setDescription, order, setOrder, operationForm, mutable, infoHost, submit, operationLabel, destinationDirs, relative, deleteMode, setDeleteMode, deleteConfirmed, setDeleteConfirmed, metadataReady, error } = model;
   if (!operation || !mutable || !listing) return null;
   const deletingFolder = operation === 'remove-directory';
   const destructive = deletingFolder && deleteMode === 'contents';
@@ -117,7 +117,7 @@ export function FileOperation({ model }: { model: ReturnType<typeof useFileManag
       {error && <p role='alert' className='file-error'>{error}</p>}
       <div className='file-actions'>
         <button type='button' className='ui-button' disabled={busy} onClick={close}>{t('common.cancel')}</button>
-        <Button type='submit' variant='primary' disabled={busy || destructive && !deleteConfirmed || (operation === 'move' || operation === 'rename') && destination + '/' + name.trim() === selected}>{operation === 'delete' || deletingFolder ? t('files.confirmDelete') : t('common.save')}</Button>
+        <Button type='submit' variant='primary' disabled={busy || operation === 'metadata' && !metadataReady || destructive && !deleteConfirmed || (operation === 'move' || operation === 'rename') && destination + '/' + name.trim() === selected}>{operation === 'delete' || deletingFolder ? t('files.confirmDelete') : t('common.save')}</Button>
       </div>
     </form>
   );

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { FileManager } from './FileManagerView.js';
+import { useFileManager } from './useFileManager.js';
 import { FileManagerDialog } from './FileManagerDialog.js';
 import type { FileManagerProps } from './types.js';
 import { fetchFiles, type FileEntry, type FileListing, mutateFile, readFile } from '../../lib/files-api.js';
@@ -170,6 +171,211 @@ it('blocks mutation when parent editor flush rejects and displays the error insi
   expect(await operation('Delete folder').findByRole('alert')).toHaveTextContent('Pending note drafts');
   expect(mutateFile).not.toHaveBeenCalled();
 });
+it('never submits an unseen R2 deletion scope after reading metadata; reload requires a new explicit confirmation', async () => {
+  let catalog = listing;
+  let newFileExists = true;
+  const added = entry('notes/a/one/nested/new.md');
+  vi.mocked(fetchFiles).mockImplementation(async () => catalog);
+  vi.mocked(readFile).mockImplementation(async (_id, path) => ({ path, revision: catalog.revision, metadata: { title: 'Nested', order: 0 } }));
+  vi.mocked(mutateFile).mockImplementation(async (command, revision) => {
+    if (revision !== catalog.revision) throw new Error('The workspace changed. Reload before saving.');
+    if (command.kind === 'delete-directory') newFileExists = false;
+    return { revision: 'r3', selectedPath: 'notes/a', pathMap: {}, deletedPaths: [] };
+  });
+  mount({ showDocuments: true });
+  await select('nested');
+  catalog = { ...listing, revision: 'r2', entries: [...listing.entries, added] };
+  fireEvent.click(within(screen.getByRole('region', { name: 'File details' })).getByRole('button', { name: 'Folder information' }));
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Display name' })).toBeEnabled());
+  fireEvent.click(within(screen.getByRole('form', { name: 'Folder information' })).getByRole('button', { name: 'Cancel' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+  await screen.findByRole('dialog', { name: 'Delete folder' });
+  let dialog = operation('Delete folder');
+  fireEvent.click(dialog.getByLabelText('Delete this folder and all contents'));
+  expect(dialog.getByRole('list')).not.toHaveTextContent('new.md');
+  fireEvent.click(dialog.getByRole('checkbox'));
+  fireEvent.click(dialog.getByRole('button', { name: 'Confirm deletion' }));
+  await waitFor(() => expect(mutateFile).toHaveBeenCalledWith({ kind: 'delete-directory', notebookId: 'a', path: 'notes/a/one/nested' }, 'r1'));
+  expect(await dialog.findByRole('alert')).toHaveTextContent('workspace changed');
+  expect(newFileExists).toBe(true);
+  fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+  await waitFor(() => expect(fetchFiles).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+  await screen.findByRole('dialog', { name: 'Delete folder' });
+  dialog = operation('Delete folder');
+  fireEvent.click(dialog.getByLabelText('Delete this folder and all contents'));
+  expect(dialog.getByRole('list')).toHaveTextContent('new.md');
+  expect(dialog.getByRole('checkbox')).not.toBeChecked();
+  expect(dialog.getByRole('button', { name: 'Confirm deletion' })).toBeDisabled();
+  expect(newFileExists).toBe(true);
+  fireEvent.click(dialog.getByRole('checkbox'));
+  fireEvent.click(dialog.getByRole('button', { name: 'Confirm deletion' }));
+  await waitFor(() => expect(mutateFile).toHaveBeenLastCalledWith({ kind: 'delete-directory', notebookId: 'a', path: 'notes/a/one/nested' }, 'r2'));
+  expect(newFileExists).toBe(false);
+});
+
+const managerHook = async () => {
+  const hook = renderHook(() => useFileManager({ notebookId: 'a', writable: true, initialPath: 'notes/a/one', layout: 'dialog' }, null));
+  await waitFor(() => expect(hook.result.current.listing).toBe(listing));
+  await act(async () => {
+    await hook.result.current.selectEntry('notes/a/one/nested');
+  });
+  return hook;
+};
+it('invalidates recursive confirmation when the full catalog is replaced or the selected scope changes', async () => {
+  const { result } = await managerHook();
+  await act(async () => {
+    await result.current.openOperation('remove-directory');
+  });
+  act(() => {
+    result.current.setDeleteMode('contents');
+    result.current.setDeleteConfirmed(true);
+  });
+  expect(result.current.deleteConfirmed).toBe(true);
+  const newer = { ...listing, revision: 'r2', entries: [...listing.entries, entry('notes/a/one/nested/new.md')] };
+  vi.mocked(fetchFiles).mockResolvedValue(newer);
+  await act(async () => {
+    await result.current.refresh();
+  });
+  expect(result.current.listing).toBe(newer);
+  expect(result.current.deleteConfirmed).toBe(false);
+  await act(async () => {
+    await result.current.submit();
+  });
+  expect(mutateFile).not.toHaveBeenCalled();
+  act(() => {
+    result.current.setDeleteConfirmed(true);
+  });
+  act(() => {
+    result.current.setSelected('notes/a/two');
+  });
+  expect(result.current.deleteConfirmed).toBe(false);
+});
+it('saves metadata with its own read revision while leaving the catalog snapshot untouched until the successful refresh', async () => {
+  const { result } = await managerHook();
+  vi.mocked(readFile).mockImplementation(async (_id, path) => ({ path, revision: 'r2', metadata: { title: 'Current title', order: 4 } }));
+  await act(async () => {
+    await result.current.openOperation('metadata');
+  });
+  expect(result.current.listing).toBe(listing);
+  expect(result.current.title).toBe('Current title');
+  act(() => {
+    result.current.setTitle('Edited title');
+  });
+  const refreshed = { ...listing, revision: 'r3', entries: [...listing.entries, entry('notes/a/one/nested/new.md')] };
+  vi.mocked(fetchFiles).mockResolvedValue(refreshed);
+  await act(async () => {
+    await result.current.submit();
+  });
+  expect(mutateFile).toHaveBeenCalledWith({ kind: 'metadata', notebookId: 'a', path: 'notes/a/one/nested', title: 'Edited title', description: '', order: 4 }, 'r2');
+  expect(result.current.listing).toBe(refreshed);
+});
+it('keeps a metadata edit stale even if a later catalog refresh observes a newer revision', async () => {
+  const { result } = await managerHook();
+  vi.mocked(readFile).mockImplementation(async (_id, path) => ({ path, revision: 'r2', metadata: { title: 'Read at R2', order: 0 } }));
+  await act(async () => {
+    await result.current.openOperation('metadata');
+  });
+  vi.mocked(fetchFiles).mockResolvedValue({ ...listing, revision: 'r3' });
+  await act(async () => {
+    await result.current.refresh();
+  });
+  vi.mocked(mutateFile).mockRejectedValue(new Error('Stale metadata'));
+  await act(async () => {
+    await result.current.submit();
+  });
+  expect(mutateFile).toHaveBeenCalledWith(expect.objectContaining({ kind: 'metadata', title: 'Read at R2' }), 'r2');
+  expect(result.current.error).toBe('Stale metadata');
+  expect(result.current.operation).toBe('metadata');
+});
+it('does not reuse a previous metadata revision after a failed read for another folder', async () => {
+  const { result } = await managerHook();
+  await act(async () => {
+    await result.current.openOperation('metadata');
+  });
+  await act(async () => {
+    await result.current.selectEntry('notes/a/two');
+  });
+  vi.mocked(readFile).mockRejectedValue(new Error('Metadata unavailable'));
+  await act(async () => {
+    await result.current.openOperation('metadata');
+  });
+  expect(result.current.error).toBe('Metadata unavailable');
+  await act(async () => {
+    await result.current.submit();
+  });
+  expect(mutateFile).not.toHaveBeenCalled();
+});
+it('disables metadata Save after a read failure while keeping cancellation available', async () => {
+  mount();
+  await select('nested');
+  vi.mocked(readFile).mockRejectedValue(new Error('Metadata unavailable'));
+  fireEvent.click(within(screen.getByRole('region', { name: 'File details' })).getByRole('button', { name: 'Folder information' }));
+  const form = await screen.findByRole('form', { name: 'Folder information' });
+  expect(await within(form).findByRole('alert')).toHaveTextContent('Metadata unavailable');
+  expect(within(form).getByRole('button', { name: 'Save' })).toBeDisabled();
+  fireEvent.submit(form);
+  expect(mutateFile).not.toHaveBeenCalled();
+  fireEvent.click(within(form).getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('form', { name: 'Folder information' })).not.toBeInTheDocument();
+});
+it('keeps text reads and writes on their own revision without promoting the catalog', async () => {
+  const { result } = await managerHook();
+  vi.mocked(readFile).mockImplementation(async (_id, path) => ({ path, revision: 'r2', content: 'R2 text' }));
+  await act(async () => {
+    await result.current.loadDetail('notes/a/one/config.json');
+  });
+  expect(result.current.listing).toBe(listing);
+  expect(result.current.detail?.revision).toBe('r2');
+  act(() => {
+    result.current.setContent('Edited text');
+  });
+  vi.mocked(mutateFile).mockRejectedValue(new Error('Stale text'));
+  await act(async () => {
+    await result.current.save();
+  });
+  expect(mutateFile).toHaveBeenCalledWith({ kind: 'write', notebookId: 'a', path: 'notes/a/one/config.json', content: 'Edited text' }, 'r2');
+  expect(result.current.listing).toBe(listing);
+  expect(result.current.dirty).toBe(true);
+});
+
+it('pairs saved text with its returned revision without promoting a catalog whose refresh failed', async () => {
+  const { result } = await managerHook();
+  vi.mocked(readFile).mockImplementation(async (_id, path) => ({ path, revision: 'r2', content: 'R2 text' }));
+  await act(async () => {
+    await result.current.loadDetail('notes/a/one/config.json');
+  });
+  act(() => {
+    result.current.setContent('Saved text');
+  });
+  vi.mocked(mutateFile).mockResolvedValue({ revision: 'r3', selectedPath: 'notes/a/one/config.json', pathMap: {}, deletedPaths: [] });
+  vi.mocked(fetchFiles).mockRejectedValue(new Error('Catalog unavailable'));
+  await act(async () => {
+    await result.current.save();
+  });
+  expect(result.current.detail).toMatchObject({ path: 'notes/a/one/config.json', content: 'Saved text', revision: 'r3' });
+  expect(result.current.dirty).toBe(false);
+  expect(result.current.listing).toBe(listing);
+  expect(result.current.error).toBe('Catalog unavailable');
+  await act(async () => {
+    await result.current.selectEntry('notes/a/one/nested');
+  });
+  await act(async () => {
+    await result.current.openOperation('remove-directory');
+  });
+  act(() => {
+    result.current.setDeleteMode('contents');
+    result.current.setDeleteConfirmed(true);
+  });
+  vi.mocked(mutateFile).mockRejectedValue(new Error('Stale catalog'));
+  await act(async () => {
+    await result.current.submit();
+  });
+  expect(mutateFile).toHaveBeenLastCalledWith({ kind: 'delete-directory', notebookId: 'a', path: 'notes/a/one/nested' }, 'r1');
+});
+
 it('keeps folder operations unavailable in read-only mode', async () => {
   mount({ writable: false, initialPath: 'notes/a/one/nested', initialOperation: 'remove-directory' });
   await screen.findByRole('button', { name: 'Select file: nested' });
