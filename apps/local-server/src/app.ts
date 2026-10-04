@@ -11,6 +11,7 @@ import { createAuth } from './auth.js';
 import { asLocal, asRemote, eachRepository, namedRemote, notebookRepository, noteRepository, type RemoteHandle, remoteHome, repositoryOrHome, requestCatalog, requestWorkspace, workspaceOf } from './request-workspace.js';
 import { createStudyRouter } from './study.js';
 import { createBookmarksResolver } from './bookmarks.js';
+import { createOutlineImportRouter } from './outline-import.js';
 import { createWorkspaceDocumentRouter } from './workspace-document.js';
 import { createFolderManagerRouter } from './folder-manager.js';
 import { createR2AssetHandler } from './r2-assets.js';
@@ -77,6 +78,7 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
   app.use(createR2ManagerRouter());
   app.use('/api/study', createStudyRouter());
   app.use('/api/focus-page', createWorkspaceDocumentRouter(FOCUS_DOCUMENT));
+  app.use('/api/outline-import', createOutlineImportRouter());
   app.use('/api/bookmarks/resolve', createBookmarksResolver());
   app.use('/api/bookmarks', createWorkspaceDocumentRouter(BOOKMARKS_DOCUMENT));
   app.use('/api/folder-manager', createFolderManagerRouter());

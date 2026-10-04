@@ -45,7 +45,10 @@ export function gitlabFixture(site = 'https://gitlab.example.test/gitlab', extra
     if (endpoint === '/repository/commits' && init?.method === 'POST') {
       const body = JSON.parse(String(init.body));
       if (rejectCommit || !canPush || body.force !== false) return json({ message: 'File changed' }, 400);
-      for (const action of body.actions) if (action.action !== 'create' && action.last_commit_id !== last.get(action.file_path)) return json({}, 400);
+      for (const action of body.actions) {
+        if (action.action === 'create' && files.has(action.file_path)) return json({ message: 'File already exists' }, 400);
+        if (action.action !== 'create' && action.last_commit_id !== last.get(action.file_path)) return json({}, 400);
+      }
       head = sha(`commit-${++writes}`);
       for (const action of body.actions) {
         if (action.action === 'delete') files.delete(action.file_path);

@@ -76,5 +76,5 @@ export function githubFixture(extra: Record<string, string> = {}) {
     } else return new Response('{}', { status: 404 });
     return new Response(JSON.stringify(result));
   };
-  return { reader: () => openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request).reader, calls, head: () => head, text: (file: string) => objects.get(files.get(file)!), files: () => [...files.keys()] };
+  return { request, reader: () => openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request).reader, calls, head: () => head, text: (file: string) => objects.get(files.get(file)!), files: () => [...files.keys()] };
 }

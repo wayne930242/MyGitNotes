@@ -356,6 +356,22 @@ The full browser matrix and honest results start in [verification.md](verificati
 
 ## Friction Notes
 
+- Tried: task-item re-lexing from F003, then parent F004 unmatched-backtick/inline-tilde LF/CRLF reproductions.
+  Found: stripping a checkbox can turn original paragraph text into a code fence and hide live links. Preserve the original block tokens and restore their exact checkbox raw prefix solely for source alignment; do not re-lex task text. This supersedes F003's earlier re-lex implementation rationale below.
+  Led by: parent reviewer F004; classification: implementation gap, bounded original-token repair with pure/planner/actual HTTP move regressions.
+- Tried: importing `zod` directly from the server for the apply request schema.
+  Found: it is a core dependency, not a server dependency; export the strict apply schema beside the browser-safe core request contract rather than add a package.
+  Led by: existing dependency boundary; classification: discovery gap, resolved without a new dependency.
+- Tried: preserving unsupported reports through `readWorkspaceDocument` and classifying symlink errors only as `SourceError`.
+  Found: legacy schema transforms canonicalize query sets and labels; validate parsed YAML while retaining the original parsed values for exact reports and keep raw-byte export separately. Shared path guards throw dedicated path/symlink errors which must map to 403, not an opaque 500.
+  Led by: R9 exact-retention and protected-path requirements; classification: integration gaps, corrected at the bounded import adapter.
+- Tried: running actual provider HTTP tests through the GitHub fixture and checking GitLab create collisions.
+  Found: GitHub's fixture did not expose its existing fetch adapter; GitLab's fixture did not reject create actions for existing files. Expose the adapter and model the actual create-only provider refusal, preserving the existing one-commit protocol.
+  Led by: deterministic provider acceptance tests; classification: fixture fidelity gaps, no production provider change.
+- Tried: reading `app/AddToOutlineDialog.tsx` while checking native UI seams, and importing source-tool helpers from `node -`.
+  Found: the dialog is `components/AddToOutlineDialog.tsx`; `source-tools.mjs` resolves `argv[1]`, so helper invocation needs `node -e` rather than the synthetic `-` path.
+  Led by: none; classification: discovery/tool-use gaps, corrected without a production assumption or a new rule.
+
 - Tried: source/token matching for Marked list-item code ranges, then parent reviewer OUTLINE-R1-F003 tight/loose/nested GFM checkbox reproductions.
   Found: Marked removes the checkbox from `item.text` but reinjects it into tight checkbox tokens and loose paragraph raw text, so those tokens no longer index into that body. Re-lex the checkbox-stripped task body to pair tokens with their exact source; removal affects columns only, preserving line-based code shielding.
   Led by: stage 4 code preservation and parent reviewer F003.

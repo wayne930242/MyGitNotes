@@ -1,8 +1,8 @@
 # Outline notes — verification ledger
 
 Planning baseline: `/home/weihung/github-notes`, clean HEAD `ac26edfe69120fac9eff904b5cb7f53e76966588`.
-Status: implementation in progress; stages 1–4 (native kind, bounded editing, creation/list/insertion and atomic relocation) verified in upstream; tasks 5–6 and independent parent browser QA are not complete.
-Parent review found an outline-only R2 reference-guard gap, adjacent drag duplication and a stage 4 GFM checkbox relocation blocker; all three are repaired and anchored in the post-stage-4 checkpoints below.
+Status: implementation in progress; stages 1–4 and task 5a (pure import planner, additive HTTP adapter and unmounted recovery primitives) verified in upstream; recovery/import UI, authoring retirement, task 6 and independent parent browser QA are not complete.
+Parent review found an outline-only R2 reference-guard gap, adjacent drag duplication, a GFM checkbox relocation blocker and changed task-block semantics; all four are repaired and anchored below.
 No push, deployment or downstream synchronization was performed by this worker.
 The approved model is **Outline note / 大綱筆記**, with general items and optional links, not the earlier specialized bookmark document.
 Contract: [spec.md](spec.md); implementation sequence: [design.md](design.md).
@@ -37,7 +37,7 @@ A planned test or a source reading is not an executed behavior check.
 | R6 Add current content with filled label/target into selected/new outline | Stage 3 mounted dirty/recovered-body insertion, source-save failure, cancel, read-only, route/repository/root races and failed-navigation tests pass; real existing/new destination and compilation-source browser checks pass; independent parent matrix remains. | unknown |
 | R7 All note lifecycle/local+remote/kind isolation and compilation unaffected | Stage 1 catalog, local create/save/copy/delete/restore, GitHub/GitLab create/save guards and draft facets pass; full move/UI lifecycle remains unverified. | unknown |
 | R8 Atomic rename/move references and non-destructive delete/restore | Stage 4 shared source-preservation, local HTTP stale/rollback, GitHub tree/GitLab actions and single-snapshot shell movement pass; deletion/copy retain references/bytes. Independent final file/folder browser journey remains. | unknown |
-| R9 Explicit partial/non-lossy import, retained source/drafts, invalid/stale/unknown-owner refusal | Preview/apply/recovery contract specified; no import endpoint or migration test executed. | unknown |
+| R9 Explicit partial/non-lossy import, retained source/drafts, invalid/stale/unknown-owner refusal | Task 5a pure/local/GitHub/GitLab and built HTTP import anchors pass; exact-envelope recovery primitives pass. Import/recovery UI, recovery blockers and old-authoring retirement remain unimplemented. | unknown |
 | R10 Disposable independent reality anchor, documentation and delivery gates | Fixture/task/cleanup plan recorded; new integrated QA and parent human acceptance not executed. | unknown |
 
 ## Stage 1 execution checkpoint
@@ -245,6 +245,69 @@ Existing file/folder planners and every hosted GitHub/GitLab move fixture now co
 | --- | --- | --- |
 | Tight/loose/nested GFM tasks never block otherwise valid moves | Source cases, task-bearing file/folder planners, GitHub/GitLab hosted moves and actual local HTTP | pass |
 | Task code shielding and checkbox/CRLF source survive link rewriting | Nested task literal-vs-real-link LF/CRLF exact-byte assertions | pass |
+
+## Stage 5a context-boundary checkpoint and F004 correction
+
+This is a coherent partial checkpoint, **not task 5/6 completion or the final fixture-ready production freeze**.
+No old controller, sidebar, position UI, resolver, PUT or remote document-authoring path was removed: recovery must be visible and usable before that retirement.
+The approved remaining work is unchanged; see [design.md](design.md) tasks 5–6.
+
+### F004 — preserve original task block semantics
+
+F003's re-lex of checkbox-stripped item text changed block semantics: unmatched backticks and inline tildes could become apparent fences and hide actual links from relocation.
+The shared rewriter now pairs the original item tokens with their original checkbox raw prefix; it does not re-lex task bodies.
+LF/CRLF, tight/loose/nested checkbox text, unmatched backticks, inline tilde text, genuine fences, nested indented code, planner folder moves and actual local HTTP target moves pass.
+`/tmp/outline-f004-red.log` records the two reproduced LF/CRLF failures; `/tmp/outline-f004-target.log` records six files / 88 passing targeted tests.
+The final full suite below includes the additional actual HTTP live-task-link assertions.
+
+### Implemented import/recovery boundaries
+
+- Browser-safe `planLegacyOutlineImport` and strict request/apply schemas are exported through core and `@mygitnotes/core/outline-import`.
+  It keeps selected representable entries in legacy display order, duplicate labels/targets and empty groups; returns exact retained entries/reasons; rejects unknown selections/owners and unsafe output paths; creates no Markdown when nothing is representable.
+- `GET /api/outline-import/source?repository=...` returns exact source bytes as base64, including malformed YAML/unsupported versions/invalid UTF-8 within the existing byte bound.
+  Its page is read-only discovery, not a replacement draft base.
+- `POST /api/outline-import/preview` is read-only and usable with `writable: false`.
+  Explicit repository/notebook/selected IDs/path/title bind to source bytes, repository identity, config/root, destination absence and remote head in the token.
+- `POST /api/outline-import` recomputes the plan and checks permission/token/partial acknowledgement.
+  Local apply uses the existing mutation queue and exclusive hard-link publication of a sibling temporary file, because the existing rename helper can overwrite a racing destination.
+  Remote apply uses one existing snapshot-paired `commitChanges` call for only the new outline.
+  Neither mode modifies legacy bytes; there is no automatic retry, rename or migration registry.
+- `legacyBookmarkRecoveries` and confirmed exact-envelope discard are read-only recovery primitives for all supplied configured repository IDs, including inactive/unavailable repositories and malformed/empty raw envelopes.
+  Export consumers must use the exact `raw`, not parse/stringify it; no fallback base, merge, autosave or commit is introduced by these helpers.
+  **They are not yet mounted; the existing live legacy controller still exists until the next substage completes recovery UI and retirement together.**
+
+### Final automated and actual built-runtime evidence
+
+- `/tmp/outline-stage5a-tests-final.log`: **261 files / 1951 tests passed**.
+- `/tmp/outline-stage5a-{build,lint,format,webtypes,servertypes,mcptypes,testtypes}-final.log`: all passed.
+  Monitor 6 exited `tests=0 build=0 lint=0 format=0 web=0 server=0 mcp=0 testtypes=0`.
+  Newly added files were staged before these final tracked-file lint/format gates; the earlier standalone new-file check also passed in `/tmp/outline-stage5a-newfiles-lint-format.log`.
+- Fresh test compilation used `/tmp/outline-stage5a-test-tsconfig.json`, covering the new server/provider/core tests and their imports in addition to normal production compilers.
+- Active LSP checked nine paths: seven were silent/inconclusive; two retained obsolete core-export and GitHub-fixture declarations (five stale diagnostics).
+  Current declarations, fresh package/server/web/MCP compilers and the independent fresh test compiler pass; this is not a clean-LSP claim.
+- `/tmp/outline-import-api.log`: initial bounded API matrix, three files / 25 tests passed.
+  The full final suite additionally includes exact uncanonicalized query/label reports, missing/oversized source and recovery raw-envelope cases.
+  The first local test run exposed a path-guard error being returned as 500 rather than 403; the typed error mapping was fixed before green runs.
+- Actual built runtime used the still-unmodified legacy fixture under Monitor 7, PID `1056039`, port `42123`, roots `/tmp/mygitnotes-bookmarks-home-23dEwu` and `/tmp/mygitnotes-bookmarks-other-RN0tiX`.
+  Direct HTTP exercised exact saved-byte export, preview/cancel no-write, required partial acknowledgement, create-only apply, repeated apply 409, normal note-read title and `kind: outline`, byte-identical original source and untouched repository B.
+  `/tmp/outline-stage5a-built-runtime.log` contains exact assertions; `/tmp/outline-stage5a-built-readback.json` records preview/apply/native readback.
+- Monitor 7 stopped; its PID, listener and both roots were asserted absent in `/tmp/outline-stage5a-cleanup.log`.
+  No browser was started and no new UI screenshot/acceptance is claimed.
+  No live-provider mutation, user-note edit, secret read, push, downstream operation or deployment occurred.
+
+| Stage 5a contract | Evidence | Result |
+| --- | --- | --- |
+| Pure partial conversion preserves order, duplicates, empty groups and exact retained records | `outline-import.test.ts` core suite | pass |
+| Local preview/apply is bounded, create-only, repository-specific and non-destructive | Actual HTTP tests: permission, stale source/config, collision, symlink/protected path, malformed data, fault, race, same-root A/B and exact bytes | pass |
+| Remote preview/apply uses existing provider snapshots and one new-file commit | Actual GitHub/GitLab HTTP fixture adapters: partial acknowledgement, stale head/source/request, permission and provider fault; tree/actions assertions | pass |
+| Saved malformed/unsupported data remains exactly exportable | Base64 byte comparisons for malformed YAML, unsupported version and invalid UTF-8 | pass |
+| Recovery primitives retain all configured raw envelopes and make cancel/discard repository-specific | JSDOM storage tests: inactive/unavailable IDs, empty/malformed raw, base/revision/ancestry/unknown fields, changed-draft refusal | pass |
+| Recovery UI/export/download, pending blocker and no live ghost autosave | Helpers are not mounted and old controller remains; next substage required | unknown |
+| Old UI/PUT/remote authoring retirement while metadata relocation stays protected | Intentionally not attempted before usable recovery UI | unknown |
+| Final fixture, README/glossary, independent desktop/mobile UI comparison | Task 6 not started; historical human FAIL retained; replacement appropriateness UNKNOWN | unknown |
+
+Reflexive disposition: F004 was an implementation gap fixed at original-token alignment; schema/dependency/path-error and provider-fixture gaps were corrected within existing seams; the helper-invocation/path lookup slips need no new global rule.
+No skill, root instruction or architecture was expanded.
 
 ## Required automated evidence
 

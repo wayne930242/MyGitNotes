@@ -1,6 +1,7 @@
 export * from './types.js';
 export * from './compilation.js';
 export * from './outline.js';
+export * from './outline-import.js';
 export * from './screen-page.js';
 export * from './screen-migration.js';
 export * from './workspace-documents.js';
