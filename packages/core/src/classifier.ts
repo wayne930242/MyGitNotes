@@ -2,6 +2,7 @@ import path from 'node:path';
 import { ClassifiedResource, WorkspaceConfig } from './types.js';
 import { LEGACY_WORKSPACE_CONFIG_FILENAME, WORKSPACE_CONFIG_FILENAME } from './config.js';
 import { workspaceAgentKind } from './workspace-agent.js';
+import { isCompilationPath } from './compilation.js';
 
 const HIDDEN_PATTERNS = [
   /(?:^|\/)\.[^/]/, // Any dotfile/dotdirectory (.git, .github, etc.)
@@ -71,6 +72,9 @@ export function classifyResource(relPath: string, config?: WorkspaceConfig | nul
           return { path: normalized, type: 'agent_doc', notebookId: nb.id };
         }
 
+        // Compilations inside notebook
+        if (isCompilationPath(normalized)) return { path: normalized, type: 'compilation', notebookId: nb.id };
+
         // Regular notes inside notebook
         const ext = path.posix.extname(normalized).toLowerCase();
         if (['.md', '.markdown', '.mdx', '.txt'].includes(ext)) {
@@ -107,6 +111,7 @@ export function classifyResource(relPath: string, config?: WorkspaceConfig | nul
       if (subPath.startsWith('assets/')) {
         return { path: normalized, type: 'asset', notebookId };
       }
+      if (isCompilationPath(normalized)) return { path: normalized, type: 'compilation', notebookId };
       return { path: normalized, type: 'note', notebookId };
     }
   }

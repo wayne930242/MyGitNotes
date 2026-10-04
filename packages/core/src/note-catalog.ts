@@ -7,7 +7,7 @@ import { extractTodoTasks } from './note-agenda.js';
 import { buildNoteGraph } from './note-graph.js';
 import { hashJson } from './remote-cache.js';
 import { type RepositoryId, type RevisionSet, StaleRevisionError } from './repository.js';
-import { DEFAULT_NOTE_QUERY, type NoteAgenda, type NotebookFacets, noteContentSnippet, noteDirectory, type NoteFacets, type NoteGraph, type NoteListItem, type NoteLookup, noteMatchesQuery, type NotePaths, type NoteQuery, type NoteQueryPage, noteQueryStatuses, type NoteRef, noteRefKey } from './note-query.js';
+import { DEFAULT_NOTE_QUERY, isCompilationEntry, NOTE_KIND_FILTERS, type NoteAgenda, type NotebookFacets, noteContentSnippet, noteDirectory, type NoteFacets, type NoteGraph, type NoteKindFilter, type NoteListItem, type NoteLookup, noteMatchesQuery, type NotePaths, type NoteQuery, type NoteQueryPage, noteQueryStatuses, type NoteRef, noteRefKey } from './note-query.js';
 
 /** Read model of the notebooks one repository serves, implemented by remote and local sources. */
 export interface RepositoryCatalog {
@@ -111,7 +111,7 @@ export async function workspaceCatalog(config: WorkspaceConfig, repositories: Ca
       const entries = await Promise.all([...involved].map(async repository => [repository.id, await repository.catalog.revision()] as const));
       return Object.fromEntries(entries.filter(([, revision]) => revision));
     },
-    index: notebook => repositoryOf(notebook.id).catalog.index(notebook),
+    index: notebook => indexWithIdentity(repositoryOf(notebook.id), notebook),
     contents: async notes => {
       const groups = new Map<CatalogRepository, NoteListItem[]>();
       for (const note of notes) {
@@ -132,6 +132,26 @@ export async function workspaceCatalog(config: WorkspaceConfig, repositories: Ca
   };
 }
 
+/**
+ * A compilation's `id` is unique within its repository, and study history hangs on it. Two files that share one
+ * are both reported invalid, so neither silently wins; siblings are indexed only when this notebook has compilations.
+ */
+async function indexWithIdentity(repository: CatalogRepository, notebook: NotebookConfig): Promise<NoteListItem[]> {
+  const items = await repository.catalog.index(notebook);
+  if (!items.some(isCompilationEntry)) return items;
+  const owners = new Map<string, string[]>();
+  for (const sibling of repository.notebooks) {
+    for (const item of sibling.id === notebook.id ? items : await repository.catalog.index(sibling)) {
+      if (!isCompilationEntry(item) || item.invalid || typeof item.metadata.id !== 'string') continue;
+      owners.set(item.metadata.id, [...owners.get(item.metadata.id) ?? [], item.path]);
+    }
+  }
+  return items.map(item => {
+    const same = !item.invalid && typeof item.metadata.id === 'string' ? owners.get(item.metadata.id) ?? [] : [];
+    return same.length > 1 ? { ...item, invalid: `Duplicate compilation id "${item.metadata.id}" also used by ${same.filter(path => path !== item.path).join(', ')}` } : item;
+  });
+}
+
 export function parseNoteQuery(input: Record<string, unknown>): { query: NoteQuery; options: NoteQueryOptions; } {
   const notebookId = single(input.notebookId);
   if (!notebookId) throw new SourceError('notebookId is required.');
@@ -139,13 +159,13 @@ export function parseNoteQuery(input: Record<string, unknown>): { query: NoteQue
   if (folders.some(folder => !safeFilterPath(folder)) || exclude.some(path => !safeFilterPath(path))) throw new SourceError('Invalid folder or path.');
   const tagMode = single(input.tagMode) ?? 'any', match = single(input.match) ?? 'all';
   const sort = (single(input.sort) ?? DEFAULT_NOTE_QUERY.sort) as SortField, order = (single(input.order) ?? DEFAULT_NOTE_QUERY.order) as SortOrder;
-  const q = single(input.q) ?? '', select = single(input.select), limitText = single(input.limit);
-  if (!['any', 'all'].includes(tagMode) || !['all', 'title'].includes(match) || !SORT_FIELDS.includes(sort) || !SORT_ORDERS.includes(order)) throw new SourceError('Invalid query option.');
+  const q = single(input.q) ?? '', select = single(input.select), limitText = single(input.limit), kind = single(input.kind) ?? DEFAULT_NOTE_QUERY.kind;
+  if (!['any', 'all'].includes(tagMode) || !['all', 'title'].includes(match) || !SORT_FIELDS.includes(sort) || !SORT_ORDERS.includes(order) || !NOTE_KIND_FILTERS.includes(kind as NoteKindFilter)) throw new SourceError('Invalid query option.');
   if (q.length > 500) throw new SourceError('Search text exceeds 500 characters.');
   if (select !== undefined && select !== 'paths') throw new SourceError('Invalid select option.');
   const limit = limitText === undefined ? 50 : Number(limitText);
   if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new SourceError('limit must be between 1 and 200.');
-  return { query: { notebookId, folders, descendants: single(input.descendants) !== '0', tags, tagMode: tagMode as NoteQuery['tagMode'], status: single(input.status) || null, withoutStatus: flag(input.noStatus), showHidden: flag(input.showHidden), q, match: match as NoteQuery['match'], exclude, sort, order }, options: { limit, cursor: single(input.cursor), content: flag(input.content), select: select as 'paths' | undefined } };
+  return { query: { notebookId, folders, descendants: single(input.descendants) !== '0', tags, tagMode: tagMode as NoteQuery['tagMode'], status: single(input.status) || null, withoutStatus: flag(input.noStatus), showHidden: flag(input.showHidden), q, match: match as NoteQuery['match'], exclude, sort, order, kind: kind as NoteKindFilter }, options: { limit, cursor: single(input.cursor), content: flag(input.content), select: select as 'paths' | undefined } };
 }
 
 async function scopeNotebooks(catalog: NoteCatalog, notebookId: string) {
@@ -206,14 +226,17 @@ export async function noteFacets(catalog: NoteCatalog, showHidden: boolean): Pro
   const { notebooks } = await scope(catalog, 'all');
   const result: Record<string, NotebookFacets> = {};
   for (const notebook of notebooks) {
-    const facets: NotebookFacets = { total: 0, hidden: 0, statuses: {}, tags: {}, directories: {} };
+    const facets: NotebookFacets = { total: 0, hidden: 0, statuses: {}, tags: {}, directories: {}, compilations: { total: 0, statuses: {}, tags: {} } };
     for (const note of await catalog.index(notebook)) {
       const hidden = isNoteHidden({ ...note.metadata, status: note.status });
-      if (hidden) facets.hidden++;
+      const compilation = isCompilationEntry(note);
+      if (hidden && !compilation) facets.hidden++;
       if (hidden && !showHidden) continue;
-      facets.total++;
-      facets.statuses[note.status || ''] = (facets.statuses[note.status || ''] || 0) + 1;
-      for (const tag of note.tags) facets.tags[tag] = (facets.tags[tag] || 0) + 1;
+      const target = compilation ? facets.compilations : facets;
+      target.total++;
+      target.statuses[note.status || ''] = (target.statuses[note.status || ''] || 0) + 1;
+      for (const tag of note.tags) target.tags[tag] = (target.tags[tag] || 0) + 1;
+      if (compilation) continue;
       const directory = noteDirectory(note.path);
       facets.directories[directory] = (facets.directories[directory] || 0) + 1;
     }
@@ -243,7 +266,7 @@ export async function noteAgenda(catalog: NoteCatalog, notebookId: string, showH
   const { notebooks } = await scope(catalog, notebookId);
   const parts = await Promise.all(notebooks.map(async notebook => {
     const part = await catalog.memo(`agenda:${showHidden ? 1 : 0}`, [notebook], async () => {
-      const visible = (await catalog.index(notebook)).filter(note => showHidden || !isNoteHidden({ ...note.metadata, status: note.status }));
+      const visible = (await catalog.index(notebook)).filter(note => !isCompilationEntry(note) && (showHidden || !isNoteHidden({ ...note.metadata, status: note.status })));
       const contents = await catalog.contents(visible);
       return { tasks: extractTodoTasks(visible.map(note => ({ ...note, content: contents.get(noteRefKey(note)) ?? '' }))), dated: visible.filter(note => note.metadata.created !== undefined || note.metadata.updated !== undefined) };
     });
@@ -257,7 +280,7 @@ export async function noteAgenda(catalog: NoteCatalog, notebookId: string, showH
 export async function noteGraph(catalog: NoteCatalog): Promise<NoteGraph> {
   const { config, notebooks } = await scope(catalog, 'all');
   const graph = await catalog.memo(`graph:${hashJson(config.notebooks.map(notebook => notebook.pathAliases || null))}`, notebooks, async () => {
-    const notes = (await Promise.all(notebooks.map(notebook => catalog.index(notebook)))).flat();
+    const notes = (await Promise.all(notebooks.map(notebook => catalog.index(notebook)))).flat().filter(note => !isCompilationEntry(note));
     const contents = await catalog.contents(notes);
     return buildNoteGraph(notes.map(note => ({ ...note, content: contents.get(noteRefKey(note)) ?? '' })), { includeHidden: true, notebooks: config.notebooks, repositoryOf: catalog.repository });
   });

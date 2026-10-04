@@ -4,7 +4,9 @@ import path from 'node:path';
 import { assetInfo, assetPath, assetRoot, decodeAsset, isAssetPath } from './assets.js';
 import { MANIFEST_FILES } from './remote-manifest.js';
 import { type RepositoryId, type RepositoryScope, StaleRevisionError } from './repository.js';
-import { parseNoteContent, serializeNoteContent } from './frontmatter.js';
+import { parseNoteContent } from './frontmatter.js';
+import { isCompilationPath } from './compilation.js';
+import { isNoteFile, NOTE_EXTENSIONS, parseNoteFile, serializeNoteFile } from './note-file.js';
 import { formatTemplateDate, renderNoteTemplate } from './templates.js';
 import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js';
 import { FolderItem, NotebookConfig, NoteItem, NoteMetadata, WorkspaceConfig } from './types.js';
@@ -18,9 +20,8 @@ import type { RepositoryCatalog } from './note-catalog.js';
 import type { NoteListItem } from './note-query.js';
 
 export { SourceError } from './github-api.js';
-const NOTE_FILE = /\.(md|markdown|mdx|txt)$/i;
 const CACHEABLE_FILE = /\.(md|markdown|mdx|txt|ya?ml)$/i;
-const INDEX_VERSION = 'v1';
+const INDEX_VERSION = 'v2';
 /** Blobs kept in memory for one request. */
 const LOADED_MAX_BYTES = 64 * 1024 * 1024;
 export interface RemoteEntry {
@@ -166,15 +167,16 @@ export abstract class RemoteSource {
   async note(file: string): Promise<NoteItem> {
     const config = await this.config();
     const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`) && isNotebookContent(file.slice(n.root.length + 1), n));
-    if (!nb || !NOTE_FILE.test(file)) throw new SourceError('Path is not a configured note.', 403);
+    if (!nb || !isNoteFile(file)) throw new SourceError('Path is not a configured note.', 403);
     const raw = (await this.readFile(file)).toString('utf8');
-    const { metadata, content, title, lineNumberOffset } = parseNoteContent(raw, path.posix.basename(file));
-    return { id: typeof metadata.id === 'string' ? metadata.id : file, path: file, notebookId: nb.id, title, metadata, content, lineNumberOffset, tags: Array.isArray(metadata.tags) ? metadata.tags.map(String) : [], status: typeof metadata.status === 'string' ? metadata.status : undefined, size: Buffer.byteLength(raw), revision: (await this.getSnapshot()).sha };
+    const { metadata, content, title, lineNumberOffset, extra } = parseNoteFile(raw, file, nb.root);
+    return { id: typeof metadata.id === 'string' ? metadata.id : file, path: file, notebookId: nb.id, title, metadata, content, lineNumberOffset, tags: Array.isArray(metadata.tags) ? metadata.tags.map(String) : [], status: typeof metadata.status === 'string' ? metadata.status : undefined, size: Buffer.byteLength(raw), revision: (await this.getSnapshot()).sha, ...extra };
   }
 
-  private notebookFiles(nb: NotebookConfig, entries: RemoteEntry[]) {
+  /** The notebook's note files; `compilations` adds its `.compilation.yml` files. */
+  private notebookFiles(nb: NotebookConfig, entries: RemoteEntry[], compilations = false) {
     const templateFiles = new Set((nb.templates || []).map(t => t.file));
-    return entries.filter(e => e.type === 'blob' && e.mode !== '120000' && e.path.startsWith(`${nb.root}/`) && isNotebookContent(e.path.slice(nb.root.length + 1), nb) && !templateFiles.has(e.path.slice(nb.root.length + 1)) && NOTE_FILE.test(e.path));
+    return entries.filter(e => e.type === 'blob' && e.mode !== '120000' && e.path.startsWith(`${nb.root}/`) && isNotebookContent(e.path.slice(nb.root.length + 1), nb) && !templateFiles.has(e.path.slice(nb.root.length + 1)) && (NOTE_EXTENSIONS.test(e.path) || compilations && isCompilationPath(e.path)));
   }
 
   /** Note paths of one notebook, taken from the snapshot tree without reading any file. */
@@ -204,7 +206,7 @@ export abstract class RemoteSource {
         await this.prefetchFiles(notes.map(note => note.path));
         const result = new Map<string, string>();
         for (let i = 0; i < notes.length; i += 6) {
-          await Promise.all(notes.slice(i, i + 6).map(async note => result.set(note.path, parseNoteContent((await this.readFile(note.path)).toString('utf8'), path.posix.basename(note.path)).content)));
+          await Promise.all(notes.slice(i, i + 6).map(async note => result.set(note.path, parseNoteFile((await this.readFile(note.path)).toString('utf8'), note.path).content)));
         }
         return result;
       },
@@ -239,7 +241,7 @@ export abstract class RemoteSource {
     }
     if (!Array.isArray(items) || items.some(item => typeof item?.path !== 'string' || typeof item?.title !== 'string' || item?.notebookId !== nb.id || !Array.isArray(item?.tags) || typeof item?.metadata !== 'object' || item?.metadata === null)) items = undefined;
     if (!items) {
-      const files = this.notebookFiles(nb, entries);
+      const files = this.notebookFiles(nb, entries, true);
       await this.prefetchFiles(files.map(file => file.path));
       items = [];
       for (let i = 0; i < files.length; i += 6) {
@@ -247,8 +249,8 @@ export abstract class RemoteSource {
           ...await Promise.all(
             files.slice(i, i + 6).map(async file => {
               const raw = (await this.readFile(file.path)).toString('utf8');
-              const { metadata, title } = parseNoteContent(raw, path.posix.basename(file.path));
-              return { id: typeof metadata.id === 'string' ? metadata.id : file.path, path: file.path, notebookId: nb.id, title, metadata, tags: Array.isArray(metadata.tags) ? metadata.tags.map(String) : [], status: typeof metadata.status === 'string' ? metadata.status : undefined, size: Buffer.byteLength(raw) } satisfies NoteListItem;
+              const { metadata, title, extra } = parseNoteFile(raw, file.path, nb.root);
+              return { id: typeof metadata.id === 'string' ? metadata.id : file.path, path: file.path, notebookId: nb.id, title, metadata, tags: Array.isArray(metadata.tags) ? metadata.tags.map(String) : [], status: typeof metadata.status === 'string' ? metadata.status : undefined, size: Buffer.byteLength(raw), ...extra } satisfies NoteListItem;
             }),
           ),
         );
@@ -348,17 +350,17 @@ export abstract class RemoteSource {
     this.assertMutable(snapshot, expected);
     const config = await this.config();
     const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
-    if (!nb || !isNotebookContent(file.slice(nb.root.length + 1), nb) || !NOTE_FILE.test(file) || file.includes('\\') || file.split('/').some(p => p === '..' || p === '.' || !p)) throw new SourceError('Path is not a configured note.', 403);
+    if (!nb || !isNotebookContent(file.slice(nb.root.length + 1), nb) || !isNoteFile(file) || file.includes('\\') || file.split('/').some(p => p === '..' || p === '.' || !p)) throw new SourceError('Path is not a configured note.', 403);
     if (createOnly && snapshot.entries.some(e => e.path === file)) throw new SourceError('A note already exists at this path.', 409);
     const existing = snapshot.entries.find(e => e.path === file);
     if (existing && (existing.type !== 'blob' || existing.mode === '120000')) throw new SourceError('Path is not a regular note file.', 403);
     if (file.includes('\0') || (metadata !== undefined && (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)))) throw new SourceError('Invalid note path or metadata.');
     const existingRaw = existing ? await this.readFile(file).then(b => b.toString('utf8')).catch(() => undefined) : undefined;
-    const raw = metadata ? serializeNoteContent(metadata, content, !existing, new Date(), existingRaw) : content;
+    const raw = metadata ? serializeNoteFile(file, metadata, content, !existing, new Date(), existingRaw) : content;
     if (Buffer.byteLength(raw) > 5 * 1024 * 1024) throw new SourceError('Note exceeds the 5 MiB limit.', 413);
     const receipt = await this.commitChanges([{ path: file, content: raw }], expected, existing ? 'write' : 'create');
-    const parsed = parseNoteContent(raw, path.posix.basename(file));
-    return { ...receipt, note: { id: typeof parsed.metadata.id === 'string' ? parsed.metadata.id : file, path: file, notebookId: nb.id, ...parsed, tags: Array.isArray(parsed.metadata.tags) ? parsed.metadata.tags.map(String) : [], status: typeof parsed.metadata.status === 'string' ? parsed.metadata.status : undefined, size: Buffer.byteLength(raw), revision: receipt.revision } };
+    const { extra, ...parsed } = parseNoteFile(raw, file, nb.root);
+    return { ...receipt, note: { id: typeof parsed.metadata.id === 'string' ? parsed.metadata.id : file, path: file, notebookId: nb.id, ...parsed, ...extra, tags: Array.isArray(parsed.metadata.tags) ? parsed.metadata.tags.map(String) : [], status: typeof parsed.metadata.status === 'string' ? parsed.metadata.status : undefined, size: Buffer.byteLength(raw), revision: receipt.revision } };
   }
 
   /** Publish selected browser working notes as one commit after validation. */
@@ -367,7 +369,7 @@ export abstract class RemoteSource {
     if (typeof message !== 'string' || !message.trim() || message.length > 4000) throw new SourceError('A commit message of at most 4000 characters is required.');
     const snapshot = await this.getSnapshot(true);
     for (const note of notes) {
-      if (!note || typeof note.path !== 'string' || !NOTE_FILE.test(note.path) || typeof note.content !== 'string' || !note.metadata || typeof note.metadata !== 'object' || Array.isArray(note.metadata)) throw new SourceError('Invalid note change.');
+      if (!note || typeof note.path !== 'string' || !isNoteFile(note.path) || typeof note.content !== 'string' || !note.metadata || typeof note.metadata !== 'object' || Array.isArray(note.metadata)) throw new SourceError('Invalid note change.');
       if (note.createOnly && snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`A note already exists at ${note.path}.`, 409);
       if (!note.createOnly && !snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`Note moved or deleted: ${note.path}.`, 409);
     }
@@ -379,7 +381,7 @@ export abstract class RemoteSource {
         ...await Promise.all(
           notes.slice(i, i + 6).map(async note => {
             const existingRaw = note.createOnly ? undefined : await this.readFile(note.path).then(b => b.toString('utf8')).catch(() => undefined);
-            return { path: note.path, content: serializeNoteContent(note.metadata, note.content, Boolean(note.createOnly), new Date(), existingRaw) };
+            return { path: note.path, content: serializeNoteFile(note.path, note.metadata, note.content, Boolean(note.createOnly), new Date(), existingRaw) };
           }),
         ),
       );
@@ -479,7 +481,7 @@ export abstract class RemoteSource {
       const nb = config.notebooks.find(n => file.startsWith(`${n.root}/`));
       const document = workspaceDocument(file);
       const documentFile = Boolean(document?.scopes.includes(scope));
-      const allowed = documentFile || (scope === 'config' ? MANIFEST_FILES.includes(file) : !['screen', 'study', 'focus', 'config'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_FILE.test(file) : scope === 'skills' ? Boolean(skillFile(file, config.notebooks)) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (NOTE_FILE.test(file) || path.posix.basename(file) === '_dir.yml'))));
+      const allowed = documentFile || (scope === 'config' ? MANIFEST_FILES.includes(file) : !['screen', 'study', 'focus', 'config'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_EXTENSIONS.test(file) : scope === 'skills' ? Boolean(skillFile(file, config.notebooks)) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (isNoteFile(file) || path.posix.basename(file) === '_dir.yml'))));
       if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
       if (documentFile) validateWorkspaceDocument(document!, change.content);
       if (snapshot.entries.some(e => (e.path === file || file.startsWith(e.path + '/')) && (e.mode === '120000' || (e.path !== file && e.type !== 'tree')))) throw new SourceError('Path crosses a non-directory or symlink.', 403);

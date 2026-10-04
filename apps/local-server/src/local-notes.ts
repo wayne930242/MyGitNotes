@@ -1,7 +1,7 @@
 import { Request, Response, Router } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
-import { deleteNoteFile, lookupNotes, noteAgenda, noteFacets, noteGraph, type NoteItem, parseNoteQuery, queryNotePaths, queryNotes, readNoteFile, type RepositoryCatalog, resolveSafePath, scanNotebookNotes, SourceError, StaleRevisionError, writeNoteFile } from '@mygitnotes/core';
+import { deleteNoteFile, lookupNotes, noteAgenda, noteFacets, noteGraph, type NoteItem, parseNoteQuery, queryNotePaths, queryNotes, readNoteFile, type RepositoryCatalog, resolveSafePath, scanNotebookEntries, scanNotebookNotes, SourceError, StaleRevisionError, writeNoteFile } from '@mygitnotes/core';
 import { changeFile, generateCommitMessage, listChanges, stageAndCommit } from '@mygitnotes/git';
 import { asLocal, eachRepository, type LocalHandle, notebookRepository, noteRepository, requestCatalog } from './request-workspace.js';
 
@@ -11,10 +11,10 @@ export function createLocalNotesRouter(): Router {
   /** Per-request read model over the working tree; local reads are not cached. */
   function localCatalog(repoRoot: string): RepositoryCatalog {
     const scans = new Map<string, NoteItem[]>();
-    const scan = (notebook: Parameters<typeof scanNotebookNotes>[1]) => {
+    const scan = (notebook: Parameters<typeof scanNotebookEntries>[1]) => {
       let notes = scans.get(notebook.id);
       if (!notes) {
-        notes = scanNotebookNotes(repoRoot, notebook);
+        notes = scanNotebookEntries(repoRoot, notebook);
         scans.set(notebook.id, notes);
       }
       return notes;
@@ -85,7 +85,7 @@ export function createLocalNotesRouter(): Router {
         return res.status(400).json({ error: 'path query parameter is required' });
       }
       const { handle, notebook } = await noteRepository(res, relPath, req.query.notebookId);
-      const note = readNoteFile(asLocal(handle).root, relPath, notebook.id);
+      const note = readNoteFile(asLocal(handle).root, relPath, notebook.id, notebook.root);
       res.json({ note });
     } catch (err: unknown) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') return res.status(404).json({ error: 'Note not found.' });
@@ -104,7 +104,7 @@ export function createLocalNotesRouter(): Router {
       const repoRoot = asLocal(handle).root;
 
       if (req.body.createOnly && fs.existsSync(resolveSafePath(repoRoot, notePath))) return res.status(409).json({ error: 'A note already exists at this path.' });
-      const saved = writeNoteFile(repoRoot, notePath, content, metadata, notebook.id);
+      const saved = writeNoteFile(repoRoot, notePath, content, metadata, notebook.id, notebook.root);
 
       // If noCommit is requested or commit is false, write file and leave working tree dirty
       if (req.body.noCommit === true || req.body.commit === false) {
@@ -157,7 +157,7 @@ export function createLocalNotesRouter(): Router {
       const repoRoot = asLocal(handle).root;
 
       if (typeof content === 'string') {
-        const restored = writeNoteFile(repoRoot, notePath, content, metadata, notebook.id);
+        const restored = writeNoteFile(repoRoot, notePath, content, metadata, notebook.id, notebook.root);
         return res.json({ success: true, note: restored });
       }
 
@@ -165,7 +165,7 @@ export function createLocalNotesRouter(): Router {
       if (!change) return res.status(409).json({ error: 'This note has no changes to restore.' });
       const restored = await changeFile(repoRoot, notePath, 'restore', req.body.revision || change.revision);
       if (!change.tracked) return res.json({ success: true, note: null, ...restored });
-      const restoredNote = readNoteFile(repoRoot, notePath, notebook.id);
+      const restoredNote = readNoteFile(repoRoot, notePath, notebook.id, notebook.root);
       res.json({ success: true, note: restoredNote });
     } catch (err: unknown) {
       res.status(err instanceof SourceError ? err.status : 500).json({ error: err instanceof Error ? err.message : String(err) });

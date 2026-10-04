@@ -43,7 +43,16 @@ export interface NoteListItem {
   content?: string;
   /** Body excerpt around a search query's match, present only when the query matched inside content. */
   matchSnippet?: string;
+  /** Set only on a compilation (`<name>.compilation.yml`); absent means a note. */
+  kind?: 'compilation';
+  /** Why a compilation cannot open. */
+  invalid?: string;
 }
+
+/** What a query returns: notes (the default), compilations, or both. */
+export type NoteKindFilter = 'note' | 'compilation' | 'all';
+export const NOTE_KIND_FILTERS: readonly NoteKindFilter[] = ['note', 'compilation', 'all'];
+export const isCompilationEntry = (note: Pick<NoteListItem, 'kind'>) => note.kind === 'compilation';
 
 export interface NoteQuery {
   notebookId: string;
@@ -60,9 +69,10 @@ export interface NoteQuery {
   exclude: string[];
   sort: SortField;
   order: SortOrder;
+  kind: NoteKindFilter;
 }
 
-export const DEFAULT_NOTE_QUERY: NoteQuery = { notebookId: 'all', folders: [], descendants: true, tags: [], tagMode: 'any', status: null, withoutStatus: false, showHidden: false, q: '', match: 'all', exclude: [], sort: 'updated', order: 'desc' };
+export const DEFAULT_NOTE_QUERY: NoteQuery = { notebookId: 'all', folders: [], descendants: true, tags: [], tagMode: 'any', status: null, withoutStatus: false, showHidden: false, q: '', match: 'all', exclude: [], sort: 'updated', order: 'desc', kind: 'note' };
 
 export interface NoteQueryPage {
   revisions: RevisionSet;
@@ -75,12 +85,20 @@ export interface NotePaths {
   notes: NoteRef[];
   total: number;
 }
+/** The counts of one kind of entry, for the filters beside its list. */
+export interface KindFacets {
+  total: number;
+  statuses: Record<string, number>;
+  tags: Record<string, number>;
+}
 export interface NotebookFacets {
   total: number;
   hidden: number;
   statuses: Record<string, number>;
   tags: Record<string, number>;
   directories: Record<string, number>;
+  /** The notebook's compilations; notes and compilations are counted apart. */
+  compilations: KindFacets;
 }
 export interface NoteFacets {
   revisions: RevisionSet;
@@ -101,6 +119,8 @@ export const noteDirectory = (path: string) => path.slice(0, path.lastIndexOf('/
 
 /** Same rules as `filterNotes`, plus `exclude` and title-only matching. Content must be present when `q` searches content. */
 export function noteMatchesQuery(note: NoteListItem, query: NoteQuery): boolean {
+  const kind = query.kind ?? DEFAULT_NOTE_QUERY.kind;
+  if (kind !== 'all' && (note.kind ?? 'note') !== kind) return false;
   if (!query.showHidden && isNoteHidden({ ...note.metadata, status: note.status })) return false;
   if (query.notebookId !== 'all' && note.notebookId !== query.notebookId) return false;
   if (query.exclude.includes(note.path)) return false;
@@ -152,6 +172,7 @@ export function noteQuerySearch(query: Partial<NoteQuery>, extra: { revisions?: 
   if (value.q) params.set('q', value.q);
   if (value.match !== 'all') params.set('match', value.match);
   for (const path of value.exclude) params.append('exclude', path);
+  if (value.kind !== DEFAULT_NOTE_QUERY.kind) params.set('kind', value.kind);
   if (value.sort !== DEFAULT_NOTE_QUERY.sort) params.set('sort', value.sort);
   if (value.order !== DEFAULT_NOTE_QUERY.order) params.set('order', value.order);
   if (extra.revisions && Object.keys(extra.revisions).length) params.set('revisions', JSON.stringify(extra.revisions));

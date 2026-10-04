@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { NotebookConfig, WorkspaceConfig } from '../src/types.js';
 import type { NoteListItem } from '../src/note-query.js';
-import { DEFAULT_NOTE_QUERY } from '../src/note-query.js';
+import { DEFAULT_NOTE_QUERY, noteQuerySearch } from '../src/note-query.js';
 import { type CatalogRepository, lookupNotes, noteAgenda, type NoteCatalog, noteFacets, noteGraph, parseNoteQuery, parseRevisions, queryNotePaths, queryNotes, workspaceCatalog } from '../src/note-catalog.js';
 import { type RevisionSet, StaleRevisionError } from '../src/repository.js';
 
@@ -49,6 +49,14 @@ describe('note query parsing', () => {
     expect(() => parseNoteQuery({ notebookId: 'work', limit: '500' })).toThrow();
     expect(() => parseNoteQuery({ notebookId: 'work', sort: 'size' })).toThrow();
     expect(() => parseNoteQuery({ notebookId: 'work', q: 'x'.repeat(501) })).toThrow();
+  });
+  it('reads the kind filter, which defaults to notes', () => {
+    expect(parseNoteQuery({ notebookId: 'work' }).query.kind).toBe('note');
+    expect(parseNoteQuery({ notebookId: 'work', kind: 'compilation' }).query.kind).toBe('compilation');
+    expect(parseNoteQuery({ notebookId: 'work', kind: 'all' }).query.kind).toBe('all');
+    expect(() => parseNoteQuery({ notebookId: 'work', kind: 'folder' })).toThrow(/Invalid query option/);
+    expect(noteQuerySearch(query({ kind: 'compilation' })).get('kind')).toBe('compilation');
+    expect(noteQuerySearch(query()).has('kind')).toBe(false);
   });
 });
 
