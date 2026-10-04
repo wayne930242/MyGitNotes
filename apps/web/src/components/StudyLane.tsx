@@ -80,7 +80,7 @@ export function StudyLane({ row, notes, controller, disabled, onOpen, toolbar }:
           disabled={busy || !undoNote}
           onClick={() => {
             if (undoNote && last) {
-              void controller.action(undoNote, row.id, 'undo', { eventId: last.id }).then(ok => {
+              void controller.action(undoNote, row, 'undo', { eventId: last.id }).then(ok => {
                 if (ok) {
                   setSkipped(values => values.filter(path => path !== undoNote.path));
                   setSelected(undoNote.path);
@@ -161,7 +161,7 @@ function StudyPostpone({ note, row, controller, disabled, onDone }: { note: Note
         event.preventDefault();
         const due = new Date(date);
         if (!disabled && resolved && Number.isFinite(due.getTime())) {
-          void controller.action(note, row.id, 'stage-postpone', { due: due.toISOString() }).then(ok => {
+          void controller.action(note, row, 'stage-postpone', { due: due.toISOString() }).then(ok => {
             if (ok) onDone();
           });
         }
@@ -204,7 +204,7 @@ function StudyLaneCard({ note: listed, row, controller, disabled, onDone, onOpen
   };
   const rate = (rating: Familiarity) => {
     if (canRate) {
-      void controller.action(note, row.id, 'stage-review', { rating }).then(ok => {
+      void controller.action(note, row, 'stage-review', { rating }).then(ok => {
         if (ok) onDone();
       });
     }

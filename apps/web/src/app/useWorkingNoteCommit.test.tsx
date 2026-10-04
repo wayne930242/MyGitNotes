@@ -6,7 +6,7 @@ import { readWorkingNotes, updateWorkingNote } from '../lib/working-notes.js';
 import { draftScope, repositoryOf, type WorkspaceRepository } from '../lib/workspace-repositories.js';
 import type { FileChange, NoteItem } from '../lib/types.js';
 import { documentDraftKey } from '../lib/use-workspace-document.js';
-import { screenDocumentClient } from '../lib/use-screen-page.js';
+import { focusDocumentClient } from '../lib/use-focus-page.js';
 
 const home: WorkspaceRepository = { id: 'github:me/notes@main', type: 'github', repository: 'me/notes', branch: 'main', revision: 'a'.repeat(40), write: true, notebooks: ['life'] };
 const other: WorkspaceRepository = { id: 'github:me/campaign@main', type: 'github', repository: 'me/campaign', branch: 'main', revision: 'b'.repeat(40), write: true, notebooks: ['trpg'] };
@@ -41,7 +41,7 @@ function commitHook() {
   };
   const clearCommittedDrafts = vi.fn();
   const setRepositoryRevision = vi.fn();
-  const { result } = renderHook(() => useWorkingNoteCommit({ documents: [], config: null, sourceId: home.id, t: ((key: string, params?: Record<string, string>) => `${key} ${JSON.stringify(params ?? {})}`) as never, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError: vi.fn() }));
+  const { result } = renderHook(() => useWorkingNoteCommit({ documents: [], sourceId: home.id, t: ((key: string, params?: Record<string, string>) => `${key} ${JSON.stringify(params ?? {})}`) as never, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError: vi.fn() }));
   return { ...result.current, clearCommittedDrafts, setRepositoryRevision };
 }
 
@@ -94,10 +94,10 @@ it('commits equal paths of two repositories to their own repositories', async ()
 
 it('commits a document draft with the group of the repository that holds it', async () => {
   stubServer();
-  const page = { version: 2, rows: [{ id: 'lane', notebookId: 'trpg', kind: 'custom', name: 'Lane', view: 'small', items: [] }] };
-  localStorage.setItem(documentDraftKey(screenDocumentClient, other.id), JSON.stringify({ page, base: { version: 2, rows: [] }, revision: other.revision }));
+  const page = { version: 1, focuses: [{ id: 'reading', notebookId: 'trpg', name: 'Reading', division: 'single', panes: [{ tabs: [] }] }] };
+  localStorage.setItem(documentDraftKey(focusDocumentClient, other.id), JSON.stringify({ page, base: { version: 1, focuses: [] }, revision: other.revision }));
   const { commitWorkingNotes } = commitHook();
-  await commitWorkingNotes([change('.github-notes-screen.yaml', other)], 'docs: lanes');
-  expect(commits.map(commit => [commit.repository, commit.documents.map((document: any) => document.path)])).toEqual([[other.id, ['.github-notes-screen.yaml']]]);
-  expect(localStorage.getItem(documentDraftKey(screenDocumentClient, other.id))).toBeNull();
+  await commitWorkingNotes([change('.github-notes-focus.yaml', other)], 'docs: focus');
+  expect(commits.map(commit => [commit.repository, commit.documents.map((document: any) => document.path)])).toEqual([[other.id, ['.github-notes-focus.yaml']]]);
+  expect(localStorage.getItem(documentDraftKey(focusDocumentClient, other.id))).toBeNull();
 });

@@ -2,23 +2,23 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { horizontalListSortingStrategy, SortableContext, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Brain, ChevronLeft, ChevronRight, Columns2, Columns3, GripVertical, LayoutGrid, Network, Plus, SlidersHorizontal, X, Zap } from 'lucide-react';
+import { GripVertical, Plus, X } from 'lucide-react';
 import type { CompilationItem, CompilationRow } from '@mygitnotes/core/compilation';
-import { type NotebookFacets, noteQueryStatuses } from '@mygitnotes/core/note-query';
+import type { NotebookFacets } from '@mygitnotes/core/note-query';
 import type { NotebookConfig } from '../lib/types.js';
 import { useLaneNotes } from '../lib/compilation-queries.js';
 import type { StudyController } from '../lib/use-study-workspace.js';
 import { compilationRowItems, studyRowItems } from '../lib/compilation-content.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { Button } from './Button.js';
+import { CompilationHeader } from './CompilationHeader.js';
 import { CompilationCard, type CompilationContentProps, compilationItemTitle } from './CompilationCard.js';
 import { NoteListSentinel } from './NoteListSentinel.js';
-import { Select } from './Select.js';
 import type { SortConfig } from '../lib/note-sort.js';
 import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
 import { LoadingStatus } from './LoadingStatus.js';
 
-export const compilationViewTabs = [{ value: 'thumbnail', icon: LayoutGrid }, { value: 'small', icon: Columns3 }, { value: 'medium', icon: Columns2 }, { value: 'graph', icon: Network }] as const;
+export { compilationViewTabs } from './CompilationHeader.js';
 
 export function createLaneNoteContext(row: CompilationRow, notebooks: NotebookConfig[]): { notebookId?: string; folder?: string; tag?: string; } | null {
   if (row.kind !== 'dynamic') return null;
@@ -62,10 +62,9 @@ export function MovableCard({ item, row, reorder, disabled, remove, ...content }
   /* eslint-enable react/refs */
 }
 
-export function CompilationLane({ row, graph, reorder, disabled, study, facets, notebooks, assets, onOpen, onStudy, onStudyChange, onView, onSort, onAdd, onRemove, onCreateNote, readOnly, onAddToFocus }: Omit<CompilationContentProps, 'notes'> & { graph?: ReactNode; facets?: Record<string, NotebookFacets>; row: CompilationRow; reorder: boolean; disabled: boolean; study: StudyController; readOnly?: boolean; onAddToFocus?: () => void; onStudy?: () => void; onView?: (view: CompilationRow['view']) => void; onAdd?: () => void; onRemove?: (id: string) => void; onSort?: (sort: SortConfig) => void; onStudyChange?: (study: NonNullable<CompilationRow['study']>) => void; onCreateNote?: (context?: { notebookId?: string; folder?: string; tag?: string; }) => void; }) {
+export function CompilationLane({ row, graph, reorder, disabled, study, facets, notebooks, assets, onOpen, onStudy, onStudyChange, onView, onSort, onAdd, onRemove, onCreateNote, readOnly, onAddToFocus, extra }: Omit<CompilationContentProps, 'notes'> & { graph?: ReactNode; extra?: ReactNode; facets?: Record<string, NotebookFacets>; row: CompilationRow; reorder: boolean; disabled: boolean; study: StudyController; readOnly?: boolean; onAddToFocus?: () => void; onStudy?: () => void; onView?: (view: CompilationRow['view']) => void; onAdd?: () => void; onRemove?: (id: string) => void; onSort?: (sort: SortConfig) => void; onStudyChange?: (study: NonNullable<CompilationRow['study']>) => void; onCreateNote?: (context?: { notebookId?: string; folder?: string; tag?: string; }) => void; }) {
   const { t } = useTranslation();
   const host = useRef<HTMLElement>(null), strip = useRef<HTMLDivElement>(null);
-  const [queryOpen, setQueryOpen] = useState(false);
   const [clock, setClock] = useState(() => new Date());
   useEffect(() => {
     const timer = setInterval(() => setClock(new Date()), 30000);
@@ -76,113 +75,33 @@ export function CompilationLane({ row, graph, reorder, disabled, study, facets, 
   const content: CompilationContentProps = { notebooks, assets, onOpen, notes: laneNotes.notes };
   const ordinaryRow = { ...row, study: { ...row.study, filter: 'all' as const, dueFirst: false } };
   const items = studyRowItems(compilationRowItems(row, content.notes, content.assets, content.notebooks), ordinaryRow, content.notes, study.study, clock);
-  const query = row.study || { filter: 'all' as const, dueFirst: false };
-  const filtered = Boolean(query.status);
+  const filtered = Boolean(row.study?.status);
   const drop = useDroppable({ id: `lane:${row.id}`, disabled: readOnly || disabled || !reorder || filtered || row.kind !== 'custom', data: { rowId: row.id, empty: row.kind === 'custom' && !row.items.length } });
-  const statuses = noteQueryStatuses(content.notebooks, row.notebookId, Object.keys(facets?.[row.notebookId]?.statuses || {}));
   useAltWheelHorizontalScroll(host, strip);
   const scroll = (direction: number) => strip.current?.scrollBy({ left: direction * strip.current.clientWidth * .8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
-  const source = row.kind === 'dynamic' ? row.source.kind === 'tag' ? `#${row.source.tag}` : row.source.path : '';
   const handleCreateInLane = () => {
     const context = createLaneNoteContext(row, content.notebooks);
     if (context) onCreateNote?.(context);
   };
   return (
     <section id={`screen-lane-${row.id}`} ref={host} className={`screen-lane screen-view-${row.view} ${row.kind === 'dynamic' ? 'screen-lane-dynamic' : ''}`} aria-label={row.name}>
-      <header className='screen-lane-header'>
-        <div className='screen-lane-heading'>
-          <h3>{row.name}</h3>
-          <span className='screen-count'>{items.length}</span>
-          {row.kind === 'dynamic' && (
-            <span className='screen-dynamic-label' title={t('screen.dynamicHint')}>
-              <Zap size={12} />
-              {t('screen.dynamic')}
-              {' · '}
-              {source}
-            </span>
-          )}
-        </div>
-        <div className='screen-lane-actions'>
-          {!readOnly && (
-            <Button type='button' size='icon' className={`screen-lane-query-toggle ${filtered ? 'is-active' : ''}`} aria-label={`${t('screen.filtersAndSort')}: ${row.name}`} title={t('screen.filtersAndSort')} aria-expanded={queryOpen} aria-controls={`screen-query-${row.id}`} onClick={() => setQueryOpen(open => !open)}>
-              <SlidersHorizontal size={18} />
-            </Button>
-          )}
-          {!readOnly && (
-            <div id={`screen-query-${row.id}`} className='screen-lane-query' data-open={queryOpen}>
-              <label className='screen-lane-filter'>
-                {t('study.status')}
-                <select className='ui-control' disabled={disabled} value={query.status || ''} onChange={event => onStudyChange?.({ ...query, status: event.target.value || undefined })}>
-                  <option value=''>{t('study.filter.all')}</option>
-                  {statuses.map(status => <option key={status} value={status}>{status}</option>)}
-                </select>
-              </label>
-              {row.kind === 'dynamic' && (
-                <label className='screen-lane-sort'>
-                  <span>{t('sort.select')}</span>
-                  <Select
-                    className='screen-sort-select'
-                    aria-label={`${t('sort.select')}: ${row.name}`}
-                    disabled={disabled}
-                    value={`${row.sort?.field || 'title'}:${row.sort?.order || 'asc'}`}
-                    onValueChange={value => {
-                      const [field, order] = value.split(':') as [SortConfig['field'], SortConfig['order']];
-                      onSort?.({ field, order });
-                    }}
-                    options={([['updated:desc', 'sort.updatedDesc'], ['updated:asc', 'sort.updatedAsc'], ['created:desc', 'sort.createdDesc'], ['created:asc', 'sort.createdAsc'], ['title:asc', 'sort.titleAsc'], ['title:desc', 'sort.titleDesc'], ['status:asc', 'sort.status']] as const).map(([value, label]) => ({ value, label: t(label) }))}
-                  />
-                </label>
-              )}
-            </div>
-          )}
-          {!readOnly && <Select className='screen-view-select' aria-label={`${t('screen.view')}: ${row.name}`} value={row.view} disabled={disabled} onValueChange={value => onView?.(value as CompilationRow['view'])} options={(['thumbnail', 'small', 'medium', 'graph'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} />}
-          {!readOnly && (
-            <div className='screen-view-tabs' role='group' aria-label={`${t('screen.view')}: ${row.name}`}>
-              {compilationViewTabs.map(({ value, icon: Icon }) => (
-                <Button
-                  key={value}
-                  type='button'
-                  disabled={disabled}
-                  size='icon'
-                  title={t(`screen.${value}`)}
-                  aria-label={t(`screen.${value}`)}
-                  aria-pressed={row.view === value}
-                  onClick={() => onView?.(value)}
-                >
-                  <Icon size={16} />
-                </Button>
-              ))}
-            </div>
-          )}
-          {!readOnly && (
-            <Button type='button' size='icon' className='screen-start-study' aria-label={`${t('study.start')}: ${row.name}`} title={t('study.start')} onClick={onStudy}>
-              <Brain size={18} />
-            </Button>
-          )}
-          {!readOnly && onAddToFocus && (
-            <Button type='button' size='icon' className='screen-add-to-focus' aria-label={`${t('focus.addTo')}: ${row.name}`} title={t('focus.addTo')} onClick={onAddToFocus}>
-              <LayoutGrid size={18} />
-            </Button>
-          )}
-          {!readOnly && (row.kind === 'custom'
-            ? (
-              <Button type='button' size='icon' disabled={disabled} onClick={onAdd} aria-label={`${t('screen.addItem')}: ${row.name}`}>
-                <Plus size={16} />
-              </Button>
-            )
-            : (
-              <Button type='button' size='icon' disabled={disabled} onClick={handleCreateInLane} aria-label={`${t('screen.createNoteInLane')}: ${row.name}`} title={t('screen.createNoteInLane')}>
-                <Plus size={16} />
-              </Button>
-            ))}
-          <Button type='button' size='icon' className='screen-lane-scroll' aria-label={`${t('screen.scrollLeft')}: ${row.name}`} onClick={() => scroll(-1)}>
-            <ChevronLeft size={16} />
-          </Button>
-          <Button type='button' size='icon' className='screen-lane-scroll' aria-label={`${t('screen.scrollRight')}: ${row.name}`} onClick={() => scroll(1)}>
-            <ChevronRight size={16} />
-          </Button>
-        </div>
-      </header>
+      <CompilationHeader
+        row={row}
+        count={items.length}
+        disabled={disabled}
+        readOnly={readOnly}
+        notebooks={content.notebooks}
+        facets={facets}
+        extra={extra}
+        onAddToFocus={onAddToFocus}
+        onStudy={onStudy}
+        onView={onView}
+        onAdd={onAdd}
+        onSort={onSort}
+        onStudyChange={onStudyChange}
+        onCreateInSource={handleCreateInLane}
+        onScroll={row.view === 'graph' ? undefined : scroll}
+      />
       {row.view === 'graph' ? graph : (
         <div ref={readOnly ? undefined : drop.setNodeRef} className={!readOnly && drop.isOver ? 'screen-drop-target' : ''}>
           <div ref={strip} className='screen-lane-strip' tabIndex={0} aria-label={`${row.name} · ${t('screen.items')}`}>

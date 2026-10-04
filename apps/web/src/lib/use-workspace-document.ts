@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { stringify } from 'yaml';
-import type { ScreenNotebookConfig, WorkspaceDocument } from '@mygitnotes/core';
+import type { WorkspaceDocument } from '@mygitnotes/core';
 import { type TranslationKey, useTranslation } from './i18n/index.js';
 import { createUnifiedDiff } from './unified-diff.js';
 
@@ -30,11 +30,11 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 export const documentDraftKey = (client: Pick<WorkspaceDocumentClient<unknown>, 'draftKey'>, repository: string) => `github-notes:${client.draftKey}:${repository}`;
 
 /** A stored draft; drafts saved before a format change migrate the same way as the stored file. */
-export function readDocumentDraft<T>(client: WorkspaceDocumentClient<T>, repository: string, config: ScreenNotebookConfig | null, fallbackBase: T): WorkspaceDocumentDraft<T> | undefined {
+export function readDocumentDraft<T>(client: WorkspaceDocumentClient<T>, repository: string, fallbackBase: T): WorkspaceDocumentDraft<T> | undefined {
   const raw = localStorage.getItem(documentDraftKey(client, repository));
   if (!raw) return;
   const value = JSON.parse(raw);
-  return { page: client.document.read(value.page, config), base: value.base ? client.document.read(value.base, config) : fallbackBase, revision: String(value.revision), legacy: !value.base };
+  return { page: client.document.read(value.page), base: value.base ? client.document.read(value.base) : fallbackBase, revision: String(value.revision), legacy: !value.base };
 }
 
 /** A document draft of one repository, waiting in Changes for a remote commit. */
@@ -50,12 +50,12 @@ export interface PendingDocument {
 const documentDiff = (file: string, base: unknown, page: unknown) => createUnifiedDiff(file, file, stringify(base), stringify(page));
 
 /** Every stored document draft of the given repositories, whichever notebook is open. */
-export function pendingDocumentDrafts(clients: WorkspaceDocumentClient<unknown>[], repositories: string[], config: ScreenNotebookConfig | null): PendingDocument[] {
+export function pendingDocumentDrafts(clients: WorkspaceDocumentClient<unknown>[], repositories: string[]): PendingDocument[] {
   return repositories.flatMap(repository =>
     clients.flatMap(client => {
       let draft;
       try {
-        draft = readDocumentDraft(client, repository, config, client.document.empty());
+        draft = readDocumentDraft(client, repository, client.document.empty());
       } catch (error) {
         return [{ repository, file: client.document.file, page: undefined, base: undefined, diff: '', error: (error as Error).message }];
       }
@@ -68,9 +68,9 @@ export function pendingDocumentDrafts(clients: WorkspaceDocumentClient<unknown>[
 export const discardDocumentDraft = (client: Pick<WorkspaceDocumentClient<unknown>, 'draftKey'>, repository: string) => localStorage.removeItem(documentDraftKey(client, repository));
 
 /** Settles a committed draft: clears it, or keeps later edits on top of the committed page. */
-export function settleDocumentDraft(client: WorkspaceDocumentClient<unknown>, repository: string, sent: { page: unknown; }, revision: string, config: ScreenNotebookConfig | null) {
+export function settleDocumentDraft(client: WorkspaceDocumentClient<unknown>, repository: string, sent: { page: unknown; }, revision: string) {
   const key = documentDraftKey(client, repository);
-  const latest = readDocumentDraft(client, repository, config, sent.page);
+  const latest = readDocumentDraft(client, repository, sent.page);
   if (!latest || same(latest.page, sent.page)) localStorage.removeItem(key);
   else localStorage.setItem(key, JSON.stringify({ page: latest.page, base: sent.page, revision }));
 }
@@ -79,7 +79,7 @@ export function settleDocumentDraft(client: WorkspaceDocumentClient<unknown>, re
  * Device draft, autosave on local main, and commit handoff for one workspace document of `repository`,
  * the repository of the open notebook.
  */
-export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, repository: string | undefined, onSaved: () => void, remote = false, enabled = true, config: ScreenNotebookConfig | null = null) {
+export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, repository: string | undefined, onSaved: () => void, remote = false, enabled = true) {
   const { t } = useTranslation();
   const { document, endpoint, messages } = client;
   const [page, setPage] = useState<T>(document.empty);
@@ -91,17 +91,13 @@ export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, repo
   /* eslint-disable react/refs -- Document callbacks and the saved comparison baseline remain current without restarting loads. */
   saved.current = onSaved;
   /* eslint-enable react/refs */
-  const notebooks = useRef(config);
-  /* eslint-disable react/refs -- Document callbacks and the saved comparison baseline remain current without restarting loads. */
-  notebooks.current = config;
-  /* eslint-enable react/refs */
   const key = documentDraftKey(client, repository ?? '');
   const target = repository ? `${endpoint}?repository=${encodeURIComponent(repository)}` : endpoint;
   const currentKey = useRef(key);
   /* eslint-disable react/refs -- Document callbacks and the saved comparison baseline remain current without restarting loads. */
   currentKey.current = key;
   /* eslint-enable react/refs */
-  const readDraft = useCallback((): WorkspaceDocumentDraft<T> | undefined => readDocumentDraft(client, repository ?? '', notebooks.current, base.current), [client, repository]);
+  const readDraft = useCallback((): WorkspaceDocumentDraft<T> | undefined => readDocumentDraft(client, repository ?? '', base.current), [client, repository]);
   const load = useCallback(async (discard = false) => {
     if (!enabled || !repository) return;
     setLoading(true);

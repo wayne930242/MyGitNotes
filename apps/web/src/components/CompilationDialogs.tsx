@@ -30,7 +30,7 @@ function CompilationRowDialog({ notebooks, assets, folders, selectedNotebookId, 
   const [stageError, setStageError] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const nb = notebooks.find(nb => nb.id === notebookId);
-  const draftRow: CompilationRow = kind === 'custom' ? { id: row?.id || 'draft', name: name || 'draft', view, notebookId, kind: 'custom', items: row?.kind === 'custom' ? row.items : [] } : { id: row?.id || 'draft', name: name || 'draft', view, notebookId, kind: 'dynamic', source: kind === 'tag' ? { kind: 'tag', tag, notebookId } : { kind: 'folder', notebookId, path: folder || nb?.root || '', recursive } };
+  const draftRow: CompilationRow = kind === 'custom' ? { id: row?.id || 'draft', name: name || 'draft', view, notebookId, path: row?.path ?? '', kind: 'custom', items: row?.kind === 'custom' ? row.items : [] } : { id: row?.id || 'draft', name: name || 'draft', view, notebookId, path: row?.path ?? '', kind: 'dynamic', source: kind === 'tag' ? { kind: 'tag', tag, notebookId } : { kind: 'folder', notebookId, path: folder || nb?.root || '', recursive } };
   const progression = customProgression || defaultStudyProgression(studyLaneStatuses(draftRow, notebooks)) || { stages: [], easy: 'two' as const };
   const facets = useNoteFacets(true);
   const tags = Object.keys(facets.facets?.[notebookId]?.tags || {}).sort();
@@ -48,7 +48,7 @@ function CompilationRowDialog({ notebooks, assets, folders, selectedNotebookId, 
             setAdvancedOpen(true);
             return;
           }
-          const base = { id: row?.id || crypto.randomUUID(), notebookId, name: name.trim() || t(kind === 'custom' ? 'screen.custom' : 'screen.dynamic'), view, ...(row?.graph ? { graph: row.graph } : {}), ...(studyChanged ? { study: { ...row?.study, filter: studyFilter, dueFirst: true } } : row?.study ? { study: row.study } : {}), ...(studyChanged && result.success ? { progression: result.data } : row?.progression ? { progression: row.progression } : {}) };
+          const base = { id: row?.id || crypto.randomUUID(), notebookId, path: row?.path ?? '', ...(row?.tags ? { tags: row.tags } : {}), ...(row?.status ? { status: row.status } : {}), name: name.trim() || t(kind === 'custom' ? 'screen.custom' : 'screen.dynamic'), view, ...(row?.graph ? { graph: row.graph } : {}), ...(studyChanged ? { study: { ...row?.study, filter: studyFilter, dueFirst: true } } : row?.study ? { study: row.study } : {}), ...(studyChanged && result.success ? { progression: result.data } : row?.progression ? { progression: row.progression } : {}) };
           const sort = row?.kind === 'dynamic' && row.sort ? { sort: row.sort } : {};
           onApply(kind === 'custom' ? { ...base, kind: 'custom', items: row?.kind === 'custom' ? row.items : [] } : { ...base, kind: 'dynamic', ...sort, source: kind === 'tag' ? { kind: 'tag', tag: tag.trim(), notebookId } : { kind: 'folder', notebookId, path: folder || nb!.root, recursive } });
           onClose();
@@ -87,7 +87,7 @@ function CompilationRowDialog({ notebooks, assets, folders, selectedNotebookId, 
         )}
         <label>
           {t('screen.view')}
-          <Select aria-label={t('screen.view')} value={view} disabled={disabled} onValueChange={value => setView(value as CompilationRow['view'])} options={(['thumbnail', 'small', 'medium', 'graph'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} />
+          <Select aria-label={t('screen.view')} value={view} disabled={disabled} onValueChange={value => setView(value as CompilationRow['view'])} options={(['thumbnail', 'small', 'medium', 'stack', 'graph'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} />
         </label>
         <details className='study-advanced' open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}>
           <summary>{t('study.advanced')}</summary>

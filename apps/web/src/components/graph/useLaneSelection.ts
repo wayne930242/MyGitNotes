@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { CompilationRow } from '@mygitnotes/core/compilation';
 import type { FilterControls } from '../../lib/filter-controls.js';
-import type { ScreenController } from '../../lib/use-screen-page.js';
+import type { CompilationController } from '../../lib/use-compilation.js';
 
 /** Which lane(s) the graph shows, driven by the `lanes`/`laneScope`/`notebook` URL params, and lane UI toggles. */
-export function useLaneSelection({ lane, screen, filters }: { lane?: CompilationRow; screen?: ScreenController; filters?: FilterControls; }) {
+export function useLaneSelection({ lane, screen, filters }: { lane?: CompilationRow; screen?: CompilationController; filters?: FilterControls; }) {
   const [params, setParams] = useSearchParams();
   const laneIds = lane ? [lane.id] : params.getAll('lanes');
   const laneKey = laneIds.join(',');

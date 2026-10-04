@@ -1,7 +1,6 @@
 import { noteRefKey } from '@mygitnotes/core/note-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { changeDivision, closeTab, emptyFocusLayout, findFocusTabInPane, FOCUS_MAX_FOCUSES, FOCUS_MAX_TABS, type FocusDivision, FocusError, type FocusLayout, focusPaneCount, type FocusTab, focusTabCount, focusTabKey, moveTab as moveFocusTab, nameFocus, notebookFocuses, placeTab, placeTabs, pruneFocus, removeFocus, renameFocus, updateFocus } from '@mygitnotes/core/focus-page';
-import type { CompilationRow } from '@mygitnotes/core/compilation';
 import type { FocusPageController } from './use-focus-page.js';
 import { useNoteLookup } from './use-note-queries.js';
 import { activatePane, browseTarget, CURRENT_FOCUS, emptyFocusView, entryView, type FocusEntryView, type FocusViewState, focusViewStorageKey, readFocusView, shownAfterClose, showTab, sideTarget } from './focus-view.js';
@@ -17,8 +16,6 @@ interface NoteFocusOptions {
   restoreLast?: boolean;
   defaultFocus?: string | null;
   writable: boolean;
-  /** The notebook's lanes, or undefined while they are unknown. */
-  lanes: readonly CompilationRow[] | undefined;
   /** Saves the pending edits of the editors of `paths` before they unmount; false keeps the current view. */
   flushEditors: (paths?: readonly string[]) => Promise<boolean>;
 }
@@ -42,7 +39,7 @@ const notePaths = (keys: (string | null)[]) => keys.map(notePath).filter((path):
 const noteKeys = (notebookId: string, keys: (string | null)[]) => notePaths(keys).map(path => noteRefKey({ notebookId, path }));
 
 /** Named Focus (Git-synced through the Focus workspace document) and this browser's (current) Focus and view state for one notebook. */
-export function useNoteFocus({ page, notebookId, scope, focusKey, restoreLast = false, defaultFocus = null, writable, lanes, flushEditors }: NoteFocusOptions) {
+export function useNoteFocus({ page, notebookId, scope, focusKey, restoreLast = false, defaultFocus = null, writable, flushEditors }: NoteFocusOptions) {
   const key = focusViewStorageKey(scope, notebookId);
   const [stored, setStored] = useState(() => ({ key, view: loadView(key) }));
   const view = stored.key === key ? stored.view : loadView(key);
@@ -75,14 +72,14 @@ export function useNoteFocus({ page, notebookId, scope, focusKey, restoreLast = 
   const requested = focusKey ?? (restoreLast ? view.last ?? defaultFocus : null);
   const shown = requested && known(requested) ? requested : null;
   // The displayed Focus's notes are read (without bodies) for tab titles and to hide notes that no longer exist.
-  const storedPaths = shown ? (storedLayout(shown)?.panes ?? []).flatMap(pane => pane.tabs.flatMap(tab => tab.kind === 'note' ? [tab.path] : [])) : [];
+  const storedPaths = shown ? (storedLayout(shown)?.panes ?? []).flatMap(pane => pane.tabs.map(tab => tab.path)) : [];
   // A Focus belongs to one notebook, so its tabs name notes by path.
   const lookup = useNoteLookup(storedPaths.map(path => ({ notebookId, path })), false);
   const notes = useMemo(() => new Map(lookup.notes.map(note => [note.path, note])), [lookup.notes]);
   const settled = !lookup.loading && !lookup.error;
   /** A tab is kept until its note or lane is known to be missing. */
-  const present = (tab: FocusTab) => tab.kind === 'note' ? !settled || !storedPaths.includes(tab.path) || notes.has(tab.path) : !lanes || lanes.some(row => row.id === tab.id);
-  /** Missing notes and lanes are hidden now and dropped on the next write. */
+  const present = (tab: FocusTab) => !settled || !storedPaths.includes(tab.path) || notes.has(tab.path);
+  /** Missing notes and compilations are hidden now and dropped on the next write. */
   const layoutOf = (target: string) => {
     const layout = storedLayout(target);
     return layout && pruneFocus(layout, present);

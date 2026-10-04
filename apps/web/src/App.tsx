@@ -27,7 +27,7 @@ import { WorkspaceLinks } from './components/WorkspaceLinks.js';
 import { type NoteLocation, NoteLocationProvider, readOnlyReason } from './lib/note-location.js';
 import { ImageLightbox } from './components/ImageLightbox.js';
 import { useNavigate } from 'react-router-dom';
-import { notebookRoute, noteTrail, parseWorkspaceRoute } from './lib/routes.js';
+import { notebookRoute, noteRoute, noteTrail, parseWorkspaceRoute } from './lib/routes.js';
 import { draftScope } from './lib/workspace-repositories.js';
 import { sameValue } from './lib/merge-note.js';
 import React, { useMemo, useState } from 'react';
@@ -60,10 +60,11 @@ import { NoteEditingProvider, useNoteEditorRegistry } from './lib/note-editing.j
 import { FocusArea } from './components/FocusArea.js';
 import { FocusControls } from './components/FocusControls.js';
 import { AddToFocusDialog } from './components/AddToFocusDialog.js';
-import { FocusLaneTab } from './components/FocusLaneTab.js';
-import { FocusList } from './components/FocusList.js';
+import { CompilationView } from './components/CompilationView.js';
+import { LegacyScreenRedirect } from './components/LegacyScreenRedirect.js';
+import { CompilationActionsProvider } from './lib/compilation-actions.js';
+import { useCompilationActionsValue } from './app/useCompilationActionsValue.js';
 import { BrowseDock, BrowseDockToggle, CARD_TWO_ROW_HEIGHT } from './components/BrowseDock.js';
-import type { CompilationRow } from '@mygitnotes/core/compilation';
 import { RightPanel } from './components/RightPanel.js';
 import { FileManager, FileManagerDialog, FileMetadata } from './components/files/index.js';
 import { AgentSystemView } from './components/AgentSystemView.js';
@@ -76,8 +77,8 @@ import { I18nProvider, useTranslation } from './lib/i18n/index.js';
 import { AlertCircle, AlertTriangle, X } from 'lucide-react';
 import { LoadingStatus } from './components/LoadingStatus.js';
 
-const ScreenPage = React.lazy(() => import('./components/ScreenPage.js').then(module => ({ default: module.ScreenPage })));
-const GraphPage = React.lazy(() => import('./components/GraphPage.js').then(module => ({ default: module.GraphPage })));
+const CompilationStudy = React.lazy(() => import('./components/CompilationStudy.js').then(module => ({ default: module.CompilationStudy })));
+const NotebookGraphPage = React.lazy(() => import('./components/NotebookGraphPage.js').then(module => ({ default: module.NotebookGraphPage })));
 
 const AppContent: React.FC = () => {
   useVisualViewport();
@@ -97,7 +98,7 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const editorRoute = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
 
-  const { selectedNotebookId, folders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, actionError, setActionError, repoRoot, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, screen, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
+  const { selectedNotebookId, folders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, actionError, setActionError, repoRoot, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
   const refreshDocuments = async () => {
     await Promise.all(documents.map(document => document.refresh()));
   };
@@ -147,7 +148,7 @@ const AppContent: React.FC = () => {
 
   const { facetsQuery, notebookFacets, notebookStatuses, newNoteStatuses, selectedTags, workspaceTagNames, noteTagActions, searchQuery, viewMode, folderless } = useBrowseFacets({ showHidden, config, scopeNotebookId, selectedFolders, selectedNotebookId, route, canManageTags, previewTagUsage, handleRenameTag, handleMergeTag, handleDeleteTag });
 
-  const { focusCapacity, notebookLanes, noteFocus, focusDisplay, focusNarrowView, setFocusNarrowView, addingToFocus, setAddingToFocus, activePaneNote, focusDocumentPanel, setDocumentContainer, showFocus } = useFocusPanes({ screen, selectedNotebookId, focusPage, remote, sourceId, repoRoot, activeTab, route, canWrite: canWriteNotebook(selectedNotebookId), editorRegistry, location, navigate, editorRoute, config });
+  const { focusCapacity, noteFocus, focusDisplay, focusNarrowView, setFocusNarrowView, addingToFocus, setAddingToFocus, activePaneNote, focusDocumentPanel, setDocumentContainer, showFocus } = useFocusPanes({ selectedNotebookId, focusPage, remote, sourceId, repoRoot, activeTab, route, canWrite: canWriteNotebook(selectedNotebookId), editorRegistry, location, navigate, editorRoute, config });
 
   const { changeFilters, clearFilters, changeAllNotebooks, setActiveTab, agentSystemRef, resourceNavigationBusy, setResourceNavigationBusy, notebookSwitchBusy, setSelectedNotebookId, setSelectedFolder, setViewMode } = useWorkspaceNavigation({ location, queryState, selectedFolders, setFilterQuery, navigate, route, activeTab, selectedNotebookId, folderRoot, viewMode, selectedFolder, config, editorRegistry, fileManagerRef, loading, editorRoute });
 
@@ -181,7 +182,7 @@ const AppContent: React.FC = () => {
   // Create New Note dialog: its form state and the handlers that render or persist a new note draft.
   const { createError, isNewNoteOpen, setIsNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteFolder, setNewNoteFolder, newNoteTags, setNewNoteTags, newNoteTemplateId, setNewNoteTemplateId, newNoteFolders, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote } = useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, sourceId, newNoteStatuses, t, onCreated: handleOpenNote });
 
-  const { commitWorkingNotes } = useWorkingNoteCommit({ documents, config, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError });
+  const { commitWorkingNotes } = useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError });
   const { commitNoteFile } = useQuickNoteCommit({ remote, repositoryFor, refreshWorkspace, commitWorkingNotes });
 
   // Assets are scoped to whichever notebook the open note (or the selected browse notebook) belongs to.
@@ -315,42 +316,44 @@ const AppContent: React.FC = () => {
       )}
     </>
   );
-  const renderFocusLane = (row: CompilationRow, pane: number) => (
-    <FocusLaneTab
-      key={row.id}
-      row={row}
-      repository={repositoryFor(row.notebookId)?.id}
+  const compilationActions = useCompilationActionsValue({ remote, canWriteNotebook, repositoryId: notebookId => repositoryFor(notebookId)?.id, revisionFor, save: handleSaveNote, remove: handleDeleteNote, stageWorkingNote, invalidateNotes, setGitStatus, createNote: openNewNote });
+  const openCompilationFolder = (item: { notebookId: string; path: string; }) => {
+    // A folder of this notebook filters the browse region and keeps the Focus; others open as they do elsewhere.
+    const notebook = config?.notebooks.find(nb => nb.id === item.notebookId);
+    if (item.notebookId !== selectedNotebookId || !notebook || !folderRoot) return false;
+    const assetRoot = `${folderRoot}/${notebook.assets || 'assets'}`;
+    if (item.path === assetRoot || item.path.startsWith(`${assetRoot}/`)) return false;
+    if (item.path !== folderRoot && !item.path.startsWith(`${folderRoot}/`)) return false;
+    setSelectedFolder(item.path === folderRoot ? null : item.path.slice(folderRoot.length + 1));
+    return true;
+  };
+  /** The compilation at `path` of the selected notebook, in a Focus pane (`pane`) or in zoom. */
+  const renderCompilation = (path: string, pane?: number) => (
+    <CompilationView
+      key={`${selectedNotebookId}:${path}`}
+      notebookId={selectedNotebookId}
+      path={path}
       notebooks={config?.notebooks || []}
-      graph={row.view === 'graph'
-        ? (
-          <React.Suspense fallback={<p role='status'>{t('graph.title')}</p>}>
-            <GraphPage notebooks={config?.notebooks || []} lane={row} screen={screen} />
-          </React.Suspense>
-        )
-        : undefined}
-      onOpenNote={note => void openInFocus(note, pane).then(opened => {
+      folders={folders}
+      frame={pane === undefined ? 'zoom' : 'pane'}
+      onOpenNote={note => void (pane === undefined ? handleOpenNote(note) : openInFocus(note, pane).then(opened => {
         if (!opened) void handleOpenNote(note);
-      })}
-      onOpenFolder={item => {
-        // A folder of this notebook filters the browse region and keeps the Focus; others open as they do on Screen.
-        const notebook = config?.notebooks.find(nb => nb.id === item.notebookId);
-        if (item.notebookId !== selectedNotebookId || !notebook || !folderRoot) return false;
-        const assetRoot = `${folderRoot}/${notebook.assets || 'assets'}`;
-        if (item.path === assetRoot || item.path.startsWith(`${assetRoot}/`)) return false;
-        if (item.path !== folderRoot && !item.path.startsWith(`${folderRoot}/`)) return false;
-        setSelectedFolder(item.path === folderRoot ? null : item.path.slice(folderRoot.length + 1));
-        return true;
-      }}
+      }))}
+      onOpenFolder={openCompilationFolder}
+      onClose={pane === undefined ? closeZoom : undefined}
     />
   );
 
+
   if (loading || loadError) return <ConnectionState loading={loading} error={loadError} onRetry={refreshWorkspace} />;
+  if (route.legacyScreen) return <LegacyScreenRedirect laneId={route.legacyLane} notebooks={config?.notebooks || []} onMissing={setActionError} />;
 
   return (
+    <CompilationActionsProvider value={compilationActions}>
     <WorkspaceLinks notebooks={config?.notebooks || []} folders={folders} onOpenNote={(note, anchor, source) => void openLink(note, anchor, source)}>
       <NoteLocationProvider locate={locateNote}>
         <NoteEditingProvider register={editorRegistry.register} editorProps={editorProps} flushEditors={editorRegistry.flushEditors} refreshNotes={refreshNotes} closeZoom={closeZoom} addToFocus={addToFocus}>
-          <div className='app-shell h-dvh w-full overflow-hidden flex flex-col font-sans transition-colors duration-200' data-workspace-tab={activeTab} data-screen-focus={activeTab === 'screen' && Boolean(route.lane)} style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}>
+          <div className='app-shell h-dvh w-full overflow-hidden flex flex-col font-sans transition-colors duration-200' data-workspace-tab={activeTab} data-screen-focus={Boolean(route.study)} style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}>
             {/* Core Branch User Guidance Banner (Theme-aware, harmonized with active palette) */}
             {!remote && homeBranch === 'core' && (
               <div className='shrink-0 flex-none px-4 py-2 text-xs flex items-center justify-between font-medium border-b transition-colors' style={{ backgroundColor: 'var(--color-sidebar)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
@@ -390,7 +393,7 @@ const AppContent: React.FC = () => {
               <div ref={sidebarGestureRef} className='workspace-body relative flex-1 min-h-0 min-w-0 flex overflow-hidden'>
                 <WorkspaceSplitLayout
                   // Collapsing the Notes browse dock hides the notebook sidebar with it; expanding the dock brings both back.
-                  hasSidebar={activeTab !== 'graph' && activeTab !== 'screen' && !(activeTab === 'notes' && dockToggle && noteFocus.view.dock.collapsed)}
+                  hasSidebar={activeTab !== 'graph' && !route.study && !(activeTab === 'notes' && dockToggle && noteFocus.view.dock.collapsed)}
                   sidebarDomId={activeTab === 'notes' ? 'notebook-panel' : activeTab === 'agent' ? 'agent-sidebar-panel' : activeTab === 'assets' ? 'assets-sidebar-panel' : activeTab === 'settings' ? 'settings-sidebar-panel' : undefined}
                   closeLabel={t('sidebar.closeFilters')}
                   rightPanelWidth={rightPanelWidth}
@@ -435,7 +438,7 @@ const AppContent: React.FC = () => {
                     />
                   }
                 >
-                  {notebookUnavailable && ['notes', 'assets', 'screen', 'graph'].includes(activeTab) && (
+                  {notebookUnavailable && ['notes', 'assets', 'graph'].includes(activeTab) && (
                     <main className='workspace-route notebook-unavailable'>
                       <section role='alert' className='notebook-unavailable-card'>
                         <AlertCircle aria-hidden='true' />
@@ -447,7 +450,7 @@ const AppContent: React.FC = () => {
                       </section>
                     </main>
                   )}
-                  {!notebookUnavailable && activeTab === 'notes' && (
+                  {!notebookUnavailable && activeTab === 'notes' && !route.study && (
                     <>
                       <WorkspaceSidebarPortal>
                         <Sidebar
@@ -493,7 +496,7 @@ const AppContent: React.FC = () => {
                         {noteFocus.layout
                           ? (
                             <BrowseDock placement={topDock ? 'top' : 'left'} size={topDock ? noteFocus.view.dock.top : noteFocus.view.dock.left} onSizeChange={size => noteFocus.setDock(topDock ? { top: size } : { left: size })} collapsed={noteFocus.view.dock.collapsed} narrow={focusCapacity === 1} narrowView={focusNarrowView} browse={height => browseRegion(true, height)}>
-                              <FocusArea focus={noteFocus} capacity={focusCapacity} lanes={notebookLanes ?? []} notebookRoot={folderRoot ?? ''} folders={folders} renderLane={renderFocusLane} onZoomNote={zoomFocusNote} documentPanel={focusDocumentPanel} />
+                              <FocusArea focus={noteFocus} capacity={focusCapacity} notebookRoot={folderRoot ?? ''} folders={folders} renderCompilation={renderCompilation} onZoomNote={zoomFocusNote} documentPanel={focusDocumentPanel} />
                             </BrowseDock>
                           )
                           : <div className='workspace-scroll'>{browseRegion(false, 0)}</div>}
@@ -510,31 +513,31 @@ const AppContent: React.FC = () => {
                       <FileManager key={`${sourceId}:${selectedNotebookId}`} ref={fileManagerRef} notebookId={selectedNotebookId} notebooks={config?.notebooks || []} onNotebookChange={id => void setSelectedNotebookId(id)} writable={canWrite} onSelectionChange={setSelectedFileEntry} metadataContainer={fileMetadataContainer} onShowMetadata={() => setFileMetadataOpen(true)} initialPath={new URLSearchParams(location.search).get('asset') || (new URLSearchParams(location.search).has('directory') ? `${folderRoot}/${config?.notebooks.find(nb => nb.id === selectedNotebookId)?.assets || 'assets'}${new URLSearchParams(location.search).get('directory') ? '/' + new URLSearchParams(location.search).get('directory') : ''}` : undefined)} onBusyChange={setResourceNavigationBusy} beforeChange={beforeFileChange} onChanged={onFilesChanged} onOpenIndex={openFileIndex} />
                     </main>
                   )}
-                  {!notebookUnavailable && activeTab === 'screen' && (
+                  {!notebookUnavailable && activeTab === 'notes' && route.study && (
                     <React.Suspense fallback={<LoadingStatus className='p-8'>{t('screen.loading')}</LoadingStatus>}>
-                      <ScreenPage
-                        key={remote ? sourceId : repoRoot}
-                        screen={screen}
-                        focusedLaneId={route.lane}
+                      <CompilationStudy
+                        key={`${selectedNotebookId}:${route.study}`}
+                        notebooks={config?.notebooks || []}
+                        folders={folders}
+                        notebookId={selectedNotebookId}
+                        path={route.study}
                         onStudySaved={() => {
                           if (remote) void refreshWorkspace(true);
                           else invalidateNotes();
                           void fetchGitStatus().then(result => setGitStatus(result.status)).catch(error => setActionError((error as Error).message));
                         }}
-                        notebooks={config?.notebooks || []}
-                        folders={folders}
-                        selectedNotebookId={selectedNotebookId}
                         onOpenNote={handleOpenNote}
-                        onCreateNote={openNewNote}
-                        focusSection={<FocusList focus={noteFocus} onOpen={id => navigate(`${notebookRoute(selectedNotebookId)}?${new URLSearchParams({ focus: id })}`)} />}
-                        onAddLaneToFocus={row => setAddingToFocus({ tab: { kind: 'lane', id: row.id }, label: row.name })}
+                        onBack={() => {
+                          const notebook = config?.notebooks.find(nb => nb.id === selectedNotebookId);
+                          navigate(notebook ? noteRoute(notebook.id, route.study!.slice(notebook.root.length + 1)) : '/notes');
+                        }}
                       />
                     </React.Suspense>
                   )}
                   {!notebookUnavailable && activeTab === 'graph' && (
                     <main className='workspace-route graph-main flex-1 w-full h-full relative min-h-0'>
                       <React.Suspense fallback={<p role='status' className='p-8'>{t('graph.title')}</p>}>
-                        <GraphPage key={remote ? sourceId : repoRoot} notebooks={config?.notebooks || []} filters={filterProps} folders={folders} screen={screen} />
+                        <NotebookGraphPage key={remote ? sourceId : repoRoot} notebookId={selectedNotebookId} notebooks={config?.notebooks || []} filters={filterProps} folders={folders} />
                       </React.Suspense>
                     </main>
                   )}
@@ -546,12 +549,6 @@ const AppContent: React.FC = () => {
                 </WorkspaceSplitLayout>
               </div>
             </SidebarProvider>
-            {activeTab !== 'screen' && screen.dirty && screen.error && (
-              <div role='alert' className='workspace-link-error'>
-                {screen.error}
-                <button className='ui-button' onClick={() => navigate('/screen')}>{t('nav.screen')}</button>
-              </div>
-            )}
             {/* Undo Toast Notification */}
             {undoToast && (
               <div className='fixed top-20 right-6 z-50 animate-in fade-in slide-in-from-top-3 duration-200'>
@@ -608,7 +605,7 @@ const AppContent: React.FC = () => {
               />
             )}
             {/* Note Editor Modal */}
-            <EditorModal key={fileEditorRevision} note={routedNote} committed={routedCommitted && typeof routedCommitted.content === 'string' ? routedCommitted as NoteItem : undefined} loading={routedLoading} isOpen={noteEditorOpen} />
+            <EditorModal key={fileEditorRevision} note={routedNote} committed={routedCommitted && typeof routedCommitted.content === 'string' ? routedCommitted as NoteItem : undefined} loading={routedLoading} isOpen={noteEditorOpen} renderCompilation={renderCompilation} />
             {addingToFocus && (
               <AddToFocusDialog
                 focus={noteFocus}
@@ -704,6 +701,7 @@ const AppContent: React.FC = () => {
         </NoteEditingProvider>
       </NoteLocationProvider>
     </WorkspaceLinks>
+    </CompilationActionsProvider>
   );
 };
 

@@ -1,5 +1,4 @@
 import { Button } from './Button.js';
-import { ScreenIcon } from './ScreenIcon.js';
 import React, { useEffect } from 'react';
 import { BookOpen, Bot, Image as ImageIcon, Keyboard, Network, Plus, Settings } from 'lucide-react';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -29,7 +28,7 @@ export function Header({ workspaceTitle, unavailableNotebooks = [], accountContr
   useEffect(() => {
     document.title = `${t(`nav.${activeTab}`)} · MyGitNotes`;
   }, [activeTab, t]);
-  const items = [{ id: 'notes', label: t('nav.notes'), icon: BookOpen }, { id: 'graph', label: t('nav.graph'), icon: Network }, { id: 'assets', label: t('nav.assets'), icon: ImageIcon }, { id: 'screen', label: t('nav.screen'), icon: ScreenIcon }] as const;
+  const items = [{ id: 'notes', label: t('nav.notes'), icon: BookOpen }, { id: 'graph', label: t('nav.graph'), icon: Network }, { id: 'assets', label: t('nav.assets'), icon: ImageIcon }, { id: 'settings', label: t('nav.settings'), icon: Settings }] as const;
   return (
     <header className='workspace-header'>
       <div className='header-layout'>
@@ -80,9 +79,6 @@ export function Header({ workspaceTitle, unavailableNotebooks = [], accountContr
             </button>
             <button type='button' disabled={navigationDisabled} className='ui-icon-button header-command' data-header-command='' aria-label={t('shortcuts.open')} title={t('shortcuts.open')} onClick={onOpenCommands}>
               <Keyboard size={17} />
-            </button>
-            <button type='button' disabled={navigationDisabled} className='ui-icon-button header-settings' data-header-settings='' aria-label={t('nav.settings')} title={t('nav.settings')} aria-current={activeTab === 'settings' ? 'page' : undefined} onClick={() => setActiveTab('settings')}>
-              <Settings size={17} />
             </button>
             {accountControls}
           </div>

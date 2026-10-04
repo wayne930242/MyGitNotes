@@ -4,7 +4,7 @@ import type { FocusLayout, FocusTab } from '@mygitnotes/core/focus-page';
 import { activatePane, browseTarget, CURRENT_FOCUS, displayedPanes, emptyFocusView, entryView, type FocusEntryView, type FocusViewState, focusViewStorageKey, groupShown, hasStoredFocusView, readFocusView, shownAfterClose, showTab, sideTarget } from './focus-view.js';
 
 const note = (path: string): FocusTab => ({ kind: 'note', path });
-const lane = (id: string): FocusTab => ({ kind: 'lane', id });
+const lane = (id: string): FocusTab => ({ kind: 'note', path: `notes/${id}.compilation.yml` });
 const pane = (...tabs: FocusTab[]) => ({ tabs });
 const layout = (division: FocusLayout['division'], ...panes: ReturnType<typeof pane>[]): FocusLayout => ({ division, panes });
 const entry = (overrides: Partial<FocusEntryView> = {}): FocusEntryView => ({ activePane: 0, shown: [], recent: [], ratios: {}, autoHide: [], ...overrides });
@@ -62,11 +62,11 @@ describe('readFocusView', () => {
 describe('entryView', () => {
   const twoPane = layout('columns-2', pane(note('a.md'), note('b.md')), pane(lane('l1')));
   it('normalizes a fresh key against the layout', () => {
-    expect(entryView(state(), 'missing', twoPane)).toEqual({ activePane: 0, shown: ['note:a.md', 'lane:l1'], recent: [0, 1], ratios: {}, autoHide: [false, false] });
+    expect(entryView(state(), 'missing', twoPane)).toEqual({ activePane: 0, shown: ['note:a.md', 'note:notes/l1.compilation.yml'], recent: [0, 1], ratios: {}, autoHide: [false, false] });
   });
   it('falls back to the first tab when the stored shown key is stale', () => {
-    const stored = entry({ shown: ['note:gone.md', 'lane:gone'] });
-    expect(entryView(state({ entries: { f: stored } }), 'f', twoPane).shown).toEqual(['note:a.md', 'lane:l1']);
+    const stored = entry({ shown: ['note:gone.md', 'note:notes/gone.compilation.yml'] });
+    expect(entryView(state({ entries: { f: stored } }), 'f', twoPane).shown).toEqual(['note:a.md', 'note:notes/l1.compilation.yml']);
   });
   it('shows null for a pane with no tabs', () => {
     const withEmpty = layout('columns-2', pane(note('a.md')), pane());

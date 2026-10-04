@@ -10,7 +10,6 @@ import type { WorkspaceState } from './workspace-state.js';
 
 interface Params {
   documents: WorkspaceState['documents'];
-  config: WorkspaceState['config'];
   sourceId: WorkspaceState['sourceId'];
   t: I18nContextValue['t'];
   stageWorkingNote: WorkspaceState['stageWorkingNote'];
@@ -34,7 +33,7 @@ interface CommitGroup {
 }
 
 /** Commits selected drafts one repository at a time, one commit each, stopping at the first repository that fails. */
-export function useWorkingNoteCommit({ documents, config, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError }: Params) {
+export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError }: Params) {
   /** One repository's drafts, merged onto its latest revision and committed as one commit; answers the Gists it failed to update. */
   const commitGroup = async ({ repository, entries, documents: sentDocuments }: CommitGroup, message: string): Promise<GistSync[]> => {
     if (!repository.write) throw new Error('Sign in with write access to this workspace before committing.');
@@ -80,7 +79,7 @@ export function useWorkingNoteCommit({ documents, config, sourceId, t, stageWork
     if (!Object.keys(sent).length && !sentDocuments.length) return [];
     const result = await commitRemoteNotes(repository.id, Object.values(sent).map(entry => ({ path: entry.note.path, content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base })), expected, message, sentDocuments.map(({ path, page, base }) => ({ path, page, base })));
     for (const document of sentDocuments) {
-      settleDocumentDraft(document.client, repository.id, document, result.revision, config);
+      settleDocumentDraft(document.client, repository.id, document, result.revision);
       // The open notebook's document shows the committed page and any edit made meanwhile.
       documents.find(live => live.client === document.client && live.repository === repository.id)?.refresh();
     }
@@ -102,7 +101,7 @@ export function useWorkingNoteCommit({ documents, config, sourceId, t, stageWork
       groups.set(repository.id, group);
       const client = documentClientOf(file.path);
       if (client) {
-        const draft = readDocumentDraft(client, repository.id, config, client.document.empty());
+        const draft = readDocumentDraft(client, repository.id, client.document.empty());
         if (!draft) throw new Error('Pending files changed. Review the selection again.');
         group.documents.push({ client, path: file.path, page: draft.page, base: draft.base });
         continue;

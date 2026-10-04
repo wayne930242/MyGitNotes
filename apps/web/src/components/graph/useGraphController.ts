@@ -2,7 +2,7 @@ import { noteRefKey } from '@mygitnotes/core/note-query';
 import { createGraphInteractions } from './createGraphInteractions.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type CompilationRow, type GraphLayout, ScreenPageSchema } from '@mygitnotes/core/compilation';
+import { COMPILATION_MAX_ITEMS, type CompilationRow, type GraphLayout } from '@mygitnotes/core/compilation';
 import { arrangeGraphLayout, graphLaneViewport, type GraphPlacement } from '../../lib/graph-layout.js';
 import { optimizeGraphLayout } from '../../lib/graph-topology-layout.js';
 import { useTranslation } from '../../lib/i18n/index.js';
@@ -294,13 +294,12 @@ export function useGraphController({ notebooks, filters, screen, lane, folders =
   const saveLane = () => {
     if (!screen?.writable || !name.trim() || !saveNotebook) return;
     const id = crypto.randomUUID(), current = currentLayout();
-    const row: CompilationRow = { id, kind: 'custom', name: name.trim(), view: 'graph', notebookId: saveNotebook, items: graphData.nodes.filter(node => visibleSelected.includes(node.id)).map(node => ({ id: crypto.randomUUID(), kind: 'note', notebookId: saveNotebook, path: node.path })), graph: persistedLayout({ nodes: current.nodes.filter(n => visibleSelected.includes(n.id)) }, saveNotebook) };
-    const next = ScreenPageSchema.safeParse({ ...screen.page, rows: [...screen.page.rows, row] });
-    if (!next.success) {
+    const row: CompilationRow = { id, path: '', kind: 'custom', name: name.trim(), view: 'graph', notebookId: saveNotebook, items: graphData.nodes.filter(node => visibleSelected.includes(node.id)).map(node => ({ id: crypto.randomUUID(), kind: 'note', notebookId: saveNotebook, path: node.path })), graph: persistedLayout({ nodes: current.nodes.filter(n => visibleSelected.includes(n.id)) }, saveNotebook) };
+    if (row.items.length > COMPILATION_MAX_ITEMS) {
       setNotice(t('screen.limit'));
       return;
     }
-    screen.change(next.data);
+    screen.change({ ...screen.page, rows: [...screen.page.rows, row] });
     setSaveOpen(false);
     setNotice(t('graph.laneCreated'));
   };

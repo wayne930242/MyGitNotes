@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { legacyAllNotebooksRoute, notebookRoute, noteReturnRoute, noteRoute, parseWorkspaceRoute, screenLaneRoute } from './routes.js';
+import { legacyAllNotebooksRoute, notebookRoute, compilationStudyRoute, noteReturnRoute, noteRoute, parseWorkspaceRoute } from './routes.js';
 describe('workspace URLs', () => {
   it('returns editors to their original workspace and preserves filters', () => {
     for (const origin of ['/graph?notebook=example', '/screen?notebook=work', '/notebooks/example/folders/projects?view=graph&tag=demo&q=hello']) {
       const search = '?' + new URLSearchParams({ returnTo: origin });
       expect(noteReturnRoute(search, 'other')).toBe(origin);
     }
-    expect(noteReturnRoute('?returnTo=screen', 'work')).toBe('/screen?notebook=work');
+    expect(noteReturnRoute('?returnTo=screen', 'work')).toBe('/notebooks/work');
     expect(noteReturnRoute('?returnTo=graph', 'work')).toBe('/graph?notebook=work');
     expect(noteReturnRoute('?folder=projects&view=card', 'work', 'projects')).toBe('/notebooks/work/folders/projects?view=card');
   });
@@ -39,7 +39,7 @@ describe('workspace URLs', () => {
     expect(parseWorkspaceRoute('/notes', '?showHidden=true').showHidden).toBe(true);
     expect(parseWorkspaceRoute('/notes', '').showHidden).toBe(false);
     expect(parseWorkspaceRoute('/notes', '?folder=').valid).toBe(true);
-    for (const tab of ['settings', 'assets', 'agent', 'screen', 'graph']) for (const suffix of ['', '/']) expect(parseWorkspaceRoute('/' + tab + suffix, '?notebook=work').tab).toBe(tab);
+    for (const tab of ['settings', 'assets', 'agent', 'graph']) for (const suffix of ['', '/']) expect(parseWorkspaceRoute('/' + tab + suffix, '?notebook=work').tab).toBe(tab);
     expect(parseWorkspaceRoute(noteRoute('work', 'note.md'), '?folder=projects&q=hello&tag=demo')).toMatchObject({ notebook: 'work', folder: 'projects', q: 'hello', tag: 'demo' });
   });
   it('rejects unknown pages, traversal and malformed URLs', () => {
@@ -47,12 +47,14 @@ describe('workspace URLs', () => {
   });
 });
 
-it('opens a dedicated lane and preserves it as the editor return route', () => {
-  const origin = screenLaneRoute('review-1') + '?notebook=work';
-  expect(parseWorkspaceRoute('/screen/lanes/review-1/', '?notebook=work')).toMatchObject({ valid: true, tab: 'screen', lane: 'review-1', notebook: 'work' });
-  expect(noteReturnRoute('?' + new URLSearchParams({ returnTo: origin }), 'work')).toBe(origin);
-  expect(parseWorkspaceRoute('/screen', '').lane).toBeNull();
+it('reads the former Screen URLs as redirects and the study session by its compilation path', () => {
+  expect(parseWorkspaceRoute('/screen', '')).toMatchObject({ valid: true, legacyScreen: true, legacyLane: null });
+  expect(parseWorkspaceRoute('/screen/lanes/review-1/', '?notebook=work')).toMatchObject({ valid: true, legacyScreen: true, legacyLane: 'review-1' });
   for (const invalid of ['/screen/lanes/a/b', '/screen/lanes/%00', '/screen/lanes/' + 'a'.repeat(65)]) expect(parseWorkspaceRoute(invalid, '').valid).toBe(false);
+  const study = compilationStudyRoute('work', 'notes/work/Review.compilation.yml');
+  expect(parseWorkspaceRoute(study.split('?')[0], '?' + study.split('?')[1])).toMatchObject({ valid: true, tab: 'notes', study: 'notes/work/Review.compilation.yml', notebook: 'work' });
+  expect(parseWorkspaceRoute('/notes/study', '').valid).toBe(false);
+  expect(parseWorkspaceRoute('/notes/study', '?path=../secret').valid).toBe(false);
 });
 
 describe('focus parameter', () => {
@@ -83,7 +85,7 @@ describe('all-notebooks scope', () => {
     expect(legacyAllNotebooksRoute('/notebooks/all', '?q=hello', 'rules')).toBe('/notebooks/rules?q=hello&notebook=rules&allNotebooks=true');
     expect(legacyAllNotebooksRoute('/notebooks/work', '?notebook=all', 'rules')).toBe('/notebooks/rules?notebook=rules&allNotebooks=true');
     expect(legacyAllNotebooksRoute('/graph', '?notebook=all&tag=demo', 'rules')).toBe('/graph?notebook=rules&tag=demo&allNotebooks=true');
-    for (const page of ['/screen', '/files', '/agent', '/settings']) {
+    for (const page of ['/files', '/agent', '/settings']) {
       expect(parseWorkspaceRoute(page, '?notebook=all').allNotebooks).toBe(false);
       expect(legacyAllNotebooksRoute(page, '?notebook=all', 'rules')).toBe(`${page}?notebook=rules`);
     }

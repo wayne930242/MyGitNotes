@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { RepositoryId } from '@mygitnotes/core/repository';
-import { useScreenPage } from './use-screen-page.js';
 import { useFocusPage } from './use-focus-page.js';
 import { pendingDocumentDrafts } from './use-workspace-document.js';
 import { WORKSPACE_DOCUMENT_CLIENTS } from './workspace-document-clients.js';
@@ -97,12 +96,11 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const refreshGitStatus = () => {
     void fetchGitStatus().then((result) => setGitStatus(result.status));
   };
-  const screen = useScreenPage(documentRepositoryId, refreshGitStatus, remote, Boolean(config && sourceId), config);
-  const focus = useFocusPage(documentRepositoryId, refreshGitStatus, remote, Boolean(config && sourceId), config);
+  const focus = useFocusPage(documentRepositoryId, refreshGitStatus, remote, Boolean(config && sourceId));
 
-  const documents = [screen, focus];
+  const documents = [focus];
   // Remote drafts wait in Changes until committed, whichever notebook is open; local ones autosave to the working tree.
-  const pendingDocuments = remote ? pendingDocumentDrafts(WORKSPACE_DOCUMENT_CLIENTS, repositories.filter(repository => repository.write).map(repository => repository.id), config) : [];
+  const pendingDocuments = remote ? pendingDocumentDrafts(WORKSPACE_DOCUMENT_CLIENTS, repositories.filter(repository => repository.write).map(repository => repository.id)) : [];
   const writable = repositories.filter(repository => repository.write).map(repository => repository.id).join('\n');
   /** Drafts of the repositories this requester may commit to, by `noteRefKey`: two repositories can hold the same path. */
   const activeWorkingNotes = useMemo<WorkingNotes>(() => (remote ? Object.fromEntries(writable.split('\n').filter(Boolean).flatMap(id => Object.values(workingNotes[id] ?? {})).map(entry => [noteRefKey(entry.note), entry])) : {}), [remote, writable, workingNotes]);
@@ -212,5 +210,5 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return note;
   };
 
-  return { selectedNotebookId, folders, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, screen, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
+  return { selectedNotebookId, folders, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
 }

@@ -1,5 +1,6 @@
 import { noteRefKey } from '@mygitnotes/core/note-query';
-import React, { useLayoutEffect, useState, useSyncExternalStore } from 'react';
+import React, { type ReactNode, useLayoutEffect, useState, useSyncExternalStore } from 'react';
+import { isCompilationPath } from '@mygitnotes/core/compilation';
 import { NoteItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useNoteEditing } from '../lib/note-editing.js';
@@ -13,12 +14,15 @@ interface EditorModalProps {
   /** The note's body is still being read; the editor waits instead of opening an empty document. */
   loading?: boolean;
   isOpen: boolean;
+  /** The view of the compilation at `path`; a compilation opens here instead of an editor. */
+  renderCompilation: (path: string) => ReactNode;
 }
 
 /** Zoom: the full-screen frame around a note's editor. */
-export const EditorModal: React.FC<EditorModalProps> = ({ note, committed, loading, isOpen }) => {
+export const EditorModal: React.FC<EditorModalProps> = ({ note, committed, loading, isOpen, renderCompilation }) => {
   if (!isOpen) return null;
   if (!note) return loading ? <EditorModalLoading /> : null;
+  if (isCompilationPath(note.path)) return <CompilationFrame key={noteRefKey(note)}>{renderCompilation(note.path)}</CompilationFrame>;
   return <ZoomFrame key={noteRefKey(note)} note={note} committed={committed} />;
 };
 
@@ -31,6 +35,13 @@ const EditorModalLoading: React.FC = () => {
     </div>
   );
 };
+
+/** Zoom for a compilation: the same full-screen frame, around its view. */
+const CompilationFrame: React.FC<{ children: ReactNode; }> = ({ children }) => (
+  <div className='note-overlay viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn'>
+    <div role='dialog' aria-modal='true' aria-label='Compilation' className='note-dialog ui-dialog shadow-2xl w-full max-w-none h-full flex flex-col overflow-hidden transition-colors'>{children}</div>
+  </div>
+);
 
 const ZoomFrame: React.FC<{ note: NoteItem; committed?: NoteItem; }> = ({ note, committed }) => {
   const editing = useNoteEditing();

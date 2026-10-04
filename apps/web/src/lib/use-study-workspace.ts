@@ -90,7 +90,7 @@ export function useStudyWorkspace(repository: string | undefined, onSaved: (note
       if (alive.current) setSaving(false);
     }
   };
-  const action = async (note: Pick<NoteListItem, 'path' | 'notebookId'>, laneId: string, action: 'stage-review' | 'stage-read' | 'stage-postpone' | 'undo', options: { rating?: 1 | 2 | 3 | 4; due?: string; eventId?: string; } = {}): Promise<boolean> => {
+  const action = async (note: Pick<NoteListItem, 'path' | 'notebookId'>, lane: { id: string; path: string; }, action: 'stage-review' | 'stage-read' | 'stage-postpone' | 'undo', options: { rating?: 1 | 2 | 3 | 4; due?: string; eventId?: string; } = {}): Promise<boolean> => {
     if (busy.current || !snapshot.current?.writable) return false;
     busy.current = true;
     setSaving(true);
@@ -101,7 +101,7 @@ export function useStudyWorkspace(repository: string | undefined, onSaved: (note
       if (!expected || typeof expected.content !== 'string') throw new Error(t('notes.readFailed', { path: note.path }));
       const base = snapshot.current, latest = await read();
       if (!same(latest.study, base.study)) throw new Error(t('study.conflict'));
-      const response = await fetch('/api/study/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ laneId, notebookId: note.notebookId, path: note.path, expected: { content: expected.content, metadata: expected.metadata }, revision: latest.revision, action, ...options }) });
+      const response = await fetch('/api/study/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ laneId: lane.id, compilationPath: lane.path, notebookId: note.notebookId, path: note.path, expected: { content: expected.content, metadata: expected.metadata }, revision: latest.revision, action, ...options }) });
       if (!response.ok) throw new Error(t(response.status === 409 ? 'study.conflict' : response.status === 422 ? 'study.configureLane' : 'study.saveError'));
       const result = await response.json();
       result.study = StudyWorkspaceSchema.parse(result.study);

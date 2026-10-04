@@ -1,25 +1,30 @@
 import { readFilterQuery } from './filter-query.js';
 import { noteWebPath } from '@mygitnotes/core/workspace-links';
 import { matchPath } from 'react-router-dom';
-export type WorkspaceTab = 'notes' | 'assets' | 'agent' | 'screen' | 'graph' | 'settings';
+export type WorkspaceTab = 'notes' | 'assets' | 'agent' | 'graph' | 'settings';
 export function parseWorkspaceRoute(pathname: string, search: string) {
   pathname = pathname.replace(/\/+$/, '') || '/';
   if (pathname === '/files') pathname = '/assets';
   if (pathname === '/index.html' || pathname === '/index' || pathname === '/notebooks') pathname = '/notes';
   const query = new URLSearchParams(search);
-  let lane: string | null = null;
+  /** The id of a Screen lane named by a former `/screen/lanes/:id` URL, which now resolves to a compilation. */
+  let legacyLane: string | null = null;
+  let legacyScreen = false;
+  let study = false;
   let tab: WorkspaceTab = 'notes';
   let notebook: string | null = null;
   let folder: string | null = null;
   let note: string | null = null;
   let valid = true;
   try {
-    const focus = matchPath('/screen/lanes/:lane', pathname);
-    if (focus) {
-      tab = 'screen';
-      lane = focus.params.lane!;
-      valid = /^[a-zA-Z0-9_-]{1,64}$/.test(lane);
-    } else if (['/assets', '/agent', '/screen', '/graph', '/settings'].includes(pathname)) tab = pathname.slice(1) as WorkspaceTab;
+    const lanePath = matchPath('/screen/lanes/:lane', pathname);
+    if (lanePath) {
+      legacyScreen = true;
+      legacyLane = lanePath.params.lane!;
+      valid = /^[a-zA-Z0-9_-]{1,64}$/.test(legacyLane);
+    } else if (pathname === '/screen') legacyScreen = true;
+    else if (pathname === '/notes/study') study = true;
+    else if (['/assets', '/agent', '/graph', '/settings'].includes(pathname)) tab = pathname.slice(1) as WorkspaceTab;
     else if (pathname !== '/' && pathname !== '/notes') {
       const entry = matchPath('/notebooks/:notebook/notes/*', pathname);
       const directory = matchPath('/notebooks/:notebook/folders/*', pathname);
@@ -48,7 +53,10 @@ export function parseWorkspaceRoute(pathname: string, search: string) {
   // `focus` selects a Focus (or `current`); it is not a filter, so it is read separately from readFilterQuery.
   const queryFocus = query.get('focus');
   const focus = queryFocus && /^[a-zA-Z0-9_-]{1,64}$/.test(queryFocus) ? queryFocus : null;
-  return { valid, tab, lane, notebook, folder, note, ...filters, allNotebooks, legacyAllNotebooks, tag: filters.tag[0] || null, tags: filters.tag, focus };
+  // A study session names its compilation by path, in the query.
+  const studyPath = study ? query.get('path') : null;
+  if (study && (!studyPath || !safeRelative(studyPath))) valid = false;
+  return { valid, tab, legacyScreen, legacyLane, study: study && studyPath ? studyPath : null, notebook, folder, note, ...filters, allNotebooks, legacyAllNotebooks, tag: filters.tag[0] || null, tags: filters.tag, focus };
 }
 /** The canonical URL for a former all-notebooks URL, or null for any other URL. */
 export function legacyAllNotebooksRoute(pathname: string, search: string, defaultNotebook: string): string | null {
@@ -74,7 +82,7 @@ export function noteRoute(notebook: string, relativePath: string) {
 export function noteReturnRoute(search: string, notebook: string, folder: string | null = null): string {
   const query = new URLSearchParams(search);
   const origin = query.get('returnTo');
-  if (origin === 'screen' || origin === 'graph') return `/${origin}?notebook=${encodeURIComponent(notebook)}`;
+  if (origin === 'graph') return `/${origin}?notebook=${encodeURIComponent(notebook)}`;
   if (origin?.startsWith('/') && !origin.startsWith('//') && !origin.includes('\\')) {
     const url = new URL(origin, 'https://workspace.invalid');
     const route = parseWorkspaceRoute(url.pathname, url.search);
@@ -92,6 +100,7 @@ export function noteTrail(state: unknown): string[] {
   return Array.isArray(trail) ? trail.filter((entry): entry is string => typeof entry === 'string' && entry.startsWith('/') && !entry.startsWith('//') && !entry.includes('\\')) : [];
 }
 
-export function screenLaneRoute(laneId: string) {
-  return `/screen/lanes/${encodeURIComponent(laneId)}`;
+/** The study session of one compilation. */
+export function compilationStudyRoute(notebook: string, path: string) {
+  return `/notes/study?${new URLSearchParams({ notebook, path })}`;
 }

@@ -1,9 +1,8 @@
 import React, { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { useNavigate } from 'react-router-dom';
-import { ChevronDown, FileText, GalleryHorizontalEnd, ListPlus, Maximize2, PanelTopDashed, Plus, X } from 'lucide-react';
+import { ChevronDown, FileText, GalleryHorizontalEnd, ListPlus, Maximize2, PanelTopDashed, X } from 'lucide-react';
 import { findFocusTabInPane, type FocusTab, focusTabKey } from '@mygitnotes/core/focus-page';
-import type { CompilationRow } from '@mygitnotes/core/compilation';
+import { COMPILATION_SUFFIX, isCompilationPath } from '@mygitnotes/core/compilation';
 import type { NoteFocus } from '../lib/use-note-focus.js';
 import type { DisplayedPane } from '../lib/focus-view.js';
 import type { FolderItem } from '../lib/types.js';
@@ -18,13 +17,12 @@ const TAB_DRAG_TYPE = 'application/x-mygitnotes-focus-tab';
 
 export interface FocusPaneContext {
   focus: NoteFocus;
-  /** The notebook's lanes. */
-  lanes: readonly CompilationRow[];
   /** Notes dropped from outside must live under this root. */
   notebookRoot: string;
   /** The notebook's configured folders, for the batch-add picker. */
   folders: readonly FolderItem[];
-  renderLane: (row: CompilationRow, pane: number) => ReactNode;
+  /** The view of the compilation at `path`, shown in place of a note editor. */
+  renderCompilation: (path: string, pane: number) => ReactNode;
   onZoomNote: (path: string) => void;
   /** The rail container and section the active pane's editor renders its document panel into. */
   documentPanel?: NoteEditorProps['documentPanel'];
@@ -45,16 +43,14 @@ interface DropSlot {
 
 /** One pane on screen: its tab list and the displayed tab. On narrow screens it stands for several stored panes. */
 export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane; }> = ({ displayed, ...context }) => {
-  const { focus, lanes, notebookRoot, folders, renderLane, onZoomNote, documentPanel } = context;
+  const { focus, notebookRoot, folders, renderCompilation, onZoomNote, documentPanel } = context;
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const layout = focus.layout!, entry = focus.entry!;
   const active = displayed.panes.includes(entry.activePane);
   const editable = focus.editable;
-  const tabs: PaneTab[] = displayed.panes.flatMap(pane => layout.panes[pane].tabs.map((tab, index) => ({ tab, key: focusTabKey(tab), pane, index, label: tab.kind === 'note' ? focus.notes.get(tab.path)?.title || tab.path.split('/').pop()!.replace(/\.md$/, '') : lanes.find(row => row.id === tab.id)?.name || tab.id })));
+  const tabs: PaneTab[] = displayed.panes.flatMap(pane => layout.panes[pane].tabs.map((tab, index) => ({ tab, key: focusTabKey(tab), pane, index, label: focus.notes.get(tab.path)?.title || tab.path.split('/').pop()!.replace(/\.md$|\.compilation\.yml$/, '') })));
   const repeatedLabels = new Set(tabs.filter((tab, index) => tabs.findIndex(candidate => candidate.label === tab.label) !== index).map(tab => tab.label));
   const shown = tabs.find(tab => tab.pane === displayed.pane && tab.key === displayed.key);
-  const lane = shown?.tab.kind === 'lane' ? lanes.find(row => shown.tab.kind === 'lane' && row.id === shown.tab.id) : undefined;
   const panelId = `focus-pane-${displayed.pane}`;
   const autoHide = entry.autoHide[displayed.pane];
 
@@ -179,7 +175,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane; 
                   }
                 }}
               >
-                {tab.tab.kind === 'note' ? <FileText aria-hidden='true' /> : <GalleryHorizontalEnd aria-hidden='true' />}
+                {isCompilationPath(tab.tab.path) ? <GalleryHorizontalEnd aria-hidden='true' /> : <FileText aria-hidden='true' />}
                 <span>{tab.label}</span>
               </button>
               {editable && (
@@ -193,28 +189,12 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane; 
         <div className='focus-pane-actions'>
           {overflowing && <FocusMenu label={t('focus.allTabs')} icon={<ChevronDown aria-hidden='true' />} items={tabs.map(tab => ({ key: `${tab.pane}:${tab.key}`, label: tab.label, current: tab.pane === displayed.pane && tab.key === displayed.key, onSelect: () => void focus.show(tab.pane, tab.key) }))} />}
           {editable && (
-            <FocusMenu
-              label={t('focus.addLane')}
-              showLabel
-              icon={<Plus aria-hidden='true' />}
-              items={lanes.length > 0
-                ? lanes.map(row => ({
-                  key: row.id,
-                  label: row.name,
-                  onSelect: () => {
-                    if (focus.shown) void focus.place(focus.shown, { kind: 'lane', id: row.id }, displayed.pane).catch(() => {});
-                  },
-                }))
-                : [{ key: 'screen', label: t('focus.goAddLane'), onSelect: () => navigate(`/screen?notebook=${encodeURIComponent(focus.notebookId)}`) }]}
-            />
-          )}
-          {editable && (
             <button type='button' className='ui-icon-button' aria-label={t('focus.batchAdd')} title={t('focus.batchAdd')} onClick={() => setBatchAddOpen(true)}>
               <ListPlus aria-hidden='true' />
             </button>
           )}
-          {shown?.tab.kind === 'note' && (
-            <button type='button' className='ui-icon-button' aria-label={t('focus.zoomNote')} title={t('focus.zoomNote')} onClick={() => shown.tab.kind === 'note' && onZoomNote(shown.tab.path)}>
+          {shown && (
+            <button type='button' className='ui-icon-button' aria-label={t('focus.zoomNote')} title={t('focus.zoomNote')} onClick={() => onZoomNote(shown.tab.path)}>
               <Maximize2 aria-hidden='true' />
             </button>
           )}
@@ -223,7 +203,7 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane; 
           </button>
         </div>
       </div>
-      <div id={panelId} className='focus-pane-body' role='tabpanel' aria-label={shown?.label}>{shown?.tab.kind === 'note' ? <PaneNoteEditor key={shown.tab.path} notebookId={focus.notebookId} path={shown.tab.path} active={active} documentPanel={active ? documentPanel : undefined} /> : lane ? renderLane(lane, displayed.pane) : <p className='focus-pane-empty'>{editable ? t('focus.emptyPane') : t('focus.emptyPaneReadonly')}</p>}</div>
+      <div id={panelId} className='focus-pane-body' role='tabpanel' aria-label={shown?.label}>{shown ? isCompilationPath(shown.tab.path) ? <React.Fragment key={shown.tab.path}>{renderCompilation(shown.tab.path, displayed.pane)}</React.Fragment> : <PaneNoteEditor key={shown.tab.path} notebookId={focus.notebookId} path={shown.tab.path} active={active} documentPanel={active ? documentPanel : undefined} /> : <p className='focus-pane-empty'>{editable ? t('focus.emptyPane') : t('focus.emptyPaneReadonly')}</p>}</div>
       {batchAddOpen && focus.shown && <BatchAddDialog focus={focus} target={focus.shown} pane={displayed.pane} notebookId={focus.notebookId} notebookRoot={notebookRoot} folders={folders} onClose={() => setBatchAddOpen(false)} />}
     </section>
   );
@@ -240,12 +220,12 @@ function droppedTab(data: DataTransfer, notebookRoot: string): DroppedTab | unde
   if (moved) {
     try {
       const { tab, pane } = JSON.parse(moved) as { tab: FocusTab; pane: number; };
-      if (typeof pane === 'number' && ((tab.kind === 'note' && typeof tab.path === 'string') || (tab.kind === 'lane' && typeof tab.id === 'string'))) return { tab, pane };
+      if (typeof pane === 'number' && tab.kind === 'note' && typeof tab.path === 'string') return { tab, pane };
     } catch { /* falls through to undefined */ }
     return undefined;
   }
   const path = (data.getData(NOTE_DRAG_TYPE) || data.getData('text/plain')).trim();
-  return path.startsWith(`${notebookRoot}/`) && path.endsWith('.md') ? { tab: { kind: 'note', path } } : undefined;
+  return path.startsWith(`${notebookRoot}/`) && (path.endsWith('.md') || path.endsWith(COMPILATION_SUFFIX)) ? { tab: { kind: 'note', path } } : undefined;
 }
 
 const FocusMenu: React.FC<{ label: string; showLabel?: boolean; icon: ReactNode; items: { key: string; label: string; current?: boolean; onSelect: () => void; }[]; }> = ({ label, showLabel, icon, items }) => (
