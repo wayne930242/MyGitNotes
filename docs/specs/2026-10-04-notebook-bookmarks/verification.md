@@ -2,7 +2,7 @@
 
 Planning baseline: `/home/weihung/github-notes`, clean HEAD `ac26edfe69120fac9eff904b5cb7f53e76966588`.
 Status: implementation in progress; stages 1–4 (native kind, bounded editing, creation/list/insertion and atomic relocation) verified in upstream; tasks 5–6 and independent parent browser QA are not complete.
-Parent review of immutable stages 1–3 found an outline-only R2 reference-guard gap and adjacent drag duplication; both are repaired and independently anchored in the post-stage-4 checkpoint below.
+Parent review found an outline-only R2 reference-guard gap, adjacent drag duplication and a stage 4 GFM checkbox relocation blocker; all three are repaired and anchored in the post-stage-4 checkpoints below.
 No push, deployment or downstream synchronization was performed by this worker.
 The approved model is **Outline note / 大綱筆記**, with general items and optional links, not the earlier specialized bookmark document.
 Contract: [spec.md](spec.md); implementation sequence: [design.md](design.md).
@@ -225,6 +225,27 @@ The parent-reported R2 outline-reference safety and adjacent drag duplication fi
 
 Tasks 5–6 and the final independent parent browser journey remain incomplete.
 
+## Final stage 4 correction — GFM task-list relocation
+
+Parent review of immutable `ac9c3c0` found `OUTLINE-R1-F003`: Marked strips a checkbox from `item.text` but reinjects it into tight checkbox tokens and loose paragraph raw text.
+Searching those token raws in the stripped body threw even for an unrelated `- [ ] Task` file, blocking managed moves.
+Task bodies now use a freshly paired Marked tokenization of their own stripped source, preserving line correspondence and code shielding rather than catching or skipping errors.
+Tight/loose/nested tasks, uppercase checked markers, LF/CRLF, nested indented literal code and actual links are covered.
+Existing file/folder planners and every hosted GitHub/GitLab move fixture now contain unrelated task notes, and the actual local HTTP move journey confirms their bytes remain unchanged.
+
+- `/tmp/outline-f003-red.log`: 22 failures reproduced the pure/planner/provider/local HTTP blocker before the fix.
+- `/tmp/outline-f003-target.log`: six files / 91 tests passed after the bounded fix.
+- `/tmp/outline-f003-tests.log`: **257 files / 1915 tests passed**.
+- Final build, lint, format and fresh web/server/MCP compilers passed: `/tmp/outline-f003-{build,lint,format,webtypes,servertypes,mcptypes}.log`.
+  Monitor 16 exited `tests=0 build=0 lint=0 format=0 web=0 server=0 mcp=0`; no production source edit followed.
+- Active LSP checked all three changed TypeScript paths, zero diagnostics but three silent/inconclusive outcomes.
+- No new persistent server or browser was needed: existing HTTP tests start actual ephemeral servers and clean up in teardown; previous owned browser/fixture cleanup remains complete.
+
+| Final correction | Evidence | Result |
+| --- | --- | --- |
+| Tight/loose/nested GFM tasks never block otherwise valid moves | Source cases, task-bearing file/folder planners, GitHub/GitLab hosted moves and actual local HTTP | pass |
+| Task code shielding and checkbox/CRLF source survive link rewriting | Nested task literal-vs-real-link LF/CRLF exact-byte assertions | pass |
+
 ## Required automated evidence
 
 ### Core and classification
@@ -321,7 +342,7 @@ This planning session started no persistent process or browser session and needs
 | --- | --- |
 | Clean specified upstream BASE before planning | Confirmed by Git status/HEAD inspection. |
 | Four-document plan researched against actual source | Complete: exactly four allowed modified files; six ordered implementation tasks; 15 relative evidence links resolve; `git diff --check` clean; HEAD unchanged. |
-| New outline tests/build/types/lint | Stages 1–4 and both parent-review fixes passed as recorded above; tasks 5–6 remain. |
+| New outline tests/build/types/lint | Stages 1–4 and parent-review fixes passed as recorded above; tasks 5–6 remain. |
 | New browser/UI/real provider evidence | Worker disposable local-browser stages 2–3 recorded above; independent parent, human appropriateness and live-provider evidence not claimed. |
 | Human appropriateness of rejected collection | FAIL. |
 | Human appropriateness of replacement outline UI | Unknown; parent/user review required after implementation. |

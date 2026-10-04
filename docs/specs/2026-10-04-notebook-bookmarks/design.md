@@ -356,6 +356,11 @@ The full browser matrix and honest results start in [verification.md](verificati
 
 ## Friction Notes
 
+- Tried: source/token matching for Marked list-item code ranges, then parent reviewer OUTLINE-R1-F003 tight/loose/nested GFM checkbox reproductions.
+  Found: Marked removes the checkbox from `item.text` but reinjects it into tight checkbox tokens and loose paragraph raw text, so those tokens no longer index into that body. Re-lex the checkbox-stripped task body to pair tokens with their exact source; removal affects columns only, preserving line-based code shielding.
+  Led by: stage 4 code preservation and parent reviewer F003.
+  Classification: implementation gap resolved by the bounded task-body fix; no catch-and-skip fallback. Pure LF/CRLF shielding, unrelated-task file/folder planners, GitHub/GitLab mv and actual local HTTP moves regress the failure.
+
 - Tried: parent review against immutable stages 1–3, followed by local/remote no-force R2 deletion regressions.
   Found: ordinary-note kind isolation had narrowed the scans used as all-reference bodies, allowing deletion of outline-only assets. Dedicated local `scanNotebookMarkdownNotes` and remote `markdownNotes` enumeration restores the safety guard without broadening ordinary listings.
   Led by: parent reviewer OUTLINE-R1-F001 and R7 lifecycle/protection requirements.

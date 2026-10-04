@@ -40,7 +40,10 @@ function markdownCodeRanges(raw: string): [number, number][] {
           const itemOffset = token.raw.indexOf(item.raw, itemCursor);
           if (itemOffset < 0) throw new Error('Markdown list item could not be located in the source.');
           itemLine += lines(token.raw.slice(itemCursor, itemOffset));
-          visit(item.text, item.tokens, itemLine);
+          // Marked strips the checkbox from text, but injects it into tight tokens
+          // and loose paragraph raws. Re-lex that body to keep source/tokens paired;
+          // checkbox removal changes columns, not the block line correspondence.
+          visit(item.text, item.task ? Lexer.lex(item.text) : item.tokens, itemLine);
           itemCursor = itemOffset + item.raw.length;
           itemLine += lines(item.raw);
         }

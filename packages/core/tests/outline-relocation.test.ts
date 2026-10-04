@@ -22,6 +22,13 @@ describe('source-preserving outline relocation', () => {
     const raw = '- Parent\r\n\r\n      [same](a.md)\r\n\r\n  - [same](a.md)\r\n';
     expect(relocateLinks(raw, 'notes/ex/plan.outline.md', 'notes/ex/work/plan.outline.md', file => file)).toBe(raw.replace('- [same](a.md)', '- [same](../a.md)'));
   });
+  it.each(['- [ ] Task\n', '- [x] Done\n', '- [X] Done\n\n  Annotation\n', '- [ ] Parent\n  - [x] Child\n'])('accepts tight, loose and nested GFM tasks without changing bytes: %j', source => {
+    expect(relocateLinks(source, 'notes/ex/tasks.md', 'notes/ex/work/tasks.md', file => file)).toBe(source);
+  });
+  it.each(['\n', '\r\n'])('keeps task checkboxes and nested task code while rebasing real refs (%j)', eol => {
+    const raw = ['- [ ] Parent', '  - [x] Child', '', '        [literal](a.md)', '', '    [real](a.md)', '', '- [X] [outside](a.md)', ''].join(eol);
+    expect(relocateLinks(raw, 'notes/ex/tasks.md', 'notes/ex/work/tasks.md', file => file)).toBe(raw.replace('[real](a.md)', '[real](../a.md)').replace('[outside](a.md)', '[outside](../a.md)'));
+  });
   it('does not let a longer closing fence swallow a following link and inline code', () => {
     const raw = '```\n[literal](a.md)\n````\n- [real](a.md)\n`code`\n';
     expect(relocateLinks(raw, 'notes/ex/plan.outline.md', 'notes/ex/work/plan.outline.md', file => file)).toBe(raw.replace('[real](a.md)', '[real](../a.md)'));
@@ -30,7 +37,7 @@ describe('source-preserving outline relocation', () => {
     const raw = '```\n[x](a.md)\n````\n- [real](a.md)\n~~~\n[x](a.md)\n';
     expect(relocateLinks(raw, 'notes/ex/plan.outline.md', 'notes/ex/work/plan.outline.md', file => file)).toBe(raw.replace('[real](a.md)', '[real](../a.md)'));
   });
-  const snapshot = (): FolderSnapshot => ({ notebooks: [{ id: 'ex', title: 'Example', root: 'notes/ex' }], directories: ['notes/ex', 'notes/ex/work', 'notes/ex/old'], protectedPaths: [], files: new Map([['notes/ex/old/plan.outline.md', '- Parent\n  Annotation\n  - [A](../a.md#part)\n'], ['notes/ex/a.md', '[Plan](old/plan.outline.md)\n']]) });
+  const snapshot = (): FolderSnapshot => ({ notebooks: [{ id: 'ex', title: 'Example', root: 'notes/ex' }], directories: ['notes/ex', 'notes/ex/work', 'notes/ex/old'], protectedPaths: [], files: new Map([['notes/ex/old/plan.outline.md', '- Parent\n  Annotation\n  - [A](../a.md#part)\n'], ['notes/ex/a.md', '[Plan](old/plan.outline.md)\n'], ['notes/ex/tasks.md', '- [ ] Task\n\n  Annotation\n']]) });
   it('file moves update incoming/outgoing outline links together; deletion retains referring bytes', () => {
     const source = snapshot();
     const before = { ...source, files: new Map([...source.files].map(([file, raw]) => [file, Buffer.from(raw)])) };
@@ -52,7 +59,7 @@ describe('source-preserving outline relocation', () => {
 
 const manifest = 'schema_version: 1\nworkspace:\n  title: Relocation\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n  - id: other\n    title: Other\n    root: notes/other\n';
 function providerFixture(provider: 'github' | 'gitlab', extra: Record<string, string> = {}) {
-  const files = { '.github-notes.yaml': manifest, 'notes/ex/plan.outline.md': outline, 'notes/ex/ref.md': '[Plan](plan.outline.md#top)\n', 'notes/ex/work/_dir.yml': 'title: Work\n', 'notes/other/_dir.yml': 'title: Other\n', ...extra };
+  const files = { '.github-notes.yaml': manifest, 'notes/ex/plan.outline.md': outline, 'notes/ex/tasks.md': '- [ ] Task\n  - [x] Child\n', 'notes/ex/ref.md': '[Plan](plan.outline.md#top)\n', 'notes/ex/work/_dir.yml': 'title: Work\n', 'notes/other/_dir.yml': 'title: Other\n', ...extra };
   if (provider === 'github') {
     const f = githubFixture(files);
     return { reader: f.reader, text: f.text, head: f.head, commits: () => f.calls.filter(c => c.endpoint === '/git/commits'), paths: () => f.calls.filter(c => c.endpoint === '/git/trees' && c.method).flatMap(c => c.body.tree.map((e: { path: string; }) => e.path)) };
