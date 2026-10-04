@@ -1,6 +1,6 @@
 import React, { type ReactNode } from 'react';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
-import type { CompilationItem, CompilationRow } from '@mygitnotes/core/screen-page';
+import type { CompilationItem, CompilationRow } from '@mygitnotes/core/compilation';
 import type { NotebookConfig } from '../lib/types.js';
 import { useStudyWorkspace } from '../lib/use-study-workspace.js';
 import { useTranslation } from '../lib/i18n/index.js';

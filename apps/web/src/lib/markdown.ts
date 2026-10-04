@@ -1,7 +1,7 @@
 import { Marked } from 'marked';
 import markedCjkFriendly from 'marked-cjk-friendly';
 import DOMPurify from 'dompurify';
-import { parseYouTubeUrl } from '@mygitnotes/core/screen-page';
+import { parseYouTubeUrl } from '@mygitnotes/core/compilation';
 import { parseR2Reference, r2AssetUrl, r2PreviewType } from '@mygitnotes/core/r2-references';
 import { headingSlug, resolveWorkspaceHref } from './workspace-links.js';
 import { escapeHtml, stripMdxImports, transformDirectives, transformMdxComponents } from './directives.js';

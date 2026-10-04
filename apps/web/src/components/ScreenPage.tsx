@@ -9,7 +9,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { stringify } from 'yaml';
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { ArrowLeft, GripVertical, Pencil, Plus } from 'lucide-react';
-import { type CompilationItem, type CompilationRow, moveCompilationItem } from '@mygitnotes/core/screen-page';
+import { type CompilationItem, type CompilationRow, moveCompilationItem } from '@mygitnotes/core/compilation';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { FolderItem, NotebookConfig } from '../lib/types.js';
 import { useNoteFacets } from '../lib/use-note-queries.js';

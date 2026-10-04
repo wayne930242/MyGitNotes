@@ -1,5 +1,5 @@
 import { useQueries } from '@tanstack/react-query';
-import type { CompilationRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/compilation';
 import type { NoteListItem, NotePaths, NoteQuery } from '@mygitnotes/core/note-query';
 import { notePathsOptions, useNoteList, useNoteLookup, useNotePaths, useNoteQueryScope } from './use-note-queries.js';
 

@@ -63,7 +63,7 @@ import { AddToFocusDialog } from './components/AddToFocusDialog.js';
 import { FocusLaneTab } from './components/FocusLaneTab.js';
 import { FocusList } from './components/FocusList.js';
 import { BrowseDock, BrowseDockToggle, CARD_TWO_ROW_HEIGHT } from './components/BrowseDock.js';
-import type { CompilationRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/compilation';
 import { RightPanel } from './components/RightPanel.js';
 import { FileManager, FileManagerDialog, FileMetadata } from './components/files/index.js';
 import { AgentSystemView } from './components/AgentSystemView.js';

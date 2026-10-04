@@ -3,7 +3,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, FileText, GalleryHorizontalEnd, ListPlus, Maximize2, PanelTopDashed, Plus, X } from 'lucide-react';
 import { findFocusTabInPane, type FocusTab, focusTabKey } from '@mygitnotes/core/focus-page';
-import type { CompilationRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/compilation';
 import type { NoteFocus } from '../lib/use-note-focus.js';
 import type { DisplayedPane } from '../lib/focus-view.js';
 import type { FolderItem } from '../lib/types.js';

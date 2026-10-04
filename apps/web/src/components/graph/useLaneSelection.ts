@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { CompilationRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/compilation';
 import type { FilterControls } from '../../lib/filter-controls.js';
 import type { ScreenController } from '../../lib/use-screen-page.js';
 

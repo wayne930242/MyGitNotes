@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import type { NoteGraphNode } from '@mygitnotes/core/note-graph';
 import { selectFilteredGraph } from '@mygitnotes/core/note-filters';
-import type { CompilationRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/compilation';
 import { noteRefKey } from '@mygitnotes/core/note-query';
 import type { NoteQuery } from '@mygitnotes/core/note-query';
 import { useNoteGraph, useNotePaths } from '../../lib/use-note-queries.js';

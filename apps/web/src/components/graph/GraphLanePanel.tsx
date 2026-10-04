@@ -1,6 +1,6 @@
 import { Minus, Pencil, Plus, Save, X } from 'lucide-react';
 import type { ScreenController } from '../../lib/use-screen-page.js';
-import type { CompilationRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/compilation';
 import type { I18nContextValue } from '../../lib/i18n/index.js';
 
 interface GraphLanePanelProps {

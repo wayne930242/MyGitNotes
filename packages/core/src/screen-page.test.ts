@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moveCompilationItem, moveScreenRow, parseYouTubeUrl, readScreenPage, ScreenPageSchema } from './screen-page.js';
+import { moveScreenRow, readScreenPage, ScreenPageSchema } from './screen-page.js';
 
 const note = { id: 'a', kind: 'note', notebookId: 'one', path: 'notes/one/a.md' };
 const page = { version: 2, rows: [{ id: 'first', name: '閱讀', view: 'small', notebookId: 'one', kind: 'custom', items: [note] }, { id: 'second', name: '參考', view: 'medium', notebookId: 'one', kind: 'custom', items: [{ ...note, id: 'b', path: 'notes/one/b.md' }] }, { id: 'live', name: '動態標籤', view: 'thumbnail', notebookId: 'one', kind: 'dynamic', source: { kind: 'tag', tag: 'clue', notebookId: 'one' } }, { id: 'other', name: '其他', view: 'small', notebookId: 'two', kind: 'custom', items: [] }] };
@@ -22,15 +22,9 @@ describe('Screen Page swimlanes', () => {
       expect(ScreenPageSchema.parse({ version: 2, rows: [{ ...page.rows[0], view, progression }] }).rows[0]).toMatchObject({ view: 'small', progression });
     }
   });
-  it('moves references across custom rows of the same notebook only', () => {
+  it('reorders rows', () => {
     const parsed = ScreenPageSchema.parse(page);
-    const moved = moveCompilationItem(parsed, 'a', 'second', 1);
-    expect(moved.rows[0]).toMatchObject({ items: [] });
-    expect(moved.rows[1]).toMatchObject({ items: [{ id: 'b' }, note] });
-    expect(parsed.rows[0]).toMatchObject({ items: [note] });
     expect(moveScreenRow(parsed, 'live', 0).rows.map(r => r.id)).toEqual(['live', 'first', 'second', 'other']);
-    expect(() => moveCompilationItem(parsed, 'a', 'live', 0)).toThrow();
-    expect(() => moveCompilationItem(parsed, 'a', 'other', 0)).toThrow('Items stay inside their notebook');
   });
   it('rejects lane content from another notebook', () => {
     expect(ScreenPageSchema.safeParse({ version: 2, rows: [{ ...page.rows[0], items: [{ ...note, notebookId: 'two' }] }] }).success).toBe(false);
@@ -58,10 +52,5 @@ describe('Screen Page swimlanes', () => {
     expect(readScreenPage(legacy, config)).toEqual(migrated);
     expect(readScreenPage(migrated, config)).toEqual(migrated);
     expect(() => readScreenPage({ version: 1, rows: Array.from({ length: 40 }, (_, index) => ({ ...legacy.rows[0], id: `row-${index}`, items: mixed.map(item => ({ ...item, id: `${item.id}-${index}` })) })) }, config)).toThrow();
-  });
-  it('accepts only recognized YouTube URLs and extracts playback start time', () => {
-    expect(parseYouTubeUrl('https://youtu.be/dQw4w9WgXcQ?t=1m30s')).toEqual({ videoId: 'dQw4w9WgXcQ', start: 90 });
-    expect(parseYouTubeUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toEqual({ videoId: 'dQw4w9WgXcQ', start: 0 });
-    for (const url of ['javascript:alert(1)', 'https://youtube.com.evil.test/watch?v=dQw4w9WgXcQ', 'https://youtube.com/watch?v=bad', 'https://u:p@youtube.com/watch?v=dQw4w9WgXcQ']) expect(parseYouTubeUrl(url)).toBeNull();
   });
 });

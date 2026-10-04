@@ -2,7 +2,7 @@ import { noteRefKey } from '@mygitnotes/core/note-query';
 import { createGraphInteractions } from './createGraphInteractions.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type CompilationRow, type GraphLayout, ScreenPageSchema } from '@mygitnotes/core/screen-page';
+import { type CompilationRow, type GraphLayout, ScreenPageSchema } from '@mygitnotes/core/compilation';
 import { arrangeGraphLayout, graphLaneViewport, type GraphPlacement } from '../../lib/graph-layout.js';
 import { optimizeGraphLayout } from '../../lib/graph-topology-layout.js';
 import { useTranslation } from '../../lib/i18n/index.js';

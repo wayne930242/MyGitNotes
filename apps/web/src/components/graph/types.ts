@@ -1,5 +1,5 @@
 import type { NoteGraphNode } from '@mygitnotes/core/note-graph';
-import type { CompilationRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/compilation';
 import type { GraphPlacement } from '../../lib/graph-layout.js';
 import type { FolderItem, NotebookConfig } from '../../lib/types.js';
 import type { FilterControls } from '../../lib/filter-controls.js';

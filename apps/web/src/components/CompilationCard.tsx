@@ -1,6 +1,6 @@
 import { type ReactNode, useMemo, useState } from 'react';
 import { ExternalLink, FileText, Folder, Image as ImageIcon, Play, Youtube } from 'lucide-react';
-import type { CompilationItem, CompilationRow } from '@mygitnotes/core/screen-page';
+import type { CompilationItem, CompilationRow } from '@mygitnotes/core/compilation';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { AssetItem, NotebookConfig } from '../lib/types.js';
 import { noteSummary } from '../lib/compilation-content.js';

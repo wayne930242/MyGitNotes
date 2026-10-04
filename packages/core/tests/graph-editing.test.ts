@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { insertNoteLink } from '../src/note-graph.js';
-import { compilationNotePaths, ScreenPageSchema } from '../src/screen-page.js';
+import { compilationNotePaths } from '../src/compilation.js';
+import { ScreenPageSchema } from '../src/screen-page.js';
 import { extractNoteLinks } from '../src/note-graph.js';
 import type { NoteItem } from '../src/types.js';
 

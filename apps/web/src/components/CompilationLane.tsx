@@ -3,7 +3,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { horizontalListSortingStrategy, SortableContext, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Brain, ChevronLeft, ChevronRight, Columns2, Columns3, GripVertical, LayoutGrid, Network, Plus, SlidersHorizontal, X, Zap } from 'lucide-react';
-import type { CompilationItem, CompilationRow } from '@mygitnotes/core/screen-page';
+import type { CompilationItem, CompilationRow } from '@mygitnotes/core/compilation';
 import { type NotebookFacets, noteQueryStatuses } from '@mygitnotes/core/note-query';
 import type { NotebookConfig } from '../lib/types.js';
 import { useLaneNotes } from '../lib/compilation-queries.js';

@@ -4,7 +4,7 @@ import { syntaxTree } from '@codemirror/language';
 import { marked } from 'marked';
 import { findDirectiveBlocks } from '../../lib/directive-editing.js';
 import { headingSlug, resolveWorkspaceHref } from '../../lib/workspace-links.js';
-import { parseYouTubeUrl } from '@mygitnotes/core/screen-page';
+import { parseYouTubeUrl } from '@mygitnotes/core/compilation';
 import { DONE_EMOJI, DUE_EMOJI, findToken, isTaskLine, START_EMOJI, TIMESTAMP_EMOJI } from '../../lib/task-tokens.js';
 import type { I18nContextValue } from '../../lib/i18n/index.js';
 import { LiveMarkdownDirective } from '../LiveMarkdownDirective.js';

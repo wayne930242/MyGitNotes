@@ -1,5 +1,5 @@
 import { Focus, LayoutGrid, ListChecks, PanelsTopLeft, PanelTopClose, PanelTopOpen, Pencil, Save, Scan } from 'lucide-react';
-import type { CompilationRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/compilation';
 import type { I18nContextValue } from '../../lib/i18n/index.js';
 import { GraphTool } from './GraphTool.js';
 

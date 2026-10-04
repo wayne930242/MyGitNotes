@@ -4,7 +4,7 @@ import { createElement, type ReactNode } from 'react';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Network } from 'lucide-react';
-import type { CompilationRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/compilation';
 import type { NotebookConfig } from '../lib/types.js';
 import { compilationViewTabs, createLaneNoteContext } from './ScreenPage.js';
 import { KeyboardShortcuts } from './KeyboardShortcuts.js';

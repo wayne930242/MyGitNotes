@@ -1,5 +1,5 @@
 import { findStudyNote, matchesStudyFilter, studyDue, type StudyWorkspace } from '@mygitnotes/core/study';
-import { type CompilationItem, compilationNotes, type CompilationRow } from '@mygitnotes/core/screen-page';
+import { type CompilationItem, compilationNotes, type CompilationRow } from '@mygitnotes/core/compilation';
 import { resolveNoteStatuses } from '@mygitnotes/core/note-status';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { AssetItem, FolderItem, NotebookConfig } from './types.js';

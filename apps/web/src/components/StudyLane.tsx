@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import { Button } from './Button.js';
 import { type ReactNode, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Ellipsis, Undo2 } from 'lucide-react';
-import type { CompilationRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/compilation';
 import { createStudyNote, findStudyNote, rebindStudyNote, reconcileStudyNote } from '@mygitnotes/core/study';
 import { deduplicatedStudyRatings, type Familiarity, type StudyProgression } from '@mygitnotes/core/study-stages';
 import { splitNotePages } from '@mygitnotes/core/note-pages';

@@ -1,6 +1,6 @@
 import { Button } from './Button.js';
 import { useState } from 'react';
-import { type CompilationItem, type CompilationRow, parseYouTubeUrl } from '@mygitnotes/core/screen-page';
+import { type CompilationItem, type CompilationRow, parseYouTubeUrl } from '@mygitnotes/core/compilation';
 import { defaultStudyProgression, studyLaneStatuses, type StudyProgression, StudyProgressionSchema } from '@mygitnotes/core/study-stages';
 import { StudyLaneSettings } from './StudyLane.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';

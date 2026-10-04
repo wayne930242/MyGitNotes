@@ -1,4 +1,4 @@
-import type { GraphLayout } from '@mygitnotes/core/screen-page';
+import type { GraphLayout } from '@mygitnotes/core/compilation';
 
 /** Canvas placement uses graph ids; Screen persists only repository-relative paths for one notebook. */
 export interface GraphPlacement {

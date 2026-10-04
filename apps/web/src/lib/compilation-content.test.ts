@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { applyStageAction, applyStudyAction, createStudyNote, emptyStudyWorkspace, undoStudyAction } from '@mygitnotes/core/study';
 import { compilationRowItems, studyRowItems } from './compilation-content.js';
 import type { NoteItem } from './types.js';
-import type { CompilationRow } from '@mygitnotes/core/screen-page';
+import type { CompilationRow } from '@mygitnotes/core/compilation';
 const notes = [{ notebookId: 'a', path: 'notes/a/one.md', title: 'One', tags: ['clue'] }, { notebookId: 'b', path: 'notes/b/two.md', title: 'Two', tags: ['clue'] }, { notebookId: 'a', path: 'notes/a/sub/three.md', title: 'Three', tags: [] }, { notebookId: 'a', path: 'notes/ab/other.md', title: 'Other', tags: [] }].map((note, i) => ({ ...note, id: String(i), content: '', metadata: {} })) as NoteItem[];
 it('lists tags only from the lane notebook and respects exact folder boundaries', () => {
   const base = { id: 'row', name: 'Live', view: 'small' as const, notebookId: 'a', kind: 'dynamic' as const };
