@@ -47,6 +47,7 @@ export function useBookmarkActions(params: Params) {
     const repository = latest.repositoryFor(owner);
     return Boolean(repository?.write && repository.id === latest.controller.repository && !latest.controller.loading && latest.controller.writable);
   };
+  const repositoryNotebooks = (owner: string) => config!.notebooks.filter(notebook => repositoryFor(notebook.id)?.id === repositoryFor(owner)?.id);
   const selectOwner = async (owner: string) => {
     if (!repositoryFor(owner)?.write) throw new BookmarkError('invalid-scope', t('bookmarks.readOnly'));
     if (owner !== current.current.selectedNotebookId || repositoryFor(owner)?.id !== controller.repository) {
@@ -89,7 +90,7 @@ export function useBookmarkActions(params: Params) {
     let target = fields.target;
     let savedBody: string | undefined;
     if (target.kind === 'position') {
-      const path = bookmarkRepositoryPath(owner, target.path, config!.notebooks);
+      const path = bookmarkRepositoryPath(owner, target.path, repositoryNotebooks(owner.id));
       if (!await flushEditors([noteRefKey({ notebookId: owner.id, path })])) throw new BookmarkError('invalid-position', t('bookmarks.saveError'));
       // Remote editor Save stages a browser draft; only the selected-note commit establishes saved source.
       if (remote && readDraft(owner.id, path)) await commitNoteFile(path, owner.id);
@@ -123,7 +124,7 @@ export function useBookmarkActions(params: Params) {
       if (target.kind === 'query') navigate(bookmarkQueryRoute(owner, target.query));
       else if (target.kind === 'folder') navigate(bookmarkFolderRoute(owner, target.path, sort, view));
       else {
-        const path = bookmarkRepositoryPath(owner, target.path, config!.notebooks);
+        const path = bookmarkRepositoryPath(owner, target.path, repositoryNotebooks(owner.id));
         const note = await readNote(path, ownerId);
         if (requestId !== activation.current) return;
         if (target.kind === 'position' && !wholeNote) setPosition({ id: crypto.randomUUID(), notebookId: ownerId, path, anchor: target.anchor });

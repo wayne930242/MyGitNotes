@@ -4,6 +4,7 @@ import type express from 'express';
 import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, localManifest, type NotebookConfig, type NoteCatalog, parseRevisions, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { authToken } from './auth.js';
+import { regularPath } from './workspace-files.js';
 
 export interface LocalHandle {
   kind: 'local';
@@ -168,14 +169,18 @@ export async function notebookRepository(res: express.Response, notebookId: unkn
 export async function noteRepository(res: express.Response, file: unknown, notebookId?: unknown): Promise<ResolvedRepository> {
   if (typeof file !== 'string' || !file) throw new SourceError('path is required.');
   if (workspaceDocument(file)) throw new SourceError('Workspace metadata is protected.', 403);
+  let resolved: ResolvedRepository;
   if (notebookId !== undefined && notebookId !== '') {
-    const resolved = await notebookRepository(res, notebookId);
+    resolved = await notebookRepository(res, notebookId);
     if (!file.startsWith(`${resolved.notebook.root}/`)) throw new SourceError('Path is not in the named notebook.', 403);
-    return resolved;
+  } else {
+    const workspace = workspaceOf(res);
+    const entry = await workspace.forPath(file);
+    resolved = { handle: entry.handle, config: await workspace.scope(entry.ref.id), notebook: entry.notebook };
   }
-  const workspace = workspaceOf(res);
-  const entry = await workspace.forPath(file);
-  return { handle: entry.handle, config: await workspace.scope(entry.ref.id), notebook: entry.notebook };
+  // Match managed-file policy: a lexical notebook path cannot alias metadata or another owner.
+  if (resolved.handle.kind === 'local') regularPath(resolved.handle.root, file.replace(/\\/g, '/'));
+  return resolved;
 }
 
 /** Every available repository of the request's workspace with the manifest scope it serves. */

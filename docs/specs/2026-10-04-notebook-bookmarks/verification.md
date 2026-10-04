@@ -59,7 +59,7 @@ Final results: **246 test files, 1779 tests passed**, duration 63.24s. Productio
 | Scoped route/query restoration, canonical identity, explicit sort | `apps/web/src/lib/bookmark-navigation.test.ts`; core query tests; existing graph/filter/sort tests run unchanged. | pass |
 | Existing lifecycle and movement entrypoints | Complete suite includes file/folder/bulk/shell, local/remote adapters, Focus/Study and editor tests; new bookmarks flow through the shared planner/document seams. | pass |
 | Build/type/lint/format regression checks | Final logs: 246 files/1779 tests, build/lint/format/types exit 0 | pass |
-| Full desktop/mobile acceptance and independent code review | Parent review found F001/F002/F003; UI density follow-up verified separately | fail |
+| Full desktop/mobile acceptance and independent code review | F001/F002/F003 fixed with red/green evidence below; independent re-review remains pending | unknown |
 
 The movement entrypoint audit is the detailed table in `design.md`. Tests exercise shared planners, HTTP note/file mutations, provider commits, shell movement/deletion and rollback; this is not a claim that every provider × UI entrypoint Cartesian product was independently driven in a real browser. Parent review should verify the shared-seam coverage against that audit.
 
@@ -112,7 +112,31 @@ Baseline for this UI-only follow-up: `0a2b5ea83d6b8b36542aab83fcfc89c849758cf8`.
 - Mobile emulation: viewport/document width 393px with no horizontal overflow, all rows measured **44px**; group menu→Rename persisted successfully. Screenshots: `/tmp/bookmarks-compact-desktop.png`, `/tmp/bookmarks-compact-mobile.png`. No browser errors reported.
 - Owned session `bookmarks-compact` closed; monitor12 stopped; PID390520/port38123 and roots `/tmp/mygitnotes-bookmarks-home-A6VklZ`, `/tmp/mygitnotes-bookmarks-other-tgHfRN` verified gone.
 
-Parent independently verified initial note/position creation, unresolved/retarget behavior, atomic folder moves, repository-isolated URL creation, group/ungroup persistence and content retention. Independent static review of the immutable initial commit nevertheless found three blockers: F001 cross-repository same-root UI path validation, F002 HTTP note symlink alias protection, and F003 raw textarea CRLF offsets. They are **not resolved by this UI-only follow-up**; sequential red-regression fixes are the next authorized work, before approval or publication.
+Parent independently verified initial note/position creation, unresolved/retarget behavior, atomic folder moves, repository-isolated URL creation, group/ungroup persistence and content retention. Independent static review of the immutable initial commit nevertheless found three blockers: F001 cross-repository same-root UI path validation, F002 HTTP note symlink alias protection, and F003 raw textarea CRLF offsets. They were **not resolved by that UI-only follow-up**. The subsequent review-fix work below addresses all three before re-review; no publication occurred.
+
+## Review blockers — sequential fixes (2026-10-05)
+
+Baseline for these fixes: compact-UI commit `72df3828ef347b5f9fafd93ed9fd8087e12d5430`. All three findings were reproduced with failing regressions before their corresponding production edit.
+
+| Requirement | Evidence | Result |
+| --- | --- | --- |
+| F001 same-root notebooks in distinct repositories | Action tests initially failed four cases; scope now filters `config.notebooks` by `repositoryFor(id).id` before both path validations. Seven action tests pass, including B note/compilation/position activation and position capture. | pass |
+| F002 HTTP note aliases must not bypass document revision protection | Four read/write/delete/restore tests initially returned 200 for a metadata symlink. `noteRepository` now applies the existing managed-file no-symlink policy for local handles, including ancestors and portable separators. Fifteen bookmark HTTP cases pass, including directory aliases with present/absent metadata and slash/backslash paths; original bytes remain unchanged. | pass |
+| F003 raw textarea CRLF position mapping | Real textarea integration initially failed three cases, including revealing `ragraph`. Raw selection now maps LF textarea offsets to the original body; raw reveal maps original offsets back to LF. Four MD/text and CRLF/LF textarea cases pass without content mutation. | pass |
+
+Red/green logs: `/tmp/bookmarks-F001-{red,green}.log`, `/tmp/bookmarks-F002-{red,green}.log`, `/tmp/bookmarks-F003-{red,green}.log`.
+Final full run: **247 test files, 1797 tests passed** (63.20s); build, lint, format, web/server types all exit 0. Lint: 732 files/128 rules, no diagnostics; theme audit: 479 web files. Logs: `/tmp/bookmarks-review-{build,tests,lint,format,types}.log`.
+Active LSP recheck covered all six changed TypeScript files: four clean, two inconclusive; known cached-import findings remain explicitly dispositioned. Fresh compilers are the independent complete type evidence.
+
+Actual same-root B browser fixture verification:
+
+- Seeded B note/compilation bookmarks only in the disposable secondary repository; activated each via sidebar. Routes were `/notebooks/b/notes/guide.md` and `/notebooks/b/notes/reading.compilation.yml`; Other guide and QA compilation rendered without alerts.
+- Created B position through the editor picker and Save first; after closing zoom and activating the sidebar bookmark, actual selection was exactly `## Second heading`. Screenshot: `/tmp/bookmarks-F001-B-position.png`.
+- Created another disposable B note whose saved body retained CRLF. Switched to Source, selected Paragraph in the actual LF textarea, captured/saved the position, then activated it. Actual selection was exactly `Paragraph`; default reopened host was live, so **raw reveal** evidence remains the explicit textarea integration tests, not a claim about that browser host. Screenshot: `/tmp/bookmarks-F003-crlf-capture-activation.png`.
+- Initial attempts to click sidebar controls behind zoom, and to select fixed offsets without accounting for serializer-added leading blank lines, were not successful actions. Closing zoom and selecting the actual source substring exercised the intended UI; invalid cross-block selection was rejected rather than stored.
+- No page errors reported. Owned session `bookmarks-review` closed; monitor14 stopped; PID421673/port37185 and roots `/tmp/mygitnotes-bookmarks-home-Ibw7MC`, `/tmp/mygitnotes-bookmarks-other-f7ZmtS` verified gone.
+
+Independent re-review is required before calling the feature approved. Initial passing tests did not cover these three cases; their old successful counts are not evidence that the initial commit was safe.
 
 ## Human appropriateness
 
@@ -128,7 +152,7 @@ Parent's independent desktop/mobile acceptance and code review are pending, dist
 ## Remaining review gates and limitations
 
 - Parent owns independent code review and the complete desktop/mobile acceptance journey, including every creation entry, drag/group/remove/repair, read-only navigation, unavailable/retry, second-tab conflicts and dirty-editor cancellation across Focus/zoom hosts. The bounded browser checks above do not claim those entire journeys passed.
-- Parent reported sidebar density: separate Edit bookmark disclosures make rows tall and move Add/folders below the fold. This is a presentation concern, not a reported functional failure. No UI changes were made during the parent's active QA; compact existing-tree/dropdown treatment remains a review follow-up.
+- Parent's initial sidebar-density concern was addressed by the separately committed compact UI and measured desktop/mobile checks above. Independent final visual approval remains the parent's gate.
 - Provider tests use deterministic GitHub/GitLab fixtures. No live provider/deployment verification occurred. GitLab's existing changed-file preconditions are not a whole-branch compare-and-swap after its final branch check.
 - Local mutation queue is process-local, not an OS transaction against independent external editors/Git processes.
 - Active LSP probes were run on changed boundaries. The server retained old core package exports/declarations; findings were explicitly dispositioned as false positives after fresh compiler/build/runtime evidence. Some push-only probes were inconclusive. This document does not report an LSP-clean verdict; fresh `tsc` results are the type-check evidence.

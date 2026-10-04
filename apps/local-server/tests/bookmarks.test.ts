@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
@@ -98,6 +98,24 @@ it('direct note deletion and restoration retain bookmarks and cannot edit the me
     expect([400, 403]).toContain(response.status);
   }
   expect(await readFile(path.join(root, BOOKMARKS_FILE), 'utf8')).toBe(raw);
+});
+it.each(['read', 'write', 'delete', 'restore'])('HTTP note %s rejects a symlink to bookmark metadata without changing bytes', async operation => {
+  await put(page);
+  const raw = await readFile(path.join(root, BOOKMARKS_FILE), 'utf8');
+  await symlink(path.join(root, BOOKMARKS_FILE), path.join(root, 'notes/a/alias.md'));
+  const file = 'notes/a/alias.md';
+  const response = operation === 'read' ? await fetch(`${base}/notes/read?path=${file}&notebookId=a`) : operation === 'delete' ? await fetch(`${base}/notes?path=${file}&notebookId=a&noCommit=true`, { method: 'DELETE' }) : await fetch(`${base}/notes${operation === 'restore' ? '/restore' : ''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: 'a', path: file, content: 'broken', metadata: {}, noCommit: true }) });
+  expect(response.status).toBe(403);
+  expect(await readFile(path.join(root, BOOKMARKS_FILE), 'utf8')).toBe(raw);
+});
+it.each([[false, '/'], [true, '/'], [false, '\\'], [true, '\\']] as const)('HTTP note writes reject a directory alias when bookmark file exists=%s using %s', async (exists, separator) => {
+  if (exists) await put(page);
+  await symlink(root, path.join(root, 'notes/a/alias'));
+  const response = await fetch(`${base}/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: 'a', path: `notes/a/alias${separator}${BOOKMARKS_FILE}`, content: 'broken', metadata: {}, noCommit: true }) });
+  expect(response.status).toBe(403);
+  const raw = await readFile(path.join(root, BOOKMARKS_FILE), 'utf8').catch(() => null);
+  if (exists) expect(raw).toContain('version: 1');
+  else expect(raw).toBeNull();
 });
 it('rejects protected paths and unsafe URLs at the read-only resolver', async () => {
   for (const target of [{ kind: 'note', path: '../private.md' }, { kind: 'note', path: '.agents/secret.md' }, { kind: 'url', url: 'javascript:alert(1)' }]) expect((await resolveTargets([{ id: 'bad', target }])).status).toBe(400);

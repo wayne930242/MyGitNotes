@@ -280,7 +280,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
         const range = live.current?.getSelection();
         return range ? bookmarkOriginalRange(content, range) : null;
       }
-      return source.current ? { from: source.current.selectionStart, to: source.current.selectionEnd } : null;
+      return source.current ? bookmarkOriginalRange(content, { from: source.current.selectionStart, to: source.current.selectionEnd }) : null;
     },
     insert(text, at) {
       if (readOnly) return;
@@ -304,8 +304,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
       }
       const target = source.current;
       if (!target) return;
-      const start = Math.max(0, Math.min(from, target.value.length));
-      const end = Math.max(start, Math.min(to, target.value.length));
+      // Textareas normalize CRLF on assignment, just like the live editor's document.
+      const { offsets } = normalizeBookmarkBody(content);
+      const start = Math.max(0, Math.min(offsets.indexOf(from), target.value.length));
+      const end = Math.max(start, Math.min(offsets.indexOf(to), target.value.length));
       target.setSelectionRange(start, end);
       const line = target.value.slice(0, start).split('\n').length;
       setActiveSourceLine(line);

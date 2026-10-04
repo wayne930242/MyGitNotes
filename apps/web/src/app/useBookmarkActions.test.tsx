@@ -23,6 +23,40 @@ function setup(remote = true, flush = async () => true, commit = async () => {})
   const hook = renderHook(() => useBookmarkActions({ controller, config: { schema_version: 1, workspace: { title: 'Test', default_notebook: 'n' }, notebooks: [{ id: 'n', root: 'notes/n', title: 'N' }] }, folders: [], repositoryFor: () => repository, remote, readDraft: () => remote ? { note, base: note } : undefined, refreshKey: '', selectedNotebookId: 'n', captureView: vi.fn(), sort: { field: 'title', order: 'asc' }, view: 'list', prepareLeave: async () => true, flushEditors: flush, commitNoteFile: commit, openNote: vi.fn(), navigate: vi.fn(), onError: vi.fn() }));
   return { ...hook, change };
 }
+function sameRootSetup() {
+  const owner = 'b', change = vi.fn(), openNote = vi.fn(), onError = vi.fn();
+  const otherRepository = { ...repository, id: 'github:other/repo@main', notebooks: [owner] };
+  const controller = { page: emptyBookmarksPage(), repository: otherRepository.id, writable: true, loading: false, error: '', change } as unknown as BookmarksController;
+  const hook = renderHook(() => useBookmarkActions({ controller, config: { schema_version: 3, workspace: { title: 'Two repositories', default_notebook: 'a' }, notebooks: [{ id: 'a', root: 'notes/shared', title: 'A' }, { id: owner, root: 'notes/shared', title: 'B' }] }, folders: [], repositoryFor: id => id === owner ? otherRepository : repository, remote: false, readDraft: () => undefined, refreshKey: '', selectedNotebookId: owner, captureView: vi.fn(), sort: { field: 'title', order: 'asc' }, view: 'list', prepareLeave: async () => true, flushEditors: async () => true, commitNoteFile: vi.fn(), openNote, navigate: vi.fn(), onError }));
+  return { ...hook, change, openNote, onError };
+}
+it.each(['note', 'compilation', 'position'] as const)('activates repository B %s when repository A has the identical notebook root', async kind => {
+  const hook = sameRootSetup();
+  const path = kind === 'compilation' ? 'reading.compilation.yml' : 'a.md';
+  const saved = { ...note, notebookId: 'b', path: `notes/shared/${path}` };
+  read.mockResolvedValue(saved);
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ results: [{ id: 'bookmark', resolution: { state: 'resolved' } }] })));
+  try {
+    const target = kind === 'position' ? { kind, path, anchor } : { kind, path };
+    await act(async () => hook.result.current.value.activate('b', { id: 'bookmark', label: 'B', groupId: null, target }));
+    expect(hook.onError).not.toHaveBeenCalled();
+    expect(hook.openNote).toHaveBeenCalledWith(saved);
+    expect(read).toHaveBeenCalledWith(saved.path, 'b');
+  } finally {
+    fetch.mockRestore();
+    hook.unmount();
+  }
+});
+it('captures repository B position without treating repository A same-root notebook as its owner', async () => {
+  const hook = sameRootSetup();
+  const saved = { ...note, notebookId: 'b', path: 'notes/shared/a.md' };
+  read.mockResolvedValue(saved);
+  await act(async () => hook.result.current.value.bookmarkPosition(saved, anchor));
+  await act(async () => hook.result.current.dialog!.onSave(fields));
+  expect(hook.change).toHaveBeenCalledOnce();
+  expect(hook.change.mock.calls[0][0].notebooks[0].notebookId).toBe('b');
+  hook.unmount();
+});
 it('remote position creation flushes then explicitly commits before reading saved source', async () => {
   const order: string[] = [];
   read.mockImplementation(async () => {
