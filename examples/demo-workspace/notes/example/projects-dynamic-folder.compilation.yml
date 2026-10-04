@@ -1,0 +1,9 @@
+version: 1
+id: example-projects
+title: Projects (Dynamic Folder)
+arrangement: lane
+size: thumbnail
+source:
+  kind: folder
+  path: notes/example/projects
+  recursive: true

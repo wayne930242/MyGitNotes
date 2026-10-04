@@ -1,0 +1,19 @@
+version: 1
+id: reading
+title: 隨選閱讀
+arrangement: lane
+size: medium
+source:
+  kind: tag
+  tag: reading
+progression:
+  stages:
+    - status: inbox
+      intervalDays: 1
+    - status: working
+      intervalDays: 3
+    - status: review
+      intervalDays: 7
+    - status: done
+      intervalDays: 30
+  easy: two

@@ -1,0 +1,23 @@
+version: 1
+id: explore
+title: 學習：一次一張卡片
+arrangement: lane
+size: small
+source:
+  kind: tag
+  tag: study-demo
+study:
+  filter: all
+  dueFirst: true
+  status: working
+progression:
+  stages:
+    - status: inbox
+      intervalDays: 1
+    - status: working
+      intervalDays: 3
+    - status: review
+      intervalDays: 7
+    - status: done
+      intervalDays: 30
+  easy: two

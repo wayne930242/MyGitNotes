@@ -1,0 +1,12 @@
+version: 1
+id: example-planning
+title: Tasks and Weekly Review
+arrangement: lane
+size: small
+items:
+  - id: example-todo-note
+    kind: note
+    path: notes/example/todo-demo.md
+  - id: example-review-note
+    kind: note
+    path: notes/example/projects/weekly-review.md
