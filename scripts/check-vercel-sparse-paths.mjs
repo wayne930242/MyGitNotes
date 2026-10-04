@@ -35,8 +35,9 @@ const filters = block ? [...block[1].matchAll(/- '([^']+)'/g)].map(match => matc
 const expected = listed.map(path => fs.statSync(path).isDirectory() ? `${path}/**` : path);
 if (JSON.stringify(filters) !== JSON.stringify(expected)) errors.push(`${workflowFile} push paths must equal ${listFile}:\n  ${expected.join('\n  ')}`);
 // Vercel's Git integration skips a build whose commits leave these paths alone; a path missing here would skip a real change.
+// Vercel only accepts exit 0 (skip) or 1 (build), so any git failure must map to 1; .vercelignore keeps .git for the diff.
 const ignoreCommand = JSON.parse(fs.readFileSync('vercel.json', 'utf8')).ignoreCommand ?? '';
-const ignored = ignoreCommand.split(' -- ')[1]?.trim().split(/\s+/) ?? [];
+const ignored = ignoreCommand.split(' -- ')[1]?.split(';')[0].trim().split(/\s+/) ?? [];
 if (JSON.stringify(ignored) !== JSON.stringify(listed)) errors.push(`vercel.json ignoreCommand paths must equal ${listFile}:\n  ${listed.join(' ')}`);
 if (errors.length) {
   console.error(errors.join('\n'));

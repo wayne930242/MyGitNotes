@@ -114,4 +114,16 @@ describe('release transaction', () => {
     expect(git('status', '--porcelain')).toBe('');
     expect(git('worktree', 'list').split('\n')).toHaveLength(1);
   });
+  it('resyncs templates whose names are not ASCII', () => {
+    write('examples/demo-workspace/notes/learning/學習.compilation.yml', 'id: study\n');
+    git('add', '.');
+    git('commit', '-qm', 'non-ASCII template');
+    git('push', '-q', 'origin', 'core');
+    expect(run()).toContain('synced=true');
+    write('examples/demo-workspace/notes/example/welcome.md', '# Second update\n');
+    git('commit', '-qam', 'second update');
+    git('push', '-q', 'origin', 'core');
+    expect(run()).toContain('synced=true');
+    expect(remoteGit('show', 'main:notes/learning/學習.compilation.yml')).toBe('id: study');
+  });
 });

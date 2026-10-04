@@ -16,7 +16,7 @@ const templateRoot = 'examples/demo-workspace';
 /** Copies the canonical demo examples from Core into the workspace at `root` and stages them there. */
 function syncExamples(root, previousCore) {
   const template = path.resolve(templateRoot);
-  const oldTemplates = previousCore ? git('ls-tree', '-r', '--name-only', previousCore, '--', `${templateRoot}/notes`).split('\n').filter(Boolean) : [];
+  const oldTemplates = previousCore ? git('ls-tree', '-r', '-z', '--name-only', previousCore, '--', `${templateRoot}/notes`).split('\0').filter(Boolean) : [];
   const copied = [];
   const safeTarget = relative => {
     const target = path.resolve(root, relative);
