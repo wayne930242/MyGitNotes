@@ -1,10 +1,10 @@
 # MyGitNotes
 
-A local-first workspace for Markdown notes, flashcards, reading screens, and knowledge graphs. Your content stays in Git; run the interface locally or deploy with Docker, Docker Compose, or Vercel.
+A local-first workspace for Markdown notes, flashcards, compilations, and knowledge graphs. Your content stays in Git; run the interface locally or deploy with Docker, Docker Compose, or Vercel.
 
 [English](README.md) · [繁體中文](README.zh-TW.md)
 
-[Live Demo](https://my-gh-core.vercel.app) · [Flashcard Demo](https://my-gh-core.vercel.app/screen/lanes/explore) · [Example Workspace](https://github.com/wayne930242/MyGitNotes/tree/main)
+[Live Demo](https://my-gh-core.vercel.app) · [Flashcard Demo](https://my-gh-core.vercel.app/notes/study?notebook=learning&path=notes%2Flearning%2F%E5%AD%B8%E7%BF%92-%E4%B8%80%E6%AC%A1%E4%B8%80%E5%BC%B5%E5%8D%A1%E7%89%87.compilation.yml) · [Example Workspace](https://github.com/wayne930242/MyGitNotes/tree/main)
 
 ![MyGitNotes architecture](docs/assets/mygitnotes-architecture-en.png)
 
@@ -61,7 +61,7 @@ Run `pnpm update-core` from a clean `core` checkout; it fast-forwards `core` fro
 
 - Notes use ordinary Markdown with optional YAML frontmatter; Git preserves history and records explicit commits.
 - Browse notes in List, Card, or Kanban views; search full text, manage folders and files, and explore a knowledge graph.
-- Screen lanes organize notebook content; Markdown pages can also become flashcards.
+- Compilations (`*.compilation.yml`) organize notebook content as lanes, stacks or graphs; Markdown pages can also become flashcards.
 - Choose from **nine palette families**, each with light and dark variants. **Flexoki** is the default; choices are saved in the browser.
 - Connect local agents through stdio or remote agents through Streamable HTTP MCP with named read-only or write grants.
 - The Files page manages notebook folders, notes, text files, and attachments: 3 MiB uploads, 5 MiB reads and changes, up to 200 changed files per operation.

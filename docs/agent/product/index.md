@@ -57,11 +57,15 @@ pnpm build         # Verify build succeeds cleanly
 Browser QA scripts (`node scripts/qa-*.mjs`) drive the built `apps/local-server/dist` and `apps/web/dist` output and run without setup on macOS and Linux CI; set `PUPPETEER_EXECUTABLE_PATH` (`GRAPH_QA_CHROME` for `qa-graph-*.mjs`) only to point at a Chrome binary other than the platform default.
 
 
-### Screen 配置所有權
+### 合輯所有權
 
-工作區根目錄 `.github-notes-screen.yaml` 是使用者資料。Core 不得追蹤真實配置，工作區更新必須保留此檔案；測試配置只建立於隔離暫存工作區。
+合輯是筆記本內的 `<名稱>.compilation.yml`，屬於使用者的筆記內容，與筆記一樣由 Git 追蹤與同步。
+路徑所在的筆記本擁有合輯，檔案不重複 `notebookId`；項目與動態來源必須指向同一筆記本（YouTube 項目除外）。
+`packages/core/src/compilation.ts` 定義檔案格式；筆記目錄把它索引為 `compilation` 種類，`/api/notes/facets` 回傳各筆記本的合輯數，`/api/notes/query` 接受 `kind=compilation`。
+搬移或重新命名筆記與資料夾時，`workspace-documents.ts` 與合輯模組一併改寫合輯內的參照。
 
-配置 `version: 2` 的每條河道記錄 `notebookId`，自訂項目與動態來源必須屬於該筆記本。`readScreenPage` 讀取 `version: 1` 時依來源歸屬河道、拆分混合筆記本的自訂河道，無法判斷時歸預設筆記本；下次儲存寫回 `version: 2`。
+舊版 `.github-notes-screen.yaml` 只由 `migrate-workspace`（schema 2 → 3）讀取：每條河道轉成 `<筆記本根目錄>/<slug(名稱)>.compilation.yml`，名稱衝突加 `-2`、`-3`，保留 `id`、排列、項目或來源、排序、學習設定與關聯圖；Focus 的 `lane` 分頁改為指向新檔的路徑分頁，河道已不存在的分頁刪除；每個儲存庫提交一個遷移 commit。
+`SUPPORTED_SCHEMA_VERSION` 為 3，本機啟動遇到 schema 2 會拒絕並指向 `pnpm migrate-workspace`。
 
 ### 學習資料所有權
 
@@ -71,7 +75,7 @@ Browser QA scripts (`node scripts/qa-*.mjs`) drive the built `apps/local-server/
 
 工作區根目錄 `.github-notes-focus.yaml` 保存使用者具名 Focus 的名稱、劃分與各窗格的 tab。
 Core 不得追蹤真實配置，工作區更新必須保留此檔案；測試配置只建立於隔離暫存工作區。
-每個 Focus 記錄 `notebookId`，tab 只參照該筆記本的筆記或河道；暫存 Focus（程式內 `CURRENT_FOCUS`）與作用窗格等檢視狀態只存在瀏覽器。
+每個 Focus 記錄 `notebookId`，tab 只參照該筆記本的筆記或合輯（路徑分頁）；暫存 Focus（程式內 `CURRENT_FOCUS`）與作用窗格等檢視狀態只存在瀏覽器。
 
 ### Focus 顯示與開啟規則
 
@@ -82,5 +86,5 @@ URL 的 `focus` 參數指定顯示的 Focus；沒有時，`useNoteFocus` 在 ren
 
 ### 工作區文件
 
-Screen、學習資料與 Focus 配置登錄在 `packages/core/src/workspace-documents.ts`，登錄決定可提交的範圍、大小上限、格式驗證，以及搬移筆記或資料夾時如何更新參照。
+學習資料與 Focus 配置登錄在 `packages/core/src/workspace-documents.ts`，登錄決定可提交的範圍、大小上限、格式驗證，以及搬移筆記或資料夾時如何更新參照。
 新增工作區根目錄的使用者檔案時，加入登錄與上述所有權清單（`scripts/lib/workspace-conversion.mjs`）。

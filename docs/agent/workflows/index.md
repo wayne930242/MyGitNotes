@@ -26,6 +26,8 @@ When an update is released to the canonical product branch `core`:
    - Compares revisions.
    - Fast-forwards `core`; a `core` with local commits is refused.
    - Runs `migrate-workspace` with the new Core on the workspace named by `MYGITNOTES_LOCAL_PATH`.
+     For schema 2 → 3 it converts every `.github-notes-screen.yaml` into `*.compilation.yml` files and rewrites Focus lane tabs, as one commit per repository.
+     It refuses a repository with uncommitted changes to the files it rewrites and lists them; commit those first.
    - Never auto-stashes, never force-pushes, and never uses destructive reset.
 
 ## 3. Git Save and Semantic Commits
