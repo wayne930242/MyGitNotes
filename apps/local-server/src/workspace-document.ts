@@ -10,7 +10,7 @@ import { readBoundedFile, readSnapshotText, revisionOf, writeFileAtomic } from '
 export function createWorkspaceDocumentRouter(document: WorkspaceDocument): Router {
   const { file, label, maxBytes } = document;
   const readLocal = (root: string) => readBoundedFile(root, file, maxBytes, `${label} configuration`);
-  function decode(raw: string | null, config: WorkspaceConfig | null) {
+  function decode(raw: string | null) {
     try {
       return readWorkspaceDocument(document, raw);
     } catch {
@@ -30,13 +30,13 @@ export function createWorkspaceDocumentRouter(document: WorkspaceDocument): Rout
       const { id, handle, config } = await documentRepository(res, req.query.repository);
       if (handle.kind === 'local') {
         const raw = await readLocal(handle.root);
-        const { page } = own(decode(raw, config), config);
+        const { page } = own(decode(raw), config);
         return res.json({ page, revision: revisionOf(raw), path: file, writable: await getCurrentBranch(handle.root) === 'main', repository: id });
       }
       const { reader } = handle;
       const snapshot = await reader.getSnapshot();
       const raw = await readSnapshotText(reader, snapshot, file);
-      const { page } = own(decode(raw, config), config);
+      const { page } = own(decode(raw), config);
       res.json({ page, revision: snapshot.sha, path: file, writable: reader.canWrite(snapshot), repository: id });
     } catch (error) {
       fail(res, error);
@@ -64,7 +64,6 @@ export function createWorkspaceDocumentRouter(document: WorkspaceDocument): Rout
       }
       if (!handle.authenticated) throw new SourceError(`Sign in with write access to save the ${label} configuration.`, 403);
       const { reader } = handle;
-      const snapshot = await reader.getSnapshot();
       if (own(value.data, config).foreign) throw foreign();
       const saved = await reader.saveWorkspaceDocument(document, yaml, revision);
       res.json({ page: value.data, revision: saved.revision, path: file, writable: true, repository: id });
