@@ -33,6 +33,7 @@ import { isOutlinePath } from '@mygitnotes/core/outline';
 import { applyOutlineCommand, outlineKeymap } from './live-markdown/outline-commands.js';
 import { outlineDrag } from './live-markdown/outline-drag.js';
 import type { OutlineCommand } from '../lib/outline-editing.js';
+import { textChange } from '../lib/text-change.js';
 
 export interface LiveMarkdownHandle {
   /** Inserts `text` at `at`, or in place of the selection. */
@@ -241,7 +242,9 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
   /* eslint-enable react-hooks/exhaustive-deps */
   useEffect(() => {
     const view = editor.current;
-    if (view && view.state.doc.toString() !== content) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content }, annotations: Transaction.addToHistory.of(false) });
+    // Only the changed span is replaced, so an outside edit keeps the scroll position, caret and selection.
+    const change = view && textChange(view.state.doc.toString(), content);
+    if (view && change) view.dispatch({ changes: change, annotations: Transaction.addToHistory.of(false) });
   }, [content]);
   useEffect(() => {
     editor.current?.dispatch({ effects: permission.current.reconfigure([EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]) });

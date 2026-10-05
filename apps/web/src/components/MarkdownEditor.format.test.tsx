@@ -2,7 +2,7 @@
 import { createElement, useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { EditorSelection, EditorState } from '@codemirror/state';
 import { EditorView, runScopeHandlers } from '@codemirror/view';
@@ -80,4 +80,31 @@ it('binds Mod-b, Mod-i and Mod-u in the live editor ahead of the default keymap'
   press('i');
   expect(view.state.doc.toString()).toBe('a ***word*** b');
   view.destroy();
+});
+
+it('keeps the source selection and scroll when the note is rewritten elsewhere, following lines added above them', () => {
+  const lines = Array.from({ length: 80 }, (_, index) => `line ${index + 1}`);
+  const content = lines.join('\n');
+  const onChange = vi.fn();
+  const view = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MarkdownEditor content={content} path='notes/a.md' mode='raw' readOnly={false} onChange={onChange} ariaLabel='Source' toolbarSlot={null} />
+    </QueryClientProvider>,
+  );
+  const textarea = screen.getByLabelText<HTMLTextAreaElement>('Source');
+  const at = content.indexOf('line 60');
+  textarea.setSelectionRange(at, at + 'line 60'.length);
+  textarea.scrollTop = 900;
+  fireEvent.scroll(textarea);
+  fireEvent.select(textarea);
+  // An agent adds a line near the top, above the visible text.
+  const rewritten = ['line 1', 'added by Pi', ...lines.slice(1)].join('\n');
+  view.rerender(
+    <QueryClientProvider client={new QueryClient()}>
+      <MarkdownEditor content={rewritten} path='notes/a.md' mode='raw' readOnly={false} onChange={onChange} ariaLabel='Source' toolbarSlot={null} />
+    </QueryClientProvider>,
+  );
+  expect(textarea.value.slice(textarea.selectionStart, textarea.selectionEnd)).toBe('line 60');
+  expect(textarea.scrollTop).toBe(900 + 22.75);
+  expect(onChange).not.toHaveBeenCalled();
 });

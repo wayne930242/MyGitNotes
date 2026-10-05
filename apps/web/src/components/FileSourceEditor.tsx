@@ -11,6 +11,7 @@ import { json } from '@codemirror/lang-json';
 import { css } from '@codemirror/lang-css';
 import { html } from '@codemirror/lang-html';
 import { yaml } from '@codemirror/lang-yaml';
+import { textChange } from '../lib/text-change.js';
 
 function language(path: string) {
   if (/\.(md|markdown|mdx)$/i.test(path)) return markdown({ extensions: [cjkEmphasis] });
@@ -62,7 +63,8 @@ export function FileSourceEditor({ path, content, readOnly, label, onChange }: {
   }, [readOnly]);
   useEffect(() => {
     const editor = view.current;
-    if (editor && editor.state.sliceDoc() !== content) editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: content } });
+    const change = editor && textChange(editor.state.sliceDoc(), content);
+    if (editor && change) editor.dispatch({ changes: change });
     initial.current = content;
   }, [content]);
   return <div ref={host} className='file-source-editor' />;

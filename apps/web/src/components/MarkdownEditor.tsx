@@ -18,6 +18,7 @@ import { applyEdits, formatMarkdown, type MarkdownFormat } from '../lib/markdown
 import { isOutlinePath } from '@mygitnotes/core/outline';
 import { editOutline, type OutlineCommand } from '../lib/outline-editing.js';
 import { OutlineRawHistory, type OutlineRawSnapshot } from '../lib/outline-raw-history.js';
+import { textChange } from '../lib/text-change.js';
 
 const LiveMarkdownEditor = React.lazy(() => import('./LiveMarkdownEditor.js').then(module => ({ default: module.LiveMarkdownEditor })));
 export type MarkdownEditorMode = 'live' | 'raw';
@@ -94,13 +95,40 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   const rawBeforeInput = useRef<OutlineRawSnapshot | null>(null);
   const tabEscape = useRef(false);
   const pendingRawSelection = useRef<OutlineRawSnapshot | null>(null);
+  // The source textarea's last selection and scroll, so content written elsewhere (an agent, another editor)
+  // can replace the text without moving the reader; edits made here set their own selection instead.
+  const rawView = useRef<{ start: number; end: number; scrollTop: number; } | null>(null);
+  const rawContent = useRef(content);
+  const localRawEdit = useRef(false);
+  const noteRawView = (target: HTMLTextAreaElement) => {
+    rawView.current = { start: target.selectionStart, end: target.selectionEnd, scrollTop: target.scrollTop };
+  };
   useLayoutEffect(() => {
     rawHistory.current = new OutlineRawHistory();
     rawBeforeInput.current = null;
     pendingRawSelection.current = null;
     tabEscape.current = false;
+    rawView.current = null;
   }, [path, notebookId, mode]);
+  useLayoutEffect(() => {
+    // Textarea offsets count a CRLF as one character, so the change is measured on the text it shows.
+    const previous = rawContent.current.replace(/\r\n?/g, '\n'), local = localRawEdit.current, saved = rawView.current, target = source.current;
+    rawContent.current = content;
+    localRawEdit.current = false;
+    const change = !local && target && saved ? textChange(previous, content.replace(/\r\n?/g, '\n')) : null;
+    if (!change || !target || !saved) return;
+    const shift = change.insert.length - (change.to - change.from);
+    const map = (position: number) => position <= change.from ? position : position >= change.to ? position + shift : change.from + change.insert.length;
+    target.setSelectionRange(map(saved.start), map(saved.end));
+    // Lines added or removed above the first visible line move the text under the reader; follow them.
+    const lineHeight = parseFloat(getComputedStyle(target).lineHeight) || 22.75;
+    const changedLine = previous.slice(0, change.from).split('\n').length - 1;
+    const lineShift = change.insert.split('\n').length - previous.slice(change.from, change.to).split('\n').length;
+    target.scrollTop = saved.scrollTop + (changedLine < Math.floor(saved.scrollTop / lineHeight) ? lineShift * lineHeight : 0);
+    noteRawView(target);
+  }, [content]);
   const updateActiveSourceLine = (target: HTMLTextAreaElement) => {
+    noteRawView(target);
     setActiveSourceLine(target.value.slice(0, target.selectionStart).split('\n').length);
     setCaret(target.selectionStart);
     onCaret?.(target.selectionStart, target.selectionEnd);
@@ -123,12 +151,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   });
   const changeSource = (next: string, selection?: { anchor: number; head: number; }, before = rawSnapshot(), restore = true) => {
     if (outline) rawHistory.current.record(before, { content: next, anchor: selection?.anchor ?? before.anchor, head: selection?.head ?? before.head });
+    localRawEdit.current = true;
     onChange(next);
     if (outline && selection && restore) restoreRawSelection({ content: next, ...selection });
   };
   const rawUndo = (redo: boolean) => {
     const snapshot = redo ? rawHistory.current.redo(content) : rawHistory.current.undo(content);
     if (snapshot) {
+      localRawEdit.current = true;
       onChange(snapshot.content);
       restoreRawSelection(snapshot);
     }
@@ -543,6 +573,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
                 onFocus={event => updateActiveSourceLine(event.currentTarget)}
                 onSelect={event => updateActiveSourceLine(event.currentTarget)}
                 onScroll={event => {
+                  noteRawView(event.currentTarget);
                   if (sourceLineNumbers.current) sourceLineNumbers.current.style.transform = `translateY(-${event.currentTarget.scrollTop}px)`;
                 }}
                 wrap='off'
