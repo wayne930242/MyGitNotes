@@ -55,7 +55,7 @@ function togglePanel(docPanel: NoteDocumentPanelState, isMarkdown: boolean) {
 function NoteZoomHeading({ note, session, onRefresh, onClose, phoneEditing }: Pick<NoteEditorToolbarProps, 'note' | 'session' | 'onRefresh' | 'onClose' | 'phoneEditing'>) {
   const { t } = useTranslation();
   return (
-    <div className='note-heading flex items-center gap-3 truncate'>
+    <div className='note-heading flex items-center gap-3 min-w-0'>
       {/* Leaving zoom sits at the far left, away from the document-panel toggle at the right. */}
       {onClose
         ? (

@@ -7,7 +7,15 @@
 .ui-button-primary, .ui-button[aria-pressed='true'] { --button-bg: var(--color-primary); --button-hover-bg: var(--color-primary-hover); --button-text: var(--color-on-primary); --button-hover-text: var(--color-on-primary-hover); --button-border: var(--color-primary); }
 .ui-button-danger { --button-text: var(--color-danger); }
 .ui-button:not(:disabled):not([aria-disabled='true']):hover, .ui-icon-button:not(:disabled):not([aria-disabled='true']):hover { background: var(--button-hover-bg); color: var(--button-hover-text); }
-.ui-button:focus-visible, .ui-button:focus-within, .ui-icon-button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; position: relative; z-index: 1; }
+/* The one keyboard focus ring for every action, so none falls back to the browser's own. Zero specificity:
+   a control that needs another ring (an inset tab, a field's border) still sets its own. */
+:where(button, a[href], summary, [role='button']):focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+/* Keyboard focus scrolls a control into view with room for that ring, instead of flush against a scroller's edge. */
+:where(button, a[href], summary, [role='button']) { scroll-margin: 6px; }
+/* The note list is a clipped card whose rows meet its edges, so its ring sits inside each control. */
+.note-list :is(button, a[href], [role='button']):focus-visible { outline-offset: -2px; }
+/* Keyboard focus only, as on icon buttons; a label button shows it for the input it wraps. */
+.ui-button:focus-visible, .ui-button:has(:focus-visible), .ui-icon-button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; position: relative; z-index: 1; }
 .ui-button:disabled, .ui-button[aria-disabled='true'], .ui-icon-button:disabled, .ui-icon-button[aria-disabled='true'] { opacity: 0.4; cursor: not-allowed; }
 /* Fade the primary surface, not its label, so disabled actions remain readable. */
 .ui-button.ui-button-primary:disabled, .ui-button.ui-button-primary[aria-disabled='true'], .ui-button[aria-pressed='true']:disabled, .ui-button[aria-pressed='true'][aria-disabled='true'] { --button-bg: color-mix(in srgb, var(--color-primary) 45%, var(--color-surface)); --button-text: var(--color-text); opacity: 1 !important; }
