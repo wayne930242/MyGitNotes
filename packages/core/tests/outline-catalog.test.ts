@@ -57,14 +57,14 @@ describe('native outline kind', () => {
   it('keeps a new empty marker and source indentation through outline saves without changing ordinary-note trimming', () => {
     const now = new Date('2026-10-05T00:00:00Z');
     const raw = serializeNoteFile(outlinePath, { title: 'Blank' }, '- ', true, now);
-    expect(parseNoteFile(raw, outlinePath).content).toBe('\n- \n');
-    const content = '\n  - Indented\r\n    annotation  \r\n  - \r\n';
+    expect(parseNoteFile(raw, outlinePath).content).toBe('- \n');
+    const content = '  - Indented\r\n    annotation  \r\n  - \r\n';
     const saved = serializeNoteFile(outlinePath, { title: 'Blank' }, content, false, now, raw);
     expect(parseNoteFile(saved, outlinePath).content).toBe(content);
     const edited = content + '- Next\r\n';
     const again = serializeNoteFile(outlinePath, { title: 'Blank' }, edited, false, now, saved);
     expect(parseNoteFile(again, outlinePath).content).toBe(edited);
-    expect(parseNoteFile(serializeNoteFile('ordinary.md', {}, '- ', true, now), 'ordinary.md').content).toBe('\n-\n');
+    expect(parseNoteFile(serializeNoteFile('ordinary.md', {}, '- ', true, now), 'ordinary.md').content).toBe('-\n');
   });
 
   it('separates queries/facets and compilation IDs while retaining graph, agenda and lookup', async () => {

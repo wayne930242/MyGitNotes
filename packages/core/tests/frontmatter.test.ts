@@ -28,7 +28,19 @@ Body text here.
     expect(parsed.metadata.custom_field).toBe(42);
     expect(parsed.metadata.nested).toEqual({ author: 'Alice' });
     expect(parsed.content.trim()).toBe('# Heading One\n\nBody text here.');
-    expect(parsed.lineNumberOffset).toBe(11);
+    expect(parsed.lineNumberOffset).toBe(12);
+  });
+
+  it('keeps the blank line written after the frontmatter out of the body, and writes it back', () => {
+    const raw = '---\nstatus: todo\n---\n\n# Heading\n\nBody.\n';
+    const parsed = parseNoteContent(raw, 'note.md');
+    expect(parsed.content).toBe('# Heading\n\nBody.\n');
+    // The body's first line is the file's fifth: three frontmatter lines and the blank one come before it.
+    expect(parsed.lineNumberOffset).toBe(4);
+    expect(serializeNoteContent(parsed.metadata, parsed.content, false, new Date(0), raw).replace(/updated: .*\n/, '')).toBe(raw);
+    const flush = parseNoteContent('---\nstatus: todo\n---\n# Heading\n');
+    expect(flush.content).toBe('# Heading\n');
+    expect(flush.lineNumberOffset).toBe(3);
   });
 
   it('preserves unknown frontmatter keys during round-trip serialization', () => {

@@ -33,6 +33,7 @@ export function parseNoteContent(rawContent: string, fallbackFilename?: string):
   let metadata: NoteMetadata = {};
   let content = rawContent;
   let hasFrontmatter = false;
+  let bodyStart = 0;
 
   if (match) {
     const rawYaml = match[1];
@@ -41,7 +42,12 @@ export function parseNoteContent(rawContent: string, fallbackFilename?: string):
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         metadata = parsed as NoteMetadata;
         hasFrontmatter = true;
-        content = rawContent.slice(match[0].length);
+        // The blank line the serializer writes after the closing fence separates, it is not body: left in, every
+        // editor would open on an empty first line. `serializeNoteContent` writes it back.
+        const rest = rawContent.slice(match[0].length);
+        const separator = rest.match(/^[ \t]*\r?\n/)?.[0] ?? '';
+        content = rest.slice(separator.length);
+        bodyStart = match[0].length + separator.length;
       }
     } catch {
       // If frontmatter YAML is malformed, treat entire file as plain content
@@ -72,7 +78,7 @@ export function parseNoteContent(rawContent: string, fallbackFilename?: string):
     metadata.tags = metadata.tags.map(String);
   }
 
-  return { metadata, content, title, hasFrontmatter, lineNumberOffset: hasFrontmatter && match ? (match[0].match(/\n/g) || []).length : 0 };
+  return { metadata, content, title, hasFrontmatter, lineNumberOffset: hasFrontmatter ? (rawContent.slice(0, bodyStart).match(/\n/g) || []).length : 0 };
 }
 
 /** Forces a document's `created`/`updated` scalars to render double-quoted, matching existing note style. */
