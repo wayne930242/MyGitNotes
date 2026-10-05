@@ -438,13 +438,14 @@
   .workspace-header .header-nav .mobile-nav-create:disabled { opacity: 0.45; }
   .workspace-header .header-nav .mobile-nav-create svg { width: 24px; height: 24px; }
   .workspace-header .header-nav .mobile-nav-create span { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-  .workspace-page-actions .header-new-note { display: none; }
   .workspace-page-actions .note-display-options { padding-right: 0; border-right: 0; }
   .workspace-scroll { padding: 12px var(--workspace-padding) 20px; }
   .workspace-page-actions .header-note-actions { gap: 6px; }
   .workspace-page-actions .header-search input { font-size: 16px; padding-left: 30px; }
   .workspace-page-actions .header-search svg { left: 9px; }
   .workspace-page-actions .note-view-select { width: 76px; }
+  /* The sort select takes the rest of the first row, so it never shrinks to a sliver; the remaining controls wrap to a second row. */
+  .workspace-page-actions .header-note-actions > .note-toolbar-sort { flex: 1 1 calc(100% - 44px - 76px - 2 * 6px); }
   .workspace-sidebar-scroll { padding-left: 12px; padding-right: 8px; }
   .workspace-breadcrumbs { gap: 8px; }
   .note-list th:first-child, .note-list td:first-child { padding-left: 0; }
