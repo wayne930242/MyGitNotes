@@ -70,7 +70,7 @@ import { CompilationView } from './components/CompilationView.js';
 import { NewCompilationDialog } from './components/NewCompilationDialog.js';
 import { planNewCompilation } from './lib/compilation-create.js';
 import type { CompilationRow } from '@mygitnotes/core/compilation';
-import { usePhone } from './components/FocusArea.js';
+import { usePhone } from './lib/use-phone.js';
 import { useFocusSearch } from './lib/focus-search.js';
 import { LegacyScreenRedirect } from './components/LegacyScreenRedirect.js';
 import { LegacySchemaNotice } from './components/LegacySchemaNotice.js';

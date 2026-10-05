@@ -3,10 +3,11 @@ import { ListTree } from 'lucide-react';
 import { useOutlineActions, useOutlineInsertion } from '../lib/outline-actions.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { NoteQuickActions } from './note-editor/NoteQuickActions.js';
-import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { MarkdownEditor, type MarkdownEditorHandle, type MarkdownEditorMode } from './MarkdownEditor.js';
 import type { NoteItem } from '../lib/types.js';
 import { usePanelContext } from '../lib/panel-context.js';
+import { usePhone } from '../lib/use-phone.js';
 import { type NoteEditorSessionState, useNoteEditorSession } from './note-editor/useNoteEditorSession.js';
 import { useNoteDocumentPanel } from './note-editor/useNoteDocumentPanel.js';
 import { NoteEditorNotices } from './note-editor/NoteEditorNotices.js';
@@ -89,16 +90,34 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   const refresh = onReadRemote && !session.blocked ? session.pullLatest : undefined;
   const docPanel = useNoteDocumentPanel({ frame, active, isMarkdown, content: session.content, editorMode, documentPanel, editorRef, metadata: session.metadata, notePath: note.path, branch, draftScope, readOnly });
 
-  useImperativeHandle(ref, () => ({
-    insert(text, at) {
-      if (!session.locked) editorRef.current?.insert(text, at);
-    },
-  }), [session.locked]);
+  // A phone opens every note for reading: a long press then only selects text instead of raising the keyboard,
+  // whose resize moved the page under the selection. Editing starts from the toolbar's Edit button.
+  const phone = usePhone();
+  const [editing, setEditing] = useState(false);
+  const reading = phone && !editing && !session.locked;
+  const finishEditing = () => {
+    setEditing(false);
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  };
+  // An insert made while reading switches to editing first; the editor drops inserts while it is read-only,
+  // so the text waits until the editor has become writable.
+  const pendingInserts = useRef<(() => void)[]>([]);
+  const insert = (text: string, at?: number) => {
+    if (session.locked) return;
+    if (!reading) return editorRef.current?.insert(text, at);
+    pendingInserts.current.push(() => editorRef.current?.insert(text, at));
+    setEditing(true);
+  };
+  useEffect(() => {
+    if (!reading) { for (const flush of pendingInserts.current.splice(0)) flush(); }
+  }, [reading]);
+
+  useImperativeHandle(ref, () => ({ insert }));
 
   // Insert markdown asset reference at cursor position or append
   const handleInsertAssetRef = (ref: string) => {
     if (session.locked) return;
-    editorRef.current?.insert(`\n${ref}\n`);
+    insert(`\n${ref}\n`);
     docPanel.setNotePanel(null);
   };
 
@@ -125,15 +144,15 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   return (
     <div className='note-editor' data-frame={frame} data-source-notebook={note.notebookId} style={noteViewStyle(viewPreferences)}>
       <NoteEditorNotices session={session} notePath={note.path} />
-      <NoteEditorToolbar frame={frame} note={note} session={session} docPanel={docPanel} isMarkdown={isMarkdown} autoSave={autoSave} readOnly={readOnly} editorMode={editorMode} setEditorMode={setEditorMode} showLineNumbers={showLineNumbers} toggleLineNumbers={toggleLineNumbers} showFormatToolbar={showFormatToolbar} toggleFormatToolbar={isMarkdown && !session.locked ? toggleFormatToolbar : undefined} onRefresh={refresh} onClose={onClose} onAddToFocus={onAddToFocus} onAddToOutline={addToOutline} />
+      <NoteEditorToolbar frame={frame} note={note} session={session} docPanel={docPanel} isMarkdown={isMarkdown} autoSave={autoSave} readOnly={readOnly} editorMode={editorMode} setEditorMode={setEditorMode} showLineNumbers={showLineNumbers} toggleLineNumbers={toggleLineNumbers} showFormatToolbar={showFormatToolbar} toggleFormatToolbar={isMarkdown && !session.locked && !reading ? toggleFormatToolbar : undefined} phoneEditing={phone && !session.locked ? { editing, onEdit: () => setEditing(true), onDone: finishEditing } : undefined} onRefresh={refresh} onClose={onClose} onAddToFocus={onAddToFocus} onAddToOutline={addToOutline} />
       {awaitingRecovery && (
         <p role='status'>
           {t('outline.recoveryPending')} <button type='button' className='ui-button' onClick={() => outlines?.cancel()}>{t('common.cancel')}</button>
         </p>
       )}
-      {showFormatToolbar && <div ref={setToolbarSlot} className='note-format-toolbar' />}
+      {showFormatToolbar && !reading && <div ref={setToolbarSlot} className='note-format-toolbar' />}
       <div className='note-editor-body'>
-        <MarkdownEditor ref={editorRef} content={session.content} path={note.path} notebookId={note.notebookId} mode={editorMode} readOnly={session.locked} onChange={session.setContent} onCaret={onCaret} toolbarSlot={showFormatToolbar ? toolbarSlot : null} ariaLabel='Note content' showLineNumbers={showLineNumbers} lineNumberOffset={session.baseNote.lineNumberOffset} />
+        <MarkdownEditor ref={editorRef} content={session.content} path={note.path} notebookId={note.notebookId} mode={editorMode} readOnly={session.locked || reading} onChange={session.setContent} onCaret={onCaret} toolbarSlot={showFormatToolbar ? toolbarSlot : null} ariaLabel='Note content' showLineNumbers={showLineNumbers} lineNumberOffset={session.baseNote.lineNumberOffset} />
         <NoteEditorDocumentPanel frame={frame} target={documentPanel?.target} notePanel={docPanel.notePanel} panel={panel} />
       </div>
       <EditorFooter content={session.content} path={note.path} state={session.editorState} status={session.editorStatus} actions={<NoteQuickActions {...footerActions({ frame, readOnly, session, refresh, canCommit: Boolean(onCommitFile) })} changes={changes} disabled={session.isSaving} />} />

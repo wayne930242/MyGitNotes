@@ -908,6 +908,8 @@ export const en = {
   'editor.source': 'Source',
   'editor.lineNumbers': 'Line Numbers',
   'editor.formatToolbar': 'Formatting toolbar',
+  'editor.startEditing': 'Edit',
+  'editor.finishEditing': 'Done',
   'format.heading1': 'Heading 1',
   'format.heading2': 'Heading 2',
   'format.heading3': 'Heading 3',

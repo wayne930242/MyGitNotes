@@ -1,9 +1,10 @@
 import './focus.css';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import type { FocusDivision } from '@mygitnotes/core/focus-page';
 import { type DisplayedPane, displayedPanes } from '../lib/focus-view.js';
 import { useIsDesktop } from './WorkspaceChrome.js';
+import { usePhone } from '../lib/use-phone.js';
 import { FocusPane, type FocusPaneContext } from './FocusPane.js';
 
 /** A division as nested splits: a leaf is a displayed pane's position, a split lays its children out along one axis. */
@@ -11,18 +12,6 @@ type Split = number | { orientation: 'horizontal' | 'vertical'; children: Split[
 const row = (...children: Split[]): Split => ({ orientation: 'horizontal', children });
 const column = (...children: Split[]): Split => ({ orientation: 'vertical', children });
 const SPLITS: Record<FocusDivision, Split> = { single: 0, 'columns-2': row(0, 1), 'rows-2': column(0, 1), 'major-left': row(0, column(1, 2)), 'major-top': column(0, row(1, 2)), 'columns-3': row(0, 1, 2), 'grid-2x2': column(row(0, 1), row(2, 3)) };
-
-/** Whether the viewport is a phone: 767px wide or less. */
-export function usePhone(): boolean {
-  const [phone, setPhone] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 767px)');
-    const update = () => setPhone(media.matches);
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
-  return phone;
-}
 
 /** How many panes fit: four on desktop, two on tablets, one on phones. */
 export function usePaneCapacity(): 1 | 2 | 4 {

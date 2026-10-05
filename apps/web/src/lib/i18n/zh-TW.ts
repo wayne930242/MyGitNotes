@@ -909,6 +909,8 @@ export const zhTW: Record<TranslationKey, string> = {
   'editor.source': '原始碼',
   'editor.lineNumbers': '行號',
   'editor.formatToolbar': '編輯工具列',
+  'editor.startEditing': '編輯',
+  'editor.finishEditing': '完成',
   'format.heading1': '標題 1',
   'format.heading2': '標題 2',
   'format.heading3': '標題 3',
