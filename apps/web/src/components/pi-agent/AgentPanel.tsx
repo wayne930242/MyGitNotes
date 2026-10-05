@@ -1,19 +1,20 @@
-import { FolderCog, MessageSquarePlus, Power, Send, ShieldCheck, ShieldOff, Square } from 'lucide-react';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { ChevronDown, Info, MessageSquarePlus, Power, Send, ShieldCheck, ShieldOff, Square } from 'lucide-react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Button } from '../Button.js';
 import { FolderPickerDialog } from '../FolderPickerDialog.js';
 import { Select } from '../Select.js';
 import { AgentDialogCard } from './AgentDialogCard.js';
-import { AgentTranscript } from './AgentTranscript.js';
-import { type PiLocation, usePiAgent } from '../../lib/pi-agent/session.js';
-import { type AgentFocus, caretPosition, focusLabel } from '../../lib/pi-agent/transcript.js';
+import { AgentTranscript, type ChatLinks } from './AgentTranscript.js';
+import { type PiLocation, type PiSessionInfo, usePiAgent } from '../../lib/pi-agent/session.js';
+import { type AgentFocus, focusLabel, selectionPosition } from '../../lib/pi-agent/transcript.js';
 import { useTranslation } from '../../lib/i18n/index.js';
 import './pi-agent.css';
 
 type ContextMode = 'line' | 'path' | 'none';
 const CONTEXT_MODES: readonly ContextMode[] = ['line', 'path', 'none'];
 const CONTEXT_KEY = 'mygitnotes.piAgent.context';
-const noCaret = { subscribe: () => () => {}, get: () => 0 };
+const noSelection = { from: 0, to: 0 };
+const noCaret = { subscribe: () => () => {}, get: () => noSelection };
 
 function savedContextMode(): ContextMode {
   try {
@@ -48,6 +49,40 @@ function SwitchFolder({ onDone }: { onDone: () => void; }) {
   );
 }
 
+/**
+ * What Pi's extensions report for its status line and widgets (quota, MCP, LSP…), kept out of the panel's
+ * height behind an info button at the start of the send row.
+ */
+function ExtensionInfo() {
+  const { t } = useTranslation();
+  const { widgets, statuses } = usePiAgent().transcript;
+  const [open, setOpen] = useState(false);
+  const widgetEntries = Object.entries(widgets).filter(([, lines]) => lines.length > 0);
+  const statusEntries = Object.entries(statuses);
+  if (widgetEntries.length + statusEntries.length === 0) return null;
+  return (
+    <div className='pi-agent-info' onKeyDown={event => event.key === 'Escape' && setOpen(false)}>
+      <Button size='icon' title={t('piAgent.extensionInfo')} aria-label={t('piAgent.extensionInfo')} aria-expanded={open} onClick={() => setOpen(current => !current)}>
+        <Info aria-hidden='true' />
+      </Button>
+      {open && <div className='pi-agent-info-popover' role='status'>{widgetEntries.map(([key, lines]) => <pre key={key}>{lines.join('\n')}</pre>)} {statusEntries.map(([key, text]) => <p key={key}>{text}</p>)}</div>}
+    </div>
+  );
+}
+
+/**
+ * Where links in Pi's replies resolve: the session folder in repository terms, and the repository on disk,
+ * read off the session's absolute folder by dropping that relative folder from its end.
+ */
+function chatLinks(session: PiSessionInfo | null, notebooks: { id: string; root: string; }[]): ChatLinks | undefined {
+  const notebook = session && notebooks.find(candidate => candidate.id === session.location.notebookId);
+  if (!session || !notebook) return undefined;
+  const folder = [notebook.root, session.location.folder].filter(part => part && part !== '.').join('/');
+  const cwd = session.cwd.replace(/\/+$/, '');
+  const repositoryRoot = folder ? cwd.endsWith(`/${folder}`) ? cwd.slice(0, -folder.length - 1) : undefined : cwd;
+  return repositoryRoot === undefined ? undefined : { notebookId: notebook.id, base: { folder, repositoryRoot } };
+}
+
 /** How the session's folder reads in the header: the notebook title, then the folder inside it. */
 function locationLabel(location: PiLocation | undefined, notebooks: { id: string; title: string; }[]): string {
   if (!location) return '';
@@ -65,8 +100,8 @@ export function AgentPanel() {
   const [switching, setSwitching] = useState(false);
   const [file, setFile] = useState<{ path: string; absolute?: string; error?: string; } | null>(null);
   const caret = target?.caret ?? noCaret;
-  const offset = useSyncExternalStore(caret.subscribe, caret.get);
-  const position = target?.caret && target.content ? caretPosition(target.content(), offset, target.lineNumberOffset) : undefined;
+  const selection = useSyncExternalStore(caret.subscribe, caret.get);
+  const position = target?.caret && target.content ? selectionPosition(target.content(), selection, target.lineNumberOffset) : undefined;
   const { locate } = agent;
 
   useEffect(() => {
@@ -87,6 +122,7 @@ export function AgentPanel() {
 
   const session = agent.session;
   const model = agent.modelState;
+  const links = useMemo(() => chatLinks(session, agent.notebooks), [session, agent.notebooks]);
   const live = Boolean(session && session.status !== 'exited');
   const ready = live && agent.connected;
   const located = target && file?.path === target.path ? file.absolute : undefined;
@@ -104,11 +140,12 @@ export function AgentPanel() {
     <section className='pi-agent-panel' aria-label={t('piAgent.title')}>
       <header className='pi-agent-header'>
         <span className='pi-agent-status' data-status={live ? session!.status : 'none'}>{t(live ? `piAgent.status.${session!.status}` as const : 'piAgent.status.none')}</span>
-        <span className='pi-agent-cwd' title={session?.cwd}>{locationLabel(session?.location, agent.notebooks)}</span>
+        {/* The folder name opens the folder picker; its tooltip names the absolute folder Pi runs in. */}
+        <button type='button' className='pi-agent-cwd' title={session?.cwd ? `${t('piAgent.switchFolder')}\n${session.cwd}` : t('piAgent.switchFolder')} aria-haspopup='dialog' aria-expanded={switching} onClick={() => setSwitching(open => !open)}>
+          <span>{locationLabel(session?.location, agent.notebooks) || t('piAgent.switchFolder')}</span>
+          <ChevronDown aria-hidden='true' />
+        </button>
         {live && session!.trusted !== undefined && <span className='pi-agent-trust' data-trusted={session!.trusted} title={t('piAgent.trustHint')}>{session!.trusted ? <ShieldCheck aria-hidden='true' /> : <ShieldOff aria-hidden='true' />} {t(session!.trusted ? 'piAgent.trusted' : 'piAgent.untrusted')}</span>}
-        <Button size='icon' title={t('piAgent.switchFolder')} aria-label={t('piAgent.switchFolder')} aria-expanded={switching} onClick={() => setSwitching(open => !open)}>
-          <FolderCog aria-hidden='true' />
-        </Button>
         <Button size='icon' title={t('piAgent.newConversation')} aria-label={t('piAgent.newConversation')} disabled={!ready} onClick={agent.newConversation}>
           <MessageSquarePlus aria-hidden='true' />
         </Button>
@@ -132,8 +169,7 @@ export function AgentPanel() {
         </div>
       )}
       {/* Pi's questions scroll with the conversation, so a tall one never pushes the composer out of the panel. */}
-      <AgentTranscript transcript={agent.transcript}>{agent.transcript.dialogs.map(dialog => <AgentDialogCard key={dialog.id} dialog={dialog} onAnswer={answer => agent.answer(dialog, answer)} />)}</AgentTranscript>
-      {[...Object.values(agent.transcript.widgets).flat(), ...Object.values(agent.transcript.statuses)].length > 0 && <div className='pi-agent-widgets'>{Object.entries(agent.transcript.widgets).map(([key, lines]) => <pre key={key}>{lines.join('\n')}</pre>)}{Object.keys(agent.transcript.statuses).length > 0 && <div className='pi-agent-statuses'>{Object.entries(agent.transcript.statuses).map(([key, text]) => <span key={key} title={text}>{text}</span>)}</div>}</div>}
+      <AgentTranscript transcript={agent.transcript} links={links}>{agent.transcript.dialogs.map(dialog => <AgentDialogCard key={dialog.id} dialog={dialog} onAnswer={answer => agent.answer(dialog, answer)} />)}</AgentTranscript>
       <form
         className='pi-agent-composer'
         onSubmit={event => {
@@ -164,6 +200,7 @@ export function AgentPanel() {
           }}
         />
         <div className='pi-agent-dialog-actions'>
+          <ExtensionInfo />
           {agent.transcript.running && (
             <Button onClick={agent.abort} title={t('piAgent.abort')}>
               <Square aria-hidden='true' />

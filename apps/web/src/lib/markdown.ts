@@ -21,6 +21,53 @@ md.use({ renderer: { code: ({ text, lang }) => isMermaidInfo(lang ?? '') ? `<div
 
 export const DOMPURIFY_DIRECTIVE_CONFIG = { ADD_TAGS: ['iframe', 'details', 'summary', 'aside', 'section', 'article', 'header', 'footer', 'figure', 'figcaption', 'abbr', 'svg', 'path', 'circle', 'cite'], ADD_ATTR: ['allow', 'allowfullscreen', 'loading', 'data-video-id', 'data-start', 'data-youtube-mode', 'data-youtube-mode-option', 'data-youtube-session', 'data-youtube-source-url', 'data-youtube-copy', 'data-copy-label', 'data-copied-label', 'data-copy-failed-label', 'controls', 'preload', 'data-type', 'data-variant', 'data-stat', 'data-cols', 'data-col-span', 'data-direction', 'data-arrow', 'data-icon', 'data-qrcode', 'data-size', 'data-component-name', 'data-lucide', 'data-slide-index', 'data-vertical', 'data-label', 'data-card-type', 'open', 'aria-label', 'aria-hidden', 'style', 'viewBox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'] };
 
+/** Where a chat reply's links resolve from: the folder Pi runs in, repository-relative and on disk. */
+export interface ChatLinkBase {
+  /** Repository-relative folder Pi runs in; relative links resolve from it. */
+  folder: string;
+  /** The repository's absolute folder on disk, so a link Pi writes as an absolute path still reaches the note. */
+  repositoryRoot: string;
+}
+
+/** A reply link as a workspace href: an absolute file path inside the repository becomes repository-rooted. */
+function chatHref(href: string, base: ChatLinkBase): string | null {
+  if (!href.startsWith('/')) return href;
+  return href.startsWith(`${base.repositoryRoot}/`) ? href.slice(base.repositoryRoot.length) : null;
+}
+
+/**
+ * HTML for a chat reply, in the notes' Markdown dialect (CJK emphasis, math, mermaid). Links are workspace
+ * links, so the surrounding WorkspaceLinks opens a note in the app and a web page in a new tab; without a
+ * `base` only web links stay.
+ */
+export function renderChatMarkdown(text: string, base?: ChatLinkBase): string {
+  const parsed = new DOMParser().parseFromString(DOMPurify.sanitize(md.parse(text, { gfm: true }) as string), 'text/html');
+  const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
+  // A file standing in the folder, since relative hrefs resolve from their source file's folder.
+  const sourcePath = base ? `${base.folder}/.pi-agent` : '';
+  for (const link of parsed.querySelectorAll('a')) {
+    const original = link.getAttribute('href') || '';
+    const href = base ? chatHref(original, base) : /^https?:\/\//i.test(original) ? original : null;
+    const target = href ? resolveWorkspaceHref(href, sourcePath, undefined, origin) : null;
+    if (!href || !target || !base && target.kind !== 'external') {
+      link.removeAttribute('href');
+      continue;
+    }
+    link.setAttribute('href', href);
+    link.dataset.workspaceLink = href;
+    link.dataset.sourcePath = sourcePath;
+    link.rel = 'noopener noreferrer';
+    if (target.kind === 'external') link.target = '_blank';
+  }
+  for (const table of parsed.querySelectorAll('table')) {
+    const scroller = parsed.createElement('div');
+    scroller.className = 'markdown-table-scroll';
+    table.replaceWith(scroller);
+    scroller.append(table);
+  }
+  return parsed.body.innerHTML;
+}
+
 /** `notebookId` names the note's notebook, so an asset URL reaches the right repository when notebook roots repeat across repositories. */
 export function renderNote(content: string, notePath: string, tableLabel = 'Horizontally scrollable table (Alt + wheel)', youtubeLabels: YouTubeLabels = DEFAULT_YOUTUBE_LABELS, notebookId?: string): string {
   const isMdx = /\.mdx$/i.test(notePath);

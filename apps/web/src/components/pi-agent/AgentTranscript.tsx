@@ -1,5 +1,7 @@
 import { AlertTriangle, CircleCheck, CircleX, Info, LoaderCircle, Wrench } from 'lucide-react';
-import { type ReactNode, useLayoutEffect, useRef } from 'react';
+import { type ReactNode, useLayoutEffect, useMemo, useRef } from 'react';
+import { NoteHtml } from '../NoteHtml.js';
+import { type ChatLinkBase, renderChatMarkdown } from '../../lib/markdown.js';
 import { type AssistantBlock, focusLabel, type TranscriptState } from '../../lib/pi-agent/transcript.js';
 import { useTranslation } from '../../lib/i18n/index.js';
 
@@ -35,12 +37,24 @@ function ToolCall({ block, transcript }: { block: Extract<AssistantBlock, { type
   );
 }
 
-function Blocks({ blocks, transcript }: { blocks: AssistantBlock[]; transcript: TranscriptState; }) {
+/** Pi writes Markdown; the reply is re-rendered as it streams in. */
+function MarkdownText({ text, links }: { text: string; links?: ChatLinks; }) {
+  const html = useMemo(() => renderChatMarkdown(text, links?.base), [text, links?.base]);
+  return <NoteHtml className='prose-custom pi-agent-markdown' html={html} notebookId={links?.notebookId} />;
+}
+
+/** Where reply links resolve: the session's notebook, which scopes them to its repository, and its folder. */
+export interface ChatLinks {
+  notebookId: string;
+  base: ChatLinkBase;
+}
+
+function Blocks({ blocks, transcript, links }: { blocks: AssistantBlock[]; transcript: TranscriptState; links?: ChatLinks; }) {
   const { t } = useTranslation();
   return (
     <>
       {blocks.map((block, index) => {
-        if (block.type === 'text') return block.text ? <p key={index} className='pi-agent-text'>{block.text}</p> : null;
+        if (block.type === 'text') return block.text ? <MarkdownText key={index} text={block.text} links={links} /> : null;
         if (block.type === 'thinking') {
           return (
             <details key={index} className='pi-agent-thinking'>
@@ -58,7 +72,7 @@ function Blocks({ blocks, transcript }: { blocks: AssistantBlock[]; transcript: 
 const NOTICE_ICONS = { info: Info, warning: AlertTriangle, error: CircleX };
 
 /** The conversation: sent messages with the note they named, Pi's replies with its tool calls, and notices; `children` follow the latest entry, as Pi's open questions do. */
-export function AgentTranscript({ transcript, children }: { transcript: TranscriptState; children?: ReactNode; }) {
+export function AgentTranscript({ transcript, links, children }: { transcript: TranscriptState; links?: ChatLinks; children?: ReactNode; }) {
   const { t } = useTranslation();
   const list = useRef<HTMLDivElement>(null);
   // Scrolls only this list; scrollIntoView would also move the panels around it.
@@ -80,7 +94,7 @@ export function AgentTranscript({ transcript, children }: { transcript: Transcri
         if (entry.kind === 'assistant') {
           return (
             <div key={entry.key} className='pi-agent-message' data-role='assistant'>
-              <Blocks blocks={entry.blocks} transcript={transcript} />
+              <Blocks blocks={entry.blocks} transcript={transcript} links={links} />
               {entry.error && <p role='alert' className='pi-agent-error'>{entry.error}</p>}
             </div>
           );
@@ -95,7 +109,7 @@ export function AgentTranscript({ transcript, children }: { transcript: Transcri
       })}
       {transcript.streaming && (
         <div className='pi-agent-message' data-role='assistant' data-streaming='true'>
-          <Blocks blocks={transcript.streaming} transcript={transcript} />
+          <Blocks blocks={transcript.streaming} transcript={transcript} links={links} />
         </div>
       )}
       {transcript.running && !transcript.streaming && (

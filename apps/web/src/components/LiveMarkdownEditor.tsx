@@ -53,7 +53,8 @@ interface Props {
   readOnly: boolean;
   ariaLabel?: string;
   onChange: (content: string) => void;
-  onCaret?: (position: number) => void;
+  /** The caret, and the other end of the selection when text is selected. */
+  onCaret?: (position: number, end?: number) => void;
   showLineNumbers?: boolean;
   lineNumberOffset?: number;
   onCopyLines?: (firstLine: number, lastLine?: number) => void;
@@ -224,7 +225,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
           }),
           EditorView.updateListener.of(update => {
             if (update.docChanged) callback.current(update.state.doc.toString());
-            if ((update.selectionSet || update.docChanged || update.focusChanged) && update.view.hasFocus) caretCallback.current?.(update.state.selection.main.head);
+            if ((update.selectionSet || update.docChanged || update.focusChanged) && update.view.hasFocus) caretCallback.current?.(update.state.selection.main.head, update.state.selection.main.anchor);
           }),
         ],
       }),

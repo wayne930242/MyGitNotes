@@ -1472,6 +1472,7 @@ export const en = {
   'piAgent.context.line': 'Line',
   'piAgent.context.path': 'Path only',
   'piAgent.context.none': 'None',
+  'piAgent.extensionInfo': 'Extension status',
   'piAgent.model': 'Model',
   'piAgent.thinkingLevel': 'Thinking level',
   'piAgent.trusted': 'Trusted',

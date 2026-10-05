@@ -1473,6 +1473,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'piAgent.context.line': '行號',
   'piAgent.context.path': '只傳路徑',
   'piAgent.context.none': '不傳',
+  'piAgent.extensionInfo': 'Extension 狀態',
   'piAgent.model': '模型',
   'piAgent.thinkingLevel': '思考等級',
   'piAgent.trusted': '已信任',

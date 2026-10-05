@@ -52,6 +52,18 @@ it('sends a message with the note path and the live caret line, and shows the se
   expect(value.send).toHaveBeenCalledWith('Explain this', { file: '/home/me/workspace/notes/plan.md', line: 5, column: 5 });
 });
 
+it('sends the selected lines when text is selected, in either direction', async () => {
+  const target = noteTarget();
+  const value = agent({ target });
+  panel(value);
+  // Dragged upwards: the caret ends at the start of the selection.
+  act(() => target.caret!.set(13, 2));
+  await waitFor(() => expect(screen.getByText('plan.md:4-5')).toBeTruthy());
+  write('Rewrite this');
+  fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message to Pi' }), { key: 'Enter' });
+  expect(value.send).toHaveBeenCalledWith('Rewrite this', { file: '/home/me/workspace/notes/plan.md', line: 4, column: 3, endLine: 5, endColumn: 10 });
+});
+
 it('sends the path only, or nothing, as the chosen context mode says, and remembers the choice', async () => {
   const value = agent({ target: noteTarget() });
   panel(value);
@@ -110,7 +122,8 @@ it("shows Pi's own project-trust decision, which the panel does not override", (
 it('switches to a notebook folder picked in the folder dialog, without a trust override', async () => {
   const value = agent();
   panel(value);
-  fireEvent.click(screen.getByRole('button', { name: 'Change working folder' }));
+  // The folder name in the header is the way into the folder picker.
+  fireEvent.click(screen.getByRole('button', { name: 'Notes' }));
   expect(screen.getByText(/ends the current Pi session and clears this conversation/)).toBeTruthy();
   expect(screen.getByRole('combobox', { name: 'Notebook' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'End session and switch' }));

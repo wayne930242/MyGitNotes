@@ -39,7 +39,8 @@ interface Props {
   readOnly: boolean;
   onChange: (content: string) => void;
   ariaLabel?: string;
-  onCaret?: (position: number) => void;
+  /** The caret, and the other end of the selection when text is selected. */
+  onCaret?: (position: number, end?: number) => void;
   compact?: boolean;
   /** The element that hosts the formatting toolbar; null hides it, and without one it sits in a row above the content. */
   toolbarSlot?: HTMLElement | null;
@@ -102,7 +103,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   const updateActiveSourceLine = (target: HTMLTextAreaElement) => {
     setActiveSourceLine(target.value.slice(0, target.selectionStart).split('\n').length);
     setCaret(target.selectionStart);
-    onCaret?.(target.selectionStart);
+    onCaret?.(target.selectionStart, target.selectionEnd);
   };
   const rawSnapshot = (): OutlineRawSnapshot => {
     const range = bookmarkOriginalRange(content, { from: source.current?.selectionStart ?? 0, to: source.current?.selectionEnd ?? 0 });

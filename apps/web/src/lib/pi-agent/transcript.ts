@@ -4,6 +4,9 @@ export interface AgentFocus {
   file: string;
   line?: number;
   column?: number;
+  /** Where a selection that starts at `line`/`column` ends; absent for a bare caret. */
+  endLine?: number;
+  endColumn?: number;
 }
 
 export type AssistantBlock = { type: 'text'; text: string; } | { type: 'thinking'; text: string; } | { type: 'toolCall'; id: string; name: string; args: unknown; };
@@ -43,26 +46,44 @@ export const emptyTranscript: TranscriptState = { entries: [], tools: {}, dialog
 
 const CONTEXT_OPEN = '<editor-context>';
 const CONTEXT_CLOSE = '</editor-context>';
-const CONTEXT_PATTERN = /^<editor-context>\nfile: (.+)\n(?:cursor: line (\d+), column (\d+)\n)?<\/editor-context>\n\n/;
+const CONTEXT_PATTERN = /^<editor-context>\nfile: (.+)\n(?:(?:cursor: line (\d+), column (\d+)|selection: line (\d+), column (\d+) to line (\d+), column (\d+))\n)?<\/editor-context>\n\n/;
 
 /** Prefixes a message with the file in focus and, when given, the caret; Pi reads the file itself when it needs it. */
 export function withFocus(text: string, focus: AgentFocus | undefined): string {
   if (!focus) return text;
-  const cursor = focus.line === undefined ? '' : `cursor: line ${focus.line}, column ${focus.column ?? 1}\n`;
-  return `${CONTEXT_OPEN}\nfile: ${focus.file}\n${cursor}${CONTEXT_CLOSE}\n\n${text}`;
+  const start = `line ${focus.line}, column ${focus.column ?? 1}`;
+  const place = focus.line === undefined ? '' : focus.endLine === undefined ? `cursor: ${start}\n` : `selection: ${start} to line ${focus.endLine}, column ${focus.endColumn ?? 1}\n`;
+  return `${CONTEXT_OPEN}\nfile: ${focus.file}\n${place}${CONTEXT_CLOSE}\n\n${text}`;
 }
 
-/** How a focus reads in a chip: `name.md:12:5`, or just the file name without a caret. */
+/**
+ * How a focus reads in a chip: `name.md:12:5` for a caret, `name.md:12-15` for lines selected,
+ * `name.md:12:5-9` for a selection within one line, or just the file name without a caret.
+ */
 export function focusLabel(focus: AgentFocus): string {
   const name = focus.file.slice(focus.file.lastIndexOf('/') + 1);
-  return focus.line === undefined ? name : `${name}:${focus.line}:${focus.column ?? 1}`;
+  if (focus.line === undefined) return name;
+  if (focus.endLine === undefined) return `${name}:${focus.line}:${focus.column ?? 1}`;
+  return focus.endLine === focus.line ? `${name}:${focus.line}:${focus.column ?? 1}-${focus.endColumn ?? 1}` : `${name}:${focus.line}-${focus.endLine}`;
 }
 
 /** Splits the focus prefix back off a sent message, for display. */
 export function splitFocus(message: string): { text: string; focus?: AgentFocus; } {
   const match = CONTEXT_PATTERN.exec(message);
   if (!match) return { text: message };
-  return { text: message.slice(match[0].length), focus: match[2] === undefined ? { file: match[1] } : { file: match[1], line: Number(match[2]), column: Number(match[3]) } };
+  const [, file, line, column, start, startColumn, end, endColumn] = match;
+  const text = message.slice(match[0].length);
+  if (line !== undefined) return { text, focus: { file, line: Number(line), column: Number(column) } };
+  if (start !== undefined) return { text, focus: { file, line: Number(start), column: Number(startColumn), endLine: Number(end), endColumn: Number(endColumn) } };
+  return { text, focus: { file } };
+}
+
+/** Where a caret or selection sits in file lines: the caret's line and column, plus the selection's end when there is one. */
+export function selectionPosition(body: string, selection: { from: number; to: number; }, lineOffset = 0): Pick<AgentFocus, 'line' | 'column' | 'endLine' | 'endColumn'> {
+  const start = caretPosition(body, selection.from, lineOffset);
+  if (selection.to <= selection.from) return start;
+  const end = caretPosition(body, selection.to, lineOffset);
+  return { ...start, endLine: end.line, endColumn: end.column };
 }
 
 /** The 1-based line and column of `offset` in a note body whose first line is file line `lineOffset + 1`. */

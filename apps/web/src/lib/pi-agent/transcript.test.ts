@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyRecord, caretPosition, emptyTranscript, focusLabel, splitFocus, stripTerminalStyles, transcriptFromMessages, type TranscriptState, withFocus } from './transcript.js';
+import { applyRecord, caretPosition, emptyTranscript, focusLabel, selectionPosition, splitFocus, stripTerminalStyles, transcriptFromMessages, type TranscriptState, withFocus } from './transcript.js';
 
 const apply = (records: unknown[], state: TranscriptState = emptyTranscript) => records.reduce<TranscriptState>(applyRecord, state);
 
@@ -16,6 +16,20 @@ describe('focus prefix', () => {
     expect(focusLabel({ file: '/home/me/notes/x.compilation.yml' })).toBe('x.compilation.yml');
     expect(splitFocus('plain')).toEqual({ text: 'plain' });
     expect(withFocus('plain', undefined)).toBe('plain');
+  });
+
+  it('names a selection by both ends, labelled by lines or by columns within one line', () => {
+    const lines = { file: '/home/me/notes/a.md', line: 3, column: 2, endLine: 7, endColumn: 4 };
+    const message = withFocus('Rewrite this', lines);
+    expect(message).toContain('selection: line 3, column 2 to line 7, column 4\n');
+    expect(splitFocus(message)).toEqual({ text: 'Rewrite this', focus: lines });
+    expect(focusLabel(lines)).toBe('a.md:3-7');
+    expect(focusLabel({ ...lines, endLine: 3, endColumn: 9 })).toBe('a.md:3:2-9');
+  });
+
+  it('places a selection in file lines, and a bare caret without an end', () => {
+    expect(selectionPosition('first\nsecond line\nthird', { from: 2, to: 15 }, 4)).toEqual({ line: 5, column: 3, endLine: 6, endColumn: 10 });
+    expect(selectionPosition('first\nsecond', { from: 8, to: 8 })).toEqual({ line: 2, column: 3 });
   });
 
   it('counts the caret in file lines, past the frontmatter above the body', () => {

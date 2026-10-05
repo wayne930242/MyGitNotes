@@ -86,8 +86,8 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   const [toolbarSlot, setToolbarSlot] = useState<HTMLDivElement | null>(null);
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const [caret] = useState(createCaretStore);
-  const trackCaret = (position: number) => {
-    caret.set(position);
+  const trackCaret = (position: number, end?: number) => {
+    caret.set(position, end);
     onCaret?.(position);
   };
 

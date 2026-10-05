@@ -3,7 +3,10 @@
 .pi-agent-status { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--color-sidebar); color: var(--color-muted); font-size: 11px; font-weight: 600; }
 .pi-agent-status[data-status='ready'] { background: var(--color-primary-light); color: var(--color-primary); }
 .pi-agent-status[data-status='exited'] { background: var(--color-danger-soft); color: var(--color-danger); }
-.pi-agent-cwd { flex: 1; min-width: 0; overflow: hidden; color: var(--color-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.pi-agent-cwd { display: inline-flex; flex: 0 1 auto; align-items: center; gap: 2px; min-width: 0; margin-right: auto; padding: 2px 4px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--color-muted); font-size: 12px; cursor: pointer; }
+.pi-agent-cwd > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pi-agent-cwd svg { flex: none; width: 12px; height: 12px; }
+.pi-agent-cwd:hover, .pi-agent-cwd[aria-expanded='true'] { background: var(--color-sidebar); color: var(--color-text); }
 .pi-agent-header .ui-icon-button svg { width: 15px; height: 15px; }
 .pi-agent-transcript { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; }
 .pi-agent-empty, .pi-agent-hint { color: var(--color-muted); line-height: 1.5; }
@@ -44,8 +47,6 @@
 .pi-agent-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .pi-agent-check { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--color-text); }
 .pi-agent-switch label.pi-agent-check { flex-direction: row; }
-.pi-agent-widgets { display: flex; flex: none; flex-direction: column; gap: 4px; max-height: 72px; overflow-y: auto; padding: 6px 10px; border-top: 1px solid var(--color-border); color: var(--color-muted); }
-.pi-agent-widgets pre { margin: 0; font: 11px ui-monospace, monospace; white-space: pre-wrap; }
 .pi-agent-composer { display: flex; flex: none; flex-direction: column; gap: 6px; padding: 8px; border-top: 1px solid var(--color-border); }
 .pi-agent-composer textarea { resize: vertical; min-height: 56px; font-size: 13px; }
 .pi-agent-composer .ui-button svg { width: 14px; height: 14px; }
@@ -65,8 +66,18 @@
 .pi-agent-model-row { display: flex; flex: none; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--color-border); }
 .pi-agent-model-row .pi-agent-model { flex: 1 1 auto; min-width: 0; }
 .pi-agent-model-row .pi-agent-thinking { flex: none; width: 96px; }
-/* Extension status lines share one row, scrolled sideways, so many extensions never squeeze the conversation. */
-.pi-agent-statuses { display: flex; gap: 12px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
-.pi-agent-statuses > span { flex: none; }
 /* A phone's bottom sheet is too short to converse in, so the agent takes the screen above the tool row. */
-@media (max-width: 767px) { .right-panel:has(.pi-agent-panel) { top: calc(var(--visual-top, 0px) + max(8px, env(safe-area-inset-top))); height: calc(var(--visual-height, 100dvh) - 76px - env(safe-area-inset-bottom) - max(8px, env(safe-area-inset-top))); transform: none; } .right-panel:has(.pi-agent-panel) .right-panel-content { flex: 1 1 auto; max-height: none; } .note-document-panel:has(.pi-agent-panel) { top: max(8px, env(safe-area-inset-top)); max-height: none; } .pi-agent-widgets { max-height: 48px; } }
+@media (max-width: 767px) { .right-panel:has(.pi-agent-panel) { top: calc(var(--visual-top, 0px) + max(8px, env(safe-area-inset-top))); height: calc(var(--visual-height, 100dvh) - 76px - env(safe-area-inset-bottom) - max(8px, env(safe-area-inset-top))); transform: none; } .right-panel:has(.pi-agent-panel) .right-panel-content { flex: 1 1 auto; max-height: none; } .note-document-panel:has(.pi-agent-panel) { top: max(8px, env(safe-area-inset-top)); max-height: none; } }
+/* Extension status and widgets: an info button at the start of the send row opens them above it. */
+.pi-agent-dialog-actions .pi-agent-info { position: relative; margin-right: auto; }
+.pi-agent-info .ui-icon-button svg { width: 15px; height: 15px; }
+.pi-agent-info-popover { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 10; display: flex; flex-direction: column; gap: 4px; width: max-content; max-width: min(320px, 80vw); max-height: 240px; overflow: auto; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-panel); background: var(--color-surface); box-shadow: 0 6px 20px color-mix(in srgb, var(--color-scrim) 20%, transparent); color: var(--color-muted); }
+.pi-agent-info-popover p { margin: 0; overflow-wrap: anywhere; }
+.pi-agent-info-popover pre { margin: 0; font: 11px ui-monospace, monospace; white-space: pre-wrap; }
+/* Pi's replies in the notes' prose style, scaled down to the panel; doubled classes outrank .prose-custom. */
+.prose-custom.pi-agent-markdown { min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+.prose-custom.pi-agent-markdown > :first-child { margin-top: 0; }
+.prose-custom.pi-agent-markdown > :last-child { margin-bottom: 0; }
+.prose-custom.pi-agent-markdown :is(p, ul, ol, pre, blockquote, .markdown-table-scroll) { margin-bottom: 0.6em; line-height: 1.55; }
+.prose-custom.pi-agent-markdown :is(h1, h2, h3, h4, h5, h6) { margin: 0.8em 0 0.4em; padding: 0; border: 0; font-size: 1.05em; font-weight: 600; }
+.prose-custom.pi-agent-markdown pre { max-width: 100%; overflow-x: auto; font-size: 12px; }
