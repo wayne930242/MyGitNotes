@@ -1,9 +1,12 @@
-import { Braces, ChevronDown, ChevronUp, Image, Info, ListTree, PanelRightClose, Search, SlidersHorizontal } from 'lucide-react';
+import { Bot, Braces, ChevronDown, ChevronUp, Image, Info, ListTree, PanelRightClose, Search, SlidersHorizontal } from 'lucide-react';
 import { Button } from '../Button.js';
 import { FileManager } from '../files/index.js';
 import { NoteFrontmatterPanel } from './NoteFrontmatterPanel.js';
 import { NoteViewPanel } from './NoteViewPanel.js';
 import { NoteInfoPanel } from './NoteInfoPanel.js';
+import { AgentPanel } from '../pi-agent/AgentPanel.js';
+import type { CaretStore } from '../../lib/pi-agent/caret-store.js';
+import { usePiAgentAvailable } from '../../lib/pi-agent/session.js';
 import type { FileResult } from '../../lib/files-api.js';
 import type { OutlineHeading } from '../../lib/note-navigation.js';
 import type { NotebookMetadataField } from '../../lib/types.js';
@@ -20,6 +23,9 @@ export interface NoteDocumentPanelProps {
   isAssetPickerOpen: boolean;
   isViewPanelOpen: boolean;
   isInfoPanelOpen: boolean;
+  isAgentOpen: boolean;
+  /** The editor's caret, which the agent tab names to Pi with each message. */
+  caret: CaretStore;
   /** The note's repository-relative path, for the Info tab. */
   notePath: string;
   /** The editor's current body, which the Info tab publishes as a Gist. */
@@ -65,8 +71,9 @@ export interface NoteDocumentPanelProps {
 }
 
 /** The zoom/pane editor's document panel: its tab strip and the find, outline, frontmatter, asset and view sections it switches between. */
-export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isViewPanelOpen, isInfoPanelOpen, notePath, content, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, readOnly, beforeFileChange, onFilesChanged }: NoteDocumentPanelProps) {
+export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isViewPanelOpen, isInfoPanelOpen, isAgentOpen, caret, notePath, content, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, readOnly, beforeFileChange, onFilesChanged }: NoteDocumentPanelProps) {
   const { t } = useTranslation();
+  const agentAvailable = usePiAgentAvailable();
 
   const sections = (
     <>
@@ -144,6 +151,7 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
       {isAssetPickerOpen && <FileManager notebookId={notebookId} writable={!readOnly} mode='pick-image' layout='panel' onInsert={locked ? undefined : onInsertAssetRef} beforeChange={beforeFileChange} onChanged={onFilesChanged} />}
       {isViewPanelOpen && <NoteViewPanel />}
       {isInfoPanelOpen && <NoteInfoPanel note={{ notebookId, path: notePath }} content={content} metadata={metadata} setMetadata={setMetadata} locked={locked || readOnly} />}
+      {isAgentOpen && agentAvailable && <AgentPanel notebookId={notebookId} notePath={notePath} content={content} lineNumberOffset={lineNumberOffset} caret={caret} />}
     </>
   );
 
@@ -165,7 +173,7 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
             tabs[(target + tabs.length) % tabs.length].focus();
           }}
         >
-          <Button type='button' role='tab' aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isAssetPickerOpen || isViewPanelOpen || isInfoPanelOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}>
+          <Button type='button' role='tab' aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isAssetPickerOpen || isViewPanelOpen || isInfoPanelOpen || isAgentOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}>
             <Search aria-hidden='true' />
           </Button>
           {isMarkdown && (
@@ -185,6 +193,11 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
           <Button type='button' role='tab' aria-selected={isInfoPanelOpen} tabIndex={isInfoPanelOpen ? 0 : -1} aria-label={t('editor.info')} title={t('editor.info')} onClick={() => setNotePanel(isInfoPanelOpen ? null : 'info')}>
             <Info aria-hidden='true' />
           </Button>
+          {agentAvailable && (
+            <Button type='button' role='tab' aria-selected={isAgentOpen} tabIndex={isAgentOpen ? 0 : -1} aria-label={t('piAgent.tab')} title={t('piAgent.tab')} onClick={() => setNotePanel(isAgentOpen ? null : 'agent')}>
+              <Bot aria-hidden='true' />
+            </Button>
+          )}
         </div>
         <button type='button' className='note-panel-collapse ui-icon-button' aria-label={t('editor.collapseDocumentPanel')} title={t('editor.collapseDocumentPanel')} onClick={() => setNotePanel(null)}>
           <PanelRightClose aria-hidden='true' />

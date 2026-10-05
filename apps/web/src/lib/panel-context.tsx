@@ -4,8 +4,8 @@ import { getSavedPanelState, savePanelState } from './panel-state.js';
 export type WorkspaceToolId = 'calendar' | 'todo' | 'changes';
 export const WORKSPACE_TOOL_IDS: readonly WorkspaceToolId[] = ['calendar', 'todo', 'changes'];
 /** The active pane's document panel sections, offered in the rail while a Focus is displayed. */
-export type DocumentToolId = 'outline' | 'find' | 'frontmatter' | 'assets' | 'view' | 'info';
-export const DOCUMENT_TOOL_IDS: readonly DocumentToolId[] = ['outline', 'find', 'frontmatter', 'assets', 'view', 'info'];
+export type DocumentToolId = 'outline' | 'find' | 'frontmatter' | 'assets' | 'view' | 'info' | 'agent';
+export const DOCUMENT_TOOL_IDS: readonly DocumentToolId[] = ['outline', 'find', 'frontmatter', 'assets', 'view', 'info', 'agent'];
 export type PanelToolId = WorkspaceToolId | DocumentToolId;
 export const isDocumentTool = (id: PanelToolId): id is DocumentToolId => (DOCUMENT_TOOL_IDS as readonly PanelToolId[]).includes(id);
 

@@ -4,6 +4,7 @@ import { useLegacyBookmarkRecovery } from './lib/use-legacy-bookmark-recovery.js
 import { Button } from './components/Button.js';
 import { useOutlineActions } from './app/useOutlineActions.js';
 import { OutlineActionsProvider } from './lib/outline-actions.js';
+import { PiAgentProvider } from './lib/pi-agent/session.js';
 import { AddToOutlineDialog } from './components/AddToOutlineDialog.js';
 import { useFilterSidebar } from './app/useFilterSidebar.js';
 import { useTheme } from './app/useTheme.js';
@@ -731,7 +732,12 @@ const AppContent: React.FC = () => {
       </WorkspaceLinks>
     </CompilationActionsProvider>
   );
-  return <OutlineActionsProvider value={outlineActions.value}>{content}</OutlineActionsProvider>;
+  // A local workspace starts its Pi agent in the background, so the agent tab opens onto a warm session.
+  return (
+    <PiAgentProvider enabled={!remote}>
+      <OutlineActionsProvider value={outlineActions.value}>{content}</OutlineActionsProvider>
+    </PiAgentProvider>
+  );
 };
 
 export const App: React.FC = () => {

@@ -18,6 +18,7 @@ import { NoteEditorLeader } from './note-editor/NoteEditorLeader.js';
 import { useNoteDiffStats } from './note-editor/useNoteDiffStats.js';
 import { noteViewStyle, readShowFormatToolbar, readShowLineNumbers, useNoteViewPreferences, writeShowFormatToolbar, writeShowLineNumbers } from '../lib/editor-preferences.js';
 import type { NoteEditorSession, NoteEditorSharedProps, NotePanelMode } from './note-editor/types.js';
+import { createCaretStore } from '../lib/pi-agent/caret-store.js';
 
 export interface NoteEditorHandle {
   /** Inserts `text` at `at`, or at the caret; no-op while the session is locked. */
@@ -83,6 +84,11 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   const viewPreferences = useNoteViewPreferences();
   const [toolbarSlot, setToolbarSlot] = useState<HTMLDivElement | null>(null);
   const editorRef = useRef<MarkdownEditorHandle>(null);
+  const [caret] = useState(createCaretStore);
+  const trackCaret = (position: number) => {
+    caret.set(position);
+    onCaret?.(position);
+  };
 
   const session = useNoteEditorSession({ note, readOnly, autoSave, draftMode, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, onCommitFile, propIsDirty, branch, draftScope, onClose, onSession });
   const outlines = useOutlineActions();
@@ -144,7 +150,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
     );
   }
 
-  const panel = { ...docPanel, isMarkdown, notePath: note.path, content: session.content, lineNumberOffset: session.baseNote.lineNumberOffset || 0, metadata: session.metadata, setMetadata: session.setMetadata, statuses, metadataFields, availableTags, locked: session.locked, notebookId: note.notebookId, onInsertAssetRef: handleInsertAssetRef, readOnly, beforeFileChange, onFilesChanged };
+  const panel = { ...docPanel, isMarkdown, notePath: note.path, content: session.content, lineNumberOffset: session.baseNote.lineNumberOffset || 0, metadata: session.metadata, setMetadata: session.setMetadata, statuses, metadataFields, availableTags, locked: session.locked, notebookId: note.notebookId, onInsertAssetRef: handleInsertAssetRef, readOnly, beforeFileChange, onFilesChanged, caret };
   return (
     <div className='note-editor' data-frame={frame} data-source-notebook={note.notebookId} style={noteViewStyle(viewPreferences)}>
       <NoteEditorNotices session={session} notePath={note.path} />
@@ -156,7 +162,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
       )}
       {showFormatToolbar && !reading && <div ref={setToolbarSlot} className='note-format-toolbar' />}
       <div className='note-editor-body'>
-        <MarkdownEditor ref={editorRef} content={session.content} path={note.path} notebookId={note.notebookId} mode={editorMode} readOnly={session.locked || reading} onChange={session.setContent} onCaret={onCaret} toolbarSlot={showFormatToolbar ? toolbarSlot : null} ariaLabel='Note content' showLineNumbers={showLineNumbers} lineNumberOffset={session.baseNote.lineNumberOffset} />
+        <MarkdownEditor ref={editorRef} content={session.content} path={note.path} notebookId={note.notebookId} mode={editorMode} readOnly={session.locked || reading} onChange={session.setContent} onCaret={trackCaret} toolbarSlot={showFormatToolbar ? toolbarSlot : null} ariaLabel='Note content' showLineNumbers={showLineNumbers} lineNumberOffset={session.baseNote.lineNumberOffset} />
         <NoteEditorDocumentPanel frame={frame} target={documentPanel?.target} notePanel={docPanel.notePanel} panel={panel} />
       </div>
       <EditorFooter content={session.content} path={note.path} state={session.editorState} status={session.editorStatus} actions={<NoteQuickActions {...footerActions({ frame, readOnly, session, refresh, canCommit: Boolean(onCommitFile) })} changes={changes} disabled={session.isSaving} />} />

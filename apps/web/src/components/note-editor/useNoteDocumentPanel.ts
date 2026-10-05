@@ -3,6 +3,7 @@ import YAML from 'yaml';
 import { chooseOutlineHeading, findOutlineIndexForLine, findTextMatches, isEditableTarget, parseMarkdownOutline } from '../../lib/note-navigation.js';
 import type { MarkdownEditorHandle, MarkdownEditorMode } from '../MarkdownEditor.js';
 import type { NotePanelMode } from './types.js';
+import { usePiAgentAvailable } from '../../lib/pi-agent/session.js';
 
 export interface UseNoteDocumentPanelParams {
   frame: 'zoom' | 'pane' | 'compact';
@@ -23,11 +24,14 @@ export interface UseNoteDocumentPanelParams {
 /** The document panel's visibility, find/outline navigation, its frontmatter form/tag state, and its keyboard leader menu. */
 export function useNoteDocumentPanel({ frame, active, isMarkdown, content, editorMode, documentPanel, editorRef, metadata, notePath, branch, draftScope, readOnly }: UseNoteDocumentPanelParams) {
   const [ownPanel, updateNotePanel] = useState<NotePanelMode | null>(null);
-  const notePanel = frame === 'pane' ? documentPanel?.mode ?? null : ownPanel;
+  const requestedPanel = frame === 'pane' ? documentPanel?.mode ?? null : ownPanel;
+  // A remembered agent tab opens the default section on a computer without Pi, where the tab is hidden.
+  const agentAvailable = usePiAgentAvailable();
+  const notePanel = requestedPanel === 'agent' && !agentAvailable ? isMarkdown ? 'outline' : 'find' : requestedPanel;
   const lastNotePanel = useRef<NotePanelMode>((() => {
     try {
       const saved = localStorage.getItem('mygitnotes.documentPanel');
-      if (['find', 'outline', 'frontmatter', 'assets', 'view', 'info'].includes(saved || '')) return saved as NotePanelMode;
+      if (['find', 'outline', 'frontmatter', 'assets', 'view', 'info', 'agent'].includes(saved || '')) return saved as NotePanelMode;
     } catch { /* Use the default panel when storage is unavailable. */ }
     return isMarkdown ? 'outline' : 'find';
   })());
@@ -48,6 +52,7 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
   const showFrontmatter = notePanel === 'frontmatter';
   const isViewPanelOpen = notePanel === 'view';
   const isInfoPanelOpen = notePanel === 'info';
+  const isAgentOpen = notePanel === 'agent';
   const [findQuery, setFindQuery] = useState('');
   const [findIndex, setFindIndex] = useState(0);
   const [outlineIndex, setOutlineIndex] = useState(0);
@@ -198,7 +203,7 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
     requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-outline-index="${index}"]`)?.focus());
   }, [isOutlineOpen, outline, outlineIndex]);
 
-  return { editorRef, notePanel, setNotePanel, lastNotePanel, isAssetPickerOpen, isFindOpen, isOutlineOpen, showFrontmatter, isViewPanelOpen, isInfoPanelOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, moveOutline, openFind, openOutline, isEditorLeaderOpen, setIsEditorLeaderOpen, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen };
+  return { editorRef, notePanel, setNotePanel, lastNotePanel, isAssetPickerOpen, isFindOpen, isOutlineOpen, showFrontmatter, isViewPanelOpen, isInfoPanelOpen, isAgentOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, moveOutline, openFind, openOutline, isEditorLeaderOpen, setIsEditorLeaderOpen, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen };
 }
 
 /** The document panel state the editor parts that render it share. */
