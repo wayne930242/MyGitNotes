@@ -140,7 +140,9 @@ export function createLocalNotesRouter(): Router {
       return await serializeWorkspaceMutation(repoRoot, async () => {
         deleteNoteFile(repoRoot, notePath);
         if (noCommit) {
-          return res.json({ success: true, committed: false });
+          // An untracked note leaves no change behind, so there is nothing to commit or list as deleted.
+          const pending = (await listChanges(repoRoot)).some(file => file.path === notePath && file.kind === 'deleted');
+          return res.json({ success: true, committed: false, pending });
         }
 
         const commit = await stageAndCommit(repoRoot, [notePath], `docs(notes): delete ${path.basename(notePath)}`);

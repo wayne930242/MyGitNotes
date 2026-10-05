@@ -1,7 +1,8 @@
 import { type NoteListItem, type NoteRef, sameNote } from '@mygitnotes/core/note-query';
 import { useNavigate } from 'react-router-dom';
-import React, { useState } from 'react';
-import { deleteNote, fetchGitStatus, restoreNote } from '../lib/api.js';
+import React, { useEffect, useState } from 'react';
+import { deleteNote, fetchFileChanges, fetchGitStatus, restoreNote } from '../lib/api.js';
+import { pendingDeletedNotes } from '../lib/deleted-notes.js';
 import type { NoteItem } from '../lib/types.js';
 import { type FileResult, mutateFile } from '../lib/files-api.js';
 import type { WorkspaceState } from './workspace-state.js';
@@ -19,12 +20,30 @@ interface Params {
   setActionError: WorkspaceState['setActionError'];
   readNoteForChange: (note: NoteRef) => Promise<NoteItem>;
   invalidateNotes: () => void;
+  gitStatus: WorkspaceState['gitStatus'];
   setGitStatus: WorkspaceState['setGitStatus'];
+  repositoryFor: WorkspaceState['repositoryFor'];
 }
 
-export function useDeletionUndo({ canWriteNotebook, revisionFor, setNotebookRevision, updateDraft, editingNote, setEditingNote, navigate, returnTo, remote, setActionError, readNoteForChange, invalidateNotes, setGitStatus }: Params) {
+export function useDeletionUndo({ canWriteNotebook, revisionFor, setNotebookRevision, updateDraft, editingNote, setEditingNote, navigate, returnTo, remote, setActionError, readNoteForChange, invalidateNotes, gitStatus, setGitStatus, repositoryFor }: Params) {
   const [deletedNotes, setDeletedNotes] = useState<NoteItem[]>([]);
   const [undoToast, setUndoToast] = useState<{ note: NoteItem; timerId: any; } | null>(null);
+  const hasDeletedNotes = deletedNotes.length > 0;
+
+  // A deletion committed or restored outside this app leaves the list once Git reports it gone.
+  useEffect(() => {
+    if (!hasDeletedNotes) return;
+    let cancelled = false;
+    void fetchFileChanges().then(changes => {
+      if (!cancelled) setDeletedNotes(prev => pendingDeletedNotes(prev, changes, notebookId => repositoryFor(notebookId)?.id));
+    }).catch(error => {
+      if (!cancelled) setActionError((error as Error).message);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Reconcile when Git status changes, not on every new list entry or helper identity.
+  }, [gitStatus, hasDeletedNotes]);
 
   // Remote delete: no working tree to trash into, so commit the removal immediately.
   const handleRemoteDeleteNote = async (note: NoteListItem) => {
@@ -58,10 +77,10 @@ export function useDeletionUndo({ canWriteNotebook, revisionFor, setNotebookRevi
       setActionError((error as Error).message);
       return;
     }
-    setDeletedNotes((prev) => [deleted, ...prev.filter((n) => !sameNote(n, note))]);
 
-    // 2. Delete from disk without committing to git
-    await deleteNote(note.path, { noCommit: true, notebookId: note.notebookId });
+    // 2. Delete from disk without committing to git; an untracked note leaves nothing to commit, so it is not listed.
+    const { pending } = await deleteNote(note.path, { noCommit: true, notebookId: note.notebookId });
+    setDeletedNotes((prev) => pending ? [deleted, ...prev.filter((n) => !sameNote(n, note))] : prev.filter((n) => !sameNote(n, note)));
     invalidateNotes();
     const statusRes = await fetchGitStatus();
     setGitStatus(statusRes.status);

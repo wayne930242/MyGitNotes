@@ -310,6 +310,12 @@ describe('real HTTP local boundaries', () => {
     expect((await fetch(`${base}/api/notes`, request)).status).toBe(409);
     expect(fs.readFileSync(path.join(root, 'notes/example/projects/deep/new.md'), 'utf8')).toBe('# New');
   });
+  it('reports whether an uncommitted delete left a change to commit', async () => {
+    const remove = (notePath: string) => fetch(`${base}/api/notes?path=${encodeURIComponent(notePath)}&noCommit=true`, { method: 'DELETE' }).then(r => r.json());
+    await fetch(`${base}/api/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'notes/example/untracked.md', content: '# Draft', noCommit: true }) });
+    expect(await remove('notes/example/untracked.md')).toEqual({ success: true, committed: false, pending: false });
+    expect(await remove('notes/example/projects/deep/note.md')).toEqual({ success: true, committed: false, pending: true });
+  });
   it('reads and saves notes whose notebook root lives outside the notes/ prefix (multi-repo root workspace)', async () => {
     fs.writeFileSync(path.join(root, 'notes/.github-notes.yaml'), 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n  - id: life\n    title: Life\n    root: my-notes/notes/life\n');
     fs.mkdirSync(path.join(root, 'my-notes/notes/life'), { recursive: true });

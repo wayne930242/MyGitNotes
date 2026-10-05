@@ -92,7 +92,7 @@ export async function saveNote(params: { path: string; content: string; metadata
   return res.json();
 }
 
-export async function deleteNote(path: string, options?: { noCommit?: boolean; notebookId?: string; }): Promise<{ success: boolean; committed?: boolean; }> {
+export async function deleteNote(path: string, options?: { noCommit?: boolean; notebookId?: string; }): Promise<{ success: boolean; committed?: boolean; pending?: boolean; }> {
   const url = `${API_BASE}/notes?path=${encodeURIComponent(path)}${options?.noCommit ? '&noCommit=true' : ''}${options?.notebookId ? `&notebookId=${encodeURIComponent(options.notebookId)}` : ''}`;
   const res = await fetch(url, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete note');
