@@ -2,6 +2,7 @@ import { FolderCog, MessageSquarePlus, Power, Send, ShieldCheck, ShieldOff, Squa
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Button } from '../Button.js';
 import { FolderPickerDialog } from '../FolderPickerDialog.js';
+import { Select } from '../Select.js';
 import { AgentDialogCard } from './AgentDialogCard.js';
 import { AgentTranscript } from './AgentTranscript.js';
 import { type PiLocation, usePiAgent } from '../../lib/pi-agent/session.js';
@@ -85,6 +86,7 @@ export function AgentPanel() {
   };
 
   const session = agent.session;
+  const model = agent.modelState;
   const live = Boolean(session && session.status !== 'exited');
   const ready = live && agent.connected;
   const located = target && file?.path === target.path ? file.absolute : undefined;
@@ -114,6 +116,12 @@ export function AgentPanel() {
           <Power aria-hidden='true' />
         </Button>
       </header>
+      {ready && agent.modelState.models.length > 0 && (
+        <div className='pi-agent-model-row'>
+          <Select className='pi-agent-model' aria-label={t('piAgent.model')} title={t('piAgent.model')} value={model.model ?? ''} onValueChange={agent.setModel} options={model.model && !model.models.some(option => option.value === model.model) ? [{ value: model.model, label: model.model }, ...model.models] : model.models} />
+          {model.levels.length > 1 && <Select className='pi-agent-thinking' aria-label={t('piAgent.thinkingLevel')} title={t('piAgent.thinkingLevel')} value={model.thinking ?? ''} onValueChange={agent.setThinking} options={model.levels.map(level => ({ value: level, label: level }))} />}
+        </div>
+      )}
       {switching && <SwitchFolder onDone={() => setSwitching(false)} />}
       {agent.error && <p role='alert' className='pi-agent-error'>{agent.error}</p>}
       {!live && (
@@ -125,7 +133,7 @@ export function AgentPanel() {
       )}
       {/* Pi's questions scroll with the conversation, so a tall one never pushes the composer out of the panel. */}
       <AgentTranscript transcript={agent.transcript}>{agent.transcript.dialogs.map(dialog => <AgentDialogCard key={dialog.id} dialog={dialog} onAnswer={answer => agent.answer(dialog, answer)} />)}</AgentTranscript>
-      {[...Object.values(agent.transcript.widgets).flat(), ...Object.values(agent.transcript.statuses)].length > 0 && <div className='pi-agent-widgets'>{Object.entries(agent.transcript.widgets).map(([key, lines]) => <pre key={key}>{lines.join('\n')}</pre>)} {Object.entries(agent.transcript.statuses).map(([key, text]) => <span key={key}>{text}</span>)}</div>}
+      {[...Object.values(agent.transcript.widgets).flat(), ...Object.values(agent.transcript.statuses)].length > 0 && <div className='pi-agent-widgets'>{Object.entries(agent.transcript.widgets).map(([key, lines]) => <pre key={key}>{lines.join('\n')}</pre>)}{Object.keys(agent.transcript.statuses).length > 0 && <div className='pi-agent-statuses'>{Object.entries(agent.transcript.statuses).map(([key, text]) => <span key={key} title={text}>{text}</span>)}</div>}</div>}
       <form
         className='pi-agent-composer'
         onSubmit={event => {

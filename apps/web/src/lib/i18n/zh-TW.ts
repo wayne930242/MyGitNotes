@@ -1473,6 +1473,8 @@ export const zhTW: Record<TranslationKey, string> = {
   'piAgent.context.line': '行號',
   'piAgent.context.path': '只傳路徑',
   'piAgent.context.none': '不傳',
+  'piAgent.model': '模型',
+  'piAgent.thinkingLevel': '思考等級',
   'piAgent.trusted': '已信任',
   'piAgent.untrusted': '未信任',
   'piAgent.trustHint': '是否載入此目錄的專案設定、extensions 與 skills，由 Pi 依 ~/.pi/agent/trust.json 決定。要變更，請在終端機於此目錄執行 pi 並用 /trust。',

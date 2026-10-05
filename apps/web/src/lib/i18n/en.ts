@@ -1472,6 +1472,8 @@ export const en = {
   'piAgent.context.line': 'Line',
   'piAgent.context.path': 'Path only',
   'piAgent.context.none': 'None',
+  'piAgent.model': 'Model',
+  'piAgent.thinkingLevel': 'Thinking level',
   'piAgent.trusted': 'Trusted',
   'piAgent.untrusted': 'Not trusted',
   'piAgent.trustHint': "Pi decides whether to load this folder's project settings, extensions and skills from ~/.pi/agent/trust.json. To change it, run pi in this folder in a terminal and use /trust.",

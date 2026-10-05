@@ -62,3 +62,11 @@
 .pi-agent-trust { display: inline-flex; flex: none; align-items: center; gap: 3px; color: var(--color-muted); font-size: 11px; }
 .pi-agent-trust svg { width: 13px; height: 13px; }
 .pi-agent-trust[data-trusted='false'] { color: var(--color-warning); }
+.pi-agent-model-row { display: flex; flex: none; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--color-border); }
+.pi-agent-model-row .pi-agent-model { flex: 1 1 auto; min-width: 0; }
+.pi-agent-model-row .pi-agent-thinking { flex: none; width: 96px; }
+/* Extension status lines share one row, scrolled sideways, so many extensions never squeeze the conversation. */
+.pi-agent-statuses { display: flex; gap: 12px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.pi-agent-statuses > span { flex: none; }
+/* A phone's bottom sheet is too short to converse in, so the agent takes the screen above the tool row. */
+@media (max-width: 767px) { .right-panel:has(.pi-agent-panel) { top: calc(var(--visual-top, 0px) + max(8px, env(safe-area-inset-top))); height: calc(var(--visual-height, 100dvh) - 76px - env(safe-area-inset-bottom) - max(8px, env(safe-area-inset-top))); transform: none; } .right-panel:has(.pi-agent-panel) .right-panel-content { flex: 1 1 auto; max-height: none; } .note-document-panel:has(.pi-agent-panel) { top: max(8px, env(safe-area-inset-top)); max-height: none; } .pi-agent-widgets { max-height: 48px; } }

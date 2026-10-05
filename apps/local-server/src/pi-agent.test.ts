@@ -20,6 +20,7 @@ process.stdin.on('data', chunk => {
   while ((index = buffer.indexOf('\\n')) >= 0) {
     const command = JSON.parse(buffer.slice(0, index));
     buffer = buffer.slice(index + 1);
+    if (command.type === 'set_model') out({ id: command.id, type: 'response', command: 'set_model', success: true, data: { provider: command.provider, id: command.modelId } });
     if (command.type === 'get_state') out({ id: command.id, type: 'response', command: 'get_state', success: true, data: { isStreaming: false } });
     if (command.type === 'prompt' && command.message === 'status') {
       out({ type: 'extension_ui_request', id: 's1', method: 'setStatus', statusKey: 'quota', statusText: '42%' });
@@ -177,6 +178,15 @@ describe('pi agent bridge', () => {
     second.send({ type: 'get_state' });
     await second.next(record => record.type === 'response');
     expect(second.records.filter(record => record.method === 'setStatus')).toEqual([expect.objectContaining({ statusKey: 'quota', statusText: '42%' })]);
+  });
+
+  it('forwards model and thinking switches, and answers every attached client', async () => {
+    const { base, port } = await start();
+    await post(base, 'POST');
+    const first = connect(port, base), second = connect(port, base);
+    await Promise.all([first.opened, second.opened]);
+    first.send({ id: 'switch', type: 'set_model', provider: 'openai-codex', modelId: 'gpt-6.1-sol' });
+    expect(await second.next(record => record.type === 'response' && record.command === 'set_model')).toMatchObject({ success: true, data: { provider: 'openai-codex', id: 'gpt-6.1-sol' } });
   });
 
   it('refuses commands outside the panel surface', async () => {

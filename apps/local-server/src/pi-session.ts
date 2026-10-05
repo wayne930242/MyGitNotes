@@ -31,7 +31,7 @@ export interface PiSessionListener {
 }
 
 /** Commands a client may forward to Pi; everything else on the RPC surface stays out of the browser's reach. */
-const CLIENT_COMMANDS = new Set(['prompt', 'steer', 'follow_up', 'abort', 'clear_queue', 'new_session', 'get_state', 'get_messages', 'extension_ui_response']);
+const CLIENT_COMMANDS = new Set(['prompt', 'steer', 'follow_up', 'abort', 'clear_queue', 'new_session', 'get_state', 'get_messages', 'extension_ui_response', 'get_available_models', 'set_model', 'get_available_thinking_levels', 'set_thinking_level']);
 const DIALOG_METHODS = new Set(['select', 'confirm', 'input', 'editor']);
 /** Fire-and-forget UI state keyed by extension; the latest of each is replayed to a client that attaches later. */
 const STATE_KEYS: Record<string, string> = { setStatus: 'statusKey', setWidget: 'widgetKey' };

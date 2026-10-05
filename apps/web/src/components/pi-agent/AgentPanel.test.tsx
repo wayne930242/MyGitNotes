@@ -26,7 +26,7 @@ const notebooks: NotebookConfig[] = [{ id: 'nb', title: 'Notes', root: 'notes' }
 const folders: FolderItem[] = [{ notebookId: 'blog', path: 'drafts', title: 'Drafts', order: 0 }];
 
 function agent(overrides: Partial<PiAgentValue> = {}): PiAgentValue {
-  return { available: true, session: { id: 's1', cwd: '/home/me/workspace/notes', location: { notebookId: 'nb', folder: null }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, folders, connected: true, transcript: emptyTranscript, error: '', start: vi.fn(async () => {}), send: vi.fn(), abort: vi.fn(), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchFolder: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
+  return { available: true, session: { id: 's1', cwd: '/home/me/workspace/notes', location: { notebookId: 'nb', folder: null }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, folders, connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, setModel: vi.fn(), setThinking: vi.fn(), error: '', start: vi.fn(async () => {}), send: vi.fn(), abort: vi.fn(), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchFolder: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
 }
 
 function noteTarget(caret = createCaretStore()): AgentTarget {
@@ -116,6 +116,15 @@ it('switches to a notebook folder picked in the folder dialog, without a trust o
   fireEvent.click(screen.getByRole('button', { name: 'End session and switch' }));
   expect(screen.queryByRole('checkbox')).toBeNull();
   await waitFor(() => expect(value.switchFolder).toHaveBeenCalledWith({ notebookId: 'nb', folder: null }));
+});
+
+it('shows the session model and thinking level, offering only levels the model supports', () => {
+  panel(agent({ modelState: { model: 'anthropic/claude-opus', thinking: 'high', models: [{ value: 'anthropic/claude-opus', label: 'Claude Opus (anthropic)' }], levels: ['low', 'high'] } }));
+  expect(screen.getByRole('combobox', { name: 'Model' }).textContent).toContain('Claude Opus (anthropic)');
+  expect(screen.getByRole('combobox', { name: 'Thinking level' }).textContent).toContain('high');
+  cleanup();
+  panel(agent({ modelState: { model: 'anthropic/claude-opus', models: [{ value: 'anthropic/claude-opus', label: 'Claude Opus (anthropic)' }], levels: ['off'] } }));
+  expect(screen.queryByRole('combobox', { name: 'Thinking level' })).toBeNull();
 });
 
 it('offers a manual start when no session runs, showing why the last one ended', () => {
