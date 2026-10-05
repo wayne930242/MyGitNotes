@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { announceWorkspaceFilesChanged } from './workspace-changes.js';
 import { useQueryClient } from '@tanstack/react-query';
 import type { RepositoryId } from '@mygitnotes/core/repository';
 import { useFocusPage } from './use-focus-page.js';
@@ -192,7 +193,10 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   useEffect(() => {
     if (!watchedRepositories) return;
     const events = openWorkspaceEvents();
-    events.addEventListener('change', () => void refreshWorkspace());
+    events.addEventListener('change', () => {
+      announceWorkspaceFilesChanged();
+      void refreshWorkspace();
+    });
     return () => events.close();
   }, [watchedRepositories, refreshWorkspace]);
 

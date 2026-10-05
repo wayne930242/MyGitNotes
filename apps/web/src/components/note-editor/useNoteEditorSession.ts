@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { mergeNote, NoteDraft, sameValue } from '../../lib/merge-note.js';
 import { ApiError } from '../../lib/api.js';
 import { NoteItem } from '../../lib/types.js';
+import { onWorkspaceFilesChanged } from '../../lib/workspace-changes.js';
 import { REMOTE_CHECK_INTERVAL_MS, REMOTE_CHECK_INTERVAL_READONLY_MS } from '../../lib/remote-check-interval.js';
 import { clearLocalDraft, dismissConflictDraftNotice, getDismissedConflictDraftNoticeAt, getLocalDraft, saveLocalDraft } from '../../lib/storage.js';
 import { copyToClipboard } from '../../lib/clipboard.js';
@@ -136,8 +137,15 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
       onMarkConflict?.(reason, { ...note, content: current.current.content, metadata: current.current.metadata }, current.current.baseNote);
     } else setSaveError((error as Error).message);
   };
-  const checkRemote = async () => {
-    if (!onReadRemote || operation.current || autosaving.current || current.current.blocked || Date.now() < nextRemoteCheck.current) return;
+  /** `now` skips the interval: the workspace said files changed, so this note may have. */
+  const checkRemote = async (now = false) => {
+    if (!onReadRemote || current.current.blocked) return;
+    if (now && (operation.current || autosaving.current)) {
+      // A save or read in flight may predate the change; look again once it settles.
+      window.setTimeout(() => mounted.current && void checkRemoteRef.current(true), 300);
+      return;
+    }
+    if (operation.current || autosaving.current || (!now && Date.now() < nextRemoteCheck.current)) return;
     nextRemoteCheck.current = Date.now() + (readOnly ? REMOTE_CHECK_INTERVAL_READONLY_MS : REMOTE_CHECK_INTERVAL_MS);
     operation.current = true;
     try {
@@ -162,7 +170,9 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
     const timer = window.setInterval(check, readOnly ? REMOTE_CHECK_INTERVAL_READONLY_MS : REMOTE_CHECK_INTERVAL_MS);
     window.addEventListener('focus', check);
     document.addEventListener('visibilitychange', check);
+    const stopListening = onWorkspaceFilesChanged(() => void checkRemoteRef.current(true));
     return () => {
+      stopListening();
       clearInterval(timer);
       window.removeEventListener('focus', check);
       document.removeEventListener('visibilitychange', check);

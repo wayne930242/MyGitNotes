@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PanelProvider } from '../lib/panel-context.js';
 import { getLocalDraft } from '../lib/storage.js';
+import { announceWorkspaceFilesChanged } from '../lib/workspace-changes.js';
 import type { NoteItem } from '../lib/types.js';
 import { NoteEditor, type NoteEditorProps } from './NoteEditor.js';
 
@@ -474,4 +475,20 @@ it('does not offer a dismiss control while blocked on a conflict', async () => {
 
   expect(screen.getByText(/conflict/i)).toBeTruthy();
   expect(screen.queryByLabelText('Dismiss notice')).toBeNull();
+});
+
+it("reads its note again as soon as the workspace says files changed, adopting an agent's edit without waiting for the interval", async () => {
+  const onReadRemote = vi.fn(async () => note);
+  render(editor({ onReadRemote }));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10);
+  });
+  expect(onReadRemote).toHaveBeenCalledTimes(1);
+  onReadRemote.mockImplementation(async () => ({ ...note, content: '# Alpha\nWritten by Pi.\n', metadata: { title: 'Alpha', updated: 't1' } }));
+  await act(async () => {
+    announceWorkspaceFilesChanged();
+    await vi.advanceTimersByTimeAsync(10);
+  });
+  expect(onReadRemote).toHaveBeenCalledTimes(2);
+  expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('# Alpha\nWritten by Pi.\n');
 });
