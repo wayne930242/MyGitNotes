@@ -4,6 +4,7 @@ import { isCompilationPath } from '@mygitnotes/core/compilation';
 import { NoteItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useNoteEditing } from '../lib/note-editing.js';
+import { usePanelContext } from '../lib/panel-context.js';
 import { NoteEditor } from './NoteEditor.js';
 import { LoadingStatus } from './LoadingStatus.js';
 
@@ -29,6 +30,12 @@ export const EditorModal: React.FC<EditorModalProps> = ({ note, committed, loadi
 /** Shown while a note's body is read; the editor never starts from a missing body. */
 const EditorModalLoading: React.FC = () => {
   const { t } = useTranslation();
+  const { setHasOpenNote } = usePanelContext();
+  // Loading is already zoom: the workspace rail hides as it does behind the editor, instead of floating above the overlay.
+  useLayoutEffect(() => {
+    setHasOpenNote(true);
+    return () => setHasOpenNote(false);
+  }, [setHasOpenNote]);
   return (
     <div className='viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-4'>
       <LoadingStatus className='px-6 py-4 rounded-xl text-sm' style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}>{t('notes.loadingNote')}</LoadingStatus>
