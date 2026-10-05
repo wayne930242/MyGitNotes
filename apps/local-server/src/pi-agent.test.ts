@@ -6,13 +6,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { agentClientAllowed, type AgentFolder, createPiAgent, type PiAgent, resolveAgentCwd } from './pi-agent.js';
+import { agentClientAllowed, type AgentFolder, createPiAgent, type PiAgent, resolveAgentCwd, resumableSession } from './pi-agent.js';
 import { commandAvailable, jsonlSplitter, TRUST_EXTENSION, TRUST_STATUS_KEY } from './pi-session.js';
 
-// A stand-in for `pi --mode rpc`: answers get_state, echoes prompts with its cwd and argv, asks one dialog, and sets or clears a status.
+// A stand-in for `pi --mode rpc`: answers get_state with its session file (the --session one, else a new one per conversation),
+// echoes prompts with its cwd and argv, asks one dialog, and sets or clears a status.
 const FAKE_PI = `
 const out = record => process.stdout.write(JSON.stringify(record) + '\\n');
 let buffer = '';
+const resumed = process.argv.indexOf('--session');
+let conversation = 0;
+let sessionFile = resumed >= 0 ? process.argv[resumed + 1] : process.cwd() + '/session-0.jsonl';
 out({ type: 'extension_ui_request', id: 'trust', method: 'setStatus', statusKey: 'mygitnotes-project-trust', statusText: 'untrusted' });
 process.stdin.on('data', chunk => {
   buffer += chunk;
@@ -21,7 +25,11 @@ process.stdin.on('data', chunk => {
     const command = JSON.parse(buffer.slice(0, index));
     buffer = buffer.slice(index + 1);
     if (command.type === 'set_model') out({ id: command.id, type: 'response', command: 'set_model', success: true, data: { provider: command.provider, id: command.modelId } });
-    if (command.type === 'get_state') out({ id: command.id, type: 'response', command: 'get_state', success: true, data: { isStreaming: false } });
+    if (command.type === 'get_state') out({ id: command.id, type: 'response', command: 'get_state', success: true, data: { isStreaming: false, sessionFile } });
+    if (command.type === 'new_session') {
+      sessionFile = process.cwd() + '/session-' + ++conversation + '.jsonl';
+      out({ id: command.id, type: 'response', command: 'new_session', success: true, data: { cancelled: false } });
+    }
     if (command.type === 'prompt' && command.message === 'status') {
       out({ type: 'extension_ui_request', id: 's1', method: 'setStatus', statusKey: 'quota', statusText: '42%' });
       out({ type: 'extension_ui_request', id: 's2', method: 'setStatus', statusKey: 'gone', statusText: 'soon cleared' });
@@ -233,6 +241,46 @@ describe('pi agent bridge', () => {
 
     expect(await (await post(base, 'DELETE')).json()).toEqual({ session: null });
     await expect(connect(port, base).opened).rejects.toThrow('HTTP 409');
+  });
+
+  it('records the session file Pi reports, and the one a new conversation moves to', async () => {
+    const { base, port, workspace } = await start();
+    await post(base, 'POST');
+    const client = connect(port, base);
+    await client.opened;
+    const sessionFile = (record: Record<string, unknown>) => record.type === 'bridge_status' ? (record.session as { sessionFile?: string; }).sessionFile : undefined;
+    expect(sessionFile(await client.next(record => sessionFile(record) !== undefined))).toBe(path.join(workspace, 'session-0.jsonl'));
+    client.send({ type: 'new_session' });
+    await client.next(record => sessionFile(record) === path.join(workspace, 'session-1.jsonl'));
+    expect(agent?.manager.session?.info.sessionFile).toBe(path.join(workspace, 'session-1.jsonl'));
+  });
+
+  it('resumes a session file of the folder it starts in, and starts a new conversation for any other', async () => {
+    const { base, port, workspace } = await start();
+    const header = (cwd: string) => `${JSON.stringify({ type: 'session', version: 3, id: 'x', cwd })}\n`;
+    const own = path.join(workspace, 'own.jsonl');
+    fs.writeFileSync(own, header(workspace));
+    const other = path.join(workspace, 'other.jsonl');
+    fs.writeFileSync(other, header(os.tmpdir()));
+    const plain = path.join(workspace, 'own.txt');
+    fs.writeFileSync(plain, header(workspace));
+    expect(resumableSession(own, workspace)).toBe(own);
+    expect([resumableSession(other, workspace), resumableSession(plain, workspace), resumableSession(path.join(workspace, 'gone.jsonl'), workspace), resumableSession('own.jsonl', workspace), resumableSession(42, workspace)]).toEqual([undefined, undefined, undefined, undefined, undefined]);
+
+    await post(base, 'POST', { notebookId: 'a', sessionFile: own });
+    const client = connect(port, base);
+    await client.opened;
+    client.send({ type: 'prompt', message: 'args' });
+    const reply = JSON.parse(assistantText(await client.next(record => record.type === 'message_end'))) as { args: string[]; };
+    expect(reply.args).toEqual(['--mode', 'rpc', '--extension', TRUST_EXTENSION, '--session', own]);
+    await client.next(record => record.type === 'bridge_status' && (record.session as { sessionFile?: string; }).sessionFile === own);
+
+    await post(base, 'DELETE', {});
+    await post(base, 'POST', { notebookId: 'a', sessionFile: other });
+    const fresh = connect(port, base);
+    await fresh.opened;
+    fresh.send({ type: 'prompt', message: 'args' });
+    expect((JSON.parse(assistantText(await fresh.next(record => record.type === 'message_end'))) as { args: string[]; }).args).not.toContain('--session');
   });
 
   it('keeps sessions inside the home directory', async () => {

@@ -1,5 +1,5 @@
 import { AlertTriangle, CircleCheck, CircleX, Info, LoaderCircle, Wrench } from 'lucide-react';
-import { type ReactNode, useLayoutEffect, useMemo, useRef } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { NoteHtml } from '../NoteHtml.js';
 import { type ChatLinkBase, renderChatMarkdown } from '../../lib/markdown.js';
 import { type AssistantBlock, focusLabel, type TranscriptState } from '../../lib/pi-agent/transcript.js';
@@ -70,55 +70,75 @@ function Blocks({ blocks, transcript, links }: { blocks: AssistantBlock[]; trans
 }
 
 const NOTICE_ICONS = { info: Info, warning: AlertTriangle, error: CircleX };
+/** How near the bottom still counts as at it, so a fraction of a pixel never stops the list following. */
+const PIN_SLACK_PX = 24;
 
 /** The conversation: sent messages with the note they named, Pi's replies with its tool calls, and notices; `children` follow the latest entry, as Pi's open questions do. */
 export function AgentTranscript({ transcript, links, children }: { transcript: TranscriptState; links?: ChatLinks; children?: ReactNode; }) {
   const { t } = useTranslation();
   const list = useRef<HTMLDivElement>(null);
-  // Scrolls only this list; scrollIntoView would also move the panels around it.
-  useLayoutEffect(() => {
-    if (list.current) list.current.scrollTop = list.current.scrollHeight;
-  }, [transcript]);
+  const content = useRef<HTMLDivElement>(null);
+  // Follows the latest entry while the reader is at the bottom, which the list starts at, so a restored history
+  // opens on its end; reading further up stops following. Scrolls only this list; scrollIntoView would also
+  // move the panels around it.
+  const pinned = useRef(true);
+  const follow = () => {
+    if (list.current && pinned.current) list.current.scrollTop = list.current.scrollHeight;
+  };
+  useLayoutEffect(follow, [transcript]);
+  // Markdown, math and diagrams can grow after they render, so the list keeps its end in view as they do.
+  useEffect(() => {
+    if (!content.current || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(follow);
+    observer.observe(content.current);
+    return () => observer.disconnect();
+  }, []);
+  const onScroll = () => {
+    const element = list.current;
+    if (element) pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < PIN_SLACK_PX;
+  };
   return (
-    <div ref={list} className='pi-agent-transcript' aria-live='polite'>
-      {transcript.entries.length === 0 && !transcript.streaming && <p className='pi-agent-empty'>{t('piAgent.empty')}</p>}
-      {transcript.entries.map(entry => {
-        if (entry.kind === 'user') {
+    <div ref={list} className='pi-agent-transcript' aria-live='polite' onScroll={onScroll}>
+      <div ref={content} className='pi-agent-transcript-content'>
+        {transcript.entries.length === 0 && !transcript.streaming && <p className='pi-agent-empty'>{t('piAgent.empty')}</p>}
+        {transcript.entries.map(entry => {
+          if (entry.kind === 'user') {
+            return (
+              <div key={entry.key} className='pi-agent-message' data-role='user'>
+                {entry.focus && <span className='pi-agent-focus-chip' title={entry.focus.file}>{focusLabel(entry.focus)}</span>}
+                <p className='pi-agent-text'>{entry.text}</p>
+              </div>
+            );
+          }
+          if (entry.kind === 'assistant') {
+            return (
+              <div key={entry.key} className='pi-agent-message' data-role='assistant'>
+                <Blocks blocks={entry.blocks} transcript={transcript} links={links} />
+                {entry.error && <p role='alert' className='pi-agent-error'>{entry.error}</p>}
+              </div>
+            );
+          }
+          const Icon = NOTICE_ICONS[entry.level];
           return (
-            <div key={entry.key} className='pi-agent-message' data-role='user'>
-              {entry.focus && <span className='pi-agent-focus-chip' title={entry.focus.file}>{focusLabel(entry.focus)}</span>}
-              <p className='pi-agent-text'>{entry.text}</p>
-            </div>
+            <p key={entry.key} className='pi-agent-notice' data-level={entry.level}>
+              <Icon aria-hidden='true' />
+              {entry.text === 'compacted' ? t('piAgent.compacted') : entry.text}
+            </p>
           );
-        }
-        if (entry.kind === 'assistant') {
-          return (
-            <div key={entry.key} className='pi-agent-message' data-role='assistant'>
-              <Blocks blocks={entry.blocks} transcript={transcript} links={links} />
-              {entry.error && <p role='alert' className='pi-agent-error'>{entry.error}</p>}
-            </div>
-          );
-        }
-        const Icon = NOTICE_ICONS[entry.level];
-        return (
-          <p key={entry.key} className='pi-agent-notice' data-level={entry.level}>
-            <Icon aria-hidden='true' />
-            {entry.text === 'compacted' ? t('piAgent.compacted') : entry.text}
+        })}
+        {transcript.streaming && (
+          <div className='pi-agent-message' data-role='assistant' data-streaming='true'>
+            <Blocks blocks={transcript.streaming} transcript={transcript} links={links} />
+          </div>
+        )}
+        {transcript.running && !transcript.streaming && (
+          <p className='pi-agent-working'>
+            <LoaderCircle aria-hidden='true' />
+            {t('piAgent.working')}
           </p>
-        );
-      })}
-      {transcript.streaming && (
-        <div className='pi-agent-message' data-role='assistant' data-streaming='true'>
-          <Blocks blocks={transcript.streaming} transcript={transcript} links={links} />
-        </div>
-      )}
-      {transcript.running && !transcript.streaming && (
-        <p className='pi-agent-working'>
-          <LoaderCircle aria-hidden='true' />
-          {t('piAgent.working')}
-        </p>
-      )}
-      {children}
+        )}
+        {children}
+      </div>
     </div>
   );
 }

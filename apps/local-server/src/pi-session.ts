@@ -13,6 +13,8 @@ export interface PiSessionInfo {
   location: PiLocation;
   /** Pi's own project-trust decision for `cwd`, once it reports it; Pi makes it from trust.json and its extensions. */
   trusted?: boolean;
+  /** The session file Pi records this conversation in, once Pi reports it; a later start resumes from it. */
+  sessionFile?: string;
   status: 'starting' | 'ready' | 'exited';
   pid?: number;
   startedAt: string;
@@ -38,6 +40,8 @@ const DIALOG_METHODS = new Set(['select', 'confirm', 'input', 'editor']);
 /** Fire-and-forget UI state keyed by extension; the latest of each is replayed to a client that attaches later. */
 const STATE_KEYS: Record<string, string> = { setStatus: 'statusKey', setWidget: 'widgetKey' };
 const READY_PROBE_ID = 'mygitnotes-bridge-ready';
+/** Re-reads the session file after Pi starts a new conversation, which records into a new one. */
+const STATE_PROBE_ID = 'mygitnotes-bridge-state';
 /** The extension that reports Pi's project-trust decision, and the status key it reports it under (kept equal to its TRUST_STATUS_KEY). */
 export const TRUST_EXTENSION = fileURLToPath(new URL('./pi-trust-extension.mjs', import.meta.url));
 export const TRUST_STATUS_KEY = 'mygitnotes-project-trust';
@@ -93,10 +97,12 @@ export class PiSession {
   private readonly exited: Promise<void>;
   private stderr = '';
 
-  constructor({ cwd, location, command = piCommand(), onExit }: { cwd: string; location: PiLocation; command?: string; onExit?: (session: PiSession) => void; }) {
+  /** `resume` names a session file to continue; without it Pi starts a new conversation. */
+  constructor({ cwd, location, resume, command = piCommand(), onExit }: { cwd: string; location: PiLocation; resume?: string; command?: string; onExit?: (session: PiSession) => void; }) {
     this.info = { id: randomUUID(), cwd, location, status: 'starting', startedAt: new Date().toISOString() };
     // No --approve: project trust stays Pi's decision, as it is in the user's terminal.
-    this.child = spawn(command, ['--mode', 'rpc', '--extension', TRUST_EXTENSION], { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const args = ['--mode', 'rpc', '--extension', TRUST_EXTENSION, ...resume ? ['--session', resume] : []];
+    this.child = spawn(command, args, { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
     this.info.pid = this.child.pid;
     this.child.stdout.on('data', jsonlSplitter(line => this.receive(line)));
     this.child.stderr.on('data', (chunk: Buffer) => {
@@ -179,13 +185,15 @@ export class PiSession {
       return;
     }
     if (!isRecord(record)) return;
-    if (record.type === 'response' && record.id === READY_PROBE_ID) {
+    if (record.type === 'response' && record.command === 'get_state') this.noteSessionFile(record.data);
+    if (record.type === 'response' && (record.id === READY_PROBE_ID || record.id === STATE_PROBE_ID)) {
       if (this.info.status === 'starting') {
         this.info.status = 'ready';
         this.broadcastStatus();
       }
       return;
     }
+    if (record.type === 'response' && record.command === 'new_session' && record.success === true) this.write({ id: STATE_PROBE_ID, type: 'get_state' });
     if (record.type === 'extension_ui_request' && typeof record.id === 'string' && DIALOG_METHODS.has(String(record.method))) {
       const id = record.id;
       this.openDialogs.set(id, line);
@@ -205,6 +213,13 @@ export class PiSession {
       else this.uiState.set(key, line);
     }
     this.broadcast(line);
+  }
+
+  private noteSessionFile(data: unknown) {
+    const file = isRecord(data) && typeof data.sessionFile === 'string' ? data.sessionFile : undefined;
+    if (!file || file === this.info.sessionFile) return;
+    this.info.sessionFile = file;
+    if (this.info.status !== 'starting') this.broadcastStatus();
   }
 
   private broadcastStatus() {

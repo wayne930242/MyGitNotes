@@ -71,6 +71,30 @@ export interface AgentFolder {
   location: PiLocation;
 }
 
+const SESSION_HEADER_LIMIT = 64 * 1024;
+
+/**
+ * The session file a start may resume: an existing Pi session file inside the home directory whose header
+ * records `cwd` as its folder. Anything else (gone, moved, another folder's) is not resumable, and Pi starts
+ * a new conversation instead.
+ */
+export function resumableSession(file: unknown, cwd: string): string | undefined {
+  if (typeof file !== 'string' || !path.isAbsolute(file) || !file.endsWith('.jsonl')) return undefined;
+  try {
+    const real = fs.realpathSync(file);
+    const home = fs.realpathSync(os.homedir());
+    if (!real.startsWith(`${home}${path.sep}`) || !fs.statSync(real).isFile()) return undefined;
+    const handle = fs.openSync(real, 'r');
+    const buffer = Buffer.alloc(SESSION_HEADER_LIMIT);
+    const length = fs.readSync(handle, buffer, 0, SESSION_HEADER_LIMIT, 0);
+    fs.closeSync(handle);
+    const header = JSON.parse(buffer.subarray(0, length).toString('utf8').split('\n', 1)[0]) as { type?: unknown; cwd?: unknown; };
+    return header.type === 'session' && typeof header.cwd === 'string' && fs.realpathSync(header.cwd) === cwd ? real : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Resolves a notebook folder the panel picked, or its whole repository, to the directory Pi starts in. */
 async function notebookFolder(res: express.Response, notebookId: unknown, folder: unknown, repository: unknown): Promise<AgentFolder> {
   if (folder !== null && folder !== undefined && (typeof folder !== 'string' || !folder)) throw new SourceError('folder must be a notebook-relative path or null.');
@@ -99,13 +123,16 @@ export class PiSessionManager {
     return this.current;
   }
 
-  /** Returns the live session, starting one in the resolved folder when there is none; `resolve` runs only then. */
-  async ensure(resolve: () => Promise<AgentFolder>): Promise<PiSession> {
+  /**
+   * Returns the live session, starting one in the resolved folder when there is none; `resolve` runs only then.
+   * A start resumes `resume` when it is a session file of that folder (see resumableSession).
+   */
+  async ensure(resolve: () => Promise<AgentFolder>, resume?: unknown): Promise<PiSession> {
     if (this.current?.alive) return this.current;
     this.assertAvailable();
     const folder = await resolve();
     if (this.current?.alive) return this.current;
-    this.current = new PiSession({ ...folder, command: this.command });
+    this.current = new PiSession({ ...folder, resume: resumableSession(resume, folder.cwd), command: this.command });
     return this.current;
   }
 
@@ -162,7 +189,7 @@ export function createPiAgent({ command, resolveFolder = notebookFolder }: PiAge
   });
   router.post('/session', async (req, res) => {
     try {
-      res.json(sessionBody(await manager.ensure(() => requestedFolder(req, res))));
+      res.json(sessionBody(await manager.ensure(() => requestedFolder(req, res), req.body?.sessionFile)));
     } catch (error) {
       fail(res, error);
     }

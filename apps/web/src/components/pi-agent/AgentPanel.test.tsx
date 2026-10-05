@@ -26,7 +26,7 @@ const notebooks: NotebookConfig[] = [{ id: 'nb', title: 'Notes', root: 'notes' }
 const folders: FolderItem[] = [{ notebookId: 'blog', path: 'drafts', title: 'Drafts', order: 0 }];
 
 function agent(overrides: Partial<PiAgentValue> = {}): PiAgentValue {
-  return { available: true, session: { id: 's1', cwd: '/home/me/workspace/notes', location: { notebookId: 'nb', folder: null }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, folders, connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, setModel: vi.fn(), setThinking: vi.fn(), error: '', start: vi.fn(async () => {}), send: vi.fn(), abort: vi.fn(), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchFolder: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
+  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { notebookId: 'nb', folder: null, repository: true }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, folders, connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, setModel: vi.fn(), setThinking: vi.fn(), error: '', start: vi.fn(async () => {}), send: vi.fn(), abort: vi.fn(), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchFolder: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
 }
 
 function noteTarget(caret = createCaretStore()): AgentTarget {
@@ -39,17 +39,17 @@ function panel(value: PiAgentValue) {
 
 const write = (text: string) => fireEvent.change(screen.getByRole('textbox', { name: 'Message to Pi' }), { target: { value: text } });
 
-it('sends a message with the note path and the live caret line, and shows the session folder by notebook', async () => {
+it('sends a message with the note path from the folder Pi runs in and the live caret line, and names that folder', async () => {
   const target = noteTarget();
   const value = agent({ target });
   panel(value);
-  expect(screen.getByText('Notes')).toBeTruthy();
+  expect(screen.getByText('workspace')).toBeTruthy();
   await waitFor(() => expect(value.locate).toHaveBeenCalledWith('notes/plan.md', 'nb'));
   act(() => target.caret!.set(8));
   await waitFor(() => expect(screen.getByText('plan.md:5:5').getAttribute('title')).toBe('/home/me/workspace/notes/plan.md'));
   write('Explain this');
   fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message to Pi' }), { key: 'Enter' });
-  expect(value.send).toHaveBeenCalledWith('Explain this', { file: '/home/me/workspace/notes/plan.md', line: 5, column: 5 });
+  expect(value.send).toHaveBeenCalledWith('Explain this', { file: 'notes/plan.md', line: 5, column: 5 });
 });
 
 it('sends the selected lines when text is selected, in either direction', async () => {
@@ -61,7 +61,7 @@ it('sends the selected lines when text is selected, in either direction', async 
   await waitFor(() => expect(screen.getByText('plan.md:4-5')).toBeTruthy());
   write('Rewrite this');
   fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message to Pi' }), { key: 'Enter' });
-  expect(value.send).toHaveBeenCalledWith('Rewrite this', { file: '/home/me/workspace/notes/plan.md', line: 4, column: 3, endLine: 5, endColumn: 10 });
+  expect(value.send).toHaveBeenCalledWith('Rewrite this', { file: 'notes/plan.md', line: 4, column: 3, endLine: 5, endColumn: 10 });
 });
 
 it('sends the path only, or nothing, as the chosen context mode says, and remembers the choice', async () => {
@@ -72,7 +72,7 @@ it('sends the path only, or nothing, as the chosen context mode says, and rememb
   expect(screen.getByText('plan.md')).toBeTruthy();
   write('What is this?');
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-  expect(value.send).toHaveBeenLastCalledWith('What is this?', { file: '/home/me/workspace/notes/plan.md' });
+  expect(value.send).toHaveBeenLastCalledWith('What is this?', { file: 'notes/plan.md' });
   fireEvent.click(screen.getByRole('radio', { name: 'None' }));
   write('General question');
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -87,7 +87,7 @@ it('names a compilation by path, since it has no caret, and offers no context on
   expect((screen.getByRole('radio', { name: 'Line' }) as HTMLButtonElement).disabled).toBe(true);
   write('Summarize');
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-  expect(value.send).toHaveBeenCalledWith('Summarize', { file: '/home/me/workspace/notes/reading.compilation.yml' });
+  expect(value.send).toHaveBeenCalledWith('Summarize', { file: 'notes/reading.compilation.yml' });
   cleanup();
 
   const list = agent();
@@ -113,19 +113,25 @@ it('answers ask_user dialogs, which Pi sends as select and input requests', () =
 
 it("shows Pi's own project-trust decision, which the panel does not override", () => {
   panel(agent());
-  expect(screen.getByText('Trusted').getAttribute('title')).toContain('/trust');
+  // It sits in the send row beside the extension info, not in the header.
+  const trusted = screen.getByRole('img', { name: 'Trusted' });
+  expect(trusted.getAttribute('title')).toContain('/trust');
+  expect(trusted.closest('.pi-agent-dialog-actions')).toBeTruthy();
   cleanup();
   panel(agent({ session: { id: 's2', cwd: '/w', location: { notebookId: 'nb', folder: null }, trusted: false, status: 'ready', startedAt: '' } }));
-  expect(screen.getByText('Not trusted')).toBeTruthy();
+  expect(screen.getByRole('img', { name: 'Not trusted' })).toBeTruthy();
 });
 
 it('switches to a notebook folder picked in the folder dialog, without a trust override', async () => {
   const value = agent();
   panel(value);
   // The folder name in the header is the way into the folder picker.
-  fireEvent.click(screen.getByRole('button', { name: 'Notes' }));
+  fireEvent.click(screen.getByRole('button', { name: 'workspace' }));
   expect(screen.getByText(/ends the current Pi session and clears this conversation/)).toBeTruthy();
   expect(screen.getByRole('combobox', { name: 'Notebook' })).toBeTruthy();
+  // The session runs at the whole project; the tree's root is the notebook's own root.
+  fireEvent.click(screen.getByRole('button', { name: 'All folders' }));
+  expect(screen.getByRole('button', { name: 'Whole project (repository root)' }).getAttribute('aria-pressed')).toBe('false');
   fireEvent.click(screen.getByRole('button', { name: 'End session and switch' }));
   expect(screen.queryByRole('checkbox')).toBeNull();
   await waitFor(() => expect(value.switchFolder).toHaveBeenCalledWith({ notebookId: 'nb', folder: null }));
@@ -134,7 +140,7 @@ it('switches to a notebook folder picked in the folder dialog, without a trust o
 it("switches to the whole project, the root of the notebook's repository, and names it by its folder", async () => {
   const value = agent();
   panel(value);
-  fireEvent.click(screen.getByRole('button', { name: 'Notes' }));
+  fireEvent.click(screen.getByRole('button', { name: 'workspace' }));
   const project = screen.getByRole('button', { name: 'Whole project (repository root)' });
   fireEvent.click(project);
   expect(project.getAttribute('aria-pressed')).toBe('true');

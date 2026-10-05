@@ -91,6 +91,12 @@ function locationLabel(location: PiLocation | undefined, cwd: string | undefined
   return location.folder ? `${title} / ${location.folder}` : title;
 }
 
+/** A file as Pi should read it: relative to the folder Pi runs in when it lies inside, absolute otherwise. */
+function fromCwd(absolute: string, cwd: string | undefined): string {
+  const base = cwd?.replace(/\/+$/, '');
+  return base && absolute.startsWith(`${base}/`) ? absolute.slice(base.length + 1) : absolute;
+}
+
 /** A conversation with the workspace's Pi process, naming the file in focus (see AgentTarget) with each message. */
 export function AgentPanel() {
   const { t } = useTranslation();
@@ -126,7 +132,8 @@ export function AgentPanel() {
   const links = useMemo(() => chatLinks(session, agent.notebooks), [session, agent.notebooks]);
   const live = Boolean(session && session.status !== 'exited');
   const ready = live && agent.connected;
-  const located = target && file?.path === target.path ? file.absolute : undefined;
+  const absolute = target && file?.path === target.path ? file.absolute : undefined;
+  const located = absolute && fromCwd(absolute, session?.cwd);
   // Without a caret (a compilation pane), a line request sends the path alone, and the switch says so.
   const effectiveMode: ContextMode = mode === 'line' && !position ? 'path' : mode;
   const focus: AgentFocus | undefined = !located || effectiveMode === 'none' ? undefined : effectiveMode === 'line' && position ? { file: located, ...position } : { file: located };
@@ -146,7 +153,6 @@ export function AgentPanel() {
           <span>{locationLabel(session?.location, session?.cwd, agent.notebooks) || t('piAgent.switchFolder')}</span>
           <ChevronDown aria-hidden='true' />
         </button>
-        {live && session!.trusted !== undefined && <span className='pi-agent-trust' data-trusted={session!.trusted} title={t('piAgent.trustHint')}>{session!.trusted ? <ShieldCheck aria-hidden='true' /> : <ShieldOff aria-hidden='true' />} {t(session!.trusted ? 'piAgent.trusted' : 'piAgent.untrusted')}</span>}
         <Button size='icon' title={t('piAgent.newConversation')} aria-label={t('piAgent.newConversation')} disabled={!ready} onClick={agent.newConversation}>
           <MessageSquarePlus aria-hidden='true' />
         </Button>
@@ -181,7 +187,7 @@ export function AgentPanel() {
         {target && (
           <div className='pi-agent-context'>
             <div className='pi-agent-modes' role='radiogroup' aria-label={t('piAgent.context')}>{CONTEXT_MODES.map(option => <button key={option} type='button' role='radio' aria-checked={effectiveMode === option} disabled={option === 'line' && !target.caret} onClick={() => chooseMode(option)}>{t(`piAgent.context.${option}` as const)}</button>)}</div>
-            {focus && <span className='pi-agent-focus-chip' title={located}>{focusLabel(focus)}</span>}
+            {focus && <span className='pi-agent-focus-chip' title={absolute}>{focusLabel(focus)}</span>}
             {!located && file?.error && <span className='pi-agent-focus-chip' title={file.error}>{target.path.slice(target.path.lastIndexOf('/') + 1)}</span>}
           </div>
         )}
@@ -201,7 +207,10 @@ export function AgentPanel() {
           }}
         />
         <div className='pi-agent-dialog-actions'>
-          <ExtensionInfo />
+          <div className='pi-agent-indicators'>
+            {live && session!.trusted !== undefined && <span className='pi-agent-trust' role='img' tabIndex={0} data-trusted={session!.trusted} aria-label={t(session!.trusted ? 'piAgent.trusted' : 'piAgent.untrusted')} title={`${t(session!.trusted ? 'piAgent.trusted' : 'piAgent.untrusted')}\n${t('piAgent.trustHint')}`}>{session!.trusted ? <ShieldCheck aria-hidden='true' /> : <ShieldOff aria-hidden='true' />}</span>}
+            <ExtensionInfo />
+          </div>
           {agent.transcript.running && (
             <Button onClick={agent.abort} title={t('piAgent.abort')}>
               <Square aria-hidden='true' />

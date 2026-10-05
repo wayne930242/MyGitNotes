@@ -21,6 +21,8 @@ export interface PiSessionInfo {
   location: PiLocation;
   /** Pi's own project-trust decision for `cwd`, once it reports it. */
   trusted?: boolean;
+  /** The session file Pi records this conversation in, once Pi reports it. */
+  sessionFile?: string;
   status: 'starting' | 'ready' | 'exited';
   pid?: number;
   startedAt: string;
@@ -115,6 +117,8 @@ export interface PiAgentValue {
 }
 
 const LOCATION_KEY = 'mygitnotes.piAgent.location';
+/** The conversation to resume when Pi next starts, as the server restarting otherwise loses it; per browser, not per page. */
+const SESSION_FILE_KEY = 'mygitnotes.piAgent.sessionFile';
 /** Responses that only feed the model state; get_state also carries whether Pi is mid-run. */
 const MODEL_COMMANDS = new Set(['get_state', 'get_available_models', 'get_available_thinking_levels', 'set_model', 'set_thinking_level']);
 const RECONNECT_MS = 1500;
@@ -125,6 +129,21 @@ function savedLocation(notebooks: NotebookConfig[]): PiLocation | undefined {
     const saved = JSON.parse(localStorage.getItem(LOCATION_KEY) || 'null') as PiLocation | null;
     if (!saved || !notebooks.some(notebook => notebook.id === saved.notebookId)) return undefined;
     return saved.repository === true ? { notebookId: saved.notebookId, folder: null, repository: true } : { notebookId: saved.notebookId, folder: typeof saved.folder === 'string' ? saved.folder : null };
+  } catch {
+    return undefined;
+  }
+}
+
+function remember(key: string, value: string | null) {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch { /* Not remembering only costs the next start its default. */ }
+}
+
+function savedSessionFile(): string | undefined {
+  try {
+    return localStorage.getItem(SESSION_FILE_KEY) ?? undefined;
   } catch {
     return undefined;
   }
@@ -164,7 +183,8 @@ export function usePiAgentAvailable(): boolean {
 /**
  * Starts the workspace's Pi process in the background as soon as a local workspace loads, so the panel
  * opens onto a warm session, and keeps it across panel and page changes until the user ends it. It starts
- * in the folder the user last switched to, else at the root of the notebook selected when it starts.
+ * in the folder the user last switched to, else at the root of the selected notebook's repository, and
+ * resumes the conversation it last had while that is still valid there.
  */
 export function PiAgentProvider({ enabled, notebookId, notebooks, folders, children }: { enabled: boolean; notebookId: string; notebooks: NotebookConfig[]; folders: FolderItem[]; children: ReactNode; }) {
   const [session, setSession] = useState<PiSessionInfo | null>(null);
@@ -272,8 +292,10 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
   const start = useCallback(async () => {
     try {
       if (!notebookId) throw new Error('No notebook is selected.');
-      // A running session is kept whatever folder is asked for; the server only uses it to start one.
-      attach((await sessionRequest('POST', savedLocation(notebooks) ?? { notebookId, folder: null })).session);
+      // A running session is kept whatever is asked for; the server only uses the folder and the conversation
+      // to start one, by default the whole project, resuming the last conversation while it is still valid there.
+      const location = savedLocation(notebooks) ?? { notebookId, folder: null, repository: true };
+      attach((await sessionRequest('POST', { ...location, sessionFile: savedSessionFile() })).session);
     } catch (reason) {
       setError((reason as Error).message);
     }
@@ -300,6 +322,11 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
     started.current = true;
     void start();
   }, [ready, start]);
+
+  // The live conversation's file is the one to resume; an ended session's is not.
+  useEffect(() => {
+    if (session?.sessionFile && session.status !== 'exited') remember(SESSION_FILE_KEY, session.sessionFile);
+  }, [session]);
 
   const command = useCallback((record: Record<string, unknown>) => {
     if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify({ id: crypto.randomUUID(), ...record }));
@@ -333,16 +360,17 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
     end: async () => {
       try {
         attach((await sessionRequest('DELETE')).session);
+        // Ending the session is the manual clear: the next start begins a new conversation.
+        remember(SESSION_FILE_KEY, null);
       } catch (reason) {
         setError((reason as Error).message);
       }
     },
     switchFolder: async location => {
       try {
+        remember(SESSION_FILE_KEY, null);
         const { session: info } = await sessionRequest('PUT', location);
-        try {
-          localStorage.setItem(LOCATION_KEY, JSON.stringify(location));
-        } catch { /* The folder still applies to this session. */ }
+        remember(LOCATION_KEY, JSON.stringify(location));
         attach(info);
       } catch (reason) {
         setError((reason as Error).message);
