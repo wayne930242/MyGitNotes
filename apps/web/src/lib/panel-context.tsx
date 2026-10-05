@@ -1,11 +1,12 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import { getSavedPanelState, savePanelState } from './panel-state.js';
 
-export type WorkspaceToolId = 'calendar' | 'todo' | 'changes';
-export const WORKSPACE_TOOL_IDS: readonly WorkspaceToolId[] = ['calendar', 'todo', 'changes'];
+/** The rail's own tools. The agent is one of them, so it works on the notebook list and beside any Focus pane. */
+export type WorkspaceToolId = 'calendar' | 'todo' | 'changes' | 'agent';
+export const WORKSPACE_TOOL_IDS: readonly WorkspaceToolId[] = ['calendar', 'todo', 'changes', 'agent'];
 /** The active pane's document panel sections, offered in the rail while a Focus is displayed. */
-export type DocumentToolId = 'outline' | 'find' | 'frontmatter' | 'assets' | 'view' | 'info' | 'agent';
-export const DOCUMENT_TOOL_IDS: readonly DocumentToolId[] = ['outline', 'find', 'frontmatter', 'assets', 'view', 'info', 'agent'];
+export type DocumentToolId = 'outline' | 'find' | 'frontmatter' | 'assets' | 'view' | 'info';
+export const DOCUMENT_TOOL_IDS: readonly DocumentToolId[] = ['outline', 'find', 'frontmatter', 'assets', 'view', 'info'];
 export type PanelToolId = WorkspaceToolId | DocumentToolId;
 export const isDocumentTool = (id: PanelToolId): id is DocumentToolId => (DOCUMENT_TOOL_IDS as readonly PanelToolId[]).includes(id);
 

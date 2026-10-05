@@ -3,7 +3,7 @@ import { ListTree } from 'lucide-react';
 import { useOutlineActions, useOutlineInsertion } from '../lib/outline-actions.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { NoteQuickActions } from './note-editor/NoteQuickActions.js';
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { MarkdownEditor, type MarkdownEditorHandle, type MarkdownEditorMode } from './MarkdownEditor.js';
 import type { NoteItem } from '../lib/types.js';
 import { usePanelContext } from '../lib/panel-context.js';
@@ -19,6 +19,7 @@ import { useNoteDiffStats } from './note-editor/useNoteDiffStats.js';
 import { noteViewStyle, readShowFormatToolbar, readShowLineNumbers, useNoteViewPreferences, writeShowFormatToolbar, writeShowLineNumbers } from '../lib/editor-preferences.js';
 import type { NoteEditorSession, NoteEditorSharedProps, NotePanelMode } from './note-editor/types.js';
 import { createCaretStore } from '../lib/pi-agent/caret-store.js';
+import { usePublishAgentTarget } from '../lib/pi-agent/session.js';
 
 export interface NoteEditorHandle {
   /** Inserts `text` at `at`, or at the caret; no-op while the session is locked. */
@@ -99,6 +100,14 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   const changes = useNoteDiffStats(frame === 'compact' ? undefined : readDiff, session.isDirty, !session.isSaving && !session.hasUnsavedChanges);
   const refresh = onReadRemote && !session.blocked ? session.pullLatest : undefined;
   const docPanel = useNoteDocumentPanel({ frame, active, isMarkdown, content: session.content, editorMode, documentPanel, editorRef, metadata: session.metadata, notePath: note.path, branch, draftScope, readOnly });
+  // The active editor is the file the agent panel names to Pi, with the line its caret is on.
+  const contentRef = useRef(session.content);
+  useEffect(() => {
+    contentRef.current = session.content;
+  }, [session.content]);
+  const lineNumberOffset = session.baseNote.lineNumberOffset || 0;
+  const agentTarget = useMemo(() => ({ notebookId: note.notebookId, path: note.path, caret, content: () => contentRef.current, lineNumberOffset }), [note.notebookId, note.path, caret, lineNumberOffset]);
+  usePublishAgentTarget(agentTarget, active && frame !== 'compact');
 
   // A phone opens every note for reading: a long press then only selects text instead of raising the keyboard,
   // whose resize moved the page under the selection. Editing starts from the toolbar's Edit button.
@@ -150,7 +159,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
     );
   }
 
-  const panel = { ...docPanel, isMarkdown, notePath: note.path, content: session.content, lineNumberOffset: session.baseNote.lineNumberOffset || 0, metadata: session.metadata, setMetadata: session.setMetadata, statuses, metadataFields, availableTags, locked: session.locked, notebookId: note.notebookId, onInsertAssetRef: handleInsertAssetRef, readOnly, beforeFileChange, onFilesChanged, caret };
+  const panel = { ...docPanel, isMarkdown, notePath: note.path, content: session.content, lineNumberOffset: session.baseNote.lineNumberOffset || 0, metadata: session.metadata, setMetadata: session.setMetadata, statuses, metadataFields, availableTags, locked: session.locked, notebookId: note.notebookId, onInsertAssetRef: handleInsertAssetRef, readOnly, beforeFileChange, onFilesChanged };
   return (
     <div className='note-editor' data-frame={frame} data-source-notebook={note.notebookId} style={noteViewStyle(viewPreferences)}>
       <NoteEditorNotices session={session} notePath={note.path} />

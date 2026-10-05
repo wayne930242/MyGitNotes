@@ -1,8 +1,9 @@
 /** The note and caret the agent panel names to Pi with each message. Lines and columns count from 1. */
+/** The file a message is about, and the caret in it when the user sends the line too. */
 export interface AgentFocus {
   file: string;
-  line: number;
-  column: number;
+  line?: number;
+  column?: number;
 }
 
 export type AssistantBlock = { type: 'text'; text: string; } | { type: 'thinking'; text: string; } | { type: 'toolCall'; id: string; name: string; args: unknown; };
@@ -42,19 +43,26 @@ export const emptyTranscript: TranscriptState = { entries: [], tools: {}, dialog
 
 const CONTEXT_OPEN = '<editor-context>';
 const CONTEXT_CLOSE = '</editor-context>';
-const CONTEXT_PATTERN = /^<editor-context>\nfile: (.+)\ncursor: line (\d+), column (\d+)\n<\/editor-context>\n\n/;
+const CONTEXT_PATTERN = /^<editor-context>\nfile: (.+)\n(?:cursor: line (\d+), column (\d+)\n)?<\/editor-context>\n\n/;
 
-/** Prefixes a message with the note and caret in focus, which Pi reads itself when it needs them. */
+/** Prefixes a message with the file in focus and, when given, the caret; Pi reads the file itself when it needs it. */
 export function withFocus(text: string, focus: AgentFocus | undefined): string {
   if (!focus) return text;
-  return `${CONTEXT_OPEN}\nfile: ${focus.file}\ncursor: line ${focus.line}, column ${focus.column}\n${CONTEXT_CLOSE}\n\n${text}`;
+  const cursor = focus.line === undefined ? '' : `cursor: line ${focus.line}, column ${focus.column ?? 1}\n`;
+  return `${CONTEXT_OPEN}\nfile: ${focus.file}\n${cursor}${CONTEXT_CLOSE}\n\n${text}`;
+}
+
+/** How a focus reads in a chip: `name.md:12:5`, or just the file name without a caret. */
+export function focusLabel(focus: AgentFocus): string {
+  const name = focus.file.slice(focus.file.lastIndexOf('/') + 1);
+  return focus.line === undefined ? name : `${name}:${focus.line}:${focus.column ?? 1}`;
 }
 
 /** Splits the focus prefix back off a sent message, for display. */
 export function splitFocus(message: string): { text: string; focus?: AgentFocus; } {
   const match = CONTEXT_PATTERN.exec(message);
   if (!match) return { text: message };
-  return { text: message.slice(match[0].length), focus: { file: match[1], line: Number(match[2]), column: Number(match[3]) } };
+  return { text: message.slice(match[0].length), focus: match[2] === undefined ? { file: match[1] } : { file: match[1], line: Number(match[2]), column: Number(match[3]) } };
 }
 
 /** The 1-based line and column of `offset` in a note body whose first line is file line `lineOffset + 1`. */

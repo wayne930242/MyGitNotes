@@ -1,11 +1,9 @@
 import { AlertTriangle, CircleCheck, CircleX, Info, LoaderCircle, Wrench } from 'lucide-react';
 import { type ReactNode, useLayoutEffect, useRef } from 'react';
-import type { AssistantBlock, TranscriptState } from '../../lib/pi-agent/transcript.js';
+import { type AssistantBlock, focusLabel, type TranscriptState } from '../../lib/pi-agent/transcript.js';
 import { useTranslation } from '../../lib/i18n/index.js';
 
 const OUTPUT_LIMIT = 4000;
-
-const baseName = (file: string) => file.slice(file.lastIndexOf('/') + 1);
 
 /** One line naming a tool call's main argument: a path, a command or a pattern. */
 function argsSummary(args: unknown): string {
@@ -74,7 +72,7 @@ export function AgentTranscript({ transcript, children }: { transcript: Transcri
         if (entry.kind === 'user') {
           return (
             <div key={entry.key} className='pi-agent-message' data-role='user'>
-              {entry.focus && <span className='pi-agent-focus-chip' title={entry.focus.file}>{baseName(entry.focus.file)}:{entry.focus.line}:{entry.focus.column}</span>}
+              {entry.focus && <span className='pi-agent-focus-chip' title={entry.focus.file}>{focusLabel(entry.focus)}</span>}
               <p className='pi-agent-text'>{entry.text}</p>
             </div>
           );

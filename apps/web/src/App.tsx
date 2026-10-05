@@ -41,12 +41,12 @@ import React, { useMemo, useState } from 'react';
 import { fetchFileDiff, fetchGitStatus, readNote } from './lib/api.js';
 import { workingDiff } from './lib/working-notes.js';
 import { NoteListSentinel } from './components/NoteListSentinel.js';
-import type { NoteItem } from './lib/types.js';
+import type { NotebookConfig, NoteItem } from './lib/types.js';
 import { useTagWorkspaceOperations } from './app/useTagWorkspaceOperations.js';
 import { useNoteSelection } from './app/useNoteSelection.js';
 import { useBulkNoteActions } from './app/useBulkNoteActions.js';
 import { BulkActionsToolbar } from './components/BulkActionsToolbar.js';
-import { BulkMoveDialog } from './components/BulkMoveDialog.js';
+import { FolderPickerDialog } from './components/FolderPickerDialog.js';
 import { useAssetOperations } from './app/useAssetOperations.js';
 import { useRoutedNote } from './app/useRoutedNote.js';
 import { UNTITLED_STEM, useCreateNote } from './app/useCreateNote.js';
@@ -93,6 +93,9 @@ import { LoadingStatus } from './components/LoadingStatus.js';
 
 const CompilationStudy = React.lazy(() => import('./components/CompilationStudy.js').then(module => ({ default: module.CompilationStudy })));
 const NotebookGraphPage = React.lazy(() => import('./components/NotebookGraphPage.js').then(module => ({ default: module.NotebookGraphPage })));
+
+/** A stable empty list while the workspace config loads, so the agent provider's value does not churn. */
+const NO_NOTEBOOKS: NotebookConfig[] = [];
 
 const AppContent: React.FC = () => {
   useVisualViewport();
@@ -624,18 +627,20 @@ const AppContent: React.FC = () => {
                 </section>
               )}
               {fileDialog && <FileManagerDialog notebookId={fileDialog.notebookId} notebooks={config?.notebooks || []} writable={canWrite} initialPath={fileDialog.path} movePath={fileDialog.movePath} initialOperation={fileDialog.initialOperation} showDocuments={fileDialog.showDocuments} beforeChange={beforeFileChange} onChanged={onFilesChanged} onOpenIndex={openFileIndex} onClose={() => setFileDialog(undefined)} />}
-              {noteMove.request?.mode === 'move' && movingNotebook && <BulkMoveDialog notebook={movingNotebook} folders={folders} title={t('files.moveNoteTitle', { title: noteMove.request.note.title || noteMove.request.note.path.split('/').pop() || '' })} initialFolder={noteFolder(noteMove.request.note.path, movingNotebook.root)} busy={noteMove.busy} onClose={noteMove.cancel} onConfirm={folder => void noteMove.confirmMove(folder)} />}
+              {noteMove.request?.mode === 'move' && movingNotebook && <FolderPickerDialog notebooks={[movingNotebook]} folders={folders} title={t('files.moveNoteTitle', { title: noteMove.request.note.title || noteMove.request.note.path.split('/').pop() || '' })} initial={{ notebookId: movingNotebook.id, folder: noteFolder(noteMove.request.note.path, movingNotebook.root) }} confirmLabel={t('bulk.moveConfirm')} busy={noteMove.busy} onClose={noteMove.cancel} onConfirm={({ folder }) => void noteMove.confirmMove(folder)} />}
               {noteMove.request?.mode === 'rename' && <RenameNoteDialog path={noteMove.request.note.path} title={noteMove.request.note.title} busy={noteMove.busy} onClose={noteMove.cancel} onConfirm={title => void noteMove.confirmRename(title)} />}
               {bulkMoveOpen && bulkMoveNotebook && (
-                <BulkMoveDialog
-                  notebook={bulkMoveNotebook}
+                <FolderPickerDialog
+                  notebooks={[bulkMoveNotebook]}
                   folders={folders}
                   title={t('bulk.moveDialogTitle', { count: selectedNotes.length })}
+                  initial={{ notebookId: bulkMoveNotebook.id, folder: null }}
+                  confirmLabel={t('bulk.moveConfirm')}
                   busy={bulkBusy}
                   onClose={() => setBulkMoveOpen(false)}
-                  onConfirm={destination => {
+                  onConfirm={({ folder }) => {
                     setBulkMoveOpen(false);
-                    void runBulkMove(bulkMoveNotebook.id, destination);
+                    void runBulkMove(bulkMoveNotebook.id, folder);
                   }}
                 />
               )}
@@ -734,7 +739,7 @@ const AppContent: React.FC = () => {
   );
   // A local workspace starts its Pi agent in the background, so the agent tab opens onto a warm session.
   return (
-    <PiAgentProvider enabled={!remote}>
+    <PiAgentProvider enabled={!remote} notebookId={selectedNotebookId} notebooks={config?.notebooks ?? NO_NOTEBOOKS} folders={folders}>
       <OutlineActionsProvider value={outlineActions.value}>{content}</OutlineActionsProvider>
     </PiAgentProvider>
   );

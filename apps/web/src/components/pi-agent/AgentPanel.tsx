@@ -1,37 +1,39 @@
 import { FolderCog, MessageSquarePlus, Power, Send, Square } from 'lucide-react';
-import { type FormEvent, useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Button } from '../Button.js';
+import { FolderPickerDialog } from '../FolderPickerDialog.js';
 import { AgentDialogCard } from './AgentDialogCard.js';
 import { AgentTranscript } from './AgentTranscript.js';
-import type { CaretStore } from '../../lib/pi-agent/caret-store.js';
-import { usePiAgent } from '../../lib/pi-agent/session.js';
-import { caretPosition } from '../../lib/pi-agent/transcript.js';
+import { type PiLocation, usePiAgent } from '../../lib/pi-agent/session.js';
+import { type AgentFocus, caretPosition, focusLabel } from '../../lib/pi-agent/transcript.js';
 import { useTranslation } from '../../lib/i18n/index.js';
 import './pi-agent.css';
 
-export interface AgentPanelProps {
-  notebookId: string;
-  /** The note's repository-relative path; the panel resolves it to the absolute path Pi reads. */
-  notePath: string;
-  /** The editor body the caret offset counts in, and the frontmatter lines above it. */
-  content: string;
-  lineNumberOffset: number;
-  caret: CaretStore;
+type ContextMode = 'line' | 'path' | 'none';
+const CONTEXT_MODES: readonly ContextMode[] = ['line', 'path', 'none'];
+const CONTEXT_KEY = 'mygitnotes.piAgent.context';
+const noCaret = { subscribe: () => () => {}, get: () => 0 };
+
+function savedContextMode(): ContextMode {
+  try {
+    const saved = localStorage.getItem(CONTEXT_KEY);
+    return CONTEXT_MODES.includes(saved as ContextMode) ? saved as ContextMode : 'line';
+  } catch {
+    return 'line';
+  }
 }
 
-/** Restarts Pi in another folder after the user confirms that the conversation ends with it. */
+/** Restarts Pi in another notebook folder after the user confirms that the conversation ends with it. */
 function SwitchFolder({ onDone }: { onDone: () => void; }) {
   const { t } = useTranslation();
   const agent = usePiAgent();
-  const [cwd, setCwd] = useState(agent.session?.cwd ?? agent.defaultCwd);
   const [approve, setApprove] = useState(false);
   const [busy, setBusy] = useState(false);
-  const roots = [...new Set([agent.defaultCwd, ...agent.workspaceRoots].filter(Boolean))];
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
+  const initial = agent.session?.location ?? { notebookId: agent.target?.notebookId ?? agent.notebooks[0]?.id ?? '', folder: null };
+  const submit = async (location: PiLocation) => {
     setBusy(true);
     try {
-      await agent.switchCwd(cwd, approve);
+      await agent.switchFolder(location, approve);
       onDone();
     } catch {
       /* The provider shows the error. */
@@ -40,53 +42,64 @@ function SwitchFolder({ onDone }: { onDone: () => void; }) {
     }
   };
   return (
-    <form className='pi-agent-switch' onSubmit={event => void submit(event)} aria-label={t('piAgent.switchFolder')}>
-      <label>
-        <span>{t('piAgent.folder')}</span>
-        <input className='ui-control' value={cwd} list='pi-agent-roots' onChange={event => setCwd(event.target.value)} spellCheck={false} />
-        <datalist id='pi-agent-roots'>{roots.map(root => <option key={root} value={root} />)}</datalist>
-      </label>
+    <FolderPickerDialog title={t('piAgent.switchFolder')} notebooks={agent.notebooks} folders={agent.folders} initial={initial} confirmLabel={t('piAgent.switchConfirm')} confirmVariant='danger' busy={busy} onClose={onDone} onConfirm={location => void submit(location)}>
       <label className='pi-agent-check'>
         <input type='checkbox' checked={approve} onChange={event => setApprove(event.target.checked)} />
         <span>{t('piAgent.approve')}</span>
       </label>
       <p className='pi-agent-hint'>{t('piAgent.switchWarning')}</p>
-      <div className='pi-agent-dialog-actions'>
-        <Button type='submit' variant='danger' disabled={busy || !cwd.trim()}>{t('piAgent.switchConfirm')}</Button>
-        <Button onClick={onDone}>{t('common.cancel')}</Button>
-      </div>
-    </form>
+    </FolderPickerDialog>
   );
 }
 
-/** The document panel's agent tab: a conversation with the workspace's Pi process about the note in focus. */
-export function AgentPanel({ notebookId, notePath, content, lineNumberOffset, caret }: AgentPanelProps) {
+/** How the session's folder reads in the header: the notebook title, then the folder inside it. */
+function locationLabel(location: PiLocation | undefined, notebooks: { id: string; title: string; }[]): string {
+  if (!location) return '';
+  const title = notebooks.find(notebook => notebook.id === location.notebookId)?.title ?? location.notebookId;
+  return location.folder ? `${title} / ${location.folder}` : title;
+}
+
+/** A conversation with the workspace's Pi process, naming the file in focus (see AgentTarget) with each message. */
+export function AgentPanel() {
   const { t } = useTranslation();
   const agent = usePiAgent();
+  const target = agent.target;
   const [draft, setDraft] = useState('');
-  const [attachFocus, setAttachFocus] = useState(true);
+  const [mode, setMode] = useState(savedContextMode);
   const [switching, setSwitching] = useState(false);
-  const [file, setFile] = useState<{ notePath: string; path?: string; error?: string; }>({ notePath });
+  const [file, setFile] = useState<{ path: string; absolute?: string; error?: string; } | null>(null);
+  const caret = target?.caret ?? noCaret;
   const offset = useSyncExternalStore(caret.subscribe, caret.get);
-  const position = caretPosition(content, offset, lineNumberOffset);
+  const position = target?.caret && target.content ? caretPosition(target.content(), offset, target.lineNumberOffset) : undefined;
   const { locate } = agent;
 
   useEffect(() => {
+    if (!target) return;
     let current = true;
-    locate(notePath, notebookId).then(path => current && setFile({ notePath, path }), (reason: Error) => current && setFile({ notePath, error: reason.message }));
+    locate(target.path, target.notebookId).then(absolute => current && setFile({ path: target.path, absolute }), (reason: Error) => current && setFile({ path: target.path, error: reason.message }));
     return () => {
       current = false;
     };
-  }, [locate, notePath, notebookId]);
+  }, [locate, target]);
+
+  const chooseMode = (next: ContextMode) => {
+    setMode(next);
+    try {
+      localStorage.setItem(CONTEXT_KEY, next);
+    } catch { /* The choice still applies until the panel closes. */ }
+  };
 
   const session = agent.session;
   const live = Boolean(session && session.status !== 'exited');
   const ready = live && agent.connected;
-  const located = file.notePath === notePath ? file.path : undefined;
+  const located = target && file?.path === target.path ? file.absolute : undefined;
+  // Without a caret (a compilation pane), a line request sends the path alone, and the switch says so.
+  const effectiveMode: ContextMode = mode === 'line' && !position ? 'path' : mode;
+  const focus: AgentFocus | undefined = !located || effectiveMode === 'none' ? undefined : effectiveMode === 'line' && position ? { file: located, ...position } : { file: located };
   const send = () => {
     const text = draft.trim();
     if (!text || !ready) return;
-    agent.send(text, attachFocus && located ? { file: located, ...position } : undefined);
+    agent.send(text, focus);
     setDraft('');
   };
 
@@ -94,11 +107,7 @@ export function AgentPanel({ notebookId, notePath, content, lineNumberOffset, ca
     <section className='pi-agent-panel' aria-label={t('piAgent.title')}>
       <header className='pi-agent-header'>
         <span className='pi-agent-status' data-status={live ? session!.status : 'none'}>{t(live ? `piAgent.status.${session!.status}` as const : 'piAgent.status.none')}</span>
-        {session && (
-          <span className='pi-agent-cwd' title={session.cwd}>
-            <bdi>{session.cwd}</bdi>
-          </span>
-        )}
+        <span className='pi-agent-cwd' title={session?.cwd}>{locationLabel(session?.location, agent.notebooks)}</span>
         <Button size='icon' title={t('piAgent.switchFolder')} aria-label={t('piAgent.switchFolder')} aria-expanded={switching} onClick={() => setSwitching(open => !open)}>
           <FolderCog aria-hidden='true' />
         </Button>
@@ -128,10 +137,13 @@ export function AgentPanel({ notebookId, notePath, content, lineNumberOffset, ca
           send();
         }}
       >
-        <label className='pi-agent-check' title={located ?? file.error}>
-          <input type='checkbox' checked={attachFocus} onChange={event => setAttachFocus(event.target.checked)} />
-          <span className='pi-agent-focus-chip'>{notePath.slice(notePath.lastIndexOf('/') + 1)}:{position.line}:{position.column}</span>
-        </label>
+        {target && (
+          <div className='pi-agent-context'>
+            <div className='pi-agent-modes' role='radiogroup' aria-label={t('piAgent.context')}>{CONTEXT_MODES.map(option => <button key={option} type='button' role='radio' aria-checked={effectiveMode === option} disabled={option === 'line' && !target.caret} onClick={() => chooseMode(option)}>{t(`piAgent.context.${option}` as const)}</button>)}</div>
+            {focus && <span className='pi-agent-focus-chip' title={located}>{focusLabel(focus)}</span>}
+            {!located && file?.error && <span className='pi-agent-focus-chip' title={file.error}>{target.path.slice(target.path.lastIndexOf('/') + 1)}</span>}
+          </div>
+        )}
         <textarea
           className='ui-control'
           rows={3}

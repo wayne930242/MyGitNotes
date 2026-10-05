@@ -6,7 +6,9 @@ import { type FocusTab } from '@mygitnotes/core/focus-page';
 import { useNoteFocus } from '../lib/use-note-focus.js';
 import { CURRENT_FOCUS, displayedPanes, hasStoredFocusView } from '../lib/focus-view.js';
 import { usePaneCapacity } from '../components/FocusArea.js';
-import { type DocumentToolId, isDocumentTool, usePanelContext } from '../lib/panel-context.js';
+import { isDocumentTool, usePanelContext } from '../lib/panel-context.js';
+import { isCompilationPath } from '@mygitnotes/core/compilation';
+import type { NotePanelMode } from '../components/note-editor/types.js';
 import type { WorkspaceState } from './workspace-state.js';
 
 interface Params {
@@ -40,11 +42,13 @@ export function useFocusPanes({ selectedNotebookId, focusPage, remote, sourceId,
   // The rail shows the active pane's document panel when that pane displays a note.
   const panel = usePanelContext();
   const [documentContainer, setDocumentContainer] = useState<HTMLDivElement | null>(null);
-  const activePaneNote = Boolean(noteFocus.entry && focusDisplay?.panes.find(pane => pane.panes.includes(noteFocus.entry!.activePane))?.key?.startsWith('note:'));
+  const activeKey = noteFocus.entry ? focusDisplay?.panes.find(pane => pane.panes.includes(noteFocus.entry!.activePane))?.key : undefined;
+  // A compilation pane has no editor, so it has no document panel either.
+  const activePaneNote = Boolean(activeKey?.startsWith('note:') && !isCompilationPath(activeKey.slice('note:'.length)));
   const focusDocumentPanel = {
     target: documentContainer,
     mode: panel.isOpen && isDocumentTool(panel.activeTool) ? panel.activeTool : null,
-    onChange: (mode: DocumentToolId | null) => {
+    onChange: (mode: NotePanelMode | null) => {
       if (!mode) panel.close();
       else if (!panel.isOpen || panel.activeTool !== mode) panel.openTool(mode);
     },

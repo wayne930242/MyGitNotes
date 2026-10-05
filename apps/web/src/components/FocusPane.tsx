@@ -1,4 +1,4 @@
-import React, { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ChevronDown, FileText, GalleryHorizontalEnd, ListPlus, Maximize2, PanelTopClose, X } from 'lucide-react';
 import { findFocusTabInPane, type FocusTab, focusTabKey } from '@mygitnotes/core/focus-page';
@@ -12,6 +12,7 @@ import type { NoteEditorProps } from './NoteEditor.js';
 import { HostedNoteEditor } from './NoteEditorHost.js';
 import { BatchAddDialog } from './BatchAddDialog.js';
 import { paneDimmed, tabDimmed } from '../lib/focus-search.js';
+import { usePublishAgentTarget } from '../lib/pi-agent/session.js';
 
 /** Drag payload for a tab moved inside the displayed Focus: its FocusTab and the pane it was dragged from, as JSON. */
 const TAB_DRAG_TYPE = 'application/x-mygitnotes-focus-tab';
@@ -208,7 +209,18 @@ export const FocusPane: React.FC<FocusPaneContext & { displayed: DisplayedPane; 
           </button>
         </div>
       </div>
-      <div id={panelId} className='focus-pane-body' role='tabpanel' aria-label={shown?.label}>{shown ? isCompilationPath(shown.tab.path) ? <React.Fragment key={shown.tab.path}>{renderCompilation(shown.tab.path, displayed.pane)}</React.Fragment> : <PaneNoteEditor key={shown.tab.path} notebookId={focus.notebookId} path={shown.tab.path} active={active} documentPanel={active ? documentPanel : undefined} /> : <p className='focus-pane-empty'>{editable ? t('focus.emptyPane') : t('focus.emptyPaneReadonly')}</p>}</div>
+      <div id={panelId} className='focus-pane-body' role='tabpanel' aria-label={shown?.label}>
+        {shown
+          ? isCompilationPath(shown.tab.path)
+            ? (
+              <React.Fragment key={shown.tab.path}>
+                <CompilationAgentTarget notebookId={focus.notebookId} path={shown.tab.path} active={active} />
+                {renderCompilation(shown.tab.path, displayed.pane)}
+              </React.Fragment>
+            )
+            : <PaneNoteEditor key={shown.tab.path} notebookId={focus.notebookId} path={shown.tab.path} active={active} documentPanel={active ? documentPanel : undefined} />
+          : <p className='focus-pane-empty'>{editable ? t('focus.emptyPane') : t('focus.emptyPaneReadonly')}</p>}
+      </div>
       {batchAddOpen && focus.shown && <BatchAddDialog focus={focus} target={focus.shown} pane={displayed.pane} notebookId={focus.notebookId} notebookRoot={notebookRoot} folders={folders} onClose={() => setBatchAddOpen(false)} />}
     </section>
   );
@@ -250,4 +262,11 @@ const FocusMenu: React.FC<{ label: string; showLabel?: boolean; icon: ReactNode;
 );
 
 /** A note tab's editor: the pane is one host of the note, sharing its single editor with zoom and graph cards. */
+/** A compilation has no editor to name itself to the agent panel, so its pane names the file, without a caret. */
+function CompilationAgentTarget({ notebookId, path, active }: { notebookId: string; path: string; active: boolean; }) {
+  const target = useMemo(() => ({ notebookId, path }), [notebookId, path]);
+  usePublishAgentTarget(target, active);
+  return null;
+}
+
 const PaneNoteEditor: React.FC<{ notebookId: string; path: string; active: boolean; documentPanel?: NoteEditorProps['documentPanel']; }> = ({ notebookId, path, active, documentPanel }) => <HostedNoteEditor notebookId={notebookId} path={path} frame='pane' active={active} documentPanel={documentPanel} />;

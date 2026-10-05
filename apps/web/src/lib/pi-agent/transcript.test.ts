@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyRecord, caretPosition, emptyTranscript, splitFocus, stripTerminalStyles, transcriptFromMessages, type TranscriptState, withFocus } from './transcript.js';
+import { applyRecord, caretPosition, emptyTranscript, focusLabel, splitFocus, stripTerminalStyles, transcriptFromMessages, type TranscriptState, withFocus } from './transcript.js';
 
 const apply = (records: unknown[], state: TranscriptState = emptyTranscript) => records.reduce<TranscriptState>(applyRecord, state);
 
@@ -9,6 +9,11 @@ describe('focus prefix', () => {
     const message = withFocus('Summarize this section', focus);
     expect(message).toBe('<editor-context>\nfile: /home/me/notes/a b.md\ncursor: line 12, column 5\n</editor-context>\n\nSummarize this section');
     expect(splitFocus(message)).toEqual({ text: 'Summarize this section', focus });
+    expect(focusLabel(focus)).toBe('a b.md:12:5');
+    const pathOnly = withFocus('What is this?', { file: '/home/me/notes/x.compilation.yml' });
+    expect(pathOnly).not.toContain('cursor:');
+    expect(splitFocus(pathOnly)).toEqual({ text: 'What is this?', focus: { file: '/home/me/notes/x.compilation.yml' } });
+    expect(focusLabel({ file: '/home/me/notes/x.compilation.yml' })).toBe('x.compilation.yml');
     expect(splitFocus('plain')).toEqual({ text: 'plain' });
     expect(withFocus('plain', undefined)).toBe('plain');
   });

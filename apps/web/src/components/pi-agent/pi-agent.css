@@ -3,7 +3,7 @@
 .pi-agent-status { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--color-sidebar); color: var(--color-muted); font-size: 11px; font-weight: 600; }
 .pi-agent-status[data-status='ready'] { background: var(--color-primary-light); color: var(--color-primary); }
 .pi-agent-status[data-status='exited'] { background: var(--color-danger-soft); color: var(--color-danger); }
-.pi-agent-cwd { flex: 1; min-width: 0; overflow: hidden; color: var(--color-muted); font: 11px ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.pi-agent-cwd { flex: 1; min-width: 0; overflow: hidden; color: var(--color-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .pi-agent-header .ui-icon-button svg { width: 15px; height: 15px; }
 .pi-agent-transcript { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; }
 .pi-agent-empty, .pi-agent-hint { color: var(--color-muted); line-height: 1.5; }
@@ -51,3 +51,11 @@
 .pi-agent-composer .ui-button svg { width: 14px; height: 14px; }
 @keyframes pi-agent-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .pi-agent-tool .pi-agent-tool-state, .pi-agent-working svg { animation: none; } }
+.pi-agent-context { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.pi-agent-modes { display: inline-flex; flex: none; overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-control); }
+.pi-agent-modes button { padding: 2px 8px; border: 0; background: transparent; color: var(--color-muted); font-size: 11px; cursor: pointer; }
+.pi-agent-modes button + button { border-left: 1px solid var(--color-border); }
+.pi-agent-modes button[aria-checked='true'] { background: var(--color-sidebar); color: var(--color-text); }
+.pi-agent-modes button:disabled { cursor: default; opacity: 0.45; }
+.pi-agent-context .pi-agent-focus-chip { align-self: center; min-width: 0; }
+.folder-picker-notebook { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--color-muted); }

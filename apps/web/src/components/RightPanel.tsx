@@ -11,6 +11,7 @@ import { CalendarTool } from './CalendarTool.js';
 import { TodoTool } from './TodoTool.js';
 import { ChangesTool, type SyncTarget } from './ChangesTool.js';
 import { usePiAgentAvailable } from '../lib/pi-agent/session.js';
+import { AgentPanel } from './pi-agent/AgentPanel.js';
 
 interface RightPanelProps {
   onFileMetadataContainer?: (element: HTMLDivElement | null) => void;
@@ -46,10 +47,12 @@ interface RightPanelProps {
   documentPanel?: { enabled: boolean; onContainer: (element: HTMLDivElement | null) => void; };
 }
 
-const WORKSPACE_TOOL_ICONS: Record<WorkspaceToolId, typeof CalendarDays> = { calendar: CalendarDays, todo: ListTodo, changes: GitBranch };
-const WORKSPACE_TOOL_LABELS: Record<WorkspaceToolId, 'panel.calendar' | 'panel.todo' | 'panel.changes'> = { calendar: 'panel.calendar', todo: 'panel.todo', changes: 'panel.changes' };
-const DOCUMENT_TOOL_ICONS: Record<DocumentToolId, typeof CalendarDays> = { outline: ListTree, find: Search, frontmatter: Braces, assets: ImageIcon, view: Type, info: Info, agent: Bot };
-const DOCUMENT_TOOL_LABELS: Record<DocumentToolId, 'editor.outline' | 'editor.findInNote' | 'editor.frontmatter' | 'editor.notebookAssets' | 'editor.viewSettings' | 'editor.info' | 'piAgent.tab'> = { outline: 'editor.outline', find: 'editor.findInNote', frontmatter: 'editor.frontmatter', assets: 'editor.notebookAssets', view: 'editor.viewSettings', info: 'editor.info', agent: 'piAgent.tab' };
+const WORKSPACE_TOOL_ICONS: Record<WorkspaceToolId, typeof CalendarDays> = { calendar: CalendarDays, todo: ListTodo, changes: GitBranch, agent: Bot };
+const WORKSPACE_TOOL_LABELS: Record<WorkspaceToolId, 'panel.calendar' | 'panel.todo' | 'panel.changes' | 'piAgent.tab'> = { calendar: 'panel.calendar', todo: 'panel.todo', changes: 'panel.changes', agent: 'piAgent.tab' };
+const DOCUMENT_TOOL_ICONS: Record<DocumentToolId, typeof CalendarDays> = { outline: ListTree, find: Search, frontmatter: Braces, assets: ImageIcon, view: Type, info: Info };
+const DOCUMENT_TOOL_LABELS: Record<DocumentToolId, 'editor.outline' | 'editor.findInNote' | 'editor.frontmatter' | 'editor.notebookAssets' | 'editor.viewSettings' | 'editor.info'> = { outline: 'editor.outline', find: 'editor.findInNote', frontmatter: 'editor.frontmatter', assets: 'editor.notebookAssets', view: 'editor.viewSettings', info: 'editor.info' };
+/** The Files page keeps only the tools that do not need a notebook view: Changes, and the agent. */
+const FILE_MODE_TOOLS: readonly WorkspaceToolId[] = ['changes', 'agent'];
 
 /** The workspace-level Calendar/Todo/Changes panel. Hidden while a note is open — the editor has its own document panel. */
 export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpenNote, onSaveNote, onReadNote, gitStatus, changeCount, deletedNotes, onRestoreNote, onOpenCommitModal, remoteChanges, getPreview, writable, onSynced, syncTargets, repositoryHeading, fileMode = false, fileMetadata, onFileMetadataContainer, metadataOpen = false, onMetadataOpenChange, onWidthChange, documentPanel }: RightPanelProps) {
@@ -58,7 +61,8 @@ export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpe
   const agentAvailable = usePiAgentAvailable();
   const visible = !panel.hasOpenNote;
   const showingMetadata = fileMode && metadataOpen && !!fileMetadata;
-  const showingWorkspaceTool = !showingMetadata && panel.isOpen && !isDocumentTool(panel.activeTool) && (!fileMode || panel.activeTool === 'changes');
+  const offered = (id: WorkspaceToolId) => (!fileMode || FILE_MODE_TOOLS.includes(id)) && (id !== 'agent' || agentAvailable);
+  const showingWorkspaceTool = !showingMetadata && panel.isOpen && !isDocumentTool(panel.activeTool) && offered(panel.activeTool);
   const showingDocument = !showingMetadata && panel.isOpen && isDocumentTool(panel.activeTool) && Boolean(documentPanel?.enabled);
   const isOpen = showingMetadata || showingWorkspaceTool || showingDocument;
 
@@ -95,6 +99,7 @@ export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpe
           {showingWorkspaceTool && panel.activeTool === 'calendar' && <CalendarTool notebooks={notebooks} selectedNotebookId={selectedNotebookId} currentFolder={currentFolder} onOpenNote={onOpenNote} />}
           {showingWorkspaceTool && panel.activeTool === 'todo' && <TodoTool notebooks={notebooks} selectedNotebookId={selectedNotebookId} currentFolder={currentFolder} onOpenNote={onOpenNote} onSaveNote={onSaveNote} onReadNote={onReadNote} />}
           {showingWorkspaceTool && panel.activeTool === 'changes' && <ChangesTool writable={writable} remoteChanges={remoteChanges} getPreview={getPreview} gitStatus={gitStatus} deletedNotes={deletedNotes} onRestoreNote={onRestoreNote} onOpenCommitModal={onOpenCommitModal} onSynced={onSynced} syncTargets={syncTargets} repositoryHeading={repositoryHeading} />}
+          {showingWorkspaceTool && panel.activeTool === 'agent' && <AgentPanel />}
           {showingDocument && <div ref={documentPanel?.onContainer} className='right-panel-document' />}
         </div>
       )}
@@ -115,7 +120,7 @@ export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpe
             <Info aria-hidden='true' />
           </Button>
         )}
-        {WORKSPACE_TOOL_IDS.filter(id => !fileMode || id === 'changes').map(id => {
+        {WORKSPACE_TOOL_IDS.filter(offered).map(id => {
           const Icon = WORKSPACE_TOOL_ICONS[id];
           const label = t(WORKSPACE_TOOL_LABELS[id]);
           return (
@@ -139,7 +144,7 @@ export function RightPanel({ notebooks, selectedNotebookId, currentFolder, onOpe
         {documentPanel && (
           <>
             <span className='right-panel-divider' aria-hidden='true' />
-            {DOCUMENT_TOOL_IDS.filter(id => id !== 'agent' || agentAvailable).map(id => {
+            {DOCUMENT_TOOL_IDS.map(id => {
               const Icon = DOCUMENT_TOOL_ICONS[id];
               const label = t(DOCUMENT_TOOL_LABELS[id]);
               return (
