@@ -16,7 +16,10 @@ class FakeSocket {
   constructor() {
     FakeSocket.last = this;
   }
-  send() {}
+  sent: { id?: string; type: string; }[] = [];
+  send(text: string) {
+    this.sent.push(JSON.parse(text));
+  }
   close() {}
   receive(record: unknown) {
     this.onmessage?.({ data: JSON.stringify(record) });
@@ -98,4 +101,22 @@ it('forgets the conversation when the session is ended or the folder is switched
   expect(requests.at(-1)).toEqual({ method: 'PUT', body: { notebookId: 'nb', folder: 'drafts' } });
   expect(localStorage.getItem('mygitnotes.piAgent.sessionFile')).toBeNull();
   expect(JSON.parse(localStorage.getItem('mygitnotes.piAgent.location')!)).toEqual({ notebookId: 'nb', folder: 'drafts' });
+});
+
+it('keeps the status lines and widgets replayed on attach when the conversation history arrives after them', async () => {
+  const agent = mount();
+  await waitFor(() => expect(FakeSocket.last).toBeDefined());
+  const socket = FakeSocket.last!;
+  act(() => {
+    socket.readyState = FakeSocket.OPEN;
+    socket.onopen?.();
+  });
+  await waitFor(() => expect(socket.sent.some(command => command.type === 'get_messages')).toBe(true));
+  act(() => {
+    socket.receive({ type: 'extension_ui_request', id: 'u1', method: 'setStatus', statusKey: 'usage-status', statusText: 'usage 12%' });
+    socket.receive({ type: 'extension_ui_request', id: 'u2', method: 'setWidget', widgetKey: 'lsp', widgetLines: ['ts: ready'] });
+    socket.receive({ type: 'response', id: socket.sent.find(command => command.type === 'get_messages')!.id, command: 'get_messages', success: true, data: { messages: [] } });
+  });
+  expect(agent.current?.transcript.statuses).toEqual({ 'usage-status': 'usage 12%' });
+  expect(agent.current?.transcript.widgets).toEqual({ lsp: ['ts: ready'] });
 });

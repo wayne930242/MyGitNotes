@@ -1,13 +1,14 @@
-import { ChevronDown, Info, MessageSquarePlus, Plug, Power, Send, ShieldCheck, ShieldOff, Square } from 'lucide-react';
+import { ChevronDown, MessageSquarePlus, Power, Send, Square } from 'lucide-react';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Button } from '../Button.js';
 import { FolderPickerDialog } from '../FolderPickerDialog.js';
 import { Select } from '../Select.js';
 import { AgentDialogCard } from './AgentDialogCard.js';
+import { InfoDrawer, InfoToggles, useInfoSection } from './AgentInfo.js';
 import { AgentTranscript, type ChatLinks } from './AgentTranscript.js';
-import { type PiLocation, type PiMcpServer, type PiSessionInfo, usePiAgent } from '../../lib/pi-agent/session.js';
+import { type PiLocation, type PiSessionInfo, usePiAgent } from '../../lib/pi-agent/session.js';
 import { type AgentFocus, focusLabel, selectionPosition } from '../../lib/pi-agent/transcript.js';
-import { type TranslationKey, useTranslation } from '../../lib/i18n/index.js';
+import { useTranslation } from '../../lib/i18n/index.js';
 import './pi-agent.css';
 
 type ContextMode = 'line' | 'path' | 'none';
@@ -49,45 +50,6 @@ function SwitchFolder({ onDone }: { onDone: () => void; }) {
   );
 }
 
-const MCP_STATUSES = new Set(['connected', 'cached', 'not-connected', 'needs-auth', 'failed', 'blocked']);
-
-/** The MCP servers Pi has, listed in the tooltip: the enabled ones with how each stands, then the disabled and blocked ones. */
-function McpServers({ servers }: { servers: PiMcpServer[]; }) {
-  const { t } = useTranslation();
-  const off = (server: PiMcpServer) => server.status === 'disabled' || server.status === 'blocked';
-  const enabled = servers.filter(server => !off(server));
-  const disabled = servers.filter(off);
-  const status = (server: PiMcpServer) => MCP_STATUSES.has(server.status) ? t(`piAgent.mcp.status.${server.status}` as TranslationKey) : server.status;
-  const lines = [t('piAgent.mcp.enabled', { count: enabled.length }), ...enabled.map(server => `  ${server.name} · ${status(server)}${server.toolCount ? ` · ${t(server.toolCount === 1 ? 'piAgent.mcp.tool' : 'piAgent.mcp.tools', { count: server.toolCount })}` : ''}`), t('piAgent.mcp.disabled', { count: disabled.length }), ...disabled.map(server => `  ${server.name}${server.status === 'blocked' ? ` · ${status(server)}${server.blockedReason ? ` (${server.blockedReason})` : ''}` : ''}`)];
-  const label = t('piAgent.mcp.label', { enabled: enabled.length, total: servers.length });
-  return (
-    <span className='pi-agent-trust pi-agent-mcp' role='img' tabIndex={0} aria-label={label} title={`${label}\n${lines.join('\n')}`}>
-      <Plug aria-hidden='true' />
-    </span>
-  );
-}
-
-/**
- * What Pi's extensions report for its status line and widgets (quota, MCP, LSP…), kept out of the panel's
- * height behind an info button at the start of the send row.
- */
-function ExtensionInfo() {
-  const { t } = useTranslation();
-  const { widgets, statuses } = usePiAgent().transcript;
-  const [open, setOpen] = useState(false);
-  const widgetEntries = Object.entries(widgets).filter(([, lines]) => lines.length > 0);
-  const statusEntries = Object.entries(statuses);
-  if (widgetEntries.length + statusEntries.length === 0) return null;
-  return (
-    <div className='pi-agent-info' onKeyDown={event => event.key === 'Escape' && setOpen(false)}>
-      <Button size='icon' title={t('piAgent.extensionInfo')} aria-label={t('piAgent.extensionInfo')} aria-expanded={open} onClick={() => setOpen(current => !current)}>
-        <Info aria-hidden='true' />
-      </Button>
-      {open && <div className='pi-agent-info-popover' role='status'>{widgetEntries.map(([key, lines]) => <pre key={key}>{lines.join('\n')}</pre>)} {statusEntries.map(([key, text]) => <p key={key}>{text}</p>)}</div>}
-    </div>
-  );
-}
-
 /**
  * Where links in Pi's replies resolve: the session folder in repository terms, and the repository on disk,
  * read off the session's absolute folder by dropping that relative folder from its end.
@@ -123,6 +85,7 @@ export function AgentPanel() {
   const [draft, setDraft] = useState('');
   const [mode, setMode] = useState(savedContextMode);
   const [switching, setSwitching] = useState(false);
+  const [infoSection, setInfoSection] = useInfoSection();
   const [file, setFile] = useState<{ path: string; absolute?: string; error?: string; } | null>(null);
   const caret = target?.caret ?? noCaret;
   const selection = useSyncExternalStore(caret.subscribe, caret.get);
@@ -224,11 +187,10 @@ export function AgentPanel() {
             }
           }}
         />
+        <InfoDrawer section={infoSection} onClose={() => setInfoSection(null)} />
         <div className='pi-agent-dialog-actions'>
           <div className='pi-agent-indicators'>
-            {live && session!.trusted !== undefined && <span className='pi-agent-trust' role='img' tabIndex={0} data-trusted={session!.trusted} aria-label={t(session!.trusted ? 'piAgent.trusted' : 'piAgent.untrusted')} title={`${t(session!.trusted ? 'piAgent.trusted' : 'piAgent.untrusted')}\n${t('piAgent.trustHint')}`}>{session!.trusted ? <ShieldCheck aria-hidden='true' /> : <ShieldOff aria-hidden='true' />}</span>}
-            {live && session!.mcpServers && <McpServers servers={session!.mcpServers} />}
-            <ExtensionInfo />
+            <InfoToggles section={infoSection} onToggle={setInfoSection} />
           </div>
           {agent.transcript.running && (
             <Button onClick={agent.abort} title={t('piAgent.abort')}>

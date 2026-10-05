@@ -262,8 +262,8 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
       if (request) {
         pending.current.delete(record.id as string);
         const data = (record.data ?? {}) as { messages?: unknown[]; isStreaming?: boolean; };
-        // Dialogs replayed on attach arrive before the history, so a rebuilt transcript keeps them.
-        if (request === 'messages' && Array.isArray(data.messages)) setTranscript(current => ({ ...transcriptFromMessages(data.messages!), dialogs: current.dialogs, running: current.running }));
+        // Dialogs, status lines and widgets replayed on attach arrive before the history, so a rebuilt transcript keeps them.
+        if (request === 'messages' && Array.isArray(data.messages)) setTranscript(current => ({ ...transcriptFromMessages(data.messages!), dialogs: current.dialogs, running: current.running, statuses: current.statuses, widgets: current.widgets }));
         if (request === 'state') setTranscript(current => ({ ...current, running: data.isStreaming === true }));
         return;
       }

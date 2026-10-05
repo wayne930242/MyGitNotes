@@ -111,27 +111,48 @@ it('answers ask_user dialogs, which Pi sends as select and input requests', () =
   expect(value.answer).toHaveBeenCalledWith(transcript.dialogs[0], { cancelled: true });
 });
 
-it("shows Pi's own project-trust decision, which the panel does not override", () => {
+it("shows Pi's own project-trust decision in a drawer between the message box and the send row, and remembers it open", () => {
   panel(agent());
-  // It sits in the send row beside the extension info, not in the header.
-  const trusted = screen.getByRole('img', { name: 'Trusted' });
-  expect(trusted.getAttribute('title')).toContain('/trust');
-  expect(trusted.closest('.pi-agent-dialog-actions')).toBeTruthy();
+  // The toggle sits in the send row; the drawer opens above that row, below the message box.
+  const toggle = screen.getByRole('button', { name: 'Trusted' });
+  expect(toggle.closest('.pi-agent-dialog-actions')).toBeTruthy();
+  fireEvent.click(toggle);
+  const drawer = screen.getByRole('region', { name: 'Project trust' });
+  expect(drawer.previousElementSibling?.tagName).toBe('TEXTAREA');
+  expect(drawer.textContent).toContain('/trust');
+  expect(localStorage.getItem('mygitnotes.piAgent.infoSection')).toBe('trust');
   cleanup();
   panel(agent({ session: { id: 's2', cwd: '/w', location: { notebookId: 'nb', folder: null }, trusted: false, status: 'ready', startedAt: '' } }));
-  expect(screen.getByRole('img', { name: 'Not trusted' })).toBeTruthy();
+  // Still open after a reload; the open toggle closes it.
+  expect(screen.getByRole('region', { name: 'Project trust' }).textContent).toContain('Not trusted');
+  fireEvent.click(screen.getByRole('button', { name: 'Not trusted' }));
+  expect(screen.queryByRole('region', { name: 'Project trust' })).toBeNull();
+  expect(localStorage.getItem('mygitnotes.piAgent.infoSection')).toBeNull();
 });
 
-it("lists Pi's enabled and disabled MCP servers in the tooltip of an icon beside the trust label", () => {
+it("lists Pi's MCP servers in the drawer, enabled ones and disabled ones apart, each with a status badge", () => {
   const session = { id: 's1', cwd: '/w', location: { notebookId: 'nb', folder: null }, status: 'ready' as const, startedAt: '' };
   panel(agent({ session: { ...session, mcpServers: [{ name: 'linear', status: 'connected', toolCount: 12 }, { name: 'figma', status: 'cached', toolCount: 1 }, { name: 'trello', status: 'disabled', toolCount: 0 }, { name: 'local', status: 'blocked', toolCount: 0, blockedReason: 'untrusted' }] } }));
-  const mcp = screen.getByRole('img', { name: 'MCP servers: 2 of 4 enabled' });
-  expect(mcp.getAttribute('title')).toBe('MCP servers: 2 of 4 enabled\nEnabled (2)\n  linear · connected · 12 tools\n  figma · not started yet · 1 tool\nDisabled (2)\n  trello\n  local · blocked (untrusted)');
-  expect(mcp.closest('.pi-agent-dialog-actions')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'MCP servers: 2 of 4 enabled' }));
+  const rows = [...screen.getByRole('region', { name: 'MCP servers' }).querySelectorAll('h4, li')].map(row => row.textContent);
+  expect(rows).toEqual(['Enabled (2)', 'linearconnected12 tools', 'figmanot started yet1 tool', 'Disabled (2)', 'trello', 'localblocked']);
+  expect(screen.getByText('connected').getAttribute('data-tone')).toBe('ok');
+  expect(screen.getByText('blocked').getAttribute('title')).toBe('untrusted');
   cleanup();
-  // Without pi-mcp-adapter's report there is no icon.
+  // Without pi-mcp-adapter's report there is no toggle.
   panel(agent({ session }));
-  expect(screen.queryByRole('img', { name: /MCP servers/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /MCP servers/ })).toBeNull();
+});
+
+it('labels each extension report with its key and clamps a long one until clicked', () => {
+  panel(agent({ transcript: { ...emptyTranscript, statuses: { 'usage-status': 'usage unavailable' }, widgets: { lsp: ['ts: ready'] } } }));
+  fireEvent.click(screen.getByRole('button', { name: 'Extension status' }));
+  const drawer = screen.getByRole('region', { name: 'Extension status' });
+  expect([...drawer.querySelectorAll('.pi-agent-badge')].map(badge => badge.textContent)).toEqual(['usage-status', 'lsp']);
+  const report = screen.getByRole('button', { name: 'usage unavailable' });
+  fireEvent.click(report);
+  expect(report.getAttribute('aria-expanded')).toBe('true');
+  expect(drawer.querySelector('pre')?.textContent).toBe('ts: ready');
 });
 
 it('switches to a notebook folder picked in the folder dialog, without a trust override', async () => {

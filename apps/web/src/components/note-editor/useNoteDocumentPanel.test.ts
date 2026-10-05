@@ -5,7 +5,23 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { useNoteDocumentPanel } from './useNoteDocumentPanel.js';
 import type { MarkdownEditorHandle } from '../MarkdownEditor.js';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
+
+it("reopens a zoomed note's panel as the user left it, open on its last section or closed", () => {
+  const props = { frame: 'zoom' as const, active: false, isMarkdown: true, content: '# Alpha', editorMode: 'raw' as const, editorRef: createRef<MarkdownEditorHandle>(), metadata: {}, notePath: 'notes/a.md', branch: 'main', readOnly: false };
+  const first = renderHook(() => useNoteDocumentPanel(props));
+  expect(first.result.current.notePanel).toBeNull();
+  act(() => first.result.current.setNotePanel('info'));
+  first.unmount();
+  const second = renderHook(() => useNoteDocumentPanel({ ...props, notePath: 'notes/b.md' }));
+  expect(second.result.current.notePanel).toBe('info');
+  act(() => second.result.current.setNotePanel(null));
+  second.unmount();
+  expect(renderHook(() => useNoteDocumentPanel(props)).result.current.notePanel).toBeNull();
+});
 
 it('keeps panel drafts across content updates and resets navigation only when the document identity changes', () => {
   const editorRef = createRef<MarkdownEditorHandle>();

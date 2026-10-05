@@ -63,20 +63,11 @@
 .folder-picker-notebook { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--color-muted); }
 /* Pi's trust decision sits beside the info button at the start of the send row, in an icon button's box. */
 .pi-agent-indicators { display: flex; align-items: center; gap: 2px; margin-right: auto; }
-.pi-agent-trust { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 6px; color: var(--color-muted); }
-.pi-agent-trust svg { width: 15px; height: 15px; }
-.pi-agent-trust[data-trusted='false'] { color: var(--color-warning); }
 .pi-agent-model-row { display: flex; flex: none; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--color-border); }
 .pi-agent-model-row .pi-agent-model { flex: 1 1 auto; min-width: 0; }
 .pi-agent-model-row .pi-agent-thinking { flex: none; width: 96px; }
 /* A phone's bottom sheet is too short to converse in, so the agent takes the screen above the tool row. */
 @media (max-width: 767px) { .right-panel:has(.pi-agent-panel) { top: calc(var(--visual-top, 0px) + max(8px, env(safe-area-inset-top))); height: calc(var(--visual-height, 100dvh) - 76px - env(safe-area-inset-bottom) - max(8px, env(safe-area-inset-top))); transform: none; } .right-panel:has(.pi-agent-panel) .right-panel-content { flex: 1 1 auto; max-height: none; } .note-document-panel:has(.pi-agent-panel) { top: max(8px, env(safe-area-inset-top)); max-height: none; } }
-/* Extension status and widgets: an info button at the start of the send row opens them above it. */
-.pi-agent-info { position: relative; }
-.pi-agent-info .ui-icon-button svg { width: 15px; height: 15px; }
-.pi-agent-info-popover { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 10; display: flex; flex-direction: column; gap: 4px; width: max-content; max-width: min(320px, 80vw); max-height: 240px; overflow: auto; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-panel); background: var(--color-surface); box-shadow: 0 6px 20px color-mix(in srgb, var(--color-scrim) 20%, transparent); color: var(--color-muted); }
-.pi-agent-info-popover p { margin: 0; overflow-wrap: anywhere; }
-.pi-agent-info-popover pre { margin: 0; font: 11px ui-monospace, monospace; white-space: pre-wrap; }
 /* Pi's replies in the notes' prose style, scaled down to the panel; doubled classes outrank .prose-custom. */
 .prose-custom.pi-agent-markdown { min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
 .prose-custom.pi-agent-markdown > :first-child { margin-top: 0; }
@@ -89,4 +80,25 @@
 .folder-picker-repository svg { flex: none; width: 15px; height: 15px; color: var(--color-muted); }
 .folder-picker-repository:hover:not(:disabled) { background: var(--color-sidebar); }
 .folder-picker-repository[aria-pressed='true'] { border-color: var(--color-primary); background: var(--color-primary-soft); }
-.pi-agent-trust:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* The send row's info toggles open a drawer between the message box and the send row; it stays until closed. */
+.pi-agent-info-toggle svg { width: 15px; height: 15px; }
+.pi-agent-info-toggle[aria-pressed='true'] { background: var(--color-primary-soft); color: var(--color-primary); }
+.pi-agent-info-toggle[data-trusted='false'] { color: var(--color-warning); }
+.pi-agent-info-drawer { display: flex; flex-direction: column; max-height: 200px; border: 1px solid var(--color-border); border-radius: var(--radius-panel); background: var(--color-sidebar); }
+.pi-agent-info-drawer > header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 6px; padding: 2px 4px 2px 10px; border-bottom: 1px solid var(--color-border); }
+.pi-agent-info-drawer h3 { margin: 0; color: var(--color-text); font-size: 12px; font-weight: 600; }
+.pi-agent-info-drawer .ui-icon-button svg { width: 14px; height: 14px; }
+.pi-agent-info-body { display: flex; flex-direction: column; gap: 6px; overflow: auto; padding: 8px 10px; color: var(--color-muted); font-size: 12px; }
+.pi-agent-info-body p { margin: 0; }
+.pi-agent-info-body h4 { margin: 2px 0 0; color: var(--color-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.pi-agent-info-body ul { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.pi-agent-info-row { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.pi-agent-info-name { min-width: 0; overflow: hidden; color: var(--color-text); text-overflow: ellipsis; white-space: nowrap; }
+.pi-agent-info-text { display: -webkit-box; flex: 1 1 auto; min-width: 0; overflow: hidden; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.pi-agent-info-text[aria-expanded='true'] { display: block; }
+.pi-agent-info-widget { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.pi-agent-info-widget pre { margin: 0; font: 11px ui-monospace, monospace; white-space: pre-wrap; }
+.pi-agent-badge { flex: none; padding: 1px 6px; border-radius: 999px; background: var(--color-surface); color: var(--color-muted); font-size: 10.5px; font-weight: 600; white-space: nowrap; }
+.pi-agent-badge[data-tone='ok'] { background: var(--color-success-soft); color: var(--color-success); }
+.pi-agent-badge[data-tone='warning'] { background: color-mix(in srgb, var(--color-warning) 15%, transparent); color: var(--color-warning); }

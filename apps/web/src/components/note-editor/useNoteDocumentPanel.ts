@@ -21,27 +21,41 @@ export interface UseNoteDocumentPanelParams {
   readOnly: boolean;
 }
 
+const PANEL_KEY = 'mygitnotes.documentPanel';
+const PANEL_OPEN_KEY = 'mygitnotes.documentPanel.open';
+
+/** The section the user last opened, else the default for the file. */
+function savedPanel(isMarkdown: boolean): NotePanelMode {
+  try {
+    const saved = localStorage.getItem(PANEL_KEY);
+    if (['find', 'outline', 'frontmatter', 'assets', 'view', 'info', 'agent'].includes(saved || '')) return saved as NotePanelMode;
+  } catch { /* Use the default panel when storage is unavailable. */ }
+  return isMarkdown ? 'outline' : 'find';
+}
+
 /** The document panel's visibility, find/outline navigation, its frontmatter form/tag state, and its keyboard leader menu. */
 export function useNoteDocumentPanel({ frame, active, isMarkdown, content, editorMode, documentPanel, editorRef, metadata, notePath, branch, draftScope, readOnly }: UseNoteDocumentPanelParams) {
-  const [ownPanel, updateNotePanel] = useState<NotePanelMode | null>(null);
+  const lastNotePanel = useRef<NotePanelMode>(savedPanel(isMarkdown));
+  // A zoomed note reopens its panel as the user left it; a Focus pane follows the rail, which remembers its own.
+  const [ownPanel, updateNotePanel] = useState<NotePanelMode | null>(() => {
+    try {
+      return localStorage.getItem(PANEL_OPEN_KEY) === 'true' ? savedPanel(isMarkdown) : null;
+    } catch {
+      return null;
+    }
+  });
   const requestedPanel = frame === 'pane' ? documentPanel?.mode ?? null : ownPanel;
   // A remembered agent tab opens the default section on a computer without Pi, where the tab is hidden.
   const agentAvailable = usePiAgentAvailable();
   const notePanel = requestedPanel === 'agent' && !agentAvailable ? isMarkdown ? 'outline' : 'find' : requestedPanel;
-  const lastNotePanel = useRef<NotePanelMode>((() => {
-    try {
-      const saved = localStorage.getItem('mygitnotes.documentPanel');
-      if (['find', 'outline', 'frontmatter', 'assets', 'view', 'info', 'agent'].includes(saved || '')) return saved as NotePanelMode;
-    } catch { /* Use the default panel when storage is unavailable. */ }
-    return isMarkdown ? 'outline' : 'find';
-  })());
   const setNotePanel = (next: NotePanelMode | null) => {
-    if (next) {
-      lastNotePanel.current = next;
-      try {
-        localStorage.setItem('mygitnotes.documentPanel', next);
-      } catch { /* The in-memory preference remains available. */ }
-    }
+    try {
+      if (next) {
+        lastNotePanel.current = next;
+        localStorage.setItem(PANEL_KEY, next);
+      }
+      if (frame !== 'pane') localStorage.setItem(PANEL_OPEN_KEY, String(next !== null));
+    } catch { /* The in-memory preference remains available. */ }
     if (frame === 'pane') documentPanel?.onChange(next);
     else updateNotePanel(next);
   };
