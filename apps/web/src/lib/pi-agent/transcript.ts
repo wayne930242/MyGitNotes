@@ -39,10 +39,17 @@ export interface TranscriptState {
   running: boolean;
   statuses: Record<string, string>;
   widgets: Record<string, string[]>;
+  /** Messages Pi holds until the run reaches them: steering after the current tool calls, follow-ups once it ends. */
+  queued: QueuedMessage[];
   nextKey: number;
 }
 
-export const emptyTranscript: TranscriptState = { entries: [], tools: {}, dialogs: [], running: false, statuses: {}, widgets: {}, nextKey: 0 };
+export interface QueuedMessage {
+  kind: 'steer' | 'followUp';
+  text: string;
+}
+
+export const emptyTranscript: TranscriptState = { entries: [], tools: {}, dialogs: [], running: false, statuses: {}, widgets: {}, queued: [], nextKey: 0 };
 
 const CONTEXT_OPEN = '<editor-context>';
 const CONTEXT_CLOSE = '</editor-context>';
@@ -236,6 +243,10 @@ export function applyRecord(state: TranscriptState, record: unknown): Transcript
     case 'bridge_error':
     case 'extension_error':
       return append(state, { kind: 'notice', level: 'error', text: String(record.error ?? '') });
+    case 'queue_update': {
+      const texts = (value: unknown) => Array.isArray(value) ? value.map(text => splitFocus(String(text)).text) : [];
+      return { ...state, queued: [...texts(record.steering).map(text => ({ kind: 'steer' as const, text })), ...texts(record.followUp).map(text => ({ kind: 'followUp' as const, text }))] };
+    }
     case 'auto_retry_start':
       return append(state, { kind: 'notice', level: 'warning', text: String(record.errorMessage ?? 'retrying') });
     default:

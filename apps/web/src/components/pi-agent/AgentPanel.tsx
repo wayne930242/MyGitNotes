@@ -165,6 +165,16 @@ export function AgentPanel() {
           send();
         }}
       >
+        {agent.transcript.queued.length > 0 && (
+          <ul className='pi-agent-queue' aria-label={t('piAgent.queue')}>
+            {agent.transcript.queued.map((message, index) => (
+              <li key={index}>
+                <span className='pi-agent-badge' title={t(message.kind === 'steer' ? 'piAgent.queue.steerHint' : 'piAgent.queue.followUpHint')}>{t(message.kind === 'steer' ? 'piAgent.queue.steer' : 'piAgent.queue.followUp')}</span>
+                <span className='pi-agent-queue-text' title={message.text}>{message.text}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         {target && (
           <div className='pi-agent-context'>
             <div className='pi-agent-modes' role='radiogroup' aria-label={t('piAgent.context')}>{CONTEXT_MODES.map(option => <button key={option} type='button' role='radio' aria-checked={effectiveMode === option} disabled={option === 'line' && !target.caret} onClick={() => chooseMode(option)}>{t(`piAgent.context.${option}` as const)}</button>)}</div>
@@ -193,7 +203,13 @@ export function AgentPanel() {
             <InfoToggles section={infoSection} onToggle={setInfoSection} />
           </div>
           {agent.transcript.running && (
-            <Button onClick={agent.abort} title={t('piAgent.abort')}>
+            <Button
+              onClick={async () => {
+                const restored = await agent.abort();
+                if (restored) setDraft(current => current.trim() ? `${restored}\n\n${current}` : restored);
+              }}
+              title={t(agent.transcript.queued.length ? 'piAgent.abortQueued' : 'piAgent.abort')}
+            >
               <Square aria-hidden='true' />
               {t('piAgent.abort')}
             </Button>

@@ -26,7 +26,7 @@ const notebooks: NotebookConfig[] = [{ id: 'nb', title: 'Notes', root: 'notes' }
 const folders: FolderItem[] = [{ notebookId: 'blog', path: 'drafts', title: 'Drafts', order: 0 }];
 
 function agent(overrides: Partial<PiAgentValue> = {}): PiAgentValue {
-  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { notebookId: 'nb', folder: null, repository: true }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, folders, connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, setModel: vi.fn(), setThinking: vi.fn(), error: '', start: vi.fn(async () => {}), send: vi.fn(), abort: vi.fn(), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchFolder: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
+  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { notebookId: 'nb', folder: null, repository: true }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, folders, connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, setModel: vi.fn(), setThinking: vi.fn(), error: '', start: vi.fn(async () => {}), send: vi.fn(), abort: vi.fn(async () => ''), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchFolder: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
 }
 
 function noteTarget(caret = createCaretStore()): AgentTarget {
@@ -201,4 +201,14 @@ it('offers a manual start when no session runs, showing why the last one ended',
   expect((screen.getByRole('textbox', { name: 'Message to Pi' }) as HTMLTextAreaElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Start session' }));
   expect(value.start).toHaveBeenCalled();
+});
+
+it('shows messages Pi has queued while it works, and puts them back in the message box when the run is stopped', async () => {
+  const value = agent({ transcript: { ...emptyTranscript, running: true, queued: [{ kind: 'steer', text: 'also check the intro' }, { kind: 'followUp', text: 'then summarize' }] }, abort: vi.fn(async () => 'also check the intro\n\nthen summarize') });
+  panel(value);
+  const queue = screen.getByRole('list', { name: 'Queued messages' });
+  expect([...queue.querySelectorAll('li')].map(item => item.textContent)).toEqual(['Queuedalso check the intro', 'Afterthen summarize']);
+  fireEvent.change(screen.getByRole('textbox', { name: 'Message to Pi' }), { target: { value: 'draft in progress' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+  await waitFor(() => expect((screen.getByRole('textbox', { name: 'Message to Pi' }) as HTMLTextAreaElement).value).toBe('also check the intro\n\nthen summarize\n\ndraft in progress'));
 });

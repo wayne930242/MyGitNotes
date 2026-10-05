@@ -81,3 +81,10 @@ it('drops terminal colours and hyperlinks that extensions write for the TUI', ()
   const state = applyRecord(emptyTranscript, { type: 'extension_ui_request', id: 'w', method: 'setWidget', widgetKey: 'k', widgetLines: ['\u001b[1mbold\u001b[22m'] });
   expect(state.widgets).toEqual({ k: ['bold'] });
 });
+
+it("keeps Pi's whole pending queue from each queue_update, without the editor-context block", () => {
+  let state = applyRecord(emptyTranscript, { type: 'queue_update', steering: [withFocus('look here', { file: 'notes/a.md', line: 3 })], followUp: ['then this'] });
+  expect(state.queued).toEqual([{ kind: 'steer', text: 'look here' }, { kind: 'followUp', text: 'then this' }]);
+  state = applyRecord(state, { type: 'queue_update', steering: [], followUp: [] });
+  expect(state.queued).toEqual([]);
+});

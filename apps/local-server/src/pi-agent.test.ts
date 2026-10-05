@@ -7,7 +7,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { agentClientAllowed, type AgentFolder, createPiAgent, type PiAgent, resolveAgentCwd, resumableSession } from './pi-agent.js';
-import { commandAvailable, jsonlSplitter, MCP_STATUS_KEY, type PiMcpServer, TRUST_EXTENSION, TRUST_STATUS_KEY } from './pi-session.js';
+import { commandAvailable, jsonlSplitter, MCP_STATUS_KEY, type PiMcpServer, TRUST_EXTENSION, TRUST_STATUS_KEY, WEB_CHAT_PROMPT } from './pi-session.js';
 
 // A stand-in for `pi --mode rpc`: answers get_state with its session file (the --session one, else a new one per conversation),
 // echoes prompts with its cwd and argv, asks one dialog, and sets or clears a status.
@@ -16,6 +16,7 @@ const out = record => process.stdout.write(JSON.stringify(record) + '\\n');
 let buffer = '';
 const resumed = process.argv.indexOf('--session');
 let conversation = 0;
+const queued = [];
 let sessionFile = resumed >= 0 ? process.argv[resumed + 1] : process.cwd() + '/session-0.jsonl';
 out({ type: 'extension_ui_request', id: 'trust', method: 'setStatus', statusKey: 'mygitnotes-project-trust', statusText: 'untrusted' });
 out({ type: 'extension_ui_request', id: 'mcp', method: 'setStatus', statusKey: 'mygitnotes-mcp-servers', statusText: JSON.stringify([{ name: 'linear', status: 'connected', toolCount: 12 }, { name: 'figma', status: 'disabled', toolCount: 0 }, { name: 'local', status: 'blocked', toolCount: 0, blockedReason: 'untrusted' }, { status: 'connected' }]) });
@@ -30,6 +31,15 @@ process.stdin.on('data', chunk => {
     if (command.type === 'new_session') {
       sessionFile = process.cwd() + '/session-' + ++conversation + '.jsonl';
       out({ id: command.id, type: 'response', command: 'new_session', success: true, data: { cancelled: false } });
+    }
+    if (command.type === 'prompt' && command.streamingBehavior === 'steer') {
+      queued.push(command.message);
+      out({ type: 'queue_update', steering: queued, followUp: [] });
+      continue;
+    }
+    if (command.type === 'clear_queue') {
+      out({ id: command.id, type: 'response', command: 'clear_queue', success: true, data: { steering: queued.splice(0), followUp: [] } });
+      out({ type: 'queue_update', steering: [], followUp: [] });
     }
     if (command.type === 'prompt' && command.message === 'status') {
       out({ type: 'extension_ui_request', id: 's1', method: 'setStatus', statusKey: 'quota', statusText: '42%' });
@@ -137,7 +147,7 @@ describe('pi agent bridge', () => {
     await first.next(record => record.type === 'bridge_status' && (record.session as { status: string; }).status === 'ready');
     first.send({ type: 'prompt', message: 'hello' });
     const reply = JSON.parse(assistantText(await first.next(record => record.type === 'message_end'))) as { cwd: string; args: string[]; message: string; };
-    expect(reply).toEqual({ cwd: workspace, args: ['--mode', 'rpc', '--extension', TRUST_EXTENSION], message: 'hello' });
+    expect(reply).toEqual({ cwd: workspace, args: ['--mode', 'rpc', '--extension', TRUST_EXTENSION, '--append-system-prompt', WEB_CHAT_PROMPT], message: 'hello' });
     first.socket.close();
 
     const second = connect(port, `http://localhost:${port}`);
@@ -203,6 +213,35 @@ describe('pi agent bridge', () => {
     expect(second.records.filter(record => record.method === 'setStatus')).toEqual([expect.objectContaining({ statusKey: 'quota', statusText: '42%' })]);
   });
 
+  it('tells Pi it runs in the web chat, where dialogs work but the user cannot run a command handed to the terminal', () => {
+    expect(WEB_CHAT_PROMPT).toContain('ask_user');
+    expect(WEB_CHAT_PROMPT).toContain('robot_hand');
+    expect(WEB_CHAT_PROMPT).toContain('their own terminal');
+    expect(WEB_CHAT_PROMPT).toContain('interjection');
+  });
+
+  it('replays the waiting message queue to a client that attaches later, and stops once it empties', async () => {
+    const { base, port } = await start();
+    await post(base, 'POST');
+    const first = connect(port, base);
+    await first.opened;
+    first.send({ type: 'prompt', message: 'later', streamingBehavior: 'steer' });
+    await first.next(record => record.type === 'queue_update');
+
+    const second = connect(port, base);
+    await second.opened;
+    expect(await second.next(record => record.type === 'queue_update')).toMatchObject({ steering: ['later'], followUp: [] });
+
+    first.send({ id: 'clear', type: 'clear_queue' });
+    await first.next(record => record.type === 'queue_update' && (record.steering as string[]).length === 0);
+    const third = connect(port, base);
+    await third.opened;
+    await third.next(record => record.type === 'bridge_status');
+    third.send({ type: 'get_state' });
+    await third.next(record => record.type === 'response');
+    expect(third.records.some(record => record.type === 'queue_update')).toBe(false);
+  });
+
   it('forwards model and thinking switches, and answers every attached client', async () => {
     const { base, port } = await start();
     await post(base, 'POST');
@@ -247,7 +286,7 @@ describe('pi agent bridge', () => {
     await next.opened;
     next.send({ type: 'prompt', message: 'where' });
     const reply = JSON.parse(assistantText(await next.next(record => record.type === 'message_end'))) as { cwd: string; args: string[]; };
-    expect(reply).toMatchObject({ cwd: other, args: ['--mode', 'rpc', '--extension', TRUST_EXTENSION] });
+    expect(reply).toMatchObject({ cwd: other, args: ['--mode', 'rpc', '--extension', TRUST_EXTENSION, '--append-system-prompt', WEB_CHAT_PROMPT] });
 
     const project = await (await post(base, 'PUT', { notebookId: 'a', repository: true })).json() as { session: { cwd: string; location: unknown; }; };
     expect(project.session).toMatchObject({ cwd: path.dirname(workspace), location: { notebookId: 'a', folder: null, repository: true } });
@@ -285,7 +324,7 @@ describe('pi agent bridge', () => {
     await client.opened;
     client.send({ type: 'prompt', message: 'args' });
     const reply = JSON.parse(assistantText(await client.next(record => record.type === 'message_end'))) as { args: string[]; };
-    expect(reply.args).toEqual(['--mode', 'rpc', '--extension', TRUST_EXTENSION, '--session', own]);
+    expect(reply.args).toEqual(['--mode', 'rpc', '--extension', TRUST_EXTENSION, '--append-system-prompt', WEB_CHAT_PROMPT, '--session', own]);
     await client.next(record => record.type === 'bridge_status' && (record.session as { sessionFile?: string; }).sessionFile === own);
 
     await post(base, 'DELETE', {});

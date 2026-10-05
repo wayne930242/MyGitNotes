@@ -58,6 +58,8 @@ export const TRUST_EXTENSION = fileURLToPath(new URL('./pi-trust-extension.mjs',
 export const TRUST_STATUS_KEY = 'mygitnotes-project-trust';
 /** The status key the same extension relays pi-mcp-adapter's server list under (kept equal to its MCP_STATUS_KEY). */
 export const MCP_STATUS_KEY = 'mygitnotes-mcp-servers';
+/** Appended to Pi's system prompt: what the web chat can and cannot do, which Pi cannot tell from RPC mode alone. */
+export const WEB_CHAT_PROMPT = ["You are running inside MyGitNotes' web chat panel, bridged to Pi in RPC mode. The user reads your replies in a browser and types into a plain chat box.", 'Interactive extension dialogs (ask_user choices, confirmations and text input) work there.', 'The user cannot run shell commands from that chat box, and tools that hand the user a command (such as robot_hand placing `! command` in the terminal prompt) do not reach it. When the user must run a command themselves, write it in your reply as a fenced code block and ask them to run it in their own terminal.', "A user message that arrives while you are working is the user's own interjection, typed in the same chat box and queued until your current tool calls finish; treat it as coming from the user and act on it.", "A message may begin with an <editor-context> block naming the file open in the user's editor, with the caret or selection; its path is relative to your working directory."].join('\n');
 const STDERR_LIMIT = 8000;
 const SHUTDOWN_GRACE_MS = 5000;
 const KILL_GRACE_MS = 3000;
@@ -119,6 +121,8 @@ export class PiSession {
   /** Dialog requests still waiting for an answer, replayed to a client that attaches later. */
   private readonly openDialogs = new Map<string, string>();
   private readonly uiState = new Map<string, string>();
+  /** Pi's latest pending steering and follow-up queue, replayed to a client that attaches while messages wait. */
+  private queue: string | undefined;
   private readonly exited: Promise<void>;
   private stderr = '';
 
@@ -126,7 +130,7 @@ export class PiSession {
   constructor({ cwd, location, resume, command = piCommand(), onExit }: { cwd: string; location: PiLocation; resume?: string; command?: string; onExit?: (session: PiSession) => void; }) {
     this.info = { id: randomUUID(), cwd, location, status: 'starting', startedAt: new Date().toISOString() };
     // No --approve: project trust stays Pi's decision, as it is in the user's terminal.
-    const args = ['--mode', 'rpc', '--extension', TRUST_EXTENSION, ...resume ? ['--session', resume] : []];
+    const args = ['--mode', 'rpc', '--extension', TRUST_EXTENSION, '--append-system-prompt', WEB_CHAT_PROMPT, ...resume ? ['--session', resume] : []];
     this.child = spawn(command, args, { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
     this.info.pid = this.child.pid;
     this.child.stdout.on('data', jsonlSplitter(line => this.receive(line)));
@@ -161,6 +165,7 @@ export class PiSession {
     listener.send(JSON.stringify({ type: 'bridge_status', session: this.info }));
     for (const request of this.openDialogs.values()) listener.send(request);
     for (const record of this.uiState.values()) listener.send(record);
+    if (this.queue) listener.send(this.queue);
     if (!this.alive) {
       listener.close();
       return () => {};
@@ -218,6 +223,7 @@ export class PiSession {
       }
       return;
     }
+    if (record.type === 'queue_update') this.queue = (Array.isArray(record.steering) && record.steering.length) || (Array.isArray(record.followUp) && record.followUp.length) ? line : undefined;
     if (record.type === 'response' && record.command === 'new_session' && record.success === true) this.write({ id: STATE_PROBE_ID, type: 'get_state' });
     if (record.type === 'extension_ui_request' && typeof record.id === 'string' && DIALOG_METHODS.has(String(record.method))) {
       const id = record.id;

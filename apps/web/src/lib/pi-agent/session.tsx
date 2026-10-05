@@ -2,7 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { responseError } from '../api.js';
 import type { FolderItem, NotebookConfig } from '../types.js';
 import type { CaretStore } from './caret-store.js';
-import { type AgentDialog, type AgentFocus, applyRecord, emptyTranscript, transcriptFromMessages, type TranscriptState, withFocus } from './transcript.js';
+import { type AgentDialog, type AgentFocus, applyRecord, emptyTranscript, splitFocus, transcriptFromMessages, type TranscriptState, withFocus } from './transcript.js';
 
 /** The bridged Pi process, as `/api/pi/session` reports it. */
 /**
@@ -113,7 +113,8 @@ export interface PiAgentValue {
   error: string;
   start: () => Promise<void>;
   send: (text: string, focus?: AgentFocus) => void;
-  abort: () => void;
+  /** Stops the run after taking back the messages still queued, as Esc does in Pi's terminal; resolves with their text. */
+  abort: () => Promise<string>;
   answer: (dialog: AgentDialog, answer: DialogAnswer) => void;
   newConversation: () => void;
   end: () => Promise<void>;
@@ -216,6 +217,8 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
   const socket = useRef<WebSocket | null>(null);
   const sessionId = useRef<string | null>(null);
   const pending = useRef(new Map<string, 'messages' | 'state'>());
+  /** `clear_queue` requests waiting for the queued text they take back. */
+  const takenBack = useRef(new Map<string, (text: string) => void>());
 
   const disconnect = useCallback(() => {
     const current = socket.current;
@@ -258,12 +261,19 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
         }
         if (record.command !== 'get_state') return;
       }
+      const restore = typeof record.id === 'string' && record.type === 'response' ? takenBack.current.get(record.id) : undefined;
+      if (restore) {
+        takenBack.current.delete(record.id as string);
+        const data = (record.data ?? {}) as { steering?: unknown[]; followUp?: unknown[]; };
+        restore([...data.steering ?? [], ...data.followUp ?? []].map(text => splitFocus(String(text)).text).join('\n\n'));
+        return;
+      }
       const request = typeof record.id === 'string' && record.type === 'response' ? pending.current.get(record.id) : undefined;
       if (request) {
         pending.current.delete(record.id as string);
         const data = (record.data ?? {}) as { messages?: unknown[]; isStreaming?: boolean; };
-        // Dialogs, status lines and widgets replayed on attach arrive before the history, so a rebuilt transcript keeps them.
-        if (request === 'messages' && Array.isArray(data.messages)) setTranscript(current => ({ ...transcriptFromMessages(data.messages!), dialogs: current.dialogs, running: current.running, statuses: current.statuses, widgets: current.widgets }));
+        // Dialogs, status lines, widgets and the queue replayed on attach arrive before the history, so a rebuilt transcript keeps them.
+        if (request === 'messages' && Array.isArray(data.messages)) setTranscript(current => ({ ...transcriptFromMessages(data.messages!), dialogs: current.dialogs, running: current.running, statuses: current.statuses, widgets: current.widgets, queued: current.queued }));
         if (request === 'state') setTranscript(current => ({ ...current, running: data.isStreaming === true }));
         return;
       }
@@ -355,7 +365,19 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
     start,
     // A message sent while Pi works steers the current run, as Enter does in Pi's terminal.
     send: (text, focus) => command({ type: 'prompt', message: withFocus(text, focus), ...(transcript.running ? { streamingBehavior: 'steer' } : {}) }),
-    abort: () => command({ type: 'abort' }),
+    abort: () => {
+      const ws = socket.current;
+      if (ws?.readyState !== WebSocket.OPEN) {
+        command({ type: 'abort' });
+        return Promise.resolve('');
+      }
+      // Queued messages would otherwise run on their own once the run stops; they go back to the message box instead.
+      const id = crypto.randomUUID();
+      const taken = new Promise<string>(resolve => takenBack.current.set(id, resolve));
+      ws.send(JSON.stringify({ id, type: 'clear_queue' }));
+      command({ type: 'abort' });
+      return taken;
+    },
     answer: (dialog, answer) => {
       command({ type: 'extension_ui_response', ...answer, id: dialog.id });
       setTranscript(current => ({ ...current, dialogs: current.dialogs.filter(open => open.id !== dialog.id) }));

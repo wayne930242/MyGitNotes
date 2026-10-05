@@ -121,3 +121,21 @@ it('keeps the status lines and widgets replayed on attach when the conversation 
   expect(agent.current?.transcript.statuses).toEqual({ 'usage-status': 'usage 12%' });
   expect(agent.current?.transcript.widgets).toEqual({ lsp: ['ts: ready'] });
 });
+
+it('takes queued messages back before stopping the run, and resolves with their text', async () => {
+  const agent = mount();
+  await waitFor(() => expect(FakeSocket.last).toBeDefined());
+  const socket = FakeSocket.last!;
+  act(() => {
+    socket.readyState = FakeSocket.OPEN;
+    socket.onopen?.();
+  });
+  let restored: Promise<string> | undefined;
+  act(() => {
+    restored = agent.current!.abort();
+  });
+  const clear = socket.sent.find(command => command.type === 'clear_queue')!;
+  expect(socket.sent.indexOf(clear)).toBeLessThan(socket.sent.findIndex(command => command.type === 'abort'));
+  act(() => socket.receive({ type: 'response', id: clear.id, command: 'clear_queue', success: true, data: { steering: ['<editor-context>\nfile: notes/a.md\n</editor-context>\n\nlook here'], followUp: ['then this'] } }));
+  await expect(restored).resolves.toBe('look here\n\nthen this');
+});

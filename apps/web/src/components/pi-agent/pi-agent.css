@@ -102,3 +102,8 @@
 .pi-agent-badge { flex: none; padding: 1px 6px; border-radius: 999px; background: var(--color-surface); color: var(--color-muted); font-size: 10.5px; font-weight: 600; white-space: nowrap; }
 .pi-agent-badge[data-tone='ok'] { background: var(--color-success-soft); color: var(--color-success); }
 .pi-agent-badge[data-tone='warning'] { background: color-mix(in srgb, var(--color-warning) 15%, transparent); color: var(--color-warning); }
+
+/* Messages Pi has queued, above the context row, so a message sent mid-run visibly waits instead of vanishing. */
+.pi-agent-queue { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.pi-agent-queue li { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 8px; border: 1px dashed var(--color-border); border-radius: var(--radius-panel); color: var(--color-muted); font-size: 12px; }
+.pi-agent-queue-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
