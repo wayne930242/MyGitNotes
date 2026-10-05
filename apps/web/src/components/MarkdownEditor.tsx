@@ -475,7 +475,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
                 </div>
               )}
               {showLineNumbers && (
-                <div ref={setSourceGutter} data-source-line-numbers aria-hidden='true' className='w-12 shrink-0 overflow-hidden border-r border-line/70 bg-sidebar/60 text-muted/70 touch-none'>
+                <div ref={setSourceGutter} data-source-line-numbers aria-hidden='true' className='w-12 shrink-0 overflow-hidden border-r border-line/70 bg-sidebar/60 text-muted/70 touch-none select-none'>
                   <div ref={sourceLineNumbers} className='py-4 pr-3 text-right font-mono text-xs tabular-nums' style={{ lineHeight: '1.421875rem' }}>
                     {Array.from({ length: sourceLineCount }, (_, index) => {
                       const line = index + 1;

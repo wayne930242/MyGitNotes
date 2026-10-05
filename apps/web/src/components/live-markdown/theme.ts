@@ -30,7 +30,8 @@ export const theme = EditorView.theme({
   '.cm-card-background': { backgroundColor: 'var(--color-surface)', borderRadius: '4px', boxShadow: '0 1px 4px 0 color-mix(in srgb, var(--color-scrim) 8%, transparent), 0 0 0 1px var(--workspace-divider)' },
   '.cm-line': { padding: '0 40px' },
   '.cm-cursor': { borderLeftColor: 'var(--color-primary)' },
-  '.cm-gutters': { backgroundColor: 'transparent', borderRight: '1px solid var(--color-border)', touchAction: 'none', WebkitTouchCallout: 'none' },
+  // Line numbers are controls, not text: a selection that reaches the gutter (easy while a phone reads a note) leaves them out.
+  '.cm-gutters': { backgroundColor: 'transparent', borderRight: '1px solid var(--color-border)', touchAction: 'none', WebkitTouchCallout: 'none', userSelect: 'none', WebkitUserSelect: 'none' },
   '.cm-lineNumbers': { color: 'var(--color-muted)', fontFamily: 'monospace', fontSize: '11px', opacity: '0.55' },
   // The number takes the body text's line box (its font size at the scroller's 1.8 line height),
   // so it sits centred beside a line's first row instead of at the top of a taller box.
