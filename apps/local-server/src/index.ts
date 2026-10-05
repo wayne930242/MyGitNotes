@@ -1,6 +1,7 @@
 import type { AddressInfo } from 'node:net';
 import { applicationRoot, createApp } from './app.js';
 import { writeDevPorts } from './dev-ports.js';
+import { createPiAgent } from './pi-agent.js';
 import { assertWorkspaceCompatible, deploymentConfigSource, loadEnvDefaults } from '@mygitnotes/core';
 
 loadEnvDefaults(`${applicationRoot()}/.env`);
@@ -20,11 +21,18 @@ if (isLocal) {
   const { home } = await configSource.settings({ headers: {} });
   if (home.source.type === 'local') assertWorkspaceCompatible(home.source.path);
 }
-const app = createApp(repoRoot, configSource);
+// The agent panel bridges to a Pi process on this machine, so only a local workspace offers it.
+const piAgent = configSource.mode === 'local' ? createPiAgent() : undefined;
+const app = createApp(repoRoot, configSource, { piAgent });
 
 function listen(port: number, attemptsLeft: number): Promise<AddressInfo> {
   return new Promise((resolve, reject) => {
     const server = app.listen(port, host);
+    if (piAgent) {
+      server.on('upgrade', (req, socket, head) => {
+        if (!piAgent.upgrade(req, socket, head)) socket.destroy();
+      });
+    }
     server.once('listening', () => resolve(server.address() as AddressInfo));
     server.once('error', (error: NodeJS.ErrnoException) => {
       if (error.code === 'EADDRINUSE' && attemptsLeft > 0) resolve(listen(port + 1, attemptsLeft - 1));

@@ -17,16 +17,7 @@ import { createR2AssetHandler } from './r2-assets.js';
 import { createR2ManagerRouter } from './r2-manager.js';
 import { createFileManagerRouter } from './file-manager.js';
 import { createGistRouter, gistToken, noteGist, syncGists } from './gists.js';
-
-function isLoopbackHttpOrigin(origin: string | undefined): boolean {
-  if (!origin) return false;
-  try {
-    const url = new URL(origin);
-    return url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-  } catch {
-    return false;
-  }
-}
+import { isLoopbackHttpOrigin, type PiAgent } from './pi-agent.js';
 
 export function applicationRoot() {
   let dir = path.dirname(fileURLToPath(import.meta.url));
@@ -35,7 +26,7 @@ export function applicationRoot() {
 }
 
 /** `configSource` decides, per request, which workspace a request serves; it defaults to the deployment's environment and server configuration. */
-export function createApp(base: string, configSource: WorkspaceConfigSource = deploymentConfigSource(base)): express.Express {
+export function createApp(base: string, configSource: WorkspaceConfigSource = deploymentConfigSource(base), { piAgent }: { piAgent?: PiAgent; } = {}): express.Express {
   const app = express();
   app.disable('x-powered-by');
   const local = configSource.mode === 'local';
@@ -82,6 +73,8 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
   app.use('/api/bookmarks', createWorkspaceDocumentRouter(BOOKMARKS_DOCUMENT));
   app.use('/api/folder-manager', createFolderManagerRouter());
   if (local) {
+    // Ahead of the local routes: starting or ending the agent does not edit the workspace, so it needs no `main` branch.
+    if (piAgent) app.use('/api/pi', piAgent.router);
     app.get(
       '/r2-assets/*',
       createR2AssetHandler(async (res, notePath) => {
