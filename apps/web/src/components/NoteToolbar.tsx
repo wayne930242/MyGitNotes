@@ -1,7 +1,7 @@
 import './note-toolbar.css';
 import { type ReactNode, useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronDown, Eye, EyeOff, FolderTree, GalleryHorizontalEnd, Kanban, LayoutGrid, LayoutList, ListTree, Plus, Search, X } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, FileText, FolderTree, GalleryHorizontalEnd, Kanban, LayoutGrid, LayoutList, ListTree, Plus, Search, X } from 'lucide-react';
 import { WorkspaceSidebarToggle } from './WorkspaceChrome.js';
 import { Select } from './Select.js';
 import { SelectButtonGroup, SelectButtonPrimary, SelectButtonTrigger } from './SelectButton.js';
@@ -22,10 +22,13 @@ interface NoteToolbarProps {
   readOnly: boolean;
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
-  onOpenNewNoteModal: () => void;
-  /** Starts a compilation in the selected folder. */
-  onOpenNewCompilation: () => void;
-  onOpenNewOutline?: () => void;
+  onNewNote: () => void;
+  /** Each of these creates at once, with default values, at the notebook root. */
+  onNewCompilation: () => void;
+  onNewOutline?: () => void;
+  /** The notebook's note templates, each a New menu item that creates a note from it. */
+  templates?: { id: string; title: string; }[];
+  onNewFromTemplate?: (templateId: string) => void;
   /** The note search, the `q` query parameter. */
   query: string;
   onQueryChange: (query: string) => void;
@@ -36,7 +39,7 @@ interface NoteToolbarProps {
   onImportLegacy?: () => void;
 }
 
-export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onOpenNewNoteModal, onOpenNewCompilation, onOpenNewOutline, query, onQueryChange, filtersOpen, onToggleFilters, focusControls, onImportLegacy }: NoteToolbarProps) {
+export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onNewNote, onNewCompilation, onNewOutline, templates = [], onNewFromTemplate, query, onQueryChange, filtersOpen, onToggleFilters, focusControls, onImportLegacy }: NoteToolbarProps) {
   const { t } = useTranslation();
   // Below 768px the field is hidden behind a button and expands over the toolbar.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -101,7 +104,7 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
       {(!readOnly || onImportLegacy) && (
         <SelectButtonGroup>
           {!readOnly && (
-            <SelectButtonPrimary aria-label={t('header.newNote')} onClick={onOpenNewNoteModal} className='ui-button-primary header-new-note'>
+            <SelectButtonPrimary aria-label={t('header.newNote')} onClick={onNewNote} className='ui-button-primary header-new-note'>
               <Plus aria-hidden='true' />
               <span>{t('header.newNote')}</span>
             </SelectButtonPrimary>
@@ -113,19 +116,28 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
             <DropdownMenu.Portal>
               <DropdownMenu.Content className='focus-menu' align='end' sideOffset={4} collisionPadding={8} aria-label={t('header.newMenu')}>
                 {!readOnly && (
-                  <DropdownMenu.Item onSelect={onOpenNewNoteModal}>
+                  <DropdownMenu.Item onSelect={onNewNote}>
                     <Plus size={14} aria-hidden='true' />
                     {t('header.newNote')}
                   </DropdownMenu.Item>
                 )}
-                {!readOnly && onOpenNewOutline && (
-                  <DropdownMenu.Item onSelect={onOpenNewOutline}>
+                {!readOnly && onNewFromTemplate && templates.map(template => (
+                  <DropdownMenu.Item
+                    key={template.id}
+                    onSelect={() => onNewFromTemplate(template.id)}
+                  >
+                    <FileText size={14} aria-hidden='true' />
+                    {t('header.newFromTemplate', { template: template.title })}
+                  </DropdownMenu.Item>
+                ))}
+                {!readOnly && onNewOutline && (
+                  <DropdownMenu.Item onSelect={onNewOutline}>
                     <ListTree size={14} aria-hidden='true' />
                     {t('outline.new')}
                   </DropdownMenu.Item>
                 )}
                 {!readOnly && (
-                  <DropdownMenu.Item onSelect={onOpenNewCompilation}>
+                  <DropdownMenu.Item onSelect={onNewCompilation}>
                     <GalleryHorizontalEnd size={14} aria-hidden='true' />
                     {t('compilation.new')}
                   </DropdownMenu.Item>

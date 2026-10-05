@@ -62,7 +62,7 @@ export function MovableCard({ item, row, reorder, disabled, remove, ...content }
   /* eslint-enable react/refs */
 }
 
-export function CompilationLane({ row, graph, reorder, disabled, study, facets, notebooks, assets, onOpen, onStudy, onStudyChange, onView, onSort, onEditOrder, onAdd, onRemove, onCreateNote, readOnly, extra }: Omit<CompilationContentProps, 'notes'> & { graph?: ReactNode; extra?: ReactNode; facets?: Record<string, NotebookFacets>; row: CompilationRow; reorder: boolean; disabled: boolean; study: StudyController; readOnly?: boolean; onStudy?: () => void; onView?: (view: CompilationRow['view']) => void; onAdd?: () => void; onRemove?: (id: string) => void; onSort?: (sort: CompilationSort) => void; onEditOrder?: () => void; onStudyChange?: (study: NonNullable<CompilationRow['study']>) => void; onCreateNote?: (context?: { notebookId?: string; folder?: string; tag?: string; }) => void; }) {
+export function CompilationLane({ row, graph, reorder, disabled, study, facets, notebooks, assets, onOpen, onStudy, onStudyChange, onView, onSort, onEditOrder, onRename, onAdd, onRemove, onCreateNote, readOnly, extra }: Omit<CompilationContentProps, 'notes'> & { graph?: ReactNode; extra?: ReactNode; facets?: Record<string, NotebookFacets>; row: CompilationRow; reorder: boolean; disabled: boolean; study: StudyController; readOnly?: boolean; onStudy?: () => void; onView?: (view: CompilationRow['view']) => void; onAdd?: () => void; onRemove?: (id: string) => void; onSort?: (sort: CompilationSort) => void; onEditOrder?: () => void; onRename?: () => void; onStudyChange?: (study: NonNullable<CompilationRow['study']>) => void; onCreateNote?: (context?: { notebookId?: string; folder?: string; tag?: string; }) => void; }) {
   const { t } = useTranslation();
   const host = useRef<HTMLElement>(null), strip = useRef<HTMLDivElement>(null);
   const [clock, setClock] = useState(() => new Date());
@@ -85,7 +85,7 @@ export function CompilationLane({ row, graph, reorder, disabled, study, facets, 
   };
   return (
     <section id={`screen-lane-${row.id}`} ref={host} className={`screen-lane screen-view-${row.view} ${row.kind === 'dynamic' ? 'screen-lane-dynamic' : ''}`} aria-label={row.name}>
-      <CompilationHeader row={row} count={items.length} disabled={disabled} readOnly={readOnly} notebooks={content.notebooks} facets={facets} extra={extra} onStudy={onStudy} onView={onView} onAdd={onAdd} onSort={onSort} onEditOrder={onEditOrder} onStudyChange={onStudyChange} onCreateInSource={handleCreateInLane} scrollButton={row.view === 'graph' ? undefined : scrollButton} />
+      <CompilationHeader row={row} count={items.length} disabled={disabled} readOnly={readOnly} notebooks={content.notebooks} facets={facets} extra={extra} onStudy={onStudy} onView={onView} onAdd={onAdd} onSort={onSort} onEditOrder={onEditOrder} onRename={onRename} onStudyChange={onStudyChange} onCreateInSource={handleCreateInLane} scrollButton={row.view === 'graph' ? undefined : scrollButton} />
       {row.view === 'graph' ? graph : (
         <div ref={readOnly ? undefined : drop.setNodeRef} className={!readOnly && drop.isOver ? 'screen-drop-target' : ''}>
           <div ref={strip} className='screen-lane-strip' tabIndex={0} aria-label={`${row.name} · ${t('screen.items')}`}>

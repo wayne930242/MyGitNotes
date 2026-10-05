@@ -19,7 +19,7 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-const baseProps = { showHidden: false, descendants: false, hiddenNoteCount: 0, onShowHiddenChange: () => {}, onDescendantsChange: () => {}, sortField: 'updated' as const, sortOrder: 'desc' as const, onSortChange: () => {}, readOnly: false, viewMode: 'flat' as const, setViewMode: () => {}, onOpenNewNoteModal: () => {}, onOpenNewCompilation: () => {}, query: '', onQueryChange: () => {}, filtersOpen: false, onToggleFilters: () => {} };
+const baseProps = { showHidden: false, descendants: false, hiddenNoteCount: 0, onShowHiddenChange: () => {}, onDescendantsChange: () => {}, sortField: 'updated' as const, sortOrder: 'desc' as const, onSortChange: () => {}, readOnly: false, viewMode: 'flat' as const, setViewMode: () => {}, onNewNote: () => {}, onNewCompilation: () => {}, query: '', onQueryChange: () => {}, filtersOpen: false, onToggleFilters: () => {} };
 
 it('labels the notebook-panel toggle and view switcher in Traditional Chinese under the zh-TW locale', () => {
   render(createElement(I18nProvider, null, createElement(NoteToolbar, baseProps)));
@@ -31,7 +31,7 @@ it('offers native outline creation in the New menu and hides creation for read-o
   const create = vi.fn();
   const view = render(
     <I18nProvider>
-      <NoteToolbar {...baseProps} onOpenNewOutline={create} />
+      <NoteToolbar {...baseProps} onNewOutline={create} />
     </I18nProvider>,
   );
   const trigger = screen.getByRole('button', { name: '新增選單' });
@@ -40,7 +40,7 @@ it('offers native outline creation in the New menu and hides creation for read-o
   expect(create).toHaveBeenCalledOnce();
   view.rerender(
     <I18nProvider>
-      <NoteToolbar {...baseProps} readOnly onOpenNewOutline={create} />
+      <NoteToolbar {...baseProps} readOnly onNewOutline={create} />
     </I18nProvider>,
   );
   expect(screen.queryByRole('button', { name: '新增選單' })).not.toBeInTheDocument();

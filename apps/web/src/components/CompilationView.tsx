@@ -118,6 +118,8 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
   const change = (next: CompilationRow) => compilation.change({ rows: [next] });
   const addToFocus = compilation.note ? editing.addToFocus({ ...compilation.note, content: compilation.note.content ?? '' }) : undefined;
   const move = compilation.writable && compilation.note ? editing.moveNote?.({ ...compilation.note, content: compilation.note.content ?? '' }) : undefined;
+  // Renaming retitles the compilation through its own row, then the file follows the new name.
+  const rename = (current: CompilationRow) => compilation.writable && compilation.note ? editing.renameNote?.({ ...compilation.note, content: compilation.note.content ?? '', title: current.name }, title => change({ ...current, name: title })) : undefined;
 
   const view = (current: CompilationRow) => {
     const common = {
@@ -195,6 +197,7 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
       ),
       onSort: (sort: NonNullable<Extract<CompilationRow, { kind: 'dynamic'; }>['sort']>) => current.kind === 'dynamic' && change({ ...current, sort }),
       onEditOrder: current.kind === 'dynamic' && compilation.writable ? () => setDialog('order') : undefined,
+      onRename: rename(current),
       onCreateNote: actions.createNote,
     };
     if (current.view === 'stack') return <CompilationStack {...common} />;

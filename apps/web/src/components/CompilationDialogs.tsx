@@ -155,10 +155,6 @@ function CompilationRowDialog({ notebooks, assets, folders, selectedNotebookId, 
   );
 }
 
-export function CompilationAddRow(props: RowDialogContent & { onAdd: (row: CompilationRow) => void; onClose: () => void; }) {
-  return <CompilationRowDialog {...props} onApply={props.onAdd} />;
-}
-
 export function CompilationEditRow(props: RowDialogContent & { row: CompilationRow; disabled?: boolean; onApply: (row: CompilationRow) => void; onRemove: () => void; onClose: () => void; }) {
   return <CompilationRowDialog {...props} />;
 }

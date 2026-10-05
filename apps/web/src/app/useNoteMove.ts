@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { relocateFocusPaths } from '@mygitnotes/core/focus-page';
 import type { QueryClient } from '@tanstack/react-query';
+import { readNote } from '../lib/api.js';
 import { fetchFiles, type FileResult, mutateFile } from '../lib/files-api.js';
 import type { I18nContextValue } from '../lib/i18n/index.js';
-import { planNoteMove } from '../lib/note-move.js';
+import { noteStem, noteSuffix, planRelocation, renamedPath, retitle } from '../lib/note-move.js';
 import { noteLookupOptions, type NoteQueryScope } from '../lib/use-note-queries.js';
 import type { NoteItem } from '../lib/types.js';
 import type { WorkspaceState } from './workspace-state.js';
@@ -15,6 +16,8 @@ interface Params {
   readDraft: WorkspaceState['readDraft'];
   updateDraft: WorkspaceState['updateDraft'];
   stageWorkingNote: WorkspaceState['stageWorkingNote'];
+  /** Saves a note the way its editor does: a remote draft, or the local working tree. */
+  saveNote: (params: { path: string; notebookId: string; content: string; metadata?: Record<string, unknown>; }) => Promise<NoteItem>;
   focus: WorkspaceState['focus'];
   queryClient: QueryClient;
   queryScope: NoteQueryScope;
@@ -25,49 +28,84 @@ interface Params {
   t: I18nContextValue['t'];
 }
 
-/** The Move action of an open note or compilation: the note it asks to move, and the move to the folder chosen for it. */
-export function useNoteMove({ config, remote, canWriteNotebook, readDraft, updateDraft, stageWorkingNote, focus, queryClient, queryScope, flushEditors, beforeFileChange, onFilesChanged, setActionError, t }: Params) {
-  const [moving, setMoving] = useState<NoteItem | null>(null);
-  const [busy, setBusy] = useState(false);
-  const moveNote = (note: NoteItem) => canWriteNotebook(note.notebookId) ? () => setMoving(note) : undefined;
+/** What the Move or Rename dialog acts on. A compilation keeps its name in its own file, so it applies the new name itself. */
+export type NoteMoveRequest = { mode: 'move'; note: NoteItem; } | { mode: 'rename'; note: NoteItem; applyTitle?: (title: string) => void; };
 
-  const moveTo = async (note: NoteItem, folder: string | null) => {
-    const notebook = config?.notebooks.find(nb => nb.id === note.notebookId);
-    if (!notebook) return;
-    // The editor's pending edits are saved first, so the move carries them.
+const isCompilation = (path: string) => noteSuffix(path) === '.compilation.yml';
+
+/** The Move and Rename actions of an open note, outline or compilation, and the dialogs that choose the folder or name. */
+export function useNoteMove({ config, remote, canWriteNotebook, readDraft, updateDraft, stageWorkingNote, saveNote, focus, queryClient, queryScope, flushEditors, beforeFileChange, onFilesChanged, setActionError, t }: Params) {
+  const [request, setRequest] = useState<NoteMoveRequest | null>(null);
+  const [busy, setBusy] = useState(false);
+  const moveNote = (note: NoteItem) => canWriteNotebook(note.notebookId) ? () => setRequest({ mode: 'move', note }) : undefined;
+  const renameNote = (note: NoteItem, applyTitle?: (title: string) => void) => canWriteNotebook(note.notebookId) ? () => setRequest({ mode: 'rename', note, applyTitle }) : undefined;
+
+  /** Puts `note` at `destination`, retitled `title` when given (a compilation has already applied it). */
+  const relocate = async (note: NoteItem, destination: string, title?: string) => {
+    // The editors' pending edits are saved first, so the move carries them.
     if (!await flushEditors()) throw new Error(t('folder.draftsHint'));
-    const plan = planNoteMove(note.path, notebook.root, folder, remote ? readDraft(note.notebookId, note.path) : undefined);
-    if (plan.kind === 'none') return;
-    if (plan.kind === 'file') {
-      await beforeFileChange();
-      const result = await mutateFile({ kind: 'move', notebookId: note.notebookId, path: note.path, destination: plan.destination }, (await fetchFiles(note.notebookId)).revision);
-      await onFilesChanged(result);
+    const retitled = title && !isCompilation(note.path) ? title : undefined;
+    const withTitle = (current: NoteItem) => retitled ? { ...current, ...retitle(current.content, current.metadata, retitled, noteSuffix(current.path) === '.outline.md', current.title), title: retitled } : current;
+    const plan = planRelocation(note.path, destination, remote ? readDraft(note.notebookId, note.path) : undefined);
+    if (plan.kind !== 'none') {
+      const taken = Boolean(readDraft(note.notebookId, destination)) || (await queryClient.fetchQuery(noteLookupOptions(queryScope, [{ notebookId: note.notebookId, path: destination }], false))).notes.length > 0;
+      if (taken) throw new Error(t('files.moveTaken', { path: destination }));
+    }
+    if (plan.kind === 'draft') {
+      stageWorkingNote(withTitle({ ...plan.draft.note, path: destination }), null);
+      updateDraft(note.notebookId, note.path, null);
+      // A Focus tab of the draft follows it, as a file move relocates the tabs of a committed note.
+      const page = structuredClone(focus.page);
+      if (relocateFocusPaths(page, note.notebookId, path => path === note.path ? destination : path)) focus.change(page);
+      await onFilesChanged({ revision: '', selectedPath: destination, pathMap: { [note.path]: destination }, deletedPaths: [] });
       return;
     }
-    const taken = Boolean(readDraft(note.notebookId, plan.destination)) || (await queryClient.fetchQuery(noteLookupOptions(queryScope, [{ notebookId: note.notebookId, path: plan.destination }], false))).notes.length > 0;
-    if (taken) throw new Error(t('files.moveTaken', { path: plan.destination }));
-    stageWorkingNote({ ...plan.draft.note, path: plan.destination }, null);
-    updateDraft(note.notebookId, note.path, null);
-    // A Focus tab of the draft follows it, as a file move relocates the tabs of a committed note.
-    const page = structuredClone(focus.page);
-    if (relocateFocusPaths(page, note.notebookId, path => path === note.path ? plan.destination : path)) focus.change(page);
-    await onFilesChanged({ revision: '', selectedPath: plan.destination, pathMap: { [note.path]: plan.destination }, deletedPaths: [] });
+    let result: FileResult = { revision: '', selectedPath: destination, pathMap: {}, deletedPaths: [] };
+    if (plan.kind === 'file') {
+      await beforeFileChange();
+      result = await mutateFile({ kind: 'move', notebookId: note.notebookId, path: note.path, destination }, (await fetchFiles(note.notebookId)).revision);
+    }
+    const save = async () => {
+      if (!retitled) return;
+      const current = withTitle(readDraft(note.notebookId, destination)?.note ?? await readNote(destination, note.notebookId));
+      await saveNote({ path: destination, notebookId: note.notebookId, content: current.content, metadata: current.metadata });
+    };
+    // A local file is retitled where it now lies before the editor reopens it; a remote move commits, so the
+    // new title is staged on the moved note once the workspace has read that commit.
+    if (!remote) await save();
+    await onFilesChanged(result);
+    if (remote) await save();
   };
 
-  const confirmMove = async (folder: string | null) => {
-    if (!moving || busy) return;
+  const run = async (action: (current: NoteMoveRequest) => Promise<void>) => {
+    if (!request || busy) return;
     setBusy(true);
     setActionError('');
     try {
-      await moveTo(moving, folder);
-      setMoving(null);
+      await action(request);
     } catch (error) {
       setActionError((error as Error).message);
-      setMoving(null);
     } finally {
+      setRequest(null);
       setBusy(false);
     }
   };
 
-  return { moving, busy, moveNote, confirmMove, cancelMove: () => setMoving(null) };
+  const confirmMove = (folder: string | null) =>
+    run(async ({ note }) => {
+      const notebook = config?.notebooks.find(nb => nb.id === note.notebookId);
+      if (!notebook) return;
+      const base = notebook.root.replace(/\/$/, '');
+      await relocate(note, `${folder ? `${base}/${folder}` : base}/${note.path.slice(note.path.lastIndexOf('/') + 1)}`);
+    });
+
+  const confirmRename = (name: string) =>
+    run(async current => {
+      const title = name.trim();
+      if (!noteStem(title)) throw new Error(t('files.renameInvalid'));
+      if (current.mode === 'rename') current.applyTitle?.(title);
+      await relocate(current.note, renamedPath(current.note.path, title), title);
+    });
+
+  return { request, busy, moveNote, renameNote, confirmMove, confirmRename, cancel: () => setRequest(null) };
 }

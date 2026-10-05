@@ -2,61 +2,81 @@
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { useNewNoteDialog } from './useNewNoteDialog.js';
+import { useCreateNote } from './useCreateNote.js';
 import type { NoteItem } from '../lib/types.js';
 const api = vi.hoisted(() => ({ saveNote: vi.fn(), fetchGitStatus: vi.fn(), renderNoteTemplate: vi.fn() }));
 vi.mock('../lib/api.js', () => api);
-type Params = Parameters<typeof useNewNoteDialog>[0];
+type Params = Parameters<typeof useCreateNote>[0];
 function params(overrides: Partial<Params> = {}): Params {
   const queryClient = new QueryClient();
   vi.spyOn(queryClient, 'fetchQuery').mockResolvedValue({ notes: [] });
-  return { config: { notebooks: [{ id: 'a', root: 'notes/shared', title: 'A', templates: [{ id: 'template', title: 'Template', file: 'template.md' }] }] }, selectedNotebookId: 'a', setSelectedNotebookId: vi.fn(), folders: [{ notebookId: 'a', path: 'sub', title: 'Sub', order: 0 }], remote: false, canWrite: true, readDraft: () => undefined, queryClient, queryScope: { sourceId: 'local:a', revisions: {}, repositories: { a: 'local:a' }, drafts: {} }, stageWorkingNote: vi.fn(note => note), revisionFor: () => 'head', invalidateNotes: vi.fn(), setGitStatus: vi.fn(), newNoteStatuses: ['inbox'], sourceId: 'local:a', t: key => key, onCreated: vi.fn(), ...overrides };
+  return { config: { notebooks: [{ id: 'a', root: 'notes/shared', title: 'A', templates: [{ id: 'template', title: 'Template', file: 'template.md' }] }, { id: 'b', root: 'notes/b', title: 'B' }] }, selectedNotebookId: 'a', setSelectedNotebookId: vi.fn(), folders: [{ notebookId: 'a', path: 'sub', title: 'Sub', order: 0 }], remote: false, canWrite: true, readDraft: () => undefined, queryClient, queryScope: { sourceId: 'local:a', revisions: {}, repositories: { a: 'local:a' }, drafts: {} }, stageWorkingNote: vi.fn(note => note), revisionFor: () => 'head', invalidateNotes: vi.fn(), setGitStatus: vi.fn(), newNoteStatuses: ['inbox'], sourceId: 'local:a', t: (key: string) => key === 'createNote.untitled' ? 'Untitled' : key, onCreated: vi.fn(), onError: vi.fn(), ...overrides } as Params;
 }
+const lookupReturns = (input: Params, paths: string[]) => vi.mocked(input.queryClient.fetchQuery).mockResolvedValue({ notes: paths.map(path => ({ path })) });
 beforeEach(() => {
   vi.clearAllMocks();
   api.fetchGitStatus.mockResolvedValue({ status: {} });
-  api.saveNote.mockImplementation(async input => ({ note: { ...input, id: 'new', title: input.metadata.title, tags: [] } }));
+  api.saveNote.mockImplementation(async input => ({ note: { ...input, id: 'new', title: 'Untitled', tags: [] } }));
+  api.renderNoteTemplate.mockResolvedValue({ content: '# Untitled\n\nFrom template.\n', metadata: { title: 'Untitled', kind: 'reading' } });
 });
 afterEach(cleanup);
-it('creates several native outlines with the compound suffix, no template and worktree-only saves', async () => {
+
+it('creates a note at once at the notebook root, titled by its heading', async () => {
   const input = params();
-  const hook = renderHook(useNewNoteDialog, { initialProps: input });
-  for (const title of ['First plan', 'Second plan']) {
-    act(() => hook.result.current.openNewNote({ kind: 'outline', folder: 'sub' }));
-    act(() => {
-      hook.result.current.setNewNoteTitle(title);
-      hook.result.current.setNewNoteTemplateId('template');
-    });
-    await act(() => hook.result.current.handleCreateNewNote());
-  }
-  expect(api.saveNote.mock.calls.map(([input]) => input.path)).toEqual(['notes/shared/sub/first-plan.outline.md', 'notes/shared/sub/second-plan.outline.md']);
-  expect(api.saveNote.mock.calls[0][0]).toMatchObject({ createOnly: true, noCommit: true, notebookId: 'a', content: '- ', metadata: { title: 'First plan', status: 'inbox' } });
-  expect(api.renderNoteTemplate).not.toHaveBeenCalled();
-  expect(input.onCreated).toHaveBeenCalledTimes(2);
+  const hook = renderHook(useCreateNote, { initialProps: input });
+  await act(() => hook.result.current.createNote());
+  expect(api.saveNote).toHaveBeenCalledWith(expect.objectContaining({ path: 'notes/shared/untitled.md', content: '# Untitled\n\nWrite your note here.\n', createOnly: true, noCommit: true }));
+  // No title field: the heading names the note, so editing it renames the note.
+  expect(api.saveNote.mock.calls[0][0].metadata).toEqual({ id: 'untitled', tags: [], status: 'inbox' });
+  expect(input.onCreated).toHaveBeenCalledOnce();
 });
-it('stages a linked remote outline with native metadata and no save API/forced commit', async () => {
-  const input = params({ remote: true });
-  const hook = renderHook(useNewNoteDialog, { initialProps: input });
-  act(() => hook.result.current.openNewNote({ kind: 'outline', folder: 'sub', initialLink: { notebookId: 'a', path: 'notes/shared/source.compilation.yml', title: 'Source' } }));
-  act(() => hook.result.current.setNewNoteTitle('Linked plan'));
-  await act(() => hook.result.current.handleCreateNewNote());
-  expect(input.stageWorkingNote).toHaveBeenCalledWith(expect.objectContaining({ kind: 'outline', path: 'notes/shared/sub/linked-plan.outline.md', content: '- [Source](../source.compilation.yml)' }), null);
+
+it('numbers the untitled name past existing notes and remote drafts', async () => {
+  const input = params({ remote: true, readDraft: (_: string, path: string) => path === 'notes/shared/untitled-2.md' ? { note: {} as NoteItem, base: null } : undefined });
+  lookupReturns(input, ['notes/shared/untitled.md']);
+  const hook = renderHook(useCreateNote, { initialProps: input });
+  await act(() => hook.result.current.createNote());
+  expect(input.stageWorkingNote).toHaveBeenCalledWith(expect.objectContaining({ path: 'notes/shared/untitled-3.md', id: 'untitled-3' }), null);
   expect(api.saveNote).not.toHaveBeenCalled();
 });
-it('keeps New note ordinary even after an outline creation and does not report status refresh as creation failure', async () => {
+
+it('creates native outlines with the compound suffix and no template', async () => {
   const input = params();
-  const hook = renderHook(useNewNoteDialog, { initialProps: input });
-  act(() => hook.result.current.openNewNote({ kind: 'outline' }));
-  act(() => hook.result.current.cancelNewNote());
-  act(() => hook.result.current.openNewNote());
-  act(() => hook.result.current.setNewNoteTitle('Ordinary'));
-  api.fetchGitStatus.mockRejectedValueOnce(new Error('offline'));
-  await act(() => hook.result.current.handleCreateNewNote());
-  expect(api.saveNote).toHaveBeenCalledWith(expect.objectContaining({ path: 'notes/shared/ordinary.md', content: '# Ordinary\n\nWrite your note here.\n' }));
-  expect(input.onCreated).toHaveBeenCalledOnce();
-  expect(hook.result.current.createError).toBe('');
+  const hook = renderHook(useCreateNote, { initialProps: input });
+  await act(() => hook.result.current.createNote({ kind: 'outline', templateId: 'template' }));
+  expect(api.saveNote.mock.calls[0][0]).toMatchObject({ path: 'notes/shared/untitled.outline.md', content: '- ', metadata: { title: 'Untitled', status: 'inbox' } });
+  expect(api.renderNoteTemplate).not.toHaveBeenCalled();
 });
-it.each(['cancel', 'repository', 'read-only'] as const)('does not create after %s during collision lookup', async reason => {
+
+it('creates a note from a template, and in the folder a compilation lane draws from', async () => {
+  const input = params();
+  const hook = renderHook(useCreateNote, { initialProps: input });
+  await act(() => hook.result.current.createNote({ templateId: 'template', folder: 'sub', tag: 'reading' }));
+  expect(api.renderNoteTemplate).toHaveBeenCalledWith({ notebookId: 'a', templateId: 'template', title: 'Untitled' });
+  expect(api.saveNote.mock.calls[0][0]).toMatchObject({ path: 'notes/shared/sub/untitled.md', content: '# Untitled\n\nFrom template.\n', metadata: { kind: 'reading', tags: ['reading'] } });
+});
+
+it('stages a linked remote outline with native metadata and no save API', async () => {
+  const input = params({ remote: true });
+  const hook = renderHook(useCreateNote, { initialProps: input });
+  await act(() => hook.result.current.createNote({ kind: 'outline', initialLink: { notebookId: 'a', path: 'notes/shared/source.compilation.yml', title: 'Source' } }));
+  expect(input.stageWorkingNote).toHaveBeenCalledWith(expect.objectContaining({ kind: 'outline', path: 'notes/shared/untitled.outline.md', content: '- [Source](source.compilation.yml)' }), null);
+  expect(api.saveNote).not.toHaveBeenCalled();
+});
+
+it('switches to another notebook first, then creates there', async () => {
+  const input = params();
+  const hook = renderHook(useCreateNote, { initialProps: input });
+  await act(() => hook.result.current.createNote({ kind: 'outline', notebookId: 'b' }));
+  expect(input.setSelectedNotebookId).toHaveBeenCalledWith('b');
+  expect(api.saveNote).not.toHaveBeenCalled();
+  await act(async () => {
+    hook.rerender({ ...input, selectedNotebookId: 'b', queryScope: { ...input.queryScope, repositories: { b: 'local:a' } } });
+  });
+  await vi.waitFor(() => expect(api.saveNote).toHaveBeenCalledWith(expect.objectContaining({ notebookId: 'b', path: 'notes/b/untitled.outline.md' })));
+});
+
+it.each(['repository', 'read-only'] as const)('does not create after a %s change during the name lookup', async reason => {
   const input = params();
   let finish!: (value: { notes: NoteItem[]; }) => void;
   vi.mocked(input.queryClient.fetchQuery).mockReturnValue(
@@ -64,14 +84,11 @@ it.each(['cancel', 'repository', 'read-only'] as const)('does not create after %
       finish = resolve;
     }),
   );
-  const hook = renderHook(useNewNoteDialog, { initialProps: input });
-  act(() => hook.result.current.openNewNote({ kind: 'outline' }));
-  act(() => hook.result.current.setNewNoteTitle('Plan'));
+  const hook = renderHook(useCreateNote, { initialProps: input });
   let operation!: Promise<void>;
   act(() => {
-    operation = hook.result.current.handleCreateNewNote();
+    operation = hook.result.current.createNote();
   });
-  if (reason === 'cancel') act(() => hook.result.current.cancelNewNote());
   if (reason === 'repository') hook.rerender({ ...input, sourceId: 'local:b', selectedNotebookId: 'b' });
   if (reason === 'read-only') hook.rerender({ ...input, canWrite: false });
   await act(async () => {
@@ -81,18 +98,11 @@ it.each(['cancel', 'repository', 'read-only'] as const)('does not create after %
   expect(api.saveNote).not.toHaveBeenCalled();
   expect(input.stageWorkingNote).not.toHaveBeenCalled();
 });
-it('refuses an existing outline or a cross-notebook initial link without altering it', async () => {
+
+it('refuses a cross-notebook initial link without creating anything', async () => {
   const input = params();
-  const hook = renderHook(useNewNoteDialog, { initialProps: input });
-  act(() => hook.result.current.openNewNote({ kind: 'outline', initialLink: { notebookId: 'b', path: 'notes/shared/same.md', title: 'Wrong owner' } }));
-  act(() => hook.result.current.setNewNoteTitle('Plan'));
-  await act(() => hook.result.current.handleCreateNewNote());
-  expect(hook.result.current.createError).toBe('outline.changed');
-  expect(api.saveNote).not.toHaveBeenCalled();
-  act(() => hook.result.current.openNewNote({ kind: 'outline' }));
-  act(() => hook.result.current.setNewNoteTitle('Plan'));
-  vi.mocked(input.queryClient.fetchQuery).mockResolvedValue({ notes: [{ path: 'notes/shared/plan.outline.md' }] });
-  await act(() => hook.result.current.handleCreateNewNote());
-  expect(hook.result.current.createError).toContain('already exists');
+  const hook = renderHook(useCreateNote, { initialProps: input });
+  await act(() => hook.result.current.createNote({ kind: 'outline', initialLink: { notebookId: 'b', path: 'notes/b/same.md', title: 'Wrong owner' } }));
+  expect(input.onError).toHaveBeenLastCalledWith('outline.changed');
   expect(api.saveNote).not.toHaveBeenCalled();
 });

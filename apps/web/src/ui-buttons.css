@@ -19,3 +19,6 @@
 .ui-button:disabled, .ui-button[aria-disabled='true'], .ui-icon-button:disabled, .ui-icon-button[aria-disabled='true'] { opacity: 0.4; cursor: not-allowed; }
 /* Fade the primary surface, not its label, so disabled actions remain readable. */
 .ui-button.ui-button-primary:disabled, .ui-button.ui-button-primary[aria-disabled='true'], .ui-button[aria-pressed='true']:disabled, .ui-button[aria-pressed='true'][aria-disabled='true'] { --button-bg: color-mix(in srgb, var(--color-primary) 45%, var(--color-surface)); --button-text: var(--color-text); opacity: 1 !important; }
+/* A title that renames its note or compilation when clicked: it reads as the title, and hints on hover. */
+.title-rename { display: block; max-width: 100%; margin: 0; padding: 0; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.title-rename:not(:disabled):hover { text-decoration: underline dotted; text-underline-offset: 3px; }

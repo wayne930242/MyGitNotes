@@ -10,8 +10,8 @@ export interface NewCompilation {
   metadata: Record<string, unknown>;
 }
 
-/** The file for a new compilation `row` in `folder` (relative to the notebook root): `<name>.compilation.yml`, suffixed when taken. */
-export async function planNewCompilation(row: CompilationRow, notebook: NotebookConfig, folder: string): Promise<NewCompilation> {
-  const path = await firstFreePath(notebook.id, taken => newCompilationPath(notebook, row.name, taken, folder));
+/** The file for a new compilation `row` in `folder` (relative to the notebook root): `<stem>.compilation.yml`, suffixed when taken; the stem defaults to its name. */
+export async function planNewCompilation(row: CompilationRow, notebook: NotebookConfig, folder: string, stem = row.name): Promise<NewCompilation> {
+  const path = await firstFreePath(notebook.id, taken => newCompilationPath(notebook, stem, taken, folder));
   return { path, content: compilationText({ ...row, path }), metadata: compilationMetadata(row) };
 }

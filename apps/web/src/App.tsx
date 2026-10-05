@@ -48,10 +48,10 @@ import { BulkActionsToolbar } from './components/BulkActionsToolbar.js';
 import { BulkMoveDialog } from './components/BulkMoveDialog.js';
 import { useAssetOperations } from './app/useAssetOperations.js';
 import { useRoutedNote } from './app/useRoutedNote.js';
-import { useNewNoteDialog } from './app/useNewNoteDialog.js';
+import { UNTITLED_STEM, useCreateNote } from './app/useCreateNote.js';
 import { useNoteMove } from './app/useNoteMove.js';
 import { noteFolder } from './lib/note-move.js';
-import { NewNoteDialog } from './app/NewNoteDialog.js';
+import { RenameNoteDialog } from './components/RenameNoteDialog.js';
 import { AgentAccessSettings, AuthControls, ConnectionState } from './components/AuthControls.js';
 import { Header } from './components/Header.js';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts.js';
@@ -69,7 +69,6 @@ import { FocusArea } from './components/FocusArea.js';
 import { FocusControls } from './components/FocusControls.js';
 import { AddToFocusDialog } from './components/AddToFocusDialog.js';
 import { CompilationView } from './components/CompilationView.js';
-import { NewCompilationDialog } from './components/NewCompilationDialog.js';
 import { planNewCompilation } from './lib/compilation-create.js';
 import type { CompilationRow } from '@mygitnotes/core/compilation';
 import { usePhone } from './lib/use-phone.js';
@@ -194,9 +193,9 @@ const AppContent: React.FC = () => {
   const bulkMoveNotebook = config?.notebooks.find(nb => nb.id === bulkMoveNotebookId);
 
   // Create New Note dialog: its form state and the handlers that render or persist a new note draft.
-  const { newNoteKind, creating, cancelNewNote, createError, isNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteTags, newNoteTemplateId, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote } = useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, sourceId, newNoteStatuses, t, onCreated: handleOpenNote });
+  const { createNote } = useCreateNote({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, sourceId, newNoteStatuses, t, onCreated: handleOpenNote, onError: setActionError });
 
-  const outlineActions = useOutlineActions({ config, repositoryFor, readDraft, remote, sourceId, selectedNotebookId, locationKey: location.key, routedRef: editorRoute.note && editorNotebookId ? { notebookId: editorNotebookId, path: `${config?.notebooks.find(nb => nb.id === editorNotebookId)?.root}/${editorRoute.note}` } : null, prepareLeave: editorRegistry.flushEditors, openNote: handleOpenNote, openNewNote, onError: setActionError });
+  const outlineActions = useOutlineActions({ config, repositoryFor, readDraft, remote, sourceId, selectedNotebookId, locationKey: location.key, routedRef: editorRoute.note && editorNotebookId ? { notebookId: editorNotebookId, path: `${config?.notebooks.find(nb => nb.id === editorNotebookId)?.root}/${editorRoute.note}` } : null, prepareLeave: editorRegistry.flushEditors, openNote: handleOpenNote, openNewNote: options => void createNote(options), onError: setActionError });
 
   const { commitWorkingNotes } = useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError });
   const { commitNoteFile } = useQuickNoteCommit({ remote, repositoryFor, refreshWorkspace, commitWorkingNotes });
@@ -207,8 +206,8 @@ const AppContent: React.FC = () => {
   const { handleUploadAsset, handleDeleteAsset, handleMoveAsset } = useAssetOperations({ editingNote, selectedNotebookId, remote, setAssets, setGitStatus });
 
   const { beforeFileChange, openFileManager, moveNoteAction, onFilesChanged, openFileIndex } = useFileNavigation({ editorRegistry, hasPendingDrafts, documents, t, config, setFileDialog, setActionError, refreshWorkspace, refreshDocuments, editorRoute, editorNotebookId, setEditingNote, navigate, location, returnTo, setFileEditorRevision, selectedFolder, folderRoot, changeFilters, handleOpenFolderIndex });
-  const noteMove = useNoteMove({ config, remote, canWriteNotebook, readDraft, updateDraft, stageWorkingNote, focus: focusPage, queryClient, queryScope, flushEditors: editorRegistry.flushEditors, beforeFileChange, onFilesChanged, setActionError, t });
-  const movingNotebook = noteMove.moving ? config?.notebooks.find(nb => nb.id === noteMove.moving?.notebookId) : undefined;
+  const noteMove = useNoteMove({ config, remote, canWriteNotebook, readDraft, updateDraft, stageWorkingNote, saveNote: handleSaveNote, focus: focusPage, queryClient, queryScope, flushEditors: editorRegistry.flushEditors, beforeFileChange, onFilesChanged, setActionError, t });
+  const movingNotebook = noteMove.request?.mode === 'move' ? config?.notebooks.find(nb => nb.id === noteMove.request?.note.notebookId) : undefined;
   const { bulkBusy, runBulkStatus, runBulkTag, runBulkMove } = useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNoteStatus: handleUpdateNoteStatus, beforeFileChange, onFilesChanged, repositories, remote, canWrite, t, invalidateNotes, setRepositoryRevision, setActionError, tagOperations, config });
 
   const noteEditorOpen = (Boolean(routedNote) || routedLoading) && !routeError;
@@ -270,9 +269,9 @@ const AppContent: React.FC = () => {
   // An outline or compilation list offers its own kind; every kind starts at the notebook root, moved from its editor.
   const newKind = route.kind === 'outline' || route.kind === 'compilation' ? route.kind : 'note';
   const createNewKind = () => {
-    if (newKind === 'outline') openNewNote({ kind: 'outline' });
-    else if (newKind === 'compilation') setNewCompilationOpen(true);
-    else openNewNote();
+    if (newKind === 'outline') void createNote({ kind: 'outline' });
+    else if (newKind === 'compilation') void createUntitledCompilation();
+    else void createNote();
   };
   const browseRegion = (docked: boolean, dockHeight: number) => (
     <>
@@ -319,7 +318,7 @@ const AppContent: React.FC = () => {
           onDeleteNote={handleDeleteNote}
           onMoveNote={moveNoteAction}
           onNewNoteWithStatus={(status) => {
-            openNewNote(status);
+            void createNote(status);
           }}
           sortField={sortField}
           sortOrder={sortOrder}
@@ -333,18 +332,19 @@ const AppContent: React.FC = () => {
   // The toolbar search dims what the Focus shows that it does not match; on a phone it only filters the list.
   const phone = usePhone();
   const focusMatches = useFocusSearch({ q: debouncedSearch, notebookId: selectedNotebookId, enabled: Boolean(noteFocus.layout) && !phone });
-  const compilationActions = useCompilationActionsValue({ remote, canWriteNotebook, repositoryId: notebookId => repositoryFor(notebookId)?.id, revisionFor, save: handleSaveNote, remove: handleDeleteNote, stageWorkingNote, invalidateNotes, setGitStatus, createNote: openNewNote });
-  const [newCompilationOpen, setNewCompilationOpen] = useState(false);
+  const compilationActions = useCompilationActionsValue({ remote, canWriteNotebook, repositoryId: notebookId => repositoryFor(notebookId)?.id, revisionFor, save: handleSaveNote, remove: handleDeleteNote, stageWorkingNote, invalidateNotes, setGitStatus, createNote: options => void createNote(options) });
   const createCompilation = async (row: CompilationRow) => {
     const notebook = config?.notebooks.find(nb => nb.id === row.notebookId);
     if (!notebook) return;
     try {
-      const plan = await planNewCompilation(row, notebook, '');
+      const plan = await planNewCompilation(row, notebook, '', UNTITLED_STEM);
       void openFromBrowse(await compilationActions.create(notebook.id, plan.path, plan.content, plan.metadata));
     } catch (error) {
       setActionError((error as Error).message);
     }
   };
+  // A new compilation starts empty, named Untitled, at the notebook root; its menu edits, renames and moves it.
+  const createUntitledCompilation = () => createCompilation({ id: crypto.randomUUID(), name: t('compilation.untitled'), notebookId: selectedNotebookId, path: '', view: 'small', kind: 'custom', items: [] });
   const openCompilationFolder = (item: { notebookId: string; path: string; }) => {
     // A folder of this notebook filters the browse region and keeps the Focus; others open as they do elsewhere.
     const notebook = config?.notebooks.find(nb => nb.id === item.notebookId);
@@ -378,7 +378,7 @@ const AppContent: React.FC = () => {
     <CompilationActionsProvider value={compilationActions}>
       <WorkspaceLinks notebooks={config?.notebooks || []} folders={folders} onOpenNote={(note, anchor, source) => void openLink(note, anchor, source)}>
         <NoteLocationProvider locate={locateNote}>
-          <NoteEditingProvider register={editorRegistry.register} editorProps={editorProps} flushEditors={editorRegistry.flushEditors} refreshNotes={refreshNotes} closeZoom={closeZoom} addToFocus={addToFocus} moveNote={noteMove.moveNote}>
+          <NoteEditingProvider register={editorRegistry.register} editorProps={editorProps} flushEditors={editorRegistry.flushEditors} refreshNotes={refreshNotes} closeZoom={closeZoom} addToFocus={addToFocus} moveNote={noteMove.moveNote} renameNote={noteMove.renameNote}>
             <div className='app-shell h-dvh w-full overflow-hidden flex flex-col font-sans transition-colors duration-200' data-workspace-tab={activeTab} data-screen-focus={Boolean(route.study)} style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}>
               {/* Core Branch User Guidance Banner (Theme-aware, harmonized with active palette) */}
               {!remote && homeBranch === 'core' && (
@@ -397,7 +397,7 @@ const AppContent: React.FC = () => {
                 </div>
               )}
               {/* Top Header */}
-              <Header unavailableNotebooks={repositories.filter(repository => repository.unavailable).flatMap(repository => repository.notebooks)} workspaceTitle={config?.workspace.title || 'MyGitNotes'} accountControls={<AuthControls local={!remote} />} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} onSelectNotebook={id => void setSelectedNotebookId(id)} notebookDisabled={loading || resourceNavigationBusy || notebookSwitchBusy} activeTab={activeTab} setActiveTab={setActiveTab} onCreateNote={() => openNewNote()} createNoteDisabled={!canWrite} onOpenCommands={() => setShortcutMode('palette')} navigationDisabled={noteEditorOpen || isCommitOpen} />
+              <Header unavailableNotebooks={repositories.filter(repository => repository.unavailable).flatMap(repository => repository.notebooks)} workspaceTitle={config?.workspace.title || 'MyGitNotes'} accountControls={<AuthControls local={!remote} />} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} onSelectNotebook={id => void setSelectedNotebookId(id)} notebookDisabled={loading || resourceNavigationBusy || notebookSwitchBusy} activeTab={activeTab} setActiveTab={setActiveTab} onCreateNote={() => void createNote()} createNoteDisabled={!canWrite} onOpenCommands={() => setShortcutMode('palette')} navigationDisabled={noteEditorOpen || isCommitOpen} />
               <KeyboardShortcuts
                 mode={shortcutMode}
                 onModeChange={setShortcutMode}
@@ -407,7 +407,7 @@ const AppContent: React.FC = () => {
                 canCreateNote={canWrite}
                 selectedNotebookId={selectedNotebookId}
                 onNavigate={tab => void setActiveTab(tab)}
-                onCreateNote={() => openNewNote()}
+                onCreateNote={() => void createNote()}
                 onFocusSearch={() => {
                   if (activeTab === 'notes') setFiltersOpen(true);
                   requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.header-search input')?.focus());
@@ -523,7 +523,7 @@ const AppContent: React.FC = () => {
                         <main className='workspace-main notes-main'>
                           <PageToolbar>
                             {dockToggle}
-                            <NoteToolbar onImportLegacy={() => setLegacyImportOpen(true)} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode} hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null} showHidden={showHidden} descendants={route.descendants} onShowHiddenChange={value => changeFilters({ showHidden: value })} onDescendantsChange={value => changeFilters({ descendants: value })} onOpenNewNoteModal={() => openNewNote()} onOpenNewOutline={() => openNewNote({ kind: 'outline' })} onOpenNewCompilation={() => setNewCompilationOpen(true)} query={searchQuery} onQueryChange={value => changeFilters({ q: value })} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(open => !open)} focusControls={<FocusControls focus={noteFocus} onShow={key => void showFocus(key)} onReload={() => void focusPage.reload()} browseToggle={focusCapacity === 1 ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') } : undefined} />} />
+                            <NoteToolbar onImportLegacy={() => setLegacyImportOpen(true)} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode} hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null} showHidden={showHidden} descendants={route.descendants} onShowHiddenChange={value => changeFilters({ showHidden: value })} onDescendantsChange={value => changeFilters({ descendants: value })} onNewNote={() => void createNote()} onNewOutline={() => void createNote({ kind: 'outline' })} onNewCompilation={() => void createUntitledCompilation()} templates={config?.notebooks.find(nb => nb.id === selectedNotebookId)?.templates} onNewFromTemplate={templateId => void createNote({ templateId })} query={searchQuery} onQueryChange={value => changeFilters({ q: value })} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(open => !open)} focusControls={<FocusControls focus={noteFocus} onShow={key => void showFocus(key)} onReload={() => void focusPage.reload()} browseToggle={focusCapacity === 1 ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') } : undefined} />} />
                           </PageToolbar>
                           {noteFocus.layout
                             ? (
@@ -623,7 +623,8 @@ const AppContent: React.FC = () => {
                 </section>
               )}
               {fileDialog && <FileManagerDialog notebookId={fileDialog.notebookId} notebooks={config?.notebooks || []} writable={canWrite} initialPath={fileDialog.path} movePath={fileDialog.movePath} initialOperation={fileDialog.initialOperation} showDocuments={fileDialog.showDocuments} beforeChange={beforeFileChange} onChanged={onFilesChanged} onOpenIndex={openFileIndex} onClose={() => setFileDialog(undefined)} />}
-              {noteMove.moving && movingNotebook && <BulkMoveDialog notebook={movingNotebook} folders={folders} title={t('files.moveNoteTitle', { title: noteMove.moving.title || noteMove.moving.path.split('/').pop() || '' })} initialFolder={noteFolder(noteMove.moving.path, movingNotebook.root)} busy={noteMove.busy} onClose={noteMove.cancelMove} onConfirm={folder => void noteMove.confirmMove(folder)} />}
+              {noteMove.request?.mode === 'move' && movingNotebook && <BulkMoveDialog notebook={movingNotebook} folders={folders} title={t('files.moveNoteTitle', { title: noteMove.request.note.title || noteMove.request.note.path.split('/').pop() || '' })} initialFolder={noteFolder(noteMove.request.note.path, movingNotebook.root)} busy={noteMove.busy} onClose={noteMove.cancel} onConfirm={folder => void noteMove.confirmMove(folder)} />}
+              {noteMove.request?.mode === 'rename' && <RenameNoteDialog path={noteMove.request.note.path} title={noteMove.request.note.title} busy={noteMove.busy} onClose={noteMove.cancel} onConfirm={title => void noteMove.confirmRename(title)} />}
               {bulkMoveOpen && bulkMoveNotebook && (
                 <BulkMoveDialog
                   notebook={bulkMoveNotebook}
@@ -639,7 +640,6 @@ const AppContent: React.FC = () => {
               )}
               {/* Note Editor Modal */}
               <EditorModal key={fileEditorRevision} note={routedNote} committed={routedCommitted && typeof routedCommitted.content === 'string' ? routedCommitted as NoteItem : undefined} loading={routedLoading} isOpen={noteEditorOpen} renderCompilation={renderCompilation} />
-              {newCompilationOpen && <NewCompilationDialog notebooks={config?.notebooks || []} folders={folders} notebookId={selectedNotebookId} onAdd={row => void createCompilation(row)} onClose={() => setNewCompilationOpen(false)} />}
               {addingToFocus && (
                 <AddToFocusDialog
                   focus={noteFocus}
@@ -706,7 +706,6 @@ const AppContent: React.FC = () => {
                 }}
               />
               {/* Create New Note Modal */}
-              {isNewNoteOpen && <NewNoteDialog t={t} createError={createError} kind={newNoteKind} creating={creating} newNoteTitle={newNoteTitle} onTitleChange={setNewNoteTitle} onSubmit={() => handleCreateNewNote()} newNoteTemplates={newNoteTemplates} newNoteTemplateId={newNoteTemplateId} onTemplateChange={handleTemplateChange} newNoteTags={newNoteTags} newNoteStatus={newNoteStatus} onStatusChange={setNewNoteStatus} newNoteStatuses={newNoteStatuses} onCancel={cancelNewNote} />}
             </div>
             <ImageLightbox />
             {outlineActions.dialog && <AddToOutlineDialog key={outlineActions.dialog.id} source={outlineActions.dialog.source} busy={outlineActions.busy} error={outlineActions.error} onChoose={outlineActions.choose} onClose={outlineActions.cancel} />}

@@ -25,6 +25,8 @@ export interface CompilationHeaderProps {
   onSort?: (sort: CompilationSort) => void;
   /** Opens the dialog that sets a dynamic compilation's manual order. */
   onEditOrder?: () => void;
+  /** Renames the compilation from its name; absent when it cannot be renamed. */
+  onRename?: () => void;
   onStudyChange?: (study: NonNullable<CompilationRow['study']>) => void;
   /** Adds a note to a dynamic compilation's source. */
   onCreateInSource?: () => void;
@@ -35,7 +37,7 @@ export interface CompilationHeaderProps {
 }
 
 /** The compilation's name, source and the controls shared by its arrangements. */
-export function CompilationHeader({ row, count, disabled, readOnly, notebooks, facets, onStudy, onView, onAdd, onSort, onEditOrder, onStudyChange, onCreateInSource, scrollButton, extra }: CompilationHeaderProps) {
+export function CompilationHeader({ row, count, disabled, readOnly, notebooks, facets, onStudy, onView, onAdd, onSort, onEditOrder, onRename, onStudyChange, onCreateInSource, scrollButton, extra }: CompilationHeaderProps) {
   const { t } = useTranslation();
   const [queryOpen, setQueryOpen] = useState(false);
   const query = row.study || { filter: 'all' as const, dueFirst: false };
@@ -45,7 +47,7 @@ export function CompilationHeader({ row, count, disabled, readOnly, notebooks, f
   return (
     <header className='screen-lane-header'>
       <div className='screen-lane-heading'>
-        <h3>{row.name}</h3>
+        <h3>{onRename && !readOnly ? <button type='button' className='title-rename' disabled={disabled} title={t('files.rename')} onClick={onRename}>{row.name}</button> : row.name}</h3>
         <span className='screen-count'>{count}</span>
         {row.kind === 'dynamic' && (
           <span className='screen-dynamic-label' title={t('screen.dynamicHint')}>

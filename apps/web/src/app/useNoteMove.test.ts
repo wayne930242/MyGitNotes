@@ -9,17 +9,20 @@ import { useNoteMove } from './useNoteMove.js';
 const files = vi.hoisted(() => ({ fetchFiles: vi.fn(), mutateFile: vi.fn() }));
 vi.mock('../lib/files-api.js', () => files);
 const lookup = vi.hoisted(() => ({ notes: [] as NoteItem[] }));
+const api = vi.hoisted(() => ({ readNote: vi.fn() }));
+vi.mock('../lib/api.js', () => api);
 vi.mock('../lib/use-note-queries.js', () => ({ noteLookupOptions: () => ({ queryKey: ['lookup'], queryFn: async () => ({ notes: lookup.notes }) }) }));
 
 const note: NoteItem = { id: 'idea', path: 'notes/idea.md', notebookId: 'nb', title: 'Idea', tags: [], metadata: {}, content: '# Idea' };
 const config = { notebooks: [{ id: 'nb', root: 'notes' }] } as never;
 
-function setup({ draft, focusTabs = [] as string[] }: { draft?: WorkingNote; focusTabs?: string[]; }) {
+function setup({ draft, focusTabs = [] as string[], remote = true }: { draft?: WorkingNote; focusTabs?: string[]; remote?: boolean; }) {
+  const order: string[] = [];
   const drafts = new Map<string, WorkingNote>(draft ? [[draft.note.path, draft]] : []);
   const focus = { page: { version: 1, focuses: [{ id: 'f', notebookId: 'nb', name: 'Focus', division: 'single', panes: [{ tabs: focusTabs.map(path => ({ kind: 'note', path })) }] }] }, change: vi.fn() };
   const params = {
     config,
-    remote: true,
+    remote,
     canWriteNotebook: () => true,
     readDraft: (_: string, path: string) => drafts.get(path),
     updateDraft: vi.fn((_: string, path: string, entry: WorkingNote | null) => {
@@ -30,12 +33,18 @@ function setup({ draft, focusTabs = [] as string[] }: { draft?: WorkingNote; foc
       drafts.set(staged.path, { note: staged, base });
       return staged;
     }),
+    saveNote: vi.fn(async (input: { path: string; }) => {
+      order.push(`save ${input.path}`);
+      return note;
+    }),
     focus: focus as never,
     queryClient: new QueryClient(),
     queryScope: {} as never,
     flushEditors: vi.fn(async () => true),
     beforeFileChange: vi.fn(async () => {}),
-    onFilesChanged: vi.fn(async () => {}),
+    onFilesChanged: vi.fn(async () => {
+      order.push('files changed');
+    }),
     setActionError: vi.fn(),
     t: ((key: string) => key) as never,
   };
@@ -44,7 +53,11 @@ function setup({ draft, focusTabs = [] as string[] }: { draft?: WorkingNote; foc
     act(() => hook.result.current.moveNote(note)?.());
     await act(() => hook.result.current.confirmMove(folder));
   };
-  return { params, drafts, focus, move };
+  const rename = async (title: string, target: NoteItem = note, applyTitle?: (title: string) => void) => {
+    act(() => hook.result.current.renameNote(target, applyTitle)?.());
+    await act(() => hook.result.current.confirmRename(title));
+  };
+  return { params, drafts, focus, move, rename, order };
 }
 
 beforeEach(() => {
@@ -84,5 +97,44 @@ describe('useNoteMove', () => {
     expect(params.beforeFileChange).toHaveBeenCalled();
     expect(files.mutateFile).toHaveBeenCalledWith({ kind: 'move', notebookId: 'nb', path: 'notes/idea.md', destination: 'notes/work/idea.md' }, 'r1');
     expect(params.onFilesChanged).toHaveBeenCalledWith(expect.objectContaining({ revision: 'r2' }));
+  });
+
+  it('renames a never-committed draft: a new file name and the heading that titles it', async () => {
+    const { params, drafts, rename } = setup({ draft: { note: { ...note, path: 'notes/untitled.md', content: '# Untitled\n\nBody.\n' }, base: null } });
+    await rename('讀書 計畫', { ...note, path: 'notes/untitled.md' });
+    expect([...drafts.keys()]).toEqual(['notes/讀書-計畫.md']);
+    expect(drafts.get('notes/讀書-計畫.md')?.note).toMatchObject({ content: '# 讀書 計畫\n\nBody.\n', title: '讀書 計畫' });
+    expect(params.onFilesChanged).toHaveBeenCalledWith(expect.objectContaining({ pathMap: { 'notes/untitled.md': 'notes/讀書-計畫.md' } }));
+    expect(params.saveNote).not.toHaveBeenCalled();
+  });
+
+  it('renames a local file, then saves the new title where it now lies before the editor reopens it', async () => {
+    files.fetchFiles.mockResolvedValue({ revision: 'r1' });
+    files.mutateFile.mockResolvedValue({ revision: 'r2', selectedPath: '', pathMap: { 'notes/idea.md': 'notes/plans.md' }, deletedPaths: [] });
+    api.readNote.mockResolvedValue({ ...note, path: 'notes/plans.md', metadata: { status: 'inbox' } });
+    const { params, rename, order } = setup({ remote: false });
+    await rename('Plans');
+    expect(files.mutateFile).toHaveBeenCalledWith({ kind: 'move', notebookId: 'nb', path: 'notes/idea.md', destination: 'notes/plans.md' }, 'r1');
+    expect(params.saveNote).toHaveBeenCalledWith({ path: 'notes/plans.md', notebookId: 'nb', content: '# Plans', metadata: { status: 'inbox' } });
+    expect(order).toEqual(['save notes/plans.md', 'files changed']);
+  });
+
+  it('lets a compilation apply its own new name, and only moves its file', async () => {
+    files.fetchFiles.mockResolvedValue({ revision: 'r1' });
+    files.mutateFile.mockResolvedValue({ revision: 'r2', selectedPath: '', pathMap: {}, deletedPaths: [] });
+    const applyTitle = vi.fn();
+    const compilation = { ...note, path: 'notes/untitled.compilation.yml', title: 'Untitled compilation' };
+    const { params, rename } = setup({ remote: false });
+    await rename('Reading list', compilation, applyTitle);
+    expect(applyTitle).toHaveBeenCalledWith('Reading list');
+    expect(files.mutateFile).toHaveBeenCalledWith(expect.objectContaining({ destination: 'notes/reading-list.compilation.yml' }), 'r1');
+    expect(params.saveNote).not.toHaveBeenCalled();
+  });
+
+  it('refuses a name with nothing to name a file after', async () => {
+    const { params, rename } = setup({});
+    await rename('!!!');
+    expect(params.setActionError).toHaveBeenLastCalledWith('files.renameInvalid');
+    expect(params.flushEditors).not.toHaveBeenCalled();
   });
 });

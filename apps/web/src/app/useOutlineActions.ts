@@ -4,7 +4,7 @@ import { type NoteRef, noteRefKey } from '@mygitnotes/core/note-query';
 import { readNote } from '../lib/api.js';
 import type { NoteItem } from '../lib/types.js';
 import type { WorkspaceState } from './workspace-state.js';
-import type { NewNoteOptions } from './useNewNoteDialog.js';
+import type { NewNoteOptions } from './useCreateNote.js';
 import type { OutlineActions, OutlineInsertionRequest } from '../lib/outline-actions.js';
 import { useTranslation } from '../lib/i18n/index.js';
 
