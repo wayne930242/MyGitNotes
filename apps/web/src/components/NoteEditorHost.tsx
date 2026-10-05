@@ -91,6 +91,7 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ notebookId, 
           documentPanel={lending ? undefined : documentPanel}
           onClose={lending ? editing.closeZoom : undefined}
           onAddToFocus={lending ? editing.addToFocus(note) : undefined}
+          onMove={editing.moveNote?.(note)}
           onSession={onSession}
           onCaret={onCaret}
         />,

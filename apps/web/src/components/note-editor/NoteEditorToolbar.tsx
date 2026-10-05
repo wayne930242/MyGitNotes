@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, FileText, LayoutGrid, ListOrdered, ListTree, PanelRight, Pencil, Save, Type } from 'lucide-react';
+import { ArrowLeft, Check, FileText, FolderInput, LayoutGrid, ListOrdered, ListTree, PanelRight, Pencil, Save, Type } from 'lucide-react';
 import { useTranslation } from '../../lib/i18n/index.js';
 import type { NoteItem } from '../../lib/types.js';
 import { Button } from '../Button.js';
@@ -28,6 +28,8 @@ interface NoteEditorToolbarProps {
   onClose?: () => void;
   onAddToFocus?: () => void;
   onAddToOutline?: () => void;
+  /** Moves the note to another folder of its notebook; a new note starts at the root and is filed from here. */
+  onMove?: () => void;
   /** On a phone, where a note opens for reading: whether it is being edited, and the buttons that switch. */
   phoneEditing?: { editing: boolean; onEdit: () => void; onDone: () => void; };
 }
@@ -79,7 +81,7 @@ function NoteZoomHeading({ note, session, onRefresh, onClose, phoneEditing }: Pi
 }
 
 /** The zoom and pane editor's top bar: the zoom title, then save, mode, line number, export, Focus, formatting toolbar and panel actions. */
-export function NoteEditorToolbar({ frame, note, session, docPanel, isMarkdown, autoSave, readOnly, editorMode, setEditorMode, showLineNumbers, toggleLineNumbers, showFormatToolbar, toggleFormatToolbar, onRefresh, onClose, onAddToFocus, onAddToOutline, phoneEditing }: NoteEditorToolbarProps) {
+export function NoteEditorToolbar({ frame, note, session, docPanel, isMarkdown, autoSave, readOnly, editorMode, setEditorMode, showLineNumbers, toggleLineNumbers, showFormatToolbar, toggleFormatToolbar, onRefresh, onClose, onAddToFocus, onAddToOutline, onMove, phoneEditing }: NoteEditorToolbarProps) {
   const { t } = useTranslation();
   const zoom = frame === 'zoom';
   return (
@@ -100,6 +102,11 @@ export function NoteEditorToolbar({ frame, note, session, docPanel, isMarkdown, 
         {onAddToOutline && (
           <button type='button' className='ui-icon-button toolbar-icon-button' disabled={session.locked} aria-label={t('outline.add')} title={t('outline.add')} onClick={onAddToOutline}>
             <ListTree aria-hidden='true' />
+          </button>
+        )}
+        {onMove && (
+          <button type='button' className='ui-icon-button toolbar-icon-button editor-move-action' disabled={session.locked} aria-label={t('files.moveNote')} title={t('files.moveNote')} onClick={onMove}>
+            <FolderInput aria-hidden='true' />
           </button>
         )}
         <NoteExportMenu className='ui-icon-button toolbar-icon-button' path={note.path} notebookId={note.notebookId} title={session.title} content={session.content} copyState={session.copyState} onCopy={session.copyNote} />

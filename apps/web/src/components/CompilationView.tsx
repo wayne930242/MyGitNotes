@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react';
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Copy, GripVertical, LayoutGrid, ListTree, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
+import { Copy, FolderInput, GripVertical, LayoutGrid, ListTree, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { type CompilationItem, type CompilationRow, moveCompilationItem } from '@mygitnotes/core/compilation';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
@@ -117,6 +117,7 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
   };
   const change = (next: CompilationRow) => compilation.change({ rows: [next] });
   const addToFocus = compilation.note ? editing.addToFocus({ ...compilation.note, content: compilation.note.content ?? '' }) : undefined;
+  const move = compilation.writable && compilation.note ? editing.moveNote?.({ ...compilation.note, content: compilation.note.content ?? '' }) : undefined;
 
   const view = (current: CompilationRow) => {
     const common = {
@@ -174,6 +175,12 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
                         <Copy size={14} aria-hidden='true' />
                         <span>{t('compilation.copy')}</span>
                       </DropdownMenu.Item>
+                      {move && (
+                        <DropdownMenu.Item disabled={disabled} onSelect={move}>
+                          <FolderInput size={14} aria-hidden='true' />
+                          <span>{t('compilation.move')}</span>
+                        </DropdownMenu.Item>
+                      )}
                       <DropdownMenu.Item disabled={disabled} onSelect={() => setDialog('delete')}>
                         <Trash2 size={14} aria-hidden='true' />
                         <span>{t('compilation.delete')}</span>

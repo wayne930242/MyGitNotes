@@ -12,7 +12,7 @@ import { useTranslation } from '../lib/i18n/index.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
 import { HighlightText } from './HighlightText.js';
-import { NotesEmptyState } from './NotesEmptyState.js';
+import { type BrowseKind, NotesEmptyState } from './NotesEmptyState.js';
 import { NoteSelectBox } from './NoteSelectBox.js';
 import { NoteZoomButton } from './NoteZoomButton.js';
 import { useNoteTouchSelection } from '../lib/use-note-touch-selection.js';
@@ -33,6 +33,8 @@ interface ListViewProps {
   onMoveNote?: (note: NoteListItem) => void;
   onUpdateNoteStatus: (note: NoteListItem, newStatus: string) => void;
   onNewNote: () => void;
+  /** What the list shows, so its empty state offers to create the same kind. */
+  newKind?: BrowseKind;
   sortField?: SortField;
   sortOrder?: SortOrder;
   onSortChange?: (field: SortField, order?: SortOrder) => void;
@@ -132,7 +134,7 @@ const NoteRow = React.memo(function NoteRow({ note, statuses, readOnly, canDelet
   );
 });
 
-export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onUpdateNoteStatus, onNewNote, sortField = 'updated', sortOrder = 'desc', onSortChange, showMobileSort = false, tagActions, focusMode, compact = false, leading, highlightQuery = '', selectedKeys, onToggleSelect }) => {
+export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onUpdateNoteStatus, onNewNote, newKind, sortField = 'updated', sortOrder = 'desc', onSortChange, showMobileSort = false, tagActions, focusMode, compact = false, leading, highlightQuery = '', selectedKeys, onToggleSelect }) => {
   const { t, language } = useTranslation();
   // Rows retain stable actions while invoking the latest committed callbacks.
   const handlers = useRef({ onOpenNote, onDeleteNote, onUpdateNoteStatus, onMoveNote, focusMode, onToggleSelect });
@@ -153,7 +155,7 @@ export const ListView: React.FC<ListViewProps> = ({ notes, uncommitted = [], has
   const isEmpty = !loading && notes.length === 0 && uncommitted.length === 0 && !hasFolderEntries;
 
   if (isEmpty) {
-    return <NotesEmptyState readOnly={readOnly} onNewNote={onNewNote} />;
+    return <NotesEmptyState readOnly={readOnly} kind={newKind} onNewNote={onNewNote} />;
   }
 
   const renderSortHeader = (field: SortField, label: string, className = '') => {

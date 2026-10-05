@@ -10,7 +10,7 @@ import { noteUpdatedTime } from '../lib/note-sort.js';
 import { useDeleteConfirm } from '../lib/use-delete-confirm.js';
 import { NOTE_DRAG_TYPE, type NoteBrowseFocusMode } from '../lib/note-drag.js';
 import { HighlightText } from './HighlightText.js';
-import { NotesEmptyState } from './NotesEmptyState.js';
+import { type BrowseKind, NotesEmptyState } from './NotesEmptyState.js';
 import { NoteSelectBox } from './NoteSelectBox.js';
 import { NoteZoomButton } from './NoteZoomButton.js';
 import { useNoteTouchSelection } from '../lib/use-note-touch-selection.js';
@@ -30,6 +30,8 @@ interface CardViewProps {
   onDeleteNote: (note: NoteListItem) => void;
   onMoveNote?: (note: NoteListItem) => void;
   onNewNote: () => void;
+  /** What the list shows, so its empty state offers to create the same kind. */
+  newKind?: BrowseKind;
   onUpdateNoteStatus: (note: NoteListItem, status: string) => void;
   tagActions?: NoteTagActions;
   /** Present while a Focus is displayed: cards get a zoom button and can be dragged into a pane. */
@@ -44,7 +46,7 @@ interface CardViewProps {
   onToggleSelect?: (note: NoteListItem) => void;
 }
 
-export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onNewNote, onUpdateNoteStatus, tagActions, focusMode, strip = false, highlightQuery = '', selectedKeys, onToggleSelect }) => {
+export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], hasFolderEntries = false, loading = false, statuses, readOnly = false, canDelete = true, confirmDelete = false, onOpenNote, onDeleteNote, onMoveNote, onNewNote, newKind, onUpdateNoteStatus, tagActions, focusMode, strip = false, highlightQuery = '', selectedKeys, onToggleSelect }) => {
   const { t } = useTranslation();
   const touchSelection = useNoteTouchSelection(onToggleSelect);
   const { pendingDeletePath, requestDelete } = useDeleteConfirm(confirmDelete, path => {
@@ -55,7 +57,7 @@ export const CardView: React.FC<CardViewProps> = ({ notes, uncommitted = [], has
   const isEmpty = !loading && notes.length === 0 && uncommitted.length === 0 && !hasFolderEntries;
 
   if (isEmpty) {
-    return <NotesEmptyState readOnly={readOnly} onNewNote={onNewNote} />;
+    return <NotesEmptyState readOnly={readOnly} kind={newKind} onNewNote={onNewNote} />;
   }
 
   const getExcerpt = (content: string) => {

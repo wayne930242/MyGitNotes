@@ -66,7 +66,7 @@ const ZoomFrame: React.FC<{ note: NoteItem; committed?: NoteItem; }> = ({ note, 
   const props = editing.editorProps(note, committed);
   return (
     <div className='note-overlay viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn'>
-      <div role='dialog' aria-modal='true' aria-label='Note editor' className='note-dialog ui-dialog shadow-2xl w-full max-w-none h-full flex flex-col overflow-hidden transition-colors'>{borrowed ? <div ref={setSlot} className='note-editor-slot' /> : <NoteEditor key={`${props.draftScope}:${key}`} {...props} note={note} frame='zoom' active onClose={editing.closeZoom} onAddToFocus={editing.addToFocus(note)} />}</div>
+      <div role='dialog' aria-modal='true' aria-label='Note editor' className='note-dialog ui-dialog shadow-2xl w-full max-w-none h-full flex flex-col overflow-hidden transition-colors'>{borrowed ? <div ref={setSlot} className='note-editor-slot' /> : <NoteEditor key={`${props.draftScope}:${key}`} {...props} note={note} frame='zoom' active onClose={editing.closeZoom} onAddToFocus={editing.addToFocus(note)} onMove={editing.moveNote?.(note)} />}</div>
     </div>
   );
 };

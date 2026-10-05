@@ -70,6 +70,8 @@ interface NoteEditingValue {
   closeZoom: () => void;
   /** The Add to Focus action for `note`, or undefined when it cannot join a Focus. */
   addToFocus: (note: NoteItem) => (() => void) | undefined;
+  /** The Move to folder action for `note`, or undefined when its notebook is read-only. */
+  moveNote?: (note: NoteItem) => (() => void) | undefined;
 }
 
 const NoteEditingContext = createContext<NoteEditingValue | null>(null);
@@ -109,7 +111,7 @@ export function useNoteEditorRegistry() {
 export function NoteEditingProvider({ register, children, ...value }: Omit<NoteEditingValue, 'zoom' | 'setZoom' | 'hosts' | 'claimEditor'> & { register: (key: string, flush: Flush) => () => void; children: ReactNode; }) {
   const [zoom, setZoom] = useState<ZoomState | null>(null);
   const [hosts] = useState(() => new NoteHosts());
-  const { editorProps, flushEditors, refreshNotes, closeZoom, addToFocus } = value;
+  const { editorProps, flushEditors, refreshNotes, closeZoom, addToFocus, moveNote } = value;
   const claims = useRef(new Map<string, Promise<boolean>>());
   // The claiming host opens its editor from the notes it reads, so a save's refetch lands first.
   // Claims for the same note are chained: a claim never runs its own flush and refresh until
@@ -132,7 +134,7 @@ export function NoteEditingProvider({ register, children, ...value }: Omit<NoteE
     });
     return queued;
   }, [flushEditors, refreshNotes, hosts]);
-  const context = useMemo(() => ({ editorProps, hosts, claimEditor, flushEditors, refreshNotes, closeZoom, addToFocus, zoom, setZoom }), [editorProps, hosts, claimEditor, flushEditors, refreshNotes, closeZoom, addToFocus, zoom]);
+  const context = useMemo(() => ({ editorProps, hosts, claimEditor, flushEditors, refreshNotes, closeZoom, addToFocus, moveNote, zoom, setZoom }), [editorProps, hosts, claimEditor, flushEditors, refreshNotes, closeZoom, addToFocus, moveNote, zoom]);
   return (
     <RegistryContext.Provider value={register}>
       <NoteEditingContext.Provider value={context}>{children}</NoteEditingContext.Provider>

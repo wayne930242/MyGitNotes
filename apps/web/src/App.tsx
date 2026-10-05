@@ -49,6 +49,8 @@ import { BulkMoveDialog } from './components/BulkMoveDialog.js';
 import { useAssetOperations } from './app/useAssetOperations.js';
 import { useRoutedNote } from './app/useRoutedNote.js';
 import { useNewNoteDialog } from './app/useNewNoteDialog.js';
+import { useNoteMove } from './app/useNoteMove.js';
+import { noteFolder } from './lib/note-move.js';
 import { NewNoteDialog } from './app/NewNoteDialog.js';
 import { AgentAccessSettings, AuthControls, ConnectionState } from './components/AuthControls.js';
 import { Header } from './components/Header.js';
@@ -192,7 +194,7 @@ const AppContent: React.FC = () => {
   const bulkMoveNotebook = config?.notebooks.find(nb => nb.id === bulkMoveNotebookId);
 
   // Create New Note dialog: its form state and the handlers that render or persist a new note draft.
-  const { newNoteKind, creating, cancelNewNote, createError, isNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteFolder, setNewNoteFolder, newNoteTags, newNoteTemplateId, newNoteFolders, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote } = useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, sourceId, newNoteStatuses, t, onCreated: handleOpenNote });
+  const { newNoteKind, creating, cancelNewNote, createError, isNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteTags, newNoteTemplateId, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote } = useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, sourceId, newNoteStatuses, t, onCreated: handleOpenNote });
 
   const outlineActions = useOutlineActions({ config, repositoryFor, readDraft, remote, sourceId, selectedNotebookId, locationKey: location.key, routedRef: editorRoute.note && editorNotebookId ? { notebookId: editorNotebookId, path: `${config?.notebooks.find(nb => nb.id === editorNotebookId)?.root}/${editorRoute.note}` } : null, prepareLeave: editorRegistry.flushEditors, openNote: handleOpenNote, openNewNote, onError: setActionError });
 
@@ -205,6 +207,8 @@ const AppContent: React.FC = () => {
   const { handleUploadAsset, handleDeleteAsset, handleMoveAsset } = useAssetOperations({ editingNote, selectedNotebookId, remote, setAssets, setGitStatus });
 
   const { beforeFileChange, openFileManager, moveNoteAction, onFilesChanged, openFileIndex } = useFileNavigation({ editorRegistry, hasPendingDrafts, documents, t, config, setFileDialog, setActionError, refreshWorkspace, refreshDocuments, editorRoute, editorNotebookId, setEditingNote, navigate, location, returnTo, setFileEditorRevision, selectedFolder, folderRoot, changeFilters, handleOpenFolderIndex });
+  const noteMove = useNoteMove({ config, remote, canWriteNotebook, readDraft, updateDraft, stageWorkingNote, focus: focusPage, queryClient, queryScope, flushEditors: editorRegistry.flushEditors, beforeFileChange, onFilesChanged, setActionError, t });
+  const movingNotebook = noteMove.moving ? config?.notebooks.find(nb => nb.id === noteMove.moving?.notebookId) : undefined;
   const { bulkBusy, runBulkStatus, runBulkTag, runBulkMove } = useBulkNoteActions({ selectedNotes, clearSelection, onUpdateNoteStatus: handleUpdateNoteStatus, beforeFileChange, onFilesChanged, repositories, remote, canWrite, t, invalidateNotes, setRepositoryRevision, setActionError, tagOperations, config });
 
   const noteEditorOpen = (Boolean(routedNote) || routedLoading) && !routeError;
@@ -263,6 +267,13 @@ const AppContent: React.FC = () => {
   const browseFocusMode = noteFocus.layout ? { onZoomNote: (note: NoteListItem) => void handleOpenNote(note), canDrag: (note: NoteListItem) => noteFocus.editable && note.notebookId === selectedNotebookId } : undefined;
   // Either dock collapses and reopens from the toolbar's left end.
   const dockToggle = noteFocus.layout && focusCapacity > 1 ? <BrowseDockToggle placement={topDock ? 'top' : 'left'} collapsed={noteFocus.view.dock.collapsed} onCollapsedChange={collapsed => noteFocus.setDock({ collapsed })} /> : undefined;
+  // An outline or compilation list offers its own kind; every kind starts at the notebook root, moved from its editor.
+  const newKind = route.kind === 'outline' || route.kind === 'compilation' ? route.kind : 'note';
+  const createNewKind = () => {
+    if (newKind === 'outline') openNewNote({ kind: 'outline' });
+    else if (newKind === 'compilation') setNewCompilationOpen(true);
+    else openNewNote();
+  };
   const browseRegion = (docked: boolean, dockHeight: number) => (
     <>
       <LegacySchemaNotice schemaVersion={config?.schema_version} />
@@ -281,13 +292,13 @@ const AppContent: React.FC = () => {
       )}
       {(viewMode === 'list' || viewMode === 'flat') && (
         <>
-          <ListView showMobileSort={false} compact={docked} focusMode={browseFocusMode} statuses={notebookStatuses} readOnly={!canWrite} canDelete={canWrite} confirmDelete={remote} notes={displayedNotes} loading={listResult.loading} uncommitted={listResult.uncommitted} hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)} onOpenNote={note => void openFromBrowse(note)} onDeleteNote={handleDeleteNote} onMoveNote={moveNoteAction} onUpdateNoteStatus={handleUpdateNoteStatus} onNewNote={() => openNewNote()} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} tagActions={noteTagActions} leading={viewMode === 'flat' && folderIndex ? <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} /> : undefined} highlightQuery={debouncedSearch} selectedKeys={selectedKeys} onToggleSelect={toggleSelect} />
+          <ListView showMobileSort={false} compact={docked} focusMode={browseFocusMode} statuses={notebookStatuses} readOnly={!canWrite} canDelete={canWrite} confirmDelete={remote} notes={displayedNotes} loading={listResult.loading} uncommitted={listResult.uncommitted} hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)} onOpenNote={note => void openFromBrowse(note)} onDeleteNote={handleDeleteNote} onMoveNote={moveNoteAction} onUpdateNoteStatus={handleUpdateNoteStatus} newKind={newKind} onNewNote={createNewKind} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} tagActions={noteTagActions} leading={viewMode === 'flat' && folderIndex ? <FolderIndex note={folderIndex} onOpenNote={note => void openFromBrowse(note)} /> : undefined} highlightQuery={debouncedSearch} selectedKeys={selectedKeys} onToggleSelect={toggleSelect} />
           <NoteListSentinel hasMore={listResult.hasMore} loading={listResult.loadingMore} error={listResult.error} onLoadMore={listResult.loadMore} />
         </>
       )}
       {viewMode === 'card' && (
         <>
-          <CardView strip={docked && dockHeight < CARD_TWO_ROW_HEIGHT} focusMode={browseFocusMode} statuses={notebookStatuses} readOnly={!canWrite} canDelete={canWrite} confirmDelete={remote} notes={displayedNotes} loading={listResult.loading} uncommitted={listResult.uncommitted} hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)} onOpenNote={note => void openFromBrowse(note)} onDeleteNote={handleDeleteNote} onMoveNote={moveNoteAction} onNewNote={() => openNewNote()} onUpdateNoteStatus={handleUpdateNoteStatus} tagActions={noteTagActions} highlightQuery={debouncedSearch} selectedKeys={selectedKeys} onToggleSelect={toggleSelect} />
+          <CardView strip={docked && dockHeight < CARD_TWO_ROW_HEIGHT} focusMode={browseFocusMode} statuses={notebookStatuses} readOnly={!canWrite} canDelete={canWrite} confirmDelete={remote} notes={displayedNotes} loading={listResult.loading} uncommitted={listResult.uncommitted} hasFolderEntries={immediateSubfolders.length > 0 || Boolean(folderIndex)} onOpenNote={note => void openFromBrowse(note)} onDeleteNote={handleDeleteNote} onMoveNote={moveNoteAction} newKind={newKind} onNewNote={createNewKind} onUpdateNoteStatus={handleUpdateNoteStatus} tagActions={noteTagActions} highlightQuery={debouncedSearch} selectedKeys={selectedKeys} onToggleSelect={toggleSelect} />
           <NoteListSentinel hasMore={listResult.hasMore} loading={listResult.loadingMore} error={listResult.error} onLoadMore={listResult.loadMore} />
         </>
       )}
@@ -328,7 +339,7 @@ const AppContent: React.FC = () => {
     const notebook = config?.notebooks.find(nb => nb.id === row.notebookId);
     if (!notebook) return;
     try {
-      const plan = await planNewCompilation(row, notebook, selectedFolder ?? '');
+      const plan = await planNewCompilation(row, notebook, '');
       void openFromBrowse(await compilationActions.create(notebook.id, plan.path, plan.content, plan.metadata));
     } catch (error) {
       setActionError((error as Error).message);
@@ -367,7 +378,7 @@ const AppContent: React.FC = () => {
     <CompilationActionsProvider value={compilationActions}>
       <WorkspaceLinks notebooks={config?.notebooks || []} folders={folders} onOpenNote={(note, anchor, source) => void openLink(note, anchor, source)}>
         <NoteLocationProvider locate={locateNote}>
-          <NoteEditingProvider register={editorRegistry.register} editorProps={editorProps} flushEditors={editorRegistry.flushEditors} refreshNotes={refreshNotes} closeZoom={closeZoom} addToFocus={addToFocus}>
+          <NoteEditingProvider register={editorRegistry.register} editorProps={editorProps} flushEditors={editorRegistry.flushEditors} refreshNotes={refreshNotes} closeZoom={closeZoom} addToFocus={addToFocus} moveNote={noteMove.moveNote}>
             <div className='app-shell h-dvh w-full overflow-hidden flex flex-col font-sans transition-colors duration-200' data-workspace-tab={activeTab} data-screen-focus={Boolean(route.study)} style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}>
               {/* Core Branch User Guidance Banner (Theme-aware, harmonized with active palette) */}
               {!remote && homeBranch === 'core' && (
@@ -512,7 +523,7 @@ const AppContent: React.FC = () => {
                         <main className='workspace-main notes-main'>
                           <PageToolbar>
                             {dockToggle}
-                            <NoteToolbar onImportLegacy={() => setLegacyImportOpen(true)} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode} hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null} showHidden={showHidden} descendants={route.descendants} onShowHiddenChange={value => changeFilters({ showHidden: value })} onDescendantsChange={value => changeFilters({ descendants: value })} onOpenNewNoteModal={() => openNewNote()} onOpenNewOutline={() => openNewNote({ kind: 'outline', folder: selectedFolder ?? '' })} onOpenNewCompilation={() => setNewCompilationOpen(true)} query={searchQuery} onQueryChange={value => changeFilters({ q: value })} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(open => !open)} focusControls={<FocusControls focus={noteFocus} onShow={key => void showFocus(key)} onReload={() => void focusPage.reload()} browseToggle={focusCapacity === 1 ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') } : undefined} />} />
+                            <NoteToolbar onImportLegacy={() => setLegacyImportOpen(true)} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode} hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null} showHidden={showHidden} descendants={route.descendants} onShowHiddenChange={value => changeFilters({ showHidden: value })} onDescendantsChange={value => changeFilters({ descendants: value })} onOpenNewNoteModal={() => openNewNote()} onOpenNewOutline={() => openNewNote({ kind: 'outline' })} onOpenNewCompilation={() => setNewCompilationOpen(true)} query={searchQuery} onQueryChange={value => changeFilters({ q: value })} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(open => !open)} focusControls={<FocusControls focus={noteFocus} onShow={key => void showFocus(key)} onReload={() => void focusPage.reload()} browseToggle={focusCapacity === 1 ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') } : undefined} />} />
                           </PageToolbar>
                           {noteFocus.layout
                             ? (
@@ -612,11 +623,12 @@ const AppContent: React.FC = () => {
                 </section>
               )}
               {fileDialog && <FileManagerDialog notebookId={fileDialog.notebookId} notebooks={config?.notebooks || []} writable={canWrite} initialPath={fileDialog.path} movePath={fileDialog.movePath} initialOperation={fileDialog.initialOperation} showDocuments={fileDialog.showDocuments} beforeChange={beforeFileChange} onChanged={onFilesChanged} onOpenIndex={openFileIndex} onClose={() => setFileDialog(undefined)} />}
+              {noteMove.moving && movingNotebook && <BulkMoveDialog notebook={movingNotebook} folders={folders} title={t('files.moveNoteTitle', { title: noteMove.moving.title || noteMove.moving.path.split('/').pop() || '' })} initialFolder={noteFolder(noteMove.moving.path, movingNotebook.root)} busy={noteMove.busy} onClose={noteMove.cancelMove} onConfirm={folder => void noteMove.confirmMove(folder)} />}
               {bulkMoveOpen && bulkMoveNotebook && (
                 <BulkMoveDialog
                   notebook={bulkMoveNotebook}
                   folders={folders}
-                  count={selectedNotes.length}
+                  title={t('bulk.moveDialogTitle', { count: selectedNotes.length })}
                   busy={bulkBusy}
                   onClose={() => setBulkMoveOpen(false)}
                   onConfirm={destination => {
@@ -694,7 +706,7 @@ const AppContent: React.FC = () => {
                 }}
               />
               {/* Create New Note Modal */}
-              {isNewNoteOpen && <NewNoteDialog t={t} createError={createError} kind={newNoteKind} creating={creating} newNoteTitle={newNoteTitle} onTitleChange={setNewNoteTitle} onSubmit={() => handleCreateNewNote()} newNoteFolder={newNoteFolder} onFolderChange={setNewNoteFolder} newNoteFolders={newNoteFolders} newNoteTemplates={newNoteTemplates} newNoteTemplateId={newNoteTemplateId} onTemplateChange={handleTemplateChange} newNoteTags={newNoteTags} newNoteStatus={newNoteStatus} onStatusChange={setNewNoteStatus} newNoteStatuses={newNoteStatuses} onCancel={cancelNewNote} />}
+              {isNewNoteOpen && <NewNoteDialog t={t} createError={createError} kind={newNoteKind} creating={creating} newNoteTitle={newNoteTitle} onTitleChange={setNewNoteTitle} onSubmit={() => handleCreateNewNote()} newNoteTemplates={newNoteTemplates} newNoteTemplateId={newNoteTemplateId} onTemplateChange={handleTemplateChange} newNoteTags={newNoteTags} newNoteStatus={newNoteStatus} onStatusChange={setNewNoteStatus} newNoteStatuses={newNoteStatuses} onCancel={cancelNewNote} />}
             </div>
             <ImageLightbox />
             {outlineActions.dialog && <AddToOutlineDialog key={outlineActions.dialog.id} source={outlineActions.dialog.source} busy={outlineActions.busy} error={outlineActions.error} onChoose={outlineActions.choose} onClose={outlineActions.cancel} />}

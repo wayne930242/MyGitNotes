@@ -164,5 +164,5 @@ export function useNewNoteDialog({ config, selectedNotebookId, setSelectedNotebo
     }
   };
 
-  return { newNoteKind, creating, cancelNewNote, createError, setCreateError, isNewNoteOpen, setIsNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteFolder, setNewNoteFolder, newNoteTags, setNewNoteTags, newNoteTemplateId, setNewNoteTemplateId, newNoteFolders, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote };
+  return { newNoteKind, creating, cancelNewNote, createError, setCreateError, isNewNoteOpen, setIsNewNoteOpen, newNoteTitle, setNewNoteTitle, newNoteStatus, setNewNoteStatus, newNoteTags, setNewNoteTags, newNoteTemplateId, setNewNoteTemplateId, newNoteTemplates, handleTemplateChange, openNewNote, handleCreateNewNote };
 }

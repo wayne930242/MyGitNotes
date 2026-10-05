@@ -38,6 +38,8 @@ export interface NoteEditorProps extends NoteEditorSharedProps {
   /** Zoom frame: saves, then leaves zoom. */
   onClose?: () => void;
   onAddToFocus?: () => void;
+  /** Opens the folder picker that moves the note; absent when its notebook is read-only. */
+  onMove?: () => void;
   /** Reports the session whenever it changes, and null when the editor unmounts. */
   onSession?: (session: NoteEditorSession | null) => void;
   onCaret?: (position: number) => void;
@@ -50,7 +52,7 @@ function footerActions({ frame, readOnly, session, refresh, canCommit }: { frame
 }
 
 /** A note's editing session: content, frontmatter, drafts, autosave, conflicts, crash recovery and the document panel. */
-export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note, frame, active, documentPanel, onClose, onAddToFocus, onSession, onCaret, statuses, metadataFields, readOnly = false, autoSave = true, draftMode = false, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, onCommitFile, readDiff, isDirty: propIsDirty = false, availableTags = [], beforeFileChange, onFilesChanged, branch, draftScope }, ref) => {
+export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note, frame, active, documentPanel, onClose, onAddToFocus, onMove, onSession, onCaret, statuses, metadataFields, readOnly = false, autoSave = true, draftMode = false, remoteBase, conflictReason, onMarkConflict, onSave, onReadRemote, onRestoreFile, onCommitFile, readDiff, isDirty: propIsDirty = false, availableTags = [], beforeFileChange, onFilesChanged, branch, draftScope }, ref) => {
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(note.path);
   const { setHasOpenNote } = usePanelContext();
   // The workspace rail hides only behind zoom; a pane editor shares the page with it. It hides before the
@@ -144,7 +146,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   return (
     <div className='note-editor' data-frame={frame} data-source-notebook={note.notebookId} style={noteViewStyle(viewPreferences)}>
       <NoteEditorNotices session={session} notePath={note.path} />
-      <NoteEditorToolbar frame={frame} note={note} session={session} docPanel={docPanel} isMarkdown={isMarkdown} autoSave={autoSave} readOnly={readOnly} editorMode={editorMode} setEditorMode={setEditorMode} showLineNumbers={showLineNumbers} toggleLineNumbers={toggleLineNumbers} showFormatToolbar={showFormatToolbar} toggleFormatToolbar={isMarkdown && !session.locked && !reading ? toggleFormatToolbar : undefined} phoneEditing={phone && !session.locked ? { editing, onEdit: () => setEditing(true), onDone: finishEditing } : undefined} onRefresh={refresh} onClose={onClose} onAddToFocus={onAddToFocus} onAddToOutline={addToOutline} />
+      <NoteEditorToolbar frame={frame} note={note} session={session} docPanel={docPanel} isMarkdown={isMarkdown} autoSave={autoSave} readOnly={readOnly} editorMode={editorMode} setEditorMode={setEditorMode} showLineNumbers={showLineNumbers} toggleLineNumbers={toggleLineNumbers} showFormatToolbar={showFormatToolbar} toggleFormatToolbar={isMarkdown && !session.locked && !reading ? toggleFormatToolbar : undefined} phoneEditing={phone && !session.locked ? { editing, onEdit: () => setEditing(true), onDone: finishEditing } : undefined} onRefresh={refresh} onClose={onClose} onAddToFocus={onAddToFocus} onMove={readOnly ? undefined : onMove} onAddToOutline={addToOutline} />
       {awaitingRecovery && (
         <p role='status'>
           {t('outline.recoveryPending')} <button type='button' className='ui-button' onClick={() => outlines?.cancel()}>{t('common.cancel')}</button>

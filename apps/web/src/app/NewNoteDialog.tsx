@@ -12,9 +12,6 @@ interface NewNoteDialogProps {
   newNoteTitle: string;
   onTitleChange: (value: string) => void;
   onSubmit: () => void;
-  newNoteFolder: string;
-  onFolderChange: (value: string) => void;
-  newNoteFolders: string[];
   newNoteTemplates: NoteTemplate[];
   newNoteTemplateId: string;
   onTemplateChange: (templateId: string) => void;
@@ -25,8 +22,9 @@ interface NewNoteDialogProps {
   onCancel: () => void;
 }
 
-/** The Create New Note modal: title, folder, template and status pickers backed by `useNewNoteDialog`. */
-export function NewNoteDialog({ t, createError, kind = 'note', creating = false, newNoteTitle, onTitleChange, onSubmit, newNoteFolder, onFolderChange, newNoteFolders, newNoteTemplates, newNoteTemplateId, onTemplateChange, newNoteTags, newNoteStatus, onStatusChange, newNoteStatuses, onCancel }: NewNoteDialogProps) {
+/** The Create New Note modal: title, template and status pickers backed by `useNewNoteDialog`. A new note starts at the
+ * notebook root, or in the folder its compilation lane draws from; its editor's Move action files it elsewhere. */
+export function NewNoteDialog({ t, createError, kind = 'note', creating = false, newNoteTitle, onTitleChange, onSubmit, newNoteTemplates, newNoteTemplateId, onTemplateChange, newNoteTags, newNoteStatus, onStatusChange, newNoteStatuses, onCancel }: NewNoteDialogProps) {
   return (
     <div className='viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-4'>
       <div className='rounded-2xl shadow-2xl border w-full max-w-md max-h-full overflow-y-auto p-4 md:p-6' style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
@@ -50,11 +48,6 @@ export function NewNoteDialog({ t, createError, kind = 'note', creating = false,
                 if (e.key === 'Enter') onSubmit();
               }}
             />
-          </div>
-          <div>
-            <label className='block text-xs font-semibold text-fg uppercase tracking-wider mb-1.5' htmlFor='create-note-folder'>{t('createNote.folder')}</label>
-            <input id='create-note-folder' type='text' list='create-note-folders' aria-label={t('createNote.folder')} placeholder={t('createNote.folderPlaceholder')} value={newNoteFolder} onChange={event => onFolderChange(event.target.value)} className='ui-control' autoComplete='off' />
-            <datalist id='create-note-folders'>{newNoteFolders.map(folder => <option key={folder} value={folder} />)}</datalist>
           </div>
           {kind === 'note' && newNoteTemplates.length > 0 && (
             <div>
