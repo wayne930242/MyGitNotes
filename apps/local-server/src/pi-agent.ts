@@ -6,8 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer } from 'ws';
-import { commandAvailable, piCommand, PiSession, type PiSessionInfo } from './pi-session.js';
-import { asLocal, eachRepository, localHome, noteRepository } from './request-workspace.js';
+import { commandAvailable, piCommand, type PiLocation, PiSession, type PiSessionInfo } from './pi-session.js';
+import { asLocal, notebookRepository, noteRepository } from './request-workspace.js';
 
 export const PI_SOCKET_PATH = '/api/pi/ws';
 const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]', '::1'];
@@ -33,12 +33,21 @@ function isLoopbackHost(host: string | undefined): boolean {
 }
 
 /**
- * The bridge drives a process that can run any command as this user, so only a page served from this
- * machine may reach it: the tailnet origin that `pnpm dev:remote` admits for notes is refused here.
+ * The bridge drives a process that can run any command as this user, so it answers a page served from this
+ * machine, and through `pnpm dev:remote` only the tailnet login that owns this machine. Tailscale Serve sets
+ * `Tailscale-User-Login` on every request it proxies, replacing any value the client sent, so a request that
+ * carries it came through Serve and names who sent it; a tagged device carries none and is refused writes,
+ * which always send an Origin.
  */
-function loopbackOnly(req: IncomingMessage): boolean {
+export function agentClientAllowed(req: Pick<IncomingMessage, 'headers'>, env: NodeJS.ProcessEnv = process.env): boolean {
   const origin = req.headers.origin;
-  return isLoopbackHost(req.headers.host) && (origin === undefined || isLoopbackHttpOrigin(origin));
+  if (!isLoopbackHost(req.headers.host)) return false;
+  const login = req.headers['tailscale-user-login'];
+  if (login !== undefined) {
+    const remoteOrigin = env.MYGITNOTES_REMOTE_ORIGIN, owner = env.MYGITNOTES_REMOTE_OWNER;
+    return Boolean(remoteOrigin && owner) && login === owner && (origin === undefined || origin === remoteOrigin);
+  }
+  return origin === undefined || isLoopbackHttpOrigin(origin);
 }
 
 /** Resolves a requested working folder: an existing directory inside the user's home directory. */
@@ -55,6 +64,20 @@ export function resolveAgentCwd(requested: string, home = os.homedir()): string 
   const realHome = fs.realpathSync(home);
   if (real !== realHome && !real.startsWith(`${realHome}${path.sep}`)) throw new SourceError('The working folder must be inside your home directory.', 403);
   return real;
+}
+
+export interface AgentFolder {
+  cwd: string;
+  location: PiLocation;
+}
+
+/** Resolves a notebook folder the panel picked to the directory Pi starts in. */
+async function notebookFolder(res: express.Response, notebookId: unknown, folder: unknown): Promise<AgentFolder> {
+  if (folder !== null && folder !== undefined && (typeof folder !== 'string' || !folder)) throw new SourceError('folder must be a notebook-relative path or null.');
+  const { handle, notebook } = await notebookRepository(res, notebookId);
+  const root = asLocal(handle).root;
+  const relative = folder ? `${notebook.root.replace(/\/$/, '')}/${folder}` : notebook.root;
+  return { cwd: resolveAgentCwd(resolveSafePath(root, relative)), location: { notebookId: notebook.id, folder: folder ? String(folder) : null } };
 }
 
 /** The one Pi process the notebook's agent panel talks to. It starts in the background and ends only when asked. */
@@ -74,19 +97,21 @@ export class PiSessionManager {
     return this.current;
   }
 
-  /** Returns the live session, starting one in `cwd` when there is none. */
-  ensure(cwd: string, approve: boolean): PiSession {
+  /** Returns the live session, starting one in the resolved folder when there is none; `resolve` runs only then. */
+  async ensure(resolve: () => Promise<AgentFolder>, approve: boolean): Promise<PiSession> {
     if (this.current?.alive) return this.current;
     this.assertAvailable();
-    this.current = new PiSession({ cwd, approve, command: this.command });
+    const folder = await resolve();
+    if (this.current?.alive) return this.current;
+    this.current = new PiSession({ ...folder, approve, command: this.command });
     return this.current;
   }
 
-  /** Ends the live session and starts a fresh one in `cwd`; its conversation does not carry over. */
-  async restart(cwd: string, approve: boolean): Promise<PiSession> {
+  /** Ends the live session and starts a fresh one in `folder`; its conversation does not carry over. */
+  async restart(folder: AgentFolder, approve: boolean): Promise<PiSession> {
     this.assertAvailable();
     await this.end();
-    this.current = new PiSession({ cwd, approve, command: this.command });
+    this.current = new PiSession({ ...folder, approve, command: this.command });
     return this.current;
   }
 
@@ -110,8 +135,8 @@ export interface PiAgent {
 
 export interface PiAgentOptions {
   command?: string;
-  /** The folder a session starts in when the request names none; defaults to the local home repository. */
-  defaultCwd?: (res: express.Response) => string;
+  /** Resolves the notebook folder a request names; defaults to the request's local workspace. */
+  resolveFolder?: (res: express.Response, notebookId: unknown, folder: unknown) => Promise<AgentFolder>;
 }
 
 function sessionBody(session: PiSession | undefined): { session: PiSessionInfo | null; } {
@@ -123,31 +148,26 @@ function fail(res: express.Response, error: unknown) {
   res.status(status).json({ error: (error as Error).message });
 }
 
-export function createPiAgent({ command, defaultCwd = res => localHome(res).root }: PiAgentOptions = {}): PiAgent {
+export function createPiAgent({ command, resolveFolder = notebookFolder }: PiAgentOptions = {}): PiAgent {
   const manager = new PiSessionManager(command);
   const router = express.Router();
-  router.use((req, res, next) => loopbackOnly(req) ? next() : res.status(403).json({ error: 'The agent panel is available only from this computer.' }));
-  const requestedCwd = (req: express.Request, res: express.Response) => resolveAgentCwd(typeof req.body?.cwd === 'string' && req.body.cwd.trim() ? req.body.cwd : defaultCwd(res));
+  router.use((req, res, next) => agentClientAllowed(req) ? next() : res.status(403).json({ error: 'The agent panel is available only from this computer, or to its owner through pnpm dev:remote.' }));
+  // Pi only ever starts in a notebook folder: the request names the notebook and a folder inside it.
+  const requestedFolder = (req: express.Request, res: express.Response) => resolveFolder(res, req.body?.notebookId, req.body?.folder);
 
-  router.get('/session', async (_req, res) => {
-    try {
-      const roots = (await eachRepository(res)).map(({ handle }) => asLocal(handle).root);
-      res.json({ ...sessionBody(manager.session), piAvailable: manager.available, defaultCwd: defaultCwd(res), workspaceRoots: [...new Set(roots)] });
-    } catch (error) {
-      fail(res, error);
-    }
+  router.get('/session', (_req, res) => {
+    res.json({ ...sessionBody(manager.session), piAvailable: manager.available });
   });
-  router.post('/session', (req, res) => {
+  router.post('/session', async (req, res) => {
     try {
-      res.json(sessionBody(manager.ensure(requestedCwd(req, res), req.body?.approve === true)));
+      res.json(sessionBody(await manager.ensure(() => requestedFolder(req, res), req.body?.approve === true)));
     } catch (error) {
       fail(res, error);
     }
   });
   router.put('/session', async (req, res) => {
     try {
-      if (typeof req.body?.cwd !== 'string' || !req.body.cwd.trim()) throw new SourceError('cwd is required.');
-      res.json(sessionBody(await manager.restart(requestedCwd(req, res), req.body?.approve === true)));
+      res.json(sessionBody(await manager.restart(await requestedFolder(req, res), req.body?.approve === true)));
     } catch (error) {
       fail(res, error);
     }
@@ -174,7 +194,7 @@ export function createPiAgent({ command, defaultCwd = res => localHome(res).root
     const refuse = (status: string) => {
       socket.end(`HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
     };
-    if (!loopbackOnly(req) || req.headers.origin === undefined) refuse('403 Forbidden');
+    if (!agentClientAllowed(req) || req.headers.origin === undefined) refuse('403 Forbidden');
     else if (!session) refuse('409 Conflict');
     else {
       sockets.handleUpgrade(req, socket, head, ws => {

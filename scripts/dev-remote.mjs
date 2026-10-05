@@ -48,7 +48,8 @@ function descendants(pid) {
   return found;
 }
 
-function tailnetHost() {
+/** The tailnet host this machine serves on, and the login that owns it; a tagged machine has no owner. */
+function tailnetIdentity() {
   let status;
   try {
     status = JSON.parse(execFileSync('tailscale', ['status', '--json'], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }));
@@ -57,7 +58,8 @@ function tailnetHost() {
   }
   const host = status.Self?.DNSName?.replace(/\.$/, '');
   if (status.BackendState !== 'Running' || !host) throw new Error('tailscale is not connected; sign in and try again.');
-  return host;
+  const owner = status.Self?.Tags?.length ? '' : status.User?.[String(status.Self?.UserID)]?.LoginName ?? '';
+  return { host, owner };
 }
 
 function copyCommand() {
@@ -86,7 +88,7 @@ async function main() {
     return;
   }
 
-  const host = tailnetHost();
+  const { host, owner } = tailnetIdentity();
   const url = `https://${host}/`;
   const port = await findFreePort();
   const children = [];
@@ -141,7 +143,7 @@ async function main() {
   process.on('SIGINT', () => stop(0));
   process.on('SIGTERM', () => stop(0));
 
-  start('pnpm', ['dev'], { MYGITNOTES_WEB_PORT: String(port), MYGITNOTES_REMOTE_ORIGIN: `https://${host}` });
+  start('pnpm', ['dev'], { MYGITNOTES_WEB_PORT: String(port), MYGITNOTES_REMOTE_ORIGIN: `https://${host}`, MYGITNOTES_REMOTE_OWNER: owner });
   await waitUntilReady(port, Date.now() + 120_000);
 
   // Foreground `tailscale serve` keeps the config only while it runs, so stopping it leaves no serve entry behind.

@@ -1,3 +1,4 @@
+import { SourceError } from '@mygitnotes/core';
 import express from 'express';
 import fs from 'node:fs';
 import { createServer, type Server } from 'node:http';
@@ -5,10 +6,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { createPiAgent, type PiAgent, resolveAgentCwd } from './pi-agent.js';
+import { agentClientAllowed, type AgentFolder, createPiAgent, type PiAgent, resolveAgentCwd } from './pi-agent.js';
 import { commandAvailable, jsonlSplitter } from './pi-session.js';
 
-// A stand-in for `pi --mode rpc`: answers get_state, echoes prompts with its cwd and argv, and asks one dialog.
+// A stand-in for `pi --mode rpc`: answers get_state, echoes prompts with its cwd and argv, asks one dialog, and sets or clears a status.
 const FAKE_PI = `
 const out = record => process.stdout.write(JSON.stringify(record) + '\\n');
 let buffer = '';
@@ -19,7 +20,12 @@ process.stdin.on('data', chunk => {
     const command = JSON.parse(buffer.slice(0, index));
     buffer = buffer.slice(index + 1);
     if (command.type === 'get_state') out({ id: command.id, type: 'response', command: 'get_state', success: true, data: { isStreaming: false } });
-    if (command.type === 'prompt' && command.message === 'ask') out({ type: 'extension_ui_request', id: 'dialog-1', method: 'select', title: 'Pick', options: ['A', 'B'] });
+    if (command.type === 'prompt' && command.message === 'status') {
+      out({ type: 'extension_ui_request', id: 's1', method: 'setStatus', statusKey: 'quota', statusText: '42%' });
+      out({ type: 'extension_ui_request', id: 's2', method: 'setStatus', statusKey: 'gone', statusText: 'soon cleared' });
+      out({ type: 'extension_ui_request', id: 's3', method: 'setStatus', statusKey: 'gone' });
+      out({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'status set' }] } });
+    } else if (command.type === 'prompt' && command.message === 'ask') out({ type: 'extension_ui_request', id: 'dialog-1', method: 'select', title: 'Pick', options: ['A', 'B'] });
     else if (command.type === 'prompt') out({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2), message: command.message }) }] } });
     if (command.type === 'extension_ui_response') out({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'answered ' + command.value }] } });
   }
@@ -42,6 +48,13 @@ afterEach(async () => {
   temp = undefined;
 });
 
+function testFolder(workspace: string) {
+  return async (_res: unknown, notebookId: unknown, folder: unknown): Promise<AgentFolder> => {
+    if (notebookId !== 'a') throw new SourceError('Unknown notebook.', 404);
+    return { cwd: resolveAgentCwd(folder ? path.join(workspace, String(folder)) : workspace), location: { notebookId, folder: folder ? String(folder) : null } };
+  };
+}
+
 async function start() {
   // Inside the home directory, which is the only place a session may run.
   temp = fs.mkdtempSync(path.join(os.homedir(), '.mygitnotes-pi-agent-test-'));
@@ -50,7 +63,8 @@ async function start() {
   const command = path.join(temp, 'fake-pi');
   fs.writeFileSync(command, `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`, { mode: 0o755 });
   const workspace = fs.realpathSync(temp);
-  agent = createPiAgent({ command, defaultCwd: () => workspace });
+  // Notebook `a` lives at the temp root; any folder name maps to the directory of that name inside it.
+  agent = createPiAgent({ command, resolveFolder: testFolder(workspace) });
   const app = express();
   app.use(express.json());
   app.use('/api/pi', agent.router);
@@ -65,7 +79,7 @@ async function start() {
   return { base: `http://127.0.0.1:${address.port}`, port: address.port, workspace };
 }
 
-const post = (base: string, method: string, body: unknown = {}, origin = base) => fetch(`${base}/api/pi/session`, { method, headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(body) });
+const post = (base: string, method: string, body: unknown = { notebookId: 'a' }, origin = base) => fetch(`${base}/api/pi/session`, { method, headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(body) });
 
 /** Opens a socket and collects its records until `until` matches one. */
 function connect(port: number, origin: string) {
@@ -136,6 +150,22 @@ describe('pi agent bridge', () => {
     expect(assistantText(await first.next(record => record.type === 'message_end'))).toBe('answered B');
   });
 
+  it('replays the latest status lines to a client that attaches later, but not cleared ones', async () => {
+    const { base, port } = await start();
+    await post(base, 'POST');
+    const first = connect(port, base);
+    await first.opened;
+    first.send({ type: 'prompt', message: 'status' });
+    await first.next(record => record.type === 'message_end');
+
+    const second = connect(port, base);
+    await second.opened;
+    await second.next(record => record.type === 'bridge_status');
+    second.send({ type: 'get_state' });
+    await second.next(record => record.type === 'response');
+    expect(second.records.filter(record => record.method === 'setStatus')).toEqual([expect.objectContaining({ statusKey: 'quota', statusText: '42%' })]);
+  });
+
   it('refuses commands outside the panel surface', async () => {
     const { base, port } = await start();
     await post(base, 'POST');
@@ -161,8 +191,8 @@ describe('pi agent bridge', () => {
     fs.mkdirSync(other);
     const client = connect(port, base);
     await client.opened;
-    const switched = await (await post(base, 'PUT', { cwd: other, approve: true })).json() as { session: { id: string; cwd: string; approve: boolean; }; };
-    expect(switched.session).toMatchObject({ cwd: other, approve: true });
+    const switched = await (await post(base, 'PUT', { notebookId: 'a', folder: 'other', approve: true })).json() as { session: { id: string; cwd: string; approve: boolean; }; };
+    expect(switched.session).toMatchObject({ cwd: other, location: { notebookId: 'a', folder: 'other' }, approve: true });
     expect(switched.session.id).not.toBe(first.session.id);
     // The old session's clients learn it ended and are closed.
     await client.next(record => record.type === 'bridge_status' && (record.session as { status: string; }).status === 'exited');
@@ -179,10 +209,28 @@ describe('pi agent bridge', () => {
 
   it('keeps sessions inside the home directory', async () => {
     const { base } = await start();
-    const response = await post(base, 'PUT', { cwd: '/' });
-    expect(response.status).toBe(403);
+    expect((await post(base, 'PUT', { notebookId: 'b' })).status).toBe(404);
+    expect((await post(base, 'PUT', { notebookId: 'a', folder: 'missing' })).status).toBe(400);
     expect(() => resolveAgentCwd('relative/path')).toThrow('absolute');
     expect(() => resolveAgentCwd(path.join(os.homedir(), 'no-such-folder-mygitnotes'))).toThrow('does not exist');
+  });
+});
+
+describe('agent clients', () => {
+  const env = { MYGITNOTES_REMOTE_ORIGIN: 'https://desk.tail.ts.net', MYGITNOTES_REMOTE_OWNER: 'me@example.com' };
+  const request = (headers: Record<string, string>) => ({ headers: { host: 'localhost:4321', ...headers } });
+
+  it('admits this computer, and through dev:remote only the login that owns it', () => {
+    expect(agentClientAllowed(request({ origin: 'http://localhost:5173' }), env)).toBe(true);
+    expect(agentClientAllowed(request({ origin: 'https://desk.tail.ts.net', 'tailscale-user-login': 'me@example.com' }), env)).toBe(true);
+    expect(agentClientAllowed(request({ 'tailscale-user-login': 'me@example.com' }), env)).toBe(true);
+    expect(agentClientAllowed(request({ origin: 'https://desk.tail.ts.net', 'tailscale-user-login': 'guest@example.com' }), env)).toBe(false);
+    expect(agentClientAllowed(request({ origin: 'https://evil.example', 'tailscale-user-login': 'me@example.com' }), env)).toBe(false);
+    // A tagged device has no login; its writes carry the tailnet origin and are refused.
+    expect(agentClientAllowed(request({ origin: 'https://desk.tail.ts.net' }), env)).toBe(false);
+    // Without dev:remote naming an owner, a request through Serve is refused even from the owner.
+    expect(agentClientAllowed(request({ origin: 'https://desk.tail.ts.net', 'tailscale-user-login': 'me@example.com' }), {})).toBe(false);
+    expect(agentClientAllowed({ headers: { host: 'desk.tail.ts.net', origin: 'http://localhost:5173' } }, env)).toBe(false);
   });
 });
 
@@ -194,9 +242,9 @@ describe('Pi detection', () => {
     expect(commandAvailable('fake-pi', { PATH: `/no/such/dir${path.delimiter}${workspace}` })).toBe(true);
     expect(commandAvailable('fake-pi', { PATH: '/no/such/dir' })).toBe(false);
 
-    const missing = createPiAgent({ command: path.join(workspace, 'no-pi-here'), defaultCwd: () => workspace });
+    const missing = createPiAgent({ command: path.join(workspace, 'no-pi-here') });
     expect(missing.manager.available).toBe(false);
-    expect(() => missing.manager.ensure(workspace, false)).toThrow('Pi is not installed on this computer.');
+    await expect(missing.manager.ensure(async () => ({ cwd: workspace, location: { notebookId: 'a', folder: null } }), false)).rejects.toThrow('Pi is not installed on this computer.');
     expect(missing.manager.session).toBeUndefined();
   });
 });

@@ -8,12 +8,19 @@ import { StringDecoder } from 'node:string_decoder';
 export interface PiSessionInfo {
   id: string;
   cwd: string;
+  /** The notebook folder the panel picked as `cwd`; `folder` is relative to the notebook root, null for the root. */
+  location: PiLocation;
   /** Whether this process was started with `--approve`, trusting the folder's project-local Pi resources. */
   approve: boolean;
   status: 'starting' | 'ready' | 'exited';
   pid?: number;
   startedAt: string;
   exit?: { code: number | null; signal: string | null; stderr: string; };
+}
+
+export interface PiLocation {
+  notebookId: string;
+  folder: string | null;
 }
 
 /** A connected client: receives Pi's stdout records and bridge notices as JSON text. */
@@ -25,6 +32,8 @@ export interface PiSessionListener {
 /** Commands a client may forward to Pi; everything else on the RPC surface stays out of the browser's reach. */
 const CLIENT_COMMANDS = new Set(['prompt', 'steer', 'follow_up', 'abort', 'clear_queue', 'new_session', 'get_state', 'get_messages', 'extension_ui_response']);
 const DIALOG_METHODS = new Set(['select', 'confirm', 'input', 'editor']);
+/** Fire-and-forget UI state keyed by extension; the latest of each is replayed to a client that attaches later. */
+const STATE_KEYS: Record<string, string> = { setStatus: 'statusKey', setWidget: 'widgetKey' };
 const READY_PROBE_ID = 'mygitnotes-bridge-ready';
 const STDERR_LIMIT = 8000;
 const SHUTDOWN_GRACE_MS = 5000;
@@ -74,11 +83,12 @@ export class PiSession {
   private readonly listeners = new Set<PiSessionListener>();
   /** Dialog requests still waiting for an answer, replayed to a client that attaches later. */
   private readonly openDialogs = new Map<string, string>();
+  private readonly uiState = new Map<string, string>();
   private readonly exited: Promise<void>;
   private stderr = '';
 
-  constructor({ cwd, approve, command = piCommand(), onExit }: { cwd: string; approve: boolean; command?: string; onExit?: (session: PiSession) => void; }) {
-    this.info = { id: randomUUID(), cwd, approve, status: 'starting', startedAt: new Date().toISOString() };
+  constructor({ cwd, location, approve, command = piCommand(), onExit }: { cwd: string; location: PiLocation; approve: boolean; command?: string; onExit?: (session: PiSession) => void; }) {
+    this.info = { id: randomUUID(), cwd, location, approve, status: 'starting', startedAt: new Date().toISOString() };
     this.child = spawn(command, ['--mode', 'rpc', ...(approve ? ['--approve'] : [])], { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
     this.info.pid = this.child.pid;
     this.child.stdout.on('data', jsonlSplitter(line => this.receive(line)));
@@ -112,6 +122,7 @@ export class PiSession {
   attach(listener: PiSessionListener): () => void {
     listener.send(JSON.stringify({ type: 'bridge_status', session: this.info }));
     for (const request of this.openDialogs.values()) listener.send(request);
+    for (const record of this.uiState.values()) listener.send(record);
     if (!this.alive) {
       listener.close();
       return () => {};
@@ -173,6 +184,13 @@ export class PiSession {
       this.openDialogs.set(id, line);
       // Pi resolves a timed dialog itself; drop it so a later client is not shown a stale question.
       if (typeof record.timeout === 'number') setTimeout(() => this.openDialogs.delete(id), record.timeout).unref();
+    }
+    const stateKey = record.type === 'extension_ui_request' ? STATE_KEYS[String(record.method)] : undefined;
+    if (stateKey && typeof record[stateKey] === 'string') {
+      const key = `${String(record.method)}:${record[stateKey]}`;
+      // A record without a value clears that key, so nothing is replayed for it.
+      if (record.statusText === undefined && record.widgetLines === undefined) this.uiState.delete(key);
+      else this.uiState.set(key, line);
     }
     this.broadcast(line);
   }
