@@ -1,6 +1,6 @@
 # MyGitNotes
 
-A local-first workspace for Markdown notes, flashcards, compilations, and knowledge graphs. Your content stays in Git; run the interface locally or deploy with Docker, Docker Compose, or Vercel.
+A local-first workspace for Markdown notes, outlines, compilations, flashcards, and knowledge graphs, with a Pi agent beside your notes in local mode. Your content stays in Git; run the interface locally or deploy with Docker, Docker Compose, or Vercel.
 
 [English](README.md) · [繁體中文](README.zh-TW.md)
 
@@ -76,10 +76,22 @@ Run `pnpm update-core` from a clean `core` checkout; it fast-forwards `core` fro
 
 - Notes use ordinary Markdown with optional YAML frontmatter; Git preserves history and records explicit commits.
 - Browse notes in List, Card, or Kanban views; search full text, manage folders and files, and explore a knowledge graph.
-- Compilations (`*.compilation.yml`) organize notebook content as lanes, stacks or graphs; Markdown pages can also become flashcards.
+- [Compilations](#compilations) organize notebook content and replace the old Screen lanes; Markdown pages can also become flashcards.
+- Local mode offers a [Pi agent](#pi-agent-local-mode) in the right panel, and [`pnpm dev:remote`](#use-it-from-other-devices-pnpm-devremote) opens the workspace from your other devices.
 - Choose from **nine palette families**, each with light and dark variants. **Flexoki** is the default; choices are saved in the browser.
 - Connect local agents through stdio or remote agents through Streamable HTTP MCP with named read-only or write grants.
 - The Files page manages notebook folders, notes, text files, and attachments: 3 MiB uploads, 5 MiB reads and changes, up to 200 changed files per operation.
+
+## Compilations
+
+A compilation is a `<name>.compilation.yml` file in a notebook, tracked and synced by Git like a note.
+Its members are picked by hand (notes, folders, attachments or YouTube videos) or gathered dynamically by tag or folder.
+Dynamic compilations sort by updated time, created time, title or status, or by your own order.
+They display as a card row (thumbnail, small, medium), a stack, or a graph; a card opens its note in zoom.
+A compilation also keeps study settings for reading and reviewing its members; see the [study and flashcard guide](docs/agent/study.md).
+
+The old Screen lanes are now compilations.
+Running `pnpm migrate-workspace` on a schema 2 workspace turns each lane into a compilation and points Focus lane tabs at the new files.
 
 ## Outline notes
 
@@ -110,6 +122,32 @@ A workspace notice exposes pending browser envelopes from every configured repos
 Export preserves the exact envelope and its original base/revision; discard requires repository-specific confirmation and refuses a changed draft.
 Legacy drafts never autosave, merge into saved source or enter normal Changes.
 They remain a file-move blocker until explicitly discarded.
+
+## Pi agent (local mode)
+
+With [Pi](https://github.com/earendil-works/pi) installed, local mode adds an Agent tab to the right panel; the tab is hidden when `pi` (or the command in `MYGITNOTES_PI_COMMAND`) is not found.
+
+- `pi --mode rpc` starts in the background when the workspace loads; after a page reload or a `pnpm dev` restart, the panel resumes the same conversation.
+- Pi runs at the project root by default.
+  Click the folder name in the header to move it into a notebook folder; switching ends the current conversation.
+- Each message can name the open file: **Line** adds the caret line or selection, **Path only** adds just the path, and **None** adds nothing.
+  Paths are relative to the folder Pi runs in.
+- Switch the model and thinking level in the panel.
+  Replies render as Markdown, links to notes open in the app, and questions Pi's extensions ask appear as cards in the conversation.
+- When Pi changes a file on disk, the open editor updates at once.
+  Unsaved edits are merged first; if they cannot be merged, the editor blocks and keeps your draft.
+- Pi decides from `~/.pi/agent/trust.json` whether to load project settings.
+  Buttons in the send row open its trust decision, MCP servers and extension status.
+
+Pi runs as your local user and can run any command, so the agent accepts only local connections; through `pnpm dev:remote` it admits only the Tailscale login that owns this machine.
+See the [security model](docs/agent/security/index.md).
+
+## Use it from other devices (`pnpm dev:remote`)
+
+`pnpm dev:remote` runs `pnpm dev` and shares it over HTTPS with Tailscale Serve, so a tablet or phone on the same tailnet can open it from another room.
+It shares the same local workspace; it does not select a GitHub/GitLab source.
+Other tailnet members can open the notes, while the Pi agent stays with the machine's owner; on a phone the agent takes the full screen.
+If it does not connect, see [Remote access with Tailscale](#remote-access-with-tailscale) below.
 
 ## Documentation
 

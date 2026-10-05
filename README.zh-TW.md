@@ -1,10 +1,10 @@
 # MyGitNotes
 
-以本機為主的 Markdown 工作區，整合筆記、單字卡、閱讀屏幕與知識圖譜。內容保存在 Git；可在本機使用，也能透過 Docker、Docker Compose 或 Vercel 部署。
+以本機為主的 Markdown 工作區，整合筆記、大綱、合輯、單字卡與知識圖譜；本機模式還能在側欄直接和 Pi agent 對話。內容保存在 Git；可在本機使用，也能透過 Docker、Docker Compose 或 Vercel 部署。
 
 [English](README.md) · [繁體中文](README.zh-TW.md)
 
-[線上展示](https://my-gh-core.vercel.app) · [單字卡展示](https://my-gh-core.vercel.app/screen/lanes/explore) · [範例工作區](https://github.com/wayne930242/MyGitNotes/tree/main)
+[線上展示](https://my-gh-core.vercel.app) · [單字卡展示](https://my-gh-core.vercel.app/notes/study?notebook=learning&path=notes%2Flearning%2F%E5%AD%B8%E7%BF%92-%E4%B8%80%E6%AC%A1%E4%B8%80%E5%BC%B5%E5%8D%A1%E7%89%87.compilation.yml) · [範例工作區](https://github.com/wayne930242/MyGitNotes/tree/main)
 
 ![MyGitNotes architecture](docs/assets/mygitnotes-architecture-zh-TW.png)
 
@@ -76,10 +76,22 @@ Shell 環境變數仍優先於 `.env`。
 
 - 筆記採用一般 Markdown 與選用的 YAML frontmatter；Git 保存歷程並記錄明確提交的變更。
 - 以清單、卡片或看板瀏覽筆記；可全文搜尋、管理資料夾與檔案，並探索知識圖譜。
-- Screen 河道整理筆記本內容；Markdown 分頁也能轉成單字卡複習。
+- [合輯](#合輯)整理筆記本內容，取代舊版的 Screen 河道；Markdown 分頁也能轉成單字卡複習。
+- 本機模式可在右側欄使用 [Pi agent](#pi-agent本機模式)，並可透過 [`pnpm dev:remote`](#從其他裝置使用pnpm-devremote) 從其他裝置開啟。
 - 提供 **九組主題配色**，各有淺色與深色版本；預設為 **Flexoki**，選擇會保存在瀏覽器。
 - Agent 可透過本機 stdio 或遠端 Streamable HTTP MCP 連線，並使用具名唯讀或寫入授權。
 - 「檔案」頁可管理筆記本資料夾、筆記、文字檔與附件：上傳上限 3 MiB，讀取與修改上限 5 MiB，每次操作最多 200 個異動檔案。
+
+## 合輯
+
+合輯是筆記本裡的 `<名稱>.compilation.yml`，和筆記一樣由 Git 追蹤與同步。
+成員可以手動挑選（筆記、資料夾、附件或 YouTube 影片），也可以依標籤或資料夾動態收集。
+動態合輯可依更新時間、建立時間、標題或狀態排序，也可以自訂順序。
+顯示方式有卡片列（縮圖、小、中）、拼接與關聯圖；點卡片會在放大檢視中開啟筆記。
+合輯也保存學習設定，用來閱讀與複習成員，見[學習與單字卡指南](docs/agent/study.md)。
+
+舊版 Screen 河道已併入合輯。
+schema 2 的工作區執行 `pnpm migrate-workspace` 時，每條河道會轉成一份合輯，Focus 裡的河道分頁改指向新檔。
 
 ## 大綱筆記
 
@@ -111,6 +123,32 @@ HTTP(S) 連結只在使用者開啟時另開分頁，隔離原分頁存取權限
 匯出保留完整原始資料及原來的基底／版本；捨棄需確認儲存庫 ID，草稿已變更時會拒絕刪除。
 舊草稿不會自動儲存、合併到已保存來源，也不會加入一般變更清單。
 明確捨棄前，檔案搬移仍會被阻擋。
+
+## Pi agent（本機模式）
+
+裝好 [Pi](https://github.com/earendil-works/pi) 後，本機模式的右側欄會多出 Agent 分頁；找不到 `pi`（或 `MYGITNOTES_PI_COMMAND` 指定的指令）時不顯示。
+
+- 工作區載入時就在背景啟動 `pi --mode rpc`；重新整理頁面或重啟 `pnpm dev` 後，會接回同一段對話。
+- 預設在專案根目錄執行。
+  點標頭的資料夾名稱可以改到某個筆記本資料夾；切換會結束目前的對話。
+- 每則訊息可以附上目前開啟的檔案：「行號」附游標所在行或選取範圍，「只送路徑」只附路徑，也可以都不附。
+  路徑從 Pi 的執行目錄算起。
+- 可在面板切換模型與思考強度。
+  回覆以 Markdown 呈現，指向筆記的連結在 app 內開啟；Pi 透過 extension 提問時，問題會以卡片出現在對話中。
+- Pi 改了磁碟上的檔案，開著的編輯器會立刻更新。
+  你有未儲存的修改時會先合併；無法合併時封鎖編輯器並保留你的草稿。
+- 是否載入專案設定由 Pi 自己依 `~/.pi/agent/trust.json` 決定。
+  送出列的按鈕會展開信任狀態、MCP server 清單與 extension 狀態。
+
+Pi 以本機使用者的身分執行，能執行任何指令，所以 Agent 只接受本機連線；透過 `pnpm dev:remote` 時，只開放給這台機器所屬的 Tailscale 帳號。
+細節見[安全模型](docs/agent/security/index.md)。
+
+## 從其他裝置使用（`pnpm dev:remote`）
+
+`pnpm dev:remote` 會啟動 `pnpm dev`，並透過 Tailscale Serve 以 HTTPS 分享給同一個 tailnet 的裝置，例如在另一個房間用平板或手機打開。
+分享的是同一個本機工作區，不會切換成 GitHub/GitLab 來源。
+tailnet 的其他成員可以開啟筆記，Pi agent 則只給本機擁有者使用；手機上的 Agent 會佔滿畫面。
+連不上時見下方[透過 Tailscale 遠端連線](#透過-tailscale-遠端連線)。
 
 ## 文件
 
