@@ -7,7 +7,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { agentClientAllowed, type AgentFolder, createPiAgent, type PiAgent, resolveAgentCwd, resumableSession } from './pi-agent.js';
-import { commandAvailable, jsonlSplitter, TRUST_EXTENSION, TRUST_STATUS_KEY } from './pi-session.js';
+import { commandAvailable, jsonlSplitter, MCP_STATUS_KEY, type PiMcpServer, TRUST_EXTENSION, TRUST_STATUS_KEY } from './pi-session.js';
 
 // A stand-in for `pi --mode rpc`: answers get_state with its session file (the --session one, else a new one per conversation),
 // echoes prompts with its cwd and argv, asks one dialog, and sets or clears a status.
@@ -18,6 +18,7 @@ const resumed = process.argv.indexOf('--session');
 let conversation = 0;
 let sessionFile = resumed >= 0 ? process.argv[resumed + 1] : process.cwd() + '/session-0.jsonl';
 out({ type: 'extension_ui_request', id: 'trust', method: 'setStatus', statusKey: 'mygitnotes-project-trust', statusText: 'untrusted' });
+out({ type: 'extension_ui_request', id: 'mcp', method: 'setStatus', statusKey: 'mygitnotes-mcp-servers', statusText: JSON.stringify([{ name: 'linear', status: 'connected', toolCount: 12 }, { name: 'figma', status: 'disabled', toolCount: 0 }, { name: 'local', status: 'blocked', toolCount: 0, blockedReason: 'untrusted' }, { status: 'connected' }]) });
 process.stdin.on('data', chunk => {
   buffer += chunk;
   let index;
@@ -172,6 +173,18 @@ describe('pi agent bridge', () => {
     await client.next(record => record.type === 'bridge_status' && (record.session as { trusted?: boolean; }).trusted === false);
     expect((await (await fetch(`${base}/api/pi/session`)).json() as { session: { trusted?: boolean; }; }).session.trusted).toBe(false);
     expect(client.records.some(record => record.statusKey === TRUST_STATUS_KEY)).toBe(false);
+  });
+
+  it('reads the MCP servers the extension relays from pi-mcp-adapter into the session, dropping malformed entries', async () => {
+    expect(fs.readFileSync(TRUST_EXTENSION, 'utf8')).toContain(`MCP_STATUS_KEY = '${MCP_STATUS_KEY}'`);
+    const { base, port } = await start();
+    await post(base, 'POST');
+    const client = connect(port, base);
+    await client.opened;
+    await client.next(record => record.type === 'bridge_status' && Array.isArray((record.session as { mcpServers?: unknown; }).mcpServers));
+    const { session } = await (await fetch(`${base}/api/pi/session`)).json() as { session: { mcpServers?: PiMcpServer[]; }; };
+    expect(session.mcpServers).toEqual([{ name: 'linear', status: 'connected', toolCount: 12 }, { name: 'figma', status: 'disabled', toolCount: 0 }, { name: 'local', status: 'blocked', toolCount: 0, blockedReason: 'untrusted' }]);
+    expect(client.records.some(record => record.statusKey === MCP_STATUS_KEY)).toBe(false);
   });
 
   it('replays the latest status lines to a client that attaches later, but not cleared ones', async () => {

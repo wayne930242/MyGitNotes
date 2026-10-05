@@ -1,13 +1,13 @@
-import { ChevronDown, Info, MessageSquarePlus, Power, Send, ShieldCheck, ShieldOff, Square } from 'lucide-react';
+import { ChevronDown, Info, MessageSquarePlus, Plug, Power, Send, ShieldCheck, ShieldOff, Square } from 'lucide-react';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Button } from '../Button.js';
 import { FolderPickerDialog } from '../FolderPickerDialog.js';
 import { Select } from '../Select.js';
 import { AgentDialogCard } from './AgentDialogCard.js';
 import { AgentTranscript, type ChatLinks } from './AgentTranscript.js';
-import { type PiLocation, type PiSessionInfo, usePiAgent } from '../../lib/pi-agent/session.js';
+import { type PiLocation, type PiMcpServer, type PiSessionInfo, usePiAgent } from '../../lib/pi-agent/session.js';
 import { type AgentFocus, focusLabel, selectionPosition } from '../../lib/pi-agent/transcript.js';
-import { useTranslation } from '../../lib/i18n/index.js';
+import { type TranslationKey, useTranslation } from '../../lib/i18n/index.js';
 import './pi-agent.css';
 
 type ContextMode = 'line' | 'path' | 'none';
@@ -46,6 +46,24 @@ function SwitchFolder({ onDone }: { onDone: () => void; }) {
     <FolderPickerDialog title={t('piAgent.switchFolder')} notebooks={agent.notebooks} folders={agent.folders} initial={initial} allowRepository confirmLabel={t('piAgent.switchConfirm')} confirmVariant='danger' busy={busy} onClose={onDone} onConfirm={location => void submit(location)}>
       <p className='pi-agent-hint'>{t('piAgent.switchWarning')}</p>
     </FolderPickerDialog>
+  );
+}
+
+const MCP_STATUSES = new Set(['connected', 'cached', 'not-connected', 'needs-auth', 'failed', 'blocked']);
+
+/** The MCP servers Pi has, listed in the tooltip: the enabled ones with how each stands, then the disabled and blocked ones. */
+function McpServers({ servers }: { servers: PiMcpServer[]; }) {
+  const { t } = useTranslation();
+  const off = (server: PiMcpServer) => server.status === 'disabled' || server.status === 'blocked';
+  const enabled = servers.filter(server => !off(server));
+  const disabled = servers.filter(off);
+  const status = (server: PiMcpServer) => MCP_STATUSES.has(server.status) ? t(`piAgent.mcp.status.${server.status}` as TranslationKey) : server.status;
+  const lines = [t('piAgent.mcp.enabled', { count: enabled.length }), ...enabled.map(server => `  ${server.name} · ${status(server)}${server.toolCount ? ` · ${t(server.toolCount === 1 ? 'piAgent.mcp.tool' : 'piAgent.mcp.tools', { count: server.toolCount })}` : ''}`), t('piAgent.mcp.disabled', { count: disabled.length }), ...disabled.map(server => `  ${server.name}${server.status === 'blocked' ? ` · ${status(server)}${server.blockedReason ? ` (${server.blockedReason})` : ''}` : ''}`)];
+  const label = t('piAgent.mcp.label', { enabled: enabled.length, total: servers.length });
+  return (
+    <span className='pi-agent-trust pi-agent-mcp' role='img' tabIndex={0} aria-label={label} title={`${label}\n${lines.join('\n')}`}>
+      <Plug aria-hidden='true' />
+    </span>
   );
 }
 
@@ -209,6 +227,7 @@ export function AgentPanel() {
         <div className='pi-agent-dialog-actions'>
           <div className='pi-agent-indicators'>
             {live && session!.trusted !== undefined && <span className='pi-agent-trust' role='img' tabIndex={0} data-trusted={session!.trusted} aria-label={t(session!.trusted ? 'piAgent.trusted' : 'piAgent.untrusted')} title={`${t(session!.trusted ? 'piAgent.trusted' : 'piAgent.untrusted')}\n${t('piAgent.trustHint')}`}>{session!.trusted ? <ShieldCheck aria-hidden='true' /> : <ShieldOff aria-hidden='true' />}</span>}
+            {live && session!.mcpServers && <McpServers servers={session!.mcpServers} />}
             <ExtensionInfo />
           </div>
           {agent.transcript.running && (

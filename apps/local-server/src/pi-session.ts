@@ -13,6 +13,8 @@ export interface PiSessionInfo {
   location: PiLocation;
   /** Pi's own project-trust decision for `cwd`, once it reports it; Pi makes it from trust.json and its extensions. */
   trusted?: boolean;
+  /** The MCP servers pi-mcp-adapter has configured and how each stands, once the adapter reports them. */
+  mcpServers?: PiMcpServer[];
   /** The session file Pi records this conversation in, once Pi reports it; a later start resumes from it. */
   sessionFile?: string;
   status: 'starting' | 'ready' | 'exited';
@@ -26,6 +28,15 @@ export interface PiLocation {
   folder: string | null;
   /** Pi runs at the root of the notebook's repository, the whole project, rather than in the notebook. */
   repository?: true;
+}
+
+export interface PiMcpServer {
+  name: string;
+  /** pi-mcp-adapter's runtime status: connected, cached, not-connected, needs-auth, failed, disabled or blocked. */
+  status: string;
+  toolCount: number;
+  /** Why a project server is blocked (untrusted, approval required, denied). */
+  blockedReason?: string;
 }
 
 /** A connected client: receives Pi's stdout records and bridge notices as JSON text. */
@@ -45,6 +56,8 @@ const STATE_PROBE_ID = 'mygitnotes-bridge-state';
 /** The extension that reports Pi's project-trust decision, and the status key it reports it under (kept equal to its TRUST_STATUS_KEY). */
 export const TRUST_EXTENSION = fileURLToPath(new URL('./pi-trust-extension.mjs', import.meta.url));
 export const TRUST_STATUS_KEY = 'mygitnotes-project-trust';
+/** The status key the same extension relays pi-mcp-adapter's server list under (kept equal to its MCP_STATUS_KEY). */
+export const MCP_STATUS_KEY = 'mygitnotes-mcp-servers';
 const STDERR_LIMIT = 8000;
 const SHUTDOWN_GRACE_MS = 5000;
 const KILL_GRACE_MS = 3000;
@@ -85,6 +98,18 @@ export function jsonlSplitter(onRecord: (line: string) => void) {
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** Reads the relayed server list, keeping only well-formed entries; anything unreadable reports no list. */
+function parseMcpServers(text: unknown): PiMcpServer[] | undefined {
+  let value: unknown;
+  try {
+    value = typeof text === 'string' ? JSON.parse(text) : undefined;
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(value)) return undefined;
+  return value.flatMap(entry => isRecord(entry) && typeof entry.name === 'string' && typeof entry.status === 'string' ? [{ name: entry.name, status: entry.status, toolCount: typeof entry.toolCount === 'number' ? entry.toolCount : 0, ...(typeof entry.blockedReason === 'string' ? { blockedReason: entry.blockedReason } : {}) }] : []);
+}
 
 /** One `pi --mode rpc` process. It outlives the sockets attached to it and ends only through `end()` or its own exit. */
 export class PiSession {
@@ -202,6 +227,11 @@ export class PiSession {
     }
     if (record.type === 'extension_ui_request' && record.method === 'setStatus' && record.statusKey === TRUST_STATUS_KEY) {
       this.info.trusted = record.statusText === 'trusted';
+      this.broadcastStatus();
+      return;
+    }
+    if (record.type === 'extension_ui_request' && record.method === 'setStatus' && record.statusKey === MCP_STATUS_KEY) {
+      this.info.mcpServers = parseMcpServers(record.statusText);
       this.broadcastStatus();
       return;
     }

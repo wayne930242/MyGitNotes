@@ -122,6 +122,18 @@ it("shows Pi's own project-trust decision, which the panel does not override", (
   expect(screen.getByRole('img', { name: 'Not trusted' })).toBeTruthy();
 });
 
+it("lists Pi's enabled and disabled MCP servers in the tooltip of an icon beside the trust label", () => {
+  const session = { id: 's1', cwd: '/w', location: { notebookId: 'nb', folder: null }, status: 'ready' as const, startedAt: '' };
+  panel(agent({ session: { ...session, mcpServers: [{ name: 'linear', status: 'connected', toolCount: 12 }, { name: 'figma', status: 'cached', toolCount: 1 }, { name: 'trello', status: 'disabled', toolCount: 0 }, { name: 'local', status: 'blocked', toolCount: 0, blockedReason: 'untrusted' }] } }));
+  const mcp = screen.getByRole('img', { name: 'MCP servers: 2 of 4 enabled' });
+  expect(mcp.getAttribute('title')).toBe('MCP servers: 2 of 4 enabled\nEnabled (2)\n  linear · connected · 12 tools\n  figma · not started yet · 1 tool\nDisabled (2)\n  trello\n  local · blocked (untrusted)');
+  expect(mcp.closest('.pi-agent-dialog-actions')).toBeTruthy();
+  cleanup();
+  // Without pi-mcp-adapter's report there is no icon.
+  panel(agent({ session }));
+  expect(screen.queryByRole('img', { name: /MCP servers/ })).toBeNull();
+});
+
 it('switches to a notebook folder picked in the folder dialog, without a trust override', async () => {
   const value = agent();
   panel(value);

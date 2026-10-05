@@ -15,12 +15,22 @@ export interface PiLocation {
   repository?: true;
 }
 
+export interface PiMcpServer {
+  name: string;
+  /** connected, cached, not-connected, needs-auth, failed, disabled or blocked. */
+  status: string;
+  toolCount: number;
+  blockedReason?: string;
+}
+
 export interface PiSessionInfo {
   id: string;
   cwd: string;
   location: PiLocation;
   /** Pi's own project-trust decision for `cwd`, once it reports it. */
   trusted?: boolean;
+  /** The MCP servers pi-mcp-adapter has configured and how each stands, once it reports them. */
+  mcpServers?: PiMcpServer[];
   /** The session file Pi records this conversation in, once Pi reports it. */
   sessionFile?: string;
   status: 'starting' | 'ready' | 'exited';
