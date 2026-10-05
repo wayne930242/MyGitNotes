@@ -1,4 +1,4 @@
-import { FolderCog, MessageSquarePlus, Power, Send, Square } from 'lucide-react';
+import { FolderCog, MessageSquarePlus, Power, Send, ShieldCheck, ShieldOff, Square } from 'lucide-react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Button } from '../Button.js';
 import { FolderPickerDialog } from '../FolderPickerDialog.js';
@@ -27,13 +27,12 @@ function savedContextMode(): ContextMode {
 function SwitchFolder({ onDone }: { onDone: () => void; }) {
   const { t } = useTranslation();
   const agent = usePiAgent();
-  const [approve, setApprove] = useState(false);
   const [busy, setBusy] = useState(false);
   const initial = agent.session?.location ?? { notebookId: agent.target?.notebookId ?? agent.notebooks[0]?.id ?? '', folder: null };
   const submit = async (location: PiLocation) => {
     setBusy(true);
     try {
-      await agent.switchFolder(location, approve);
+      await agent.switchFolder(location);
       onDone();
     } catch {
       /* The provider shows the error. */
@@ -43,10 +42,6 @@ function SwitchFolder({ onDone }: { onDone: () => void; }) {
   };
   return (
     <FolderPickerDialog title={t('piAgent.switchFolder')} notebooks={agent.notebooks} folders={agent.folders} initial={initial} confirmLabel={t('piAgent.switchConfirm')} confirmVariant='danger' busy={busy} onClose={onDone} onConfirm={location => void submit(location)}>
-      <label className='pi-agent-check'>
-        <input type='checkbox' checked={approve} onChange={event => setApprove(event.target.checked)} />
-        <span>{t('piAgent.approve')}</span>
-      </label>
       <p className='pi-agent-hint'>{t('piAgent.switchWarning')}</p>
     </FolderPickerDialog>
   );
@@ -108,6 +103,7 @@ export function AgentPanel() {
       <header className='pi-agent-header'>
         <span className='pi-agent-status' data-status={live ? session!.status : 'none'}>{t(live ? `piAgent.status.${session!.status}` as const : 'piAgent.status.none')}</span>
         <span className='pi-agent-cwd' title={session?.cwd}>{locationLabel(session?.location, agent.notebooks)}</span>
+        {live && session!.trusted !== undefined && <span className='pi-agent-trust' data-trusted={session!.trusted} title={t('piAgent.trustHint')}>{session!.trusted ? <ShieldCheck aria-hidden='true' /> : <ShieldOff aria-hidden='true' />} {t(session!.trusted ? 'piAgent.trusted' : 'piAgent.untrusted')}</span>}
         <Button size='icon' title={t('piAgent.switchFolder')} aria-label={t('piAgent.switchFolder')} aria-expanded={switching} onClick={() => setSwitching(open => !open)}>
           <FolderCog aria-hidden='true' />
         </Button>

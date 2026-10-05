@@ -98,20 +98,20 @@ export class PiSessionManager {
   }
 
   /** Returns the live session, starting one in the resolved folder when there is none; `resolve` runs only then. */
-  async ensure(resolve: () => Promise<AgentFolder>, approve: boolean): Promise<PiSession> {
+  async ensure(resolve: () => Promise<AgentFolder>): Promise<PiSession> {
     if (this.current?.alive) return this.current;
     this.assertAvailable();
     const folder = await resolve();
     if (this.current?.alive) return this.current;
-    this.current = new PiSession({ ...folder, approve, command: this.command });
+    this.current = new PiSession({ ...folder, command: this.command });
     return this.current;
   }
 
   /** Ends the live session and starts a fresh one in `folder`; its conversation does not carry over. */
-  async restart(folder: AgentFolder, approve: boolean): Promise<PiSession> {
+  async restart(folder: AgentFolder): Promise<PiSession> {
     this.assertAvailable();
     await this.end();
-    this.current = new PiSession({ ...folder, approve, command: this.command });
+    this.current = new PiSession({ ...folder, command: this.command });
     return this.current;
   }
 
@@ -160,14 +160,14 @@ export function createPiAgent({ command, resolveFolder = notebookFolder }: PiAge
   });
   router.post('/session', async (req, res) => {
     try {
-      res.json(sessionBody(await manager.ensure(() => requestedFolder(req, res), req.body?.approve === true)));
+      res.json(sessionBody(await manager.ensure(() => requestedFolder(req, res))));
     } catch (error) {
       fail(res, error);
     }
   });
   router.put('/session', async (req, res) => {
     try {
-      res.json(sessionBody(await manager.restart(await requestedFolder(req, res), req.body?.approve === true)));
+      res.json(sessionBody(await manager.restart(await requestedFolder(req, res))));
     } catch (error) {
       fail(res, error);
     }

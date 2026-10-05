@@ -7,12 +7,13 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { agentClientAllowed, type AgentFolder, createPiAgent, type PiAgent, resolveAgentCwd } from './pi-agent.js';
-import { commandAvailable, jsonlSplitter } from './pi-session.js';
+import { commandAvailable, jsonlSplitter, TRUST_EXTENSION, TRUST_STATUS_KEY } from './pi-session.js';
 
 // A stand-in for `pi --mode rpc`: answers get_state, echoes prompts with its cwd and argv, asks one dialog, and sets or clears a status.
 const FAKE_PI = `
 const out = record => process.stdout.write(JSON.stringify(record) + '\\n');
 let buffer = '';
+out({ type: 'extension_ui_request', id: 'trust', method: 'setStatus', statusKey: 'mygitnotes-project-trust', statusText: 'untrusted' });
 process.stdin.on('data', chunk => {
   buffer += chunk;
   let index;
@@ -124,7 +125,7 @@ describe('pi agent bridge', () => {
     await first.next(record => record.type === 'bridge_status' && (record.session as { status: string; }).status === 'ready');
     first.send({ type: 'prompt', message: 'hello' });
     const reply = JSON.parse(assistantText(await first.next(record => record.type === 'message_end'))) as { cwd: string; args: string[]; message: string; };
-    expect(reply).toEqual({ cwd: workspace, args: ['--mode', 'rpc'], message: 'hello' });
+    expect(reply).toEqual({ cwd: workspace, args: ['--mode', 'rpc', '--extension', TRUST_EXTENSION], message: 'hello' });
     first.socket.close();
 
     const second = connect(port, `http://localhost:${port}`);
@@ -148,6 +149,18 @@ describe('pi agent bridge', () => {
     second.send({ type: 'extension_ui_response', id: 'dialog-1', value: 'B' });
     await first.next(record => record.type === 'bridge_ui_resolved' && record.id === 'dialog-1');
     expect(assistantText(await first.next(record => record.type === 'message_end'))).toBe('answered B');
+  });
+
+  it("reads Pi's project-trust report into the session instead of passing it on as a status line", async () => {
+    // The extension Pi loads reports under the key the bridge reads.
+    expect(fs.readFileSync(TRUST_EXTENSION, 'utf8')).toContain(`TRUST_STATUS_KEY = '${TRUST_STATUS_KEY}'`);
+    const { base, port } = await start();
+    await post(base, 'POST');
+    const client = connect(port, base);
+    await client.opened;
+    await client.next(record => record.type === 'bridge_status' && (record.session as { trusted?: boolean; }).trusted === false);
+    expect((await (await fetch(`${base}/api/pi/session`)).json() as { session: { trusted?: boolean; }; }).session.trusted).toBe(false);
+    expect(client.records.some(record => record.statusKey === TRUST_STATUS_KEY)).toBe(false);
   });
 
   it('replays the latest status lines to a client that attaches later, but not cleared ones', async () => {
@@ -191,8 +204,8 @@ describe('pi agent bridge', () => {
     fs.mkdirSync(other);
     const client = connect(port, base);
     await client.opened;
-    const switched = await (await post(base, 'PUT', { notebookId: 'a', folder: 'other', approve: true })).json() as { session: { id: string; cwd: string; approve: boolean; }; };
-    expect(switched.session).toMatchObject({ cwd: other, location: { notebookId: 'a', folder: 'other' }, approve: true });
+    const switched = await (await post(base, 'PUT', { notebookId: 'a', folder: 'other' })).json() as { session: { id: string; cwd: string; }; };
+    expect(switched.session).toMatchObject({ cwd: other, location: { notebookId: 'a', folder: 'other' } });
     expect(switched.session.id).not.toBe(first.session.id);
     // The old session's clients learn it ended and are closed.
     await client.next(record => record.type === 'bridge_status' && (record.session as { status: string; }).status === 'exited');
@@ -201,7 +214,7 @@ describe('pi agent bridge', () => {
     await next.opened;
     next.send({ type: 'prompt', message: 'where' });
     const reply = JSON.parse(assistantText(await next.next(record => record.type === 'message_end'))) as { cwd: string; args: string[]; };
-    expect(reply).toMatchObject({ cwd: other, args: ['--mode', 'rpc', '--approve'] });
+    expect(reply).toMatchObject({ cwd: other, args: ['--mode', 'rpc', '--extension', TRUST_EXTENSION] });
 
     expect(await (await post(base, 'DELETE')).json()).toEqual({ session: null });
     await expect(connect(port, base).opened).rejects.toThrow('HTTP 409');
@@ -244,7 +257,7 @@ describe('Pi detection', () => {
 
     const missing = createPiAgent({ command: path.join(workspace, 'no-pi-here') });
     expect(missing.manager.available).toBe(false);
-    await expect(missing.manager.ensure(async () => ({ cwd: workspace, location: { notebookId: 'a', folder: null } }), false)).rejects.toThrow('Pi is not installed on this computer.');
+    await expect(missing.manager.ensure(async () => ({ cwd: workspace, location: { notebookId: 'a', folder: null } }))).rejects.toThrow('Pi is not installed on this computer.');
     expect(missing.manager.session).toBeUndefined();
   });
 });

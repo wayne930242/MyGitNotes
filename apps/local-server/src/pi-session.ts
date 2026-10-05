@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
+import { fileURLToPath } from 'node:url';
 
 /** What the panel sees of the bridged Pi process. */
 export interface PiSessionInfo {
@@ -10,8 +11,8 @@ export interface PiSessionInfo {
   cwd: string;
   /** The notebook folder the panel picked as `cwd`; `folder` is relative to the notebook root, null for the root. */
   location: PiLocation;
-  /** Whether this process was started with `--approve`, trusting the folder's project-local Pi resources. */
-  approve: boolean;
+  /** Pi's own project-trust decision for `cwd`, once it reports it; Pi makes it from trust.json and its extensions. */
+  trusted?: boolean;
   status: 'starting' | 'ready' | 'exited';
   pid?: number;
   startedAt: string;
@@ -35,6 +36,9 @@ const DIALOG_METHODS = new Set(['select', 'confirm', 'input', 'editor']);
 /** Fire-and-forget UI state keyed by extension; the latest of each is replayed to a client that attaches later. */
 const STATE_KEYS: Record<string, string> = { setStatus: 'statusKey', setWidget: 'widgetKey' };
 const READY_PROBE_ID = 'mygitnotes-bridge-ready';
+/** The extension that reports Pi's project-trust decision, and the status key it reports it under (kept equal to its TRUST_STATUS_KEY). */
+export const TRUST_EXTENSION = fileURLToPath(new URL('./pi-trust-extension.mjs', import.meta.url));
+export const TRUST_STATUS_KEY = 'mygitnotes-project-trust';
 const STDERR_LIMIT = 8000;
 const SHUTDOWN_GRACE_MS = 5000;
 const KILL_GRACE_MS = 3000;
@@ -87,9 +91,10 @@ export class PiSession {
   private readonly exited: Promise<void>;
   private stderr = '';
 
-  constructor({ cwd, location, approve, command = piCommand(), onExit }: { cwd: string; location: PiLocation; approve: boolean; command?: string; onExit?: (session: PiSession) => void; }) {
-    this.info = { id: randomUUID(), cwd, location, approve, status: 'starting', startedAt: new Date().toISOString() };
-    this.child = spawn(command, ['--mode', 'rpc', ...(approve ? ['--approve'] : [])], { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
+  constructor({ cwd, location, command = piCommand(), onExit }: { cwd: string; location: PiLocation; command?: string; onExit?: (session: PiSession) => void; }) {
+    this.info = { id: randomUUID(), cwd, location, status: 'starting', startedAt: new Date().toISOString() };
+    // No --approve: project trust stays Pi's decision, as it is in the user's terminal.
+    this.child = spawn(command, ['--mode', 'rpc', '--extension', TRUST_EXTENSION], { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
     this.info.pid = this.child.pid;
     this.child.stdout.on('data', jsonlSplitter(line => this.receive(line)));
     this.child.stderr.on('data', (chunk: Buffer) => {
@@ -184,6 +189,11 @@ export class PiSession {
       this.openDialogs.set(id, line);
       // Pi resolves a timed dialog itself; drop it so a later client is not shown a stale question.
       if (typeof record.timeout === 'number') setTimeout(() => this.openDialogs.delete(id), record.timeout).unref();
+    }
+    if (record.type === 'extension_ui_request' && record.method === 'setStatus' && record.statusKey === TRUST_STATUS_KEY) {
+      this.info.trusted = record.statusText === 'trusted';
+      this.broadcastStatus();
+      return;
     }
     const stateKey = record.type === 'extension_ui_request' ? STATE_KEYS[String(record.method)] : undefined;
     if (stateKey && typeof record[stateKey] === 'string') {

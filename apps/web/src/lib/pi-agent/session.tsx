@@ -15,7 +15,8 @@ export interface PiSessionInfo {
   id: string;
   cwd: string;
   location: PiLocation;
-  approve: boolean;
+  /** Pi's own project-trust decision for `cwd`, once it reports it. */
+  trusted?: boolean;
   status: 'starting' | 'ready' | 'exited';
   pid?: number;
   startedAt: string;
@@ -57,7 +58,7 @@ export interface PiAgentValue {
   newConversation: () => void;
   end: () => Promise<void>;
   /** Restarts Pi in another notebook folder; the current conversation ends with the old process. */
-  switchFolder: (location: PiLocation, approve: boolean) => Promise<void>;
+  switchFolder: (location: PiLocation) => Promise<void>;
   locate: (path: string, notebookId: string) => Promise<string>;
 }
 
@@ -261,9 +262,9 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
         setError((reason as Error).message);
       }
     },
-    switchFolder: async (location, approve) => {
+    switchFolder: async location => {
       try {
-        const { session: info } = await sessionRequest('PUT', { ...location, approve });
+        const { session: info } = await sessionRequest('PUT', location);
         try {
           localStorage.setItem(LOCATION_KEY, JSON.stringify(location));
         } catch { /* The folder still applies to this session. */ }

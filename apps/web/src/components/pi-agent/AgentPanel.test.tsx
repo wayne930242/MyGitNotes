@@ -26,7 +26,7 @@ const notebooks: NotebookConfig[] = [{ id: 'nb', title: 'Notes', root: 'notes' }
 const folders: FolderItem[] = [{ notebookId: 'blog', path: 'drafts', title: 'Drafts', order: 0 }];
 
 function agent(overrides: Partial<PiAgentValue> = {}): PiAgentValue {
-  return { available: true, session: { id: 's1', cwd: '/home/me/workspace/notes', location: { notebookId: 'nb', folder: null }, approve: false, status: 'ready', startedAt: '' }, target: null, notebooks, folders, connected: true, transcript: emptyTranscript, error: '', start: vi.fn(async () => {}), send: vi.fn(), abort: vi.fn(), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchFolder: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
+  return { available: true, session: { id: 's1', cwd: '/home/me/workspace/notes', location: { notebookId: 'nb', folder: null }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, folders, connected: true, transcript: emptyTranscript, error: '', start: vi.fn(async () => {}), send: vi.fn(), abort: vi.fn(), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchFolder: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
 }
 
 function noteTarget(caret = createCaretStore()): AgentTarget {
@@ -99,18 +99,27 @@ it('answers ask_user dialogs, which Pi sends as select and input requests', () =
   expect(value.answer).toHaveBeenCalledWith(transcript.dialogs[0], { cancelled: true });
 });
 
-it('switches to a notebook folder picked in the folder dialog, with trust off by default', async () => {
+it("shows Pi's own project-trust decision, which the panel does not override", () => {
+  panel(agent());
+  expect(screen.getByText('Trusted').getAttribute('title')).toContain('/trust');
+  cleanup();
+  panel(agent({ session: { id: 's2', cwd: '/w', location: { notebookId: 'nb', folder: null }, trusted: false, status: 'ready', startedAt: '' } }));
+  expect(screen.getByText('Not trusted')).toBeTruthy();
+});
+
+it('switches to a notebook folder picked in the folder dialog, without a trust override', async () => {
   const value = agent();
   panel(value);
   fireEvent.click(screen.getByRole('button', { name: 'Change working folder' }));
   expect(screen.getByText(/ends the current Pi session and clears this conversation/)).toBeTruthy();
   expect(screen.getByRole('combobox', { name: 'Notebook' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'End session and switch' }));
-  await waitFor(() => expect(value.switchFolder).toHaveBeenCalledWith({ notebookId: 'nb', folder: null }, false));
+  expect(screen.queryByRole('checkbox')).toBeNull();
+  await waitFor(() => expect(value.switchFolder).toHaveBeenCalledWith({ notebookId: 'nb', folder: null }));
 });
 
 it('offers a manual start when no session runs, showing why the last one ended', () => {
-  const value = agent({ session: { id: 's1', cwd: '/w', approve: false, location: { notebookId: 'nb', folder: null }, status: 'exited', startedAt: '', exit: { code: 1, signal: null, stderr: 'No API key' } }, connected: false });
+  const value = agent({ session: { id: 's1', cwd: '/w', location: { notebookId: 'nb', folder: null }, status: 'exited', startedAt: '', exit: { code: 1, signal: null, stderr: 'No API key' } }, connected: false });
   panel(value);
   expect(screen.getByText('No API key')).toBeTruthy();
   expect((screen.getByRole('textbox', { name: 'Message to Pi' }) as HTMLTextAreaElement).disabled).toBe(true);
