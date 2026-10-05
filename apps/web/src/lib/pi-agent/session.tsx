@@ -5,10 +5,14 @@ import type { CaretStore } from './caret-store.js';
 import { type AgentDialog, type AgentFocus, applyRecord, emptyTranscript, transcriptFromMessages, type TranscriptState, withFocus } from './transcript.js';
 
 /** The bridged Pi process, as `/api/pi/session` reports it. */
-/** A notebook folder Pi runs in: `folder` is relative to the notebook root, null for the root itself. */
+/**
+ * Where Pi runs: a notebook folder, `folder` relative to the notebook root and null for the root itself, or with
+ * `repository` the root of the notebook's repository, the whole project.
+ */
 export interface PiLocation {
   notebookId: string;
   folder: string | null;
+  repository?: true;
 }
 
 export interface PiSessionInfo {
@@ -119,7 +123,8 @@ const RECONNECT_MS = 1500;
 function savedLocation(notebooks: NotebookConfig[]): PiLocation | undefined {
   try {
     const saved = JSON.parse(localStorage.getItem(LOCATION_KEY) || 'null') as PiLocation | null;
-    return saved && notebooks.some(notebook => notebook.id === saved.notebookId) ? { notebookId: saved.notebookId, folder: typeof saved.folder === 'string' ? saved.folder : null } : undefined;
+    if (!saved || !notebooks.some(notebook => notebook.id === saved.notebookId)) return undefined;
+    return saved.repository === true ? { notebookId: saved.notebookId, folder: null, repository: true } : { notebookId: saved.notebookId, folder: typeof saved.folder === 'string' ? saved.folder : null };
   } catch {
     return undefined;
   }

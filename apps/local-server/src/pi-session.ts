@@ -22,6 +22,8 @@ export interface PiSessionInfo {
 export interface PiLocation {
   notebookId: string;
   folder: string | null;
+  /** Pi runs at the root of the notebook's repository, the whole project, rather than in the notebook. */
+  repository?: true;
 }
 
 /** A connected client: receives Pi's stdout records and bridge notices as JSON text. */

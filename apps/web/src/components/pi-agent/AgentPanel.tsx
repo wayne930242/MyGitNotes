@@ -43,7 +43,7 @@ function SwitchFolder({ onDone }: { onDone: () => void; }) {
     }
   };
   return (
-    <FolderPickerDialog title={t('piAgent.switchFolder')} notebooks={agent.notebooks} folders={agent.folders} initial={initial} confirmLabel={t('piAgent.switchConfirm')} confirmVariant='danger' busy={busy} onClose={onDone} onConfirm={location => void submit(location)}>
+    <FolderPickerDialog title={t('piAgent.switchFolder')} notebooks={agent.notebooks} folders={agent.folders} initial={initial} allowRepository confirmLabel={t('piAgent.switchConfirm')} confirmVariant='danger' busy={busy} onClose={onDone} onConfirm={location => void submit(location)}>
       <p className='pi-agent-hint'>{t('piAgent.switchWarning')}</p>
     </FolderPickerDialog>
   );
@@ -77,15 +77,16 @@ function ExtensionInfo() {
 function chatLinks(session: PiSessionInfo | null, notebooks: { id: string; root: string; }[]): ChatLinks | undefined {
   const notebook = session && notebooks.find(candidate => candidate.id === session.location.notebookId);
   if (!session || !notebook) return undefined;
-  const folder = [notebook.root, session.location.folder].filter(part => part && part !== '.').join('/');
+  const folder = session.location.repository ? '' : [notebook.root, session.location.folder].filter(part => part && part !== '.').join('/');
   const cwd = session.cwd.replace(/\/+$/, '');
   const repositoryRoot = folder ? cwd.endsWith(`/${folder}`) ? cwd.slice(0, -folder.length - 1) : undefined : cwd;
   return repositoryRoot === undefined ? undefined : { notebookId: notebook.id, base: { folder, repositoryRoot } };
 }
 
-/** How the session's folder reads in the header: the notebook title, then the folder inside it. */
-function locationLabel(location: PiLocation | undefined, notebooks: { id: string; title: string; }[]): string {
+/** How the session's folder reads in the header: the notebook title, then the folder inside it, or the project's folder name. */
+function locationLabel(location: PiLocation | undefined, cwd: string | undefined, notebooks: { id: string; title: string; }[]): string {
   if (!location) return '';
+  if (location.repository) return cwd?.replace(/\/+$/, '').split('/').pop() ?? '';
   const title = notebooks.find(notebook => notebook.id === location.notebookId)?.title ?? location.notebookId;
   return location.folder ? `${title} / ${location.folder}` : title;
 }
@@ -142,7 +143,7 @@ export function AgentPanel() {
         <span className='pi-agent-status' data-status={live ? session!.status : 'none'}>{t(live ? `piAgent.status.${session!.status}` as const : 'piAgent.status.none')}</span>
         {/* The folder name opens the folder picker; its tooltip names the absolute folder Pi runs in. */}
         <button type='button' className='pi-agent-cwd' title={session?.cwd ? `${t('piAgent.switchFolder')}\n${session.cwd}` : t('piAgent.switchFolder')} aria-haspopup='dialog' aria-expanded={switching} onClick={() => setSwitching(open => !open)}>
-          <span>{locationLabel(session?.location, agent.notebooks) || t('piAgent.switchFolder')}</span>
+          <span>{locationLabel(session?.location, session?.cwd, agent.notebooks) || t('piAgent.switchFolder')}</span>
           <ChevronDown aria-hidden='true' />
         </button>
         {live && session!.trusted !== undefined && <span className='pi-agent-trust' data-trusted={session!.trusted} title={t('piAgent.trustHint')}>{session!.trusted ? <ShieldCheck aria-hidden='true' /> : <ShieldOff aria-hidden='true' />} {t(session!.trusted ? 'piAgent.trusted' : 'piAgent.untrusted')}</span>}

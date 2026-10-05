@@ -1467,6 +1467,7 @@ export const en = {
   'piAgent.status.exited': 'Ended',
   'piAgent.status.none': 'Not running',
   'piAgent.switchFolder': 'Change working folder',
+  'folderPicker.repository': 'Whole project (repository root)',
   'folderPicker.notebook': 'Notebook',
   'piAgent.context': 'Context sent with each message',
   'piAgent.context.line': 'Line',

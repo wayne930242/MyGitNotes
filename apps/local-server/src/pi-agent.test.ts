@@ -51,8 +51,10 @@ afterEach(async () => {
 });
 
 function testFolder(workspace: string) {
-  return async (_res: unknown, notebookId: unknown, folder: unknown): Promise<AgentFolder> => {
+  return async (_res: unknown, notebookId: unknown, folder: unknown, repository: unknown): Promise<AgentFolder> => {
     if (notebookId !== 'a') throw new SourceError('Unknown notebook.', 404);
+    // The repository root sits one level above the notebook in these tests.
+    if (repository === true) return { cwd: resolveAgentCwd(path.dirname(workspace)), location: { notebookId, folder: null, repository: true } };
     return { cwd: resolveAgentCwd(folder ? path.join(workspace, String(folder)) : workspace), location: { notebookId, folder: folder ? String(folder) : null } };
   };
 }
@@ -225,6 +227,9 @@ describe('pi agent bridge', () => {
     next.send({ type: 'prompt', message: 'where' });
     const reply = JSON.parse(assistantText(await next.next(record => record.type === 'message_end'))) as { cwd: string; args: string[]; };
     expect(reply).toMatchObject({ cwd: other, args: ['--mode', 'rpc', '--extension', TRUST_EXTENSION] });
+
+    const project = await (await post(base, 'PUT', { notebookId: 'a', repository: true })).json() as { session: { cwd: string; location: unknown; }; };
+    expect(project.session).toMatchObject({ cwd: path.dirname(workspace), location: { notebookId: 'a', folder: null, repository: true } });
 
     expect(await (await post(base, 'DELETE')).json()).toEqual({ session: null });
     await expect(connect(port, base).opened).rejects.toThrow('HTTP 409');

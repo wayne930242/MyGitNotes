@@ -1468,6 +1468,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'piAgent.status.exited': '已結束',
   'piAgent.status.none': '未執行',
   'piAgent.switchFolder': '變更執行目錄',
+  'folderPicker.repository': '整個專案（repository 根目錄）',
   'folderPicker.notebook': '筆記本',
   'piAgent.context': '每則訊息附帶的 context',
   'piAgent.context.line': '行號',

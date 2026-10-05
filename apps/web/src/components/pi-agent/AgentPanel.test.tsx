@@ -131,6 +131,21 @@ it('switches to a notebook folder picked in the folder dialog, without a trust o
   await waitFor(() => expect(value.switchFolder).toHaveBeenCalledWith({ notebookId: 'nb', folder: null }));
 });
 
+it("switches to the whole project, the root of the notebook's repository, and names it by its folder", async () => {
+  const value = agent();
+  panel(value);
+  fireEvent.click(screen.getByRole('button', { name: 'Notes' }));
+  const project = screen.getByRole('button', { name: 'Whole project (repository root)' });
+  fireEvent.click(project);
+  expect(project.getAttribute('aria-pressed')).toBe('true');
+  fireEvent.click(screen.getByRole('button', { name: 'End session and switch' }));
+  await waitFor(() => expect(value.switchFolder).toHaveBeenCalledWith({ notebookId: 'nb', folder: null, repository: true }));
+
+  cleanup();
+  panel(agent({ session: { ...value.session!, cwd: '/home/me/workspace', location: { notebookId: 'nb', folder: null, repository: true } } }));
+  expect(screen.getByRole('button', { name: 'workspace' })).toBeTruthy();
+});
+
 it('shows the session model and thinking level, offering only levels the model supports', () => {
   panel(agent({ modelState: { model: 'anthropic/claude-opus', thinking: 'high', models: [{ value: 'anthropic/claude-opus', label: 'Claude Opus (anthropic)' }], levels: ['low', 'high'] } }));
   expect(screen.getByRole('combobox', { name: 'Model' }).textContent).toContain('Claude Opus (anthropic)');

@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from 'react';
+import { FolderGit2 } from 'lucide-react';
 import { FolderTree } from './FolderTree.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { Button } from './Button.js';
@@ -10,6 +11,8 @@ import type { FolderItem, NotebookConfig } from '../lib/types.js';
 export interface FolderPick {
   notebookId: string;
   folder: string | null;
+  /** The root of the notebook's repository instead of a folder; offered only with `allowRepository`. */
+  repository?: true;
 }
 
 interface FolderPickerDialogProps {
@@ -21,6 +24,8 @@ interface FolderPickerDialogProps {
   confirmLabel: string;
   confirmVariant?: 'primary' | 'danger';
   busy: boolean;
+  /** Offers the root of the notebook's repository, the whole project, above the notebook's folders. */
+  allowRepository?: boolean;
   /** Shown between the tree and the actions, such as a warning or an option that goes with the pick. */
   children?: ReactNode;
   onClose: () => void;
@@ -31,7 +36,7 @@ interface FolderPickerDialogProps {
  * Picks one notebook folder: the destination of moved notes (useNoteMove, useBulkNoteActions.runBulkMove)
  * or the folder the Pi agent runs in. Read-only FolderTree: this dialog only chooses, it never manages folders.
  */
-export function FolderPickerDialog({ title, notebooks, folders, initial, confirmLabel, confirmVariant = 'primary', busy, children, onClose, onConfirm }: FolderPickerDialogProps) {
+export function FolderPickerDialog({ title, notebooks, folders, initial, confirmLabel, confirmVariant = 'primary', busy, allowRepository = false, children, onClose, onConfirm }: FolderPickerDialogProps) {
   const { t } = useTranslation();
   const [pick, setPick] = useState<FolderPick>(initial);
 
@@ -40,10 +45,16 @@ export function FolderPickerDialog({ title, notebooks, folders, initial, confirm
       {notebooks.length > 1 && (
         <label className='folder-picker-notebook'>
           <span>{t('folderPicker.notebook')}</span>
-          <Select aria-label={t('folderPicker.notebook')} value={pick.notebookId} disabled={busy} onValueChange={notebookId => setPick({ notebookId, folder: null })} options={notebooks.map(notebook => ({ value: notebook.id, label: notebook.title }))} />
+          <Select aria-label={t('folderPicker.notebook')} value={pick.notebookId} disabled={busy} onValueChange={notebookId => setPick(current => current.repository ? { notebookId, folder: null, repository: true } : { notebookId, folder: null })} options={notebooks.map(notebook => ({ value: notebook.id, label: notebook.title }))} />
         </label>
       )}
-      <FolderTree showRoot folders={folders} notebookId={pick.notebookId} selected={pick.folder} onSelect={folder => setPick(current => ({ ...current, folder }))} writable={false} onManageFiles={() => {}} onChanged={async () => {}} />
+      {allowRepository && (
+        <button type='button' className='folder-picker-repository' aria-pressed={pick.repository === true} disabled={busy} onClick={() => setPick(current => ({ notebookId: current.notebookId, folder: null, repository: true }))}>
+          <FolderGit2 aria-hidden='true' />
+          <span>{t('folderPicker.repository')}</span>
+        </button>
+      )}
+      <FolderTree showRoot folders={folders} notebookId={pick.notebookId} selected={pick.folder} {...pick.repository ? { selectedPaths: [], allFoldersSelected: false } : {}} onSelect={folder => setPick(current => ({ notebookId: current.notebookId, folder }))} writable={false} onManageFiles={() => {}} onChanged={async () => {}} />
       {children}
       <div className='workspace-dialog-actions'>
         <Button type='button' onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>

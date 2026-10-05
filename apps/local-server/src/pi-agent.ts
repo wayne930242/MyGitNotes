@@ -71,11 +71,13 @@ export interface AgentFolder {
   location: PiLocation;
 }
 
-/** Resolves a notebook folder the panel picked to the directory Pi starts in. */
-async function notebookFolder(res: express.Response, notebookId: unknown, folder: unknown): Promise<AgentFolder> {
+/** Resolves a notebook folder the panel picked, or its whole repository, to the directory Pi starts in. */
+async function notebookFolder(res: express.Response, notebookId: unknown, folder: unknown, repository: unknown): Promise<AgentFolder> {
   if (folder !== null && folder !== undefined && (typeof folder !== 'string' || !folder)) throw new SourceError('folder must be a notebook-relative path or null.');
+  if (repository !== undefined && typeof repository !== 'boolean') throw new SourceError('repository must be a boolean.');
   const { handle, notebook } = await notebookRepository(res, notebookId);
   const root = asLocal(handle).root;
+  if (repository) return { cwd: resolveAgentCwd(root), location: { notebookId: notebook.id, folder: null, repository: true } };
   const relative = folder ? `${notebook.root.replace(/\/$/, '')}/${folder}` : notebook.root;
   return { cwd: resolveAgentCwd(resolveSafePath(root, relative)), location: { notebookId: notebook.id, folder: folder ? String(folder) : null } };
 }
@@ -136,7 +138,7 @@ export interface PiAgent {
 export interface PiAgentOptions {
   command?: string;
   /** Resolves the notebook folder a request names; defaults to the request's local workspace. */
-  resolveFolder?: (res: express.Response, notebookId: unknown, folder: unknown) => Promise<AgentFolder>;
+  resolveFolder?: (res: express.Response, notebookId: unknown, folder: unknown, repository: unknown) => Promise<AgentFolder>;
 }
 
 function sessionBody(session: PiSession | undefined): { session: PiSessionInfo | null; } {
@@ -152,8 +154,8 @@ export function createPiAgent({ command, resolveFolder = notebookFolder }: PiAge
   const manager = new PiSessionManager(command);
   const router = express.Router();
   router.use((req, res, next) => agentClientAllowed(req) ? next() : res.status(403).json({ error: 'The agent panel is available only from this computer, or to its owner through pnpm dev:remote.' }));
-  // Pi only ever starts in a notebook folder: the request names the notebook and a folder inside it.
-  const requestedFolder = (req: express.Request, res: express.Response) => resolveFolder(res, req.body?.notebookId, req.body?.folder);
+  // Pi only ever starts in a notebook folder or at the root of a notebook's repository, never at a path the request spells out.
+  const requestedFolder = (req: express.Request, res: express.Response) => resolveFolder(res, req.body?.notebookId, req.body?.folder, req.body?.repository);
 
   router.get('/session', (_req, res) => {
     res.json({ ...sessionBody(manager.session), piAvailable: manager.available });
