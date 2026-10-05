@@ -32,6 +32,7 @@ let requests: { method: string; body?: unknown; }[] = [];
 
 beforeEach(() => {
   requests = [];
+  FakeSocket.last = undefined;
   vi.stubGlobal('WebSocket', FakeSocket);
   vi.stubGlobal(
     'fetch',
