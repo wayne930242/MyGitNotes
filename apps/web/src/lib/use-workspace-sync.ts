@@ -140,8 +140,9 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return () => window.removeEventListener('storage', refresh);
   }, [scopes]);
 
-  // The workspace answer is applied before folders arrive, so the note queries keyed by source
-  // and revision start in parallel with `/api/folders` instead of waiting behind it.
+  // The workspace answer is applied, and the page shown, before folders arrive, so the note queries
+  // keyed by source and revision start in parallel with `/api/folders` instead of waiting behind it;
+  // the folder tree fills in when its answer lands.
   // `fresh` reads each branch head past the server's cache, which may still hold a head from
   // before a commit when another server instance answers.
   const refreshWorkspace = useCallback(async (fresh?: boolean) => {
@@ -163,6 +164,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
       setConfig((previous) => (sameValue(previous, ws.config) ? previous : ws.config));
       setWorkingNotes(ws.local ? {} : Object.fromEntries(ws.repositories.filter((repository) => !repository.unavailable).map((repository) => [repository.id, readWorkingNotes(draftScope(repository))])));
       setGitStatus(ws.repositories.find((repository) => repository.id === ws.home)?.gitStatus ?? null);
+      setLoading(false);
 
       const folderList = await folderRequest;
       if (request !== refreshRequest.current) return;
