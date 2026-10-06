@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DerivedManifestNotice, WorkspaceGate } from './WorkspaceSetup.js';
 import type { WorkspaceConfig } from '../lib/types.js';
 
-vi.mock('./AuthControls.js', () => ({ AuthControls: () => createElement('a', { href: '/api/auth/github' }, 'Sign in with GitHub') }));
+vi.mock('./AuthControls.js', () => ({ AuthControls: () => createElement('a', { href: '/api/auth/github' }, 'Sign in with GitHub'), ConnectionState: () => createElement('p', null, 'Opening workspace') }));
 vi.mock('../lib/api.js', () => ({ updateWorkspaceConfig: vi.fn(async () => ({ success: true, configRevision: 'next' })) }));
 
 let root: Root;
@@ -34,6 +34,8 @@ const button = (text: string) => [...container.querySelectorAll('button')].find(
 
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean; }).IS_REACT_ACT_ENVIRONMENT = true;
+  // The setup screens apply the theme themselves, which follows the system colour scheme.
+  window.matchMedia = ((query: string) => ({ matches: false, media: query, onchange: null, addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false })) as unknown as typeof window.matchMedia;
   requests = [];
   container = document.createElement('div');
   document.body.append(container);
@@ -56,6 +58,9 @@ it('asks a signed-out visitor to sign in where visitors choose their repository'
   await render(createElement(WorkspaceGate, null, createElement('p', null, 'workspace')));
   expect(container.textContent).not.toContain('workspace');
   expect(container.querySelector('a[href="/api/auth/github"]')).not.toBeNull();
+  // Visitors cannot reach Settings yet, so the screen offers the language and says what the sign-in can reach.
+  expect(container.querySelector('[aria-label="Language"]')).not.toBeNull();
+  expect(container.textContent).toContain('only reaches the repositories you grant');
 });
 
 it('lists repositories, opens the chosen one and shows why a choice failed', async () => {

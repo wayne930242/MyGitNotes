@@ -1,9 +1,11 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { ArrowLeftRight, ExternalLink, Lock, LogOut, Search } from 'lucide-react';
+import { ArrowLeftRight, ExternalLink, GitBranch, Languages, ListTree, Lock, LogOut, Network, Search, ShieldCheck } from 'lucide-react';
 import { Button } from './Button.js';
-import { AuthControls } from './AuthControls.js';
+import { AuthControls, ConnectionState } from './AuthControls.js';
 import { LoadingStatus } from './LoadingStatus.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { Select } from './Select.js';
+import { useTheme } from '../app/useTheme.js';
 import { updateWorkspaceConfig } from '../lib/api.js';
 import type { WorkspaceConfig } from '../lib/types.js';
 import YAML from 'yaml';
@@ -28,14 +30,64 @@ interface AvailableAnswer {
   installUrl: string | null;
 }
 
+const FEATURES = [{ icon: ListTree, key: 'setup.featureNotes' }, { icon: Network, key: 'setup.featureGraph' }, { icon: GitBranch, key: 'setup.featureGit' }] as const;
+
+/**
+ * The screens before a workspace opens: the product on one side, the sign-in or repository picker on the other.
+ * They render before the app, so they apply the theme themselves and offer the language a visitor cannot yet set in Settings.
+ */
 function SetupCard({ children }: { children: ReactNode; }) {
+  const { t, language, setLanguage } = useTranslation();
+  useTheme();
   return (
-    <main className='min-h-screen p-8 flex items-center justify-center' style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}>
-      <div className='max-w-xl w-full p-8 rounded-2xl border' style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <h1 className='text-2xl font-semibold mb-4'>MyGitNotes</h1>
-        {children}
-      </div>
+    <main className='min-h-screen grid md:grid-cols-2' style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}>
+      <section className='flex flex-col justify-center gap-6 md:gap-8 px-6 py-8 md:px-16 md:py-10 bg-sidebar'>
+        <div className='flex items-center gap-4'>
+          <img src={`${import.meta.env.BASE_URL}brand/github-notes-192.png`} width='56' height='56' alt='' className='rounded-xl' />
+          <div>
+            <h1 className='font-serif text-3xl font-semibold'>MyGitNotes</h1>
+            <p className='text-sm text-muted'>{t('header.gitWorkspace')}</p>
+          </div>
+        </div>
+        <p className='max-w-md text-base'>{t('setup.brandDescription')}</p>
+        {/* On a phone the features would push the sign-in below the fold. */}
+        <ul className='hidden md:flex flex-col gap-4 max-w-md'>
+          {FEATURES.map(({ icon: Icon, key }) => (
+            <li key={key} className='flex items-start gap-3 text-sm'>
+              <span className='shrink-0 w-8 h-8 rounded-lg bg-primary-soft text-primary flex items-center justify-center'>
+                <Icon size={16} aria-hidden='true' />
+              </span>
+              <span className='pt-1.5'>{t(key)}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section className='flex flex-col px-6 py-6 md:px-12'>
+        <div className='setup-language flex justify-end items-center gap-2 text-muted'>
+          <Languages size={16} aria-hidden='true' />
+          <Select aria-label={t('settings.language')} value={language} onValueChange={next => setLanguage(next as typeof language)} options={[{ value: 'en', label: 'English' }, { value: 'zh-TW', label: '繁體中文' }]} />
+        </div>
+        <div className='flex-1 flex items-center justify-center py-8'>
+          <div className='w-full max-w-md p-8 rounded-2xl border border-line bg-surface'>{children}</div>
+        </div>
+      </section>
     </main>
+  );
+}
+
+/** The first screen where visitors choose their repository: why to sign in, the GitHub button, and what the sign-in can reach. */
+function SignIn() {
+  const { t } = useTranslation();
+  return (
+    <SetupCard>
+      <h2 className='font-serif text-xl font-semibold mb-2'>{t('setup.signInTitle')}</h2>
+      <p className='text-sm text-muted mb-6'>{t('setup.signInDescription')}</p>
+      <AuthControls connection />
+      <div className='mt-6 p-3 rounded-lg bg-sidebar flex items-start gap-2 text-xs text-muted'>
+        <ShieldCheck size={16} aria-hidden='true' className='shrink-0 text-primary' />
+        <span>{t('setup.privacy')}</span>
+      </div>
+    </SetupCard>
   );
 }
 
@@ -90,6 +142,7 @@ export function RepositoryPicker({ login }: { login?: string; }) {
   const error = openError || listError;
   return (
     <SetupCard>
+      <h2 className='font-serif text-xl font-semibold mb-2'>{t('setup.chooseTitle')}</h2>
       <p className='mb-4 text-sm text-muted'>{t('setup.chooseDescription')}</p>
       <label className='flex items-center gap-2 px-3 py-2 rounded-lg border border-line mb-3'>
         <Search size={16} aria-hidden='true' className='text-muted' />
@@ -153,27 +206,18 @@ export function RepositoryPicker({ login }: { login?: string; }) {
  * workspace's parallel reads, which could otherwise each spend the same single-use refresh token.
  */
 export function WorkspaceGate({ children }: { children: ReactNode; }) {
-  const { t } = useTranslation();
   const [session, setSession] = useState<SessionProbe | null>(null);
   useEffect(() => {
     fetch('/api/auth/session').then(response => response.ok ? response.json() : {}).catch(() => ({})).then(setSession);
   }, []);
   if (!session) {
     return (
-      <SetupCard>
-        <LoadingStatus>{t('auth.openingWorkspace')}</LoadingStatus>
-      </SetupCard>
+      // Every deployment passes through here, so the wait looks like the app's own loading state, not the sign-in page.
+      <ConnectionState loading error='' onRetry={() => {}} />
     );
   }
   if (!session.repositoryChoice || (session.authenticated && session.workspace)) return children;
-  if (!session.authenticated) {
-    return (
-      <SetupCard>
-        <p className='mb-6'>{t('setup.signInDescription')}</p>
-        <AuthControls connection />
-      </SetupCard>
-    );
-  }
+  if (!session.authenticated) return <SignIn />;
   return <RepositoryPicker login={session.login} />;
 }
 

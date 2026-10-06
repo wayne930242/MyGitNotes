@@ -1544,7 +1544,7 @@ export const en = {
   'piAgent.command.name': 'Name this conversation',
   'piAgent.command.nameArgument': 'name',
   'piAgent.command.new': 'Start a new conversation',
-  'setup.signInDescription': 'Sign in with GitHub to choose the repository that holds your notes. Your sign-in stays in this browser.',
+  'setup.signInDescription': 'Sign in with GitHub, then choose the repository that holds your notes.',
   'setup.chooseDescription': 'Choose the repository to open. You can switch to another one later from the account menu.',
   'setup.searchRepositories': 'Search repositories',
   'setup.repositories': 'Repositories',
@@ -1565,6 +1565,13 @@ export const en = {
   'setup.creatingManifest': 'Creating…',
   'setup.dismiss': 'Dismiss',
   'auth.grantsNeedServerStorage': 'This deployment keeps sign-ins only in your browser, so it cannot hold MCP connector grants. Grants need a deployment with server storage (Redis).',
+  'setup.signInTitle': 'Sign in to your notes',
+  'setup.chooseTitle': 'Choose a repository',
+  'setup.brandDescription': 'Markdown notes, outlines and flashcards that live in your own GitHub repository. Write in the browser; every save is a commit you own.',
+  'setup.featureNotes': 'Notes, outlines and compilations in plain Markdown, organised into notebooks.',
+  'setup.featureGraph': 'Links, tags and a knowledge graph across everything you write.',
+  'setup.featureGit': 'Your repository stays the only copy: history, branches and backups are plain Git.',
+  'setup.privacy': 'MyGitNotes only reaches the repositories you grant to its GitHub App, and your sign-in is kept in this browser, not on our server.',
 };
 
 export type TranslationKey = keyof typeof en;
