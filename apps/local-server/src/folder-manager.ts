@@ -11,27 +11,32 @@ import { regularPath, writeFileAtomicSync } from './workspace-files.js';
 const documents = WORKSPACE_DOCUMENTS.map(document => document.file);
 
 const isText = (file: string) => /\.(md|markdown|txt)$/i.test(file) || isCompilationPath(file) || path.posix.basename(file) === '_dir.yml';
-/** Visits what a folder change may touch: each notebook's directories, the paths it must leave alone, and the text files and workspace documents it may rewrite. */
-function walkFolders(root: string, notebooks: NotebookConfig[], visitor: { directory: (path: string) => void; protectedPath: (path: string) => void; file: (path: string) => void; }) {
+/**
+ * Visits what a folder change may touch: each notebook's directories, the paths it must leave alone, and the text
+ * files and workspace documents it may rewrite. Each file comes with its absolute path: only the notebook root is
+ * resolved through `regularPath`, and the walk descends solely into entries the directory listing reports as real
+ * directories, so no path below it crosses a symlink without re-checking every segment per file.
+ */
+function walkFolders(root: string, notebooks: NotebookConfig[], visitor: { directory: (path: string) => void; protectedPath: (path: string) => void; file: (path: string, full: string) => void; }) {
   for (const nb of notebooks) {
     const rootPath = regularPath(root, nb.root);
     if (!fs.existsSync(rootPath)) continue;
-    const visit = (directory: string) => {
+    const visit = (directory: string, full: string) => {
       visitor.directory(directory);
-      for (const entry of fs.readdirSync(regularPath(root, directory), { withFileTypes: true })) {
+      for (const entry of fs.readdirSync(full, { withFileTypes: true })) {
         const file = `${directory}/${entry.name}`;
         const relative = file.slice(nb.root.length + 1);
         if (entry.isSymbolicLink() || !isNotebookContent(relative, nb) || !entry.isDirectory() && (!entry.isFile() || !isText(file))) {
           visitor.protectedPath(file);
           continue;
         }
-        if (entry.isDirectory()) visit(file);
-        else visitor.file(file);
+        if (entry.isDirectory()) visit(file, path.join(full, entry.name));
+        else visitor.file(file, path.join(full, entry.name));
       }
     };
-    visit(nb.root);
+    visit(nb.root, rootPath);
   }
-  for (const file of documents) if (fs.existsSync(path.join(root, file))) visitor.file(file);
+  for (const file of documents) if (fs.existsSync(path.join(root, file))) visitor.file(file, regularPath(root, file));
 }
 export function localFolderSnapshot(root: string, notebooks: NotebookConfig[]): FolderSnapshot {
   const snapshot: FolderSnapshot = { notebooks, directories: [], protectedPaths: [], files: new Map() };
@@ -39,8 +44,8 @@ export function localFolderSnapshot(root: string, notebooks: NotebookConfig[]): 
   walkFolders(root, notebooks, {
     directory: directory => snapshot.directories.push(directory),
     protectedPath: file => snapshot.protectedPaths.push(file),
-    file: file => {
-      const full = regularPath(root, file);
+    file: (file, full) => {
+      // lstat rejects a file that became a symlink after the listing.
       const stat = fs.lstatSync(full);
       if (!stat.isFile() || stat.size > 5 * 1024 * 1024) throw new SourceError('Unsupported or oversized notebook file.', 413);
       bytes += stat.size;
@@ -59,8 +64,8 @@ function localFolderRevision(root: string, notebooks: NotebookConfig[]): string 
   walkFolders(root, notebooks, {
     directory: directory => directories.push(directory),
     protectedPath: file => protectedPaths.push(file),
-    file: file => {
-      const stat = fs.lstatSync(regularPath(root, file), { bigint: true });
+    file: (file, full) => {
+      const stat = fs.lstatSync(full, { bigint: true });
       files.push([file, [stat.size, stat.mtimeNs, stat.ctimeNs, stat.ino, stat.mode].join(':')]);
     },
   });

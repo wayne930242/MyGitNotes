@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
-import { applyLocalFilePlan, localFileSnapshot } from '../src/file-manager.js';
+import { applyLocalFilePlan, localFileCatalog, localFileSnapshot } from '../src/file-manager.js';
 import { assetHash, loadWorkspaceConfig, planFileChange } from '@mygitnotes/core';
 let root: string, server: Server, base: string;
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
@@ -78,6 +78,21 @@ it('rejects stale revisions, cross-notebook paths, symlinks, overwrite and read-
   git('checkout', '-b', 'core');
   expect((await list()).writable).toBe(false);
   expect((await post({ kind: 'create', path: 'notes/a/no.txt' })).status).toBe(403);
+});
+it('lists symlinks inside a notebook as protected without following them, and refuses a symlinked notebook root', () => {
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-outside-'));
+  fs.writeFileSync(path.join(outside, 'secret.md'), 'secret');
+  fs.symlinkSync(path.join(root, 'notes/b'), path.join(root, 'notes/a/one/linked-dir'));
+  fs.symlinkSync(path.join(outside, 'secret.md'), path.join(root, 'notes/a/one/linked.md'));
+  const catalog = localFileCatalog(root, loadWorkspaceConfig(root)!.notebooks);
+  expect(catalog.protectedPaths).toEqual(expect.arrayContaining(['notes/a/one/linked-dir', 'notes/a/one/linked.md']));
+  expect([...catalog.files.keys()].filter(file => file.includes('linked'))).toEqual([]);
+  expect(catalog.directories).not.toContain('notes/a/one/linked-dir');
+  fs.rmSync(path.join(root, 'notes/b'), { recursive: true });
+  fs.symlinkSync(outside, path.join(root, 'notes/b'));
+  expect(() => localFileCatalog(root, loadWorkspaceConfig(root)!.notebooks)).toThrow(/symlink/i);
+  fs.unlinkSync(path.join(root, 'notes/b'));
+  fs.rmSync(outside, { recursive: true });
 });
 it('restores the original binary and text snapshot after a write fails', () => {
   const before = localFileSnapshot(root, loadWorkspaceConfig(root)!.notebooks), after = planFileChange(before, { kind: 'move', notebookId: 'a', path: 'notes/a/one', destination: 'notes/a/two/one' });

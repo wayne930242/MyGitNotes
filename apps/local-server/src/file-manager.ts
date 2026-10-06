@@ -23,33 +23,43 @@ interface FileCatalog {
 }
 export function localFileCatalog(root: string, notebooks: NotebookConfig[]): FileCatalog {
   const catalog: FileCatalog = { notebooks, directories: [], protectedPaths: [], files: new Map() };
-  const add = (file: string) => {
-    const stat = fs.statSync(regularPath(root, file), { bigint: true });
+  const visited = new Set<string>();
+  // lstat rejects a file that became a symlink after the listing.
+  const add = (file: string, full: string) => {
+    const stat = fs.lstatSync(full, { bigint: true });
     if (!stat.isFile()) throw new SourceError('Expected a regular file.', 400);
     catalog.files.set(file, { size: Number(stat.size), mtime: Number(stat.mtimeMs), stamp: [stat.size, stat.mtimeNs, stat.ctimeNs, stat.ino, stat.mode].join(':') });
   };
-  const visit = (dir: string) => {
-    if (catalog.directories.includes(dir)) return;
+  // Only a walk's starting directory goes through `regularPath`; it descends solely into entries the listing reports as
+  // real directories, so the paths below it need no per-file symlink check.
+  const visit = (dir: string, full: string) => {
+    if (visited.has(dir)) return;
+    visited.add(dir);
     catalog.directories.push(dir);
-    for (const entry of fs.readdirSync(regularPath(root, dir), { withFileTypes: true })) {
+    for (const entry of fs.readdirSync(full, { withFileTypes: true })) {
       const file = dir + '/' + entry.name;
       if (!managedNotebook(file, notebooks) || entry.isSymbolicLink() || !entry.isFile() && !entry.isDirectory()) catalog.protectedPaths.push(file);
-      else if (entry.isDirectory()) visit(file);
-      else add(file);
+      else if (entry.isDirectory()) visit(file, path.join(full, entry.name));
+      else add(file, path.join(full, entry.name));
     }
   };
+  const start = (dir: string) => {
+    const full = regularPath(root, dir);
+    if (fs.existsSync(full)) visit(dir, full);
+  };
   for (const nb of notebooks) {
-    if (fs.existsSync(regularPath(root, nb.root))) visit(nb.root);
+    start(nb.root);
     if (nb.pathAliases) {
       for (const target of Object.values(nb.pathAliases)) {
         const targetDir = target.replace(/\*$/, '').replace(/\/$/, '');
-        if (targetDir && fs.existsSync(regularPath(root, targetDir))) {
-          visit(targetDir);
-        }
+        if (targetDir) start(targetDir);
       }
     }
   }
-  for (const file of auxiliary) if (fs.existsSync(regularPath(root, file))) add(file);
+  for (const file of auxiliary) {
+    const full = regularPath(root, file);
+    if (fs.existsSync(full)) add(file, full);
+  }
   return catalog;
 }
 function localRead(root: string, file: string) {
