@@ -15,6 +15,8 @@ interface UseCreateNoteParams {
   selectedNotebookId: string;
   setSelectedNotebookId: (id: string) => void;
   folders: FolderItem[];
+  /** While the folder list is still arriving, a folder cannot be checked yet. */
+  foldersLoading: boolean;
   remote: boolean;
   canWrite: boolean;
   readDraft: WorkspaceState['readDraft'];
@@ -54,7 +56,7 @@ export function untitledCandidates(directory: string, suffix: string, count = CA
 }
 
 /** Creates a note, outline or templated note at once, with default values, and opens it. */
-export function useCreateNote({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, newNoteStatuses, sourceId, t, onCreated, onError }: UseCreateNoteParams) {
+export function useCreateNote({ config, selectedNotebookId, setSelectedNotebookId, folders, foldersLoading, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, newNoteStatuses, sourceId, t, onCreated, onError }: UseCreateNoteParams) {
   const [creating, setCreating] = useState(false);
   const generation = useRef(0);
   const submitting = useRef(false);
@@ -92,6 +94,7 @@ export function useCreateNote({ config, selectedNotebookId, setSelectedNotebookI
       const notebook = config?.notebooks.find(n => n.id === selectedNotebookId);
       if (!notebook) throw new Error(t('outline.changed'));
       const folder = (opts.folder ?? '').trim().replace(/^\/+|\/+$/g, '');
+      if (folder && foldersLoading) throw new Error(t('createNote.foldersLoading'));
       if (folder && !folders.some(item => item.notebookId === notebook.id && item.path === folder)) throw new Error(t('createNote.invalidFolder'));
       const directory = [notebook.root.replace(/\/$/, ''), folder].filter(Boolean).join('/');
       const candidates = untitledCandidates(directory, kind === 'outline' ? OUTLINE_SUFFIX : '.md');

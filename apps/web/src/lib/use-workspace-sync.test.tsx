@@ -21,7 +21,9 @@ it('shows the workspace as soon as it is known, filling in folders when they arr
   await waitFor(() => expect(result.current.loading).toBe(false));
   expect(result.current.config?.notebooks.map(notebook => notebook.id)).toEqual(['a']);
   expect(result.current.folders).toEqual([]);
+  expect(result.current.foldersLoading).toBe(true);
 
   folders.resolve([{ notebookId: 'a', path: 'one' } as FolderItem]);
   await waitFor(() => expect(result.current.folders).toHaveLength(1));
+  expect(result.current.foldersLoading).toBe(false);
 });

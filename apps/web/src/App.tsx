@@ -115,7 +115,7 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const editorRoute = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
 
-  const { selectedNotebookId, folders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, actionError, setActionError, repoRoot, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
+  const { selectedNotebookId, folders, foldersLoading, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, actionError, setActionError, repoRoot, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
   const refreshDocuments = async () => {
     await Promise.all(documents.map(document => document.refresh()));
   };
@@ -197,7 +197,7 @@ const AppContent: React.FC = () => {
   const bulkMoveNotebook = config?.notebooks.find(nb => nb.id === bulkMoveNotebookId);
 
   // Create New Note dialog: its form state and the handlers that render or persist a new note draft.
-  const { createNote } = useCreateNote({ config, selectedNotebookId, setSelectedNotebookId, folders, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, sourceId, newNoteStatuses, t, onCreated: handleOpenNote, onError: setActionError });
+  const { createNote } = useCreateNote({ config, selectedNotebookId, setSelectedNotebookId, folders, foldersLoading, remote, canWrite, readDraft, queryClient, queryScope, stageWorkingNote, revisionFor, invalidateNotes, setGitStatus, sourceId, newNoteStatuses, t, onCreated: handleOpenNote, onError: setActionError });
 
   const outlineActions = useOutlineActions({ config, repositoryFor, readDraft, remote, sourceId, selectedNotebookId, locationKey: location.key, routedRef: editorRoute.note && editorNotebookId ? { notebookId: editorNotebookId, path: `${config?.notebooks.find(nb => nb.id === editorNotebookId)?.root}/${editorRoute.note}` } : null, prepareLeave: editorRegistry.flushEditors, openNote: handleOpenNote, openNewNote: options => void createNote(options), onError: setActionError });
 
@@ -492,6 +492,7 @@ const AppContent: React.FC = () => {
                           <Sidebar
                             selectedNotebookId={selectedNotebookId}
                             folders={folders}
+                            foldersLoading={foldersLoading}
                             onManageFiles={openFileManager}
                             foldersWritable={canWrite}
                             reorder={folderReorder}

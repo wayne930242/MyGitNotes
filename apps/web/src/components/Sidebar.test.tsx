@@ -30,6 +30,16 @@ function controls(value: Partial<NoteFilters> = {}, onChange: FilterControls['on
 
 const sidebar = (filters: FilterControls, onSelectFolder = vi.fn()) => render(createElement(I18nProvider, null, createElement(Sidebar, { filters, facets, folders: [], selectedNotebookId: 'life', onManageFiles: () => {}, reorder: false, onToggleReorder: () => {}, onSelectFolder, workspaceTagNames: ['work'], changeCount: 0 })));
 
+it('treats folder filters and empty notebooks as unknown while folders are loading', () => {
+  const filters = controls({ folders: ['notes/life/projects'] });
+  const props = { filters, facets, folders: [], selectedNotebookId: 'life', onManageFiles: () => {}, reorder: false, onToggleReorder: () => {}, onSelectFolder: vi.fn(), workspaceTagNames: ['work'], changeCount: 0 };
+  const { rerender } = render(createElement(I18nProvider, null, createElement(Sidebar, { ...props, foldersLoading: true })));
+  expect(screen.queryByRole('button', { name: /notes\/life\/projects/ })).toBeNull();
+  expect(screen.getAllByText('Loading folders…').length).toBeGreaterThan(0);
+  rerender(createElement(I18nProvider, null, createElement(Sidebar, { ...props, foldersLoading: false })));
+  expect(screen.getByRole('button', { name: /notes\/life\/projects/ })).toBeTruthy();
+  expect(screen.queryByText('Loading folders…')).toBeNull();
+});
 it('has three collapsible sections, Notebooks, Status and Tags, and no search field', () => {
   sidebar(controls());
   const summaries = [...document.querySelectorAll('details.sidebar-filter-section > summary')].map(summary => summary.textContent);

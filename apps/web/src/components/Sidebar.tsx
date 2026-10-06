@@ -24,6 +24,8 @@ const selectedItemStyle: React.CSSProperties = { backgroundColor: 'color-mix(in 
 interface SidebarProps {
   onManageFiles: (notebookId: string, path: string, action?: FolderAction) => void;
   folders?: FolderItem[];
+  /** While the folder list is still arriving: folder filters are not yet known to be missing, nor notebooks empty. */
+  foldersLoading?: boolean;
   foldersWritable?: boolean;
   reorder: boolean;
   onToggleReorder: () => void;
@@ -51,7 +53,7 @@ interface SidebarProps {
   onDeleteTag?: (tag: string) => Promise<void>;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, foldersWritable = false, beforeFolderChange, onFoldersChanged, selectedFolder = null, onSelectFolder, selectedNotebookId, facets, facetsLoading = false, facetsError = '', workspaceTagNames, filters, reorder, onToggleReorder, changeCount, onPulled, repoRoot = '', canManageTags = false, onPreviewTagUsage, onRenameTag, onMergeTag, onDeleteTag }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ folders = [], foldersLoading = false, onManageFiles, foldersWritable = false, beforeFolderChange, onFoldersChanged, selectedFolder = null, onSelectFolder, selectedNotebookId, facets, facetsLoading = false, facetsError = '', workspaceTagNames, filters, reorder, onToggleReorder, changeCount, onPulled, repoRoot = '', canManageTags = false, onPreviewTagUsage, onRenameTag, onMergeTag, onDeleteTag }) => {
   const { t, language } = useTranslation();
   const { value, statuses, onChange } = filters;
   const sections = useSidebarSections();
@@ -203,10 +205,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
           {facetsError && <span role='alert' className='sidebar-facets-status'>{t('notes.countsFailed', { message: facetsError })}</span>}
           <button type='button' className='sidebar-clear-filters' onClick={filters.onClear}>{t('filters.clear')}</button>
         </div>
-        {value.folders.filter(path => !filters.notebooks.some(nb => path === nb.root.replace(/\/$/, '')) && !folders.some(folder => {
-          const root = filters.notebooks.find(nb => nb.id === folder.notebookId)?.root.replace(/\/$/, '');
-          return path === `${root}/${folder.path}`;
-        })).map(path => (
+        {!foldersLoading && value.folders.filter(path =>
+          !filters.notebooks.some(nb => path === nb.root.replace(/\/$/, '')) && !folders.some(folder => {
+            const root = filters.notebooks.find(nb => nb.id === folder.notebookId)?.root.replace(/\/$/, '');
+            return path === `${root}/${folder.path}`;
+          })
+        ).map(path => (
           <button type='button' className='sidebar-missing-filter' key={path} aria-label={t('filters.remove', { value: path })} onClick={() => onChange({ folders: value.folders.filter(item => item !== path) })}>
             {path}
             <X size={12} />
@@ -279,7 +283,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ folders = [], onManageFiles, f
                     suffix={<span className='sidebar-notebook-count' title={count === null ? t('notes.countsLoading') : t('folder.noteCount', { count })}>{count ?? '—'}</span>}
                     actions={foldersWritable && isCurrentNotebook ? <div className='folder-heading-actions'>{onToggleReorder && <ReorderToggle active={reorder} onToggle={onToggleReorder} />}</div> : undefined}
                   />
-                  <div id={`notebook-folders-${nb.id}`} hidden={!expanded} className='sidebar-notebook-folders'>{hasFolders ? <FolderTree onManageFiles={(path, action) => onManageFiles(nb.id, path, action)} reorder={reorder} onToggleReorder={onToggleReorder} folders={folders} notebookId={nb.id} selected={isCurrentNotebook ? selectedFolder : null} onSelect={folder => selectSingleFolder(nb.id, folder)} allFoldersSelected={value.folders.length === 0} selectedPaths={selectedPaths} onFilterFolder={folder => toggleFolder(nb.id, folder)} touchMultiSelect={touchMultiSelect} onLongPressFolder={folder => enterTouchMultiSelect(nb.id, folder)} writable={foldersWritable && isCurrentNotebook} beforeChange={beforeFolderChange} onChanged={onFoldersChanged} expandCommand={folderExpandCommand} /> : <p className='sidebar-notebook-empty'>{t('folder.subfolderCount', { count: 0 })}</p>}</div>
+                  <div id={`notebook-folders-${nb.id}`} hidden={!expanded} className='sidebar-notebook-folders'>{hasFolders ? <FolderTree onManageFiles={(path, action) => onManageFiles(nb.id, path, action)} reorder={reorder} onToggleReorder={onToggleReorder} folders={folders} notebookId={nb.id} selected={isCurrentNotebook ? selectedFolder : null} onSelect={folder => selectSingleFolder(nb.id, folder)} allFoldersSelected={value.folders.length === 0} selectedPaths={selectedPaths} onFilterFolder={folder => toggleFolder(nb.id, folder)} touchMultiSelect={touchMultiSelect} onLongPressFolder={folder => enterTouchMultiSelect(nb.id, folder)} writable={foldersWritable && isCurrentNotebook} beforeChange={beforeFolderChange} onChanged={onFoldersChanged} expandCommand={folderExpandCommand} /> : foldersLoading ? <LoadingStatus className='sidebar-notebook-empty'>{t('folder.loading')}</LoadingStatus> : <p className='sidebar-notebook-empty'>{t('folder.subfolderCount', { count: 0 })}</p>}</div>
                   <NavTreeRow
                     icon={<ListTree size={16} />}
                     title={t('outline.list')}

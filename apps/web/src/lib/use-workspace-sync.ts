@@ -30,6 +30,8 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const queryClient = useQueryClient();
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
+  // True until the first folder list arrives; until then an empty `folders` means unknown, not none.
+  const [foldersLoading, setFoldersLoading] = useState(true);
   // The workspace is identified by its home repository.
   const [sourceId, setSourceId] = useState('');
   const [remote, setRemote] = useState(false);
@@ -169,10 +171,12 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
       const folderList = await folderRequest;
       if (request !== refreshRequest.current) return;
       setFolders((previous) => (sameValue(previous, folderList) ? previous : folderList));
+      setFoldersLoading(false);
     } catch (err) {
       if (request !== refreshRequest.current) return;
       loadedWorkspace.current = '';
       setFolders([]);
+      setFoldersLoading(false);
       setAssets([]);
       setConfig(null);
       setLoadError(err instanceof Error ? err.message : 'Failed to load workspace');
@@ -222,5 +226,5 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return note;
   };
 
-  return { selectedNotebookId, folders, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
+  return { selectedNotebookId, folders, foldersLoading, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
 }
