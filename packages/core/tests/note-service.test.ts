@@ -46,4 +46,25 @@ describe('writeNoteFile timestamp stamping', () => {
     const notes = scanNotebookNotes(repoRoot, { id: 'example', title: 'Example', root: 'notes/example' });
     expect(notes.map(n => n.title).sort()).toEqual(['Interactive MDX', 'Regular']);
   });
+
+  it('reuses unchanged parses across scans yet follows edits, additions and deletions', () => {
+    const notebook = { id: 'example', title: 'Example', root: 'notes/example' };
+    const dir = path.join(repoRoot, 'notes/example');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'a.md'), '---\ntitle: A\ntags: [one]\n---\nBody A');
+    fs.writeFileSync(path.join(dir, 'b.md'), '---\ntitle: B\n---\nBody B');
+    const first = scanNotebookNotes(repoRoot, notebook);
+    // A caller changing its result must not reach the next scan.
+    const a = first.find(note => note.path.endsWith('a.md'))!;
+    a.metadata.title = 'Changed';
+    a.tags.push('two');
+    expect(scanNotebookNotes(repoRoot, notebook).find(note => note.path.endsWith('a.md'))).toMatchObject({ title: 'A', tags: ['one'], metadata: { title: 'A' } });
+
+    // Same size, so only the change times tell the edit apart.
+    fs.writeFileSync(path.join(dir, 'a.md'), '---\ntitle: Z\ntags: [one]\n---\nBody Z');
+    fs.rmSync(path.join(dir, 'b.md'));
+    fs.writeFileSync(path.join(dir, 'c.md'), '---\ntitle: C\n---\nBody C');
+    const next = scanNotebookNotes(repoRoot, notebook);
+    expect(next.map(note => [note.title, note.content.trim()]).sort()).toEqual([['C', 'Body C'], ['Z', 'Body Z']]);
+  });
 });

@@ -71,14 +71,29 @@ export function writeNoteFile(repoRoot: string, relPath: string, content: string
   return readNoteFile(repoRoot, normalizedRel, resolvedNotebookId, notebookRoot);
 }
 
+/**
+ * Parsed files of each notebook scan, reused while a file's size, change times and inode are unchanged, so a
+ * scan reads and parses only the files edited since the last one. A scan keeps only the files it saw.
+ */
+const scanCache = new Map<string, Map<string, { stamp: string; note: NoteItem; }>>();
+
+/** A copy the caller may change without altering the cached parse; the body string is immutable and shared. */
+function copyNote({ content, ...rest }: NoteItem): NoteItem {
+  return { ...structuredClone(rest), content };
+}
+
 function walkNotebook(repoRoot: string, notebook: NotebookConfig, compilations: boolean): NoteItem[] {
   const safeRoot = resolveSafePath(repoRoot, notebook.root);
+  const cacheKey = JSON.stringify([path.resolve(repoRoot), notebook.id, notebook.root]);
   if (!fs.existsSync(safeRoot)) {
+    scanCache.delete(cacheKey);
     return [];
   }
 
   const templateFiles = new Set((notebook.templates || []).map(t => t.file));
   const notes: NoteItem[] = [];
+  const previous = scanCache.get(cacheKey);
+  const seen = new Map<string, { stamp: string; note: NoteItem; }>();
 
   function walk(currentDir: string) {
     const entries = fs.readdirSync(currentDir, { withFileTypes: true });
@@ -93,13 +108,20 @@ function walkNotebook(repoRoot: string, notebook: NotebookConfig, compilations: 
         walk(fullPath);
       } else if (entry.isFile()) {
         if (NOTE_EXTENSIONS.test(entry.name) || compilations && isCompilationPath(entry.name)) {
-          notes.push(readNoteFile(repoRoot, relToRepo, notebook.id, notebook.root));
+          // Stat before reading: a file changed in between carries a newer body than its stamp, so the next scan reads it again.
+          const stat = fs.statSync(fullPath);
+          const stamp = `${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}:${stat.ino}`;
+          const cached = previous?.get(relToRepo);
+          const note = cached?.stamp === stamp ? cached.note : readNoteFile(repoRoot, relToRepo, notebook.id, notebook.root);
+          seen.set(relToRepo, { stamp, note });
+          notes.push(copyNote(note));
         }
       }
     }
   }
 
   walk(safeRoot);
+  scanCache.set(cacheKey, seen);
   return notes;
 }
 
