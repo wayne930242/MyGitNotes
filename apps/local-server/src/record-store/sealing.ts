@@ -20,7 +20,7 @@ export type StoredRecord = any;
 
 export function unseal(value: string, secret = sealingKey()): StoredRecord {
   const data = Buffer.from(value, 'base64url');
-  const decipher = createDecipheriv('aes-256-gcm', secret, data.subarray(0, 12));
+  const decipher = createDecipheriv('aes-256-gcm', secret, data.subarray(0, 12), { authTagLength: 16 });
   decipher.setAuthTag(data.subarray(-16));
   return JSON.parse(Buffer.concat([decipher.update(data.subarray(12, -16)), decipher.final()]).toString());
 }
