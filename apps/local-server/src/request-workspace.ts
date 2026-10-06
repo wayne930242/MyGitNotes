@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type express from 'express';
-import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, localManifest, type NotebookConfig, type NoteCatalog, parseRevisions, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
+import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, localManifest, type NotebookConfig, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { authToken } from './auth.js';
 import { regularPath } from './workspace-files.js';
@@ -108,6 +108,19 @@ export function workspaceOf(res: express.Response): RequestWorkspace {
 export async function homeRepository(res: express.Response): Promise<{ handle: RepositoryHandle; config: WorkspaceConfig; }> {
   const workspace = workspaceOf(res);
   return { handle: workspace.home.handle, config: await workspace.scope(workspace.home.ref.id) };
+}
+
+/**
+ * Parses every local worktree's notebooks in the background once the server listens, so the first page load does not
+ * wait for a cold scan; requests arriving meanwhile are served between batches of files. A remote workspace has nothing to warm.
+ */
+export async function prewarmLocalScans(configSource: WorkspaceConfigSource): Promise<void> {
+  const settings = await configSource.settings({ headers: {} });
+  if (settings.home.source.type !== 'local') return;
+  const repositories = await openWorkspace(settings, undefined).all();
+  for (const repository of repositories) {
+    if ('handle' in repository && repository.handle.kind === 'local') await prewarmNotebookScans(repository.handle.root, repository.notebooks);
+  }
 }
 
 /** The note catalog over every available repository of the request's workspace, checked against the `revisions` the caller works from. */

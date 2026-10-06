@@ -2,6 +2,7 @@ import type { AddressInfo } from 'node:net';
 import { applicationRoot, createApp } from './app.js';
 import { writeDevPorts } from './dev-ports.js';
 import { createPiAgent } from './pi-agent.js';
+import { prewarmLocalScans } from './request-workspace.js';
 import { assertWorkspaceCompatible, deploymentConfigSource, loadEnvDefaults } from '@mygitnotes/core';
 
 loadEnvDefaults(`${applicationRoot()}/.env`);
@@ -48,3 +49,9 @@ if (isLocal) {
   writeDevPorts(repoRoot, { serverPort: port, serverPid: process.pid });
 }
 console.log(`[local-server] http://${host}:${port}`);
+const warmStart = performance.now();
+prewarmLocalScans(configSource).then(
+  () => console.log(`[local-server] notes parsed in ${Math.round(performance.now() - warmStart)} ms`),
+  // Requests still scan on demand; only the head start is lost.
+  (error: unknown) => console.warn(`[local-server] background note scan failed: ${error instanceof Error ? error.message : String(error)}`),
+);

@@ -82,7 +82,8 @@ function copyNote({ content, ...rest }: NoteItem): NoteItem {
   return { ...structuredClone(rest), content };
 }
 
-function walkNotebook(repoRoot: string, notebook: NotebookConfig, compilations: boolean): NoteItem[] {
+/** Walks a notebook, parsing the files changed since the last scan; it yields after each file, so a background scan can let requests in. */
+function* scanNotebookFiles(repoRoot: string, notebook: NotebookConfig, compilations: boolean): Generator<void, NoteItem[]> {
   const safeRoot = resolveSafePath(repoRoot, notebook.root);
   const cacheKey = JSON.stringify([path.resolve(repoRoot), notebook.id, notebook.root]);
   if (!fs.existsSync(safeRoot)) {
@@ -95,7 +96,7 @@ function walkNotebook(repoRoot: string, notebook: NotebookConfig, compilations: 
   const previous = scanCache.get(cacheKey);
   const seen = new Map<string, { stamp: string; note: NoteItem; }>();
 
-  function walk(currentDir: string) {
+  function* walk(currentDir: string): Generator<void> {
     const entries = fs.readdirSync(currentDir, { withFileTypes: true });
     for (const entry of entries) {
       const fullPath = path.join(currentDir, entry.name);
@@ -105,7 +106,7 @@ function walkNotebook(repoRoot: string, notebook: NotebookConfig, compilations: 
       if (!isNotebookContent(relToNb, notebook) || templateFiles.has(relToNb)) continue;
 
       if (entry.isDirectory()) {
-        walk(fullPath);
+        yield* walk(fullPath);
       } else if (entry.isFile()) {
         if (NOTE_EXTENSIONS.test(entry.name) || compilations && isCompilationPath(entry.name)) {
           // Stat before reading: a file changed in between carries a newer body than its stamp, so the next scan reads it again.
@@ -115,14 +116,35 @@ function walkNotebook(repoRoot: string, notebook: NotebookConfig, compilations: 
           const note = cached?.stamp === stamp ? cached.note : readNoteFile(repoRoot, relToRepo, notebook.id, notebook.root);
           seen.set(relToRepo, { stamp, note });
           notes.push(copyNote(note));
+          yield;
         }
       }
     }
   }
 
-  walk(safeRoot);
+  yield* walk(safeRoot);
   scanCache.set(cacheKey, seen);
   return notes;
+}
+
+function walkNotebook(repoRoot: string, notebook: NotebookConfig, compilations: boolean): NoteItem[] {
+  const scan = scanNotebookFiles(repoRoot, notebook, compilations);
+  let step = scan.next();
+  while (!step.done) step = scan.next();
+  return step.value;
+}
+
+/**
+ * Fills the scan cache for `notebooks` without holding the event loop: it yields after every `batch` files, so
+ * requests arriving meanwhile are served, and the first page load after startup finds the notes already parsed.
+ */
+export async function prewarmNotebookScans(repoRoot: string, notebooks: NotebookConfig[], batch = 25): Promise<void> {
+  for (const notebook of notebooks) {
+    const scan = scanNotebookFiles(repoRoot, notebook, true);
+    for (let files = 1; !scan.next().done; files++) {
+      if (files % batch === 0) await new Promise(resolve => setImmediate(resolve));
+    }
+  }
 }
 
 /**

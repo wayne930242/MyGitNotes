@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { scanNotebookNotes, writeNoteFile } from '../src/note-service.js';
+import { prewarmNotebookScans, scanNotebookEntries, scanNotebookNotes, writeNoteFile } from '../src/note-service.js';
 
 describe('writeNoteFile timestamp stamping', () => {
   let repoRoot: string;
@@ -66,5 +66,19 @@ describe('writeNoteFile timestamp stamping', () => {
     fs.writeFileSync(path.join(dir, 'c.md'), '---\ntitle: C\n---\nBody C');
     const next = scanNotebookNotes(repoRoot, notebook);
     expect(next.map(note => [note.title, note.content.trim()]).sort()).toEqual([['C', 'Body C'], ['Z', 'Body Z']]);
+  });
+
+  it('prewarms notebook scans in the background, letting other work run between batches', async () => {
+    const notebook = { id: 'example', title: 'Example', root: 'notes/example' };
+    const dir = path.join(repoRoot, 'notes/example');
+    fs.mkdirSync(dir, { recursive: true });
+    for (const name of ['a', 'b', 'c', 'd']) fs.writeFileSync(path.join(dir, `${name}.md`), `---\ntitle: ${name}\n---\nBody`);
+    const order: string[] = [];
+    setImmediate(() => order.push('other work'));
+    const warm = prewarmNotebookScans(repoRoot, [notebook], 2).then(() => order.push('prewarmed'));
+    expect(order).toEqual([]);
+    await warm;
+    expect(order).toEqual(['other work', 'prewarmed']);
+    expect(scanNotebookEntries(repoRoot, notebook).map(note => note.title).sort()).toEqual(['a', 'b', 'c', 'd']);
   });
 });
