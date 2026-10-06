@@ -34,10 +34,13 @@ import { applyOutlineCommand, outlineKeymap } from './live-markdown/outline-comm
 import { outlineDrag } from './live-markdown/outline-drag.js';
 import type { OutlineCommand } from '../lib/outline-editing.js';
 import { textChange } from '../lib/text-change.js';
+import { blockInsertion } from '../lib/directive-editing.js';
 
 export interface LiveMarkdownHandle {
   /** Inserts `text` at `at`, or in place of the selection. */
   insert: (text: string, at?: number) => void;
+  /** Puts `block` in place of the selection as a block of its own, with exactly one blank line on either side. */
+  insertBlock: (block: string) => void;
   revealRange: (from: number, to: number, focus?: boolean) => void;
   goToLine: (line: number, options?: { focus?: boolean; }) => void;
   getCurrentLine: () => number;
@@ -110,6 +113,14 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
       const from = at === undefined ? undefined : Math.max(0, Math.min(at, view.state.doc.length));
       const inserted = view.state.toText(text);
       view.dispatch(from === undefined ? view.state.replaceSelection(inserted) : { changes: { from, insert: inserted }, selection: { anchor: from + inserted.length } }, { scrollIntoView: true, userEvent: 'input', annotations: isOutlinePath(notePath) ? isolateHistory.of('full') : undefined });
+      view.focus();
+    },
+    insertBlock(block) {
+      const view = editor.current;
+      if (!view || view.state.readOnly) return;
+      const { from, to } = view.state.selection.main;
+      const edit = blockInsertion(view.state.doc.toString(), from, to, block);
+      view.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, selection: { anchor: edit.cursor }, scrollIntoView: true, userEvent: 'input', annotations: isOutlinePath(notePath) ? isolateHistory.of('full') : undefined });
       view.focus();
     },
     revealRange(from, to, focus = false) {

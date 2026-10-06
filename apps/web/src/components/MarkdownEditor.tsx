@@ -9,7 +9,7 @@ import { type TranslationKey, useTranslation } from '../lib/i18n/index.js';
 import { noteCompletionAt, useNoteCandidates } from '../lib/note-completion.js';
 import { noteLinkHref, noteMarkdownLink } from '@mygitnotes/core/workspace-links';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
-import { DIRECTIVE_TEMPLATES, localizedDirectiveSnippet } from '../lib/directive-editing.js';
+import { blockInsertion, DIRECTIVE_TEMPLATES, localizedDirectiveSnippet } from '../lib/directive-editing.js';
 import './note-completion.css';
 import { copyLinePrompt } from '../lib/line-prompt-copy.js';
 import { attachLineGutterGesture } from '../lib/line-gutter-gesture.js';
@@ -242,12 +242,18 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
   };
 
   const insertDirective = (type = 'info') => {
-    const text = `\n\n${localizedDirectiveSnippet(type, t)}\n`;
-    if (mode === 'live') live.current?.insert(text);
-    else {
-      const position = source.current?.selectionStart ?? content.length;
-      changeSource(content.slice(0, position) + text + content.slice(position));
+    const block = localizedDirectiveSnippet(type, t);
+    if (mode === 'live') {
+      live.current?.insertBlock(block);
+      return;
     }
+    const target = source.current;
+    const edit = blockInsertion(content, target?.selectionStart ?? content.length, target?.selectionEnd ?? content.length, block);
+    changeSource(content.slice(0, edit.from) + edit.insert + content.slice(edit.to));
+    requestAnimationFrame(() => {
+      source.current?.focus();
+      source.current?.setSelectionRange(edit.cursor, edit.cursor);
+    });
   };
 
   const insertTable = () => {

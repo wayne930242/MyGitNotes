@@ -1,9 +1,43 @@
 import { describe, expect, it } from 'vitest';
-import { DIRECTIVE_TEMPLATES, findDirectiveBlocks, localizedDirectiveLabel, localizedDirectiveSnippet, parseDirectiveModel, updateDirectiveType, updateDirectiveVariant } from './directive-editing.js';
+import { blockInsertion, DIRECTIVE_TEMPLATES, findDirectiveBlocks, localizedDirectiveLabel, localizedDirectiveSnippet, parseDirectiveModel, updateDirectiveType, updateDirectiveVariant } from './directive-editing.js';
 import { localizedHandoutVariants, parseDirectiveAttributes, parseDirectiveTitle, stripMdxImports, transformDirectives, transformMdxComponents } from './directives.js';
 import { en, type TranslationKey } from './i18n/en.js';
 
 const enT = (key: TranslationKey): string => en[key] ?? key;
+
+/** `doc` with `|` marking the cursor, or `[` `]` a selection, after inserting `B`; `^` marks the resulting cursor. */
+function inserted(marked: string, block = ':::info\nB\n:::') {
+  const from = marked.includes('[') ? marked.indexOf('[') : marked.indexOf('|');
+  const doc = marked.replace(/[|[\]]/g, '');
+  const to = marked.includes(']') ? marked.indexOf(']') - 1 : from;
+  const edit = blockInsertion(doc, from, to, block);
+  const result = doc.slice(0, edit.from) + edit.insert + doc.slice(edit.to);
+  return result.slice(0, edit.cursor) + '^' + result.slice(edit.cursor);
+}
+
+describe('block insertion', () => {
+  const B = ':::info\nB\n:::';
+  it('leaves exactly one blank line on either side, whatever was there', () => {
+    expect(inserted('a\n|b')).toBe(`a\n\n${B}\n^\nb`);
+    expect(inserted('a\n\n\n\n|\n\n\nb')).toBe(`a\n\n${B}\n^\nb`);
+    expect(inserted('a\n  \n|  \n\t\nb')).toBe(`a\n\n${B}\n^\nb`);
+    expect(inserted('ab|cd')).toBe(`ab\n\n${B}\n^\ncd`);
+    expect(inserted('a\n[selected]\nb')).toBe(`a\n\n${B}\n^\nb`);
+  });
+  it('adds nothing before the block at the start of the document and one newline after it at the end', () => {
+    expect(inserted('|a')).toBe(`${B}\n^\na`);
+    expect(inserted('\n\n|a')).toBe(`${B}\n^\na`);
+    expect(inserted('a|')).toBe(`a\n\n${B}\n^`);
+    expect(inserted('a\n\n\n|')).toBe(`a\n\n${B}\n^`);
+    expect(inserted('|')).toBe(`${B}\n^`);
+  });
+  it('keeps one blank line between blocks inserted one after another', () => {
+    const first = blockInsertion('a\n', 2, 2, B);
+    const doc = 'a\n'.slice(0, first.from) + first.insert;
+    const second = blockInsertion(doc, first.cursor, first.cursor, `\n${B}\n\n`);
+    expect(doc.slice(0, second.from) + second.insert + doc.slice(second.to)).toBe(`a\n\n${B}\n\n${B}\n`);
+  });
+});
 
 describe('directive templates', () => {
   it('uses domain-neutral labels and starter content in the notes editor', () => {

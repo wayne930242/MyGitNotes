@@ -27,6 +27,22 @@ export function localizedDirectiveSnippet(type: string, t?: DirectiveTranslate):
   return snippet;
 }
 
+/**
+ * The edit that puts `block` in place of the selection `from`–`to` as a block of its own: the blank lines and
+ * whitespace already around that spot give way to exactly one blank line before and after it, however many the
+ * writer left, so the block never fuses with a neighbouring paragraph. At the start of the document nothing goes
+ * before it, and at the end it is closed by a single newline. `cursor` is the start of the line after the block.
+ */
+export function blockInsertion(doc: string, from: number, to: number, block: string): { from: number; to: number; insert: string; cursor: number; } {
+  const before = doc.slice(0, from), after = doc.slice(to);
+  const kept = /^\s*$/.test(before) ? '' : before.replace(/(?:\r?\n[ \t]*)+$/, '');
+  const rest = /^\s*$/.test(after) ? '' : after.replace(/^(?:[ \t]*\r?\n)+/, '');
+  const body = block.replace(/^\n+|\n+$/g, '');
+  const head = kept ? '\n\n' : '';
+  const insert = `${head}${body}${rest ? '\n\n' : '\n'}`;
+  return { from: kept.length, to: doc.length - rest.length, insert, cursor: kept.length + head.length + body.length + 1 };
+}
+
 /** DIRECTIVE_TEMPLATES[type].label in the given locale, via the existing `directive.<type>` keys. */
 export function localizedDirectiveLabel(type: string, t?: DirectiveTranslate): string {
   const tpl = DIRECTIVE_TEMPLATES.find(d => d.type === type) ?? DIRECTIVE_TEMPLATES[0];
