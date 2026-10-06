@@ -3,7 +3,7 @@ import { type RecordStore, SealedRecordStore } from './record-store.js';
 import { recordKeyPrefix, RedisRecordBackend, usesRedis } from './redis-backend.js';
 
 export { DirectoryRecordBackend } from './directory-backend.js';
-export { type GrantSummary, type RecordBackend, recordLifetime, type RecordStore, SealedRecordStore, sealedElsewhere } from './record-store.js';
+export { type GrantSummary, type RecordBackend, recordLifetime, type RecordStore, sealedElsewhere, SealedRecordStore } from './record-store.js';
 export { recordKeyPrefix, RedisRecordBackend, redisRestConnection, usesRedis } from './redis-backend.js';
 export { digest, random, seal, type StoredRecord, unseal } from './sealing.js';
 

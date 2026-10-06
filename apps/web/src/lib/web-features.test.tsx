@@ -12,15 +12,9 @@ vi.mock('../components/CoreUpdates.js', () => ({ CoreUpdates: () => null }));
 vi.mock('../components/ProductVersion.js', () => ({ ProductVersion: () => null }));
 vi.mock('../components/WorkspaceManifestEditor.js', () => ({ WorkspaceManifestEditor: () => null }));
 
-const billing: WebFeature = {
-  id: 'billing',
-  routes: [{ path: '/billing', element: createElement('h1', null, 'Billing page') }],
-  settingsSections: [{ id: 'plan', title: 'Plan', icon: CreditCard, element: createElement('p', null, 'Pro plan') }],
-  accountControls: ({ local }) => createElement('span', null, `tenant menu ${local ? 'local' : 'hosted'}`),
-};
+const billing: WebFeature = { id: 'billing', routes: [{ path: '/billing', element: createElement('h1', null, 'Billing page') }], settingsSections: [{ id: 'plan', title: 'Plan', icon: CreditCard, element: createElement('p', null, 'Pro plan') }], accountControls: ({ local }) => createElement('span', null, `tenant menu ${local ? 'local' : 'hosted'}`) };
 
-const settings = (features: WebFeature[]) =>
-  renderToStaticMarkup(createElement(WebFeaturesProvider, { features }, createElement(SettingsModal, { config: null, canWrite: false, configRevision: '', onConfigRevision: () => {}, branch: 'main', onRefreshWorkspace: async () => {}, currentTheme: { familyId: 'flexoki', mode: 'light' }, onSelectTheme: () => {} })));
+const settings = (features: WebFeature[]) => renderToStaticMarkup(createElement(WebFeaturesProvider, { features }, createElement(SettingsModal, { config: null, canWrite: false, configRevision: '', onConfigRevision: () => {}, branch: 'main', onRefreshWorkspace: async () => {}, currentTheme: { familyId: 'flexoki', mode: 'light' }, onSelectTheme: () => {} })));
 
 let root: Root | undefined;
 afterEach(() => {
@@ -29,7 +23,7 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
-it('appends an edition\'s settings sections and leaves the page unchanged without features', () => {
+it("appends an edition's settings sections and leaves the page unchanged without features", () => {
   const plain = settings([]);
   expect(plain).not.toContain('settings-plan');
   const extended = settings([billing]);

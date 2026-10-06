@@ -37,11 +37,7 @@ const noWorkspaceYet: WorkspaceConfigSource = {
 };
 
 it('mounts edition routes ahead of the workspace routes, so they answer before a workspace exists', async () => {
-  const base = await listen(createApp(dir, {
-    configSource: noWorkspaceYet,
-    remoteCache: undefined,
-    routes: app => app.get('/api/edition/ping', (_req, res) => res.json({ edition: 'pro' })),
-  }));
+  const base = await listen(createApp(dir, { configSource: noWorkspaceYet, remoteCache: undefined, routes: app => app.get('/api/edition/ping', (_req, res) => res.json({ edition: 'pro' })) }));
   expect(await fetch(`${base}/api/edition/ping`).then(response => response.json())).toEqual({ edition: 'pro' });
   const workspace = await fetch(`${base}/api/workspace`);
   expect(workspace.status).toBe(503);

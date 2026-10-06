@@ -52,7 +52,7 @@ export function recordStoreContract(name: string, makeStore: () => RecordStore |
       expect(await store.get(id('d'))).toEqual({ kind: 'session' });
     });
 
-    it('lists, records rejections for and revokes only the owner\'s agent grants', async () => {
+    it("lists, records rejections for and revokes only the owner's agent grants", async () => {
       await store.set(id('e'), { kind: 'agent', ownerId: 7, name: 'older', write: false, source: 'home', createdAt: 1 }, null);
       await store.indexGrant(id('e'), 7);
       await store.set(id('f'), { kind: 'agent', ownerId: 7, name: 'newer', write: true, source: 'home', createdAt: 2 }, null);
@@ -71,12 +71,13 @@ export function recordStoreContract(name: string, makeStore: () => RecordStore |
 
     it('runs credential work one at a time for the same id', async () => {
       const order: string[] = [];
-      const work = (label: string) => store.withCredentialLock(id('h'), async () => {
-        order.push(`${label}:start`);
-        await new Promise(resolve => setTimeout(resolve, 5));
-        order.push(`${label}:end`);
-        return label;
-      });
+      const work = (label: string) =>
+        store.withCredentialLock(id('h'), async () => {
+          order.push(`${label}:start`);
+          await new Promise(resolve => setTimeout(resolve, 5));
+          order.push(`${label}:end`);
+          return label;
+        });
       expect(await Promise.all([work('one'), work('two')])).toEqual(['one', 'two']);
       expect(order).toEqual(['one:start', 'one:end', 'two:start', 'two:end']);
     });
