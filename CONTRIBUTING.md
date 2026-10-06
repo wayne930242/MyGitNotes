@@ -5,7 +5,13 @@ MyGitNotes is the community edition of an open-core product: this repository is 
 ## Contributor License Agreement
 
 Every pull request needs a signed [Contributor License Agreement](CLA.md).
-On your first pull request, CLA Assistant comments with a link; sign once and it covers your later contributions.
+On your first pull request, the CLA check comments with the agreement; reply with this exact comment to sign:
+
+```text
+I have read the CLA Document and I hereby sign the CLA
+```
+
+One signature covers your later contributions. Comment `recheck` if the check does not update.
 You keep the copyright in your work; the agreement lets the project ship it in both editions.
 
 ## Before you open a pull request
