@@ -2,17 +2,45 @@ import { createHash } from 'node:crypto';
 import { GitHubApi, SourceError } from './github-api.js';
 import { readGitHubArchive } from './github-archive.js';
 import { type RemoteChange, type RemoteEntry, type RemoteSnapshot, RemoteSource, type RepositoryInfo } from './remote-source.js';
-import { hashJson, type RemoteCache } from './remote-cache.js';
+import { hashJson, REMOTE_CACHE_MAX_VALUE, REMOTE_CACHE_TTL, type RemoteCache } from './remote-cache.js';
 import { reaching, type RepositoryScope } from './repository.js';
 import { sourceIdentity } from './source-config.js';
 export { SourceError } from './github-api.js';
 export type { RepositoryInfo } from './remote-source.js';
 export type GitHubEntry = RemoteEntry;
 
+/** A tree listing as the shared cache keeps it: path, mode, type, sha and size, without the API's URLs. */
+type TreeRow = [string, string, string, string, number | null];
+const TREE_KEY_VERSION = 1;
+/** Recent tree listings of this process, keyed like the GitHub runtime by its `fetch`, so test doubles never share one. */
+const processTrees = new WeakMap<typeof fetch, Map<string, GitHubEntry[]>>();
+const PROCESS_TREES = 8;
+
+const BLOB_BATCH_COUNT = 500;
+const BLOB_BATCH_BYTES = 4 * 1024 * 1024;
+
+/** Consecutive groups of at most `BLOB_BATCH_COUNT` blobs and, unless one blob alone exceeds it, `BLOB_BATCH_BYTES`. */
+export function blobBatches(entries: RemoteEntry[]): RemoteEntry[][] {
+  const batches: RemoteEntry[][] = [];
+  let current: RemoteEntry[] = [], bytes = 0;
+  for (const entry of entries) {
+    const size = entry.size || 0;
+    if (current.length && (current.length >= BLOB_BATCH_COUNT || bytes + size > BLOB_BATCH_BYTES)) {
+      batches.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(entry);
+    bytes += size;
+  }
+  if (current.length) batches.push(current);
+  return batches;
+}
+
 /** GitHub transport with its existing authorization-scoped cache. */
 export class GitHubSource extends RemoteSource {
   private client: GitHubApi;
-  constructor(repository: string, branch: string, token: string | undefined, request: typeof fetch, cache: RemoteCache | undefined, scope: RepositoryScope) {
+  constructor(repository: string, branch: string, token: string | undefined, private request: typeof fetch, cache: RemoteCache | undefined, scope: RepositoryScope) {
     super(repository, branch, token, cache, scope);
     this.client = new GitHubApi(repository, token, request);
   }
@@ -30,6 +58,33 @@ export class GitHubSource extends RemoteSource {
     });
     const commit = await reaching('missing-branch', () => this.api(`/commits/${encodeURIComponent(this.branch)}`));
     const treeSha: string = commit.commit.tree.sha;
+    return { sha: commit.sha as string, treeSha, entries: await this.treeEntries(treeSha), info };
+  }
+  /**
+   * The recursive listing of `treeSha`, which an authorized commit read just named. A tree never changes, so a new
+   * server instance takes the listing from this process or the shared cache instead of listing it again.
+   */
+  private async treeEntries(treeSha: string): Promise<GitHubEntry[]> {
+    const key = `mgn:tree:v${TREE_KEY_VERSION}:${this.repository.toLowerCase()}:${treeSha}`;
+    let recent = processTrees.get(this.request);
+    if (!recent) processTrees.set(this.request, recent = new Map());
+    const remembered = recent.get(key);
+    if (remembered) return remembered;
+    const entries = await this.cachedTree(key) ?? await this.listTree(treeSha, key);
+    if (recent.size >= PROCESS_TREES) recent.delete(recent.keys().next().value!);
+    recent.set(key, entries);
+    return entries;
+  }
+  private async cachedTree(key: string): Promise<GitHubEntry[] | undefined> {
+    const hit = this.cache ? (await this.cache.get([key]))[0] : null;
+    if (hit === null) return undefined;
+    try {
+      const rows = JSON.parse(hit) as TreeRow[];
+      if (Array.isArray(rows) && rows.every(row => Array.isArray(row) && row.slice(0, 4).every(field => typeof field === 'string'))) return rows.map(([path, mode, type, sha, size]) => size === null ? { path, mode, type, sha } : { path, mode, type, sha, size });
+    } catch { /* A damaged value is listed again. */ }
+    return undefined;
+  }
+  private async listTree(treeSha: string, key: string): Promise<GitHubEntry[]> {
     const result = await this.api(`/git/trees/${treeSha}?recursive=1`);
     let entries: GitHubEntry[] = result.tree;
     if (result.truncated) {
@@ -47,7 +102,10 @@ export class GitHubSource extends RemoteSource {
         if (entries.length > 100000) throw new SourceError('Repository exceeds the supported file listing size.', 422);
       }
     }
-    return { sha: commit.sha as string, treeSha, entries, info };
+    entries = entries.map(({ path, mode, type, sha, size }) => size === undefined ? { path, mode, type, sha } : { path, mode, type, sha, size });
+    const text = JSON.stringify(entries.map(({ path, mode, type, sha, size }): TreeRow => [path, mode, type, sha, size ?? null]));
+    if (this.cache && Buffer.byteLength(text) <= REMOTE_CACHE_MAX_VALUE) await this.cache.set([[key, text]], REMOTE_CACHE_TTL);
+    return entries;
   }
   protected async readBlob(sha: string): Promise<Buffer> {
     const blob = await this.api(`/git/blobs/${sha}`);
@@ -79,20 +137,23 @@ export class GitHubSource extends RemoteSource {
     });
   }
 
-  /** Loads only the requested files, 100 blobs per GraphQL request, verified against their Git SHA. */
+  /**
+   * Loads only the requested files, verified against their Git SHA. Requests for one user stay serial, as GitHub asks,
+   * so each GraphQL request takes as many blobs as its size bounds allow: the round trips, not the bytes, dominate.
+   */
   private async prefetchBlobBatches(entries: RemoteEntry[]) {
     const pending = entries.filter(entry => !this.client.hasBlob(entry.sha));
-    for (let i = 0; i < pending.length; i += 100) {
+    for (const batch of blobBatches(pending)) {
       let texts: Map<string, string>;
       try {
-        texts = await this.client.blobTexts(pending.slice(i, i + 100).map(entry => entry.sha));
+        texts = await this.client.blobTexts(batch.map(entry => entry.sha));
       } catch (error) {
         // Unloaded notes fall back to individual blob reads. Never fall back through a cooldown or lost access.
         if (!(error instanceof SourceError) || [401, 403, 404, 429].includes(error.status)) throw error;
         return;
       }
       const verified: [RemoteEntry, Buffer][] = [];
-      for (const entry of pending.slice(i, i + 100)) {
+      for (const entry of batch) {
         const text = texts.get(entry.sha);
         if (text === undefined) continue;
         const bytes = Buffer.from(text, 'utf8');

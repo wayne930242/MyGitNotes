@@ -137,7 +137,8 @@ describe('GitHub request budgets', () => {
     const notes = await f.reader('large').notes();
     expect(notes).toHaveLength(250);
     expect(notes.find(note => note.path === 'notes/ex/n7.md')!.title).toBe('Note 7');
-    expect(f.calls.filter(call => call.url === 'https://api.github.com/graphql')).toHaveLength(3);
+    // 250 small notes fit within one request's count and byte bounds.
+    expect(f.calls.filter(call => call.url === 'https://api.github.com/graphql')).toHaveLength(1);
     expect(f.calls.some(call => call.url.includes('/tarball/') || call.url.startsWith('https://codeload.github.com/'))).toBe(false);
     expect(f.calls.filter(call => call.url.includes('/git/blobs/'))).toHaveLength(2); // The manifest and bytes that fail SHA verification load individually.
   });
