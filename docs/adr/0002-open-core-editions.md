@@ -26,4 +26,4 @@ Users do not choose a mode per account.
 - Redis stays a supported store until existing deployments migrate; it is then a candidate for removal.
 - Claude subscription OAuth is not offered in the hosted sandbox because Anthropic's terms restrict those tokens to Claude Code and Claude.ai; providers are reached with user-supplied API keys, and ChatGPT device sign-in is at most an experimental option.
 - Work proceeds in four phases, each specified and reviewed before implementation: community extension points with unchanged behavior; community lightweight mode, GitHub App and repository import; the Pro repository with Postgres and tenants; the hosted Pi sandbox.
-- See [docs/specs/2026-10-06-editions](../specs/2026-10-06-editions/spec.md).
+- The extension points are described in the [architecture notes](../agent/architecture/index.md#editions-and-extension-points).
