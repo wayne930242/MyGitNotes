@@ -50,6 +50,13 @@ it('creates, nests, reorders and removes folders without deleting notes or stagi
   expect(fs.existsSync(path.join(root, 'notes/a/child'))).toBe(true);
   expect(git('diff', '--cached', '--name-only').toString().trim()).toBe('unrelated.txt');
 });
+it('treats a same-size rewrite since the revision as a change', async () => {
+  const file = path.join(root, 'notes/a/one/note.md');
+  const revision = await getRevision();
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/./, character => character === 'x' ? 'y' : 'x'));
+  expect((await post({ kind: 'delete', notebookId: 'a', path: 'one', destination: '' }, revision)).status).toBe(409);
+  expect(await getRevision()).not.toBe(revision);
+});
 it('rejects stale revisions, collisions, protected descendants and non-main writes', async () => {
   const revision = await getRevision();
   fs.writeFileSync(path.join(root, 'notes/a/one/note.md'), 'Newer content');

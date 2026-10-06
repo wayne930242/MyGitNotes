@@ -159,6 +159,14 @@ it('serializes concurrent destructive commands so only the first matching revisi
   expect(results.map(response => response.status).sort()).toEqual([200, 409]);
   expect([fs.existsSync(path.join(root, 'notes/a/one')), fs.existsSync(path.join(root, 'notes/a/two'))].filter(Boolean)).toHaveLength(1);
 });
+it('lists asset hashes that follow edits to an asset, even one of the same size', async () => {
+  const hashOf = async () => (await (await fetch(base + '/api/assets?notebookId=a')).json()).assets.find((entry: any) => entry.path === 'notes/a/one/image.png').hash;
+  const gitHash = () => execFileSync('git', ['hash-object', 'notes/a/one/image.png'], { cwd: root }).toString().trim();
+  expect(await hashOf()).toBe(gitHash());
+  expect(await hashOf()).toBe(gitHash());
+  write('notes/a/one/image.png', Buffer.from([137, 80, 78, 71, 1, 254]));
+  expect(await hashOf()).toBe(gitHash());
+});
 it('browses large binary files without loading their contents and reports the read limit separately', async () => {
   write('notes/a/large.bin', Buffer.alloc(6 * 1024 * 1024));
   const listing = await list();

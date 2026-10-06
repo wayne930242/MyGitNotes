@@ -57,10 +57,18 @@ function localRead(root: string, file: string) {
   if (!stat.isFile() || stat.size > 5 * 1024 * 1024) throw new SourceError('File reads support up to 5 MiB.', 413);
   return fs.readFileSync(full);
 }
-async function localHash(root: string, file: string, size: number) {
+/** Git object ids of worktree files, reused while a file's stamp is unchanged, so an asset listing hashes only edited files. */
+const localHashes = new Map<string, { stamp: string; hash: string; }>();
+async function localHash(root: string, file: string, size: number, stamp: string) {
+  const key = `${root}\0${file}`;
+  const cached = localHashes.get(key);
+  if (cached?.stamp === stamp) return cached.hash;
   const hash = createHash('sha1').update(`blob ${size}\0`);
   for await (const chunk of fs.createReadStream(regularPath(root, file))) hash.update(chunk);
-  return hash.digest('hex');
+  const digest = hash.digest('hex');
+  // A file rewritten after its stamp was taken has a new stamp next time, so this hash is never served for newer bytes.
+  localHashes.set(key, { stamp, hash: digest });
+  return digest;
 }
 function needsContent(file: string, command?: FileCommand) {
   if (!command) return true;
@@ -217,7 +225,7 @@ export function createFileManagerRouter(): Router {
       for (const [file, info] of state.index.files) {
         if (managedNotebook(file, state.index.notebooks)?.id !== nb.id || file.slice(nb.root.length + 1).split('/').some(part => part.startsWith('.'))) continue;
         if (!withinPath(file, root) && filePresentation(file) === 'file' && !/\.(bin|zip|gz|7z|rar|woff2?|ttf|otf)$/i.test(file)) continue;
-        const hash = info.hash || (state.local !== undefined ? await localHash(state.local, file, info.size) : assetHash(await state.read(file)));
+        const hash = info.hash || (state.local !== undefined ? await localHash(state.local, file, info.size, info.stamp) : assetHash(await state.read(file)));
         assets.push({ ...assetInfo(file, withinPath(file, root) ? root : nb.root, hash, info.size, info.mtime), revision: state.revision });
       }
       res.json({ assets });
