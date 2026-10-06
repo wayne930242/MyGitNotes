@@ -949,7 +949,6 @@ export const zhTW: Record<TranslationKey, string> = {
   'outline.saveFailed': '請先儲存來源內容的變更，再加入連結。',
   'outline.unsafeEnd': '大綱結尾仍在未完成的 Markdown 區塊內。請先完成該區塊，再加入連結。',
   'outline.recoveryPending': '請先還原或捨棄復原草稿，再插入連結。',
-  'outline.empty': '此筆記本尚無大綱，可先建立一篇。',
   'outline.loadMore': '載入更多大綱',
   'outline.indent': '縮排項目',
   'outline.outdent': '提升項目層級',

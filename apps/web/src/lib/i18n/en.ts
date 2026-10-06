@@ -948,7 +948,6 @@ export const en = {
   'outline.saveFailed': 'Save the source changes before adding this link.',
   'outline.unsafeEnd': 'The outline ends inside an unfinished Markdown block. Finish that block, then add the link again.',
   'outline.recoveryPending': 'Restore or discard the recovered draft before the link is inserted.',
-  'outline.empty': 'No outlines yet. Create one in this notebook.',
   'outline.loadMore': 'Load more outlines',
   'outline.indent': 'Indent item',
   'outline.outdent': 'Outdent item',

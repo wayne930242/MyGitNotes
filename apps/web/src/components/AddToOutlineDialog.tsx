@@ -8,12 +8,16 @@ import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { Select } from './Select.js';
 import { Button } from './Button.js';
 
+/** The destination that creates an outline holding the note, offered first whether or not the notebook has outlines. */
+const NEW_OUTLINE = 'new';
+
 export function AddToOutlineDialog({ source, busy, error, onChoose, onClose }: { source: NoteItem; busy: boolean; error: string; onChoose: (destination: NoteRef | null) => Promise<void>; onClose: () => void; }) {
   const { t } = useTranslation();
   const result = useNoteList({ notebookId: source.notebookId, kind: 'outline', showHidden: true });
   // Query placeholders from another notebook are not selectable destinations.
   const notes = [...result.uncommitted, ...result.notes].filter(note => note.notebookId === source.notebookId && isOutlinePath(note.path));
-  const [selected, setSelected] = useState('');
+  const [selected, setSelected] = useState(NEW_OUTLINE);
+  const creating = selected === NEW_OUTLINE;
   const destination = notes.find(note => noteRefKey(note) === selected);
   return (
     <WorkspaceDialog title={t('outline.add')} onClose={onClose}>
@@ -25,15 +29,13 @@ export function AddToOutlineDialog({ source, busy, error, onChoose, onClose }: {
         </div>
         <label className='block text-sm'>
           <span className='block mb-1.5'>{t('outline.destination')}</span>
-          <Select aria-label={t('outline.destination')} value={selected} onValueChange={setSelected} disabled={busy || result.loading} options={[{ value: '', label: t('outline.destination') }, ...notes.map(note => ({ value: noteRefKey(note), label: `${note.title} · ${note.path}` }))]} className='w-full' />
+          <Select aria-label={t('outline.destination')} value={selected} onValueChange={setSelected} disabled={busy || result.loading} options={[{ value: NEW_OUTLINE, label: t('outline.new') }, ...notes.map(note => ({ value: noteRefKey(note), label: `${note.title} · ${note.path}` }))]} className='w-full' />
         </label>
-        {!result.loading && !notes.length && !result.error && <p className='text-sm text-muted'>{t('outline.empty')}</p>}
         {result.hasMore && <Button disabled={result.loadingMore || busy} onClick={result.loadMore}>{t('outline.loadMore')}</Button>}
         {(error || result.error) && <p role='alert' className='text-sm text-danger'>{error || result.error}</p>}
         <div className='flex flex-wrap justify-end gap-2'>
           <Button onClick={onClose}>{t('common.cancel')}</Button>
-          <Button disabled={busy} onClick={() => void onChoose(null)}>{t('outline.new')}</Button>
-          <Button variant='primary' disabled={busy || result.loading || Boolean(result.error) || !destination} onClick={() => destination && void onChoose(destination)}>{t('outline.insert')}</Button>
+          <Button variant='primary' disabled={busy || (!creating && (result.loading || Boolean(result.error) || !destination))} onClick={() => creating ? void onChoose(null) : destination && void onChoose(destination)}>{t('outline.insert')}</Button>
         </div>
       </div>
     </WorkspaceDialog>
