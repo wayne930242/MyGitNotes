@@ -3,9 +3,11 @@ import type { RemoteCache } from '@mygitnotes/core';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { BOOKMARKS_DOCUMENT, classifyResource, deploymentConfigSource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceFileTags, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
+import { BOOKMARKS_DOCUMENT, classifyResource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceFileTags, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
-import { createRecordStore, type RecordStore } from './record-store/index.js';
+import { createRecordStore, NoRecordStore, type RecordStore, storageMode } from './record-store/index.js';
+import { type BrowserSessions, cookieSessions, storedSessions } from './browser-sessions.js';
+import { choosesRepository, chosenRepositorySource, workspaceChoiceRouter } from './workspace-choice.js';
 import { createRemoteMCP } from './mcp.js';
 import { createRemoteCoreUpdateRouter } from './remote-core-update.js';
 import { createLocalApp } from './local-app.js';
@@ -31,8 +33,10 @@ export function applicationRoot() {
 export interface AppServices {
   /** Decides, per request, which workspace a request serves; defaults to the deployment's environment and server configuration. */
   configSource: WorkspaceConfigSource;
-  /** Encrypted sessions, credentials and agent grants; defaults to Redis when configured, else a local directory. */
+  /** Encrypted sessions, credentials and agent grants; defaults to Redis when configured, else a local directory, and none in the lightweight mode. */
   recordStore: RecordStore;
+  /** Where browser sign-ins live: the record store, or sealed cookies in the lightweight mode. */
+  sessions: BrowserSessions;
   /** The remote read cache; defaults to Redis when configured, else process memory. Local workspaces use none. */
   remoteCache?: RemoteCache;
   piAgent?: PiAgent;
@@ -46,10 +50,13 @@ export interface AppServices {
 }
 
 export function createApp(base: string, overrides: Partial<AppServices> = {}): express.Express {
-  const configSource = overrides.configSource ?? deploymentConfigSource(base);
+  const configSource = overrides.configSource ?? chosenRepositorySource(base);
   const local = configSource.mode === 'local';
-  const services: AppServices = { ...overrides, configSource, recordStore: overrides.recordStore ?? createRecordStore(base), remoteCache: 'remoteCache' in overrides ? overrides.remoteCache : local ? undefined : createRemoteCache(), webDist: overrides.webDist ?? path.join(base, 'apps/web/dist') };
-  const { recordStore, remoteCache: cache, piAgent } = services;
+  // The lightweight mode keeps sign-ins in cookies and nothing on the server; local workspaces never use it.
+  const lightweight = !local && storageMode() === 'cookie';
+  const recordStore = overrides.recordStore ?? (lightweight ? new NoRecordStore() : createRecordStore(base));
+  const services: AppServices = { ...overrides, configSource, recordStore, sessions: overrides.sessions ?? (lightweight ? cookieSessions() : storedSessions(recordStore)), remoteCache: 'remoteCache' in overrides ? overrides.remoteCache : local ? undefined : createRemoteCache(), webDist: overrides.webDist ?? path.join(base, 'apps/web/dist') };
+  const { remoteCache: cache, piAgent, sessions } = services;
   const app = express();
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -72,7 +79,8 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   // held to the repository size limit, so the MCP route parses ahead of the shared 8 MiB ceiling.
   if (r2SettingsFromEnv()) app.use('/mcp', express.json({ limit: '64mb' }));
   app.use(express.json({ limit: '8mb' }));
-  app.use('/api/auth', createAuth({ store: recordStore, configSource }));
+  app.use('/api/auth', createAuth({ store: recordStore, sessions, configSource }));
+  app.use('/api', workspaceChoiceRouter({ store: recordStore, sessions }));
   services.routes?.(app, services);
   // Product reference documents come from this Core checkout, not from the workspace being served.
   app.get('/api/agent-resources/read', (req, res, next) => {
@@ -85,7 +93,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
     }
   });
   app.use('/mcp', createRemoteMCP(recordStore, configSource, cache));
-  app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace(recordStore, configSource, cache));
+  app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace({ store: recordStore, sessions }, configSource, cache));
   app.use(createFileManagerRouter());
   app.use(createR2ManagerRouter());
   app.use('/api/study', createStudyRouter());
@@ -112,7 +120,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
     const remoteNotebook = async (res: express.Response, notebookId: unknown) => asRemote((await notebookRepository(res, notebookId)).handle);
     const remoteNote = async (res: express.Response, file: unknown, notebookId?: unknown) => asRemote((await noteRepository(res, file, notebookId)).handle);
     const remoteRepositories = async (res: express.Response) => (await eachRepository(res)).map(({ handle }) => asRemote(handle));
-    app.use('/api/core', createRemoteCoreUpdateRouter(recordStore));
+    app.use('/api/core', createRemoteCoreUpdateRouter({ store: recordStore, sessions }));
     app.use(createGistRouter());
     /** Pushes committed notes that name a Gist to it; notes that name none cost nothing. */
     const publishedGists = async (res: express.Response, notes: { path: string; content: string; metadata: Record<string, unknown>; }[]) => {
@@ -125,7 +133,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
         const fresh = req.query.fresh === '1';
         // The manifest is read from the home repository, so a fresh answer reloads it first.
         if (fresh) await remoteHome(res).reader.getSnapshot(true);
-        const [{ config, revision: configRevision }, entries] = await Promise.all([workspace.manifest(), workspace.all()]);
+        const [{ config, revision: configRevision, derived }, entries] = await Promise.all([workspace.manifest(), workspace.all()]);
         const repositories = await Promise.all(entries.map(async (entry): Promise<RepositoryStatus> => {
           const base = { id: entry.ref.id, type: entry.ref.source.type, repository: entry.ref.source.type === 'local' ? undefined : entry.ref.source.repository, notebooks: entry.notebooks.map(notebook => notebook.id) };
           if (!('handle' in entry)) return { ...base, branch: entry.ref.source.type === 'local' ? '' : entry.ref.source.branch, revision: '', write: false, unavailable: entry.unavailable };
@@ -133,7 +141,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
           const snapshot = await handle.reader.getSnapshot(fresh && entry.ref.id !== workspace.home.ref.id);
           return { ...base, branch: handle.reader.branch, revision: snapshot.sha, write: handle.authenticated && handle.reader.canWrite(snapshot) };
         }));
-        const body: WorkspaceStatus = { config, configRevision, local: false, home: workspace.home.ref.id, repositories };
+        const body: WorkspaceStatus = { config, configRevision, local: false, home: workspace.home.ref.id, repositories, ...(derived ? { manifest: 'derived' as const } : {}), ...(choosesRepository() ? { repositoryChoice: true } : {}) };
         res.json(body);
       } catch (error) {
         fail(res, error);

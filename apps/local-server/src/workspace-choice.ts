@@ -1,0 +1,121 @@
+import { deploymentConfigSource, parseSourceConfig, repositoryRef, SourceError, type WorkspaceConfigSource, WorkspaceSetupError } from '@mygitnotes/core';
+import { type Request, type Response, Router } from 'express';
+import { authToken, type SessionServices } from './auth.js';
+import { cookieOptions, workspaceChoiceCookie } from './browser-sessions.js';
+import { seal } from './record-store/index.js';
+import { choiceLifetime, choosesRepository, readWorkspaceChoice, type WorkspaceChoice } from './repository-choice.js';
+
+export { choosesRepository, readWorkspaceChoice, type WorkspaceChoice } from './repository-choice.js';
+
+/**
+ * The deployment's configuration source; when it chooses no repository, each request serves the repository
+ * in the visitor's choice cookie, and one without a choice asks them to pick (`choose-repository`).
+ */
+export function chosenRepositorySource(base: string, env: NodeJS.ProcessEnv = process.env): WorkspaceConfigSource {
+  const deployment = deploymentConfigSource(base, env);
+  if (!choosesRepository(env)) return deployment;
+  return {
+    mode: 'remote',
+    async settings(request) {
+      const choice = readWorkspaceChoice(request.headers.cookie);
+      if (!choice) throw new WorkspaceSetupError('Choose a GitHub repository to open.', 'choose-repository');
+      return { home: repositoryRef({ type: 'github', ...choice }), localPath: () => undefined, manifest: inHomeRepository => inHomeRepository() };
+    },
+  };
+}
+
+/** One repository a visitor may open. */
+export interface AvailableRepository {
+  fullName: string;
+  defaultBranch: string;
+  private: boolean;
+  updatedAt: string;
+}
+interface GitHubRepository {
+  full_name: string;
+  default_branch: string;
+  private: boolean;
+  updated_at: string;
+  permissions?: { push?: boolean; };
+}
+
+async function github<T>(token: string, path: string): Promise<{ status: number; body: T | null; }> {
+  const response = await fetch(`https://api.github.com${path}`, { redirect: 'error', signal: AbortSignal.timeout(15000), headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'MyGitNotes', 'X-GitHub-Api-Version': '2022-11-28' } });
+  if (response.status === 401) throw new SourceError('GitHub authorization expired. Sign in again.', 401);
+  if (!response.ok) return { status: response.status, body: null };
+  return { status: response.status, body: await response.json() as T };
+}
+/** Follows pages of a list endpoint up to `maxPages` pages of 100. */
+async function pages<T>(token: string, path: string, pick: (body: unknown) => T[], maxPages = 10): Promise<T[]> {
+  const items: T[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const { status, body } = await github<unknown>(token, `${path}${path.includes('?') ? '&' : '?'}per_page=100&page=${page}`);
+    if (!body) throw new SourceError(`GitHub answered ${status} while listing repositories.`, 502);
+    const batch = pick(body);
+    items.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return items;
+}
+
+/** Repositories the signed-in token can write: those granted to the GitHub App, or every repository of an OAuth App token. */
+export async function availableRepositories(token: string, githubApp: boolean): Promise<AvailableRepository[]> {
+  let repositories: GitHubRepository[];
+  if (githubApp) {
+    const installations = await pages(token, '/user/installations', body => (body as { installations: { id: number; }[]; }).installations);
+    repositories = (await Promise.all(installations.map(installation => pages(token, `/user/installations/${installation.id}/repositories`, body => (body as { repositories: GitHubRepository[]; }).repositories)))).flat();
+  } else repositories = await pages(token, '/user/repos?affiliation=owner,collaborator,organization_member&sort=updated', body => body as GitHubRepository[]);
+  const unique = new Map(repositories.filter(repository => repository.permissions?.push !== false).map(repository => [repository.full_name, repository]));
+  return [...unique.values()].map(repository => ({ fullName: repository.full_name, defaultBranch: repository.default_branch, private: repository.private, updatedAt: repository.updated_at })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+const githubApp = () => process.env.GITHUB_APP_TYPE === 'github-app';
+const pageSize = 50;
+
+/** Listing repositories, and choosing or forgetting the visitor's repository; mounted ahead of the workspace routes. */
+export function workspaceChoiceRouter(services: SessionServices): Router {
+  const router = Router();
+  const token = async (req: Request, res: Response) => {
+    const value = await authToken(req, res, services, { type: 'github' });
+    if (!value) throw new SourceError('Sign in with GitHub first.', 401);
+    return value;
+  };
+  const fail = (res: Response, error: unknown) => res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'Request failed.' });
+  router.use('/workspace/choice', (_req, res, next) => choosesRepository() ? next() : res.status(404).json({ error: 'This deployment serves one configured repository.' }));
+  router.use('/repositories/available', (_req, res, next) => choosesRepository() ? next() : res.status(404).json({ error: 'This deployment serves one configured repository.' }));
+
+  router.get('/repositories/available', async (req, res) => {
+    try {
+      const query = typeof req.query.query === 'string' ? req.query.query.trim().toLowerCase() : '';
+      const all = await availableRepositories(await token(req, res), githubApp());
+      const matching = query ? all.filter(repository => repository.fullName.toLowerCase().includes(query)) : all;
+      res.json({ repositories: matching.slice(0, pageSize), total: matching.length, githubApp: githubApp(), installUrl: process.env.GITHUB_APP_SLUG ? `https://github.com/apps/${encodeURIComponent(process.env.GITHUB_APP_SLUG)}/installations/new` : null, current: readWorkspaceChoice(req.headers.cookie) });
+    } catch (error) {
+      fail(res, error);
+    }
+  });
+  router.post('/workspace/choice', async (req, res) => {
+    try {
+      const value = await token(req, res);
+      const repository = typeof req.body?.repository === 'string' ? req.body.repository.trim() : '';
+      const requested = typeof req.body?.branch === 'string' && req.body.branch.trim() ? req.body.branch.trim() : undefined;
+      if (!/^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_.-]+$/.test(repository)) throw new SourceError('Name a repository as owner/name.', 400);
+      const { body: found } = await github<GitHubRepository>(value, `/repos/${repository}`);
+      if (!found) throw new SourceError('That repository does not exist or this sign-in cannot reach it.', 404);
+      const branch = requested ?? found.default_branch;
+      // Validates the branch name the same way a configured source is validated.
+      parseSourceConfig({ source: { type: 'github', repository: found.full_name, branch } }, '.');
+      if (requested && !(await github(value, `/repos/${found.full_name}/branches/${encodeURIComponent(branch)}`)).body) throw new SourceError(`Branch ${branch} does not exist in ${found.full_name}.`, 404);
+      const choice: WorkspaceChoice = { repository: found.full_name, branch };
+      res.cookie(workspaceChoiceCookie, seal(choice), { ...cookieOptions(), maxAge: choiceLifetime * 1000 });
+      res.json({ choice });
+    } catch (error) {
+      fail(res, error instanceof Error && !(error instanceof SourceError) && /Configure source/.test(error.message) ? new SourceError('That branch name is not valid.', 400) : error);
+    }
+  });
+  router.delete('/workspace/choice', (_req, res) => {
+    res.clearCookie(workspaceChoiceCookie, cookieOptions());
+    res.json({ success: true });
+  });
+  return router;
+}

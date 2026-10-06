@@ -84,6 +84,7 @@ import { FileManager, FileManagerDialog, FileMetadata } from './components/files
 import { AgentSystemView } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { useAccountControls } from './lib/web-features.js';
+import { DerivedManifestNotice, RepositorySwitch, WorkspaceGate } from './components/WorkspaceSetup.js';
 import { CommitModal } from './components/CommitModal.js';
 import { Breadcrumbs } from './components/Breadcrumbs.js';
 import { FolderIndex } from './components/FolderIndex.js';
@@ -117,7 +118,7 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const editorRoute = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
 
-  const { selectedNotebookId, folders, foldersLoading, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, actionError, setActionError, repoRoot, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
+  const { selectedNotebookId, folders, foldersLoading, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, actionError, setActionError, repoRoot, manifestDerived, repositoryChoice, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
   const refreshDocuments = async () => {
     await Promise.all(documents.map(document => document.refresh()));
   };
@@ -402,6 +403,7 @@ const AppContent: React.FC = () => {
                   <Button onClick={() => setLegacyImportOpen(true)}>{t('legacyOutline.recovery')}</Button>
                 </div>
               )}
+              {manifestDerived && config && <DerivedManifestNotice config={config} configRevision={configRevision} canWrite={manifestWritable} onCreated={() => refreshWorkspace(true)} />}
               {/* Top Header */}
               <Header unavailableNotebooks={repositories.filter(repository => repository.unavailable).flatMap(repository => repository.notebooks)} workspaceTitle={config?.workspace.title || 'MyGitNotes'} accountControls={renderAccountControls ? renderAccountControls({ local: !remote }) : <AuthControls local={!remote} />} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} onSelectNotebook={id => void setSelectedNotebookId(id)} notebookDisabled={loading || resourceNavigationBusy || notebookSwitchBusy} activeTab={activeTab} setActiveTab={setActiveTab} onCreateNote={() => void createNote()} createNoteDisabled={!canWrite} onOpenCommands={() => setShortcutMode('palette')} navigationDisabled={noteEditorOpen || isCommitOpen} />
               <KeyboardShortcuts
@@ -582,7 +584,24 @@ const AppContent: React.FC = () => {
                     )}
                     {activeTab === 'settings' && (
                       <main className='workspace-route settings-main has-sidebar-drawer'>
-                        <SettingsModal config={config} branch={homeBranch} local={!remote} canWrite={manifestWritable} configRevision={configRevision} onConfigRevision={setConfigRevision} accountSettings={<AgentAccessSettings local={!remote} />} onRefreshWorkspace={refreshWorkspace} currentTheme={currentTheme} onSelectTheme={handleSelectTheme} />
+                        <SettingsModal
+                          config={config}
+                          branch={homeBranch}
+                          local={!remote}
+                          canWrite={manifestWritable}
+                          configRevision={configRevision}
+                          onConfigRevision={setConfigRevision}
+                          coreUpdates={!repositoryChoice}
+                          accountSettings={
+                            <>
+                              {repositoryChoice && homeRepository?.repository && <RepositorySwitch repository={homeRepository.repository} branch={homeBranch} />}
+                              <AgentAccessSettings local={!remote} />
+                            </>
+                          }
+                          onRefreshWorkspace={refreshWorkspace}
+                          currentTheme={currentTheme}
+                          onSelectTheme={handleSelectTheme}
+                        />
                       </main>
                     )}
                   </WorkspaceSplitLayout>
@@ -751,7 +770,9 @@ const AppContent: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <I18nProvider>
-      <AppContent />
+      <WorkspaceGate>
+        <AppContent />
+      </WorkspaceGate>
     </I18nProvider>
   );
 };

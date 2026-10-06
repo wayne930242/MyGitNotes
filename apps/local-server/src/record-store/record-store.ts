@@ -148,3 +148,43 @@ export class SealedRecordStore implements RecordStore {
     return true;
   }
 }
+
+/**
+ * The record store of the lightweight mode, which keeps nothing on the server: reads find nothing and writes
+ * fail, so a feature that needs server records (persistent agent grants) is unavailable instead of half working.
+ */
+export class NoRecordStore implements RecordStore {
+  readonly durable = false;
+  private refuse(): never {
+    throw new Error('This deployment keeps no server records.');
+  }
+  async set() {
+    this.refuse();
+  }
+  async get() {
+    return null;
+  }
+  async readRecord() {
+    return null;
+  }
+  async getByDigest() {
+    return null;
+  }
+  async delete() {}
+  async deleteByDigest() {}
+  async withCredentialLock<T>(_id: string, work: () => Promise<T>) {
+    return work();
+  }
+  async recordRejection() {
+    this.refuse();
+  }
+  async indexGrant() {
+    this.refuse();
+  }
+  async listGrants() {
+    return [];
+  }
+  async revokeGrant() {
+    return false;
+  }
+}

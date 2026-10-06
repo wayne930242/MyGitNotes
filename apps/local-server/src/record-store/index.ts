@@ -1,9 +1,9 @@
 import { DirectoryRecordBackend } from './directory-backend.js';
 import { type RecordStore, SealedRecordStore } from './record-store.js';
-import { recordKeyPrefix, RedisRecordBackend, usesRedis } from './redis-backend.js';
+import { recordKeyPrefix, RedisRecordBackend, redisRestConnection, usesRedis } from './redis-backend.js';
 
 export { DirectoryRecordBackend } from './directory-backend.js';
-export { type GrantSummary, type RecordBackend, recordLifetime, type RecordStore, sealedElsewhere, SealedRecordStore } from './record-store.js';
+export { type GrantSummary, NoRecordStore, type RecordBackend, recordLifetime, type RecordStore, sealedElsewhere, SealedRecordStore } from './record-store.js';
 export { recordKeyPrefix, RedisRecordBackend, redisRestConnection, usesRedis } from './redis-backend.js';
 export { digest, random, seal, type StoredRecord, unseal } from './sealing.js';
 
@@ -14,4 +14,14 @@ export { digest, random, seal, type StoredRecord, unseal } from './sealing.js';
 export function createRecordStore(base: string): RecordStore {
   const redis = new RedisRecordBackend(recordKeyPrefix(), base), directory = new DirectoryRecordBackend(base);
   return new SealedRecordStore(() => usesRedis() ? redis : directory);
+}
+
+/**
+ * How this deployment keeps sign-ins. `cookie` is the lightweight mode: chosen with MYGITNOTES_STORAGE=cookie,
+ * and on Vercel whenever no Redis is configured, where a server directory would not survive.
+ */
+export function storageMode(env: NodeJS.ProcessEnv = process.env): 'cookie' | 'redis' | 'directory' {
+  if (env.MYGITNOTES_STORAGE === 'cookie') return 'cookie';
+  if (env.REDIS_URL || redisRestConnection(env).url) return 'redis';
+  return env.VERCEL ? 'cookie' : 'directory';
 }

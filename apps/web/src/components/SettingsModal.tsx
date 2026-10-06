@@ -21,6 +21,8 @@ interface SettingsModalProps {
   configRevision: string;
   onConfigRevision: (revision: string) => void;
   accountSettings?: React.ReactNode;
+  /** Core updates concern a deployment's own repository; a repository a visitor imported has none to update. */
+  coreUpdates?: boolean;
   config: WorkspaceConfig | null;
   branch: string;
   onRefreshWorkspace: () => Promise<void>;
@@ -28,7 +30,7 @@ interface SettingsModalProps {
   onSelectTheme: (theme: ThemeChoice) => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = true, canWrite, configRevision, onConfigRevision, accountSettings, branch, onRefreshWorkspace, currentTheme, onSelectTheme }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = true, canWrite, configRevision, onConfigRevision, accountSettings, coreUpdates = true, branch, onRefreshWorkspace, currentTheme, onSelectTheme }) => {
   const { t, language, setLanguage } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
   const featureSections = useSettingsSections();
@@ -64,7 +66,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
       <WorkspaceSidebarPortal>
         <WorkspaceSidebar label={t('settings.title')} className='settings-sidebar'>
           <div className='sidebar-section-label'>{t('nav.settings')}</div>
-          {[...([['language', t('settings.language'), Globe], ['theme', t('settings.theme'), Palette], ['access', t('layout.access'), Shield], ['updates', t('settings.coreUpdates'), RefreshCw], ['manifest', t('layout.manifest'), Save]] as const), ...featureSections.map(section => [section.id, section.title, section.icon] as const)].map(([id, label, Icon]) => (
+          {[...([['language', t('settings.language'), Globe], ['theme', t('settings.theme'), Palette], ['access', t('layout.access'), Shield], ...(coreUpdates ? [['updates', t('settings.coreUpdates'), RefreshCw] as const] : []), ['manifest', t('layout.manifest'), Save]] as const), ...featureSections.map(section => [section.id, section.title, section.icon] as const)].map(([id, label, Icon]) => (
             <a
               key={id}
               href={`#settings-${id}`}
@@ -140,7 +142,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
             </div>
             <ProductVersion />
             <div id='settings-access'>{accountSettings}</div>
-            <CoreUpdates local={local} />
+            {coreUpdates && <CoreUpdates local={local} />}
             {/* Manifest YAML Editor */}
             <div id='settings-manifest' className='flex flex-col gap-2'>
               <div className='flex items-center justify-between'>

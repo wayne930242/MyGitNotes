@@ -24,7 +24,7 @@ export type WorkspaceRepository<H> = AvailableRepository<H> | UnavailableReposit
 export interface WorkspaceRepositories<H> {
   /** The home repository, available without loading the manifest. */
   readonly home: { ref: RepositoryRef; handle: H; };
-  manifest(): Promise<{ config: WorkspaceConfig; revision: string; }>;
+  manifest(): Promise<{ config: WorkspaceConfig; revision: string; derived?: boolean; }>;
   saveManifest(yaml: string, revision: string): Promise<{ config: WorkspaceConfig; revision: string; }>;
   /** Every repository of the workspace, the home repository first, each opened or marked unavailable. */
   all(): Promise<WorkspaceRepository<H>[]>;

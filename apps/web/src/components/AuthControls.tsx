@@ -1,7 +1,7 @@
 import { Button } from './Button.js';
 import { Select } from './Select.js';
 import { useEffect, useState } from 'react';
-import { Check, ChevronDown, Copy, Github, Gitlab, HelpCircle, KeyRound, LogOut, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, Check, ChevronDown, Copy, Github, Gitlab, HelpCircle, KeyRound, LogOut, Plus, Trash2 } from 'lucide-react';
 import { McpTutorialModal } from './McpTutorialModal.js';
 import { copyToClipboard } from '../lib/clipboard.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -27,7 +27,7 @@ async function requestGrant(url: string, fallback: TranslationKey, init?: Reques
   }
 }
 
-type Session = { authenticated?: boolean; login?: string; configured?: boolean; provider?: 'github' | 'gitlab'; loginUrl?: string; };
+type Session = { authenticated?: boolean; login?: string; configured?: boolean; provider?: 'github' | 'gitlab'; loginUrl?: string; storage?: 'stored' | 'cookie'; repositoryChoice?: boolean; };
 type Grant = { id: string; name: string; write: boolean; source: string; createdAt: number; expiresAt: null; };
 function useSession() {
   const [session, setSession] = useState<Session>({});
@@ -52,6 +52,17 @@ export function AuthControls({ local = false, connection = false }: { local?: bo
         </summary>
         <div className='header-user-popover'>
           <span>{session.login}</span>
+          {session.repositoryChoice && (
+            <button
+              onClick={async () => {
+                const response = await fetch('/api/workspace/choice', { method: 'DELETE' });
+                if (response.ok) window.location.assign('/');
+              }}
+            >
+              <ArrowLeftRight size={14} />
+              {t('setup.switchRepository')}
+            </button>
+          )}
           <button
             onClick={async () => {
               const response = await fetch('/api/auth/logout', { method: 'POST' });
@@ -74,7 +85,9 @@ export function AuthControls({ local = false, connection = false }: { local?: bo
 export function AgentAccessSettings({ local = false }: { local?: boolean; }) {
   const { t, language } = useTranslation();
   const session = useSession();
-  const canManage = !local && Boolean(session.authenticated);
+  // A lightweight deployment keeps nothing on the server, so it holds no grants to manage.
+  const cookieOnly = !local && session.storage === 'cookie';
+  const canManage = !local && !cookieOnly && Boolean(session.authenticated);
   const [grants, setGrants] = useState<Grant[]>([]);
   const [name, setName] = useState('');
   const [write, setWrite] = useState(false);
@@ -138,6 +151,17 @@ export function AgentAccessSettings({ local = false }: { local?: boolean; }) {
       setBusy(false);
     }
   };
+  if (cookieOnly) {
+    return (
+      <section className='border border-line rounded-xl p-4 flex flex-col gap-3'>
+        <h3 className='font-semibold text-sm text-fg flex gap-2 items-center'>
+          <KeyRound className='w-4 h-4' style={{ color: 'var(--color-primary)' }} />
+          {t('auth.mcpAccessControl')}
+        </h3>
+        <p role='status' className='text-sm text-muted'>{t('auth.grantsNeedServerStorage')}</p>
+      </section>
+    );
+  }
   return (
     <section className='border border-line rounded-xl p-4 flex flex-col gap-3'>
       <div className='flex items-center justify-between gap-2'>

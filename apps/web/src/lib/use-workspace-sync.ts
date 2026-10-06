@@ -44,6 +44,10 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const [actionError, setActionError] = useState('');
 
   const [repoRoot, setRepoRoot] = useState<string>('');
+  /** The home repository keeps no manifest yet; its configuration was derived from its folders. */
+  const [manifestDerived, setManifestDerived] = useState(false);
+  /** The deployment lets each visitor choose their repository. */
+  const [repositoryChoice, setRepositoryChoice] = useState(false);
   const [config, setConfig] = useState<WorkspaceConfig | null>(null);
   // Children read these defaults while they render — a `useState` initializer runs before any
   // effect — so applying them in an effect would hand the first mount the previous default.
@@ -163,6 +167,8 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
       setConfigRevision(ws.configRevision);
       setLoadError('');
       setRepoRoot(ws.repoRoot ?? '');
+      setManifestDerived(ws.manifest === 'derived');
+      setRepositoryChoice(ws.repositoryChoice === true);
       setConfig((previous) => (sameValue(previous, ws.config) ? previous : ws.config));
       setWorkingNotes(ws.local ? {} : Object.fromEntries(ws.repositories.filter((repository) => !repository.unavailable).map((repository) => [repository.id, readWorkingNotes(draftScope(repository))])));
       setGitStatus(ws.repositories.find((repository) => repository.id === ws.home)?.gitStatus ?? null);
@@ -226,5 +232,5 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return note;
   };
 
-  return { selectedNotebookId, folders, foldersLoading, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
+  return { selectedNotebookId, folders, foldersLoading, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, manifestDerived, repositoryChoice, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
 }

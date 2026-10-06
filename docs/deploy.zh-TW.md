@@ -81,6 +81,52 @@ workflow 從 core 部署產品路徑；main 的筆記異動不會觸發 build，
 
 此路徑會由 Vercel 複製完整儲存庫，不需要 `VERCEL_TOKEN`、`VERCEL_ORG_ID` 或 `VERCEL_PROJECT_ID`。
 
+## 輕量 Vercel 部署（不用 Redis，訪客自選儲存庫）
+
+這條路徑不需要 Redis，也不需要固定的筆記儲存庫。
+每位訪客透過 GitHub 登入後，從自己的儲存庫中選一個來使用。
+登入狀態（包括 GitHub token）和選定的儲存庫都以 `SESSION_SECRET` 加密，存在 HttpOnly cookie，伺服器不保存任何資料。
+沒有 MyGitNotes manifest 的儲存庫會以頂層資料夾作為筆記本開啟，並提示可以 commit 一份 manifest。
+
+伺服器不保存資料，代價如下：沒有 MCP 連線授權、不支援 GitLab 登入、沒有 Core 更新面板；GitHub App 的 refresh token 到期（六個月）或更新失敗後，需要重新登入。
+
+### 輕量部署準備
+
+**帳號與服務**
+
+- 依 [Vercel 部署準備](#vercel-部署準備) 建立 Vercel 專案，不需要 Upstash Redis。
+- 建立 GitHub App（**Settings → Developer settings → GitHub Apps → New GitHub App**）：
+  - Homepage URL 設為 `APP_URL`，Callback URL 設為 `APP_URL`/api/auth/github/callback。
+  - 保持開啟 **Expire user authorization tokens**，並開啟 **Request user authorization (OAuth) during installation**。
+  - 關閉 **Webhook**。
+  - Repository permissions：**Contents** 設為 Read and write，**Metadata** 設為 Read-only。
+  - 安裝範圍選 **Any account**，讓訪客能安裝到自己的儲存庫。
+  - 產生 client secret，記下 client ID 與 App 的網址名稱（`https://github.com/apps/<slug>` 中的 slug）。
+
+**要產生的值**
+
+- 以 `openssl rand -hex 32` 產生 `SESSION_SECRET`。
+  更換這個值會讓所有訪客登出，也會清掉他們選過的儲存庫。
+
+### 輕量部署的 runtime values
+
+在 .env 填入下列欄位，再以 `pnpm env:vercel production` 匯入；`MYGITNOTES_REPOSITORY`、`MYGITNOTES_BRANCH` 與所有 Redis 變數都不要設定。
+
+```dotenv
+APP_URL=https://<your-project>.vercel.app
+MYGITNOTES_SOURCE=github
+GITHUB_APP_TYPE=github-app
+GITHUB_APP_SLUG=<GitHub App 的網址名稱>
+GITHUB_CLIENT_ID=<GitHub App 的 client ID>
+GITHUB_CLIENT_SECRET=<GitHub App 的 client secret>
+SESSION_SECRET=<openssl rand -hex 32 的輸出>
+```
+
+依 [連接 GitHub Actions](#連接-github-actions) 與 [部署與驗證](#部署與驗證) 部署後開啟網域：先出現登入畫面，登入後出現儲存庫選擇畫面。
+
+任何部署都能以 `MYGITNOTES_STORAGE=cookie` 改用 cookie session；Vercel 在沒有設定 Redis 時會自動使用。
+有設定 `MYGITNOTES_REPOSITORY` 的部署仍固定使用該儲存庫，有沒有 Redis 都一樣。
+
 ## Docker Compose 連接遠端儲存庫
 
 ### Docker Compose 部署準備

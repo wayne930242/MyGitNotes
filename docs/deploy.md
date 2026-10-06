@@ -81,6 +81,52 @@ The workflow deploys product paths from core; note-only changes on main do not t
 
 This path clones the full repository on Vercel. It does not need `VERCEL_TOKEN`, `VERCEL_ORG_ID`, or `VERCEL_PROJECT_ID`.
 
+## Lightweight Vercel deployment (no Redis, visitors choose their repository)
+
+This path needs no Redis and no fixed note repository.
+Each visitor signs in with GitHub, picks one of their own repositories, and works in it.
+The sign-in, including the GitHub token, and the chosen repository are sealed with `SESSION_SECRET` in HttpOnly cookies, so the server stores nothing.
+A repository without a MyGitNotes manifest opens with its top-level folders as notebooks, and a notice offers to commit the manifest.
+
+The trade-offs follow from keeping nothing on the server: there are no MCP connector grants, no GitLab sign-in, and no Core update panel, and signing in again is needed after the GitHub App's refresh token expires (six months) or after a failed refresh.
+
+### Lightweight preparation
+
+**Accounts and services**
+
+- A Vercel project, as in [Vercel preparation](#vercel-preparation); no Upstash Redis.
+- A GitHub App (**Settings → Developer settings → GitHub Apps → New GitHub App**):
+  - Homepage URL: `APP_URL`; Callback URL: `APP_URL`/api/auth/github/callback.
+  - Keep **Expire user authorization tokens** on, and turn on **Request user authorization (OAuth) during installation**.
+  - Turn off **Webhook**.
+  - Repository permissions: **Contents** read and write, **Metadata** read-only.
+  - Choose **Any account** so visitors can install it on their own repositories.
+  - Generate a client secret, and note the client ID and the app's URL name (the slug in `https://github.com/apps/<slug>`).
+
+**Values to generate**
+
+- Generate `SESSION_SECRET` with `openssl rand -hex 32`.
+  Rotating it signs every visitor out and forgets their repository choice.
+
+### Lightweight runtime values
+
+Fill .env with these fields and import them with `pnpm env:vercel production`; leave `MYGITNOTES_REPOSITORY`, `MYGITNOTES_BRANCH` and every Redis variable unset.
+
+```dotenv
+APP_URL=https://<your-project>.vercel.app
+MYGITNOTES_SOURCE=github
+GITHUB_APP_TYPE=github-app
+GITHUB_APP_SLUG=<the GitHub App's URL name>
+GITHUB_CLIENT_ID=<the GitHub App's client ID>
+GITHUB_CLIENT_SECRET=<the GitHub App's client secret>
+SESSION_SECRET=<output of openssl rand -hex 32>
+```
+
+Deploy as in [Connect GitHub Actions](#connect-github-actions) and [Deploy and verify](#deploy-and-verify), then open the domain: it shows the sign-in screen, and after sign-in the repository picker.
+
+Any deployment can use these cookie sessions with `MYGITNOTES_STORAGE=cookie`; Vercel uses them automatically when no Redis is configured.
+A deployment that sets `MYGITNOTES_REPOSITORY` keeps serving that one repository, with or without Redis.
+
 ## Docker Compose with a remote repository
 
 ### Docker Compose preparation

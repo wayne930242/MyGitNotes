@@ -3,8 +3,7 @@ import path from 'node:path';
 import type express from 'express';
 import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, localManifest, type NotebookConfig, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
-import { authToken } from './auth.js';
-import type { RecordStore } from './record-store/index.js';
+import { authToken, type SessionServices } from './auth.js';
 import { regularPath } from './workspace-files.js';
 
 export interface LocalHandle {
@@ -71,19 +70,19 @@ function sameDirectory(candidate: string | undefined, root: string): boolean {
 }
 
 /** Resolves the request's workspace once and stores it in `res.locals.workspace`. */
-export function requestWorkspace(store: RecordStore, configSource: WorkspaceConfigSource, cache?: RemoteCache): express.RequestHandler {
+export function requestWorkspace(auth: SessionServices, configSource: WorkspaceConfigSource, cache?: RemoteCache): express.RequestHandler {
   return async (req, res, next) => {
     let settings: WorkspaceSettings;
     try {
       settings = await configSource.settings(req);
     } catch (error) {
-      if (error instanceof WorkspaceSetupError) return res.status(503).json({ error: error.message, setupRequired: true });
+      if (error instanceof WorkspaceSetupError) return res.status(503).json({ error: error.message, setupRequired: true, ...(error.reason ? { reason: error.reason } : {}) });
       return next(error);
     }
     let token: string | undefined;
     if (settings.home.source.type !== 'local') {
       try {
-        token = await authToken(req, store, settings.home.source);
+        token = await authToken(req, res, auth, settings.home.source);
       } catch {
         return res.status(401).json({ error: 'Session unavailable. Sign in again.' });
       }

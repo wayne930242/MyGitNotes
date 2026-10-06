@@ -1,7 +1,6 @@
 import { type CoreStatus, GitHubCoreUpdate, RemoteCoreError, type RemoteSourceConfig, SourceError } from '@mygitnotes/core';
 import { type Request, type Response, Router } from 'express';
-import { authToken } from './auth.js';
-import type { RecordStore } from './record-store/index.js';
+import { authToken, type SessionServices } from './auth.js';
 import { buildInfo } from './build-info.js';
 import { workspaceOf } from './request-workspace.js';
 
@@ -12,9 +11,9 @@ function homeSource(res: Response): RemoteSourceConfig {
   return source;
 }
 
-export function createRemoteCoreUpdateRouter(store: RecordStore): Router {
+export function createRemoteCoreUpdateRouter(auth: SessionServices): Router {
   const router = Router();
-  const updater = async (req: Request, source: RemoteSourceConfig & { type: 'github'; }) => new GitHubCoreUpdate(source.repository, buildInfo.sha, await authToken(req, store, source));
+  const updater = async (req: Request, res: Response, source: RemoteSourceConfig & { type: 'github'; }) => new GitHubCoreUpdate(source.repository, buildInfo.sha, await authToken(req, res, auth, source));
   for (const method of ['get', 'post'] as const) {
     router[method](method === 'get' ? '/status' : '/update', async (req, res) => {
       try {
@@ -24,7 +23,7 @@ export function createRemoteCoreUpdateRouter(store: RecordStore): Router {
           const status: CoreStatus = { state: 'unsupported', canUpdate: false, current: null, upstreamSha: null, upstream: '', running: null, runningBuild: buildInfo.sha };
           return res.json({ status });
         }
-        const update = await updater(req, source);
+        const update = await updater(req, res, source);
         res.json(method === 'get' ? { status: await update.status() } : { result: await update.update() });
       } catch (error) {
         if (error instanceof SourceError && error.retryAfter) res.setHeader('Retry-After', String(error.retryAfter));
@@ -36,7 +35,7 @@ export function createRemoteCoreUpdateRouter(store: RecordStore): Router {
     try {
       const source = homeSource(res);
       if (source.type !== 'github') throw new RemoteCoreError('GitLab Core updates are not supported yet.', 'UNSUPPORTED_PROVIDER', 422);
-      res.json(await (await updater(req, source)).install());
+      res.json(await (await updater(req, res, source)).install());
     } catch (error) {
       res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'Workflow installation failed.', code: error instanceof RemoteCoreError ? error.code : 'INSTALL_FAILED' });
     }
@@ -45,7 +44,7 @@ export function createRemoteCoreUpdateRouter(store: RecordStore): Router {
     try {
       const source = homeSource(res);
       if (source.type !== 'github') throw new RemoteCoreError('GitLab Core updates are not supported yet.', 'UNSUPPORTED_PROVIDER', 422);
-      res.json({ run: await (await updater(req, source)).follow(req.params.requestId) });
+      res.json({ run: await (await updater(req, res, source)).follow(req.params.requestId) });
     } catch (error) {
       res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'Run status unavailable.', code: error instanceof RemoteCoreError ? error.code : 'REQUEST_FAILED' });
     }

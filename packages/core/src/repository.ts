@@ -85,4 +85,8 @@ export interface WorkspaceStatus {
   repositories: RepositoryStatus[];
   /** The home worktree, in a local workspace. */
   repoRoot?: string;
+  /** `derived`: the home repository has no manifest yet and `config` was derived from its folders. */
+  manifest?: 'derived';
+  /** The deployment lets each visitor choose their repository, so the app offers to switch it. */
+  repositoryChoice?: boolean;
 }

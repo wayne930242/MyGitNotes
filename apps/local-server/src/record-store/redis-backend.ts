@@ -3,8 +3,8 @@ import { nativeRedisCommand } from '../redis-store.js';
 import type { RecordBackend } from './record-store.js';
 import { digest, random } from './sealing.js';
 
-export function redisRestConnection() {
-  return process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_TOKEN ? { url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN } : { url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN };
+export function redisRestConnection(env: NodeJS.ProcessEnv = process.env) {
+  return env.UPSTASH_REDIS_REST_URL || env.UPSTASH_REDIS_REST_TOKEN ? { url: env.UPSTASH_REDIS_REST_URL, token: env.UPSTASH_REDIS_REST_TOKEN } : { url: env.KV_REST_API_URL, token: env.KV_REST_API_TOKEN };
 }
 
 /** Whether this deployment keeps records in Redis: native Redis, Redis REST, or any Vercel deployment. */

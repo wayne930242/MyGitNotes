@@ -9,7 +9,8 @@ export interface WorkspaceRequest {
 }
 /** Reads and saves the workspace manifest wherever the configuration source keeps it. */
 export interface ManifestStore {
-  load(): Promise<{ config: WorkspaceConfig; revision: string; }>;
+  /** `derived`: the repository keeps no manifest yet, and `config` was derived from its folders; a save creates the file. */
+  load(): Promise<{ config: WorkspaceConfig; revision: string; derived?: boolean; }>;
   save(yaml: string, revision: string): Promise<{ config: WorkspaceConfig; revision: string; }>;
 }
 /** Configuration of the workspace serving one request. */
@@ -29,7 +30,8 @@ export interface WorkspaceConfigSource {
 
 /** The deployment has no usable source configuration yet. */
 export class WorkspaceSetupError extends SourceError {
-  constructor(message: string) {
+  /** `choose-repository`: the deployment lets each visitor pick a GitHub repository, and this one has not. */
+  constructor(message: string, readonly reason?: 'choose-repository') {
     super(message, 503);
   }
 }
