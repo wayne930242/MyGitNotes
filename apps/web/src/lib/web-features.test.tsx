@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { CreditCard } from 'lucide-react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { WebApp } from '../app/create-web-app.js';
+import { AuthControls } from '../components/AuthControls.js';
 import { SettingsModal } from '../components/SettingsModal.js';
 import { useAccountControls, type WebFeature, WebFeaturesProvider } from './web-features.js';
 
@@ -48,4 +49,26 @@ it('routes an edition page beside the workspace routes', async () => {
   root = createRoot(container);
   await act(async () => root!.render(createElement(WebApp, { features: [billing] })));
   expect(container.textContent).toBe('Billing page');
+});
+
+it("adds an edition's entries to the signed-in account menu", async () => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ authenticated: true, login: 'octo', provider: 'github' }), { headers: { 'Content-Type': 'application/json' } }));
+  const recent: WebFeature = { id: 'recent', accountMenuItems: ({ close }) => createElement('button', { onClick: close }, 'octo/journal') };
+  const container = document.createElement('div');
+  document.body.append(container);
+  root = createRoot(container);
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean; }).IS_REACT_ACT_ENVIRONMENT = true;
+  await act(async () => root!.render(createElement(WebFeaturesProvider, { features: [recent] }, createElement(AuthControls))));
+  await act(async () => new Promise(resolve => setTimeout(resolve, 0)));
+  const menu = container.querySelector('details')!;
+  await act(async () => {
+    menu.open = true;
+    menu.dispatchEvent(new Event('toggle'));
+  });
+  const entry = [...container.querySelectorAll('.header-user-items button')].find(button => button.textContent === 'octo/journal') as HTMLButtonElement;
+  expect(entry).toBeDefined();
+  await act(async () => entry.click());
+  expect(menu.open).toBe(false);
+  container.remove();
+  vi.restoreAllMocks();
 });

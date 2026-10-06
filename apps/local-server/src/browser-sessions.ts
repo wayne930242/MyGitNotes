@@ -1,3 +1,4 @@
+import type { WorkspaceRequest } from '@mygitnotes/core';
 import type { Request, Response } from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { random, type RecordStore, seal, type StoredRecord, unseal } from './record-store/index.js';
@@ -21,8 +22,8 @@ export interface PendingSignIn {
  */
 export interface BrowserSessions {
   readonly kind: 'stored' | 'cookie';
-  /** The session record of the request, or null when it carries none or one that cannot be read. */
-  read(req: Request): Promise<StoredRecord | null>;
+  /** The session record of the request, or null when it carries none or one that cannot be read; only its headers are read. */
+  read(req: WorkspaceRequest): Promise<StoredRecord | null>;
   /** Replaces the request's session with `session` for `ttlSeconds` and sets its cookie. */
   write(req: Request, res: Response, session: StoredRecord, ttlSeconds: number): Promise<void>;
   clear(req: Request, res: Response): Promise<void>;
@@ -32,8 +33,9 @@ export interface BrowserSessions {
   finishSignIn(req: Request, res: Response, state: string): Promise<PendingSignIn | null>;
 }
 
-export function requestCookies(req: Request): Record<string, string> {
-  return Object.fromEntries((req.headers.cookie || '').split(';').map(p => p.trim().split('=')).filter(p => p.length === 2));
+export function requestCookies(req: WorkspaceRequest): Record<string, string> {
+  const header = req.headers.cookie;
+  return Object.fromEntries((Array.isArray(header) ? header.join(';') : header || '').split(';').map(p => p.trim().split('=')).filter(p => p.length === 2));
 }
 export function cookieOptions() {
   return { httpOnly: true, secure: process.env.APP_URL?.startsWith('https://') || Boolean(process.env.VERCEL), sameSite: 'lax' as const, path: '/' };

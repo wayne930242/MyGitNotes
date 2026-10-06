@@ -47,6 +47,8 @@
 .header-user-popover { position: absolute; right: 0; top: calc(100% + 12px); min-width: 170px; padding: 8px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-surface); box-shadow: 0 8px 30px color-mix(in srgb, var(--color-scrim) 13%, transparent); }
 .header-user-popover > span { display: block; padding: 8px; font-size: 11px; color: var(--color-muted); }
 .header-user-popover button { display: flex; align-items: center; gap: 8px; padding: 8px; width: 100%; border-radius: 6px; font-size: 12px; }
+.header-user-items { display: flex; flex-direction: column; padding-bottom: 4px; margin-bottom: 4px; border-bottom: 1px solid var(--workspace-divider); }
+.header-user-items > span { padding: 6px 8px 2px; font-size: 11px; color: var(--color-muted); }
 .screen-main { position: relative; --workspace-sidebar-width: 0px; background: var(--color-bg); }
 .screen-main .workspace-responsive-sidebar { display: block; position: absolute; inset: 0 auto 0 0; z-index: 57; width: min(280px, 85%); max-width: calc(100% - 56px); transform: translateX(-100%); visibility: hidden; pointer-events: none; transition: transform 180ms ease, visibility 180ms; box-shadow: 8px 0 24px color-mix(in srgb, var(--color-scrim) 13%, transparent); }
 .screen-main .workspace-responsive-sidebar.is-open { transform: translateX(0); visibility: visible; pointer-events: auto; }

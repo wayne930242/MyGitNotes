@@ -7,6 +7,7 @@ import { copyToClipboard } from '../lib/clipboard.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import type { TranslationKey } from '../lib/i18n/index.js';
 import { LoadingStatus } from './LoadingStatus.js';
+import { useAccountMenuItems } from '../lib/web-features.js';
 
 class GrantRequestError extends Error {
   constructor(public key: TranslationKey) {
@@ -41,10 +42,13 @@ const connectionActionClass = 'inline-flex min-h-11 items-center justify-center 
 export function AuthControls({ local = false, connection = false }: { local?: boolean; connection?: boolean; }) {
   const { t } = useTranslation();
   const session = useSession();
+  const menuItems = useAccountMenuItems();
+  const [menuOpen, setMenuOpen] = useState(false);
   if (local || (!session.authenticated && !session.provider)) return null;
+  const close = () => setMenuOpen(false);
   return session.authenticated
     ? (
-      <details className='header-user-menu'>
+      <details open={menuOpen} onToggle={event => setMenuOpen(event.currentTarget.open)} className='header-user-menu'>
         <summary className='header-user-button' aria-label={session.login}>
           <span className='header-user-avatar'>{session.login?.slice(0, 1).toUpperCase()}</span>
           <span className='header-user-login'>{session.login}</span>
@@ -52,6 +56,7 @@ export function AuthControls({ local = false, connection = false }: { local?: bo
         </summary>
         <div className='header-user-popover'>
           <span>{session.login}</span>
+          {menuItems.map((render, index) => <div key={index} className='header-user-items'>{render({ close })}</div>)}
           {session.repositoryChoice && (
             <button
               onClick={async () => {

@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/app/create-web-app.tsx",
-    "./features": "./src/lib/web-features.tsx"
+    "./features": "./src/lib/web-features.tsx",
+    "./kit": "./src/kit.ts"
   },
   "scripts": {
     "dev": "vite",
