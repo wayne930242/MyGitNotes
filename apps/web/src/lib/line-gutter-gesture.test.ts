@@ -19,14 +19,30 @@ function pointer(type: string, init: { y: number; target?: Element; pointerType?
 beforeEach(() => {
   vi.useFakeTimers();
   gutter = document.createElement('div');
-  gutter.innerHTML = '<span data-line="3">3</span><span data-line="4">4</span>';
+  // Lines 7 to 9 sit under one block widget (a table, a directive), whose gutter row stands for all three.
+  gutter.innerHTML = '<span data-line="3">3</span><span data-line="4">4</span><span data-line="7" data-last="9">7</span>';
   scroller = document.createElement('div');
   scroller.getBoundingClientRect = () => ({ top: 0, bottom: 200, left: 0, right: 100, width: 100, height: 200, x: 0, y: 0, toJSON: () => ({}) });
   document.body.append(gutter);
-  lineAtY = vi.fn((y: number) => Math.floor(y / LINE_HEIGHT) + 1 + Math.floor(scroller.scrollTop / LINE_HEIGHT));
+  lineAtY = vi.fn((y: number) => {
+    const line = Math.floor(y / LINE_HEIGHT) + 1 + Math.floor(scroller.scrollTop / LINE_HEIGHT);
+    return line >= 7 && line <= 9 ? [7, 9] as const : line;
+  });
   onCopy = vi.fn();
   onPreview = vi.fn();
-  cleanup = attachLineGutterGesture({ gutter, scroller, lineFromTarget: target => Number((target.closest('[data-line]') as HTMLElement | null)?.dataset.line ?? NaN) || null, lineAtY, lineHeight: () => LINE_HEIGHT, onPreview, onCopy });
+  cleanup = attachLineGutterGesture({
+    gutter,
+    scroller,
+    lineFromTarget: target => {
+      const row = target.closest<HTMLElement>('[data-line]');
+      if (!row) return null;
+      return row.dataset.last ? [Number(row.dataset.line), Number(row.dataset.last)] as const : Number(row.dataset.line);
+    },
+    lineAtY,
+    lineHeight: () => LINE_HEIGHT,
+    onPreview,
+    onCopy,
+  });
 });
 
 afterEach(() => {
@@ -96,4 +112,29 @@ it('does not scroll while the pointer stays above the last two lines', () => {
   frames.shift()?.(0);
   expect(scroller.scrollTop).toBe(0);
   vi.unstubAllGlobals();
+});
+
+it('takes a block widget whole at whichever end of the drag it sits', () => {
+  // Down from line 3 onto the widget: the range runs to the widget's last line.
+  pointer('pointerdown', { y: 50, target: row(3), pointerType: 'mouse' });
+  pointer('pointermove', { y: 150, pointerType: 'mouse' });
+  expect(onPreview).toHaveBeenLastCalledWith([3, 9]);
+  pointer('pointerup', { y: 150, pointerType: 'mouse' });
+  expect(onCopy).toHaveBeenLastCalledWith(3, 9);
+  // Up from the widget's row to line 4: the range starts at line 4 and keeps the whole widget.
+  vi.advanceTimersByTime(600);
+  pointer('pointerdown', { y: 150, target: row(7), pointerType: 'mouse' });
+  pointer('pointermove', { y: 70, pointerType: 'mouse' });
+  pointer('pointerup', { y: 70, pointerType: 'mouse' });
+  expect(onCopy).toHaveBeenLastCalledWith(4, 9);
+});
+
+it('copies every line of a block widget on a double tap, and treats a drag inside it as a tap', () => {
+  pointer('pointerdown', { y: 150, target: row(7), pointerType: 'mouse' });
+  pointer('pointermove', { y: 170, pointerType: 'mouse' });
+  pointer('pointerup', { y: 170, pointerType: 'mouse' });
+  expect(onCopy).not.toHaveBeenCalled();
+  pointer('pointerdown', { y: 150, target: row(7), pointerType: 'mouse' });
+  pointer('pointerup', { y: 150, pointerType: 'mouse' });
+  expect(onCopy).toHaveBeenCalledWith(7, 9);
 });

@@ -23,7 +23,7 @@ import { cjkEmphasis } from './live-markdown/cjk-emphasis.js';
 import { anchorMermaidSwap } from './live-markdown/mermaid-scroll.js';
 import { liveDecorations } from './live-markdown/decorations.js';
 import { cardBackgroundLayer, theme } from './live-markdown/theme.js';
-import { attachGutterLineCopy } from './live-markdown/gutter-line-copy.js';
+import { attachGutterLineCopy, blockWidgetLineNumbers } from './live-markdown/gutter-line-copy.js';
 import { headingGutter } from './live-markdown/heading-gutter.js';
 import { tableBoundaries } from './live-markdown/table-boundaries.js';
 import { useNoteViewPreferences } from '../lib/editor-preferences.js';
@@ -188,7 +188,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
           headingGutter,
           lineNumberGutter.current.of(
             showLineNumbers
-              ? [lineNumbers({ formatNumber: number => String(number + lineOffset.current) }), highlightActiveLineGutter()]
+              ? [lineNumbers({ formatNumber: number => String(number + lineOffset.current) }), blockWidgetLineNumbers(lineOffset), highlightActiveLineGutter()]
               : [],
           ),
           EditorView.lineWrapping,
@@ -267,7 +267,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
     editor.current?.requestMeasure();
   }, [viewPreferences]);
   useEffect(() => {
-    editor.current?.dispatch({ effects: lineNumberGutter.current.reconfigure(showLineNumbers ? [lineNumbers({ formatNumber: number => String(number + lineNumberOffset) }), highlightActiveLineGutter()] : []) });
+    editor.current?.dispatch({ effects: lineNumberGutter.current.reconfigure(showLineNumbers ? [lineNumbers({ formatNumber: number => String(number + lineNumberOffset) }), blockWidgetLineNumbers(lineOffset), highlightActiveLineGutter()] : []) });
   }, [showLineNumbers, lineNumberOffset]);
   useEffect(() => {
     const target = notePath + location.hash;
