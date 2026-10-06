@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { prewarmNotebookScans, scanNotebookEntries, scanNotebookNotes, writeNoteFile } from '../src/note-service.js';
+import { prewarmNotebookScans, scanNotebookEntries, scanNotebookNotes, stampIsRacy, writeNoteFile } from '../src/note-service.js';
 
 describe('writeNoteFile timestamp stamping', () => {
   let repoRoot: string;
@@ -66,6 +66,49 @@ describe('writeNoteFile timestamp stamping', () => {
     fs.writeFileSync(path.join(dir, 'c.md'), '---\ntitle: C\n---\nBody C');
     const next = scanNotebookNotes(repoRoot, notebook);
     expect(next.map(note => [note.title, note.content.trim()]).sort()).toEqual([['C', 'Body C'], ['Z', 'Body Z']]);
+  });
+
+  it('keeps compilation parses across scans that leave compilations out', () => {
+    const notebook = { id: 'example', title: 'Example', root: 'notes/example' };
+    const dir = path.join(repoRoot, 'notes/example');
+    const compilation = (title: string) => `version: 1\nid: queue\ntitle: ${title}\narrangement: lane\nitems: []\n`;
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'a.md'), '---\ntitle: A\n---\nBody');
+    fs.writeFileSync(path.join(dir, 'queue.compilation.yml'), compilation('Queue'));
+    // Past the files' timestamp tick, so their stamps are trusted.
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 5000);
+    const reads = vi.spyOn(fs, 'readFileSync');
+    const compilationReads = () => reads.mock.calls.filter(([file]) => String(file).endsWith('.compilation.yml')).length;
+    expect(scanNotebookEntries(repoRoot, notebook).map(note => note.title).sort()).toEqual(['A', 'Queue']);
+    expect(scanNotebookNotes(repoRoot, notebook).map(note => note.title)).toEqual(['A']);
+    expect(scanNotebookEntries(repoRoot, notebook).map(note => note.title).sort()).toEqual(['A', 'Queue']);
+    expect(compilationReads()).toBe(1);
+
+    // An edit seen only by a scan without compilations still reaches the next scan with them.
+    fs.writeFileSync(path.join(dir, 'queue.compilation.yml'), compilation('Qeueu'));
+    scanNotebookNotes(repoRoot, notebook);
+    expect(scanNotebookEntries(repoRoot, notebook).map(note => note.title).sort()).toEqual(['A', 'Qeueu']);
+    vi.restoreAllMocks();
+  });
+
+  it('trusts a stamp only once its timestamp tick has passed', () => {
+    expect(stampIsRacy({ mtimeMs: 10_000, ctimeMs: 9_000 }, 11_999)).toBe(true);
+    expect(stampIsRacy({ mtimeMs: 9_000, ctimeMs: 10_000n }, 12_000)).toBe(false);
+    const notebook = { id: 'example', title: 'Example', root: 'notes/example' };
+    const dir = path.join(repoRoot, 'notes/example');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'a.md'), '---\ntitle: A\n---\nBody');
+    const reads = vi.spyOn(fs, 'readFileSync');
+    const noteReads = () => reads.mock.calls.filter(([file]) => String(file).endsWith('a.md')).length;
+    scanNotebookNotes(repoRoot, notebook);
+    scanNotebookNotes(repoRoot, notebook);
+    expect(noteReads()).toBe(2);
+    const later = Date.now() + 5000;
+    vi.spyOn(Date, 'now').mockReturnValue(later);
+    scanNotebookNotes(repoRoot, notebook);
+    scanNotebookNotes(repoRoot, notebook);
+    expect(noteReads()).toBe(3);
+    vi.restoreAllMocks();
   });
 
   it('prewarms notebook scans in the background, letting other work run between batches', async () => {

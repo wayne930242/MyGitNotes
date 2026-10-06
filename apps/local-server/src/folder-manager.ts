@@ -2,7 +2,7 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { FolderCommandSchema, type FolderSnapshot, isCompilationPath, isNotebookContent, type NotebookConfig, planFolderChange, type RemoteSnapshot, RemoteSource, SourceError, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
+import { FolderCommandSchema, type FolderSnapshot, isCompilationPath, isNotebookContent, type NotebookConfig, planFolderChange, type RemoteSnapshot, RemoteSource, SourceError, stampIsRacy, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { notebookRepository } from './request-workspace.js';
@@ -58,18 +58,27 @@ export function localFolderSnapshot(root: string, notebooks: NotebookConfig[]): 
 /**
  * The state a folder change is checked against, from file stamps rather than file contents, like the file
  * manager's revision: any write changes a file's change time, so an edit made since it was read still conflicts.
+ * A file changed within its timestamp tick of `at` could change again without a new stamp, so its content counts
+ * too. The revision carries `at`, and a later check judges the same files racy against that same moment, as git does
+ * with its index time, so a revision stays valid once the tick has passed.
  */
-function localFolderRevision(root: string, notebooks: NotebookConfig[]): string {
+function localFolderRevision(root: string, notebooks: NotebookConfig[], at = Date.now()): string {
   const directories: string[] = [], protectedPaths: string[] = [], files: [string, string][] = [];
   walkFolders(root, notebooks, {
     directory: directory => directories.push(directory),
     protectedPath: file => protectedPaths.push(file),
     file: (file, full) => {
       const stat = fs.lstatSync(full, { bigint: true });
-      files.push([file, [stat.size, stat.mtimeNs, stat.ctimeNs, stat.ino, stat.mode].join(':')]);
+      const stamp = [stat.size, stat.mtimeNs, stat.ctimeNs, stat.ino, stat.mode].join(':');
+      files.push([file, stampIsRacy(stat, at) ? `${stamp}:${createHash('sha256').update(fs.readFileSync(full)).digest('hex')}` : stamp]);
     },
   });
-  return createHash('sha256').update(JSON.stringify([notebooks, directories.sort(), protectedPaths.sort(), files.sort(([a], [b]) => a.localeCompare(b))])).digest('hex');
+  return `${at}.${createHash('sha256').update(JSON.stringify([notebooks, directories.sort(), protectedPaths.sort(), files.sort(([a], [b]) => a.localeCompare(b))])).digest('hex')}`;
+}
+/** Whether `revision` from `localFolderRevision` still describes the workspace. */
+function localFolderRevisionHolds(root: string, notebooks: NotebookConfig[], revision: string) {
+  const at = Number(revision.slice(0, revision.indexOf('.')));
+  return Number.isSafeInteger(at) && localFolderRevision(root, notebooks, at) === revision;
 }
 function changesFor(before: FolderSnapshot, after: ReturnType<typeof planFolderChange>) {
   const changes = [...new Set([...before.files.keys(), ...after.files.keys()])].filter(file => before.files.get(file) !== after.files.get(file)).map(file => after.files.has(file) ? { path: file, content: after.files.get(file)! } : { path: file, sha: null });
@@ -156,7 +165,7 @@ export function createFolderManagerRouter(): Router {
         const { root } = handle;
         return await serializeWorkspaceMutation(root, async () => {
           if (await getCurrentBranch(root) !== 'main') throw new SourceError('Folder changes require the main workspace branch.', 403);
-          if (localFolderRevision(root, config.notebooks) !== req.body.revision) throw new SourceError('The workspace changed. Reload the folders and try again.', 409);
+          if (!localFolderRevisionHolds(root, config.notebooks, req.body.revision)) throw new SourceError('The workspace changed. Reload the folders and try again.', 409);
           const before = localFolderSnapshot(root, config.notebooks);
           const after = planFolderChange(before, command.data);
           applyLocalFolderPlan(root, before, after);

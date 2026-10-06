@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { getCurrentBranch } from '@mygitnotes/git';
-import { assetHash, assetInfo, assetRoot, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isCompilationPath, isNotebookContent, managedNotebook, type NotebookConfig, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSnapshot, type RemoteSource, SourceError, withinPath, WORKSPACE_DOCUMENTS, type WorkspaceConfig } from '@mygitnotes/core';
+import { assetHash, assetInfo, assetRoot, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isCompilationPath, isNotebookContent, managedNotebook, type NotebookConfig, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSnapshot, type RemoteSource, SourceError, stampIsRacy, withinPath, WORKSPACE_DOCUMENTS, type WorkspaceConfig } from '@mygitnotes/core';
 import { eachRepository, notebookRepository, noteRepository, type RepositoryHandle } from './request-workspace.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { regularPath, writeFileAtomicSync } from './workspace-files.js';
@@ -76,8 +76,9 @@ async function localHash(root: string, file: string, size: number, stamp: string
   const hash = createHash('sha1').update(`blob ${size}\0`);
   for await (const chunk of fs.createReadStream(regularPath(root, file))) hash.update(chunk);
   const digest = hash.digest('hex');
-  // A file rewritten after its stamp was taken has a new stamp next time, so this hash is never served for newer bytes.
-  localHashes.set(key, { stamp, hash: digest });
+  // A file rewritten after its stamp was taken has a new stamp next time, so this hash is never served for newer bytes;
+  // only a file still inside its timestamp tick could be rewritten without one, so its hash is not kept.
+  if (!stampIsRacy(fs.statSync(regularPath(root, file)))) localHashes.set(key, { stamp, hash: digest });
   return digest;
 }
 function needsContent(file: string, command?: FileCommand) {

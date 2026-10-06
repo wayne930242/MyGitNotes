@@ -72,6 +72,15 @@ export function writeNoteFile(repoRoot: string, relPath: string, content: string
 }
 
 /**
+ * Whether a file changed so recently that a further write could leave its stamp unchanged: on file systems that keep
+ * whole or even seconds, a same-size edit within the same tick keeps every stamp field. As in git, such a file's
+ * stamp is not trusted until the tick has passed.
+ */
+export function stampIsRacy(stat: { mtimeMs: number | bigint; ctimeMs: number | bigint; }, now = Date.now()): boolean {
+  return now - Math.max(Number(stat.mtimeMs), Number(stat.ctimeMs)) < 2000;
+}
+
+/**
  * Parsed files of each notebook scan, reused while a file's size, change times and inode are unchanged, so a
  * scan reads and parses only the files edited since the last one. A scan keeps only the files it saw.
  */
@@ -108,14 +117,20 @@ function* scanNotebookFiles(repoRoot: string, notebook: NotebookConfig, compilat
       if (entry.isDirectory()) {
         yield* walk(fullPath);
       } else if (entry.isFile()) {
-        if (NOTE_EXTENSIONS.test(entry.name) || compilations && isCompilationPath(entry.name)) {
+        const note = NOTE_EXTENSIONS.test(entry.name);
+        if (note || isCompilationPath(entry.name)) {
           // Stat before reading: a file changed in between carries a newer body than its stamp, so the next scan reads it again.
           const stat = fs.statSync(fullPath);
           const stamp = `${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}:${stat.ino}`;
           const cached = previous?.get(relToRepo);
-          const note = cached?.stamp === stamp ? cached.note : readNoteFile(repoRoot, relToRepo, notebook.id, notebook.root);
-          seen.set(relToRepo, { stamp, note });
-          notes.push(copyNote(note));
+          if (!note && !compilations) {
+            // Scans without compilations keep their unchanged parses for the next scan that includes them.
+            if (cached?.stamp === stamp) seen.set(relToRepo, cached);
+            continue;
+          }
+          const parsed = cached?.stamp === stamp ? cached.note : readNoteFile(repoRoot, relToRepo, notebook.id, notebook.root);
+          if (!stampIsRacy(stat)) seen.set(relToRepo, { stamp, note: parsed });
+          notes.push(copyNote(parsed));
           yield;
         }
       }

@@ -14,7 +14,8 @@ type TreeRow = [string, string, string, string, number | null];
 const TREE_KEY_VERSION = 1;
 /** Recent tree listings of this process, keyed like the GitHub runtime by its `fetch`, so test doubles never share one. */
 const processTrees = new WeakMap<typeof fetch, Map<string, GitHubEntry[]>>();
-const PROCESS_TREES = 8;
+/** The most entries these listings hold together, so a few large repositories cannot grow the process without bound. */
+const PROCESS_TREE_ENTRIES = 200_000;
 
 const BLOB_BATCH_COUNT = 500;
 const BLOB_BATCH_BYTES = 4 * 1024 * 1024;
@@ -101,13 +102,24 @@ export class GitHubSource extends RemoteSource {
     let recent = processTrees.get(this.request);
     if (!recent) processTrees.set(this.request, recent = new Map());
     const remembered = recent.get(key);
-    if (remembered) return remembered;
+    if (remembered) {
+      // Refresh its place, so the least recently used listing goes first.
+      recent.delete(key);
+      recent.set(key, remembered);
+      return remembered;
+    }
     const entries = await this.cachedTree(key, treeSha) ?? await this.listTree(treeSha, key);
     // Requests of every user share these entries; freezing keeps one from changing another's snapshot.
     for (const entry of entries) Object.freeze(entry);
     Object.freeze(entries);
-    if (recent.size >= PROCESS_TREES) recent.delete(recent.keys().next().value!);
     recent.set(key, entries);
+    let total = 0;
+    for (const listing of recent.values()) total += listing.length;
+    for (const [oldest, listing] of recent) {
+      if (total <= PROCESS_TREE_ENTRIES || oldest === key) break;
+      recent.delete(oldest);
+      total -= listing.length;
+    }
     return entries;
   }
   /** The shared cache's listing of `treeSha`, accepted only when it hashes back to that tree. */
