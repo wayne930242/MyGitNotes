@@ -189,8 +189,12 @@ export function useNotePaths(query: Partial<NoteQuery> | null): { notes: NoteRef
 
 export function useNoteFacets(showHidden: boolean): { facets: Record<string, NotebookFacets> | undefined; loading: boolean; error: string; } {
   const scope = useNoteQueryScope();
-  const result = useQuery({ queryKey: queryKey(scope, scope.revisions, 'facets', { showHidden }), queryFn: () => fetchNoteFacets(showHidden, scope.revisions), enabled: Boolean(scope.sourceId), placeholderData: keepPreviousData });
-  const facets = useMemo(() => result.data ? overlayDraftFacets((result.data as NoteFacets).notebooks, scope.drafts, showHidden) : undefined, [result.data, scope.drafts, showHidden]);
+  // One answer carries both views, so every caller shares a single request whichever view it shows.
+  const result = useQuery({ queryKey: queryKey(scope, scope.revisions, 'facets', {}), queryFn: () => fetchNoteFacets(scope.revisions), enabled: Boolean(scope.sourceId), placeholderData: keepPreviousData });
+  const facets = useMemo(() => {
+    const data = result.data as NoteFacets | undefined;
+    return data ? overlayDraftFacets(showHidden ? data.withHidden : data.notebooks, scope.drafts, showHidden) : undefined;
+  }, [result.data, scope.drafts, showHidden]);
   return { facets, loading: result.isPending, error: errorText(result.error) };
 }
 

@@ -106,7 +106,10 @@ export interface NotebookFacets {
 }
 export interface NoteFacets {
   revisions: RevisionSet;
+  /** Counts with hidden notes left out unless the request asked for them. */
   notebooks: Record<string, NotebookFacets>;
+  /** Counts including hidden notes, from the same pass, so one request serves both views. */
+  withHidden: Record<string, NotebookFacets>;
 }
 export interface NoteAgenda {
   revisions: RevisionSet;

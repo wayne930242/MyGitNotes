@@ -222,27 +222,38 @@ export async function queryNotePaths(catalog: NoteCatalog, query: NoteQuery): Pr
   return { revisions, notes: sorted.map(note => ({ notebookId: note.notebookId, path: note.path })), total: sorted.length };
 }
 
+const emptyFacets = (): NotebookFacets => ({ total: 0, hidden: 0, statuses: {}, tags: {}, directories: {}, compilations: { total: 0, statuses: {}, tags: {} }, outlines: { total: 0, statuses: {}, tags: {} } });
+
+function countFacet(facets: NotebookFacets, note: NoteListItem, kind: ReturnType<typeof entryKind>) {
+  const target = kind === 'outline' ? facets.outlines : kind === 'compilation' ? facets.compilations : facets;
+  target.total++;
+  target.statuses[note.status || ''] = (target.statuses[note.status || ''] || 0) + 1;
+  for (const tag of note.tags) target.tags[tag] = (target.tags[tag] || 0) + 1;
+  if (kind !== 'note') return;
+  const directory = noteDirectory(note.path);
+  facets.directories[directory] = (facets.directories[directory] || 0) + 1;
+}
+
+/** Counts per notebook, without hidden notes unless `showHidden`, and with them in `withHidden`; one pass gives both. */
 export async function noteFacets(catalog: NoteCatalog, showHidden: boolean): Promise<NoteFacets> {
   const { notebooks } = await scope(catalog, 'all');
-  const result: Record<string, NotebookFacets> = {};
+  const visible: Record<string, NotebookFacets> = {}, withHidden: Record<string, NotebookFacets> = {};
   for (const notebook of notebooks) {
-    const facets: NotebookFacets = { total: 0, hidden: 0, statuses: {}, tags: {}, directories: {}, compilations: { total: 0, statuses: {}, tags: {} }, outlines: { total: 0, statuses: {}, tags: {} } };
+    const shown = emptyFacets(), all = emptyFacets();
     for (const note of await catalog.index(notebook)) {
       const hidden = isNoteHidden({ ...note.metadata, status: note.status });
       const kind = entryKind(note);
-      if (hidden && kind === 'note') facets.hidden++;
-      if (hidden && !showHidden) continue;
-      const target = kind === 'outline' ? facets.outlines : kind === 'compilation' ? facets.compilations : facets;
-      target.total++;
-      target.statuses[note.status || ''] = (target.statuses[note.status || ''] || 0) + 1;
-      for (const tag of note.tags) target.tags[tag] = (target.tags[tag] || 0) + 1;
-      if (kind !== 'note') continue;
-      const directory = noteDirectory(note.path);
-      facets.directories[directory] = (facets.directories[directory] || 0) + 1;
+      if (hidden && kind === 'note') {
+        shown.hidden++;
+        all.hidden++;
+      }
+      countFacet(all, note, kind);
+      if (!hidden) countFacet(shown, note, kind);
     }
-    result[notebook.id] = facets;
+    visible[notebook.id] = shown;
+    withHidden[notebook.id] = all;
   }
-  return { revisions: await catalog.revisions(notebooks), notebooks: result };
+  return { revisions: await catalog.revisions(notebooks), notebooks: showHidden ? withHidden : visible, withHidden };
 }
 
 /** Notes by notebook and path, in the requested order; notes that do not exist are omitted. */

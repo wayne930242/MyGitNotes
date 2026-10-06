@@ -33,9 +33,9 @@ export function fetchNotePaths(query: NoteQuery, revisions?: RevisionSet): Promi
   return readJson(`${API_BASE}/notes/query?${noteQuerySearch(query, { revisions, select: 'paths' })}`, 'Failed to query notes');
 }
 
-export function fetchNoteFacets(showHidden: boolean, revisions?: RevisionSet): Promise<NoteFacets> {
+/** Counts without hidden notes in `notebooks` and with them in `withHidden`. */
+export function fetchNoteFacets(revisions?: RevisionSet): Promise<NoteFacets> {
   const params = new URLSearchParams();
-  if (showHidden) params.set('showHidden', '1');
   revisionParam(params, revisions);
   const search = params.toString();
   return readJson(`${API_BASE}/notes/facets${search ? `?${search}` : ''}`, 'Failed to load note counts');

@@ -126,6 +126,9 @@ describe('facets, lookup, agenda and graph', () => {
     expect(facets.notebooks.work).toMatchObject({ total: 2, hidden: 1, statuses: { inbox: 1, done: 1 }, tags: { a: 1, b: 2 } });
     expect(facets.notebooks.work.directories).toEqual({ 'notes/work': 1, 'notes/work/deep': 1 });
     expect((await noteFacets(await catalog(), true)).notebooks.work.total).toBe(3);
+    // The same answer also carries the counts with hidden notes, so one request serves both views.
+    expect(facets.withHidden.work).toEqual((await noteFacets(await catalog(), true)).notebooks.work);
+    expect(facets.withHidden.work).toMatchObject({ total: 3, hidden: 1 });
   });
 
   it('looks up notes by path, keeping request order and skipping unknown paths', async () => {
