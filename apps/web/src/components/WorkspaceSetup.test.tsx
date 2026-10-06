@@ -62,7 +62,13 @@ it('asks a signed-out visitor to sign in where visitors choose their repository'
   expect(container.querySelector('a[href="/api/auth/github"]')).not.toBeNull();
   // Visitors cannot reach Settings yet, so the screen offers the language and says what the sign-in can reach.
   expect(container.querySelector('[aria-label="Language"]')).not.toBeNull();
-  expect(container.textContent).toContain('only reaches the repositories you grant');
+  expect(container.textContent).toContain('your sign-in is stored encrypted on this server');
+});
+
+it('says a lightweight sign-in stays in the browser', async () => {
+  serve({ authenticated: false, storage: 'cookie', repositoryChoice: true, workspace: null });
+  await render(createElement(WorkspaceGate, null, createElement('p', null, 'workspace')));
+  expect(container.textContent).toContain('your sign-in is kept in this browser, not on our server');
 });
 
 it('lists repositories, opens the chosen one and shows why a choice failed', async () => {

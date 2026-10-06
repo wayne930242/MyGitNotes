@@ -1580,6 +1580,7 @@ export const en = {
   'setup.reopenGitHub': 'Open the page again',
   'setup.grantNew': 'Grant access',
   'setup.refreshList': 'Refresh list',
+  'setup.privacyStored': 'MyGitNotes only reaches the repositories you grant to its GitHub App, and your sign-in is stored encrypted on this server.',
 };
 
 export type TranslationKey = keyof typeof en;

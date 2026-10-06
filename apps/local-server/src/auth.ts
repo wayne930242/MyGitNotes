@@ -4,7 +4,7 @@ import { Router } from 'express';
 import { createHash } from 'node:crypto';
 import type { BrowserSessions } from './browser-sessions.js';
 import { choosesRepository, cookieWorkspaceChoices, type WorkspaceChoices } from './repository-choice.js';
-import { digest, random, recordLifetime as lifetime, type RecordStore, redisRestConnection, sealedElsewhere, type StoredRecord } from './record-store/index.js';
+import { digest, random, recordLifetime as lifetime, type RecordStore, sealedElsewhere, type StoredRecord } from './record-store/index.js';
 
 export { seal, unseal } from './record-store/index.js';
 
@@ -157,7 +157,7 @@ export function signInRouter(services: AuthServices): Router {
           session = null;
         }
       }
-      const serverStoreReady = sessions.kind === 'cookie' || !process.env.VERCEL || Boolean(redisRestConnection().url && redisRestConnection().token) || Boolean(process.env.REDIS_URL);
+      const serverStoreReady = sessions.kind === 'cookie' || store.ready !== false;
       // Where visitors choose their repository, the app shows the sign-in screen or the picker until they have one.
       const choice = choosesRepository() ? { repositoryChoice: true, workspace: await choices.read(req) } : {};
       res.json({ authenticated: Boolean(session), login: session?.login, provider: provider.type, loginUrl: `/api/auth/${provider.type}`, storage: sessions.kind, ...choice, configured: Boolean(provider.clientId && provider.clientSecret && process.env.SESSION_SECRET && serverStoreReady) });

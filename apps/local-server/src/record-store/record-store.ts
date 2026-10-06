@@ -19,6 +19,8 @@ export interface GrantSummary {
 export interface RecordStore {
   /** Whether records outlive the process and are shared by every instance (persistent agent grants need this). */
   readonly durable: boolean;
+  /** False while the store lacks configuration it needs to keep records (the community store on Vercel without Redis); absent counts as ready. */
+  readonly ready?: boolean;
   set(id: string, value: unknown, ttlSeconds?: number | null): Promise<void>;
   get(id: string): Promise<StoredRecord | null>;
   /** Returns the stored value, null, or the sealedElsewhere marker. */

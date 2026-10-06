@@ -79,7 +79,7 @@ function SetupCard({ children }: { children: ReactNode; }) {
 }
 
 /** The first screen where visitors choose their repository: why to sign in, the GitHub button, and what the sign-in can reach. */
-function SignIn() {
+function SignIn({ storage }: { storage?: SessionProbe['storage']; }) {
   const { t } = useTranslation();
   return (
     <SetupCard>
@@ -88,7 +88,7 @@ function SignIn() {
       <AuthControls connection />
       <div className='mt-6 p-3 rounded-lg bg-sidebar flex items-start gap-2 text-xs text-muted'>
         <ShieldCheck size={16} aria-hidden='true' className='shrink-0 text-primary' />
-        <span>{t('setup.privacy')}</span>
+        <span>{t(storage === 'cookie' ? 'setup.privacy' : 'setup.privacyStored')}</span>
       </div>
     </SetupCard>
   );
@@ -292,7 +292,7 @@ export function WorkspaceGate({ children }: { children: ReactNode; }) {
     );
   }
   if (!session.repositoryChoice || (session.authenticated && session.workspace)) return children;
-  if (!session.authenticated) return <SignIn />;
+  if (!session.authenticated) return <SignIn storage={session.storage} />;
   return <RepositoryPicker login={session.login} />;
 }
 

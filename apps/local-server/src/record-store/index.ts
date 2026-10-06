@@ -13,7 +13,10 @@ export { digest, random, seal, type StoredRecord, unseal } from './sealing.js';
  */
 export function createRecordStore(base: string): RecordStore {
   const redis = new RedisRecordBackend(recordKeyPrefix(), base), directory = new DirectoryRecordBackend(base);
-  return new SealedRecordStore(() => usesRedis() ? redis : directory);
+  const store = new SealedRecordStore(() => usesRedis() ? redis : directory);
+  // A Vercel function's directory does not survive the request, so there the store needs Redis.
+  Object.defineProperty(store, 'ready', { get: () => !process.env.VERCEL || Boolean(process.env.REDIS_URL) || Boolean(redisRestConnection().url && redisRestConnection().token) });
+  return store;
 }
 
 /**

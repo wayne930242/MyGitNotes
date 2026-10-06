@@ -5,7 +5,8 @@ import { createServer, type Server } from 'node:http';
 import { repositoryRef, type WorkspaceConfigSource, WorkspaceSetupError } from '@mygitnotes/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
-import { DirectoryRecordBackend, type RecordStore, SealedRecordStore } from '../src/record-store/index.js';
+import { createRecordStore, DirectoryRecordBackend, type RecordStore, SealedRecordStore } from '../src/record-store/index.js';
+import { storedSessions } from '../src/browser-sessions.js';
 import type { WorkspaceChoices } from '../src/repository-choice.js';
 
 let server: Server | undefined;
@@ -83,4 +84,24 @@ it("keeps visitors' repository choices in the injected service", async () => {
   expect(await fetch(`${base}/api/auth/session`).then(response => response.json())).toMatchObject({ repositoryChoice: true, workspace: { repository: 'octo/notes', branch: 'main' } });
   await fetch(`${base}/api/auth/logout`, { method: 'POST' });
   expect(signedOut).toHaveBeenCalledOnce();
+});
+
+it('reports sign-in configured on Vercel when an edition injects a store that keeps records', async () => {
+  for (const [key, value] of Object.entries({ VERCEL: '1', REDIS_URL: '', UPSTASH_REDIS_REST_URL: '', KV_REST_API_URL: '', MYGITNOTES_STORAGE: '', GITHUB_CLIENT_ID: 'client', GITHUB_CLIENT_SECRET: 'secret' })) vi.stubEnv(key, value);
+  const store = new SealedRecordStore(new DirectoryRecordBackend(path.join(dir, 'postgres-stand-in')));
+  const home = repositoryRef({ type: 'github', repository: 'o/r', branch: 'main' });
+  const configSource: WorkspaceConfigSource = { mode: 'remote', settings: async () => ({ home, localPath: () => undefined, manifest: inHomeRepository => inHomeRepository() }) };
+  const base = await listen(createApp(dir, { configSource, recordStore: store, sessions: storedSessions(store), remoteCache: undefined }));
+  expect(await fetch(`${base}/api/auth/session`).then(response => response.json())).toMatchObject({ storage: 'stored', configured: true });
+});
+
+it('reports the community store unready on Vercel until Redis is configured', () => {
+  for (const [key, value] of Object.entries({ VERCEL: '1', REDIS_URL: '', UPSTASH_REDIS_REST_URL: '', UPSTASH_REDIS_REST_TOKEN: '', KV_REST_API_URL: '', KV_REST_API_TOKEN: '' })) vi.stubEnv(key, value);
+  const store = createRecordStore(dir);
+  expect(store.ready).toBe(false);
+  vi.stubEnv('REDIS_URL', 'redis://localhost:6379');
+  expect(store.ready).toBe(true);
+  vi.stubEnv('VERCEL', '');
+  vi.stubEnv('REDIS_URL', '');
+  expect(store.ready).toBe(true);
 });

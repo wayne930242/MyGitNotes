@@ -1581,4 +1581,5 @@ export const zhTW: Record<TranslationKey, string> = {
   'setup.reopenGitHub': '重新開啟頁面',
   'setup.grantNew': '前往授權',
   'setup.refreshList': '重新整理清單',
+  'setup.privacyStored': 'MyGitNotes 只能存取你授權給它 GitHub App 的 repository；登入狀態會加密保存在這個伺服器。',
 };
