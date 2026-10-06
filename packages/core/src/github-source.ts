@@ -19,6 +19,38 @@ const PROCESS_TREES = 8;
 const BLOB_BATCH_COUNT = 500;
 const BLOB_BATCH_BYTES = 4 * 1024 * 1024;
 
+/**
+ * Whether a recursive listing is exactly the tree `treeSha`: every directory's git object id, recomputed from the
+ * entries listed under it, matches the id its parent lists, up to the root. A shared-cache value that passes is the
+ * tree an authorized commit read named, so a writer of the cache cannot substitute paths or blob ids.
+ */
+export function listingMatchesTree(entries: GitHubEntry[], treeSha: string): boolean {
+  const children = new Map<string, GitHubEntry[]>([['', []]]);
+  const listed = new Map<string, GitHubEntry>();
+  for (const entry of entries) {
+    if (!/^[0-9a-f]{40}$/.test(entry.sha) || !entry.path || entry.path.split('/').some(part => !part)) return false;
+    if (listed.has(entry.path)) return false;
+    listed.set(entry.path, entry);
+    const parent = entry.path.includes('/') ? entry.path.slice(0, entry.path.lastIndexOf('/')) : '';
+    let siblings = children.get(parent);
+    if (!siblings) children.set(parent, siblings = []);
+    siblings.push(entry);
+    if (entry.type === 'tree' && !children.has(entry.path)) children.set(entry.path, []);
+  }
+  const name = (entry: GitHubEntry) => entry.path.slice(entry.path.lastIndexOf('/') + 1);
+  const sortKey = (entry: GitHubEntry) => Buffer.from(entry.type === 'tree' ? `${name(entry)}/` : name(entry));
+  for (const [directory, rows] of children) {
+    const tree = listed.get(directory);
+    // Every parent of a listed path must itself be a listed tree.
+    if (directory !== '' && tree?.type !== 'tree') return false;
+    const expected = directory === '' ? treeSha : tree!.sha;
+    const body = Buffer.concat(rows.sort((a, b) => Buffer.compare(sortKey(a), sortKey(b))).map(entry => Buffer.concat([Buffer.from(`${entry.type === 'tree' ? '40000' : entry.mode} ${name(entry)}\0`), Buffer.from(entry.sha, 'hex')])));
+    const id = createHash('sha1').update(`tree ${body.length}\0`).update(body).digest('hex');
+    if (id !== expected) return false;
+  }
+  return true;
+}
+
 /** Consecutive groups of at most `BLOB_BATCH_COUNT` blobs and, unless one blob alone exceeds it, `BLOB_BATCH_BYTES`. */
 export function blobBatches(entries: RemoteEntry[]): RemoteEntry[][] {
   const batches: RemoteEntry[][] = [];
@@ -70,17 +102,24 @@ export class GitHubSource extends RemoteSource {
     if (!recent) processTrees.set(this.request, recent = new Map());
     const remembered = recent.get(key);
     if (remembered) return remembered;
-    const entries = await this.cachedTree(key) ?? await this.listTree(treeSha, key);
+    const entries = await this.cachedTree(key, treeSha) ?? await this.listTree(treeSha, key);
+    // Requests of every user share these entries; freezing keeps one from changing another's snapshot.
+    for (const entry of entries) Object.freeze(entry);
+    Object.freeze(entries);
     if (recent.size >= PROCESS_TREES) recent.delete(recent.keys().next().value!);
     recent.set(key, entries);
     return entries;
   }
-  private async cachedTree(key: string): Promise<GitHubEntry[] | undefined> {
+  /** The shared cache's listing of `treeSha`, accepted only when it hashes back to that tree. */
+  private async cachedTree(key: string, treeSha: string): Promise<GitHubEntry[] | undefined> {
     const hit = this.cache ? (await this.cache.get([key]))[0] : null;
     if (hit === null) return undefined;
     try {
       const rows = JSON.parse(hit) as TreeRow[];
-      if (Array.isArray(rows) && rows.every(row => Array.isArray(row) && row.slice(0, 4).every(field => typeof field === 'string'))) return rows.map(([path, mode, type, sha, size]) => size === null ? { path, mode, type, sha } : { path, mode, type, sha, size });
+      if (Array.isArray(rows) && rows.every(row => Array.isArray(row) && row.slice(0, 4).every(field => typeof field === 'string'))) {
+        const entries: GitHubEntry[] = rows.map(([path, mode, type, sha, size]) => size === null ? { path, mode, type, sha } : { path, mode, type, sha, size });
+        if (listingMatchesTree(entries, treeSha)) return entries;
+      }
     } catch { /* A damaged value is listed again. */ }
     return undefined;
   }

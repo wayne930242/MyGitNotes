@@ -1,21 +1,44 @@
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { openRemoteHome } from '../src/remote-factory.js';
 import { gitBlobId, MemoryRemoteCache, type RemoteCache } from '../src/remote-cache.js';
-import { blobBatches } from '../src/github-source.js';
+import { blobBatches, type GitHubEntry, listingMatchesTree } from '../src/github-source.js';
 
 const manifest = 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n';
 const fixture: Record<string, string> = { 'notes/.github-notes.yaml': manifest, 'notes/example/alpha.md': '---\ntags: [a]\n---\n# Alpha\n', 'notes/example/deep/beta.md': '# Beta\n' };
 const shaOf = (content: string) => gitBlobId(Buffer.from(content, 'utf8'), 40);
 const bySha = new Map(Object.values(fixture).map(content => [shaOf(content), content]));
 
-function tree() {
-  const directories = new Set<string>();
-  for (const file of Object.keys(fixture)) {
-    const parts = file.split('/');
-    for (let i = 1; i < parts.length; i++) directories.add(parts.slice(0, i).join('/'));
+/** The fixture's recursive listing as GitHub returns it, with object ids from a real git repository. */
+function gitListing(files: Record<string, string | { content: string; mode: string; }>) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-tree-'));
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' }).toString();
+  try {
+    git('init', '-q');
+    for (const [file, value] of Object.entries(files)) {
+      const { content, mode } = typeof value === 'string' ? { content: value, mode: '100644' } : value;
+      fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      if (mode === '120000') fs.symlinkSync(content, path.join(root, file));
+      else fs.writeFileSync(path.join(root, file), content, { mode: mode === '100755' ? 0o755 : 0o644 });
+    }
+    git('add', '-A');
+    const treeSha = git('write-tree').trim();
+    const entries = git('ls-tree', '-r', '-t', '-l', '-z', treeSha).split('\0').filter(Boolean).map((line): GitHubEntry => {
+      const [meta, file] = line.split('\t');
+      const [mode, type, sha, size] = meta.split(/\s+/);
+      // GitHub writes directory modes with a leading zero.
+      return type === 'tree' ? { path: file, mode: '040000', type, sha } : { path: file, mode, type, sha, size: Number(size) };
+    });
+    return { treeSha, entries };
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
-  return [...Object.entries(fixture).map(([file, content]) => ({ path: file, type: 'blob', mode: '100644', sha: shaOf(content), size: content.length })), ...[...directories].map(directory => ({ path: directory, type: 'tree', mode: '040000', sha: `tree-${directory}` }))];
 }
+const listing = gitListing(fixture);
+const tree = () => structuredClone(listing.entries);
 
 /** GitHub double serving one commit, its tree, blob reads and GraphQL batches. */
 function github(options: { corrupt?: boolean; } = {}) {
@@ -29,8 +52,8 @@ function github(options: { corrupt?: boolean; } = {}) {
     }
     let result: unknown;
     if (!url) result = { private: true, permissions: { push: true } };
-    else if (url.startsWith('/commits/')) result = { sha: url.slice('/commits/'.length), commit: { tree: { sha: 'tree1' } } };
-    else if (url === '/git/trees/tree1?recursive=1') result = { tree: tree(), truncated: false };
+    else if (url.startsWith('/commits/')) result = { sha: url.slice('/commits/'.length), commit: { tree: { sha: listing.treeSha } } };
+    else if (url === `/git/trees/${listing.treeSha}?recursive=1`) result = { tree: tree(), truncated: false };
     else if (url.startsWith('/git/blobs/')) {
       const content = bySha.get(url.slice('/git/blobs/'.length));
       if (content === undefined) return new Response('{}', { status: 404 });
@@ -72,6 +95,27 @@ describe('shared remote cache', () => {
     expect((await reader(warm, cache).catalog().index({ id: 'example', title: 'Example', root: 'notes/example' })).map(note => note.path)).toEqual(['notes/example/alpha.md', 'notes/example/deep/beta.md']);
   });
 
+  it('accepts only listings that hash back to their tree', () => {
+    const tricky = gitListing({ 'a-b': '1', 'a.b': '2', 'a0/c': '3', 'a/b': '4', 'run.sh': { content: 'x', mode: '100755' }, 'link': { content: 'a', mode: '120000' }, 'n/o/p/q.md': '5' });
+    expect(listingMatchesTree(tricky.entries, tricky.treeSha)).toBe(true);
+    expect(listingMatchesTree(tree(), listing.treeSha)).toBe(true);
+    const retarget = tree().map(entry => entry.path === 'notes/example/alpha.md' ? { ...entry, sha: shaOf('# Planted\n') } : entry);
+    const renamed = tree().map(entry => entry.path === 'notes/example/alpha.md' ? { ...entry, path: 'notes/example/planted.md' } : entry);
+    const added = [...tree(), { path: 'notes/example/planted.md', mode: '100644', type: 'blob', sha: shaOf('# Planted\n'), size: 10 }];
+    const dropped = tree().filter(entry => entry.path !== 'notes/example/deep/beta.md');
+    const executable = tree().map(entry => entry.path === 'notes/example/alpha.md' ? { ...entry, mode: '100755' } : entry);
+    for (const forged of [retarget, renamed, added, dropped, executable, [...tree(), tree()[0]]]) expect(listingMatchesTree(forged, listing.treeSha)).toBe(false);
+  });
+
+  it('lists the tree again when a shared listing does not hash back to its tree', async () => {
+    const cache = new MemoryRemoteCache();
+    const planted = tree().map(entry => entry.path === 'notes/example/alpha.md' ? { ...entry, sha: shaOf('# Planted\n') } : entry);
+    await cache.set([[`mgn:tree:v1:owner/repo:${listing.treeSha}`, JSON.stringify(planted.map(({ path, mode, type, sha, size }) => [path, mode, type, sha, size ?? null]))]], 60);
+    const request = github();
+    expect((await reader(request, cache).getSnapshot()).entries).toEqual(tree());
+    expect(request.mock.calls.some(([url]) => String(url).includes('/git/trees/'))).toBe(true);
+  });
+
   it('lists the tree again when the cached listing is damaged', async () => {
     const damaged: RemoteCache = { get: async keys => keys.map(key => key.startsWith('mgn:tree:') ? '{not json' : null), set: async () => {} };
     const request = github();
@@ -97,7 +141,7 @@ describe('shared remote cache', () => {
     expect(blobKeys.length).toBeGreaterThan(0);
     expect(blobKeys.every(key => allowed.has(key))).toBe(true);
     // The only tree it asks for is the one its authorized commit read named.
-    expect(keys.filter(key => !key.startsWith('mgn:blob:')).every(key => key.startsWith('mgn:index:v3:owner/repo:') || key === 'mgn:tree:v1:owner/repo:tree1')).toBe(true);
+    expect(keys.filter(key => !key.startsWith('mgn:blob:')).every(key => key.startsWith('mgn:index:v3:owner/repo:') || key === `mgn:tree:v1:owner/repo:${listing.treeSha}`)).toBe(true);
   });
 
   it('never stores content whose git object id does not match the tree', async () => {
