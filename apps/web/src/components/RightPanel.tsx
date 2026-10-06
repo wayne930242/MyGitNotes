@@ -1,7 +1,7 @@
 import type { NoteRef } from '@mygitnotes/core/note-query';
 import { Button } from './Button.js';
 import { type ReactNode, useLayoutEffect } from 'react';
-import { Bot, Braces, CalendarDays, GitBranch, ImageIcon, Info, ListTodo, ListTree, Search, Type } from 'lucide-react';
+import { Bot, Braces, CalendarDays, GitBranch, Info, ListTodo, ListTree, Search, Type } from 'lucide-react';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { ChangeRequest, FileChange, GitStatus, NotebookConfig, NoteItem } from '../lib/types.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -49,8 +49,8 @@ interface RightPanelProps {
 
 const WORKSPACE_TOOL_ICONS: Record<WorkspaceToolId, typeof CalendarDays> = { calendar: CalendarDays, todo: ListTodo, changes: GitBranch, agent: Bot };
 const WORKSPACE_TOOL_LABELS: Record<WorkspaceToolId, 'panel.calendar' | 'panel.todo' | 'panel.changes' | 'piAgent.tab'> = { calendar: 'panel.calendar', todo: 'panel.todo', changes: 'panel.changes', agent: 'piAgent.tab' };
-const DOCUMENT_TOOL_ICONS: Record<DocumentToolId, typeof CalendarDays> = { outline: ListTree, find: Search, frontmatter: Braces, assets: ImageIcon, view: Type, info: Info };
-const DOCUMENT_TOOL_LABELS: Record<DocumentToolId, 'editor.outline' | 'editor.findInNote' | 'editor.frontmatter' | 'editor.notebookAssets' | 'editor.viewSettings' | 'editor.info'> = { outline: 'editor.outline', find: 'editor.findInNote', frontmatter: 'editor.frontmatter', assets: 'editor.notebookAssets', view: 'editor.viewSettings', info: 'editor.info' };
+const DOCUMENT_TOOL_ICONS: Record<DocumentToolId, typeof CalendarDays> = { outline: ListTree, find: Search, frontmatter: Braces, view: Type, info: Info };
+const DOCUMENT_TOOL_LABELS: Record<DocumentToolId, 'editor.outline' | 'editor.findInNote' | 'editor.frontmatter' | 'editor.viewSettings' | 'editor.info'> = { outline: 'editor.outline', find: 'editor.findInNote', frontmatter: 'editor.frontmatter', view: 'editor.viewSettings', info: 'editor.info' };
 /** The Files page keeps only the tools that do not need a notebook view: Changes, and the agent. */
 const FILE_MODE_TOOLS: readonly WorkspaceToolId[] = ['changes', 'agent'];
 

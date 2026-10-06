@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createElement, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { PanelProvider } from '../lib/panel-context.js';
@@ -11,13 +11,18 @@ import { FORMAT_TOOLBAR_STORAGE_KEY } from '../lib/editor-preferences.js';
 
 vi.mock('./MarkdownEditor.js', () => ({
   MarkdownEditorModeSwitch: () => null,
-  MarkdownEditor: forwardRef<MarkdownEditorHandle, { toolbarSlot?: HTMLElement | null; }>(({ toolbarSlot }, ref) => {
-    useImperativeHandle(ref, () => ({ insert() {}, revealRange() {}, goToLine() {}, getCurrentLine: () => 1, getSelection: () => null, ready: () => true }), []);
-    return toolbarSlot ? createPortal(createElement('div', { role: 'toolbar', 'aria-label': 'Formatting toolbar' }), toolbarSlot) : null;
+  MarkdownEditor: forwardRef<MarkdownEditorHandle, { toolbarSlot?: HTMLElement | null; onInsertImage?: () => void; }>(({ toolbarSlot, onInsertImage }, ref) => {
+    useImperativeHandle(ref, () => ({ insert: inserted, revealRange() {}, goToLine() {}, getCurrentLine: () => 1, getSelection: () => null, ready: () => true }), []);
+    return toolbarSlot ? createPortal(createElement('div', { role: 'toolbar', 'aria-label': 'Formatting toolbar' }, onInsertImage && createElement('button', { type: 'button', onClick: onInsertImage }, 'Insert image')), toolbarSlot) : null;
   }),
 }));
+const inserted = vi.hoisted(() => vi.fn());
+vi.mock('./files/index.js', () => ({ FileManagerDialog: ({ mode, onInsert, onClose }: { mode?: string; onInsert?: (reference: string) => void; onClose: () => void; }) => createElement('div', { role: 'dialog', 'aria-label': mode === 'pick-image' ? 'Choose an image' : 'Files' }, createElement('button', { type: 'button', onClick: () => onInsert?.('![a](/raw-assets/by-hash/1)') }, 'Insert'), createElement('button', { type: 'button', onClick: onClose }, 'Close')) }));
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  inserted.mockClear();
+});
 afterEach(() => {
   cleanup();
   localStorage.clear();
@@ -70,4 +75,18 @@ it('offers no toggle for a note that is not Markdown or cannot be edited', () =>
   cleanup();
   render(editor({ readOnly: true }));
   expect(screen.queryByRole('button', { name: 'Formatting toolbar' })).toBeNull();
+});
+
+it('inserts an image chosen from the toolbar, and the document panel no longer offers it', () => {
+  localStorage.setItem(FORMAT_TOOLBAR_STORAGE_KEY, 'true');
+  render(editor({}));
+  fireEvent.click(screen.getByRole('button', { name: 'Document tools' }));
+  expect(screen.getByRole('tablist', { name: 'Document tools' })).toBeInTheDocument();
+  expect(screen.queryByRole('tab', { name: 'Insert image' })).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Insert image' }));
+  const dialog = screen.getByRole('dialog', { name: 'Choose an image' });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Insert' }));
+  expect(inserted).toHaveBeenCalledWith('\n![a](/raw-assets/by-hash/1)\n', undefined);
+  expect(screen.queryByRole('dialog', { name: 'Choose an image' })).toBeNull();
 });

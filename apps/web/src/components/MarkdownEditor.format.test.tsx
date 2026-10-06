@@ -63,6 +63,20 @@ it('formats from the toolbar it renders into the slot, with the insert actions b
   slot.remove();
 });
 
+it('groups Insert image with the other insert actions when the editor offers it', () => {
+  const onInsertImage = vi.fn();
+  render(createElement(QueryClientProvider, { client: new QueryClient() }, createElement(MarkdownEditor, { content: 'title', path: 'notes/a.md', mode: 'raw', readOnly: false, onChange: () => {}, ariaLabel: 'Note content', onInsertImage })));
+  const image = screen.getByRole('button', { name: 'Insert image' });
+  const group = image.closest('.markdown-format-group');
+  expect([...group!.querySelectorAll('button')].map(button => button.getAttribute('aria-label'))).toEqual(['Insert note link', 'Insert image', 'Insert table', 'Insert block']);
+  fireEvent.click(image);
+  expect(onInsertImage).toHaveBeenCalledOnce();
+  cleanup();
+
+  renderSource('title');
+  expect(screen.queryByRole('button', { name: 'Insert image' })).toBeNull();
+});
+
 it('renders no toolbar when the slot is null', () => {
   renderSource('title', null);
   expect(screen.queryByRole('toolbar')).toBeNull();

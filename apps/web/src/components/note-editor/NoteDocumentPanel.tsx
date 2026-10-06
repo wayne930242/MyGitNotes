@@ -1,12 +1,10 @@
-import { Bot, Braces, ChevronDown, ChevronUp, Image, Info, ListTree, PanelRightClose, Search, SlidersHorizontal } from 'lucide-react';
+import { Bot, Braces, ChevronDown, ChevronUp, Info, ListTree, PanelRightClose, Search, SlidersHorizontal } from 'lucide-react';
 import { Button } from '../Button.js';
-import { FileManager } from '../files/index.js';
 import { NoteFrontmatterPanel } from './NoteFrontmatterPanel.js';
 import { NoteViewPanel } from './NoteViewPanel.js';
 import { NoteInfoPanel } from './NoteInfoPanel.js';
 import { AgentPanel } from '../pi-agent/AgentPanel.js';
 import { usePiAgentAvailable } from '../../lib/pi-agent/session.js';
-import type { FileResult } from '../../lib/files-api.js';
 import type { OutlineHeading } from '../../lib/note-navigation.js';
 import type { NotebookMetadataField } from '../../lib/types.js';
 import type { NotePanelMode } from './types.js';
@@ -19,7 +17,6 @@ export interface NoteDocumentPanelProps {
   isFindOpen: boolean;
   isOutlineOpen: boolean;
   showFrontmatter: boolean;
-  isAssetPickerOpen: boolean;
   isViewPanelOpen: boolean;
   isInfoPanelOpen: boolean;
   isAgentOpen: boolean;
@@ -59,16 +56,11 @@ export interface NoteDocumentPanelProps {
   availableTags: string[];
   locked: boolean;
   notebookId: string;
-  onInsertAssetRef: (ref: string) => void;
   readOnly: boolean;
-  /** Guards unsaved workspace edits before an R2 move rewrites notes. */
-  beforeFileChange?: () => Promise<void>;
-  /** Reloads workspace views after an R2 move rewrote notes. */
-  onFilesChanged?: (result: FileResult) => Promise<void>;
 }
 
-/** The zoom/pane editor's document panel: its tab strip and the find, outline, frontmatter, asset and view sections it switches between. */
-export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isAssetPickerOpen, isViewPanelOpen, isInfoPanelOpen, isAgentOpen, notePath, content, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, onInsertAssetRef, readOnly, beforeFileChange, onFilesChanged }: NoteDocumentPanelProps) {
+/** The zoom/pane editor's document panel: its tab strip and the find, outline, frontmatter, view and info sections it switches between. */
+export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isViewPanelOpen, isInfoPanelOpen, isAgentOpen, notePath, content, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, readOnly }: NoteDocumentPanelProps) {
   const { t } = useTranslation();
   const agentAvailable = usePiAgentAvailable();
 
@@ -145,7 +137,6 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
         </section>
       )}
       {showFrontmatter && <NoteFrontmatterPanel metadata={metadata} setMetadata={setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={locked} newFieldKey={newFieldKey} setNewFieldKey={setNewFieldKey} frontmatterViewMode={frontmatterViewMode} setFrontmatterViewMode={setFrontmatterViewMode} yamlText={yamlText} setYamlText={setYamlText} yamlError={yamlError} setYamlError={setYamlError} tagInput={tagInput} setTagInput={setTagInput} isTagDropdownOpen={isTagDropdownOpen} setIsTagDropdownOpen={setIsTagDropdownOpen} />}
-      {isAssetPickerOpen && <FileManager notebookId={notebookId} writable={!readOnly} mode='pick-image' layout='panel' onInsert={locked ? undefined : onInsertAssetRef} beforeChange={beforeFileChange} onChanged={onFilesChanged} />}
       {isViewPanelOpen && <NoteViewPanel />}
       {isInfoPanelOpen && <NoteInfoPanel note={{ notebookId, path: notePath }} content={content} metadata={metadata} setMetadata={setMetadata} locked={locked || readOnly} />}
       {isAgentOpen && agentAvailable && <AgentPanel />}
@@ -170,7 +161,7 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
             tabs[(target + tabs.length) % tabs.length].focus();
           }}
         >
-          <Button type='button' role='tab' aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isAssetPickerOpen || isViewPanelOpen || isInfoPanelOpen || isAgentOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}>
+          <Button type='button' role='tab' aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isViewPanelOpen || isInfoPanelOpen || isAgentOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}>
             <Search aria-hidden='true' />
           </Button>
           {isMarkdown && (
@@ -180,9 +171,6 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
           )}
           <Button type='button' role='tab' aria-selected={showFrontmatter} tabIndex={showFrontmatter ? 0 : -1} aria-label={t('editor.frontmatter')} title={t('editor.frontmatter')} onClick={() => setNotePanel(showFrontmatter ? null : 'frontmatter')}>
             <Braces aria-hidden='true' />
-          </Button>
-          <Button type='button' role='tab' aria-selected={isAssetPickerOpen} tabIndex={isAssetPickerOpen ? 0 : -1} aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onClick={() => setNotePanel(isAssetPickerOpen ? null : 'assets')}>
-            <Image aria-hidden='true' />
           </Button>
           <Button type='button' role='tab' aria-selected={isViewPanelOpen} tabIndex={isViewPanelOpen ? 0 : -1} aria-label={t('editor.viewSettings')} title={t('editor.viewSettings')} onClick={() => setNotePanel(isViewPanelOpen ? null : 'view')}>
             <SlidersHorizontal aria-hidden='true' />

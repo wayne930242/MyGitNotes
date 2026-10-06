@@ -28,7 +28,7 @@ const PANEL_OPEN_KEY = 'mygitnotes.documentPanel.open';
 function savedPanel(isMarkdown: boolean): NotePanelMode {
   try {
     const saved = localStorage.getItem(PANEL_KEY);
-    if (['find', 'outline', 'frontmatter', 'assets', 'view', 'info', 'agent'].includes(saved || '')) return saved as NotePanelMode;
+    if (['find', 'outline', 'frontmatter', 'view', 'info', 'agent'].includes(saved || '')) return saved as NotePanelMode;
   } catch { /* Use the default panel when storage is unavailable. */ }
   return isMarkdown ? 'outline' : 'find';
 }
@@ -60,7 +60,6 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
     else updateNotePanel(next);
   };
 
-  const isAssetPickerOpen = notePanel === 'assets';
   const isFindOpen = notePanel === 'find';
   const isOutlineOpen = notePanel === 'outline';
   const showFrontmatter = notePanel === 'frontmatter';
@@ -217,7 +216,7 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
     requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-outline-index="${index}"]`)?.focus());
   }, [isOutlineOpen, outline, outlineIndex]);
 
-  return { editorRef, notePanel, setNotePanel, lastNotePanel, isAssetPickerOpen, isFindOpen, isOutlineOpen, showFrontmatter, isViewPanelOpen, isInfoPanelOpen, isAgentOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, moveOutline, openFind, openOutline, isEditorLeaderOpen, setIsEditorLeaderOpen, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen };
+  return { editorRef, notePanel, setNotePanel, lastNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isViewPanelOpen, isInfoPanelOpen, isAgentOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, moveOutline, openFind, openOutline, isEditorLeaderOpen, setIsEditorLeaderOpen, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen };
 }
 
 /** The document panel state the editor parts that render it share. */

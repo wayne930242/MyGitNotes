@@ -3,7 +3,7 @@ import { bookmarkOriginalRange, normalizeBookmarkBody } from '@mygitnotes/core/b
 import React, { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Bold, Code, Code2, Eye, Heading1, Heading2, Heading3, IndentDecrease, IndentIncrease, Italic, Link, Link2, List, ListOrdered, ListTodo, type LucideIcon, Plus, Quote, SeparatorHorizontal, Square, SquareCode, Strikethrough, Table2, Underline } from 'lucide-react';
+import { Bold, Code, Code2, Eye, Heading1, Heading2, Heading3, ImageIcon, IndentDecrease, IndentIncrease, Italic, Link, Link2, List, ListOrdered, ListTodo, type LucideIcon, Plus, Quote, SeparatorHorizontal, Square, SquareCode, Strikethrough, Table2, Underline } from 'lucide-react';
 import type { LiveMarkdownHandle } from './LiveMarkdownEditor.js';
 import { type TranslationKey, useTranslation } from '../lib/i18n/index.js';
 import { noteCompletionAt, useNoteCandidates } from '../lib/note-completion.js';
@@ -47,6 +47,8 @@ interface Props {
   toolbarSlot?: HTMLElement | null;
   showLineNumbers?: boolean;
   lineNumberOffset?: number;
+  /** Opens the notebook's image picker; the toolbar's Insert group offers it only when present. */
+  onInsertImage?: () => void;
 }
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -71,7 +73,7 @@ export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEdi
   );
 }
 
-export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, notebookId, mode, readOnly, onChange, onCaret, compact = false, toolbarSlot, ariaLabel = 'Document content', showLineNumbers = true, lineNumberOffset = 0 }, ref) => {
+export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, notebookId, mode, readOnly, onChange, onCaret, compact = false, toolbarSlot, ariaLabel = 'Document content', showLineNumbers = true, lineNumberOffset = 0, onInsertImage }, ref) => {
   const { t } = useTranslation();
   const [caret, setCaret] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -332,6 +334,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
               <Plus />
             </span>
           </button>
+          {onInsertImage && (
+            <button type='button' className='ui-icon-button toolbar-icon-button insert-icon-button' aria-label={t('editor.notebookAssets')} title={t('editor.notebookAssets')} onMouseDown={event => event.preventDefault()} onClick={onInsertImage}>
+              <ImageIcon aria-hidden='true' />
+              <span className='insert-plus-badge' aria-hidden='true'>
+                <Plus />
+              </span>
+            </button>
+          )}
           <button type='button' className='ui-icon-button toolbar-icon-button insert-icon-button' aria-label={t('table.insert')} title={t('table.insert')} onClick={insertTable}>
             <Table2 aria-hidden='true' />
             <span className='insert-plus-badge' aria-hidden='true'>
