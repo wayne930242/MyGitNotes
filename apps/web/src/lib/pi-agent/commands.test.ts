@@ -24,7 +24,7 @@ describe('parseComposerInput', () => {
 describe('commandWithFocus', () => {
   const focus = { file: 'notes/plan.md', line: 4, column: 1 };
 
-  it('keeps the command first, putting the editor context in a skill\'s arguments and nowhere else', () => {
+  it("keeps the command first, putting the editor context in a skill's arguments and nowhere else", () => {
     expect(commandWithFocus('/reload', focus)).toBe('/reload');
     expect(commandWithFocus('/template a b', focus)).toBe('/template a b');
     expect(commandWithFocus('/skill:review tighten this', focus)).toBe(`/skill:review ${withFocus('tighten this', focus)}`);
@@ -56,7 +56,7 @@ describe('the command menu', () => {
     expect(matchCommands(commands, '').map(command => command.name)).toEqual(['preview', 'reload', 'skill:review']);
   });
 
-  it('reads Pi\'s command list, dropping malformed entries', () => {
+  it("reads Pi's command list, dropping malformed entries", () => {
     expect(commandsFromResponse({ commands: [{ name: 'reload', source: 'extension', description: 'Reload' }, { name: 'skill:x', source: 'skill', description: '' }, { name: 'bad', source: 'tui' }, { source: 'skill' }, null] })).toEqual([{ name: 'reload', source: 'extension', description: 'Reload' }, { name: 'skill:x', source: 'skill' }]);
     expect(commandsFromResponse(undefined)).toEqual([]);
   });
