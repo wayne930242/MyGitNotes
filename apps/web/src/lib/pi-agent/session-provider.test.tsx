@@ -139,3 +139,59 @@ it('takes queued messages back before stopping the run, and resolves with their 
   act(() => socket.receive({ type: 'response', id: clear.id, command: 'clear_queue', success: true, data: { steering: ['<editor-context>\nfile: notes/a.md\n</editor-context>\n\nlook here'], followUp: ['then this'] } }));
   await expect(restored).resolves.toBe('look here\n\nthen this');
 });
+
+async function opened() {
+  const agent = mount();
+  await waitFor(() => expect(FakeSocket.last).toBeDefined());
+  const socket = FakeSocket.last!;
+  act(() => {
+    socket.readyState = FakeSocket.OPEN;
+    socket.onopen?.();
+  });
+  return { agent, socket };
+}
+
+it('routes ! to a shell run, the built-ins to their RPC commands, and a skill with the focus in its arguments', async () => {
+  const { agent, socket } = await opened();
+  const sent = () => socket.sent.at(-1) as Record<string, unknown>;
+  act(() => void agent.current!.send('!!git status'));
+  expect(sent()).toMatchObject({ type: 'bash', command: 'git status', excludeFromContext: true });
+  expect(agent.current!.transcript.entries).toEqual([{ kind: 'shell', key: 0, id: sent().id, command: 'git status', output: '', excluded: true, running: true }]);
+  act(() => void agent.current!.send('/compact keep decisions'));
+  expect(sent()).toMatchObject({ type: 'compact', customInstructions: 'keep decisions' });
+  act(() => void agent.current!.send('/name Plan'));
+  expect(sent()).toMatchObject({ type: 'set_session_name', name: 'Plan' });
+  const before = socket.sent.length;
+  let accepted = true;
+  act(() => {
+    accepted = agent.current!.send('/name');
+  });
+  expect(accepted).toBe(false);
+  expect(socket.sent.length).toBe(before);
+  act(() => void agent.current!.send('/new'));
+  expect(sent()).toMatchObject({ type: 'new_session' });
+  act(() => void agent.current!.send('/skill:review tighten', { file: 'notes/a.md' }));
+  expect(sent()).toMatchObject({ type: 'prompt', message: '/skill:review <editor-context>\nfile: notes/a.md\n</editor-context>\n\ntighten' });
+  act(() => void agent.current!.send('/reload', { file: 'notes/a.md' }));
+  expect(sent()).toMatchObject({ type: 'prompt', message: '/reload' });
+});
+
+it('reads the command list, the context usage after a run, and text an extension puts in the message box', async () => {
+  const { agent, socket } = await opened();
+  expect(socket.sent.some(command => command.type === 'get_session_stats')).toBe(true);
+  act(() => agent.current!.loadCommands());
+  expect(socket.sent.at(-1)).toMatchObject({ type: 'get_commands' });
+  act(() => {
+    socket.receive({ type: 'response', command: 'get_commands', success: true, data: { commands: [{ name: 'reload', source: 'extension', description: 'Reload' }] } });
+    socket.receive({ type: 'response', command: 'get_session_stats', success: true, data: { contextUsage: { tokens: 50_000, contextWindow: 200_000, percent: 25 } } });
+    socket.receive({ type: 'extension_ui_request', id: 'e1', method: 'set_editor_text', text: '! pnpm test' });
+  });
+  expect(agent.current!.commands).toEqual([{ name: 'reload', source: 'extension', description: 'Reload' }]);
+  expect(agent.current!.contextUsage).toEqual({ tokens: 50_000, contextWindow: 200_000, percent: 25 });
+  expect(agent.current!.editorText).toEqual({ text: '! pnpm test', serial: 1 });
+  act(() => agent.current!.takeEditorText(agent.current!.editorText!));
+  expect(agent.current!.editorText).toBeNull();
+  const stats = socket.sent.filter(command => command.type === 'get_session_stats').length;
+  act(() => socket.receive({ type: 'agent_settled' }));
+  expect(socket.sent.filter(command => command.type === 'get_session_stats').length).toBe(stats + 1);
+});

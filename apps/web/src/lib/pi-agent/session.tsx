@@ -2,7 +2,8 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { responseError } from '../api.js';
 import type { FolderItem, NotebookConfig } from '../types.js';
 import type { CaretStore } from './caret-store.js';
-import { type AgentDialog, type AgentFocus, applyRecord, emptyTranscript, splitFocus, transcriptFromMessages, type TranscriptState, withFocus } from './transcript.js';
+import { commandsFromResponse, commandWithFocus, parseComposerInput, type PiCommand } from './commands.js';
+import { type AgentDialog, type AgentFocus, applyRecord, emptyTranscript, queuedText, startShell, transcriptFromMessages, type TranscriptState, withFocus } from './transcript.js';
 
 /** The bridged Pi process, as `/api/pi/session` reports it. */
 /**
@@ -100,6 +101,25 @@ export function applyModelResponse(state: PiModelState, record: Record<string, u
 
 export type DialogAnswer = { value: string; } | { confirmed: boolean; } | { cancelled: true; };
 
+/** How full the model's context window is, as `get_session_stats` reports it; `tokens` and `percent` are unknown right after compaction. */
+export interface PiContextUsage {
+  tokens: number | null;
+  contextWindow: number;
+  percent: number | null;
+}
+
+/** Text an extension placed in the message box (`set_editor_text`); `serial` tells a repeat of the same text apart. */
+export interface PiEditorText {
+  text: string;
+  serial: number;
+}
+
+function contextUsageOf(data: unknown): PiContextUsage | undefined {
+  const usage = typeof data === 'object' && data !== null ? (data as { contextUsage?: Record<string, unknown>; }).contextUsage : undefined;
+  if (!usage || typeof usage.contextWindow !== 'number') return undefined;
+  return { contextWindow: usage.contextWindow, tokens: typeof usage.tokens === 'number' ? usage.tokens : null, percent: typeof usage.percent === 'number' ? usage.percent : null };
+}
+
 export interface PiAgentValue {
   /** Only a local workspace served from this computer, with Pi installed on it, bridges to Pi. */
   available: boolean;
@@ -112,7 +132,20 @@ export interface PiAgentValue {
   transcript: TranscriptState;
   error: string;
   start: () => Promise<void>;
-  send: (text: string, focus?: AgentFocus) => void;
+  /**
+   * Sends what the message box holds, read as Pi's terminal editor reads it (see parseComposerInput); returns false
+   * when it is not complete enough to send, such as /name without a name.
+   */
+  send: (text: string, focus?: AgentFocus) => boolean;
+  /** The slash commands Pi offers, as of the last `loadCommands`; the built-ins are the panel's to add. */
+  commands: PiCommand[];
+  /** Asks Pi for its commands again, as a /reload may have changed them. */
+  loadCommands: () => void;
+  contextUsage?: PiContextUsage;
+  /** Text an extension placed in the message box, until the panel takes it. */
+  editorText: PiEditorText | null;
+  /** Marks `text` as placed in the message box, so a panel opened later does not place it again. */
+  takeEditorText: (text: PiEditorText) => void;
   /** Stops the run after taking back the messages still queued, as Esc does in Pi's terminal; resolves with their text. */
   abort: () => Promise<string>;
   answer: (dialog: AgentDialog, answer: DialogAnswer) => void;
@@ -214,6 +247,9 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
   const [transcript, setTranscript] = useState<TranscriptState>(emptyTranscript);
   const [error, setError] = useState('');
   const [modelState, setModelState] = useState<PiModelState>(emptyModelState);
+  const [commands, setCommands] = useState<PiCommand[]>([]);
+  const [contextUsage, setContextUsage] = useState<PiContextUsage>();
+  const [editorText, setEditorText] = useState<PiEditorText | null>(null);
   const socket = useRef<WebSocket | null>(null);
   const sessionId = useRef<string | null>(null);
   const pending = useRef(new Map<string, 'messages' | 'state'>());
@@ -232,6 +268,7 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
     const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/pi/ws`);
     socket.current = ws;
     const loadId = crypto.randomUUID(), stateId = crypto.randomUUID();
+    const requestStats = () => ws.send(JSON.stringify({ id: crypto.randomUUID(), type: 'get_session_stats' }));
     pending.current.set(loadId, 'messages');
     pending.current.set(stateId, 'state');
     ws.onopen = () => {
@@ -241,6 +278,7 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
       ws.send(JSON.stringify({ id: stateId, type: 'get_state' }));
       ws.send(JSON.stringify({ id: crypto.randomUUID(), type: 'get_available_models' }));
       ws.send(JSON.stringify({ id: crypto.randomUUID(), type: 'get_available_thinking_levels' }));
+      requestStats();
     };
     ws.onmessage = event => {
       if (socket.current !== ws || typeof event.data !== 'string') return;
@@ -259,13 +297,29 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
           ws.send(JSON.stringify({ id: crypto.randomUUID(), type: 'get_state' }));
           ws.send(JSON.stringify({ id: crypto.randomUUID(), type: 'get_available_thinking_levels' }));
         }
+        // Another model has another context window.
+        if (record.success === true && record.command === 'set_model') requestStats();
         if (record.command !== 'get_state') return;
       }
+      if (record.type === 'response' && record.success === true && record.command === 'get_commands') {
+        setCommands(commandsFromResponse(record.data));
+        return;
+      }
+      if (record.type === 'response' && record.success === true && record.command === 'get_session_stats') {
+        setContextUsage(contextUsageOf(record.data));
+        return;
+      }
+      if (record.type === 'extension_ui_request' && record.method === 'set_editor_text') {
+        setEditorText(current => ({ text: String(record.text ?? ''), serial: (current?.serial ?? 0) + 1 }));
+        return;
+      }
+      // A finished run or compaction changes how full the context is.
+      if (record.type === 'agent_settled' || record.type === 'compaction_end') requestStats();
       const restore = typeof record.id === 'string' && record.type === 'response' ? takenBack.current.get(record.id) : undefined;
       if (restore) {
         takenBack.current.delete(record.id as string);
         const data = (record.data ?? {}) as { steering?: unknown[]; followUp?: unknown[]; };
-        restore([...data.steering ?? [], ...data.followUp ?? []].map(text => splitFocus(String(text)).text).join('\n\n'));
+        restore([...data.steering ?? [], ...data.followUp ?? []].map(text => queuedText(String(text))).join('\n\n'));
         return;
       }
       const request = typeof record.id === 'string' && record.type === 'response' ? pending.current.get(record.id) : undefined;
@@ -274,11 +328,12 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
         const data = (record.data ?? {}) as { messages?: unknown[]; isStreaming?: boolean; };
         // Dialogs, status lines, widgets and the queue replayed on attach arrive before the history, so a rebuilt transcript keeps them.
         if (request === 'messages' && Array.isArray(data.messages)) setTranscript(current => ({ ...transcriptFromMessages(data.messages!), dialogs: current.dialogs, running: current.running, statuses: current.statuses, widgets: current.widgets, queued: current.queued }));
-        if (request === 'state') setTranscript(current => ({ ...current, running: data.isStreaming === true }));
+        if (request === 'state') setTranscript(current => ({ ...applyRecord(current, record), running: data.isStreaming === true }));
         return;
       }
       if (record.type === 'response' && record.command === 'new_session' && record.success === true && !(record.data as { cancelled?: boolean; } | undefined)?.cancelled) {
         setTranscript(emptyTranscript);
+        requestStats();
         return;
       }
       setTranscript(current => applyRecord(current, record));
@@ -302,6 +357,9 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
       disconnect();
       setTranscript(emptyTranscript);
       setModelState(emptyModelState);
+      setCommands([]);
+      setContextUsage(undefined);
+      setEditorText(null);
     }
     sessionId.current = info?.id ?? null;
     setSession(info);
@@ -348,10 +406,14 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
     if (session?.sessionFile && session.status !== 'exited') remember(SESSION_FILE_KEY, session.sessionFile);
   }, [session]);
 
+  const takeEditorText = useCallback((text: PiEditorText) => setEditorText(current => current === text ? null : current), []);
+
   const command = useCallback((record: Record<string, unknown>) => {
     if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify({ id: crypto.randomUUID(), ...record }));
     else setError('Pi is not connected.');
   }, []);
+  // Stable, since the panel asks again each time its menu opens rather than on every transcript change.
+  const loadCommands = useCallback(() => command({ type: 'get_commands' }), [command]);
 
   const value = useMemo<PiAgentValue>(() => ({
     available: enabled && piAvailable,
@@ -363,8 +425,40 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
     transcript,
     error,
     start,
-    // A message sent while Pi works steers the current run, as Enter does in Pi's terminal.
-    send: (text, focus) => command({ type: 'prompt', message: withFocus(text, focus), ...(transcript.running ? { streamingBehavior: 'steer' } : {}) }),
+    send: (text, focus) => {
+      const input = parseComposerInput(text);
+      // A message sent while Pi works steers the current run, as Enter does in Pi's terminal.
+      const steer = transcript.running ? { streamingBehavior: 'steer' } : {};
+      switch (input.kind) {
+        case 'shell': {
+          if (socket.current?.readyState !== WebSocket.OPEN) {
+            setError('Pi is not connected.');
+            return false;
+          }
+          const id = crypto.randomUUID();
+          setTranscript(current => startShell(current, id, input.command, input.excludeFromContext));
+          command({ id, type: 'bash', command: input.command, ...(input.excludeFromContext ? { excludeFromContext: true } : {}) });
+          return true;
+        }
+        case 'builtin':
+          if (input.name === 'new') command({ type: 'new_session' });
+          else if (input.name === 'compact') command({ type: 'compact', ...(input.args ? { customInstructions: input.args } : {}) });
+          else if (input.args) command({ type: 'set_session_name', name: input.args });
+          else return false;
+          return true;
+        case 'command':
+          command({ type: 'prompt', message: commandWithFocus(input.text, focus), ...steer });
+          return true;
+        case 'message':
+          command({ type: 'prompt', message: withFocus(input.text, focus), ...steer });
+          return true;
+      }
+    },
+    commands,
+    loadCommands,
+    contextUsage,
+    editorText,
+    takeEditorText,
     abort: () => {
       const ws = socket.current;
       if (ws?.readyState !== WebSocket.OPEN) {
@@ -414,7 +508,7 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
       if (!res.ok) throw await responseError(res, 'The note could not be located');
       return ((await res.json()) as { file: string; }).file;
     },
-  }), [enabled, piAvailable, session, target, notebooks, folders, connected, transcript, error, modelState, start, command, attach]);
+  }), [enabled, piAvailable, session, target, notebooks, folders, connected, transcript, error, modelState, commands, contextUsage, editorText, takeEditorText, loadCommands, start, command, attach]);
 
   return (
     <PiAgentTargetContext.Provider value={registerTarget}>

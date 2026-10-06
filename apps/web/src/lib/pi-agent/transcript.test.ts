@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyRecord, caretPosition, emptyTranscript, focusLabel, selectionPosition, splitFocus, stripTerminalStyles, transcriptFromMessages, type TranscriptState, withFocus } from './transcript.js';
+import { applyRecord, caretPosition, emptyTranscript, focusLabel, queuedText, selectionPosition, splitFocus, startShell, stripTerminalStyles, transcriptFromMessages, type TranscriptState, withFocus } from './transcript.js';
 
 const apply = (records: unknown[], state: TranscriptState = emptyTranscript) => records.reduce<TranscriptState>(applyRecord, state);
 
@@ -87,4 +87,44 @@ it("keeps Pi's whole pending queue from each queue_update, without the editor-co
   expect(state.queued).toEqual([{ kind: 'steer', text: 'look here' }, { kind: 'followUp', text: 'then this' }]);
   state = applyRecord(state, { type: 'queue_update', steering: [], followUp: [] });
   expect(state.queued).toEqual([]);
+});
+
+describe('commands, shell runs and compaction', () => {
+  const skill = '<skill name="review" location="/s/SKILL.md">\nReferences are relative to /s.\n\nBody\n</skill>';
+
+  it('shows an expanded skill as its command, in the history and in the queue', () => {
+    const state = transcriptFromMessages([{ role: 'user', content: `${skill}\n\nlook here` }, { role: 'user', content: skill }]);
+    expect(state.entries).toEqual([{ kind: 'user', key: 0, text: 'look here', skill: 'review' }, { kind: 'user', key: 1, text: '', skill: 'review' }]);
+    expect(apply([{ type: 'queue_update', steering: [`${skill}\n\nlater`], followUp: [] }]).queued).toEqual([{ kind: 'steer', text: '/skill:review later' }]);
+    expect(queuedText(skill)).toBe('/skill:review');
+  });
+
+  it('streams a shell run into its entry and settles it on the answer, even when another tab sent it', () => {
+    let state = startShell(emptyTranscript, 'b1', 'ls', false);
+    state = apply([{ type: 'bash_execution_update', id: 'b1', delta: 'a\n' }, { type: 'bash_execution_update', id: 'b1', delta: 'b\n' }, { type: 'response', id: 'b1', command: 'bash', success: true, data: { output: 'b\n', exitCode: 2, cancelled: false } }], state);
+    expect(state.entries).toEqual([{ kind: 'shell', key: 0, id: 'b1', command: 'ls', output: 'a\nb\n', excluded: false, running: false, exitCode: 2 }]);
+    const elsewhere = apply([{ type: 'bash_execution_update', id: 'b2', delta: 'x' }]);
+    expect(elsewhere.entries).toEqual([{ kind: 'shell', key: 0, id: 'b2', command: '', output: 'x', excluded: false, running: true }]);
+    const failed = apply([{ type: 'response', id: 'b1', command: 'bash', success: false, error: 'no shell' }], startShell(emptyTranscript, 'b1', 'ls', true));
+    expect(failed.entries).toEqual([{ kind: 'shell', key: 0, id: 'b1', command: 'ls', output: '', excluded: true, running: false }, { kind: 'notice', key: 1, level: 'error', text: 'bash: no shell' }]);
+  });
+
+  it('rebuilds shell runs from the history', () => {
+    expect(transcriptFromMessages([{ role: 'bashExecution', command: 'pwd', output: '/w\n', exitCode: 0, cancelled: false, truncated: false, excludeFromContext: true }]).entries).toEqual([{ kind: 'shell', key: 0, command: 'pwd', output: '/w\n', excluded: true, running: false, exitCode: 0 }]);
+  });
+
+  it("marks compaction while it runs and notes its end, leaving a failed /compact to its command's answer", () => {
+    expect(apply([{ type: 'compaction_start', reason: 'manual' }]).compacting).toBe(true);
+    const done = apply([{ type: 'compaction_start', reason: 'threshold' }, { type: 'compaction_end', reason: 'threshold', result: { summary: 's' } }]);
+    expect(done.compacting).toBe(false);
+    expect(done.entries).toEqual([{ kind: 'notice', key: 0, level: 'info', text: 'compacted' }]);
+    expect(apply([{ type: 'compaction_end', reason: 'manual', errorMessage: 'Compaction failed: x' }]).entries).toEqual([]);
+    expect(apply([{ type: 'compaction_end', reason: 'overflow', errorMessage: 'Compaction failed: x' }]).entries).toEqual([{ kind: 'notice', key: 0, level: 'error', text: 'Compaction failed: x' }]);
+  });
+
+  it("follows the conversation name and an extension's title", () => {
+    expect(apply([{ type: 'response', command: 'get_state', success: true, data: { sessionName: 'Plan' } }]).name).toBe('Plan');
+    expect(apply([{ type: 'session_info_changed', name: 'Plan' }, { type: 'session_info_changed' }]).name).toBeUndefined();
+    expect(apply([{ type: 'extension_ui_request', id: 't', method: 'setTitle', title: '\u001b[1mpi - notes\u001b[0m' }]).title).toBe('pi - notes');
+  });
 });

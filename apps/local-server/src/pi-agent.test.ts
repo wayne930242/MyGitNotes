@@ -26,6 +26,7 @@ process.stdin.on('data', chunk => {
   while ((index = buffer.indexOf('\\n')) >= 0) {
     const command = JSON.parse(buffer.slice(0, index));
     buffer = buffer.slice(index + 1);
+    if (command.type === 'bash') out({ id: command.id, type: 'response', command: 'bash', success: true, data: { output: 'ran ' + command.command, exitCode: 0, cancelled: false, truncated: false } });
     if (command.type === 'set_model') out({ id: command.id, type: 'response', command: 'set_model', success: true, data: { provider: command.provider, id: command.modelId } });
     if (command.type === 'get_state') out({ id: command.id, type: 'response', command: 'get_state', success: true, data: { isStreaming: false, sessionFile } });
     if (command.type === 'new_session') {
@@ -213,10 +214,12 @@ describe('pi agent bridge', () => {
     expect(second.records.filter(record => record.method === 'setStatus')).toEqual([expect.objectContaining({ statusKey: 'quota', statusText: '42%' })]);
   });
 
-  it('tells Pi it runs in the web chat, where dialogs work but the user cannot run a command handed to the terminal', () => {
+  it('tells Pi it runs in the web chat, where dialogs, slash commands and !commands work', () => {
     expect(WEB_CHAT_PROMPT).toContain('ask_user');
+    expect(WEB_CHAT_PROMPT).toContain('/skill:name');
+    expect(WEB_CHAT_PROMPT).toContain('/reload');
+    expect(WEB_CHAT_PROMPT).toContain('`!command`');
     expect(WEB_CHAT_PROMPT).toContain('robot_hand');
-    expect(WEB_CHAT_PROMPT).toContain('their own terminal');
     expect(WEB_CHAT_PROMPT).toContain('interjection');
   });
 
@@ -256,8 +259,17 @@ describe('pi agent bridge', () => {
     await post(base, 'POST');
     const client = connect(port, base);
     await client.opened;
-    client.send({ type: 'bash', command: 'id' });
+    client.send({ type: 'switch_session', sessionPath: '/etc/passwd' });
     expect(await client.next(record => record.type === 'bridge_error')).toMatchObject({ error: 'Command is not allowed.' });
+  });
+
+  it('forwards the shell commands the panel runs with !', async () => {
+    const { base, port } = await start();
+    await post(base, 'POST');
+    const client = connect(port, base);
+    await client.opened;
+    client.send({ id: 'shell', type: 'bash', command: 'id' });
+    expect(await client.next(record => record.type === 'response' && record.command === 'bash')).toMatchObject({ id: 'shell', success: true, data: { output: 'ran id' } });
   });
 
   it('refuses a socket or a session change from a non-loopback origin', async () => {

@@ -1,12 +1,14 @@
-import { ChevronDown, MessageSquarePlus, Power, Send, Square } from 'lucide-react';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { ChevronDown, MessageSquarePlus, Power, Send, Square, SquareTerminal } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Button } from '../Button.js';
 import { FolderPickerDialog } from '../FolderPickerDialog.js';
 import { Select } from '../Select.js';
 import { AgentDialogCard } from './AgentDialogCard.js';
 import { InfoDrawer, InfoToggles, useInfoSection } from './AgentInfo.js';
 import { AgentTranscript, type ChatLinks } from './AgentTranscript.js';
-import { type PiLocation, type PiSessionInfo, usePiAgent } from '../../lib/pi-agent/session.js';
+import { CommandMenu } from './CommandMenu.js';
+import { BUILTIN_COMMANDS, matchCommands, parseComposerInput, type PiCommand, slashQuery } from '../../lib/pi-agent/commands.js';
+import { type PiContextUsage, type PiEditorText, type PiLocation, type PiSessionInfo, usePiAgent } from '../../lib/pi-agent/session.js';
 import { type AgentFocus, focusLabel, selectionPosition } from '../../lib/pi-agent/transcript.js';
 import { useTranslation } from '../../lib/i18n/index.js';
 import './pi-agent.css';
@@ -71,6 +73,16 @@ function locationLabel(location: PiLocation | undefined, cwd: string | undefined
   return location.folder ? `${title} / ${location.folder}` : title;
 }
 
+/** Token counts as the usage badge's tooltip reads them: 1.2k, 200k. */
+const tokenCount = (tokens: number) => tokens < 1000 ? String(tokens) : `${Math.round(tokens / 100) / 10}k`.replace('.0k', 'k');
+
+/** How full the context window is, beside the info toggles; it turns to a warning as compaction nears. */
+function ContextUsage({ usage }: { usage: PiContextUsage; }) {
+  const { t } = useTranslation();
+  const label = t('piAgent.contextUsage', { tokens: usage.tokens === null ? '?' : tokenCount(usage.tokens), window: tokenCount(usage.contextWindow) });
+  return <span className='pi-agent-badge pi-agent-usage' data-tone={usage.percent !== null && usage.percent >= 80 ? 'warning' : undefined} title={label} aria-label={label}>{usage.percent === null ? '–' : `${Math.round(usage.percent)}%`}</span>;
+}
+
 /** A file as Pi should read it: relative to the folder Pi runs in when it lies inside, absolute otherwise. */
 function fromCwd(absolute: string, cwd: string | undefined): string {
   const base = cwd?.replace(/\/+$/, '');
@@ -86,11 +98,28 @@ export function AgentPanel() {
   const [mode, setMode] = useState(savedContextMode);
   const [switching, setSwitching] = useState(false);
   const [infoSection, setInfoSection] = useInfoSection();
+  const [highlight, setHighlight] = useState(0);
+  /** The draft the user closed the command menu on with Esc; the menu stays closed until the draft changes. */
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
+  const menuId = useId();
   const [file, setFile] = useState<{ path: string; absolute?: string; error?: string; } | null>(null);
   const caret = target?.caret ?? noCaret;
   const selection = useSyncExternalStore(caret.subscribe, caret.get);
   const position = target?.caret && target.content ? selectionPosition(target.content(), selection, target.lineNumberOffset) : undefined;
-  const { locate } = agent;
+  const { locate, loadCommands, editorText, takeEditorText } = agent;
+
+  // An extension (such as robot_hand) placed text in the message box for the user to review and send.
+  const [shownEditorText, setShownEditorText] = useState<PiEditorText | null>(null);
+  if (editorText && editorText !== shownEditorText) {
+    setShownEditorText(editorText);
+    setDraft(editorText.text);
+  }
+  useEffect(() => {
+    if (!editorText) return;
+    input.current?.focus();
+    takeEditorText(editorText);
+  }, [editorText, takeEditorText]);
 
   useEffect(() => {
     if (!target) return;
@@ -118,11 +147,29 @@ export function AgentPanel() {
   // Without a caret (a compilation pane), a line request sends the path alone, and the switch says so.
   const effectiveMode: ContextMode = mode === 'line' && !position ? 'path' : mode;
   const focus: AgentFocus | undefined = !located || effectiveMode === 'none' ? undefined : effectiveMode === 'line' && position ? { file: located, ...position } : { file: located };
+  const builtins = useMemo<PiCommand[]>(() => BUILTIN_COMMANDS.map(name => ({ name, source: 'builtin', description: t(`piAgent.command.${name}` as const), ...(name === 'name' ? { usage: ` <${t('piAgent.command.nameArgument')}>` } : name === 'compact' ? { usage: ` [${t('piAgent.command.compactArgument')}]` } : {}) })), [t]);
+  const query = ready && dismissed !== draft ? slashQuery(draft) : undefined;
+  const menuOpen = query !== undefined;
+  // The panel runs its built-ins itself, so a Pi command of the same name could never be reached.
+  const matches = useMemo(() => query === undefined ? [] : matchCommands([...builtins, ...agent.commands.filter(command => !(BUILTIN_COMMANDS as readonly string[]).includes(command.name))], query), [query, builtins, agent.commands]);
+  // Pi's commands change with /reload and installs, so the list is read afresh each time the menu opens.
+  useEffect(() => {
+    if (menuOpen) loadCommands();
+  }, [menuOpen, loadCommands]);
+  const active = Math.min(highlight, Math.max(matches.length - 1, 0));
+  const shell = parseComposerInput(draft).kind === 'shell';
+
   const send = () => {
     const text = draft.trim();
     if (!text || !ready) return;
-    agent.send(text, focus);
-    setDraft('');
+    if (agent.send(text, focus)) setDraft('');
+    // A built-in that is not ready to send, /name without a name, waits for its argument.
+    else if (parseComposerInput(text).kind === 'builtin') setDraft(`${text} `);
+  };
+  const pick = (command: PiCommand) => {
+    setDraft(`/${command.name} `);
+    setHighlight(0);
+    input.current?.focus();
   };
 
   return (
@@ -134,6 +181,8 @@ export function AgentPanel() {
           <span>{locationLabel(session?.location, session?.cwd, agent.notebooks) || t('piAgent.switchFolder')}</span>
           <ChevronDown aria-hidden='true' />
         </button>
+        {/* The conversation's name, which /name sets, else the title an extension gave it. */}
+        <span className='pi-agent-session-name' title={live ? agent.transcript.name ?? agent.transcript.title : undefined}>{live ? agent.transcript.name ?? agent.transcript.title : undefined}</span>
         <Button size='icon' title={t('piAgent.newConversation')} aria-label={t('piAgent.newConversation')} disabled={!ready} onClick={agent.newConversation}>
           <MessageSquarePlus aria-hidden='true' />
         </Button>
@@ -182,25 +231,54 @@ export function AgentPanel() {
             {!located && file?.error && <span className='pi-agent-focus-chip' title={file.error}>{target.path.slice(target.path.lastIndexOf('/') + 1)}</span>}
           </div>
         )}
-        <textarea
-          className='ui-control'
-          rows={3}
-          value={draft}
-          placeholder={t(ready ? 'piAgent.placeholder' : 'piAgent.connecting')}
-          aria-label={t('piAgent.message')}
-          disabled={!ready}
-          onChange={event => setDraft(event.target.value)}
-          onKeyDown={event => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              send();
-            }
-          }}
-        />
+        <div className='pi-agent-input'>
+          {menuOpen && <CommandMenu id={menuId} commands={matches} highlight={active} onPick={pick} />}
+          <textarea
+            ref={input}
+            className='ui-control'
+            rows={3}
+            value={draft}
+            placeholder={t(ready ? 'piAgent.placeholder' : 'piAgent.connecting')}
+            aria-label={t('piAgent.message')}
+            aria-controls={menuOpen ? menuId : undefined}
+            aria-activedescendant={menuOpen && matches.length ? `${menuId}-${active}` : undefined}
+            aria-autocomplete='list'
+            disabled={!ready}
+            onChange={event => {
+              setDraft(event.target.value);
+              setHighlight(0);
+            }}
+            onKeyDown={event => {
+              if (event.nativeEvent.isComposing) return;
+              if (menuOpen && matches.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+                event.preventDefault();
+                setHighlight((active + (event.key === 'ArrowDown' ? 1 : matches.length - 1)) % matches.length);
+                return;
+              }
+              if (menuOpen && event.key === 'Escape') {
+                event.preventDefault();
+                setDismissed(draft);
+                return;
+              }
+              // Tab completes the highlighted command; Enter does too, unless the name is already typed out in full.
+              const chosen = menuOpen ? matches[active] : undefined;
+              if (chosen && (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey && chosen.name !== query))) {
+                event.preventDefault();
+                pick(chosen);
+                return;
+              }
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                send();
+              }
+            }}
+          />
+        </div>
         <InfoDrawer section={infoSection} onClose={() => setInfoSection(null)} />
         <div className='pi-agent-dialog-actions'>
           <div className='pi-agent-indicators'>
             <InfoToggles section={infoSection} onToggle={setInfoSection} />
+            {live && agent.contextUsage && <ContextUsage usage={agent.contextUsage} />}
           </div>
           {agent.transcript.running && (
             <Button
@@ -214,10 +292,7 @@ export function AgentPanel() {
               {t('piAgent.abort')}
             </Button>
           )}
-          <Button type='submit' variant='primary' disabled={!ready || !draft.trim()}>
-            <Send aria-hidden='true' />
-            {t(agent.transcript.running ? 'piAgent.steer' : 'piAgent.send')}
-          </Button>
+          <Button type='submit' variant='primary' disabled={!ready || !draft.trim()}>{shell ? <SquareTerminal aria-hidden='true' /> : <Send aria-hidden='true' />}{t(shell ? 'piAgent.run' : agent.transcript.running ? 'piAgent.steer' : 'piAgent.send')}</Button>
         </div>
       </form>
     </section>

@@ -45,8 +45,12 @@ export interface PiSessionListener {
   close: () => void;
 }
 
-/** Commands a client may forward to Pi; everything else on the RPC surface stays out of the browser's reach. */
-const CLIENT_COMMANDS = new Set(['prompt', 'steer', 'follow_up', 'abort', 'clear_queue', 'new_session', 'get_state', 'get_messages', 'extension_ui_response', 'get_available_models', 'set_model', 'get_available_thinking_levels', 'set_thinking_level']);
+/**
+ * Commands a client may forward to Pi; everything else on the RPC surface stays out of the browser's reach.
+ * `bash` grants nothing Pi's own tools do not: the panel already drives a process that runs commands as this user.
+ * Commands that name a path (switch_session, export_html) stay out, so the bridge alone picks the files Pi opens.
+ */
+const CLIENT_COMMANDS = new Set(['prompt', 'steer', 'follow_up', 'abort', 'clear_queue', 'new_session', 'get_state', 'get_messages', 'extension_ui_response', 'get_available_models', 'set_model', 'get_available_thinking_levels', 'set_thinking_level', 'get_commands', 'compact', 'set_session_name', 'get_session_stats', 'bash', 'abort_bash']);
 const DIALOG_METHODS = new Set(['select', 'confirm', 'input', 'editor']);
 /** Fire-and-forget UI state keyed by extension; the latest of each is replayed to a client that attaches later. */
 const STATE_KEYS: Record<string, string> = { setStatus: 'statusKey', setWidget: 'widgetKey' };
@@ -59,7 +63,7 @@ export const TRUST_STATUS_KEY = 'mygitnotes-project-trust';
 /** The status key the same extension relays pi-mcp-adapter's server list under (kept equal to its MCP_STATUS_KEY). */
 export const MCP_STATUS_KEY = 'mygitnotes-mcp-servers';
 /** Appended to Pi's system prompt: what the web chat can and cannot do, which Pi cannot tell from RPC mode alone. */
-export const WEB_CHAT_PROMPT = ["You are running inside MyGitNotes' web chat panel, bridged to Pi in RPC mode. The user reads your replies in a browser and types into a plain chat box.", 'Interactive extension dialogs (ask_user choices, confirmations and text input) work there.', 'The user cannot run shell commands from that chat box, and tools that hand the user a command (such as robot_hand placing `! command` in the terminal prompt) do not reach it. When the user must run a command themselves, write it in your reply as a fenced code block and ask them to run it in their own terminal.', "A user message that arrives while you are working is the user's own interjection, typed in the same chat box and queued until your current tool calls finish; treat it as coming from the user and act on it.", "A message may begin with an <editor-context> block naming the file open in the user's editor, with the caret or selection; its path is relative to your working directory."].join('\n');
+export const WEB_CHAT_PROMPT = ["You are running inside MyGitNotes' web chat panel, bridged to Pi in RPC mode. The user reads your replies in a browser and types into a chat box.", 'Interactive extension dialogs (ask_user choices, confirmations and text input) work there, and so do slash commands: extension commands, /skill:name and prompt templates, plus /reload, /compact, /name and /new.', 'The user can run a shell command from that chat box by typing `!command` (its output joins your context) or `!!command` (kept out of your context), as in the terminal. A tool that places a command in the editor (such as robot_hand placing `! command` in the prompt) fills that chat box for the user to send.', "A user message that arrives while you are working is the user's own interjection, typed in the same chat box and queued until your current tool calls finish; treat it as coming from the user and act on it.", "A message may begin with an <editor-context> block naming the file open in the user's editor, with the caret or selection; its path is relative to your working directory."].join('\n');
 const STDERR_LIMIT = 8000;
 const SHUTDOWN_GRACE_MS = 5000;
 const KILL_GRACE_MS = 3000;

@@ -26,7 +26,7 @@ const notebooks: NotebookConfig[] = [{ id: 'nb', title: 'Notes', root: 'notes' }
 const folders: FolderItem[] = [{ notebookId: 'blog', path: 'drafts', title: 'Drafts', order: 0 }];
 
 function agent(overrides: Partial<PiAgentValue> = {}): PiAgentValue {
-  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { notebookId: 'nb', folder: null, repository: true }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, folders, connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, setModel: vi.fn(), setThinking: vi.fn(), error: '', start: vi.fn(async () => {}), send: vi.fn(), abort: vi.fn(async () => ''), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchFolder: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
+  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { notebookId: 'nb', folder: null, repository: true }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, folders, connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, setModel: vi.fn(), setThinking: vi.fn(), error: '', start: vi.fn(async () => {}), send: vi.fn(() => true), commands: [], loadCommands: vi.fn(), editorText: null, takeEditorText: vi.fn(), abort: vi.fn(async () => ''), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchFolder: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
 }
 
 function noteTarget(caret = createCaretStore()): AgentTarget {
@@ -118,7 +118,8 @@ it("shows Pi's own project-trust decision in a drawer between the message box an
   expect(toggle.closest('.pi-agent-dialog-actions')).toBeTruthy();
   fireEvent.click(toggle);
   const drawer = screen.getByRole('region', { name: 'Project trust' });
-  expect(drawer.previousElementSibling?.tagName).toBe('TEXTAREA');
+  // The message box sits in its wrapper with the command menu that floats above it.
+  expect(drawer.previousElementSibling?.querySelector('textarea')).toBe(screen.getByRole('textbox', { name: 'Message to Pi' }));
   expect(drawer.textContent).toContain('/trust');
   expect(localStorage.getItem('mygitnotes.piAgent.infoSection')).toBe('trust');
   cleanup();
@@ -211,4 +212,63 @@ it('shows messages Pi has queued while it works, and puts them back in the messa
   fireEvent.change(screen.getByRole('textbox', { name: 'Message to Pi' }), { target: { value: 'draft in progress' } });
   fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
   await waitFor(() => expect((screen.getByRole('textbox', { name: 'Message to Pi' }) as HTMLTextAreaElement).value).toBe('also check the intro\n\nthen summarize\n\ndraft in progress'));
+});
+
+it('offers the matching slash commands while the name is typed, completing one with Enter and sending it with the next', () => {
+  const value = agent({ commands: [{ name: 'reload', source: 'extension', description: 'Reload extensions' }, { name: 'skill:review', source: 'skill', description: 'Review code' }, { name: 'compact', source: 'extension' }] });
+  panel(value);
+  write('/re');
+  expect(value.loadCommands).toHaveBeenCalled();
+  const options = screen.getAllByRole('option').map(option => option.textContent);
+  // Prefix matches first; a Pi command named like a built-in is left out, since the panel runs the built-in.
+  expect(options).toEqual(['/reloadReload extensionsextension', '/skill:reviewReview codeskill']);
+  const box = screen.getByRole('textbox', { name: 'Message to Pi' });
+  fireEvent.keyDown(box, { key: 'Enter' });
+  expect((box as HTMLTextAreaElement).value).toBe('/reload ');
+  expect(screen.queryByRole('listbox')).toBeNull();
+  fireEvent.keyDown(box, { key: 'Enter' });
+  expect(value.send).toHaveBeenCalledWith('/reload', undefined);
+});
+
+it('lists the built-ins, moves through the menu with the arrows, and closes it with Esc', () => {
+  const value = agent();
+  panel(value);
+  write('/');
+  expect(screen.getAllByRole('option').map(option => option.querySelector('.pi-agent-command-name')?.textContent)).toEqual(['/compact [focus]', '/name <name>', '/new']);
+  const box = screen.getByRole('textbox', { name: 'Message to Pi' });
+  fireEvent.keyDown(box, { key: 'ArrowDown' });
+  expect(screen.getAllByRole('option')[1].getAttribute('aria-selected')).toBe('true');
+  fireEvent.keyDown(box, { key: 'Tab' });
+  expect((box as HTMLTextAreaElement).value).toBe('/name ');
+  write('/n');
+  fireEvent.keyDown(box, { key: 'Escape' });
+  expect(screen.queryByRole('listbox')).toBeNull();
+  expect(value.send).not.toHaveBeenCalled();
+});
+
+it('keeps /name waiting for its argument when the provider cannot send it yet', () => {
+  const value = agent({ send: vi.fn(() => false) });
+  panel(value);
+  write('/name');
+  const box = screen.getByRole('textbox', { name: 'Message to Pi' });
+  // The typed-out name sends rather than completing.
+  fireEvent.keyDown(box, { key: 'Enter' });
+  expect(value.send).toHaveBeenCalledWith('/name', undefined);
+  expect((box as HTMLTextAreaElement).value).toBe('/name ');
+});
+
+it('labels a shell command Run, fills the message box when an extension sets its text, and shows how full the context is', () => {
+  const value = agent({ contextUsage: { tokens: 164_000, contextWindow: 200_000, percent: 82 } });
+  panel(value);
+  write('!ls -la');
+  expect(screen.getByRole('button', { name: 'Run' })).toBeTruthy();
+  const usage = screen.getByLabelText('Context: 164k of 200k tokens');
+  expect(usage.textContent).toBe('82%');
+  expect(usage.getAttribute('data-tone')).toBe('warning');
+  cleanup();
+  const editorText = { text: '! pnpm test', serial: 1 };
+  const filled = agent({ editorText });
+  panel(filled);
+  expect((screen.getByRole('textbox', { name: 'Message to Pi' }) as HTMLTextAreaElement).value).toBe('! pnpm test');
+  expect(filled.takeEditorText).toHaveBeenCalledWith(editorText);
 });

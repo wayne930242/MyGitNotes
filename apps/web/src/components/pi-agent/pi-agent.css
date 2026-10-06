@@ -3,11 +3,13 @@
 .pi-agent-status { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--color-sidebar); color: var(--color-muted); font-size: 11px; font-weight: 600; }
 .pi-agent-status[data-status='ready'] { background: var(--color-primary-light); color: var(--color-primary); }
 .pi-agent-status[data-status='exited'] { background: var(--color-danger-soft); color: var(--color-danger); }
-.pi-agent-cwd { display: inline-flex; flex: 0 1 auto; align-items: center; gap: 2px; min-width: 0; margin-right: auto; padding: 2px 4px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--color-muted); font-size: 12px; cursor: pointer; }
+.pi-agent-cwd { display: inline-flex; flex: 0 1 auto; align-items: center; gap: 2px; min-width: 0; padding: 2px 4px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--color-muted); font-size: 12px; cursor: pointer; }
 .pi-agent-cwd > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pi-agent-cwd svg { flex: none; width: 12px; height: 12px; }
 .pi-agent-cwd:hover, .pi-agent-cwd[aria-expanded='true'] { background: var(--color-sidebar); color: var(--color-text); }
 .pi-agent-header .ui-icon-button svg { width: 15px; height: 15px; }
+/* The conversation's name trails the folder in the header's free space; empty, it still pushes the buttons to the end. */
+.pi-agent-session-name { flex: 0 1 auto; min-width: 0; margin-right: auto; overflow: hidden; color: var(--color-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .pi-agent-transcript { flex: 1; min-height: 0; padding: 10px; overflow-y: auto; }
 .pi-agent-transcript-content { display: flex; flex-direction: column; gap: 10px; }
 .pi-agent-empty, .pi-agent-hint { color: var(--color-muted); line-height: 1.5; }
@@ -107,3 +109,19 @@
 .pi-agent-queue { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .pi-agent-queue li { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 8px; border: 1px dashed var(--color-border); border-radius: var(--radius-panel); color: var(--color-muted); font-size: 12px; }
 .pi-agent-queue-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A sent message's chips: the skill it ran and the file it named. */
+.pi-agent-chips { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.pi-agent-chips .pi-agent-focus-chip[data-kind='skill'] { color: var(--color-primary); }
+.pi-agent-usage { margin-left: 4px; font-variant-numeric: tabular-nums; cursor: default; }
+
+/* The slash-command menu floats over the end of the conversation, just above the message box that drives it. */
+.pi-agent-input { position: relative; display: flex; flex-direction: column; }
+.pi-agent-commands { position: absolute; right: 0; bottom: calc(100% + 4px); left: 0; z-index: 20; max-height: 220px; margin: 0; padding: 4px; overflow-y: auto; list-style: none; border: 1px solid var(--color-border); border-radius: var(--radius-panel); background: var(--color-surface); box-shadow: 0 4px 16px color-mix(in srgb, var(--color-scrim) 13%, transparent); }
+.pi-agent-commands li { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 6px; border-radius: var(--radius-control); cursor: pointer; }
+.pi-agent-commands li[aria-selected='true'], .pi-agent-commands li:hover { background: var(--color-sidebar); }
+.pi-agent-commands li.pi-agent-commands-empty { color: var(--color-muted); cursor: default; }
+.pi-agent-commands li.pi-agent-commands-empty:hover { background: none; }
+.pi-agent-command-name { flex: none; max-width: 60%; overflow: hidden; color: var(--color-text); font: 600 12px ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.pi-agent-command-usage { color: var(--color-muted); font-weight: 400; }
+.pi-agent-command-description { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--color-muted); text-overflow: ellipsis; white-space: nowrap; }

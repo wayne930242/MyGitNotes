@@ -11,7 +11,22 @@ export interface AgentFocus {
 
 export type AssistantBlock = { type: 'text'; text: string; } | { type: 'thinking'; text: string; } | { type: 'toolCall'; id: string; name: string; args: unknown; };
 
-export type TranscriptEntry = { kind: 'user'; key: number; text: string; focus?: AgentFocus; } | { kind: 'assistant'; key: number; blocks: AssistantBlock[]; error?: string; } | { kind: 'notice'; key: number; level: 'info' | 'warning' | 'error'; text: string; };
+export type TranscriptEntry = { kind: 'user'; key: number; text: string; focus?: AgentFocus; skill?: string; } | { kind: 'assistant'; key: number; blocks: AssistantBlock[]; error?: string; } | { kind: 'notice'; key: number; level: 'info' | 'warning' | 'error'; text: string; } | ShellEntry;
+
+/** A shell command the user ran with `!` (or `!!`, kept out of Pi's context), streaming its output until Pi answers. */
+export interface ShellEntry {
+  kind: 'shell';
+  key: number;
+  /** The `bash` request id its output streams under; absent for one rebuilt from the history. */
+  id?: string;
+  /** Empty when another tab ran it, since only the id reaches the clients that did not send it. */
+  command: string;
+  output: string;
+  excluded: boolean;
+  running: boolean;
+  exitCode?: number;
+  cancelled?: boolean;
+}
 
 export interface ToolOutcome {
   text: string;
@@ -41,6 +56,12 @@ export interface TranscriptState {
   widgets: Record<string, string[]>;
   /** Messages Pi holds until the run reaches them: steering after the current tool calls, follow-ups once it ends. */
   queued: QueuedMessage[];
+  /** Pi is summarizing the conversation, by /compact or because the context filled up. */
+  compacting: boolean;
+  /** The conversation's display name, which /name sets. */
+  name?: string;
+  /** A title an extension set for the terminal window, which the panel shows when the conversation has no name. */
+  title?: string;
   nextKey: number;
 }
 
@@ -49,7 +70,7 @@ export interface QueuedMessage {
   text: string;
 }
 
-export const emptyTranscript: TranscriptState = { entries: [], tools: {}, dialogs: [], running: false, statuses: {}, widgets: {}, queued: [], nextKey: 0 };
+export const emptyTranscript: TranscriptState = { entries: [], tools: {}, dialogs: [], running: false, statuses: {}, widgets: {}, queued: [], compacting: false, nextKey: 0 };
 
 const CONTEXT_OPEN = '<editor-context>';
 const CONTEXT_CLOSE = '</editor-context>';
@@ -83,6 +104,24 @@ export function splitFocus(message: string): { text: string; focus?: AgentFocus;
   if (line !== undefined) return { text, focus: { file, line: Number(line), column: Number(column) } };
   if (start !== undefined) return { text, focus: { file, line: Number(start), column: Number(startColumn), endLine: Number(end), endColumn: Number(endColumn) } };
   return { text, focus: { file } };
+}
+
+const SKILL_PATTERN = /^<skill name="([^"]+)" location="[^"]*">\n[\s\S]*?\n<\/skill>(?:\n\n|$)/;
+
+/**
+ * Splits a sent message for display: the skill Pi expanded `/skill:name` into, then the focus prefix. A skill
+ * reads as its command, since its whole body otherwise fills the transcript.
+ */
+export function splitUserMessage(message: string): { text: string; focus?: AgentFocus; skill?: string; } {
+  const skill = SKILL_PATTERN.exec(message);
+  if (!skill) return splitFocus(message);
+  return { ...splitFocus(message.slice(skill[0].length)), skill: skill[1] };
+}
+
+/** A queued message as the user typed it, so taking it back restores the command rather than the skill's body. */
+export function queuedText(message: string): string {
+  const { text, skill } = splitUserMessage(message);
+  return skill ? `/skill:${skill}${text ? ` ${text}` : ''}` : text;
 }
 
 /** Where a caret or selection sits in file lines: the caret's line and column, plus the selection's end when there is one. */
@@ -135,7 +174,10 @@ function append(state: TranscriptState, entry: NewEntry): TranscriptState {
 /** Adds one finished message; returns the state unchanged for roles the panel does not show. */
 function addMessage(state: TranscriptState, message: unknown): TranscriptState {
   if (!isRecord(message)) return state;
-  if (message.role === 'user') return append(state, { kind: 'user', ...splitFocus(contentText(message.content)) });
+  if (message.role === 'user') return append(state, { kind: 'user', ...splitUserMessage(contentText(message.content)) });
+  if (message.role === 'bashExecution') {
+    return append(state, { kind: 'shell', command: String(message.command ?? ''), output: String(message.output ?? ''), excluded: message.excludeFromContext === true, running: false, ...(typeof message.exitCode === 'number' ? { exitCode: message.exitCode } : {}), ...(message.cancelled === true ? { cancelled: true } : {}) });
+  }
   if (message.role === 'assistant') {
     const error = message.stopReason === 'error' || message.stopReason === 'aborted' ? String(message.errorMessage || message.stopReason) : undefined;
     return append(state, { kind: 'assistant', blocks: assistantBlocks(message.content), ...(error ? { error } : {}) });
@@ -197,6 +239,7 @@ function applyUiRequest(state: TranscriptState, record: PiRecord): TranscriptSta
     const dialog: AgentDialog = { id: record.id, method: method as AgentDialog['method'], title: String(record.title ?? ''), ...(typeof record.message === 'string' ? { message: record.message } : {}), ...(Array.isArray(record.options) ? { options: record.options.map(String) } : {}), ...(typeof record.placeholder === 'string' ? { placeholder: record.placeholder } : {}), ...(typeof record.prefill === 'string' ? { prefill: record.prefill } : {}) };
     return { ...state, dialogs: [...state.dialogs, dialog] };
   }
+  if (method === 'setTitle') return { ...state, title: typeof record.title === 'string' && record.title ? stripTerminalStyles(record.title) : undefined };
   if (method === 'notify') {
     const level = record.notifyType === 'error' || record.notifyType === 'warning' ? record.notifyType : 'info';
     return append(state, { kind: 'notice', level, text: stripTerminalStyles(String(record.message ?? '')) });
@@ -209,6 +252,35 @@ function applyUiRequest(state: TranscriptState, record: PiRecord): TranscriptSta
     const { [record.widgetKey]: _, ...widgets } = state.widgets;
     return { ...state, widgets: Array.isArray(record.widgetLines) ? { ...widgets, [record.widgetKey]: record.widgetLines.map(line => stripTerminalStyles(String(line))) } : widgets };
   }
+  return state;
+}
+
+/** Starts the transcript entry for a shell command this tab sent, before its output arrives. */
+export function startShell(state: TranscriptState, id: string, command: string, excluded: boolean): TranscriptState {
+  return append(state, { kind: 'shell', id, command, output: '', excluded, running: true });
+}
+
+/** Updates the shell entry streaming under `id`, starting one when another tab sent the command. */
+function updateShell(state: TranscriptState, id: string, update: (entry: ShellEntry) => ShellEntry): TranscriptState {
+  const index = state.entries.findIndex(entry => entry.kind === 'shell' && entry.id === id);
+  if (index < 0) {
+    const started = startShell(state, id, '', false);
+    return { ...started, entries: [...started.entries.slice(0, -1), update(started.entries.at(-1) as ShellEntry)] };
+  }
+  const entries = [...state.entries];
+  entries[index] = update(entries[index] as ShellEntry);
+  return { ...state, entries };
+}
+
+function applyResponse(state: TranscriptState, record: PiRecord): TranscriptState {
+  if (record.command === 'bash' && typeof record.id === 'string') {
+    const data = isRecord(record.data) ? record.data : {};
+    const ended = updateShell(state, record.id, entry => ({ ...entry, running: false, output: entry.output || String(data.output ?? ''), ...(typeof data.exitCode === 'number' ? { exitCode: data.exitCode } : {}), ...(data.cancelled === true ? { cancelled: true } : {}) }));
+    if (record.success !== false) return ended;
+    return append(ended, { kind: 'notice', level: 'error', text: `bash: ${String(record.error ?? '')}` });
+  }
+  if (record.success === false) return append(state, { kind: 'notice', level: 'error', text: `${String(record.command ?? '')}: ${String(record.error ?? '')}` });
+  if (record.command === 'get_state' && isRecord(record.data)) return { ...state, name: typeof record.data.sessionName === 'string' && record.data.sessionName ? record.data.sessionName : undefined };
   return state;
 }
 
@@ -239,12 +311,24 @@ export function applyRecord(state: TranscriptState, record: unknown): Transcript
     case 'bridge_ui_resolved':
       return { ...state, dialogs: state.dialogs.filter(dialog => dialog.id !== record.id) };
     case 'response':
-      return record.success === false ? append(state, { kind: 'notice', level: 'error', text: `${String(record.command ?? '')}: ${String(record.error ?? '')}` }) : state;
+      return applyResponse(state, record);
+    case 'bash_execution_update':
+      return typeof record.id === 'string' ? updateShell(state, record.id, entry => ({ ...entry, output: entry.output + String(record.delta ?? '') })) : state;
+    case 'compaction_start':
+      return { ...state, compacting: true };
+    case 'compaction_end': {
+      const settled = { ...state, compacting: false };
+      if (isRecord(record.result)) return append(settled, { kind: 'notice', level: 'info', text: 'compacted' });
+      // A failed /compact also fails its command, whose response reports it; automatic compaction has none.
+      return typeof record.errorMessage === 'string' && record.reason !== 'manual' ? append(settled, { kind: 'notice', level: 'error', text: record.errorMessage }) : settled;
+    }
+    case 'session_info_changed':
+      return { ...state, name: typeof record.name === 'string' && record.name ? record.name : undefined };
     case 'bridge_error':
     case 'extension_error':
       return append(state, { kind: 'notice', level: 'error', text: String(record.error ?? '') });
     case 'queue_update': {
-      const texts = (value: unknown) => Array.isArray(value) ? value.map(text => splitFocus(String(text)).text) : [];
+      const texts = (value: unknown) => Array.isArray(value) ? value.map(text => queuedText(String(text))) : [];
       return { ...state, queued: [...texts(record.steering).map(text => ({ kind: 'steer' as const, text })), ...texts(record.followUp).map(text => ({ kind: 'followUp' as const, text }))] };
     }
     case 'auto_retry_start':

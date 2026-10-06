@@ -1,8 +1,8 @@
-import { AlertTriangle, CircleCheck, CircleX, Info, LoaderCircle, Wrench } from 'lucide-react';
+import { AlertTriangle, CircleCheck, CircleX, Info, LoaderCircle, SquareTerminal, Wrench } from 'lucide-react';
 import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { NoteHtml } from '../NoteHtml.js';
 import { type ChatLinkBase, renderChatMarkdown } from '../../lib/markdown.js';
-import { type AssistantBlock, focusLabel, type TranscriptState } from '../../lib/pi-agent/transcript.js';
+import { type AssistantBlock, focusLabel, type ShellEntry, type TranscriptState } from '../../lib/pi-agent/transcript.js';
 import { useTranslation } from '../../lib/i18n/index.js';
 
 const OUTPUT_LIMIT = 4000;
@@ -32,7 +32,29 @@ function ToolCall({ block, transcript }: { block: Extract<AssistantBlock, { type
         <Icon aria-label={t(`piAgent.tool.${state}`)} className='pi-agent-tool-state' />
       </summary>
       {block.args !== undefined && <pre className='pi-agent-pre'>{JSON.stringify(block.args, null, 2)}</pre>}
-      {output && <pre className='pi-agent-pre'>{output.length > OUTPUT_LIMIT ? `${output.slice(0, OUTPUT_LIMIT)}\n…` : output}</pre>}
+      {output && <pre className='pi-agent-pre'>{clip(output)}</pre>}
+    </details>
+  );
+}
+
+const clip = (output: string) => output.length > OUTPUT_LIMIT ? `${output.slice(0, OUTPUT_LIMIT)}\n…` : output;
+
+/** A command the user ran with `!`, in a tool call's card: `!!` marks one kept out of Pi's context. */
+function ShellRun({ entry }: { entry: ShellEntry; }) {
+  const { t } = useTranslation();
+  const state = entry.running ? 'running' : entry.cancelled || (entry.exitCode !== undefined && entry.exitCode !== 0) ? 'error' : 'done';
+  const Icon = state === 'running' ? LoaderCircle : state === 'error' ? CircleX : CircleCheck;
+  const label = entry.cancelled ? t('piAgent.shell.cancelled') : entry.exitCode !== undefined && entry.exitCode !== 0 ? t('piAgent.shell.exit', { code: entry.exitCode }) : t(`piAgent.tool.${state}`);
+  return (
+    <details className='pi-agent-tool pi-agent-shell' data-state={state} open={entry.running || undefined}>
+      <summary>
+        <SquareTerminal aria-hidden='true' />
+        <span className='pi-agent-tool-name'>{entry.excluded ? '!!' : '!'}</span>
+        <span className='pi-agent-tool-args' title={entry.command}>{entry.command}</span>
+        {entry.excluded && <span className='pi-agent-badge' title={t('piAgent.shell.excludedHint')}>{t('piAgent.shell.excluded')}</span>}
+        <Icon aria-label={label} className='pi-agent-tool-state' />
+      </summary>
+      {entry.output && <pre className='pi-agent-pre'>{clip(entry.output)}</pre>}
     </details>
   );
 }
@@ -103,12 +125,7 @@ export function AgentTranscript({ transcript, links, children }: { transcript: T
         {transcript.entries.length === 0 && !transcript.streaming && <p className='pi-agent-empty'>{t('piAgent.empty')}</p>}
         {transcript.entries.map(entry => {
           if (entry.kind === 'user') {
-            return (
-              <div key={entry.key} className='pi-agent-message' data-role='user'>
-                {entry.focus && <span className='pi-agent-focus-chip' title={entry.focus.file}>{focusLabel(entry.focus)}</span>}
-                <p className='pi-agent-text'>{entry.text}</p>
-              </div>
-            );
+            return <div key={entry.key} className='pi-agent-message' data-role='user'>{(entry.skill || entry.focus) && <span className='pi-agent-chips'>{entry.skill && <span className='pi-agent-focus-chip' data-kind='skill' title={t('piAgent.skillChip')}>/skill:{entry.skill}</span>}{entry.focus && <span className='pi-agent-focus-chip' title={entry.focus.file}>{focusLabel(entry.focus)}</span>}</span>}{entry.text && <p className='pi-agent-text'>{entry.text}</p>}</div>;
           }
           if (entry.kind === 'assistant') {
             return (
@@ -118,6 +135,7 @@ export function AgentTranscript({ transcript, links, children }: { transcript: T
               </div>
             );
           }
+          if (entry.kind === 'shell') return <ShellRun key={entry.key} entry={entry} />;
           const Icon = NOTICE_ICONS[entry.level];
           return (
             <p key={entry.key} className='pi-agent-notice' data-level={entry.level}>
@@ -131,10 +149,10 @@ export function AgentTranscript({ transcript, links, children }: { transcript: T
             <Blocks blocks={transcript.streaming} transcript={transcript} links={links} />
           </div>
         )}
-        {transcript.running && !transcript.streaming && (
+        {(transcript.compacting || (transcript.running && !transcript.streaming)) && (
           <p className='pi-agent-working'>
             <LoaderCircle aria-hidden='true' />
-            {t('piAgent.working')}
+            {t(transcript.compacting ? 'piAgent.compacting' : 'piAgent.working')}
           </p>
         )}
         {children}
