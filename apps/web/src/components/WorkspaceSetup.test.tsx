@@ -24,9 +24,11 @@ function serve(session: unknown) {
     throw new Error(`Unexpected request ${url}`);
   });
 }
+/** Lets pending fetches and the state they set settle. */
+const settle = () => act(async () => new Promise(resolve => setTimeout(resolve, 0)));
 async function render(element: ReturnType<typeof createElement>) {
   await act(async () => root.render(element));
-  await act(async () => new Promise(resolve => setTimeout(resolve, 0)));
+  await settle();
 }
 const button = (text: string) => [...container.querySelectorAll('button')].find(candidate => candidate.textContent?.includes(text)) as HTMLButtonElement;
 
@@ -67,10 +69,12 @@ it('lists repositories, opens the chosen one and shows why a choice failed', asy
   await act(async () => button('team/handbook').click());
   expect(container.querySelector<HTMLInputElement>('input[placeholder="trunk"]')).not.toBeNull();
   await act(async () => button('Open repository').click());
+  await settle();
   expect(container.querySelector('[role="alert"]')?.textContent).toBe('Branch nope does not exist in team/handbook.');
   await act(async () => button('visitor/notes').click());
   await act(async () => button('Open repository').click());
-  expect(JSON.parse(String(requests.at(-1)!.init!.body))).toEqual({ repository: 'visitor/notes' });
+  await settle();
+  expect(JSON.parse(String(requests.filter(request => request.url === '/api/workspace/choice').at(-1)!.init!.body))).toEqual({ repository: 'visitor/notes' });
   expect(assign).toHaveBeenCalledWith('/');
   vi.unstubAllGlobals();
 });
@@ -81,6 +85,7 @@ it('commits the derived manifest and reloads the workspace', async () => {
   const config: WorkspaceConfig = { schema_version: 3, workspace: { title: 'notes', default_notebook: 'journal' }, notebooks: [{ id: 'journal', title: 'journal', root: 'journal' }] };
   await render(createElement(DerivedManifestNotice, { config, configRevision: 'abc', canWrite: true, onCreated }));
   await act(async () => button('Create manifest').click());
+  await settle();
   expect(updateWorkspaceConfig).toHaveBeenCalledWith(expect.stringContaining('default_notebook: journal'), 'abc');
   expect(onCreated).toHaveBeenCalled();
 });

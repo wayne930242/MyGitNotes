@@ -51,7 +51,9 @@ export function RepositoryPicker({ login }: { login?: string; }) {
   const [answer, setAnswer] = useState<AvailableAnswer | null>(null);
   const [selected, setSelected] = useState<AvailableRepository | null>(null);
   const [branch, setBranch] = useState('');
-  const [error, setError] = useState('');
+  // Listing and opening fail separately, so a list that loads again does not hide why opening failed.
+  const [listError, setListError] = useState('');
+  const [openError, setOpenError] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
@@ -61,9 +63,9 @@ export function RepositoryPicker({ login }: { login?: string; }) {
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || t('setup.listFailed'));
         setAnswer(body);
-        setError('');
+        setListError('');
       }).catch((reason: Error) => {
-        if (reason.name !== 'AbortError') setError(reason.message);
+        if (reason.name !== 'AbortError') setListError(reason.message);
       });
     }, query ? 250 : 0);
     return () => {
@@ -74,17 +76,18 @@ export function RepositoryPicker({ login }: { login?: string; }) {
   const open = async () => {
     if (!selected) return;
     setBusy(true);
-    setError('');
+    setOpenError('');
     try {
       const response = await fetch('/api/workspace/choice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository: selected.fullName, branch: branch.trim() || undefined }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || t('setup.chooseFailed'));
       window.location.assign('/');
     } catch (reason) {
-      setError((reason as Error).message);
+      setOpenError((reason as Error).message);
       setBusy(false);
     }
   };
+  const error = openError || listError;
   return (
     <SetupCard>
       <p className='mb-4 text-sm text-muted'>{t('setup.chooseDescription')}</p>
@@ -92,7 +95,7 @@ export function RepositoryPicker({ login }: { login?: string; }) {
         <Search size={16} aria-hidden='true' className='text-muted' />
         <input aria-label={t('setup.searchRepositories')} placeholder={t('setup.searchRepositories')} value={query} onChange={event => setQuery(event.target.value)} className='flex-1 min-w-0 bg-transparent focus:outline-none' />
       </label>
-      {!answer && !error && <LoadingStatus className='mb-3'>{t('setup.loadingRepositories')}</LoadingStatus>}
+      {!answer && !listError && <LoadingStatus className='mb-3'>{t('setup.loadingRepositories')}</LoadingStatus>}
       {answer && (
         <ul className='flex flex-col gap-1 max-h-80 overflow-y-auto mb-3' aria-label={t('setup.repositories')}>
           {answer.repositories.map(repository => (
