@@ -1573,4 +1573,12 @@ export const zhTW: Record<TranslationKey, string> = {
   'setup.featureGraph': '連結、標籤與知識圖譜，串起你寫下的所有內容。',
   'setup.featureGit': 'Repository 就是唯一的副本：歷史、分支與備份都是一般的 Git。',
   'setup.privacy': 'MyGitNotes 只能存取你授權給它 GitHub App 的 repository；登入狀態保存在這個瀏覽器，不存在我們的伺服器。',
+  'setup.createRepository': '建立新的筆記 repository',
+  'setup.createSteps': '在 GitHub 完成建立',
+  'setup.createStepGitHub': '在剛開啟的 GitHub 頁面按下建立，名稱和範本都已經填好。',
+  'setup.createStepGrant': '把新的 repository 授權給 MyGitNotes。',
+  'setup.createStepReturn': '回到這個頁面，新的 repository 會自動選取。',
+  'setup.reopenGitHub': '重新開啟頁面',
+  'setup.grantNew': '前往授權',
+  'setup.refreshList': '重新整理清單',
 };

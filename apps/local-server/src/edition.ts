@@ -5,6 +5,8 @@
 export { applicationRoot, type AppServices, createApp } from './app.js';
 export { type AuthServices, authToken, createAuth, CredentialRejected, credentialToken, grantsRouter, signInRouter } from './auth.js';
 export { createPiAgent, type PiAgent } from './pi-agent.js';
+export { type BrowserSessions, cookieSessions, requestCookies, sessionCookie, storedSessions } from './browser-sessions.js';
+export { availableRepositories, type AvailableRepository, choosesRepository, chosenRepositorySource, cookieWorkspaceChoices, type WorkspaceChoice, type WorkspaceChoices } from './workspace-choice.js';
 export { createRemoteCache } from './remote-cache-store.js';
 export { openWorkspace, requestWorkspace, workspaceOf } from './request-workspace.js';
 export { createRecordStore, DirectoryRecordBackend, type GrantSummary, type RecordBackend, type RecordStore, RedisRecordBackend, sealedElsewhere, SealedRecordStore, type StoredRecord } from './record-store/index.js';

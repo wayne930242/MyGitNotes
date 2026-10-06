@@ -124,6 +124,9 @@ SESSION_SECRET=<output of openssl rand -hex 32>
 
 Deploy as in [Connect GitHub Actions](#connect-github-actions) and [Deploy and verify](#deploy-and-verify), then open the domain: it shows the sign-in screen, and after sign-in the repository picker.
 
+A visitor without a notes repository chooses **Create a new notes repository** in the picker: GitHub's new-repository page opens prefilled with the starter template, and once they create it and grant it to the app, the picker selects it.
+The template defaults to the public [`wayne930242/mygitnotes-starter`](https://github.com/wayne930242/mygitnotes-starter); set `MYGITNOTES_STARTER_TEMPLATE=<owner>/<name>` to offer your own template repository instead.
+
 Any deployment can use these cookie sessions with `MYGITNOTES_STORAGE=cookie`; Vercel uses them automatically when no Redis is configured.
 A deployment that sets `MYGITNOTES_REPOSITORY` keeps serving that one repository, with or without Redis.
 

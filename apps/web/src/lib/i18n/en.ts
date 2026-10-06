@@ -1572,6 +1572,14 @@ export const en = {
   'setup.featureGraph': 'Links, tags and a knowledge graph across everything you write.',
   'setup.featureGit': 'Your repository stays the only copy: history, branches and backups are plain Git.',
   'setup.privacy': 'MyGitNotes only reaches the repositories you grant to its GitHub App, and your sign-in is kept in this browser, not on our server.',
+  'setup.createRepository': 'Create a new notes repository',
+  'setup.createSteps': 'Finish on GitHub',
+  'setup.createStepGitHub': 'Create the repository on the GitHub page that opened; its name and template are filled in.',
+  'setup.createStepGrant': 'Grant the new repository to MyGitNotes.',
+  'setup.createStepReturn': 'Come back to this page; the new repository is selected for you.',
+  'setup.reopenGitHub': 'Open the page again',
+  'setup.grantNew': 'Grant access',
+  'setup.refreshList': 'Refresh list',
 };
 
 export type TranslationKey = keyof typeof en;

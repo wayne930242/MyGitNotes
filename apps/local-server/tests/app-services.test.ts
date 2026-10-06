@@ -6,6 +6,7 @@ import { repositoryRef, type WorkspaceConfigSource, WorkspaceSetupError } from '
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
 import { DirectoryRecordBackend, type RecordStore, SealedRecordStore } from '../src/record-store/index.js';
+import type { WorkspaceChoices } from '../src/repository-choice.js';
 
 let server: Server | undefined;
 let dir: string;
@@ -70,4 +71,16 @@ it('serves the web build from the injected directory', async () => {
   fs.writeFileSync(path.join(web, 'index.html'), '<title>Pro</title>');
   const base = await listen(createApp(dir, { configSource: noWorkspaceYet, remoteCache: undefined, webDist: web }));
   expect(await fetch(`${base}/settings`).then(response => response.text())).toContain('<title>Pro</title>');
+});
+
+it("keeps visitors' repository choices in the injected service", async () => {
+  vi.stubEnv('MYGITNOTES_SOURCE', 'github');
+  vi.stubEnv('MYGITNOTES_REPOSITORY', '');
+  vi.stubEnv('MYGITNOTES_STORAGE', 'directory');
+  const signedOut = vi.fn(async () => {});
+  const workspaceChoices: WorkspaceChoices = { read: async () => ({ repository: 'octo/notes', branch: 'main' }), write: async () => {}, clear: async () => {}, signedOut };
+  const base = await listen(createApp(dir, { workspaceChoices, remoteCache: undefined }));
+  expect(await fetch(`${base}/api/auth/session`).then(response => response.json())).toMatchObject({ repositoryChoice: true, workspace: { repository: 'octo/notes', branch: 'main' } });
+  await fetch(`${base}/api/auth/logout`, { method: 'POST' });
+  expect(signedOut).toHaveBeenCalledOnce();
 });

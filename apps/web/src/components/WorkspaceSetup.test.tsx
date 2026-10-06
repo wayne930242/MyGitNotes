@@ -12,14 +12,15 @@ let root: Root;
 let container: HTMLElement;
 let requests: { url: string; init?: RequestInit; }[];
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-const repositories = { repositories: [{ fullName: 'visitor/notes', defaultBranch: 'main', private: true, updatedAt: '2026-10-01T00:00:00Z' }, { fullName: 'team/handbook', defaultBranch: 'trunk', private: false, updatedAt: '2026-09-01T00:00:00Z' }], total: 2, installUrl: 'https://github.com/apps/my-notes/installations/new' };
+const repositories = { repositories: [{ fullName: 'visitor/notes', defaultBranch: 'main', private: true, updatedAt: '2026-10-01T00:00:00Z' }, { fullName: 'team/handbook', defaultBranch: 'trunk', private: false, updatedAt: '2026-09-01T00:00:00Z' }], total: 2, githubApp: true, installUrl: 'https://github.com/apps/my-notes/installations/new', newRepositoryUrl: 'https://github.com/new?template_owner=wayne930242&template_name=mygitnotes-starter' };
+let available = repositories;
 
 function serve(session: unknown) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = String(input);
     requests.push({ url, init });
     if (url === '/api/auth/session') return json(session);
-    if (url.startsWith('/api/repositories/available')) return json(repositories);
+    if (url.startsWith('/api/repositories/available')) return json(available);
     if (url === '/api/workspace/choice') return JSON.parse(String(init?.body)).repository === 'team/handbook' ? json({ error: 'Branch nope does not exist in team/handbook.' }, 404) : json({ choice: { repository: 'visitor/notes', branch: 'main' } });
     throw new Error(`Unexpected request ${url}`);
   });
@@ -37,6 +38,7 @@ beforeEach(() => {
   // The setup screens apply the theme themselves, which follows the system colour scheme.
   window.matchMedia = ((query: string) => ({ matches: false, media: query, onchange: null, addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false })) as unknown as typeof window.matchMedia;
   requests = [];
+  available = repositories;
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -93,4 +95,24 @@ it('commits the derived manifest and reloads the workspace', async () => {
   await settle();
   expect(updateWorkspaceConfig).toHaveBeenCalledWith(expect.stringContaining('default_notebook: journal'), 'abc');
   expect(onCreated).toHaveBeenCalled();
+});
+
+it('walks a visitor through creating a repository on GitHub and selects it when they return', async () => {
+  serve({ authenticated: true, login: 'visitor', repositoryChoice: true, workspace: null });
+  const open = vi.spyOn(window, 'open').mockReturnValue(null);
+  await render(createElement(WorkspaceGate, null, createElement('p', null, 'workspace')));
+  await act(async () => button('Create a new notes repository').click());
+  await settle();
+  expect(open).toHaveBeenCalledWith(repositories.newRepositoryUrl, '_blank', 'noopener');
+  expect(container.textContent).toContain('Finish on GitHub');
+  expect(container.querySelector('section a[href="https://github.com/apps/my-notes/installations/new"]')).not.toBeNull();
+  // Back from GitHub before the repository exists: nothing new to select yet.
+  await act(async () => window.dispatchEvent(new Event('focus')));
+  await settle();
+  expect(container.querySelector('[aria-pressed="true"]')).toBeNull();
+  available = { ...repositories, repositories: [{ fullName: 'visitor/my-notes', defaultBranch: 'main', private: true, updatedAt: '2026-10-07T00:00:00Z' }, ...repositories.repositories], total: 3 };
+  await act(async () => window.dispatchEvent(new Event('focus')));
+  await settle();
+  expect(button('visitor/my-notes').getAttribute('aria-pressed')).toBe('true');
+  expect(container.textContent).not.toContain('Finish on GitHub');
 });

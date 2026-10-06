@@ -7,7 +7,7 @@ import { BOOKMARKS_DOCUMENT, classifyResource, FOCUS_DOCUMENT, isProductAgentDoc
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRecordStore, NoRecordStore, type RecordStore, storageMode } from './record-store/index.js';
 import { type BrowserSessions, cookieSessions, storedSessions } from './browser-sessions.js';
-import { choosesRepository, chosenRepositorySource, workspaceChoiceRouter } from './workspace-choice.js';
+import { choosesRepository, chosenRepositorySource, cookieWorkspaceChoices, workspaceChoiceRouter, type WorkspaceChoices } from './workspace-choice.js';
 import { createRemoteMCP } from './mcp.js';
 import { createRemoteCoreUpdateRouter } from './remote-core-update.js';
 import { createLocalApp } from './local-app.js';
@@ -37,6 +37,8 @@ export interface AppServices {
   recordStore: RecordStore;
   /** Where browser sign-ins live: the record store, or sealed cookies in the lightweight mode. */
   sessions: BrowserSessions;
+  /** Where visitors' repository choices are kept, where the deployment lets them choose; defaults to a sealed cookie. */
+  workspaceChoices: WorkspaceChoices;
   /** The remote read cache; defaults to Redis when configured, else process memory. Local workspaces use none. */
   remoteCache?: RemoteCache;
   piAgent?: PiAgent;
@@ -50,12 +52,13 @@ export interface AppServices {
 }
 
 export function createApp(base: string, overrides: Partial<AppServices> = {}): express.Express {
-  const configSource = overrides.configSource ?? chosenRepositorySource(base);
+  const workspaceChoices = overrides.workspaceChoices ?? cookieWorkspaceChoices();
+  const configSource = overrides.configSource ?? chosenRepositorySource(base, process.env, workspaceChoices);
   const local = configSource.mode === 'local';
   // The lightweight mode keeps sign-ins in cookies and nothing on the server; local workspaces never use it.
   const lightweight = !local && storageMode() === 'cookie';
   const recordStore = overrides.recordStore ?? (lightweight ? new NoRecordStore() : createRecordStore(base));
-  const services: AppServices = { ...overrides, configSource, recordStore, sessions: overrides.sessions ?? (lightweight ? cookieSessions() : storedSessions(recordStore)), remoteCache: 'remoteCache' in overrides ? overrides.remoteCache : local ? undefined : createRemoteCache(), webDist: overrides.webDist ?? path.join(base, 'apps/web/dist') };
+  const services: AppServices = { ...overrides, configSource, recordStore, workspaceChoices, sessions: overrides.sessions ?? (lightweight ? cookieSessions() : storedSessions(recordStore)), remoteCache: 'remoteCache' in overrides ? overrides.remoteCache : local ? undefined : createRemoteCache(), webDist: overrides.webDist ?? path.join(base, 'apps/web/dist') };
   const { remoteCache: cache, piAgent, sessions } = services;
   const app = express();
   app.disable('x-powered-by');
@@ -79,8 +82,8 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   // held to the repository size limit, so the MCP route parses ahead of the shared 8 MiB ceiling.
   if (r2SettingsFromEnv()) app.use('/mcp', express.json({ limit: '64mb' }));
   app.use(express.json({ limit: '8mb' }));
-  app.use('/api/auth', createAuth({ store: recordStore, sessions, configSource }));
-  app.use('/api', workspaceChoiceRouter({ store: recordStore, sessions }));
+  app.use('/api/auth', createAuth({ store: recordStore, sessions, configSource, choices: workspaceChoices }));
+  app.use('/api', workspaceChoiceRouter({ store: recordStore, sessions, choices: workspaceChoices }));
   services.routes?.(app, services);
   // Product reference documents come from this Core checkout, not from the workspace being served.
   app.get('/api/agent-resources/read', (req, res, next) => {

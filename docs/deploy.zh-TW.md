@@ -124,6 +124,9 @@ SESSION_SECRET=<openssl rand -hex 32 的輸出>
 
 依 [連接 GitHub Actions](#連接-github-actions) 與 [部署與驗證](#部署與驗證) 部署後開啟網域：先出現登入畫面，登入後出現儲存庫選擇畫面。
 
+沒有筆記儲存庫的訪客，可在選擇畫面按「建立新的筆記 repository」：會開啟已預填範本的 GitHub 新儲存庫頁面，建立並授權給 App 後，選擇畫面會自動選取它。
+範本預設為公開的 [`wayne930242/mygitnotes-starter`](https://github.com/wayne930242/mygitnotes-starter)；設定 `MYGITNOTES_STARTER_TEMPLATE=<owner>/<name>` 可改用你自己的範本儲存庫。
+
 任何部署都能以 `MYGITNOTES_STORAGE=cookie` 改用 cookie session；Vercel 在沒有設定 Redis 時會自動使用。
 有設定 `MYGITNOTES_REPOSITORY` 的部署仍固定使用該儲存庫，有沒有 Redis 都一樣。
 

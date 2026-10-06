@@ -1,23 +1,21 @@
 import { deploymentConfigSource, parseSourceConfig, repositoryRef, SourceError, type WorkspaceConfigSource, WorkspaceSetupError } from '@mygitnotes/core';
 import { type Request, type Response, Router } from 'express';
 import { authToken, type SessionServices } from './auth.js';
-import { cookieOptions, workspaceChoiceCookie } from './browser-sessions.js';
-import { seal } from './record-store/index.js';
-import { choiceLifetime, choosesRepository, readWorkspaceChoice, type WorkspaceChoice } from './repository-choice.js';
+import { choosesRepository, cookieWorkspaceChoices, type WorkspaceChoice, type WorkspaceChoices } from './repository-choice.js';
 
-export { choosesRepository, readWorkspaceChoice, type WorkspaceChoice } from './repository-choice.js';
+export { choosesRepository, cookieWorkspaceChoices, readWorkspaceChoice, type WorkspaceChoice, type WorkspaceChoices } from './repository-choice.js';
 
 /**
  * The deployment's configuration source; when it chooses no repository, each request serves the repository
  * in the visitor's choice cookie, and one without a choice asks them to pick (`choose-repository`).
  */
-export function chosenRepositorySource(base: string, env: NodeJS.ProcessEnv = process.env): WorkspaceConfigSource {
+export function chosenRepositorySource(base: string, env: NodeJS.ProcessEnv = process.env, choices: WorkspaceChoices = cookieWorkspaceChoices()): WorkspaceConfigSource {
   const deployment = deploymentConfigSource(base, env);
   if (!choosesRepository(env)) return deployment;
   return {
     mode: 'remote',
     async settings(request) {
-      const choice = readWorkspaceChoice(request.headers.cookie);
+      const choice = await choices.read(request);
       if (!choice) throw new WorkspaceSetupError('Choose a GitHub repository to open.', 'choose-repository');
       return { home: repositoryRef({ type: 'github', ...choice }), localPath: () => undefined, manifest: inHomeRepository => inHomeRepository() };
     },
@@ -70,10 +68,19 @@ export async function availableRepositories(token: string, githubApp: boolean): 
 }
 
 const githubApp = () => process.env.GITHUB_APP_TYPE === 'github-app';
+const defaultStarter = 'wayne930242/mygitnotes-starter';
+/**
+ * GitHub's own page for a new private repository from the starter template, prefilled through its documented
+ * query parameters; creating it there needs no extra permission for the app.
+ */
+export function newRepositoryUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const [owner, name] = (env.MYGITNOTES_STARTER_TEMPLATE || defaultStarter).split('/');
+  return `https://github.com/new?${new URLSearchParams({ template_owner: owner, template_name: name, name: 'my-notes', visibility: 'private', description: 'My MyGitNotes notes' })}`;
+}
 const pageSize = 50;
 
 /** Listing repositories, and choosing or forgetting the visitor's repository; mounted ahead of the workspace routes. */
-export function workspaceChoiceRouter(services: SessionServices): Router {
+export function workspaceChoiceRouter(services: SessionServices & { choices: WorkspaceChoices; }): Router {
   const router = Router();
   const token = async (req: Request, res: Response) => {
     const value = await authToken(req, res, services, { type: 'github' });
@@ -89,7 +96,7 @@ export function workspaceChoiceRouter(services: SessionServices): Router {
       const query = typeof req.query.query === 'string' ? req.query.query.trim().toLowerCase() : '';
       const all = await availableRepositories(await token(req, res), githubApp());
       const matching = query ? all.filter(repository => repository.fullName.toLowerCase().includes(query)) : all;
-      res.json({ repositories: matching.slice(0, pageSize), total: matching.length, githubApp: githubApp(), installUrl: process.env.GITHUB_APP_SLUG ? `https://github.com/apps/${encodeURIComponent(process.env.GITHUB_APP_SLUG)}/installations/new` : null, current: readWorkspaceChoice(req.headers.cookie) });
+      res.json({ repositories: matching.slice(0, pageSize), total: matching.length, githubApp: githubApp(), installUrl: process.env.GITHUB_APP_SLUG ? `https://github.com/apps/${encodeURIComponent(process.env.GITHUB_APP_SLUG)}/installations/new` : null, newRepositoryUrl: newRepositoryUrl(), current: await services.choices.read(req) });
     } catch (error) {
       fail(res, error);
     }
@@ -107,15 +114,19 @@ export function workspaceChoiceRouter(services: SessionServices): Router {
       parseSourceConfig({ source: { type: 'github', repository: found.full_name, branch } }, '.');
       if (requested && !(await github(value, `/repos/${found.full_name}/branches/${encodeURIComponent(branch)}`)).body) throw new SourceError(`Branch ${branch} does not exist in ${found.full_name}.`, 404);
       const choice: WorkspaceChoice = { repository: found.full_name, branch };
-      res.cookie(workspaceChoiceCookie, seal(choice), { ...cookieOptions(), maxAge: choiceLifetime * 1000 });
+      await services.choices.write(req, res, choice);
       res.json({ choice });
     } catch (error) {
       fail(res, error instanceof Error && !(error instanceof SourceError) && /Configure source/.test(error.message) ? new SourceError('That branch name is not valid.', 400) : error);
     }
   });
-  router.delete('/workspace/choice', (_req, res) => {
-    res.clearCookie(workspaceChoiceCookie, cookieOptions());
-    res.json({ success: true });
+  router.delete('/workspace/choice', async (req, res) => {
+    try {
+      await services.choices.clear(req, res);
+      res.json({ success: true });
+    } catch (error) {
+      fail(res, error);
+    }
   });
   return router;
 }

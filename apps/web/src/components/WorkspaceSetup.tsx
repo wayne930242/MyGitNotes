@@ -1,5 +1,5 @@
-import { type ReactNode, useEffect, useState } from 'react';
-import { ArrowLeftRight, ExternalLink, GitBranch, Languages, ListTree, Lock, LogOut, Network, Search, ShieldCheck } from 'lucide-react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { ArrowLeftRight, ExternalLink, GitBranch, Languages, ListTree, Lock, LogOut, Network, Plus, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { Button } from './Button.js';
 import { AuthControls, ConnectionState } from './AuthControls.js';
 import { LoadingStatus } from './LoadingStatus.js';
@@ -27,7 +27,10 @@ interface AvailableRepository {
 interface AvailableAnswer {
   repositories: AvailableRepository[];
   total: number;
+  githubApp: boolean;
   installUrl: string | null;
+  /** GitHub's page for a new repository from the starter template. */
+  newRepositoryUrl: string;
 }
 
 const FEATURES = [{ icon: ListTree, key: 'setup.featureNotes' }, { icon: Network, key: 'setup.featureGraph' }, { icon: GitBranch, key: 'setup.featureGit' }] as const;
@@ -107,6 +110,17 @@ export function RepositoryPicker({ login }: { login?: string; }) {
   const [listError, setListError] = useState('');
   const [openError, setOpenError] = useState('');
   const [busy, setBusy] = useState(false);
+  // While a visitor creates a repository on GitHub: the unfiltered list from before, so the one that appears can be selected.
+  const creation = useRef<{ before: Set<string> | null; } | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    if (!creating) return;
+    // Returning from the GitHub tab lists the repositories again.
+    const refresh = () => setReload(count => count + 1);
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, [creating]);
   useEffect(() => {
     const controller = new AbortController();
     // Typing settles before the list is asked for, so each keystroke does not list the account again.
@@ -116,6 +130,18 @@ export function RepositoryPicker({ login }: { login?: string; }) {
         if (!response.ok) throw new Error(body.error || t('setup.listFailed'));
         setAnswer(body);
         setListError('');
+        const pending = creation.current;
+        if (pending && !query) {
+          const names = (body as AvailableAnswer).repositories.map(repository => repository.fullName);
+          const created = pending.before && (body as AvailableAnswer).repositories.find(repository => !pending.before!.has(repository.fullName));
+          if (!pending.before) pending.before = new Set(names);
+          else if (created) {
+            setSelected(created);
+            setBranch('');
+            creation.current = null;
+            setCreating(false);
+          }
+        }
       }).catch((reason: Error) => {
         if (reason.name !== 'AbortError') setListError(reason.message);
       });
@@ -124,7 +150,19 @@ export function RepositoryPicker({ login }: { login?: string; }) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, t]);
+  }, [query, reload, t]);
+  const startCreating = () => {
+    if (!answer) return;
+    window.open(answer.newRepositoryUrl, '_blank', 'noopener');
+    // A filtered list is not a full picture of what existed, so the next unfiltered one becomes the baseline.
+    creation.current = { before: query ? null : new Set(answer.repositories.map(repository => repository.fullName)) };
+    setQuery('');
+    setCreating(true);
+  };
+  const stopCreating = () => {
+    creation.current = null;
+    setCreating(false);
+  };
   const open = async () => {
     if (!selected) return;
     setBusy(true);
@@ -176,6 +214,43 @@ export function RepositoryPicker({ login }: { login?: string; }) {
         </ul>
       )}
       {answer && answer.total > answer.repositories.length && <p className='text-xs text-muted mb-3'>{t('setup.moreRepositories', { count: answer.total - answer.repositories.length })}</p>}
+      {answer && !creating && (
+        <button type='button' onClick={startCreating} className='w-full flex items-center justify-center gap-2 mb-3 px-3 py-2 rounded-lg border border-dashed border-line text-sm text-muted hover:text-fg hover:bg-fg/5 transition'>
+          <Plus size={16} aria-hidden='true' />
+          {t('setup.createRepository')}
+        </button>
+      )}
+      {answer && creating && (
+        <section aria-label={t('setup.createSteps')} className='mb-3 p-3 rounded-lg bg-sidebar text-sm'>
+          <h3 className='font-semibold mb-2'>{t('setup.createSteps')}</h3>
+          <ol className='list-decimal pl-5 flex flex-col gap-2'>
+            <li>
+              {t('setup.createStepGitHub')}{' '}
+              <a href={answer.newRepositoryUrl} target='_blank' rel='noreferrer' className='inline-flex items-center gap-1 text-primary'>
+                {t('setup.reopenGitHub')}
+                <ExternalLink size={12} aria-hidden='true' />
+              </a>
+            </li>
+            {answer.githubApp && answer.installUrl && (
+              <li>
+                {t('setup.createStepGrant')}{' '}
+                <a href={answer.installUrl} target='_blank' rel='noreferrer' className='inline-flex items-center gap-1 text-primary'>
+                  {t('setup.grantNew')}
+                  <ExternalLink size={12} aria-hidden='true' />
+                </a>
+              </li>
+            )}
+            <li>{t('setup.createStepReturn')}</li>
+          </ol>
+          <div className='flex items-center gap-3 mt-3'>
+            <Button onClick={() => setReload(count => count + 1)}>
+              <RefreshCw size={14} aria-hidden='true' />
+              {t('setup.refreshList')}
+            </Button>
+            <button type='button' onClick={stopCreating} className='text-sm text-muted hover:text-fg'>{t('common.cancel')}</button>
+          </div>
+        </section>
+      )}
       {selected && (
         <label className='flex flex-col gap-1 mb-3 text-sm'>
           <span>{t('setup.branch')}</span>

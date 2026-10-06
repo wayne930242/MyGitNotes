@@ -2,8 +2,8 @@ import { type SourceConfig, SourceError, sourceIdentity, type WorkspaceConfigSou
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { createHash } from 'node:crypto';
-import { type BrowserSessions, cookieOptions, workspaceChoiceCookie } from './browser-sessions.js';
-import { choosesRepository, readWorkspaceChoice } from './repository-choice.js';
+import type { BrowserSessions } from './browser-sessions.js';
+import { choosesRepository, cookieWorkspaceChoices, type WorkspaceChoices } from './repository-choice.js';
 import { digest, random, recordLifetime as lifetime, type RecordStore, redisRestConnection, sealedElsewhere, type StoredRecord } from './record-store/index.js';
 
 export { seal, unseal } from './record-store/index.js';
@@ -119,6 +119,8 @@ export async function authToken(req: Request, res: Response, { store, sessions }
 }
 export interface AuthServices extends SessionServices {
   configSource: WorkspaceConfigSource;
+  /** Where visitors' repository choices are kept; defaults to the sealed cookie. */
+  choices?: WorkspaceChoices;
 }
 /** Sign-in and persistent agent grants, mounted at /api/auth. */
 export function createAuth(services: AuthServices): Router {
@@ -141,7 +143,7 @@ const providerSiteOf = (configSource: WorkspaceConfigSource) => async (req: Requ
 const sessionProbeRefreshMs = 10 * 60_000;
 /** Provider sign-in, the session probe and logout. */
 export function signInRouter(services: AuthServices): Router {
-  const { store, sessions, configSource } = services;
+  const { store, sessions, configSource, choices = cookieWorkspaceChoices() } = services;
   const router = Router(), providerSite = providerSiteOf(configSource);
   router.get('/session', async (req, res) => {
     try {
@@ -157,7 +159,7 @@ export function signInRouter(services: AuthServices): Router {
       }
       const serverStoreReady = sessions.kind === 'cookie' || !process.env.VERCEL || Boolean(redisRestConnection().url && redisRestConnection().token) || Boolean(process.env.REDIS_URL);
       // Where visitors choose their repository, the app shows the sign-in screen or the picker until they have one.
-      const choice = choosesRepository() ? { repositoryChoice: true, workspace: readWorkspaceChoice(req.headers.cookie) } : {};
+      const choice = choosesRepository() ? { repositoryChoice: true, workspace: await choices.read(req) } : {};
       res.json({ authenticated: Boolean(session), login: session?.login, provider: provider.type, loginUrl: `/api/auth/${provider.type}`, storage: sessions.kind, ...choice, configured: Boolean(provider.clientId && provider.clientSecret && process.env.SESSION_SECRET && serverStoreReady) });
     } catch {
       res.status(503).json({ error: 'Session store or source configuration unavailable.' });
@@ -207,9 +209,8 @@ export function signInRouter(services: AuthServices): Router {
   });
   router.post('/logout', async (req, res) => {
     try {
+      await choices.signedOut(req, res);
       await sessions.clear(req, res);
-      // The repository a visitor chose belongs to their sign-in.
-      res.clearCookie(workspaceChoiceCookie, cookieOptions());
       res.json({ success: true });
     } catch {
       res.status(503).json({ error: 'Session store unavailable.' });

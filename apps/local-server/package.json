@@ -8,7 +8,8 @@
   "types": "./src/edition.ts",
   "exports": {
     ".": "./src/edition.ts",
-    "./testing/record-store-contract": "./src/record-store/contract.ts"
+    "./testing/record-store-contract": "./src/record-store/contract.ts",
+    "./testing/workspace-choices-contract": "./src/workspace-choices-contract.ts"
   },
   "scripts": {
     "build": "tsc && node ../write-build-info.mjs",
