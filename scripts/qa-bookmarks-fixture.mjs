@@ -35,7 +35,7 @@ try {
   delete process.env.APP_URL;
   delete process.env.VERCEL;
   const configSource = { mode: 'local', settings: async () => ({ home: repositoryRef({ type: 'local', path: home.root }), localPath: ref => ref.id === 'github:fixture/bookmarks-other@main' ? other.root : undefined, manifest: inHome => inHome() }) };
-  server = createServer(createApp(product, configSource));
+  server = createServer(createApp(product, { configSource }));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port, base = `http://127.0.0.1:${port}`;
   const workspace = await fetch(`${base}/api/workspace`).then(response => response.json());

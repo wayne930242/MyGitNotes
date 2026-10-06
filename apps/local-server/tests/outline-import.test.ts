@@ -37,7 +37,7 @@ beforeEach(async () => {
   const configSource: WorkspaceConfigSource = { mode: 'local', settings: async () => ({ home, localPath: ref => ref.id === 'github:owner/other@main' ? roots[1] : undefined, manifest: inHome => inHome() }) };
   vi.stubEnv('APP_URL', '');
   vi.stubEnv('VERCEL', '');
-  server = createServer(createApp(roots[0], configSource));
+  server = createServer(createApp(roots[0], { configSource }));
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
 });

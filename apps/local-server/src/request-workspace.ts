@@ -4,6 +4,7 @@ import type express from 'express';
 import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, localManifest, type NotebookConfig, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { authToken } from './auth.js';
+import type { RecordStore } from './record-store/index.js';
 import { regularPath } from './workspace-files.js';
 
 export interface LocalHandle {
@@ -70,7 +71,7 @@ function sameDirectory(candidate: string | undefined, root: string): boolean {
 }
 
 /** Resolves the request's workspace once and stores it in `res.locals.workspace`. */
-export function requestWorkspace(base: string, configSource: WorkspaceConfigSource, cache?: RemoteCache): express.RequestHandler {
+export function requestWorkspace(store: RecordStore, configSource: WorkspaceConfigSource, cache?: RemoteCache): express.RequestHandler {
   return async (req, res, next) => {
     let settings: WorkspaceSettings;
     try {
@@ -82,7 +83,7 @@ export function requestWorkspace(base: string, configSource: WorkspaceConfigSour
     let token: string | undefined;
     if (settings.home.source.type !== 'local') {
       try {
-        token = await authToken(req, base, settings.home.source);
+        token = await authToken(req, store, settings.home.source);
       } catch {
         return res.status(401).json({ error: 'Session unavailable. Sign in again.' });
       }

@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 const mock = vi.hoisted(() => ({ createClient: vi.fn() }));
 vi.mock('redis', () => ({ createClient: mock.createClient }));
 import { nativeRedisCommand } from '../src/redis-store.js';
-import { SessionStore } from '../src/auth.js';
+import { createRecordStore, recordKeyPrefix, RedisRecordBackend } from '../src/record-store/index.js';
 
 function client() {
   const instance = {
@@ -31,7 +31,7 @@ it('shares the native connection across stores and prefers it over REST credenti
   vi.stubEnv('REDIS_URL', 'redis://compose-test:6379');
   vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://unused.example.test');
   vi.stubEnv('SESSION_SECRET', 'test-secret'.repeat(5));
-  const first = new SessionStore('/unused'), second = new SessionStore('/unused');
+  const first = createRecordStore('/unused'), second = createRecordStore('/unused');
   await Promise.all([first.set('a'.repeat(43), { kind: 'session' }), second.set('b'.repeat(43), { kind: 'agent' }, null)]);
   expect(mock.createClient).toHaveBeenCalledTimes(1);
   expect(redis.sendCommand.mock.calls[0][0]).toEqual(expect.arrayContaining(['EX', '2592000']));
@@ -44,7 +44,7 @@ it('reports failures without credentials or a filesystem fallback and reconnects
   broken.sendCommand.mockRejectedValue(new Error('redis://user:private-password@unavailable'));
   mock.createClient.mockReturnValueOnce(broken).mockReturnValueOnce(recovered);
   vi.stubEnv('REDIS_URL', 'rediss://failure-test:6379');
-  const store = new SessionStore('/unused');
+  const store = new RedisRecordBackend(recordKeyPrefix());
   await expect(store.command(['PING'])).rejects.toThrow(/^Session store unavailable\.$/);
   expect(broken.destroy).toHaveBeenCalledOnce();
   await expect(store.command(['PING'])).resolves.toBe('OK');

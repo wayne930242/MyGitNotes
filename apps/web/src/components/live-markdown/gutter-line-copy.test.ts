@@ -19,11 +19,7 @@ afterEach(() => {
 it('numbers a block widget by its first line and records every line it replaces, offset as the gutter is', () => {
   const doc = ['one', ':::note', 'body', ':::', 'five'].join('\n');
   // Lines 2 to 4 render as one block widget, as a collapsed directive does; a block widget between lines replaces none.
-  const widgets = StateField.define({
-    create: state => Decoration.set([Decoration.replace({ widget: new Box(), block: true }).range(state.doc.line(2).from, state.doc.line(4).to), Decoration.widget({ widget: new Box(), block: true, side: 1 }).range(state.doc.length)]),
-    update: value => value,
-    provide: field => EditorView.decorations.from(field),
-  });
+  const widgets = StateField.define({ create: state => Decoration.set([Decoration.replace({ widget: new Box(), block: true }).range(state.doc.line(2).from, state.doc.line(4).to), Decoration.widget({ widget: new Box(), block: true, side: 1 }).range(state.doc.length)]), update: value => value, provide: field => EditorView.decorations.from(field) });
   const offset = { current: 10 };
   view = new EditorView({ state: EditorState.create({ doc, extensions: [widgets, lineNumbers({ formatNumber: number => String(number + offset.current) }), blockWidgetLineNumbers(offset)] }), parent: document.body });
   const markers = [...view.dom.querySelectorAll<HTMLElement>('[data-line-first]')].map(marker => [marker.textContent, marker.dataset.lineFirst, marker.dataset.lineLast]);

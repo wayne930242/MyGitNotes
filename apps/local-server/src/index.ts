@@ -24,7 +24,7 @@ if (isLocal) {
 }
 // The agent panel bridges to a Pi process on this machine, so only a local workspace offers it.
 const piAgent = configSource.mode === 'local' ? createPiAgent() : undefined;
-const app = createApp(repoRoot, configSource, { piAgent });
+const app = createApp(repoRoot, { configSource, piAgent });
 
 function listen(port: number, attemptsLeft: number): Promise<AddressInfo> {
   return new Promise((resolve, reject) => {

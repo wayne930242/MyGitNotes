@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
-import { SessionStore } from '../src/auth.js';
+import { createRecordStore } from '../src/record-store/index.js';
 
 const R2 = { MYGITNOTES_R2_ACCOUNT_ID: 'acc', MYGITNOTES_R2_ACCESS_KEY_ID: 'AK', MYGITNOTES_R2_SECRET_ACCESS_KEY: 'r2-secret', MYGITNOTES_R2_BUCKET: 'private-assets' };
 const MANIFEST = 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n';
@@ -71,7 +71,7 @@ describe('R2 asset authorization', () => {
       return new Response(JSON.stringify(value), { status: 200 });
     });
     await start({ ...R2, GITHUB_NOTES_SOURCE: 'github', GITHUB_NOTES_REPOSITORY: 'owner/private', GITHUB_NOTES_BRANCH: 'main' });
-    await new SessionStore(root).set(session, { kind: 'session', token: 'reader-token', userId: 1 });
+    await createRecordStore(root).set(session, { kind: 'session', token: 'reader-token', userId: 1 });
 
     expect((await get(`${KEY_URL}?note=notes/ex/rules.md`)).status).toBe(404);
     const reader = { Cookie: `gh_notes_session=${session}` };

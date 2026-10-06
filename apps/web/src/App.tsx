@@ -83,6 +83,7 @@ import { RightPanel } from './components/RightPanel.js';
 import { FileManager, FileManagerDialog, FileMetadata } from './components/files/index.js';
 import { AgentSystemView } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
+import { useAccountControls } from './lib/web-features.js';
 import { CommitModal } from './components/CommitModal.js';
 import { Breadcrumbs } from './components/Breadcrumbs.js';
 import { FolderIndex } from './components/FolderIndex.js';
@@ -100,6 +101,7 @@ const NO_NOTEBOOKS: NotebookConfig[] = [];
 const AppContent: React.FC = () => {
   useVisualViewport();
   const { t } = useTranslation();
+  const renderAccountControls = useAccountControls();
   const { sortField, sortOrder, handleSortChange } = useNoteSort();
 
   const { folderReorder, setFolderReorder, filtersOpen, setFiltersOpen, location, queryState, setFilterQuery } = useFilterSidebar();
@@ -401,7 +403,7 @@ const AppContent: React.FC = () => {
                 </div>
               )}
               {/* Top Header */}
-              <Header unavailableNotebooks={repositories.filter(repository => repository.unavailable).flatMap(repository => repository.notebooks)} workspaceTitle={config?.workspace.title || 'MyGitNotes'} accountControls={<AuthControls local={!remote} />} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} onSelectNotebook={id => void setSelectedNotebookId(id)} notebookDisabled={loading || resourceNavigationBusy || notebookSwitchBusy} activeTab={activeTab} setActiveTab={setActiveTab} onCreateNote={() => void createNote()} createNoteDisabled={!canWrite} onOpenCommands={() => setShortcutMode('palette')} navigationDisabled={noteEditorOpen || isCommitOpen} />
+              <Header unavailableNotebooks={repositories.filter(repository => repository.unavailable).flatMap(repository => repository.notebooks)} workspaceTitle={config?.workspace.title || 'MyGitNotes'} accountControls={renderAccountControls ? renderAccountControls({ local: !remote }) : <AuthControls local={!remote} />} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} onSelectNotebook={id => void setSelectedNotebookId(id)} notebookDisabled={loading || resourceNavigationBusy || notebookSwitchBusy} activeTab={activeTab} setActiveTab={setActiveTab} onCreateNote={() => void createNote()} createNoteDisabled={!canWrite} onOpenCommands={() => setShortcutMode('palette')} navigationDisabled={noteEditorOpen || isCommitOpen} />
               <KeyboardShortcuts
                 mode={shortcutMode}
                 onModeChange={setShortcutMode}

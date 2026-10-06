@@ -5,7 +5,8 @@ import path from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
 import { loadSourceConfig } from '@mygitnotes/core';
-import { credentialToken, SessionStore } from '../src/auth.js';
+import { credentialToken } from '../src/auth.js';
+import { createRecordStore, RedisRecordBackend } from '../src/record-store/index.js';
 import { gitlabFixture } from '../../../packages/core/tests/fixtures/gitlab.js';
 
 let root: string, server: Server, base: string, fixture: ReturnType<typeof gitlabFixture>, refreshes: number, cookie: string;
@@ -121,11 +122,11 @@ describe('GitLab HTTP and MCP integration', () => {
   });
   it('refreshes one shared credential for concurrent browser/MCP calls and preserves grants after logout until revocation', async () => {
     await login();
-    const store = new SessionStore(root), session = await store.get(cookie.split('=')[1]);
+    const store = createRecordStore(root), session = await store.get(cookie.split('=')[1]);
     const grant = await fetch(`${base}/api/auth/agent-token`, post({ name: 'reader', write: false })).then(r => r.json());
     const credential = await store.get(session.credential);
     await store.set(session.credential, { ...credential, upstreamExpiresAt: Date.now() - 1000 }, null);
-    expect(await Promise.all([credentialToken(root, session.credential, loadSourceConfig(root)), credentialToken(root, session.credential, loadSourceConfig(root))])).toEqual(['refreshed-token', 'refreshed-token']);
+    expect(await Promise.all([credentialToken(createRecordStore(root), session.credential, loadSourceConfig(root)), credentialToken(createRecordStore(root), session.credential, loadSourceConfig(root))])).toEqual(['refreshed-token', 'refreshed-token']);
     expect(refreshes).toBe(1);
     expect((await store.get(session.credential)).refreshToken).toBe('rotated-refresh');
     const mcp = (method: string, params?: unknown) => ({ method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
@@ -149,16 +150,16 @@ describe('GitLab HTTP and MCP integration', () => {
     const response = await fetch(grant.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'write', arguments: { path: 'notes/ex/new.md', content: '# Created via MCP', revision: fixture.head } } }) }).then(r => r.json());
     expect(response.result.isError).not.toBe(true);
     expect(fixture.files.get('notes/ex/new.md')).toBe('# Created via MCP');
-    const store = new SessionStore(root), session = await store.get(cookie.split('=')[1]);
+    const store = createRecordStore(root), session = await store.get(cookie.split('=')[1]);
     vi.stubEnv('GITLAB_URL', 'https://different.example.test');
-    await expect(credentialToken(root, session.credential, loadSourceConfig(root))).rejects.toMatchObject({ status: 401 });
+    await expect(credentialToken(createRecordStore(root), session.credential, loadSourceConfig(root))).rejects.toMatchObject({ status: 401 });
   });
 });
 
 it('serializes hosted refresh across independent local lock scopes using Redis and reports refresh failure', async () => {
   vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://redis.example.test');
   const values = new Map<string, string>(), sets = new Map<string, Set<string>>();
-  vi.spyOn(SessionStore.prototype, 'command').mockImplementation(async ([command, key, ...args]) => {
+  vi.spyOn(RedisRecordBackend.prototype, 'command').mockImplementation(async ([command, key, ...args]) => {
     if (command === 'GET') return values.get(key) ?? null;
     if (command === 'SET') {
       if (args.includes('NX') && values.has(key)) return null;
@@ -181,11 +182,11 @@ it('serializes hosted refresh across independent local lock scopes using Redis a
     throw new Error('Unexpected Redis command');
   });
   await login();
-  const store = new SessionStore(root), session = await store.get(cookie.split('=')[1]), record = await store.get(session.credential);
+  const store = createRecordStore(root), session = await store.get(cookie.split('=')[1]), record = await store.get(session.credential);
   await store.set(session.credential, { ...record, upstreamExpiresAt: Date.now() - 1000 }, null);
-  expect(await Promise.all([credentialToken(root, session.credential, loadSourceConfig(root)), credentialToken(root + '-other-process', session.credential, loadSourceConfig(root))])).toEqual(['refreshed-token', 'refreshed-token']);
+  expect(await Promise.all([credentialToken(createRecordStore(root), session.credential, loadSourceConfig(root)), credentialToken(createRecordStore(root + '-other-process'), session.credential, loadSourceConfig(root))])).toEqual(['refreshed-token', 'refreshed-token']);
   expect(refreshes).toBe(1);
   expect([...values.keys()].some(key => key.startsWith('gh-notes:refresh:'))).toBe(false);
   await store.set(session.credential, { ...record, refreshToken: undefined, upstreamExpiresAt: Date.now() - 1000 }, null);
-  await expect(credentialToken(root, session.credential, loadSourceConfig(root))).rejects.toMatchObject({ status: 401 });
+  await expect(credentialToken(createRecordStore(root), session.credential, loadSourceConfig(root))).rejects.toMatchObject({ status: 401 });
 });

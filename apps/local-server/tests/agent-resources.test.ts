@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
-import { SessionStore } from '../src/auth.js';
+import { createRecordStore } from '../src/record-store/index.js';
 
 let root: string, server: Server, base: string;
 let writes: { endpoint: string; body: any; }[];
@@ -14,7 +14,7 @@ beforeEach(async () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-remote-agents-'));
   writes = [];
   for (const [key, value] of Object.entries({ GITHUB_NOTES_SOURCE: 'github', GITHUB_NOTES_REPOSITORY: 'agent/http', GITHUB_NOTES_BRANCH: 'main', SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '' })) vi.stubEnv(key, value);
-  await new SessionStore(root).set(session, { kind: 'session', token: 'fixture-owner', userId: 1 });
+  await createRecordStore(root).set(session, { kind: 'session', token: 'fixture-owner', userId: 1 });
   const nativeFetch = globalThis.fetch;
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
     if (!String(url).startsWith('https://api.github.com/repos/agent/http')) return nativeFetch(url, init);

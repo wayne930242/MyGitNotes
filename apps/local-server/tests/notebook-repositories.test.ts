@@ -60,7 +60,7 @@ async function serve() {
   const trpg = worktree({ 'notes/life/note.md': '# TRPG note\n' });
   roots = [home, trpg];
   const configSource: WorkspaceConfigSource = { mode: 'local', settings: async () => ({ home: repositoryRef({ type: 'local', path: home }), localPath: ref => ref.id === 'github:owner/trpg@main' ? trpg : undefined, manifest: inHomeRepository => inHomeRepository() }) };
-  server = createServer(createApp(home, configSource));
+  server = createServer(createApp(home, { configSource }));
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
   return { home, trpg };

@@ -10,6 +10,7 @@ import { ThemeChoice } from '../lib/themes.js';
 import { ThemeSelector } from './ThemeSelector.js';
 import { WorkspaceManifestEditor } from './WorkspaceManifestEditor.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { useSettingsSections } from '../lib/web-features.js';
 import YAML from 'yaml';
 
 interface SettingsModalProps {
@@ -30,6 +31,7 @@ interface SettingsModalProps {
 export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = true, canWrite, configRevision, onConfigRevision, accountSettings, branch, onRefreshWorkspace, currentTheme, onSelectTheme }) => {
   const { t, language, setLanguage } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
+  const featureSections = useSettingsSections();
   const [yamlContent, setYamlContent] = useState(() => config ? YAML.stringify(config) : '');
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string; } | null>(null);
@@ -62,9 +64,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
       <WorkspaceSidebarPortal>
         <WorkspaceSidebar label={t('settings.title')} className='settings-sidebar'>
           <div className='sidebar-section-label'>{t('nav.settings')}</div>
-          {([['language', t('settings.language'), Globe], ['theme', t('settings.theme'), Palette], ['access', t('layout.access'), Shield], ['updates', t('settings.coreUpdates'), RefreshCw], ['manifest', t('layout.manifest'), Save]] as const).map(([id, label, Icon]) => (
+          {[...([['language', t('settings.language'), Globe], ['theme', t('settings.theme'), Palette], ['access', t('layout.access'), Shield], ['updates', t('settings.coreUpdates'), RefreshCw], ['manifest', t('layout.manifest'), Save]] as const), ...featureSections.map(section => [section.id, section.title, section.icon] as const)].map(([id, label, Icon]) => (
             <a
-              key={String(id)}
+              key={id}
               href={`#settings-${id}`}
               className='sidebar-link'
               onClick={event => {
@@ -74,7 +76,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
               }}
             >
               <Icon aria-hidden='true' className='w-4 h-4' />
-              <span>{String(label)}</span>
+              <span>{label}</span>
             </a>
           ))}
         </WorkspaceSidebar>
@@ -160,6 +162,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
                 </div>
               )}
             </div>
+            {featureSections.map(section => (
+              <div key={section.id} id={`settings-${section.id}`} className='flex flex-col gap-3'>
+                <h3 className='text-xs font-semibold text-fg uppercase tracking-wider flex items-center gap-1.5'>
+                  <section.icon className='w-4 h-4 text-primary' />
+                  {section.title}
+                </h3>
+                {section.element}
+              </div>
+            ))}
           </div>
         </div>
       </div>

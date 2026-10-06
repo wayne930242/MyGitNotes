@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { SessionStore } from '../src/auth.js';
+import { createRecordStore, recordKeyPrefix, RedisRecordBackend } from '../src/record-store/index.js';
 
 const id = 's'.repeat(43);
 afterEach(() => {
@@ -13,7 +13,7 @@ it('isolates credentials, grants, revocation and refresh locks while retaining l
   vi.stubEnv('SESSION_SECRET', 'legacy'.repeat(10));
   const values = new Map<string, string>(), sets = new Map<string, Set<string>>();
   const commands: string[][] = [];
-  vi.spyOn(SessionStore.prototype, 'command').mockImplementation(async command => {
+  vi.spyOn(RedisRecordBackend.prototype, 'command').mockImplementation(async command => {
     commands.push(command);
     const [op, key, ...args] = command;
     if (op === 'GET') return values.get(key) ?? null;
@@ -33,13 +33,13 @@ it('isolates credentials, grants, revocation and refresh locks while retaining l
     if (op === 'EVAL') return Number(values.delete(args[1]));
     throw new Error('Unexpected Redis command');
   });
-  const legacy = new SessionStore('/tmp/namespace-fixture');
+  const legacy = createRecordStore('/tmp/namespace-fixture');
   await legacy.set(id, { kind: 'agent', ownerId: 42, name: 'legacy' }, null);
   await legacy.indexGrant(id, 42);
   const original = new Map(values);
   vi.stubEnv('MYGITNOTES_SESSION_NAMESPACE', 'gitlab-test');
   vi.stubEnv('SESSION_SECRET', 'test'.repeat(16));
-  const isolated = new SessionStore('/tmp/namespace-fixture');
+  const isolated = createRecordStore('/tmp/namespace-fixture');
   expect(await isolated.get(id)).toBeNull();
   expect(await isolated.listGrants(42)).toEqual([]);
   await isolated.set(id, { kind: 'agent', ownerId: 42, name: 'test' }, null);
@@ -61,8 +61,8 @@ it('uses the native Vercel Upstash REST variables and rejects invalid namespaces
   vi.stubEnv('KV_REST_API_TOKEN', 'fixture-redis-token');
   vi.stubEnv('MYGITNOTES_SESSION_NAMESPACE', 'test');
   const request = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ result: 'PONG' })));
-  expect(await new SessionStore('/tmp/namespace-fixture').command(['PING'])).toBe('PONG');
+  expect(await new RedisRecordBackend(recordKeyPrefix()).command(['PING'])).toBe('PONG');
   expect(request).toHaveBeenCalledWith('https://redis.example.test', expect.objectContaining({ redirect: 'error', headers: expect.objectContaining({ Authorization: 'Bearer fixture-redis-token' }) }));
   vi.stubEnv('MYGITNOTES_SESSION_NAMESPACE', 'invalid:namespace');
-  expect(() => new SessionStore('/tmp/namespace-fixture')).toThrow('MYGITNOTES_SESSION_NAMESPACE');
+  expect(() => createRecordStore('/tmp/namespace-fixture')).toThrow('MYGITNOTES_SESSION_NAMESPACE');
 });

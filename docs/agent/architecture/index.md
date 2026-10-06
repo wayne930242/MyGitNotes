@@ -29,6 +29,10 @@ OAuth follows the selected provider. Encrypted server records isolate site and a
 
 See the [deployment guide](../../deploy.md).
 
+## Editions and extension points
+
+This repository is the AGPL-3.0 community edition; the private Pro edition includes it as a Git submodule and composes it without editing it ([ADR 0002](../../adr/0002-open-core-editions.md)). The server's composition root is `createApp(base, services)`: an edition may supply the `configSource`, `recordStore`, `remoteCache`, `piAgent`, the `webDist` it serves, and a `routes` hook mounted after sign-in and before the workspace routes. `@mygitnotes/local-server` resolves to `src/edition.ts`, which starts nothing, and `@mygitnotes/local-server/testing/record-store-contract` is the behavior every record store must keep. The web app's entry is `createWebApp(root, { features })` (`@mygitnotes/web`); a `WebFeature` (`@mygitnotes/web/features`) may add top-level routes, Settings sections, and replace the header's account controls. A store that does not outlive the process reports `durable: false`, and the agent grant routes then answer 404. Missing seams are added here first, with community behavior unchanged.
+
 ## Self-hosted runtime
 
 The [Dockerfile](../../../Dockerfile) builds the web application and runs the compiled Express server as the `node` user. `HOST` defaults to loopback for direct startup and is set to `0.0.0.0` inside the image. The local-source Host and Origin checks remain active; `compose.local.yaml` binds an existing workspace checkout at `/workspace` and publishes only a loopback port.
@@ -37,7 +41,7 @@ Note pages come from query routes shared by both sources: `/api/notes/query` (no
 
 Remote readers cache notes and their per-notebook indexes in the session Redis, keyed by repository and Git object id with a 30 day lifetime, falling back to a process-local cache when Redis is absent. Cache failures end the request rather than silently reloading from the platform.
 
-`compose.yaml` runs the remote-source application with its own Redis service on an internal network. Redis persists AOF data in `redis-data`; only the application HTTP port is published. `SessionStore` chooses native Redis via `REDIS_URL`, then the existing Redis REST configuration, then a local encrypted session directory outside Vercel. Native Redis reuses connections, bounds connection/command waits, and propagates errors; a later request reconnects after a failure. Session/grant keys, encryption, TTLs, indexes, and credential refresh locks use the same operations across both Redis transports.
+`compose.yaml` runs the remote-source application with its own Redis service on an internal network. Redis persists AOF data in `redis-data`; only the application HTTP port is published. Encrypted records go through a `RecordStore` (`apps/local-server/src/record-store/`): `SealedRecordStore` seals values, expires them, lists grants and orders credential locks over a raw `RecordBackend`. `createRecordStore` chooses native Redis via `REDIS_URL`, then the existing Redis REST configuration, then a local encrypted session directory outside Vercel. Native Redis reuses connections, bounds connection/command waits, and propagates errors; a later request reconnects after a failure. Session/grant keys, encryption, TTLs, indexes, and credential refresh locks use the same operations across both Redis transports.
 
 See the [deployment guide](../../deploy.md#docker-compose-with-a-remote-repository) for volumes, OAuth callbacks, reverse proxies, and updates.
 

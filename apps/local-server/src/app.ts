@@ -1,9 +1,11 @@
 import express from 'express';
+import type { RemoteCache } from '@mygitnotes/core';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { BOOKMARKS_DOCUMENT, classifyResource, deploymentConfigSource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceFileTags, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
+import { createRecordStore, type RecordStore } from './record-store/index.js';
 import { createRemoteMCP } from './mcp.js';
 import { createRemoteCoreUpdateRouter } from './remote-core-update.js';
 import { createLocalApp } from './local-app.js';
@@ -25,11 +27,31 @@ export function applicationRoot() {
   return dir;
 }
 
-/** `configSource` decides, per request, which workspace a request serves; it defaults to the deployment's environment and server configuration. */
-export function createApp(base: string, configSource: WorkspaceConfigSource = deploymentConfigSource(base), { piAgent }: { piAgent?: PiAgent; } = {}): express.Express {
+/** What an edition supplies to the server; the community edition uses the defaults. */
+export interface AppServices {
+  /** Decides, per request, which workspace a request serves; defaults to the deployment's environment and server configuration. */
+  configSource: WorkspaceConfigSource;
+  /** Encrypted sessions, credentials and agent grants; defaults to Redis when configured, else a local directory. */
+  recordStore: RecordStore;
+  /** The remote read cache; defaults to Redis when configured, else process memory. Local workspaces use none. */
+  remoteCache?: RemoteCache;
+  piAgent?: PiAgent;
+  /** The built web app to serve; defaults to apps/web/dist under the application root. */
+  webDist: string;
+  /**
+   * Adds an edition's routes after sign-in and before the workspace routes, so they run even when the
+   * requester has no workspace yet; a route that needs one mounts `requestWorkspace` itself.
+   */
+  routes?: (app: express.Express, services: AppServices) => void;
+}
+
+export function createApp(base: string, overrides: Partial<AppServices> = {}): express.Express {
+  const configSource = overrides.configSource ?? deploymentConfigSource(base);
+  const local = configSource.mode === 'local';
+  const services: AppServices = { ...overrides, configSource, recordStore: overrides.recordStore ?? createRecordStore(base), remoteCache: 'remoteCache' in overrides ? overrides.remoteCache : local ? undefined : createRemoteCache(), webDist: overrides.webDist ?? path.join(base, 'apps/web/dist') };
+  const { recordStore, remoteCache: cache, piAgent } = services;
   const app = express();
   app.disable('x-powered-by');
-  const local = configSource.mode === 'local';
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
@@ -50,7 +72,8 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
   // held to the repository size limit, so the MCP route parses ahead of the shared 8 MiB ceiling.
   if (r2SettingsFromEnv()) app.use('/mcp', express.json({ limit: '64mb' }));
   app.use(express.json({ limit: '8mb' }));
-  app.use('/api/auth', createAuth(base, configSource));
+  app.use('/api/auth', createAuth({ store: recordStore, configSource }));
+  services.routes?.(app, services);
   // Product reference documents come from this Core checkout, not from the workspace being served.
   app.get('/api/agent-resources/read', (req, res, next) => {
     const file = req.query.path;
@@ -61,9 +84,8 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
       res.status(404).json({ error: (error as Error).message });
     }
   });
-  const cache = local ? undefined : createRemoteCache();
-  app.use('/mcp', createRemoteMCP(base, configSource, cache));
-  app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace(base, configSource, cache));
+  app.use('/mcp', createRemoteMCP(recordStore, configSource, cache));
+  app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace(recordStore, configSource, cache));
   app.use(createFileManagerRouter());
   app.use(createR2ManagerRouter());
   app.use('/api/study', createStudyRouter());
@@ -90,7 +112,7 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     const remoteNotebook = async (res: express.Response, notebookId: unknown) => asRemote((await notebookRepository(res, notebookId)).handle);
     const remoteNote = async (res: express.Response, file: unknown, notebookId?: unknown) => asRemote((await noteRepository(res, file, notebookId)).handle);
     const remoteRepositories = async (res: express.Response) => (await eachRepository(res)).map(({ handle }) => asRemote(handle));
-    app.use('/api/core', createRemoteCoreUpdateRouter(base));
+    app.use('/api/core', createRemoteCoreUpdateRouter(recordStore));
     app.use(createGistRouter());
     /** Pushes committed notes that name a Gist to it; notes that name none cost nothing. */
     const publishedGists = async (res: express.Response, notes: { path: string; content: string; metadata: Record<string, unknown>; }[]) => {
@@ -370,7 +392,7 @@ export function createApp(base: string, configSource: WorkspaceConfigSource = de
     });
     app.use('/api', (req, res) => res.status(403).json({ error: 'This operation is available only in a local workspace.' }));
   }
-  const web = path.join(base, 'apps/web/dist');
+  const web = services.webDist;
   app.use(express.static(web, { redirect: false }));
   app.get('*', (req, res) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/raw-assets') || req.path.startsWith('/r2-assets')) return res.status(404).end();

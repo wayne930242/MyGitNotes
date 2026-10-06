@@ -1,6 +1,7 @@
 import { type CoreStatus, GitHubCoreUpdate, RemoteCoreError, type RemoteSourceConfig, SourceError } from '@mygitnotes/core';
 import { type Request, type Response, Router } from 'express';
 import { authToken } from './auth.js';
+import type { RecordStore } from './record-store/index.js';
 import { buildInfo } from './build-info.js';
 import { workspaceOf } from './request-workspace.js';
 
@@ -11,9 +12,9 @@ function homeSource(res: Response): RemoteSourceConfig {
   return source;
 }
 
-export function createRemoteCoreUpdateRouter(base: string): Router {
+export function createRemoteCoreUpdateRouter(store: RecordStore): Router {
   const router = Router();
-  const updater = async (req: Request, source: RemoteSourceConfig & { type: 'github'; }) => new GitHubCoreUpdate(source.repository, buildInfo.sha, await authToken(req, base, source));
+  const updater = async (req: Request, source: RemoteSourceConfig & { type: 'github'; }) => new GitHubCoreUpdate(source.repository, buildInfo.sha, await authToken(req, store, source));
   for (const method of ['get', 'post'] as const) {
     router[method](method === 'get' ? '/status' : '/update', async (req, res) => {
       try {

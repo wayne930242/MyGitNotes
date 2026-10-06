@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
-import { SessionStore } from '../src/auth.js';
+import { createRecordStore } from '../src/record-store/index.js';
 
 const manifest = 'schema_version: 1\nworkspace:\n  title: Hosted\n  default_notebook: life\nnotebooks:\n  - id: life\n    title: Life\n    root: notes/life\n';
 const R1 = 'a'.repeat(40), R2 = 'b'.repeat(40);
@@ -16,7 +16,7 @@ beforeEach(async () => {
   head = R1;
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-stale-head-'));
   for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: 'owner/home', MYGITNOTES_BRANCH: 'main', SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '' })) vi.stubEnv(key, value);
-  await new SessionStore(root).set(session, { kind: 'session', token: 'fixture-owner', userId: 1 });
+  await createRecordStore(root).set(session, { kind: 'session', token: 'fixture-owner', userId: 1 });
   const nativeFetch = globalThis.fetch;
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
     const match = /^https:\/\/api\.github\.com\/repos\/owner\/home(.*)$/.exec(String(url));

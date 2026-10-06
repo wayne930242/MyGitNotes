@@ -53,7 +53,7 @@ describe('a replaceable configuration source', () => {
   it('serves a different workspace to each request on one app instance', async () => {
     const alpha = worktree('Alpha'), beta = worktree('Beta');
     roots = [alpha, beta];
-    server = createServer(createApp(alpha, tenantConfigSource({ alpha, beta })));
+    server = createServer(createApp(alpha, { configSource: tenantConfigSource({ alpha, beta }) }));
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
     const workspace = (tenant: string) => fetch(`${base}/api/workspace`, { headers: { 'x-tenant': tenant } }).then(response => response.json());

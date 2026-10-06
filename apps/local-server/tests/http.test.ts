@@ -6,7 +6,8 @@ import { execFileSync } from 'node:child_process';
 import { createServer, Server } from 'node:http';
 import { createApp } from '../src/app.js';
 import { loadSourceConfig } from '@mygitnotes/core';
-import { credentialToken, seal, SessionStore, unseal } from '../src/auth.js';
+import { credentialToken, seal, unseal } from '../src/auth.js';
+import { createRecordStore } from '../src/record-store/index.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
@@ -383,7 +384,7 @@ describe('server-held session records', () => {
     const bytes = Buffer.from(record, 'base64url');
     bytes[15] ^= 1;
     expect(() => unseal(bytes.toString('base64url'))).toThrow();
-    const store = new SessionStore(root);
+    const store = createRecordStore(root);
     const id = 'a'.repeat(43);
     await store.set(id, { kind: 'session', token: 'upstream-secret' });
     expect((await store.get(id)).token).toBe('upstream-secret');
@@ -482,7 +483,7 @@ describe('GitHub login and shared agent authorization', () => {
       }
       const denied = await fetch(`${base}/mcp`, { ...call, body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'save_note', arguments: { path: 'notes/ex/private.md', content: 'bad', revision: 'head' } } }) }).then(r => r.json());
       expect(denied.result.isError).toBe(true);
-      const store = new SessionStore(root);
+      const store = createRecordStore(root);
       const grants = await fetch(`${base}/api/auth/agent-tokens`, { headers: { Cookie: cookie } }).then(r => r.json());
       expect(grants.grants[0]).toMatchObject({ id: grant.id, write: false, expiresAt: null });
       expect(JSON.stringify(grants)).not.toContain(grant.token);
@@ -566,11 +567,11 @@ describe('GitHub login and shared agent authorization', () => {
     const callback = await fetch(`${base}/api/auth/github/callback?state=${location.searchParams.get('state')}&code=test`, { redirect: 'manual', headers: { Cookie: start.headers.get('set-cookie')!.split(';')[0] } });
     const cookie = callback.headers.getSetCookie().find(value => value.startsWith('gh_notes_session='))!.split(';')[0];
     const grant = await fetch(`${base}/api/auth/agent-token`, { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ write: false }) }).then(r => r.json());
-    const store = new SessionStore(root);
+    const store = createRecordStore(root);
     const { credential } = await store.get(grant.token);
     const issued = await store.get(credential);
     expect(issued).toMatchObject({ token: 'short-lived-token', refreshToken: 'github-refresh' });
-    expect(await credentialToken(root, credential, loadSourceConfig(root))).toBe('short-lived-token');
+    expect(await credentialToken(createRecordStore(root), credential, loadSourceConfig(root))).toBe('short-lived-token');
     expect(refreshes).toBe(0);
     await store.set(credential, { ...issued, upstreamExpiresAt: Date.now() - 1000 }, null);
     const read = (id: number) => fetch(grant.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Connection: 'close' }, body: JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'read_note', arguments: { path: 'notes/ex/private.md' } } }) });
@@ -588,7 +589,7 @@ describe('GitHub login and shared agent authorization', () => {
     expect(expired.status).toBe(401);
     expect((await expired.json()).error).toContain('Authorization expired');
     await store.set(credential, { ...issued, refreshToken: undefined, upstreamExpiresAt: undefined }, null);
-    expect(await credentialToken(root, credential, loadSourceConfig(root))).toBe('short-lived-token');
+    expect(await credentialToken(createRecordStore(root), credential, loadSourceConfig(root))).toBe('short-lived-token');
     expect(refreshes).toBe(1);
   });
 
@@ -618,7 +619,7 @@ describe('GitHub login and shared agent authorization', () => {
     const callback = await fetch(`${base}/api/auth/github/callback?state=${location.searchParams.get('state')}&code=test`, { redirect: 'manual', headers: { Cookie: start.headers.get('set-cookie')!.split(';')[0] } });
     const cookie = callback.headers.getSetCookie().find(value => value.startsWith('gh_notes_session='))!.split(';')[0];
     const grant = await fetch(`${base}/api/auth/agent-token`, { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ write: false }) }).then(r => r.json());
-    const store = new SessionStore(root);
+    const store = createRecordStore(root);
     const { credential } = await store.get(grant.token);
     const issued = await store.get(credential);
     const reasons = async (url: string) => {
@@ -669,7 +670,7 @@ describe('GitHub login and shared agent authorization', () => {
     const callback = await fetch(`${base}/api/auth/github/callback?state=${location.searchParams.get('state')}&code=test`, { redirect: 'manual', headers: { Cookie: start.headers.get('set-cookie')!.split(';')[0] } });
     const cookie = callback.headers.getSetCookie().find(value => value.startsWith('gh_notes_session='))!.split(';')[0];
     const grant = await fetch(`${base}/api/auth/agent-token`, { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ write: false }) }).then(r => r.json());
-    const store = new SessionStore(root);
+    const store = createRecordStore(root);
     const { credential } = await store.get(grant.token);
     const issued = await store.get(credential);
     const call = (url: string) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Connection: 'close' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) }).then(r => r.status);
@@ -729,7 +730,7 @@ describe('durable Redis grant records', () => {
       if (c[0] === 'SMEMBERS') result = [...members];
       return new Response(JSON.stringify({ result }));
     });
-    const store = new SessionStore(root);
+    const store = createRecordStore(root);
     const token = 't'.repeat(43);
     await store.set(token, { kind: 'agent', ownerId: 1, name: 'Test', createdAt: Date.now(), write: false, source: 'github:owner/repo@main' }, null);
     await store.indexGrant(token, 1);
@@ -774,12 +775,12 @@ describe('durable Redis grant records', () => {
     });
     const token = 'o'.repeat(43), stale = 'b'.repeat(64);
     vi.stubEnv('SESSION_SECRET', 'other'.repeat(8));
-    const other = new SessionStore(root);
+    const other = createRecordStore(root);
     await other.set(token, { kind: 'agent', ownerId: 1, name: 'Other connector', createdAt: Date.now() }, null);
     await other.indexGrant(token, 1);
     members.add(stale);
     vi.stubEnv('SESSION_SECRET', 's'.repeat(64));
-    const store = new SessionStore(root);
+    const store = createRecordStore(root);
     expect(await store.listGrants(1)).toEqual([]);
     expect(await store.get(token)).toBeNull();
     expect(members.has(stale)).toBe(false);
@@ -808,7 +809,7 @@ describe('durable Redis grant records', () => {
       if (c[0] === 'SMEMBERS') result = [...members];
       return new Response(JSON.stringify({ result }));
     });
-    const token = 'g'.repeat(43), store = new SessionStore(root);
+    const token = 'g'.repeat(43), store = createRecordStore(root);
     await store.set(token, { kind: 'agent', ownerId: 1, name: 'Kept', createdAt: Date.now() }, null);
     await store.indexGrant(token, 1);
     vi.stubEnv('SESSION_SECRET', '');

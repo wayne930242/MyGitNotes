@@ -161,7 +161,7 @@ tailnet 的其他成員可以開啟筆記，Pi agent 則只給本機擁有者使
 
 ## 授權條款
 
-MIT
+社群版採用 [AGPL-3.0](LICENSE) 授權。貢獻程式碼前需簽署[貢獻者授權協議](CLA.md)，詳見 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 啟動疑難排解
 

@@ -160,7 +160,7 @@ If it does not connect, see [Remote access with Tailscale](#remote-access-with-t
 
 ## License
 
-MIT
+The community edition is licensed under [AGPL-3.0](LICENSE). Contributions need the [Contributor License Agreement](CLA.md); see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Startup troubleshooting
 

@@ -39,7 +39,7 @@ for (const provider of ['github', 'gitlab'] as const) {
       );
       vi.stubEnv('APP_URL', '');
       vi.stubEnv('VERCEL', '');
-      server = createServer(createApp(process.cwd(), configSource));
+      server = createServer(createApp(process.cwd(), { configSource }));
       await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
       const base = `http://127.0.0.1:${(server.address() as { port: number; }).port}/api/outline-import`;
       const input = { repository: home.id, notebookId: 'ex', selectedIds: ['note', 'folder'], path: 'notes/ex/imported.outline.md', title: 'Imported' };

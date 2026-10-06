@@ -5,10 +5,11 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { type RemoteCache, SourceError, type WorkspaceConfigSource, WorkspaceSetupError } from '@mygitnotes/core';
 import { callWorkspaceRemoteTool, isMutationTool, remoteTools } from '@mygitnotes/mcp-server';
-import { CredentialRejected, credentialToken, SessionStore } from './auth.js';
+import { CredentialRejected, credentialToken } from './auth.js';
+import type { RecordStore } from './record-store/index.js';
 import { openWorkspace, type RemoteHandle } from './request-workspace.js';
 
-export function createRemoteMCP(base: string, configSource: WorkspaceConfigSource, cache?: RemoteCache): Router {
+export function createRemoteMCP(store: RecordStore, configSource: WorkspaceConfigSource, cache?: RemoteCache): Router {
   const router = Router();
   router.post(['/', '/:token'], async (req, res) => {
     try {
@@ -21,7 +22,6 @@ export function createRemoteMCP(base: string, configSource: WorkspaceConfigSourc
       const home = settings.home;
       const urlToken = typeof req.params.token === 'string' && /^[A-Za-z0-9_-]{43}$/.test(req.params.token) ? req.params.token : undefined;
       const bearer = urlToken || req.headers.authorization?.match(/^Bearer ([A-Za-z0-9_-]{43})$/)?.[1];
-      const store = new SessionStore(base);
       const grant = bearer ? await store.get(bearer) : null;
       // Rejections of an existing grant outlive the runtime logs so its owner can read the reason on the grant list.
       const remember = (reason: string) => store.recordRejection(bearer!, reason).catch(error => console.warn(`[mcp] rejection record failed: ${(error as Error).message}`));
@@ -34,7 +34,7 @@ export function createRemoteMCP(base: string, configSource: WorkspaceConfigSourc
       }
       let token: string;
       try {
-        token = await credentialToken(base, grant.credential || grant.session, home.source);
+        token = await credentialToken(store, grant.credential || grant.session, home.source);
       } catch (error) {
         if (!(error instanceof SourceError)) console.warn(`[mcp] credential lookup failed: ${(error as Error).message}`);
         await remember(error instanceof CredentialRejected ? error.reason : 'credential-unavailable');

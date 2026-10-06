@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
-import { SessionStore } from '../src/auth.js';
+import { createRecordStore } from '../src/record-store/index.js';
 
 const manifest = 'schema_version: 1\nworkspace:\n  title: Hosted\n  default_notebook: life\nnotebooks:\n  - id: life\n    title: Life\n    root: notes/life\n';
 const files: Record<string, string> = { '.mygitnotes.yaml': manifest, 'notes/life/shared.md': '---\ntitle: Shared\ngist: abc123\n---\n\nOld body\n', 'notes/life/private.md': '# Private\n' };
@@ -22,7 +22,7 @@ beforeEach(async () => {
   gistCalls = [];
   scopes = 'repo, workflow, gist';
   for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: 'owner/home', MYGITNOTES_BRANCH: 'main', SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '' })) vi.stubEnv(key, value);
-  await new SessionStore(root).set(session, { kind: 'session', token: 'fixture-owner', userId: 1 });
+  await createRecordStore(root).set(session, { kind: 'session', token: 'fixture-owner', userId: 1 });
   const nativeFetch = globalThis.fetch;
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
     const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'x-oauth-scopes': scopes } });
