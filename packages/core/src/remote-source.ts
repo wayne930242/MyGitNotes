@@ -627,6 +627,7 @@ export abstract class RemoteSource {
     if (!changes.length || changes.length > 200) throw new SourceError('A mutation requires between 1 and 200 changed files.');
     if (new Set(changes.map(c => c.path)).size !== changes.length) throw new SourceError('Each file may appear only once in a mutation.');
     const config = await this.config();
+    const changed = new Set(changes.map(change => change.path));
     let bytes = 0;
     for (const change of changes) {
       const file = change.path;
@@ -635,8 +636,10 @@ export abstract class RemoteSource {
       const relocation = ['move', 'delete', 'remove-directory', 'mv'].includes(operation) && ['files', 'folders'].includes(scope);
       if (document?.retired && !relocation) throw new SourceError('Legacy bookmark authoring is retired. Export or import the saved source into a new outline.', 410);
       const documentFile = Boolean(document?.scopes.includes(scope));
-      // A version file is written with its versions, or with a note's New version, and otherwise only follows its note's move or deletion.
-      const versionFile = Boolean(versionedPath(file)) && (['versions', 'notes'].includes(scope) || ['files', 'folders', 'skills', 'agents'].includes(scope) && change.content === undefined && change.base64 === undefined);
+      // A version file is written with its versions, or with its note's New version, and otherwise only follows its note's move or deletion;
+      // a note commit touches one only together with its note, so a note tool cannot edit or delete versions on their own.
+      const versioned = versionedPath(file);
+      const versionFile = Boolean(versioned) && (scope === 'versions' || scope === 'notes' && changed.has(versioned!) || ['files', 'folders', 'skills', 'agents'].includes(scope) && change.content === undefined && change.base64 === undefined);
       const allowed = documentFile || versionFile || scope !== 'versions' && (scope === 'config' ? MANIFEST_FILES.includes(file) : !['study', 'focus', 'config'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_EXTENSIONS.test(file) : scope === 'skills' ? Boolean(skillFile(file, config.notebooks)) : scope === 'agents' ? agentFileAllowed(file, config.notebooks) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (isNoteFile(file) || path.posix.basename(file) === '_dir.yml'))));
       if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
       if (documentFile) {

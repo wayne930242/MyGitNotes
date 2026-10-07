@@ -53,6 +53,15 @@ describe('remote note history', { timeout: 20_000 }, () => {
     expect(f.text(file)).toBe('versions: []\n');
   });
 
+  it('refuses a note commit that edits or deletes a version file without its note', async () => {
+    const file = versionFilePath('notes/ex/a.md');
+    const f = githubFixture({ [file]: 'versions: []\n' }, { hexIds: true });
+    await expect(f.reader().commitChanges([{ path: file, sha: null }], f.head(), 'delete', 'notes')).rejects.toMatchObject({ status: 403 });
+    await expect(f.reader().commitChanges([{ path: file, content: 'versions: []\n# edited\n' }], f.head(), 'write', 'notes')).rejects.toMatchObject({ status: 403 });
+    await expect(callNoteShell(f.reader(), 'rm', { paths: [file], revision: f.head() }, true)).rejects.toMatchObject({ status: 403 });
+    expect(f.text(file)).toBe('versions: []\n');
+  });
+
   it('carries a note’s version file along an MCP move and removal', async () => {
     const f = githubFixture({ [versionFilePath('notes/ex/work/b.md')]: 'versions: []\n' }, { hexIds: true });
     await callNoteShell(f.reader(), 'mv', { source: 'notes/ex/work', destination: 'notes/ex/done', recursive: true, revision: f.head() }, true);
