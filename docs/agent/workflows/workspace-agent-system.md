@@ -22,7 +22,7 @@ Agent 工作區是 Pi 工作的資料夾。每個儲存庫的根目錄一定是 
 
 - 核心指示：`<資料夾>/AGENTS.md`。
 - 技能：`<資料夾>/.agents/skills/<名稱>/`，入口是 `SKILL.md`。參考資料是技能內 `scripts/` 以外的 Markdown 或文字檔；腳本是 `scripts/` 內的文字檔（`.sh`、`.py`、`.js`、`.ts`、`.json`、`.yaml`、`.toml` 等）。
-- MCP 伺服器：社群版的 Agents 頁沒有這一區，請在 Pi 裡設定（`pi mcp add`，或對話中的 `/mcp`）。MCP 設定可能帶 token，所以不放進儲存庫。Pro 版透過 `WebFeature.agentWorkspaceSections` 在 Agents 頁加上 MCP 設定，存在伺服器的加密紀錄。
+- MCP 伺服器：社群版的 Agents 頁沒有這一區，請在 Pi 裡設定（`pi mcp add`，或對話中的 `/mcp`）。MCP 設定可能帶 token，所以不放進儲存庫。Pro 版預計透過 `WebFeature.agentWorkspaceSections` 在 Agents 頁加上 MCP 設定，存在伺服器的加密紀錄；目前尚未提供。
 
 這些都是 Pi 自己讀的路徑：Pi 從執行資料夾往上讀每一層的 `AGENTS.md`，也讀到儲存庫根目錄為止每一層的 `.agents/skills/`。因此內層工作區也套用外層工作區的核心指示與技能，Agents 頁會列出這些外層工作區。App 不替各工具轉換或複製檔案；Codex 與新版 Antigravity 也讀 `.agents/skills/`。
 
@@ -44,6 +44,7 @@ Agents 頁先選工作區，再編輯它的核心指示與技能。「新增工�
 
 - `.claude/skills/<名稱>/`（或 `.codex/skills/`、`.agent/skills/`）移到同一層的 `.agents/skills/<名稱>/`。Pi 讀不到原本的位置。
 - 只有 `CLAUDE.md`、沒有 `AGENTS.md` 的資料夾：Pi 讀得到 `CLAUDE.md`，但 Agents 頁不把它當工作區。把內容併進 `AGENTS.md`，資料夾就會出現在工作區清單。
+- 只有 `.agents/skills/`、沒有 `AGENTS.md` 的資料夾（儲存庫根目錄除外）：Pi 與 MCP 的 `list_skills` 照常使用這些技能，但 Agents 頁不把資料夾當工作區，技能也就不會出現。加上 `AGENTS.md`，技能才會顯示在 Agents 頁。
 - 已經用 `AGENTS.md` 與 `.agents/skills/` 的資料夾不用改。
 
 Git 路徑所有權涵蓋完整 Agent 目錄，Agents 頁只開放上述工作區檔案。`.codex/auth.json`、`.codex/config.toml`、`.claude/settings*.json`、`CLAUDE.local.md`、憑證、執行紀錄與隱藏檔不會開放；檔案不得透過符號連結讀寫其他檔案。憑證與執行紀錄應維持本機私有，不提交。
