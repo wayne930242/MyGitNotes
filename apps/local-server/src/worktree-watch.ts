@@ -9,6 +9,8 @@ export type WatchKind = 'files' | 'commits';
 
 interface SharedWatcher {
   watcher: fs.FSWatcher;
+  /** A linked worktree keeps its reflog in the main repository's `.git/worktrees/<name>`, outside the worktree's own watch. */
+  reflog?: fs.FSWatcher;
   listeners: Record<WatchKind, Set<() => void>>;
 }
 
@@ -16,7 +18,8 @@ const watchers = new Map<string, SharedWatcher>();
 
 /**
  * Git's own bookkeeping changes on every status read and commit, so files under `.git` are not worktree changes.
- * Git appends to `.git/logs/HEAD` whenever HEAD moves: a commit, reset or checkout, by the app or anyone else.
+ * Git appends to `.git/logs/HEAD` whenever HEAD moves: a commit, reset or checkout, by the app or anyone else;
+ * a linked worktree's reflog is watched where its `.git` file points.
  */
 function changeKind(file: string | null): WatchKind | undefined {
   const parts = file === null ? [] : file.split(/[\\/]/);
@@ -24,19 +27,47 @@ function changeKind(file: string | null): WatchKind | undefined {
   return parts.length === 3 && parts[1] === 'logs' && parts[2] === 'HEAD' ? 'commits' : undefined;
 }
 
+/** The Git directory a linked worktree's `.git` file points to; undefined when `.git` is the repository's own directory. */
+function linkedGitDir(root: string): string | undefined {
+  let text: string;
+  try {
+    text = fs.readFileSync(path.join(root, '.git'), 'utf8');
+  } catch {
+    return;
+  }
+  const gitdir = /^gitdir:\s*(.+)$/m.exec(text)?.[1].trim();
+  return gitdir ? path.resolve(root, gitdir) : undefined;
+}
+
+function closeWatcher(shared: SharedWatcher) {
+  shared.watcher.close();
+  shared.reflog?.close();
+}
+
 function openWatcher(root: string): SharedWatcher {
   const shared: SharedWatcher = { watcher: fs.watch(root, { recursive: true }), listeners: { files: new Set(), commits: new Set() } };
-  shared.watcher.on('change', (_event, file) => {
-    const kind = changeKind(file === null ? null : String(file));
+  const notify = (kind: WatchKind | undefined) => {
     if (!kind) return;
     for (const listener of shared.listeners[kind]) listener();
-  });
-  shared.watcher.on('error', error => {
+  };
+  const fail = (error: Error) => {
     // A worktree that disappears ends its watcher; subscribers reconnect and open a new one.
     console.warn(`[worktree-watch] ${root}: ${error.message}`);
-    shared.watcher.close();
+    closeWatcher(shared);
     watchers.delete(root);
-  });
+  };
+  shared.watcher.on('change', (_event, file) => notify(changeKind(file === null ? null : String(file))));
+  shared.watcher.on('error', fail);
+  const gitdir = linkedGitDir(root);
+  if (gitdir) {
+    try {
+      shared.reflog = fs.watch(path.join(gitdir, 'logs'));
+      shared.reflog.on('change', (_event, file) => notify(file === null || String(file) === 'HEAD' ? 'commits' : undefined));
+      shared.reflog.on('error', fail);
+    } catch (error) {
+      console.warn(`[worktree-watch] ${root}: commits are not watched: ${(error as Error).message}`);
+    }
+  }
   return shared;
 }
 
@@ -68,7 +99,7 @@ export function watchWorktrees(worktrees: { id: string; root: string; }[], onCha
     for (const { key, shared, listener } of subscriptions) {
       shared.listeners[kind].delete(listener);
       if (shared.listeners.files.size || shared.listeners.commits.size || watchers.get(key) !== shared) continue;
-      shared.watcher.close();
+      closeWatcher(shared);
       watchers.delete(key);
     }
   };

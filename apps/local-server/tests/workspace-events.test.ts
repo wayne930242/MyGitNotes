@@ -211,3 +211,22 @@ it('answers the history stream with 204 on Vercel, where a function cannot hold 
   expect(await res.text()).toBe('');
   expect(watchedWorktreeCount()).toBe(0);
 });
+
+it('reports commits made in a linked worktree, whose reflog lives in the main repository', async () => {
+  const linked = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-linked-')));
+  fs.rmSync(linked, { recursive: true });
+  git('worktree', 'add', '-b', 'side', linked);
+  try {
+    const onCommits = vi.fn();
+    stops.push(watchWorktrees([{ id: 'linked', root: linked }], onCommits, 'commits'));
+    await settle();
+    fs.writeFileSync(path.join(linked, 'notes/a/side.md'), '# Side\n');
+    execFileSync('git', ['add', 'notes/a/side.md'], { cwd: linked, stdio: 'pipe' });
+    execFileSync('git', ['commit', '-m', 'Side'], { cwd: linked, stdio: 'pipe' });
+    await settle(600);
+    expect(onCommits).toHaveBeenCalledWith(['linked']);
+  } finally {
+    for (const stop of stops.splice(0)) stop();
+    fs.rmSync(linked, { recursive: true, force: true });
+  }
+});
