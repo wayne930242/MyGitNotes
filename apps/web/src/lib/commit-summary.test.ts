@@ -106,6 +106,32 @@ describe('polished commit', () => {
     expect(polished.details).toBe(`Body\n\n${trailers}`);
   });
 
+  it('keeps every trailer when a long polish passes the message limit, cutting only the body', () => {
+    const body = Array.from({ length: 300 }, (_, line) => `Reworded line ${line} that explains the change in some detail.`).join('\n');
+    expect(body.length).toBeGreaterThan(6000);
+    const polished = polishedCommit(`Plan the next phase\n\n${body}`, [created, modified], ['notes/a/.outline.json']);
+    const message = commitMessage(polished.subject, polished.details);
+    expect(message.length).toBeLessThanOrEqual(4000);
+    expect(message.startsWith('Plan the next phase\n\nReworded line 0 that')).toBe(true);
+    expect(message.endsWith(`\n…\n\n${trailers}`)).toBe(true);
+    // The body stops at a whole line.
+    expect(message.split('\n').filter(line => line.startsWith('Reworded line')).every(line => line.endsWith('detail.'))).toBe(true);
+  });
+
+  it('keeps the trailers when the visitor lengthens the subject after a long polish', () => {
+    const polished = polishedCommit(`Subject\n\n${'A line of the polished body.\n'.repeat(400)}`, [created, modified], []);
+    const message = commitMessage(`${'A long subject '.repeat(20)}`, polished.details);
+    expect(message.length).toBeLessThanOrEqual(4000);
+    expect(message.endsWith('Note-Added: notes/a/new.md\nNote-Modified: notes/a/weekly-review.md')).toBe(true);
+  });
+
+  it('cuts a single-line body that is longer than the limit rather than dropping it', () => {
+    const message = commitMessage('Subject', polishedCommit(`Subject\n\n${'x'.repeat(6000)}`, [created], []).details);
+    expect(message.length).toBeLessThanOrEqual(4000);
+    expect(message).toContain('xxxx');
+    expect(message.endsWith('\n…\n\nNote-Added: notes/a/new.md')).toBe(true);
+  });
+
   it('refuses a polish that has no subject', () => {
     expect(() => polishedCommit('\n\nNote-Added: notes/a/new.md', [created], [])).toThrow(/empty/);
   });

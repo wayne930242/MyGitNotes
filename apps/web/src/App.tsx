@@ -83,7 +83,7 @@ import { RightPanel } from './components/RightPanel.js';
 import { FileManager, FileManagerDialog, FileMetadata } from './components/files/index.js';
 import { AgentSystemView } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
-import { useAccountControls } from './lib/web-features.js';
+import { useAccountControls, useAgentEnabled } from './lib/web-features.js';
 import { DerivedManifestNotice, RepositorySwitch, WorkspaceGate } from './components/WorkspaceSetup.js';
 import { useLeaveWarning } from './lib/use-leave-warning.js';
 import { CommitModal } from './components/CommitModal.js';
@@ -121,6 +121,7 @@ export const AppContent: React.FC = () => {
   const editorRoute = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
 
   const { selectedNotebookId, folders, foldersLoading, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, actionError, setActionError, repoRoot, manifestDerived, repositoryChoice, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
+  const agentEnabled = useAgentEnabled(remote);
   const refreshDocuments = async () => {
     await Promise.all(documents.map(document => document.refresh()));
   };
@@ -765,7 +766,7 @@ export const AppContent: React.FC = () => {
   );
   // A local workspace starts its Pi agent in the background, so the agent tab opens onto a warm session.
   return (
-    <PiAgentProvider enabled={!remote} notebookId={selectedNotebookId} notebooks={config?.notebooks ?? NO_NOTEBOOKS} folders={folders}>
+    <PiAgentProvider enabled={agentEnabled} notebookId={selectedNotebookId} notebooks={config?.notebooks ?? NO_NOTEBOOKS} folders={folders}>
       <OutlineActionsProvider value={outlineActions.value}>{content}</OutlineActionsProvider>
     </PiAgentProvider>
   );

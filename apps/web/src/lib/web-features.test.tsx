@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { WebApp } from '../app/create-web-app.js';
 import { AuthControls } from '../components/AuthControls.js';
 import { SettingsModal } from '../components/SettingsModal.js';
-import { useAccountControls, useCommitMessagePolish, useFeatureGate, type WebFeature, WebFeaturesProvider } from './web-features.js';
+import { useAccountControls, useAgentEnabled, useCommitMessagePolish, useFeatureGate, type WebFeature, WebFeaturesProvider } from './web-features.js';
 
 vi.mock('../components/CoreUpdates.js', () => ({ CoreUpdates: () => null }));
 vi.mock('../components/ProductVersion.js', () => ({ ProductVersion: () => null }));
@@ -96,4 +96,16 @@ it('lets the last feature that sets one supply the commit message polish', () =>
   const html = (features: WebFeature[]) => renderToStaticMarkup(createElement(WebFeaturesProvider, { features }, createElement(Probe)));
   expect(html([])).toBe('<span>none</span>');
   expect(html([{ id: 'a', commitMessagePolish: first }, { id: 'b' }, { id: 'c', commitMessagePolish: second }])).toBe('<span>true</span>');
+});
+
+it('asks a remote deployment for an agent session only when an edition says its server has one', () => {
+  function Probe({ remote }: { remote: boolean; }) {
+    return createElement('span', null, String(useAgentEnabled(remote)));
+  }
+  const html = (features: WebFeature[], remote: boolean) => renderToStaticMarkup(createElement(WebFeaturesProvider, { features }, createElement(Probe, { remote })));
+  // A local workspace always asks; the community edition's remote one never does.
+  expect(html([], false)).toBe('<span>true</span>');
+  expect(html([], true)).toBe('<span>false</span>');
+  expect(html([{ id: 'quiet' }, { id: 'declined', agent: false }], true)).toBe('<span>false</span>');
+  expect(html([{ id: 'quiet' }, { id: 'hosted-agent', agent: true }], true)).toBe('<span>true</span>');
 });

@@ -106,6 +106,9 @@ function commitTrailers(notes: NoteChangeFacts[], documents: string[]): string[]
   return [...notes.map(facts => `${facts.added ? 'Note-Added' : 'Note-Modified'}: ${facts.path}`), ...documents.map(path => `Document-Modified: ${path}`)];
 }
 
+/** The longest message the repository source accepts. */
+const MESSAGE_LIMIT = 4000;
+
 /** Trailer lines of the kinds `commitTrailers` writes, whatever their case. */
 const TRAILER_LINE = /^(Note-Added|Note-Modified|Document-Modified):/i;
 
@@ -141,18 +144,28 @@ export function summarizeCommit(notes: NoteChangeFacts[], documents: string[], t
   return { subject: clip(subject), details: repeatsSubject ? trailers : `${lines.join('\n')}\n\n${trailers}` };
 }
 
-/** The longest message the repository source accepts. */
-const MESSAGE_LIMIT = 4000;
-
 /**
- * The full commit message: the subject as the visitor left it, then the generated details, cut at a line
- * boundary when a very large commit would pass the source's message limit.
+ * The full commit message: the subject as the visitor left it, then the generated details. When a long body
+ * (a very large commit, or a long polish) would pass the source's message limit, the body is cut at a line
+ * boundary and the trailers stay whole; only trailers that alone pass the limit are cut.
  */
 export function commitMessage(subject: string, details: string): string {
   const head = subject.trim();
   if (!details) return head;
   const full = `${head}\n\n${details}`;
   if (full.length <= MESSAGE_LIMIT) return full;
-  const kept = full.slice(0, MESSAGE_LIMIT - 2);
-  return `${kept.slice(0, kept.lastIndexOf('\n'))}\n…`;
+  const lines = details.split('\n');
+  let bodyEnd = lines.length;
+  while (bodyEnd > 0 && TRAILER_LINE.test(lines[bodyEnd - 1])) bodyEnd--;
+  const trailers = lines.slice(bodyEnd).join('\n');
+  const body = lines.slice(0, bodyEnd).join('\n').trim();
+  // The room for the body: the limit less the subject, the trailers, the blank lines between them and the ellipsis line.
+  const room = MESSAGE_LIMIT - head.length - trailers.length - 6;
+  const kept = body.slice(0, Math.max(room, 0));
+  const lineEnd = kept.lastIndexOf('\n');
+  const clipped = (lineEnd > 0 ? kept.slice(0, lineEnd) : kept).trimEnd();
+  if (trailers && clipped) return `${head}\n\n${clipped}\n…\n\n${trailers}`;
+  if (trailers && trailers.length + head.length + 2 <= MESSAGE_LIMIT) return `${head}\n\n${trailers}`;
+  const cut = full.slice(0, MESSAGE_LIMIT - 2);
+  return `${cut.slice(0, cut.lastIndexOf('\n'))}\n…`;
 }

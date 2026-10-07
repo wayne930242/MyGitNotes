@@ -60,6 +60,11 @@ export interface WebFeature {
   /** Adds an "AI polish" button to the commit dialog, beside "Generate message"; the last feature that sets it wins. */
   commitMessagePolish?: CommitMessagePolish;
   /**
+   * The server runs an agent for a remote deployment too (its `PiAgent` is mounted at `/api/pi`), so the web app
+   * asks it for a session there. Without it a remote deployment never asks, as a remote server runs no local Pi.
+   */
+  agent?: boolean;
+  /**
    * Whether the agent panel (`FEATURE_IDS.agent`), the R2 panel (`FEATURE_IDS.r2`) and the polish button
    * (`FEATURE_IDS.commitPolish`) are open to this user. A denied feature shows its `reason` in place instead
    * of being hidden or failing at the server. It is presentation only: the server still enforces every limit.
@@ -87,6 +92,12 @@ export function useAccountControls(): RenderAccountControls | undefined {
 
 export function useCommitMessagePolish(): CommitMessagePolish | undefined {
   return useContext(FeaturesContext).reduce<CommitMessagePolish | undefined>((found, feature) => feature.commitMessagePolish ?? found, undefined);
+}
+
+/** Whether the app asks the server for an agent session: always for a local workspace, and for a remote one only when an edition's server supplies an agent. */
+export function useAgentEnabled(remote: boolean): boolean {
+  const hosted = useContext(FeaturesContext).some(feature => feature.agent === true);
+  return !remote || hosted;
 }
 
 /** The first denial among the features, or an open gate; the community edition gates nothing. */
