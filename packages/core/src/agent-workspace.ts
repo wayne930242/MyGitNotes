@@ -39,7 +39,9 @@ const SCRIPT = /\.(sh|bash|zsh|py|js|mjs|cjs|ts|json|ya?ml|toml|txt|md)$/i;
 const SKIPPED = new Set(['node_modules', 'dist', 'build']);
 
 const instructionsPath = (folder: string) => folder ? `${folder}/${INSTRUCTIONS_FILE}` : INSTRUCTIONS_FILE;
-const visible = (part: string) => Boolean(part) && !part.startsWith('.') && !SKIPPED.has(part);
+const visible = (part: string) => Boolean(part) && !part.startsWith('.');
+/** Generated folders inside a skill that the worktree walk leaves out; paths through them stay valid workspace files. */
+const walked = (part: string) => visible(part) && !SKIPPED.has(part);
 
 /** Whether a folder is a notebook root or a content folder inside one. */
 export function insideNotebook(dir: string, notebooks: NotebookConfig[]) {
@@ -110,7 +112,7 @@ export function listAgentWorkspaceFiles(root: string, notebooks: NotebookConfig[
     const full = path.join(root, relative);
     if (fs.lstatSync(full).isSymbolicLink()) return;
     if (fs.statSync(full).isDirectory()) {
-      for (const entry of fs.readdirSync(full)) if (visible(entry)) collect(`${relative}/${entry}`);
+      for (const entry of fs.readdirSync(full)) if (walked(entry)) collect(`${relative}/${entry}`);
       return;
     }
     const file = agentWorkspaceFile(relative, notebooks);
@@ -124,7 +126,7 @@ export function listAgentWorkspaceFiles(root: string, notebooks: NotebookConfig[
     const skills = folder ? `${folder}/${SKILLS_DIRECTORY}` : SKILLS_DIRECTORY;
     // Neither `.agents` nor `.agents/skills` may be a symlink, or the walk would leave the folder.
     if (isDirectory(path.join(root, skills, '..')) && isDirectory(path.join(root, skills))) {
-      for (const skill of fs.readdirSync(path.join(root, skills))) if (visible(skill) && isDirectory(path.join(root, skills, skill))) collect(`${skills}/${skill}`);
+      for (const skill of fs.readdirSync(path.join(root, skills))) if (walked(skill) && isDirectory(path.join(root, skills, skill))) collect(`${skills}/${skill}`);
     }
     for (const entry of fs.readdirSync(full, { withFileTypes: true })) {
       const child = folder ? `${folder}/${entry.name}` : entry.name;

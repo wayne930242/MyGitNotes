@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { skillFile } from '../src/agent-system.js';
 import { agentFileAllowed, agentWorkspaceFile, agentWorkspaces, listAgentWorkspaceFiles, resolveAgentFile } from '../src/agent-workspace.js';
 import type { NotebookConfig } from '../src/types.js';
 
@@ -23,9 +24,18 @@ describe('agent workspace files', () => {
     expect(agentWorkspaceFile('.agents/skills/proofread/guide.txt', notebooks)).toMatchObject({ kind: 'reference' });
     expect(agentWorkspaceFile('.agents/skills/proofread/scripts/check.sh', notebooks)).toMatchObject({ kind: 'script', skill: 'proofread' });
     expect(agentWorkspaceFile('.agents/skills/proofread/scripts/lib/util.py', notebooks)).toMatchObject({ kind: 'script' });
-    for (const file of ['.agents/skills/proofread/run.sh', '.agents/skills/proofread/.env', '.agents/skills/proofread/scripts/.secret.sh', '.agents/skills/proofread/scripts/tool.exe', '.agents/skills/.hidden/SKILL.md', '.agents/skills/proofread/node_modules/x.md', '.claude/skills/proofread/SKILL.md', 'apps/.agents/skills/x/SKILL.md']) {
+    for (const file of ['.agents/skills/proofread/run.sh', '.agents/skills/proofread/.env', '.agents/skills/proofread/scripts/.secret.sh', '.agents/skills/proofread/scripts/tool.exe', '.agents/skills/.hidden/SKILL.md', '.claude/skills/proofread/SKILL.md', 'apps/.agents/skills/x/SKILL.md']) {
       expect(agentWorkspaceFile(file, notebooks)).toBeUndefined();
     }
+  });
+
+  it('keeps skills under notebook folders named like generated output', () => {
+    const generated = [{ id: 'projects', title: 'Projects', root: 'notes/projects/build' }, { id: 'site', title: 'Site', root: 'dist/site' }] as NotebookConfig[];
+    expect(skillFile('notes/projects/build/.agents/skills/x/SKILL.md', generated)).toEqual({ owner: 'notes/projects/build', name: 'x', directory: 'notes/projects/build/.agents/skills/x' });
+    expect(skillFile('dist/.agents/skills/x/SKILL.md', generated)).toMatchObject({ owner: 'dist' });
+    expect(skillFile('.agents/skills/x/scripts/build/notes.md', generated)).toMatchObject({ name: 'x' });
+    expect(agentWorkspaceFile('notes/projects/build/AGENTS.md', generated)).toMatchObject({ kind: 'instructions', folder: 'notes/projects/build' });
+    expect(agentWorkspaceFile('.agents/skills/x/scripts/build/run.sh', generated)).toMatchObject({ kind: 'script', skill: 'x' });
   });
 
   it('still lets Git reach the files other tools keep, without opening runtime settings', () => {
@@ -50,7 +60,7 @@ describe('listing a worktree', () => {
 
   it('walks only workspace folders and skill folders, skipping symlinks', () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-workspace-'));
-    for (const file of ['AGENTS.md', '.agents/skills/a/SKILL.md', '.agents/skills/a/references/r.md', '.agents/skills/a/scripts/s.sh', 'blog/AGENTS.md', 'blog/.agents/skills/b/SKILL.md', 'apps/AGENTS.md', 'notes/life/trips/AGENTS.md', 'notes/life/trips/day.md', 'outside/secret.md']) write(file);
+    for (const file of ['AGENTS.md', '.agents/skills/a/node_modules/dep.md', '.agents/skills/a/SKILL.md', '.agents/skills/a/references/r.md', '.agents/skills/a/scripts/s.sh', 'blog/AGENTS.md', 'blog/.agents/skills/b/SKILL.md', 'apps/AGENTS.md', 'notes/life/trips/AGENTS.md', 'notes/life/trips/day.md', 'outside/secret.md']) write(file);
     fs.symlinkSync(path.join(root, 'outside'), path.join(root, '.agents/skills/linked'));
     expect(listAgentWorkspaceFiles(root, notebooks).map(file => file.path)).toEqual(['.agents/skills/a/references/r.md', '.agents/skills/a/scripts/s.sh', '.agents/skills/a/SKILL.md', 'AGENTS.md', 'blog/.agents/skills/b/SKILL.md', 'blog/AGENTS.md', 'notes/life/trips/AGENTS.md']);
     expect(() => resolveAgentFile(root, '.agents/skills/linked/secret.md', notebooks)).toThrow(/symlinks/);
