@@ -514,7 +514,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'layout.graph': '關聯圖',
   // Navigation & Shell
   'nav.notes': '筆記',
-  'nav.agent': 'Agent 系統',
+  'nav.agent': 'Agent 工作區',
   'nav.assets': '檔案',
   'nav.graph': '關聯圖',
   'nav.settings': '設定',
@@ -1064,7 +1064,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'assets.openOriginal': '開啟原始檔案',
   'assets.openToViewFormat': '開啟原始檔案以檢視此格式。',
 
-  // Agent System
+  // Agent workspaces
   'agent.title': 'Agent 工作區',
   'agent.workspace': 'Agent 工作區',
   'agent.addWorkspace': '新增工作區',

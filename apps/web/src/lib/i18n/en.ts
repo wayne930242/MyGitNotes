@@ -513,7 +513,7 @@ export const en = {
 
   // Navigation & Shell
   'nav.notes': 'Notes',
-  'nav.agent': 'Agent System',
+  'nav.agent': 'Agent workspaces',
   'nav.assets': 'Files',
   'nav.graph': 'Graph',
   'nav.settings': 'Settings',
@@ -1063,7 +1063,7 @@ export const en = {
   'assets.openOriginal': 'Open original',
   'assets.openToViewFormat': 'Open the original file to view this format.',
 
-  // Agent System
+  // Agent workspaces
   'agent.title': 'Agent workspaces',
   'agent.workspace': 'Agent workspace',
   'agent.addWorkspace': 'Add workspace',
@@ -1102,7 +1102,7 @@ export const en = {
   'agent.loadingDocument': 'Loading file…',
   'agent.skillMetadata': 'Skill details',
   'agent.skillName': 'Name',
-  'agent.skillNameHint': 'Also the skill’s folder name: lowercase letters, numbers and hyphens. Changing it renames the skill.',
+  'agent.skillNameHint': 'Also the name of the skill folder: lowercase letters, numbers and hyphens. Changing it renames the skill.',
   'agent.skillDescription': 'Description',
   'agent.skillDescriptionHint': 'What the skill does and when to use it. Pi reads this to decide when to use the skill.',
   'agent.skillMetadataError': 'These details cannot be read. Fix them in the YAML view.',
