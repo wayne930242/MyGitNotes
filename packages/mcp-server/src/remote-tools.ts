@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { agentSystemHint, callAgentSystem, callNoteShell, configuredNoteStatuses, DEFAULT_NOTE_STATUSES, NOTE_DESCRIPTION_LIMIT, type NoteItem, type NoteMetadata, type NoteMetadataEdits, type NoteSearchOptions, noteShellWrites, noteSummary, noteWebPath, RemoteSource, searchNotes, serializeNoteContent, skillFile, textSearchRegex, versionFileChanges, withNoteEdits } from '@mygitnotes/core';
+import { agentSystemHint, callAgentSystem, callNoteShell, configuredNoteStatuses, DEFAULT_NOTE_STATUSES, keptNoteMetadata, NOTE_DESCRIPTION_LIMIT, type NoteItem, type NoteMetadata, type NoteMetadataEdits, type NoteSearchOptions, noteShellWrites, noteSummary, noteWebPath, RemoteSource, searchNotes, serializeNoteContent, skillFile, textSearchRegex, versionFileChanges, withNoteEdits } from '@mygitnotes/core';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { type AssetUpload, deleteR2Asset, envToolAssets, listR2Assets, type ToolAssets, uploadR2Asset } from './tools/assets.js';
 
@@ -166,9 +166,13 @@ async function runRemoteTool(reader: RemoteSource, name: string, args: Record<st
       return args.metadataOnly ? metadataResult(await noteMetadata(reader, args.path)) : { note: await reader.note(String(args.path)) };
     case 'save_note': {
       if (args.content === undefined) return updateNoteMetadata(reader, args, false);
+      // A save that leaves metadata out keeps the note's frontmatter; given keys replace their values.
+      const file = String(args.path);
+      const existing = args.createOnly !== true && (await reader.getSnapshot()).entries.some(entry => entry.path === file && entry.type === 'blob') ? (await reader.readFile(file)).toString('utf8') : undefined;
+      const kept = keptNoteMetadata(file, existing, args.metadata as NoteMetadata | undefined);
       const edited = args.status !== undefined || args.tags !== undefined || args.title !== undefined;
-      const finalMetadata = edited ? withNoteEdits({ ...args.metadata as NoteMetadata | undefined }, metadataEdits(args)) : args.metadata as NoteMetadata | undefined;
-      return reader.save(String(args.path), String(args.content), finalMetadata, String(args.revision), args.createOnly === true, true);
+      const finalMetadata = edited ? withNoteEdits({ ...kept }, metadataEdits(args)) : kept;
+      return reader.save(file, String(args.content), finalMetadata, String(args.revision), args.createOnly === true, true);
     }
     case 'delete_note': {
       const file = String(args.path);

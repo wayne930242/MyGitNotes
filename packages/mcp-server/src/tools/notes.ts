@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { agentEditMessage, DEFAULT_NOTE_STATUSES, deleteNoteFile, loadWorkspaceConfig, type NotebookConfig, NoteItem, noteSummary, readNoteFile, resolveNoteStatuses, resolveSafePath, scanNotebookNotes, versionFilePath, withNoteEdits, type WorkspaceConfig, writeNoteFile } from '@mygitnotes/core';
+import { agentEditMessage, DEFAULT_NOTE_STATUSES, deleteNoteFile, keptNoteMetadata, loadWorkspaceConfig, type NotebookConfig, NoteItem, noteSummary, readNoteFile, resolveNoteStatuses, resolveSafePath, scanNotebookNotes, versionFilePath, withNoteEdits, type WorkspaceConfig, writeNoteFile } from '@mygitnotes/core';
 import { generateCommitMessage, stageAndCommit } from '@mygitnotes/git';
 import { assertNoteResource, assertUserWorkspaceBranch } from '../guards.js';
 import type { ToolContext } from './context.js';
@@ -59,8 +59,11 @@ export async function handleSaveNote(ctx: ToolContext, args: { path: string; con
     return handleUpdateNoteMetadata(ctx, args);
   }
 
+  // A save that leaves metadata out keeps the note's frontmatter; given keys replace their values.
+  const target = resolveSafePath(ctx.repoRoot, args.path);
+  const kept = keptNoteMetadata(args.path, fs.existsSync(target) ? fs.readFileSync(target, 'utf-8') : undefined, args.metadata);
   const edited = args.status !== undefined || args.tags !== undefined || args.title !== undefined;
-  const finalMetadata = edited ? withNoteEdits(args.metadata ?? {}, args) : args.metadata;
+  const finalMetadata = edited ? withNoteEdits(kept ?? {}, args) : kept;
 
   const saved = writeNoteFile(ctx.repoRoot, args.path, args.content, finalMetadata);
 

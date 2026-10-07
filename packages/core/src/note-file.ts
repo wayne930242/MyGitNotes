@@ -40,6 +40,17 @@ export function serializeNoteFile(filePath: string, metadata: NoteMetadata, cont
   return serializeNoteContent(metadata, content, isNew, now, existingRaw, isOutlinePath(filePath));
 }
 
+/**
+ * The metadata a save that names only some frontmatter keys writes over an existing note: its current frontmatter with
+ * the given keys replaced, so keys the caller left out are kept. A new note, a note without frontmatter and a compilation,
+ * whose content carries its own fields, take the given metadata as it is.
+ */
+export function keptNoteMetadata(filePath: string, existingRaw: string | undefined, given: NoteMetadata | undefined): NoteMetadata | undefined {
+  if (existingRaw === undefined || isCompilationPath(filePath)) return given;
+  const { metadata } = parseNoteFile(existingRaw, filePath);
+  return Object.keys(metadata).length ? { ...metadata, ...given } : given;
+}
+
 /** Replaces only the tags of a stored file: a compilation's `tags` key, or a note's frontmatter `tags`; every other field stays as it is. */
 export function replaceFileTags(raw: string, filePath: string, tags: string[]): string {
   if (!isCompilationPath(filePath)) return replaceNoteTags(raw, tags);

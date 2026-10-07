@@ -133,6 +133,25 @@ notebooks:
     expect(second.note.metadata.updated >= firstUpdatedAt).toBe(true);
   });
 
+  it("keeps an existing note's frontmatter when save_note leaves metadata out or names only some keys", async () => {
+    await runGit(['checkout', '-b', 'main'], testRepo);
+    fs.writeFileSync(path.join(testRepo, WORKSPACE_CONFIG_FILENAME), `schema_version: 1\nworkspace:\n  title: "Test"\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: "Example"\n    root: notes/example\n`);
+    fs.mkdirSync(path.join(testRepo, 'notes/example'), { recursive: true });
+    fs.writeFileSync(path.join(testRepo, 'notes/example/kept.md'), '---\ncustom: retained\nstatus: inbox\n---\n# Alpha\n');
+    await stageAndCommit(testRepo, [WORKSPACE_CONFIG_FILENAME, 'notes/example/kept.md'], 'fixture');
+
+    const bodyOnly = await handleSaveNote({ repoRoot: testRepo }, { path: 'notes/example/kept.md', content: '# Alpha\nnew body\n' });
+    expect(bodyOnly.note.metadata).toMatchObject({ custom: 'retained', status: 'inbox' });
+    expect(bodyOnly.note.content).toContain('new body');
+
+    const partial = await handleSaveNote({ repoRoot: testRepo }, { path: 'notes/example/kept.md', content: '# Alpha\nnew body\n', metadata: { status: 'done' } });
+    expect(partial.note.metadata).toMatchObject({ custom: 'retained', status: 'done' });
+
+    const created = await handleSaveNote({ repoRoot: testRepo }, { path: 'notes/example/plain.md', content: '# Plain\n' });
+    expect(fs.readFileSync(path.join(testRepo, 'notes/example/plain.md'), 'utf-8')).toBe('# Plain\n');
+    expect(created.note.metadata).toEqual({});
+  });
+
   it('reads workspace configuration properly', async () => {
     await runGit(['checkout', '-b', 'main'], testRepo);
     fs.writeFileSync(path.join(testRepo, WORKSPACE_CONFIG_FILENAME), `schema_version: 1\nworkspace:\n  title: "MCP Notes"\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: "Ex"\n    root: notes/ex\n`);
