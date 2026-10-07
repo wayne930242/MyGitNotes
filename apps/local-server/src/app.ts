@@ -85,6 +85,8 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   // JSON-RPC body, and how large that may be depends on the bucket the asset storage gives the caller.
   const smallBody = express.json({ limit: '8mb' });
   app.use((req, res, next) => req.path === '/mcp' || req.path.startsWith('/mcp/') ? next() : smallBody(req, res, next));
+  // A parse error message can quote part of the body, such as an API key, so it is answered with fixed text and never logged.
+  app.use((error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => (error as { type?: string; } | null)?.type === 'entity.parse.failed' ? res.status(400).json({ error: 'Request body is not valid JSON.', code: 'bad-json' }) : next(error));
   app.use('/api/auth', createAuth({ store: recordStore, sessions, configSource, choices: workspaceChoices }));
   app.use('/api', workspaceChoiceRouter({ store: recordStore, sessions, choices: workspaceChoices }));
   services.routes?.(app, services);

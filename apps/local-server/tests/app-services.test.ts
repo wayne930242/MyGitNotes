@@ -119,3 +119,18 @@ it('reports the community store unready on Vercel until Redis is configured', ()
   vi.stubEnv('REDIS_URL', '');
   expect(store.ready).toBe(true);
 });
+
+it('answers a malformed JSON body with a fixed 400 that neither quotes nor logs the body, and keeps 413 for a too-large one', async () => {
+  const secret = 'sk-live-SECRET-0123456789';
+  const spies = (['error', 'warn', 'log', 'info'] as const).map(name => vi.spyOn(console, name).mockImplementation(() => undefined));
+  const base = await listen(createApp(dir, { configSource: noWorkspaceYet, remoteCache: undefined, routes: app => app.put('/api/edition/key', (_req, res) => res.json({ ok: true })) }));
+  const send = (body: string) => fetch(`${base}/api/edition/key`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body });
+  const bad = await send(`{"key": "${secret}`);
+  expect(bad.status).toBe(400);
+  const text = await bad.text();
+  expect(JSON.parse(text)).toEqual({ error: 'Request body is not valid JSON.', code: 'bad-json' });
+  expect(text).not.toContain(secret);
+  expect((await send(JSON.stringify({ key: 'x'.repeat(9 * 1024 * 1024) }))).status).toBe(413);
+  for (const spy of spies) expect(JSON.stringify(spy.mock.calls)).not.toContain(secret);
+  spies.forEach(spy => spy.mockRestore());
+});
