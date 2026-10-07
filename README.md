@@ -128,8 +128,9 @@ They remain a file-move blocker until explicitly discarded.
 With [Pi](https://github.com/earendil-works/pi) installed, local mode adds an Agent tab to the right panel; the tab is hidden when `pi` (or the command in `MYGITNOTES_PI_COMMAND`) is not found.
 
 - `pi --mode rpc` starts in the background when the workspace loads; after a page reload or a `pnpm dev` restart, the panel resumes the same conversation.
-- Pi runs at the project root by default.
-  Click the folder name in the header to move it into a notebook folder; switching ends the current conversation.
+- Pi runs in an agent workspace: a folder with its own core instructions (`AGENTS.md`) and skills (`.agents/skills/`), set up on the Agents page.
+  It starts at the repository root; click the workspace name in the header to switch, which ends the current conversation.
+- MCP servers are configured in Pi itself (`pi mcp add`, or `/mcp` in the chat), never in the repository.
 - Each message can name the open file: **Line** adds the caret line or selection, **Path only** adds just the path, and **None** adds nothing.
   Paths are relative to the folder Pi runs in.
 - Switch the model and thinking level in the panel.
