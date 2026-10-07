@@ -1,4 +1,5 @@
-import { agentInstructionFile, skillFile } from './agent-system.js';
+import { skillFile } from './agent-system.js';
+import { agentWorkspaceFile } from './agent-workspace.js';
 import { isNotebookContent } from './folders.js';
 import { isNoteFile } from './note-file.js';
 import { isVersionFile } from './note-versions.js';
@@ -15,7 +16,7 @@ export function historyFile(file: string, notebooks: readonly NotebookConfig[]):
   if (typeof file !== 'string' || !file || file.length > 1024 || file.includes('\\') || /[\x00-\x1f\x7f]/.test(file) || file.split('/').some(p => !p || p === '.' || p === '..')) return false;
   /* eslint-enable no-control-regex */
   if (isVersionFile(file) || workspaceDocument(file)) return false;
-  if (workspaceAgentKind(file) || agentInstructionFile(file, [...notebooks]) || skillFile(file, [...notebooks])) return true;
+  if (workspaceAgentKind(file) || agentWorkspaceFile(file, [...notebooks]) || skillFile(file, [...notebooks])) return true;
   const notebook = notebooks.find(nb => file.startsWith(`${nb.root}/`));
   return Boolean(notebook && isNotebookContent(file.slice(notebook.root.length + 1), notebook) && isNoteFile(file));
 }

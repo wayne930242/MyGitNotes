@@ -95,7 +95,7 @@ describe('GitLab HTTP and MCP integration', () => {
     expect(fixture.writes).toBe(1);
     expect(await fetch(`${base}/api/focus-page`, { headers: { Cookie: cookie } }).then(r => r.json())).toMatchObject({ writable: true, page: { version: 1 } });
     expect(await fetch(`${base}/api/study`, { headers: { Cookie: cookie } }).then(r => r.json())).toMatchObject({ writable: true });
-    expect((await fetch(`${base}/api/agent-resources`, { headers: { Cookie: cookie } }).then(r => r.json())).instructions[0].path).toBe('AGENTS.md');
+    expect((await fetch(`${base}/api/agent-resources`, { headers: { Cookie: cookie } }).then(r => r.json())).files.find((file: any) => file.kind === 'instructions').path).toBe('AGENTS.md');
   });
   it('answers note queries, facets and lookups over the remote source', async () => {
     await login();

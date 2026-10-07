@@ -40,9 +40,9 @@ export function splitAgentSkillContent(content: string): AgentSkillContentSplit 
   return { frontmatter: match[0], body: content.slice(match[0].length), lineNumberOffset: (match[0].match(/\n/g) || []).length };
 }
 
-/** The canonical entry path for a brand-new directory-backed skill. */
-export function newAgentSkillEntryPath(slug: string): string {
-  return `.agents/skills/${validateAgentSkillSlug(slug)}/SKILL.md`;
+/** The canonical entry path for a brand-new directory-backed skill in a workspace folder (empty for the repository root). */
+export function newAgentSkillEntryPath(slug: string, folder = ''): string {
+  return `${folder ? `${folder}/` : ''}.agents/skills/${validateAgentSkillSlug(slug)}/SKILL.md`;
 }
 
 /** A minimal, immediately valid SKILL.md: frontmatter with a name and empty description, plus a heading. */

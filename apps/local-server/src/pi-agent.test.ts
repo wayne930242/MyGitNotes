@@ -71,11 +71,9 @@ afterEach(async () => {
 });
 
 function testFolder(workspace: string) {
-  return async (_res: unknown, notebookId: unknown, folder: unknown, repository: unknown): Promise<AgentFolder> => {
-    if (notebookId !== 'a') throw new SourceError('Unknown notebook.', 404);
-    // The repository root sits one level above the notebook in these tests.
-    if (repository === true) return { cwd: resolveAgentCwd(path.dirname(workspace)), location: { notebookId, folder: null, repository: true } };
-    return { cwd: resolveAgentCwd(folder ? path.join(workspace, String(folder)) : workspace), location: { notebookId, folder: folder ? String(folder) : null } };
+  return async (_res: unknown, repository: unknown, folder: unknown): Promise<AgentFolder> => {
+    if (repository !== 'home') throw new SourceError('Unknown repository.', 404);
+    return { cwd: resolveAgentCwd(folder ? path.join(workspace, String(folder)) : workspace), location: { repository, folder: String(folder ?? '') } };
   };
 }
 
@@ -87,7 +85,7 @@ async function start() {
   const command = path.join(temp, 'fake-pi');
   fs.writeFileSync(command, `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`, { mode: 0o755 });
   const workspace = fs.realpathSync(temp);
-  // Notebook `a` lives at the temp root; any folder name maps to the directory of that name inside it.
+  // Repository `home` lives at the temp root; any folder name maps to the directory of that name inside it.
   agent = createPiAgent({ command, resolveFolder: testFolder(workspace) });
   const app = express();
   app.use(express.json());
@@ -103,7 +101,7 @@ async function start() {
   return { base: `http://127.0.0.1:${address.port}`, port: address.port, workspace };
 }
 
-const post = (base: string, method: string, body: unknown = { notebookId: 'a' }, origin = base) => fetch(`${base}/api/pi/session`, { method, headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(body) });
+const post = (base: string, method: string, body: unknown = { repository: 'home', folder: '' }, origin = base) => fetch(`${base}/api/pi/session`, { method, headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(body) });
 
 /** Opens a socket and collects its records until `until` matches one. */
 function connect(port: number, origin: string) {
@@ -288,8 +286,8 @@ describe('pi agent bridge', () => {
     fs.mkdirSync(other);
     const client = connect(port, base);
     await client.opened;
-    const switched = await (await post(base, 'PUT', { notebookId: 'a', folder: 'other' })).json() as { session: { id: string; cwd: string; }; };
-    expect(switched.session).toMatchObject({ cwd: other, location: { notebookId: 'a', folder: 'other' } });
+    const switched = await (await post(base, 'PUT', { repository: 'home', folder: 'other' })).json() as { session: { id: string; cwd: string; }; };
+    expect(switched.session).toMatchObject({ cwd: other, location: { repository: 'home', folder: 'other' } });
     expect(switched.session.id).not.toBe(first.session.id);
     // The old session's clients learn it ended and are closed.
     await client.next(record => record.type === 'bridge_status' && (record.session as { status: string; }).status === 'exited');
@@ -300,8 +298,8 @@ describe('pi agent bridge', () => {
     const reply = JSON.parse(assistantText(await next.next(record => record.type === 'message_end'))) as { cwd: string; args: string[]; };
     expect(reply).toMatchObject({ cwd: other, args: ['--mode', 'rpc', '--extension', TRUST_EXTENSION, '--append-system-prompt', WEB_CHAT_PROMPT] });
 
-    const project = await (await post(base, 'PUT', { notebookId: 'a', repository: true })).json() as { session: { cwd: string; location: unknown; }; };
-    expect(project.session).toMatchObject({ cwd: path.dirname(workspace), location: { notebookId: 'a', folder: null, repository: true } });
+    const root = await (await post(base, 'PUT', { repository: 'home', folder: '' })).json() as { session: { cwd: string; location: unknown; }; };
+    expect(root.session).toMatchObject({ cwd: workspace, location: { repository: 'home', folder: '' } });
 
     expect(await (await post(base, 'DELETE')).json()).toEqual({ session: null });
     await expect(connect(port, base).opened).rejects.toThrow('HTTP 409');
@@ -331,7 +329,7 @@ describe('pi agent bridge', () => {
     expect(resumableSession(own, workspace)).toBe(own);
     expect([resumableSession(other, workspace), resumableSession(plain, workspace), resumableSession(path.join(workspace, 'gone.jsonl'), workspace), resumableSession('own.jsonl', workspace), resumableSession(42, workspace)]).toEqual([undefined, undefined, undefined, undefined, undefined]);
 
-    await post(base, 'POST', { notebookId: 'a', sessionFile: own });
+    await post(base, 'POST', { repository: 'home', folder: '', sessionFile: own });
     const client = connect(port, base);
     await client.opened;
     client.send({ type: 'prompt', message: 'args' });
@@ -340,7 +338,7 @@ describe('pi agent bridge', () => {
     await client.next(record => record.type === 'bridge_status' && (record.session as { sessionFile?: string; }).sessionFile === own);
 
     await post(base, 'DELETE', {});
-    await post(base, 'POST', { notebookId: 'a', sessionFile: other });
+    await post(base, 'POST', { repository: 'home', folder: '', sessionFile: other });
     const fresh = connect(port, base);
     await fresh.opened;
     fresh.send({ type: 'prompt', message: 'args' });
@@ -349,8 +347,8 @@ describe('pi agent bridge', () => {
 
   it('keeps sessions inside the home directory', async () => {
     const { base } = await start();
-    expect((await post(base, 'PUT', { notebookId: 'b' })).status).toBe(404);
-    expect((await post(base, 'PUT', { notebookId: 'a', folder: 'missing' })).status).toBe(400);
+    expect((await post(base, 'PUT', { repository: 'other', folder: '' })).status).toBe(404);
+    expect((await post(base, 'PUT', { repository: 'home', folder: 'missing' })).status).toBe(400);
     expect(() => resolveAgentCwd('relative/path')).toThrow('absolute');
     expect(() => resolveAgentCwd(path.join(os.homedir(), 'no-such-folder-mygitnotes'))).toThrow('does not exist');
   });
@@ -374,6 +372,48 @@ describe('agent clients', () => {
   });
 });
 
+describe('agent workspaces', () => {
+  it('starts Pi only at a repository root or in a folder that holds core instructions', async () => {
+    temp = fs.mkdtempSync(path.join(os.homedir(), '.mygitnotes-pi-agent-test-'));
+    const root = fs.realpathSync(temp);
+    fs.writeFileSync(path.join(root, 'fake-pi.cjs'), FAKE_PI);
+    const command = path.join(root, 'fake-pi');
+    fs.writeFileSync(command, `#!/bin/sh\nexec "${process.execPath}" "${path.join(root, 'fake-pi.cjs')}" "$@"\n`, { mode: 0o755 });
+    for (const folder of ['blog/posts/drafts', 'apps']) fs.mkdirSync(path.join(root, folder), { recursive: true });
+    fs.writeFileSync(path.join(root, 'apps/AGENTS.md'), '# Not a workspace\n');
+    const config = { notebooks: [{ id: 'blog', title: 'Blog', root: 'blog/posts' }] };
+    const workspace = {
+      home: { ref: { id: 'home' }, handle: { kind: 'local', id: 'home', root } },
+      byId: async () => {
+        throw new SourceError('Unknown repository.', 404);
+      },
+      scope: async () => config,
+    };
+    agent = createPiAgent({ command });
+    const app = express();
+    app.use(express.json());
+    app.use((_req, res, next) => {
+      res.locals.workspace = workspace;
+      next();
+    });
+    app.use('/api/pi', agent.router);
+    server = createServer(app);
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+    const base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
+    const put = (body: unknown) => post(base, 'PUT', body);
+
+    expect((await put({ folder: 'blog/posts/drafts' })).status).toBe(404);
+    expect((await put({ folder: 'apps' })).status).toBe(403);
+    expect((await put({ folder: '../outside' })).status).toBe(403);
+    expect((await put({ repository: 'elsewhere', folder: '' })).status).toBe(404);
+    const rooted = await (await put({ folder: '' })).json() as { session: { cwd: string; location: unknown; }; };
+    expect(rooted.session).toMatchObject({ cwd: root, location: { repository: 'home', folder: '' } });
+    fs.writeFileSync(path.join(root, 'blog/posts/drafts/AGENTS.md'), '# Drafts\n');
+    const drafts = await (await put({ folder: 'blog/posts/drafts' })).json() as { session: { cwd: string; location: unknown; }; };
+    expect(drafts.session).toMatchObject({ cwd: path.join(root, 'blog/posts/drafts'), location: { repository: 'home', folder: 'blog/posts/drafts' } });
+  });
+});
+
 describe('Pi detection', () => {
   it('finds Pi by path or on PATH, and refuses to start a session without it', async () => {
     const { workspace } = await start();
@@ -384,7 +424,7 @@ describe('Pi detection', () => {
 
     const missing = createPiAgent({ command: path.join(workspace, 'no-pi-here') });
     expect(missing.manager.available).toBe(false);
-    await expect(missing.manager.ensure(async () => ({ cwd: workspace, location: { notebookId: 'a', folder: null } }))).rejects.toThrow('Pi is not installed on this computer.');
+    await expect(missing.manager.ensure(async () => ({ cwd: workspace, location: { repository: 'home', folder: '' } }))).rejects.toThrow('Pi is not installed on this computer.');
     expect(missing.manager.session).toBeUndefined();
   });
 });

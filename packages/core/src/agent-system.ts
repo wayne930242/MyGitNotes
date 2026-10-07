@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { isNotebookContent } from './folders.js';
+import { agentFolder, insideNotebook } from './agent-workspace.js';
 import { parseNoteContent } from './frontmatter.js';
 import { SourceError } from './github-api.js';
 import type { RemoteEntry, RemoteSource } from './remote-source.js';
@@ -17,17 +17,6 @@ const SKILL_PATH = /^(?:(.+)\/)?\.agents\/skills\/([^/]+)\/(.+)$/;
 const instructionFile = (dir: string) => dir ? `${dir}/AGENTS.md` : 'AGENTS.md';
 const regular = (entry: RemoteEntry) => entry.type === 'blob' && entry.mode !== '120000';
 
-function insideNotebook(dir: string, notebooks: NotebookConfig[]) {
-  return notebooks.some(nb => dir === nb.root || (dir.startsWith(nb.root + '/') && isNotebookContent(dir.slice(nb.root.length + 1), nb)));
-}
-
-/** The repository root, notebook roots and their ancestors, and folders inside notebooks may hold agent files. */
-function agentDirectory(dir: string, notebooks: NotebookConfig[]) {
-  if (!dir) return true;
-  if (dir.split('/').some(p => !p || p.startsWith('.'))) return false;
-  return notebooks.some(nb => nb.root.startsWith(dir + '/')) || insideNotebook(dir, notebooks);
-}
-
 /** A readable skill file in an allowed skill location, using the workspace Agent skill allowlist. */
 export function skillFile(file: string, notebooks: NotebookConfig[]): SkillFile | undefined {
   /* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
@@ -38,18 +27,8 @@ export function skillFile(file: string, notebooks: NotebookConfig[]): SkillFile 
   const [, owner = '', name, rest] = match;
   if (name.startsWith('.') || rest.split('/').some(p => !p || p.startsWith('.'))) return;
   if (!/\.(md|markdown|txt)$/i.test(rest) && rest !== 'agents/openai.yaml') return;
-  if (!agentDirectory(owner, notebooks)) return;
+  if (!agentFolder(owner, notebooks)) return;
   return { owner, name, directory: path.posix.join(owner, '.agents/skills', name) };
-}
-
-/** An `AGENTS.md` that `get_system_prompt` reads: at the repository root, a notebook root or an ancestor, or a folder inside a notebook. */
-export function agentInstructionFile(file: string, notebooks: NotebookConfig[]): boolean {
-  /* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
-  if (file.includes('\\') || /[\x00-\x1f\x7f]/.test(file) || file.split('/').some(p => !p || p === '.' || p === '..')) return false;
-  /* eslint-enable no-control-regex */
-  if (path.posix.basename(file) !== 'AGENTS.md') return false;
-  const dir = path.posix.dirname(file);
-  return agentDirectory(dir === '.' ? '' : dir, notebooks);
 }
 
 /** A target directory and each ancestor up to the repository root, root first. */

@@ -1,20 +1,18 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { responseError } from '../api.js';
-import type { FolderItem, NotebookConfig } from '../types.js';
+import { ApiError, responseError } from '../api.js';
+import type { NotebookConfig } from '../types.js';
+import type { RepositoryStatus } from '@mygitnotes/core/repository';
+import { fetchAgentWorkspaces } from '../api.js';
+import type { AgentWorkspace } from '../agent-workspaces.js';
 import { FEATURE_IDS, useFeatureGate } from '../web-features.js';
 import type { CaretStore } from './caret-store.js';
 import { commandsFromResponse, commandWithFocus, parseComposerInput, type PiCommand } from './commands.js';
 import { type AgentDialog, type AgentFocus, applyRecord, emptyTranscript, queuedText, startShell, transcriptFromMessages, type TranscriptState, withFocus } from './transcript.js';
 
-/** The bridged Pi process, as `/api/pi/session` reports it. */
-/**
- * Where Pi runs: a notebook folder, `folder` relative to the notebook root and null for the root itself, or with
- * `repository` the root of the notebook's repository, the whole project.
- */
+/** Where Pi runs: an agent workspace, a folder of one repository (`folder` empty for its root). */
 export interface PiLocation {
-  notebookId: string;
-  folder: string | null;
-  repository?: true;
+  repository: string;
+  folder: string;
 }
 
 export interface PiMcpServer {
@@ -135,7 +133,13 @@ export interface PiAgentValue {
   /** What the panel can name to Pi right now; null on the notebook list or an empty pane. */
   target: AgentTarget | null;
   notebooks: NotebookConfig[];
-  folders: FolderItem[];
+  repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'notebooks'>[];
+  /** The home repository, whose root workspace Pi starts in by default and which the workspace title names. */
+  homeRepository: string;
+  workspaceTitle: string;
+  /** The agent workspaces Pi may run in, once `loadWorkspaces` has listed them. */
+  workspaces: AgentWorkspace[];
+  loadWorkspaces: () => Promise<void>;
   connected: boolean;
   transcript: TranscriptState;
   error: string;
@@ -163,8 +167,8 @@ export interface PiAgentValue {
   /** Switches this session's model (`provider/id`); the thinking level follows what the model supports. */
   setModel: (value: string) => void;
   setThinking: (level: string) => void;
-  /** Restarts Pi in another notebook folder; the current conversation ends with the old process. */
-  switchFolder: (location: PiLocation) => Promise<void>;
+  /** Restarts Pi in another agent workspace; the current conversation ends with the old process. */
+  switchWorkspace: (location: PiLocation) => Promise<void>;
   locate: (path: string, notebookId: string) => Promise<string>;
 }
 
@@ -175,12 +179,11 @@ const SESSION_FILE_KEY = 'mygitnotes.piAgent.sessionFile';
 const MODEL_COMMANDS = new Set(['get_state', 'get_available_models', 'get_available_thinking_levels', 'set_model', 'set_thinking_level']);
 const RECONNECT_MS = 1500;
 
-/** The folder the user last switched to, while its notebook still exists. */
-function savedLocation(notebooks: NotebookConfig[]): PiLocation | undefined {
+/** The workspace the user last switched to; the server refuses it once it is no longer a workspace. */
+function savedLocation(): PiLocation | undefined {
   try {
-    const saved = JSON.parse(localStorage.getItem(LOCATION_KEY) || 'null') as PiLocation | null;
-    if (!saved || !notebooks.some(notebook => notebook.id === saved.notebookId)) return undefined;
-    return saved.repository === true ? { notebookId: saved.notebookId, folder: null, repository: true } : { notebookId: saved.notebookId, folder: typeof saved.folder === 'string' ? saved.folder : null };
+    const saved = JSON.parse(localStorage.getItem(LOCATION_KEY) || 'null') as Partial<PiLocation> | null;
+    return typeof saved?.repository === 'string' && typeof saved.folder === 'string' ? { repository: saved.repository, folder: saved.folder } : undefined;
   } catch {
     return undefined;
   }
@@ -235,10 +238,10 @@ export function usePiAgentAvailable(): boolean {
 /**
  * Starts the workspace's Pi process in the background as soon as a local workspace loads, so the panel
  * opens onto a warm session, and keeps it across panel and page changes until the user ends it. It starts
- * in the folder the user last switched to, else at the root of the selected notebook's repository, and
- * resumes the conversation it last had while that is still valid there.
+ * in the agent workspace the user last switched to, else at the root of the home repository, and resumes the
+ * conversation it last had while that is still valid there.
  */
-export function PiAgentProvider({ enabled, notebookId, notebooks, folders, children }: { enabled: boolean; notebookId: string; notebooks: NotebookConfig[]; folders: FolderItem[]; children: ReactNode; }) {
+export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, notebooks, repositories, children }: { enabled: boolean; homeRepository: string; workspaceTitle: string; notebooks: NotebookConfig[]; repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'notebooks'>[]; children: ReactNode; }) {
   const agentGate = useFeatureGate(FEATURE_IDS.agent);
   const [session, setSession] = useState<PiSessionInfo | null>(null);
   const [piAvailable, setPiAvailable] = useState(false);
@@ -258,6 +261,14 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
   const [modelState, setModelState] = useState<PiModelState>(emptyModelState);
   const [commands, setCommands] = useState<PiCommand[]>([]);
   const [contextUsage, setContextUsage] = useState<PiContextUsage>();
+  const [workspaces, setWorkspaces] = useState<AgentWorkspace[]>([]);
+  const loadWorkspaces = useCallback(async () => {
+    try {
+      setWorkspaces(await fetchAgentWorkspaces());
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  }, []);
   const [editorText, setEditorText] = useState<PiEditorText | null>(null);
   const socket = useRef<WebSocket | null>(null);
   /** The socket the live session named, kept here because `connect` also runs from timers that have only the ref. */
@@ -385,15 +396,23 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
 
   const start = useCallback(async () => {
     try {
-      if (!notebookId) throw new Error('No notebook is selected.');
-      // A running session is kept whatever is asked for; the server only uses the folder and the conversation
-      // to start one, by default the whole project, resuming the last conversation while it is still valid there.
-      const location = savedLocation(notebooks) ?? { notebookId, folder: null, repository: true };
-      attach((await sessionRequest('POST', { ...location, sessionFile: savedSessionFile() })).session);
+      // A running session is kept whatever is asked for; the server only uses the workspace and the conversation
+      // to start one, by default the home repository's root, resuming the last conversation while it is still valid there.
+      const home = { repository: homeRepository, folder: '' };
+      const saved = savedLocation();
+      try {
+        attach((await sessionRequest('POST', { ...saved ?? home, sessionFile: savedSessionFile() })).session);
+      } catch (reason) {
+        // Only a refused workspace is forgotten (its folder lost its core instructions, or its repository left the
+        // workspace); any other failure keeps the user's choice for the next try.
+        if (!saved || !(reason instanceof ApiError && (reason.status === 403 || reason.status === 404))) throw reason;
+        remember(LOCATION_KEY, null);
+        attach((await sessionRequest('POST', home)).session);
+      }
     } catch (reason) {
       setError((reason as Error).message);
     }
-  }, [attach, notebookId, notebooks]);
+  }, [attach, homeRepository]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -408,10 +427,10 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
     };
   }, [enabled, disconnect]);
 
-  // Starts once, as soon as Pi is known to be installed and a notebook is selected.
+  // Starts once, as soon as Pi is known to be installed and the workspace is known.
   const started = useRef(false);
   // A gated-off agent is not started behind the panel's back: its reason is shown instead of a request the server would refuse.
-  const ready = enabled && piAvailable && agentGate.allowed && Boolean(notebookId);
+  const ready = enabled && piAvailable && agentGate.allowed && Boolean(homeRepository);
   useEffect(() => {
     if (!ready || started.current) return;
     started.current = true;
@@ -437,7 +456,11 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
     session,
     target,
     notebooks,
-    folders,
+    repositories,
+    homeRepository,
+    workspaceTitle,
+    workspaces,
+    loadWorkspaces,
     connected,
     transcript,
     error,
@@ -509,7 +532,7 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
         setError((reason as Error).message);
       }
     },
-    switchFolder: async location => {
+    switchWorkspace: async location => {
       try {
         remember(SESSION_FILE_KEY, null);
         const { session: info } = await sessionRequest('PUT', location);
@@ -525,7 +548,7 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
       if (!res.ok) throw await responseError(res, 'The note could not be located');
       return ((await res.json()) as { file: string; }).file;
     },
-  }), [enabled, piAvailable, session, target, notebooks, folders, connected, transcript, error, modelState, commands, contextUsage, editorText, takeEditorText, loadCommands, start, command, attach]);
+  }), [enabled, piAvailable, session, target, notebooks, repositories, homeRepository, workspaceTitle, workspaces, loadWorkspaces, connected, transcript, error, modelState, commands, contextUsage, editorText, takeEditorText, loadCommands, start, command, attach]);
 
   return (
     <PiAgentTargetContext.Provider value={registerTarget}>

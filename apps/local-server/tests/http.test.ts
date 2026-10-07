@@ -53,23 +53,17 @@ describe('real HTTP local boundaries', () => {
     expect((await fetch(`${base}/api/folder-manager`)).status).toBe(400);
     expect((await fetch(`${base}/api/folder-manager?notebookId=example`)).status).toBe(200);
   });
-  it('serves product reference documents read-only from the Core checkout, not the workspace', async () => {
+  it('no longer serves product reference documents on the Agents page', async () => {
     const product = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-product-'));
     fs.mkdirSync(path.join(product, 'docs/agent/product'), { recursive: true });
     fs.writeFileSync(path.join(product, 'docs/agent/product/index.md'), '# Product Guide\n');
-    fs.writeFileSync(path.join(product, 'docs/agent/.hidden.md'), '# Hidden\n');
     const split = createServer(createApp(product));
     await new Promise<void>(resolve => split.listen(0, '127.0.0.1', resolve));
     const url = `http://127.0.0.1:${(split.address() as any).port}`;
     try {
       const listing = await fetch(`${url}/api/agent-resources`).then(r => r.json());
-      expect(listing.docs.filter((r: any) => r.scope === 'product')).toEqual([{ path: 'docs/agent/product/index.md', name: 'Product Guide', editable: false, scope: 'product' }]);
-      expect(await fetch(`${url}/api/agent-resources/read?path=docs/agent/product/index.md`).then(r => r.json())).toEqual({ path: 'docs/agent/product/index.md', content: '# Product Guide\n' });
-      for (const file of ['docs/agent/.hidden.md', 'docs/agent/../../etc/passwd.md', 'docs/agent/missing.md']) expect((await fetch(`${url}/api/agent-resources/read?path=${encodeURIComponent(file)}`)).ok).toBe(false);
-      const save = await fetch(`${url}/api/agent-resources/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'docs/agent/product/index.md', content: 'bad' }) });
-      expect(save.ok).toBe(false);
-      expect(fs.readFileSync(path.join(product, 'docs/agent/product/index.md'), 'utf8')).toBe('# Product Guide\n');
-      expect(fs.existsSync(path.join(root, 'docs'))).toBe(false);
+      expect(listing.files.some((file: any) => file.path.startsWith('docs/'))).toBe(false);
+      expect((await fetch(`${url}/api/agent-resources/read?path=docs/agent/product/index.md`)).ok).toBe(false);
     } finally {
       await new Promise<void>(resolve => split.close(() => resolve()));
       fs.rmSync(product, { recursive: true, force: true });
@@ -174,9 +168,9 @@ describe('real HTTP local boundaries', () => {
       fs.rmSync(remote, { recursive: true, force: true });
     }
   }, 20000); // Real bare-repo push/clone/sync round trips spawn dozens of git subprocesses; slower under full-suite load.
-  it('lists, edits, commits and restores workspace Agent documents while protecting secrets and product paths', async () => {
-    const settings = ['AGENTS.md', '.agents/skills/custom/SKILL.md', '.codex/agents/reviewer.toml'];
-    for (const file of settings) {
+  it("lists, edits, commits and restores agent workspace files while protecting secrets and other tools' files", async () => {
+    const settings = ['AGENTS.md', '.agents/skills/custom/SKILL.md', '.agents/skills/custom/references/guide.md', '.agents/skills/custom/scripts/run.sh', 'notes/example/AGENTS.md', 'notes/example/.agents/skills/local/SKILL.md'];
+    for (const file of [...settings, '.codex/agents/reviewer.toml']) {
       fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       fs.writeFileSync(path.join(root, file), '# Custom settings\n');
     }
@@ -185,16 +179,19 @@ describe('real HTTP local boundaries', () => {
     git('commit', '-m', 'workspace agent settings');
     const request = (body: unknown) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const listing = await fetch(`${base}/api/agent-resources`).then(r => r.json());
-    const resources = [...listing.instructions, ...listing.skills, ...listing.docs];
-    for (const file of settings) expect(resources).toContainEqual(expect.objectContaining({ path: file, editable: true, scope: 'workspace' }));
-    expect(resources.some(r => r.path === '.codex/auth.json')).toBe(false);
+    expect(listing.files.map((file: any) => file.path).sort()).toEqual([...settings].sort());
+    expect(listing.files).toContainEqual({ path: '.agents/skills/custom/scripts/run.sh', folder: '', kind: 'script', skill: 'custom', editable: true });
+    expect(listing.workspaces).toEqual([{ folder: '', hasInstructions: true, parents: [] }, { folder: 'notes/example', hasInstructions: true, parents: [''] }]);
+    expect((await fetch(`${base}/api/agent-resources/workspaces`).then(r => r.json())).workspaces).toEqual([{ repository: expect.any(String), folder: '', hasInstructions: true, parents: [] }, { repository: expect.any(String), folder: 'notes/example', hasInstructions: true, parents: [''] }]);
     for (const file of settings) {
       expect((await fetch(`${base}/api/agent-resources/save`, request({ path: file, content: '# Changed\n' }))).status).toBe(200);
       expect(await fetch(`${base}/api/agent-resources/read?path=${encodeURIComponent(file)}`).then(r => r.json())).toMatchObject({ content: '# Changed\n' });
       expect((await fetch(`${base}/api/agent-resources/restore`, request({ path: file }))).status).toBe(200);
       expect(fs.readFileSync(path.join(root, file), 'utf8')).toBe('# Custom settings\n');
     }
-    for (const file of ['.codex/auth.json', '.codex/config.toml', '.agents/skills/custom/.env', '.agents/skills/custom/run.sh', 'apps/web/AGENTS.md', '.agents/../README.md']) {
+    expect((await fetch(`${base}/api/agent-resources/save`, request({ path: '.agents/skills/custom/references/guide.md', content: 'x', create: true }))).status).toBe(409);
+    expect((await fetch(`${base}/api/agent-resources/save`, request({ path: '.agents/skills/custom/scripts/new.py', content: 'print(1)\n', create: true }))).status).toBe(200);
+    for (const file of ['.codex/auth.json', '.codex/config.toml', '.codex/agents/reviewer.toml', '.agents/skills/custom/.env', '.agents/skills/custom/run.sh', 'apps/web/AGENTS.md', '.agents/../README.md']) {
       expect((await fetch(`${base}/api/agent-resources/read?path=${encodeURIComponent(file)}`)).ok).toBe(false);
       expect((await fetch(`${base}/api/agent-resources/save`, request({ path: file, content: 'bad' }))).ok).toBe(false);
     }
@@ -214,6 +211,7 @@ describe('real HTTP local boundaries', () => {
     fs.writeFileSync(path.join(skill, 'SKILL.md'), '---\nname: old-name\ndescription: Old\n---\nUse $old-name.\n');
     fs.writeFileSync(path.join(skill, 'scripts/run.sh'), '#!/bin/sh\n');
     fs.writeFileSync(path.join(root, 'AGENTS.md'), 'Read `.agents/skills/old-name/SKILL.md` and use $old-name.\n');
+    fs.writeFileSync(path.join(root, 'CLAUDE.md'), 'Read `.agents/skills/old-name/SKILL.md`.\n');
     expect((await fetch(`${base}/api/agent-resources/rename-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: '.agents/skills/old-name/SKILL.md', slug: '../unsafe', content: 'unchanged' }) })).status).toBe(400);
     expect(fs.existsSync(skill)).toBe(true);
     const response = await fetch(`${base}/api/agent-resources/rename-skill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: '.agents/skills/old-name/SKILL.md', slug: 'new-name', content: '---\nname: new-name\ndescription: New\n---\nUse $old-name.\n' }) });
@@ -224,6 +222,7 @@ describe('real HTTP local boundaries', () => {
     expect(fs.readFileSync(path.join(root, '.agents/skills/new-name/SKILL.md'), 'utf8')).toContain('name: new-name');
     expect(fs.readFileSync(path.join(root, '.agents/skills/new-name/SKILL.md'), 'utf8')).toContain('$old-name');
     expect(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')).toBe('Read `.agents/skills/new-name/SKILL.md` and use $old-name.\n');
+    expect(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8')).toBe('Read `.agents/skills/old-name/SKILL.md`.\n');
     const staleSave = await fetch(`${base}/api/agent-resources/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: '.agents/skills/old-name/SKILL.md', content: 'stale' }) });
     expect(staleSave.status).toBe(409);
     expect(fs.existsSync(skill)).toBe(false);
@@ -826,7 +825,8 @@ describe('agent resources discovery and security boundaries', () => {
     fs.writeFileSync(path.join(root, 'notes/AGENTS.md'), '# Workspace Guidelines\n');
 
     const res = await fetch(`${base}/api/agent-resources`).then((r) => r.json());
-    expect(res.instructions).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'AGENTS.md', scope: 'workspace', editable: true }), expect.objectContaining({ path: 'notes/AGENTS.md', scope: 'notes', editable: true })]));
+    expect(res.files).toEqual(expect.arrayContaining([{ path: 'AGENTS.md', folder: '', kind: 'instructions', editable: true }, { path: 'notes/AGENTS.md', folder: 'notes', kind: 'instructions', editable: true }]));
+    expect(res.workspaces.map((workspace: any) => workspace.folder)).toEqual(['', 'notes']);
 
     const rootDoc = await fetch(`${base}/api/agent-resources/read?path=AGENTS.md`).then((r) => r.json());
     expect(rootDoc.content).toBe('# Root Workspace Guidelines\n');

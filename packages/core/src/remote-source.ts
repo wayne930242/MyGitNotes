@@ -13,9 +13,9 @@ import { formatTemplateDate, renderNoteTemplate } from './templates.js';
 import { isNotebookContent, parseFolderConfig, sortFolders } from './folders.js';
 import { FolderItem, NotebookConfig, NoteItem, NoteMetadata, WorkspaceConfig } from './types.js';
 import { SourceError } from './github-api.js';
-import { workspaceAgentKind } from './workspace-agent.js';
+import { agentFileAllowed, agentWorkspaceFile } from './agent-workspace.js';
 import { agentSkillLocation, renameAgentSkillEntryContent, renamedAgentSkillPath, rewriteAgentSkillReferences } from './agent-skill-metadata.js';
-import { agentInstructionFile, skillFile } from './agent-system.js';
+import { skillFile } from './agent-system.js';
 import { type CommitScope, readWorkspaceDocument, serializeWorkspaceDocument, validateWorkspaceDocument, type WorkspaceDocument, workspaceDocument } from './workspace-documents.js';
 import { gitBlobId, hashJson, REMOTE_CACHE_BATCH_BYTES, REMOTE_CACHE_MAX_VALUE, REMOTE_CACHE_TTL, type RemoteCache } from './remote-cache.js';
 import type { RepositoryCatalog } from './note-catalog.js';
@@ -496,12 +496,14 @@ export abstract class RemoteSource {
 
   /** One Git tree, commit and non-force ref update for the entire mutation. */
   async saveAgentResource(file: string, content: string, expected: string, create?: boolean) {
-    if (typeof file !== 'string' || !workspaceAgentKind(file)) throw new SourceError('Path is not a workspace Agent document.', 403);
+    if (typeof file !== 'string' || !agentWorkspaceFile(file, (await this.config()).notebooks)) throw new SourceError('Path is not an agent workspace file.', 403);
     if (typeof content !== 'string') throw new SourceError('Agent document content is required.');
-    const location = create ? agentSkillLocation(file) : null;
-    if (location) {
+    if (create) {
+      // A new skill needs a free folder; any other new file needs a free path, so creating never overwrites.
+      const location = agentSkillLocation(file);
       const snapshot = await this.getSnapshot(true);
-      if (snapshot.entries.some(entry => entry.path === location.directory || entry.path.startsWith(`${location.directory}/`))) throw new SourceError(`A skill named ${location.slug} already exists.`, 409);
+      if (location && snapshot.entries.some(entry => entry.path === location.directory || entry.path.startsWith(`${location.directory}/`))) throw new SourceError(`A skill named ${location.slug} already exists.`, 409);
+      if (!location && snapshot.entries.some(entry => entry.path === file)) throw new SourceError(`${file} already exists.`, 409);
       return this.commitChanges([{ path: file, content }], expected, 'write', 'agents', undefined, snapshot);
     }
     return this.commitChanges([{ path: file, content }], expected, 'write', 'agents');
@@ -517,6 +519,8 @@ export abstract class RemoteSource {
     } catch (error) {
       throw new SourceError((error as Error).message, 400);
     }
+    const notebooks = (await this.config()).notebooks;
+    if (agentWorkspaceFile(file, notebooks)?.kind !== 'skill' || agentWorkspaceFile(nextPath, notebooks)?.kind !== 'skill') throw new SourceError('Only a workspace skill can be renamed.', 403);
     if (nextPath === file) return this.saveAgentResource(file, content, expected);
     const nextLocation = agentSkillLocation(nextPath)!;
     const snapshot = await this.getSnapshot(true);
@@ -534,7 +538,7 @@ export abstract class RemoteSource {
     }
     changes.set(nextPath, { path: nextPath, content: renameAgentSkillEntryContent(content, location.directory, nextLocation.directory, nextLocation.slug) });
 
-    const references = snapshot.entries.filter(entry => entry.type === 'blob' && entry.mode !== '120000' && workspaceAgentKind(entry.path) && !entry.path.startsWith(`${location.directory}/`));
+    const references = snapshot.entries.filter(entry => entry.type === 'blob' && entry.mode !== '120000' && agentWorkspaceFile(entry.path, notebooks) && !entry.path.startsWith(`${location.directory}/`));
     for (const entry of references) {
       const original = (await this.readFile(entry.path)).toString('utf8');
       const updated = rewriteAgentSkillReferences(original, location.directory, nextLocation.directory);
@@ -613,7 +617,7 @@ export abstract class RemoteSource {
       const documentFile = Boolean(document?.scopes.includes(scope));
       // A version file is written with its versions, or with a note's New version, and otherwise only follows its note's move or deletion.
       const versionFile = Boolean(versionedPath(file)) && (['versions', 'notes'].includes(scope) || ['files', 'folders', 'skills', 'agents'].includes(scope) && change.content === undefined && change.base64 === undefined);
-      const allowed = documentFile || versionFile || scope !== 'versions' && (scope === 'config' ? MANIFEST_FILES.includes(file) : !['study', 'focus', 'config'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_EXTENSIONS.test(file) : scope === 'skills' ? Boolean(skillFile(file, config.notebooks)) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) || agentInstructionFile(file, config.notebooks) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (isNoteFile(file) || path.posix.basename(file) === '_dir.yml'))));
+      const allowed = documentFile || versionFile || scope !== 'versions' && (scope === 'config' ? MANIFEST_FILES.includes(file) : !['study', 'focus', 'config'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_EXTENSIONS.test(file) : scope === 'skills' ? Boolean(skillFile(file, config.notebooks)) : scope === 'agents' ? agentFileAllowed(file, config.notebooks) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (isNoteFile(file) || path.posix.basename(file) === '_dir.yml'))));
       if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
       if (documentFile) {
         validateWorkspaceDocument(document!, change.content);

@@ -35,6 +35,18 @@ export interface CommitPolishInput {
  */
 export type CommitMessagePolish = (input: CommitPolishInput) => Promise<string>;
 
+/** The agent workspace an Agents-page section is shown for: a folder of one repository, empty for its root. */
+export interface AgentWorkspaceRef {
+  repository: string;
+  folder: string;
+}
+
+/**
+ * Renders a section of the Agents page's sidebar for the selected agent workspace, below its skills, such as an
+ * edition's MCP server settings. `readOnly` is true when the user may not change that workspace.
+ */
+export type RenderAgentWorkspaceSection = (props: { workspace: AgentWorkspaceRef; readOnly: boolean; }) => ReactNode;
+
 /** The features an edition may gate; `WebFeature.gate` is asked about each by one of these ids. */
 export const FEATURE_IDS = { agent: 'agent', r2: 'r2', commitPolish: 'commit-polish' } as const;
 
@@ -57,6 +69,8 @@ export interface WebFeature {
   accountControls?: RenderAccountControls;
   /** Adds entries to the community account menu, such as recent repositories, without replacing it. */
   accountMenuItems?: RenderAccountMenuItems;
+  /** Adds sections to the Agents page for the selected agent workspace; the community edition has none. */
+  agentWorkspaceSections?: RenderAgentWorkspaceSection[];
   /** Adds an "AI polish" button to the commit dialog, beside "Generate message"; the last feature that sets it wins. */
   commitMessagePolish?: CommitMessagePolish;
   /**
@@ -84,6 +98,10 @@ export function useAccountMenuItems(): RenderAccountMenuItems[] {
 
 export function useSettingsSections(): FeatureSettingsSection[] {
   return useContext(FeaturesContext).flatMap(feature => feature.settingsSections ?? []);
+}
+
+export function useAgentWorkspaceSections(): RenderAgentWorkspaceSection[] {
+  return useContext(FeaturesContext).flatMap(feature => feature.agentWorkspaceSections ?? []);
 }
 
 export function useAccountControls(): RenderAccountControls | undefined {

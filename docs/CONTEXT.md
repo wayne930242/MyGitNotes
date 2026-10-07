@@ -26,15 +26,21 @@ MyGitNotes 是以 Git 保存的個人筆記與文件工作區。平台指 GitHub
 
 **產品參考**：Core 的 `docs/agent/**`，在 Agents 頁唯讀顯示，不屬於工作區。
 
-## Agent system
+## Agent 工作區
 
-筆記本或筆記的 agent system 由系統指令與 skill 組成。範圍從目標所在資料夾往上到該筆記本儲存庫的根目錄；筆記本以根目錄為目標。
+Agent 工作區是 Pi 工作的資料夾，由資料夾決定範圍。每個儲存庫的根目錄一定是 Agent 工作區；筆記本根目錄、它的上層，或筆記本內的資料夾放了 `AGENTS.md` 也成為工作區。Agents 頁與 Agent 窗格都以工作區為單位。
 
 ### 用語
 
-**系統指令**：從儲存庫根目錄到目標資料夾，每層 `AGENTS.md` 依序組成的指令。避免稱為：CLAUDE.md（Claude 專用副本）、Agent 文件（泛指 Agents 頁內容）。
+**Agent 工作區**：一個儲存庫裡的資料夾，帶著自己的核心指示與技能；Pi 在其中執行時，也套用外層工作區的核心指示與技能。避免稱為：agent system、執行目錄。
 
-**skill**：`.agents/skills/<name>/` 裡以 `SKILL.md` 為入口的指令與參考資料，名稱等於資料夾名。目標可用的 skill 來自範圍內每層的 `.agents/skills`，同名時較近的一層優先。避免稱為：`.claude/skills`（客戶端專用副本）。
+**核心指示**：工作區資料夾的 `AGENTS.md`。避免稱為：工作區共用、系統指令、CLAUDE.md（Claude 專用副本）。
+
+**skill（技能）**：`<工作區>/.agents/skills/<name>/` 裡以 `SKILL.md` 為入口的指令，附帶參考資料（`scripts/` 以外的 Markdown 或文字檔）與腳本（`scripts/` 內的文字檔），名稱等於資料夾名。避免稱為：`.claude/skills`（客戶端專用副本）。
+
+**MCP 伺服器設定**：Pi 連線的 MCP 伺服器。可能帶 token，從不放進儲存庫；社群版在 Pi 裡設定，Pro 版存在伺服器的加密紀錄。
+
+MCP 的 `get_system_prompt`、`list_skills` 與 `invoke_skill` 照舊從目標資料夾往上讀每一層的 `AGENTS.md` 與 `.agents/skills`。
 
 ## 工作區呈現
 

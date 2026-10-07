@@ -1,4 +1,4 @@
-import { classifyResource, managedNotebook, resolveSafePath, resolveWorkspaceAgentPath, SourceError, versionedPath, workspaceAgentKind, type WorkspaceConfig, workspaceDocument } from '@mygitnotes/core';
+import { agentFileAllowed, classifyResource, managedNotebook, resolveAgentFile, resolveSafePath, SourceError, versionedPath, type WorkspaceConfig, workspaceDocument } from '@mygitnotes/core';
 import express, { Request, Response } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -18,10 +18,10 @@ function validateWorkspacePath(repoRoot: string, reqPath: string, candidate: unk
   if (typeof candidate !== 'string') throw new Error('Paths must be strings.');
   resolveSafePath(repoRoot, candidate);
   const resource = classifyResource(candidate, config);
-  const agentAccess = (reqPath.startsWith('/api/agent-resources') || reqPath.startsWith('/api/git/')) && workspaceAgentKind(candidate);
+  const agentAccess = (reqPath.startsWith('/api/agent-resources') || reqPath.startsWith('/api/git/')) && agentFileAllowed(candidate, config.notebooks);
   const screenAccess = reqPath.startsWith('/api/git/') && (Boolean(workspaceDocument(candidate)) || resource.type === 'workspace_config');
   const fileAccess = reqPath.startsWith('/api/git/') && (managedNotebook(candidate, config.notebooks) || versionedPath(candidate));
-  if (agentAccess) resolveWorkspaceAgentPath(repoRoot, candidate);
+  if (agentAccess) resolveAgentFile(repoRoot, candidate, config.notebooks);
   if (!agentAccess && !screenAccess && !fileAccess && (!['note', 'compilation', 'outline', 'asset', 'agent_instruction', 'agent_doc'].includes(resource.type) || !resource.notebookId)) {
     const err = new Error('Path is outside configured workspace resources.') as Error & { status?: number; };
     err.status = 403;
@@ -93,7 +93,7 @@ export function createLocalApp(appRoot: string): express.Express {
   app.use('/api/notes', createLocalNotesRouter());
   app.use(createLocalFoldersTemplatesRouter());
   app.use('/api/tags', createLocalTagsRouter());
-  app.use('/api/agent-resources', createLocalAgentResourcesRouter(appRoot));
+  app.use('/api/agent-resources', createLocalAgentResourcesRouter());
   app.use('/api/assets', createLocalAssetsRouter());
   app.use('/api/git', createLocalGitRouter());
 

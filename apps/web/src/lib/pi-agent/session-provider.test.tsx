@@ -28,7 +28,8 @@ class FakeSocket {
 }
 
 const notebooks: NotebookConfig[] = [{ id: 'nb', title: 'Notes', root: 'notes' }];
-const live = (overrides: Partial<PiSessionInfo> = {}): PiSessionInfo => ({ id: 's1', cwd: '/home/me/workspace', location: { notebookId: 'nb', folder: null, repository: true }, status: 'ready', startedAt: '', ...overrides });
+const home = 'local:home';
+const live = (overrides: Partial<PiSessionInfo> = {}): PiSessionInfo => ({ id: 's1', cwd: '/home/me/workspace', location: { repository: home, folder: '' }, status: 'ready', startedAt: '', ...overrides });
 let requests: { method: string; body?: unknown; }[] = [];
 /** What the next started session carries beyond its defaults, such as a remote agent's `socket`. */
 let sessionOverrides: Partial<PiSessionInfo> = {};
@@ -42,7 +43,11 @@ beforeEach(() => {
     'fetch',
     vi.fn(async (_url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
-      requests.push({ method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      requests.push({ method, body });
+      // A remembered workspace that lost its core instructions is refused.
+      if (body?.folder === 'gone') return new Response(JSON.stringify({ error: 'That folder is not an agent workspace yet.' }), { status: 404 });
+      if (body?.folder === 'flaky') return new Response(JSON.stringify({ error: 'Pi could not start.' }), { status: 500 });
       const session = method === 'DELETE' ? null : method === 'GET' ? null : live({ id: method === 'PUT' ? 's2' : 's1', ...sessionOverrides });
       return new Response(JSON.stringify({ session, piAvailable: true }), { status: 200 });
     }),
@@ -66,7 +71,7 @@ function mount(features: WebFeature[] = []) {
   const seen: { current?: PiAgentValue; } = {};
   render(
     <WebFeaturesProvider features={features}>
-      <PiAgentProvider enabled notebookId='nb' notebooks={notebooks} folders={[]}>
+      <PiAgentProvider enabled homeRepository={home} workspaceTitle='Knowledge Base' notebooks={notebooks} repositories={[{ id: home, notebooks: ['nb'] }]}>
         <Probe
           onValue={value => {
             seen.current = value;
@@ -78,16 +83,33 @@ function mount(features: WebFeature[] = []) {
   return seen;
 }
 
-it("starts at the root of the notebook's repository by default, resuming no conversation yet", async () => {
+it("starts at the home repository's root workspace by default, resuming no conversation yet", async () => {
   mount();
-  await waitFor(() => expect(requests.find(request => request.method === 'POST')?.body).toEqual({ notebookId: 'nb', folder: null, repository: true }));
+  await waitFor(() => expect(requests.find(request => request.method === 'POST')?.body).toEqual({ repository: home, folder: '' }));
+});
+
+it('falls back to the home root when the remembered workspace is gone, and forgets it', async () => {
+  localStorage.setItem('mygitnotes.piAgent.location', JSON.stringify({ repository: home, folder: 'gone' }));
+  const agent = mount();
+  await waitFor(() => expect(agent.current?.session?.id).toBe('s1'));
+  expect(requests.filter(request => request.method === 'POST').map(request => request.body)).toEqual([{ repository: home, folder: 'gone' }, { repository: home, folder: '' }]);
+  expect(localStorage.getItem('mygitnotes.piAgent.location')).toBeNull();
+});
+
+it('keeps the remembered workspace when starting fails for another reason', async () => {
+  const remembered = JSON.stringify({ repository: home, folder: 'flaky' });
+  localStorage.setItem('mygitnotes.piAgent.location', remembered);
+  const agent = mount();
+  await waitFor(() => expect(agent.current?.error).toBe('Pi could not start.'));
+  expect(requests.filter(request => request.method === 'POST').map(request => request.body)).toEqual([{ repository: home, folder: 'flaky' }]);
+  expect(localStorage.getItem('mygitnotes.piAgent.location')).toBe(remembered);
 });
 
 it('remembers the live conversation and resumes it, with the remembered folder, on the next start', async () => {
-  localStorage.setItem('mygitnotes.piAgent.location', JSON.stringify({ notebookId: 'nb', folder: 'drafts' }));
+  localStorage.setItem('mygitnotes.piAgent.location', JSON.stringify({ repository: home, folder: 'blog' }));
   localStorage.setItem('mygitnotes.piAgent.sessionFile', '/home/me/.pi/agent/sessions/old.jsonl');
   mount();
-  await waitFor(() => expect(requests.find(request => request.method === 'POST')?.body).toEqual({ notebookId: 'nb', folder: 'drafts', sessionFile: '/home/me/.pi/agent/sessions/old.jsonl' }));
+  await waitFor(() => expect(requests.find(request => request.method === 'POST')?.body).toEqual({ repository: home, folder: 'blog', sessionFile: '/home/me/.pi/agent/sessions/old.jsonl' }));
   await waitFor(() => expect(FakeSocket.last).toBeDefined());
   act(() => FakeSocket.last!.receive({ type: 'bridge_status', session: live({ sessionFile: '/home/me/.pi/agent/sessions/new.jsonl' }) }));
   expect(localStorage.getItem('mygitnotes.piAgent.sessionFile')).toBe('/home/me/.pi/agent/sessions/new.jsonl');
@@ -96,7 +118,7 @@ it('remembers the live conversation and resumes it, with the remembered folder, 
   expect(localStorage.getItem('mygitnotes.piAgent.sessionFile')).toBe('/home/me/.pi/agent/sessions/new.jsonl');
 });
 
-it('forgets the conversation when the session is ended or the folder is switched, and remembers the folder', async () => {
+it('forgets the conversation when the session is ended or the workspace is switched, and remembers the workspace', async () => {
   localStorage.setItem('mygitnotes.piAgent.sessionFile', '/home/me/.pi/agent/sessions/old.jsonl');
   const agent = mount();
   await waitFor(() => expect(agent.current?.session?.id).toBe('s1'));
@@ -104,10 +126,10 @@ it('forgets the conversation when the session is ended or the folder is switched
   expect(localStorage.getItem('mygitnotes.piAgent.sessionFile')).toBeNull();
 
   localStorage.setItem('mygitnotes.piAgent.sessionFile', '/home/me/.pi/agent/sessions/old.jsonl');
-  await act(() => agent.current!.switchFolder({ notebookId: 'nb', folder: 'drafts' }));
-  expect(requests.at(-1)).toEqual({ method: 'PUT', body: { notebookId: 'nb', folder: 'drafts' } });
+  await act(() => agent.current!.switchWorkspace({ repository: home, folder: 'blog' }));
+  expect(requests.at(-1)).toEqual({ method: 'PUT', body: { repository: home, folder: 'blog' } });
   expect(localStorage.getItem('mygitnotes.piAgent.sessionFile')).toBeNull();
-  expect(JSON.parse(localStorage.getItem('mygitnotes.piAgent.location')!)).toEqual({ notebookId: 'nb', folder: 'drafts' });
+  expect(JSON.parse(localStorage.getItem('mygitnotes.piAgent.location')!)).toEqual({ repository: home, folder: 'blog' });
 });
 
 it('keeps the status lines and widgets replayed on attach when the conversation history arrives after them', async () => {

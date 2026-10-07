@@ -1,112 +1,90 @@
 import { Request, Response, Router } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
-import { agentSkillLocation, extractFirstH1, listWorkspaceAgentFiles, parseNoteContent, productAgentResources, renameAgentSkillEntryContent, renamedAgentSkillPath, resolveWorkspaceAgentPath, rewriteAgentSkillReferences, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource } from '@mygitnotes/core';
+import { agentSkillLocation, agentWorkspaceFile, agentWorkspaces, listAgentWorkspaceFiles, type NotebookConfig, renameAgentSkillEntryContent, renamedAgentSkillPath, resolveAgentFile, rewriteAgentSkillReferences } from '@mygitnotes/core';
 import { changeFile, getCurrentBranch, listChanges } from '@mygitnotes/git';
-import { asLocal, repositoryOrHome } from './request-workspace.js';
+import { asLocal, eachRepository, repositoryOrHome } from './request-workspace.js';
 
-export function createLocalAgentResourcesRouter(appRoot: string): Router {
+/** A workspace file the page may open; anything else, including other tools' files, is refused. */
+function workspacePath(root: string, file: unknown, notebooks: NotebookConfig[]): string {
+  if (typeof file !== 'string' || !agentWorkspaceFile(file, notebooks)) throw Object.assign(new Error('Path is not an agent workspace file.'), { status: 403 });
+  return resolveAgentFile(root, file, notebooks);
+}
+
+function fail(res: Response, error: unknown, status = 500) {
+  res.status((error as { status?: number; }).status || status).json({ error: error instanceof Error ? error.message : String(error) });
+}
+
+export function createLocalAgentResourcesRouter(): Router {
   const router = Router();
-  /** The worktree a request names in `repository`, or the home worktree: each repository keeps its own Agent files. */
-  const worktreeRoot = async (res: Response, id: unknown) => asLocal((await repositoryOrHome(res, id)).handle).root;
+  /** The worktree a request names in `repository`, or the home worktree, with the notebooks it holds: each repository keeps its own agent workspaces. */
+  const worktree = async (res: Response, id: unknown) => {
+    const { handle, config } = await repositoryOrHome(res, id);
+    return { root: asLocal(handle).root, notebooks: config.notebooks };
+  };
 
-  // Helper to extract first heading, skill name, or clean folder title
-  function extractResourceTitle(fullPath: string, relPath: string): string {
+  /** The agent workspaces of every available repository, for the agent pane's picker. */
+  router.get('/workspaces', async (_req: Request, res: Response) => {
     try {
-      const raw = fs.readFileSync(fullPath, 'utf-8');
-      const { metadata } = parseNoteContent(raw);
-      if (typeof metadata.name === 'string' && metadata.name.trim()) {
-        return metadata.name.trim();
-      }
-      if (typeof metadata.title === 'string' && metadata.title.trim()) {
-        return metadata.title.trim();
-      }
-      const h1 = extractFirstH1(raw);
-      if (h1) return h1;
-    } catch {}
-
-    const base = path.basename(relPath).replace(/\.(md|markdown|mdx|txt)$/i, '');
-    if (base.toLowerCase() === 'index' || base.toLowerCase() === 'skill') {
-      const dir = path.basename(path.dirname(relPath));
-      return dir.charAt(0).toUpperCase() + dir.slice(1).replace(/-/g, ' ');
+      const repositories = await eachRepository(res);
+      res.json({ workspaces: repositories.flatMap(({ id, handle, config }) => agentWorkspaces(listAgentWorkspaceFiles(asLocal(handle).root, config.notebooks)).map(workspace => ({ repository: id, ...workspace }))) });
+    } catch (error) {
+      fail(res, error);
     }
-    return base.charAt(0).toUpperCase() + base.slice(1).replace(/-/g, ' ');
-  }
+  });
 
   router.get('/', async (req: Request, res: Response) => {
     try {
-      const repoRoot = await worktreeRoot(res, req.query.repository);
-      const branch = await getCurrentBranch(repoRoot);
-      const instructions: WorkspaceAgentResource[] = [];
-      const skills: WorkspaceAgentResource[] = [];
-      const docs: WorkspaceAgentResource[] = [];
-      const groups = { instructions, skills, docs };
-      for (const file of listWorkspaceAgentFiles(repoRoot)) {
-        const resource = workspaceAgentResource(file, branch === 'main');
-        if (!/^notes\/[^/]+\/AGENTS\.md$/.test(file)) {
-          resource.name = extractResourceTitle(resolveWorkspaceAgentPath(repoRoot, file), file) || resource.name;
-        }
-        groups[workspaceAgentKind(file)!].push(resource);
-      }
-      docs.push(...productAgentResources(appRoot));
-
-      res.json({ instructions, skills, docs });
-    } catch (err: unknown) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+      const { root, notebooks } = await worktree(res, req.query.repository);
+      const editable = await getCurrentBranch(root) === 'main';
+      const files = listAgentWorkspaceFiles(root, notebooks);
+      res.json({ workspaces: agentWorkspaces(files), files: files.map(file => ({ ...file, editable })) });
+    } catch (error) {
+      fail(res, error);
     }
   });
 
   router.get('/read', async (req: Request, res: Response) => {
     try {
-      const repoRoot = await worktreeRoot(res, req.query.repository);
-      const targetPath = req.query.path as string;
-      if (!targetPath) return res.status(400).json({ error: 'path query required' });
-      const safePath = resolveWorkspaceAgentPath(repoRoot, targetPath);
-      const content = fs.readFileSync(safePath, 'utf-8');
-      res.json({ path: targetPath, content });
-    } catch (err: unknown) {
-      res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+      const { root, notebooks } = await worktree(res, req.query.repository);
+      const file = req.query.path as string;
+      res.json({ path: file, content: fs.readFileSync(workspacePath(root, file, notebooks), 'utf-8') });
+    } catch (error) {
+      fail(res, error, 400);
     }
   });
 
-  // Save agent resource file (workspace Agent documents)
+  /** Writes a workspace file; `create` refuses to replace a skill folder or file that already exists. */
   router.post('/save', async (req: Request, res: Response) => {
     try {
-      const repoRoot = await worktreeRoot(res, req.body?.repository);
-      const { path: relPath, content, create } = req.body;
-      if (!relPath || typeof content !== 'string') {
-        return res.status(400).json({ error: 'path and content are required' });
+      const { root, notebooks } = await worktree(res, req.body?.repository);
+      const { path: file, content, create } = req.body;
+      if (typeof content !== 'string') return res.status(400).json({ error: 'path and content are required' });
+      const safePath = workspacePath(root, file, notebooks);
+      const skill = agentSkillLocation(file);
+      if (create) {
+        if (skill && fs.existsSync(path.dirname(safePath))) return res.status(409).json({ error: `A skill named ${skill.slug} already exists.` });
+        if (fs.existsSync(safePath)) return res.status(409).json({ error: `${file} already exists.` });
+      } else if (skill && !fs.existsSync(safePath)) {
+        // Without `create`, a missing entry means the skill was moved or deleted elsewhere and this save is stale.
+        return res.status(409).json({ error: 'Skill moved or deleted. Reload before saving.' });
       }
-      const safePath = resolveWorkspaceAgentPath(repoRoot, relPath);
-      const skillLocation = agentSkillLocation(relPath);
-      if (skillLocation) {
-        // `create` starts a brand-new skill, so its directory must not exist yet; without it, a
-        // missing file means the skill was moved or deleted elsewhere and this save is stale.
-        if (create) {
-          if (fs.existsSync(path.dirname(safePath))) return res.status(409).json({ error: `A skill named ${skillLocation.slug} already exists.` });
-        } else if (!fs.existsSync(safePath)) {
-          return res.status(409).json({ error: 'Skill moved or deleted. Reload before saving.' });
-        }
-      }
-      const dir = path.dirname(safePath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
+      fs.mkdirSync(path.dirname(safePath), { recursive: true });
       fs.writeFileSync(safePath, content, 'utf-8');
-      res.json({ success: true, path: relPath });
-    } catch (err: unknown) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+      res.json({ success: true, path: file });
+    } catch (error) {
+      fail(res, error);
     }
   });
 
-  // Rename a directory-backed skill and update references in editable Agent documents as one rollback-safe operation.
+  // Rename a directory-backed skill and update references in the other workspace files as one rollback-safe operation.
   router.post('/rename-skill', async (req: Request, res: Response) => {
     const originals = new Map<string, string>();
     let oldDirectoryPath = '';
     let newDirectoryPath = '';
     let moved = false;
     // Resolved before the try block because the rollback below restores files in this worktree.
-    const repoRoot = await worktreeRoot(res, req.body?.repository);
+    const { root, notebooks } = await worktree(res, req.body?.repository);
     try {
       const { path: relPath, slug, content } = req.body;
       if (typeof relPath !== 'string' || typeof slug !== 'string' || typeof content !== 'string') return res.status(400).json({ error: 'path, slug and content are required' });
@@ -119,9 +97,9 @@ export function createLocalAgentResourcesRouter(appRoot: string): Router {
         return res.status(400).json({ error: (error as Error).message });
       }
       const nextLocation = agentSkillLocation(nextPath)!;
-      const safePath = resolveWorkspaceAgentPath(repoRoot, relPath);
+      const safePath = workspacePath(root, relPath, notebooks);
       oldDirectoryPath = path.dirname(safePath);
-      newDirectoryPath = path.dirname(resolveWorkspaceAgentPath(repoRoot, nextPath));
+      newDirectoryPath = path.dirname(workspacePath(root, nextPath, notebooks));
 
       if (nextPath === relPath) {
         fs.writeFileSync(safePath, content, 'utf-8');
@@ -129,8 +107,7 @@ export function createLocalAgentResourcesRouter(appRoot: string): Router {
       }
       if (fs.existsSync(newDirectoryPath)) return res.status(409).json({ error: `A skill named ${nextLocation.slug} already exists.` });
 
-      const agentFiles = listWorkspaceAgentFiles(repoRoot);
-      for (const file of agentFiles) originals.set(file, fs.readFileSync(resolveWorkspaceAgentPath(repoRoot, file), 'utf-8'));
+      for (const { path: file } of listAgentWorkspaceFiles(root, notebooks)) originals.set(file, fs.readFileSync(resolveAgentFile(root, file, notebooks), 'utf-8'));
       const updates = [...originals].map(([file, original]) => {
         const destination = file === relPath || file.startsWith(`${location.directory}/`) ? `${nextLocation.directory}${file.slice(location.directory.length)}` : file;
         const source = file === relPath ? content : original;
@@ -140,7 +117,7 @@ export function createLocalAgentResourcesRouter(appRoot: string): Router {
 
       fs.renameSync(oldDirectoryPath, newDirectoryPath);
       moved = true;
-      for (const update of updates) if (update.updated !== update.original || update.file === relPath) fs.writeFileSync(resolveWorkspaceAgentPath(repoRoot, update.destination), update.updated, 'utf-8');
+      for (const update of updates) if (update.updated !== update.original || update.file === relPath) fs.writeFileSync(resolveAgentFile(root, update.destination, notebooks), update.updated, 'utf-8');
       res.json({ success: true, path: nextPath, changedPaths: updates.map(update => update.destination) });
     } catch (err: unknown) {
       const rollbackErrors: string[] = [];
@@ -153,32 +130,28 @@ export function createLocalAgentResourcesRouter(appRoot: string): Router {
       }
       for (const [file, raw] of originals) {
         try {
-          fs.writeFileSync(resolveWorkspaceAgentPath(repoRoot, file), raw, 'utf-8');
+          fs.writeFileSync(resolveAgentFile(root, file, notebooks), raw, 'utf-8');
         } catch (error) {
           rollbackErrors.push(error instanceof Error ? error.message : String(error));
         }
       }
       const failure = err instanceof Error ? err.message : String(err);
-      res.status(500).json({ error: rollbackErrors.length ? `${failure} Rollback failed: ${rollbackErrors.join('; ')}` : failure, rollbackFailed: rollbackErrors.length > 0 });
+      res.status((err as { status?: number; }).status || 500).json({ error: rollbackErrors.length ? `${failure} Rollback failed: ${rollbackErrors.join('; ')}` : failure, rollbackFailed: rollbackErrors.length > 0 });
     }
   });
 
-  // Restore agent resource from Git HEAD (workspace Agent documents)
+  // Restore a workspace file from Git HEAD.
   router.post('/restore', async (req: Request, res: Response) => {
     try {
-      const repoRoot = await worktreeRoot(res, req.body?.repository);
+      const { root, notebooks } = await worktree(res, req.body?.repository);
       const { path: relPath } = req.body;
-      if (!relPath) {
-        return res.status(400).json({ error: 'path is required' });
-      }
-      const safePath = resolveWorkspaceAgentPath(repoRoot, relPath);
-      const change = (await listChanges(repoRoot)).find(file => file.path === relPath);
+      const safePath = workspacePath(root, relPath, notebooks);
+      const change = (await listChanges(root)).find(file => file.path === relPath);
       if (!change?.tracked || !change.available) return res.status(409).json({ error: 'This file has no committed version to restore.' });
-      await changeFile(repoRoot, relPath, 'restore', req.body.revision || change.revision);
-      const content = fs.readFileSync(safePath, 'utf-8');
-      res.json({ success: true, path: relPath, content });
-    } catch (err: unknown) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+      await changeFile(root, relPath, 'restore', req.body.revision || change.revision);
+      res.json({ success: true, path: relPath, content: fs.readFileSync(safePath, 'utf-8') });
+    } catch (error) {
+      fail(res, error);
     }
   });
 

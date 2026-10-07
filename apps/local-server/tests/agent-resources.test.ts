@@ -8,7 +8,7 @@ import { createRecordStore } from '../src/record-store/index.js';
 
 let root: string, server: Server, base: string;
 let writes: { endpoint: string; body: any; }[];
-const files: Record<string, string> = { '.github-notes.yaml': 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n', 'AGENTS.md': '# Workspace\n', '.agents/skills/custom/SKILL.md': '# Skill\n', '.agents/skills/custom/agents/openai.yaml': 'interface:\n  display_name: Custom\ncustom_field: keep\n', 'CLAUDE.md': '# Custom Claude instructions\n', '.claude/CLAUDE.md': '# Custom Claude scoped instructions\n', '.claude/skills/review/SKILL.md': '# Custom Claude skill\n', 'GEMINI.md': '# Custom Antigravity instructions\n', '.agent/skills/review/SKILL.md': '# Custom Antigravity legacy skill\n', '.agents/skills/format-tests.md': '# Custom Antigravity command\n', '.codex/agents/reviewer.toml': 'description = "Reviewer"\n', '.codex/auth.json': '{"token":"fixture"}' };
+const files: Record<string, string> = { '.github-notes.yaml': 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n', 'AGENTS.md': '# Workspace\n', '.agents/skills/custom/SKILL.md': '# Skill\n', '.agents/skills/custom/agents/openai.yaml': 'interface:\n  display_name: Custom\ncustom_field: keep\n', 'CLAUDE.md': '# Custom Claude instructions\n', '.claude/CLAUDE.md': '# Custom Claude scoped instructions\n', '.claude/skills/review/SKILL.md': '# Custom Claude skill\n', 'GEMINI.md': '# Custom Antigravity instructions\n', '.agent/skills/review/SKILL.md': '# Custom Antigravity legacy skill\n', '.agents/skills/format-tests.md': '# Custom Antigravity command\n', '.codex/agents/reviewer.toml': 'description = "Reviewer"\n', '.codex/auth.json': '{"token":"fixture"}', 'notes/ex/AGENTS.md': '# Notebook\n', 'notes/ex/.agents/skills/local/scripts/run.sh': 'echo hi\n' };
 const session = 'a'.repeat(43);
 beforeEach(async () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-remote-agents-'));
@@ -35,19 +35,16 @@ afterEach(async () => {
 });
 
 it('serves workspace Agent settings with revision and enforces login for remote saves', async () => {
-  fs.mkdirSync(path.join(root, 'docs/agent'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'docs/agent/index.md'), '# Product\n');
   const anonymous = await fetch(`${base}/api/agent-resources`).then(r => r.json());
-  expect(anonymous.instructions).toContainEqual(expect.objectContaining({ path: 'AGENTS.md', scope: 'workspace', editable: false }));
+  expect(anonymous.files).toContainEqual({ path: 'AGENTS.md', folder: '', kind: 'instructions', editable: false });
   const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
   const listing = await fetch(`${base}/api/agent-resources`, { headers }).then(r => r.json());
   expect(listing.revision).toBe('before');
-  expect(listing.instructions).toContainEqual(expect.objectContaining({ path: 'AGENTS.md', scope: 'workspace', editable: true }));
-  expect(listing.skills).toContainEqual(expect.objectContaining({ path: '.agents/skills/custom/SKILL.md', editable: true }));
-  expect(listing.skills).toContainEqual(expect.objectContaining({ path: '.agents/skills/custom/agents/openai.yaml', editable: true }));
-  expect(listing.docs.map((r: any) => r.path)).toEqual(['.codex/agents/reviewer.toml', 'docs/agent/index.md']);
-  expect(listing.docs[1]).toMatchObject({ scope: 'product', editable: false });
-  expect(await fetch(`${base}/api/agent-resources/read?path=docs/agent/index.md`).then(r => r.json())).toMatchObject({ content: '# Product\n' });
+  expect(listing.files.map((file: any) => file.path)).toEqual(['.agents/skills/custom/SKILL.md', 'AGENTS.md', 'notes/ex/.agents/skills/local/scripts/run.sh', 'notes/ex/AGENTS.md']);
+  expect(listing.files.every((file: any) => file.editable)).toBe(true);
+  expect(listing.workspaces).toEqual([{ folder: '', hasInstructions: true, parents: [] }, { folder: 'notes/ex', hasInstructions: true, parents: [''] }]);
+  expect((await fetch(`${base}/api/agent-resources/workspaces`, { headers }).then(r => r.json())).workspaces.map((workspace: any) => workspace.folder)).toEqual(['', 'notes/ex']);
+  expect((await fetch(`${base}/api/agent-resources/read?path=docs/agent/index.md`)).status).toBe(403);
   expect(await fetch(`${base}/api/agent-resources/read?path=AGENTS.md`, { headers }).then(r => r.json())).toMatchObject({ content: '# Workspace\n', revision: 'before' });
   expect((await fetch(`${base}/api/agent-resources/read?path=.codex/auth.json`, { headers })).status).toBe(403);
   const body = JSON.stringify({ path: 'AGENTS.md', content: '# Updated\n', revision: 'before' });
@@ -68,17 +65,45 @@ it('renames a remote skill directory and preserves every skill resource in one c
   expect(tree).toEqual(expect.arrayContaining([expect.objectContaining({ path: '.agents/skills/custom/SKILL.md', sha: null }), expect.objectContaining({ path: '.agents/skills/custom/agents/openai.yaml', sha: null }), expect.objectContaining({ path: '.agents/skills/renamed/SKILL.md', content: expect.stringContaining('name: renamed') }), expect.objectContaining({ path: '.agents/skills/renamed/agents/openai.yaml', sha: '.agents/skills/custom/agents/openai.yaml' })]));
 });
 
-it.each(['.agents/skills/custom/agents/openai.yaml', 'CLAUDE.md', '.claude/CLAUDE.md', '.claude/skills/review/SKILL.md', 'GEMINI.md', '.agent/skills/review/SKILL.md', '.agents/skills/format-tests.md'])('reads and saves native Agent settings at their original Git path: %s', async (path) => {
+it("rewrites skill references only in workspace files, leaving other tools' files as they are", async () => {
   const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
-  const original = files[path];
-  const read = await fetch(`${base}/api/agent-resources/read?path=${encodeURIComponent(path)}`, { headers });
-  expect(read.status).toBe(200);
-  expect(await read.json()).toMatchObject({ content: original, revision: 'before' });
-  const content = original.replace('Custom', 'Updated');
-  const saved = await fetch(`${base}/api/agent-resources/save`, { method: 'POST', headers, body: JSON.stringify({ path, content, revision: 'before' }) });
+  const before = { agents: files['AGENTS.md'], claude: files['CLAUDE.md'] };
+  files['AGENTS.md'] = 'Use `.agents/skills/custom/SKILL.md`.\n';
+  files['CLAUDE.md'] = 'Use `.agents/skills/custom/SKILL.md`.\n';
+  try {
+    const response = await fetch(`${base}/api/agent-resources/rename-skill`, { method: 'POST', headers, body: JSON.stringify({ path: '.agents/skills/custom/SKILL.md', slug: 'renamed', content: '---\nname: renamed\n---\n', revision: 'before' }) });
+    expect(response.status).toBe(200);
+    const tree = writes.find(w => w.endpoint === '/git/trees')?.body.tree;
+    expect(tree).toContainEqual(expect.objectContaining({ path: 'AGENTS.md', content: 'Use `.agents/skills/renamed/SKILL.md`.\n' }));
+    expect(tree.map((entry: any) => entry.path)).not.toContain('CLAUDE.md');
+  } finally {
+    files['AGENTS.md'] = before.agents;
+    files['CLAUDE.md'] = before.claude;
+  }
+});
+
+it('refuses to rename a skill outside the agent workspaces', async () => {
+  const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
+  for (const [file, slug] of [['.claude/skills/review/SKILL.md', 'renamed'], ['.agent/skills/review/SKILL.md', 'renamed']]) {
+    const response = await fetch(`${base}/api/agent-resources/rename-skill`, { method: 'POST', headers, body: JSON.stringify({ path: file, slug, content: '---\nname: renamed\n---\n', revision: 'before' }) });
+    expect(response.status).toBe(403);
+  }
+  expect(writes).toEqual([]);
+});
+
+it.each(['.agents/skills/custom/agents/openai.yaml', 'CLAUDE.md', '.claude/CLAUDE.md', '.claude/skills/review/SKILL.md', 'GEMINI.md', '.agent/skills/review/SKILL.md', '.agents/skills/format-tests.md', '.codex/agents/reviewer.toml'])("leaves other tools' files out of the agent pages: %s", async (path) => {
+  const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
+  expect((await fetch(`${base}/api/agent-resources/read?path=${encodeURIComponent(path)}`, { headers })).status).toBe(403);
+  expect((await fetch(`${base}/api/agent-resources/save`, { method: 'POST', headers, body: JSON.stringify({ path, content: 'x', revision: 'before' }) })).status).toBe(403);
+  expect(writes).toEqual([]);
+});
+
+it('saves a script of a notebook workspace skill at its Git path', async () => {
+  const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
+  const path = 'notes/ex/.agents/skills/local/scripts/run.sh';
+  const saved = await fetch(`${base}/api/agent-resources/save`, { method: 'POST', headers, body: JSON.stringify({ path, content: 'echo bye\n', revision: 'before' }) });
   expect(saved.status).toBe(200);
-  expect(await saved.json()).toMatchObject({ success: true, path, revision: 'after' });
-  expect(writes.find(w => w.endpoint === '/git/trees')?.body.tree).toEqual([{ path, mode: '100644', type: 'blob', content }]);
+  expect(writes.find(w => w.endpoint === '/git/trees')?.body.tree).toEqual([{ path, mode: '100644', type: 'blob', content: 'echo bye\n' }]);
 });
 
 it('saves Focus YAML as one remote file with authentication and revision protection', async () => {

@@ -3,7 +3,8 @@ import picomatch from 'picomatch';
 import { RemoteEntry, RemoteSource, SourceError } from './remote-source.js';
 import { isNotebookContent, serializeFolderConfig } from './folders.js';
 import { NotebookConfig } from './types.js';
-import { agentInstructionFile, skillFile } from './agent-system.js';
+import { skillFile } from './agent-system.js';
+import { agentWorkspaceFile } from './agent-workspace.js';
 import { agentEditMessage, versionFileChanges } from './note-versions.js';
 import type { CommitScope } from './workspace-documents.js';
 import { bookmarkRelocationChange } from './bookmark-relocation.js';
@@ -61,7 +62,7 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
   const notebooks = config.notebooks;
   const blobs = snapshot.entries.filter(e => e.type === 'blob' && e.mode !== '120000' && noteFile(e.path, notebooks)).sort((a, b) => a.path.localeCompare(b.path));
   const skills = snapshot.entries.filter(e => e.type === 'blob' && e.mode !== '120000' && skillFile(e.path, notebooks));
-  const instructions = snapshot.entries.filter(e => e.type === 'blob' && e.mode !== '120000' && agentInstructionFile(e.path, notebooks));
+  const instructions = snapshot.entries.filter(e => e.type === 'blob' && e.mode !== '120000' && agentWorkspaceFile(e.path, notebooks)?.kind === 'instructions');
   const revision = snapshot.sha;
   const read = async (file: string) => {
     relative(file);
@@ -154,7 +155,7 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
   if (operation === 'write' || operation === 'append' || operation === 'edit') {
     const file = relative(string(args, 'path'));
     const skill = Boolean(skillFile(file, notebooks));
-    const instruction = agentInstructionFile(file, notebooks);
+    const instruction = agentWorkspaceFile(file, notebooks)?.kind === 'instructions';
     if (!skill && !instruction && !noteFile(file, notebooks)) throw new SourceError('Target must be a note, folder metadata, AGENTS.md or skill file.', 403);
     const exists = (skill ? skills : instruction ? instructions : blobs).some(e => e.path === file);
     if (args.createOnly === true && snapshot.entries.some(e => e.path === file)) throw new SourceError('Target already exists.', 409);

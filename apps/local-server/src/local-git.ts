@@ -1,6 +1,6 @@
 import { Request, Response, Router } from 'express';
 import fs from 'node:fs';
-import { classifyResource, historyFile, managedNotebook, resolveSafePath, resolveWorkspaceAgentPath, versionedPath, WORKSPACE_DOCUMENTS, workspaceAgentKind, type WorkspaceConfig, workspaceDocument } from '@mygitnotes/core';
+import { agentFileAllowed, classifyResource, historyFile, managedNotebook, resolveAgentFile, resolveSafePath, versionedPath, WORKSPACE_DOCUMENTS, type WorkspaceConfig, workspaceDocument } from '@mygitnotes/core';
 import { changeFile, commitSelectedFiles, commitStagedFiles, fileDiff, generateCommitMessage, getDiff, getGitStatus, getRecentCommits, listChanges, stageAndCommit, SyncError, syncWorkspace } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { newVersion } from './note-history.js';
@@ -15,8 +15,8 @@ export function createLocalGitRouter(): Router {
       if (fs.existsSync(target) && !fs.lstatSync(target).isFile()) return false;
       // A version file moves with its note in the worktree, so it is committed or discarded with that move.
       if (versionedPath(file)) return true;
-      if (workspaceAgentKind(file)) {
-        resolveWorkspaceAgentPath(repoRoot, file);
+      if (agentFileAllowed(file, config.notebooks)) {
+        resolveAgentFile(repoRoot, file, config.notebooks);
         return true;
       }
       const resource = classifyResource(file, config);
