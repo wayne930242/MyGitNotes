@@ -1,6 +1,4 @@
 import YAML from 'yaml';
-import path from 'node:path';
-import { isDeepStrictEqual } from 'node:util';
 import { NoteMetadata } from './types.js';
 import { stampSaveTimestamps } from './note-timestamps.js';
 import { patchFrontmatterField } from './frontmatter-patch.js';
@@ -66,8 +64,9 @@ export function parseNoteContent(rawContent: string, fallbackFilename?: string):
     if (firstH1) {
       title = firstH1;
     } else if (fallbackFilename) {
-      const ext = path.extname(fallbackFilename);
-      title = path.basename(fallbackFilename, ext);
+      const name = fallbackFilename.split('/').pop() ?? fallbackFilename;
+      const dot = name.lastIndexOf('.');
+      title = dot > 0 ? name.slice(0, dot) : name;
     } else {
       title = 'Untitled';
     }
@@ -96,6 +95,16 @@ function stringifyMetadata(metadata: NoteMetadata): string {
   return doc.toString();
 }
 
+/** Deep equality for parsed YAML and JSON values, without Node's util so the browser can serialize notes too. */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (a instanceof Date || b instanceof Date) return a instanceof Date && b instanceof Date && a.getTime() === b.getTime();
+  if (Array.isArray(a) || Array.isArray(b)) return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((item, index) => sameValue(item, b[index]));
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every(key => Object.hasOwn(b, key) && sameValue((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]));
+}
+
 /**
  * Patches an existing frontmatter block onto `metadata`: a key whose value is unchanged keeps
  * its original quoting, flow/block style, position and comments; a changed or new key is
@@ -110,7 +119,7 @@ function patchNoteMetadata(raw: string, metadata: NoteMetadata): string | null {
     if (!(key in metadata)) next = patchFrontmatterField(next, key, undefined);
   }
   for (const [key, value] of Object.entries(metadata)) {
-    if (!isDeepStrictEqual(oldMetadata[key], value)) next = patchFrontmatterField(next, key, value);
+    if (!sameValue(oldMetadata[key], value)) next = patchFrontmatterField(next, key, value);
   }
   return next;
 }

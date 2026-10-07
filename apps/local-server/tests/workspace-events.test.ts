@@ -58,6 +58,25 @@ it('reports a burst of worktree changes once, and ignores Git internals', async 
   expect(onChange).not.toHaveBeenCalled();
 });
 
+it('reports commits to commit subscribers only, whoever makes them', async () => {
+  const onFiles = vi.fn();
+  const onCommits = vi.fn();
+  watch(onFiles);
+  stops.push(watchWorktrees([{ id: 'home', root }], onCommits, 'commits'));
+  await settle();
+  write('notes/a/two.md', '# Two\n');
+  await settle(600);
+  expect(onFiles).toHaveBeenCalledTimes(1);
+  expect(onCommits).not.toHaveBeenCalled();
+
+  onFiles.mockClear();
+  git('add', 'notes/a/two.md');
+  git('commit', '-m', 'Two');
+  await settle(600);
+  expect(onCommits).toHaveBeenCalledWith(['home']);
+  expect(onFiles).not.toHaveBeenCalled();
+});
+
 it('shares one watcher per worktree and closes it with the last subscriber', async () => {
   const stopFirst = watch(() => {});
   const stopSecond = watch(() => {});
@@ -65,6 +84,42 @@ it('shares one watcher per worktree and closes it with the last subscriber', asy
   stopFirst();
   expect(watchedWorktreeCount()).toBe(1);
   stopSecond();
+  expect(watchedWorktreeCount()).toBe(0);
+});
+
+it('streams a history event when the worktree commits', async () => {
+  vi.stubEnv('MYGITNOTES_SOURCE', 'local');
+  vi.stubEnv('MYGITNOTES_LOCAL_PATH', root);
+  vi.stubEnv('VERCEL', '');
+  vi.stubEnv('APP_URL', '');
+  server = createServer(createApp(root));
+  await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+  base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
+
+  const controller = new AbortController();
+  const res = await fetch(base + '/api/history/events', { signal: controller.signal });
+  expect(res.status).toBe(200);
+  expect(res.headers.get('content-type')).toBe('text/event-stream');
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let received = '';
+  const until = async (text: string) => {
+    while (!received.includes(text)) {
+      const { value, done } = await reader.read();
+      if (done) throw new Error(`Stream ended before ${text}`);
+      received += decoder.decode(value);
+    }
+  };
+  await until('retry: 3000');
+  await settle();
+  write('notes/a/two.md', '# Two\n');
+  git('add', 'notes/a/two.md');
+  git('commit', '-m', 'Two');
+  await until('event: history');
+  expect(received).toMatch(/data: \{"repositories":\["[^"]+"\]\}/);
+
+  controller.abort();
+  await settle();
   expect(watchedWorktreeCount()).toBe(0);
 });
 

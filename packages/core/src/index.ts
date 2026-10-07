@@ -41,7 +41,7 @@ export * from './note-versions.js';
 export * from './note-history.js';
 
 export * from './study-stages.js';
-export { type HistoryRead, type RemoteChange, type RemoteCommit, type RemoteEntry, type RemoteSnapshot, RemoteSource } from './remote-source.js';
+export { type HistoryRead, onRemoteCommit, type RemoteChange, type RemoteCommit, type RemoteCommitListener, type RemoteEntry, type RemoteSnapshot, RemoteSource } from './remote-source.js';
 export { GitLabSource } from './gitlab-source.js';
 export { createRemoteSource, openRemoteHome } from './remote-factory.js';
 export { MANIFEST_FILES, RemoteManifest } from './remote-manifest.js';

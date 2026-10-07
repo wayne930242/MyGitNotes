@@ -60,6 +60,16 @@ export type HistoryRead = { blob: string; content: string; } | { blob: string; n
 const HISTORY_MAX_BYTES = 1024 * 1024;
 const OBJECT_ID = /^[a-f0-9]{40}([a-f0-9]{24})?$/;
 
+/** Hears of every commit this process publishes to a remote repository: its identity, as `RemoteSource.id`, and the changed paths. */
+export type RemoteCommitListener = (repository: RepositoryId, paths: string[]) => void;
+const commitListeners = new Set<RemoteCommitListener>();
+
+/** Subscribes to the commits this process publishes, so open pages can read history again; returns the unsubscribe. */
+export function onRemoteCommit(listener: RemoteCommitListener): () => void {
+  commitListeners.add(listener);
+  return () => commitListeners.delete(listener);
+}
+
 /** Shared workspace rules, independent of the Git hosting provider. */
 export abstract class RemoteSource {
   private snapshot?: Promise<RemoteSnapshot>;
@@ -76,6 +86,15 @@ export abstract class RemoteSource {
   protected abstract readBlob(sha: string): Promise<Buffer>;
   protected abstract publishChanges(changes: RemoteChange[], snapshot: RemoteSnapshot, message: string): Promise<string>;
   protected invalidate() {}
+  private announceCommit(paths: string[]) {
+    for (const listener of commitListeners) {
+      try {
+        listener(this.id, paths);
+      } catch (error) {
+        console.warn(`[remote-source] commit listener failed: ${(error as Error).message}`);
+      }
+    }
+  }
   /** Loads cached blobs for the given files; providers extend this with batched platform reads. */
   async prefetchFiles(files: string[]): Promise<void> {
     const { entries } = await this.getSnapshot();
@@ -548,6 +567,7 @@ export abstract class RemoteSource {
     let revision: string;
     try {
       revision = await this.publishChanges([...changes.values()], snapshot, `docs(agents): rename ${location.slug} to ${nextLocation.slug}`);
+      this.announceCommit([...changes.keys()]);
     } finally {
       this.invalidate();
       this.snapshot = undefined;
@@ -649,6 +669,7 @@ export abstract class RemoteSource {
     let revision: string;
     try {
       revision = await this.publishChanges(changes, snapshot, message);
+      this.announceCommit(changedPaths);
     } finally {
       this.invalidate();
       this.snapshot = undefined;

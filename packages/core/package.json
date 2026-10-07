@@ -110,6 +110,10 @@
     "./note-versions": {
       "types": "./dist/note-versions.d.ts",
       "import": "./dist/note-versions.js"
+    },
+    "./note-file": {
+      "types": "./dist/note-file.d.ts",
+      "import": "./dist/note-file.js"
     }
   },
   "scripts": {

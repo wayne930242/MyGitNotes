@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { callNoteShell } from '../src/note-shell.js';
+import { onRemoteCommit } from '../src/remote-source.js';
 import { agentEditMessage, placeVersions, readVersionFile, versionFilePath } from '../src/note-versions.js';
 import { gitBlobId } from '../src/remote-cache.js';
 import { githubFixture } from './fixtures/github.js';
@@ -59,6 +60,21 @@ describe('remote note history', { timeout: 20_000 }, () => {
     expect(f.files()).not.toContain(versionFilePath('notes/ex/work/b.md'));
     await callNoteShell(f.reader(), 'rm', { paths: ['notes/ex/done/b.md'], revision: f.head() }, true);
     expect(f.files()).not.toContain(versionFilePath('notes/ex/done/b.md'));
+  });
+
+  it('tells commit listeners which repository and paths every published commit changed', async () => {
+    const f = githubFixture({}, { hexIds: true });
+    const heard: [string, string[]][] = [];
+    const stop = onRemoteCommit((repository, paths) => heard.push([repository, paths]));
+    try {
+      await callNoteShell(f.reader(), 'write', { path: 'notes/ex/a.md', content: '# Alpha\nagain\n', revision: f.head() }, true);
+      await f.reader().commitNotes([{ path: 'notes/ex/a.md', content: '# Alpha\nversioned\n', metadata: {} }], f.head(), 'Version alpha', [], { path: 'notes/ex/a.md', label: {}, today: '2026-10-07' });
+    } finally {
+      stop();
+    }
+    expect(heard).toEqual([[f.reader().id, ['notes/ex/a.md']], [f.reader().id, [versionFilePath('notes/ex/a.md'), 'notes/ex/a.md'].sort()]]);
+    await callNoteShell(f.reader(), 'write', { path: 'notes/ex/a.md', content: '# Alpha\nunheard\n', revision: f.head() }, true);
+    expect(heard).toHaveLength(2);
   });
 
   it('lets an agent edit the AGENTS.md files the system prompt reads, marked as an agent edit', async () => {

@@ -1,9 +1,10 @@
-import { type Response, Router } from 'express';
+import { type Request, type Response, Router } from 'express';
 import path from 'node:path';
-import { addVersion, historyFile, type HistoryRead, type NoteVersionFile, readVersionFile, relabelVersion, removeVersion, serializeVersionFile, SourceError, utcDay, versionFilePath, type VersionLabel, VersionLabelSchema } from '@mygitnotes/core';
+import { addVersion, historyFile, type HistoryRead, type NoteVersionFile, onRemoteCommit, readVersionFile, relabelVersion, removeVersion, serializeVersionFile, SourceError, utcDay, versionFilePath, type VersionLabel, VersionLabelSchema } from '@mygitnotes/core';
 import { commitDetails, commitVersionChange, fileHistory, getCurrentBranch, readFileAt, readHistoryBlob } from '@mygitnotes/git';
-import { notebookRepository, type RepositoryHandle, repositoryOrHome } from './request-workspace.js';
+import { notebookRepository, type RepositoryHandle, repositoryOrHome, workspaceOf } from './request-workspace.js';
 import { readBoundedFile, readSnapshotText, regularPath } from './workspace-files.js';
+import { watchWorktrees } from './worktree-watch.js';
 
 const PER_PAGE = 50;
 const OBJECT_ID = /^[a-f0-9]{40}([a-f0-9]{24})?$/;
@@ -92,9 +93,40 @@ function fail(res: Response, error: unknown) {
   res.status(error instanceof SourceError ? error.status : 500).json({ error: error instanceof Error ? error.message : 'Request failed.' });
 }
 
+/** Keeps idle event streams open through proxies that close silent connections. */
+const HEARTBEAT_MS = 25_000;
+
+/**
+ * Commits in the workspace's repositories, as server-sent `history` events, so open history panels read again.
+ * A local worktree reports every commit, whoever made it; a remote repository reports the commits this server publishes
+ * for any request, which includes the app's saves, versions and remote MCP edits, with the paths they changed.
+ */
+async function streamHistoryChanges(req: Request, res: Response) {
+  let repositories: RepositoryHandle[];
+  try {
+    repositories = (await workspaceOf(res).all()).flatMap(entry => 'handle' in entry ? [entry.handle] : []);
+  } catch (error) {
+    fail(res, error);
+    return;
+  }
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.write('retry: 3000\n\n');
+  const send = (change: { repositories: string[]; paths?: string[]; }) => res.write(`event: history\ndata: ${JSON.stringify(change)}\n\n`);
+  const local = repositories.flatMap(handle => handle.kind === 'local' ? [{ id: handle.id, root: handle.root }] : []);
+  const remote = new Set(repositories.flatMap(handle => handle.kind === 'remote' ? [handle.reader.id] : []));
+  const stops = [local.length ? watchWorktrees(local, ids => send({ repositories: ids }), 'commits') : () => {}, remote.size ? onRemoteCommit((repository, paths) => remote.has(repository) && send({ repositories: [repository], paths })) : () => {}];
+  const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), HEARTBEAT_MS);
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    for (const stop of stops) stop();
+  });
+}
+
 /** History of notes and agent files, and the versions people record for them, in local and remote workspaces. */
 export function createNoteHistoryRouter(): Router {
   const router = Router();
+
+  router.get('/api/history/events', streamHistoryChanges);
 
   router.get('/api/history', async (req, res) => {
     try {
