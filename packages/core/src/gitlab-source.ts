@@ -1,4 +1,4 @@
-import { type RemoteChange, type RemoteEntry, type RemoteSnapshot, RemoteSource } from './remote-source.js';
+import { type RemoteChange, type RemoteCommit, type RemoteEntry, type RemoteSnapshot, RemoteSource } from './remote-source.js';
 import { SourceError } from './github-api.js';
 import { normalizeGitLabUrl, sourceIdentity } from './source-config.js';
 import type { RemoteCache } from './remote-cache.js';
@@ -76,6 +76,33 @@ export class GitLabSource extends RemoteSource {
       this.blobs.set(sha, pending);
     }
     return pending;
+  }
+  protected async historyPage(file: string, head: string, page: number, perPage: number): Promise<{ commits: RemoteCommit[]; more: boolean; }> {
+    const response = await this.response(`/repository/commits?ref_name=${head}&path=${encodeURIComponent(file)}&per_page=${perPage}&page=${page}`);
+    const listed = await response.json() as { id: string; parent_ids?: string[]; authored_date?: string; author_name?: string; message?: string; }[];
+    if (!Array.isArray(listed)) throw new SourceError('GitLab returned an invalid commit list.', 502);
+    const next = response.headers.get('x-next-page');
+    return { commits: listed.map(commit => ({ sha: commit.id, parents: commit.parent_ids || [], date: commit.authored_date || '', author: commit.author_name || '', message: commit.message || '' })), more: next === null ? listed.length === perPage : next !== '' };
+  }
+  protected async objectAt(commit: string, file: string): Promise<{ sha: string; size: number; } | null> {
+    try {
+      const found = await this.json(`/repository/files/${encodeURIComponent(file)}?ref=${commit}`);
+      return typeof found.blob_id === 'string' ? { sha: found.blob_id, size: Number(found.size) || 0 } : null;
+    } catch (error) {
+      if (error instanceof SourceError && error.status === 404) return null;
+      throw error;
+    }
+  }
+  protected async commitInfo(commit: string): Promise<{ date: string; paths: string[]; } | null> {
+    let found: { authored_date?: string; };
+    try {
+      found = await this.json(`/repository/commits/${commit}`);
+    } catch (error) {
+      if (error instanceof SourceError && error.status === 404) return null;
+      throw error;
+    }
+    const diff = await this.json(`/repository/commits/${commit}/diff?per_page=100`) as { new_path: string; deleted_file?: boolean; }[];
+    return { date: found.authored_date || '', paths: Array.isArray(diff) ? diff.filter(entry => !entry.deleted_file).map(entry => entry.new_path) : [] };
   }
   protected async publishChanges(changes: RemoteChange[], snapshot: RemoteSnapshot, message: string): Promise<string> {
     const actions = [];

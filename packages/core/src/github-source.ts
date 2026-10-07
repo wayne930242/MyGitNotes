@@ -1,13 +1,21 @@
 import { createHash } from 'node:crypto';
 import { GitHubApi, SourceError } from './github-api.js';
 import { readGitHubArchive } from './github-archive.js';
-import { type RemoteChange, type RemoteEntry, type RemoteSnapshot, RemoteSource, type RepositoryInfo } from './remote-source.js';
+import { type RemoteChange, type RemoteCommit, type RemoteEntry, type RemoteSnapshot, RemoteSource, type RepositoryInfo } from './remote-source.js';
 import { hashJson, REMOTE_CACHE_MAX_VALUE, REMOTE_CACHE_TTL, type RemoteCache } from './remote-cache.js';
 import { reaching, type RepositoryScope } from './repository.js';
 import { sourceIdentity } from './source-config.js';
 export { SourceError } from './github-api.js';
 export type { RepositoryInfo } from './remote-source.js';
 export type GitHubEntry = RemoteEntry;
+
+/** A commit as GitHub's REST API lists it. */
+interface GitHubCommit {
+  sha: string;
+  parents: { sha: string; }[];
+  author?: { login?: string; } | null;
+  commit: { message: string; author?: { name?: string; date?: string; } | null; committer?: { date?: string; } | null; };
+}
 
 /** A tree listing as the shared cache keeps it: path, mode, type, sha and size, without the API's URLs. */
 type TreeRow = [string, string, string, string, number | null];
@@ -214,6 +222,31 @@ export class GitHubSource extends RemoteSource {
       }
       if (verified.some(([entry]) => this.cacheable(entry))) await this.storeCached(verified);
     }
+  }
+
+  protected async historyPage(file: string, head: string, page: number, perPage: number): Promise<{ commits: RemoteCommit[]; more: boolean; }> {
+    const listed: GitHubCommit[] = await this.api(`/commits?sha=${head}&path=${encodeURIComponent(file)}&per_page=${perPage}&page=${page}`);
+    if (!Array.isArray(listed)) throw new SourceError('GitHub returned an invalid commit list.', 502);
+    return { commits: listed.map(commit => ({ sha: commit.sha, parents: commit.parents.map(parent => parent.sha), date: commit.commit.author?.date || commit.commit.committer?.date || '', author: commit.commit.author?.name || commit.author?.login || '', message: commit.commit.message })), more: listed.length === perPage };
+  }
+  protected async objectAt(commit: string, file: string): Promise<{ sha: string; size: number; } | null> {
+    try {
+      const found = await this.api(`/contents/${file.split('/').map(encodeURIComponent).join('/')}?ref=${commit}`);
+      return found && !Array.isArray(found) && found.type === 'file' ? { sha: found.sha, size: found.size } : null;
+    } catch (error) {
+      if (error instanceof SourceError && error.status === 404) return null;
+      throw error;
+    }
+  }
+  protected async commitInfo(commit: string): Promise<{ date: string; paths: string[]; } | null> {
+    let found: GitHubCommit & { files?: { filename: string; status: string; }[]; };
+    try {
+      found = await this.api(`/commits/${commit}`);
+    } catch (error) {
+      if (error instanceof SourceError && [404, 422].includes(error.status)) return null;
+      throw error;
+    }
+    return { date: found.commit.author?.date || '', paths: (found.files || []).filter(entry => entry.status !== 'removed').map(entry => entry.filename) };
   }
 
   protected async publishChanges(changes: RemoteChange[], snapshot: RemoteSnapshot, message: string): Promise<string> {

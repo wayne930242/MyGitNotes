@@ -5,6 +5,7 @@ import { deleteNoteFile, lookupNotes, noteAgenda, noteFacets, noteGraph, type No
 import { changeFile, generateCommitMessage, listChanges, stageAndCommit } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { asLocal, eachRepository, type LocalHandle, notebookRepository, noteRepository, requestCatalog } from './request-workspace.js';
+import { moveLocalVersionFiles, restoreLocalVersionFile } from './version-files.js';
 
 export function createLocalNotesRouter(): Router {
   const router = Router();
@@ -139,13 +140,15 @@ export function createLocalNotesRouter(): Router {
 
       return await serializeWorkspaceMutation(repoRoot, async () => {
         deleteNoteFile(repoRoot, notePath);
+        // The note's versions go with it; restoring the note brings them back.
+        const versionFiles = moveLocalVersionFiles(repoRoot, [notePath], file => file, file => file === notePath);
         if (noCommit) {
           // An untracked note leaves no change behind, so there is nothing to commit or list as deleted.
           const pending = (await listChanges(repoRoot)).some(file => file.path === notePath && file.kind === 'deleted');
           return res.json({ success: true, committed: false, pending });
         }
 
-        const commit = await stageAndCommit(repoRoot, [notePath], `docs(notes): delete ${path.basename(notePath)}`);
+        const commit = await stageAndCommit(repoRoot, [notePath, ...versionFiles], `docs(notes): delete ${path.basename(notePath)}`);
         res.json({ success: true, commit, committed: true });
       });
     } catch (err: unknown) {
@@ -166,12 +169,14 @@ export function createLocalNotesRouter(): Router {
       return await serializeWorkspaceMutation(repoRoot, async () => {
         if (typeof content === 'string') {
           const restored = writeNoteFile(repoRoot, notePath, content, metadata, notebook.id, notebook.root);
+          await restoreLocalVersionFile(repoRoot, notePath);
           return res.json({ success: true, note: restored });
         }
 
         const change = (await listChanges(repoRoot)).find(file => file.path === notePath);
         if (!change) return res.status(409).json({ error: 'This note has no changes to restore.' });
         const restored = await changeFile(repoRoot, notePath, 'restore', req.body.revision || change.revision);
+        await restoreLocalVersionFile(repoRoot, notePath);
         if (!change.tracked) return res.json({ success: true, note: null, ...restored });
         const restoredNote = readNoteFile(repoRoot, notePath, notebook.id, notebook.root);
         res.json({ success: true, note: restoredNote });

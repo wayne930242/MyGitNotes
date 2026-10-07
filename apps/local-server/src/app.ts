@@ -17,6 +17,7 @@ import { createStudyRouter } from './study.js';
 import { createOutlineImportRouter } from './outline-import.js';
 import { createWorkspaceDocumentRouter } from './workspace-document.js';
 import { createFolderManagerRouter } from './folder-manager.js';
+import { createNoteHistoryRouter, newVersion } from './note-history.js';
 import { type AssetStorage, envAssetStorage } from './asset-storage.js';
 import { createR2AssetHandler } from './r2-assets.js';
 import { createR2ManagerRouter } from './r2-manager.js';
@@ -110,6 +111,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   app.use('/api/bookmarks/resolve', (_req, res) => res.status(410).json({ code: 'legacy-authoring-retired', error: 'Legacy bookmark resolution is retired. Use the saved-source outline import preview.' }));
   app.use('/api/bookmarks', createWorkspaceDocumentRouter(BOOKMARKS_DOCUMENT));
   app.use('/api/folder-manager', createFolderManagerRouter());
+  app.use(createNoteHistoryRouter());
   // Ahead of the local routes: starting or ending the agent does not edit the workspace, so it needs no `main` branch.
   // A remote deployment mounts it too, for an edition that supplies a hosted agent; the community one supplies none.
   if (piAgent) app.use('/api/pi', piAgent.router);
@@ -308,10 +310,10 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
       try {
         // An anonymous request is refused before its body is read.
         if (!signedIn(res)) throw new SourceError('Sign in with write permission to commit notes.', 403);
-        const { repository, notes, revision, message, documents } = req.body;
+        const { repository, notes, revision, message, documents, version } = req.body;
         const target = await namedRemote(res, repository);
         if (!target.authenticated) throw new SourceError('Sign in with write permission to commit notes.', 403);
-        const receipt = await target.reader.commitNotes(notes, revision, message, documents);
+        const receipt = await target.reader.commitNotes(notes, revision, message, documents, newVersion(version));
         res.json({ ...receipt, ...await publishedGists(res, notes) });
       } catch (error) {
         fail(res, error);

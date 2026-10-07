@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getCurrentBranch } from '@mygitnotes/git';
-import { resolveSafePath, workspaceDocument } from '@mygitnotes/core';
+import { isVersionFile, resolveSafePath, workspaceDocument } from '@mygitnotes/core';
 
 export class MCPGuardError extends Error {
   constructor(message: string) {
@@ -35,6 +35,6 @@ export function assertNoteResource(repoRoot: string, relPath: string): string {
   while (!fs.existsSync(ancestor)) ancestor = path.dirname(ancestor);
   const real = path.resolve(fs.realpathSync(ancestor), path.relative(ancestor, absolute));
   const relative = path.relative(fs.realpathSync(repoRoot), real).split(path.sep).join('/');
-  if (workspaceDocument(relative)) throw new MCPGuardError('Workspace metadata is protected.');
+  if (workspaceDocument(relative) || isVersionFile(relative)) throw new MCPGuardError('Workspace metadata is protected.');
   return absolute;
 }

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { DEFAULT_NOTE_STATUSES, deleteNoteFile, loadWorkspaceConfig, type NotebookConfig, NoteItem, noteSummary, readNoteFile, resolveNoteStatuses, resolveSafePath, scanNotebookNotes, withNoteEdits, type WorkspaceConfig, writeNoteFile } from '@mygitnotes/core';
+import { agentEditMessage, DEFAULT_NOTE_STATUSES, deleteNoteFile, loadWorkspaceConfig, type NotebookConfig, NoteItem, noteSummary, readNoteFile, resolveNoteStatuses, resolveSafePath, scanNotebookNotes, versionFilePath, withNoteEdits, type WorkspaceConfig, writeNoteFile } from '@mygitnotes/core';
 import { generateCommitMessage, stageAndCommit } from '@mygitnotes/git';
 import { assertNoteResource, assertUserWorkspaceBranch } from '../guards.js';
 import type { ToolContext } from './context.js';
@@ -64,10 +64,8 @@ export async function handleSaveNote(ctx: ToolContext, args: { path: string; con
 
   const saved = writeNoteFile(ctx.repoRoot, args.path, args.content, finalMetadata);
 
-  let message = args.commitMessage;
-  if (!message) {
-    message = await generateCommitMessage({ filePath: args.path, diff: args.content });
-  }
+  // An agent's edit of one note is marked as such, whatever message it supplied.
+  const message = agentEditMessage(args.commitMessage || await generateCommitMessage({ filePath: args.path, diff: args.content }));
 
   const commitResult = await stageAndCommit(ctx.repoRoot, [args.path], message);
 
@@ -79,9 +77,14 @@ export async function handleDeleteNote(ctx: ToolContext, args: { path: string; c
   assertNoteResource(ctx.repoRoot, args.path);
 
   deleteNoteFile(ctx.repoRoot, args.path);
+  // The note's versions go with it in the same commit.
+  const versionFile = versionFilePath(args.path);
+  const versionTarget = resolveSafePath(ctx.repoRoot, versionFile);
+  const withVersions = fs.existsSync(versionTarget) && fs.lstatSync(versionTarget).isFile();
+  if (withVersions) fs.unlinkSync(versionTarget);
 
   const message = args.commitMessage || `docs(notes): delete ${path.basename(args.path)}`;
-  const commitResult = await stageAndCommit(ctx.repoRoot, [args.path], message);
+  const commitResult = await stageAndCommit(ctx.repoRoot, withVersions ? [args.path, versionFile] : [args.path], message);
 
   return { success: true, path: args.path, commit: commitResult };
 }
@@ -152,7 +155,7 @@ export async function handleUpdateNoteMetadata(ctx: ToolContext, args: { path: s
     }
   }
 
-  const commit = await stageAndCommit(ctx.repoRoot, [args.path], message);
+  const commit = await stageAndCommit(ctx.repoRoot, [args.path], agentEditMessage(message));
 
   return { success: true, path: args.path, note: updatedNote, availableStatuses: availableStatuses(ctx, nb), commit };
 }

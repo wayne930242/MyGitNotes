@@ -2,11 +2,12 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { FolderCommandSchema, type FolderSnapshot, isCompilationPath, isNotebookContent, type NotebookConfig, planFolderChange, type RemoteSnapshot, RemoteSource, SourceError, stampIsRacy, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
+import { FolderCommandSchema, type FolderSnapshot, isCompilationPath, isNotebookContent, type NotebookConfig, planFolderChange, type RemoteChange, type RemoteSnapshot, RemoteSource, SourceError, stampIsRacy, versionFileChanges, WORKSPACE_DOCUMENTS } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { notebookRepository } from './request-workspace.js';
 import { regularPath, writeFileAtomicSync } from './workspace-files.js';
+import { moveLocalVersionFiles } from './version-files.js';
 
 const documents = WORKSPACE_DOCUMENTS.map(document => document.file);
 
@@ -169,6 +170,7 @@ export function createFolderManagerRouter(): Router {
           const before = localFolderSnapshot(root, config.notebooks);
           const after = planFolderChange(before, command.data);
           applyLocalFolderPlan(root, before, after);
+          moveLocalVersionFiles(root, Object.keys(after.pathMap), file => after.pathMap[file] ?? file, () => false);
           return res.json({ selectedPath: after.selectedPath, revision: localFolderRevision(root, config.notebooks) });
         });
       }
@@ -177,7 +179,7 @@ export function createFolderManagerRouter(): Router {
       const { snapshot: before, state: current } = await remoteSnapshot(reader);
       if (current.sha !== req.body.revision) throw new SourceError('The workspace changed. Reload the folders and try again.', 409);
       const after = planFolderChange(before, command.data);
-      const changes = changesFor(before, after);
+      const changes: RemoteChange[] = [...changesFor(before, after), ...versionFileChanges(current.entries, Object.keys(after.pathMap), file => after.pathMap[file] ?? file, () => false)];
       const receipt = changes.length ? await reader.commitChanges(changes, req.body.revision, command.data.kind, 'folders', undefined, current) : { revision: current.sha };
       res.json({ selectedPath: after.selectedPath, revision: receipt.revision });
     } catch (error) {

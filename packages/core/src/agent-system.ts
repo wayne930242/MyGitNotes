@@ -42,6 +42,16 @@ export function skillFile(file: string, notebooks: NotebookConfig[]): SkillFile 
   return { owner, name, directory: path.posix.join(owner, '.agents/skills', name) };
 }
 
+/** An `AGENTS.md` that `get_system_prompt` reads: at the repository root, a notebook root or an ancestor, or a folder inside a notebook. */
+export function agentInstructionFile(file: string, notebooks: NotebookConfig[]): boolean {
+  /* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
+  if (file.includes('\\') || /[\x00-\x1f\x7f]/.test(file) || file.split('/').some(p => !p || p === '.' || p === '..')) return false;
+  /* eslint-enable no-control-regex */
+  if (path.posix.basename(file) !== 'AGENTS.md') return false;
+  const dir = path.posix.dirname(file);
+  return agentDirectory(dir === '.' ? '' : dir, notebooks);
+}
+
 /** A target directory and each ancestor up to the repository root, root first. */
 function chain(dir: string) {
   const parts = dir ? dir.split('/') : [];

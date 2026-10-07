@@ -163,5 +163,8 @@ export function planFolderChange(snapshot: FolderSnapshot, input: unknown) {
       files.set(file, YAML.stringify({ ...YAML.parse(files.get(file) || ''), order }));
     });
   }
-  return { files, directories: [...directories], folders: folders(), selectedPath: command.kind === 'delete' ? parent : destination.slice(root.length + 1) };
+  // Where each file of the snapshot went, for records kept outside the notebook such as version files.
+  const pathMap: Record<string, string> = {};
+  for (const file of snapshot.files.keys()) if (file !== removedMetadata && relocate(file) !== file) pathMap[file] = relocate(file);
+  return { files, directories: [...directories], folders: folders(), selectedPath: command.kind === 'delete' ? parent : destination.slice(root.length + 1), pathMap };
 }

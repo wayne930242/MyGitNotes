@@ -15,11 +15,12 @@ import { FolderItem, NotebookConfig, NoteItem, NoteMetadata, WorkspaceConfig } f
 import { SourceError } from './github-api.js';
 import { workspaceAgentKind } from './workspace-agent.js';
 import { agentSkillLocation, renameAgentSkillEntryContent, renamedAgentSkillPath, rewriteAgentSkillReferences } from './agent-skill-metadata.js';
-import { skillFile } from './agent-system.js';
+import { agentInstructionFile, skillFile } from './agent-system.js';
 import { type CommitScope, readWorkspaceDocument, serializeWorkspaceDocument, validateWorkspaceDocument, type WorkspaceDocument, workspaceDocument } from './workspace-documents.js';
 import { gitBlobId, hashJson, REMOTE_CACHE_BATCH_BYTES, REMOTE_CACHE_MAX_VALUE, REMOTE_CACHE_TTL, type RemoteCache } from './remote-cache.js';
 import type { RepositoryCatalog } from './note-catalog.js';
 import type { NoteListItem } from './note-query.js';
+import { addVersion, agentEditMessage, type HistoryEntry, isAgentEdit, readVersionFile, serializeVersionFile, versionedPath, versionFilePath, type VersionLabel } from './note-versions.js';
 
 export { SourceError } from './github-api.js';
 const CACHEABLE_FILE = /\.(md|markdown|mdx|txt|ya?ml)$/i;
@@ -45,6 +46,19 @@ export interface RemoteSnapshot {
   info: RepositoryInfo;
 }
 export type RemoteChange = { path: string; content?: string; base64?: string; sha?: string | null; };
+/** A commit as a provider lists it in a file's history. */
+export interface RemoteCommit {
+  sha: string;
+  parents: string[];
+  date: string;
+  author: string;
+  message: string;
+}
+/** A file's content in a past commit, or why it is not shown. */
+export type HistoryRead = { blob: string; content: string; } | { blob: string; notice: 'binary' | 'too-large'; };
+/** History reads show at most this much of a file. */
+const HISTORY_MAX_BYTES = 1024 * 1024;
+const OBJECT_ID = /^[a-f0-9]{40}([a-f0-9]{24})?$/;
 
 /** Shared workspace rules, independent of the Git hosting provider. */
 export abstract class RemoteSource {
@@ -139,6 +153,56 @@ export abstract class RemoteSource {
     if (!this.canWrite(snapshot)) throw new SourceError('Write access on the main workspace branch is required.', 403);
     if (!expected || expected !== snapshot.sha) throw new StaleRevisionError([this.id], 'The repository changed. Reload before saving.');
   }
+  /** One page of the commits on the branch head that changed `file`, newest first; a provider lists them by path. */
+  protected historyPage(_file: string, _head: string, _page: number, _perPage: number): Promise<{ commits: RemoteCommit[]; more: boolean; }> {
+    throw new SourceError('History is unavailable for this source.', 501);
+  }
+  /** The object id and size of `file` in `commit`, or null when that commit does not hold it. */
+  protected objectAt(_commit: string, _file: string): Promise<{ sha: string; size: number; } | null> {
+    throw new SourceError('History is unavailable for this source.', 501);
+  }
+  /** The author date of `commit` and the paths it changed, renamed paths under their new names; null for an unknown commit. */
+  protected commitInfo(_commit: string): Promise<{ date: string; paths: string[]; } | null> {
+    throw new SourceError('History is unavailable for this source.', 501);
+  }
+
+  /** One page of the commits that changed `file`, listed from this reader's snapshot so pages never mix branch states. */
+  async fileHistory(file: string, page: number, perPage = 50): Promise<{ entries: HistoryEntry[]; more: boolean; }> {
+    const snapshot = await this.getSnapshot();
+    const { commits, more } = await this.historyPage(file, snapshot.sha, page, perPage);
+    return {
+      entries: commits.map(({ sha, parents, date, author, message }) => {
+        const [subject = '', ...rest] = message.replace(/\n+$/, '').split('\n');
+        return { commit: sha, parents, date, author, subject, body: rest.join('\n').trim(), path: file, agent: isAgentEdit(message) };
+      }),
+      more,
+    };
+  }
+  /** `file` as it was in `commit`, or why it is not shown; undefined when that commit does not hold it. */
+  async readFileAt(commit: string, file: string): Promise<HistoryRead | undefined> {
+    if (!OBJECT_ID.test(commit)) throw new SourceError('Invalid commit.');
+    const object = await this.objectAt(commit, file);
+    return object ? this.readHistoryBlob(object.sha, object.size) : undefined;
+  }
+  /** A blob by object id, bounded like every history read; `size` skips the read of a blob known to be too large. */
+  async readHistoryBlob(sha: string, size?: number): Promise<HistoryRead> {
+    if (!OBJECT_ID.test(sha)) throw new SourceError('Invalid object id.');
+    if (size !== undefined && size > HISTORY_MAX_BYTES) return { blob: sha, notice: 'too-large' };
+    let bytes: Buffer;
+    try {
+      bytes = this.loaded.get(sha) ?? await this.readBlob(sha);
+    } catch (error) {
+      if (error instanceof SourceError && error.status === 413) return { blob: sha, notice: 'too-large' };
+      throw error;
+    }
+    if (bytes.length > HISTORY_MAX_BYTES) return { blob: sha, notice: 'too-large' };
+    return bytes.includes(0) ? { blob: sha, notice: 'binary' } : { blob: sha, content: bytes.toString('utf8') };
+  }
+  async commitDetails(commit: string): Promise<{ date: string; paths: string[]; } | null> {
+    if (!OBJECT_ID.test(commit)) throw new SourceError('Invalid commit.');
+    return this.commitInfo(commit);
+  }
+
   async readFile(file: string): Promise<Buffer> {
     return this.readSnapshotFile(await this.getSnapshot(), file);
   }
@@ -357,7 +421,8 @@ export abstract class RemoteSource {
     return { ...receipt, path: destination };
   }
 
-  async save(file: string, content: string, metadata: NoteMetadata | undefined, expected: string, createOnly = false) {
+  /** `agent` marks the commit as an agent's edit of this one file. */
+  async save(file: string, content: string, metadata: NoteMetadata | undefined, expected: string, createOnly = false, agent = false) {
     const snapshot = await this.getSnapshot(true);
     this.assertMutable(snapshot, expected);
     const config = await this.config();
@@ -370,13 +435,17 @@ export abstract class RemoteSource {
     const existingRaw = existing ? await this.readFile(file).then(b => b.toString('utf8')).catch(() => undefined) : undefined;
     const raw = metadata ? serializeNoteFile(file, metadata, content, !existing, new Date(), existingRaw) : content;
     if (Buffer.byteLength(raw) > 5 * 1024 * 1024) throw new SourceError('Note exceeds the 5 MiB limit.', 413);
-    const receipt = await this.commitChanges([{ path: file, content: raw }], expected, existing ? 'write' : 'create');
+    const operation = existing ? 'write' : 'create';
+    const receipt = await this.commitChanges([{ path: file, content: raw }], expected, operation, 'notes', agent ? agentEditMessage(`docs(notes): ${operation} ${path.posix.basename(file)}`) : undefined);
     const { extra, ...parsed } = parseNoteFile(raw, file, nb.root);
     return { ...receipt, note: { id: typeof parsed.metadata.id === 'string' ? parsed.metadata.id : file, path: file, notebookId: nb.id, ...parsed, ...extra, tags: Array.isArray(parsed.metadata.tags) ? parsed.metadata.tags.map(String) : [], status: typeof parsed.metadata.status === 'string' ? parsed.metadata.status : undefined, size: Buffer.byteLength(raw), revision: receipt.revision } };
   }
 
-  /** Publish selected browser working notes as one commit after validation. */
-  async commitNotes(notes: { path: string; content: string; metadata: NoteMetadata; createOnly?: boolean; }[], expected: string, message: string, documents: { path: string; page: unknown; base: unknown; }[] = []) {
+  /**
+   * Publish selected browser working notes as one commit after validation. With `version`, the one note's version
+   * file joins the same commit with a version recorded after the current head, since the commit cannot name itself.
+   */
+  async commitNotes(notes: { path: string; content: string; metadata: NoteMetadata; createOnly?: boolean; }[], expected: string, message: string, documents: { path: string; page: unknown; base: unknown; }[] = [], version?: { path: string; label: VersionLabel; today: string; }) {
     if (!Array.isArray(notes) || !Array.isArray(documents) || !notes.length && !documents.length || notes.length + documents.length > 200) throw new SourceError('Select between 1 and 200 files.');
     if (typeof message !== 'string' || !message.trim() || message.length > 4000) throw new SourceError('A commit message of at most 4000 characters is required.');
     const snapshot = await this.getSnapshot(true);
@@ -408,6 +477,19 @@ export abstract class RemoteSource {
       if (JSON.stringify(current) !== JSON.stringify(base.data)) throw new SourceError(`${document.label} configuration changed. Reload and review your draft.`, 409);
       await this.validateDocumentChange(document, current, page.data, (await this.config()).notebooks, snapshot);
       changes.push({ path: document.file, content: serializeWorkspaceDocument(page.data) });
+    }
+    if (version) {
+      const change = changes.find(entry => entry.path === version.path);
+      if (!change || changes.length !== 1) throw new SourceError('A new version commits its note alone.');
+      const file = versionFilePath(version.path);
+      const now = new Date();
+      try {
+        const record = readVersionFile(snapshot.entries.some(entry => entry.path === file) ? (await this.readSnapshotFile(snapshot, file)).toString('utf8') : null);
+        addVersion(record, { blob: gitBlobId(Buffer.from(change.content), snapshot.sha.length), parent: snapshot.sha, authored: now.toISOString() }, version.label, version.today, now);
+        changes.push({ path: file, content: serializeVersionFile(record) });
+      } catch (error) {
+        throw error instanceof SourceError ? error : new SourceError((error as Error).message, 409);
+      }
     }
     return this.commitChanges(changes, expected, 'update', documents.length ? 'folders' : 'notes', message.trim(), snapshot);
   }
@@ -529,7 +611,9 @@ export abstract class RemoteSource {
       const relocation = ['move', 'delete', 'remove-directory', 'mv'].includes(operation) && ['files', 'folders'].includes(scope);
       if (document?.retired && !relocation) throw new SourceError('Legacy bookmark authoring is retired. Export or import the saved source into a new outline.', 410);
       const documentFile = Boolean(document?.scopes.includes(scope));
-      const allowed = documentFile || (scope === 'config' ? MANIFEST_FILES.includes(file) : !['study', 'focus', 'config'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_EXTENSIONS.test(file) : scope === 'skills' ? Boolean(skillFile(file, config.notebooks)) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (isNoteFile(file) || path.posix.basename(file) === '_dir.yml'))));
+      // A version file is written with its versions, or with a note's New version, and otherwise only follows its note's move or deletion.
+      const versionFile = Boolean(versionedPath(file)) && (['versions', 'notes'].includes(scope) || ['files', 'folders', 'skills', 'agents'].includes(scope) && change.content === undefined && change.base64 === undefined);
+      const allowed = documentFile || versionFile || scope !== 'versions' && (scope === 'config' ? MANIFEST_FILES.includes(file) : !['study', 'focus', 'config'].includes(scope) && (scope === 'files' ? Boolean(managedNotebook(file, config.notebooks)) : scope === 'study-transition' ? nb && isNotebookContent(file.slice(nb.root.length + 1), nb) && NOTE_EXTENSIONS.test(file) : scope === 'skills' ? Boolean(skillFile(file, config.notebooks)) : scope === 'agents' ? Boolean(workspaceAgentKind(file)) || agentInstructionFile(file, config.notebooks) : nb && (scope === 'assets' ? isAssetPath(file, nb) : isNotebookContent(file.slice(nb.root.length + 1), nb) && (isNoteFile(file) || path.posix.basename(file) === '_dir.yml'))));
       if (!allowed || file.includes('\\') || file.includes('\0') || file.split('/').some(p => !p || p === '.' || p === '..')) throw new SourceError('Path is not an allowed workspace resource.', 403);
       if (documentFile) {
         validateWorkspaceDocument(document!, change.content);

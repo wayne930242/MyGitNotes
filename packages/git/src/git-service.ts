@@ -83,9 +83,9 @@ export async function getUpstreamStatus(repoRoot: string): Promise<{ upstream: s
 }
 
 /**
- * Stages specified files and creates a Git commit.
+ * Stages specified files and creates a Git commit. `authorDate` sets the commit's author date, which a rebase keeps.
  */
-export async function stageAndCommit(repoRoot: string, files: string[], message: string): Promise<{ commitHash: string; shortHash: string; }> {
+export async function stageAndCommit(repoRoot: string, files: string[], message: string, options: { authorDate?: string; } = {}): Promise<{ commitHash: string; shortHash: string; }> {
   if (files.length === 0) {
     throw new Error('No files provided to stage and commit');
   }
@@ -94,7 +94,7 @@ export async function stageAndCommit(repoRoot: string, files: string[], message:
   await runGit(['add', '--', ...files.map(file => `:(literal)${file}`)], repoRoot);
 
   // Commit
-  await runGit(['commit', '--only', '-m', message, '--', ...files.map(file => `:(literal)${file}`)], repoRoot);
+  await runGit(['commit', '--only', '-m', message, '--', ...files.map(file => `:(literal)${file}`)], repoRoot, options.authorDate ? { env: { GIT_AUTHOR_DATE: options.authorDate } } : {});
 
   // Get commit hash
   const { stdout: hash } = await runGit(['rev-parse', 'HEAD'], repoRoot);

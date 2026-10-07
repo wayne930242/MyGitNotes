@@ -1,8 +1,9 @@
 import { Request, Response, Router } from 'express';
 import fs from 'node:fs';
-import { classifyResource, managedNotebook, resolveSafePath, resolveWorkspaceAgentPath, WORKSPACE_DOCUMENTS, workspaceAgentKind, type WorkspaceConfig, workspaceDocument } from '@mygitnotes/core';
+import { classifyResource, historyFile, managedNotebook, resolveSafePath, resolveWorkspaceAgentPath, versionedPath, WORKSPACE_DOCUMENTS, workspaceAgentKind, type WorkspaceConfig, workspaceDocument } from '@mygitnotes/core';
 import { changeFile, commitSelectedFiles, commitStagedFiles, fileDiff, generateCommitMessage, getDiff, getGitStatus, getRecentCommits, listChanges, stageAndCommit, SyncError, syncWorkspace } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
+import { newVersion } from './note-history.js';
 import { eachRepository, type LocalHandle, repositoryOrHome } from './request-workspace.js';
 
 export function createLocalGitRouter(): Router {
@@ -12,6 +13,8 @@ export function createLocalGitRouter(): Router {
     try {
       const target = resolveSafePath(repoRoot, file);
       if (fs.existsSync(target) && !fs.lstatSync(target).isFile()) return false;
+      // A version file moves with its note in the worktree, so it is committed or discarded with that move.
+      if (versionedPath(file)) return true;
       if (workspaceAgentKind(file)) {
         resolveWorkspaceAgentPath(repoRoot, file);
         return true;
@@ -66,7 +69,10 @@ export function createLocalGitRouter(): Router {
       const { root: repoRoot, config } = await worktree(res, req.body.repository);
       const { files, revisions, message, selected } = req.body;
       if (!Array.isArray(files) || !files.length || files.some(file => !canManageChange(repoRoot, config, file)) || typeof message !== 'string') return res.status(400).json({ error: 'Select writable workspace files and provide a message.' });
-      const commit = await (selected === true ? commitSelectedFiles : commitStagedFiles)(repoRoot, files.map(file => ({ path: file, revision: revisions?.[file] })), message);
+      const version = newVersion(req.body.version);
+      if (version && (selected !== true || !historyFile(version.path, config.notebooks))) return res.status(400).json({ error: 'A new version commits its note alone.' });
+      const expected = files.map(file => ({ path: file, revision: revisions?.[file] }));
+      const commit = selected === true ? await commitSelectedFiles(repoRoot, expected, message, version) : await commitStagedFiles(repoRoot, expected, message);
       res.json({ success: true, commit });
     } catch (error) {
       res.status(409).json({ error: (error as Error).message });

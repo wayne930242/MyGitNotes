@@ -3,7 +3,8 @@ import picomatch from 'picomatch';
 import { RemoteEntry, RemoteSource, SourceError } from './remote-source.js';
 import { isNotebookContent, serializeFolderConfig } from './folders.js';
 import { NotebookConfig } from './types.js';
-import { skillFile } from './agent-system.js';
+import { agentInstructionFile, skillFile } from './agent-system.js';
+import { agentEditMessage, versionFileChanges } from './note-versions.js';
 import type { CommitScope } from './workspace-documents.js';
 import { bookmarkRelocationChange } from './bookmark-relocation.js';
 import { relocateLinks } from './folder-plan.js';
@@ -60,10 +61,11 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
   const notebooks = config.notebooks;
   const blobs = snapshot.entries.filter(e => e.type === 'blob' && e.mode !== '120000' && noteFile(e.path, notebooks)).sort((a, b) => a.path.localeCompare(b.path));
   const skills = snapshot.entries.filter(e => e.type === 'blob' && e.mode !== '120000' && skillFile(e.path, notebooks));
+  const instructions = snapshot.entries.filter(e => e.type === 'blob' && e.mode !== '120000' && agentInstructionFile(e.path, notebooks));
   const revision = snapshot.sha;
   const read = async (file: string) => {
     relative(file);
-    if (!blobs.some(e => e.path === file) && !skills.some(e => e.path === file)) throw new SourceError('File is not a configured note, folder metadata or skill file.', 404);
+    if (!blobs.some(e => e.path === file) && !skills.some(e => e.path === file) && !instructions.some(e => e.path === file)) throw new SourceError('File is not a configured note, folder metadata, AGENTS.md or skill file.', 404);
     return (await reader.readFile(file)).toString('utf8');
   };
   const selected = (input: string, recursive: boolean, pool = blobs) => {
@@ -80,9 +82,9 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
     if (children.some(e => !pool.includes(e))) throw new SourceError('Directory contains protected files or assets. Select note files explicitly.', 403);
     return children;
   };
-  const receipt = async (changes: { path: string; content?: string; sha?: string | null; }[], scope: CommitScope = 'notes') => {
+  const receipt = async (changes: { path: string; content?: string; sha?: string | null; }[], scope: CommitScope = 'notes', message?: string) => {
     const expected = string(args, 'revision');
-    return reader.commitChanges(changes, expected, operation, scope, undefined, snapshot);
+    return reader.commitChanges(changes, expected, operation, scope, message, snapshot);
   };
   if (operation === 'ls') {
     const input = string(args, 'path', '.');
@@ -152,8 +154,9 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
   if (operation === 'write' || operation === 'append' || operation === 'edit') {
     const file = relative(string(args, 'path'));
     const skill = Boolean(skillFile(file, notebooks));
-    if (!skill && !noteFile(file, notebooks)) throw new SourceError('Target must be a note, folder metadata or skill file.', 403);
-    const exists = (skill ? skills : blobs).some(e => e.path === file);
+    const instruction = agentInstructionFile(file, notebooks);
+    if (!skill && !instruction && !noteFile(file, notebooks)) throw new SourceError('Target must be a note, folder metadata, AGENTS.md or skill file.', 403);
+    const exists = (skill ? skills : instruction ? instructions : blobs).some(e => e.path === file);
     if (args.createOnly === true && snapshot.entries.some(e => e.path === file)) throw new SourceError('Target already exists.', 409);
     const original = exists ? await read(file) : '';
     let content = string(args, 'content');
@@ -163,7 +166,8 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
       content = replaceNoteLines(original, integer(args, 'startLine', 1, 1, 1000000), integer(args, 'endLine', 1, 0, 1000000), content);
     }
     if (exists && content === original) throw new SourceError('No content change to commit.');
-    return receipt([{ path: file, content }], skill ? 'skills' : 'notes');
+    const scope: CommitScope = skill ? 'skills' : instruction ? 'agents' : 'notes';
+    return receipt([{ path: file, content }], scope, agentEditMessage(`docs(${scope}): ${operation} ${path.posix.basename(file)}`));
   }
   if (operation === 'mkdir') {
     const dir = directoryPath(string(args, 'path')).replace(/\/_dir\.yml$/, '');
@@ -211,7 +215,8 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
     if (scopes.size > 1) throw new SourceError('Remove notes and skill files in separate calls.');
     const [scope] = scopes;
     for (const file of args.paths as string[]) for (const entry of selected(file, args.recursive === true, scope === 'skills' ? skills : blobs)) files.set(entry.path, entry);
-    return receipt([...files.keys()].map(file => ({ path: file, sha: null })), scope);
+    // A removed file's versions go with it.
+    return receipt([...[...files.keys()].map(file => ({ path: file, sha: null })), ...versionFileChanges(snapshot.entries, files.keys(), file => file, file => files.has(file))], scope);
   }
   if (operation === 'mv' || operation === 'cp') {
     const from = directoryPath(string(args, 'source'));
@@ -244,6 +249,7 @@ export async function callNoteShell(reader: RemoteSource, operation: string, arg
         const rewritten = relocateLinks(raw, entry.path, target, relocate);
         if (rewritten !== raw) merged.set(target, { path: target, content: rewritten });
       }
+      for (const change of versionFileChanges(snapshot.entries, files.map(entry => entry.path), relocate, () => false)) merged.set(change.path, change);
       const owner = inNotebook(from, notebooks);
       if (owner) {
         const change = await bookmarkRelocationChange(reader, snapshot, owner, relocate);

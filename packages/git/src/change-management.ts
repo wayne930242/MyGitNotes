@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { resolveSafePath } from '@mygitnotes/core';
+import { addVersion, type NoteVersionFile, readVersionFile, resolveSafePath, serializeVersionFile, versionFilePath, type VersionLabel } from '@mygitnotes/core';
 import { runGit, stageAndCommit } from './git-service.js';
+import { headCommit, worktreeBlob } from './file-history.js';
 
 export interface FileChange {
   path: string;
@@ -118,13 +119,101 @@ export async function commitStagedFiles(root: string, expected: Pick<FileChange,
   });
 }
 
-/** Commit the reviewed working copies without including unrelated index entries. */
-export async function commitSelectedFiles(root: string, expected: Pick<FileChange, 'path' | 'revision'>[], message: string) {
+/** What a New version records with a note's commit: the note, and the name and note a person gave the version. */
+export interface NewVersion {
+  path: string;
+  label: VersionLabel;
+  /** The person's day, `YYYY-MM-DD`, for the version's date number. */
+  today: string;
+}
+
+/** A commit time at second precision, which Git reads as an author date. */
+const commitTime = (now: Date) => now.toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+/**
+ * Commit the reviewed working copies without including unrelated index entries. With `version`, the one selected
+ * note's version file joins the same commit; the version names the head it was made on and the author date it got.
+ */
+export async function commitSelectedFiles(root: string, expected: Pick<FileChange, 'path' | 'revision'>[], message: string, version?: NewVersion) {
   return exclusive(root, async () => {
     const changes = await listChanges(root);
     if (!message.trim() || !expected.length || new Set(expected.map(file => file.path)).size !== expected.length || expected.some(file => !changes.some(current => current.path === file.path && current.available && current.revision === file.revision))) {
       throw new Error('Selected files changed. Refresh and review them before committing.');
     }
-    return stageAndCommit(root, expected.map(file => file.path), message);
+    if (!version) return stageAndCommit(root, expected.map(file => file.path), message);
+    if (expected.length !== 1 || expected[0].path !== version.path) throw new Error('A new version commits its note alone.');
+    const parent = await headCommit(root);
+    if (!parent) throw new Error('Commit this note once before recording a version.');
+    const blob = await worktreeBlob(root, version.path);
+    const now = new Date(), authored = commitTime(now);
+    const file = versionFilePath(version.path);
+    const records = readVersionFiles(root, [file]);
+    addVersion(records.get(file)!, { blob, parent, authored }, version.label, version.today, now);
+    const restore = writeVersionFiles(root, records);
+    return commitWritten(root, restore, () => stageAndCommit(root, [version.path, file], message, { authorDate: authored }));
+  });
+}
+
+function readVersionFiles(root: string, files: string[]): Map<string, NoteVersionFile> {
+  return new Map(files.map(file => {
+    const target = regularFile(root, file);
+    return [file, readVersionFile(fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : null)];
+  }));
+}
+
+/** Writes each version file, removing one left without versions; returns a function that puts the previous files back. */
+function writeVersionFiles(root: string, records: Map<string, NoteVersionFile>) {
+  const previous = new Map([...records.keys()].map(file => {
+    const target = regularFile(root, file);
+    return [target, fs.existsSync(target) ? fs.readFileSync(target) : null];
+  }));
+  const restore = () => {
+    for (const [target, bytes] of previous) {
+      if (bytes) fs.writeFileSync(target, bytes);
+      else fs.rmSync(target, { force: true });
+    }
+  };
+  for (const [file, record] of records) {
+    const target = regularFile(root, file);
+    if (!record.versions.length) {
+      if (fs.existsSync(target)) fs.unlinkSync(target);
+      continue;
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const temporary = `${target}.${randomUUID()}.tmp`;
+    fs.writeFileSync(temporary, serializeVersionFile(record), { flag: 'wx', mode: 0o644 });
+    fs.renameSync(temporary, target);
+  }
+  return restore;
+}
+
+/** Commits `paths` after the version files were written, putting the version files back when the commit fails. */
+async function commitWritten(root: string, restore: () => void, commit: () => Promise<{ commitHash: string; shortHash: string; } | null>) {
+  try {
+    return await commit();
+  } catch (error) {
+    restore();
+    throw error;
+  }
+}
+
+/**
+ * Changes the version files of `files` together and commits them alone. `change` receives each file's versions by
+ * the file's path and edits them in place; the commit holds only version files.
+ */
+export async function commitVersionChange(root: string, files: string[], change: (records: Map<string, NoteVersionFile>) => void, message: string) {
+  return exclusive(root, async () => {
+    const records = readVersionFiles(root, files.map(versionFilePath));
+    const byFile = new Map(files.map(file => [file, records.get(versionFilePath(file))!]));
+    change(byFile);
+    const restore = writeVersionFiles(root, records);
+    return commitWritten(root, restore, async () => {
+      // A removed version file that Git never tracked has nothing to commit.
+      const paths: string[] = [];
+      for (const file of records.keys()) {
+        if (fs.existsSync(regularFile(root, file)) || await runGit(['ls-files', '--error-unmatch', '--', `:(literal)${file}`], root).then(() => true, () => false)) paths.push(file);
+      }
+      return paths.length ? stageAndCommit(root, paths, message) : null;
+    });
   });
 }

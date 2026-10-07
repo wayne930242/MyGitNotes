@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { callNoteShell, matchNoteGlob, replaceNoteLines } from '../src/note-shell.js';
 import { agentSystemHint, callAgentSystem } from '../src/agent-system.js';
 import { FOCUS_PAGE_FILE } from '../src/focus-page.js';
+import { agentEditMessage } from '../src/note-versions.js';
 import { githubFixture } from './fixtures/github.js';
 
 vi.setConfig({ testTimeout: 30000 }); // Real GitHub write pacing applies to multi-commit scenarios too.
@@ -82,7 +83,7 @@ describe('shell-shaped note operations', () => {
     const result: any = await callNoteShell(f.reader(), 'edit', { path: 'notes/ex/a.md', startLine: 5, endLine: 5, content: 'changed', revision: f.head() }, true);
     expect(f.text('notes/ex/a.md')).toBe('---\ncustom: retained\n---\n# Alpha\nchanged\n');
     expect(result.pushed).toBe(true);
-    expect(result.commit.message).toBe('docs(notes): edit a.md');
+    expect(result.commit.message).toBe(agentEditMessage('docs(notes): edit a.md'));
     expect(result.revision).toBe(f.head());
     expect(f.calls.filter(c => c.endpoint === '/git/commits')).toHaveLength(1);
     expect(f.calls.filter(c => c.method === 'PATCH')).toHaveLength(1);
@@ -193,7 +194,7 @@ describe('agent system over the note tree', () => {
   it('creates, edits and removes skill files through the note shell with skills commits', async () => {
     const f = fixture(agentFiles);
     const created: any = await callNoteShell(f.reader(), 'write', { path: 'notes/ex/.agents/skills/local/SKILL.md', content: '---\ndescription: Local\n---\nLocal body\n', createOnly: true, revision: f.head() }, true);
-    expect(created.commit.message).toBe('docs(skills): write SKILL.md');
+    expect(created.commit.message).toBe(agentEditMessage('docs(skills): write SKILL.md'));
     expect(await callAgentSystem(f.reader(), 'invoke_skill', { name: 'local', notebookId: 'ex' })).toMatchObject({ directory: 'notes/ex/.agents/skills/local', content: 'Local body\n' });
     const read: any = await callNoteShell(f.reader(), 'read', { path: 'notes/.agents/skills/shared/SKILL.md', startLine: 4 }, false);
     expect(read.content).toBe('# Notes shared body\n');
@@ -203,7 +204,7 @@ describe('agent system over the note tree', () => {
     expect(f.text('notes/.agents/skills/shared/references/guide.md')).toBe('guide\nmore');
     await callNoteShell(f.reader(), 'rm', { paths: ['notes/ex/.agents/skills/local'], recursive: true, revision: f.head() }, true);
     expect(f.files()).not.toContain('notes/ex/.agents/skills/local/SKILL.md');
-    expect(f.calls.filter(c => c.endpoint === '/git/commits').map(c => c.body.message)).toEqual(['docs(skills): write SKILL.md', 'docs(skills): edit SKILL.md', 'docs(skills): append guide.md', 'docs(skills): rm SKILL.md']);
+    expect(f.calls.filter(c => c.endpoint === '/git/commits').map(c => c.body.message)).toEqual([agentEditMessage('docs(skills): write SKILL.md'), agentEditMessage('docs(skills): edit SKILL.md'), agentEditMessage('docs(skills): append guide.md'), 'docs(skills): rm SKILL.md']);
   });
   it('rejects skill writes outside allowed skill files, mixed removals and read-only grants', async () => {
     const f = fixture(agentFiles);

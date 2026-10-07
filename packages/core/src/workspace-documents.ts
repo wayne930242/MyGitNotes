@@ -5,7 +5,7 @@ import { STUDY_DOCUMENT } from './study.js';
 import { FOCUS_DOCUMENT } from './focus-page.js';
 import { BOOKMARKS_DOCUMENT } from './bookmarks.js';
 
-export type CommitScope = 'notes' | 'assets' | 'agents' | 'skills' | 'folders' | 'study' | 'study-transition' | 'files' | 'focus' | 'config';
+export type CommitScope = 'notes' | 'assets' | 'agents' | 'skills' | 'folders' | 'study' | 'study-transition' | 'files' | 'focus' | 'config' | 'versions';
 
 /** A Git-tracked YAML file at the workspace root that the app reads and writes as a whole. */
 export interface WorkspaceDocument<T = unknown> {

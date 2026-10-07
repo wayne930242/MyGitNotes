@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { openRemoteHome } from '@mygitnotes/core';
+import { agentEditMessage, openRemoteHome } from '@mygitnotes/core';
 import { callRemoteTool } from '../src/remote-tools.js';
 import { gitlabFixture } from '../../core/tests/fixtures/gitlab.js';
 
@@ -32,7 +32,7 @@ it('points a note read to its agent system and reports a skill write without a w
   expect(await callRemoteTool(reader(f), 'read', { path: 'notes/ex/a.md' }, false, app)).toMatchObject({ hint: 'Before creating or editing notes here, read the agent system: call get_system_prompt and list_skills with path "notes/ex/a.md".' });
   expect(await callRemoteTool(reader(f), 'read_note', { path: 'notes/ex/a.md' }, false, app)).toMatchObject({ note: { path: 'notes/ex/a.md' }, hint: expect.stringContaining('notes/ex/a.md') });
   const skill = await callRemoteTool(reader(f), 'write', { path: 'notes/ex/.agents/skills/demo/SKILL.md', content: '---\ndescription: Demo\n---\nDemo body\n', revision: f.head }, true, app);
-  expect(skill).toMatchObject({ path: 'notes/ex/.agents/skills/demo/SKILL.md', commit: { message: 'docs(skills): write SKILL.md' } });
+  expect(skill).toMatchObject({ path: 'notes/ex/.agents/skills/demo/SKILL.md', commit: { message: agentEditMessage('docs(skills): write SKILL.md') } });
   expect(skill).not.toHaveProperty('url');
   expect(await callRemoteTool(reader(f), 'read', { path: 'notes/ex/.agents/skills/demo/SKILL.md' }, false, app)).not.toHaveProperty('hint');
   expect(await callRemoteTool(reader(f), 'list_skills', { path: 'notes/ex/a.md' }, false, app)).toMatchObject({ target: 'notes/ex', skills: [{ name: 'demo', description: 'Demo', path: 'notes/ex/.agents/skills/demo/SKILL.md' }] });

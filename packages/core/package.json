@@ -106,6 +106,10 @@
     "./note-query": {
       "types": "./dist/note-query.d.ts",
       "import": "./dist/note-query.js"
+    },
+    "./note-versions": {
+      "types": "./dist/note-versions.d.ts",
+      "import": "./dist/note-versions.js"
     }
   },
   "scripts": {

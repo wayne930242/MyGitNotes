@@ -36,9 +36,11 @@ export * from './note-graph.js';
 export * from './note-pages.js';
 export * from './study.js';
 export * from './tag-ops.js';
+export * from './note-versions.js';
+export * from './note-history.js';
 
 export * from './study-stages.js';
-export { type RemoteChange, type RemoteEntry, type RemoteSnapshot, RemoteSource } from './remote-source.js';
+export { type HistoryRead, type RemoteChange, type RemoteCommit, type RemoteEntry, type RemoteSnapshot, RemoteSource } from './remote-source.js';
 export { GitLabSource } from './gitlab-source.js';
 export { createRemoteSource, openRemoteHome } from './remote-factory.js';
 export { MANIFEST_FILES, RemoteManifest } from './remote-manifest.js';

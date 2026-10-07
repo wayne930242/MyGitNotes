@@ -3,10 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { getCurrentBranch } from '@mygitnotes/git';
-import { assetHash, assetInfo, assetRoot, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isCompilationPath, isNotebookContent, managedNotebook, type NotebookConfig, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSnapshot, type RemoteSource, SourceError, stampIsRacy, withinPath, WORKSPACE_DOCUMENTS, type WorkspaceConfig } from '@mygitnotes/core';
+import { assetHash, assetInfo, assetRoot, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isCompilationPath, isNotebookContent, managedNotebook, type NotebookConfig, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSnapshot, type RemoteSource, SourceError, stampIsRacy, versionFileChanges, withinPath, WORKSPACE_DOCUMENTS, type WorkspaceConfig } from '@mygitnotes/core';
 import { eachRepository, notebookRepository, noteRepository, type RepositoryHandle } from './request-workspace.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { regularPath, writeFileAtomicSync } from './workspace-files.js';
+import { moveLocalVersionFiles } from './version-files.js';
 
 const auxiliary = WORKSPACE_DOCUMENTS.map(document => document.file);
 interface CatalogFile {
@@ -302,9 +303,14 @@ export function createFileManagerRouter(): Router {
       if (!state.writable) throw new SourceError('Write access on the main workspace branch is required.', 403);
       if (!req.body.revision || req.body.revision !== state.revision) throw new SourceError('The workspace changed. Reload before saving.', 409);
       const after = planFileChange(state.snapshot, command), paths = changedFiles(state.snapshot, after);
+      // Version files follow their files: moved along the path map, deleted with a deleted file.
+      const relocate = (file: string) => after.pathMap[file] ?? file;
+      const removed = (file: string) => !after.files.has(file) && !(file in after.pathMap);
+      const followed = [...paths, ...Object.keys(after.pathMap)];
       let nextRevision: string;
       if (state.local !== undefined) {
         applyLocalFilePlan(state.local, state.snapshot, after);
+        moveLocalVersionFiles(state.local, followed, relocate, removed);
         nextRevision = catalogRevision(localFileCatalog(state.local, state.notebooks));
       } else {
         const entries = state.remoteSnapshot!.entries;
@@ -316,6 +322,7 @@ export function createFileManagerRouter(): Router {
           const content = editableFile(file, bytes);
           return content === undefined ? { path: file, base64: bytes.toString('base64') } : { path: file, content };
         });
+        changes.push(...versionFileChanges(entries, followed, relocate, removed));
         nextRevision = changes.length ? (await state.reader!.commitChanges(changes, state.revision, command.kind, 'files', undefined, state.remoteSnapshot)).revision : state.revision;
       }
       res.json({ revision: nextRevision, selectedPath: after.selectedPath, pathMap: after.pathMap, deletedPaths: [...paths.filter(file => !after.files.has(file)), ...state.snapshot.directories.filter(dir => !after.directories.includes(dir))] });
