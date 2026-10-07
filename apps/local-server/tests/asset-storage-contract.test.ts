@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { describe, expect, it } from 'vitest';
-import { envAssetStorage } from '../src/asset-storage.js';
+import { type AssetStorage, envAssetStorage, inAssetScope, resolveAssetScope } from '../src/asset-storage.js';
 import { assetStorageContract } from '../src/asset-storage-contract.js';
 import type { RepositoryHandle } from '../src/request-workspace.js';
 
@@ -22,5 +22,21 @@ describe('environment asset storage', () => {
   it('has no scope when R2 is not configured', async () => {
     const { req, res, repository } = request();
     expect(await envAssetStorage({}).resolve(req, res, repository)).toBeNull();
+  });
+});
+
+describe('asset scope prefixes', () => {
+  const scoped = (prefix: string): AssetStorage => ({ resolve: async () => ({ settings: { accountId: 'acc', accessKeyId: 'AK', secretAccessKey: 's', bucket: 'assets' }, prefix, limits: { maxObjectBytes: 1 } }) });
+  const { req, res, repository } = request();
+
+  it('accepts an empty prefix and one that ends in a slash', async () => {
+    for (const prefix of ['', 'r/', 'r/12/']) expect(await resolveAssetScope(scoped(prefix), req, res, repository)).toMatchObject({ prefix });
+  });
+
+  it('refuses a prefix that does not end in a slash, which would also cover a sibling such as r/123/', async () => {
+    await expect(resolveAssetScope(scoped('r/12'), req, res, repository)).rejects.toMatchObject({ status: 500, message: expect.stringContaining('end in "/"') });
+    expect(() => inAssetScope({ prefix: 'r/12' }, 'r/123/a.pdf')).toThrow(/end in "\/"/);
+    expect(inAssetScope({ prefix: 'r/12/' }, 'r/123/a.pdf')).toBe(false);
+    expect(inAssetScope({ prefix: 'r/12/' }, 'r/12/a.pdf')).toBe(true);
   });
 });

@@ -1,4 +1,5 @@
 import { AwsClient, AwsV4Signer } from 'aws4fetch';
+import { SourceError } from './github-api.js';
 import { isValidR2Key, r2PreviewType } from './r2-references.js';
 
 export interface R2Settings {
@@ -8,6 +9,31 @@ export interface R2Settings {
   bucket: string;
   endpoint?: string;
 }
+/** What one request may use of the R2 bucket. */
+export interface AssetScope {
+  settings: R2Settings;
+  /** The key prefix every object of this request lives under: empty, or ending in `/`. Keys outside it answer 404. */
+  prefix: string;
+  limits: {
+    /** The largest object one upload may declare. */
+    maxObjectBytes: number;
+  };
+}
+
+/** R2 accepts at most 5 GiB in one PUT, and a presigned upload is a single PUT. */
+export const R2_MAX_OBJECT_BYTES = 5 * 1024 ** 3;
+
+/** Whether `key` lies in `scope`'s key space; a prefix that does not end in `/` (`r/12` also covers `r/123/…`) is a configuration error, not a scope. */
+export function inAssetScope(scope: Pick<AssetScope, 'prefix'>, key: string): boolean {
+  assertAssetPrefix(scope.prefix);
+  return key.startsWith(scope.prefix);
+}
+
+/** Throws unless `prefix` is empty or ends in `/`, so a key prefix can only ever name a whole folder. */
+export function assertAssetPrefix(prefix: string): void {
+  if (prefix && !prefix.endsWith('/')) throw new SourceError(`The asset key prefix "${prefix}" must be empty or end in "/".`, 500);
+}
+
 export interface R2Object {
   key: string;
   size: number;

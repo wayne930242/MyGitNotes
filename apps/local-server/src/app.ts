@@ -3,7 +3,7 @@ import type { RemoteCache } from '@mygitnotes/core';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { BOOKMARKS_DOCUMENT, classifyResource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, productAgentResources, queryNotePaths, queryNotes, r2SettingsFromEnv, readProductAgentDoc, RemoteSource, replaceFileTags, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
+import { BOOKMARKS_DOCUMENT, classifyResource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, productAgentResources, queryNotePaths, queryNotes, readProductAgentDoc, RemoteSource, replaceFileTags, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRecordStore, NoRecordStore, type RecordStore, storageMode } from './record-store/index.js';
 import { type BrowserSessions, cookieSessions, storedSessions } from './browser-sessions.js';
@@ -81,10 +81,10 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
     if (origin && origin !== allowed && !isLocalDevOrigin) return res.status(403).json({ error: 'Origin is not allowed.' });
     next();
   });
-  // An MCP asset upload carries its file inside the JSON-RPC body, and a bucket-bound one is not
-  // held to the repository size limit, so the MCP route parses ahead of the shared 8 MiB ceiling.
-  if (r2SettingsFromEnv()) app.use('/mcp', express.json({ limit: '64mb' }));
-  app.use(express.json({ limit: '8mb' }));
+  // The MCP route reads its own body once the caller is known: an asset upload carries its file inside the
+  // JSON-RPC body, and how large that may be depends on the bucket the asset storage gives the caller.
+  const smallBody = express.json({ limit: '8mb' });
+  app.use((req, res, next) => req.path === '/mcp' || req.path.startsWith('/mcp/') ? next() : smallBody(req, res, next));
   app.use('/api/auth', createAuth({ store: recordStore, sessions, configSource, choices: workspaceChoices }));
   app.use('/api', workspaceChoiceRouter({ store: recordStore, sessions, choices: workspaceChoices }));
   services.routes?.(app, services);
@@ -98,7 +98,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
       res.status(404).json({ error: (error as Error).message });
     }
   });
-  app.use('/mcp', createRemoteMCP(recordStore, configSource, cache));
+  app.use('/mcp', createRemoteMCP(recordStore, configSource, assetStorage, cache));
   app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace({ store: recordStore, sessions }, configSource, cache));
   app.use(createFileManagerRouter());
   app.use(createR2ManagerRouter(assetStorage));
@@ -108,9 +108,10 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   app.use('/api/bookmarks/resolve', (_req, res) => res.status(410).json({ code: 'legacy-authoring-retired', error: 'Legacy bookmark resolution is retired. Use the saved-source outline import preview.' }));
   app.use('/api/bookmarks', createWorkspaceDocumentRouter(BOOKMARKS_DOCUMENT));
   app.use('/api/folder-manager', createFolderManagerRouter());
+  // Ahead of the local routes: starting or ending the agent does not edit the workspace, so it needs no `main` branch.
+  // A remote deployment mounts it too, for an edition that supplies a hosted agent; the community one supplies none.
+  if (piAgent) app.use('/api/pi', piAgent.router);
   if (local) {
-    // Ahead of the local routes: starting or ending the agent does not edit the workspace, so it needs no `main` branch.
-    if (piAgent) app.use('/api/pi', piAgent.router);
     app.get(
       '/r2-assets/*',
       createR2AssetHandler(assetStorage, async (res, notePath) => {

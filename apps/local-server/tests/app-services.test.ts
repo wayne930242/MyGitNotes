@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createServer, type Server } from 'node:http';
+import { Router } from 'express';
 import { repositoryRef, type WorkspaceConfigSource, WorkspaceSetupError } from '@mygitnotes/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
@@ -64,6 +65,19 @@ it('offers no agent grants from a store that does not outlive the process', asyn
   const base = await listen(createApp(dir, { configSource: noWorkspaceYet, recordStore: transient, remoteCache: undefined }));
   expect((await fetch(`${base}/api/auth/agent-tokens`)).status).toBe(404);
   expect((await fetch(`${base}/api/auth/agent-token`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status).toBe(404);
+});
+
+/** A hosted deployment whose home repository is never read: the requests below never get past routing. */
+const hostedHome: WorkspaceConfigSource = { mode: 'remote', settings: async () => ({ home: repositoryRef({ type: 'github', repository: 'o/r', branch: 'main' }), localPath: () => undefined, manifest: inHomeRepository => inHomeRepository() }) };
+
+it('mounts an injected agent on a hosted deployment, and answers 403 where an edition supplies none', async () => {
+  const router = Router();
+  router.get('/session', (_req, res) => res.json({ session: null, piAvailable: true }));
+  const hosted = await listen(createApp(dir, { configSource: hostedHome, remoteCache: undefined, piAgent: { router } }));
+  expect(await fetch(`${hosted}/api/pi/session`).then(response => response.json())).toEqual({ session: null, piAvailable: true });
+  await new Promise<void>(resolve => server!.close(() => resolve()));
+  const community = await listen(createApp(dir, { configSource: hostedHome, remoteCache: undefined }));
+  expect((await fetch(`${community}/api/pi/session`)).status).toBe(403);
 });
 
 it('serves the web build from the injected directory', async () => {

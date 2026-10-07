@@ -2,7 +2,7 @@ import { type Request, type Response, Router } from 'express';
 import fs from 'node:fs';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { copyR2Object, deleteR2Object, isValidR2Key, listR2Objects, managedNotebook, type NotebookConfig, presignR2Object, presignR2Upload, putEmptyR2Object, r2ObjectExists, r2ReferenceKeys, resolveSafePath, rewriteR2References, SourceError, withinPath } from '@mygitnotes/core';
-import { type AssetScope, type AssetStorage, inAssetScope } from './asset-storage.js';
+import { type AssetScope, type AssetStorage, inAssetScope, resolveAssetScope } from './asset-storage.js';
 import { eachRepository, type RepositoryHandle } from './request-workspace.js';
 import { localFileCatalog } from './file-manager.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
@@ -78,8 +78,11 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
       },
     };
   };
-  /** The named notebook, whose repository must be writable, and every available repository, opened only when a route scans notes. */
-  const context = async (req: Request, res: Response, input: Record<string, unknown>) => {
+  /**
+   * The named notebook and every available repository, opened only when a route scans notes. The notebook's
+   * repository must be writable: `authorize` checks that (it is checked at once unless `deferAuthorize` is set).
+   */
+  const context = async (req: Request, res: Response, input: Record<string, unknown>, deferAuthorize = false) => {
     const entries = await eachRepository(res);
     const target = entries.find(({ config }) => config.notebooks.some(nb => nb.id === input.notebookId));
     const notebook = target?.config.notebooks.find(nb => nb.id === input.notebookId);
@@ -89,12 +92,15 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
       if (!opened.has(handle.id)) opened.set(handle.id, open(handle.id, handle, config));
       return opened.get(handle.id)!;
     };
-    if (!(await openEntry(target)).writable) throw new SourceError('Write access on the main workspace branch is required.', 403);
-    const scope = await storage.resolve(req, res, target.handle);
+    const authorize = async () => {
+      if (!(await openEntry(target)).writable) throw new SourceError('Write access on the main workspace branch is required.', 403);
+    };
+    if (!deferAuthorize) await authorize();
+    const scope = await resolveAssetScope(storage, req, res, target.handle);
     if (!scope) throw new SourceError('R2 storage is not configured.', 404);
     /** Tells the storage about a size change; a failure ends the request, so a quota never drifts silently. */
     const record = (key: string, deltaBytes: number) => storage.record?.(scope, key, deltaBytes) ?? Promise.resolve();
-    return { repositories: () => Promise.all(entries.map(openEntry)), notebook, scope, settings: scope.settings, record };
+    return { repositories: () => Promise.all(entries.map(openEntry)), notebook, scope, settings: scope.settings, record, authorize };
   };
   /** A well-formed key inside the scope; a key outside it is not found, whatever it names. */
   const bucketKey = (scope: AssetScope, value: unknown) => {
@@ -150,21 +156,23 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
       if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0) throw new SourceError('Upload size is required.', 400);
       if (size > scope.limits.maxObjectBytes) throw new SourceError('The file is larger than the storage allows for one object.', 413);
       if (await r2ObjectExists(settings, key)) throw new SourceError('Destination already exists.', 409);
-      await storage.reserve?.(scope, size);
+      await storage.reserve?.(scope, key, size);
       res.json({ key, url: await presignR2Upload(settings, key, undefined, size) });
     }),
   );
   router.post(
     '/api/r2/uploaded',
     handle(async (req, res) => {
-      const { scope, settings, record } = await context(req, res, req.body);
+      const { scope, settings, record, authorize } = await context(req, res, req.body, true);
       const key = bucketKey(scope, req.body.key);
+      // Without a quota to settle there is nothing to confirm, so the community default makes no further request.
+      if (!storage.record) return res.json({ key });
+      await authorize();
       // The browser sent the object straight to the bucket, so the storage learns its size from the bucket.
-      if (storage.record) {
-        const object = (await listR2Objects(settings, key)).find(found => found.key === key);
-        if (!object) throw new SourceError('R2 object not found.', 404);
-        await record(key, object.size);
-      }
+      // Confirming a key is idempotent: a repeat records the same key and size again (see `AssetStorage.record`).
+      const object = (await listR2Objects(settings, key)).find(found => found.key === key);
+      if (!object) throw new SourceError('R2 object not found.', 404);
+      await record(key, object.size);
       res.json({ key });
     }),
   );

@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { describe, expect, it } from 'vitest';
-import type { AssetStorage } from './asset-storage.js';
+import { type AssetStorage, resolveAssetScope } from './asset-storage.js';
 import type { RepositoryHandle } from './request-workspace.js';
 
 /** What an {@link AssetStorage} needs the contract to ask it. */
@@ -22,7 +22,7 @@ export function assetStorageContract(name: string, makeFixture: () => AssetStora
     const scoped = async () => {
       const fixture = await makeFixture();
       const { req, res, repository } = fixture.available();
-      const scope = await fixture.storage.resolve(req, res, repository);
+      const scope = await resolveAssetScope(fixture.storage, req, res, repository);
       if (!scope) throw new Error('The available request resolved no scope.');
       return { fixture, scope };
     };
@@ -53,8 +53,8 @@ export function assetStorageContract(name: string, makeFixture: () => AssetStora
     it('lets a quota hook refuse an upload with a SourceError and accepts an upload within it', async () => {
       const { fixture, scope } = await scoped();
       if (!fixture.storage.reserve) return;
-      await expect(fixture.storage.reserve(scope, 0)).resolves.toBeUndefined();
-      await expect(fixture.storage.reserve(scope, scope.limits.maxObjectBytes + 1)).rejects.toMatchObject({ status: 413 });
+      await expect(fixture.storage.reserve(scope, `${scope.prefix}contract/in-quota`, 0)).resolves.toBeUndefined();
+      await expect(fixture.storage.reserve(scope, `${scope.prefix}contract/over-quota`, scope.limits.maxObjectBytes + 1)).rejects.toMatchObject({ status: 413 });
     });
   });
 }

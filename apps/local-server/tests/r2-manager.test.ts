@@ -215,22 +215,26 @@ describe('R2 management on a local workspace', () => {
   });
 });
 
-/** A tenant that owns the key space under `prefix`, meters its uploads and records every size change. */
+/** A tenant that owns the key space under `prefix`, meters its uploads (confirmed or pending) and keeps one size row per key. */
 function tenantStorage(prefix: string, options: { quota?: number; } = {}) {
-  const reserved: number[] = [], recorded: [string, number][] = [];
-  let total = 0;
+  const reserved: [string, number][] = [], recorded: [string, number][] = [];
+  const pending = new Map<string, number>(), rows = new Map<string, number>();
+  const used = (except?: string) => [...rows, ...pending].filter(([key]) => key !== except).reduce((sum, [, bytes]) => sum + bytes, 0);
   const storage: AssetStorage = {
     resolve: async () => ({ settings: r2SettingsFromEnv()!, prefix, limits: { maxObjectBytes: 1000 } }),
-    reserve: async (_scope, bytes) => {
-      reserved.push(bytes);
-      if (total + bytes > (options.quota ?? Infinity)) throw new SourceError('Storage quota exceeded.', 413);
+    reserve: async (_scope, key, bytes) => {
+      reserved.push([key, bytes]);
+      if (used(key) + bytes > (options.quota ?? Infinity)) throw new SourceError('Storage quota exceeded.', 413);
+      pending.set(key, bytes);
     },
     record: async (_scope, key, delta) => {
       recorded.push([key, delta]);
-      total += delta;
+      pending.delete(key);
+      if (delta > 0) rows.set(key, delta);
+      else rows.delete(key);
     },
   };
-  return { storage, reserved, recorded };
+  return { storage, reserved, recorded, used };
 }
 
 describe('R2 management through an asset storage', () => {
@@ -268,10 +272,10 @@ describe('R2 management through an asset storage', () => {
     expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: 'r/42/ex/new' })).status).toBe(200);
   });
 
-  it('reserves the declared size before signing and refuses an upload over the quota or the object limit', async () => {
+  it('reserves the key and declared size before signing and refuses an upload over the quota or the object limit', async () => {
     const tenant = await startTenant('r/42/', { quota: 500 });
     expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'r/42/ex/a.pdf', size: 400 })).status).toBe(200);
-    expect(tenant.reserved).toEqual([400]);
+    expect(tenant.reserved).toEqual([['r/42/ex/a.pdf', 400]]);
     // The browser sends the body straight to the bucket; the stand-in bucket gets it here.
     bucket.objects.set('r/42/ex/a.pdf', Buffer.alloc(400));
     expect((await call('POST', '/api/r2/uploaded', { notebookId: 'ex', key: 'r/42/ex/a.pdf' })).status).toBe(200);
@@ -280,7 +284,26 @@ describe('R2 management through an asset storage', () => {
     expect(over.status).toBe(413);
     expect(await over.json()).toEqual({ error: 'Storage quota exceeded.' });
     expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'r/42/ex/c.pdf', size: 1001 })).status).toBe(413);
-    expect(tenant.reserved).toEqual([400, 200]);
+    expect(tenant.reserved).toEqual([['r/42/ex/a.pdf', 400], ['r/42/ex/b.pdf', 200]]);
+  });
+
+  it('counts a signed upload the browser never confirms, so skipping /uploaded saves no quota', async () => {
+    const tenant = await startTenant('r/42/', { quota: 500 });
+    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'r/42/ex/a.pdf', size: 400 })).status).toBe(200);
+    expect(tenant.recorded).toEqual([]);
+    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'r/42/ex/b.pdf', size: 200 })).status).toBe(413);
+    expect(tenant.used()).toBe(400);
+  });
+
+  it('confirms an upload by key and changes nothing when the browser confirms it again', async () => {
+    const tenant = await startTenant('r/42/');
+    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'r/42/ex/a.pdf', size: 400 })).status).toBe(200);
+    bucket.objects.set('r/42/ex/a.pdf', Buffer.alloc(400));
+    for (let confirmation = 0; confirmation < 3; confirmation++) expect((await call('POST', '/api/r2/uploaded', { notebookId: 'ex', key: 'r/42/ex/a.pdf' })).status).toBe(200);
+    // Every confirmation carries the same key and the size the bucket reports, which a per-key storage keeps once.
+    expect(tenant.recorded).toEqual(Array(3).fill(['r/42/ex/a.pdf', 400]));
+    expect(tenant.used()).toBe(400);
+    expect((await call('POST', '/api/r2/uploaded', { notebookId: 'ex', key: 'r/42/ex/never-uploaded.pdf' })).status).toBe(404);
   });
 
   it('records the size of every object a move or delete creates and removes', async () => {
@@ -298,6 +321,19 @@ describe('R2 management through an asset storage', () => {
   it('answers 404 when the storage has no bucket for the request', async () => {
     await startLocal('main', { assetStorage: { resolve: async () => null } });
     for (const operation of operations()) expect((await operation()).status).toBe(404);
+    expect(bucket.requests).toEqual([]);
+  });
+});
+
+describe('R2 asset scope prefixes', () => {
+  it('refuses a scope whose prefix could reach a sibling folder, without contacting the bucket', async () => {
+    await startLocal('main', { assetStorage: { resolve: async () => ({ settings: r2SettingsFromEnv()!, prefix: 'r/42', limits: { maxObjectBytes: 1000 } }) } });
+    bucket.requests.length = 0;
+    for (const operation of operations()) {
+      const response = await operation();
+      expect(response.status).toBe(500);
+      expect((await response.json()).error).toMatch(/must be empty or end in "\/"/);
+    }
     expect(bucket.requests).toEqual([]);
   });
 });
@@ -337,6 +373,24 @@ describe('R2 management on a hosted workspace', () => {
     expect(files.get('notes/ex/rules.md')!.toString()).toContain('[map](r2:ex/maps/region.webp)');
     expect(bucket.objects.has('ex/maps/region.webp')).toBe(true);
     expect(bucket.objects.has('ex/old/map.webp')).toBe(false);
+  });
+
+  it('answers a confirmed upload without a bucket or a fresh snapshot when no quota needs settling', async () => {
+    canPush = true;
+    await startRemote('writer-token');
+    const snapshots = (GitHubSource.prototype as any).loadSnapshot as ReturnType<typeof vi.fn>;
+    await call('GET', '/api/workspace');
+    snapshots.mockClear();
+    const response = await call('POST', '/api/r2/uploaded', { notebookId: 'ex', key: 'ex/docs/new.pdf' });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ key: 'ex/docs/new.pdf' });
+    expect(bucket.requests).toEqual([]);
+    const confirmed = snapshots.mock.calls.length;
+    snapshots.mockClear();
+    // A route that checks write access loads one more, fresh, snapshot than the request itself needs.
+    await call('GET', '/api/r2/raw?notebookId=ex&key=ex/keep.pdf');
+    expect(confirmed).toBeLessThan(snapshots.mock.calls.length);
+    expect((await call('POST', '/api/r2/uploaded', { notebookId: 'ex', key: '../escape' })).status).toBe(403);
   });
 
   it('rolls copied objects back when the rewrite commit hits a revision conflict', async () => {

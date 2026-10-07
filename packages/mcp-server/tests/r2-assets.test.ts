@@ -3,10 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createServer } from 'node:http';
-import { openRemoteHome, RemoteSource, scanNotebookNotes, WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
+import { openRemoteHome, r2SettingsFromEnv, RemoteSource, scanNotebookNotes, WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
 import { gitlabFixture } from '../../core/tests/fixtures/gitlab.js';
 import { runGit, stageAndCommit } from '@mygitnotes/git';
-import { handleAddAsset, handleDeleteAsset, handleListAssets } from '../src/tools/index.js';
+import { handleAddAsset, handleDeleteAsset, handleListAssets, type ToolAssets } from '../src/tools/index.js';
 import { callRemoteTool } from '../src/remote-tools.js';
 
 const MANIFEST = `schema_version: 1
@@ -195,5 +195,67 @@ describe('managing R2 assets over MCP', () => {
     expect(await callRemoteTool(reader, 'list_assets', { notebookId: 'example' }, false)).toMatchObject({ assets: [{ storage: 'r2', key: 'example/images/photo.png' }] });
     expect(await callRemoteTool(reader, 'delete_asset', { path: 'r2:example/images/photo.png' }, true)).toMatchObject({ success: true, storage: 'r2' });
     expect(bucket.objects.has('example/images/photo.png')).toBe(false);
+  });
+});
+
+describe('R2 asset tools in a storage scope', () => {
+  const reserved: [string, number][] = [], recorded: [string, number][] = [];
+  /** Keys live under `r/42/`, an object may be at most 1 MiB, and every upload and removal is metered. */
+  const scoped: ToolAssets = {
+    scope: async () => ({ settings: r2SettingsFromEnv()!, prefix: 'r/42/', limits: { maxObjectBytes: 1024 * 1024 } }),
+    reserve: async (_scope, key, bytes) => {
+      reserved.push([key, bytes]);
+    },
+    record: async (_scope, key, delta) => {
+      recorded.push([key, delta]);
+    },
+  };
+  const reader = (notes: { path: string; content: string; }[] = []) => ({ config: async () => ({ notebooks: [{ id: 'example', root: 'notes/example' }] }), assets: async () => [], markdownNotes: async () => notes, mutateAsset: () => expect.unreachable('a bucket object must not be committed or deleted through Git') }) as unknown as RemoteSource;
+  beforeEach(() => {
+    reserved.length = 0;
+    recorded.length = 0;
+  });
+
+  it('uploads a local asset under the prefix and meters it', async () => {
+    const result = await handleAddAsset({ repoRoot: repo, assets: scoped }, upload);
+    expect(result).toMatchObject({ storage: 'r2', key: 'r/42/example/images/photo.png', reference: 'r2:r/42/example/images/photo.png' });
+    expect(bucket.objects.has('r/42/example/images/photo.png')).toBe(true);
+    expect(bucket.objects.has('example/images/photo.png')).toBe(false);
+    expect(reserved).toEqual([['r/42/example/images/photo.png', 21]]);
+    expect(recorded).toEqual([['r/42/example/images/photo.png', 21]]);
+  });
+
+  it('holds an upload to the scope object limit, and reserves nothing for one that already exists', async () => {
+    const big = { ...upload, filename: 'scan.pdf', base64Content: Buffer.alloc(2 * 1024 * 1024, 7).toString('base64') };
+    await expect(handleAddAsset({ repoRoot: repo, assets: scoped }, big)).rejects.toThrow(/up to 1 MiB/);
+    await handleAddAsset({ repoRoot: repo, assets: scoped }, upload);
+    reserved.length = 0;
+    await expect(handleAddAsset({ repoRoot: repo, assets: scoped }, upload)).rejects.toThrow(/already exists: r2:r\/42\/example\/images\/photo\.png/);
+    expect(reserved).toEqual([]);
+  });
+
+  it('lists only the scope’s objects and deletes only inside it, recording the size removed', async () => {
+    bucket.objects.set('r/42/example/mine.png', Buffer.from('mine'));
+    bucket.objects.set('r/43/example/theirs.png', Buffer.from('theirs'));
+    bucket.objects.set('example/unscoped.png', Buffer.from('plain'));
+    const listed = await callRemoteTool(reader(), 'list_assets', { notebookId: 'example' }, false, undefined, scoped);
+    expect((listed.assets as { key: string; }[]).map(asset => asset.key)).toEqual(['r/42/example/mine.png']);
+
+    for (const key of ['r/43/example/theirs.png', 'example/unscoped.png']) {
+      await expect(callRemoteTool(reader(), 'delete_asset', { path: `r2:${key}`, force: true }, true, undefined, scoped)).rejects.toThrow(/not found/);
+      expect(bucket.objects.has(key)).toBe(true);
+    }
+    expect(await callRemoteTool(reader(), 'delete_asset', { path: 'r2:r/42/example/mine.png' }, true, undefined, scoped)).toMatchObject({ success: true, key: 'r/42/example/mine.png' });
+    expect(recorded).toEqual([['r/42/example/mine.png', -4]]);
+    expect(bucket.deletions).toEqual(['r/42/example/mine.png']);
+  });
+
+  it('uploads a hosted asset into the scope, and keeps it in Git when the scope has no bucket', async () => {
+    expect(await callRemoteTool(reader(), 'add_asset', { ...upload, filename: 'scan.pdf' }, true, undefined, scoped)).toMatchObject({ storage: 'r2', key: 'r/42/example/images/scan.pdf' });
+    const none: ToolAssets = { scope: async () => null };
+    const mutate = { path: 'notes/example/assets/images/scan.pdf' };
+    const git = { ...reader(), getSnapshot: async () => ({ sha: 'head' }), mutateAsset: async () => mutate } as unknown as RemoteSource;
+    expect(await callRemoteTool(git, 'add_asset', { ...upload, filename: 'scan.pdf' }, true, undefined, none)).toMatchObject({ storage: 'git' });
+    expect(bucket.objects.size).toBe(1);
   });
 });

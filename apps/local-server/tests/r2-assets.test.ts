@@ -70,6 +70,17 @@ describe('R2 asset authorization', () => {
     expect((await get(`${KEY_URL}?note=notes/ex/rules.md`)).status).toBe(404);
   });
 
+  it('answers 502 when the storage fails with something other than a SourceError, and 500 for a prefix that could reach a sibling folder', async () => {
+    await start({ ...R2, GITHUB_NOTES_SOURCE: 'local' }, { assetStorage: { resolve: async () => Promise.reject(new Error('database unreachable')) } });
+    const failed = await get(`${KEY_URL}?note=notes/ex/rules.md`);
+    expect(failed.status).toBe(502);
+    expect(await failed.json()).toEqual({ error: 'database unreachable' });
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    fs.rmSync(root, { recursive: true, force: true });
+    await start({ ...R2, GITHUB_NOTES_SOURCE: 'local' }, { assetStorage: { resolve: async () => ({ settings: r2SettingsFromEnv()!, prefix: 'trpg', limits: { maxObjectBytes: 1 } }) } });
+    expect((await get(`${KEY_URL}?note=notes/ex/rules.md`)).status).toBe(500);
+  });
+
   it('returns 404 when R2 is not configured', async () => {
     await start({ GITHUB_NOTES_SOURCE: 'local' });
     expect((await get(`${KEY_URL}?note=notes/ex/rules.md`)).status).toBe(404);

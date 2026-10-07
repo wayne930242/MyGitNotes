@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { agentClientAllowed, type AgentFolder, createPiAgent, type PiAgent, resolveAgentCwd, resumableSession } from './pi-agent.js';
+import { agentClientAllowed, type AgentFolder, createPiAgent, resolveAgentCwd, resumableSession } from './pi-agent.js';
 import { commandAvailable, jsonlSplitter, MCP_STATUS_KEY, type PiMcpServer, TRUST_EXTENSION, TRUST_STATUS_KEY, WEB_CHAT_PROMPT } from './pi-session.js';
 
 // A stand-in for `pi --mode rpc`: answers get_state with its session file (the --session one, else a new one per conversation),
@@ -56,7 +56,7 @@ process.stdin.on('end', () => process.exit(0));
 `;
 
 let server: Server | undefined;
-let agent: PiAgent | undefined;
+let agent: ReturnType<typeof createPiAgent> | undefined;
 let temp: string | undefined;
 const sockets: WebSocket[] = [];
 

@@ -1,3 +1,4 @@
+import type { ToolAssets } from './assets.js';
 import type { WorkspaceConfig, WorkspaceRepositories } from '@mygitnotes/core';
 
 export interface ToolContext {
@@ -8,4 +9,6 @@ export interface ToolContext {
   config?: WorkspaceConfig;
   /** The Core checkout that ships product reference documents; the workspace root when the app serves its own checkout. */
   productRoot?: string;
+  /** The bucket the asset tools use; defaults to the one the environment names. */
+  assets?: ToolAssets;
 }

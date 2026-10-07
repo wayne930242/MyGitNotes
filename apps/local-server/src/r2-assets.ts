@@ -1,6 +1,6 @@
 import express from 'express';
 import { presignR2Object, r2ReferenceKeys, SourceError } from '@mygitnotes/core';
-import { type AssetStorage, inAssetScope } from './asset-storage.js';
+import { type AssetStorage, inAssetScope, resolveAssetScope } from './asset-storage.js';
 import type { RepositoryHandle } from './request-workspace.js';
 
 /** Reads a configured note's Markdown with the requester's workspace permission, with the repository that holds it; throws when unreadable. */
@@ -22,14 +22,13 @@ export function createR2AssetHandler(storage: AssetStorage, readNote: NoteReader
     } catch {
       return res.status(404).json({ error: 'Asset not found.' });
     }
-    let scope;
     try {
-      scope = await storage.resolve(req, res, note.repository);
+      const scope = await resolveAssetScope(storage, req, res, note.repository);
+      if (!scope || !inAssetScope(scope, key) || !r2ReferenceKeys(note.content).includes(key)) return res.status(404).json({ error: 'Asset not found.' });
+      res.redirect(302, await presignR2Object(scope.settings, key));
     } catch (error) {
-      if (error instanceof SourceError) return res.status(error.status).json({ error: error.message });
-      throw error;
+      // A storage that fails (a lookup in an edition's database) answers 502 here; an async handler's rejection would hang the request.
+      res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'Asset lookup failed.' });
     }
-    if (!scope || !inAssetScope(scope, key) || !r2ReferenceKeys(note.content).includes(key)) return res.status(404).json({ error: 'Asset not found.' });
-    res.redirect(302, await presignR2Object(scope.settings, key));
   };
 }

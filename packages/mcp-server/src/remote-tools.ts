@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { agentSystemHint, callAgentSystem, callNoteShell, configuredNoteStatuses, DEFAULT_NOTE_STATUSES, NOTE_DESCRIPTION_LIMIT, type NoteItem, type NoteMetadata, type NoteMetadataEdits, type NoteSearchOptions, noteShellWrites, noteSummary, noteWebPath, RemoteSource, searchNotes, serializeNoteContent, skillFile, textSearchRegex, withNoteEdits } from '@mygitnotes/core';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { type AssetUpload, deleteR2Asset, listR2Assets, uploadR2Asset } from './tools/assets.js';
+import { type AssetUpload, deleteR2Asset, envToolAssets, listR2Assets, type ToolAssets, uploadR2Asset } from './tools/assets.js';
 
 type Schema = { [key: string]: unknown; type?: string | string[]; properties?: Record<string, Schema>; required?: string[]; additionalProperties?: boolean; items?: Schema; minItems?: number; maxItems?: number; minLength?: number; maxLength?: number; minimum?: number; maximum?: number; };
 const str = (description: string, extra: Schema = {}): Schema => ({ type: 'string', description, ...extra });
@@ -77,8 +77,8 @@ function validate(value: unknown, schema: Schema, label: string) {
 }
 
 /** A note read points to the agent system that governs the note; a note write reports its path and, when the app origin is known, its web page. */
-export async function callRemoteTool(reader: RemoteSource, name: string, args: Record<string, unknown>, write: boolean, appUrl?: string): Promise<Record<string, unknown>> {
-  const result = await runRemoteTool(reader, name, args, write);
+export async function callRemoteTool(reader: RemoteSource, name: string, args: Record<string, unknown>, write: boolean, appUrl?: string, assets: ToolAssets = envToolAssets()): Promise<Record<string, unknown>> {
+  const result = await runRemoteTool(reader, name, args, write, assets);
   if (name === 'read' || name === 'read_note') {
     const file = String(args.path);
     const hint = skillFile(file, (await reader.config()).notebooks) ? undefined : await agentSystemHint(reader, file);
@@ -133,7 +133,7 @@ async function updateNoteMetadata(reader: RemoteSource, args: Record<string, unk
   return reader.save(note.path, note.content, updated, await revisionArg(reader, args), false);
 }
 
-async function runRemoteTool(reader: RemoteSource, name: string, args: Record<string, unknown>, write: boolean): Promise<Record<string, unknown>> {
+async function runRemoteTool(reader: RemoteSource, name: string, args: Record<string, unknown>, write: boolean, assets: ToolAssets): Promise<Record<string, unknown>> {
   const definition = remoteTools.find((t) => t.name === name) || legacyRemoteTools.find((t) => t.name === name);
   if (!definition) throw new Error('This operation is unavailable for a remote source.');
   validate(args, definition.inputSchema as Schema, 'arguments');
@@ -179,13 +179,13 @@ async function runRemoteTool(reader: RemoteSource, name: string, args: Record<st
     case 'list_assets': {
       const config = await reader.config();
       const ids = config.notebooks.filter((n) => !args.notebookId || n.id === args.notebookId).map((n) => n.id);
-      return { assets: [...(await reader.assets(args.notebookId as string | undefined)).map((asset) => ({ storage: 'git', ...asset })), ...await listR2Assets(ids) || []] };
+      return { assets: [...(await reader.assets(args.notebookId as string | undefined)).map((asset) => ({ storage: 'git', ...asset })), ...await listR2Assets(assets, ids) || []] };
     }
     case 'add_asset': {
       const config = await reader.config();
       const nb = config.notebooks.find((n) => n.id === args.notebookId) || config.notebooks[0];
       // SAFETY: the tool schema requires filename and base64Content; uploadR2Asset reads only those fields.
-      const uploaded = await uploadR2Asset(nb.id, args as unknown as AssetUpload);
+      const uploaded = await uploadR2Asset(assets, nb.id, args as unknown as AssetUpload);
       if (uploaded) return uploaded;
       const res = await reader.mutateAsset('upload', { ...args, revision: await revisionArg(reader, args) });
       const dest = String(res.path);
@@ -194,7 +194,7 @@ async function runRemoteTool(reader: RemoteSource, name: string, args: Record<st
     }
     case 'delete_asset': {
       const config = await reader.config();
-      const removed = await deleteR2Asset(String(args.path), config.notebooks.map((n) => n.id), async () => new Map((await reader.markdownNotes()).map((note) => [note.path, note.content])), args.force === true);
+      const removed = await deleteR2Asset(assets, String(args.path), config.notebooks.map((n) => n.id), async () => new Map((await reader.markdownNotes()).map((note) => [note.path, note.content])), args.force === true);
       if (removed) return removed;
       const res = await reader.mutateAsset('delete', { ...args, revision: await revisionArg(reader, args) });
       return { success: true, storage: 'git', path: String(args.path), commit: res.commit };

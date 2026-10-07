@@ -1,5 +1,6 @@
 import { type RemoteSource, type RevisionSet, StaleRevisionError, type WorkspaceRepositories } from '@mygitnotes/core';
 import { callRemoteTool, isMutationTool } from './remote-tools.js';
+import type { ToolAssets } from './tools/assets.js';
 
 type RemoteHandle = { reader: RemoteSource; };
 type Args = Record<string, unknown>;
@@ -40,8 +41,8 @@ const pathTools = new Set(['read', 'read_note', 'write', 'append', 'edit', 'save
 const optionalWrites = new Set(['delete_note', 'delete_asset', 'update_note_metadata', 'add_asset', 'replace_notes']);
 const mutation = (name: string) => isMutationTool(name) || optionalWrites.has(name);
 
-/** Route a hosted tool by notebook identity; only workspace-wide reads fan out. */
-export async function callWorkspaceRemoteTool(workspace: WorkspaceRepositories<RemoteHandle>, name: string, args: Args, write: boolean, appUrl?: string): Promise<Record<string, unknown>> {
+/** Route a hosted tool by notebook identity; only workspace-wide reads fan out. `assetsFor` names the bucket each repository's asset tools use (the environment's by default). */
+export async function callWorkspaceRemoteTool(workspace: WorkspaceRepositories<RemoteHandle>, name: string, args: Args, write: boolean, appUrl?: string, assetsFor?: (handle: RemoteHandle) => ToolAssets): Promise<Record<string, unknown>> {
   const repositories = await workspace.all();
   const available = repositories.filter((entry): entry is typeof entry & { handle: RemoteHandle; } => 'handle' in entry);
   const unavailable = repositories.filter(entry => 'unavailable' in entry).map(entry => ({ repository: entry.ref.id, message: entry.unavailable.message }));
@@ -55,7 +56,7 @@ export async function callWorkspaceRemoteTool(workspace: WorkspaceRepositories<R
   const broad = (name === 'ls' && (!args.path || args.path === '.')) || (workspaceReads.has(name) && !args.notebookId && !args.path && repositories.length > 1);
   if (broad && name !== 'get_statuses') {
     if (name === 'list_skills' || name === 'list_assets' || name === 'list_folders') {
-      const results = await Promise.all(available.map(entry => callRemoteTool(entry.handle.reader, name, args, write, appUrl)));
+      const results = await Promise.all(available.map(entry => callRemoteTool(entry.handle.reader, name, args, write, appUrl, assetsFor?.(entry.handle))));
       const field = name === 'list_skills' ? 'skills' : name === 'list_assets' ? 'assets' : 'folders';
       return { [field]: results.flatMap(result => result[field] as unknown[]), ...(name === 'list_skills' ? { target: null } : {}), revision: await revisions(available), unavailable };
     }
@@ -109,7 +110,7 @@ export async function callWorkspaceRemoteTool(workspace: WorkspaceRepositories<R
     const entries = paged ? merged.slice(offset, offset + limit) : name === 'search_notes' ? merged.sort((a, b) => Number((b as { score: number; }).score) - Number((a as { score: number; }).score)).slice(0, Number(args.limit || 20)) : merged;
     return { ...(name === 'ls' ? { path: '.' } : {}), ...(name === 'search_notes' ? { query: args.query || '', isRegex: Boolean(args.isRegex), totalMatches: pages.reduce((n, r) => n + Number(r.totalMatches), 0), truncated: pages.some(r => r.truncated) || merged.length > entries.length } : {}), [field]: entries, total, ...(paged ? { nextOffset: offset + limit < total ? offset + limit : null } : {}), ...(name === 'list_notes' ? { count: entries.length } : {}), revision: await revisions(available), unavailable };
   }
-  const entry = ['cp', 'mv', 'rm'].includes(name) ? await resolvePath(workspace, name, args) : typeof args.notebookId === 'string' ? await workspace.forNotebook(args.notebookId) : await resolvePath(workspace, name, args);
+  const entry = ['cp', 'mv', 'rm'].includes(name) ? await resolvePath(workspace, name, args, assetsFor) : typeof args.notebookId === 'string' ? await workspace.forNotebook(args.notebookId) : await resolvePath(workspace, name, args, assetsFor);
   const selectedPath = args.path;
   if (typeof args.notebookId === 'string' && typeof selectedPath === 'string' && !selectedPath.startsWith('r2:') && !entry.notebooks.some(nb => nb.id === args.notebookId && (selectedPath === nb.root || selectedPath.startsWith(`${nb.root}/`) || selectedPath.startsWith('.agents/skills/') || selectedPath.startsWith(`${nb.root.replace(/\/[^/]+$/, '')}/.agents/skills/`)))) throw new Error('Path does not belong to the selected notebook.');
   const scoped = { ...args };
@@ -118,7 +119,7 @@ export async function callWorkspaceRemoteTool(workspace: WorkspaceRepositories<R
   if (typeof scoped.revision === 'string') scoped.revision = received[entry.ref.id];
   let result: Record<string, unknown>;
   try {
-    result = await callRemoteTool(entry.handle.reader, name, scoped, write, appUrl);
+    result = await callRemoteTool(entry.handle.reader, name, scoped, write, appUrl, assetsFor?.(entry.handle));
   } catch (error) {
     if (error instanceof StaleRevisionError) throw new StaleRevisionError([entry.ref.id], `Stale revision for repository ${entry.ref.id}. Reload before writing.`);
     throw error;
@@ -145,7 +146,18 @@ async function notebookPath(workspace: WorkspaceRepositories<RemoteHandle>, file
   return roots.length ? workspace.forNotebook(roots[0].id) : workspace.forPath(file);
 }
 
-async function resolvePath(workspace: WorkspaceRepositories<RemoteHandle>, name: string, args: Args) {
+/** The repository whose notebook an `r2:` key belongs to: the key's first folder after the storage's key prefix names the notebook. */
+async function r2Repository(workspace: WorkspaceRepositories<RemoteHandle>, key: string, assetsFor?: (handle: RemoteHandle) => ToolAssets) {
+  for (const entry of await workspace.all()) {
+    if (!('handle' in entry)) continue;
+    const prefix = (await assetsFor?.(entry.handle).scope())?.prefix ?? '';
+    const notebook = key.startsWith(prefix) ? key.slice(prefix.length).split('/')[0] : undefined;
+    if (notebook && entry.notebooks.some(nb => nb.id === notebook)) return workspace.forNotebook(notebook);
+  }
+  return workspace.forNotebook(key.split('/')[0]);
+}
+
+async function resolvePath(workspace: WorkspaceRepositories<RemoteHandle>, name: string, args: Args, assetsFor?: (handle: RemoteHandle) => ToolAssets) {
   const selected = typeof args.notebookId === 'string' ? await workspace.forNotebook(args.notebookId) : undefined;
   const pathEntry = (file: string) => {
     if (selected?.notebooks.some(nb => nb.id === args.notebookId && (file === nb.root || file.startsWith(`${nb.root}/`)))) return Promise.resolve(selected);
@@ -170,6 +182,6 @@ async function resolvePath(workspace: WorkspaceRepositories<RemoteHandle>, name:
   if (pathTools.has(name) && !args.path?.toString().startsWith('r2:')) throw new Error('Name a notebook or a path inside a configured notebook.');
   if (name === 'replace_notes' && !args.notebookId && !args.dryRun) throw new Error('replace_notes requires notebookId so one mutation writes one repository.');
   if (name === 'invoke_skill' && !args.path && (await workspace.all()).length !== 1) throw new Error('Name a notebook or note path when invoking a skill in a multi-repository workspace.');
-  if (typeof args.path === 'string' && args.path.startsWith('r2:')) return workspace.forNotebook(args.path.slice(3).split('/')[0]);
+  if (typeof args.path === 'string' && args.path.startsWith('r2:')) return r2Repository(workspace, args.path.slice(3), assetsFor);
   return workspace.byId(workspace.home.ref.id);
 }

@@ -162,7 +162,6 @@ export interface PiAgent {
    * An agent that runs no socket of its own (one reached through `PiSessionInfo.socket`) leaves it out.
    */
   upgrade?: (req: IncomingMessage, socket: Duplex, head: Buffer) => boolean;
-  manager: PiSessionManager;
 }
 
 export interface PiAgentOptions {
@@ -180,8 +179,8 @@ function fail(res: express.Response, error: unknown) {
   res.status(status).json({ error: (error as Error).message });
 }
 
-/** The local agent bridges its own socket, so unlike any `PiAgent`, it always has `upgrade`. */
-export function createPiAgent({ command, resolveFolder = notebookFolder }: PiAgentOptions = {}): PiAgent & { upgrade: NonNullable<PiAgent['upgrade']>; } {
+/** The local agent bridges its own socket and keeps its session in a local process, so unlike any `PiAgent`, it always has `upgrade` and a `manager`. */
+export function createPiAgent({ command, resolveFolder = notebookFolder }: PiAgentOptions = {}): PiAgent & { upgrade: NonNullable<PiAgent['upgrade']>; manager: PiSessionManager; } {
   const manager = new PiSessionManager(command);
   const router = express.Router();
   router.use((req, res, next) => agentClientAllowed(req) ? next() : res.status(403).json({ error: 'The agent panel is available only from this computer, or to its owner through pnpm dev:remote.' }));
