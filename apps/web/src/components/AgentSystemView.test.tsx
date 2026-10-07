@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import type { ChangeEvent, ReactNode } from 'react';
 import { I18nProvider } from '../lib/i18n/index.js';
+import { type RenderAgentWorkspaceSection, WebFeaturesProvider } from '../lib/web-features.js';
 import { AgentSystemView } from './AgentSystemView.js';
 import type { AgentFile, AgentWorkspace } from '../lib/agent-workspaces.js';
 
@@ -33,13 +34,18 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function view() {
+function view({ sections = [], writable = true }: { sections?: RenderAgentWorkspaceSection[]; writable?: boolean; } = {}) {
   return render(
-    <I18nProvider>
-      <AgentSystemView notebooks={notebooks} folders={[]} repositories={repositories} homeRepository={home} workspaceTitle='Knowledge Base' onBusyChange={() => {}} />
-    </I18nProvider>,
+    <WebFeaturesProvider features={[{ id: 'edition', agentWorkspaceSections: sections }]}>
+      <I18nProvider>
+        <AgentSystemView notebooks={notebooks} folders={[]} repositories={repositories.map(repository => ({ ...repository, write: writable }))} homeRepository={home} workspaceTitle='Knowledge Base' onBusyChange={() => {}} />
+      </I18nProvider>
+    </WebFeaturesProvider>,
   );
 }
+
+/** An edition section that shows what the page hands it. */
+const echoSection: RenderAgentWorkspaceSection = ({ workspace, readOnly }) => <section aria-label='Edition section'>{`${workspace.repository}|${workspace.folder}|${readOnly}`}</section>;
 
 beforeEach(() => {
   localStorage.clear();
@@ -82,6 +88,31 @@ describe('Agents page', () => {
     expect(screen.getByText('Also uses the core instructions and skills of Knowledge Base.')).toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: 'Skills' })).getByRole('button', { name: 'proofread' })).toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem('mygitnotes.agents.workspace')!)).toEqual({ repository: home, folder: 'blog' });
+  });
+
+  it('names every workspace an inner one also uses as a list in the page language', async () => {
+    const nested = [...workspaces, { repository: home, folder: 'blog/posts', hasInstructions: true, parents: ['', 'blog'] }];
+    api.fetchAgentWorkspaces.mockResolvedValue(nested);
+    api.fetchAgentResources.mockResolvedValue({ workspaces: nested, files: [...files, file('blog/posts/AGENTS.md', 'blog/posts', 'instructions')] });
+    localStorage.setItem('mygitnotes.agents.workspace', JSON.stringify({ repository: home, folder: 'blog/posts' }));
+    view();
+    expect(await screen.findByText(/^Also uses the core instructions and skills of Knowledge Base and .+\.$/)).toBeInTheDocument();
+    expect(screen.queryByText(/、/)).not.toBeInTheDocument();
+  });
+
+  it("renders an edition's sections below the skills for the selected workspace", async () => {
+    view({ sections: [echoSection] });
+    await waitFor(() => expect(screen.getByLabelText('Agent document content')).toHaveValue('# Root\n'));
+    const section = screen.getByRole('region', { name: 'Edition section' });
+    expect(section).toHaveTextContent(`${home}||false`);
+    expect(screen.getByRole('region', { name: 'Skills' }).compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Agent workspace' }), { target: { value: `${home}\nblog` } });
+    await waitFor(() => expect(screen.getByRole('region', { name: 'Edition section' })).toHaveTextContent(`${home}|blog|false`));
+  });
+
+  it("tells an edition's sections when the workspace is read-only", async () => {
+    view({ sections: [echoSection], writable: false });
+    await waitFor(() => expect(screen.getByRole('region', { name: 'Edition section' })).toHaveTextContent(`${home}||true`));
   });
 
   it('opens a script in the code editor and a skill entry with its metadata beside the body', async () => {

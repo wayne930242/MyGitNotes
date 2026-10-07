@@ -66,7 +66,7 @@ interface AgentSystemViewProps {
 
 /** The Agents page: pick an agent workspace, then edit its core instructions and its skills with their reference files and scripts. */
 export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemViewProps>(({ remote = false, notebooks, folders, repositories, homeRepository, workspaceTitle, onBusyChange, onGitStatus }, ref) => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
   const sections = useAgentWorkspaceSections();
   const [workspaces, setWorkspaces] = useState<AgentWorkspace[]>([]);
@@ -481,7 +481,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemVi
             <div className='sidebar-section-label'>{t('agent.workspace')}</div>
             <div className='agent-workspace-picker'>
               <Select aria-label={t('agent.workspace')} value={workspaceKey(selected)} disabled={busy || !workspaces.length} onValueChange={value => void selectWorkspace(workspaces.find(candidate => workspaceKey(candidate) === value) ?? selected)} options={workspaceOptions.length ? workspaceOptions : [{ value: workspaceKey(selected), label: label(selected) }]} className='w-full' />
-              {parentNames.length > 0 && <p className='agent-empty-scope'>{t('agent.inherits', { names: parentNames.join('、') })}</p>}
+              {parentNames.length > 0 && <p className='agent-empty-scope'>{t('agent.inherits', { names: new Intl.ListFormat(language, { type: 'conjunction' }).format(parentNames) })}</p>}
             </div>
             {!readOnly && (
               <button disabled={isCreating || busy} onClick={() => setAddingWorkspace(true)} className='sidebar-link'>
