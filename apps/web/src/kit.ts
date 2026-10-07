@@ -5,4 +5,5 @@
 export { Button } from './components/Button.js';
 export { LoadingStatus } from './components/LoadingStatus.js';
 export { Select } from './components/Select.js';
-export { type Language, useTranslation } from './lib/i18n/index.js';
+export { I18nProvider, type Language, useTranslation } from './lib/i18n/index.js';
+export { useTheme } from './app/useTheme.js';
