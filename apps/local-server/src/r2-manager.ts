@@ -100,7 +100,8 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
     if (!scope) throw new SourceError('R2 storage is not configured.', 404);
     /** Tells the storage about a size change; a failure ends the request, so a quota never drifts silently. */
     const record = (key: string, deltaBytes: number) => storage.record?.(scope, key, deltaBytes) ?? Promise.resolve();
-    return { repositories: () => Promise.all(entries.map(openEntry)), notebook, scope, settings: scope.settings, record, authorize };
+    const moved = storage.moved && ((from: string, to: string, bytes: number) => storage.moved!(scope, from, to, bytes));
+    return { repositories: () => Promise.all(entries.map(openEntry)), notebook, scope, settings: scope.settings, record, moved, authorize };
   };
   /** A well-formed key inside the scope; a key outside it is not found, whatever it names. */
   const bucketKey = (scope: AssetScope, value: unknown) => {
@@ -199,7 +200,7 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
   router.post(
     '/api/r2/move',
     handle(async (req, res) => {
-      const { repositories, scope, settings, record } = await context(req, res, req.body);
+      const { repositories, scope, settings, record, moved } = await context(req, res, req.body);
       const key = bucketKey(scope, req.body.key), destination = bucketKey(scope, req.body.destination);
       if (withinPath(destination, key)) throw new SourceError('Choose a destination outside the moved item.', 400);
       const found = await affected(scope, key, req.body.directory === true);
@@ -221,7 +222,8 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
         for (const [from, to] of Object.entries(moves)) {
           await copyR2Object(settings, from, to);
           copied.push({ to, bytes: bytes.get(from)! });
-          await record(to, bytes.get(from)!);
+          // A storage that re-keys on `moved` keeps the quota as it is until the move is done.
+          if (!moved) await record(to, bytes.get(from)!);
         }
         for (const { repository, notes, rewritten } of rewrites) {
           await repository.commit(rewritten, notes);
@@ -232,7 +234,7 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
         if (!committed.length) {
           const undo = async ({ to, bytes }: (typeof copied)[number]) => {
             await deleteR2Object(settings, to);
-            await record(to, -bytes);
+            if (!moved) await record(to, -bytes);
           };
           await Promise.allSettled(copied.map(undo));
           throw error;
@@ -242,7 +244,8 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
       }
       for (const from of objects) {
         await deleteR2Object(settings, from);
-        await record(from, -bytes.get(from)!);
+        if (moved) await moved(from, moves[from], bytes.get(from)!);
+        else await record(from, -bytes.get(from)!);
       }
       const notes = rewrites.flatMap(({ repository, rewritten }) => [...rewritten.keys()].map(file => ({ repository: repository.id, notebookId: managedNotebook(file, repository.notebooks)!.id, path: file }))).sort(byPath);
       res.json({ moves, notes: notes.map(({ notebookId, path }) => ({ notebookId, path })) });

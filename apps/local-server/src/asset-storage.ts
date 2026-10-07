@@ -21,6 +21,14 @@ export interface AssetStorage {
    * row sets it, and confirms a pending one) and a repeat changes nothing.
    */
   record?(scope: AssetScope, key: string, deltaBytes: number): Promise<void>;
+  /**
+   * Called when a move has finished with one object: the notes now reference `to`, the object is there with `bytes`,
+   * and `from` has been deleted. An edition that keeps one row per key re-keys the row of `from` to `to`, so a move
+   * neither charges the person who moved it nor frees the person who uploaded it. A key with no row is charged as
+   * `record` would. When an edition defines this, a move calls it instead of `record` for the copy and the delete,
+   * and an undone move calls nothing, because the quota never changed.
+   */
+  moved?(scope: AssetScope, from: string, to: string, bytes: number): Promise<void>;
 }
 
 /** The community behavior: the bucket comes from the deployment's environment, every key is allowed, and nothing is metered. */

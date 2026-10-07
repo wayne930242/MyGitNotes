@@ -56,5 +56,11 @@ export function assetStorageContract(name: string, makeFixture: () => AssetStora
       await expect(fixture.storage.reserve(scope, `${scope.prefix}contract/in-quota`, 0)).resolves.toBeUndefined();
       await expect(fixture.storage.reserve(scope, `${scope.prefix}contract/over-quota`, scope.limits.maxObjectBytes + 1)).rejects.toMatchObject({ status: 413 });
     });
+
+    it('accepts a move of an object inside the scope', async () => {
+      const { fixture, scope } = await scoped();
+      if (!fixture.storage.moved) return;
+      await expect(fixture.storage.moved(scope, `${scope.prefix}contract/from`, `${scope.prefix}contract/to`, 0)).resolves.toBeUndefined();
+    });
   });
 }

@@ -17,6 +17,7 @@ describe('environment asset storage', () => {
     expect(scope).toMatchObject({ prefix: '', settings: { accountId: 'acc', bucket: 'assets' } });
     expect(storage.reserve).toBeUndefined();
     expect(storage.record).toBeUndefined();
+    expect(storage.moved).toBeUndefined();
   });
 
   it('has no scope when R2 is not configured', async () => {

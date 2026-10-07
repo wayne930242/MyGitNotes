@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { assetHash, GitHubSource, r2SettingsFromEnv, type RemoteChange, SourceError } from '@mygitnotes/core';
 import { type AppServices, createApp } from '../src/app.js';
-import type { AssetStorage } from '../src/asset-storage.js';
+import type { AssetScope, AssetStorage } from '../src/asset-storage.js';
 
 let remoteToken: string | undefined;
 vi.mock('../src/auth.js', async original => ({ ...await original<typeof import('../src/auth.js')>(), authToken: async () => remoteToken }));
@@ -216,8 +216,8 @@ describe('R2 management on a local workspace', () => {
 });
 
 /** A tenant that owns the key space under `prefix`, meters its uploads (confirmed or pending) and keeps one size row per key. */
-function tenantStorage(prefix: string, options: { quota?: number; } = {}) {
-  const reserved: [string, number][] = [], recorded: [string, number][] = [];
+function tenantStorage(prefix: string, options: { quota?: number; rekey?: boolean; } = {}) {
+  const reserved: [string, number][] = [], recorded: [string, number][] = [], movedKeys: [string, string, number][] = [];
   const pending = new Map<string, number>(), rows = new Map<string, number>();
   const used = (except?: string) => [...rows, ...pending].filter(([key]) => key !== except).reduce((sum, [, bytes]) => sum + bytes, 0);
   const storage: AssetStorage = {
@@ -233,13 +233,20 @@ function tenantStorage(prefix: string, options: { quota?: number; } = {}) {
       if (delta > 0) rows.set(key, delta);
       else rows.delete(key);
     },
+    ...options.rekey && {
+      moved: async (_scope: AssetScope, from: string, to: string, bytes: number) => {
+        movedKeys.push([from, to, bytes]);
+        rows.delete(from);
+        rows.set(to, bytes);
+      },
+    },
   };
-  return { storage, reserved, recorded, used };
+  return { storage, reserved, recorded, movedKeys, rows, used };
 }
 
 describe('R2 management through an asset storage', () => {
   /** Serves the tenant's prefix from the stand-in bucket, resolving settings from the deployment environment. */
-  async function startTenant(prefix: string, options: { quota?: number; } = {}) {
+  async function startTenant(prefix: string, options: { quota?: number; rekey?: boolean; } = {}) {
     const tenant = tenantStorage(prefix, options);
     await startLocal('main', { assetStorage: tenant.storage });
     for (const key of ['r/42/ex/keep.pdf', 'r/42/ex/old/map.webp', 'r/43/ex/theirs.pdf']) bucket.objects.set(key, Buffer.from(key));
@@ -316,6 +323,28 @@ describe('R2 management through an asset storage', () => {
     expect(tenant.recorded).toEqual([['r/42/ex/keep.pdf', -Buffer.from('r/42/ex/keep.pdf').length]]);
     expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: 'r/42/ex/empty' })).status).toBe(200);
     expect(tenant.recorded.at(-1)).toEqual(['r/42/ex/empty/.keep', 0]);
+  });
+
+  it('tells a storage that re-keys which key each moved object went to, and records no size change for the move', async () => {
+    const tenant = await startTenant('r/42/', { rekey: true });
+    tenant.rows.set('r/42/ex/old/map.webp', 7);
+    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'r/42/ex/old', destination: 'r/42/ex/archive', directory: true })).status).toBe(200);
+    expect(tenant.movedKeys).toEqual([['r/42/ex/old/map.webp', 'r/42/ex/archive/map.webp', Buffer.from('r/42/ex/old/map.webp').length]]);
+    expect(tenant.recorded).toEqual([]);
+    expect(bucket.objects.has('r/42/ex/archive/map.webp')).toBe(true);
+    expect(bucket.objects.has('r/42/ex/old/map.webp')).toBe(false);
+    expect(tenant.rows.has('r/42/ex/old/map.webp')).toBe(false);
+  });
+
+  it('tells a storage that re-keys nothing when a move is undone', async () => {
+    const tenant = await startTenant('r/42/', { rekey: true });
+    const note = '![map](r2:r/42/ex/old/map.webp)\n';
+    fs.writeFileSync(path.join(root, 'notes/ex/rules.md'), note);
+    bucket.hooks.onCopy = () => fs.writeFileSync(path.join(root, 'notes/ex/rules.md'), `${note}Saved while copying.\n`);
+    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'r/42/ex/old', destination: 'r/42/ex/archive', directory: true })).status).toBe(409);
+    expect(tenant.movedKeys).toEqual([]);
+    expect(tenant.recorded).toEqual([]);
+    expect(bucket.objects.has('r/42/ex/archive/map.webp')).toBe(false);
   });
 
   it('answers 404 when the storage has no bucket for the request', async () => {
