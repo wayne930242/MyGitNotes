@@ -1,6 +1,7 @@
 import type { ChangeRequest, FileChange } from '../lib/types.js';
 import { WorkspaceTab } from '../lib/routes.js';
 import { workingDiff } from '../lib/working-notes.js';
+import { type NoteChangeFacts, noteChangeFacts } from '../lib/commit-summary.js';
 import React, { useState } from 'react';
 import { type AgentSystemHandle } from '../components/AgentSystemView.js';
 import type { WorkspaceState } from './workspace-state.js';
@@ -49,5 +50,18 @@ export function useChangeDialog({ activeTab, agentSystemRef, remote, documents, 
     }
     : undefined;
 
-  return { commitRequest, isCommitOpen, setIsCommitOpen, openCommitModal, panelRemoteChanges, panelGetPreview };
+  /** What the selected drafts change, for the commit message; a pending document is named by its file. */
+  const panelDescribeChanges = remote
+    ? (files: FileChange[]) => {
+      const notes: NoteChangeFacts[] = [], changedDocuments: string[] = [];
+      for (const file of files) {
+        const draft = draftOf(file);
+        if (draft) notes.push(noteChangeFacts(draft.note, draft.base));
+        else changedDocuments.push(file.path);
+      }
+      return { notes, documents: changedDocuments };
+    }
+    : undefined;
+
+  return { commitRequest, isCommitOpen, setIsCommitOpen, openCommitModal, panelRemoteChanges, panelGetPreview, panelDescribeChanges };
 }

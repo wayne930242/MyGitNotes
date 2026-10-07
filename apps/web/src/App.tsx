@@ -85,6 +85,7 @@ import { AgentSystemView } from './components/AgentSystemView.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { useAccountControls } from './lib/web-features.js';
 import { DerivedManifestNotice, RepositorySwitch, WorkspaceGate } from './components/WorkspaceSetup.js';
+import { useLeaveWarning } from './lib/use-leave-warning.js';
 import { CommitModal } from './components/CommitModal.js';
 import { Breadcrumbs } from './components/Breadcrumbs.js';
 import { FolderIndex } from './components/FolderIndex.js';
@@ -173,7 +174,8 @@ export const AppContent: React.FC = () => {
 
   const { changeFilters, clearFilters, changeAllNotebooks, setActiveTab, agentSystemRef, resourceNavigationBusy, setResourceNavigationBusy, notebookSwitchBusy, setSelectedNotebookId, setSelectedFolder, setViewMode } = useWorkspaceNavigation({ location, queryState, selectedFolders, setFilterQuery, navigate, route, activeTab, selectedNotebookId, folderRoot, viewMode, selectedFolder, config, editorRegistry, fileManagerRef, loading, editorRoute });
 
-  const { commitRequest, isCommitOpen, setIsCommitOpen, openCommitModal, panelRemoteChanges, panelGetPreview } = useChangeDialog({ activeTab, agentSystemRef, remote, documents, setActionError, activeWorkingNotes, pendingDocuments, canWriteNotebook, repositoryFor });
+  const { commitRequest, isCommitOpen, setIsCommitOpen, openCommitModal, panelRemoteChanges, panelGetPreview, panelDescribeChanges } = useChangeDialog({ activeTab, agentSystemRef, remote, documents, setActionError, activeWorkingNotes, pendingDocuments, canWriteNotebook, repositoryFor });
+  useLeaveWarning(Boolean(panelRemoteChanges?.length));
 
   // Aggregated tags across the workspace for autocomplete
   const availableTags = useMemo(() => Array.from(new Set(workspaceTagNames.map(tag => tag.trim()))).filter(Boolean).sort(), [workspaceTagNames]);
@@ -206,7 +208,7 @@ export const AppContent: React.FC = () => {
   const outlineActions = useOutlineActions({ config, repositoryFor, readDraft, remote, sourceId, selectedNotebookId, locationKey: location.key, routedRef: editorRoute.note && editorNotebookId ? { notebookId: editorNotebookId, path: `${config?.notebooks.find(nb => nb.id === editorNotebookId)?.root}/${editorRoute.note}` } : null, prepareLeave: editorRegistry.flushEditors, openNote: handleOpenNote, openNewNote: options => void createNote(options), onError: setActionError });
 
   const { commitWorkingNotes } = useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError });
-  const { commitNoteFile } = useQuickNoteCommit({ remote, repositoryFor, refreshWorkspace, commitWorkingNotes });
+  const { commitNoteFile } = useQuickNoteCommit({ remote, repositoryFor, refreshWorkspace, commitWorkingNotes, activeWorkingNotes, t });
   const legacyRecovery = useLegacyBookmarkRecovery(repositories.map(repository => repository.id));
   const [legacyImportOpen, setLegacyImportOpen] = useState(false);
 
@@ -689,6 +691,7 @@ export const AppContent: React.FC = () => {
                 writable={repositories.some(repository => repository.write)}
                 remoteChanges={panelRemoteChanges}
                 getPreview={panelGetPreview}
+                describeChanges={panelDescribeChanges}
                 request={commitRequest}
                 restoreFile={remote
                   ? async file => {

@@ -35,7 +35,11 @@ When an update is released to the canonical product branch `core`:
 Local UI edits auto-save to the working tree. The Changes manager reviews each file, stages or unstages its snapshot, and commits the reviewed index. Later working edits remain uncommitted. Single-file restore resets that file to HEAD; discarded local working content is copied into the Git directory for recovery. Other selected-file save/commit operations preserve unrelated pre-staged files.
 Local MCP saves create a Git commit. Remote UI edits persist as browser working drafts, kept per repository; the Changes panel publishes the selected notes of each repository as one commit on it, with a revision check, one repository after another, and stops at the first repository that fails. MCP mutations create a commit immediately.
 - A remote save advances the branch without force; concurrent changes return a conflict.
-- Semantic commit messages are generated:
+- Remote commit messages are described from the drafts themselves (`apps/web/src/lib/commit-summary.ts`), in the visitor's language and without any model:
+  - The subject names the note and its most telling changes (new note, title, status, completed or reopened tasks, sections, tags, then text added or cut); several files are listed by name. The Changes subject follows the selection until the visitor types their own.
+  - The body lists every note's changes, then machine-readable trailers (`Note-Added:`, `Note-Modified:`, `Document-Modified:` with the path) for history views; the whole message is cut at a line to stay within the 4000-character source limit.
+  - The editor footer's one-note commit uses the same description. Remote drafts warn before the page is left while any stay uncommitted.
+- Local commit messages are generated:
   - If `GEMINI_API_KEY` is provided, requests a concise conventional commit message from Gemini Flash-Lite.
   - If no API key is available or the request fails, falls back gracefully to deterministic messages (e.g. `minor-mod` or `docs(notes): update <title>`).
   - Editing and Save always succeed even without network or API keys.

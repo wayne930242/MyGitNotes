@@ -9,6 +9,7 @@ import { commitStagedChanges, fetchFileChanges, fetchFileDiff, generateSemanticC
 import { useTranslation } from '../lib/i18n/index.js';
 import { changeKey, groupChanges } from '../lib/file-changes.js';
 import { LoadingStatus } from './LoadingStatus.js';
+import { commitMessage, type NoteChangeFacts, summarizeCommit } from '../lib/commit-summary.js';
 
 interface Props {
   isOpen: boolean;
@@ -17,6 +18,8 @@ interface Props {
   gitStatus: GitStatus | null;
   remoteChanges?: FileChange[];
   getPreview?: (file: FileChange) => string;
+  /** Reads what the chosen remote drafts change, so the message names it and lists every note. */
+  describeChanges?: (files: FileChange[]) => { notes: NoteChangeFacts[]; documents: string[]; };
   restoreFile?: (file: FileChange) => Promise<void>;
   commitFiles?: (files: FileChange[], message: string) => Promise<void>;
   /** Names a repository and branch; given when the workspace has several repositories, it groups changes under them. */
@@ -27,7 +30,7 @@ interface Props {
 }
 export const CommitModal = (props: Props) => props.isOpen ? <Changes {...props} /> : null;
 
-function Changes({ request, writable, gitStatus, remoteChanges, getPreview, restoreFile, commitFiles, repositoryHeading, onChanged, onCommitted, onClose }: Props) {
+function Changes({ request, writable, gitStatus, remoteChanges, getPreview, describeChanges, restoreFile, commitFiles, repositoryHeading, onChanged, onCommitted, onClose }: Props) {
   const { t } = useTranslation();
   const remote = Boolean(commitFiles);
   /** A remote row is a draft held in this browser, so discarding it needs neither write access nor a committable state. */
@@ -51,8 +54,13 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [confirm, setConfirm] = useState<FileChange>();
-  const [message, setMessage] = useState(remote ? `docs(notes): update ${remoteChanges?.length || 0} notes` : '');
+  const [typed, setTyped] = useState<string>();
   const staged = changes.filter(file => selectionMode ? included.includes(changeKey(file)) : file.staged);
+  // A remote commit is described from its drafts and follows the selection until the visitor writes their own subject.
+  const described = describeChanges && staged.length ? describeChanges(staged) : undefined;
+  const summary = described ? summarizeCommit(described.notes, described.documents, t) : undefined;
+  const message = typed ?? summary?.subject ?? '';
+  const setMessage = setTyped;
   const selected = changes.find(file => changeKey(file) === active?.key);
   const refresh = async () => {
     if (!remote) setChanges(await fetchFileChanges());
@@ -163,7 +171,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     setBusy(true);
     setError('');
     try {
-      if (commitFiles) await commitFiles(staged, message.trim());
+      if (commitFiles) await commitFiles(staged, commitMessage(message, summary?.details ?? ''));
       else await commitStagedChanges(staged, message.trim(), selectionMode);
       await onCommitted();
       onClose();
@@ -178,7 +186,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
     setBusy(true);
     setError('');
     try {
-      setMessage(remote ? `docs(notes): update ${staged.length} files` : await generateSemanticCommit((await Promise.all(staged.map(file => fetchFileDiff(file, selectionMode ? 'current' : 'staged')))).join('\n'), staged[0]?.path));
+      setMessage(remote ? undefined : await generateSemanticCommit((await Promise.all(staged.map(file => fetchFileDiff(file, selectionMode ? 'current' : 'staged')))).join('\n'), staged[0]?.path));
     } catch (error) {
       setError((error as Error).message);
     } finally {
@@ -325,7 +333,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, rest
       {error && <p role='alert' className='changes-error'>{error}</p>}
       {notice && <p role='status' className='changes-help'>{notice}</p>}
       <footer>
-        <input className='ui-control' aria-label={t('commit.message')} placeholder={t('commit.placeholder')} value={message} disabled={busy} onChange={event => setMessage(event.target.value)} />
+        <input className='ui-control' aria-label={t('commit.message')} placeholder={t('commit.placeholder')} title={summary?.details} value={message} disabled={busy} onChange={event => setMessage(event.target.value)} />
         <Button disabled={busy || !staged.length} onClick={() => void generate()}>{t(remote ? 'commit.generateMessage' : 'commit.semanticMessage')}</Button>
         <Button variant='primary' disabled={busy || !writable || !staged.length || !message.trim() || staged.some(file => !file.available)} onClick={() => void commit()}>
           <GitCommit />

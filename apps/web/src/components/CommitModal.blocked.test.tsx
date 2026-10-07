@@ -20,10 +20,11 @@ afterEach(() => {
   cleanup();
   vi.resetAllMocks();
 });
-const mount = (restoreFile: (file: FileChange) => Promise<void>) =>
+const describeChanges = (files: FileChange[]) => ({ notes: [], documents: files.map(file => file.path) });
+const mount = (restoreFile: (file: FileChange) => Promise<void>, commitFiles: (files: FileChange[], message: string) => Promise<void> = vi.fn(), changes = [blocked, editable]) =>
   render(
     <I18nProvider>
-      <CommitModal isOpen writable gitStatus={null} remoteChanges={[blocked, editable]} getPreview={file => `--- a/${file}\n+++ b/${file}\n+draft line\n`} restoreFile={restoreFile} commitFiles={vi.fn()} onChanged={async () => {}} onCommitted={async () => {}} onClose={() => {}} />
+      <CommitModal isOpen writable gitStatus={null} remoteChanges={changes} getPreview={file => `--- a/${file}\n+++ b/${file}\n+draft line\n`} describeChanges={describeChanges} restoreFile={restoreFile} commitFiles={commitFiles} onChanged={async () => {}} onCommitted={async () => {}} onClose={() => {}} />
     </I18nProvider>,
   );
 describe('A remote change the repository refuses', () => {
@@ -46,5 +47,23 @@ describe('A remote change the repository refuses', () => {
     mount(vi.fn());
     fireEvent.click(screen.getByRole('button', { name: /^notes\/gone\.md/ }));
     await screen.findByText('+draft line');
+  });
+});
+
+describe('The remote commit message', () => {
+  const other: FileChange = { ...editable, path: 'notes/other.md', revision: 'r3' };
+  it('names the selected drafts until the visitor writes a subject, and always carries the change list', async () => {
+    const commitFiles = vi.fn().mockResolvedValue(undefined);
+    mount(vi.fn(), commitFiles, [editable, other]);
+    const message = screen.getByRole('textbox', { name: 'Commit Message' }) as HTMLInputElement;
+    expect(message.value).toBe('Update 2 files: keep.md, other.md');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select notes/other.md' }));
+    expect(message.value).toBe('Update keep.md');
+    fireEvent.change(message, { target: { value: 'Tidy the weekly notes' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select notes/other.md' }));
+    expect(message.value).toBe('Tidy the weekly notes');
+    fireEvent.click(screen.getByRole('button', { name: /Commit to remote repository/ }));
+    await waitFor(() => expect(commitFiles).toHaveBeenCalled());
+    expect(commitFiles.mock.calls[0][1]).toBe('Tidy the weekly notes\n\n- keep.md: updated\n- other.md: updated\n\nDocument-Modified: notes/keep.md\nDocument-Modified: notes/other.md');
   });
 });
