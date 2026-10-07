@@ -197,10 +197,10 @@ export async function noteRepository(res: express.Response, file: unknown, noteb
 }
 
 /** Every available repository of the request's workspace with the manifest scope it serves. */
-export async function eachRepository(res: express.Response): Promise<{ handle: RepositoryHandle; config: WorkspaceConfig; }[]> {
+export async function eachRepository(res: express.Response): Promise<{ id: RepositoryId; handle: RepositoryHandle; config: WorkspaceConfig; }[]> {
   const workspace = workspaceOf(res);
   const entries = (await workspace.all()).filter((entry): entry is AvailableRepository<RepositoryHandle> => 'handle' in entry);
-  return Promise.all(entries.map(async entry => ({ handle: entry.handle, config: await workspace.scope(entry.ref.id) })));
+  return Promise.all(entries.map(async entry => ({ id: entry.ref.id, handle: entry.handle, config: await workspace.scope(entry.ref.id) })));
 }
 
 /** A local handle, for routes that exist only in a local workspace. */

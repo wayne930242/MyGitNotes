@@ -1,6 +1,6 @@
 import { Request, Response, Router } from 'express';
 import fs from 'node:fs';
-import { classifyResource, managedNotebook, resolveSafePath, resolveWorkspaceAgentPath, WORKSPACE_DOCUMENTS, workspaceAgentKind, type WorkspaceConfig, workspaceDocument } from '@mygitnotes/core';
+import { agentFileAllowed, classifyResource, managedNotebook, resolveAgentFile, resolveSafePath, WORKSPACE_DOCUMENTS, type WorkspaceConfig, workspaceDocument } from '@mygitnotes/core';
 import { changeFile, commitSelectedFiles, commitStagedFiles, fileDiff, generateCommitMessage, getDiff, getGitStatus, getRecentCommits, listChanges, stageAndCommit, SyncError, syncWorkspace } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { eachRepository, type LocalHandle, repositoryOrHome } from './request-workspace.js';
@@ -12,8 +12,8 @@ export function createLocalGitRouter(): Router {
     try {
       const target = resolveSafePath(repoRoot, file);
       if (fs.existsSync(target) && !fs.lstatSync(target).isFile()) return false;
-      if (workspaceAgentKind(file)) {
-        resolveWorkspaceAgentPath(repoRoot, file);
+      if (agentFileAllowed(file, config.notebooks)) {
+        resolveAgentFile(repoRoot, file, config.notebooks);
         return true;
       }
       const resource = classifyResource(file, config);

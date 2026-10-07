@@ -397,6 +397,12 @@
 .agent-file-tree .agent-file { padding-left: 22px; }
 .agent-file[aria-current='page'] { background: var(--workspace-selection); color: var(--color-text); }
 .agent-empty-scope { padding: 4px 10px; font-size: 11px; line-height: 1.6; color: var(--color-muted); }
+.agent-workspace-picker { display: flex; flex-direction: column; gap: 4px; padding: 0 2px 4px; }
+.agent-workspace-picker .agent-empty-scope { padding: 0 8px; }
+.agent-skill-group-label { display: block; padding: 4px 6px 2px 22px; font-size: 11px; line-height: 16px; color: var(--color-muted); }
+.agent-file-tree .agent-add { color: var(--color-muted); }
+.agent-editor-row { display: flex; flex: 1; min-height: 0; }
+.agent-editor-column { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .agent-sidebar .sidebar-section-label { display: flex; justify-content: space-between; }
 .agent-sidebar .sidebar-section-label > span { font-weight: 400; }
 .agent-toolbar { background: var(--color-surface) !important; border-color: var(--workspace-divider) !important; padding: 12px var(--workspace-padding); gap: 12px; }

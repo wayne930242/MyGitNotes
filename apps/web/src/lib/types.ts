@@ -27,13 +27,6 @@ export interface AssetItem {
   markdownRef: string;
 }
 
-export interface AgentResource {
-  path: string;
-  name: string;
-  editable?: boolean;
-  scope?: 'notes' | 'workspace' | 'product';
-}
-
 export interface GitStatus {
   branch: string;
   isClean: boolean;

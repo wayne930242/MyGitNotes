@@ -1,4 +1,4 @@
-import { resolveSafePath, SourceError } from '@mygitnotes/core';
+import { agentFolder, INSTRUCTIONS_FILE, resolveSafePath, SourceError } from '@mygitnotes/core';
 import express from 'express';
 import fs from 'node:fs';
 import type { IncomingMessage } from 'node:http';
@@ -7,7 +7,7 @@ import path from 'node:path';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer } from 'ws';
 import { commandAvailable, piCommand, type PiLocation, PiSession, type PiSessionInfo } from './pi-session.js';
-import { asLocal, notebookRepository, noteRepository } from './request-workspace.js';
+import { asLocal, noteRepository, repositoryOrHome } from './request-workspace.js';
 
 export const PI_SOCKET_PATH = '/api/pi/ws';
 const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]', '::1'];
@@ -95,15 +95,17 @@ export function resumableSession(file: unknown, cwd: string): string | undefined
   }
 }
 
-/** Resolves a notebook folder the panel picked, or its whole repository, to the directory Pi starts in. */
-async function notebookFolder(res: express.Response, notebookId: unknown, folder: unknown, repository: unknown): Promise<AgentFolder> {
-  if (folder !== null && folder !== undefined && (typeof folder !== 'string' || !folder)) throw new SourceError('folder must be a notebook-relative path or null.');
-  if (repository !== undefined && typeof repository !== 'boolean') throw new SourceError('repository must be a boolean.');
-  const { handle, notebook } = await notebookRepository(res, notebookId);
+/** Resolves the agent workspace the panel picked, the repository root or a folder holding core instructions, to the directory Pi starts in. */
+async function workspaceFolder(res: express.Response, repository: unknown, folder: unknown): Promise<AgentFolder> {
+  if (typeof folder !== 'string') throw new SourceError('folder must be a repository-relative folder, empty for the root.');
+  const { id, handle, config } = await repositoryOrHome(res, repository);
   const root = asLocal(handle).root;
-  if (repository) return { cwd: resolveAgentCwd(root), location: { notebookId: notebook.id, folder: null, repository: true } };
-  const relative = folder ? `${notebook.root.replace(/\/$/, '')}/${folder}` : notebook.root;
-  return { cwd: resolveAgentCwd(resolveSafePath(root, relative)), location: { notebookId: notebook.id, folder: folder ? String(folder) : null } };
+  if (folder) {
+    if (!agentFolder(folder, config.notebooks)) throw new SourceError('That folder cannot be an agent workspace.', 403);
+    const instructions = resolveSafePath(root, `${folder}/${INSTRUCTIONS_FILE}`);
+    if (!fs.existsSync(instructions) || !fs.lstatSync(instructions).isFile()) throw new SourceError('That folder is not an agent workspace yet.', 404);
+  }
+  return { cwd: resolveAgentCwd(folder ? resolveSafePath(root, folder) : root), location: { repository: id, folder } };
 }
 
 /** The one Pi process the notebook's agent panel talks to. It starts in the background and ends only when asked. */
@@ -166,8 +168,8 @@ export interface PiAgent {
 
 export interface PiAgentOptions {
   command?: string;
-  /** Resolves the notebook folder a request names; defaults to the request's local workspace. */
-  resolveFolder?: (res: express.Response, notebookId: unknown, folder: unknown, repository: unknown) => Promise<AgentFolder>;
+  /** Resolves the agent workspace a request names; defaults to one of the request's local repositories. */
+  resolveFolder?: (res: express.Response, repository: unknown, folder: unknown) => Promise<AgentFolder>;
 }
 
 function sessionBody(session: PiSession | undefined): { session: PiSessionInfo | null; } {
@@ -180,12 +182,12 @@ function fail(res: express.Response, error: unknown) {
 }
 
 /** The local agent bridges its own socket and keeps its session in a local process, so unlike any `PiAgent`, it always has `upgrade` and a `manager`. */
-export function createPiAgent({ command, resolveFolder = notebookFolder }: PiAgentOptions = {}): PiAgent & { upgrade: NonNullable<PiAgent['upgrade']>; manager: PiSessionManager; } {
+export function createPiAgent({ command, resolveFolder = workspaceFolder }: PiAgentOptions = {}): PiAgent & { upgrade: NonNullable<PiAgent['upgrade']>; manager: PiSessionManager; } {
   const manager = new PiSessionManager(command);
   const router = express.Router();
   router.use((req, res, next) => agentClientAllowed(req) ? next() : res.status(403).json({ error: 'The agent panel is available only from this computer, or to its owner through pnpm dev:remote.' }));
-  // Pi only ever starts in a notebook folder or at the root of a notebook's repository, never at a path the request spells out.
-  const requestedFolder = (req: express.Request, res: express.Response) => resolveFolder(res, req.body?.notebookId, req.body?.folder, req.body?.repository);
+  // Pi only ever starts in an agent workspace, never at a path the request spells out.
+  const requestedFolder = (req: express.Request, res: express.Response) => resolveFolder(res, req.body?.repository, req.body?.folder);
 
   router.get('/session', (_req, res) => {
     res.json({ ...sessionBody(manager.session), piAvailable: manager.available });

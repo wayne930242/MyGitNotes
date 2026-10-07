@@ -1,53 +1,74 @@
-import { describe, expect, it } from 'vitest';
-import { readSkillMetadata, updateSkillMetadata } from './AgentSkillMetadataPanel.js';
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import '@testing-library/jest-dom/vitest';
+import { I18nProvider } from '../lib/i18n/index.js';
+import { AgentSkillMetadataPanel, readSkillFrontmatter, withSkillFrontmatterSource, withSkillMetadata } from './AgentSkillMetadataPanel.js';
 
-describe('AgentSkillMetadataPanel metadata helpers', () => {
-  it('reads skill name and description', () => {
-    expect(readSkillMetadata('---\nname: review\ndescription: Review prose\ncustom: keep\n---\n# Review\n')).toEqual({ title: 'review', description: 'Review prose' });
+afterEach(cleanup);
+
+describe('skill metadata helpers', () => {
+  it('reads the frontmatter as an object with its source text', () => {
+    expect(readSkillFrontmatter('---\nname: review\ndescription: Review prose\ncustom: keep\n---\n# Review\n')).toEqual({ metadata: { name: 'review', description: 'Review prose', custom: 'keep' }, source: 'name: review\ndescription: Review prose\ncustom: keep' });
+    expect(readSkillFrontmatter('# Skill\n')).toEqual({ metadata: {}, source: '' });
   });
 
-  it('updates a dedicated field without dropping custom metadata or body content', () => {
+  it('changes one field without dropping other metadata or the body', () => {
     const original = '---\nname: review\ndescription: Review prose\ncustom: keep\n---\n# Review\n';
-    const updated = updateSkillMetadata(original, 'description', 'Review clear prose');
-    expect(updated).toContain('name: review');
-    expect(updated).toContain('description: Review clear prose');
-    expect(updated).toContain('custom: keep');
-    expect(updated).toContain('# Review\n');
+    expect(withSkillMetadata(original, { name: 'review', description: 'Review clear prose', custom: 'keep' })).toBe('---\nname: review\ndescription: Review clear prose\ncustom: keep\n---\n# Review\n');
+  });
+
+  it('adds and removes fields, as the form does', () => {
+    const original = '---\nname: review\ndescription: x\n---\n# Review\n';
+    const added = withSkillMetadata(original, { name: 'review', description: 'x', license: 'MIT' });
+    expect(readSkillFrontmatter(added).metadata).toEqual({ name: 'review', description: 'x', license: 'MIT' });
+    expect(withSkillMetadata(added, { name: 'review', description: 'x' })).toBe(original);
   });
 
   it('creates frontmatter for a skill that has none', () => {
-    expect(updateSkillMetadata('# Skill\n', 'name', 'skill')).toBe('---\nname: skill\n---\n\n# Skill\n');
+    expect(withSkillMetadata('# Skill\n', { description: 'Does things' })).toBe('---\ndescription: Does things\n---\n\n# Skill\n');
   });
 
-  it('keeps malformed frontmatter available in the source editor without crashing or overwriting it', () => {
+  it('leaves malformed frontmatter untouched and reports it', () => {
     const malformed = '---\nname: [broken\n---\n# Skill\n';
-    expect(readSkillMetadata(malformed)).toEqual({ title: '', description: '' });
-    expect(updateSkillMetadata(malformed, 'name', 'skill')).toBe(malformed);
+    expect(readSkillFrontmatter(malformed).error).toBeTruthy();
+    expect(withSkillMetadata(malformed, { name: 'skill' })).toBe(malformed);
   });
 
-  it('preserves a hidden flow-mapping key byte-for-byte when editing an exposed field', () => {
-    const original = '---\nname: review\ndescription: Review prose\ncustom: {x: 1,y: 2}\n---\n# Review\n';
-    const updated = updateSkillMetadata(original, 'description', 'Review clear prose');
-    expect(updated).toBe('---\nname: review\ndescription: Review clear prose\ncustom: {x: 1,y: 2}\n---\n# Review\n');
+  it('keeps hidden keys, CRLF line endings and comments byte for byte', () => {
+    expect(withSkillMetadata('---\nname: review\ndescription: Review prose\ncustom: {x: 1,y: 2}\n---\n# Review\n', { name: 'review', description: 'Review clear prose', custom: { x: 1, y: 2 } })).toBe('---\nname: review\ndescription: Review clear prose\ncustom: {x: 1,y: 2}\n---\n# Review\n');
+    expect(withSkillMetadata('---\r\nname: review\r\ndescription: Review prose\r\ncustom: keep\r\n---\r\n# Review\r\nBody.\r\n', { name: 'review', description: 'Review clear prose', custom: 'keep' })).toBe('---\r\nname: review\r\ndescription: Review clear prose\r\ncustom: keep\r\n---\r\n# Review\r\nBody.\r\n');
+    const multiline = withSkillMetadata('---\nname: review\ndescription: Review prose # keep\ncustom: keep\n---\n# Review\n', { name: 'review', description: 'Line one\nLine two', custom: 'keep' });
+    expect(multiline).toBe('---\nname: review\ndescription: |- # keep\n  Line one\n  Line two\ncustom: keep\n---\n# Review\n');
   });
 
-  it('preserves CRLF line endings on every untouched line when editing an exposed field', () => {
-    const original = '---\r\nname: review\r\ndescription: Review prose\r\ncustom: keep\r\n---\r\n# Review\r\nBody.\r\n';
-    const updated = updateSkillMetadata(original, 'description', 'Review clear prose');
-    expect(updated).toBe('---\r\nname: review\r\ndescription: Review clear prose\r\ncustom: keep\r\n---\r\n# Review\r\nBody.\r\n');
+  it('replaces the whole block from the YAML view, keeping the body', () => {
+    expect(withSkillFrontmatterSource('---\nname: a\n---\n# Body\n', 'name: a\n# note\nlicense: MIT\n')).toBe('---\nname: a\n# note\nlicense: MIT\n---\n# Body\n');
+    expect(withSkillFrontmatterSource('# Body\n', 'name: a')).toBe('---\nname: a\n---\n\n# Body\n');
   });
+});
 
-  it('emits valid, indented YAML when a textarea edit turns the description multiline', () => {
-    const original = '---\nname: review\ndescription: Review prose\ncustom: keep\n---\n# Review\n';
-    const updated = updateSkillMetadata(original, 'description', 'Line one\nLine two');
-    expect(updated).toBe('---\nname: review\ndescription: |-\n  Line one\n  Line two\ncustom: keep\n---\n# Review\n');
-    expect(readSkillMetadata(updated)).toEqual({ title: 'review', description: 'Line one\nLine two' });
-  });
+describe('AgentSkillMetadataPanel', () => {
+  const content = '---\nname: review\ndescription: Review prose\nlicense: MIT\n---\n# Review\n';
+  const panel = (onChange = vi.fn(), onRename = vi.fn(async () => {})) => {
+    render(
+      <I18nProvider>
+        <AgentSkillMetadataPanel content={content} disabled={false} path='blog/.agents/skills/review/SKILL.md' renaming={false} onChange={onChange} onRename={onRename} />
+      </I18nProvider>,
+    );
+    return { onChange, onRename };
+  };
 
-  it('keeps a trailing comment attached to its own header line, not folded into the new multiline content', () => {
-    const original = '---\nname: review\ndescription: Review prose # keep\ncustom: keep\n---\n# Review\n';
-    const updated = updateSkillMetadata(original, 'description', 'Line one\nLine two');
-    expect(updated).toBe('---\nname: review\ndescription: |- # keep\n  Line one\n  Line two\ncustom: keep\n---\n# Review\n');
-    expect(readSkillMetadata(updated)).toEqual({ title: 'review', description: 'Line one\nLine two' });
+  it('edits the description and other fields like a note, and renames the skill from its name', () => {
+    const { onChange, onRename } = panel();
+    expect(screen.getByRole('button', { name: 'Form' })).toBeInTheDocument();
+    expect(screen.getByLabelText('license')).toHaveValue('MIT');
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Review clear prose' } });
+    expect(onChange).toHaveBeenLastCalledWith('---\nname: review\ndescription: Review clear prose\nlicense: MIT\n---\n# Review\n');
+    const name = screen.getByLabelText('Name');
+    expect(name).toHaveValue('review');
+    fireEvent.change(name, { target: { value: 'proofread' } });
+    fireEvent.keyDown(name, { key: 'Enter' });
+    expect(onRename).toHaveBeenCalledWith('proofread');
   });
 });

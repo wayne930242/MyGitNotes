@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AgentPanel } from './AgentPanel.js';
 import { createCaretStore } from '../../lib/pi-agent/caret-store.js';
 import { type AgentTarget, PiAgentContext, type PiAgentValue } from '../../lib/pi-agent/session.js';
-import type { FolderItem, NotebookConfig } from '../../lib/types.js';
+import type { NotebookConfig } from '../../lib/types.js';
 import { emptyTranscript, type TranscriptState } from '../../lib/pi-agent/transcript.js';
 import { type WebFeature, WebFeaturesProvider } from '../../lib/web-features.js';
 
@@ -24,10 +24,12 @@ beforeEach(() => {
 });
 
 const notebooks: NotebookConfig[] = [{ id: 'nb', title: 'Notes', root: 'notes' }, { id: 'blog', title: 'Blog', root: 'blog/posts' }];
-const folders: FolderItem[] = [{ notebookId: 'blog', path: 'drafts', title: 'Drafts', order: 0 }];
+const home = 'local:home';
+const repositories = [{ id: home, notebooks: ['nb', 'blog'] }];
+const workspaces = [{ repository: home, folder: '', hasInstructions: true, parents: [] }, { repository: home, folder: 'blog', hasInstructions: true, parents: [''] }];
 
 function agent(overrides: Partial<PiAgentValue> = {}): PiAgentValue {
-  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { notebookId: 'nb', folder: null, repository: true }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, folders, connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, setModel: vi.fn(), setThinking: vi.fn(), error: '', start: vi.fn(async () => {}), send: vi.fn(() => true), commands: [], loadCommands: vi.fn(), editorText: null, takeEditorText: vi.fn(), abort: vi.fn(async () => ''), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchFolder: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
+  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { repository: home, folder: '' }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, repositories, homeRepository: home, workspaceTitle: 'Knowledge Base', workspaces, loadWorkspaces: vi.fn(async () => {}), connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, setModel: vi.fn(), setThinking: vi.fn(), error: '', start: vi.fn(async () => {}), send: vi.fn(() => true), commands: [], loadCommands: vi.fn(), editorText: null, takeEditorText: vi.fn(), abort: vi.fn(async () => ''), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchWorkspace: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
 }
 
 function noteTarget(caret = createCaretStore()): AgentTarget {
@@ -40,11 +42,11 @@ function panel(value: PiAgentValue) {
 
 const write = (text: string) => fireEvent.change(screen.getByRole('textbox', { name: 'Message to Pi' }), { target: { value: text } });
 
-it('sends a message with the note path from the folder Pi runs in and the live caret line, and names that folder', async () => {
+it('sends a message with the note path from the folder Pi runs in and the live caret line, and names its workspace', async () => {
   const target = noteTarget();
   const value = agent({ target });
   panel(value);
-  expect(screen.getByText('workspace')).toBeTruthy();
+  expect(screen.getByText('Knowledge Base')).toBeTruthy();
   await waitFor(() => expect(value.locate).toHaveBeenCalledWith('notes/plan.md', 'nb'));
   act(() => target.caret!.set(8));
   await waitFor(() => expect(screen.getByText('plan.md:5:5').getAttribute('title')).toBe('/home/me/workspace/notes/plan.md'));
@@ -124,7 +126,7 @@ it("shows Pi's own project-trust decision in a drawer between the message box an
   expect(drawer.textContent).toContain('/trust');
   expect(localStorage.getItem('mygitnotes.piAgent.infoSection')).toBe('trust');
   cleanup();
-  panel(agent({ session: { id: 's2', cwd: '/w', location: { notebookId: 'nb', folder: null }, trusted: false, status: 'ready', startedAt: '' } }));
+  panel(agent({ session: { id: 's2', cwd: '/w', location: { repository: home, folder: '' }, trusted: false, status: 'ready', startedAt: '' } }));
   // Still open after a reload; the open toggle closes it.
   expect(screen.getByRole('region', { name: 'Project trust' }).textContent).toContain('Not trusted');
   fireEvent.click(screen.getByRole('button', { name: 'Not trusted' }));
@@ -133,7 +135,7 @@ it("shows Pi's own project-trust decision in a drawer between the message box an
 });
 
 it("lists Pi's MCP servers in the drawer, enabled ones and disabled ones apart, each with a status badge", () => {
-  const session = { id: 's1', cwd: '/w', location: { notebookId: 'nb', folder: null }, status: 'ready' as const, startedAt: '' };
+  const session = { id: 's1', cwd: '/w', location: { repository: home, folder: '' }, status: 'ready' as const, startedAt: '' };
   panel(agent({ session: { ...session, mcpServers: [{ name: 'linear', status: 'connected', toolCount: 12 }, { name: 'figma', status: 'cached', toolCount: 1 }, { name: 'trello', status: 'disabled', toolCount: 0 }, { name: 'local', status: 'blocked', toolCount: 0, blockedReason: 'untrusted' }] } }));
   fireEvent.click(screen.getByRole('button', { name: 'MCP servers: 2 of 4 enabled' }));
   const rows = [...screen.getByRole('region', { name: 'MCP servers' }).querySelectorAll('h4, li')].map(row => row.textContent);
@@ -157,34 +159,23 @@ it('labels each extension report with its key and clamps a long one until clicke
   expect(drawer.querySelector('pre')?.textContent).toBe('ts: ready');
 });
 
-it('switches to a notebook folder picked in the folder dialog, without a trust override', async () => {
+it('switches to another agent workspace picked in the header dialog, after warning that the conversation ends', async () => {
   const value = agent();
   panel(value);
-  // The folder name in the header is the way into the folder picker.
-  fireEvent.click(screen.getByRole('button', { name: 'workspace' }));
-  expect(screen.getByText(/ends the current Pi session and clears this conversation/)).toBeTruthy();
-  expect(screen.getByRole('combobox', { name: 'Notebook' })).toBeTruthy();
-  // The session runs at the whole project; the tree's root is the notebook's own root.
-  fireEvent.click(screen.getByRole('button', { name: 'All folders' }));
-  expect(screen.getByRole('button', { name: 'Whole project (repository root)' }).getAttribute('aria-pressed')).toBe('false');
-  fireEvent.click(screen.getByRole('button', { name: 'End session and switch' }));
+  // The workspace name in the header is the way into the workspace picker.
+  fireEvent.click(screen.getByRole('button', { name: 'Knowledge Base' }));
+  expect(value.loadWorkspaces).toHaveBeenCalled();
+  expect(screen.getByText(/ends the current conversation with Pi/)).toBeTruthy();
+  expect(screen.getAllByRole('button', { name: 'Knowledge Base' }).some(button => button.getAttribute('aria-pressed') === 'true')).toBe(true);
+  expect((screen.getByRole('button', { name: 'End conversation and switch' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: /^blog/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'End conversation and switch' }));
   expect(screen.queryByRole('checkbox')).toBeNull();
-  await waitFor(() => expect(value.switchFolder).toHaveBeenCalledWith({ notebookId: 'nb', folder: null }));
-});
-
-it("switches to the whole project, the root of the notebook's repository, and names it by its folder", async () => {
-  const value = agent();
-  panel(value);
-  fireEvent.click(screen.getByRole('button', { name: 'workspace' }));
-  const project = screen.getByRole('button', { name: 'Whole project (repository root)' });
-  fireEvent.click(project);
-  expect(project.getAttribute('aria-pressed')).toBe('true');
-  fireEvent.click(screen.getByRole('button', { name: 'End session and switch' }));
-  await waitFor(() => expect(value.switchFolder).toHaveBeenCalledWith({ notebookId: 'nb', folder: null, repository: true }));
+  await waitFor(() => expect(value.switchWorkspace).toHaveBeenCalledWith({ repository: home, folder: 'blog' }));
 
   cleanup();
-  panel(agent({ session: { ...value.session!, cwd: '/home/me/workspace', location: { notebookId: 'nb', folder: null, repository: true } } }));
-  expect(screen.getByRole('button', { name: 'workspace' })).toBeTruthy();
+  panel(agent({ session: { ...value.session!, cwd: '/home/me/workspace/blog', location: { repository: home, folder: 'blog' } } }));
+  expect(screen.getByRole('button', { name: 'blog' })).toBeTruthy();
 });
 
 it('shows the session model and thinking level, offering only levels the model supports', () => {
@@ -197,7 +188,7 @@ it('shows the session model and thinking level, offering only levels the model s
 });
 
 it('offers a manual start when no session runs, showing why the last one ended', () => {
-  const value = agent({ session: { id: 's1', cwd: '/w', location: { notebookId: 'nb', folder: null }, status: 'exited', startedAt: '', exit: { code: 1, signal: null, stderr: 'No API key' } }, connected: false });
+  const value = agent({ session: { id: 's1', cwd: '/w', location: { repository: home, folder: '' }, status: 'exited', startedAt: '', exit: { code: 1, signal: null, stderr: 'No API key' } }, connected: false });
   panel(value);
   expect(screen.getByText('No API key')).toBeTruthy();
   expect((screen.getByRole('textbox', { name: 'Message to Pi' }) as HTMLTextAreaElement).disabled).toBe(true);

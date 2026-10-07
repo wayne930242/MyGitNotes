@@ -1,7 +1,7 @@
-import { ChevronDown, MessageSquarePlus, Power, Send, Square, SquareTerminal } from 'lucide-react';
+import { ChevronDown, FolderGit2, MessageSquarePlus, Power, Send, Square, SquareTerminal } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Button } from '../Button.js';
-import { FolderPickerDialog } from '../FolderPickerDialog.js';
+import { WorkspaceDialog } from '../WorkspaceDialog.js';
 import { Select } from '../Select.js';
 import { AgentDialogCard } from './AgentDialogCard.js';
 import { InfoDrawer, InfoToggles, useInfoSection } from './AgentInfo.js';
@@ -9,6 +9,7 @@ import { AgentTranscript, type ChatLinks } from './AgentTranscript.js';
 import { CommandMenu } from './CommandMenu.js';
 import { BUILTIN_COMMANDS, matchCommands, parseComposerInput, type PiCommand, slashQuery } from '../../lib/pi-agent/commands.js';
 import { type PiContextUsage, type PiEditorText, type PiLocation, type PiSessionInfo, usePiAgent } from '../../lib/pi-agent/session.js';
+import { sameWorkspace, workspaceKey, workspaceName } from '../../lib/agent-workspaces.js';
 import { type AgentFocus, focusLabel, selectionPosition } from '../../lib/pi-agent/transcript.js';
 import { useTranslation } from '../../lib/i18n/index.js';
 import { FEATURE_IDS, useFeatureGate } from '../../lib/web-features.js';
@@ -29,16 +30,23 @@ function savedContextMode(): ContextMode {
   }
 }
 
-/** Restarts Pi in another notebook folder after the user confirms that the conversation ends with it. */
-function SwitchFolder({ onDone }: { onDone: () => void; }) {
+/** Restarts Pi in another agent workspace after the user confirms that the conversation ends with it. */
+function SwitchWorkspace({ onDone }: { onDone: () => void; }) {
   const { t } = useTranslation();
   const agent = usePiAgent();
+  const { loadWorkspaces } = agent;
   const [busy, setBusy] = useState(false);
-  const initial = agent.session?.location ?? { notebookId: agent.target?.notebookId ?? agent.notebooks[0]?.id ?? '', folder: null };
-  const submit = async (location: PiLocation) => {
+  const [pick, setPick] = useState<PiLocation>(agent.session?.location ?? { repository: agent.homeRepository, folder: '' });
+  // The list is read when the dialog opens, so a workspace added on the Agents page shows up.
+  useEffect(() => {
+    void loadWorkspaces();
+  }, [loadWorkspaces]);
+  const name = useWorkspaceName();
+  const repositories = [...new Set(agent.workspaces.map(workspace => workspace.repository))];
+  const submit = async () => {
     setBusy(true);
     try {
-      await agent.switchFolder(location);
+      await agent.switchWorkspace(pick);
       onDone();
     } catch {
       /* The provider shows the error. */
@@ -47,31 +55,61 @@ function SwitchFolder({ onDone }: { onDone: () => void; }) {
     }
   };
   return (
-    <FolderPickerDialog title={t('piAgent.switchFolder')} notebooks={agent.notebooks} folders={agent.folders} initial={initial} allowRepository confirmLabel={t('piAgent.switchConfirm')} confirmVariant='danger' busy={busy} onClose={onDone} onConfirm={location => void submit(location)}>
+    <WorkspaceDialog title={t('piAgent.switchWorkspace')} onClose={onDone}>
+      <ul className='pi-agent-workspace-list' aria-label={t('piAgent.switchWorkspace')}>
+        {repositories.map(repository => (
+          <li key={repository}>
+            {repositories.length > 1 && <div className='pi-agent-workspace-group'>{name({ repository, folder: '' })}</div>}
+            <ul className='pi-agent-workspace-list'>
+              {agent.workspaces.filter(workspace => workspace.repository === repository).map(workspace => (
+                <li key={workspaceKey(workspace)}>
+                  <button
+                    type='button'
+                    className='pi-agent-workspace-option'
+                    aria-pressed={sameWorkspace(workspace, pick)}
+                    disabled={busy}
+                    onClick={() => setPick({ repository: workspace.repository, folder: workspace.folder })}
+                  >
+                    <FolderGit2 aria-hidden='true' />
+                    <span>{name(workspace)}</span>
+                    {workspace.folder && <small title={workspace.folder}>{workspace.folder}</small>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
       <p className='pi-agent-hint'>{t('piAgent.switchWarning')}</p>
-    </FolderPickerDialog>
+      <div className='workspace-dialog-actions'>
+        <Button type='button' onClick={onDone} disabled={busy}>{t('common.cancel')}</Button>
+        <Button type='button' variant='danger' disabled={busy || sameWorkspace(pick, agent.session?.location)} onClick={() => void submit()}>{t('piAgent.switchConfirm')}</Button>
+      </div>
+    </WorkspaceDialog>
   );
+}
+
+/** How a workspace reads in the panel: the workspace title for the home root, the repository for another root, else the folder's name. */
+function useWorkspaceName() {
+  const agent = usePiAgent();
+  return (workspace: PiLocation) => workspaceName(workspace, { home: agent.homeRepository, title: agent.workspaceTitle, repositories: agent.repositories });
 }
 
 /**
  * Where links in Pi's replies resolve: the session folder in repository terms, and the repository on disk,
- * read off the session's absolute folder by dropping that relative folder from its end.
+ * read off the session's absolute folder by dropping that relative folder from its end. Links are scoped to the
+ * workspace's repository through one of its notebooks, the one holding the folder when there is one.
  */
-function chatLinks(session: PiSessionInfo | null, notebooks: { id: string; root: string; }[]): ChatLinks | undefined {
-  const notebook = session && notebooks.find(candidate => candidate.id === session.location.notebookId);
-  if (!session || !notebook) return undefined;
-  const folder = session.location.repository ? '' : [notebook.root, session.location.folder].filter(part => part && part !== '.').join('/');
+function chatLinks(session: PiSessionInfo | null, notebooks: { id: string; root: string; }[], repositories: { id: string; notebooks: string[]; }[]): ChatLinks | undefined {
+  if (!session) return undefined;
+  const { folder, repository } = session.location;
+  const owned = repositories.find(candidate => candidate.id === repository)?.notebooks ?? [];
+  const candidates = notebooks.filter(notebook => owned.includes(notebook.id));
+  const notebook = candidates.find(candidate => folder === candidate.root || folder.startsWith(`${candidate.root}/`)) ?? candidates[0];
+  if (!notebook) return undefined;
   const cwd = session.cwd.replace(/\/+$/, '');
   const repositoryRoot = folder ? cwd.endsWith(`/${folder}`) ? cwd.slice(0, -folder.length - 1) : undefined : cwd;
   return repositoryRoot === undefined ? undefined : { notebookId: notebook.id, base: { folder, repositoryRoot } };
-}
-
-/** How the session's folder reads in the header: the notebook title, then the folder inside it, or the project's folder name. */
-function locationLabel(location: PiLocation | undefined, cwd: string | undefined, notebooks: { id: string; title: string; }[]): string {
-  if (!location) return '';
-  if (location.repository) return cwd?.replace(/\/+$/, '').split('/').pop() ?? '';
-  const title = notebooks.find(notebook => notebook.id === location.notebookId)?.title ?? location.notebookId;
-  return location.folder ? `${title} / ${location.folder}` : title;
 }
 
 /** Token counts as the usage badge's tooltip reads them: 1.2k, 200k. */
@@ -148,7 +186,8 @@ function AgentConversation() {
 
   const session = agent.session;
   const model = agent.modelState;
-  const links = useMemo(() => chatLinks(session, agent.notebooks), [session, agent.notebooks]);
+  const links = useMemo(() => chatLinks(session, agent.notebooks, agent.repositories), [session, agent.notebooks, agent.repositories]);
+  const name = useWorkspaceName();
   const live = Boolean(session && session.status !== 'exited');
   const ready = live && agent.connected;
   const absolute = target && file?.path === target.path ? file.absolute : undefined;
@@ -185,9 +224,9 @@ function AgentConversation() {
     <section className='pi-agent-panel' aria-label={t('piAgent.title')}>
       <header className='pi-agent-header'>
         <span className='pi-agent-status' data-status={live ? session!.status : 'none'}>{t(live ? `piAgent.status.${session!.status}` as const : 'piAgent.status.none')}</span>
-        {/* The folder name opens the folder picker; its tooltip names the absolute folder Pi runs in. */}
-        <button type='button' className='pi-agent-cwd' title={session?.cwd ? `${t('piAgent.switchFolder')}\n${session.cwd}` : t('piAgent.switchFolder')} aria-haspopup='dialog' aria-expanded={switching} onClick={() => setSwitching(open => !open)}>
-          <span>{locationLabel(session?.location, session?.cwd, agent.notebooks) || t('piAgent.switchFolder')}</span>
+        {/* The workspace name opens the workspace picker; its tooltip names the absolute folder Pi runs in. */}
+        <button type='button' className='pi-agent-cwd' title={session?.cwd ? `${t('piAgent.switchWorkspace')}\n${session.cwd}` : t('piAgent.switchWorkspace')} aria-haspopup='dialog' aria-expanded={switching} onClick={() => setSwitching(open => !open)}>
+          <span>{session ? name(session.location) : t('piAgent.switchWorkspace')}</span>
           <ChevronDown aria-hidden='true' />
         </button>
         {/* The conversation's name, which /name sets, else the title an extension gave it. */}
@@ -205,7 +244,7 @@ function AgentConversation() {
           {model.levels.length > 1 && <Select className='pi-agent-thinking' aria-label={t('piAgent.thinkingLevel')} title={t('piAgent.thinkingLevel')} value={model.thinking ?? ''} onValueChange={agent.setThinking} options={model.levels.map(level => ({ value: level, label: level }))} />}
         </div>
       )}
-      {switching && <SwitchFolder onDone={() => setSwitching(false)} />}
+      {switching && <SwitchWorkspace onDone={() => setSwitching(false)} />}
       {agent.error && <p role='alert' className='pi-agent-error'>{agent.error}</p>}
       {!live && (
         <div className='pi-agent-idle'>

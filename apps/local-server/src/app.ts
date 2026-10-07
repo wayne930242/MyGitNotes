@@ -3,7 +3,7 @@ import type { RemoteCache } from '@mygitnotes/core';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { BOOKMARKS_DOCUMENT, classifyResource, FOCUS_DOCUMENT, isProductAgentDoc, lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, productAgentResources, queryNotePaths, queryNotes, readProductAgentDoc, RemoteSource, replaceFileTags, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, workspaceAgentKind, type WorkspaceAgentResource, workspaceAgentResource, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
+import { agentWorkspaceFile, agentWorkspaces, BOOKMARKS_DOCUMENT, classifyResource, FOCUS_DOCUMENT, lookupNotes, noteAgenda, type NotebookConfig, noteFacets, noteGraph, parseNoteQuery, queryNotePaths, queryNotes, RemoteSource, replaceFileTags, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRecordStore, NoRecordStore, type RecordStore, storageMode } from './record-store/index.js';
 import { type BrowserSessions, cookieSessions, storedSessions } from './browser-sessions.js';
@@ -90,16 +90,6 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   app.use('/api/auth', createAuth({ store: recordStore, sessions, configSource, choices: workspaceChoices }));
   app.use('/api', workspaceChoiceRouter({ store: recordStore, sessions, choices: workspaceChoices }));
   services.routes?.(app, services);
-  // Product reference documents come from this Core checkout, not from the workspace being served.
-  app.get('/api/agent-resources/read', (req, res, next) => {
-    const file = req.query.path;
-    if (typeof file !== 'string' || !isProductAgentDoc(file)) return next();
-    try {
-      res.json({ path: file, content: readProductAgentDoc(base, file) });
-    } catch (error) {
-      res.status(404).json({ error: (error as Error).message });
-    }
-  });
   app.use('/mcp', createRemoteMCP(recordStore, configSource, assetStorage, cache));
   app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace({ store: recordStore, sessions }, configSource, cache));
   app.use(createFileManagerRouter());
@@ -364,19 +354,25 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
     });
     // Agent routes act on the repository a request names, the home repository by default.
     app.get('/api/git/status', (req, res) => res.json({ status: { branch: remoteHome(res).reader.branch, isClean: true, staged: [], modified: [], untracked: [] }, commits: [] }));
+    // Every workspace file of one snapshot, so a listing never mixes two commits.
+    const snapshotFiles = (entries: { path: string; type: string; mode: string; }[], notebooks: NotebookConfig[]) => entries.flatMap(entry => entry.type === 'blob' && entry.mode !== '120000' ? [agentWorkspaceFile(entry.path, notebooks)].filter(file => file !== undefined) : []).sort((a, b) => a.path.localeCompare(b.path, 'en'));
+    app.get('/api/agent-resources/workspaces', async (_req, res) => {
+      try {
+        const repositories = await eachRepository(res);
+        const listed = await Promise.all(repositories.map(async ({ id, handle, config }) => agentWorkspaces(snapshotFiles((await asRemote(handle).reader.getSnapshot()).entries, config.notebooks)).map(workspace => ({ repository: id, ...workspace }))));
+        res.json({ workspaces: listed.flat() });
+      } catch (error) {
+        fail(res, error);
+      }
+    });
     app.get('/api/agent-resources', async (req, res) => {
       try {
-        const { reader, authenticated } = asRemote((await repositoryOrHome(res, req.query.repository)).handle);
+        const { handle, config } = await repositoryOrHome(res, req.query.repository);
+        const { reader, authenticated } = asRemote(handle);
         const snapshot = await reader.getSnapshot();
-        const entries = snapshot.entries;
-        const groups: { instructions: WorkspaceAgentResource[]; skills: WorkspaceAgentResource[]; docs: WorkspaceAgentResource[]; } = { instructions: [], skills: [], docs: [] };
         const editable = Boolean(authenticated && snapshot.info.permissions?.push && reader.branch === 'main');
-        for (const entry of entries) {
-          const kind = workspaceAgentKind(entry.path);
-          if (kind && entry.type === 'blob' && entry.mode !== '120000') groups[kind].push(workspaceAgentResource(entry.path, editable));
-        }
-        groups.docs.push(...productAgentResources(base));
-        res.json({ ...groups, revision: snapshot.sha });
+        const files = snapshotFiles(snapshot.entries, config.notebooks);
+        res.json({ workspaces: agentWorkspaces(files), files: files.map(file => ({ ...file, editable })), revision: snapshot.sha });
       } catch (error) {
         fail(res, error);
       }
@@ -385,8 +381,9 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
       try {
         const targetPath = req.query.path as string;
         if (!targetPath) throw new SourceError('path query required', 400);
-        if (!workspaceAgentKind(targetPath)) throw new SourceError('Path is not a workspace Agent document.', 403);
-        const { reader } = asRemote((await repositoryOrHome(res, req.query.repository)).handle);
+        const { handle, config } = await repositoryOrHome(res, req.query.repository);
+        if (!agentWorkspaceFile(targetPath, config.notebooks)) throw new SourceError('Path is not an agent workspace file.', 403);
+        const { reader } = asRemote(handle);
         const buf = await reader.readFile(targetPath);
         res.json({ path: targetPath, content: buf.toString('utf8'), revision: (await reader.getSnapshot()).sha });
       } catch (error) {

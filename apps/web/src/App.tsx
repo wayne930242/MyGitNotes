@@ -127,7 +127,6 @@ export const AppContent: React.FC = () => {
   };
   // The selected notebook's repository decides what the browse, create and file views may write.
   const canWrite = canWriteNotebook(selectedNotebookId);
-  const branch = repositoryFor(selectedNotebookId)?.branch ?? homeBranch;
   // Workspace documents and the manifest live in the home repository.
   /** Where a note lives, for the note Info tab: the repository and branch of its notebook, and why it is read-only. */
   const locateNote = (note: NoteRef): NoteLocation | undefined => {
@@ -153,8 +152,6 @@ export const AppContent: React.FC = () => {
     : undefined;
   /** Why the selected notebook's repository cannot serve it; its notebook views show this instead. */
   const notebookUnavailable = repositoryFor(selectedNotebookId)?.unavailable;
-  /** The Agents page edits the Agent files of the selected notebook's repository; the app-wide Git status is the home worktree's. */
-  const agentRepository = repositoryFor(selectedNotebookId)?.id;
   /** The manifest lives in the home repository. */
   const manifestWritable = Boolean(homeRepository?.write);
   // A workspace-wide tag change commits to every repository that serves a notebook.
@@ -550,7 +547,7 @@ export const AppContent: React.FC = () => {
                     )}
                     {activeTab === 'agent' && (
                       <main className='workspace-route agent-main'>
-                        <AgentSystemView key={agentRepository} repository={agentRepository} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} ref={agentSystemRef} onBusyChange={setResourceNavigationBusy} readOnly={!canWrite} remote={remote} onGitStatus={agentRepository === sourceId ? setGitStatus : undefined} readOnlyNotice={t(remote ? 'agent.remoteReadOnlyNotice' : branch === 'core' ? 'agent.coreBranchNotice' : 'agent.workspaceReadOnlyNotice')} />
+                        <AgentSystemView ref={agentSystemRef} notebooks={config?.notebooks || []} folders={folders} repositories={repositories} homeRepository={sourceId} workspaceTitle={config?.workspace.title ?? ''} onBusyChange={setResourceNavigationBusy} remote={remote} onGitStatus={setGitStatus} />
                       </main>
                     )}
                     {!notebookUnavailable && activeTab === 'assets' && (
@@ -766,7 +763,7 @@ export const AppContent: React.FC = () => {
   );
   // A local workspace starts its Pi agent in the background, so the agent tab opens onto a warm session.
   return (
-    <PiAgentProvider enabled={agentEnabled} notebookId={selectedNotebookId} notebooks={config?.notebooks ?? NO_NOTEBOOKS} folders={folders}>
+    <PiAgentProvider enabled={agentEnabled} homeRepository={sourceId} workspaceTitle={config?.workspace.title ?? ''} notebooks={config?.notebooks ?? NO_NOTEBOOKS} repositories={repositories}>
       <OutlineActionsProvider value={outlineActions.value}>{content}</OutlineActionsProvider>
     </PiAgentProvider>
   );

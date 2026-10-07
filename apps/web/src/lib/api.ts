@@ -1,4 +1,5 @@
-import { AgentResource, AssetItem, FolderItem, GitCommit, GitStatus, NoteItem, WorkspaceConfig } from './types.js';
+import type { AgentFile, AgentWorkspace } from './agent-workspaces.js';
+import { AssetItem, FolderItem, GitCommit, GitStatus, NoteItem, WorkspaceConfig } from './types.js';
 import type { RepositoryId } from '@mygitnotes/core/repository';
 import type { WorkspaceAnswer } from './workspace-repositories.js';
 
@@ -118,8 +119,15 @@ export async function restoreNote(params: { path: string; content?: string; meta
   return res.json();
 }
 
-/** Agent files of one repository (the home repository without `repository`); each repository keeps its own. */
-export async function fetchAgentResources(repository?: string): Promise<{ instructions: AgentResource[]; skills: AgentResource[]; docs: AgentResource[]; revision?: string; }> {
+/** The agent workspaces of every available repository. */
+export async function fetchAgentWorkspaces(): Promise<AgentWorkspace[]> {
+  const res = await fetch(`${API_BASE}/agent-resources/workspaces`);
+  if (!res.ok) throw new Error('Failed to fetch agent workspaces');
+  return (await res.json()).workspaces;
+}
+
+/** The workspaces and workspace files of one repository (the home repository without `repository`); each repository keeps its own. */
+export async function fetchAgentResources(repository?: string): Promise<{ workspaces: AgentWorkspace[]; files: AgentFile[]; revision?: string; }> {
   const res = await fetch(`${API_BASE}/agent-resources${repository ? `?repository=${encodeURIComponent(repository)}` : ''}`);
   if (!res.ok) throw new Error('Failed to fetch agent resources');
   return res.json();

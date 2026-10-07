@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 export interface PiSessionInfo {
   id: string;
   cwd: string;
-  /** The notebook folder the panel picked as `cwd`; `folder` is relative to the notebook root, null for the root. */
+  /** The agent workspace the panel picked as `cwd`. */
   location: PiLocation;
   /** Pi's own project-trust decision for `cwd`, once it reports it; Pi makes it from trust.json and its extensions. */
   trusted?: boolean;
@@ -28,11 +28,10 @@ export interface PiSessionInfo {
   exit?: { code: number | null; signal: string | null; stderr: string; };
 }
 
+/** An agent workspace: a folder of one repository of the workspace, empty for the repository root. */
 export interface PiLocation {
-  notebookId: string;
-  folder: string | null;
-  /** Pi runs at the root of the notebook's repository, the whole project, rather than in the notebook. */
-  repository?: true;
+  repository: string;
+  folder: string;
 }
 
 export interface PiMcpServer {
