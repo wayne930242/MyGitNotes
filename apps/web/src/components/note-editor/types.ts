@@ -3,7 +3,7 @@ import type { NewVersionRequest } from '../../lib/history-api.js';
 import type { AssetItem, NotebookMetadataField, NoteItem } from '../../lib/types.js';
 
 // Types the editor's parts share with NoteEditor; kept apart so those parts need not import the editor itself.
-export type NotePanelMode = 'find' | 'outline' | 'frontmatter' | 'view' | 'info' | 'agent';
+export type NotePanelMode = 'find' | 'outline' | 'frontmatter' | 'view' | 'history' | 'agent';
 
 /** Props every editor of one note shares, whether zoom or a Focus pane frames it. */
 export interface NoteEditorSharedProps {

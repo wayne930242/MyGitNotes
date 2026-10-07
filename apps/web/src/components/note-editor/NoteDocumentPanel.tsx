@@ -1,4 +1,5 @@
-import { Bot, Braces, ChevronDown, ChevronUp, Info, ListTree, PanelRightClose, Search, SlidersHorizontal } from 'lucide-react';
+import { Bot, Braces, ChevronDown, ChevronUp, History, ListTree, PanelRightClose, Search, SlidersHorizontal } from 'lucide-react';
+import { NoteHistoryPanel, type NoteHistoryPanelProps } from '../NoteHistoryPanel.js';
 import { Button } from '../Button.js';
 import { NoteFrontmatterPanel } from './NoteFrontmatterPanel.js';
 import { NoteViewPanel } from './NoteViewPanel.js';
@@ -18,11 +19,13 @@ export interface NoteDocumentPanelProps {
   isOutlineOpen: boolean;
   showFrontmatter: boolean;
   isViewPanelOpen: boolean;
-  isInfoPanelOpen: boolean;
+  isHistoryOpen: boolean;
   isAgentOpen: boolean;
-  /** The note's repository-relative path, for the Info tab. */
+  /** The note's history and versions; absent where the note has none to show. */
+  history?: NoteHistoryPanelProps;
+  /** The note's repository-relative path, for the info under the frontmatter. */
   notePath: string;
-  /** The editor's current body, which the Info tab publishes as a Gist. */
+  /** The editor's current body, which the info under the frontmatter publishes as a Gist. */
   content: string;
   findQuery: string;
   setFindQuery: (value: string) => void;
@@ -59,8 +62,8 @@ export interface NoteDocumentPanelProps {
   readOnly: boolean;
 }
 
-/** The zoom/pane editor's document panel: its tab strip and the find, outline, frontmatter, view and info sections it switches between. */
-export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isViewPanelOpen, isInfoPanelOpen, isAgentOpen, notePath, content, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, readOnly }: NoteDocumentPanelProps) {
+/** The zoom/pane editor's document panel: its tab strip and the find, outline, frontmatter (with the note's info), view and history sections it switches between. */
+export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isViewPanelOpen, isHistoryOpen, isAgentOpen, history, notePath, content, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, lineNumberOffset, outlineIndex, setOutlineIndex, chooseOutline, openOutline, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, metadata, setMetadata, statuses, metadataFields, availableTags, locked, notebookId, readOnly }: NoteDocumentPanelProps) {
   const { t } = useTranslation();
   const agentAvailable = usePiAgentAvailable();
 
@@ -136,9 +139,13 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
             : <p>{t('editor.outlineEmpty')}</p>}
         </section>
       )}
-      {showFrontmatter && <NoteFrontmatterPanel metadata={metadata} setMetadata={setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={locked} newFieldKey={newFieldKey} setNewFieldKey={setNewFieldKey} frontmatterViewMode={frontmatterViewMode} setFrontmatterViewMode={setFrontmatterViewMode} yamlText={yamlText} setYamlText={setYamlText} yamlError={yamlError} setYamlError={setYamlError} tagInput={tagInput} setTagInput={setTagInput} isTagDropdownOpen={isTagDropdownOpen} setIsTagDropdownOpen={setIsTagDropdownOpen} />}
+      {showFrontmatter && (
+        <NoteFrontmatterPanel metadata={metadata} setMetadata={setMetadata} statuses={statuses} metadataFields={metadataFields} availableTags={availableTags} locked={locked} newFieldKey={newFieldKey} setNewFieldKey={setNewFieldKey} frontmatterViewMode={frontmatterViewMode} setFrontmatterViewMode={setFrontmatterViewMode} yamlText={yamlText} setYamlText={setYamlText} yamlError={yamlError} setYamlError={setYamlError} tagInput={tagInput} setTagInput={setTagInput} isTagDropdownOpen={isTagDropdownOpen} setIsTagDropdownOpen={setIsTagDropdownOpen}>
+          <NoteInfoPanel note={{ notebookId, path: notePath }} content={content} metadata={metadata} setMetadata={setMetadata} locked={locked || readOnly} />
+        </NoteFrontmatterPanel>
+      )}
       {isViewPanelOpen && <NoteViewPanel />}
-      {isInfoPanelOpen && <NoteInfoPanel note={{ notebookId, path: notePath }} content={content} metadata={metadata} setMetadata={setMetadata} locked={locked || readOnly} />}
+      {isHistoryOpen && history && <NoteHistoryPanel {...history} />}
       {isAgentOpen && agentAvailable && <AgentPanel />}
     </>
   );
@@ -161,7 +168,7 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
             tabs[(target + tabs.length) % tabs.length].focus();
           }}
         >
-          <Button type='button' role='tab' aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isViewPanelOpen || isInfoPanelOpen || isAgentOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}>
+          <Button type='button' role='tab' aria-selected={isFindOpen} tabIndex={isFindOpen || !((isMarkdown && isOutlineOpen) || showFrontmatter || isViewPanelOpen || (history && isHistoryOpen) || isAgentOpen) ? 0 : -1} aria-label={t('editor.findInNote')} title={t('editor.findInNote')} onClick={() => setNotePanel(isFindOpen ? null : 'find')}>
             <Search aria-hidden='true' />
           </Button>
           {isMarkdown && (
@@ -175,9 +182,11 @@ export function NoteDocumentPanel({ includeTabs, isMarkdown, setNotePanel, isFin
           <Button type='button' role='tab' aria-selected={isViewPanelOpen} tabIndex={isViewPanelOpen ? 0 : -1} aria-label={t('editor.viewSettings')} title={t('editor.viewSettings')} onClick={() => setNotePanel(isViewPanelOpen ? null : 'view')}>
             <SlidersHorizontal aria-hidden='true' />
           </Button>
-          <Button type='button' role='tab' aria-selected={isInfoPanelOpen} tabIndex={isInfoPanelOpen ? 0 : -1} aria-label={t('editor.info')} title={t('editor.info')} onClick={() => setNotePanel(isInfoPanelOpen ? null : 'info')}>
-            <Info aria-hidden='true' />
-          </Button>
+          {history && (
+            <Button type='button' role='tab' aria-selected={isHistoryOpen} tabIndex={isHistoryOpen ? 0 : -1} aria-label={t('history.open')} title={t('history.open')} onClick={() => setNotePanel(isHistoryOpen ? null : 'history')}>
+              <History aria-hidden='true' />
+            </Button>
+          )}
           {agentAvailable && (
             <Button type='button' role='tab' aria-selected={isAgentOpen} tabIndex={isAgentOpen ? 0 : -1} aria-label={t('piAgent.tab')} title={t('piAgent.tab')} onClick={() => setNotePanel(isAgentOpen ? null : 'agent')}>
               <Bot aria-hidden='true' />

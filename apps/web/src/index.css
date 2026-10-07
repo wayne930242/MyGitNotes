@@ -239,19 +239,37 @@ input, textarea, [contenteditable='true'] { caret-color: var(--color-text); }
 .changes-confirm, .changes-error { padding: 12px; background: var(--color-sidebar); color: var(--color-danger); font-size: 12px; overflow-wrap: anywhere; }
 .changes-confirm button { margin-top: 8px; margin-right: 8px; }
 .changes-help { padding: 8px 12px; color: var(--color-muted); font-size: 11px; overflow-wrap: anywhere; }
-/* Note history: the Changes layout with commits and versions on the left and what they hold on the right. */
-.history-toolbar { flex-wrap: wrap; }
-.history-view { display: flex; gap: 4px; margin-left: auto; }
+/* Note history: a document panel section listing versions and saved changes; one opens in a reader dialog. */
+.note-history-panel { display: flex; min-height: 0; flex: 1; flex-direction: column; padding: 10px 6px 12px; }
+.note-history-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 6px 6px; }
+.note-history-actions .ui-icon-button { margin-left: auto; }
+.note-history-panel svg { width: 14px; height: 14px; flex: none; }
+.note-history-panel h4 { padding: 12px 8px 4px; color: var(--color-muted); font-size: 11px; font-weight: 600; }
+.note-history-panel ul { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; }
+.note-history-row { display: flex; align-items: flex-start; gap: 2px; border-radius: var(--radius-control); }
+.note-history-row:hover, .note-history-row:focus-within { background: var(--color-sidebar); }
+.note-history-open { display: grid; flex: 1; gap: 3px; min-width: 0; padding: 7px 8px; border-radius: var(--radius-control); text-align: left; }
+.note-history-open:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+.note-history-row .ui-icon-button { flex: none; width: 28px; height: 28px; min-height: 0; margin-top: 3px; }
+.note-history-hint { padding: 4px 8px; color: var(--color-muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.note-history-error { color: var(--color-danger); }
+.note-history-confirm { display: grid; gap: 8px; margin: 4px 6px 8px; padding: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-sidebar); font-size: 12px; line-height: 1.5; }
+.note-history-confirm > div { display: flex; justify-content: flex-end; gap: 6px; }
+.note-history-more { align-self: flex-start; margin: 8px; }
+.history-reader-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--color-border); }
+.history-reader-meta { display: grid; flex: 1; gap: 3px; min-width: 0; }
+.history-reader .history-compare-with { max-width: min(360px, 100%); }
+.history-reader > .changes-preview { flex: 1; }
+.history-reader svg { width: 16px; height: 16px; flex: none; }
 .history-subject { font-size: 12px; font-weight: 500; color: var(--color-text); }
 .history-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--color-muted); font-size: 11px; }
 .history-badge { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; border-radius: 999px; background: var(--color-sidebar); color: var(--color-text); font-size: 10.5px; font-weight: 500; }
-.changes-dialog .history-badge svg { width: 11px; height: 11px; }
+.history-badge svg { width: 11px; height: 11px; }
 .history-badge-version { background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface)); color: var(--color-primary); font-weight: 600; }
 .history-version { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 12px; color: var(--color-text); }
 .history-version small, .history-note { color: var(--color-muted); }
 .history-note { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
 .changes-preview pre.history-text { white-space: pre-wrap; overflow-wrap: anywhere; }
-.history-more { margin: 8px; }
 .history-numbers { display: flex; align-items: baseline; gap: 10px; }
 .history-numbers b { font-size: 18px; font-weight: 600; }
 .history-numbers span { color: var(--color-muted); font-size: 12px; }

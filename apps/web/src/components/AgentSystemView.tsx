@@ -6,9 +6,9 @@ import { EditorNotice } from './EditorNotice.js';
 import { EditorFooter } from './EditorFooter.js';
 import { Select } from './Select.js';
 import { FolderPickerDialog } from './FolderPickerDialog.js';
-import React, { lazy, Suspense, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Bot, Braces, FileText, FolderPlus, History, Plus, RotateCcw } from 'lucide-react';
-import { NoteHistoryDialog } from './NoteHistoryDialog.js';
+import { NoteHistoryPanel } from './NoteHistoryPanel.js';
 import { MarkdownEditor, MarkdownEditorMode, MarkdownEditorModeSwitch } from './MarkdownEditor.js';
 import type { FolderItem, GitStatus, NotebookConfig } from '../lib/types.js';
 import type { RepositoryStatus } from '@mygitnotes/core/repository';
@@ -120,6 +120,11 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemVi
   const [fileStatus, setFileStatus] = useState<GitStatus | null>(null);
   const [restorableFiles, setRestorableFiles] = useState<Record<string, string>>({});
   const canRestore = !remote && !locked && !isSaving && Boolean(fileStatus && (fileStatus.modified.includes(selectedPath) || fileStatus.staged.includes(selectedPath)) && restorableFiles[selectedPath]);
+  // History reads again for a new file or repository, not on every render.
+  const historyTarget = useMemo(() => ({ path: selectedPath, repository }), [selectedPath, repository]);
+  const historyDirty = hasUnsavedChanges || Boolean(fileStatus && (fileStatus.modified.includes(selectedPath) || fileStatus.staged.includes(selectedPath)));
+  // An agent file is edited as its whole text, so the history compares with and restores into that text.
+  const historyCurrent = useCallback(() => content, [content]);
   const renameRestoreLimited = !remote && isSkillEntry && Boolean(fileStatus?.untracked.includes(selectedPath));
   const showRestore = !remote && !renameRestoreLimited;
   const skills = workspaceSkills(files, selected.folder);
@@ -585,16 +590,26 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemVi
               <Button
                 size='icon'
                 className='editor-panel-action'
-                aria-pressed={metadataOpen}
+                aria-pressed={metadataOpen && !historyOpen}
                 title={t('editor.frontmatter')}
                 aria-label={t('editor.frontmatter')}
-                onClick={() => setMetadataOpen(open => !open)}
+                onClick={() => {
+                  setMetadataOpen(open => historyOpen || !open);
+                  setHistoryOpen(false);
+                }}
               >
                 <Braces aria-hidden='true' />
               </Button>
             )}
             {selectedPath && (
-              <Button size='icon' className='editor-history-action' title={t('history.open')} aria-label={t('history.open')} onClick={() => setHistoryOpen(true)}>
+              <Button
+                size='icon'
+                className='editor-panel-action'
+                aria-pressed={historyOpen}
+                title={t('history.open')}
+                aria-label={t('history.open')}
+                onClick={() => setHistoryOpen(open => !open)}
+              >
                 <History aria-hidden='true' />
               </Button>
             )}
@@ -626,7 +641,12 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemVi
                 </div>
               )}
           </div>
-          {selectedPath && isSkillEntry && !loading && (
+          {selectedPath && historyOpen && (
+            <aside className='note-document-panel agent-skill-panel' data-open='true' data-panel='history' aria-label={t('history.open')}>
+              <NoteHistoryPanel key={`${repository}:${selectedPath}`} target={historyTarget} dirty={historyDirty} current={historyCurrent} onRestore={locked ? undefined : setContent} />
+            </aside>
+          )}
+          {selectedPath && isSkillEntry && !loading && !historyOpen && (
             <aside className='note-document-panel agent-skill-panel' data-open={metadataOpen} data-panel='frontmatter' aria-label={t('agent.skillMetadata')}>
               <AgentSkillMetadataPanel key={selectedPath} content={content} disabled={locked} path={selectedPath} renaming={renamingSkill} onChange={setContent} onRename={handleRenameSkill} />
             </aside>
@@ -634,7 +654,6 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemVi
         </div>
         {selectedPath && <EditorFooter content={loading ? '' : bodyContent} path={selectedPath} state={loading ? 'loading' : isSaving ? 'saving' : hasUnsavedChanges ? 'pending' : 'saved'} status={t(loading ? 'agent.loading' : isSaving ? 'editor.saving' : hasUnsavedChanges ? 'editor.unsavedChanges' : editable ? 'agent.saved' : 'editor.readOnly')} />}
       </div>
-      {historyOpen && selectedPath && <NoteHistoryDialog target={{ path: selectedPath, repository }} title={selectedPath} dirty={hasUnsavedChanges || Boolean(fileStatus && (fileStatus.modified.includes(selectedPath) || fileStatus.staged.includes(selectedPath)))} onClose={() => setHistoryOpen(false)} />}
       {addingWorkspace && (
         <FolderPickerDialog title={t('agent.addWorkspace')} notebooks={notebooks} folders={folders} initial={{ notebookId: notebooks[0]?.id ?? '', folder: null }} confirmLabel={t('agent.addWorkspaceConfirm')} busy={isCreating} onClose={() => setAddingWorkspace(false)} onConfirm={pick => void handleAddWorkspace(pick.notebookId, pick.folder)}>
           <p className='pi-agent-hint'>{t('agent.addWorkspaceHint')}</p>

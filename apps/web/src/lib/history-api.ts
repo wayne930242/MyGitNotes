@@ -75,3 +75,36 @@ export async function changeVersion(target: HistoryTarget, change: VersionChange
   if (!res.ok) throw await responseError(res, 'The version could not be saved.');
   return (await res.json() as { versions: NoteVersion[]; }).versions;
 }
+
+/** A commit in the workspace that may change a file's history: the repositories it touched and, when known, the paths it changed. */
+export interface HistoryChange {
+  repositories: string[];
+  paths?: string[];
+}
+
+const historyListeners = new Set<(change: HistoryChange) => void>();
+let historyEvents: EventSource | undefined;
+
+/** Hears of commits from the server's history stream, which every open history panel shares; returns the unsubscribe. */
+export function onHistoryChanged(listener: (change: HistoryChange) => void): () => void {
+  historyListeners.add(listener);
+  if (!historyEvents && typeof EventSource !== 'undefined') {
+    historyEvents = new EventSource(`${API_BASE}/history/events`);
+    historyEvents.addEventListener('history', event => {
+      // An event that cannot be read still names a commit, so every panel reads its history again.
+      let change: HistoryChange = { repositories: [] };
+      try {
+        change = JSON.parse((event as MessageEvent<string>).data) as HistoryChange;
+      } catch {
+        console.warn('[history] unreadable history event');
+      }
+      for (const each of historyListeners) each(change);
+    });
+  }
+  return () => {
+    historyListeners.delete(listener);
+    if (historyListeners.size) return;
+    historyEvents?.close();
+    historyEvents = undefined;
+  };
+}

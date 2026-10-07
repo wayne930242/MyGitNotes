@@ -28,7 +28,9 @@ const PANEL_OPEN_KEY = 'mygitnotes.documentPanel.open';
 function savedPanel(isMarkdown: boolean): NotePanelMode {
   try {
     const saved = localStorage.getItem(PANEL_KEY);
-    if (['find', 'outline', 'frontmatter', 'view', 'info', 'agent'].includes(saved || '')) return saved as NotePanelMode;
+    // The info section now sits under the frontmatter.
+    if (saved === 'info') return 'frontmatter';
+    if (['find', 'outline', 'frontmatter', 'view', 'history', 'agent'].includes(saved || '')) return saved as NotePanelMode;
   } catch { /* Use the default panel when storage is unavailable. */ }
   return isMarkdown ? 'outline' : 'find';
 }
@@ -64,7 +66,7 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
   const isOutlineOpen = notePanel === 'outline';
   const showFrontmatter = notePanel === 'frontmatter';
   const isViewPanelOpen = notePanel === 'view';
-  const isInfoPanelOpen = notePanel === 'info';
+  const isHistoryOpen = notePanel === 'history';
   const isAgentOpen = notePanel === 'agent';
   const [findQuery, setFindQuery] = useState('');
   const [findIndex, setFindIndex] = useState(0);
@@ -216,7 +218,7 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
     requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-outline-index="${index}"]`)?.focus());
   }, [isOutlineOpen, outline, outlineIndex]);
 
-  return { editorRef, notePanel, setNotePanel, lastNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isViewPanelOpen, isInfoPanelOpen, isAgentOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, moveOutline, openFind, openOutline, isEditorLeaderOpen, setIsEditorLeaderOpen, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen };
+  return { editorRef, notePanel, setNotePanel, lastNotePanel, isFindOpen, isOutlineOpen, showFrontmatter, isViewPanelOpen, isHistoryOpen, isAgentOpen, findQuery, setFindQuery, findIndex, matches, stepFind, findInputRef, outline, outlineIndex, setOutlineIndex, chooseOutline, moveOutline, openFind, openOutline, isEditorLeaderOpen, setIsEditorLeaderOpen, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen };
 }
 
 /** The document panel state the editor parts that render it share. */

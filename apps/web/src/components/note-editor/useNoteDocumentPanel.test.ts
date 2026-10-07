@@ -14,10 +14,10 @@ it("reopens a zoomed note's panel as the user left it, open on its last section 
   const props = { frame: 'zoom' as const, active: false, isMarkdown: true, content: '# Alpha', editorMode: 'raw' as const, editorRef: createRef<MarkdownEditorHandle>(), metadata: {}, notePath: 'notes/a.md', branch: 'main', readOnly: false };
   const first = renderHook(() => useNoteDocumentPanel(props));
   expect(first.result.current.notePanel).toBeNull();
-  act(() => first.result.current.setNotePanel('info'));
+  act(() => first.result.current.setNotePanel('history'));
   first.unmount();
   const second = renderHook(() => useNoteDocumentPanel({ ...props, notePath: 'notes/b.md' }));
-  expect(second.result.current.notePanel).toBe('info');
+  expect(second.result.current.notePanel).toBe('history');
   act(() => second.result.current.setNotePanel(null));
   second.unmount();
   expect(renderHook(() => useNoteDocumentPanel(props)).result.current.notePanel).toBeNull();

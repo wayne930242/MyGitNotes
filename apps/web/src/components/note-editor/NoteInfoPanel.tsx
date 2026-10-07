@@ -14,14 +14,14 @@ interface GistProps {
   locked: boolean;
 }
 
-/** The document panel's info section: the note's notebook, repository, branch, path, whether it can be edited, and its Gist. */
+/** The note's info, under the frontmatter in the document panel: the note's notebook, repository, branch, path, whether it can be edited, and its Gist. */
 export function NoteInfoPanel({ note, ...gist }: { note: NoteRef; } & GistProps) {
   const { t } = useTranslation();
   const location = useNoteLocation(note);
   if (!location) return null;
   const rows: [string, string][] = [[t('editor.infoNotebook'), location.notebook], [t('editor.infoRepository'), location.repository], [t('editor.infoBranch'), location.branch], [t('editor.infoPath'), location.path]];
   return (
-    <section className='note-info-panel note-panel-scroll' aria-label={t('editor.info')}>
+    <section className='note-info-panel' aria-label={t('editor.info')}>
       <dl>
         {rows.map(([label, value]) => (
           <div key={label}>

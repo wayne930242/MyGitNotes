@@ -3,7 +3,8 @@ import { ListTree } from 'lucide-react';
 import { useOutlineActions, useOutlineInsertion } from '../lib/outline-actions.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { NoteQuickActions } from './note-editor/NoteQuickActions.js';
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { parseNoteFile, serializeNoteFile } from '@mygitnotes/core/note-file';
 import { MarkdownEditor, type MarkdownEditorHandle, type MarkdownEditorMode } from './MarkdownEditor.js';
 import type { NoteItem } from '../lib/types.js';
 import { usePanelContext } from '../lib/panel-context.js';
@@ -16,8 +17,7 @@ import { NoteEditorToolbar } from './note-editor/NoteEditorToolbar.js';
 import { NoteEditorDocumentPanel } from './note-editor/NoteEditorDocumentPanel.js';
 import { NoteEditorLeader } from './note-editor/NoteEditorLeader.js';
 import { FileManagerDialog } from './files/index.js';
-import { NoteHistoryDialog } from './NoteHistoryDialog.js';
-import { today } from '../lib/history-api.js';
+import { today, type VersionText } from '../lib/history-api.js';
 import { useNoteDiffStats } from './note-editor/useNoteDiffStats.js';
 import { noteViewStyle, readShowFormatToolbar, readShowLineNumbers, useNoteViewPreferences, writeShowFormatToolbar, writeShowLineNumbers } from '../lib/editor-preferences.js';
 import type { NoteEditorSession, NoteEditorSharedProps, NotePanelMode } from './note-editor/types.js';
@@ -136,8 +136,15 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
 
   useImperativeHandle(ref, () => ({ insert }));
 
-  const [historyOpen, setHistoryOpen] = useState(false);
   const historyTarget = useMemo(() => ({ path: note.path, notebookId: note.notebookId }), [note.path, note.notebookId]);
+  // The history compares and keeps the note as saving it would write the file; a restored file goes back into the editor's fields.
+  const { content: sessionContent, metadata: sessionMetadata, setContent: setSessionContent, setMetadata: setSessionMetadata } = session;
+  const currentFile = useCallback((latest: string | null) => serializeNoteFile(note.path, sessionMetadata, sessionContent, latest === null, new Date(), latest ?? undefined), [note.path, sessionContent, sessionMetadata]);
+  const restoreFile = useCallback((text: string) => {
+    const parsed = parseNoteFile(text, note.path);
+    setSessionContent(parsed.content);
+    setSessionMetadata(parsed.metadata);
+  }, [note.path, setSessionContent, setSessionMetadata]);
 
   // The formatting toolbar's Insert image opens the notebook's assets; a chosen image goes in at the caret.
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
@@ -165,11 +172,12 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
     );
   }
 
-  const panel = { ...docPanel, isMarkdown, notePath: note.path, content: session.content, lineNumberOffset: session.baseNote.lineNumberOffset || 0, metadata: session.metadata, setMetadata: session.setMetadata, statuses, metadataFields, availableTags, locked: session.locked, notebookId: note.notebookId, readOnly };
+  const history = { target: historyTarget, dirty: session.isDirty, current: currentFile, onRestore: readOnly || session.locked ? undefined : restoreFile, onCommitVersion: onCommitFile && !readOnly ? (text: VersionText) => session.commitNote({ path: note.path, today: today(), ...text }) : undefined };
+  const panel = { ...docPanel, isMarkdown, history, notePath: note.path, content: session.content, lineNumberOffset: session.baseNote.lineNumberOffset || 0, metadata: session.metadata, setMetadata: session.setMetadata, statuses, metadataFields, availableTags, locked: session.locked, notebookId: note.notebookId, readOnly };
   return (
     <div className='note-editor' data-frame={frame} data-source-notebook={note.notebookId} style={noteViewStyle(viewPreferences)}>
       <NoteEditorNotices session={session} notePath={note.path} />
-      <NoteEditorToolbar frame={frame} note={note} session={session} docPanel={docPanel} isMarkdown={isMarkdown} autoSave={autoSave} readOnly={readOnly} editorMode={editorMode} setEditorMode={setEditorMode} showLineNumbers={showLineNumbers} toggleLineNumbers={toggleLineNumbers} showFormatToolbar={showFormatToolbar} toggleFormatToolbar={isMarkdown && !session.locked && !reading ? toggleFormatToolbar : undefined} phoneEditing={phone && !session.locked ? { editing, onEdit: () => setEditing(true), onDone: finishEditing } : undefined} onRefresh={refresh} onClose={onClose} onAddToFocus={onAddToFocus} onMove={readOnly ? undefined : onMove} onRename={readOnly || !onRename ? undefined : () => onRename(session.title)} onAddToOutline={addToOutline} onOpenHistory={() => setHistoryOpen(true)} />
+      <NoteEditorToolbar frame={frame} note={note} session={session} docPanel={docPanel} isMarkdown={isMarkdown} autoSave={autoSave} readOnly={readOnly} editorMode={editorMode} setEditorMode={setEditorMode} showLineNumbers={showLineNumbers} toggleLineNumbers={toggleLineNumbers} showFormatToolbar={showFormatToolbar} toggleFormatToolbar={isMarkdown && !session.locked && !reading ? toggleFormatToolbar : undefined} phoneEditing={phone && !session.locked ? { editing, onEdit: () => setEditing(true), onDone: finishEditing } : undefined} onRefresh={refresh} onClose={onClose} onAddToFocus={onAddToFocus} onMove={readOnly ? undefined : onMove} onRename={readOnly || !onRename ? undefined : () => onRename(session.title)} onAddToOutline={addToOutline} />
       {awaitingRecovery && (
         <p role='status'>
           {t('outline.recoveryPending')} <button type='button' className='ui-button' onClick={() => outlines?.cancel()}>{t('common.cancel')}</button>
@@ -182,7 +190,6 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
       </div>
       <EditorFooter content={session.content} path={note.path} state={session.editorState} status={session.editorStatus} actions={<NoteQuickActions {...footerActions({ frame, readOnly, session, refresh, canCommit: Boolean(onCommitFile) })} changes={changes} disabled={session.isSaving} />} />
       {docPanel.isEditorLeaderOpen && <NoteEditorLeader docPanel={docPanel} isMarkdown={isMarkdown} />}
-      {historyOpen && <NoteHistoryDialog target={historyTarget} title={session.title || note.path} dirty={session.isDirty} onCommitVersion={onCommitFile && !readOnly ? text => session.commitNote({ path: note.path, today: today(), ...text }) : undefined} onClose={() => setHistoryOpen(false)} />}
       {imagePickerOpen && <FileManagerDialog notebookId={note.notebookId} writable={!readOnly} mode='pick-image' onInsert={session.locked ? undefined : insertImage} beforeChange={beforeFileChange} onChanged={onFilesChanged} onClose={() => setImagePickerOpen(false)} />}
     </div>
   );

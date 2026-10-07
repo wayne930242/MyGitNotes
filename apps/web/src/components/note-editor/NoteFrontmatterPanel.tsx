@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { type ReactNode, useMemo } from 'react';
 import { isNoteHidden, withNoteStatus } from '@mygitnotes/core/note-status';
 import { Select } from '../Select.js';
 import { NotebookMetadataField } from '../../lib/types.js';
@@ -26,10 +26,12 @@ export interface NoteFrontmatterPanelProps {
   setTagInput: (value: string) => void;
   isTagDropdownOpen: boolean;
   setIsTagDropdownOpen: (value: boolean) => void;
+  /** Shown below the fields, in the same scroll. */
+  children?: ReactNode;
 }
 
-/** A note's frontmatter: title, status, tags with autocomplete, custom metadata fields, and a raw-YAML view. */
-export function NoteFrontmatterPanel({ metadata, setMetadata, statuses, metadataFields, availableTags, locked, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen }: NoteFrontmatterPanelProps) {
+/** A note's frontmatter: title, status, tags with autocomplete, custom metadata fields, and a raw-YAML view; `children` follow it. */
+export function NoteFrontmatterPanel({ metadata, setMetadata, statuses, metadataFields, availableTags, locked, newFieldKey, setNewFieldKey, frontmatterViewMode, setFrontmatterViewMode, yamlText, setYamlText, yamlError, setYamlError, tagInput, setTagInput, isTagDropdownOpen, setIsTagDropdownOpen, children }: NoteFrontmatterPanelProps) {
   const { t } = useTranslation();
 
   const customFields = useMemo(() => metadataFieldSpecs(metadata, RESERVED_METADATA_KEYS, metadataFields), [metadataFields, metadata]);
@@ -153,6 +155,7 @@ export function NoteFrontmatterPanel({ metadata, setMetadata, statuses, metadata
           </fieldset>
         )
         : <FrontmatterYaml yamlText={yamlText} setYamlText={setYamlText} yamlError={yamlError} setYamlError={setYamlError} locked={locked} setMetadata={setMetadata} />}
+      {children}
     </div>
   );
 }
