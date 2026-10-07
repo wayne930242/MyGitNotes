@@ -17,7 +17,7 @@ import { createStudyRouter } from './study.js';
 import { createOutlineImportRouter } from './outline-import.js';
 import { createWorkspaceDocumentRouter } from './workspace-document.js';
 import { createFolderManagerRouter } from './folder-manager.js';
-import { createNoteHistoryRouter, newVersion } from './note-history.js';
+import { createNoteHistoryRouter, newVersion, serverlessHistoryEvents } from './note-history.js';
 import { type AssetStorage, envAssetStorage } from './asset-storage.js';
 import { createR2AssetHandler } from './r2-assets.js';
 import { createR2ManagerRouter } from './r2-manager.js';
@@ -92,6 +92,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   app.use('/api', workspaceChoiceRouter({ store: recordStore, sessions, choices: workspaceChoices }));
   services.routes?.(app, services);
   app.use('/mcp', createRemoteMCP(recordStore, configSource, assetStorage, cache));
+  app.get('/api/history/events', serverlessHistoryEvents);
   app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace({ store: recordStore, sessions }, configSource, cache));
   app.use(createFileManagerRouter());
   app.use(createR2ManagerRouter(assetStorage));

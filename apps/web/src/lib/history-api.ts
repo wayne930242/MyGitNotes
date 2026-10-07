@@ -84,13 +84,22 @@ export interface HistoryChange {
 
 const historyListeners = new Set<(change: HistoryChange) => void>();
 let historyEvents: EventSource | undefined;
+/** The server closed the stream for good, as a serverless deployment does with 204; panels then read again only after the app's own saves. */
+let historyStreamEnded = false;
 
 /** Hears of commits from the server's history stream, which every open history panel shares; returns the unsubscribe. */
 export function onHistoryChanged(listener: (change: HistoryChange) => void): () => void {
   historyListeners.add(listener);
-  if (!historyEvents && typeof EventSource !== 'undefined') {
-    historyEvents = new EventSource(`${API_BASE}/history/events`);
-    historyEvents.addEventListener('history', event => {
+  if (!historyEvents && !historyStreamEnded && typeof EventSource !== 'undefined') {
+    const events = new EventSource(`${API_BASE}/history/events`);
+    historyEvents = events;
+    // EventSource retries a dropped connection itself and gives up only on an answer such as 204, which needs no error shown.
+    events.addEventListener('error', () => {
+      if (events.readyState !== EventSource.CLOSED) return;
+      historyStreamEnded = true;
+      if (historyEvents === events) historyEvents = undefined;
+    });
+    events.addEventListener('history', event => {
       // An event that cannot be read still names a commit, so every panel reads its history again.
       let change: HistoryChange = { repositories: [] };
       try {

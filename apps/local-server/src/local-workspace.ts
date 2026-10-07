@@ -2,10 +2,8 @@ import { Request, Response, Router } from 'express';
 import { type RepositoryStatus, SourceError, type WorkspaceStatus } from '@mygitnotes/core';
 import { getCurrentBranch, getGitStatus } from '@mygitnotes/git';
 import { type LocalHandle, workspaceOf } from './request-workspace.js';
+import { openEventStream } from './event-stream.js';
 import { watchWorktrees } from './worktree-watch.js';
-
-/** Keeps idle event streams open through proxies that close silent connections. */
-const HEARTBEAT_MS = 25_000;
 
 /** Every available worktree of the request's workspace; the home worktree alone before its first manifest. */
 async function workspaceWorktrees(res: Response): Promise<{ id: string; root: string; }[]> {
@@ -20,22 +18,8 @@ async function workspaceWorktrees(res: Response): Promise<{ id: string; root: st
 }
 
 /** Files changed in any worktree, whoever wrote them, as server-sent `change` events naming the repositories. */
-async function streamWorktreeChanges(req: Request, res: Response) {
-  let worktrees: { id: string; root: string; }[];
-  try {
-    worktrees = await workspaceWorktrees(res);
-  } catch (err: unknown) {
-    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    return;
-  }
-  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
-  res.write('retry: 3000\n\n');
-  const unsubscribe = watchWorktrees(worktrees, repositories => res.write(`event: change\ndata: ${JSON.stringify({ repositories })}\n\n`));
-  const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), HEARTBEAT_MS);
-  req.on('close', () => {
-    clearInterval(heartbeat);
-    unsubscribe();
-  });
+async function streamWorktreeChanges(_req: Request, res: Response) {
+  await openEventStream(res, () => workspaceWorktrees(res), error => res.status(500).json({ error: error instanceof Error ? error.message : String(error) }), (worktrees, write) => watchWorktrees(worktrees, repositories => write(`event: change\ndata: ${JSON.stringify({ repositories })}\n\n`)));
 }
 
 export function createLocalWorkspaceRouter(): Router {

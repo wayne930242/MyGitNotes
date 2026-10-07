@@ -4,7 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
+import express from 'express';
 import { createApp } from '../src/app.js';
+import { openEventStream } from '../src/event-stream.js';
 import { watchedWorktreeCount, watchWorktrees } from '../src/worktree-watch.js';
 
 let root: string, server: Server | undefined, base: string;
@@ -154,5 +156,58 @@ it('streams a change event when a file is added outside the app', async () => {
 
   controller.abort();
   await settle();
+  expect(watchedWorktreeCount()).toBe(0);
+});
+
+it('subscribes nothing for a client that left while the stream was still being prepared', async () => {
+  let ready!: () => void;
+  const prepared = new Promise<void>(resolve => ready = resolve);
+  const subscribe = vi.fn(() => () => {});
+  const fail = vi.fn();
+  let handled!: Promise<void>;
+  const app = express();
+  app.get('/events', (_req, res) => {
+    handled = openEventStream(res, () => prepared, fail, subscribe);
+  });
+  server = createServer(app);
+  await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+  const controller = new AbortController();
+  const request = fetch(`http://127.0.0.1:${(server.address() as { port: number; }).port}/events`, { signal: controller.signal }).catch(() => undefined);
+  await settle(50);
+  controller.abort();
+  await request;
+  await settle(50);
+  ready();
+  await handled;
+  expect(subscribe).not.toHaveBeenCalled();
+  expect(fail).not.toHaveBeenCalled();
+});
+
+it('ends a stream subscription when its client leaves', async () => {
+  const unsubscribe = vi.fn();
+  const app = express();
+  app.get('/events', (_req, res) => void openEventStream(res, async () => 'ready', () => {}, () => unsubscribe));
+  server = createServer(app);
+  await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+  const controller = new AbortController();
+  const res = await fetch(`http://127.0.0.1:${(server.address() as { port: number; }).port}/events`, { signal: controller.signal });
+  expect(res.status).toBe(200);
+  controller.abort();
+  await settle();
+  expect(unsubscribe).toHaveBeenCalledTimes(1);
+});
+
+it('answers the history stream with 204 on Vercel, where a function cannot hold it open', async () => {
+  vi.stubEnv('MYGITNOTES_SOURCE', 'local');
+  vi.stubEnv('MYGITNOTES_LOCAL_PATH', root);
+  vi.stubEnv('VERCEL', '');
+  vi.stubEnv('APP_URL', '');
+  server = createServer(createApp(root));
+  await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+  base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
+  vi.stubEnv('VERCEL', '1');
+  const res = await fetch(base + '/api/history/events');
+  expect(res.status).toBe(204);
+  expect(await res.text()).toBe('');
   expect(watchedWorktreeCount()).toBe(0);
 });
