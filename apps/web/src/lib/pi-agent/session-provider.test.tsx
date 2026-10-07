@@ -47,6 +47,7 @@ beforeEach(() => {
       requests.push({ method, body });
       // A remembered workspace that lost its core instructions is refused.
       if (body?.folder === 'gone') return new Response(JSON.stringify({ error: 'That folder is not an agent workspace yet.' }), { status: 404 });
+      if (body?.folder === 'flaky') return new Response(JSON.stringify({ error: 'Pi could not start.' }), { status: 500 });
       const session = method === 'DELETE' ? null : method === 'GET' ? null : live({ id: method === 'PUT' ? 's2' : 's1', ...sessionOverrides });
       return new Response(JSON.stringify({ session, piAvailable: true }), { status: 200 });
     }),
@@ -93,6 +94,15 @@ it('falls back to the home root when the remembered workspace is gone, and forge
   await waitFor(() => expect(agent.current?.session?.id).toBe('s1'));
   expect(requests.filter(request => request.method === 'POST').map(request => request.body)).toEqual([{ repository: home, folder: 'gone' }, { repository: home, folder: '' }]);
   expect(localStorage.getItem('mygitnotes.piAgent.location')).toBeNull();
+});
+
+it('keeps the remembered workspace when starting fails for another reason', async () => {
+  const remembered = JSON.stringify({ repository: home, folder: 'flaky' });
+  localStorage.setItem('mygitnotes.piAgent.location', remembered);
+  const agent = mount();
+  await waitFor(() => expect(agent.current?.error).toBe('Pi could not start.'));
+  expect(requests.filter(request => request.method === 'POST').map(request => request.body)).toEqual([{ repository: home, folder: 'flaky' }]);
+  expect(localStorage.getItem('mygitnotes.piAgent.location')).toBe(remembered);
 });
 
 it('remembers the live conversation and resumes it, with the remembered folder, on the next start', async () => {

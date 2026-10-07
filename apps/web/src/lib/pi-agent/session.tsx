@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { responseError } from '../api.js';
+import { ApiError, responseError } from '../api.js';
 import type { NotebookConfig } from '../types.js';
 import type { RepositoryStatus } from '@mygitnotes/core/repository';
 import { fetchAgentWorkspaces } from '../api.js';
@@ -403,8 +403,9 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
       try {
         attach((await sessionRequest('POST', { ...saved ?? home, sessionFile: savedSessionFile() })).session);
       } catch (reason) {
-        if (!saved) throw reason;
-        // The remembered workspace is gone (its folder lost its core instructions, or its repository left the workspace).
+        // Only a refused workspace is forgotten (its folder lost its core instructions, or its repository left the
+        // workspace); any other failure keeps the user's choice for the next try.
+        if (!saved || !(reason instanceof ApiError && (reason.status === 403 || reason.status === 404))) throw reason;
         remember(LOCATION_KEY, null);
         attach((await sessionRequest('POST', home)).session);
       }
