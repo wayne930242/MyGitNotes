@@ -6,7 +6,8 @@ import { EditorNotice } from './EditorNotice.js';
 import { LoadingStatus } from './LoadingStatus.js';
 import { DiffStats } from './DiffStats.js';
 
-export function DiffPreview({ diff, file, loading = false, error = '' }: { diff: string; file?: FileChange; loading?: boolean; error?: string; }) {
+/** `title` and `emptyText` name the preview and its no-difference state when it shows something other than a changed file. */
+export function DiffPreview({ diff, file, loading = false, error = '', title, emptyText }: { diff: string; file?: FileChange; loading?: boolean; error?: string; title?: string; emptyText?: string; }) {
   const { t } = useTranslation();
   const preview = parseDiffPreview(diff);
   const reason = file?.unavailableReason || (file?.kind === 'conflict' ? 'conflict' : 'unsupported');
@@ -15,7 +16,7 @@ export function DiffPreview({ diff, file, loading = false, error = '' }: { diff:
     <section className='changes-preview' aria-label={t('commit.diffPreview')} aria-busy={loading}>
       <h4>
         <FileDiff aria-hidden='true' />
-        <span>{file?.path || t('commit.diffPreview')}</span>
+        <span>{file?.path || title || t('commit.diffPreview')}</span>
         {diff && !preview.notice && <DiffStats stats={preview} />}
       </h4>
       {error ? <EditorNotice tone='error'>{error}</EditorNotice> : loading ? <LoadingStatus className='diff-empty'>{t('agent.loadingDocument')}</LoadingStatus> : file?.available === false
@@ -38,7 +39,7 @@ export function DiffPreview({ diff, file, loading = false, error = '' }: { diff:
           </div>
         )
         : !diff
-        ? <p className='diff-empty'>{t(file ? 'changes.identical' : 'changes.noDiff')}</p>
+        ? <p className='diff-empty'>{emptyText ?? t(file ? 'changes.identical' : 'changes.noDiff')}</p>
         : code}
     </section>
   );

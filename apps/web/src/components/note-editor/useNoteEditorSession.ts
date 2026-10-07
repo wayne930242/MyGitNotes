@@ -12,6 +12,7 @@ import type { TranslationKey } from '../../lib/i18n/index.js';
 import { useWorkspaceLinks } from '../WorkspaceLinks.js';
 import { useEditorRegistry } from '../../lib/note-editing.js';
 import type { NoteEditorSession, NoteEditorSharedProps } from './types.js';
+import type { NewVersionRequest } from '../../lib/history-api.js';
 
 /** Server-managed on every save; excluded when deciding whether there is a new edit to save. */
 function sameIgnoringTimestamps(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
@@ -381,8 +382,8 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
       if (mounted.current) setIsSaving(false);
     }
   };
-  /** Saves any pending edit, then commits this note alone. */
-  const commitNote = async () => {
+  /** Saves any pending edit, then commits this note alone; with `version`, the commit also records it as a new version. Rethrows for a caller that waits on it. */
+  const commitNote = async (version?: NewVersionRequest) => {
     if (!onCommitFile || locked || operation.current) return;
     operation.current = true;
     setIsSaving(true);
@@ -402,9 +403,10 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
         clearLocalDraft(draftScope || branch, note.path);
         setHasUnsavedChanges(false);
       }
-      await onCommitFile(note.path);
+      await onCommitFile(note.path, version);
     } catch (error) {
       if (mounted.current) setSaveError((error as Error).message);
+      if (version) throw error;
     } finally {
       operation.current = false;
       if (mounted.current) setIsSaving(false);

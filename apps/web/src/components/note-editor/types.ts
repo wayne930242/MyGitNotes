@@ -1,4 +1,5 @@
 import type { FileResult } from '../../lib/files-api.js';
+import type { NewVersionRequest } from '../../lib/history-api.js';
 import type { AssetItem, NotebookMetadataField, NoteItem } from '../../lib/types.js';
 
 // Types the editor's parts share with NoteEditor; kept apart so those parts need not import the editor itself.
@@ -17,8 +18,8 @@ export interface NoteEditorSharedProps {
   onSave: (params: { path: string; content: string; metadata?: Record<string, unknown>; revision?: string; baseNote?: NoteItem; }) => Promise<NoteItem>;
   onReadRemote?: (path: string) => Promise<NoteItem>;
   onRestoreFile: (path: string) => Promise<NoteItem | null>;
-  /** Commits one note's saved file alone, from the footer; absent when the note's repository is read-only. */
-  onCommitFile?: (path: string) => Promise<void>;
+  /** Commits one note's saved file alone, from the footer or with a new version; absent when the note's repository is read-only. */
+  onCommitFile?: (path: string, version?: NewVersionRequest) => Promise<void>;
   /** Reads the note's uncommitted changes as a unified diff, for the footer's line counts. */
   readDiff?: () => Promise<string>;
   isDirty?: boolean;

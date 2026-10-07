@@ -235,7 +235,7 @@ export const AppContent: React.FC = () => {
       metadataFields: config?.notebooks.find(nb => nb.id === note.notebookId)?.metadata,
       onSave: params => handleSaveNote({ ...params, notebookId: note.notebookId }),
       onRestoreFile: path => handleRestoreNoteFile(path, note.notebookId),
-      onCommitFile: writable ? path => commitNoteFile(path, note.notebookId) : undefined,
+      onCommitFile: writable ? (path, version) => commitNoteFile(path, note.notebookId, version) : undefined,
       // The same diff the Changes panel shows: a remote note's draft against its base, a local note's worktree against HEAD.
       readDiff: remote ? draft && (async () => workingDiff({ [note.path]: draft })) : () => fetchFileDiff({ path: note.path, repository: repository?.id }, 'current'),
       // A path names a file only within its repository: a remote note is dirty when it holds a draft, a local one when its worktree reports it.

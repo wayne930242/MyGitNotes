@@ -3,7 +3,9 @@ import { ProductVersion } from './ProductVersion.js';
 import { Button } from './Button.js';
 import { useWorkspaceSidebarDrawer, WorkspaceSidebar, WorkspaceSidebarPortal, WorkspaceSidebarToggle } from './WorkspaceChrome.js';
 import React, { useState } from 'react';
-import { AlertCircle, Check, Globe, Palette, RefreshCw, Save, Shield } from 'lucide-react';
+import { AlertCircle, Check, Globe, History, Palette, RefreshCw, Save, Shield } from 'lucide-react';
+import { Select } from './Select.js';
+import { useVersionNumbering, type VersionNumbering, writeVersionNumbering } from '../lib/version-display.js';
 import { WorkspaceConfig } from '../lib/types.js';
 import { updateWorkspaceConfig } from '../lib/api.js';
 import { ThemeChoice } from '../lib/themes.js';
@@ -34,6 +36,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
   const { t, language, setLanguage } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
   const featureSections = useSettingsSections();
+  const versionNumbering = useVersionNumbering();
   const [yamlContent, setYamlContent] = useState(() => config ? YAML.stringify(config) : '');
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string; } | null>(null);
@@ -66,7 +69,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
       <WorkspaceSidebarPortal>
         <WorkspaceSidebar label={t('settings.title')} className='settings-sidebar'>
           <div className='sidebar-section-label'>{t('nav.settings')}</div>
-          {[...([['language', t('settings.language'), Globe], ['theme', t('settings.theme'), Palette], ['access', t('layout.access'), Shield], ...(coreUpdates ? [['updates', t('settings.coreUpdates'), RefreshCw] as const] : []), ['manifest', t('layout.manifest'), Save]] as const), ...featureSections.map(section => [section.id, section.title, section.icon] as const)].map(([id, label, Icon]) => (
+          {[...([['language', t('settings.language'), Globe], ['theme', t('settings.theme'), Palette], ['versions', t('settings.versionNumbers'), History], ['access', t('layout.access'), Shield], ...(coreUpdates ? [['updates', t('settings.coreUpdates'), RefreshCw] as const] : []), ['manifest', t('layout.manifest'), Save]] as const), ...featureSections.map(section => [section.id, section.title, section.icon] as const)].map(([id, label, Icon]) => (
             <a
               key={id}
               href={`#settings-${id}`}
@@ -139,6 +142,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ config, local = tr
                 </div>
               </div>
               <ThemeSelector value={currentTheme} onChange={onSelectTheme} />
+            </div>
+            <div id='settings-versions' className='flex flex-col gap-3'>
+              <div>
+                <h3 className='text-xs font-semibold text-fg uppercase tracking-wider flex items-center gap-1.5'>
+                  <History className='w-4 h-4 text-primary' />
+                  {t('settings.versionNumbers')}
+                </h3>
+                <p className='text-xs text-muted mt-0.5'>{t('settings.versionNumbersDescription')}</p>
+              </div>
+              <Select aria-label={t('settings.versionNumbers')} value={versionNumbering} onValueChange={value => writeVersionNumbering(value as VersionNumbering)} options={[{ value: 'sequence', label: t('settings.versionBySequence') }, { value: 'date', label: t('settings.versionByDate') }]} />
             </div>
             <ProductVersion />
             <div id='settings-access'>{accountSettings}</div>

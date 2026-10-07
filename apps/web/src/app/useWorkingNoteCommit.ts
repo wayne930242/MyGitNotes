@@ -5,6 +5,7 @@ import { draftScope, type WorkspaceRepository } from '../lib/workspace-repositor
 import { readDocumentDraft, settleDocumentDraft, type WorkspaceDocumentClient } from '../lib/use-workspace-document.js';
 import { documentClientOf } from '../lib/workspace-document-clients.js';
 import type { FileChange, NoteItem } from '../lib/types.js';
+import type { NewVersionRequest } from '../lib/history-api.js';
 import type { I18nContextValue } from '../lib/i18n/index.js';
 import type { WorkspaceState } from './workspace-state.js';
 
@@ -36,7 +37,7 @@ interface CommitGroup {
 /** Commits selected drafts one repository at a time, one commit each, stopping at the first repository that fails. */
 export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError }: Params) {
   /** One repository's drafts, merged onto its latest revision and committed as one commit; answers the Gists it failed to update. */
-  const commitGroup = async ({ repository, entries, documents: sentDocuments }: CommitGroup, message: string): Promise<GistSync[]> => {
+  const commitGroup = async ({ repository, entries, documents: sentDocuments }: CommitGroup, message: string, version?: NewVersionRequest): Promise<GistSync[]> => {
     if (!repository.write) throw new Error('Sign in with write access to this workspace before committing.');
     const scope = draftScope(repository);
     const expected = repository.revision;
@@ -78,7 +79,7 @@ export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote,
     }
     if (reviewRequired) throw new Error(t('changes.reviewRequired'));
     if (!Object.keys(sent).length && !sentDocuments.length) return [];
-    const result = await commitRemoteNotes(repository.id, Object.values(sent).map(entry => ({ path: entry.note.path, content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base })), expected, message, sentDocuments.map(({ path, page, base }) => ({ path, page, base })));
+    const result = await commitRemoteNotes(repository.id, Object.values(sent).map(entry => ({ path: entry.note.path, content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base })), expected, message, sentDocuments.map(({ path, page, base }) => ({ path, page, base })), version);
     for (const document of sentDocuments) {
       if (!settleDocumentDraft(document.client, repository.id, document, result.revision)) setActionError(t('changes.reviewRequired'));
       // The open notebook's document shows the committed page and any edit made meanwhile.
@@ -90,7 +91,8 @@ export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote,
   };
 
   /** Commits the selected changes, each named by its repository and path. */
-  const commitWorkingNotes = async (files: Pick<FileChange, 'path' | 'repository'>[], message: string) => {
+  /** With `version`, the one selected note's version file joins its commit. */
+  const commitWorkingNotes = async (files: Pick<FileChange, 'path' | 'repository'>[], message: string, version?: NewVersionRequest) => {
     const workspace = await fetchWorkspace(true);
     if (workspace.home !== sourceId) throw new Error('Sign in with write access to this workspace before committing.');
     const repositories = workspace.repositories.filter(repository => !repository.unavailable);
@@ -116,7 +118,7 @@ export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote,
     const failedGists: GistSync[] = [];
     for (const group of groups.values()) {
       try {
-        failedGists.push(...await commitGroup(group, message));
+        failedGists.push(...await commitGroup(group, message, version));
       } catch (error) {
         if (!committed.length) throw error;
         throw new Error(t('changes.partialCommit', { repositories: committed.join(', '), error: (error as Error).message }));

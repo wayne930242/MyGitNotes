@@ -1,3 +1,4 @@
+import type { NewVersionRequest } from './history-api.js';
 import { AgentResource, AssetItem, FolderItem, GitCommit, GitStatus, NoteItem, WorkspaceConfig } from './types.js';
 import type { RepositoryId } from '@mygitnotes/core/repository';
 import type { WorkspaceAnswer } from './workspace-repositories.js';
@@ -12,8 +13,8 @@ export interface GistSync {
 }
 
 /** Commits drafts of one repository as one commit on it; `gists` reports the published notes it pushed to their Gists. */
-export async function commitRemoteNotes(repository: RepositoryId, notes: { path: string; content: string; metadata: Record<string, unknown>; createOnly?: boolean; }[], revision: string, message: string, documents: { path: string; page: unknown; base: unknown; }[] = []): Promise<{ revision: string; commit: { commitHash: string; }; gists?: GistSync[]; }> {
-  const res = await fetch(`${API_BASE}/notes/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, notes, revision, message, documents }) });
+export async function commitRemoteNotes(repository: RepositoryId, notes: { path: string; content: string; metadata: Record<string, unknown>; createOnly?: boolean; }[], revision: string, message: string, documents: { path: string; page: unknown; base: unknown; }[] = [], version?: NewVersionRequest): Promise<{ revision: string; commit: { commitHash: string; }; gists?: GistSync[]; }> {
+  const res = await fetch(`${API_BASE}/notes/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, notes, revision, message, documents, version }) });
   if (!res.ok) throw await responseError(res, 'Failed to commit notes');
   return res.json();
 }
@@ -217,12 +218,12 @@ export class PartialCommitError extends Error {
   }
 }
 /** Commits each worktree's files in turn, one commit per worktree, stopping at the first that fails. */
-export async function commitStagedChanges(files: import('./types.js').FileChange[], message: string, selected = false) {
+export async function commitStagedChanges(files: import('./types.js').FileChange[], message: string, selected = false, version?: NewVersionRequest) {
   const groups = new Map<string | undefined, import('./types.js').FileChange[]>();
   for (const file of files) groups.set(file.repository, [...groups.get(file.repository) ?? [], file]);
   const committed: string[] = [];
   for (const [repository, group] of groups) {
-    const response = await fetch(`${API_BASE}/git/commit-staged`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, files: group.map(file => file.path), revisions: Object.fromEntries(group.map(file => [file.path, file.revision])), message, selected }) });
+    const response = await fetch(`${API_BASE}/git/commit-staged`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, files: group.map(file => file.path), revisions: Object.fromEntries(group.map(file => [file.path, file.revision])), message, selected, version }) });
     const data = await response.json();
     if (!response.ok) throw new PartialCommitError(data.error || 'Commit failed', committed);
     if (repository) committed.push(repository);
