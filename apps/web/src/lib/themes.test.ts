@@ -1,6 +1,7 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { PALETTE_FAMILIES } from './palettes.js';
-import { getThemeChoice, resolveThemeChoice, setThemeChoice, subscribeThemeChoice, themeTokens } from './themes.js';
+import { applyTheme, getThemeChoice, resolveThemeChoice, setThemeChoice, subscribeThemeChoice, themeTokens } from './themes.js';
 
 const luminance = (hex: string) => {
   const [r, g, b] = hex.slice(1, 7).match(/.{2}/g)!.map(value => parseInt(value, 16) / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
@@ -12,6 +13,13 @@ const contrast = (a: string, b: string) => {
 };
 
 describe('theme choice', () => {
+  it('caches the resolved colours for the first paint of the next visit', () => {
+    applyTheme({ familyId: 'gruvbox', mode: 'dark' });
+    const cached = JSON.parse(localStorage.getItem('github_notes_theme_tokens')!);
+    expect(cached.mode).toBe('dark');
+    expect(cached.tokens['--color-bg']).toBe(themeTokens(PALETTE_FAMILIES.find(family => family.id === 'gruvbox')!.variants.dark)['--color-bg']);
+  });
+
   it('loads a retired theme id as Flexoki with the mode it carried', () => {
     expect(resolveThemeChoice('github-dark', null)).toEqual({ familyId: 'flexoki', mode: 'dark' });
     expect(resolveThemeChoice('warm-sepia', null)).toEqual({ familyId: 'flexoki', mode: 'light' });

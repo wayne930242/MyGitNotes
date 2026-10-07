@@ -22,7 +22,7 @@ afterEach(cleanup);
 const note = { id: 'a', path: 'notes/a/a.md', notebookId: 'a', title: 'Alpha', tags: [], metadata: { title: 'Alpha' }, content: '# Alpha\n' };
 const editor = (props: Partial<NoteEditorProps>) => createElement(PanelProvider, null, createElement(NoteEditor, { note, frame: 'zoom', active: true, statuses: [], onSave: async () => note, onRestoreFile: async () => null, branch: 'main', draftScope: 'src:main', ...props } as NoteEditorProps));
 
-it('keeps in-progress frontmatter form, tag and YAML state across a switch to another document-panel tab and back', () => {
+it('keeps in-progress frontmatter form, tag and YAML state across a switch to another document-panel tab and back', async () => {
   render(editor({}));
 
   fireEvent.click(screen.getByRole('tab', { name: 'Frontmatter' }));
@@ -30,7 +30,8 @@ it('keeps in-progress frontmatter form, tag and YAML state across a switch to an
   fireEvent.change(screen.getByPlaceholderText('Add tag (e.g. project)...'), { target: { value: 'wip' } });
 
   fireEvent.click(screen.getByRole('button', { name: 'YAML Source' }));
-  fireEvent.change(screen.getByLabelText('YAML Metadata'), { target: { value: '- item' } });
+  // The YAML source editor loads on demand.
+  fireEvent.change(await screen.findByLabelText('YAML Metadata'), { target: { value: '- item' } });
   expect(screen.getByText('Invalid YAML syntax: Root must be a mapping')).toBeInTheDocument();
 
   // Switch away to another document-panel tab, then back to Frontmatter.
@@ -38,7 +39,7 @@ it('keeps in-progress frontmatter form, tag and YAML state across a switch to an
   fireEvent.click(screen.getByRole('tab', { name: 'Frontmatter' }));
 
   expect(screen.getByRole('button', { name: 'YAML Source' })).toHaveClass('shadow-sm');
-  expect(screen.getByLabelText('YAML Metadata')).toHaveValue('- item');
+  expect(await screen.findByLabelText('YAML Metadata')).toHaveValue('- item');
   expect(screen.getByText('Invalid YAML syntax: Root must be a mapping')).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: 'Form' }));

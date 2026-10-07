@@ -99,7 +99,8 @@ const NotebookGraphPage = React.lazy(() => import('./components/NotebookGraphPag
 /** A stable empty list while the workspace config loads, so the agent provider's value does not churn. */
 const NO_NOTEBOOKS: NotebookConfig[] = [];
 
-const AppContent: React.FC = () => {
+/** The workspace itself, behind the sign-in gate; the entry loads it as its own chunk. */
+export const AppContent: React.FC = () => {
   useVisualViewport();
   const { t } = useTranslation();
   const renderAccountControls = useAccountControls();

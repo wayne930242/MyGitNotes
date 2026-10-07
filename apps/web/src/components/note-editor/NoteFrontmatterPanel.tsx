@@ -1,11 +1,14 @@
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import YAML from 'yaml';
 import { Code } from 'lucide-react';
 import { isNoteHidden, withNoteStatus } from '@mygitnotes/core/note-status';
 import { Select } from '../Select.js';
-import { FileSourceEditor } from '../FileSourceEditor.js';
 import { NotebookMetadataField } from '../../lib/types.js';
 import { useTranslation } from '../../lib/i18n/index.js';
+import { LoadingStatus } from '../LoadingStatus.js';
+
+// CodeMirror loads only when the YAML source view opens, not with the note editor.
+const FileSourceEditor = lazy(() => import('../FileSourceEditor.js').then(module => ({ default: module.FileSourceEditor })));
 
 export interface NoteFrontmatterPanelProps {
   metadata: Record<string, unknown>;
@@ -274,29 +277,31 @@ export function NoteFrontmatterPanel({ metadata, setMetadata, statuses, metadata
           <div className='flex-1 flex flex-col min-h-0 text-xs space-y-2'>
             {yamlError && <div className='p-2 rounded bg-danger-soft border border-danger/40 text-danger font-mono text-[11px] break-all'>{yamlError}</div>}
             <div className='flex-1 border border-line rounded-md overflow-hidden min-h-[340px]'>
-              <FileSourceEditor
-                path='metadata.yaml'
-                content={yamlText}
-                readOnly={locked}
-                label='YAML Metadata'
-                onChange={(newYaml) => {
-                  setYamlText(newYaml);
-                  try {
-                    const parsed = YAML.parse(newYaml);
-                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                      setMetadata(parsed as Record<string, unknown>);
-                      setYamlError('');
-                    } else if (newYaml.trim() === '') {
-                      setMetadata({});
-                      setYamlError('');
-                    } else {
-                      setYamlError(`${t('editor.yamlError')}: Root must be a mapping`);
+              <Suspense fallback={<LoadingStatus className='p-3'>{t('editor.loadingEditor')}</LoadingStatus>}>
+                <FileSourceEditor
+                  path='metadata.yaml'
+                  content={yamlText}
+                  readOnly={locked}
+                  label='YAML Metadata'
+                  onChange={(newYaml) => {
+                    setYamlText(newYaml);
+                    try {
+                      const parsed = YAML.parse(newYaml);
+                      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                        setMetadata(parsed as Record<string, unknown>);
+                        setYamlError('');
+                      } else if (newYaml.trim() === '') {
+                        setMetadata({});
+                        setYamlError('');
+                      } else {
+                        setYamlError(`${t('editor.yamlError')}: Root must be a mapping`);
+                      }
+                    } catch (err) {
+                      setYamlError(err instanceof Error ? err.message : t('editor.yamlError'));
                     }
-                  } catch (err) {
-                    setYamlError(err instanceof Error ? err.message : t('editor.yamlError'));
-                  }
-                }}
-              />
+                  }}
+                />
+              </Suspense>
             </div>
             <p className='text-[11px] text-muted leading-tight'>{t('editor.yamlHint')}</p>
           </div>

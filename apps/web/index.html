@@ -26,9 +26,38 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      // Paint in the visitor's last theme before any bundle loads; applyTheme() keeps this cache current.
+      try {
+        var cached = JSON.parse(localStorage.getItem('github_notes_theme_tokens') || 'null');
+        if (cached && cached.tokens) {
+          var root = document.documentElement;
+          root.classList.toggle('dark', cached.mode === 'dark');
+          root.style.colorScheme = cached.mode;
+          for (var name in cached.tokens) root.style.setProperty(name, cached.tokens[name]);
+        }
+      } catch (error) { /* The splash falls back to the default palette. */ }
+    </script>
+    <style>
+      /* Shown until the app renders into #root, so a slow first load is visibly loading, not blank. */
+      .boot-splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color-scheme: light dark; background: var(--color-bg, Canvas); color: var(--color-text, CanvasText); font-family: 'Noto Serif TC', serif; }
+      .boot-splash img { width: 56px; height: 56px; border-radius: 12px; }
+      .boot-splash strong { font-size: 20px; font-weight: 600; letter-spacing: 0.01em; }
+      .boot-splash svg { width: 20px; height: 20px; color: var(--color-muted, GrayText); animation: boot-spin 0.9s linear infinite; }
+      .boot-splash .boot-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .boot-splash svg { animation: none; } }
+    </style>
   </head>
   <body class="bg-canvas text-fg antialiased">
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot-splash" role="status">
+        <img src="%BASE_URL%brand/github-notes-192.png" alt="" />
+        <strong>MyGitNotes</strong>
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" opacity="0.2" /><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" /></svg>
+        <span class="boot-hidden">Loading MyGitNotes…</span>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

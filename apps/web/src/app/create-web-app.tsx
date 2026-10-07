@@ -4,7 +4,9 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { handleNoteQueryError } from '../lib/use-note-queries.js';
-import { App } from '../App.js';
+import { I18nProvider } from '../lib/i18n/index.js';
+import { WorkspaceGate } from '../components/WorkspaceSetup.js';
+import { ConnectionState } from '../components/AuthControls.js';
 import { PanelProvider } from '../lib/panel-context.js';
 import '../index.css';
 import '../workspace.css';
@@ -24,6 +26,25 @@ import '../directives/live-editor-toolbar.css';
 import '../directives/mobile-adaptations.css';
 
 import { type WebFeature, WebFeaturesProvider } from '../lib/web-features.js';
+
+// The workspace (editor, math, study, drag and drop) is its own chunk, fetched as soon as the entry runs: the sign-in
+// gate paints without waiting for it, and a signed-in visitor downloads it while the session probe is in flight.
+const workspaceChunk = import('../App.js');
+workspaceChunk.catch(() => {/* The lazy boundary below reports a failed load when it renders. */});
+const AppContent = React.lazy(() => workspaceChunk.then(module => ({ default: module.AppContent })));
+
+/** The sign-in gate, then the workspace once its chunk arrives. */
+function App() {
+  return (
+    <I18nProvider>
+      <WorkspaceGate>
+        <React.Suspense fallback={<ConnectionState loading error='' onRetry={() => {}} />}>
+          <AppContent />
+        </React.Suspense>
+      </WorkspaceGate>
+    </I18nProvider>
+  );
+}
 
 export interface WebAppOptions {
   /** What another edition adds; the community edition passes none. */

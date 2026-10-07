@@ -12,6 +12,8 @@ const DEFAULT_FAMILY = PALETTE_FAMILIES[0];
 const DEFAULT_FAMILY_ID = DEFAULT_FAMILY.id;
 const THEME_FAMILY_KEY = 'github_notes_theme';
 const THEME_MODE_KEY = 'github_notes_theme_mode';
+/** The resolved colours, read by the inline script in index.html so the first paint already wears the theme. */
+const THEME_TOKENS_KEY = 'github_notes_theme_tokens';
 
 /** Retired single-mode themes; a saved retired id still tells us the mode the user chose. */
 const RETIRED_THEME_MODES: Record<string, PaletteMode> = { 'clean-indigo': 'light', 'warm-sepia': 'light', 'forest-emerald': 'light', 'github-dark': 'dark', 'nord-arctic': 'dark', 'midnight-violet': 'dark' };
@@ -89,5 +91,9 @@ export function applyTheme(choice: ThemeChoice): void {
   root.setAttribute('data-theme-mode', mode);
   root.classList.toggle('dark', mode === 'dark');
   root.style.colorScheme = mode;
-  for (const [name, value] of Object.entries(themeTokens(getFamily(choice.familyId).variants[mode]))) root.style.setProperty(name, value);
+  const tokens = themeTokens(getFamily(choice.familyId).variants[mode]);
+  for (const [name, value] of Object.entries(tokens)) root.style.setProperty(name, value);
+  try {
+    localStorage.setItem(THEME_TOKENS_KEY, JSON.stringify({ mode, tokens }));
+  } catch { /* The first paint falls back to the default colours. */ }
 }
