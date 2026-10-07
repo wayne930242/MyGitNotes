@@ -12,5 +12,5 @@ it('commits a remote draft from the editor footer with a message naming what it 
   const commitWorkingNotes = vi.fn().mockResolvedValue(undefined);
   const { commitNoteFile } = useQuickNoteCommit({ remote: true, repositoryFor: () => ({ id: 'repo' }) as ReturnType<Parameters<typeof useQuickNoteCommit>[0]['repositoryFor']>, refreshWorkspace: vi.fn().mockResolvedValue(undefined), commitWorkingNotes, activeWorkingNotes: { 'a:notes/a/plan.md': { note: note('done', '- [x] Ship'), base: note('working', '- [ ] Ship') } }, t });
   await commitNoteFile('notes/a/plan.md', 'a');
-  expect(commitWorkingNotes).toHaveBeenCalledWith([{ path: 'notes/a/plan.md', repository: 'repo' }], 'Plan: status working → done, completed 1 task(s)\n\n- Plan: status working → done, completed 1 task(s)\n\nNote-Modified: notes/a/plan.md');
+  expect(commitWorkingNotes).toHaveBeenCalledWith([{ path: 'notes/a/plan.md', repository: 'repo' }], 'Plan: status working → done, completed 1 task(s)\n\nNote-Modified: notes/a/plan.md');
 });

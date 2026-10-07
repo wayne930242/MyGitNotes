@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { commitMessage, noteChangeFacts, summarizeCommit, textSize } from './commit-summary.js';
+import { commitMessage, noteChangeFacts, polishedCommit, summarizeCommit, textSize } from './commit-summary.js';
 import { en, type TranslationKey, zhTW } from './i18n/index.js';
 import type { NoteItem } from './types.js';
 
@@ -49,11 +49,64 @@ describe('commit summary', () => {
     expect(summarizeCommit([created], [], english).subject).toBe('Add note New Idea');
   });
 
+  it('leaves out a body that would only repeat the subject of a single change, and keeps the trailers', () => {
+    const twoPhrases = noteChangeFacts(note('x', { status: 'done' }), note('x'));
+    expect(summarizeCommit([twoPhrases], [], english).details).toBe('Note-Modified: notes/a/weekly-review.md');
+    expect(commitMessage('Weekly Review: status working → done', summarizeCommit([twoPhrases], [], english).details)).toBe('Weekly Review: status working → done\n\nNote-Modified: notes/a/weekly-review.md');
+    expect(summarizeCommit([noteChangeFacts(note('Hi', { path: 'notes/a/new.md', title: 'New Idea' }), null)], [], english).details).toBe('Note-Added: notes/a/new.md');
+    expect(summarizeCommit([], ['notes/a/.outline.json'], english).details).toBe('Document-Modified: notes/a/.outline.json');
+  });
+
+  it('keeps the body of a single change whose subject cut phrases off or is clipped', () => {
+    expect(summarizeCommit([noteChangeFacts(after, before)], [], english).details).toContain('- Weekly Review: status');
+    const long = noteChangeFacts(note('x', { title: 'A'.repeat(90) }), note('x', { title: 'B' }));
+    const summary = summarizeCommit([long], [], english);
+    expect(summary.subject.endsWith('…')).toBe(true);
+    expect(summary.details).toContain(`- ${'A'.repeat(90)}`);
+  });
+
+  it('keeps a body for several changes', () => {
+    const created = noteChangeFacts(note('Hi', { path: 'notes/a/new.md', title: 'New Idea' }), null);
+    expect(summarizeCommit([created, noteChangeFacts(after, before)], [], english).details).toMatch(/^- New Idea: new note\n- Weekly Review/);
+  });
+
   it('keeps a huge commit within the message limit, cut at a line', () => {
     const notes = Array.from({ length: 200 }, (_, index) => noteChangeFacts(note('x', { path: `notes/a/n${index}.md`, title: `Note ${index}` }), null));
     const message = commitMessage('Add notes', summarizeCommit(notes, [], english).details);
     expect(message.length).toBeLessThanOrEqual(4000);
     expect(message.endsWith('\n…')).toBe(true);
     expect(message.startsWith('Add notes\n\n- Note 0: new note\n')).toBe(true);
+  });
+});
+
+describe('polished commit', () => {
+  const created = noteChangeFacts(note('Hi', { path: 'notes/a/new.md', title: 'New Idea' }), null);
+  const modified = noteChangeFacts(after, before);
+  const trailers = 'Note-Added: notes/a/new.md\nNote-Modified: notes/a/weekly-review.md\nDocument-Modified: notes/a/.outline.json';
+
+  it('takes the polished subject and body and writes every trailer again from the facts', () => {
+    const polished = polishedCommit('Plan the next phase\n\nReworded body.', [created, modified], ['notes/a/.outline.json']);
+    expect(polished.subject).toBe('Plan the next phase');
+    expect(polished.details).toBe(`Reworded body.\n\n${trailers}`);
+  });
+
+  it('restores trailers the polish dropped', () => {
+    expect(polishedCommit('Subject only', [created, modified], ['notes/a/.outline.json']).details).toBe(trailers);
+  });
+
+  it('drops trailers the polish kept in another form or invented', () => {
+    const polished = polishedCommit('Subject\n\nBody\n\nnote-modified: notes/a/wrong.md\nNote-Added: notes/a/invented.md\nDocument-Modified: elsewhere.json', [created, modified], []);
+    expect(polished.details).toBe('Body\n\nNote-Added: notes/a/new.md\nNote-Modified: notes/a/weekly-review.md');
+    expect(polished.details).not.toContain('invented');
+    expect(polished.details).not.toContain('wrong');
+  });
+
+  it('keeps the original trailers when the polish repeats them and tolerates CRLF', () => {
+    const polished = polishedCommit(`Subject\r\n\r\nBody\r\n\r\n${trailers}`, [created, modified], ['notes/a/.outline.json']);
+    expect(polished.details).toBe(`Body\n\n${trailers}`);
+  });
+
+  it('refuses a polish that has no subject', () => {
+    expect(() => polishedCommit('\n\nNote-Added: notes/a/new.md', [created], [])).toThrow(/empty/);
   });
 });

@@ -9,7 +9,8 @@ import { commitStagedChanges, fetchFileChanges, fetchFileDiff, generateSemanticC
 import { useTranslation } from '../lib/i18n/index.js';
 import { changeKey, groupChanges } from '../lib/file-changes.js';
 import { LoadingStatus } from './LoadingStatus.js';
-import { commitMessage, type NoteChangeFacts, summarizeCommit } from '../lib/commit-summary.js';
+import { commitMessage, type NoteChangeFacts, polishedCommit, summarizeCommit } from '../lib/commit-summary.js';
+import { FEATURE_IDS, useCommitMessagePolish, useFeatureGate } from '../lib/web-features.js';
 
 interface Props {
   isOpen: boolean;
@@ -55,12 +56,20 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, desc
   const [notice, setNotice] = useState('');
   const [confirm, setConfirm] = useState<FileChange>();
   const [typed, setTyped] = useState<string>();
+  const polish = useCommitMessagePolish();
+  const polishGate = useFeatureGate(FEATURE_IDS.commitPolish);
+  const [polishing, setPolishing] = useState(false);
+  /** The body an edition's polish wrote for the selection it ran on; the subject it wrote is in `typed`. */
+  const [polished, setPolished] = useState<{ selection: string; details: string; }>();
   const staged = changes.filter(file => selectionMode ? included.includes(changeKey(file)) : file.staged);
   // A remote commit is described from its drafts and follows the selection until the visitor writes their own subject.
   const described = describeChanges && staged.length ? describeChanges(staged) : undefined;
   const summary = described ? summarizeCommit(described.notes, described.documents, t) : undefined;
   const message = typed ?? summary?.subject ?? '';
   const setMessage = setTyped;
+  // A polished body describes the notes it was written for, so a changed selection goes back to the generated one.
+  const selection = staged.map(changeKey).join('|');
+  const details = polished?.selection === selection ? polished.details : summary?.details ?? '';
   const selected = changes.find(file => changeKey(file) === active?.key);
   const refresh = async () => {
     if (!remote) setChanges(await fetchFileChanges());
@@ -171,7 +180,7 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, desc
     setBusy(true);
     setError('');
     try {
-      if (commitFiles) await commitFiles(staged, commitMessage(message, summary?.details ?? ''));
+      if (commitFiles) await commitFiles(staged, commitMessage(message, details));
       else await commitStagedChanges(staged, message.trim(), selectionMode);
       await onCommitted();
       onClose();
@@ -186,10 +195,28 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, desc
     setBusy(true);
     setError('');
     try {
+      setPolished(undefined);
       setMessage(remote ? undefined : await generateSemanticCommit((await Promise.all(staged.map(file => fetchFileDiff(file, selectionMode ? 'current' : 'staged')))).join('\n'), staged[0]?.path));
     } catch (error) {
       setError((error as Error).message);
     } finally {
+      setBusy(false);
+    }
+  };
+  /** Hands the message to the edition's polish; its answer replaces the subject and body, and the trailers are written again from the facts. */
+  const polishMessage = async () => {
+    if (!polish || !described) return;
+    setBusy(true);
+    setPolishing(true);
+    setError('');
+    try {
+      const result = polishedCommit(await polish({ facts: described.notes, message: commitMessage(message, details) }), described.notes, described.documents);
+      setPolished({ selection, details: result.details });
+      setMessage(result.subject);
+    } catch (error) {
+      setError((error as Error).message);
+    } finally {
+      setPolishing(false);
       setBusy(false);
     }
   };
@@ -333,8 +360,9 @@ function Changes({ request, writable, gitStatus, remoteChanges, getPreview, desc
       {error && <p role='alert' className='changes-error'>{error}</p>}
       {notice && <p role='status' className='changes-help'>{notice}</p>}
       <footer>
-        <input className='ui-control' aria-label={t('commit.message')} placeholder={t('commit.placeholder')} title={summary?.details} value={message} disabled={busy} onChange={event => setMessage(event.target.value)} />
+        <input className='ui-control' aria-label={t('commit.message')} placeholder={t('commit.placeholder')} title={details} value={message} disabled={busy} onChange={event => setMessage(event.target.value)} />
         <Button disabled={busy || !staged.length} onClick={() => void generate()}>{t(remote ? 'commit.generateMessage' : 'commit.semanticMessage')}</Button>
+        {polish && remote && (polishGate.allowed ? <Button disabled={busy || !described || !message.trim()} onClick={() => void polishMessage()}>{t(polishing ? 'commit.polishing' : 'commit.polishMessage')}</Button> : <span className='changes-polish-gate' role='status'>{polishGate.reason ?? t('feature.unavailable')}</span>)}
         <Button variant='primary' disabled={busy || !writable || !staged.length || !message.trim() || staged.some(file => !file.available)} onClick={() => void commit()}>
           <GitCommit />
           {t(busy ? 'commit.committing' : selectionMode ? 'changes.commitSelected' : remote ? 'commit.commitToGithub' : 'commit.commitAndSave', { count: staged.length })}

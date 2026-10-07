@@ -101,6 +101,25 @@ const SUBJECT_LIMIT = 72;
 const clip = (text: string) => text.length <= SUBJECT_LIMIT ? text : `${text.slice(0, SUBJECT_LIMIT - 1)}…`;
 const separator = (t: Translate) => t('commitSummary.separator');
 
+/** The machine-readable trailers a commit of these notes and documents carries, always read from the facts. */
+function commitTrailers(notes: NoteChangeFacts[], documents: string[]): string[] {
+  return [...notes.map(facts => `${facts.added ? 'Note-Added' : 'Note-Modified'}: ${facts.path}`), ...documents.map(path => `Document-Modified: ${path}`)];
+}
+
+/** Trailer lines of the kinds `commitTrailers` writes, whatever their case. */
+const TRAILER_LINE = /^(Note-Added|Note-Modified|Document-Modified):/i;
+
+/**
+ * A commit message an edition's polish rewrote: its subject and body, with every trailer line it wrote or
+ * kept dropped and the trailers written again from the facts, so a model can neither lose nor invent one.
+ */
+export function polishedCommit(polished: string, notes: NoteChangeFacts[], documents: string[]): CommitSummary {
+  const [subject = '', ...rest] = polished.replace(/\r\n/g, '\n').split('\n').filter(line => !TRAILER_LINE.test(line.trim())).join('\n').trim().split('\n');
+  if (!subject.trim()) throw new Error('The polished message is empty.');
+  const body = rest.join('\n').trim();
+  return { subject: subject.trim(), details: [body, commitTrailers(notes, documents).join('\n')].filter(Boolean).join('\n\n') };
+}
+
 /** Describes a commit of note drafts and workspace documents in the visitor's language. */
 export function summarizeCommit(notes: NoteChangeFacts[], documents: string[], t: Translate): CommitSummary {
   const fileName = (path: string) => path.split('/').pop() || path;
@@ -116,8 +135,10 @@ export function summarizeCommit(notes: NoteChangeFacts[], documents: string[], t
     subject = created === notes.length && !documents.length ? t('commitSummary.subjectCreatedMany', { count: created, names: listed }) : t('commitSummary.subjectMany', { count: names.length, names: listed });
   }
   const lines = [...notes.map(facts => `- ${facts.title}${t('commitSummary.colon')}${changePhrases(facts, t).join(separator(t))}`), ...documents.map(path => `- ${fileName(path)}${t('commitSummary.colon')}${t('commitSummary.documentUpdated')}`)];
-  const trailers = [...notes.map(facts => `${facts.added ? 'Note-Added' : 'Note-Modified'}: ${facts.path}`), ...documents.map(path => `Document-Modified: ${path}`)];
-  return { subject: clip(subject), details: `${lines.join('\n')}\n\n${trailers.join('\n')}` };
+  const trailers = commitTrailers(notes, documents).join('\n');
+  // One change, whole in its subject: a body bullet would only repeat it. A change whose phrases the subject cut off keeps its body.
+  const repeatsSubject = lines.length === 1 && subject.length <= SUBJECT_LIMIT && (!notes.length || notes[0].added || changePhrases(notes[0], t).length <= 2);
+  return { subject: clip(subject), details: repeatsSubject ? trailers : `${lines.join('\n')}\n\n${trailers}` };
 }
 
 /** The longest message the repository source accepts. */
