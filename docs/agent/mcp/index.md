@@ -12,8 +12,8 @@ Default transport is **stdio** for local agent integration (e.g. Claude Desktop,
 2. `list_notebooks`: Lists all configured notebooks and their root directories.
 3. `list_notes`: Lists note summaries within a notebook, paged by `offset` and `limit` (default 100), returning `total` and `nextOffset`. Each entry carries frontmatter, a file path and a bounded `description` in place of the Markdown body.
 4. `read_note`: Reads a note file and parses its frontmatter and raw Markdown body (supports `metadataOnly: true` to return metadata without the markdown body).
-5. `save_note`: Atomically creates or updates a note file with path traversal and branch checks, and commits to Git. If `content` is omitted, updates frontmatter metadata only. Returns the note `path`.
-6. `delete_note`: Removes a note file and creates a corresponding deletion commit.
+5. `save_note`: Atomically creates or updates a note file with path traversal and branch checks, and commits to Git. If `content` is omitted, updates frontmatter metadata only. On an existing note, frontmatter keys left out of `metadata` keep their values, so a save without `metadata` keeps the frontmatter. The commit is marked as an agent edit (see below). Returns the note `path`.
+6. `delete_note`: Removes a note file, together with its version file, and creates a corresponding deletion commit. Paths that are not notes, such as version files under `.mygitnotes/versions`, are refused.
 7. `read_agent_resource`: Reads an agent instruction or doc file safely; lists available agent resources (`AGENTS.md`, `docs/agent/**`) if `path` is omitted.
 8. `list_assets`: Lists a notebook's assets. With private R2 storage configured the bucket objects are listed alongside the repository files, and every entry names its `storage` and the `reference` a note links it by.
 9. `add_asset`: Stores an asset file (with optional subfolder directory) and returns the reference a note links it by. With private R2 storage configured the file is uploaded to `<notebookId>/<directory>/<filename>` in the bucket (below the key prefix of the asset storage's scope when an edition supplies one) and the response carries `storage: "r2"`, the object `key` and an `r2:<object-key>` `reference`; otherwise it is written into the notebook asset directory, committed, and returned as a notebook-relative path.
@@ -94,9 +94,22 @@ notebooks; their Markdown and text files and `agents/openai.yaml` are readable.
 `read`, `write`, `append`, `edit` and `rm` accept those skill files, so writing
 `SKILL.md` creates a skill and a recursive `rm` of its directory deletes it.
 Skill mutations commit as `docs(skills): …`, return no web `url`, and cannot
-share an `rm` call with notes. `read` and `read_note` on a note return a `hint`
+share an `rm` call with notes. `read`, `write`, `append` and `edit` also accept
+the `AGENTS.md` files `get_system_prompt` reads; their edits commit as
+`docs(agents): …`. `read` and `read_note` on a note return a `hint`
 to read the agent system before creating or editing notes when the note has
 one.
+
+## Agent edits and versions
+
+Every MCP edit of one file — `write`, `append` and `edit` on a note, `AGENTS.md`
+or skill file, `save_note` and `update_note_metadata` — is committed as an agent edit: the commit
+subject ends with `(Agent, YYYY-MM-DD)` and the message carries an
+`Agent-Edit: YYYY-MM-DD` trailer, both with the UTC day, whatever commit message
+the caller supplies. The app's history panel shows these commits as agent
+edits. Named versions live in version files under `.mygitnotes/versions`, which
+MCP tools never edit directly; a version file moves and is deleted together with
+its note.
 
 Every hosted tool declares input and output schemas, structured content and
 readOnly/destructive/idempotent/openWorld annotations. Read-only grants omit all
