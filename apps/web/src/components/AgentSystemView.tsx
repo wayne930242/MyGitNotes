@@ -7,7 +7,8 @@ import { EditorFooter } from './EditorFooter.js';
 import { Select } from './Select.js';
 import { FolderPickerDialog } from './FolderPickerDialog.js';
 import React, { lazy, Suspense, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { AlertTriangle, Bot, Braces, FileText, FolderPlus, Plus, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Bot, Braces, FileText, FolderPlus, History, Plus, RotateCcw } from 'lucide-react';
+import { NoteHistoryDialog } from './NoteHistoryDialog.js';
 import { MarkdownEditor, MarkdownEditorMode, MarkdownEditorModeSwitch } from './MarkdownEditor.js';
 import type { FolderItem, GitStatus, NotebookConfig } from '../lib/types.js';
 import type { RepositoryStatus } from '@mygitnotes/core/repository';
@@ -73,6 +74,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemVi
   const [selected, setSelected] = useState<WorkspaceRef>(() => savedWorkspace() ?? { repository: homeRepository, folder: '' });
   const [files, setFiles] = useState<AgentFile[]>([]);
   const [selectedPath, setSelectedPath] = useState<string>('');
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [content, setContent] = useState<string>('');
   const [viewMode, setViewMode] = useState<MarkdownEditorMode>('live');
   const [loadedPath, setLoadedPath] = useState('');
@@ -591,6 +593,11 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemVi
                 <Braces aria-hidden='true' />
               </Button>
             )}
+            {selectedPath && (
+              <Button size='icon' className='editor-history-action' title={t('history.open')} aria-label={t('history.open')} onClick={() => setHistoryOpen(true)}>
+                <History aria-hidden='true' />
+              </Button>
+            )}
             {!script && <MarkdownEditorModeSwitch mode={viewMode} onChange={setViewMode} />}
           </div>
         </div>
@@ -627,6 +634,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemVi
         </div>
         {selectedPath && <EditorFooter content={loading ? '' : bodyContent} path={selectedPath} state={loading ? 'loading' : isSaving ? 'saving' : hasUnsavedChanges ? 'pending' : 'saved'} status={t(loading ? 'agent.loading' : isSaving ? 'editor.saving' : hasUnsavedChanges ? 'editor.unsavedChanges' : editable ? 'agent.saved' : 'editor.readOnly')} />}
       </div>
+      {historyOpen && selectedPath && <NoteHistoryDialog target={{ path: selectedPath, repository }} title={selectedPath} dirty={hasUnsavedChanges || Boolean(fileStatus && (fileStatus.modified.includes(selectedPath) || fileStatus.staged.includes(selectedPath)))} onClose={() => setHistoryOpen(false)} />}
       {addingWorkspace && (
         <FolderPickerDialog title={t('agent.addWorkspace')} notebooks={notebooks} folders={folders} initial={{ notebookId: notebooks[0]?.id ?? '', folder: null }} confirmLabel={t('agent.addWorkspaceConfirm')} busy={isCreating} onClose={() => setAddingWorkspace(false)} onConfirm={pick => void handleAddWorkspace(pick.notebookId, pick.folder)}>
           <p className='pi-agent-hint'>{t('agent.addWorkspaceHint')}</p>
