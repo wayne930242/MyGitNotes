@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createServer, type Server } from 'node:http';
-import { createApp } from '../src/app.js';
+import { type AppServices, createApp } from '../src/app.js';
+import { r2SettingsFromEnv } from '@mygitnotes/core';
 import { createRecordStore } from '../src/record-store/index.js';
 
 const R2 = { MYGITNOTES_R2_ACCOUNT_ID: 'acc', MYGITNOTES_R2_ACCESS_KEY_ID: 'AK', MYGITNOTES_R2_SECRET_ACCESS_KEY: 'r2-secret', MYGITNOTES_R2_BUCKET: 'private-assets' };
@@ -12,7 +13,7 @@ const NOTE = '# Rules\n\n![Core](<r2:trpg/Tales from the old west/Core.pdf>)\n';
 const KEY_URL = '/r2-assets/trpg/Tales%20from%20the%20old%20west/Core.pdf';
 let root: string, server: Server, base: string;
 
-async function start(env: Record<string, string>) {
+async function start(env: Record<string, string>, services: Partial<AppServices> = {}) {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-r2-'));
   if (env.GITHUB_NOTES_SOURCE === 'local') {
     env = { ...env, GITHUB_NOTES_LOCAL_PATH: root };
@@ -21,7 +22,7 @@ async function start(env: Record<string, string>) {
     fs.writeFileSync(path.join(root, 'notes/ex/rules.md'), NOTE);
   }
   for (const [key, value] of Object.entries({ SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '', ...env })) vi.stubEnv(key, value);
-  server = createServer(createApp(root));
+  server = createServer(createApp(root, services));
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as any).port}`;
 }
@@ -52,6 +53,21 @@ describe('R2 asset authorization', () => {
     expect((await get(`${KEY_URL}?note=.env`)).status).toBe(404);
     expect((await get(`${KEY_URL}?note=../outside.md`)).status).toBe(404);
     expect((await get(KEY_URL)).status).toBe(404);
+  });
+
+  it("answers 404 for a referenced key outside the requester's asset scope", async () => {
+    const inScope = (prefix: string) => ({ resolve: async () => ({ settings: r2SettingsFromEnv()!, prefix, limits: { maxObjectBytes: 1 } }) });
+    await start({ ...R2, GITHUB_NOTES_SOURCE: 'local' }, { assetStorage: inScope('trpg/') });
+    expect((await get(`${KEY_URL}?note=notes/ex/rules.md`)).status).toBe(302);
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    fs.rmSync(root, { recursive: true, force: true });
+    await start({ ...R2, GITHUB_NOTES_SOURCE: 'local' }, { assetStorage: inScope('r/42/') });
+    // The note references the key, but the key belongs to another key space.
+    expect((await get(`${KEY_URL}?note=notes/ex/rules.md`)).status).toBe(404);
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    fs.rmSync(root, { recursive: true, force: true });
+    await start({ ...R2, GITHUB_NOTES_SOURCE: 'local' }, { assetStorage: { resolve: async () => null } });
+    expect((await get(`${KEY_URL}?note=notes/ex/rules.md`)).status).toBe(404);
   });
 
   it('returns 404 when R2 is not configured', async () => {

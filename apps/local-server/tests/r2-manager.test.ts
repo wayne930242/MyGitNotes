@@ -4,8 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { assetHash, GitHubSource, type RemoteChange, SourceError } from '@mygitnotes/core';
-import { createApp } from '../src/app.js';
+import { assetHash, GitHubSource, r2SettingsFromEnv, type RemoteChange, SourceError } from '@mygitnotes/core';
+import { type AppServices, createApp } from '../src/app.js';
+import type { AssetStorage } from '../src/asset-storage.js';
 
 let remoteToken: string | undefined;
 vi.mock('../src/auth.js', async original => ({ ...await original<typeof import('../src/auth.js')>(), authToken: async () => remoteToken }));
@@ -67,15 +68,15 @@ async function startBucket() {
 
 let root: string, app: Server, base: string, bucket: Awaited<ReturnType<typeof startBucket>>;
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
-async function start(env: Record<string, string>) {
+async function start(env: Record<string, string>, services: Partial<AppServices> = {}) {
   bucket = await startBucket();
   const settings = { MYGITNOTES_R2_ACCOUNT_ID: 'acc', MYGITNOTES_R2_ACCESS_KEY_ID: 'AK', MYGITNOTES_R2_SECRET_ACCESS_KEY: 'r2-secret', MYGITNOTES_R2_BUCKET: 'private-assets', MYGITNOTES_R2_ENDPOINT: bucket.endpoint };
   for (const [key, value] of Object.entries({ SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '', ...settings, ...env })) vi.stubEnv(key, value);
-  app = createServer(createApp(root));
+  app = createServer(createApp(root, services));
   await new Promise<void>(resolve => app.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(app.address() as any).port}`;
 }
-async function startLocal(branch = 'main') {
+async function startLocal(branch = 'main', services: Partial<AppServices> = {}) {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-r2-manager-'));
   fs.mkdirSync(path.join(root, 'notes/ex'), { recursive: true });
   fs.mkdirSync(path.join(root, 'notes/other'), { recursive: true });
@@ -88,11 +89,11 @@ async function startLocal(branch = 'main') {
   git('config', 'user.email', 'test@example.com');
   git('add', '.');
   git('commit', '-m', 'fixture');
-  await start({ MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: root });
+  await start({ MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: root }, services);
   for (const key of ['ex/old/Core Rules.pdf', 'ex/old/map.webp', 'ex/keep.pdf', 'other/secret.pdf']) bucket.objects.set(key, Buffer.from(key));
 }
 const call = (method: string, url: string, body?: unknown, headers: Record<string, string> = {}) => fetch(base + url, { method, redirect: 'manual', headers: { 'Content-Type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
-const operations = (notebookId = 'ex') => [() => call('GET', `/api/r2?notebookId=${notebookId}`), () => call('GET', `/api/r2/raw?notebookId=${notebookId}&key=ex/keep.pdf`), () => call('GET', `/api/r2/references?notebookId=${notebookId}&key=ex/keep.pdf`), () => call('POST', '/api/r2/upload', { notebookId, key: 'ex/new.pdf' }), () => call('POST', '/api/r2/mkdir', { notebookId, key: 'ex/folder' }), () => call('POST', '/api/r2/move', { notebookId, key: 'ex/keep.pdf', destination: 'ex/moved.pdf' }), () => call('POST', '/api/r2/delete', { notebookId, key: 'ex/keep.pdf' })];
+const operations = (notebookId = 'ex') => [() => call('GET', `/api/r2?notebookId=${notebookId}`), () => call('GET', `/api/r2/raw?notebookId=${notebookId}&key=ex/keep.pdf`), () => call('GET', `/api/r2/references?notebookId=${notebookId}&key=ex/keep.pdf`), () => call('POST', '/api/r2/upload', { notebookId, key: 'ex/new.pdf', size: 10 }), () => call('POST', '/api/r2/mkdir', { notebookId, key: 'ex/folder' }), () => call('POST', '/api/r2/move', { notebookId, key: 'ex/keep.pdf', destination: 'ex/moved.pdf' }), () => call('POST', '/api/r2/delete', { notebookId, key: 'ex/keep.pdf' })];
 
 afterEach(async () => {
   if (app) await new Promise<void>(resolve => app.close(() => resolve()));
@@ -103,6 +104,15 @@ afterEach(async () => {
 });
 
 describe('R2 management on a local workspace', () => {
+  it('signs the declared Content-Length into a direct upload and refuses an upload without one', async () => {
+    await startLocal();
+    const upload = await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex/docs/sized.pdf', size: 1234 }).then(r => r.json());
+    const url = new URL(upload.url);
+    expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;host;if-none-match');
+    for (const size of [undefined, -1, 1.5, '12', null]) expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex/docs/bad.pdf', size })).status).toBe(400);
+    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex/docs/huge.pdf', size: 6 * 1024 ** 3 })).status).toBe(413);
+  });
+
   it('lists the whole bucket and previews through a presigned redirect', async () => {
     await startLocal();
     bucket.objects.set('top.pdf', Buffer.from('top'));
@@ -119,12 +129,12 @@ describe('R2 management on a local workspace', () => {
 
   it('presigns a direct upload, rejects existing keys and creates folders', async () => {
     await startLocal();
-    const upload = await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex/docs/big file.pdf' }).then(r => r.json());
+    const upload = await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex/docs/big file.pdf', size: 1234 }).then(r => r.json());
     expect(new URL(upload.url).pathname).toBe('/private-assets/ex/docs/big%20file.pdf');
     expect(new URL(upload.url).searchParams.get('X-Amz-Signature')).toMatch(/^[a-f0-9]{64}$/);
     expect(new URL(upload.url).searchParams.get('X-Amz-SignedHeaders')).toContain('if-none-match');
     expect(bucket.objects.has('ex/docs/big file.pdf')).toBe(false);
-    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex/keep.pdf' })).status).toBe(409);
+    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex/keep.pdf', size: 1 })).status).toBe(409);
     expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: 'ex/new folder' })).status).toBe(200);
     expect(bucket.objects.get('ex/new folder/.keep')).toEqual(Buffer.alloc(0));
     expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: 'ex/old' })).status).toBe(409);
@@ -176,7 +186,7 @@ describe('R2 management on a local workspace', () => {
   it('manages keys outside notebook prefixes, including the bucket root', async () => {
     await startLocal();
     expect((await call('GET', '/api/r2/raw?notebookId=ex&key=other/secret.pdf')).status).toBe(302);
-    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'top.pdf' })).status).toBe(200);
+    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'top.pdf', size: 3 })).status).toBe(200);
     expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: 'trpg' })).status).toBe(200);
     expect(bucket.objects.has('trpg/.keep')).toBe(true);
     const moved = await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old/map.webp', destination: 'trpg/map.webp' });
@@ -191,7 +201,7 @@ describe('R2 management on a local workspace', () => {
     expect((await call('GET', '/api/r2/raw?notebookId=ex&key=/other/secret.pdf')).status).toBe(403);
     expect((await call('POST', '/api/r2/delete', { notebookId: 'ex', key: 'ex/../other/secret.pdf' })).status).toBe(403);
     expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/keep.pdf', destination: '../stolen.pdf' })).status).toBe(403);
-    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex//new.pdf' })).status).toBe(403);
+    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex//new.pdf', size: 3 })).status).toBe(403);
     expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: '../escape' })).status).toBe(403);
     expect(bucket.objects.has('other/secret.pdf')).toBe(true);
     expect(bucket.objects.has('ex/keep.pdf')).toBe(true);
@@ -202,6 +212,93 @@ describe('R2 management on a local workspace', () => {
     for (const operation of operations()) expect((await operation()).status).toBe(403);
     expect(bucket.requests).toEqual([]);
     expect(bucket.objects.has('ex/keep.pdf')).toBe(true);
+  });
+});
+
+/** A tenant that owns the key space under `prefix`, meters its uploads and records every size change. */
+function tenantStorage(prefix: string, options: { quota?: number; } = {}) {
+  const reserved: number[] = [], recorded: [string, number][] = [];
+  let total = 0;
+  const storage: AssetStorage = {
+    resolve: async () => ({ settings: r2SettingsFromEnv()!, prefix, limits: { maxObjectBytes: 1000 } }),
+    reserve: async (_scope, bytes) => {
+      reserved.push(bytes);
+      if (total + bytes > (options.quota ?? Infinity)) throw new SourceError('Storage quota exceeded.', 413);
+    },
+    record: async (_scope, key, delta) => {
+      recorded.push([key, delta]);
+      total += delta;
+    },
+  };
+  return { storage, reserved, recorded };
+}
+
+describe('R2 management through an asset storage', () => {
+  /** Serves the tenant's prefix from the stand-in bucket, resolving settings from the deployment environment. */
+  async function startTenant(prefix: string, options: { quota?: number; } = {}) {
+    const tenant = tenantStorage(prefix, options);
+    await startLocal('main', { assetStorage: tenant.storage });
+    for (const key of ['r/42/ex/keep.pdf', 'r/42/ex/old/map.webp', 'r/43/ex/theirs.pdf']) bucket.objects.set(key, Buffer.from(key));
+    bucket.requests.length = 0;
+    return tenant;
+  }
+
+  it('lists only the tenant prefix and reports it as the listing root', async () => {
+    await startTenant('r/42/');
+    const listing = await call('GET', '/api/r2?notebookId=ex').then(r => r.json());
+    expect(listing.prefix).toBe('r/42/');
+    expect(listing.objects.map((object: any) => object.key).sort()).toEqual(['r/42/ex/keep.pdf', 'r/42/ex/old/map.webp']);
+  });
+
+  it('answers 404 for a key outside the prefix in every route, without contacting the bucket', async () => {
+    await startTenant('r/42/');
+    const theirs = 'r/43/ex/theirs.pdf', outside = 'ex/keep.pdf';
+    for (const key of [theirs, outside, 'r/42', 'r/4']) {
+      const calls = [call('GET', `/api/r2/raw?notebookId=ex&key=${encodeURIComponent(key)}`), call('GET', `/api/r2/references?notebookId=ex&key=${encodeURIComponent(key)}`), call('POST', '/api/r2/upload', { notebookId: 'ex', key, size: 1 }), call('POST', '/api/r2/uploaded', { notebookId: 'ex', key }), call('POST', '/api/r2/mkdir', { notebookId: 'ex', key }), call('POST', '/api/r2/move', { notebookId: 'ex', key, destination: 'r/42/ex/moved.pdf' }), call('POST', '/api/r2/move', { notebookId: 'ex', key: 'r/42/ex/keep.pdf', destination: key }), call('POST', '/api/r2/delete', { notebookId: 'ex', key })];
+      expect((await Promise.all(calls)).map(response => response.status)).toEqual(calls.map(() => 404));
+    }
+    expect(bucket.requests).toEqual([]);
+    expect([...bucket.objects.keys()].filter(key => key.startsWith('r/')).sort()).toEqual(['r/42/ex/keep.pdf', 'r/42/ex/old/map.webp', 'r/43/ex/theirs.pdf']);
+    expect(bucket.objects.has('ex/keep.pdf')).toBe(true);
+  });
+
+  it('serves a key inside the prefix', async () => {
+    await startTenant('r/42/');
+    expect((await call('GET', '/api/r2/raw?notebookId=ex&key=r/42/ex/keep.pdf')).status).toBe(302);
+    expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: 'r/42/ex/new' })).status).toBe(200);
+  });
+
+  it('reserves the declared size before signing and refuses an upload over the quota or the object limit', async () => {
+    const tenant = await startTenant('r/42/', { quota: 500 });
+    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'r/42/ex/a.pdf', size: 400 })).status).toBe(200);
+    expect(tenant.reserved).toEqual([400]);
+    // The browser sends the body straight to the bucket; the stand-in bucket gets it here.
+    bucket.objects.set('r/42/ex/a.pdf', Buffer.alloc(400));
+    expect((await call('POST', '/api/r2/uploaded', { notebookId: 'ex', key: 'r/42/ex/a.pdf' })).status).toBe(200);
+    expect(tenant.recorded).toContainEqual(['r/42/ex/a.pdf', 400]);
+    const over = await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'r/42/ex/b.pdf', size: 200 });
+    expect(over.status).toBe(413);
+    expect(await over.json()).toEqual({ error: 'Storage quota exceeded.' });
+    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'r/42/ex/c.pdf', size: 1001 })).status).toBe(413);
+    expect(tenant.reserved).toEqual([400, 200]);
+  });
+
+  it('records the size of every object a move or delete creates and removes', async () => {
+    const tenant = await startTenant('r/42/');
+    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'r/42/ex/old', destination: 'r/42/ex/archive', directory: true })).status).toBe(200);
+    const size = Buffer.from('r/42/ex/old/map.webp').length;
+    expect(tenant.recorded).toEqual([['r/42/ex/archive/map.webp', size], ['r/42/ex/old/map.webp', -size]]);
+    tenant.recorded.length = 0;
+    expect((await call('POST', '/api/r2/delete', { notebookId: 'ex', key: 'r/42/ex/keep.pdf' })).status).toBe(200);
+    expect(tenant.recorded).toEqual([['r/42/ex/keep.pdf', -Buffer.from('r/42/ex/keep.pdf').length]]);
+    expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: 'r/42/ex/empty' })).status).toBe(200);
+    expect(tenant.recorded.at(-1)).toEqual(['r/42/ex/empty/.keep', 0]);
+  });
+
+  it('answers 404 when the storage has no bucket for the request', async () => {
+    await startLocal('main', { assetStorage: { resolve: async () => null } });
+    for (const operation of operations()) expect((await operation()).status).toBe(404);
+    expect(bucket.requests).toEqual([]);
   });
 });
 

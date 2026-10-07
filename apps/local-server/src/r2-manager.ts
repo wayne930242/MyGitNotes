@@ -1,7 +1,8 @@
 import { type Request, type Response, Router } from 'express';
 import fs from 'node:fs';
 import { getCurrentBranch } from '@mygitnotes/git';
-import { copyR2Object, deleteR2Object, isValidR2Key, listR2Objects, managedNotebook, type NotebookConfig, presignR2Object, presignR2Upload, putEmptyR2Object, r2ObjectExists, r2ReferenceKeys, type R2Settings, r2SettingsFromEnv, resolveSafePath, rewriteR2References, SourceError, withinPath } from '@mygitnotes/core';
+import { copyR2Object, deleteR2Object, isValidR2Key, listR2Objects, managedNotebook, type NotebookConfig, presignR2Object, presignR2Upload, putEmptyR2Object, r2ObjectExists, r2ReferenceKeys, resolveSafePath, rewriteR2References, SourceError, withinPath } from '@mygitnotes/core';
+import { type AssetScope, type AssetStorage, inAssetScope } from './asset-storage.js';
 import { eachRepository, type RepositoryHandle } from './request-workspace.js';
 import { localFileCatalog } from './file-manager.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
@@ -28,11 +29,12 @@ interface ReferencingNote {
 }
 
 /**
- * Manages every object in the configured R2 bucket; notes may reference any key, so the manager is not
- * confined to a notebook prefix. Routes require write access to the named notebook's repository, and a
- * move requires it for every repository whose notes it rewrites.
+ * Manages every object in the requester's asset scope (the whole configured bucket, by default); notes may
+ * reference any key, so the manager is not confined to a notebook prefix. A key outside the scope answers
+ * 404. Routes require write access to the named notebook's repository, and a move requires it for every
+ * repository whose notes it rewrites.
  */
-export function createR2ManagerRouter(): Router {
+export function createR2ManagerRouter(storage: AssetStorage): Router {
   const router = Router();
   const open = async (id: string, handle: RepositoryHandle, config: { notebooks: NotebookConfig[]; }): Promise<RepositoryNotes> => {
     if (handle.kind === 'local') {
@@ -77,7 +79,7 @@ export function createR2ManagerRouter(): Router {
     };
   };
   /** The named notebook, whose repository must be writable, and every available repository, opened only when a route scans notes. */
-  const context = async (res: Response, input: Record<string, unknown>) => {
+  const context = async (req: Request, res: Response, input: Record<string, unknown>) => {
     const entries = await eachRepository(res);
     const target = entries.find(({ config }) => config.notebooks.some(nb => nb.id === input.notebookId));
     const notebook = target?.config.notebooks.find(nb => nb.id === input.notebookId);
@@ -88,20 +90,28 @@ export function createR2ManagerRouter(): Router {
       return opened.get(handle.id)!;
     };
     if (!(await openEntry(target)).writable) throw new SourceError('Write access on the main workspace branch is required.', 403);
-    const settings = r2SettingsFromEnv();
-    if (!settings) throw new SourceError('R2 storage is not configured.', 404);
-    return { repositories: () => Promise.all(entries.map(openEntry)), notebook, settings };
+    const scope = await storage.resolve(req, res, target.handle);
+    if (!scope) throw new SourceError('R2 storage is not configured.', 404);
+    /** Tells the storage about a size change; a failure ends the request, so a quota never drifts silently. */
+    const record = (key: string, deltaBytes: number) => storage.record?.(scope, key, deltaBytes) ?? Promise.resolve();
+    return { repositories: () => Promise.all(entries.map(openEntry)), notebook, scope, settings: scope.settings, record };
   };
-  const bucketKey = (value: unknown) => {
+  /** A well-formed key inside the scope; a key outside it is not found, whatever it names. */
+  const bucketKey = (scope: AssetScope, value: unknown) => {
     if (typeof value !== 'string' || !isValidR2Key(value)) throw new SourceError('R2 key is invalid.', 403);
+    if (!inAssetScope(scope, value)) throw new SourceError('R2 object not found.', 404);
     return value;
   };
-  /** Resolves a file key or every object under a folder key. */
-  const affected = async (settings: R2Settings, key: string, directory: boolean) => {
-    const keys = directory ? (await listR2Objects(settings, key + '/')).map(object => object.key) : [key];
-    if (!directory && !await r2ObjectExists(settings, key)) throw new SourceError('R2 object not found.', 404);
-    if (!keys.length) throw new SourceError('R2 folder is empty.', 404);
-    return keys;
+  /** Resolves a file key or every object under a folder key, with each object's size when the storage meters them. */
+  const affected = async (scope: AssetScope, key: string, directory: boolean) => {
+    const { settings } = scope;
+    let objects: { key: string; size: number; }[];
+    if (directory) objects = await listR2Objects(settings, key + '/');
+    else if (storage.record) objects = (await listR2Objects(settings, key)).filter(object => object.key === key);
+    else objects = await r2ObjectExists(settings, key) ? [{ key, size: 0 }] : [];
+    if (!directory && !objects.length) throw new SourceError('R2 object not found.', 404);
+    if (!objects.length) throw new SourceError('R2 folder is empty.', 404);
+    return objects;
   };
   /** Notes of every repository that reference any of `keys`, named by notebook and path: two repositories can hold the same path. */
   const referencing = (repository: RepositoryNotes, notes: Map<string, string>, keys: string[]): ReferencingNote[] => [...notes].filter(([, content]) => r2ReferenceKeys(content).some(key => keys.includes(key))).map(([file]) => ({ repository: repository.id, notebookId: managedNotebook(file, repository.notebooks)!.id, path: file }));
@@ -120,40 +130,60 @@ export function createR2ManagerRouter(): Router {
   router.get(
     '/api/r2',
     handle(async (req, res) => {
-      const { settings } = await context(res, req.query);
-      res.json({ prefix: '', objects: (await listR2Objects(settings, '')).filter(object => isValidR2Key(object.key)) });
+      const { scope } = await context(req, res, req.query);
+      res.json({ prefix: scope.prefix, objects: (await listR2Objects(scope.settings, scope.prefix)).filter(object => isValidR2Key(object.key)) });
     }),
   );
   router.get(
     '/api/r2/raw',
     handle(async (req, res) => {
-      const { settings } = await context(res, req.query);
-      res.redirect(302, await presignR2Object(settings, bucketKey(req.query.key), 300, req.query.download === '1'));
+      const { scope, settings } = await context(req, res, req.query);
+      res.redirect(302, await presignR2Object(settings, bucketKey(scope, req.query.key), 300, req.query.download === '1'));
     }),
   );
   router.post(
     '/api/r2/upload',
     handle(async (req, res) => {
-      const { settings } = await context(res, req.body);
-      const key = bucketKey(req.body.key);
+      const { scope, settings } = await context(req, res, req.body);
+      const key = bucketKey(scope, req.body.key);
+      const size = req.body.size;
+      if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0) throw new SourceError('Upload size is required.', 400);
+      if (size > scope.limits.maxObjectBytes) throw new SourceError('The file is larger than the storage allows for one object.', 413);
       if (await r2ObjectExists(settings, key)) throw new SourceError('Destination already exists.', 409);
-      res.json({ key, url: await presignR2Upload(settings, key) });
+      await storage.reserve?.(scope, size);
+      res.json({ key, url: await presignR2Upload(settings, key, undefined, size) });
+    }),
+  );
+  router.post(
+    '/api/r2/uploaded',
+    handle(async (req, res) => {
+      const { scope, settings, record } = await context(req, res, req.body);
+      const key = bucketKey(scope, req.body.key);
+      // The browser sent the object straight to the bucket, so the storage learns its size from the bucket.
+      if (storage.record) {
+        const object = (await listR2Objects(settings, key)).find(found => found.key === key);
+        if (!object) throw new SourceError('R2 object not found.', 404);
+        await record(key, object.size);
+      }
+      res.json({ key });
     }),
   );
   router.post(
     '/api/r2/mkdir',
     handle(async (req, res) => {
-      const { settings } = await context(res, req.body);
-      const key = bucketKey(`${bucketKey(req.body.key)}/.keep`);
-      if ((await listR2Objects(settings, `${req.body.key}/`)).length || await r2ObjectExists(settings, req.body.key) || !await putEmptyR2Object(settings, key)) throw new SourceError('Destination already exists.', 409);
+      const { scope, settings, record } = await context(req, res, req.body);
+      const folder = bucketKey(scope, req.body.key);
+      const key = bucketKey(scope, `${folder}/.keep`);
+      if ((await listR2Objects(settings, `${folder}/`)).length || await r2ObjectExists(settings, folder) || !await putEmptyR2Object(settings, key)) throw new SourceError('Destination already exists.', 409);
+      await record(key, 0);
       res.json({ key });
     }),
   );
   router.get(
     '/api/r2/references',
     handle(async (req, res) => {
-      const { repositories, settings } = await context(res, req.query);
-      const objects = await affected(settings, bucketKey(req.query.key), req.query.directory === '1');
+      const { repositories, scope } = await context(req, res, req.query);
+      const objects = (await affected(scope, bucketKey(scope, req.query.key), req.query.directory === '1')).map(object => object.key);
       const notes = (await Promise.all((await repositories()).map(async repository => referencing(repository, await repository.notes(), objects)))).flat().sort(byPath);
       res.json({ objects, notes: notes.map(({ notebookId, path }) => ({ notebookId, path })) });
     }),
@@ -161,10 +191,11 @@ export function createR2ManagerRouter(): Router {
   router.post(
     '/api/r2/move',
     handle(async (req, res) => {
-      const { repositories, settings } = await context(res, req.body);
-      const key = bucketKey(req.body.key), destination = bucketKey(req.body.destination);
+      const { repositories, scope, settings, record } = await context(req, res, req.body);
+      const key = bucketKey(scope, req.body.key), destination = bucketKey(scope, req.body.destination);
       if (withinPath(destination, key)) throw new SourceError('Choose a destination outside the moved item.', 400);
-      const objects = await affected(settings, key, req.body.directory === true);
+      const found = await affected(scope, key, req.body.directory === true);
+      const objects = found.map(object => object.key), bytes = new Map(found.map(object => [object.key, object.size]));
       // CopyObject has no destination precondition on R2, so this check stays check-then-act.
       const moves = Object.fromEntries(objects.map(object => [object, destination + object.slice(key.length)]));
       for (const target of Object.values(moves)) if (await r2ObjectExists(settings, target)) throw new SourceError('Destination already exists.', 409);
@@ -176,12 +207,13 @@ export function createR2ManagerRouter(): Router {
       }))).filter(({ rewritten }) => rewritten.size);
       const readOnly = rewrites.find(({ repository }) => !repository.writable);
       if (readOnly) throw new SourceError(`Write access to ${readOnly.repository.id} is required to rewrite its notes.`, 403);
-      const copied: string[] = [];
+      const copied: { to: string; bytes: number; }[] = [];
       const committed: string[] = [];
       try {
         for (const [from, to] of Object.entries(moves)) {
           await copyR2Object(settings, from, to);
-          copied.push(to);
+          copied.push({ to, bytes: bytes.get(from)! });
+          await record(to, bytes.get(from)!);
         }
         for (const { repository, notes, rewritten } of rewrites) {
           await repository.commit(rewritten, notes);
@@ -190,13 +222,20 @@ export function createR2ManagerRouter(): Router {
       } catch (error) {
         // Before any commit the move is undone; after one, notes point at both keys, so both stay.
         if (!committed.length) {
-          await Promise.allSettled(copied.map(target => deleteR2Object(settings, target)));
+          const undo = async ({ to, bytes }: (typeof copied)[number]) => {
+            await deleteR2Object(settings, to);
+            await record(to, -bytes);
+          };
+          await Promise.allSettled(copied.map(undo));
           throw error;
         }
         const status = error instanceof SourceError ? error.status : 502;
         return res.status(status).json({ error: `${(error as Error).message} Notes in ${committed.join(', ')} were rewritten; both the old and the new keys remain.`, committed });
       }
-      for (const from of objects) await deleteR2Object(settings, from);
+      for (const from of objects) {
+        await deleteR2Object(settings, from);
+        await record(from, -bytes.get(from)!);
+      }
       const notes = rewrites.flatMap(({ repository, rewritten }) => [...rewritten.keys()].map(file => ({ repository: repository.id, notebookId: managedNotebook(file, repository.notebooks)!.id, path: file }))).sort(byPath);
       res.json({ moves, notes: notes.map(({ notebookId, path }) => ({ notebookId, path })) });
     }),
@@ -204,10 +243,13 @@ export function createR2ManagerRouter(): Router {
   router.post(
     '/api/r2/delete',
     handle(async (req, res) => {
-      const { settings } = await context(res, req.body);
-      const objects = await affected(settings, bucketKey(req.body.key), req.body.directory === true);
-      for (const object of objects) await deleteR2Object(settings, object);
-      res.json({ deleted: objects });
+      const { scope, settings, record } = await context(req, res, req.body);
+      const objects = await affected(scope, bucketKey(scope, req.body.key), req.body.directory === true);
+      for (const object of objects) {
+        await deleteR2Object(settings, object.key);
+        await record(object.key, -object.size);
+      }
+      res.json({ deleted: objects.map(object => object.key) });
     }),
   );
   return router;

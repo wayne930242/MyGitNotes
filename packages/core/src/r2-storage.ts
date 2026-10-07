@@ -32,9 +32,9 @@ function objectUrl(settings: R2Settings, key: string): URL {
   return new URL(`${bucketUrl(settings)}/${key.split('/').map(encodeURIComponent).join('/')}`);
 }
 
-async function presign(settings: R2Settings, url: URL, method: 'GET' | 'PUT', expiresInSeconds: number, headers?: Record<string, string>): Promise<string> {
+async function presign(settings: R2Settings, url: URL, method: 'GET' | 'PUT', expiresInSeconds: number, headers?: Record<string, string>, allHeaders = false): Promise<string> {
   url.searchParams.set('X-Amz-Expires', String(expiresInSeconds));
-  const signer = new AwsV4Signer({ url: url.toString(), method, headers, accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey, service: 's3', region: 'auto', signQuery: true });
+  const signer = new AwsV4Signer({ url: url.toString(), method, headers, accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey, service: 's3', region: 'auto', signQuery: true, allHeaders });
   return (await signer.sign()).url.toString();
 }
 
@@ -51,9 +51,15 @@ export async function presignR2Object(settings: R2Settings, key: string, expires
 /** Headers a create-only PUT sends; the bucket answers 412 when the key already exists. */
 export const R2_CREATE_ONLY_HEADERS = { 'If-None-Match': '*' };
 
-/** Creates a short-lived presigned create-only PUT URL; the browser must send `R2_CREATE_ONLY_HEADERS`. */
-export function presignR2Upload(settings: R2Settings, key: string, expiresInSeconds = 900): Promise<string> {
-  return presign(settings, objectUrl(settings, key), 'PUT', expiresInSeconds, R2_CREATE_ONLY_HEADERS);
+/**
+ * Creates a short-lived presigned create-only PUT URL; the browser must send `R2_CREATE_ONLY_HEADERS`.
+ * With `contentLength` the URL also signs that `Content-Length`, so the bucket rejects a body of another size.
+ */
+export function presignR2Upload(settings: R2Settings, key: string, expiresInSeconds = 900, contentLength?: number): Promise<string> {
+  if (contentLength === undefined) return presign(settings, objectUrl(settings, key), 'PUT', expiresInSeconds, R2_CREATE_ONLY_HEADERS);
+  if (!Number.isSafeInteger(contentLength) || contentLength < 0) throw new Error('Content-Length must be a non-negative integer.');
+  // aws4fetch leaves Content-Length unsigned unless asked to sign every header.
+  return presign(settings, objectUrl(settings, key), 'PUT', expiresInSeconds, { ...R2_CREATE_ONLY_HEADERS, 'Content-Length': String(contentLength) }, true);
 }
 
 const client = (settings: R2Settings) => new AwsClient({ accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey, service: 's3', region: 'auto' });

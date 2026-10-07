@@ -63,6 +63,16 @@ describe('R2 management helpers', () => {
     expect(rewriteR2References('no refs', { a: 'b' })).toBe('no refs');
   });
 
+  it('signs the declared Content-Length into an upload URL only when one is given', async () => {
+    const settings = { accountId: 'acc', accessKeyId: 'AK', secretAccessKey: 'SK', bucket: 'private' };
+    expect(new URL(await presignR2Upload(settings, 'ex/a.pdf')).searchParams.get('X-Amz-SignedHeaders')).toBe('host;if-none-match');
+    const sized = new URL(await presignR2Upload(settings, 'ex/a.pdf', 900, 1234));
+    expect(sized.searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;host;if-none-match');
+    const other = new URL(await presignR2Upload(settings, 'ex/a.pdf', 900, 1235));
+    expect(other.searchParams.get('X-Amz-Signature')).not.toBe(sized.searchParams.get('X-Amz-Signature'));
+    await expect(Promise.resolve().then(() => presignR2Upload(settings, 'ex/a.pdf', 900, -1))).rejects.toThrow(/Content-Length/);
+  });
+
   it('uses a configured endpoint for presigned uploads', async () => {
     const url = new URL(await presignR2Upload({ accountId: 'acc', accessKeyId: 'AK', secretAccessKey: 'SK', bucket: 'private', endpoint: 'http://127.0.0.1:9000' }, 'ex/a b.pdf'));
     expect(url.origin + url.pathname).toBe('http://127.0.0.1:9000/private/ex/a%20b.pdf');

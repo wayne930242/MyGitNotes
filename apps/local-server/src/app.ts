@@ -17,6 +17,7 @@ import { createStudyRouter } from './study.js';
 import { createOutlineImportRouter } from './outline-import.js';
 import { createWorkspaceDocumentRouter } from './workspace-document.js';
 import { createFolderManagerRouter } from './folder-manager.js';
+import { type AssetStorage, envAssetStorage } from './asset-storage.js';
 import { createR2AssetHandler } from './r2-assets.js';
 import { createR2ManagerRouter } from './r2-manager.js';
 import { createFileManagerRouter } from './file-manager.js';
@@ -42,6 +43,8 @@ export interface AppServices {
   /** The remote read cache; defaults to Redis when configured, else process memory. Local workspaces use none. */
   remoteCache?: RemoteCache;
   piAgent?: PiAgent;
+  /** Which R2 bucket and key space each request reaches, and any quota it meters; defaults to the deployment's environment (see asset-storage.ts). */
+  assetStorage: AssetStorage;
   /** The built web app to serve; defaults to apps/web/dist under the application root. */
   webDist: string;
   /**
@@ -58,8 +61,8 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   // The lightweight mode keeps sign-ins in cookies and nothing on the server; local workspaces never use it.
   const lightweight = !local && storageMode() === 'cookie';
   const recordStore = overrides.recordStore ?? (lightweight ? new NoRecordStore() : createRecordStore(base));
-  const services: AppServices = { ...overrides, configSource, recordStore, workspaceChoices, sessions: overrides.sessions ?? (lightweight ? cookieSessions() : storedSessions(recordStore)), remoteCache: 'remoteCache' in overrides ? overrides.remoteCache : local ? undefined : createRemoteCache(), webDist: overrides.webDist ?? path.join(base, 'apps/web/dist') };
-  const { remoteCache: cache, piAgent, sessions } = services;
+  const services: AppServices = { ...overrides, configSource, recordStore, workspaceChoices, sessions: overrides.sessions ?? (lightweight ? cookieSessions() : storedSessions(recordStore)), assetStorage: overrides.assetStorage ?? envAssetStorage(), remoteCache: 'remoteCache' in overrides ? overrides.remoteCache : local ? undefined : createRemoteCache(), webDist: overrides.webDist ?? path.join(base, 'apps/web/dist') };
+  const { remoteCache: cache, piAgent, sessions, assetStorage } = services;
   const app = express();
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -98,7 +101,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   app.use('/mcp', createRemoteMCP(recordStore, configSource, cache));
   app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace({ store: recordStore, sessions }, configSource, cache));
   app.use(createFileManagerRouter());
-  app.use(createR2ManagerRouter());
+  app.use(createR2ManagerRouter(assetStorage));
   app.use('/api/study', createStudyRouter());
   app.use('/api/focus-page', createWorkspaceDocumentRouter(FOCUS_DOCUMENT));
   app.use('/api/outline-import', createOutlineImportRouter());
@@ -110,10 +113,10 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
     if (piAgent) app.use('/api/pi', piAgent.router);
     app.get(
       '/r2-assets/*',
-      createR2AssetHandler(async (res, notePath) => {
+      createR2AssetHandler(assetStorage, async (res, notePath) => {
         const { handle, config } = await noteRepository(res, notePath);
         if (!['note', 'outline'].includes(classifyResource(notePath, config).type)) throw new Error('Path is not a configured note.');
-        return fs.readFileSync(resolveSafePath(asLocal(handle).root, notePath), 'utf8');
+        return { content: fs.readFileSync(resolveSafePath(asLocal(handle).root, notePath), 'utf8'), repository: handle };
       }),
     );
     app.use(createLocalApp(base));
@@ -260,7 +263,13 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
         }
       });
     }
-    app.get('/r2-assets/*', createR2AssetHandler(async (res, notePath) => (await (await remoteNote(res, notePath)).reader.note(notePath)).content));
+    app.get(
+      '/r2-assets/*',
+      createR2AssetHandler(assetStorage, async (res, notePath) => {
+        const repository = await remoteNote(res, notePath);
+        return { content: (await repository.reader.note(notePath)).content, repository };
+      }),
+    );
     app.get('/raw-assets/by-hash/:hash', async (req, res) => {
       try {
         if (!/^[a-f0-9]{40}$/.test(req.params.hash)) throw new SourceError('Invalid asset hash.');

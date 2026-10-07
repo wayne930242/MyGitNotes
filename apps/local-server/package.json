@@ -8,6 +8,7 @@
   "types": "./src/edition.ts",
   "exports": {
     ".": "./src/edition.ts",
+    "./testing/asset-storage-contract": "./src/asset-storage-contract.ts",
     "./testing/record-store-contract": "./src/record-store/contract.ts",
     "./testing/workspace-choices-contract": "./src/workspace-choices-contract.ts"
   },
